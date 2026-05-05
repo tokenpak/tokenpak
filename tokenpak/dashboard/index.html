@@ -119,6 +119,31 @@
             padding-top: 2rem;
             border-top: 1px solid #27272a;
         }
+
+        .sessions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8125rem;
+            margin-top: 0.75rem;
+        }
+
+        .sessions-table th {
+            text-align: left;
+            color: #a1a1a6;
+            font-weight: 500;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid #27272a;
+            white-space: nowrap;
+        }
+
+        .sessions-table td {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid #18181b;
+            font-variant-numeric: tabular-nums;
+            color: #d4d4d8;
+        }
+
+        .sessions-table tr:last-child td { border-bottom: none; }
     </style>
 </head>
 <body>
@@ -186,11 +211,35 @@
             </div>
         </div>
 
+        <!-- Top Sessions (Phase 2 — CCG-13) -->
+        <div class="card wide" id="sessions-panel" style="margin-bottom: 2rem;">
+            <div class="card-title">Top Sessions — by request count (top 20)</div>
+            <table class="sessions-table" id="sessionsTable">
+                <thead>
+                    <tr>
+                        <th>Session ID</th>
+                        <th>Requests</th>
+                        <th>Input Tokens</th>
+                        <th>Output Tokens</th>
+                        <th>Cache Read</th>
+                        <th>Cache Creation</th>
+                        <th>Cost (USD)</th>
+                        <th>p50 Latency</th>
+                        <th>Platform</th>
+                    </tr>
+                </thead>
+                <tbody id="sessionsBody">
+                    <tr><td colspan="9" style="opacity: 0.5;">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <div class="footer">
             Auto-refreshing every 30 seconds · <span id="last-update">Never</span>
         </div>
     </div>
 
+    <script src="sessions.js"></script>
     <script>
         const STATS_URL = '/stats/session';
         const REFRESH_INTERVAL = 30000;
@@ -380,10 +429,16 @@
         async function init() {
             const stats = await fetchStats();
             updateDashboard(stats);
+            if (typeof fetchAndUpdateSessionsDashboard === "function") {
+                fetchAndUpdateSessionsDashboard();
+            }
 
             setInterval(async () => {
                 const stats = await fetchStats();
                 updateDashboard(stats);
+                if (typeof fetchAndUpdateSessionsDashboard === "function") {
+                    fetchAndUpdateSessionsDashboard();
+                }
             }, REFRESH_INTERVAL);
         }
 

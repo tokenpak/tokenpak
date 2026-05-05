@@ -583,6 +583,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path == "/metrics/dashboard":
+            self._handle_metrics_dashboard()
+            return
         if path.startswith("/dashboard"):
             # Serve dashboard UI files
             from tokenpak.dashboard import serve_dashboard_file
@@ -2156,6 +2159,82 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+    def _handle_metrics_dashboard(self) -> None:
+        """GET /metrics/dashboard — dashboard JSON with top-20 sessions panel.
+
+        Returns a JSON object with a `sessions` array of the top 20 sessions
+        by request count. Each entry contains the columns documented in
+        Spec Component 11 / CCG-13.
+        """
+        import os
+        import sqlite3 as _sqlite3
+
+        ps = self.server.proxy_server
+        db_path = (
+            ps.monitor.db_path
+            if getattr(ps, "monitor", None) is not None
+            else os.path.expanduser("~/.tokenpak/monitor.db")
+        )
+
+        sessions: list = []
+        try:
+            conn = _sqlite3.connect(str(db_path), timeout=3.0)
+            conn.row_factory = _sqlite3.Row
+            # Top 20 sessions by request count, with aggregated token/cost columns.
+            rows = conn.execute("""
+                SELECT
+                    session_id,
+                    SUM(input_tokens)           AS input_tokens,
+                    SUM(output_tokens)          AS output_tokens,
+                    SUM(cache_read_tokens)      AS cache_read_input_tokens,
+                    SUM(cache_creation_tokens)  AS cache_creation_input_tokens,
+                    SUM(estimated_cost)         AS cost,
+                    COUNT(*)                    AS request_count,
+                    MAX(attribution_source)     AS platform
+                FROM requests
+                WHERE session_id IS NOT NULL AND session_id != ''
+                GROUP BY session_id
+                ORDER BY request_count DESC
+                LIMIT 20
+            """).fetchall()
+
+            for row in rows:
+                sid = row["session_id"]
+                # p50 latency: fetch ordered latencies and pick median.
+                lat_rows = conn.execute(
+                    "SELECT latency_ms FROM requests "
+                    "WHERE session_id=? AND latency_ms IS NOT NULL "
+                    "ORDER BY latency_ms",
+                    (sid,),
+                ).fetchall()
+                if lat_rows:
+                    vals = [r[0] for r in lat_rows]
+                    n = len(vals)
+                    mid = n // 2
+                    p50 = vals[mid] if n % 2 else (vals[mid - 1] + vals[mid]) // 2
+                else:
+                    p50 = 0
+
+                sessions.append({
+                    "session_id": sid,
+                    "input_tokens": row["input_tokens"] or 0,
+                    "output_tokens": row["output_tokens"] or 0,
+                    "cache_read_input_tokens": row["cache_read_input_tokens"] or 0,
+                    "cache_creation_input_tokens": row["cache_creation_input_tokens"] or 0,
+                    "cost": round(row["cost"] or 0.0, 6),
+                    "request_count": row["request_count"] or 0,
+                    "latency_p50": p50,
+                    "platform": row["platform"] or "unknown",
+                })
+            conn.close()
+        except Exception as exc:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "metrics/dashboard sessions query failed: %s", exc
+            )
+
+        self._send_json({"sessions": sessions})
 
 
 # ---------------------------------------------------------------------------
