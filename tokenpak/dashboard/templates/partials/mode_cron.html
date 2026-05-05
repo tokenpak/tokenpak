@@ -1,0 +1,67 @@
+<!-- cron mode panel — job success/failure rate and alerts -->
+<div class="mode-panel" id="panel-cron">
+  <h2 class="panel-title">Cron Mode — Job Reliability</h2>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">Success rate</div>
+      <div class="stat-value {{ 'ok' if success_rate is not none and success_rate >= 95 else 'warn' }}">
+        {{ success_rate | round(1) if success_rate is not none else "—" }}%
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Telegram alerts sent</div>
+      <div class="stat-value">{{ telegram_alerts if telegram_alerts is not none else "—" }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Hard budget enforcements</div>
+      <div class="stat-value {{ 'warn' if budget_enforcements is not none and budget_enforcements > 0 else '' }}">
+        {{ budget_enforcements if budget_enforcements is not none else "—" }}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h3>Job Success / Failure Rate (today)</h3>
+    {% if job_stats %}
+      <table class="data-table">
+        <thead><tr><th>Job</th><th>Runs</th><th>Success</th><th>Failed</th><th>Rate</th></tr></thead>
+        <tbody>
+          {% for job in job_stats %}
+          <tr>
+            <td class="mono">{{ job.name }}</td>
+            <td>{{ job.total }}</td>
+            <td>{{ job.success }}</td>
+            <td>{{ job.failed }}</td>
+            <td>{{ job.rate | round(1) }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-state">No cron job telemetry today. Cron job attribution requires the <code>TOKENPAK_JOB_NAME</code> env var or SDK annotation.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel-section">
+    <h3>Hard Budget Enforcements</h3>
+    {% if budget_enforcements is not none and budget_enforcements > 0 %}
+      <p class="warn">{{ budget_enforcements }} request(s) were hard-capped by budget enforcement today. Check your budget configuration.</p>
+    {% elif budget_enforcements is not none %}
+      <p class="ok">No budget enforcements today.</p>
+    {% else %}
+      <p class="empty-state">Budget enforcement tracking requires proxy ≥ v1.4.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel-section">
+    <h3>Telegram Alerts</h3>
+    {% if telegram_alerts is not none and telegram_alerts > 0 %}
+      <p>{{ telegram_alerts }} alert(s) sent today via Telegram.</p>
+    {% elif telegram_alerts is not none %}
+      <p class="ok">No Telegram alerts sent today.</p>
+    {% else %}
+      <p class="empty-state">Telegram alerts not configured. Set <code>TOKENPAK_TELEGRAM_TOKEN</code> and <code>TOKENPAK_TELEGRAM_CHAT_ID</code> to enable.</p>
+    {% endif %}
+  </div>
+</div>

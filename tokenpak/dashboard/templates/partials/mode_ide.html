@@ -1,0 +1,66 @@
+<!-- IDE mode panel — workspace status and inline savings -->
+<div class="mode-panel" id="panel-ide">
+  <h2 class="panel-title">IDE Mode — Workspace Status</h2>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">Active workspace</div>
+      <div class="stat-value mono">{{ active_workspace if active_workspace else "not detected" }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Inline savings today</div>
+      <div class="stat-value signal">
+        {% if inline_savings_tokens is not none and inline_savings_tokens > 0 %}
+          {{ inline_savings_tokens }}t saved
+        {% else %}
+          not yet measured
+        {% endif %}
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Timeout events</div>
+      <div class="stat-value {{ 'warn' if timeout_count is not none and timeout_count > 0 else '' }}">
+        {{ timeout_count if timeout_count is not none else "—" }}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h3>Workspace Detection</h3>
+    {% if active_workspace %}
+      <p>TokenPak detected workspace: <code>{{ active_workspace }}</code></p>
+    {% else %}
+      <p class="empty-state">No IDE workspace detected. Install the VS Code or JetBrains extension to enable workspace attribution.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel-section">
+    <h3>Inline Savings Totals</h3>
+    {% if inline_savings_tokens is not none and inline_savings_tokens > 0 %}
+      <table class="data-table">
+        <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Tokens saved</td><td>{{ inline_savings_tokens }}</td></tr>
+          <tr><td>Cost saved</td><td>${{ "%.4f"|format(inline_savings_cost) if inline_savings_cost is not none else "0.0000" }}</td></tr>
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-state">No inline savings data yet. Route your IDE's AI completions through TokenPak to see savings here.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel-section">
+    <h3>IDE-Specific Timeout Events (today)</h3>
+    {% if timeout_events %}
+      <ul class="event-list">
+        {% for ev in timeout_events %}
+        <li>{{ ev.timestamp }} — {{ ev.description }}</li>
+        {% endfor %}
+      </ul>
+    {% elif timeout_count is not none and timeout_count == 0 %}
+      <p class="ok">No timeout events today.</p>
+    {% else %}
+      <p class="empty-state">IDE timeout event tracking requires proxy ≥ v1.4.</p>
+    {% endif %}
+  </div>
+</div>

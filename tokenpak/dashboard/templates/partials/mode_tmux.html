@@ -1,0 +1,55 @@
+<!-- tmux mode panel — per-agent session attribution -->
+<div class="mode-panel" id="panel-tmux">
+  <h2 class="panel-title">tmux Mode — Agent Attribution</h2>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">Active sessions</div>
+      <div class="stat-value">{{ concurrent_sessions if concurrent_sessions is defined else "—" }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Fairness status</div>
+      <div class="stat-value {{ 'ok' if fairness_ok else 'warn' }}">
+        {{ "OK" if fairness_ok else "⚠ skewed" }}
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Budget today</div>
+      <div class="stat-value">${{ "%.4f"|format(stats.total_cost) if stats.total_cost is defined else "0.0000" }}</div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h3>Per-Agent Cost Breakdown</h3>
+    {% if agent_rows %}
+      <table class="data-table">
+        <thead><tr><th>Agent / Session</th><th>Requests</th><th>Tokens</th><th>Cost</th><th>% of budget</th></tr></thead>
+        <tbody>
+          {% for row in agent_rows %}
+          <tr>
+            <td class="mono">{{ row.agent_id }}</td>
+            <td>{{ row.request_count }}</td>
+            <td>{{ row.total_tokens }}</td>
+            <td>${{ "%.4f"|format(row.cost) }}</td>
+            <td>{{ row.budget_pct | round(1) }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-state">No agent sessions recorded today.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel-section">
+    <h3>Concurrent Session Count (last 24h)</h3>
+    {% if concurrent_sessions is defined and concurrent_sessions > 0 %}
+      <p>{{ concurrent_sessions }} concurrent session(s) detected.</p>
+      {% if not fairness_ok %}
+        <p class="warn">One agent is using &gt;70% of today's budget. Consider adding per-session budget limits.</p>
+      {% endif %}
+    {% else %}
+      <p class="empty-state">No concurrent session data available yet.</p>
+    {% endif %}
+  </div>
+</div>

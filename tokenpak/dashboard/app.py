@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, FastAPI, Query, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
@@ -26,6 +27,9 @@ _store = EntryStore()
 _timeline = TimelineGenerator()
 _audit = AuditGenerator()
 
+# Valid consumption modes (CCI-09)
+VALID_MODES = frozenset({"cli", "tui", "tmux", "sdk", "ide", "cron"})
+
 
 def _today() -> str:
     return date.today().strftime("%Y-%m-%d")
@@ -33,6 +37,169 @@ def _today() -> str:
 
 def _days_ago(n: int) -> str:
     return (date.today() - timedelta(days=n)).strftime("%Y-%m-%d")
+
+
+def _detect_active_mode() -> str:
+    """Infer consumption mode from environment (CCI-04 active profile)."""
+    if os.environ.get("TOKENPAK_MODE"):
+        m = os.environ["TOKENPAK_MODE"].lower()
+        if m in VALID_MODES:
+            return m
+    if os.environ.get("TMUX") or os.environ.get("TMUX_PANE"):
+        return "tmux"
+    if os.environ.get("TERM_PROGRAM", "").lower() in ("iterm.app", "ghostty"):
+        return "tui"
+    if os.environ.get("VSCODE_PID") or os.environ.get("JETBRAINS_IDE"):
+        return "ide"
+    if os.environ.get("TOKENPAK_JOB_NAME") or os.environ.get("CRON_JOB"):
+        return "cron"
+    return "cli"
+
+
+def _mode_data(mode: str, date_str: str) -> dict[str, Any]:
+    """Build mode-specific context dict for the per_mode template."""
+    stats = _store.compute_stats(date_str)
+    summary = _store.usage_summary(date_str)
+    entries = _store.read_entries(date_str, date_str)
+
+    header = {
+        "total_cost": stats.get("total_cost", 0.0),
+        "cache_hit_pct": stats.get("cache_hit_pct", 0.0),
+        "request_count": stats.get("request_count", 0),
+    }
+
+    ctx: dict[str, Any] = {
+        "active_mode": mode,
+        "active_profile": os.environ.get("TOKENPAK_COMPANION_PROFILE", "balanced"),
+        "header": header,
+        "stats": stats,
+        "query_date": date_str,
+    }
+
+    if mode == "cli":
+        ctx.update(_cli_data(entries))
+    elif mode == "tui":
+        ctx.update(_tui_data(entries))
+    elif mode == "tmux":
+        ctx.update(_tmux_data(entries, stats))
+    elif mode == "sdk":
+        ctx.update(_sdk_data(entries))
+    elif mode == "ide":
+        ctx.update(_ide_data())
+    elif mode == "cron":
+        ctx.update(_cron_data())
+
+    return ctx
+
+
+def _cli_data(entries: list[dict]) -> dict[str, Any]:
+    # cost_by_repo: group by extra.working_dir or extra.repo_hash if present
+    repo_map: dict[str, dict] = {}
+    for e in entries:
+        repo = ((e.get("extra") or {}).get("working_dir") or
+                (e.get("extra") or {}).get("repo_hash") or "")
+        if not repo:
+            continue
+        if repo not in repo_map:
+            repo_map[repo] = {"repo": repo, "request_count": 0, "cost": 0.0}
+        repo_map[repo]["request_count"] += 1
+        repo_map[repo]["cost"] += e.get("cost", 0.0)
+    cost_by_repo = sorted(repo_map.values(), key=lambda x: x["cost"], reverse=True)[:10]
+    return {
+        "cost_by_repo": cost_by_repo,
+        "burn_rate": None,
+        "doctor_runs": [],
+    }
+
+
+def _tui_data(entries: list[dict]) -> dict[str, Any]:
+    # Build savings tape from last 10 sessions with non-null session_id
+    seen: dict[str, dict] = {}
+    for e in entries:
+        sid = e.get("session_id") or ""
+        if not sid:
+            continue
+        if sid not in seen:
+            seen[sid] = {"session_id": sid, "tokens": 0, "cost": 0.0, "saved_pct": 0.0}
+        seen[sid]["tokens"] += e.get("tokens", 0)
+        seen[sid]["cost"] += e.get("cost", 0.0)
+        comp = (e.get("extra") or {}).get("compression_pct", 0.0)
+        seen[sid]["saved_pct"] = max(seen[sid]["saved_pct"], comp)
+
+    tape = sorted(seen.values(), key=lambda x: x["cost"], reverse=True)[:10]
+    total_cost = sum(e.get("cost", 0.0) for e in entries)
+    total_tokens = sum(e.get("tokens", 0) for e in entries)
+    return {
+        "session_cost": total_cost,
+        "session_tokens": total_tokens,
+        "savings_pct": None,
+        "savings_tape": tape,
+    }
+
+
+def _tmux_data(entries: list[dict], stats: dict) -> dict[str, Any]:
+    agent_map: dict[str, dict] = {}
+    for e in entries:
+        aid = e.get("agent") or "unknown"
+        if aid not in agent_map:
+            agent_map[aid] = {"agent_id": aid, "request_count": 0, "total_tokens": 0, "cost": 0.0}
+        agent_map[aid]["request_count"] += 1
+        agent_map[aid]["total_tokens"] += e.get("tokens", 0)
+        agent_map[aid]["cost"] += e.get("cost", 0.0)
+
+    total_cost = stats.get("total_cost", 0.0) or 1e-9
+    agent_rows = sorted(agent_map.values(), key=lambda x: x["cost"], reverse=True)[:20]
+    for row in agent_rows:
+        row["budget_pct"] = (row["cost"] / total_cost) * 100
+
+    # Fairness: any single agent using >70% of budget is "skewed"
+    fairness_ok = all(r["budget_pct"] <= 70 for r in agent_rows)
+    return {
+        "agent_rows": agent_rows,
+        "concurrent_sessions": len(agent_map),
+        "fairness_ok": fairness_ok,
+    }
+
+
+def _sdk_data(entries: list[dict]) -> dict[str, Any]:
+    model_map: dict[str, dict] = {}
+    for e in entries:
+        m = e.get("model") or "unknown"
+        if m not in model_map:
+            model_map[m] = {"model": m, "request_count": 0, "total_tokens": 0, "cost": 0.0}
+        model_map[m]["request_count"] += 1
+        model_map[m]["total_tokens"] += e.get("tokens", 0)
+        model_map[m]["cost"] += e.get("cost", 0.0)
+
+    otlp_endpoint = os.environ.get("TOKENPAK_OTLP_ENDPOINT", "")
+    otlp_status = "active" if otlp_endpoint else "not configured"
+
+    return {
+        "model_usage": sorted(model_map.values(), key=lambda x: x["request_count"], reverse=True),
+        "error_count": 0,
+        "otlp_status": otlp_status,
+    }
+
+
+def _ide_data() -> dict[str, Any]:
+    workspace = (os.environ.get("VSCODE_WORKSPACE_FOLDER") or
+                 os.environ.get("JETBRAINS_PROJECT") or "")
+    return {
+        "active_workspace": workspace or None,
+        "inline_savings_tokens": None,
+        "inline_savings_cost": None,
+        "timeout_count": 0,
+        "timeout_events": [],
+    }
+
+
+def _cron_data() -> dict[str, Any]:
+    return {
+        "job_stats": [],
+        "success_rate": None,
+        "telegram_alerts": None,
+        "budget_enforcements": None,
+    }
 
 
 def _overview_data(query_date: str) -> dict:
@@ -53,15 +220,31 @@ router = APIRouter(tags=["dashboard"])
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-def dashboard_overview(request: Request, date_str: Optional[str] = Query(None, alias="date")):
-    """Main overview dashboard."""
+def dashboard_overview(
+    request: Request,
+    date_str: Optional[str] = Query(None, alias="date"),
+    mode: Optional[str] = Query(None),
+):
+    """Main dashboard — overview or per-mode view when ?mode= is provided."""
     q = date_str or _today()
-    data = _overview_data(q)
-    return templates.TemplateResponse(
-        request,
-        "overview.html",
-        {"query_date": q, "today": _today(), "yesterday": _days_ago(1), **data},
-    )
+    if mode is not None:
+        if mode not in VALID_MODES:
+            raise HTTPException(status_code=404, detail=f"Unknown mode: {mode!r}")
+        ctx = _mode_data(mode, q)
+        return templates.TemplateResponse(request, "per_mode.html", ctx)
+    # Default: detect mode from environment (CCI-04 active profile)
+    detected = _detect_active_mode()
+    ctx = _mode_data(detected, q)
+    return templates.TemplateResponse(request, "per_mode.html", ctx)
+
+
+@router.get("/dashboard/htmx/mode/tui/cost", response_class=HTMLResponse)
+def htmx_tui_cost(request: Request, date_str: Optional[str] = Query(None, alias="date")):
+    """HTMX partial — live cost figure for TUI mode polling (5s interval)."""
+    q = date_str or _today()
+    stats = _store.compute_stats(q)
+    cost = stats.get("total_cost", 0.0)
+    return HTMLResponse(content=f"${cost:.6f}")
 
 
 @router.get("/dashboard/time-series", response_class=HTMLResponse)

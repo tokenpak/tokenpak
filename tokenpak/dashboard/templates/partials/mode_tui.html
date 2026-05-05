@@ -1,0 +1,42 @@
+<!-- TUI mode panel (live cost meter via HTMX 5s polling) -->
+<div class="mode-panel" id="panel-tui">
+  <h2 class="panel-title">TUI Mode — Live Cost Meter</h2>
+
+  <div class="stat-row">
+    <div class="stat-card hero">
+      <div class="stat-label">Current session cost</div>
+      <div class="stat-value live-meter">
+        ${{ "%.6f"|format(session_cost) if session_cost is defined else "0.000000" }}
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Session tokens</div>
+      <div class="stat-value">{{ session_tokens if session_tokens is defined else "—" }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Savings vs baseline</div>
+      <div class="stat-value signal">{{ savings_pct if savings_pct is defined else "—" }}%</div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h3>Savings Tape — Last 10 Sessions</h3>
+    {% if savings_tape %}
+      <table class="data-table">
+        <thead><tr><th>Session</th><th>Tokens</th><th>Cost</th><th>Saved</th></tr></thead>
+        <tbody>
+          {% for row in savings_tape %}
+          <tr>
+            <td class="mono">{{ row.session_id[:8] }}…</td>
+            <td>{{ row.tokens }}</td>
+            <td>${{ "%.6f"|format(row.cost) }}</td>
+            <td>{{ row.saved_pct | round(1) }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-state">No session history yet. Send a request through TokenPak to start recording savings.</p>
+    {% endif %}
+  </div>
+</div>

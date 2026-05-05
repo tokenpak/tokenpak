@@ -1,0 +1,67 @@
+<!-- CLI mode panel -->
+<div class="mode-panel" id="panel-cli">
+  <h2 class="panel-title">CLI Mode — Cost by Repository</h2>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">Total cost today</div>
+      <div class="stat-value">
+        {% if stats.total_cost is defined %}
+          ${{ "%.4f"|format(stats.total_cost) }}
+        {% else %}
+          not yet measured
+        {% endif %}
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Requests today</div>
+      <div class="stat-value">{{ stats.request_count if stats.request_count is defined else "—" }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Cache hit rate</div>
+      <div class="stat-value">{{ stats.cache_hit_pct if stats.cache_hit_pct is defined else "—" }}%</div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h3>Cost by Working Directory</h3>
+    {% if cost_by_repo %}
+      <table class="data-table">
+        <thead><tr><th>Directory</th><th>Requests</th><th>Cost</th></tr></thead>
+        <tbody>
+          {% for row in cost_by_repo %}
+          <tr>
+            <td class="mono">{{ row.repo }}</td>
+            <td>{{ row.request_count }}</td>
+            <td>${{ "%.4f"|format(row.cost) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-state">No repo-attributed requests yet. Working directory attribution requires proxy ≥ v1.4.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel-section">
+    <h3>Budget Burn Rate</h3>
+    {% if burn_rate %}
+      <p>{{ burn_rate.rate_per_hour | round(4) }} $/hr (rolling 1h window)</p>
+    {% else %}
+      <p class="empty-state">Not yet measured — send a request through TokenPak to see burn rate here.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel-section">
+    <h3>Recent <code>tokenpak doctor</code> Runs</h3>
+    {% if doctor_runs %}
+      <ul class="event-list">
+        {% for run in doctor_runs %}
+        <li>{{ run.timestamp }} — {{ run.status }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state">No doctor runs recorded. Run <code>tokenpak doctor</code> to diagnose your setup.</p>
+    {% endif %}
+  </div>
+</div>

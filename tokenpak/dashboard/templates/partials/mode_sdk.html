@@ -1,0 +1,60 @@
+<!-- SDK mode panel — API usage and OTLP -->
+<div class="mode-panel" id="panel-sdk">
+  <h2 class="panel-title">SDK Mode — API Usage</h2>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">API requests today</div>
+      <div class="stat-value">{{ stats.request_count if stats.request_count is defined else "—" }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Structured errors</div>
+      <div class="stat-value {{ 'warn' if error_count > 0 else '' }}">{{ error_count if error_count is defined else "—" }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">OTLP export</div>
+      <div class="stat-value">{{ otlp_status if otlp_status is defined else "not configured" }}</div>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h3>API Usage by Model</h3>
+    {% if model_usage %}
+      <table class="data-table">
+        <thead><tr><th>Model</th><th>Requests</th><th>Tokens</th><th>Cost</th></tr></thead>
+        <tbody>
+          {% for row in model_usage %}
+          <tr>
+            <td class="mono">{{ row.model }}</td>
+            <td>{{ row.request_count }}</td>
+            <td>{{ row.total_tokens }}</td>
+            <td>${{ "%.4f"|format(row.cost) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-state">No SDK requests today.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel-section">
+    <h3>OTLP Export Status</h3>
+    {% if otlp_status == "active" %}
+      <p class="ok">OTLP exporter is active and sending traces.</p>
+    {% elif otlp_status == "disabled" %}
+      <p class="mute">OTLP export is disabled. Set <code>TOKENPAK_OTLP_ENDPOINT</code> to enable.</p>
+    {% else %}
+      <p class="empty-state">OTLP export not configured. Set <code>TOKENPAK_OTLP_ENDPOINT</code> to enable trace export.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel-section">
+    <h3>Structured Error Count (today)</h3>
+    {% if error_count is defined and error_count > 0 %}
+      <p class="warn">{{ error_count }} structured error(s) logged today. Check <code>journalctl --user -u tokenpak</code> for details.</p>
+    {% else %}
+      <p class="ok">No structured errors logged today.</p>
+    {% endif %}
+  </div>
+</div>
