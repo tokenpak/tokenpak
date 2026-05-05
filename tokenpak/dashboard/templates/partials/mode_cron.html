@@ -6,7 +6,7 @@
     <div class="stat-card">
       <div class="stat-label">Success rate</div>
       <div class="stat-value {{ 'ok' if success_rate is not none and success_rate >= 95 else 'warn' }}">
-        {{ success_rate | round(1) if success_rate is not none else "—" }}%
+        {% if success_rate is not none %}{{ success_rate | round(1) }}%{% else %}—{% endif %}
       </div>
     </div>
     <div class="stat-card">

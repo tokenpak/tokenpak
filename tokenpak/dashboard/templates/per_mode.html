@@ -3,26 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TokenPak Dashboard — {{ active_mode | upper }} Mode</title>
+  <title>TokenPak Dashboard — {{ active_panel.label }} Mode</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
 
-    /* Nav */
     .topbar { background: #1a1f2e; border-bottom: 1px solid #2d3748; padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
     .topbar-brand { font-weight: 700; color: #a78bfa; font-size: 1.1rem; text-decoration: none; }
     .topbar-nav { display: flex; gap: 0.5rem; }
     .topbar-nav a { color: #94a3b8; text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.75rem; border-radius: 0.375rem; }
     .topbar-nav a:hover { background: #2d3748; color: #e2e8f0; }
 
-    /* Shared header */
     .shared-header { background: #1a1f2e; border-bottom: 1px solid #2d3748; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap; }
     .header-metric { display: flex; flex-direction: column; gap: 0.25rem; }
     .header-metric .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
     .header-metric .value { font-size: 1.125rem; font-weight: 600; color: #e2e8f0; }
     .header-metric .value.signal { color: #34d399; }
 
-    /* Mode selector */
     .mode-selector { padding: 1rem 1.5rem; background: #161b2a; border-bottom: 1px solid #2d3748; }
     .mode-selector h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 0.75rem; }
     .mode-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -30,13 +27,8 @@
     .mode-btn:hover { background: #2d3748; color: #e2e8f0; border-color: #4a5568; }
     .mode-btn.active { background: #4f46e5; border-color: #4f46e5; color: #fff; font-weight: 600; }
 
-    /* Main content */
     .main { padding: 1.5rem; max-width: 1200px; }
-
-    /* Panels */
-    .mode-panel { }
     .panel-title { font-size: 1.25rem; font-weight: 700; color: #e2e8f0; margin-bottom: 1.25rem; padding-bottom: 0.5rem; border-bottom: 1px solid #2d3748; }
-
     .stat-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
     .stat-card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 0.75rem; padding: 1rem 1.5rem; flex: 1; min-width: 180px; }
     .stat-card.hero { flex: 2; }
@@ -48,7 +40,6 @@
 
     .panel-section { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 0.75rem; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
     .panel-section h3 { font-size: 0.875rem; font-weight: 600; color: #94a3b8; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
-
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
     .data-table th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #2d3748; color: #64748b; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
     .data-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #1e2535; color: #cbd5e1; }
@@ -56,36 +47,35 @@
     .data-table tr:hover td { background: #1e2535; }
 
     .mono { font-family: "SF Mono", "Fira Code", monospace; font-size: 0.8rem; }
-    .empty-state { color: #4a5568; font-style: italic; font-size: 0.875rem; padding: 0.5rem 0; }
+    .empty-state { color: #64748b; font-style: italic; font-size: 0.875rem; padding: 0.5rem 0; }
     .ok { color: #34d399; }
     .warn { color: #f59e0b; }
     .mute { color: #64748b; }
-
     .event-list { list-style: none; font-size: 0.875rem; }
     .event-list li { padding: 0.25rem 0; border-bottom: 1px solid #1e2535; color: #cbd5e1; font-family: "SF Mono", monospace; font-size: 0.8rem; }
     .event-list li:last-child { border-bottom: none; }
-
     .live-meter { font-variant-numeric: tabular-nums; transition: color 0.3s; }
   </style>
-  <!-- Polling via fetch() — no external dependencies (04 §11) -->
   <script>
-    // TUI mode: poll /dashboard/htmx/mode/tui/cost every 5s
-    if (document.querySelector('.live-meter')) {
-      setInterval(function() {
-        fetch('/dashboard/htmx/mode/tui/cost')
-          .then(function(r) { return r.text(); })
-          .then(function(html) {
-            var el = document.querySelector('.live-meter');
-            if (el) el.innerHTML = html;
-          })
-          .catch(function() {});
-      }, 5000);
-    }
+    // Local HTMX-style polling shim for hx-get + hx-trigger="every 5s".
+    // Keeps the local dashboard offline-safe: no CDN, no external JS framework.
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('[hx-get][hx-trigger]').forEach(function(el) {
+        var trigger = el.getAttribute('hx-trigger') || '';
+        var match = trigger.match(/every\s+(\d+)s/);
+        if (!match) return;
+        var refresh = function() {
+          fetch(el.getAttribute('hx-get'))
+            .then(function(r) { return r.text(); })
+            .then(function(html) { el.innerHTML = html; })
+            .catch(function() {});
+        };
+        setInterval(refresh, Number(match[1]) * 1000);
+      });
+    });
   </script>
 </head>
 <body>
-
-  <!-- Top navigation -->
   <nav class="topbar">
     <a href="/dashboard" class="topbar-brand">TokenPak</a>
     <div class="topbar-nav">
@@ -96,11 +86,10 @@
     </div>
   </nav>
 
-  <!-- Cross-mode shared header (04 §11 / Standard 04 §2) -->
   <div class="shared-header">
     <div class="header-metric">
       <span class="label">Active profile</span>
-      <span class="value">{{ active_profile | default("balanced") }}</span>
+      <span class="value">{{ active_profile | default("claude-code-cli") }}</span>
     </div>
     <div class="header-metric">
       <span class="label">Total cost today</span>
@@ -116,35 +105,21 @@
     </div>
   </div>
 
-  <!-- Mode selector (1 click per requirement) -->
-  <div class="mode-selector">
+  <div class="mode-selector" aria-label="Consumption mode selector">
     <h3>Consumption mode</h3>
     <div class="mode-buttons">
-      {% for mode in ["cli", "tui", "tmux", "sdk", "ide", "cron"] %}
-      <a href="/dashboard?mode={{ mode }}"
-         class="mode-btn {% if mode == active_mode %}active{% endif %}">
-        {{ mode }}
+      {% for option in mode_options %}
+      <a href="/dashboard?mode={{ option.mode }}"
+         class="mode-btn {% if option.mode == active_mode %}active{% endif %}"
+         aria-current="{{ 'page' if option.mode == active_mode else 'false' }}">
+        {{ option.label }}
       </a>
       {% endfor %}
     </div>
   </div>
 
-  <!-- Mode-specific panel content -->
   <div class="main">
-    {% if active_mode == "cli" %}
-      {% include "partials/mode_cli.html" %}
-    {% elif active_mode == "tui" %}
-      {% include "partials/mode_tui.html" %}
-    {% elif active_mode == "tmux" %}
-      {% include "partials/mode_tmux.html" %}
-    {% elif active_mode == "sdk" %}
-      {% include "partials/mode_sdk.html" %}
-    {% elif active_mode == "ide" %}
-      {% include "partials/mode_ide.html" %}
-    {% elif active_mode == "cron" %}
-      {% include "partials/mode_cron.html" %}
-    {% endif %}
+    {% include active_panel.template %}
   </div>
-
 </body>
 </html>

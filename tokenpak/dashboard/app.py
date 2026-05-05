@@ -27,8 +27,28 @@ _store = EntryStore()
 _timeline = TimelineGenerator()
 _audit = AuditGenerator()
 
-# Valid consumption modes (CCI-09)
-VALID_MODES = frozenset({"cli", "tui", "tmux", "sdk", "ide", "cron"})
+
+def _today() -> str:
+    return date.today().strftime("%Y-%m-%d")
+
+
+def _days_ago(n: int) -> str:
+    return (date.today() - timedelta(days=n)).strftime("%Y-%m-%d")
+
+
+# Consumption-mode panels (CCI-09). Keep the mode catalog as the single
+# source of truth so routes, templates, and tests discover the same modes.
+MODE_PANELS: tuple[dict[str, str], ...] = (
+    {"mode": "cli", "label": "CLI", "template": "partials/mode_cli.html"},
+    {"mode": "tui", "label": "TUI", "template": "partials/mode_tui.html"},
+    {"mode": "tmux", "label": "tmux", "template": "partials/mode_tmux.html"},
+    {"mode": "sdk", "label": "SDK", "template": "partials/mode_sdk.html"},
+    {"mode": "ide", "label": "IDE", "template": "partials/mode_ide.html"},
+    {"mode": "cron", "label": "cron", "template": "partials/mode_cron.html"},
+)
+VALID_MODES = frozenset(panel["mode"] for panel in MODE_PANELS)
+_MODE_BY_NAME = {panel["mode"]: panel for panel in MODE_PANELS}
+_PROFILE_PREFIX = "claude-code-"
 
 
 def _today() -> str:
@@ -39,71 +59,126 @@ def _days_ago(n: int) -> str:
     return (date.today() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 
+def _as_number(value: Any, default: float = 0.0) -> float:
+    """Best-effort numeric conversion for telemetry rows with partial fields."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    """Best-effort integer conversion for telemetry rows with partial fields."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _mode_from_profile(profile: str | None) -> str | None:
+    """Map a CCI-04 profile name (for example claude-code-tui) to a mode."""
+    if not profile:
+        return None
+    normalized = profile.lower().strip()
+    if normalized in VALID_MODES:
+        return normalized
+    if normalized.startswith(_PROFILE_PREFIX):
+        mode = normalized[len(_PROFILE_PREFIX):]
+        if mode in VALID_MODES:
+            return mode
+    return None
+
+
+def _active_profile_from_env(default_mode: str = "cli") -> str:
+    """Return the CCI-04 profile label shown in the shared dashboard header."""
+    for key in ("TOKENPAK_ACTIVE_PROFILE", "TOKENPAK_PROFILE", "TOKENPAK_COMPANION_PROFILE"):
+        value = os.environ.get(key)
+        if value:
+            return value
+    mode = os.environ.get("TOKENPAK_CONSUMPTION_MODE") or os.environ.get("TOKENPAK_MODE")
+    detected = _mode_from_profile(mode) or default_mode
+    return f"{_PROFILE_PREFIX}{detected}"
+
+
 def _detect_active_mode() -> str:
-    """Infer consumption mode from environment (CCI-04 active profile)."""
-    if os.environ.get("TOKENPAK_MODE"):
-        m = os.environ["TOKENPAK_MODE"].lower()
-        if m in VALID_MODES:
-            return m
-    if os.environ.get("TMUX") or os.environ.get("TMUX_PANE"):
-        return "tmux"
-    if os.environ.get("TERM_PROGRAM", "").lower() in ("iterm.app", "ghostty"):
-        return "tui"
-    if os.environ.get("VSCODE_PID") or os.environ.get("JETBRAINS_IDE"):
-        return "ide"
+    """Infer the consumption mode from CCI-04 profile/env signals."""
+    for key in (
+        "TOKENPAK_ACTIVE_PROFILE",
+        "TOKENPAK_PROFILE",
+        "TOKENPAK_COMPANION_PROFILE",
+        "TOKENPAK_CONSUMPTION_MODE",
+        "TOKENPAK_MODE",
+    ):
+        detected = _mode_from_profile(os.environ.get(key))
+        if detected:
+            return detected
+
+    client = os.environ.get("TOKENPAK_CLIENT", "").lower()
+    if client == "sdk" or os.environ.get("TOKENPAK_SDK"):
+        return "sdk"
     if os.environ.get("TOKENPAK_JOB_NAME") or os.environ.get("CRON_JOB"):
         return "cron"
+    if os.environ.get("VSCODE_PID") or os.environ.get("JETBRAINS_IDE"):
+        return "ide"
+    if os.environ.get("TMUX") or os.environ.get("TMUX_PANE"):
+        return "tmux"
+    if os.environ.get("TERM_PROGRAM", "").lower() in (
+        "apple_terminal",
+        "ghostty",
+        "iterm.app",
+        "wezterm",
+    ):
+        return "tui"
     return "cli"
 
 
 def _mode_data(mode: str, date_str: str) -> dict[str, Any]:
-    """Build mode-specific context dict for the per_mode template."""
+    """Build mode-specific context dict for the per-mode template."""
     stats = _store.compute_stats(date_str)
     summary = _store.usage_summary(date_str)
     entries = _store.read_entries(date_str, date_str)
 
     header = {
-        "total_cost": stats.get("total_cost", 0.0),
-        "cache_hit_pct": stats.get("cache_hit_pct", 0.0),
-        "request_count": stats.get("request_count", 0),
+        "total_cost": _as_number(stats.get("total_cost")),
+        "cache_hit_pct": _as_number(stats.get("cache_hit_pct")),
+        "request_count": _as_int(stats.get("request_count")),
     }
 
+    active_panel = _MODE_BY_NAME[mode]
     ctx: dict[str, Any] = {
         "active_mode": mode,
-        "active_profile": os.environ.get("TOKENPAK_COMPANION_PROFILE", "balanced"),
+        "active_panel": active_panel,
+        "active_profile": _active_profile_from_env(mode),
+        "mode_options": MODE_PANELS,
         "header": header,
         "stats": stats,
+        "summary": summary,
         "query_date": date_str,
     }
 
-    if mode == "cli":
-        ctx.update(_cli_data(entries))
-    elif mode == "tui":
-        ctx.update(_tui_data(entries))
-    elif mode == "tmux":
-        ctx.update(_tmux_data(entries, stats))
-    elif mode == "sdk":
-        ctx.update(_sdk_data(entries))
-    elif mode == "ide":
-        ctx.update(_ide_data())
-    elif mode == "cron":
-        ctx.update(_cron_data())
-
+    builders = {
+        "cli": _cli_data,
+        "tui": _tui_data,
+        "tmux": lambda rows: _tmux_data(rows, stats),
+        "sdk": _sdk_data,
+        "ide": lambda rows: _ide_data(rows),
+        "cron": _cron_data,
+    }
+    ctx.update(builders[mode](entries))
     return ctx
 
 
-def _cli_data(entries: list[dict]) -> dict[str, Any]:
-    # cost_by_repo: group by extra.working_dir or extra.repo_hash if present
-    repo_map: dict[str, dict] = {}
-    for e in entries:
-        repo = ((e.get("extra") or {}).get("working_dir") or
-                (e.get("extra") or {}).get("repo_hash") or "")
+def _cli_data(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    repo_map: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        extra = entry.get("extra") or {}
+        repo = extra.get("working_dir") or extra.get("repo_hash") or ""
         if not repo:
             continue
-        if repo not in repo_map:
-            repo_map[repo] = {"repo": repo, "request_count": 0, "cost": 0.0}
-        repo_map[repo]["request_count"] += 1
-        repo_map[repo]["cost"] += e.get("cost", 0.0)
+        row = repo_map.setdefault(repo, {"repo": repo, "request_count": 0, "cost": 0.0})
+        row["request_count"] += 1
+        row["cost"] += _as_number(entry.get("cost"))
+
     cost_by_repo = sorted(repo_map.values(), key=lambda x: x["cost"], reverse=True)[:10]
     return {
         "cost_by_repo": cost_by_repo,
@@ -112,23 +187,20 @@ def _cli_data(entries: list[dict]) -> dict[str, Any]:
     }
 
 
-def _tui_data(entries: list[dict]) -> dict[str, Any]:
-    # Build savings tape from last 10 sessions with non-null session_id
-    seen: dict[str, dict] = {}
-    for e in entries:
-        sid = e.get("session_id") or ""
+def _tui_data(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    seen: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        sid = entry.get("session_id") or ""
         if not sid:
             continue
-        if sid not in seen:
-            seen[sid] = {"session_id": sid, "tokens": 0, "cost": 0.0, "saved_pct": 0.0}
-        seen[sid]["tokens"] += e.get("tokens", 0)
-        seen[sid]["cost"] += e.get("cost", 0.0)
-        comp = (e.get("extra") or {}).get("compression_pct", 0.0)
-        seen[sid]["saved_pct"] = max(seen[sid]["saved_pct"], comp)
+        row = seen.setdefault(sid, {"session_id": sid, "tokens": 0, "cost": 0.0, "saved_pct": 0.0})
+        row["tokens"] += _as_int(entry.get("tokens"))
+        row["cost"] += _as_number(entry.get("cost"))
+        row["saved_pct"] = max(row["saved_pct"], _as_number((entry.get("extra") or {}).get("compression_pct")))
 
     tape = sorted(seen.values(), key=lambda x: x["cost"], reverse=True)[:10]
-    total_cost = sum(e.get("cost", 0.0) for e in entries)
-    total_tokens = sum(e.get("tokens", 0) for e in entries)
+    total_cost = sum(_as_number(entry.get("cost")) for entry in entries)
+    total_tokens = sum(_as_int(entry.get("tokens")) for entry in entries)
     return {
         "session_cost": total_cost,
         "session_tokens": total_tokens,
@@ -137,23 +209,24 @@ def _tui_data(entries: list[dict]) -> dict[str, Any]:
     }
 
 
-def _tmux_data(entries: list[dict], stats: dict) -> dict[str, Any]:
-    agent_map: dict[str, dict] = {}
-    for e in entries:
-        aid = e.get("agent") or "unknown"
-        if aid not in agent_map:
-            agent_map[aid] = {"agent_id": aid, "request_count": 0, "total_tokens": 0, "cost": 0.0}
-        agent_map[aid]["request_count"] += 1
-        agent_map[aid]["total_tokens"] += e.get("tokens", 0)
-        agent_map[aid]["cost"] += e.get("cost", 0.0)
+def _tmux_data(entries: list[dict[str, Any]], stats: dict[str, Any]) -> dict[str, Any]:
+    agent_map: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        agent_id = entry.get("agent") or entry.get("session_id") or "unknown"
+        row = agent_map.setdefault(
+            agent_id,
+            {"agent_id": agent_id, "request_count": 0, "total_tokens": 0, "cost": 0.0},
+        )
+        row["request_count"] += 1
+        row["total_tokens"] += _as_int(entry.get("tokens"))
+        row["cost"] += _as_number(entry.get("cost"))
 
-    total_cost = stats.get("total_cost", 0.0) or 1e-9
+    total_cost = max(_as_number(stats.get("total_cost")), 0.000000001)
     agent_rows = sorted(agent_map.values(), key=lambda x: x["cost"], reverse=True)[:20]
     for row in agent_rows:
         row["budget_pct"] = (row["cost"] / total_cost) * 100
 
-    # Fairness: any single agent using >70% of budget is "skewed"
-    fairness_ok = all(r["budget_pct"] <= 70 for r in agent_rows)
+    fairness_ok = all(row["budget_pct"] <= 70 for row in agent_rows)
     return {
         "agent_rows": agent_rows,
         "concurrent_sessions": len(agent_map),
@@ -161,44 +234,88 @@ def _tmux_data(entries: list[dict], stats: dict) -> dict[str, Any]:
     }
 
 
-def _sdk_data(entries: list[dict]) -> dict[str, Any]:
-    model_map: dict[str, dict] = {}
-    for e in entries:
-        m = e.get("model") or "unknown"
-        if m not in model_map:
-            model_map[m] = {"model": m, "request_count": 0, "total_tokens": 0, "cost": 0.0}
-        model_map[m]["request_count"] += 1
-        model_map[m]["total_tokens"] += e.get("tokens", 0)
-        model_map[m]["cost"] += e.get("cost", 0.0)
+def _sdk_data(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    model_map: dict[str, dict[str, Any]] = {}
+    error_count = 0
+    for entry in entries:
+        model = entry.get("model") or "unknown"
+        row = model_map.setdefault(
+            model,
+            {"model": model, "request_count": 0, "total_tokens": 0, "cost": 0.0},
+        )
+        row["request_count"] += 1
+        row["total_tokens"] += _as_int(entry.get("tokens"))
+        row["cost"] += _as_number(entry.get("cost"))
+        status = str(entry.get("status") or (entry.get("extra") or {}).get("status") or "").lower()
+        if status in {"error", "failed", "failure"} or entry.get("error"):
+            error_count += 1
 
     otlp_endpoint = os.environ.get("TOKENPAK_OTLP_ENDPOINT", "")
     otlp_status = "active" if otlp_endpoint else "not configured"
 
     return {
         "model_usage": sorted(model_map.values(), key=lambda x: x["request_count"], reverse=True),
-        "error_count": 0,
+        "error_count": error_count,
         "otlp_status": otlp_status,
     }
 
 
-def _ide_data() -> dict[str, Any]:
-    workspace = (os.environ.get("VSCODE_WORKSPACE_FOLDER") or
-                 os.environ.get("JETBRAINS_PROJECT") or "")
+def _ide_data(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    workspace = (
+        os.environ.get("VSCODE_WORKSPACE_FOLDER")
+        or os.environ.get("JETBRAINS_PROJECT")
+        or os.environ.get("TOKENPAK_WORKSPACE")
+        or ""
+    )
+    inline_savings_tokens = sum(_as_int((entry.get("extra") or {}).get("tokens_saved")) for entry in entries)
+    inline_savings_cost = sum(_as_number((entry.get("extra") or {}).get("cost_saved")) for entry in entries)
+    timeout_events = [
+        {
+            "timestamp": entry.get("timestamp", "unknown"),
+            "description": entry.get("error") or (entry.get("extra") or {}).get("description") or "timeout",
+        }
+        for entry in entries
+        if "timeout" in str(entry.get("error") or (entry.get("extra") or {}).get("error") or "").lower()
+    ]
     return {
         "active_workspace": workspace or None,
-        "inline_savings_tokens": None,
-        "inline_savings_cost": None,
-        "timeout_count": 0,
-        "timeout_events": [],
+        "inline_savings_tokens": inline_savings_tokens or None,
+        "inline_savings_cost": inline_savings_cost or None,
+        "timeout_count": len(timeout_events),
+        "timeout_events": timeout_events,
     }
 
 
-def _cron_data() -> dict[str, Any]:
+def _cron_data(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    job_map: dict[str, dict[str, Any]] = {}
+    telegram_alerts = 0
+    budget_enforcements = 0
+    for entry in entries:
+        extra = entry.get("extra") or {}
+        job_name = extra.get("job_name") or entry.get("job_name")
+        if job_name:
+            row = job_map.setdefault(job_name, {"name": job_name, "total": 0, "success": 0, "failed": 0})
+            row["total"] += 1
+            status = str(entry.get("status") or extra.get("status") or "success").lower()
+            if status in {"error", "failed", "failure"}:
+                row["failed"] += 1
+            else:
+                row["success"] += 1
+        if extra.get("telegram_alert_sent") or extra.get("alert_channel") == "telegram":
+            telegram_alerts += 1
+        if extra.get("budget_enforced") or extra.get("budget_hard_stop"):
+            budget_enforcements += 1
+
+    job_stats = sorted(job_map.values(), key=lambda x: x["total"], reverse=True)
+    for row in job_stats:
+        row["rate"] = (row["success"] / max(row["total"], 1)) * 100
+    total_jobs = sum(row["total"] for row in job_stats)
+    success_rate = (sum(row["success"] for row in job_stats) / total_jobs * 100) if total_jobs else None
     return {
-        "job_stats": [],
-        "success_rate": None,
-        "telegram_alerts": None,
-        "budget_enforcements": None,
+        "job_stats": job_stats,
+        "success_rate": success_rate,
+        "telegram_alerts": telegram_alerts,
+        "budget_enforcements": budget_enforcements,
     }
 
 

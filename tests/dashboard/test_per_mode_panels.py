@@ -1,252 +1,199 @@
-"""CCI-09 — Per-mode dashboard panels tests.
-
-Covers all acceptance criteria:
-  AC 1 — Each of the 6 modes renders an HTTP 200 at /dashboard?mode=<mode>
-  AC 2 — /dashboard with no ?mode= returns 200 (defaults to detected mode)
-  AC 3 — Mode selector appears in every per-mode response
-  AC 4 — Unknown ?mode= value returns 404
-  AC 5 — Cross-mode shared header fields appear in every response
-  AC 6 — HTMX polling endpoint /dashboard/htmx/mode/tui/cost returns 200
-  AC 7 — TUI live-meter polling script included in tui response
-  AC 8 — No regressions: existing dashboard routes still work
-
-All tests use TestClient against the combined FastAPI app — no running proxy
-needed.
-"""
+"""CCI-09 — Per-mode dashboard panel coverage."""
 
 from __future__ import annotations
 
 import os
-import tempfile
-import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-from typing import Any
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-# ---------------------------------------------------------------------------
-# Import guard
-# ---------------------------------------------------------------------------
 try:
-    from tokenpak.dashboard.app import create_dashboard_app, VALID_MODES, _detect_active_mode
-except ImportError as exc:
+    from tokenpak.dashboard.app import (
+        MODE_PANELS,
+        VALID_MODES,
+        _detect_active_mode,
+        _mode_from_profile,
+        create_dashboard_app,
+    )
+except ImportError as exc:  # pragma: no cover - import guard should fail loudly
     pytest.fail(f"Failed to import tokenpak.dashboard.app: {exc}")
 
+MODES = tuple(panel["mode"] for panel in MODE_PANELS)
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
 def client():
-    """TestClient for the dashboard app with an empty telemetry store."""
+    """TestClient for the standalone dashboard app."""
     app = create_dashboard_app()
-    with TestClient(app, raise_server_exceptions=True) as c:
-        yield c
+    with TestClient(app, raise_server_exceptions=True) as test_client:
+        yield test_client
 
-
-# ---------------------------------------------------------------------------
-# AC 1 — Each mode renders HTTP 200
-# ---------------------------------------------------------------------------
 
 class TestEachModeRenders:
-    @pytest.mark.parametrize("mode", ["cli", "tui", "tmux", "sdk", "ide", "cron"])
+    @pytest.mark.parametrize("mode", MODES)
     def test_mode_returns_200(self, client, mode):
-        r = client.get(f"/dashboard?mode={mode}")
-        assert r.status_code == 200, f"mode={mode} got {r.status_code}: {r.text[:200]}"
+        response = client.get(f"/dashboard?mode={mode}")
+        assert response.status_code == 200, response.text[:200]
 
-    @pytest.mark.parametrize("mode", ["cli", "tui", "tmux", "sdk", "ide", "cron"])
+    @pytest.mark.parametrize("mode", MODES)
     def test_mode_returns_html(self, client, mode):
-        r = client.get(f"/dashboard?mode={mode}")
-        assert "text/html" in r.headers.get("content-type", "")
+        response = client.get(f"/dashboard?mode={mode}")
+        assert "text/html" in response.headers.get("content-type", "")
 
-    @pytest.mark.parametrize("mode", ["cli", "tui", "tmux", "sdk", "ide", "cron"])
+    @pytest.mark.parametrize("mode", MODES)
     def test_mode_panel_title_in_response(self, client, mode):
-        r = client.get(f"/dashboard?mode={mode}")
-        assert mode in r.text.lower(), f"mode={mode} not found in response"
+        response = client.get(f"/dashboard?mode={mode}")
+        assert mode in response.text.lower()
 
-
-# ---------------------------------------------------------------------------
-# AC 2 — No ?mode= defaults gracefully
-# ---------------------------------------------------------------------------
 
 class TestDefaultMode:
     def test_no_mode_returns_200(self, client):
-        # Force TOKENPAK_MODE unset so detection falls through to "cli"
-        env = {k: v for k, v in os.environ.items() if k != "TOKENPAK_MODE"}
         with patch.dict(os.environ, {}, clear=True):
-            os.environ.update(env)
-            r = client.get("/dashboard")
-        assert r.status_code == 200
+            response = client.get("/dashboard")
+        assert response.status_code == 200
 
     def test_no_mode_renders_mode_selector(self, client):
         with patch.dict(os.environ, {}, clear=True):
-            r = client.get("/dashboard")
-        assert "mode-buttons" in r.text or "mode-btn" in r.text
+            response = client.get("/dashboard")
+        assert "mode-buttons" in response.text
 
+    def test_default_mode_uses_cci04_profile(self, client):
+        with patch.dict(os.environ, {"TOKENPAK_PROFILE": "claude-code-ide"}, clear=True):
+            response = client.get("/dashboard")
+        assert response.status_code == 200
+        assert "IDE Mode" in response.text
+        assert "claude-code-ide" in response.text
 
-# ---------------------------------------------------------------------------
-# AC 3 — Mode selector present in every response
-# ---------------------------------------------------------------------------
 
 class TestModeSelectorPresent:
-    @pytest.mark.parametrize("mode", ["cli", "tui", "tmux", "sdk", "ide", "cron"])
-    def test_all_6_modes_linked(self, client, mode):
-        r = client.get(f"/dashboard?mode={mode}")
-        # All 6 modes should appear as links in the selector
-        for m in ["cli", "tui", "tmux", "sdk", "ide", "cron"]:
-            assert f"?mode={m}" in r.text, f"Link to ?mode={m} missing in mode={mode} response"
+    @pytest.mark.parametrize("mode", MODES)
+    def test_all_modes_linked_from_single_source(self, client, mode):
+        response = client.get(f"/dashboard?mode={mode}")
+        for expected in MODES:
+            assert f"?mode={expected}" in response.text
 
-    @pytest.mark.parametrize("mode", ["cli", "tui", "tmux", "sdk", "ide", "cron"])
+    @pytest.mark.parametrize("mode", MODES)
     def test_active_mode_has_active_class(self, client, mode):
-        r = client.get(f"/dashboard?mode={mode}")
-        # The active mode button should have the "active" CSS class
-        # Check that mode appears near "active" in the response
-        assert "active" in r.text
+        response = client.get(f"/dashboard?mode={mode}")
+        assert "mode-btn active" in response.text
+        assert "aria-current=\"page\"" in response.text
 
-    def test_mode_selector_is_1_click(self, client):
-        # Each mode is a direct link (<a href=...>) not nested in menus
-        r = client.get("/dashboard?mode=cli")
-        for m in ["cli", "tui", "tmux", "sdk", "ide", "cron"]:
-            assert f'href="/dashboard?mode={m}"' in r.text, f"Direct link for mode={m} missing"
+    def test_mode_selector_is_one_click(self, client):
+        response = client.get("/dashboard?mode=cli")
+        for mode in MODES:
+            assert f'href="/dashboard?mode={mode}"' in response.text
 
-
-# ---------------------------------------------------------------------------
-# AC 4 — Unknown mode returns 404
-# ---------------------------------------------------------------------------
 
 class TestUnknownMode:
-    def test_unknown_mode_returns_404(self, client):
-        r = client.get("/dashboard?mode=unknown_xyz")
-        assert r.status_code == 404
-
-    def test_empty_mode_param_returns_200(self, client):
-        # Empty string falls through; server treats as no-mode
-        r = client.get("/dashboard?mode=")
-        # Should either default gracefully or return 404
-        assert r.status_code in (200, 404)
-
-    @pytest.mark.parametrize("bad_mode", ["admin", "root", "api", "../etc"])
+    @pytest.mark.parametrize("bad_mode", ["unknown_xyz", "admin", "root", "api", "../etc"])
     def test_bad_modes_return_404(self, client, bad_mode):
-        r = client.get(f"/dashboard?mode={bad_mode}")
-        assert r.status_code == 404
+        response = client.get(f"/dashboard?mode={bad_mode}")
+        assert response.status_code == 404
 
-
-# ---------------------------------------------------------------------------
-# AC 5 — Shared header fields appear in every response
-# ---------------------------------------------------------------------------
 
 class TestSharedHeader:
-    @pytest.mark.parametrize("mode", ["cli", "tui", "tmux", "sdk", "ide", "cron"])
+    @pytest.mark.parametrize("mode", MODES)
     def test_active_profile_shown(self, client, mode):
-        r = client.get(f"/dashboard?mode={mode}")
-        assert "profile" in r.text.lower()
+        # Clear profile env vars so _active_profile_from_env falls through to
+        # the CCI-04 default pattern ("claude-code-<mode>").
+        env_keys = (
+            "TOKENPAK_ACTIVE_PROFILE", "TOKENPAK_PROFILE",
+            "TOKENPAK_COMPANION_PROFILE", "TOKENPAK_CONSUMPTION_MODE", "TOKENPAK_MODE",
+        )
+        clean = {k: v for k, v in os.environ.items() if k not in env_keys}
+        with patch.dict(os.environ, clean, clear=True):
+            response = client.get(f"/dashboard?mode={mode}")
+        assert "Active profile" in response.text
+        assert f"claude-code-{mode}" in response.text
 
-    @pytest.mark.parametrize("mode", ["cli", "tui", "tmux", "sdk", "ide", "cron"])
+    @pytest.mark.parametrize("mode", MODES)
     def test_total_cost_today_shown(self, client, mode):
-        r = client.get(f"/dashboard?mode={mode}")
-        # Should contain a dollar sign for cost display
-        assert "$" in r.text
+        response = client.get(f"/dashboard?mode={mode}")
+        assert "Total cost today" in response.text
+        assert "$" in response.text
 
-    @pytest.mark.parametrize("mode", ["cli", "tui", "tmux", "sdk", "ide", "cron"])
+    @pytest.mark.parametrize("mode", MODES)
     def test_cache_hit_rate_label_shown(self, client, mode):
-        r = client.get(f"/dashboard?mode={mode}")
-        assert "cache" in r.text.lower()
+        response = client.get(f"/dashboard?mode={mode}")
+        assert "Cache hit rate" in response.text
 
-    @pytest.mark.parametrize("mode", ["cli", "tui", "tmux", "sdk", "ide", "cron"])
+    @pytest.mark.parametrize("mode", MODES)
     def test_shared_header_div_present(self, client, mode):
-        r = client.get(f"/dashboard?mode={mode}")
-        assert "shared-header" in r.text
+        response = client.get(f"/dashboard?mode={mode}")
+        assert "shared-header" in response.text
 
-
-# ---------------------------------------------------------------------------
-# AC 6 — TUI HTMX polling endpoint
-# ---------------------------------------------------------------------------
 
 class TestTuiPollingEndpoint:
     def test_tui_cost_endpoint_returns_200(self, client):
-        r = client.get("/dashboard/htmx/mode/tui/cost")
-        assert r.status_code == 200
+        response = client.get("/dashboard/htmx/mode/tui/cost")
+        assert response.status_code == 200
 
     def test_tui_cost_endpoint_returns_dollar_amount(self, client):
-        r = client.get("/dashboard/htmx/mode/tui/cost")
-        assert r.text.startswith("$")
+        response = client.get("/dashboard/htmx/mode/tui/cost")
+        assert response.text.startswith("$")
 
     def test_tui_cost_endpoint_returns_numeric(self, client):
-        r = client.get("/dashboard/htmx/mode/tui/cost")
-        # Should be parseable: "$0.000000"
-        cost_str = r.text.lstrip("$")
-        float(cost_str)  # raises ValueError if not a number
+        response = client.get("/dashboard/htmx/mode/tui/cost")
+        float(response.text.lstrip("$"))
 
-
-# ---------------------------------------------------------------------------
-# AC 7 — TUI mode includes live-meter polling script
-# ---------------------------------------------------------------------------
 
 class TestTuiLiveMeter:
     def test_tui_has_live_meter_element(self, client):
-        r = client.get("/dashboard?mode=tui")
-        assert "live-meter" in r.text
+        response = client.get("/dashboard?mode=tui")
+        assert "live-meter" in response.text
 
-    def test_tui_has_polling_script(self, client):
-        r = client.get("/dashboard?mode=tui")
-        assert "setInterval" in r.text or "htmx" in r.text.lower()
+    def test_tui_has_htmx_polling_attributes(self, client):
+        response = client.get("/dashboard?mode=tui")
+        assert 'hx-get="/dashboard/htmx/mode/tui/cost"' in response.text
+        assert 'hx-trigger="every 5s"' in response.text
 
-    def test_tui_polling_targets_correct_endpoint(self, client):
-        r = client.get("/dashboard?mode=tui")
-        assert "/dashboard/htmx/mode/tui/cost" in r.text
+    def test_tui_has_local_polling_shim(self, client):
+        response = client.get("/dashboard?mode=tui")
+        assert "querySelectorAll('[hx-get][hx-trigger]')" in response.text
 
-
-# ---------------------------------------------------------------------------
-# AC 8 — No regressions: existing routes still work
-# ---------------------------------------------------------------------------
 
 class TestNoRegressions:
     def test_existing_agents_route_still_works(self, client):
-        r = client.get("/dashboard/agents")
-        assert r.status_code == 200
+        response = client.get("/dashboard/agents")
+        assert response.status_code == 200
 
     def test_existing_timeline_route_still_works(self, client):
-        r = client.get("/dashboard/timeline")
-        assert r.status_code == 200
+        response = client.get("/dashboard/timeline")
+        assert response.status_code == 200
 
     def test_existing_audit_route_still_works(self, client):
-        r = client.get("/dashboard/audit")
-        assert r.status_code == 200
+        response = client.get("/dashboard/audit")
+        assert response.status_code == 200
 
     def test_health_route_still_works(self, client):
-        r = client.get("/health")
-        assert r.status_code == 200
+        response = client.get("/health")
+        assert response.status_code == 200
 
-    def test_valid_modes_constant_has_6_entries(self):
+    def test_valid_modes_derived_from_mode_panels(self):
+        assert VALID_MODES == frozenset(MODES)
         assert len(VALID_MODES) == 6
-        assert VALID_MODES == {"cli", "tui", "tmux", "sdk", "ide", "cron"}
 
-
-# ---------------------------------------------------------------------------
-# Unit: _detect_active_mode
-# ---------------------------------------------------------------------------
 
 class TestDetectActiveMode:
-    def test_explicit_env_var_takes_priority(self):
-        with patch.dict(os.environ, {"TOKENPAK_MODE": "sdk"}, clear=False):
+    @pytest.mark.parametrize("mode", MODES)
+    def test_cci04_profile_maps_to_mode(self, mode):
+        assert _mode_from_profile(f"claude-code-{mode}") == mode
+
+    def test_explicit_profile_takes_priority(self):
+        with patch.dict(os.environ, {"TOKENPAK_PROFILE": "claude-code-sdk"}, clear=True):
+            assert _detect_active_mode() == "sdk"
+
+    def test_explicit_consumption_env_takes_priority(self):
+        with patch.dict(os.environ, {"TOKENPAK_CONSUMPTION_MODE": "sdk"}, clear=True):
             assert _detect_active_mode() == "sdk"
 
     def test_invalid_env_var_falls_through_to_heuristic(self):
-        with patch.dict(os.environ, {"TOKENPAK_MODE": "invalid", "TMUX": ""}, clear=False):
-            # "invalid" not in VALID_MODES, should fall through (TMUX="" is falsy)
-            result = _detect_active_mode()
-            assert result in VALID_MODES
+        with patch.dict(os.environ, {"TOKENPAK_MODE": "invalid"}, clear=True):
+            assert _detect_active_mode() == "cli"
 
     def test_tmux_env_detected(self):
-        env = {k: v for k, v in os.environ.items()
-               if k not in ("TOKENPAK_MODE", "TMUX", "TMUX_PANE",
-                            "TERM_PROGRAM", "VSCODE_PID", "JETBRAINS_IDE",
-                            "TOKENPAK_JOB_NAME", "CRON_JOB")}
         with patch.dict(os.environ, {"TMUX": "/tmp/tmux-1234/default,123,0"}, clear=True):
-            os.environ.update(env)
             assert _detect_active_mode() == "tmux"
 
     def test_no_signals_defaults_to_cli(self):

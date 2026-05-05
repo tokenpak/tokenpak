@@ -5,7 +5,10 @@
   <div class="stat-row">
     <div class="stat-card hero">
       <div class="stat-label">Current session cost</div>
-      <div class="stat-value live-meter">
+      <div class="stat-value live-meter"
+           hx-get="/dashboard/htmx/mode/tui/cost"
+           hx-trigger="every 5s"
+           hx-swap="innerHTML">
         ${{ "%.6f"|format(session_cost) if session_cost is defined else "0.000000" }}
       </div>
     </div>
