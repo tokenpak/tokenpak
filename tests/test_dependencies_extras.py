@@ -133,24 +133,25 @@ def test_each_heavy_dep_lives_in_its_named_extra(extra: str, heavy_pkg: str):
 
 
 def test_core_imports_under_slim_install():
-    """``import tokenpak`` and ``import tokenpak.proxy.client`` must succeed
-    even when none of the heavy extras packages are installed.
+    """The slim top-level package and canonical proxy surfaces import cleanly.
 
     This is the in-process equivalent of the CI slim-install smoke. We
     can't simulate a true ``pip install tokenpak`` (no extras) inside the
     dev venv, but we CAN guarantee the negative: if a heavy module is
-    absent from this interpreter, the slim path through tokenpak must not
-    raise. That confirms every heavy import site is properly guarded.
+    absent from this interpreter, the slim path through tokenpak and the
+    current canonical proxy import surfaces must not raise. That confirms
+    every heavy import site is properly guarded.
 
-    The CI slim-install smoke job is the authoritative cross-check; this
-    test catches regressions early in dev for any heavy package the
-    developer happens not to have installed locally.
+    ``tokenpak.proxy.client`` existed on an older branch but is absent from
+    the current canonical line; ``tokenpak.proxy`` and ``tokenpak.proxy.server``
+    are the import surfaces exercised by the repo's proxy smoke tests.
     """
     import importlib
     import importlib.util
 
     importlib.import_module("tokenpak")
-    importlib.import_module("tokenpak.proxy.client")
+    importlib.import_module("tokenpak.proxy")
+    importlib.import_module("tokenpak.proxy.server")
 
     heavy_modules = (
         "torch",
