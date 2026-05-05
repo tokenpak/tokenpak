@@ -587,15 +587,24 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self._handle_metrics_dashboard()
             return
         if path.startswith("/dashboard"):
-            # Serve dashboard UI files
-            from tokenpak.dashboard import serve_dashboard_file
+            # Serve dashboard UI files. Strip query strings before filesystem
+            # lookup so `/dashboard?mode=cli` still serves the local dashboard
+            # shell; the page reads the mode query parameter client-side.
+            from tokenpak.dashboard import CCI09_DASHBOARD_MODES, serve_dashboard_file
+            from urllib.parse import parse_qs, urlparse as _urlparse
             import asyncio
-            
-            # Extract dashboard path
-            dashboard_path = path[10:]  # Remove '/dashboard' prefix
+
+            dashboard_request = _urlparse(path)
+            mode = parse_qs(dashboard_request.query).get("mode", [None])[0]
+            if mode and mode not in CCI09_DASHBOARD_MODES:
+                self.send_error(404)
+                return
+
+            route_path = dashboard_request.path
+            dashboard_path = route_path[10:]  # Remove '/dashboard' prefix
             if not dashboard_path:
                 dashboard_path = '/'
-            
+
             # Serve the file
             result = asyncio.run(serve_dashboard_file(dashboard_path))
             if result:

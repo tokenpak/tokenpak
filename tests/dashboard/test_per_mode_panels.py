@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 try:
+    from tokenpak.dashboard import CCI09_DASHBOARD_MODES, serve_dashboard_file
     from tokenpak.dashboard.app import (
         MODE_PANELS,
         VALID_MODES,
@@ -173,6 +174,21 @@ class TestNoRegressions:
     def test_valid_modes_derived_from_mode_panels(self):
         assert VALID_MODES == frozenset(MODES)
         assert len(VALID_MODES) == 6
+
+
+class TestStaticDashboardShell:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", MODES)
+    async def test_static_dashboard_query_serves_index(self, mode):
+        result = await serve_dashboard_file(f"/?mode={mode}")
+        assert result is not None
+        content, mime_type = result
+        assert mime_type == "text/html"
+        assert "mode-selector" in content
+        assert f"mode: '{mode}'" in content
+
+    def test_static_dashboard_mode_catalog_matches_app_modes(self):
+        assert CCI09_DASHBOARD_MODES == MODES
 
 
 class TestDetectActiveMode:

@@ -710,10 +710,19 @@ class ProxyRoutesMixin:
 
     def _serve_dashboard(self):
         """Serve static dashboard files (HTML/CSS/JS)."""
+        from tokenpak.dashboard import CCI09_DASHBOARD_MODES
         from tokenpak.proxy.config import DASHBOARD_AUTH_ENABLED
 
+        parsed = urlparse(self.path)
+        mode = parse_qs(parsed.query).get("mode", [None])[0]
+        if mode and mode not in CCI09_DASHBOARD_MODES:
+            self._send_json(
+                {"error": {"type": "not_found", "message": f"Unknown dashboard mode: {mode}"}},
+                status=404,
+            )
+            return
+
         if DASHBOARD_AUTH_ENABLED:
-            parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
             provided = params.get("token", [None])[0]
             from tokenpak.telemetry.token_manager import load_or_create_token
@@ -731,13 +740,14 @@ class ProxyRoutesMixin:
                 return
             self.path = parsed.path
 
-        dashboard_dir = Path(__file__).parent / "tokenpak" / "dashboard"
+        dashboard_dir = Path(__file__).parents[1] / "dashboard"
 
-        if self.path == "/dashboard" or self.path == "/dashboard/":
+        dashboard_request_path = parsed.path
+        if dashboard_request_path == "/dashboard" or dashboard_request_path == "/dashboard/":
             file_path = dashboard_dir / "index.html"
             content_type = "text/html; charset=utf-8"
         else:
-            rel_path = self.path[len("/dashboard/"):]
+            rel_path = dashboard_request_path[len("/dashboard/"):]
             file_path = (dashboard_dir / rel_path).resolve()
             if not str(file_path).startswith(str(dashboard_dir.resolve())):
                 self._send_json(
@@ -756,8 +766,9 @@ class ProxyRoutesMixin:
                 content_type = "application/octet-stream"
 
         if not file_path.exists():
+            missing_path = dashboard_request_path if dashboard_request_path in ("/dashboard", "/dashboard/") else rel_path
             self._send_json(
-                {"error": {"type": "not_found", "message": f"File not found: {rel_path}"}},
+                {"error": {"type": "not_found", "message": f"File not found: {missing_path}"}},
                 status=404,
             )
             return

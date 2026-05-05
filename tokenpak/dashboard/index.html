@@ -144,12 +144,130 @@
         }
 
         .sessions-table tr:last-child td { border-bottom: none; }
+
+
+        .shared-header {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+        }
+
+        .mode-btn {
+            display: inline-block;
+            padding: 0.5rem 0.875rem;
+            border: 1px solid #27272a;
+            border-radius: 0.5rem;
+            color: #a1a1a6;
+            text-decoration: none;
+            font-size: 0.875rem;
+            background: #18181b;
+        }
+
+        .mode-btn:hover { border-color: #3f3f46; color: #fafafa; }
+        .mode-btn.active { border-color: #10b981; color: #10b981; background: #052e24; }
+
+        .mode-panel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .mode-metric {
+            background: #09090b;
+            border: 1px solid #27272a;
+            border-radius: 0.5rem;
+            padding: 1rem;
+        }
+
+        .mode-metric-label {
+            font-size: 0.7rem;
+            color: #71717a;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 0.35rem;
+        }
+
+        .mode-metric-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #10b981;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .mode-section {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #27272a;
+        }
+
+        .mode-section h3 {
+            font-size: 0.875rem;
+            color: #a1a1a6;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+
+        .mode-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8125rem;
+        }
+
+        .mode-table th,
+        .mode-table td {
+            text-align: left;
+            padding: 0.45rem 0.6rem;
+            border-bottom: 1px solid #27272a;
+            color: #d4d4d8;
+        }
+
+        .mode-table th { color: #a1a1a6; font-weight: 500; }
+        .empty-state { color: #71717a; font-style: italic; font-size: 0.875rem; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>✨ TokenPak Telemetry</h1>
         <p class="subtitle">Real-time compression & cost metrics</p>
+
+
+        <!-- Per-mode dashboard selector (CCI-09) -->
+        <div class="shared-header" aria-label="Shared dashboard header">
+            <div class="card">
+                <div class="card-title">Active Profile</div>
+                <div class="card-value" id="active-profile" style="font-size: 1.25rem;">claude-code-cli</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Total Cost Today</div>
+                <div class="card-value" id="mode-total-cost">—</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Cache Hit Rate</div>
+                <div class="card-value" id="mode-cache-hit-rate">—</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Requests Today</div>
+                <div class="card-value" id="mode-request-count">—</div>
+            </div>
+        </div>
+
+        <nav class="mode-selector" aria-label="Consumption mode selector" id="mode-selector"></nav>
+
+        <section class="card wide" id="mode-panel" aria-live="polite" style="margin-bottom: 2rem;">
+            <div class="card-title" id="mode-title">CLI Mode</div>
+            <div class="mode-panel-grid" id="mode-metrics"></div>
+            <div id="mode-sections"></div>
+        </section>
 
         <div class="grid">
             <!-- Request Count (24h) -->
@@ -245,6 +363,116 @@
         const REFRESH_INTERVAL = 30000;
 
         let costCtx, cacheCtx;
+
+
+        const MODE_PANELS = [
+            { mode: 'cli', label: 'CLI', title: 'CLI Mode — Repo Cost + Doctor Runs' },
+            { mode: 'tui', label: 'TUI', title: 'TUI Mode — Live Session Cost' },
+            { mode: 'tmux', label: 'tmux', title: 'tmux Mode — Agent Fairness' },
+            { mode: 'sdk', label: 'SDK', title: 'SDK Mode — API Usage' },
+            { mode: 'ide', label: 'IDE', title: 'IDE Mode — Workspace Savings' },
+            { mode: 'cron', label: 'cron', title: 'cron Mode — Job Reliability' },
+        ];
+        const VALID_MODES = new Set(MODE_PANELS.map((p) => p.mode));
+
+        function activeModeFromQuery() {
+            const mode = new URLSearchParams(window.location.search).get('mode') || 'cli';
+            return VALID_MODES.has(mode) ? mode : 'cli';
+        }
+
+        function metric(label, value) {
+            return `<div class="mode-metric"><div class="mode-metric-label">${label}</div><div class="mode-metric-value">${value}</div></div>`;
+        }
+
+        function table(headers, rows) {
+            if (!rows || rows.length === 0) return '<p class="empty-state">No telemetry for this lens yet.</p>';
+            return `<table class="mode-table"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+        }
+
+        function renderModeSelector(activeMode) {
+            const nav = document.getElementById('mode-selector');
+            if (!nav) return;
+            nav.innerHTML = MODE_PANELS.map((panel) => {
+                const active = panel.mode === activeMode ? ' active' : '';
+                const current = panel.mode === activeMode ? ' aria-current="page"' : '';
+                return `<a class="mode-btn${active}" href="/dashboard?mode=${panel.mode}"${current}>${panel.label}</a>`;
+            }).join('');
+        }
+
+        function updateSharedHeader(stats, activeMode) {
+            document.getElementById('active-profile').textContent = `claude-code-${activeMode}`;
+            document.getElementById('mode-total-cost').textContent = formatCost(stats?.total_cost || 0);
+            document.getElementById('mode-request-count').textContent = formatNumber(stats?.session_requests || 0);
+            const cachePct = Math.min((stats?.uptime_hours || 0) / 24, 1);
+            document.getElementById('mode-cache-hit-rate').textContent = formatPercent(cachePct);
+        }
+
+        function buildModeSections(activeMode, stats, dashboard) {
+            const sessions = Array.isArray(dashboard?.sessions) ? dashboard.sessions : [];
+            const totalCost = stats?.total_cost || sessions.reduce((sum, s) => sum + (s.cost || 0), 0);
+            const totalTokens = stats?.tokens_sent || sessions.reduce((sum, s) => sum + (s.input_tokens || 0) + (s.output_tokens || 0), 0);
+            const errors = stats?.errors || 0;
+
+            if (activeMode === 'cli') {
+                return {
+                    metrics: [metric('Budget burn rate', formatCost(totalCost)), metric('Repos tracked', '0'), metric('Doctor runs', '0')].join(''),
+                    sections: `<div class="mode-section"><h3>Cost by Repo</h3><p class="empty-state">Repo-level attribution requires working-directory telemetry. This panel is ready once extra.working_dir is emitted.</p></div><div class="mode-section"><h3>Recent Doctor Runs</h3><p class="empty-state">No doctor command runs recorded today.</p></div>`,
+                };
+            }
+            if (activeMode === 'tui') {
+                const rows = sessions.slice(0, 8).map((s) => `<tr><td>${_escSess(s.session_id)}</td><td>${(s.input_tokens || 0) + (s.output_tokens || 0)}</td><td>$${(s.cost || 0).toFixed(4)}</td></tr>`);
+                return {
+                    metrics: [metric('Live cost meter', `<span id="tui-live-cost" data-refresh="5s">${formatCost(totalCost)}</span>`), metric('Current session tokens', formatNumber(totalTokens)), metric('Savings tape entries', sessions.length)].join(''),
+                    sections: `<div class="mode-section"><h3>Savings Tape History</h3>${table(['Session', 'Tokens', 'Cost'], rows)}</div>`,
+                };
+            }
+            if (activeMode === 'tmux') {
+                const maxPct = totalCost > 0 ? Math.max(...sessions.map((s) => ((s.cost || 0) / totalCost) * 100), 0) : 0;
+                const rows = sessions.slice(0, 10).map((s) => `<tr><td>${_escSess(s.session_id)}</td><td>${s.request_count || 0}</td><td>$${(s.cost || 0).toFixed(4)}</td></tr>`);
+                return {
+                    metrics: [metric('Concurrent sessions', sessions.length), metric('Fairness check', maxPct <= 70 ? 'OK' : 'Watch'), metric('Max budget share', `${maxPct.toFixed(1)}%`)].join(''),
+                    sections: `<div class="mode-section"><h3>Per-Agent Attribution</h3>${table(['Agent / Session', 'Requests', 'Cost'], rows)}</div>`,
+                };
+            }
+            if (activeMode === 'sdk') {
+                const rows = sessions.slice(0, 10).map((s) => `<tr><td>${_escSess(s.session_id)}</td><td>${s.request_count || 0}</td><td>${(s.input_tokens || 0) + (s.output_tokens || 0)}</td><td>$${(s.cost || 0).toFixed(4)}</td></tr>`);
+                return {
+                    metrics: [metric('Structured errors', errors), metric('OTLP export', 'Not configured'), metric('API requests', stats?.session_requests || 0)].join(''),
+                    sections: `<div class="mode-section"><h3>API Usage</h3>${table(['Model / Session', 'Requests', 'Tokens', 'Cost'], rows)}</div>`,
+                };
+            }
+            if (activeMode === 'ide') {
+                return {
+                    metrics: [metric('Workspace status', 'Local'), metric('Inline savings', formatNumber(stats?.tokens_saved || 0)), metric('Timeout events', '0')].join(''),
+                    sections: `<div class="mode-section"><h3>IDE Timeout Events</h3><p class="empty-state">No IDE-specific timeout events recorded today.</p></div>`,
+                };
+            }
+            return {
+                metrics: [metric('Job success rate', '—'), metric('Telegram alerts sent', '0'), metric('Hard budget enforcements', '0')].join(''),
+                sections: `<div class="mode-section"><h3>Job Success / Failure Rate</h3><p class="empty-state">Cron job attribution requires TOKENPAK_JOB_NAME or SDK annotation.</p></div>`,
+            };
+        }
+
+        function updateModeDashboard(stats, dashboardPayload) {
+            const activeMode = activeModeFromQuery();
+            const panel = MODE_PANELS.find((p) => p.mode === activeMode) || MODE_PANELS[0];
+            renderModeSelector(activeMode);
+            updateSharedHeader(stats || {}, activeMode);
+            document.getElementById('mode-title').textContent = panel.title;
+            const content = buildModeSections(activeMode, stats || {}, dashboardPayload || {});
+            document.getElementById('mode-metrics').innerHTML = content.metrics;
+            document.getElementById('mode-sections').innerHTML = content.sections;
+        }
+
+        async function fetchMetricsDashboard() {
+            try {
+                const response = await fetch('/metrics/dashboard');
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (error) {
+                return null;
+            }
+        }
 
         async function fetchStats() {
             try {
@@ -428,18 +656,29 @@
 
         async function init() {
             const stats = await fetchStats();
+            const dashboardPayload = await fetchMetricsDashboard();
             updateDashboard(stats);
+            updateModeDashboard(stats, dashboardPayload);
             if (typeof fetchAndUpdateSessionsDashboard === "function") {
                 fetchAndUpdateSessionsDashboard();
             }
 
             setInterval(async () => {
                 const stats = await fetchStats();
+                const dashboardPayload = await fetchMetricsDashboard();
                 updateDashboard(stats);
+                updateModeDashboard(stats, dashboardPayload);
                 if (typeof fetchAndUpdateSessionsDashboard === "function") {
                     fetchAndUpdateSessionsDashboard();
                 }
             }, REFRESH_INTERVAL);
+
+            setInterval(async () => {
+                if (activeModeFromQuery() !== 'tui') return;
+                const stats = await fetchStats();
+                const liveCost = document.getElementById('tui-live-cost');
+                if (liveCost) liveCost.textContent = formatCost(stats?.total_cost || 0);
+            }, 5000);
         }
 
         init();

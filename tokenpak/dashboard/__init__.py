@@ -4,6 +4,7 @@ import os  # noqa: F401 — reserved for dashboard file path expansion
 from pathlib import Path
 
 DASHBOARD_DIR = Path(__file__).parent
+CCI09_DASHBOARD_MODES = ("cli", "tui", "tmux", "sdk", "ide", "cron")
 
 
 def get_dashboard_files():
@@ -17,8 +18,16 @@ def get_dashboard_files():
 
 
 async def serve_dashboard_file(path: str) -> tuple[str, str] | None:
-    """Serve a dashboard file. Returns (content, mime_type) or None."""
+    """Serve a dashboard file. Returns (content, mime_type) or None.
+
+    Query strings are ignored so `/dashboard?mode=cli` resolves to the same
+    local dashboard shell as `/dashboard`; client-side code reads the `mode`
+    parameter and renders the requested CCI-09 panel.
+    """
     files = get_dashboard_files()
+
+    # Normalize request-target fragments from the proxy server before lookup.
+    path = path.split("?", 1)[0].split("#", 1)[0]
 
     # Default to index.html
     if path in ("", "/"):
@@ -54,6 +63,6 @@ try:
     from .export_api import ExportAPI
     from .export_csv import CSVExporter, ExportDataType, ExportFormat
     from .session_filter import SessionFilter
-    __all__ = ['get_dashboard_files', 'serve_dashboard_file', 'ExportAPI', 'CSVExporter', 'ExportDataType', 'ExportFormat', 'SessionFilter', 'account_dashboard', 'app', 'export_api', 'export_csv', 'session_filter']
+    __all__ = ['get_dashboard_files', 'serve_dashboard_file', 'CCI09_DASHBOARD_MODES', 'ExportAPI', 'CSVExporter', 'ExportDataType', 'ExportFormat', 'SessionFilter', 'account_dashboard', 'app', 'export_api', 'export_csv', 'session_filter']
 except ImportError:
-    __all__ = ["get_dashboard_files", "serve_dashboard_file", 'account_dashboard', 'app', 'export_api', 'export_csv', 'session_filter']
+    __all__ = ["get_dashboard_files", "serve_dashboard_file", "CCI09_DASHBOARD_MODES", 'account_dashboard', 'app', 'export_api', 'export_csv', 'session_filter']
