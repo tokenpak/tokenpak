@@ -4,9 +4,9 @@ Two test classes:
 1. PyprojectHeavyDepCheck — asserts heavy packages are absent from
    [project.dependencies] after TIP7-001 lands. Run this as the
    post-demotion gate to confirm the pyproject change is correct.
-2. ExtrasGuardSmokeTest — asserts guarded import sites raise a clear
-   ImportError (mentioning the extra name) when the dep is absent.
-   Uses unittest.mock.patch so no actual uninstall is needed.
+2. ExtrasGuardSmokeTest — asserts guarded import sites still import or
+   fail gracefully when the dep is absent. Uses unittest.mock.patch so no
+   actual uninstall is needed.
 
 Usage:
     pytest tests/test_extras_import_guard.py -v --tb=short
@@ -14,7 +14,8 @@ Usage:
 Or as a standalone checker (no pytest required):
     python3 tests/test_extras_import_guard.py
 
-Standards cited: 02 §9 (Dependencies), 02 §10 (Formatting), 10 §2 A5
+Standards cited: 02 §9 (Dependencies), 02 §10 (Formatting), 02 §11
+(Commit Hygiene), 10 §2 A5
 """
 
 from __future__ import annotations
@@ -209,22 +210,28 @@ class ExtrasGuardSmokeTest(unittest.TestCase):
             "_TS_AVAILABLE must be False when tree-sitter-languages is absent",
         )
 
-    def test_ab_optimizer_loads_without_scipy(self):
-        """ab_optimizer must import cleanly even if scipy is absent."""
-        mod = self._reload_with_missing(
-            "tokenpak.intelligence.ab_optimizer",
-            "scipy",
-        )
+    def test_scipy_has_no_current_runtime_import_site(self):
+        """scipy is extra-only until a real source import site returns."""
+        offenders: list[str] = []
+        for source_file in (_REPO_ROOT / "tokenpak").rglob("*.py"):
+            text = source_file.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                stripped = line.strip()
+                if stripped.startswith(("import scipy", "from scipy")):
+                    offenders.append(str(source_file.relative_to(_REPO_ROOT)))
+                    break
+
         self.assertFalse(
-            mod._HAS_SCIPY,
-            "_HAS_SCIPY must be False when scipy is absent",
+            offenders,
+            "scipy should have no current tokenpak source import sites: "
+            + ", ".join(offenders),
         )
 
     def test_litellm_proxy_returns_error_without_litellm(self):
         """litellm ProxyHandler must return a 500 JSON error (not raise) when litellm absent."""
         import asyncio
 
-        from tokenpak.integrations.litellm.proxy import ProxyHandler
+        from tokenpak.sdk.integrations.litellm.proxy import ProxyHandler
 
         handler = ProxyHandler()
 
