@@ -9,13 +9,18 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
+from fastapi import APIRouter, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from tokenpak.telemetry.query.api import EntryStore
 from tokenpak.telemetry.query.audit import AuditGenerator
 from tokenpak.telemetry.query.timeline import TimelineGenerator
+from tokenpak.dashboard.settings_persistence import (
+    load_settings_context,
+    validate_settings,
+    write_settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -553,6 +558,188 @@ def api_audit(
     audit = _audit.session_audit(entries)
     audit["generated_at"] = datetime.now(tz=timezone.utc).isoformat()
     return audit
+
+
+@router.get("/settings/claude-code", response_class=HTMLResponse)
+def settings_claude_code(request: Request):
+    """CCI-13: Settings UI page for Claude Code integration."""
+    ctx = load_settings_context()
+    ctx["request"] = request
+    ctx["page_title"] = "Claude Code Settings"
+    ctx["active_profile_display"] = ctx.get("active_profile", "claude-code-cli")
+    return templates.TemplateResponse(request, "settings_claude_code.html", ctx)
+
+
+@router.post("/settings/claude-code/htmx/profile", response_class=HTMLResponse)
+def htmx_settings_profile(
+    request: Request,
+    profile: str = Form(...),
+):
+    """HTMX: update active profile."""
+    errors = validate_settings({"TOKENPAK_ACTIVE_PROFILE": profile})
+    if errors:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
+        )
+    ok, write_errors = write_settings({"TOKENPAK_ACTIVE_PROFILE": profile})
+    if not ok:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(write_errors)}</p>', status_code=422
+        )
+    return HTMLResponse(
+        f'<span class="settings-ok">Profile set to <strong>{profile}</strong>. '
+        f'Takes effect on next request.</span>'
+    )
+
+
+@router.post("/settings/claude-code/htmx/vault", response_class=HTMLResponse)
+def htmx_settings_vault(
+    request: Request,
+    vault_inject_enabled: str = Form("0"),
+    inject_budget: str = Form("4000"),
+    inject_top_k: str = Form("5"),
+    inject_min_score: str = Form("2.0"),
+):
+    """HTMX: update vault injection settings."""
+    updates = {
+        "TOKENPAK_VAULT_INJECT_ENABLED": vault_inject_enabled,
+        "TOKENPAK_INJECT_BUDGET": inject_budget,
+        "TOKENPAK_INJECT_TOP_K": inject_top_k,
+        "TOKENPAK_INJECT_MIN_SCORE": inject_min_score,
+    }
+    errors = validate_settings(updates)
+    if errors:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
+        )
+    ok, write_errors = write_settings(updates)
+    if not ok:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(write_errors)}</p>', status_code=422
+        )
+    state = "enabled" if vault_inject_enabled in {"1", "true", "yes", "on"} else "disabled"
+    return HTMLResponse(
+        f'<span class="settings-ok">Vault injection {state}. '
+        f'Budget {inject_budget} tokens, top_k={inject_top_k}, min_score={inject_min_score}. '
+        f'Takes effect on next request.</span>'
+    )
+
+
+@router.post("/settings/claude-code/htmx/budget", response_class=HTMLResponse)
+def htmx_settings_budget(
+    request: Request,
+    budget_controller_enabled: str = Form("0"),
+    budget_total: str = Form("12000"),
+):
+    """HTMX: update budget enforcement settings."""
+    updates = {
+        "TOKENPAK_BUDGET_CONTROLLER": budget_controller_enabled,
+        "TOKENPAK_BUDGET_TOTAL": budget_total,
+    }
+    errors = validate_settings(updates)
+    if errors:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
+        )
+    ok, write_errors = write_settings(updates)
+    if not ok:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(write_errors)}</p>', status_code=422
+        )
+    state = "enabled" if budget_controller_enabled in {"1", "true", "yes", "on"} else "disabled"
+    return HTMLResponse(
+        f'<span class="settings-ok">Budget enforcement {state}. '
+        f'Monthly limit: {budget_total} tokens. Takes effect on next request.</span>'
+    )
+
+
+@router.post("/settings/claude-code/htmx/alerts", response_class=HTMLResponse)
+def htmx_settings_alerts(
+    request: Request,
+    cache_alert_webhook_enabled: str = Form("0"),
+    cache_alert_webhook_url: str = Form(""),
+    cache_alert_slack_channel: str = Form(""),
+    cache_alert_threshold: str = Form("50.0"),
+):
+    """HTMX: update cache invalidation alert settings."""
+    updates = {
+        "TOKENPAK_CACHE_ALERT_WEBHOOK_ENABLED": cache_alert_webhook_enabled,
+        "TOKENPAK_CACHE_ALERT_THRESHOLD": cache_alert_threshold,
+    }
+    if cache_alert_webhook_url:
+        updates["TOKENPAK_CACHE_ALERT_WEBHOOK_URL"] = cache_alert_webhook_url
+    if cache_alert_slack_channel:
+        updates["TOKENPAK_CACHE_ALERT_SLACK_CHANNEL"] = cache_alert_slack_channel
+
+    errors = validate_settings(updates)
+    if errors:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
+        )
+    ok, write_errors = write_settings(updates)
+    if not ok:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(write_errors)}</p>', status_code=422
+        )
+    state = "enabled" if cache_alert_webhook_enabled in {"1", "true", "yes", "on"} else "disabled"
+    return HTMLResponse(
+        f'<span class="settings-ok">Cache invalidation alerts {state}. '
+        f'Threshold: {cache_alert_threshold}%. Takes effect on next request.</span>'
+    )
+
+
+@router.post("/settings/claude-code/htmx/local-first", response_class=HTMLResponse)
+def htmx_settings_local_first(
+    request: Request,
+    local_first_routing_enabled: str = Form("0"),
+):
+    """HTMX: update local-first routing toggle."""
+    updates = {"TOKENPAK_LOCAL_FIRST_ROUTING": local_first_routing_enabled}
+    errors = validate_settings(updates)
+    if errors:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
+        )
+    ok, write_errors = write_settings(updates)
+    if not ok:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(write_errors)}</p>', status_code=422
+        )
+    state = "enabled" if local_first_routing_enabled in {"1", "true", "yes", "on"} else "disabled"
+    return HTMLResponse(
+        f'<span class="settings-ok">Local-first routing {state}. '
+        f'Restart proxy for this change to take effect.</span>'
+    )
+
+
+@router.post("/settings/claude-code/htmx/compliance", response_class=HTMLResponse)
+def htmx_settings_compliance(
+    request: Request,
+    compliance_provider: str = Form(""),
+):
+    """HTMX: update compliance routing provider."""
+    updates: dict[str, str] = {}
+    if compliance_provider:
+        updates["TOKENPAK_COMPLIANCE_PROVIDER"] = compliance_provider
+
+    if not updates:
+        return HTMLResponse('<span class="settings-ok">No changes.</span>')
+
+    ok, write_errors = write_settings(updates, skip_validation=True)
+    if not ok:
+        return HTMLResponse(
+            f'<p class="settings-error">{"; ".join(write_errors)}</p>', status_code=422
+        )
+    return HTMLResponse(
+        f'<span class="settings-ok">Compliance provider set to <strong>{compliance_provider}</strong>. '
+        f'Restart proxy for this change to take effect.</span>'
+    )
+
+
+@router.get("/settings/claude-code/api/current", response_class=JSONResponse)
+def api_settings_current():
+    """JSON: return current settings state (for testing/debugging)."""
+    return load_settings_context()
 
 
 def create_dashboard_app() -> FastAPI:
