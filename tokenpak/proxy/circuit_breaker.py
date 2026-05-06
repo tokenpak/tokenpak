@@ -568,6 +568,7 @@ class CircuitBreaker:
 # Known provider URL substrings → canonical provider names
 _PROVIDER_PATTERNS: List[tuple] = [
     ("anthropic.com", "anthropic"),
+    ("deepseek.com", "deepseek"),
     ("openai.com", "openai"),
     # ChatGPT Codex subscription — OAuth JWT → chatgpt.com/backend-api.
     # Maps to the same circuit-breaker + injection logic as openai so

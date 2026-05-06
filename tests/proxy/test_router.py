@@ -97,3 +97,25 @@ def test_router_accepts_missing_content_length():
 
     result = router.route("/v1/messages", headers, body)
     assert result.provider == "anthropic"
+
+
+def test_router_detects_deepseek_host():
+    router = ProviderRouter()
+    body = _json_body("deepseek-v4-flash")
+
+    result = router.route("https://api.deepseek.com/v1/chat/completions", {}, body)
+
+    assert result.provider == "deepseek"
+    assert result.base_url == "https://api.deepseek.com"
+    assert result.full_url == "https://api.deepseek.com/v1/chat/completions"
+
+
+def test_router_detects_deepseek_model_for_reverse_proxy():
+    router = ProviderRouter()
+    body = _json_body("deepseek-v4-pro")
+    headers = {"Content-Type": "application/json", "Content-Length": str(len(body))}
+
+    result = router.route("/v1/chat/completions", headers, body)
+
+    assert result.provider == "deepseek"
+    assert result.full_url == "https://api.deepseek.com/v1/chat/completions"

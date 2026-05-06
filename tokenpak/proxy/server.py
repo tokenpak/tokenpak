@@ -862,6 +862,23 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get("Content-Length", 0))
         body: Optional[bytes] = self.rfile.read(content_length) if content_length > 0 else None
 
+        # DeepSeek is OpenAI-compatible, so reverse-proxy requests arrive on
+        # /v1/chat/completions like OpenAI. Route by explicit model prefix so
+        # OpenClaw can use a tokenpak-deepseek provider without overriding all
+        # OpenAI-chat traffic.
+        try:
+            if body and "/chat/completions" in target_url:
+                _body_model = json.loads(body.decode("utf-8")).get("model", "")
+                if isinstance(_body_model, str) and _body_model.startswith("deepseek"):
+                    _path = parsed.path or self.path
+                    if parsed.query:
+                        _path += "?" + parsed.query
+                    target_url = "https://api.deepseek.com" + _path
+                    parsed = urlparse(target_url)
+                    should_log = True
+        except Exception:
+            pass
+
         model = "unknown"
         input_tokens = 0
         sent_input_tokens = 0
@@ -1262,6 +1279,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             )
         except Exception:
             _router_injected = False  # fail-open
+
+        # DeepSeek API-key injection. DeepSeek is OpenAI-compatible and uses
+        # Authorization: Bearer <DEEPSEEK_API_KEY>. Keep this narrow so normal
+        # OpenAI/Codex routing remains untouched.
+        _upstream_provider = provider_from_url(target_url)
+        if not _router_injected and _upstream_provider == "deepseek":
+            _deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+            if _deepseek_key:
+                fwd_headers["Authorization"] = f"Bearer {_deepseek_key}"
+                for _ck in ("x-api-key", "X-Api-Key"):
+                    fwd_headers.pop(_ck, None)
+                _router_injected = True
 
         # ── Codex OAuth credential injection (legacy default path) ───
         # OpenAI Codex (Responses API) routes need OAuth token from
@@ -2725,6 +2754,7 @@ class ProxyServer:
         _provider_keys = {
             "anthropic": "ANTHROPIC_API_KEY",
             "openai": "OPENAI_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
             "google": "GOOGLE_API_KEY",
         }
         cb_registry = get_circuit_breaker_registry()

@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 PROVIDER_URLS = {
     "anthropic": "https://api.anthropic.com",
     "openai": "https://api.openai.com",
+    "deepseek": "https://api.deepseek.com",
     # openai-codex: subscription OAuth model (gpt-5.x-codex series)
     # Uses api.openai.com with OAuth Bearer token instead of API key.
     # Preferred endpoint: /v1/responses (Responses API)
@@ -154,6 +155,8 @@ class ProviderRouter:
         host_lower = host.lower()
         if "anthropic" in host_lower:
             return "anthropic"
+        elif "deepseek" in host_lower:
+            return "deepseek"
         elif "openai" in host_lower:
             return "openai"
         elif "googleapis" in host_lower or "google" in host_lower:
@@ -175,7 +178,15 @@ class ProviderRouter:
         4. Bearer token presence (non-Google Bearer → openai)
         5. Default: anthropic
         """
-        # Path-based detection (highest priority)
+        # Body model prefix can disambiguate OpenAI-compatible providers that
+        # share /v1/chat/completions (for example DeepSeek). Keep this before
+        # the generic chat-completions path rule.
+        if body:
+            model = self._extract_model(body)
+            if model.startswith("deepseek"):
+                return "deepseek"
+
+        # Path-based detection (highest priority for unique provider paths)
         if "/v1/messages" in path:
             return "anthropic"
         if "/codex/responses" in path or "/v1/codex/responses" in path:
