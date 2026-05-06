@@ -80,9 +80,12 @@ def load_custom_providers() -> List[CustomProvider]:
     Never raises -- config errors are logged and the offending entry skipped.
     """
     try:
-        from tokenpak import config_loader as _cl
+        from tokenpak.core import config_loader as _cl
     except ImportError:
-        return []
+        try:
+            from tokenpak import config_loader as _cl  # legacy layout
+        except ImportError:
+            return []
 
     cfg = _cl.load_config()
     if not isinstance(cfg, dict):
