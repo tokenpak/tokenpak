@@ -667,7 +667,11 @@ def htmx_settings_alerts(
         "TOKENPAK_CACHE_ALERT_THRESHOLD": cache_alert_threshold,
     }
     if cache_alert_webhook_url:
-        updates["TOKENPAK_CACHE_ALERT_WEBHOOK_URL"] = cache_alert_webhook_url
+        return HTMLResponse(
+            '<p class="settings-error">Webhook URL edits are disabled in the dashboard; '
+            'edit tokenpak.env manually or request a webhook exception.</p>',
+            status_code=422,
+        )
     if cache_alert_slack_channel:
         updates["TOKENPAK_CACHE_ALERT_SLACK_CHANNEL"] = cache_alert_slack_channel
 
