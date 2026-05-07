@@ -1,5 +1,6 @@
 
 import pytest
+
 pytest.importorskip("tokenpak.agentic.prefetcher", reason="module not available in current build")
 from tokenpak.agentic.prefetcher import PredictivePrefetcher
 

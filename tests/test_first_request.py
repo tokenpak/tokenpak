@@ -9,13 +9,13 @@ Validates:
 - Cleanup is graceful
 """
 
-import pytest
+import json
+import os
 import subprocess
 import time
-import os
-import json
+
+import pytest
 import requests
-from pathlib import Path
 
 pytestmark = [pytest.mark.needs_proxy, pytest.mark.needs_webhook]
 
@@ -42,12 +42,12 @@ def proxy_process():
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    
+
     # Wait for startup
     time.sleep(2)
-    
+
     yield proc
-    
+
     # Cleanup
     try:
         proc.terminate()
@@ -262,11 +262,11 @@ class TestEndToEnd:
         """Full startup → request → response cycle."""
         # Simplified check without actually starting proxy
         # (proxy may not be installed in test environment)
-        
+
         # Just validate the logic
         request = {"model": "claude-opus-4-6", "messages": []}
         response = {"id": "msg-123", "content": []}
-        
+
         assert request["model"] == "claude-opus-4-6"
         assert response["id"] == "msg-123"
 

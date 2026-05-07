@@ -12,12 +12,7 @@ Coverage:
 """
 
 import sqlite3
-import tempfile
 from datetime import datetime
-from pathlib import Path
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers

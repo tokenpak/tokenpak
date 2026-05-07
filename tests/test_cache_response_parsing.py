@@ -26,7 +26,6 @@ Research Notes (2026-04-03):
 | Anthropic    | usage.cache_read_input_tokens                 | int    | Different field name (existing)                |
 """
 
-import sys
 from enum import Enum, auto
 from pathlib import Path
 
@@ -105,20 +104,20 @@ def _detect_provider_from_model(model_name: str) -> Provider:
 def _parse_cached_tokens(provider: Provider, response_data: dict) -> int:
     """
     Extract cached token count from provider-specific response format.
-    
+
     CACHE-P2-002: Provider-dispatched parser for unified cache_read_tokens DB column.
-    
+
     Research Notes (2026-04-03):
     - OpenAI/Azure/xAI/Codex: usage.prompt_tokens_details.cached_tokens (int)
     - Groq: usage.prompt_tokens_details.cached_tokens (same as OpenAI)
     - Fireworks: Does NOT expose cached_tokens in response body (only in headers for dedicated)
     - Together: Does NOT expose cached_tokens in response body
     - Anthropic: usage.cache_read_input_tokens (separate field, handled elsewhere)
-    
+
     Args:
         provider: The Provider enum value
         response_data: Parsed JSON response from the provider
-        
+
     Returns:
         Number of cached tokens (0 if not available or not supported)
     """
@@ -161,16 +160,16 @@ def _parse_cached_tokens(provider: Provider, response_data: dict) -> int:
 def _parse_cached_tokens_from_sse(provider: Provider, event_data: dict) -> dict:
     """
     Extract cached token info from an SSE event for a specific provider.
-    
+
     Args:
         provider: The Provider enum value
         event_data: Parsed JSON from a single SSE data line
-        
+
     Returns:
         Dict with cache_read_input_tokens and cache_creation_input_tokens
     """
     result = {"cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
-    
+
     # Anthropic format: message_start contains cache info
     if provider == Provider.ANTHROPIC:
         if event_data.get("type") == "message_start":
@@ -178,7 +177,7 @@ def _parse_cached_tokens_from_sse(provider: Provider, event_data: dict) -> dict:
             result["cache_read_input_tokens"] = usage.get("cache_read_input_tokens", 0)
             result["cache_creation_input_tokens"] = usage.get("cache_creation_input_tokens", 0)
         return result
-    
+
     # OpenAI-compatible providers (final chunk contains usage)
     if provider in (Provider.OPENAI, Provider.AZURE_OPENAI, Provider.XAI, Provider.CODEX, Provider.GROQ):
         usage = event_data.get("usage", {})
@@ -189,7 +188,7 @@ def _parse_cached_tokens_from_sse(provider: Provider, event_data: dict) -> dict:
                 if cached and cached > 0:
                     result["cache_read_input_tokens"] = cached
         return result
-    
+
     # Providers that don't expose cache tokens in SSE
     return result
 
@@ -261,7 +260,7 @@ class TestParseCachedTokens:
                 }
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.OPENAI, response) == 800
 
     def test_azure_openai_with_cached_tokens(self):
@@ -276,7 +275,7 @@ class TestParseCachedTokens:
                 }
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.AZURE_OPENAI, response) == 4608
 
     def test_xai_grok_with_cached_tokens(self):
@@ -290,7 +289,7 @@ class TestParseCachedTokens:
                 }
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.XAI, response) == 1500
 
     def test_codex_with_cached_tokens(self):
@@ -304,7 +303,7 @@ class TestParseCachedTokens:
                 }
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.CODEX, response) == 4500
 
     def test_groq_with_cached_tokens(self):
@@ -326,7 +325,7 @@ class TestParseCachedTokens:
                 }
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.GROQ, response) == 4608
 
     def test_fireworks_no_cached_tokens(self):
@@ -340,7 +339,7 @@ class TestParseCachedTokens:
                 "total_tokens": 1500
             }
         }
-        
+
         # Should return 0 since Fireworks doesn't expose cache info in response body
         assert _parse_cached_tokens(Provider.FIREWORKS, response) == 0
 
@@ -355,7 +354,7 @@ class TestParseCachedTokens:
                 "total_tokens": 2800
             }
         }
-        
+
         # Should return 0 since Together doesn't expose cache info
         assert _parse_cached_tokens(Provider.TOGETHER, response) == 0
 
@@ -369,7 +368,7 @@ class TestParseCachedTokens:
                 "cache_creation_input_tokens": 500
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.ANTHROPIC, response) == 4000
 
     def test_unknown_provider_returns_zero(self):
@@ -383,19 +382,19 @@ class TestParseCachedTokens:
                 }
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.UNKNOWN, response) == 0
 
     def test_missing_usage_object(self):
         """Response without usage object should return 0."""
         response = {"id": "chatcmpl-...", "model": "gpt-4"}
-        
+
         assert _parse_cached_tokens(Provider.OPENAI, response) == 0
 
     def test_empty_usage_object(self):
         """Response with empty usage object should return 0."""
         response = {"usage": {}}
-        
+
         assert _parse_cached_tokens(Provider.OPENAI, response) == 0
 
     def test_null_prompt_tokens_details(self):
@@ -406,7 +405,7 @@ class TestParseCachedTokens:
                 "prompt_tokens_details": None
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.OPENAI, response) == 0
 
     def test_missing_cached_tokens_field(self):
@@ -419,7 +418,7 @@ class TestParseCachedTokens:
                 }
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.OPENAI, response) == 0
 
     def test_zero_cached_tokens(self):
@@ -432,7 +431,7 @@ class TestParseCachedTokens:
                 }
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.OPENAI, response) == 0
 
 
@@ -451,7 +450,7 @@ class TestParseCachedTokensSSE:
                 }
             }
         }
-        
+
         result = _parse_cached_tokens_from_sse(Provider.ANTHROPIC, event)
         assert result["cache_read_input_tokens"] == 4000
         assert result["cache_creation_input_tokens"] == 500
@@ -468,7 +467,7 @@ class TestParseCachedTokensSSE:
                 }
             }
         }
-        
+
         result = _parse_cached_tokens_from_sse(Provider.OPENAI, event)
         assert result["cache_read_input_tokens"] == 800
 
@@ -483,7 +482,7 @@ class TestParseCachedTokensSSE:
                 }
             }
         }
-        
+
         result = _parse_cached_tokens_from_sse(Provider.GROQ, event)
         assert result["cache_read_input_tokens"] == 4608
 
@@ -495,7 +494,7 @@ class TestParseCachedTokensSSE:
                 "completion_tokens": 500
             }
         }
-        
+
         result = _parse_cached_tokens_from_sse(Provider.FIREWORKS, event)
         assert result["cache_read_input_tokens"] == 0
         assert result["cache_creation_input_tokens"] == 0
@@ -508,7 +507,7 @@ class TestParseCachedTokensSSE:
                 "completion_tokens": 800
             }
         }
-        
+
         result = _parse_cached_tokens_from_sse(Provider.TOGETHER, event)
         assert result["cache_read_input_tokens"] == 0
         assert result["cache_creation_input_tokens"] == 0
@@ -560,10 +559,10 @@ class TestAllProvidersCovered:
             Provider.FIREWORKS,
             Provider.TOGETHER,
         ]
-        
+
         # Test that each provider can be called without error
         test_response = {"usage": {"prompt_tokens": 100}}
-        
+
         for provider in prefix_auto_providers:
             # Should not raise, should return int >= 0
             result = _parse_cached_tokens(provider, test_response)
@@ -577,7 +576,7 @@ class TestAllProvidersCovered:
                 "cache_read_input_tokens": 1000
             }
         }
-        
+
         assert _parse_cached_tokens(Provider.ANTHROPIC, response) == 1000
 
 
@@ -589,7 +588,7 @@ class TestProxyCodeIntegration:
         proxy_path = Path(__file__).parent.parent / "proxy.py"
         with open(proxy_path) as f:
             content = f.read()
-        
+
         assert "class Provider(Enum):" in content
         assert "OPENAI = auto()" in content
         assert "GROQ = auto()" in content
@@ -601,7 +600,7 @@ class TestProxyCodeIntegration:
         proxy_path = Path(__file__).parent.parent / "proxy.py"
         with open(proxy_path) as f:
             content = f.read()
-        
+
         assert "def _parse_cached_tokens(provider: Provider, response_data: dict) -> int:" in content
 
     def test_proxy_has_detect_provider_from_url(self):
@@ -609,7 +608,7 @@ class TestProxyCodeIntegration:
         proxy_path = Path(__file__).parent.parent / "proxy.py"
         with open(proxy_path) as f:
             content = f.read()
-        
+
         assert "def _detect_provider_from_url(upstream_url: str) -> Provider:" in content
 
 

@@ -113,7 +113,7 @@ class VaultWatcher:
                 if src and not watcher_ref._should_ignore(src):
                     watcher_ref._on_fs_event(src)
 
-        self._observer: BaseObserver = Observer()  # type: ignore
+        self._observer: BaseObserver = Observer()  # type: ignore  # noqa: F821
         for raw_path in self.config.watch_paths:
             watch_dir = str(Path(raw_path).expanduser().resolve())
             self._observer.schedule(_Handler(), watch_dir, recursive=self.config.recursive)  # type: ignore

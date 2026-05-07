@@ -1,19 +1,19 @@
 
 import pytest
+
 pytest.importorskip("tokenpak.request_explorer", reason="module not available in current build")
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tokenpak.request_explorer import (
-    load_requests,
-    get_request_by_id,
-    to_view,
-    cache_pct,
-    status_label,
     age_label,
+    cache_pct,
+    get_request_by_id,
+    load_requests,
+    status_label,
+    to_view,
 )
-
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:

@@ -11,7 +11,7 @@ Coverage:
   4. Check 4 fails when active profile is not claude-code-*
   5. Check 5 fails when round-trip returns non-200
   6. Check 6 passes (skip) when no traffic and no DB
-  7. Check 7 fails on PYTHONPATH drift (calibot incident pattern)
+  7. Check 7 fails on PYTHONPATH drift (cross-host PYTHONPATH incident pattern)
   8. Check 8 fails when sources disagree on proxy URL
   9. Check 9 fails when neither plugin dir candidate exists
   Additional: Check 7 passes when PYTHONPATH matches canonical
@@ -23,14 +23,12 @@ Coverage:
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from tokenpak.cli.commands.doctor_claude_code import (
-    DEFAULT_PROXY_URL,
     NUM_CHECKS,
     _check_active_profile,
     _check_auth_flow,
@@ -41,13 +39,9 @@ from tokenpak.cli.commands.doctor_claude_code import (
     _check_pythonpath_drift,
     _check_sample_roundtrip,
     _check_telemetry_visible,
-    _get_canonical_pythonpath_from_unit,
-    _get_url_from_env_file,
-    _get_url_from_unit,
     _normalise_url,
     run_claude_code_checks,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -347,12 +341,12 @@ def test_check6_sessions_via_endpoint(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Test 7: PYTHONPATH drift (calibot incident) → check 7 fails
+# Test 7: PYTHONPATH drift (cross-host incident) → check 7 fails
 # ---------------------------------------------------------------------------
 
 
-def test_check7_pythonpath_drift_calibot_incident(tmp_home, monkeypatch):
-    """Check 7 detects drift where proc PYTHONPATH references /home/sue/ (calibot incident)."""
+def test_check7_pythonpath_drift_cross_host_incident(tmp_home, monkeypatch):
+    """Check 7 detects drift where proc PYTHONPATH references /home/sue/ (cross-host incident)."""
     pid = 42001
     (tmp_home / ".tokenpak").mkdir(parents=True, exist_ok=True)
     (tmp_home / ".tokenpak" / "proxy.pid").write_text(str(pid))

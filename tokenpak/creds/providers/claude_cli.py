@@ -11,8 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..model import Credential, REFRESH_EXTERNAL, KIND_OAUTH
-
+from ..model import KIND_OAUTH, REFRESH_EXTERNAL, Credential
 
 PROVIDER_NAME = "claude-cli"
 CREDS_PATH = Path.home() / ".claude" / ".credentials.json"

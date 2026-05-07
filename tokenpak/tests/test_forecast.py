@@ -7,19 +7,19 @@ Tests cover:
 - format_burn_rate_display() output formatting
 """
 
-import pytest
 from datetime import date, timedelta
+from typing import Any, Dict, List
 from unittest import mock
-from typing import Dict, Any, List
+
+import pytest
 
 from tokenpak.cli.forecast import (
     BurnRateAnalysis,
-    get_burn_rate,
     _calculate_wow_trend,
     format_burn_rate_display,
+    get_burn_rate,
 )
 from tokenpak.telemetry.budget import BudgetTracker
-
 
 # ---------------------------------------------------------------------------
 # Fixtures — Mock spend data
@@ -38,11 +38,11 @@ def spend_records_7days() -> List[Dict[str, Any]]:
     today = date.today()
     records = []
     base_cost = 10.0
-    
+
     for day_offset in range(7):
         current_date = today - timedelta(days=day_offset)
         date_str = current_date.isoformat()
-        
+
         # 2-3 transactions per day
         records.append({
             "timestamp": f"{date_str}T08:00:00Z",
@@ -63,7 +63,7 @@ def spend_records_7days() -> List[Dict[str, Any]]:
                 "model": "claude-3-haiku",
                 "agent": "Cron jobs",
             })
-    
+
     return records
 
 
@@ -72,11 +72,11 @@ def spend_records_30days() -> List[Dict[str, Any]]:
     """Spend records for 30 days (monthly projection)."""
     today = date.today()
     records = []
-    
+
     for day_offset in range(30):
         current_date = today - timedelta(days=day_offset)
         date_str = current_date.isoformat()
-        
+
         daily_base = 10.0 + (day_offset // 7) * 2  # Trending up slightly
         records.append({
             "timestamp": f"{date_str}T10:00:00Z",
@@ -90,7 +90,7 @@ def spend_records_30days() -> List[Dict[str, Any]]:
             "model": "gpt-4",
             "agent": "other",
         })
-    
+
     return records
 
 
@@ -129,7 +129,7 @@ def test_burn_rate_analysis_construction() -> None:
         weekly_avg=100.0,
         monthly_projection=429.0,
     )
-    
+
     assert analysis.window_days == 7
     assert analysis.total_cost == 100.0
     assert analysis.daily_avg == 14.29
@@ -156,7 +156,7 @@ def test_burn_rate_analysis_with_breakdown() -> None:
         start_date=date(2026, 3, 21),
         end_date=date(2026, 3, 27),
     )
-    
+
     assert analysis.by_model["claude-3-sonnet"] == 60.0
     assert analysis.by_activity["Agent"] == 62.0
     assert analysis.week_over_week_trend == 15.5
@@ -171,9 +171,9 @@ def test_burn_rate_analysis_with_breakdown() -> None:
 def test_get_burn_rate_7days(mock_budget_tracker, spend_records_7days) -> None:
     """Test 1: get_burn_rate with 7-day window calculates burn correctly."""
     mock_budget_tracker.list_spend.return_value = spend_records_7days
-    
+
     analysis = get_burn_rate(mock_budget_tracker, window_days=7)
-    
+
     assert analysis.window_days == 7
     assert analysis.data_points == len(spend_records_7days)
     assert analysis.total_cost > 0
@@ -195,9 +195,9 @@ def test_get_burn_rate_7days(mock_budget_tracker, spend_records_7days) -> None:
 def test_get_burn_rate_empty_data(mock_budget_tracker, empty_spend_records) -> None:
     """Test 2: get_burn_rate handles empty spend records gracefully."""
     mock_budget_tracker.list_spend.return_value = empty_spend_records
-    
+
     analysis = get_burn_rate(mock_budget_tracker, window_days=7)
-    
+
     assert analysis.window_days == 7
     assert analysis.total_cost == 0.0
     assert analysis.daily_avg == 0.0
@@ -216,9 +216,9 @@ def test_get_burn_rate_empty_data(mock_budget_tracker, empty_spend_records) -> N
 def test_get_burn_rate_single_day(mock_budget_tracker, single_day_record) -> None:
     """Test 3: get_burn_rate with only one day of data."""
     mock_budget_tracker.list_spend.return_value = single_day_record
-    
+
     analysis = get_burn_rate(mock_budget_tracker, window_days=1)
-    
+
     assert analysis.window_days == 1
     assert analysis.total_cost == 25.50
     assert analysis.daily_avg == 25.50
@@ -235,9 +235,9 @@ def test_get_burn_rate_single_day(mock_budget_tracker, single_day_record) -> Non
 def test_get_burn_rate_30days(mock_budget_tracker, spend_records_30days) -> None:
     """Test 4: get_burn_rate with 30-day window for monthly projection."""
     mock_budget_tracker.list_spend.return_value = spend_records_30days
-    
+
     analysis = get_burn_rate(mock_budget_tracker, window_days=30)
-    
+
     assert analysis.window_days == 30
     assert analysis.data_points == len(spend_records_30days)
     assert analysis.total_cost > 0
@@ -258,7 +258,7 @@ def test_calculate_wow_trend_positive(mock_budget_tracker) -> None:
     week_1_end = today - timedelta(days=7)
     week_2_start = today - timedelta(days=6)
     week_2_end = today
-    
+
     # Current week: higher spend
     current_records = [
         {
@@ -274,7 +274,7 @@ def test_calculate_wow_trend_positive(mock_budget_tracker) -> None:
             "agent": "task",
         }
     ]
-    
+
     # Previous week: lower spend
     prev_records = [
         {
@@ -290,12 +290,12 @@ def test_calculate_wow_trend_positive(mock_budget_tracker) -> None:
             "agent": "task",
         }
     ]
-    
+
     all_records = current_records + prev_records
     mock_budget_tracker.list_spend.return_value = all_records
-    
+
     trend = _calculate_wow_trend(mock_budget_tracker, current_window=7)
-    
+
     # Current: 250, Previous: 100 → ((250-100)/100)*100 = 150%
     assert trend is not None
     assert trend > 0  # Positive trend
@@ -313,7 +313,7 @@ def test_calculate_wow_trend_negative(mock_budget_tracker) -> None:
     week_1_end = today - timedelta(days=7)
     week_2_start = today - timedelta(days=6)
     week_2_end = today
-    
+
     # Current week: lower spend
     current_records = [
         {
@@ -323,7 +323,7 @@ def test_calculate_wow_trend_negative(mock_budget_tracker) -> None:
             "agent": "task",
         }
     ]
-    
+
     # Previous week: higher spend
     prev_records = [
         {
@@ -339,12 +339,12 @@ def test_calculate_wow_trend_negative(mock_budget_tracker) -> None:
             "agent": "task",
         }
     ]
-    
+
     all_records = current_records + prev_records
     mock_budget_tracker.list_spend.return_value = all_records
-    
+
     trend = _calculate_wow_trend(mock_budget_tracker, current_window=7)
-    
+
     # Current: 50, Previous: 200 → ((50-200)/200)*100 = -75%
     assert trend is not None
     assert trend < 0  # Negative trend
@@ -358,9 +358,9 @@ def test_calculate_wow_trend_negative(mock_budget_tracker) -> None:
 def test_calculate_wow_trend_insufficient_window(mock_budget_tracker, single_day_record) -> None:
     """Test 7: _calculate_wow_trend returns None for window < 7 days."""
     mock_budget_tracker.list_spend.return_value = single_day_record
-    
+
     trend = _calculate_wow_trend(mock_budget_tracker, current_window=3)
-    
+
     assert trend is None
 
 
@@ -382,9 +382,9 @@ def test_format_burn_rate_display_with_data() -> None:
         by_activity={"Agent": 62.0, "TokenPak CLI": 38.0},
         data_points=14,
     )
-    
+
     output = format_burn_rate_display(analysis)
-    
+
     assert "Burn Rate Analysis" in output
     assert "Daily average" in output
     assert "14.29" in output
@@ -413,10 +413,10 @@ def test_format_burn_rate_display_over_threshold() -> None:
         monthly_projection=429.0,
         data_points=14,
     )
-    
+
     threshold = 400.0  # Budget is $400
     output = format_burn_rate_display(analysis, threshold=threshold)
-    
+
     assert "⚠️  Over budget" in output
     assert "429.00" in output
 
@@ -436,9 +436,9 @@ def test_format_burn_rate_display_empty_data() -> None:
         monthly_projection=0.0,
         data_points=0,
     )
-    
+
     output = format_burn_rate_display(analysis)
-    
+
     assert "No spend data available" in output
     assert "< 1 day history" in output
 
@@ -452,7 +452,7 @@ def test_get_burn_rate_model_breakdown(mock_budget_tracker) -> None:
     """Test 11: get_burn_rate correctly breaks down costs by model."""
     today = date.today()
     date_str = today.isoformat()
-    
+
     records = [
         {
             "timestamp": f"{date_str}T08:00:00Z",
@@ -473,10 +473,10 @@ def test_get_burn_rate_model_breakdown(mock_budget_tracker) -> None:
             "agent": "agent-2",
         },
     ]
-    
+
     mock_budget_tracker.list_spend.return_value = records
     analysis = get_burn_rate(mock_budget_tracker, window_days=1)
-    
+
     assert analysis.by_model["claude-3-sonnet"] == 20.0
     assert analysis.by_model["gpt-4"] == 30.0
     assert analysis.by_model["claude-3-haiku"] == 10.0
@@ -492,7 +492,7 @@ def test_get_burn_rate_activity_breakdown(mock_budget_tracker) -> None:
     """Test 12: get_burn_rate correctly breaks down costs by activity."""
     today = date.today()
     date_str = today.isoformat()
-    
+
     records = [
         {
             "timestamp": f"{date_str}T08:00:00Z",
@@ -513,10 +513,10 @@ def test_get_burn_rate_activity_breakdown(mock_budget_tracker) -> None:
             "agent": "Cron jobs",
         },
     ]
-    
+
     mock_budget_tracker.list_spend.return_value = records
     analysis = get_burn_rate(mock_budget_tracker, window_days=1)
-    
+
     assert analysis.by_activity["Agent tasks"] == 50.0
     assert analysis.by_activity["TokenPak CLI"] == 30.0
     assert analysis.by_activity["Cron jobs"] == 20.0
@@ -531,7 +531,7 @@ def test_get_burn_rate_empty_agent_field(mock_budget_tracker) -> None:
     """Test 13: Empty agent field is handled as 'other'."""
     today = date.today()
     date_str = today.isoformat()
-    
+
     records = [
         {
             "timestamp": f"{date_str}T08:00:00Z",
@@ -546,10 +546,10 @@ def test_get_burn_rate_empty_agent_field(mock_budget_tracker) -> None:
             "agent": None,  # None agent
         },
     ]
-    
+
     mock_budget_tracker.list_spend.return_value = records
     analysis = get_burn_rate(mock_budget_tracker, window_days=1)
-    
+
     assert "other" in analysis.by_activity
     assert analysis.by_activity["other"] == 30.0
 

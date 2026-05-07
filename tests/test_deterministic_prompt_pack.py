@@ -13,9 +13,8 @@ Tests verify:
 """
 
 import json
-import sys
 import os
-from typing import Any
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -178,7 +177,7 @@ class TestByteIdentity:
         # The tools appear in system block text (sorted deterministically)
         system_text1 = body1["system"][0]["text"]
         system_text2 = body2["system"][0]["text"]
-        
+
         # Both should have the same sorted order in the system text
         assert system_text1 == system_text2, "Tool order should not affect system block (deterministic sorting)"
 

@@ -384,8 +384,9 @@ if __name__ == "__main__":
 # Validation utilities (used by tests that import from this module)
 # ---------------------------------------------------------------------------
 import re as _re
-from dataclasses import dataclass as _dataclass, field as _field
-from typing import List as _List, Optional as _Optional
+from dataclasses import dataclass as _dataclass
+from dataclasses import field as _field
+from typing import List as _List
 
 MIN_COVERAGE = 0.5
 MAX_COVERAGE = 1.0

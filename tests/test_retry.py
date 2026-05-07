@@ -1,15 +1,19 @@
 """Tests for tokenpak.agentic.retry"""
 
 import pytest
+
 pytest.importorskip("tokenpak.agentic.retry", reason="module not available in current build")
 import json
-import pytest
-from tokenpak.agentic.retry import (
-    RetryEngine, RetryExhaustedError, ImmediateAlertError,
-    MODEL_DOWNGRADE_PATH, PROVIDER_FALLBACK_PATH,
-    _extract_http_status, load_recent_retry_events, RETRY_EVENT_LOG,
-)
 
+import pytest
+
+from tokenpak.agentic.retry import (
+    MODEL_DOWNGRADE_PATH,
+    PROVIDER_FALLBACK_PATH,
+    RetryEngine,
+    RetryExhaustedError,
+    _extract_http_status,
+)
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 

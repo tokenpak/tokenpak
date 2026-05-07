@@ -89,7 +89,7 @@ class FidelityPolicy(str, Enum):
 # an adapter or caller supplies an explicit override.
 #
 # Import note: delayed import to avoid circular dependency with route_contract.
-def default_policy_for_route(route_class: "OptimizationRouteClass") -> FidelityPolicy:
+def default_policy_for_route(route_class: "OptimizationRouteClass") -> FidelityPolicy:  # noqa: F821 (forward ref resolved by local import)
     """Return the default ``FidelityPolicy`` for a given route class."""
     from tokenpak.tip.route_contract import OptimizationRouteClass  # local import
 

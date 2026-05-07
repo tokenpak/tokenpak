@@ -12,19 +12,15 @@ from __future__ import annotations
 
 import json
 import socket
-import threading
 import time
 from http.client import HTTPConnection
 from unittest.mock import MagicMock
-
-import pytest
 
 from tokenpak.proxy.circuit_breaker import (
     RateLimitCircuitBreaker,
     _reset_rl_registry_for_testing,
 )
 from tokenpak.proxy.server import ProxyServer
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -7,7 +7,7 @@ All public functions are safe to call regardless of SDK availability.
 from __future__ import annotations
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 # ── Module-level state ───────────────────────────────────────────────────────
 
@@ -42,13 +42,14 @@ def _init() -> None:
     _initialized = True
 
     try:
-        from opentelemetry import trace as otel_trace, metrics as otel_metrics
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry import metrics as otel_metrics
+        from opentelemetry import trace as otel_trace
+        from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk.metrics import MeterProvider
         from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-        from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
         tracer_provider = TracerProvider()
         span_exporter = OTLPSpanExporter(endpoint=_ENDPOINT + "/v1/traces")
@@ -127,7 +128,7 @@ def record_request(
 
             if status_code >= 500:
                 try:
-                    from opentelemetry.trace import StatusCode, Status
+                    from opentelemetry.trace import Status, StatusCode
                     span.set_status(Status(StatusCode.ERROR))
                 except Exception:
                     pass

@@ -17,7 +17,6 @@ import pytest
 
 from tokenpak.proxy.credential_passthrough import CredentialPassthrough
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

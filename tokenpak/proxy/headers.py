@@ -9,7 +9,7 @@ Each route classification maps to a header-forwarding strategy:
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Set
+from typing import Dict
 
 from tokenpak.proxy.request import ROUTE_CLAUDE_CODE, ROUTE_OPENCLAW
 

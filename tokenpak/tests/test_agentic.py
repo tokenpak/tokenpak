@@ -16,11 +16,9 @@ No live API calls.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -404,7 +402,10 @@ class TestRetryEngineEscalation:
         assert len(exc_info.value.attempts) > 0
 
     def test_immediate_alert_on_401(self, tmp_path):
-        from tokenpak.orchestration.retry import ImmediateAlertError, RetryEngine, RetryExhaustedError
+        from tokenpak.orchestration.retry import (
+            RetryEngine,
+            RetryExhaustedError,
+        )
 
         def fn(ctx, state):
             exc = Exception("HTTP 401 Unauthorized")
@@ -826,7 +827,10 @@ class TestValidationOrchestrator:
         assert not result.passed
 
     def test_validation_history_recorded(self):
-        from tokenpak.orchestration.validation_framework import SchemaValidator, ValidationOrchestrator
+        from tokenpak.orchestration.validation_framework import (
+            SchemaValidator,
+            ValidationOrchestrator,
+        )
         orch = ValidationOrchestrator()
         orch.register_step_validator("check", SchemaValidator({"required_keys": ["x"]}))
         orch.validate_step("check", {"x": 1}, {})

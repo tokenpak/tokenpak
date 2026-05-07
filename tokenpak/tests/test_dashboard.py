@@ -12,15 +12,12 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import io
 import json
 import os
 import sqlite3
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
-
 
 # ---------------------------------------------------------------------------
 # dashboard/__init__.py
@@ -163,7 +160,7 @@ def test_filter_params_invalid_status_raises():
 
 
 def test_filter_params_all_valid_statuses():
-    from dashboard.session_filter import FilterParams, VALID_STATUSES
+    from dashboard.session_filter import VALID_STATUSES, FilterParams
 
     for s in VALID_STATUSES:
         fp = FilterParams(status=s)
@@ -415,7 +412,7 @@ def test_csv_exporter_empty_traces_full():
 
 
 def test_csv_exporter_trace_full_columns():
-    from dashboard.export_csv import CSVExporter, ExportDataType, ExportFormat, _TRACE_FULL_COLUMNS
+    from dashboard.export_csv import _TRACE_FULL_COLUMNS, CSVExporter, ExportDataType, ExportFormat
 
     exporter = CSVExporter(traces=[])
     csv_bytes, _ = exporter.export(data_type=ExportDataType.TRACES, fmt=ExportFormat.FULL)
@@ -426,10 +423,10 @@ def test_csv_exporter_trace_full_columns():
 
 def test_csv_exporter_trace_simplified_columns():
     from dashboard.export_csv import (
+        _TRACE_SIMPLIFIED_COLUMNS,
         CSVExporter,
         ExportDataType,
         ExportFormat,
-        _TRACE_SIMPLIFIED_COLUMNS,
     )
 
     exporter = CSVExporter(traces=[])
@@ -710,7 +707,7 @@ def test_days_ago_returns_string():
 
 
 def test_days_ago_offset_is_correct():
-    from datetime import date, timedelta
+    from datetime import date
 
     from dashboard.app import _days_ago, _today
 

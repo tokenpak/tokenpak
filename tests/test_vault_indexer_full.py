@@ -1,5 +1,6 @@
-import pytest
 from pathlib import Path
+
+import pytest
 
 from tokenpak.vault.blocks import BlockStore
 from tokenpak.vault.indexer import VaultIndexer

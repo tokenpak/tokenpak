@@ -554,6 +554,6 @@ def is_known_intent(intent: str) -> bool:
     return intent in _BASE_POLICY
 
 
-def known_intents() -> list[str]:
+def known_intents() -> list[str]:  # noqa: F811 (re-export at policy-API boundary)
     """Return list of all known canonical intent strings."""
     return list(_BASE_POLICY.keys())

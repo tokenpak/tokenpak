@@ -14,8 +14,8 @@ Coverage targets:
 """
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.monitoring.request_logger", reason="module not available in current build")
 import json
 import queue
@@ -25,22 +25,20 @@ import time
 import uuid
 from pathlib import Path
 from typing import List
-from unittest.mock import MagicMock, patch
 
 import pytest
 
+from tokenpak.monitoring.audit_trail import AuditTrail
 from tokenpak.monitoring.request_logger import (
     LEVEL_DEBUG,
     LEVEL_INFO,
     LEVEL_WARN,
-    RequestLogRecord,
     RequestLogger,
+    RequestLogRecord,
     _FileWriter,
     log_request,
     new_request_id,
 )
-from tokenpak.monitoring.audit_trail import AuditTrail
-
 
 # ---------------------------------------------------------------------------
 # Helpers

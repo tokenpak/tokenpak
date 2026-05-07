@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for tokenpak/cache_report.py"""
 
-import pytest
 from tokenpak.cache.cache_report import format_cache_report
-
 
 # ---------------------------------------------------------------------------
 # Happy path tests

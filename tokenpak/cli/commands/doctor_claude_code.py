@@ -513,7 +513,7 @@ def _check_pythonpath_drift() -> CheckResult:
             return CheckResult(
                 check="pythonpath_drift",
                 status="pass",
-                message=f"Check 7  PYTHONPATH drift     OK — proc matches systemd unit",
+                message="Check 7  PYTHONPATH drift     OK — proc matches systemd unit",
                 detail=f"pid={pid} proc_pythonpath={proc_pythonpath!r} canonical={canonical_pythonpath!r}",
                 remediation="",
             )
@@ -534,7 +534,7 @@ def _check_pythonpath_drift() -> CheckResult:
         )
 
     # No systemd unit — fall back to home-directory heuristic
-    # The 2026-04-08 calibot incident: PYTHONPATH referenced /home/sue/ instead of current user
+    # The 2026-04-08 cross-host PYTHONPATH incident: a worker referenced another user's $HOME instead of its own
     if proc_pythonpath and home_str not in proc_pythonpath:
         wrong_user = re.search(r"/home/(\w+)/", proc_pythonpath)
         wrong_name = wrong_user.group(1) if wrong_user else "unknown"

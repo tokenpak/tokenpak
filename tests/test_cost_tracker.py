@@ -1,8 +1,8 @@
 """Tests for tokenpak.telemetry.cost_tracker."""
 
 import pytest
-from tokenpak.telemetry.cost_tracker import CostTracker, estimate_cost, get_cost_tracker
 
+from tokenpak.telemetry.cost_tracker import CostTracker, estimate_cost, get_cost_tracker
 
 # ---------------------------------------------------------------------------
 # estimate_cost

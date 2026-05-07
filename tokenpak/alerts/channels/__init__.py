@@ -45,8 +45,8 @@ def _load_channel_configs() -> list[dict]:
 
     Falls back to env-var-based channel selection when no file config exists.
     """
-    from pathlib import Path
     import json
+    from pathlib import Path
 
     for config_path in (
         Path.home() / ".tokenpak" / "config.yaml",
@@ -115,8 +115,8 @@ def dispatch(event: str, severity: str, message: str, **extra: Any) -> None:
         return
 
     def _deliver_all() -> None:
-        from . import slack, webhook, telegram
         from . import email as email_channel
+        from . import slack, telegram, webhook
         for ch in channels:
             ch_type = ch.get("type")
             try:

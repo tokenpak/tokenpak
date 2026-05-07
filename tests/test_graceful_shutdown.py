@@ -12,9 +12,7 @@ Acceptance criteria coverage:
 from __future__ import annotations
 
 import json
-import os
 import signal
-import tempfile
 import threading
 import time
 import urllib.error
@@ -23,7 +21,6 @@ import urllib.request
 import pytest
 
 from tokenpak.proxy.server import GracefulShutdown, ProxyServer
-
 
 # ---------------------------------------------------------------------------
 # GracefulShutdown unit tests

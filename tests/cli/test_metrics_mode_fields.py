@@ -11,13 +11,10 @@ One test class per mode — 6 classes total (AC-3.13 requirement).
 from __future__ import annotations
 
 import os
-import sys
-import tempfile
 from pathlib import Path
 from unittest import mock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers

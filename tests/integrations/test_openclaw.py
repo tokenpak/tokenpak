@@ -22,15 +22,10 @@ pytest marks used:
 
 from __future__ import annotations
 
-import asyncio
 import json
-import os
 import threading
 import time
-from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -477,7 +472,7 @@ class TestOAuthFlow:
 
     def test_oauth_type_marked_as_skip_cache_keying(self):
         """OAuth requests must not be shared across sessions (no cache keying)."""
-        from tokenpak.proxy.oauth import detect_auth_type, AUTH_TYPE_OAUTH, AUTH_TYPE_APIKEY
+        from tokenpak.proxy.oauth import AUTH_TYPE_OAUTH, detect_auth_type
 
         def _is_oauth_bearer(token: str) -> bool:
             headers = {"authorization": f"Bearer {token}"}

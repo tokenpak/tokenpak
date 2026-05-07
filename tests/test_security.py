@@ -39,13 +39,11 @@ from __future__ import annotations
 
 import json
 import os
-import threading
 import time
 import unittest
 from io import BytesIO
 from typing import Any
 from unittest.mock import MagicMock, patch
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -139,6 +137,7 @@ class TestRequestSizeLimit(unittest.TestCase):
         """TOKENPAK_MAX_REQUEST_SIZE env var sets the limit."""
         with patch.dict(os.environ, {"TOKENPAK_MAX_REQUEST_SIZE": "512"}):
             import importlib
+
             import tokenpak.runtime.proxy as proxy_mod
             importlib.reload(proxy_mod)
             try:
@@ -311,6 +310,7 @@ class TestJSONValidation(unittest.TestCase):
         """TOKENPAK_STRICT_MODE=true enables STRICT_VALIDATION."""
         with patch.dict(os.environ, {"TOKENPAK_STRICT_MODE": "true"}):
             import importlib
+
             import tokenpak.runtime.proxy as proxy_mod
             importlib.reload(proxy_mod)
             try:

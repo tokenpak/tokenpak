@@ -4,23 +4,17 @@ Tests for debug mode toggle and logging.
 
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.config", reason="module not available in current build")
-import io
 import json
-import os
+
 import pytest
-import sys
-import tempfile
-from pathlib import Path
-from unittest.mock import patch
 
 from tokenpak._internal.config import (
+    debug_log,
     get_debug_enabled,
     set_debug_enabled,
-    debug_log,
-    CONFIG_PATH,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -135,56 +129,61 @@ class TestDebugLog:
 class TestDebugCLI:
     def test_cmd_debug_on(self, temp_config, clean_env, capsys):
         """tokenpak debug on enables debug mode."""
-        from tokenpak.cli import cmd_debug_on
         from types import SimpleNamespace
-        
+
+        from tokenpak.cli import cmd_debug_on
+
         cmd_debug_on(SimpleNamespace())
         captured = capsys.readouterr()
-        
+
         assert "enabled" in captured.out.lower()
         assert get_debug_enabled() is True
 
     def test_cmd_debug_off(self, temp_config, clean_env, capsys):
         """tokenpak debug off disables debug mode."""
-        from tokenpak.cli import cmd_debug_off
         from types import SimpleNamespace
-        
+
+        from tokenpak.cli import cmd_debug_off
+
         set_debug_enabled(True)
         cmd_debug_off(SimpleNamespace())
         captured = capsys.readouterr()
-        
+
         assert "disabled" in captured.out.lower()
         assert get_debug_enabled() is False
 
     def test_cmd_debug_status_off(self, temp_config, clean_env, capsys):
         """tokenpak debug status shows OFF state."""
-        from tokenpak.cli import cmd_debug_status
         from types import SimpleNamespace
-        
+
+        from tokenpak.cli import cmd_debug_status
+
         set_debug_enabled(False)
         cmd_debug_status(SimpleNamespace())
         captured = capsys.readouterr()
-        
+
         assert "OFF" in captured.out
 
     def test_cmd_debug_status_on(self, temp_config, clean_env, capsys):
         """tokenpak debug status shows ON state."""
-        from tokenpak.cli import cmd_debug_status
         from types import SimpleNamespace
-        
+
+        from tokenpak.cli import cmd_debug_status
+
         set_debug_enabled(True)
         cmd_debug_status(SimpleNamespace())
         captured = capsys.readouterr()
-        
+
         assert "ON" in captured.out
 
     def test_cmd_debug_status_shows_env_override(self, temp_config, monkeypatch, capsys):
         """tokenpak debug status shows env var override."""
-        from tokenpak.cli import cmd_debug_status
         from types import SimpleNamespace
-        
+
+        from tokenpak.cli import cmd_debug_status
+
         monkeypatch.setenv("TOKENPAK_DEBUG", "1")
         cmd_debug_status(SimpleNamespace())
         captured = capsys.readouterr()
-        
+
         assert "TOKENPAK_DEBUG" in captured.out

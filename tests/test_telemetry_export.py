@@ -16,12 +16,10 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
 
-from tokenpak.telemetry.collector import RequestStats
 from tokenpak.telemetry.export import MAX_EXPORT_ROWS
 from tokenpak.telemetry.storage import TelemetryStorage
 
@@ -308,7 +306,6 @@ class TestMaxRows:
         # Monkey-patch limit to 3 for test
         with patch("tokenpak.telemetry.export.MAX_EXPORT_ROWS", 3):
             # Re-import to pick up patched constant
-            from importlib import reload
             import tokenpak.telemetry.export as mod
             original = mod.MAX_EXPORT_ROWS
             mod.MAX_EXPORT_ROWS = 3

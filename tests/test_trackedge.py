@@ -3,29 +3,29 @@ Tests for TrackEdge Feature Engine, Scoring Engine, and Probability Engine.
 """
 
 import math
-import pytest
-import numpy as np
-import sys
 import os
+import sys
+
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from trackedge.processing.feature_engine import (
-    speed_score,
-    pace_style,
-    race_pace_scenario,
-    class_fit,
-    workout_fitness,
-    layoff_penalty,
-    connections_score,
-    first_time_starter_reweight,
-    apply_shrinkage,
-)
+from trackedge.model.probability import softmax_probabilities, top_contenders
 from trackedge.model.scoring_engine import (
     power_score,
     race_confidence_score,
 )
-from trackedge.model.probability import softmax_probabilities, top_contenders
-
+from trackedge.processing.feature_engine import (
+    apply_shrinkage,
+    class_fit,
+    connections_score,
+    first_time_starter_reweight,
+    layoff_penalty,
+    pace_style,
+    race_pace_scenario,
+    speed_score,
+    workout_fitness,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 try:
     from tokenpak.vault.retrieval import COVERAGE_OK
 except ImportError:
-    pytest.skip(f"Cannot import COVERAGE_OK from tokenpak.vault.retrieval — removed in current build", allow_module_level=True)
+    pytest.skip("Cannot import COVERAGE_OK from tokenpak.vault.retrieval — removed in current build", allow_module_level=True)
 import pytest
 
 from tokenpak.vault.retrieval import (
-    COVERAGE_OK,
-    COVERAGE_STRONG,
     _BOOST_PATH,
     _BOOST_RECENCY,
     _BOOST_SYMBOL,
@@ -21,6 +19,8 @@ from tokenpak.vault.retrieval import (
     _W_BM25,
     _W_META,
     _W_SEM,
+    COVERAGE_OK,
+    COVERAGE_STRONG,
     all_must_hits_found,
     chunks_contain_term,
     compute_coverage_score,
@@ -30,7 +30,6 @@ from tokenpak.vault.retrieval import (
     score_and_sort,
     sort_retrieval_results,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

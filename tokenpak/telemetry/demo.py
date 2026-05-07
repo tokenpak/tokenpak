@@ -205,7 +205,7 @@ def clear_demo_data() -> dict:
                     continue
                 try:
                     event = json.loads(line)
-                    if event.get("is_demo") == True:
+                    if event.get("is_demo") is True:
                         deleted_count += 1
                     else:
                         all_events.append(event)

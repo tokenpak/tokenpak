@@ -7,11 +7,10 @@ Tests verify TokenPak handles concurrent requests correctly:
 - Thread/async safety
 """
 
-import pytest
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestConcurrentRequests:
@@ -25,7 +24,7 @@ class TestConcurrentRequests:
             pytest.skip("TokenPakClient not available")
 
         client = TokenPakClient("http://localhost:8767")
-        
+
         def make_request(i):
             try:
                 return client.send_request({
@@ -39,7 +38,7 @@ class TestConcurrentRequests:
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(make_request, i) for i in range(10)]
             results = [f.result() for f in as_completed(futures)]
-        
+
         assert len(results) == 10
 
     def test_concurrent_cache_access(self):
@@ -51,23 +50,23 @@ class TestConcurrentRequests:
 
         cache = CacheManager()
         request_template = {"model": "gpt-4", "messages": [{"role": "user", "content": "X"}]}
-        
+
         def cache_operation(i):
             req = dict(request_template)
             req["messages"][0]["content"] = f"Request {i}"
-            
+
             # Set
             cache.set(req, {"content": f"response {i}", "tokens": 10})
-            
+
             # Get
             result = cache.get(req)
-            
+
             return result is not None
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(cache_operation, i) for i in range(20)]
             results = [f.result() for f in as_completed(futures)]
-        
+
         assert all(results)
 
     def test_metrics_consistency_under_load(self):
@@ -78,7 +77,7 @@ class TestConcurrentRequests:
             pytest.skip("MetricsCollector not available")
 
         metrics = MetricsCollector()
-        
+
         def record_metric(i):
             metrics.record_request(
                 {"model": "gpt-4"},
@@ -89,7 +88,7 @@ class TestConcurrentRequests:
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(record_metric, i) for i in range(100)]
             list(as_completed(futures))
-        
+
         stats = metrics.get_stats()
         assert stats["total_requests"] == 100
 
@@ -100,8 +99,9 @@ class TestAsyncIntegration:
     def test_async_litellm_completion(self):
         """Test async LiteLLM completion."""
         try:
-            import litellm
             import asyncio
+
+            import litellm
         except ImportError:
             pytest.skip("litellm or asyncio not available")
 
@@ -112,6 +112,7 @@ class TestAsyncIntegration:
         """Test concurrent async calls."""
         try:
             import asyncio
+
             from tokenpak.client import TokenPakAsyncClient
         except ImportError:
             pytest.skip("Async client not available")
@@ -125,7 +126,7 @@ class TestAsyncIntegration:
                 })
                 for i in range(5)
             ]
-            
+
             try:
                 results = await asyncio.gather(*tasks)
                 return len(results) == 5
@@ -156,11 +157,11 @@ class TestConcurrentCaching:
         cache = CacheManager()
         request = {"model": "gpt-4", "messages": [{"role": "user", "content": "test"}]}
         expected_response = {"content": "response", "tokens": 10}
-        
+
         cache.set(request, expected_response)
-        
+
         results = []
-        
+
         def read_cache():
             result = cache.get(request)
             results.append(result)
@@ -168,7 +169,7 @@ class TestConcurrentCaching:
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(read_cache) for _ in range(100)]
             list(as_completed(futures))
-        
+
         # All reads should return the same response
         assert all(r == expected_response for r in results)
 
@@ -180,7 +181,7 @@ class TestConcurrentCaching:
             pytest.skip("CacheManager not available")
 
         cache = CacheManager()
-        
+
         def write_cache(i):
             request = {
                 "model": "gpt-4",
@@ -192,7 +193,7 @@ class TestConcurrentCaching:
         with ThreadPoolExecutor(max_workers=20) as executor:
             futures = [executor.submit(write_cache, i) for i in range(100)]
             results = [f.result() for f in as_completed(futures)]
-        
+
         assert all(results)
         stats = cache.get_stats()
         assert stats["entries"] == 100
@@ -209,7 +210,7 @@ class TestLoadScenarios:
             pytest.skip("TokenPakClient not available")
 
         client = TokenPakClient("http://localhost:8767")
-        
+
         def burst_request(i):
             try:
                 return client.send_request({
@@ -222,7 +223,7 @@ class TestLoadScenarios:
         with ThreadPoolExecutor(max_workers=20) as executor:
             futures = [executor.submit(burst_request, i) for i in range(50)]
             results = [f.result() for f in as_completed(futures)]
-        
+
         # Should complete without deadlock or corruption
         assert len(results) == 50
 
@@ -237,7 +238,7 @@ class TestLoadScenarios:
         duration = 0.5  # 500ms test
         start_time = time.time()
         request_count = 0
-        
+
         def sustained_operation():
             nonlocal request_count
             request = {
@@ -254,7 +255,7 @@ class TestLoadScenarios:
                 futures.append(executor.submit(sustained_operation))
                 if len(futures) > 100:  # Keep queue manageable
                     futures.pop(0)
-            
+
             for f in as_completed(futures):
                 f.result()
 
@@ -272,7 +273,7 @@ class TestMemorySafety:
             pytest.skip("CacheManager not available")
 
         cache = CacheManager()
-        
+
         for iteration in range(3):
             def add_and_clear():
                 request = {
@@ -284,7 +285,7 @@ class TestMemorySafety:
             with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = [executor.submit(add_and_clear) for _ in range(100)]
                 list(as_completed(futures))
-            
+
             cache.clear()
 
         # If we got here, no segfaults or memory errors
@@ -298,7 +299,7 @@ class TestMemorySafety:
             pytest.skip("MetricsCollector not available")
 
         metrics = MetricsCollector()
-        
+
         def record():
             for _ in range(10):
                 metrics.record_request(

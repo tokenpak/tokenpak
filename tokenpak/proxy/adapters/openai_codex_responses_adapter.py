@@ -18,13 +18,11 @@ chatgpt.com requests will likely get 403'd by CF in that case.
 
 from __future__ import annotations
 
-import copy
 import json
-from typing import Any, Dict, Mapping, Optional
+from typing import Mapping, Optional
 
-from .openai_responses_adapter import OpenAIResponsesAdapter
 from .canonical import CanonicalRequest
-
+from .openai_responses_adapter import OpenAIResponsesAdapter
 
 # ---------------------------------------------------------------------------
 # ChatGPT OAuth tokens are JWTs (start with "eyJ").

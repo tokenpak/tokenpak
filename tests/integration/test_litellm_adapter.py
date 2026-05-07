@@ -7,9 +7,10 @@ Tests verify LiteLLM integration with TokenPak proxy works end-to-end:
 - Response format preservation
 """
 
-import pytest
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
 
 
 class TestLiteLLMIntegration:
@@ -43,7 +44,7 @@ class TestLiteLLMIntegration:
 
         model = "gpt-4"
         text = "Hello, this is a test message."
-        
+
         try:
             count = token_counter(model=model, text=text)
             assert isinstance(count, int)
@@ -61,7 +62,7 @@ class TestLiteLLMIntegration:
 
         model = "claude-3-sonnet-20240229"
         text = "Hello, this is a test message for Anthropic."
-        
+
         try:
             count = token_counter(model=model, text=text)
             assert isinstance(count, int)
@@ -88,8 +89,9 @@ class TestLiteLLMFrameworkIntegration:
     def test_litellm_completion_routing(self):
         """Test LiteLLM routes calls through proxy correctly."""
         try:
+            from unittest.mock import MagicMock, patch
+
             import litellm
-            from unittest.mock import patch, MagicMock
         except ImportError:
             pytest.skip("litellm not installed")
 
@@ -174,8 +176,9 @@ class TestLiteLLMConcurrency:
     def test_litellm_concurrent_requests(self):
         """Test multiple concurrent LiteLLM calls."""
         try:
-            import litellm
             import asyncio
+
+            import litellm
         except ImportError:
             pytest.skip("litellm or asyncio not available")
 

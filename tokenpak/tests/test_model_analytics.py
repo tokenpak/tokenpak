@@ -5,12 +5,9 @@ Uses sys.modules patching to bypass FastAPI/Starlette incompatibility in the imp
 
 import json
 import sys
-import tempfile
 import types
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Patch the broken ingest + proxy import chain
@@ -29,7 +26,6 @@ from tokenpak.telemetry.models import (  # noqa: E402
     ModelStats,
     get_model_pricing,
 )
-
 
 # ---------------------------------------------------------------------------
 # get_model_pricing

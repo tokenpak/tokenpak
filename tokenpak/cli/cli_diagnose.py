@@ -85,15 +85,15 @@ def _check_config(verbose: bool) -> DiagResult:
     # Use comprehensive config validator
     try:
         from .cli_validate_config import ConfigValidator
-        
+
         validator = ConfigValidator()
         exit_code, errors, warnings = validator.validate(str(found_path))
-        
+
         # Determine severity based on exit code
         if exit_code == 0:
             severity = OK
             msg = f"Config: Valid ({found_path.name})"
-            detail = f"All validation checks passed"
+            detail = "All validation checks passed"
         elif exit_code == 2:
             severity = WARNING
             msg = f"Config: Valid with warnings ({found_path.name})"
@@ -102,7 +102,7 @@ def _check_config(verbose: bool) -> DiagResult:
             severity = ERROR
             msg = f"Config: Invalid ({found_path.name})"
             detail = f"{len(errors)} error(s) — run: tokenpak validate-config {found_path}"
-        
+
         env_vars = {
             "TOKENPAK_PORT": os.environ.get("TOKENPAK_PORT", "(default 8766)"),
             "TOKENPAK_MODE": os.environ.get("TOKENPAK_MODE", "(default hybrid)"),

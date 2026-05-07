@@ -13,7 +13,6 @@ import pytest
 
 from tokenpak.proxy.adapters import OpenAIChatAdapter, OpenAIResponsesAdapter
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

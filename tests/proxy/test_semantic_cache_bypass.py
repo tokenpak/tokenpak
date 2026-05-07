@@ -18,9 +18,8 @@ upstream is required.  All 5 acceptance criteria are covered:
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+
 import pytest
 
 # ---------------------------------------------------------------------------

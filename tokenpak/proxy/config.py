@@ -6,20 +6,20 @@ Extracted from tokenpak/runtime/proxy.py (L1-607 extraction, phase 1a).
 
 import json
 import os
-import urllib3
 from pathlib import Path
 from typing import Dict
 
-from tokenpak.proxy.adapters import build_default_registry
+import urllib3
 
+from tokenpak.proxy.adapters import build_default_registry
 
 # ---------------------------------------------------------------------------
 # Config — reads ~/.tokenpak/config.yaml with env var overrides
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.core.config_loader import get as _cfg
-
     import logging as _logging
+
+    from tokenpak.core.config_loader import get as _cfg
     _logging.getLogger("tokenpak.proxy.config").info("Config: ~/.tokenpak/config.yaml (env vars override)")
 except ImportError:
     # Fallback: env-only mode (no config_loader available)
@@ -425,9 +425,9 @@ UPSTREAM_ROUTES = _build_upstream_routes()
 # Custom providers — user-registered endpoints from config.yaml `providers:`
 # ---------------------------------------------------------------------------
 from tokenpak.proxy.custom_providers import (
-    load_custom_providers,
     build_custom_adapters,
     get_provider_display_list,
+    load_custom_providers,
 )
 
 CUSTOM_PROVIDERS = load_custom_providers()

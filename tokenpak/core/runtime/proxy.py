@@ -14,23 +14,21 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sqlite3
-import threading
 
 # ---------------------------------------------------------------------------
 # Implemented symbols — re-exported from modular tree
 # ---------------------------------------------------------------------------
 from tokenpak.proxy.circuit_breaker import _sanitize_headers  # noqa: F401
+from tokenpak.proxy.config import _PROFILE_PRESETS as _BASE_PROFILE_PRESETS
 from tokenpak.proxy.config import (  # noqa: F401
     COMPILATION_MODE,
     MUTATION_AUDIT_TTL_DAYS,
     STABLE_CACHE_CONTROL_AUTO,
 )
-from tokenpak.proxy.config import _PROFILE_PRESETS as _BASE_PROFILE_PRESETS
 from tokenpak.proxy.monitor import Monitor as _BaseMonitor  # noqa: F401
-from tokenpak.proxy.request_pipeline import can_compress as _base_can_compress
 from tokenpak.proxy.request_pipeline import _partition_stable_volatile  # noqa: F401
+from tokenpak.proxy.request_pipeline import can_compress as _base_can_compress
 from tokenpak.proxy.server import ForwardProxyHandler  # noqa: F401
 from tokenpak.telemetry.monitoring.server import ThreadedHTTPServer  # noqa: F401
 

@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict
 
-from tokenpak.security.dlp import DLPScanner, DLPMatch, DLPBlockError
+from tokenpak.security.dlp import DLPBlockError, DLPMatch, DLPScanner
 
 # File mode for sensitive config files: owner read/write only.
 _CONFIG_FILE_MODE = 0o600

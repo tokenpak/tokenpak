@@ -10,10 +10,11 @@ and lossless/lossy guarantees are met.
 
 
 import pytest
+
 pytest.importorskip("tokenpak.capsule.builder", reason="module not available in current build")
 import pytest
-from tokenpak.capsule.builder import CapsuleBuilder, _compress_text
 
+from tokenpak.capsule.builder import CapsuleBuilder, _compress_text
 
 # ==========================================
 # Realistic Payloads (for ratio testing)
@@ -149,7 +150,6 @@ class TestCapsuleEnvelope:
 
     def test_capsule_id_consistency(self):
         """Capsule IDs are derived from original content."""
-        import json
         from tokenpak.capsule.builder import _capsule_id
 
         cid1 = _capsule_id(PAYLOAD_2000)

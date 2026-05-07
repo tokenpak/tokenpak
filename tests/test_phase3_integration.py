@@ -12,6 +12,7 @@ Covers:
 
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.regression.stability_scorer", reason="module not available in current build")
 import json
 import tempfile
@@ -21,25 +22,23 @@ from pathlib import Path
 import pytest
 
 from tokenpak._internal.agentic.precondition_gates import (
-    PreconditionGates,
     Gate,
+    PreconditionGates,
+)
+from tokenpak._internal.memory.session_capsules import (
+    build_session_capsule,
+    capsule_retrieval_score,
+    score_capsule_sections,
+    serialize_capsule,
+)
+from tokenpak._internal.regression.stability_scorer import (
+    RunRecord,
+    StabilityScorer,
 )
 from tokenpak.compression.query_rewriter import (
     QueryRewriter,
     RewriteResult,
 )
-from tokenpak._internal.memory.session_capsules import (
-    build_session_capsule,
-    serialize_capsule,
-    score_capsule_sections,
-    capsule_retrieval_score,
-)
-from tokenpak._internal.regression.stability_scorer import (
-    StabilityScorer,
-    RunRecord,
-    compute_stability,
-)
-
 
 # ===========================================================================
 # Fixtures

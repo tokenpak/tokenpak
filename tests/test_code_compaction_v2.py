@@ -11,15 +11,14 @@ Acceptance criteria:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.processors.code", reason="module not available in current build")
 import hashlib
 import re
 import unittest
 
-from tokenpak.processors.code import CodeCompactionMode, CodeProcessor, _LARGE_LITERAL_THRESHOLD
-
+from tokenpak.processors.code import _LARGE_LITERAL_THRESHOLD, CodeCompactionMode, CodeProcessor
 
 # ---------------------------------------------------------------------------
 # Helpers

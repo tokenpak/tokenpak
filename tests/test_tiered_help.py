@@ -1,21 +1,17 @@
 """Tests for tiered help system (essential, intermediate, all commands)."""
 
-import sys
-from pathlib import Path
 import subprocess
-from io import StringIO
 from contextlib import redirect_stdout
-
-import pytest
+from io import StringIO
+from pathlib import Path
 
 from tokenpak.cli.commands.help import (
-    run,
-    print_essential_help,
-    print_intermediate_help,
-    print_full_help,
-    print_command_help,
     _ESSENTIAL_COMMANDS,
     _INTERMEDIATE_COMMANDS,
+    print_essential_help,
+    print_full_help,
+    print_intermediate_help,
+    run,
 )
 
 

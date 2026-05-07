@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.agentic.memory_promoter", reason="module not available in current build")
-import json
 import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 import pytest
 
 from tokenpak.agentic.memory_promoter import (
+    PROMOTION_RULES,
     Lesson,
     MemoryPromoter,
-    PROMOTION_RULES,
-    TIER_NAMES,
 )
 
 
@@ -75,7 +71,7 @@ def test_record_success_increments_counters(promoter):
     """Recording success should increment occurrences and successes."""
     lesson = promoter.add_lesson("test-1", "Fast path", specificity_score=0.7, savings_pct=20.0)
     initial_occurrences = lesson.occurrences
-    
+
     lesson = promoter.record_success("test-1")
     assert lesson.occurrences == initial_occurrences + 1
     assert lesson.successes == 1
@@ -84,7 +80,7 @@ def test_record_success_increments_counters(promoter):
 def test_record_failure_increments_counters(promoter):
     """Recording failure should increment occurrences and failures."""
     lesson = promoter.add_lesson("test-1", "Fast path", specificity_score=0.7, savings_pct=20.0)
-    
+
     lesson = promoter.record_failure("test-1")
     assert lesson.occurrences == 2
     assert lesson.failures == 1
@@ -104,21 +100,21 @@ def test_promote_tier1_to_tier2(promoter):
         savings_pct=20.0,
     )
     assert lesson.tier == 1
-    
+
     # Record 1 more success: 2 occurrences, 1 success (50%) - not enough yet
     promoter.record_success("test-1")
     lesson = promoter.get_lesson("test-1")
     assert lesson.tier == 1  # Still Tier 1 (50% < 70%)
-    
+
     # Record another success: 3 occurrences, 2 successes (66%) - still not enough
     promoter.record_success("test-1")
     lesson = promoter.get_lesson("test-1")
     assert lesson.tier == 1  # Still Tier 1 (66% < 70%)
-    
+
     # Record another success: 4 occurrences, 3 successes (75%) - now should promote!
     promoter.record_success("test-1")
     lesson = promoter.get_lesson("test-1")
-    
+
     assert lesson.tier == 2
     assert lesson.occurrences >= PROMOTION_RULES["min_occurrences"]
     assert lesson.success_rate() >= PROMOTION_RULES["min_success_rate"]
@@ -144,11 +140,11 @@ def test_no_promote_tier1_low_success_rate(promoter):
         specificity_score=0.7,
         savings_pct=10.0,
     )
-    
+
     # Record 1 failure (total: 2 occurrences, 0 successes = 0% success rate)
     promoter.record_failure("test-1")
     lesson = promoter.get_lesson("test-1")
-    
+
     assert lesson.tier == 1  # Should not promote
 
 
@@ -160,11 +156,11 @@ def test_no_promote_tier1_low_specificity(promoter):
         specificity_score=0.2,  # Below threshold of 0.5
         savings_pct=20.0,
     )
-    
+
     # Even with 2 successful occurrences, should not promote
     promoter.record_success("test-1")
     lesson = promoter.get_lesson("test-1")
-    
+
     assert lesson.tier == 1
 
 
@@ -181,19 +177,19 @@ def test_demote_on_contradiction(promoter):
         specificity_score=0.8,
         savings_pct=20.0,
     )
-    
+
     # Get to Tier 2: need 2+ occurrences and 70%+ success rate
     promoter.record_success("test-1")  # 2 occ, 1 succ = 50%
     promoter.record_success("test-1")  # 3 occ, 2 succ = 66%
     promoter.record_success("test-1")  # 4 occ, 3 succ = 75% -> promotes to Tier 2
-    
+
     lesson = promoter.get_lesson("test-1")
     assert lesson.tier == 2
-    
+
     # Record contradiction
     promoter.record_contradiction("test-1")
     lesson = promoter.get_lesson("test-1")
-    
+
     # Should be demoted back to Tier 1
     assert lesson.tier == 1
 
@@ -206,15 +202,15 @@ def test_no_promote_with_contradiction(promoter):
         specificity_score=0.8,
         savings_pct=20.0,
     )
-    
+
     # Record success + contradiction
     promoter.record_success("test-1")
     promoter.record_contradiction("test-1")
     lesson = promoter.get_lesson("test-1")
-    
+
     # Tier 1 with contradiction should be deleted
     assert lesson is None
-    
+
     # Now test with a promoted lesson that gets contradicted
     lesson2 = promoter.add_lesson(
         lesson_id="test-2",
@@ -227,7 +223,7 @@ def test_no_promote_with_contradiction(promoter):
     promoter.record_success("test-2")  # 66%
     promoter.record_success("test-2")  # 75% -> promotes
     assert promoter.get_lesson("test-2").tier == 2
-    
+
     # Now contradict it - should demote to Tier 1
     promoter.record_contradiction("test-2")
     lesson2 = promoter.get_lesson("test-2")
@@ -290,13 +286,13 @@ def test_cleanup_expired_lessons(promoter):
         specificity_score=0.7,
         savings_pct=20.0,
     )
-    
+
     # Make it expired by setting last_seen far in the past
     promoter.lessons["test-1"].last_seen_at = time.time() - 400  # 400s ago, expired for Tier 1 (5 min TTL)
-    
+
     # Run cleanup
     affected = promoter.cleanup_expired()
-    
+
     # Should be removed (since Tier 1 demotes to 0, which deletes)
     assert "test-1" not in promoter.lessons or promoter.get_lesson("test-1") is None
     assert affected >= 1
@@ -314,12 +310,12 @@ def test_save_and_load(promoter, temp_memory_file):
     promoter.record_success("test-1")  # 2, 1 = 50%
     promoter.record_success("test-1")  # 3, 2 = 66%
     promoter.record_success("test-1")  # 4, 3 = 75% -> promotes
-    
+
     lesson2 = promoter.add_lesson("test-2", "Lesson 2", specificity_score=0.6, savings_pct=15.0)
-    
+
     # Create new promoter instance from same file
     promoter2 = MemoryPromoter(path=temp_memory_file)
-    
+
     assert len(promoter2.lessons) == 2
     assert promoter2.get_lesson("test-1").tier == 2
     assert promoter2.get_lesson("test-2").tier == 1
@@ -334,15 +330,15 @@ def test_get_tier_lessons(promoter):
     """get_tier_lessons should return lessons at specific tier."""
     promoter.add_lesson("tier1a", "Lesson", specificity_score=0.7, savings_pct=20.0)
     promoter.add_lesson("tier1b", "Lesson", specificity_score=0.7, savings_pct=20.0)
-    
+
     # Promote tier1a to Tier 2: need 75%+ success
     promoter.record_success("tier1a")  # 2 occ, 1 succ = 50%
     promoter.record_success("tier1a")  # 3 occ, 2 succ = 66%
     promoter.record_success("tier1a")  # 4 occ, 3 succ = 75% -> promotes
-    
+
     tier1 = promoter.get_tier_lessons(1)
     tier2 = promoter.get_tier_lessons(2)
-    
+
     assert len(tier1) == 1
     assert len(tier2) == 1
     assert tier1[0].lesson_id == "tier1b"
@@ -353,14 +349,14 @@ def test_stats(promoter):
     """stats() should return accurate counts."""
     promoter.add_lesson("test-1", "L1", specificity_score=0.7, savings_pct=20.0)
     promoter.add_lesson("test-2", "L2", specificity_score=0.7, savings_pct=20.0)
-    
+
     # Promote test-1 to Tier 2: need 75%+ success
     promoter.record_success("test-1")  # 2 occ, 1 succ = 50%
     promoter.record_success("test-1")  # 3 occ, 2 succ = 66%
     promoter.record_success("test-1")  # 4 occ, 3 succ = 75% -> promotes
-    
+
     stats = promoter.stats()
-    
+
     assert stats["total_lessons"] == 2
     assert stats["by_tier"][1] == 1
     assert stats["by_tier"][2] == 1
@@ -377,7 +373,7 @@ def test_lesson_to_dict(promoter):
     """Lesson.to_dict() should serialize correctly."""
     lesson = promoter.add_lesson("test", "content", specificity_score=0.7, savings_pct=20.0)
     data = lesson.to_dict()
-    
+
     assert data["lesson_id"] == "test"
     assert data["content"] == "content"
     assert data["tier"] == 1

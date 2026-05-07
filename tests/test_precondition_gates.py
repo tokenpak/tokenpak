@@ -1,29 +1,22 @@
 """Tests for tokenpak._internal.agentic.precondition_gates"""
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.agentic.precondition_gates", reason="module not available in current build")
-import json
 import os
 import subprocess
-import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 import pytest
 
 from tokenpak._internal.agentic.precondition_gates import (
     Gate,
-    GateResult,
     PreconditionGates,
-    SUPPORTED_GATE_TYPES,
-    AUTO_PROMOTE_THRESHOLD,
+    _check_diff_clean,
     _check_env_check,
     _check_file_exists,
     _check_service_running,
     _check_test_passing,
-    _check_diff_clean,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

@@ -17,23 +17,23 @@ from __future__ import annotations
 
 import json
 import threading
-import time
-from typing import Tuple
-from unittest.mock import patch
-
-import pytest
-
-# ---------------------------------------------------------------------------
-# Modular imports (migrated from proxy monolith)
-# ---------------------------------------------------------------------------
-from tokenpak.proxy.server import ForwardProxyHandler
-from tokenpak.proxy.fallback import _provider_circuits, _provider_circuit_lock
-from tokenpak.core.runtime.proxy import SESSION
 
 # Compat shims — the old monolith exposed these as module-level globals.
 # The modular tree uses ProxyServer instances with GracefulShutdown instead.
 # For test purposes, we provide lightweight module-level stand-ins.
 import threading as _threading
+import time
+from typing import Tuple
+
+import pytest
+
+from tokenpak.core.runtime.proxy import SESSION
+from tokenpak.proxy.fallback import _provider_circuit_lock, _provider_circuits
+
+# ---------------------------------------------------------------------------
+# Modular imports (migrated from proxy monolith)
+# ---------------------------------------------------------------------------
+from tokenpak.proxy.server import ForwardProxyHandler
 
 _proxy_ready: bool = False
 _shutdown_event = _threading.Event()

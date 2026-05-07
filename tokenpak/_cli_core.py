@@ -609,7 +609,8 @@ def cmd_setup(args):
     # Start the proxy
     print("\n🚀 Starting proxy...\n")
 
-    import sys
+    # (sys is imported at module top — local re-import would shadow it
+    #  and trigger F823 at any earlier reference inside this function.)
 
     # Find proxy — prefer bundled runtime/ first, then canonical proxy.py
     candidates = [
@@ -682,11 +683,11 @@ def cmd_start(args):
 
     # Validate config on boot (P1-T5)
     from tokenpak.core.config_loader import load_config
-    
+
     try:
         _config = load_config()
         from tokenpak.core.config_validator import ConfigValidator
-        
+
         _validator = ConfigValidator()
         _errors = _validator.validate(_config)
         if _errors:
@@ -830,14 +831,14 @@ def cmd_logs(args):
 
 # ── End Progressive Disclosure ────────────────────────────────────────────────
 
-from .telemetry.budget_allocator import BudgetBlock, quadratic_allocate
-from .orchestration.calibration import calibrate_workers, get_recommended_workers
-from .telemetry.miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
 from .compression.processors import get_processor
+from .compression.wire import pack
 from .core.registry import Block, BlockRegistry
+from .orchestration.calibration import calibrate_workers, get_recommended_workers
+from .telemetry.budget_allocator import BudgetBlock, quadratic_allocate
+from .telemetry.miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
 from .telemetry.tokens import cache_info, count_tokens, truncate_to_tokens
 from .vault.walker import walk_directory
-from .compression.wire import pack
 
 # Batch size for SQLite transactions
 BATCH_SIZE = 100
@@ -1778,7 +1779,7 @@ def cmd_explain(args):
             print(f"  {key:<40} = {value}")
 
     if not profile:
-        print(f"\nTip: Set with TOKENPAK_PROFILE=<name> or use `tokenpak explain --profile <name>`")
+        print("\nTip: Set with TOKENPAK_PROFILE=<name> or use `tokenpak explain --profile <name>`")
 
 
 def cmd_preview(args):
@@ -2049,8 +2050,8 @@ def cmd_prove(args):
     action = getattr(args, "prove_action", None)
 
     if action == "run":
-        from .prove.scenario import resolve_scenario
         from .prove.runner import run_proof
+        from .prove.scenario import resolve_scenario
         scenario_name = getattr(args, "scenario", "default")
         scenario = resolve_scenario(scenario_name)
         # Apply CLI overrides
@@ -2068,9 +2069,9 @@ def cmd_prove(args):
         scenarios = list_scenarios()
         if not scenarios:
             print("No scenarios found.")
-            print(f"Create one at: ~/.tokenpak/prove/scenarios/<name>.md")
+            print("Create one at: ~/.tokenpak/prove/scenarios/<name>.md")
             return
-        print(f"\n  Available scenarios:\n")
+        print("\n  Available scenarios:\n")
         for s in scenarios:
             turns = s.get("turns", "?")
             print(f"    {s['id']:24s}  {s.get('name', ''):30s}  {turns} turns  ({s['source']})")
@@ -2097,14 +2098,14 @@ def cmd_prove(args):
     elif action == "providers":
         from .prove.adapter import list_providers
         providers = list_providers()
-        print(f"\n  Registered providers:\n")
+        print("\n  Registered providers:\n")
         for p in providers:
             models = ", ".join(p["models"][:5])
             if len(p["models"]) > 5:
                 models += f", ... (+{len(p['models']) - 5})"
             print(f"    {p['name']:12s}  format={p['format']:10s}  ({p['source']})")
             print(f"    {'':12s}  models: {models}")
-        print(f"\n  Add custom providers: ~/.tokenpak/prove/providers.yaml")
+        print("\n  Add custom providers: ~/.tokenpak/prove/providers.yaml")
         print()
 
     else:
@@ -2168,7 +2169,7 @@ def _prove_create_scenario(args):
 
     path.write_text("\n".join(lines))
     print(f"Created scenario: {path}")
-    print(f"Edit the file to customize your test prompts, then run:")
+    print("Edit the file to customize your test prompts, then run:")
     print(f"  tokenpak prove run {name}")
 
 
@@ -2244,6 +2245,7 @@ def _build_codex_parser(sub):
 def cmd_creds(args):
     """Discover and inspect credentials across platforms."""
     import sys
+
     from .creds.cli import main as creds_main
     sys.exit(creds_main(list(args.args)))
 
@@ -2435,7 +2437,7 @@ def _build_stub_parsers(sub):
     )
     p_integrate.add_argument(
         "--proxy-url", default=None,
-        help=f"Override the printed proxy URL (default: $TOKENPAK_PROXY_URL or http://localhost:8766)",
+        help="Override the printed proxy URL (default: $TOKENPAK_PROXY_URL or http://localhost:8766)",
     )
     p_integrate.add_argument(
         "--apply", action="store_true",
@@ -2506,7 +2508,7 @@ def _build_stub_parsers(sub):
                 return 1
             configs = result.get("configs", [])
             print("")
-            print(f"  TOKENPAK openclaw refresh-models")
+            print("  TOKENPAK openclaw refresh-models")
             print("  " + "─" * 40)
             print(f"  Proxy         {proxy_url}")
             print(f"  Installs      {len(configs)}")
@@ -2526,9 +2528,9 @@ def _build_stub_parsers(sub):
                 if updated:
                     print(f"    Providers ~   {', '.join(updated)}")
                 if cc:
-                    print(f"    Backend       tokenpak-claude-code enabled")
+                    print("    Backend       tokenpak-claude-code enabled")
                 if not (added or updated):
-                    print(f"    No changes — already in sync.")
+                    print("    No changes — already in sync.")
             print("")
             return 0
         # Default: print help for openclaw
@@ -3088,7 +3090,7 @@ def _cmd_status_legacy(args):
         if _savings_parts:
             print(f"  💰 Savings: {' | '.join(_savings_parts)}")
         else:
-            print(f"  💰 Savings: no data yet (run some requests first)")
+            print("  💰 Savings: no data yet (run some requests first)")
         print()
 
         # Today's savings (from telemetry DB)
@@ -3101,7 +3103,7 @@ def _cmd_status_legacy(args):
                 _daily_suffix = f" ({_daily_hit})" if _daily_hit else ""
                 print(f"  📅 Today's savings: ${_daily.savings_amount:.2f}{_daily_suffix}")
             else:
-                print(f"  📅 Today's savings: $0.00")
+                print("  📅 Today's savings: $0.00")
             print()
         except Exception:
             pass
@@ -3326,9 +3328,10 @@ def cmd_savings(args):
     try:
         from .services.optimization.attribution_stage import is_attribution_v2_enabled
         if is_attribution_v2_enabled():
-            from .telemetry.savings import aggregate_attributions, format_savings_by_source
-            from .telemetry.storage import TelemetryDB
             import pathlib
+
+            from .telemetry.savings import format_savings_by_source
+            from .telemetry.storage import TelemetryDB
             _db_path = pathlib.Path.home() / ".tokenpak" / "telemetry.db"
             if _db_path.exists():
                 _db = TelemetryDB(_db_path)
@@ -3675,7 +3678,7 @@ def cmd_debug_list(args):
 
     if not captures:
         print("No debug captures found.")
-        print(f"  Set TOKENPAK_DEBUG_CAPTURE=encrypted or TOKENPAK_DEBUG_CAPTURE=hash_only")
+        print("  Set TOKENPAK_DEBUG_CAPTURE=encrypted or TOKENPAK_DEBUG_CAPTURE=hash_only")
         return
 
     print(f"{'TRACE ID':<40} {'MODE':<12} {'SIZE':>10}  TIMESTAMP")
@@ -3960,8 +3963,9 @@ def cmd_update(args):
         print(f"  ✗ Could not reach PyPI: {e}")
         latest = None
 
-    from tokenpak import __version__ as current_ver
     from packaging.version import Version as _PV
+
+    from tokenpak import __version__ as current_ver
 
     print(f"  Current : {current_ver}")
     if latest:
@@ -4193,7 +4197,7 @@ def cmd_config_migrate(args):
     json_path = Path(getattr(args, "config_json", str(Path.home() / ".tokenpak" / "config.json")))
     dry_run = getattr(args, "dry_run", False)
 
-    print(f"TokenPak Config Migration")
+    print("TokenPak Config Migration")
     print(f"  Source : {json_path}")
     print(f"  Target : {CONFIG_PATH}")
     print()
@@ -4253,7 +4257,7 @@ def cmd_config_migrate(args):
         print("  config.json may contain agent-specific settings — those remain in place.")
         return
 
-    print(f"Changes to apply to config.yaml:")
+    print("Changes to apply to config.yaml:")
     for c in changes:
         print(c)
     print()
@@ -4267,7 +4271,7 @@ def cmd_config_migrate(args):
         CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(CONFIG_PATH, "w") as f:
             _yaml.dump(yaml_cfg, f, default_flow_style=False, allow_unicode=True)
-        print(f"✓ config.yaml updated")
+        print("✓ config.yaml updated")
     else:
         print("✗ PyYAML not installed — cannot write config.yaml (pip install pyyaml)")
         return
@@ -5150,7 +5154,11 @@ def cmd_trigger_watch(args):
     """Start file watcher for file:changed events."""
     import signal
 
-    from tokenpak.orchestration.macros.hooks import is_file_watcher_running, start_file_watcher, stop_file_watcher
+    from tokenpak.orchestration.macros.hooks import (
+        is_file_watcher_running,
+        start_file_watcher,
+        stop_file_watcher,
+    )
 
     paths = args.paths if args.paths else ["."]
 
@@ -7048,7 +7056,11 @@ def cmd_macro_run(args):
     import json as _json
 
     from tokenpak.orchestration.macros.engine import MacroEngine
-    from tokenpak.orchestration.macros.premade_macros import PREMADE_MACROS, format_macro_output, run_macro
+    from tokenpak.orchestration.macros.premade_macros import (
+        PREMADE_MACROS,
+        format_macro_output,
+        run_macro,
+    )
 
     name = args.name
     dry_run = getattr(args, "dry_run", False)
@@ -7910,6 +7922,7 @@ def _build_optimize_parser(sub):
         # No file and no stdin → delegate to the session-level analyzer
         # in tokenpak.cli.commands.optimize.
         import sys
+
         from tokenpak.cli.commands.optimize_prompt import run_optimize_prompt
         if getattr(args, "file", None) or not sys.stdin.isatty():
             return run_optimize_prompt(args)
@@ -8085,7 +8098,6 @@ def _vec_doc_count(vec) -> int:
 
 def cmd_retrieval_status(args):
     """Show retrieval configuration and index stats."""
-    import asyncio
     from .vault.retrieval.base import HybridSearchConfig
     from .vault.retrieval.bm25 import BM25Retriever
     from .vault.retrieval.vector_local import LocalVectorRetriever
@@ -8156,6 +8168,7 @@ def cmd_retrieval_status(args):
 def cmd_retrieval_test(args):
     """Test a query through all enabled retrievers."""
     import asyncio
+
     from .vault.retrieval.base import HybridSearchConfig, RetrievalQuery
     from .vault.retrieval.hybrid import HybridRetriever
 

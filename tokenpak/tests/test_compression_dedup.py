@@ -5,17 +5,14 @@ Covers exact-duplicate removal, near-duplicate detection via Jaccard similarity,
 threshold tuning, and edge cases.
 """
 
-import pytest
 from tokenpak.compression.dedup import (
-    dedup_messages,
-    count_duplicates,
     _content_to_str,
-    _sha256,
-    _ngrams,
     _jaccard,
-    DEDUP_JACCARD_THRESHOLD,
+    _ngrams,
+    _sha256,
+    count_duplicates,
+    dedup_messages,
 )
-
 
 # ============================================================================
 # Helper Function Tests
@@ -345,7 +342,7 @@ class TestDedupEdgeCases:
         result = dedup_messages(messages, threshold=0.90)
         # Extra space changes n-gram sets enough that threshold=0.90 doesn't trigger
         assert len(result) == 2
-        
+
         # Jaccard similarity is ~0.545, so need threshold < 0.545 to catch it
         result_lenient = dedup_messages(messages, threshold=0.50)
         assert len(result_lenient) == 1

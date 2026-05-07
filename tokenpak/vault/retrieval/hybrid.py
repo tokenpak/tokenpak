@@ -7,7 +7,7 @@ import asyncio
 import logging
 from typing import List, Optional
 
-from .base import FusedResult, HybridSearchConfig, RetrievalQuery, RetrieverType
+from .base import FusedResult, HybridSearchConfig, RetrievalQuery
 from .bm25 import BM25Retriever
 from .fusion import rrf_fusion_detailed
 from .vector_local import LocalVectorRetriever

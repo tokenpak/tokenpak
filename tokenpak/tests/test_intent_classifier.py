@@ -5,12 +5,12 @@ needs_retrieval/needs_writeback flags, edge cases.
 """
 
 import pytest
+
 from tokenpak.compression.intent_classifier import (
     ClassificationResult,
     IntentClass,
     classify,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper

@@ -1,9 +1,10 @@
 
 import pytest
+
 pytest.importorskip("tokenpak.extraction", reason="module not available in current build")
 from tokenpak.extraction import EntityExtractor, EntityType
-from tokenpak.vault.indexer import VaultIndexer
 from tokenpak.vault.blocks import BlockStore
+from tokenpak.vault.indexer import VaultIndexer
 
 
 def test_extracts_file_paths_correctly():

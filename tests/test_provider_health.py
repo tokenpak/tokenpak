@@ -3,8 +3,9 @@
 Test suite for provider health monitoring.
 """
 
-import pytest
 import time
+
+import pytest
 from provider_health import (
     ProviderHealthMonitor,
     ProviderMetrics,

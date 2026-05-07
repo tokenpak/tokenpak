@@ -1,20 +1,18 @@
 """Comprehensive tests for tokenpak doctor command."""
 
 import json
-import os
 import sys
-import socket
 import tempfile
 import unittest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-from io import StringIO
 from collections import namedtuple
+from io import StringIO
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tokenpak.cli import cmd_doctor, Colors
+from tokenpak.cli import Colors, cmd_doctor
 
 # Create a namedtuple for version_info that works like sys.version_info
 VersionInfo = namedtuple('VersionInfo', ['major', 'minor', 'micro', 'releaselevel', 'serial'])
@@ -29,7 +27,7 @@ class DoctorChecksPythonVersionTest(unittest.TestCase):
         self.args.fleet = False
         self.args.claude_code = False
         self.captured_output = StringIO()
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_python_version_pass_310(self, mock_stdout):
@@ -39,7 +37,7 @@ class DoctorChecksPythonVersionTest(unittest.TestCase):
         self.assertIn('✅', output)
         self.assertIn('Python version', output)
         self.assertIn('3.10.0', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 11, 5, 'final', 0))
     def test_python_version_pass_311(self, mock_stdout):
@@ -48,7 +46,7 @@ class DoctorChecksPythonVersionTest(unittest.TestCase):
         output = mock_stdout.getvalue()
         self.assertIn('Python version', output)
         self.assertIn('3.11.5', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 9, 2, 'final', 0))
     def test_python_version_fail_39(self, mock_stdout):
@@ -71,10 +69,10 @@ class DoctorConfigFileTest(unittest.TestCase):
         self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
-    
+
     def tearDown(self):
         self.temp_home.cleanup()
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_config_valid_json(self, mock_stdout):
@@ -83,28 +81,28 @@ class DoctorConfigFileTest(unittest.TestCase):
         config_dir.mkdir()
         config_file = config_dir / "config.json"
         config_file.write_text(json.dumps({"port": 8766}))
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('✅', output)
             self.assertIn('Config file', output)
             self.assertIn('valid', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_config_missing(self, mock_stdout):
         """Missing config.json should warn."""
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
             self.assertIn('Config file', output)
             self.assertIn('not found', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_config_invalid_json(self, mock_stdout):
@@ -113,7 +111,7 @@ class DoctorConfigFileTest(unittest.TestCase):
         config_dir.mkdir()
         config_file = config_dir / "config.json"
         config_file.write_text("{invalid json")
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             with self.assertRaises(SystemExit) as cm:
                 cmd_doctor(self.args)
@@ -133,10 +131,10 @@ class DoctorVaultIndexTest(unittest.TestCase):
         self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
-    
+
     def tearDown(self):
         self.temp_home.cleanup()
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
@@ -146,17 +144,17 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir.mkdir()
         config_file = config_dir / "config.json"
         config_file.write_text(json.dumps({"port": 8766}))
-        
+
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": [{"id": "1"}, {"id": "2"}]}))
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('✅', output)
             self.assertIn('Vault index', output)
             self.assertIn('2 blocks', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
@@ -166,17 +164,17 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir.mkdir()
         config_file = config_dir / "config.json"
         config_file.write_text(json.dumps({"port": 8766}))
-        
+
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
             self.assertIn('0 blocks', output)
             self.assertIn('tokenpak index', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
@@ -186,14 +184,14 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir.mkdir()
         config_file = config_dir / "config.json"
         config_file.write_text(json.dumps({"port": 8766}))
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
             self.assertIn('Vault index', output)
             self.assertIn('not found', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
@@ -203,10 +201,10 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir.mkdir()
         config_file = config_dir / "config.json"
         config_file.write_text(json.dumps({"port": 8766}))
-        
+
         index_file = config_dir / "index.json"
         index_file.write_text("{invalid")
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             with self.assertRaises(SystemExit) as cm:
                 cmd_doctor(self.args)
@@ -226,10 +224,10 @@ class DoctorProxyPortTest(unittest.TestCase):
         self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
-    
+
     def tearDown(self):
         self.temp_home.cleanup()
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     @patch('socket.socket')
@@ -251,7 +249,7 @@ class DoctorProxyPortTest(unittest.TestCase):
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
             self.assertIn('port open', output)
-    
+
     @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
@@ -274,7 +272,7 @@ class DoctorProxyPortTest(unittest.TestCase):
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
             self.assertIn('not running', output)
-    
+
     @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
@@ -287,9 +285,9 @@ class DoctorProxyPortTest(unittest.TestCase):
         config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
-        
+
         mock_socket.side_effect = Exception("Network error")
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
@@ -307,10 +305,10 @@ class DoctorDiskSpaceTest(unittest.TestCase):
         self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
-    
+
     def tearDown(self):
         self.temp_home.cleanup()
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_disk_usage_small(self, mock_stdout):
@@ -321,17 +319,17 @@ class DoctorDiskSpaceTest(unittest.TestCase):
         config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
-        
+
         # Create a small file
         test_file = config_dir / "test.txt"
         test_file.write_text("x" * 1000)  # ~1KB
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('✅', output)
             self.assertIn('Disk usage', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_disk_usage_large(self, mock_stdout):
@@ -370,10 +368,10 @@ class DoctorLogFileTest(unittest.TestCase):
         self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
-    
+
     def tearDown(self):
         self.temp_home.cleanup()
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_log_file_missing(self, mock_stdout):
@@ -384,13 +382,13 @@ class DoctorLogFileTest(unittest.TestCase):
         config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('Debug log', output)
             self.assertIn('not present', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_log_file_present(self, mock_stdout):
@@ -401,10 +399,10 @@ class DoctorLogFileTest(unittest.TestCase):
         config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
-        
+
         log_file = config_dir / "debug.log"
         log_file.write_text("log entry 1\nlog entry 2\n")
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
@@ -422,10 +420,10 @@ class DoctorFixFlagTest(unittest.TestCase):
         self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
-    
+
     def tearDown(self):
         self.temp_home.cleanup()
-    
+
     @patch('socket.socket')
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
@@ -435,23 +433,23 @@ class DoctorFixFlagTest(unittest.TestCase):
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 1  # connection refused
         mock_socket.return_value = mock_sock
-        
+
         config_dir = self.temp_path / ".tokenpak"
         # Don't create config dir or file
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
-            
+
             # Check that config was created
             config_file = config_dir / "config.json"
             self.assertTrue(config_file.exists())
-            
+
             # Verify it's valid JSON
             with open(config_file) as f:
                 data = json.load(f)
                 self.assertEqual(data.get("port"), 8766)
-    
+
     @patch('socket.socket')
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
@@ -461,17 +459,17 @@ class DoctorFixFlagTest(unittest.TestCase):
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 1  # connection refused
         mock_socket.return_value = mock_sock
-        
+
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
         config_file.write_text("{invalid")
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             with self.assertRaises(SystemExit):
                 cmd_doctor(self.args)
             output = mock_stdout.getvalue()
-            
+
             # Verify config was not overwritten (backup check would be in implementation)
             # For now just check that fix was attempted
             self.assertIn('fix', output.lower() or '')
@@ -485,7 +483,7 @@ class DoctorOutputFormatTest(unittest.TestCase):
         self.args.fix = False
         self.args.fleet = False
         self.args.claude_code = False
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_output_has_header(self, mock_stdout):
@@ -494,16 +492,16 @@ class DoctorOutputFormatTest(unittest.TestCase):
         config_dir.mkdir(parents=True, exist_ok=True)
         config_file = config_dir / "config.json"
         config_file.write_text(json.dumps({"port": 8766}))
-        
+
         try:
             cmd_doctor(self.args)
         except SystemExit:
             pass
-        
+
         output = mock_stdout.getvalue()
         self.assertIn('TOKENPAK', output)
         self.assertIn('Doctor', output)
-    
+
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     def test_output_has_summary(self, mock_stdout):
@@ -512,12 +510,12 @@ class DoctorOutputFormatTest(unittest.TestCase):
         config_dir.mkdir(parents=True, exist_ok=True)
         config_file = config_dir / "config.json"
         config_file.write_text(json.dumps({"port": 8766}))
-        
+
         try:
             cmd_doctor(self.args)
         except SystemExit:
             pass
-        
+
         output = mock_stdout.getvalue()
         self.assertRegex(output, r'\d+ error[s]?, \d+ warning[s]?')
 
@@ -532,10 +530,10 @@ class DoctorExitCodesTest(unittest.TestCase):
         self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
-    
+
     def tearDown(self):
         self.temp_home.cleanup()
-    
+
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     @patch('socket.socket')
     def test_exit_code_0_on_pass(self, mock_socket):
@@ -546,11 +544,11 @@ class DoctorExitCodesTest(unittest.TestCase):
         config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
-        
+
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0
         mock_socket.return_value = mock_sock
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             with patch('sys.stdout', new_callable=StringIO):
                 try:
@@ -558,14 +556,14 @@ class DoctorExitCodesTest(unittest.TestCase):
                     # If we get here without SystemExit, exit code should be 0
                 except SystemExit as e:
                     self.assertEqual(e.code, None)  # sys.exit(0) or no exit
-    
+
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 9, 0, 'final', 0))
     def test_exit_code_1_on_fail(self):
         """Should exit 1 when any check fails."""
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
-        
+
         with patch('sys.stdout', new_callable=StringIO):
             with self.assertRaises(SystemExit) as cm:
                 cmd_doctor(self.args)
@@ -574,19 +572,19 @@ class DoctorExitCodesTest(unittest.TestCase):
 
 class ColorsTest(unittest.TestCase):
     """Test color formatting."""
-    
+
     def test_ok_color(self):
         """OK should have green emoji."""
         result = Colors.ok("test")
         self.assertIn('✅', result)
         self.assertIn('test', result)
-    
+
     def test_warn_color(self):
         """Warn should have yellow emoji."""
         result = Colors.warn("test")
         self.assertIn('⚠️', result)
         self.assertIn('test', result)
-    
+
     def test_fail_color(self):
         """Fail should have red emoji."""
         result = Colors.fail("test")

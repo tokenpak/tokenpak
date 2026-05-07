@@ -2,8 +2,8 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.miss_detector", reason="module not available in current build")
-import json
 import os
 import tempfile
 
@@ -12,14 +12,12 @@ import pytest
 from tokenpak.miss_detector import (
     ContextGap,
     SignalType,
-    detect_misses,
-    save_gaps,
-    load_gaps,
-    should_expand_retrieval,
     _word_overlap_ratio,
-    DEFAULT_GAPS_PATH,
+    detect_misses,
+    load_gaps,
+    save_gaps,
+    should_expand_retrieval,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -358,7 +356,7 @@ class TestRetrievalExpansion:
     def test_expand_in_cli_search(self):
         """Integration: cmd_search doubles top_k when prior miss detected."""
         import argparse
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         # Write a prior gap for "authentication"
         self._write_gap("authentication login flow")

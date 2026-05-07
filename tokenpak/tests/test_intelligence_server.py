@@ -44,8 +44,9 @@ class TestCorsOrigins(unittest.TestCase):
             os.environ.pop("TOKENPAK_CORS_ORIGINS", None)
             if env_val is not None:
                 os.environ["TOKENPAK_CORS_ORIGINS"] = env_val
-            from tokenpak.proxy.intelligence import server as srv
             import importlib
+
+            from tokenpak.proxy.intelligence import server as srv
             importlib.reload(srv)
             return srv._cors_origins()
 
@@ -196,6 +197,7 @@ class TestBudgetRequestValidator(unittest.TestCase):
 def _make_test_client(key="testkey", tier="pro"):
     """Return a TestClient with a pre-registered API key."""
     from starlette.testclient import TestClient
+
     from tokenpak.proxy.intelligence.auth import APIKeyValidator, LicenseTier, RateLimiter
     from tokenpak.proxy.intelligence.server import create_app
 
@@ -214,6 +216,7 @@ def _make_test_client(key="testkey", tier="pro"):
 class TestCreateApp(unittest.TestCase):
     def test_returns_fastapi_instance(self):
         from fastapi import FastAPI
+
         from tokenpak.proxy.intelligence.server import create_app
 
         app = create_app()

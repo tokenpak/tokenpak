@@ -20,9 +20,6 @@ import unittest
 from http.client import HTTPConnection
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -12,16 +12,16 @@ Tests cover:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.monitoring.request_size", reason="module not available in current build")
-import pytest
 from datetime import datetime
-from unittest.mock import patch
+
+import pytest
 
 from tokenpak.monitoring.request_size import (
-    RequestSizeMonitor,
-    RequestSizeConfig,
     AlertLevel,
-    SizeAlert,
+    RequestSizeConfig,
+    RequestSizeMonitor,
     get_monitor,
     reset_monitor,
 )
@@ -68,7 +68,7 @@ class TestRequestSizeMonitor:
         """Yellow alert at 300KB threshold."""
         monitor = RequestSizeMonitor()
         alert = monitor.check_request_size(300_000)
-        
+
         assert alert is not None
         assert alert.level == AlertLevel.YELLOW
         assert alert.size_bytes == 300_000
@@ -78,7 +78,7 @@ class TestRequestSizeMonitor:
         """Orange alert at 500KB threshold."""
         monitor = RequestSizeMonitor()
         alert = monitor.check_request_size(500_000)
-        
+
         assert alert is not None
         assert alert.level == AlertLevel.ORANGE
         assert alert.size_bytes == 500_000
@@ -88,7 +88,7 @@ class TestRequestSizeMonitor:
         """Red alert at 700KB threshold."""
         monitor = RequestSizeMonitor()
         alert = monitor.check_request_size(700_000)
-        
+
         assert alert is not None
         assert alert.level == AlertLevel.RED
         assert alert.size_bytes == 700_000
@@ -98,16 +98,16 @@ class TestRequestSizeMonitor:
         """Only alert once per level per session."""
         monitor = RequestSizeMonitor()
         session_id = "test-session-1"
-        
+
         # First yellow alert
         alert1 = monitor.check_request_size(300_000, session_id=session_id)
         assert alert1 is not None
         assert alert1.level == AlertLevel.YELLOW
-        
+
         # Second yellow alert (same level) — should not trigger
         alert2 = monitor.check_request_size(350_000, session_id=session_id)
         assert alert2 is None
-        
+
         # Escalate to orange — should trigger
         alert3 = monitor.check_request_size(500_000, session_id=session_id)
         assert alert3 is not None
@@ -116,12 +116,12 @@ class TestRequestSizeMonitor:
     def test_different_sessions_independent(self):
         """Different sessions track alerts independently."""
         monitor = RequestSizeMonitor()
-        
+
         # Session 1 gets yellow
         alert1 = monitor.check_request_size(300_000, session_id="session-1")
         assert alert1 is not None
         assert alert1.level == AlertLevel.YELLOW
-        
+
         # Session 2 gets yellow independently
         alert2 = monitor.check_request_size(300_000, session_id="session-2")
         assert alert2 is not None
@@ -130,10 +130,10 @@ class TestRequestSizeMonitor:
     def test_no_session_id_tracking(self):
         """Requests without session_id are tracked under None key."""
         monitor = RequestSizeMonitor()
-        
+
         alert1 = monitor.check_request_size(300_000)
         assert alert1 is not None
-        
+
         alert2 = monitor.check_request_size(350_000)
         assert alert2 is None  # Already alerted at yellow for None session
 
@@ -141,18 +141,18 @@ class TestRequestSizeMonitor:
         """Reset session clears alert state."""
         monitor = RequestSizeMonitor()
         session_id = "test-session"
-        
+
         # First alert
         alert1 = monitor.check_request_size(300_000, session_id=session_id)
         assert alert1 is not None
-        
+
         # Second alert (same level) — blocked
         alert2 = monitor.check_request_size(350_000, session_id=session_id)
         assert alert2 is None
-        
+
         # Reset session
         monitor.reset_session(session_id)
-        
+
         # Alert again at same level — now allowed
         alert3 = monitor.check_request_size(350_000, session_id=session_id)
         assert alert3 is not None
@@ -162,7 +162,7 @@ class TestRequestSizeMonitor:
         """Disabled monitoring returns no alerts."""
         config = RequestSizeConfig(enabled=False)
         monitor = RequestSizeMonitor(config)
-        
+
         alert = monitor.check_request_size(700_000)
         assert alert is None
 
@@ -170,12 +170,12 @@ class TestRequestSizeMonitor:
         """Alerts are tracked in history."""
         config = RequestSizeConfig(track_history=True, max_history_size=10)
         monitor = RequestSizeMonitor(config)
-        
+
         # Generate alerts from different sessions
         monitor.check_request_size(300_000, session_id="s1")
         monitor.check_request_size(500_000, session_id="s2")
         monitor.check_request_size(700_000, session_id="s3")
-        
+
         history = monitor.get_alert_history()
         assert len(history) == 3
         assert history[0]["level"] == "yellow"
@@ -186,11 +186,11 @@ class TestRequestSizeMonitor:
         """History respects max size."""
         config = RequestSizeConfig(track_history=True, max_history_size=5)
         monitor = RequestSizeMonitor(config)
-        
+
         # Generate 10 alerts
         for i in range(10):
             monitor.check_request_size(300_000 + i, session_id=f"s{i}")
-        
+
         history = monitor.get_alert_history(limit=100)
         assert len(history) <= 5
 
@@ -198,10 +198,10 @@ class TestRequestSizeMonitor:
         """Stats correctly report alert counts and configuration."""
         config = RequestSizeConfig()
         monitor = RequestSizeMonitor(config)
-        
+
         monitor.check_request_size(300_000, session_id="s1")
         monitor.check_request_size(500_000, session_id="s2")
-        
+
         stats = monitor.get_stats()
         assert stats["enabled"] is True
         assert stats["thresholds"]["yellow_bytes"] == 300_000
@@ -216,7 +216,7 @@ class TestRequestSizeMonitor:
         """Monitor serializes to dict for telemetry."""
         monitor = RequestSizeMonitor()
         monitor.check_request_size(500_000)
-        
+
         data = monitor.to_dict()
         assert data["type"] == "request_size_alert"
         assert "stats" in data
@@ -228,7 +228,7 @@ class TestRequestSizeMonitor:
         """Alerts include size in both bytes and KB."""
         monitor = RequestSizeMonitor()
         alert = monitor.check_request_size(512_000)
-        
+
         assert alert.size_bytes == 512_000
         assert "500.0" in alert.message or "512.5" in alert.message
 
@@ -238,7 +238,7 @@ class TestRequestSizeMonitor:
         before = datetime.utcnow()
         alert = monitor.check_request_size(300_000)
         after = datetime.utcnow()
-        
+
         assert alert.timestamp >= before
         assert alert.timestamp <= after
 
@@ -250,15 +250,15 @@ class TestRequestSizeMonitor:
             red_threshold=300_000,
         )
         monitor = RequestSizeMonitor(config)
-        
+
         # Yellow at custom threshold
         alert1 = monitor.check_request_size(100_000, session_id="s1")
         assert alert1.level == AlertLevel.YELLOW
-        
+
         # Orange at custom threshold
         alert2 = monitor.check_request_size(200_000, session_id="s2")
         assert alert2.level == AlertLevel.ORANGE
-        
+
         # Red at custom threshold
         alert3 = monitor.check_request_size(300_000, session_id="s3")
         assert alert3.level == AlertLevel.RED
@@ -281,7 +281,7 @@ class TestSingletonPattern:
         """Singleton respects initial config."""
         config = RequestSizeConfig(yellow_threshold=100_000)
         monitor = get_monitor(config)
-        
+
         stats = monitor.get_stats()
         assert stats["thresholds"]["yellow_bytes"] == 100_000
 
@@ -289,10 +289,10 @@ class TestSingletonPattern:
         """Second get_monitor call ignores new config."""
         config1 = RequestSizeConfig(yellow_threshold=100_000)
         monitor1 = get_monitor(config1)
-        
+
         config2 = RequestSizeConfig(yellow_threshold=200_000)
         monitor2 = get_monitor(config2)
-        
+
         # Should still have first config
         stats = monitor2.get_stats()
         assert stats["thresholds"]["yellow_bytes"] == 100_000
@@ -301,7 +301,7 @@ class TestSingletonPattern:
         """Reset clears singleton."""
         monitor1 = get_monitor()
         reset_monitor()
-        
+
         monitor2 = get_monitor()
         assert monitor1 is not monitor2
 
@@ -312,23 +312,23 @@ class TestThreadSafety:
     def test_concurrent_alerts(self):
         """Multiple alerts can be processed concurrently."""
         from concurrent.futures import ThreadPoolExecutor
-        
+
         monitor = RequestSizeMonitor()
         results = []
-        
+
         def check_size(session_id, size):
             alert = monitor.check_request_size(size, session_id=session_id)
             results.append(alert)
-        
+
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = []
             for i in range(10):
                 future = executor.submit(check_size, f"s{i % 3}", 300_000 + i)
                 futures.append(future)
-            
+
             for future in futures:
                 future.result()
-        
+
         # Should have some alerts (exact count depends on concurrency)
         assert len([r for r in results if r is not None]) >= 1
         assert len([r for r in results if r is None]) >= 1
@@ -341,26 +341,26 @@ class TestIntegration:
         """Test full escalation from yellow → orange → red."""
         monitor = RequestSizeMonitor()
         session_id = "escalation-test"
-        
+
         # Start below threshold
         alert0 = monitor.check_request_size(200_000, session_id=session_id)
         assert alert0 is None
-        
+
         # Hit yellow
         alert1 = monitor.check_request_size(300_000, session_id=session_id)
         assert alert1 is not None
         assert alert1.level == AlertLevel.YELLOW
-        
+
         # Escalate to orange
         alert2 = monitor.check_request_size(500_000, session_id=session_id)
         assert alert2 is not None
         assert alert2.level == AlertLevel.ORANGE
-        
+
         # Escalate to red
         alert3 = monitor.check_request_size(700_000, session_id=session_id)
         assert alert3 is not None
         assert alert3.level == AlertLevel.RED
-        
+
         # Stay at red
         alert4 = monitor.check_request_size(750_000, session_id=session_id)
         assert alert4 is None
@@ -370,23 +370,23 @@ class TestIntegration:
         # Create monitor with custom config
         config = RequestSizeConfig()
         monitor = RequestSizeMonitor(config)
-        
+
         # Simulate requests from multiple sessions
         sessions = ["user-1", "user-2", "user-3"]
         sizes = [300_000, 500_000, 700_000]  # At each threshold
-        
+
         alerts = []
         for session, size in zip(sessions, sizes):
             alert = monitor.check_request_size(size, session_id=session)
             if alert:
                 alerts.append(alert)
-        
+
         # Verify we got expected alerts
         assert len(alerts) == 3
         assert alerts[0].level == AlertLevel.YELLOW
         assert alerts[1].level == AlertLevel.ORANGE
         assert alerts[2].level == AlertLevel.RED
-        
+
         # Check stats
         stats = monitor.get_stats()
         assert stats["active_sessions"] == 3

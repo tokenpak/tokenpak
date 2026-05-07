@@ -30,7 +30,6 @@ import os
 from typing import Mapping, Optional
 from urllib.parse import urlparse
 
-
 log = logging.getLogger(__name__)
 
 _ENABLED_ENV = "TOKENPAK_CREDS_ROUTER_ENABLED"
@@ -130,13 +129,13 @@ def maybe_inject(
         return False
 
     try:
+        from tokenpak.creds.providers import resolve_secret
         from tokenpak.creds.router import (
             AmbiguousRoute,
             NoRoute,
             RouteContext,
             select,
         )
-        from tokenpak.creds.providers import resolve_secret
     except Exception as exc:
         # Import-time failure = bug in the creds subsystem; fail-open.
         log.warning("creds router unavailable, falling back to passthrough: %s", exc)

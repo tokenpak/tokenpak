@@ -22,20 +22,14 @@ pytest marks used:
 
 from __future__ import annotations
 
-import asyncio
-import errno
 import json
 import os
-import signal
 import socket
 import stat
-import sys
-import tempfile
-import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
+from typing import Any, Dict
+from unittest.mock import patch
 
 import pytest
 
@@ -291,7 +285,7 @@ class TestNetworkPartitionChaos:
 
     def test_failover_chain_skips_empty_credential_env(self, tmp_path, monkeypatch):
         """Providers whose credential env var is unset are skipped in failover chain."""
-        from tokenpak.proxy.failover import FailoverManager, ProviderEntry, FailoverConfig
+        from tokenpak.proxy.failover import FailoverConfig, FailoverManager, ProviderEntry
 
         # Unset all relevant env vars
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -370,7 +364,7 @@ class TestDiskChaos:
 
     def test_telemetry_degraded_on_write_failure(self):
         """Telemetry system enters degraded mode when writes fail."""
-        from tokenpak.proxy.degradation import DegradationTracker, DegradationEventType
+        from tokenpak.proxy.degradation import DegradationEventType, DegradationTracker
 
         tracker = DegradationTracker()
         # Simulate a config fallback (what happens when config can't be written)
@@ -424,7 +418,8 @@ class TestMemoryPressure:
     def test_failover_event_log_is_bounded(self):
         """FailoverEventLog uses bounded deque — no memory leak on high error rates."""
         from datetime import datetime, timezone
-        from tokenpak.proxy.failover_engine import FailoverEventLog, FailoverEvent
+
+        from tokenpak.proxy.failover_engine import FailoverEvent, FailoverEventLog
 
         log = FailoverEventLog()
         for i in range(500):

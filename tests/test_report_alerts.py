@@ -11,38 +11,34 @@ Tests coverage:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.daily_report", reason="module not available in current build")
-import json
-import os
-import sys
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from datetime import datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tokenpak.alerts import (
+    AlertRule,
+    AlertRuleState,
+    _get_default_rules,
+    check_alerts,
+    evaluate_rule,
+    load_state,
+    save_state,
+)
 
 # Import modules under test
 from tokenpak.daily_report import (
     DailySavingsData,
     _calculate_data,
-    _format_terminal,
-    _format_markdown,
     _format_json,
+    _format_markdown,
+    _format_terminal,
     generate_report,
-)
-from tokenpak.alerts import (
-    AlertRule,
-    AlertRuleState,
-    load_config,
-    load_state,
-    save_state,
-    evaluate_rule,
-    check_alerts,
-    _get_default_rules,
 )
 
 

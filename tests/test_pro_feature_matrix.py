@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.pro.feature_matrix", reason="module not available in current build")
 import json
-import sys
 from io import StringIO
 from unittest.mock import patch
 
 import pytest
 
-from tokenpak.pro.feature_matrix import FeatureMatrix, FEATURES, ADAPTERS
 from tokenpak.pro.audit_log import AuditLog
-
+from tokenpak.pro.feature_matrix import ADAPTERS, FEATURES, FeatureMatrix
 
 # ── Feature Matrix ───────────────────────────────────────────────────────────
 

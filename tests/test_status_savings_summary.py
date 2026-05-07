@@ -9,11 +9,8 @@ Verifies:
 - Proxy unreachable: no savings line (no crash)
 """
 
-import pytest
 from io import StringIO
-from unittest.mock import patch, MagicMock
-import sys
-
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Helpers

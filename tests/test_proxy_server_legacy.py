@@ -24,7 +24,6 @@ import json
 import threading
 import time
 import urllib.request
-from typing import Any, Dict, Optional
 
 import pytest
 
@@ -42,7 +41,6 @@ from tokenpak.proxy.server import (
     _new_session,
     auto_detect_upstream,
 )
-
 
 # ---------------------------------------------------------------------------
 # StageTrace
@@ -548,7 +546,7 @@ class TestProxyServerAdditionalEndpoints:
         time.sleep(0.1)
         ps.shutdown.begin()
         # Health should still work
-        status, data = _get(f"http://127.0.0.1:19300/health")
+        status, data = _get("http://127.0.0.1:19300/health")
         assert status == 200
         assert data.get("status") in ("shutting_down", "ok", "degraded")
         ps.stop()
@@ -605,8 +603,7 @@ class TestProxyServerMethods:
 # Proxy forwarding tests (with mocked pool)
 # ---------------------------------------------------------------------------
 
-from unittest.mock import MagicMock, patch, PropertyMock
-import io
+from unittest.mock import MagicMock
 
 
 def _make_mock_response(status_code: int = 200, body: bytes = b'{"content": "ok"}',
@@ -750,8 +747,8 @@ class TestPipelineTraceMethods:
 # Proxy forwarding with real mock upstream
 # ---------------------------------------------------------------------------
 
-from http.server import HTTPServer as _HTTPServer, BaseHTTPRequestHandler as _BaseHandler
-import socket as _socket
+from http.server import BaseHTTPRequestHandler as _BaseHandler
+from http.server import HTTPServer as _HTTPServer
 
 
 class _SimpleUpstream(_BaseHandler):

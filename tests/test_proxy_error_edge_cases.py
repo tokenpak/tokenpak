@@ -20,7 +20,6 @@ import json
 import pytest
 
 from tokenpak.proxy.error_response import (
-    _extract_message_from_provider_body,
     _status_to_error_type,
     normalize_upstream_error,
 )

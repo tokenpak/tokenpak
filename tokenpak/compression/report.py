@@ -35,7 +35,7 @@ class Action(Enum):
     @property
     def icon(self) -> str:
         """Return emoji icon representing this action.
-        
+
         Returns:
             str: One of ✅ (kept), 📦 (compacted), ❌ (removed), ✂️ (truncated)
         """
@@ -49,7 +49,7 @@ class Action(Enum):
     @property
     def label(self) -> str:
         """Return label text representing this action.
-        
+
         Returns:
             str: One of 'KEPT', 'COMPACTED', 'REMOVED', 'TRUNCATED'
         """
@@ -83,7 +83,7 @@ class Decision:
     @property
     def tokens_saved(self) -> int:
         """Calculate tokens saved by this decision.
-        
+
         Returns:
             int: Max of 0 or (tokens_before - tokens_after)
         """
@@ -91,7 +91,7 @@ class Decision:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert decision to dictionary for serialization.
-        
+
         Returns:
             dict: Serializable representation with action enum converted to string value
         """
@@ -139,7 +139,7 @@ class CompileReport:
     @property
     def tokens_saved(self) -> int:
         """Calculate total tokens saved in this compilation.
-        
+
         Returns:
             int: Max of 0 or (input_tokens - output_tokens)
         """
@@ -148,7 +148,7 @@ class CompileReport:
     @property
     def savings_percent(self) -> float:
         """Calculate percentage of tokens saved.
-        
+
         Returns:
             float: Percentage rounded to 1 decimal place
         """
@@ -159,7 +159,7 @@ class CompileReport:
     @property
     def budget_used_percent(self) -> float:
         """Calculate percentage of allocated budget used.
-        
+
         Returns:
             float: Percentage rounded to 1 decimal place
         """

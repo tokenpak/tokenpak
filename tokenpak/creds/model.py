@@ -12,7 +12,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-
 # Refresh ownership. The single-owner invariant is what prevents the
 # "refresh token already used" OAuth failure mode — exactly one process
 # must own refresh per credential.

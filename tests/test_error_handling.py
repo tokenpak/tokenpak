@@ -19,37 +19,33 @@ Tests cover:
 7. Credential passthrough failures
 """
 
-import json
 import os
 import threading
 import time
 import unittest
-from io import BytesIO
-from pathlib import Path
-from typing import Dict, Any, Optional
 from unittest import mock
 
 import pytest
 
-# Import modules under test
-from tokenpak.proxy.proxy import record_proxy_request
+from tokenpak.proxy.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerRegistry,
+    CircuitState,
+    provider_from_url,
+)
 from tokenpak.proxy.failover import (
-    FailoverManager,
     FailoverConfig,
+    FailoverManager,
     ProviderEntry,
     load_failover_config,
 )
-from tokenpak.proxy.circuit_breaker import (
-    CircuitBreaker,
-    CircuitBreakerRegistry,
-    CircuitState,
-    CircuitBreakerConfig,
-    provider_from_url,
-)
-from tokenpak.proxy.streaming import extract_sse_tokens, StreamHandler
 from tokenpak.proxy.passthrough import CredentialPassthrough, PassthroughConfig
-from tokenpak.proxy.router import ProviderRouter
 
+# Import modules under test
+from tokenpak.proxy.proxy import record_proxy_request
+from tokenpak.proxy.router import ProviderRouter
+from tokenpak.proxy.streaming import StreamHandler, extract_sse_tokens
 
 # ==============================================================================
 # Test 1: Invalid API Key Error Handling
@@ -78,8 +74,9 @@ class TestInvalidApiKeyHandling(unittest.TestCase):
         """Test cost tracking can be disabled via feature flag."""
         # Reload the module to pick up the env var
         import importlib
+
         import tokenpak.proxy.proxy as proxy_module
-        
+
         with mock.patch.dict(os.environ, {"TOKENPAK_COST_TRACKING": "0"}):
             importlib.reload(proxy_module)
             result = proxy_module.record_proxy_request(
@@ -371,7 +368,7 @@ class TestLoggingFailures(unittest.TestCase):
     def test_streaming_handler_chunk_error(self):
         """Test StreamHandler gracefully handles chunk errors."""
         handler = StreamHandler(content_encoding="")
-        
+
         # Attempt to process None data
         try:
             # Should handle gracefully

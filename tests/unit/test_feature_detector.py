@@ -1,5 +1,6 @@
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.regression.feature_detector", reason="module not available in current build")
 from tokenpak._internal.regression.feature_detector import (
     build_targeted_repair_prompt,

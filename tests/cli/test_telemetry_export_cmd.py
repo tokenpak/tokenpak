@@ -7,10 +7,7 @@ empty result, provider filter, CSV format, summary stats, no-DB handling.
 
 from __future__ import annotations
 
-import csv
-import io
 import json
-import sqlite3
 import types
 from pathlib import Path
 
@@ -21,7 +18,6 @@ from tokenpak.cli.commands.telemetry import (
     cmd_telemetry_export,
 )
 from tokenpak.telemetry.storage import TelemetryDB
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -34,7 +30,7 @@ def _make_db(tmp_path: Path) -> Path:
     db = TelemetryDB(str(db_path))
 
     # Insert 3 traces across two providers
-    from tokenpak.telemetry.models import TelemetryEvent, Usage, Cost
+    from tokenpak.telemetry.models import Cost, TelemetryEvent, Usage
 
     events = [
         TelemetryEvent(

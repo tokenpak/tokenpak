@@ -6,8 +6,8 @@ from __future__ import annotations
 import pytest
 
 from tokenpak.compression.fidelity_tiers import (
-    FidelityTier,
     TIER_COST_FACTOR,
+    FidelityTier,
     TieredBlock,
     TierGenerator,
     TierSelector,

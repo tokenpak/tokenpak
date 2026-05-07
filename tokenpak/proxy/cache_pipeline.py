@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 try:
     from tokenpak.core.runtime.providers import Provider
@@ -75,7 +75,7 @@ def _apply_anthropic_auto_cache(body_dict: dict) -> None:
             for block in content:
                 if isinstance(block, dict):
                     block.pop("cache_control", None)
-    body_dict["cache_control"] = {"type": "ephemeral"}  # noqa: anthropic-only — caller guards Provider.ANTHROPIC
+    body_dict["cache_control"] = {"type": "ephemeral"}  # anthropic-only — caller guards Provider.ANTHROPIC
 
 
 # ---------------------------------------------------------------------------

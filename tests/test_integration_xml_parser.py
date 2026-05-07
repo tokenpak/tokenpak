@@ -13,9 +13,11 @@ To unblock:
   3. Rerun: pytest tests/test_xml_parser.py -v
 """
 
-import pytest
 import os
 import sys
+
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 

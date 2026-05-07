@@ -13,22 +13,18 @@ Coverage:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.agentic.failure_memory", reason="module not available in current build")
-import json
-import re
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from tokenpak._internal.agentic.failure_memory import (
+    N_VALIDATE_SUCCESSES,
     FailureMemoryDB,
     FailureSignature,
-    N_VALIDATE_SUCCESSES,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

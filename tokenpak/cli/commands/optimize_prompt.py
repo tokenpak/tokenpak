@@ -29,7 +29,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # Verbose-phrase replacements — conservative, widely-agreed redundancies.
 _VERBOSE_PATTERNS: list[tuple[str, str, str]] = [
     # (human_label, regex_pattern, replacement)

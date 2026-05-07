@@ -1,7 +1,5 @@
 """Unit tests for tokenpak/complexity.py"""
-import pytest
-from tokenpak.compression.complexity import TaskType, score_complexity, _classify_task_type, _word_set
-
+from tokenpak.compression.complexity import TaskType, _word_set, score_complexity
 
 # ---------------------------------------------------------------------------
 # score_complexity — basic return types

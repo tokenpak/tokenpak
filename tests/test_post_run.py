@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.post_run", reason="module not available in current build")
 import json
 import time

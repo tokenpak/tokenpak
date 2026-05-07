@@ -8,12 +8,10 @@ from pathlib import Path
 import pytest
 
 from tokenpak.routing.calibrator import (
-    DEFAULT_CALIBRATION_PATH,
+    DECAY_7D_WEIGHT,
     DECAY_14D_WEIGHT,
     DECAY_30D_CUTOFF,
-    DECAY_7D_WEIGHT,
     MAX_EVENTS,
-    RETRY_RATE_THRESHOLD,
     _age_days,
     _downgrade_mode,
     _event_weight,
@@ -27,7 +25,6 @@ from tokenpak.routing.calibrator import (
     log_retry,
     log_success,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

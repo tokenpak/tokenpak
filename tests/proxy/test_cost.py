@@ -14,10 +14,7 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import tokenpak.proxy.proxy as cost_mod
-
 
 # ---------------------------------------------------------------------------
 # Regression tests

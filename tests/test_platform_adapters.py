@@ -4,15 +4,15 @@ Tests for tokenpak.adapters — platform detection and configuration.
 
 
 import pytest
+
 pytest.importorskip("tokenpak.adapters.claude_cli", reason="module not available in current build")
 import pytest
 
 from tokenpak.adapters.base import BaseAdapter
-from tokenpak.adapters.openclaw import OpenClawAdapter
 from tokenpak.adapters.claude_cli import ClaudeCLIAdapter
 from tokenpak.adapters.generic import GenericAdapter
+from tokenpak.adapters.openclaw import OpenClawAdapter
 from tokenpak.adapters.registry import detect_platform
-
 
 # ---------------------------------------------------------------------------
 # OpenClaw adapter

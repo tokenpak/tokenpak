@@ -2,10 +2,10 @@
 
 import pytest
 from tokenpak_local.auto_budget import (
-    auto_budget,
-    get_context_length,
-    budget_info,
     DEFAULT_OUTPUT_FRACTION,
+    auto_budget,
+    budget_info,
+    get_context_length,
 )
 
 

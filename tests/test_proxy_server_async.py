@@ -18,30 +18,24 @@ import asyncio
 import gzip
 import json
 import threading
-import time
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
-from typing import Any
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers under test (pure functions — no I/O needed)
 # ---------------------------------------------------------------------------
-
 from tokenpak.proxy.server_async import (
+    ConcurrencyLimiterMiddleware,
+    _build_forward_headers,
     _estimate_tokens,
     _extract_response_tokens,
     _is_messages_endpoint,
     _parse_sse_tokens,
-    _should_intercept,
-    ConcurrencyLimiterMiddleware,
-    create_async_app,
     _record_telemetry,
-    _build_forward_headers,
+    _should_intercept,
+    create_async_app,
     start_async_proxy_in_thread,
 )
-
 
 # ===========================================================================
 # Pure helper tests — no async needed
@@ -248,10 +242,10 @@ class TestConcurrencyLimiterMiddleware(unittest.IsolatedAsyncioTestCase):
 
     async def _make_request(self, middleware, path: str = "/v1/messages"):
         """Drive ASGI lifecycle and return captured status."""
-        from starlette.testclient import TestClient
         from starlette.applications import Starlette
-        from starlette.routing import Route
         from starlette.responses import PlainTextResponse
+        from starlette.routing import Route
+        from starlette.testclient import TestClient
 
         async def view(request):
             return PlainTextResponse("ok")
@@ -263,10 +257,10 @@ class TestConcurrencyLimiterMiddleware(unittest.IsolatedAsyncioTestCase):
 
     def test_management_endpoints_bypass_limit(self):
         """Health/stats always respond even when at capacity."""
-        from starlette.testclient import TestClient
         from starlette.applications import Starlette
-        from starlette.routing import Route
         from starlette.responses import PlainTextResponse
+        from starlette.routing import Route
+        from starlette.testclient import TestClient
 
         async def view(request):
             return PlainTextResponse("ok")
@@ -283,11 +277,12 @@ class TestConcurrencyLimiterMiddleware(unittest.IsolatedAsyncioTestCase):
     def test_503_when_semaphore_exhausted(self):
         """When semaphore is exhausted, non-management path returns 503."""
         import asyncio as _asyncio
-        from starlette.testclient import TestClient
+
         from starlette.applications import Starlette
-        from starlette.routing import Route
-        from starlette.responses import PlainTextResponse
         from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.responses import PlainTextResponse
+        from starlette.routing import Route
+        from starlette.testclient import TestClient
 
         async def slow_view(request):
             await _asyncio.sleep(5)
@@ -530,8 +525,8 @@ class TestForwardRequest(unittest.IsolatedAsyncioTestCase):
         return Request(scope, receive)
 
     async def test_non_streaming_passthrough(self):
+
         from tokenpak.proxy import server_async as module
-        import httpx
 
         ps = self._make_ps()
         module._proxy_server_ref = ps
@@ -557,8 +552,9 @@ class TestForwardRequest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
 
     async def test_upstream_error_returns_502(self):
-        from tokenpak.proxy import server_async as module
         import httpx
+
+        from tokenpak.proxy import server_async as module
 
         ps = self._make_ps()
         module._proxy_server_ref = ps
@@ -801,8 +797,9 @@ class TestForwardRequestStreaming(unittest.IsolatedAsyncioTestCase):
         return Request(scope, receive)
 
     async def test_streaming_response_returned(self):
-        from tokenpak.proxy import server_async as module
         from starlette.responses import StreamingResponse
+
+        from tokenpak.proxy import server_async as module
 
         ps = self._make_ps()
         module._proxy_server_ref = ps

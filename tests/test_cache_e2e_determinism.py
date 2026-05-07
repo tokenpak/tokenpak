@@ -40,14 +40,12 @@ Skip slow tests:
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import List
-from unittest.mock import patch
 
 import pytest
 
@@ -166,8 +164,8 @@ def proxy_against_stub(stub_backend):
     Start a real ProxyServer pointing at the stub backend.
     Returns the proxy port.
     """
-    from tokenpak.proxy.server import ProxyServer
     from tokenpak.proxy.router import ProviderRouter
+    from tokenpak.proxy.server import ProxyServer
 
     stub_host, stub_port, _ = stub_backend
     stub_base = f"http://{stub_host}:{stub_port}"

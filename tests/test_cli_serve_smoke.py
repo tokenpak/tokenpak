@@ -17,10 +17,8 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -60,7 +58,7 @@ class TestCliServeSmoke:
     def test_cli_serve_zero_config(self, tmp_path):
         """
         AC1: `tokenpak serve` works with zero config (no flags).
-        
+
         - Spawn `tokenpak serve` in subprocess
         - Wait for health endpoint to respond
         - Assert /health returns 200 + valid JSON
@@ -72,7 +70,7 @@ class TestCliServeSmoke:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
         sock.close()
-        
+
         # Spawn `tokenpak serve --port <port>`
         proc = subprocess.Popen(
             [sys.executable, "-m", "tokenpak", "serve", "--port", str(port)],
@@ -80,19 +78,19 @@ class TestCliServeSmoke:
             stderr=subprocess.PIPE,
             text=True,
         )
-        
+
         try:
             # Wait for health endpoint
             assert _wait_health(port, timeout=10), \
                 f"Server did not respond on port {port} within 10s"
-            
+
             # Verify /health returns 200 + JSON
             health = _get_health(port)
             assert isinstance(health, dict), \
                 f"Expected JSON dict, got {type(health)}"
             assert health.get("status") in ("ok", "healthy"), \
                 f"Unexpected health status: {health}"
-            
+
         finally:
             # Kill process cleanly
             proc.terminate()
@@ -111,14 +109,14 @@ class TestCliServeSmoke:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
         sock.close()
-        
+
         proc = subprocess.Popen(
             [sys.executable, "-m", "tokenpak", "serve", "--port", str(port)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
         )
-        
+
         try:
             assert _wait_health(port, timeout=10), \
                 f"Server did not respond on specified port {port}"

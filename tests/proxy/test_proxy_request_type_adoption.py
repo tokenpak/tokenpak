@@ -20,7 +20,6 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -31,7 +30,6 @@ from tokenpak.proxy.request import (
     ProxyResponse,
     _byte_inject_system_block,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -221,8 +219,8 @@ class TestLegacyBytesBackwardCompat:
 
     def test_legacy_bytes_path_works(self):
         """All three functions accept bytes positional arg without request kwarg."""
-        from tokenpak.proxy.vault_bridge import inject_vault_context
         from tokenpak.compression.pipeline import compact_request_body
+        from tokenpak.proxy.vault_bridge import inject_vault_context
 
         body = _body_bytes()
         r1 = inject_vault_context(body)

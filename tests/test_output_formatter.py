@@ -1,12 +1,13 @@
 
 import pytest
+
 pytest.importorskip("tokenpak.formatting.formatter", reason="module not available in current build")
 import types
 
+from tokenpak import cli
+from tokenpak.formatting import symbols as FS
 from tokenpak.formatting.formatter import OutputFormatter
 from tokenpak.formatting.modes import OutputMode, resolve_mode
-from tokenpak.formatting import symbols as FS
-from tokenpak import cli
 
 
 def test_symbols_are_semantic_set():

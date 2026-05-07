@@ -46,16 +46,14 @@ Content not logged
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.intelligence.server", reason="module not available in current build")
 import json
 import logging
 import os
 import stat
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -70,7 +68,6 @@ from tokenpak.security import (
     sanitize_model_name,
     secure_write_config,
 )
-
 
 # ──────────────────────────────────────────────────────────────
 # Fixtures

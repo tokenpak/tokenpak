@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.regression.stability_scorer", reason="module not available in current build")
-import json
 import math
 import tempfile
 from pathlib import Path
@@ -21,7 +20,6 @@ from tokenpak._internal.regression.stability_scorer import (
     _normalise_token_volatility,
     compute_stability,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

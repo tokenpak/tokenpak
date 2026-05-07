@@ -453,11 +453,11 @@ def compute_baseline_cost(model: str, raw_input_tokens: int) -> float:
 # ---------------------------------------------------------------------------
 
 from tokenpak.telemetry.pricing_rates import (  # noqa: E402, F401
-    get_rates,
-    estimate_savings,
+    DEFAULT_RATE,
+    MODEL_RATES,
     calculate_request_cost,
     calculate_request_cost_baseline,
+    estimate_savings,
     get_price,
-    MODEL_RATES,
-    DEFAULT_RATE,
+    get_rates,
 )

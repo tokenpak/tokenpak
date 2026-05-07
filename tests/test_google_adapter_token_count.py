@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-import pytest
 
 from tokenpak.proxy.adapters import GoogleGenerativeAIAdapter
-
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 

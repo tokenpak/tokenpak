@@ -12,22 +12,32 @@ Tests here exercise what IS implemented end-to-end.
 """
 
 import math
-import pytest
-import sys
 import os
+import sys
+
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from trackedge.processing.feature_engine import (
-    speed_score, pace_style, race_pace_scenario, class_fit,
-    workout_fitness, layoff_penalty, connections_score, first_time_starter_reweight,
-)
-from trackedge.model.scoring_engine import (
-    power_score, race_confidence_score, softmax_probabilities as scoring_softmax,
+from trackedge.model.probability import (
+    softmax_probabilities as prob_softmax,
 )
 from trackedge.model.probability import (
-    softmax_probabilities as prob_softmax, top_contenders,
+    top_contenders,
 )
-
+from trackedge.model.scoring_engine import (
+    power_score,
+    race_confidence_score,
+)
+from trackedge.processing.feature_engine import (
+    class_fit,
+    connections_score,
+    layoff_penalty,
+    pace_style,
+    race_pace_scenario,
+    speed_score,
+    workout_fitness,
+)
 
 # ---------------------------------------------------------------------------
 # Synthetic Data Factory

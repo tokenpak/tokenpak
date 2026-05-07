@@ -21,11 +21,10 @@ Requirements:
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -296,7 +295,7 @@ def main():
     model = args.model
 
     print("=" * 70)
-    print(f"  A/B TEST: tokenpak claude vs vanilla claude")
+    print("  A/B TEST: tokenpak claude vs vanilla claude")
     print(f"  Model: {model}  |  Tasks: {len(task_ids)}  |  {time.strftime('%Y-%m-%d %H:%M')}")
     print("=" * 70)
 
@@ -311,12 +310,12 @@ def main():
         print(f"\n  Running: {task_id} — {task['description']}")
 
         # Run vanilla first
-        print(f"    [A] vanilla claude ...", end="", flush=True)
+        print("    [A] vanilla claude ...", end="", flush=True)
         vanilla = run_variant("vanilla", task_id, task, model)
         print(f" {vanilla.total_ms:.0f}ms, ${vanilla.cost_usd:.4f}")
 
         # Run companion
-        print(f"    [B] tokenpak claude ...", end="", flush=True)
+        print("    [B] tokenpak claude ...", end="", flush=True)
         companion = run_variant("companion", task_id, task, model)
         print(f" {companion.total_ms:.0f}ms, ${companion.cost_usd:.4f}")
 
@@ -349,7 +348,7 @@ def main():
 
     overhead_pct = ((c_cost - v_cost) / v_cost * 100) if v_cost > 0 else 0
     print(f"\n  Companion cost overhead: {overhead_pct:+.1f}%")
-    print(f"  (Overhead = companion system prompt + MCP tool definitions)")
+    print("  (Overhead = companion system prompt + MCP tool definitions)")
 
     # Write results
     output_path = args.output or str(Path(__file__).parent / "ab_results.json")

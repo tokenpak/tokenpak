@@ -27,9 +27,11 @@ Market probability formula: 1 / (decimal_odds) OR ML odds → decimal → 1/deci
   - "Even" / "1-1" → decimal 2.0 → market_prob 0.500
 """
 
-import pytest
-import sys
 import os
+import sys
+
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # ---------------------------------------------------------------------------

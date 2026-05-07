@@ -20,7 +20,6 @@ import os
 import unittest
 from unittest.mock import patch
 
-
 _PROFILE_PRESETS = {
     "safe": {
         "TOKENPAK_MODE": "strict",

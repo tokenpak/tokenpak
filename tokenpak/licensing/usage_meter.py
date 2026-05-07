@@ -31,14 +31,12 @@ import json
 import logging
 import os
 import threading
-import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 from urllib import error as _urlerror
 from urllib import request as _urlrequest
-
 
 logger = logging.getLogger(__name__)
 

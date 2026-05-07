@@ -8,11 +8,8 @@ compact_block_with_topics).
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from tokenpak.compression.budgets.modes import CompactionMode
 from tokenpak.compression.budgets.policy import BlockPolicy, CompactionPolicy, TopicAwarePolicy
-
 
 # ============================================================================
 # BlockPolicy

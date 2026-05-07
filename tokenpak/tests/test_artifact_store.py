@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for artifact_store.py module."""
 
-import json
 import sqlite3
 import tempfile
 from datetime import datetime, timezone
@@ -9,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.telemetry.artifact_store import ArtifactStore
 from tokenpak.schemas.artifact import ArtifactSchema
 from tokenpak.schemas.chunk import ChunkSchema
 from tokenpak.schemas.retrieval_cache import RetrievalCacheSchema
 from tokenpak.schemas.source_map import SourceMapSchema
+from tokenpak.telemetry.artifact_store import ArtifactStore
 
 
 @pytest.fixture
@@ -396,7 +395,7 @@ class TestArtifactStore:
         )
 
         store.cache_retrieval_results(cache_entry)
-        
+
         # Entry should be expired and return None
         retrieved = store.get_cached_results("fp-expire")
         assert retrieved is None

@@ -18,8 +18,8 @@ Coverage:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.capsule.builder", reason="module not available in current build")
 import json
 import time
@@ -33,7 +33,6 @@ from tokenpak.capsule.builder import (
     _compress_text,
     _wrap_capsule,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -381,6 +380,6 @@ class TestPerformance:
 # ---------------------------------------------------------------------------
 
 def test_import():
-    from tokenpak.capsule.builder import CapsuleBuilder  # noqa: F401
     from tokenpak.capsule import CapsuleBuilder as CB2  # noqa: F401
+    from tokenpak.capsule.builder import CapsuleBuilder  # noqa: F401
     assert CapsuleBuilder is CB2

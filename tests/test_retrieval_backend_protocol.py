@@ -14,9 +14,8 @@ from __future__ import annotations
 
 import sys
 import types
-import warnings
 from typing import Dict, List, Tuple
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -27,7 +26,6 @@ from tokenpak.vault.backend_protocol import (
     load_custom_backend,
     load_custom_scorer,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers / minimal implementations

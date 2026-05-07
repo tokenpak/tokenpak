@@ -5,10 +5,9 @@ formatter, parser, and middleware in isolation.
 """
 
 import sys
-import types
-import pytest
 from types import SimpleNamespace
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -242,6 +241,7 @@ class TestTokenPakMiddleware:
 class TestProxyHandler:
     def test_missing_tokenpak_returns_error(self):
         import asyncio
+
         from tokenpak.integrations.litellm.proxy import ProxyHandler
 
         handler = ProxyHandler()
@@ -256,7 +256,6 @@ class TestProxyHandler:
     def test_process_compiles_when_litellm_absent(self, monkeypatch):
         """If litellm not installed, should return 500."""
         import asyncio
-        import sys
 
         # Temporarily hide litellm
         orig = sys.modules.get("litellm", None)

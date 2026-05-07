@@ -5,38 +5,36 @@ Extracted from runtime/proxy.py (L608-811) as part of TPK-RESTRUCTURE-002.
 Circuit breakers, rate limiting, header sanitizing, and error helpers were
 separated into proxy/circuit_breaker.py (TPK-RESTRUCTURE-003).
 """
-import os
-import re
 import json
-import socket
+import os
 import threading
 import time
-from typing import Optional, Dict, Any
+from typing import Optional
 from urllib.parse import urlparse
 
-from .config import _cfg, UPSTREAM_ROUTES, UPSTREAM_TIMEOUT
 from .circuit_breaker import (  # noqa: F401 — re-exported for consumers
-    OLLAMA_UPSTREAM,
+    _BLOCKED_FORWARD_HEADERS,
+    _MAX_REQUEST_BYTES,
+    _RATE_LIMIT_RPM,
     OLLAMA_CONNECT_TIMEOUT,
-    _ollama_circuit,
-    _ollama_circuit_lock,
-    _provider_circuits,
-    _provider_circuit_lock,
-    _provider_for_url,
+    OLLAMA_UPSTREAM,
     _circuit_check,
     _circuit_record_failure,
     _circuit_record_success,
-    _RATE_LIMIT_RPM,
-    _rate_buckets,
+    _enrich_upstream_error,
+    _make_structured_error,
+    _ollama_circuit,
+    _ollama_circuit_lock,
+    _provider_circuit_lock,
+    _provider_circuits,
+    _provider_for_url,
     _rate_bucket_lock,
-    _MAX_REQUEST_BYTES,
-    _BLOCKED_FORWARD_HEADERS,
+    _rate_buckets,
+    _rate_limit_check,
     _sanitize_headers,
     _suggest_model,
-    _make_structured_error,
-    _enrich_upstream_error,
-    _rate_limit_check,
 )
+from .config import UPSTREAM_ROUTES, UPSTREAM_TIMEOUT, _cfg
 
 # ForwardAdapter import — used by _resolve_upstream
 try:

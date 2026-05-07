@@ -2,6 +2,7 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.infrastructure.cooldown", reason="module not available in current build")
 import asyncio
 import json
@@ -10,9 +11,10 @@ import time
 from pathlib import Path
 
 import pytest
+
 from tokenpak.infrastructure.cooldown import (
-    CooldownManager,
     BackgroundCooldownClearer,
+    CooldownManager,
 )
 
 
@@ -358,7 +360,7 @@ class TestCooldownManagerRunCycle:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             profiles_path = Path(tmpdir) / "profiles.json"
             now = time.time()
-            
+
             cooldowns_path.write_text(
                 json.dumps({
                     "test:key": {"cooldownUntil": now - 100, "errorCount": 1},
@@ -369,7 +371,7 @@ class TestCooldownManagerRunCycle:
                     "profile1": {"cooldownUntil": now - 100, "errorCount": 1},
                 })
             )
-            
+
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
                 auth_profiles_file=profiles_path,
@@ -382,7 +384,7 @@ class TestCooldownManagerRunCycle:
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             now = time.time()
-            
+
             cooldowns_path.write_text(
                 json.dumps({
                     "k1": {"cooldownUntil": now - 100, "errorCount": 1},
@@ -390,7 +392,7 @@ class TestCooldownManagerRunCycle:
                     "k3": {"cooldownUntil": now + 3600, "errorCount": 1},
                 })
             )
-            
+
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
                 auth_profiles_file=Path(tmpdir) / "profiles.json",
@@ -477,7 +479,7 @@ class TestBackgroundCooldownClearerAsync:
                     "test:key": {"cooldownUntil": now - 100, "errorCount": 1},
                 })
             )
-            
+
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
                 auth_profiles_file=Path(tmpdir) / "profiles.json",
@@ -491,7 +493,7 @@ class TestBackgroundCooldownClearerAsync:
             # Wait for at least one cycle
             await asyncio.sleep(1.5)
             await clearer.stop()
-            
+
             # Verify the cooldown was cleared
             data = manager._load_cooldowns()
             assert "test:key" not in data
@@ -506,7 +508,7 @@ class TestBackgroundCooldownClearerAsync:
                     "test:key": {"cooldownUntil": now - 100, "errorCount": 1},
                 })
             )
-            
+
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
                 auth_profiles_file=Path(tmpdir) / "profiles.json",
@@ -519,7 +521,7 @@ class TestBackgroundCooldownClearerAsync:
             await clearer.start()
             await asyncio.sleep(1.5)
             await clearer.stop()
-            
+
             # Cooldown should NOT be cleared
             data = manager._load_cooldowns()
             assert "test:key" in data

@@ -34,9 +34,8 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib  # type: ignore[no-redef]
 
-from .model import Credential, KIND_OAUTH
+from .model import Credential
 from .providers import discover_all
-
 
 ROUTES_PATH = Path.home() / ".tokenpak" / "routes.toml"
 

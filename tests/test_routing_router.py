@@ -2,12 +2,14 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.pro.routing.detector", reason="module not available in current build")
+from unittest.mock import Mock
+
 import pytest
-import asyncio
-from unittest.mock import Mock, AsyncMock
-from tokenpak.pro.routing.router import ProviderRouter, RoutingConfig
+
 from tokenpak.pro.routing.detector import Provider
+from tokenpak.pro.routing.router import ProviderRouter, RoutingConfig
 
 
 class TestRoutingConfig:

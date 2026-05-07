@@ -12,10 +12,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
-import tempfile
-import threading
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -202,7 +198,7 @@ class TestSyncBatch:
         assert len(store.get_pending()) == 0  # marked synced to stop loop
 
     def test_sync_retries_on_5xx(self, tmp_path):
-        from tokenpak.telemetry.reporter import sync_batch, MAX_RETRIES
+        from tokenpak.telemetry.reporter import MAX_RETRIES, sync_batch
         store = _make_store(tmp_path)
         store.record(_make_record())
 
@@ -224,7 +220,8 @@ class TestSyncBatch:
 
     def test_sync_network_error_retries(self, tmp_path):
         import urllib.error
-        from tokenpak.telemetry.reporter import sync_batch, MAX_RETRIES
+
+        from tokenpak.telemetry.reporter import MAX_RETRIES, sync_batch
         store = _make_store(tmp_path)
         store.record(_make_record())
 

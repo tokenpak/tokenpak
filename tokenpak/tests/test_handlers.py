@@ -12,9 +12,9 @@ Covers:
 """
 
 import pytest
+
 from tokenpak import handlers
 from tokenpak.proxy.handlers.rate_limit import RateLimitBackoff
-
 
 # ── handlers package ────────────────────────────────────────────────────────
 

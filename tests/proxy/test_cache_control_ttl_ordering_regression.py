@@ -31,8 +31,8 @@ Both /home/cali/tokenpak/proxy.py and /home/sue/tokenpak/proxy.py are tested whe
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.runtime.providers", reason="module not available in current build")
 import io
 import json
@@ -64,6 +64,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-sk-ccg17-dummy-not-real")
 os.environ.setdefault("TOKENPAK_VAULT_INDEX", "0")
 
 import importlib.util as _ilu
+
 _spec = _ilu.spec_from_file_location("proxy", _PROJECT_ROOT / "proxy.py")
 _proxy = _ilu.module_from_spec(_spec)
 sys.modules.setdefault("proxy", _proxy)
@@ -79,7 +80,7 @@ from tokenpak.runtime.providers import Provider  # noqa: E402
 _FIXTURES = Path(__file__).parent.parent / "fixtures"
 _FAILING_REQ = json.loads((_FIXTURES / "cali_failing_request_2026-04-08.json").read_bytes())
 
-# Proxy.py files to test — calibot is mandatory, SueWu is optional
+# Proxy.py files to test — primary host is mandatory, secondary host is optional
 _PROXY_FILES: list[Path] = [_PROJECT_ROOT / "proxy.py"]
 _SUE_PROXY = _SUE_PROJECT_ROOT / "proxy.py"
 if _SUE_PROXY.exists():

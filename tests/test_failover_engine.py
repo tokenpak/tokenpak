@@ -18,22 +18,15 @@ Covers:
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from tokenpak.proxy.failover import (
     FailoverConfig,
-    FailoverManager,
     ProviderEntry,
 )
 from tokenpak.proxy.failover_engine import (
-    CIRCUIT_COOL_DOWN_SECONDS,
     CIRCUIT_FAILURE_THRESHOLD,
     RATE_LIMIT_WAIT_SECONDS,
     CircuitBreaker,
-    ClassifiedError,
     ErrorType,
     FailoverEngine,
     FailoverEvent,
@@ -43,10 +36,8 @@ from tokenpak.proxy.failover_engine import (
     decide,
     get_event_log,
     normalize_response,
-    normalize_stream,
     render_failover_footer,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

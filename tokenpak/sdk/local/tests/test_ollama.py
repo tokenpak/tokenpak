@@ -1,9 +1,9 @@
 """Tests for TokenPakOllama — uses mocks, no live Ollama required."""
 
-import pytest
 from unittest.mock import MagicMock, patch
-from tokenpak_local.utils import Block, TokenPak
 
+import pytest
+from tokenpak_local.utils import Block, TokenPak
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -27,6 +27,7 @@ class TestTokenPakOllamaInit:
         with patch.dict("sys.modules", {"ollama": None}):
             # Force re-import
             import importlib
+
             import tokenpak_local.ollama as mod
 
             importlib.reload(mod)
@@ -41,6 +42,7 @@ class TestTokenPakOllamaInit:
 
         with patch.dict("sys.modules", {"ollama": mock_ollama}):
             import importlib
+
             import tokenpak_local.ollama as mod
 
             importlib.reload(mod)
@@ -61,6 +63,7 @@ class TestTokenPakOllamaChat:
 
         with patch.dict("sys.modules", {"ollama": mock_ollama}):
             import importlib
+
             import tokenpak_local.ollama as mod
 
             importlib.reload(mod)
@@ -161,6 +164,7 @@ class TestBudgetFor:
 
         with patch.dict("sys.modules", {"ollama": mock_ollama}):
             import importlib
+
             import tokenpak_local.ollama as mod
 
             importlib.reload(mod)
@@ -195,6 +199,7 @@ class TestContextDetection:
 
         with patch.dict("sys.modules", {"ollama": mock_ollama}):
             import importlib
+
             import tokenpak_local.ollama as mod
 
             importlib.reload(mod)

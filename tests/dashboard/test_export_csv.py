@@ -16,11 +16,9 @@ import csv
 import io
 import json
 import re
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import patch
+from typing import Any, Dict
 
 import pytest
 
@@ -28,13 +26,13 @@ import pytest
 # Import guard — fail fast with a useful message
 # ---------------------------------------------------------------------------
 try:
+    from tokenpak.dashboard.export_api import ExportAPI
     from tokenpak.dashboard.export_csv import (
         CSVExporter,
         ExportDataType,
         ExportFormat,
         _format_filename,
     )
-    from tokenpak.dashboard.export_api import ExportAPI
 except ImportError as exc:
     pytest.fail(f"Failed to import dashboard modules: {exc}")
 
@@ -348,12 +346,13 @@ class TestRegressionExistingImports:
     """AC 5: Adding dashboard module must not break existing proxy imports."""
 
     def test_proxy_server_imports_cleanly(self):
-        from tokenpak.proxy import ProxyServer, start_proxy
+        from tokenpak.proxy import ProxyServer
         assert ProxyServer is not None
 
     def test_export_api_import_in_server_module(self):
         """server.py must import ExportAPI without error."""
         import importlib
+
         import tokenpak.proxy.server as srv_mod
         importlib.reload(srv_mod)  # force re-import
         assert hasattr(srv_mod, "ExportAPI")
@@ -364,6 +363,6 @@ class TestRegressionExistingImports:
         assert ExportAPI is not None
 
     def test_existing_trace_dataclass_still_works(self):
-        from tokenpak.proxy.server import PipelineTrace, StageTrace
+        from tokenpak.proxy.server import PipelineTrace
         t = PipelineTrace(request_id="test-id", timestamp="2026-03-03T00:00:00Z")
         assert t.request_id == "test-id"

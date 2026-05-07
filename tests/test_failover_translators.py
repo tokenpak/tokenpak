@@ -16,13 +16,12 @@ from typing import Any, Dict, List
 
 import pytest
 
-from tokenpak.proxy.providers.translator import translate_request, translate_response
 from tokenpak.proxy.providers.stream_translator import (
     StreamingTranslator,
-    _sse_done,
     _parse_sse_line,
+    _sse_done,
 )
-
+from tokenpak.proxy.providers.translator import translate_response
 
 # ---------------------------------------------------------------------------
 # Fixtures — sample payloads
@@ -404,12 +403,12 @@ class TestOpenAIToGoogleResponse:
 
 def _ant_stream_events(text: str = "Hello world", stop_reason: str = "end_turn") -> List[str]:
     return [
-        f'data: {{"type":"message_start","message":{{"id":"msg_1","model":"claude-sonnet-4-5","role":"assistant","content":[],"stop_reason":null,"usage":{{"input_tokens":10,"output_tokens":0}}}}}}',
-        f'data: {{"type":"content_block_start","index":0,"content_block":{{"type":"text","text":""}}}}',
+        'data: {"type":"message_start","message":{"id":"msg_1","model":"claude-sonnet-4-5","role":"assistant","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}',
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
         f'data: {{"type":"content_block_delta","index":0,"delta":{{"type":"text_delta","text":"{text}"}}}}',
-        f'data: {{"type":"content_block_stop","index":0}}',
+        'data: {"type":"content_block_stop","index":0}',
         f'data: {{"type":"message_delta","delta":{{"stop_reason":"{stop_reason}","stop_sequence":null}},"usage":{{"output_tokens":5}}}}',
-        f'data: {{"type":"message_stop"}}',
+        'data: {"type":"message_stop"}',
         "data: [DONE]",
     ]
 
@@ -490,9 +489,9 @@ class TestAnthropicToOpenAIStreaming:
 
 def _oai_stream_events(text: str = "Hello back") -> List[str]:
     return [
-        f'data: {{"id":"chatcmpl-1","object":"chat.completion.chunk","model":"gpt-4o","choices":[{{"index":0,"delta":{{"role":"assistant","content":""}},"finish_reason":null}}]}}',
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}',
         f'data: {{"id":"chatcmpl-1","object":"chat.completion.chunk","model":"gpt-4o","choices":[{{"index":0,"delta":{{"content":"{text}"}},"finish_reason":null}}]}}',
-        f'data: {{"id":"chatcmpl-1","object":"chat.completion.chunk","model":"gpt-4o","choices":[{{"index":0,"delta":{{}},"finish_reason":"stop"}}]}}',
+        'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}',
         "data: [DONE]",
     ]
 

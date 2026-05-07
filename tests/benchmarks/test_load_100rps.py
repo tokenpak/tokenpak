@@ -13,7 +13,6 @@ Targets:
 
 from __future__ import annotations
 
-import statistics
 import threading
 import time
 import urllib.error
@@ -25,7 +24,6 @@ import pytest
 pytestmark = [pytest.mark.needs_proxy, pytest.mark.needs_fast_host]
 
 from tokenpak.proxy.server import ProxyServer
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -76,7 +74,7 @@ def _load_burst(
     max_workers caps concurrency to avoid thread-spawn overhead on constrained hardware.
     Returns (latencies_ms, success_count, error_count).
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
 
     latencies: List[float] = []
     errors = 0

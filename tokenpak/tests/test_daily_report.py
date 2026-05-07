@@ -2,10 +2,7 @@
 """Unit tests for daily_report.py module."""
 
 import json
-from datetime import datetime
 from unittest import mock
-
-import pytest
 
 from tokenpak.cli.daily_report import (
     DailySavingsData,

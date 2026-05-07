@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Exception hierarchy tests
 # ---------------------------------------------------------------------------
@@ -109,9 +108,17 @@ class TestSpecificErrors:
 class TestExceptionCatch:
     def test_catch_all_with_base(self):
         from tokenpak.infrastructure.error_handling import (
-            AuthError, CacheError, CircuitOpenError, CompressionError,
-            ConfigError, LicenseError, ProxyError, RateLimitError,
-            TokenPakError, UpstreamError, ValidationError,
+            AuthError,
+            CacheError,
+            CircuitOpenError,
+            CompressionError,
+            ConfigError,
+            LicenseError,
+            ProxyError,
+            RateLimitError,
+            TokenPakError,
+            UpstreamError,
+            ValidationError,
         )
         subtypes = [
             ProxyError("p"), UpstreamError("u"), CircuitOpenError("prov"),
@@ -141,14 +148,14 @@ class TestLoggingConfig:
             logger.removeHandler(h)
 
     def test_configure_default(self):
-        from tokenpak.logging_config import configure_logging, TPK_LOGGER_NAME
+        from tokenpak.logging_config import TPK_LOGGER_NAME, configure_logging
         configure_logging()
         logger = logging.getLogger(TPK_LOGGER_NAME)
         assert logger.level == logging.INFO
         assert len(logger.handlers) >= 1
 
     def test_configure_debug_level(self):
-        from tokenpak.logging_config import configure_logging, TPK_LOGGER_NAME
+        from tokenpak.logging_config import TPK_LOGGER_NAME, configure_logging
         configure_logging(level="DEBUG")
         logger = logging.getLogger(TPK_LOGGER_NAME)
         assert logger.level == logging.DEBUG
@@ -162,7 +169,7 @@ class TestLoggingConfig:
         assert logger.level == logging.ERROR
 
     def test_json_format(self):
-        from tokenpak.logging_config import configure_logging, TPK_LOGGER_NAME
+        from tokenpak.logging_config import TPK_LOGGER_NAME, configure_logging
         stream = StringIO()
         configure_logging(fmt="json")
         logger = logging.getLogger(TPK_LOGGER_NAME)
@@ -178,7 +185,7 @@ class TestLoggingConfig:
             assert data["message"] == "test json log"
 
     def test_idempotent(self):
-        from tokenpak.logging_config import configure_logging, TPK_LOGGER_NAME
+        from tokenpak.logging_config import TPK_LOGGER_NAME, configure_logging
         configure_logging(level="INFO")
         configure_logging(level="DEBUG")  # second call is no-op
         logger = logging.getLogger(TPK_LOGGER_NAME)
@@ -199,7 +206,6 @@ class TestLoggingConfig:
 class TestBareExceptAudit:
     def test_no_bare_except_in_runtime_proxy(self):
         """Verify runtime/proxy.py has zero bare except: clauses."""
-        import re
         from pathlib import Path
         proxy_path = Path(__file__).parent.parent / "tokenpak" / "runtime" / "proxy.py"
         if not proxy_path.exists():

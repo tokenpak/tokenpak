@@ -11,12 +11,12 @@ Tests cover:
 """
 
 import json
-import pytest
-import tempfile
-from pathlib import Path
-from datetime import datetime, timedelta
 import sqlite3
-import sys
+import tempfile
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import pytest
 
 # For testing, we need to mock the HTTP server.
 # Since tokenpak is designed as a proxy, we test via:
@@ -32,7 +32,7 @@ except ImportError:
 
 class TestSavingsEndpointSchema:
     """Test the response schema of the /savings endpoint."""
-    
+
     @pytest.fixture
     def temp_db(self):
         """Create a temporary monitor database."""
@@ -40,7 +40,7 @@ class TestSavingsEndpointSchema:
             db_path = Path(tmpdir) / "monitor.db"
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            
+
             # Create minimal schema required for savings queries
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS audit_log (
@@ -56,7 +56,7 @@ class TestSavingsEndpointSchema:
                     cost_saved_usd REAL
                 )
             """)
-            
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS monitor_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,12 +71,12 @@ class TestSavingsEndpointSchema:
                     cost_saved_usd REAL
                 )
             """)
-            
+
             conn.commit()
             conn.close()
-            
+
             yield db_path
-    
+
     def test_savings_endpoint_returns_200(self, temp_db):
         """Savings endpoint should return HTTP 200 OK."""
         # This would be tested against a live proxy in integration environment
@@ -93,7 +93,7 @@ class TestSavingsEndpointSchema:
         }
         # When endpoint exists, check response keys
         assert all(isinstance(k, str) for k in expected_fields)
-    
+
     def test_savings_response_has_required_fields(self):
         """Response must include all required top-level fields."""
         expected_fields = {
@@ -107,7 +107,7 @@ class TestSavingsEndpointSchema:
         for field in expected_fields:
             assert isinstance(field, str)
             assert len(field) > 0
-    
+
     def test_empty_database_returns_valid_response(self, temp_db):
         """Empty database should return zeros, not error."""
         # Expected response structure for empty DB
@@ -121,7 +121,7 @@ class TestSavingsEndpointSchema:
         for key, value in expected_structure.items():
             assert isinstance(key, str)
             assert value is not None or isinstance(value, type(None))
-    
+
     def test_savings_by_model_field_is_dict(self):
         """savings_by_model should be a dictionary keyed by model name."""
         # Example of expected structure
@@ -137,7 +137,7 @@ class TestSavingsEndpointSchema:
                 'cost_saved_usd': 2.0
             }
         }
-        
+
         assert isinstance(example, dict)
         for model, stats in example.items():
             assert isinstance(model, str)
@@ -145,7 +145,7 @@ class TestSavingsEndpointSchema:
             assert 'requests' in stats
             assert 'tokens_saved' in stats
             assert 'cost_saved_usd' in stats
-    
+
     def test_savings_by_date_7d_is_list(self):
         """savings_by_date_7d should be a list of daily summaries."""
         # Example of expected structure
@@ -163,7 +163,7 @@ class TestSavingsEndpointSchema:
                 'requests': 280
             }
         ]
-        
+
         assert isinstance(example, list)
         for day in example:
             assert isinstance(day, dict)
@@ -174,27 +174,27 @@ class TestSavingsEndpointSchema:
 
 class TestSavingsDataFormat:
     """Test data formats and calculations in savings response."""
-    
+
     def test_tokens_saved_is_numeric(self):
         """Tokens saved should be an integer >= 0."""
         values = [0, 1000, 1037703198]
         for val in values:
             assert isinstance(val, int)
             assert val >= 0
-    
+
     def test_cost_saved_usd_is_float(self):
         """Cost saved should be a float with reasonable precision."""
         values = [0.0, 2808.1365, 10.50]
         for val in values:
             assert isinstance(val, float)
             assert val >= 0.0
-    
+
     def test_since_parameter_nullable(self):
         """The 'since' field can be null or an ISO date string."""
         valid_values = [None, '2026-03-01', '2026-03-27T15:00:00Z']
         for val in valid_values:
             assert val is None or isinstance(val, str)
-    
+
     def test_total_cost_saved_sums_correctly(self):
         """total_cost_saved_usd should equal sum of savings_by_model costs."""
         savings_by_model = {
@@ -202,14 +202,14 @@ class TestSavingsDataFormat:
             'claude-haiku': {'cost_saved_usd': 50.0},
             'gpt-4': {'cost_saved_usd': 25.0}
         }
-        
+
         expected_total = sum(m['cost_saved_usd'] for m in savings_by_model.values())
         assert expected_total == 175.0
 
 
 class TestSavingsDateFiltering:
     """Test date filtering capabilities."""
-    
+
     def test_since_parameter_filters_by_date(self):
         """?since=YYYY-MM-DD should restrict results to dates >= since."""
         # Test date filtering logic
@@ -219,18 +219,18 @@ class TestSavingsDateFiltering:
             datetime.fromisoformat('2026-03-20').date(),  # Equal
             datetime.fromisoformat('2026-03-27').date(),  # After
         ]
-        
+
         filtered = [d for d in test_dates if d >= since]
         assert len(filtered) == 2
         assert test_dates[0] not in filtered
-    
+
     def test_savings_by_date_7d_uses_last_7_days(self):
         """savings_by_date_7d should cover exactly 7 days or fewer if unavailable."""
         today = datetime.now(tz=None).date()
         # Generate last 7 days: from 6 days ago through today
         dates = [today - timedelta(days=i) for i in range(7)]
         dates.reverse()  # Chronological order: oldest first
-        
+
         assert len(dates) == 7
         assert dates[0] <= dates[-1]  # Oldest <= Newest
         assert (dates[-1] - dates[0]).days == 6  # 7 days span
@@ -238,7 +238,7 @@ class TestSavingsDateFiltering:
 
 class TestSavingsResponseValidJSON:
     """Test that savings response is valid, parseable JSON."""
-    
+
     def test_response_is_valid_json(self):
         """Response must be parseable as JSON."""
         example_response = {
@@ -248,13 +248,13 @@ class TestSavingsResponseValidJSON:
             'savings_by_model': {'claude-sonnet': {'requests': 1000}},
             'savings_by_date_7d': [{'date': '2026-03-27', 'cost_saved_usd': 100.0}]
         }
-        
+
         # Should serialize without error
         json_str = json.dumps(example_response)
         parsed = json.loads(json_str)
-        
+
         assert parsed == example_response
-    
+
     def test_response_content_type_is_json(self):
         """HTTP Content-Type header should be application/json."""
         expected_content_type = 'application/json'

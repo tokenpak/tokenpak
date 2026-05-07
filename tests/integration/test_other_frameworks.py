@@ -6,9 +6,9 @@ Tests for:
 - LlamaIndex × TokenPak
 """
 
+from unittest.mock import patch
+
 import pytest
-import os
-from unittest.mock import patch, MagicMock
 
 
 class TestCrewaiIntegration:

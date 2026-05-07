@@ -15,7 +15,6 @@ import pytest
 
 from tokenpak.proxy.passthrough import PassthroughConfig
 
-
 # ---------------------------------------------------------------------------
 # Regression tests
 # ---------------------------------------------------------------------------

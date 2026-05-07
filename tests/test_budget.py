@@ -1,13 +1,12 @@
 """Tests for the BudgetTracker — local cost tracking module."""
 
+
 import pytest
-from datetime import datetime, date, timedelta
 
 from tokenpak.telemetry.budget import (
     BudgetConfig,
     BudgetTracker,
     SpendRecord,
-    BudgetStatus,
 )
 
 

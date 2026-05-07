@@ -1,5 +1,4 @@
 """Tests for tokenpak.proxy.providers.stream_translator module."""
-import pytest
 from tokenpak.proxy.providers.stream_translator import StreamingTranslator
 
 

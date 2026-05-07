@@ -2,14 +2,7 @@
 Tests for X-TokenPak-Bypass per-request passthrough header.
 Checks production proxy source at ~/tokenpak/proxy.py.
 """
-import ast
-import os
-import sys
-import types
-import importlib
-import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 PROXY_PATH = Path(__file__).parent.parent / "proxy.py"
 

@@ -1,6 +1,7 @@
 """Unit tests for tokenpak.compression.wire module."""
 
 import pytest
+
 from tokenpak.compression.wire import make_slice_id, pack
 
 

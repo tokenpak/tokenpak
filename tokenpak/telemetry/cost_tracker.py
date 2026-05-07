@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
+
 def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
     """Return estimated cost in USD for the given model and token counts.
 

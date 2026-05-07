@@ -12,8 +12,6 @@ Avoids duplicating test_cost_integration.py coverage; focuses on:
   - Negative / clamped token inputs
 """
 
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -21,13 +19,11 @@ from tokenpak.telemetry.cost import (
     CURRENT_PRICING_VERSION,
     SEED_PRICING,
     CostEngine,
-    CostResult,
     Pricing,
     calculate_actual,
     calculate_baseline,
     calculate_savings,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared fixture

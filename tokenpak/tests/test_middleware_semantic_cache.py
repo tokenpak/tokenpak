@@ -16,7 +16,6 @@ from tokenpak.cache.semantic_cache import (
 )
 from tokenpak.proxy.middleware.semantic_cache_middleware import SemanticCacheMiddleware
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -41,9 +41,7 @@ from tokenpak.vault.progressive_disclosure import (  # noqa: E402
     disclose,
     extract_section_map,
     is_enabled,
-    render_section_map,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -102,7 +100,8 @@ Seventh line still no headings.
 
 _TINY_DOC = "# Single\nOnly one line of body."
 
-_token_counter = lambda t: max(1, len(t) // 4)  # simple proxy
+def _token_counter(t):
+    return max(1, len(t) // 4)  # simple proxy
 
 
 # ---------------------------------------------------------------------------

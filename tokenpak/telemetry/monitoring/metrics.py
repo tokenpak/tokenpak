@@ -35,7 +35,6 @@ Usage::
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -46,6 +45,7 @@ _LATENCY_BUCKETS_MS = [50, 100, 250, 500, 1000, 2500, 5000, 10000]
 
 # Default telemetry DB path — centralized resolution
 from tokenpak.core.paths import get_db_path as _get_db_path
+
 _DEFAULT_DB_PATH = _get_db_path("telemetry.db")
 
 

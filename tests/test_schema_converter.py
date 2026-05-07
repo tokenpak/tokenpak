@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.ingest.schema_converter", reason="module not available in current build")
 from tokenpak._internal.ingest.schema_converter import (
     SCHEMAS,
@@ -10,10 +10,10 @@ from tokenpak._internal.ingest.schema_converter import (
     extract_schema,
     should_serve_schema,
 )
-from tokenpak.vault.indexer import VaultIndexer
 from tokenpak.vault.blocks import BlockStore
-from tokenpak.vault.symbols import SymbolTable
+from tokenpak.vault.indexer import VaultIndexer
 from tokenpak.vault.retrieval import inject_retrieved_context
+from tokenpak.vault.symbols import SymbolTable
 
 
 def test_schemas_include_required_document_types() -> None:

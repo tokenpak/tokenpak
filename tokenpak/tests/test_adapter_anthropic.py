@@ -9,9 +9,9 @@ Tests cover:
 - Timeout and authentication error handling
 """
 
-import json
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
+
 import requests
 
 from tokenpak.sdk.anthropic import AnthropicAdapter

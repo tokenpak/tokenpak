@@ -1,21 +1,19 @@
 """Unit tests for tokenpak.cli.aggregate module."""
 
 import json
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from tokenpak.cli.aggregate import (
-    AggregateRow,
-    parse_since,
-    load_requests,
-    aggregate_records,
-    format_tokens,
-    fmt_cost,
-    _parse_iso,
-    _coerce_int,
     _coerce_float,
+    _coerce_int,
+    _parse_iso,
+    aggregate_records,
+    fmt_cost,
+    format_tokens,
+    load_requests,
+    parse_since,
 )
 
 
@@ -95,7 +93,7 @@ class TestLoadRequests:
                 {"agent": "trix", "model": "claude-haiku", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T01:00:00Z"},
             ]
             requests_file.write_text("\n".join(json.dumps(r) for r in records))
-            
+
             result = load_requests(requests_file)
             assert len(result) == 2
             assert result[0]["agent"] == "cali"
@@ -111,7 +109,7 @@ class TestLoadRequests:
                 {"agent": "trix", "model": "claude-haiku", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T14:00:00Z"},  # after cutoff
             ]
             requests_file.write_text("\n".join(json.dumps(r) for r in records))
-            
+
             result = load_requests(requests_file, since=cutoff)
             assert len(result) == 1
             assert result[0]["agent"] == "trix"
@@ -122,7 +120,7 @@ class TestLoadRequests:
             requests_file = Path(tmpdir) / "requests.jsonl"
             content = '{"agent": "cali", "model": "claude", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0, "timestamp": "2026-03-27T00:00:00Z"}\n\n{"agent": "trix", "model": "claude", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T01:00:00Z"}\n'
             requests_file.write_text(content)
-            
+
             result = load_requests(requests_file)
             assert len(result) == 2
 
@@ -132,7 +130,7 @@ class TestLoadRequests:
             requests_file = Path(tmpdir) / "requests.jsonl"
             content = '{"agent": "cali", "model": "claude", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0, "timestamp": "2026-03-27T00:00:00Z"}\nmalformed json line\n{"agent": "trix", "model": "claude", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T01:00:00Z"}\n'
             requests_file.write_text(content)
-            
+
             result = load_requests(requests_file)
             assert len(result) == 2
 
@@ -146,7 +144,7 @@ class TestAggregateRecords:
             {"agent": "cali", "model": "claude-sonnet", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0}
         ]
         rows, totals = aggregate_records(records, "agent-3")
-        
+
         assert len(rows) == 1
         assert rows[0].agent == "cali"
         assert rows[0].machine == "agent-3"
@@ -164,7 +162,7 @@ class TestAggregateRecords:
             {"agent": "cali", "model": "claude-sonnet", "input_tokens": 200, "output_tokens": 100, "cost": 0.002, "saved_cost": 0.0001},
         ]
         rows, totals = aggregate_records(records, "agent-3")
-        
+
         assert len(rows) == 1
         assert rows[0].requests == 2
         assert rows[0].tokens == 450
@@ -179,7 +177,7 @@ class TestAggregateRecords:
             {"agent": "trix", "model": "claude-sonnet", "input_tokens": 200, "output_tokens": 100, "cost": 0.002, "saved_cost": 0.0},
         ]
         rows, totals = aggregate_records(records, "agent-3")
-        
+
         assert len(rows) == 3
         assert totals["requests"] == 3
         assert totals["tokens"] == 525
@@ -191,7 +189,7 @@ class TestAggregateRecords:
             {"agent": "cali", "model": "claude-sonnet"},  # missing tokens and cost
         ]
         rows, totals = aggregate_records(records, "agent-3")
-        
+
         assert len(rows) == 1
         assert rows[0].tokens == 0
         assert rows[0].cost == 0.0
@@ -199,7 +197,7 @@ class TestAggregateRecords:
     def test_aggregate_empty_records(self):
         """Test aggregating empty record list."""
         rows, totals = aggregate_records([], "agent-3")
-        
+
         assert len(rows) == 0
         assert totals["requests"] == 0
         assert totals["tokens"] == 0
@@ -213,7 +211,7 @@ class TestAggregateRecords:
             {"agent": "sue", "model": "medium", "input_tokens": 50, "output_tokens": 25, "cost": 0.001, "saved_cost": 0.0},
         ]
         rows, totals = aggregate_records(records, "agent-3")
-        
+
         assert len(rows) == 3
         assert rows[0].cost == 0.005
         assert rows[1].cost == 0.001

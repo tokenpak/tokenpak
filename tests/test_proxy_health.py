@@ -13,17 +13,14 @@ Covers:
 from __future__ import annotations
 
 import json
-import threading
 import time
 import urllib.request
-from collections import deque
 
 import pytest
 
 pytestmark = pytest.mark.needs_proxy
 
 from tokenpak.proxy.server import ProxyServer
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -269,7 +266,7 @@ def test_health_uptime_grows(proxy):
 
 def test_health_no_auth_required(proxy):
     """Health endpoint must be accessible without any Authorization header."""
-    req = urllib.request.Request(f"http://127.0.0.1:18766/health")
+    req = urllib.request.Request("http://127.0.0.1:18766/health")
     # Explicitly do NOT set Authorization
     with urllib.request.urlopen(req, timeout=5) as resp:
         assert resp.status == 200
@@ -280,7 +277,7 @@ def test_health_no_auth_required(proxy):
 # ---------------------------------------------------------------------------
 
 def test_health_content_type_json(proxy):
-    req = urllib.request.Request(f"http://127.0.0.1:18766/health")
+    req = urllib.request.Request("http://127.0.0.1:18766/health")
     with urllib.request.urlopen(req, timeout=5) as resp:
         ct = resp.headers.get("Content-Type", "")
         assert "application/json" in ct

@@ -17,6 +17,7 @@ Tests:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
 import json
 import os
@@ -26,7 +27,6 @@ import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import BytesIO
 from unittest.mock import patch
-
 
 # ---------------------------------------------------------------------------
 # Bootstrap: add repo root to sys.path

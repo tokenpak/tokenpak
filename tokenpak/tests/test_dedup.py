@@ -7,8 +7,6 @@ helper functions, and edge cases (empty input, unicode, large input).
 
 from __future__ import annotations
 
-import pytest
-
 from tokenpak.compression.dedup import (
     DEDUP_JACCARD_THRESHOLD,
     _content_to_str,
@@ -18,7 +16,6 @@ from tokenpak.compression.dedup import (
     count_duplicates,
     dedup_messages,
 )
-
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 

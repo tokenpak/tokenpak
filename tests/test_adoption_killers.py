@@ -13,8 +13,8 @@ Requirements tested:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.pack", reason="module not available in current build")
 import hashlib
 import json
@@ -24,10 +24,8 @@ from typing import List
 
 import pytest
 
-from tokenpak.pack import ContextPack, PackBlock, pack_prompt
-from tokenpak.report import Action, CompileReport, Decision
-from tokenpak.tokens import count_tokens
-
+from tokenpak.pack import ContextPack, PackBlock
+from tokenpak.report import Action, CompileReport
 
 # ── Shared fixtures ───────────────────────────────────────────────────────
 
@@ -488,7 +486,8 @@ class TestStackNeutralityRequirement:
 
     def test_sdk_zero_required_dependencies(self):
         """Import from tokenpak should work with no external services."""
-        from tokenpak import ContextPack as CP, PackBlock as PB
+        from tokenpak import ContextPack as CP
+        from tokenpak import PackBlock as PB
         p = CP(budget=4000)
         p.add(PB(id="t", type="instructions", content="Test.", priority="critical"))
         result = p.compile()
@@ -560,7 +559,8 @@ class TestIncrementalAdoptionRequirement:
 
     def test_level2_pack_prompt_budget_enforced(self):
         """pack_prompt respects the budget parameter."""
-        from tokenpak import pack_prompt as pp, count_tokens as ct
+        from tokenpak import count_tokens as ct
+        from tokenpak import pack_prompt as pp
         big_docs = "word " * 5000  # ~5000 tokens
         result = pp(docs=big_docs, budget=500)
         token_count = ct(result)
@@ -605,7 +605,7 @@ class TestIncrementalAdoptionRequirement:
 
     def test_level4_compile_with_report(self):
         """Level 4: full compile() returns text + report."""
-        from tokenpak import ContextPack, PackBlock, CompileReport
+        from tokenpak import CompileReport, ContextPack, PackBlock
         pack = ContextPack(budget=8000)
         pack.add(PackBlock(id="sys", type="instructions", content="System.", priority="critical"))
         result = pack.compile()
@@ -614,7 +614,7 @@ class TestIncrementalAdoptionRequirement:
 
     def test_level4_adds_value_over_level3(self):
         """Level 4 adds compile reports and observability."""
-        from tokenpak import ContextPack, PackBlock, Action
+        from tokenpak import Action, ContextPack, PackBlock
         pack = ContextPack(budget=8000, quality_threshold=0.5)
         pack.add(PackBlock(id="good", type="evidence", content="Good evidence.", quality=0.9, priority="medium"))
         pack.add(PackBlock(id="bad", type="evidence", content="Bad evidence.", quality=0.1, priority="medium"))
@@ -680,14 +680,11 @@ class TestIncrementalAdoptionRequirement:
     def test_top_level_imports_all_levels(self):
         """tokenpak package must export all level 1-4 symbols."""
         from tokenpak import (
-            count_tokens,     # Level 1
-            pack_prompt,      # Level 2
-            ContextPack,      # Level 3
-            PackBlock,        # Level 3
-            CompileReport,    # Level 4
-            Action,           # Level 4
-            Decision,         # Level 4
-            CompiledResult,   # Level 4
+            CompileReport,  # Level 4
+            ContextPack,  # Level 3
+            PackBlock,  # Level 3
+            count_tokens,  # Level 1
+            pack_prompt,  # Level 2
         )
         # All imports succeeded — adoption ladder is accessible
         assert all([

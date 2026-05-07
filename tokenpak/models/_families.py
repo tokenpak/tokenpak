@@ -11,8 +11,7 @@ Rules are matched longest-pattern-first so ``gpt-4o-mini`` beats ``gpt-4o``.
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

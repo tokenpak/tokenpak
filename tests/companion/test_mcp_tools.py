@@ -11,10 +11,7 @@ Integration (JSON-RPC protocol) tests are in test_mcp_server.py.
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
-
-import pytest
 
 from tokenpak.companion.config import CompanionConfig
 from tokenpak.companion.mcp.tools import (
@@ -28,7 +25,6 @@ from tokenpak.companion.mcp.tools import (
     _handle_prune_context,
     _handle_session_info,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

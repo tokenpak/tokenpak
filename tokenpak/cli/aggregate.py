@@ -79,11 +79,11 @@ def load_requests(
     path: Optional[Path] = None, since: Optional[datetime] = None
 ) -> List[Dict[str, Any]]:
     """Load request records from JSONL file with optional time filtering.
-    
+
     Args:
         path: Optional path to requests.jsonl (defaults to ~/.tokenpak/requests.jsonl)
         since: Optional datetime to filter records (skip earlier timestamps)
-    
+
     Returns:
         list: Loaded request records (empty list if file doesn't exist)
     """
@@ -115,11 +115,11 @@ def aggregate_records(
     records: Iterable[Dict[str, Any]], machine: str
 ) -> Tuple[List[AggregateRow], Dict[str, Any]]:
     """Aggregate request records by agent and model.
-    
+
     Args:
         records: Iterable of request dicts (typically from load_requests)
         machine: Machine/hostname identifier for output rows
-    
+
     Returns:
         tuple: (list of AggregateRow, dict of totals with request/token/cost/saved)
     """
@@ -174,10 +174,10 @@ def aggregate_records(
 
 def format_tokens(n: int) -> str:
     """Format token count with human-readable suffixes (M, K).
-    
+
     Args:
         n: Token count
-    
+
     Returns:
         str: Formatted token count (e.g. '1.5M', '500K', '100')
     """

@@ -354,8 +354,8 @@ class UsageMeter:
 
         # Build payload
         usage_by_date = []
-        for date in unreported_dates:
-            summary = self.get_daily_summary(date)
+        for d in unreported_dates:
+            summary = self.get_daily_summary(d)
             usage_by_date.append(summary)
 
         payload = {

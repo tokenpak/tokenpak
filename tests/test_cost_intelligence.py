@@ -12,26 +12,21 @@ Coverage:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.intelligence.cost_intelligence", reason="module not available in current build")
-import json
-from dataclasses import asdict
 from datetime import date, timedelta
 from typing import List
 
 import pytest
 from fastapi.testclient import TestClient
 
+from tokenpak.intelligence.auth import APIKeyValidator, LicenseTier
 from tokenpak.intelligence.cost_intelligence import (
-    BudgetAlert,
     CostIntelligence,
     DailyMetric,
-    Projection,
 )
 from tokenpak.intelligence.server import create_app
-from tokenpak.intelligence.auth import APIKeyValidator, LicenseTier
-
 
 # ---------------------------------------------------------------------------
 # Helpers

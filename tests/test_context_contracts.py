@@ -11,16 +11,16 @@ Verifies:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.proxy.intent_policy", reason="module not available in current build")
 import pytest
-from tokenpak.proxy.intent_policy import (
-    resolve_policy,
-    apply_context_contract,
-    FALLBACK_POLICY,
-    PolicyResult,
-    known_intents,
-)
 
+from tokenpak.proxy.intent_policy import (
+    FALLBACK_POLICY,
+    apply_context_contract,
+    known_intents,
+    resolve_policy,
+)
 
 # ---------------------------------------------------------------------------
 # PolicyResult schema tests

@@ -13,17 +13,13 @@ Tests cover:
 from __future__ import annotations
 
 import os
-import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
-
-from tokenpak.proxy.server import ProxyServer
 from tokenpak.proxy.circuit_breaker import (
     _reset_registry_for_testing,
     get_circuit_breaker_registry,
 )
-
+from tokenpak.proxy.server import ProxyServer
 
 # ---------------------------------------------------------------------------
 # Helpers

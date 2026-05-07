@@ -13,15 +13,11 @@ Covers:
 from __future__ import annotations
 
 import argparse
-import os
-import sys
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from tokenpak.vault import config as vault_config
-
 
 # ---------------------------------------------------------------------------
 # vault.yaml schema

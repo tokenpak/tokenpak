@@ -10,19 +10,21 @@ Tests cover:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.validator", reason="module not available in current build")
 import json
-import pytest
 from pathlib import Path
 
+import pytest
+
 from tokenpak.validator import (
-    TokenPakValidator,
-    VALID_PACK_MINIMAL,
-    INVALID_PACK_MISSING_HEADER,
-    INVALID_PACK_BAD_VERSION,
-    INVALID_PACK_NO_BLOCKS,
     INVALID_PACK_BAD_BLOCK_TYPE,
+    INVALID_PACK_BAD_VERSION,
     INVALID_PACK_DUPLICATE_BLOCK_IDS,
+    INVALID_PACK_MISSING_HEADER,
+    INVALID_PACK_NO_BLOCKS,
+    VALID_PACK_MINIMAL,
+    TokenPakValidator,
 )
 
 EXAMPLES_DIR = Path(__file__).parent.parent.parent / "examples"

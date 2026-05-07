@@ -7,27 +7,24 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, FrozenSet
 
-import pytest
-
 from tokenpak.services.optimization import (
     OptimizationPipeline,
     StageRegistry,
 )
 from tokenpak.services.optimization.compression_stage import (
     ENV_FLAG,
-    RouteClassCompressionStage,
     TIP_COMPRESSION_V1,
+    RouteClassCompressionStage,
     is_stage_enabled,
     register_with_default_pipeline,
 )
 from tokenpak.services.optimization.context import OptimizationContext
+from tokenpak.services.optimization.protected_spans import SpanType
 from tokenpak.services.optimization.route_recipe_policy import (
-    DEFAULT_POLICIES,
     FidelityTier,
     RouteClass,
     RoutePolicy,
 )
-from tokenpak.services.optimization.protected_spans import SpanType
 from tokenpak.services.optimization.trace import OptimizationTrace
 
 

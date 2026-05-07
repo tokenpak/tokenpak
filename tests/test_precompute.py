@@ -3,19 +3,17 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.precompute", reason="module not available in current build")
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from tokenpak.precompute import (
     DocType,
-    PrecomputeStore,
     PrecomputedArtifact,
+    PrecomputeStore,
     detect_doc_type,
     generate_error_signature,
     generate_fact_card,
@@ -25,7 +23,6 @@ from tokenpak.precompute import (
     precompute_for_block,
     recompute_all,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

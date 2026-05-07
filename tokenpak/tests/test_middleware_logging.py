@@ -10,11 +10,10 @@ and mocking RequestLogger when testing LoggingMiddleware.
 
 import json
 import unittest
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import tokenpak.proxy.middleware.logger as logger_mod
 from tokenpak.proxy.middleware.audit_trail import (
-    BlockAudit,
     BlockType,
     MetricsAudit,
     create_cache_audit,
@@ -29,7 +28,6 @@ from tokenpak.proxy.middleware.logger import (
     init_logger,
 )
 from tokenpak.proxy.middleware.logging_middleware import LoggingMiddleware
-
 
 # ---------------------------------------------------------------------------
 # Helpers

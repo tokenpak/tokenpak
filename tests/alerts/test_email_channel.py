@@ -6,12 +6,9 @@ All SMTP I/O is mocked — no real mail server is contacted.
 from __future__ import annotations
 
 import smtplib
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from tokenpak.alerts.channels.email import EmailChannel, deliver, _build_subject, _build_body
-
+from tokenpak.alerts.channels.email import EmailChannel, _build_body, _build_subject, deliver
 
 # ---------------------------------------------------------------------------
 # Helper builders

@@ -18,8 +18,7 @@ import logging
 import os
 import time
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
-
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # LicenseTier + TIER_RATE_LIMITS
@@ -28,7 +27,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 class TestLicenseTier(unittest.TestCase):
     def setUp(self):
-        from tokenpak.proxy.intelligence.auth import LicenseTier, TIER_RATE_LIMITS
+        from tokenpak.proxy.intelligence.auth import TIER_RATE_LIMITS, LicenseTier
 
         self.LicenseTier = LicenseTier
         self.TIER_RATE_LIMITS = TIER_RATE_LIMITS
@@ -230,7 +229,7 @@ class TestAPIKeyValidatorValidate(unittest.TestCase):
 
 class TestRateLimiterEnterprise(unittest.TestCase):
     def setUp(self):
-        from tokenpak.proxy.intelligence.auth import RateLimiter, LicenseTier
+        from tokenpak.proxy.intelligence.auth import LicenseTier, RateLimiter
 
         self.limiter = RateLimiter()
         self.enterprise = LicenseTier.ENTERPRISE
@@ -248,7 +247,7 @@ class TestRateLimiterEnterprise(unittest.TestCase):
 
 class TestRateLimiterFree(unittest.TestCase):
     def setUp(self):
-        from tokenpak.proxy.intelligence.auth import RateLimiter, LicenseTier
+        from tokenpak.proxy.intelligence.auth import LicenseTier, RateLimiter
 
         self.limiter = RateLimiter()
         self.free = LicenseTier.FREE
@@ -274,7 +273,7 @@ class TestRateLimiterFree(unittest.TestCase):
         self.assertEqual(r1, r0 - 1)
 
     def test_window_resets(self):
-        from tokenpak.proxy.intelligence.auth import RateLimiter, LicenseTier
+        from tokenpak.proxy.intelligence.auth import RateLimiter
 
         limiter = RateLimiter()
         key = "window_reset_key"
@@ -299,7 +298,7 @@ class TestRateLimiterFree(unittest.TestCase):
     def test_thread_safety(self):
         import threading
 
-        from tokenpak.proxy.intelligence.auth import RateLimiter, LicenseTier
+        from tokenpak.proxy.intelligence.auth import LicenseTier, RateLimiter
 
         limiter = RateLimiter()
         key = "thread_key"
@@ -347,7 +346,7 @@ class TestTokenPakAuthMiddlewareBypass(unittest.TestCase):
     def _make_client(self):
         from fastapi import FastAPI
         from starlette.testclient import TestClient
-        from starlette.responses import JSONResponse
+
         from tokenpak.proxy.intelligence.auth import (
             APIKeyValidator,
             RateLimiter,
@@ -398,6 +397,7 @@ class TestTokenPakAuthMiddlewareAuth(unittest.TestCase):
     def _make_client_with_key(self, key, tier_str):
         from fastapi import FastAPI
         from starlette.testclient import TestClient
+
         from tokenpak.proxy.intelligence.auth import (
             APIKeyValidator,
             LicenseTier,
@@ -449,11 +449,12 @@ class TestTokenPakAuthMiddlewareRateLimit(unittest.TestCase):
     def _make_client_exhausted(self):
         from fastapi import FastAPI
         from starlette.testclient import TestClient
+
         from tokenpak.proxy.intelligence.auth import (
+            TIER_RATE_LIMITS,
             APIKeyValidator,
             LicenseTier,
             RateLimiter,
-            TIER_RATE_LIMITS,
             TokenPakAuthMiddleware,
         )
 
@@ -499,6 +500,7 @@ class TestTokenPakAuthMiddlewareRateLimitHeaders(unittest.TestCase):
     def setUp(self):
         from fastapi import FastAPI
         from starlette.testclient import TestClient
+
         from tokenpak.proxy.intelligence.auth import (
             APIKeyValidator,
             LicenseTier,
@@ -532,9 +534,15 @@ class TestTokenPakAuthMiddlewareRateLimitHeaders(unittest.TestCase):
         self.assertIn("x-ratelimit-remaining", resp.headers)
 
     def test_enterprise_shows_unlimited_limit(self):
-        from tokenpak.proxy.intelligence.auth import APIKeyValidator, LicenseTier, RateLimiter, TokenPakAuthMiddleware
         from fastapi import FastAPI
         from starlette.testclient import TestClient
+
+        from tokenpak.proxy.intelligence.auth import (
+            APIKeyValidator,
+            LicenseTier,
+            RateLimiter,
+            TokenPakAuthMiddleware,
+        )
 
         ent_key = "enterprise_header_key"
         app2 = FastAPI()

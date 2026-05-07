@@ -9,13 +9,11 @@ Tests cover:
 """
 
 import pytest
+
 from tokenpak.compression.vendor_classifier import (
     classify_vendor_minified,
-    should_include_in_index,
     create_metadata_only_block,
-    _has_vendor_path,
-    _has_vendor_extension,
-    _is_minified_content,
+    should_include_in_index,
 )
 
 

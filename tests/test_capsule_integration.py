@@ -4,22 +4,22 @@ Tests for capsule builder proxy integration.
 
 
 import pytest
+
 pytest.importorskip("tokenpak.capsule.builder", reason="module not available in current build")
 import json
 import os
-import pytest
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from tokenpak.proxy.capsule_integration import (
-    capsule_request_hook,
-    get_capsule_request_hook,
-    clear_cache,
-    _is_capsule_enabled,
     _estimate_tokens,
+    _is_capsule_enabled,
+    capsule_request_hook,
+    clear_cache,
+    get_capsule_request_hook,
 )
-from tokenpak.capsule.builder import CapsuleBuilder
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -157,31 +157,31 @@ class TestHookChaining:
 
     def test_chains_to_base_hook(self, simple_body):
         base_called = []
-        
+
         def base_hook(body, model, trace):
             base_called.append((body, model))
             return body, 100, 100, 0
-        
+
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "0"}):
             clear_cache()
             hook = get_capsule_request_hook(base_hook=base_hook)
             result = hook(simple_body, "claude-sonnet-4-5")
-            
+
             assert len(base_called) == 1
             assert base_called[0][1] == "claude-sonnet-4-5"
 
     def test_passes_modified_body_to_base_hook(self, long_body):
         received_bodies = []
-        
+
         def base_hook(body, model, trace):
             received_bodies.append(body)
             return body, 100, 100, 0
-        
+
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "1"}):
             clear_cache()
             hook = get_capsule_request_hook(base_hook=base_hook)
             hook(long_body, "claude-sonnet-4-5")
-            
+
             # Base hook should receive the potentially-modified body
             assert len(received_bodies) == 1
 
@@ -197,13 +197,13 @@ class TestPerformance:
         """Builder should complete in <20ms p99."""
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "1"}):
             clear_cache()
-            
+
             times = []
             for _ in range(10):
                 t0 = time.monotonic()
                 capsule_request_hook(long_body, "claude-sonnet-4-5")
                 times.append((time.monotonic() - t0) * 1000)
-            
+
             p99 = sorted(times)[int(len(times) * 0.99)]
             assert p99 < 20, f"p99 latency {p99:.1f}ms exceeds 20ms threshold"
 
@@ -211,12 +211,12 @@ class TestPerformance:
         """When disabled, overhead should be negligible."""
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "0"}):
             clear_cache()
-            
+
             t0 = time.monotonic()
             for _ in range(100):
                 capsule_request_hook(long_body, "claude-sonnet-4-5")
             total = (time.monotonic() - t0) * 1000
-            
+
             avg = total / 100
             assert avg < 0.5, f"Disabled hook avg {avg:.2f}ms too slow"
 
@@ -232,25 +232,25 @@ class TestDeterminism:
         """Same input should always produce same output."""
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "1"}):
             clear_cache()
-            
+
             result1, _, _, _ = capsule_request_hook(long_body, "claude-sonnet-4-5")
             result2, _, _, _ = capsule_request_hook(long_body, "claude-sonnet-4-5")
-            
+
             assert result1 == result2
 
     def test_capsule_id_is_stable(self, long_body):
         """Capsule IDs should be deterministic (based on content hash)."""
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "1"}):
             clear_cache()
-            
+
             result1, _, _, _ = capsule_request_hook(long_body, "claude-sonnet-4-5")
             result2, _, _, _ = capsule_request_hook(long_body, "claude-sonnet-4-5")
-            
+
             # Extract capsule IDs from both results
             import re
             ids1 = re.findall(r'\[CAPSULE id=(\w+)', result1.decode())
             ids2 = re.findall(r'\[CAPSULE id=(\w+)', result2.decode())
-            
+
             assert ids1 == ids2
 
 
@@ -264,7 +264,7 @@ class TestErrorHandling:
     def test_invalid_json_passthrough(self):
         """Invalid JSON should pass through unchanged."""
         invalid_body = b"not json at all {"
-        
+
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "1"}):
             clear_cache()
             result, _, _, _ = capsule_request_hook(invalid_body, "claude-sonnet-4-5")
@@ -273,7 +273,7 @@ class TestErrorHandling:
     def test_missing_messages_passthrough(self):
         """Body without messages should pass through unchanged."""
         body = json.dumps({"model": "test"}).encode()
-        
+
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "1"}):
             clear_cache()
             result, _, _, _ = capsule_request_hook(body, "claude-sonnet-4-5")
@@ -293,7 +293,7 @@ class TestTokenEstimation:
                 {"role": "user", "content": "x" * 400}  # 100 tokens approx
             ]
         }).encode()
-        
+
         tokens = _estimate_tokens(body)
         assert 80 <= tokens <= 120
 
@@ -306,7 +306,7 @@ class TestTokenEstimation:
                 ]}
             ]
         }).encode()
-        
+
         tokens = _estimate_tokens(body)
         assert 80 <= tokens <= 120
 

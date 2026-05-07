@@ -17,6 +17,7 @@ ALL TESTS USE REAL MODULE APIs - verified by reading source code.
 
 
 import pytest
+
 pytest.importorskip("tokenpak.infrastructure.cooldown", reason="module not available in current build")
 import json
 import tempfile
@@ -25,16 +26,20 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.infrastructure.cooldown import CooldownManager
-from tokenpak._internal.ingest.claim_indexer import extract_claims_from_document, ClaimEvidence, extract_claims_from_text
-from tokenpak._internal.fingerprint.privacy import apply_privacy, PrivacyLevel
-from tokenpak._internal.macros.premade_macros import PREMADE_MACROS, PremadeMacroRunner
-from tokenpak._internal.macros.script_hooks import fire_hook, list_hooks, get_hook_path
-from tokenpak.proxy.providers.stream_translator import StreamingTranslator
-from tokenpak.proxy.stats_api import StatsAPI, get_stats_storage
 from tokenpak._internal.config import get_config
-from tokenpak.infrastructure.debug import DebugLogger
+from tokenpak._internal.fingerprint.privacy import PrivacyLevel, apply_privacy
+from tokenpak._internal.ingest.claim_indexer import (
+    ClaimEvidence,
+    extract_claims_from_document,
+    extract_claims_from_text,
+)
+from tokenpak._internal.macros.premade_macros import PREMADE_MACROS, PremadeMacroRunner
+from tokenpak._internal.macros.script_hooks import fire_hook, get_hook_path, list_hooks
 from tokenpak.agentic.capabilities import AgentCapabilities
+from tokenpak.infrastructure.cooldown import CooldownManager
+from tokenpak.infrastructure.debug import DebugLogger
+from tokenpak.proxy.providers.stream_translator import StreamingTranslator
+from tokenpak.proxy.stats_api import StatsAPI
 
 
 class TestCooldownManager:
@@ -74,7 +79,7 @@ class TestCooldownManager:
             cooldowns_file.write_text(json.dumps({
                 "provider:default": {"cooldownUntil": past_time, "errorCount": 2}
             }))
-            
+
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.clear_expired()
             assert "provider:default" in result
@@ -98,7 +103,7 @@ class TestCooldownManager:
             cooldowns_file.write_text(json.dumps({
                 "test:key": {"cooldownUntil": future_time, "errorCount": 1}
             }))
-            
+
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.get_active_cooldowns()
             assert "test:key" in result
@@ -112,7 +117,7 @@ class TestCooldownManager:
             cooldowns_file.write_text(json.dumps({
                 "old:key": {"cooldownUntil": time.time() - 3600, "errorCount": 2}
             }))
-            
+
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             count = mgr.run_cycle()
             assert isinstance(count, int)

@@ -28,7 +28,6 @@ from typing import Any, Dict, FrozenSet, Optional
 from .context import OptimizationContext
 from .route_recipe_policy import (
     CompressionResult,
-    DEFAULT_POLICIES,
     FidelityTier,
     RouteClass,
     RoutePolicy,

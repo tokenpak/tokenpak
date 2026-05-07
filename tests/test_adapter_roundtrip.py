@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.adapters.anthropic", reason="module not available in current build")
 import json
 from pathlib import Path

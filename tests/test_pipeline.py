@@ -4,30 +4,23 @@ Covers each extracted stage function and both pipeline paths
 (byte_preserved + full_pipeline).
 """
 import json
-import pytest
 
-from tokenpak.proxy.request import ProxyRequest, ROUTE_CLAUDE_CODE, ROUTE_OPENCLAW, ROUTE_SDK
-from tokenpak.proxy.route_policy import get_policy, ROUTE_POLICIES
 from tokenpak.proxy.headers import (
     forward_headers,
-    sanitize_headers,
-    OPENCLAW_HEADER_ALLOWLIST,
-    CLAUDE_CODE_HEADER_ALLOWLIST,
 )
 from tokenpak.proxy.pipeline import (
-    process_request,
-    stage_cache_poison_removal,
-    stage_vault_injection,
-    stage_header_forwarding,
-    stage_auth_injection,
-    stage_cache_control,
-    stage_compaction,
-    stage_ttl_hotfix,
-    stage_byte_restore,
     PipelineResult,
-    StageResult,
+    process_request,
+    stage_auth_injection,
+    stage_byte_restore,
+    stage_cache_control,
+    stage_cache_poison_removal,
+    stage_compaction,
+    stage_header_forwarding,
+    stage_ttl_hotfix,
 )
-
+from tokenpak.proxy.request import ROUTE_CLAUDE_CODE, ROUTE_OPENCLAW, ROUTE_SDK, ProxyRequest
+from tokenpak.proxy.route_policy import ROUTE_POLICIES, get_policy
 
 # ---------------------------------------------------------------------------
 # Fixtures

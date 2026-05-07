@@ -10,10 +10,11 @@ Usage:
 """
 
 import json
-import pytest
 from pathlib import Path
-from tokenpak.compression import CompressionPipeline
 
+import pytest
+
+from tokenpak.compression import CompressionPipeline
 
 # Load baselines
 BASELINES_PATH = Path(__file__).parent / "regression" / "baselines.json"
@@ -53,45 +54,45 @@ def compress_payload(pipeline, payload):
 
 class TestCompressionRegression:
     """Regression tests for compression quality"""
-    
+
     @pytest.fixture
     def pipeline(self):
         """Initialize compression pipeline"""
         return CompressionPipeline()
-    
+
     @pytest.fixture
     def baselines(self):
         """Load baseline ratios"""
         return load_baselines()
-    
+
     @pytest.mark.parametrize("payload_file", get_payload_files(), ids=lambda p: p.stem)
     def test_compression_ratio_no_regression(self, payload_file, pipeline, baselines, request):
         """
         Test that compression ratio for a payload doesn't degrade.
-        
+
         Tolerance: ±5% degradation = FAIL
         Tolerance: 5% improvement = PASS with note
         """
-        
+
         payload_name = payload_file.stem
-        
+
         # Load payload
         with open(payload_file) as f:
             payload = json.load(f)
-        
+
         # Compute original size
         original_size = compute_payload_size(payload)
-        
+
         # Compress
         compressed = compress_payload(pipeline, payload)
         if compressed is None:
             pytest.skip("Compression failed")
-        
+
         # Compute current ratio
         compressed_size = compute_payload_size(compressed)
         current_ratio = (original_size - compressed_size) / original_size if original_size > 0 else 0
         current_ratio = max(0, min(1, current_ratio))  # Clamp to [0, 1]
-        
+
         # Check baseline (update mode)
         if request.config.getoption("--update-baselines"):
             baselines[payload_name] = {
@@ -102,15 +103,15 @@ class TestCompressionRegression:
             }
             save_baselines(baselines)
             pytest.skip(f"Baseline updated: {payload_name} = {current_ratio:.1%}")
-        
+
         # Check against baseline
         if payload_name in baselines:
             baseline_ratio = baselines[payload_name]["ratio"]
             degradation = (baseline_ratio - current_ratio) / baseline_ratio if baseline_ratio > 0 else 0
-            
+
             # Allow for some variance
             TOLERANCE = 0.05  # ±5%
-            
+
             if degradation > TOLERANCE:
                 pytest.fail(
                     f"{payload_name}: Compression degraded {degradation:.1%} "
@@ -141,40 +142,39 @@ def pytest_addoption(parser):
 
 if __name__ == "__main__":
     # Quick manual test
-    import sys
-    
+
     payloads = get_payload_files()
     print(f"📦 Found {len(payloads)} payloads\n")
-    
+
     pipeline = CompressionPipeline()
     baselines = {}
-    
+
     for payload_file in payloads:
         payload_name = payload_file.stem
         print(f"Processing {payload_name}...", end=" ")
-        
+
         with open(payload_file) as f:
             payload = json.load(f)
-        
+
         original_size = compute_payload_size(payload)
         compressed = compress_payload(pipeline, payload)
-        
+
         if compressed is None:
             print("❌ Compression failed")
             continue
-        
+
         compressed_size = compute_payload_size(compressed)
         ratio = (original_size - compressed_size) / original_size if original_size > 0 else 0
         ratio = max(0, min(1, ratio))
-        
+
         baselines[payload_name] = {
             "original_size": original_size,
             "compressed_size": compressed_size,
             "ratio": round(ratio, 4),
             "file": str(payload_file.relative_to(PAYLOADS_DIR.parent.parent))
         }
-        
+
         print(f"✓ {ratio:.1%}")
-    
+
     save_baselines(baselines)
-    print(f"\n✅ Baselines saved")
+    print("\n✅ Baselines saved")

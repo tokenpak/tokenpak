@@ -13,7 +13,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Lightweight Block representation (no hard dep on tokenpak-sdk)
 # ---------------------------------------------------------------------------

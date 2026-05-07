@@ -14,21 +14,18 @@ AC coverage:
 """
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.agentic.workflow_budget", reason="module not available in current build")
-import math
 import pytest
 
 from tokenpak.agentic.workflow_budget import (
-    WorkflowBudget,
-    BudgetEvent,
-    BudgetEventKind,
+    CRITICAL_REMAINING_PCT,
     MIN_FLOOR_TOKENS,
     WARN_OVERSPEND_PCT,
-    CRITICAL_REMAINING_PCT,
+    BudgetEventKind,
+    WorkflowBudget,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

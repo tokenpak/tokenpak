@@ -16,7 +16,6 @@ Flag mapping:
 from __future__ import annotations
 
 import sys
-from typing import Optional
 
 _DEPRECATION_NOTICE = """\
 ⚠️  `tokenpak savings` is deprecated.
@@ -33,7 +32,7 @@ def run_savings_cmd(args) -> None:
     as_json = getattr(args, "json", False) or getattr(args, "as_json", False)
 
     try:
-        from tokenpak.cli.commands.status import run, run_full, _run_json
+        from tokenpak.cli.commands.status import _run_json, run, run_full
 
         if as_json:
             _run_json()

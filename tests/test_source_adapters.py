@@ -2,22 +2,19 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.connectors.notion_adapter", reason="module not available in current build")
-import json
 import os
 import subprocess
 import tempfile
-from io import BytesIO
-from unittest.mock import MagicMock, patch, PropertyMock
-import urllib.error
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.connectors.base_source import Provenance, SourceAdapter, SourceFetchError
-from tokenpak.connectors.url_adapter import URLAdapter, _strip_html, _extract_title
-from tokenpak.connectors.notion_adapter import NotionAdapter
+from tokenpak.connectors.base_source import Provenance, SourceFetchError
 from tokenpak.connectors.git_adapter import GitAdapter
-
+from tokenpak.connectors.notion_adapter import NotionAdapter
+from tokenpak.connectors.url_adapter import URLAdapter, _extract_title, _strip_html
 
 # ---------------------------------------------------------------------------
 # Provenance dataclass

@@ -13,17 +13,14 @@ proxy-side wiring.
 from __future__ import annotations
 
 import os
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from tokenpak.proxy import creds_injection
 from tokenpak.creds import router
-from tokenpak.creds.model import Credential, REFRESH_EXTERNAL, REFRESH_NONE, KIND_API_KEY
-from tokenpak.creds.router import RouteContext, RouteDecision
-
+from tokenpak.creds.model import KIND_API_KEY, REFRESH_EXTERNAL, REFRESH_NONE, Credential
+from tokenpak.creds.router import RouteDecision
+from tokenpak.proxy import creds_injection
 
 # ── helpers ──────────────────────────────────────────────────────────
 

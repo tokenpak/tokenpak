@@ -12,15 +12,10 @@ Tests:
 8. _serve_dashboard returns 401 on wrong token (proxy)
 """
 
-import os
-import sys
 import stat
-import importlib
-import tempfile
-from pathlib import Path
 from unittest import mock
-import pytest
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers: patch TOKEN_FILE to a tmp file

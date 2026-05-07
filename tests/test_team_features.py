@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.team.agent_registry", reason="module not available in current build")
 import time
+
 import pytest
 
 from tokenpak._internal.team.agent_registry import AgentRecord, AgentRegistry
-from tokenpak._internal.team.shared_vault import SharedVaultBlock, SharedVault
-from tokenpak._internal.team.templates import Template, TemplateStore, ROLE_ADMIN, ROLE_MEMBER
-
+from tokenpak._internal.team.shared_vault import SharedVault, SharedVaultBlock
+from tokenpak._internal.team.templates import ROLE_ADMIN, ROLE_MEMBER, Template, TemplateStore
 
 # ===========================================================================
 # Agent Registry Tests (5.3)

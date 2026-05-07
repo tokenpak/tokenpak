@@ -25,12 +25,10 @@ import pytest
 
 from tokenpak.cli.commands.setup import (
     PROXY_URL,
-    OPENAI_PROXY_URL,
     configure_claude_code,
     detect_claude_code,
     run_setup_cmd,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

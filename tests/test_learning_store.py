@@ -16,20 +16,17 @@ Covers:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.agentic.learning", reason="module not available in current build")
 import json
-import os
 import sqlite3
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from tokenpak.agentic.learning import (
-    DEFAULT_LEARNING_PATH,
     _empty_store,
     _extract_block_utility,
     _extract_compression_modes,
@@ -44,7 +41,6 @@ from tokenpak.agentic.learning import (
     load,
     reset,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import os
 from typing import Dict, Mapping, Optional, Tuple
-from urllib.request import urlopen
 from urllib.error import URLError
+from urllib.request import urlopen
 
 from .canonical import CanonicalEmbeddingRequest
 from .embedding_base import EmbeddingAdapter

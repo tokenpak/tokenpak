@@ -15,20 +15,18 @@ Covers:
 from __future__ import annotations
 
 import json
-import pytest
 
 from tokenpak.proxy.oauth import (
+    AUTH_TYPE_APIKEY,
+    AUTH_TYPE_NONE,
+    AUTH_TYPE_OAUTH,
+    analyze_request,
     detect_auth_type,
     detect_token_format,
-    analyze_request,
-    oauth_telemetry_tags,
     is_codex_model,
-    AUTH_TYPE_APIKEY,
-    AUTH_TYPE_OAUTH,
-    AUTH_TYPE_NONE,
+    oauth_telemetry_tags,
 )
-from tokenpak.proxy.router import ProviderRouter, RouteResult
-
+from tokenpak.proxy.router import ProviderRouter
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -213,7 +211,7 @@ class TestOAuthTelemetryTags:
             model="gpt-5.2-codex",
         )
         tags = oauth_telemetry_tags(ctx)
-        
+
         # Tags must not contain any fragment of the real token
         tag_str = json.dumps(tags)
         assert JWT_OAUTH not in tag_str

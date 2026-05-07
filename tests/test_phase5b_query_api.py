@@ -21,26 +21,24 @@ Test count: ≥ 15 test cases as required by acceptance criteria.
 from __future__ import annotations
 
 import json
-import time
-import uuid
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from typing import List
-
-import pytest
 
 # Ensure project root on path
 import sys
+import time
+import uuid
+from pathlib import Path
+
+import pytest
+
 ROOT = Path(__file__).parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from fastapi.testclient import TestClient
 
+from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
 from tokenpak.telemetry.server import create_app
 from tokenpak.telemetry.storage import TelemetryDB
-from tokenpak.telemetry.models import TelemetryEvent, Usage, Cost, Segment
-
 
 # ---------------------------------------------------------------------------
 # Test data constants

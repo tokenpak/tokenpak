@@ -6,8 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
-
+from typing import Any
 
 TAG_PREFIX = "[INSTRUCTION:"
 TAG_SUFFIX = "]"

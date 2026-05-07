@@ -3,8 +3,8 @@ Tests for tokenpak.network_utils — Dashboard network detection utilities.
 """
 
 import pytest
+
 pytest.importorskip("tokenpak.network_utils", reason="module not available in current build")
-import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,7 +15,6 @@ from tokenpak.network_utils import (
     get_reachable_addresses,
     is_port_accessible,
 )
-
 
 # ---------------------------------------------------------------------------
 # get_local_ip

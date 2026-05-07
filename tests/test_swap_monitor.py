@@ -9,13 +9,13 @@ Tests:
 """
 
 
-import pytest
 import logging
 import os
 import sys
-import types
 import unittest
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import mock_open, patch
+
+import pytest
 
 # Ensure the tokenpak package is importable from the repo root
 _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

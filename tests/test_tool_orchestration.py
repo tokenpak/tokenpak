@@ -2,28 +2,30 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.reference_scanner", reason="module not available in current build")
 import json
 import os
 import tempfile
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.reference_scanner import (
-    Reference, RefType, scan_for_references,
-)
-from tokenpak.reference_fetcher import fetch_reference
 from tokenpak.compiler import (
-    compile_with_refs,
-    _cache_key,
+    _CACHE_TTL_SECONDS,
     _cache_get,
+    _cache_key,
     _cache_put,
     _prune_stale,
-    _CACHE_TTL_SECONDS,
+    compile_with_refs,
 )
-
+from tokenpak.reference_fetcher import fetch_reference
+from tokenpak.reference_scanner import (
+    Reference,
+    RefType,
+    scan_for_references,
+)
 
 # ---------------------------------------------------------------------------
 # Reference scanner — detection patterns

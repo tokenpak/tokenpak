@@ -12,11 +12,11 @@ Usage:
     check_swap_pressure()
 """
 import json
+import logging
 import os
 import time
-import urllib.request
 import urllib.error
-import logging
+import urllib.request
 from typing import Optional
 
 logger = logging.getLogger(__name__)

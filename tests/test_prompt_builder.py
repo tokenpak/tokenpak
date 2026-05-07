@@ -11,16 +11,15 @@ Tests verify:
 """
 
 import json
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from tokenpak.proxy.prompt_builder import (
     apply_stable_cache_control,
-    inject_with_cache_boundary,
     classify_system_blocks,
-    PromptBuilder,
+    inject_with_cache_boundary,
 )
 
 

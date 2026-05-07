@@ -23,11 +23,11 @@ from __future__ import annotations
 import importlib
 import pathlib
 import sys
-import tomllib
 import types
 import unittest
 from unittest.mock import patch
 
+import tomllib
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -264,7 +264,6 @@ class ExtrasGuardSmokeTest(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 def _standalone():
-    import os
 
     data = _load_pyproject()
     direct = _direct_deps(data)

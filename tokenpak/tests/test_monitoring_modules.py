@@ -11,12 +11,10 @@ All external I/O (HTTP, filesystem, /proc) is mocked — no live calls are made.
 from __future__ import annotations
 
 import json
-import time
 import threading
+import time
 import unittest
-from datetime import datetime, timezone
 from unittest import mock
-
 
 # ---------------------------------------------------------------------------
 # monitoring.health
@@ -132,6 +130,7 @@ class TestCheckProviderMocked(unittest.TestCase):
 
     def test_timeout_status(self):
         import httpx
+
         from tokenpak.telemetry.monitoring.health import _check_provider
 
         with mock.patch("httpx.head", side_effect=httpx.TimeoutException("timeout")):
@@ -170,8 +169,8 @@ class TestHealthChecker(unittest.TestCase):
         self.assertGreater(result["uptime_seconds"], 0)
 
     def test_check_version_default(self):
-        from tokenpak.telemetry.monitoring.health import HealthChecker
         import tokenpak
+        from tokenpak.telemetry.monitoring.health import HealthChecker
 
         checker = HealthChecker(start_time=time.time())
         with mock.patch("tokenpak.telemetry.monitoring.health.check_providers", return_value={}), \
@@ -346,8 +345,9 @@ class TestProxyMetricsCollector(unittest.TestCase):
 
 class TestProviderMetrics(unittest.TestCase):
     def test_to_dict_structure(self):
-        from tokenpak.telemetry.monitoring.provider_health import ProviderMetrics
         from collections import deque
+
+        from tokenpak.telemetry.monitoring.provider_health import ProviderMetrics
 
         m = ProviderMetrics(provider="anthropic", latencies_ms=deque())
         m.request_count = 10
@@ -486,7 +486,7 @@ class TestGetMonitorSingleton(unittest.TestCase):
 
 class TestRequestLogRecord(unittest.TestCase):
     def _make_record(self, **kwargs):
-        from tokenpak.telemetry.monitoring.request_logger import RequestLogRecord, LEVEL_INFO
+        from tokenpak.telemetry.monitoring.request_logger import LEVEL_INFO, RequestLogRecord
 
         defaults = dict(
             request_id="req-001",
@@ -577,8 +577,9 @@ class TestRequestLoggerInit(unittest.TestCase):
         rl.stop()
 
     def test_new_request_id_generates_uuid(self):
-        from tokenpak.telemetry.monitoring.request_logger import RequestLogger
         import uuid
+
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger
 
         rid = RequestLogger.new_request_id()
         self.assertIsNotNone(uuid.UUID(rid))  # validates UUID format
@@ -621,7 +622,7 @@ class TestRequestLoggerInit(unittest.TestCase):
         rl1.stop()
 
     def test_build_record_warn_level_for_4xx(self):
-        from tokenpak.telemetry.monitoring.request_logger import RequestLogger, LEVEL_WARN
+        from tokenpak.telemetry.monitoring.request_logger import LEVEL_WARN, RequestLogger
 
         rl = RequestLogger(config={
             "enabled": True, "level": "info", "destination": "stdout", "retention_days": 7,
@@ -635,7 +636,7 @@ class TestRequestLoggerInit(unittest.TestCase):
         rl.stop()
 
     def test_build_record_info_level_for_2xx(self):
-        from tokenpak.telemetry.monitoring.request_logger import RequestLogger, LEVEL_INFO
+        from tokenpak.telemetry.monitoring.request_logger import LEVEL_INFO, RequestLogger
 
         rl = RequestLogger(config={
             "enabled": True, "level": "info", "destination": "stdout", "retention_days": 7,
@@ -645,7 +646,11 @@ class TestRequestLoggerInit(unittest.TestCase):
         rl.stop()
 
     def test_log_disabled_does_not_enqueue(self):
-        from tokenpak.telemetry.monitoring.request_logger import RequestLogger, RequestLogRecord, LEVEL_INFO
+        from tokenpak.telemetry.monitoring.request_logger import (
+            LEVEL_INFO,
+            RequestLogger,
+            RequestLogRecord,
+        )
 
         rl = RequestLogger(config={
             "enabled": False, "level": "info", "destination": "stdout", "retention_days": 7,
@@ -661,7 +666,9 @@ class TestRequestLoggerInit(unittest.TestCase):
 
     def test_log_level_filtered(self):
         from tokenpak.telemetry.monitoring.request_logger import (
-            RequestLogger, RequestLogRecord, LEVEL_DEBUG, LEVEL_INFO,
+            LEVEL_DEBUG,
+            RequestLogger,
+            RequestLogRecord,
         )
 
         rl = RequestLogger(config={
@@ -708,7 +715,7 @@ class TestAlertLevel(unittest.TestCase):
 
 class TestRequestSizeMonitor(unittest.TestCase):
     def setUp(self):
-        from tokenpak.telemetry.monitoring.request_size import RequestSizeMonitor, RequestSizeConfig
+        from tokenpak.telemetry.monitoring.request_size import RequestSizeConfig, RequestSizeMonitor
 
         self.config = RequestSizeConfig(
             enabled=True,
@@ -784,7 +791,7 @@ class TestRequestSizeMonitor(unittest.TestCase):
         self.assertIn("size_bytes", history[0])
 
     def test_disabled_monitor_returns_none(self):
-        from tokenpak.telemetry.monitoring.request_size import RequestSizeMonitor, RequestSizeConfig
+        from tokenpak.telemetry.monitoring.request_size import RequestSizeConfig, RequestSizeMonitor
 
         mon = RequestSizeMonitor(config=RequestSizeConfig(enabled=False))
         self.assertIsNone(mon.check_request_size(999_999))

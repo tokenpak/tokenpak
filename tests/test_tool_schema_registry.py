@@ -5,16 +5,13 @@ Unit tests for tokenpak.proxy.tool_schema_registry
 import json
 import threading
 
-import pytest
-
 from tokenpak.proxy.tool_schema_registry import (
     ToolSchemaRegistry,
-    get_registry,
     _normalize_tools,
     _serialize,
     _sha256,
+    get_registry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

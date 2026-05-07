@@ -1,7 +1,8 @@
 """Tests for TokenPakOpenAICompat and TokenPakLMStudio."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from tokenpak_local.utils import Block, TokenPak
 
 
@@ -21,6 +22,7 @@ class TestTokenPakOpenAICompatInit:
     def test_raises_without_openai(self):
         with patch.dict("sys.modules", {"openai": None}):
             import importlib
+
             import tokenpak_local.openai_compat as mod
 
             importlib.reload(mod)
@@ -35,6 +37,7 @@ class TestTokenPakOpenAICompatInit:
 
         with patch.dict("sys.modules", {"openai": mock_openai}):
             import importlib
+
             import tokenpak_local.openai_compat as mod
 
             importlib.reload(mod)
@@ -54,6 +57,7 @@ class TestBuildMessages:
 
         with patch.dict("sys.modules", {"openai": mock_openai}):
             import importlib
+
             import tokenpak_local.openai_compat as mod
 
             importlib.reload(mod)
@@ -122,6 +126,7 @@ class TestBuildMessages:
 
         with patch.dict("sys.modules", {"openai": mock_openai}):
             import importlib
+
             import tokenpak_local.openai_compat as mod
 
             importlib.reload(mod)
@@ -139,6 +144,7 @@ class TestTokenPakLMStudio:
 
         with patch.dict("sys.modules", {"openai": mock_openai}):
             import importlib
+
             import tokenpak_local.lmstudio as mod
 
             importlib.reload(mod)

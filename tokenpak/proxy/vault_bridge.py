@@ -18,15 +18,15 @@ if TYPE_CHECKING:
     from .request import ProxyRequest
 
 from .config import (
-    _cfg,
+    INJECT_BUDGET,
+    INJECT_MIN_SCORE,
+    INJECT_TOP_K,
+    RETRIEVAL_BACKEND,
+    SKELETON_ENABLED,
+    VAULT_AUTO_REINDEX_INTERVAL,
     VAULT_INDEX_PATH,
     VAULT_INDEX_RELOAD_INTERVAL,
-    VAULT_AUTO_REINDEX_INTERVAL,
-    RETRIEVAL_BACKEND,
-    INJECT_BUDGET,
-    INJECT_TOP_K,
-    INJECT_MIN_SCORE,
-    SKELETON_ENABLED,
+    _cfg,
 )
 from .token_cache import count_tokens
 
@@ -63,6 +63,8 @@ QUERY_EXPANSION_ENABLED: bool = _cfg(
 try:
     from tokenpak.vault.query_expansion import (
         expand_query as _qe_expand,
+    )
+    from tokenpak.vault.query_expansion import (
         tokenize as _qe_tokenize,
     )
     _QE_AVAILABLE = True
@@ -439,7 +441,10 @@ def _init_singletons() -> None:
         # --- Term Resolver ---
         _TERM_RESOLVER_AVAILABLE = False
         try:
-            from tokenpak.vault.semantic import TermResolver, TermResolverConfig  # type: ignore[assignment]
+            from tokenpak.vault.semantic import (  # type: ignore[assignment]
+                TermResolver,
+                TermResolverConfig,
+            )
 
             _TERM_RESOLVER_AVAILABLE = True
         except ImportError:
@@ -462,7 +467,9 @@ def _init_singletons() -> None:
 
         # --- Capsule Builder ---
         try:
-            from tokenpak.companion.capsules.builder import CapsuleBuilder as _CapsuleBuilder  # type: ignore[assignment]
+            from tokenpak.companion.capsules.builder import (
+                CapsuleBuilder as _CapsuleBuilder,  # type: ignore[assignment]
+            )
 
             _CAPSULE_BUILDER = _CapsuleBuilder(
                 enabled=ENABLE_CAPSULE_BUILDER,
@@ -552,8 +559,8 @@ def inject_vault_context(
         from tokenpak.core.runtime.proxy import SESSION  # type: ignore[import]
     except ImportError:
         SESSION = {}  # type: ignore[assignment]
-    from tokenpak.vault.search import _compile_from_results, score_and_sort  # type: ignore[import]
     from tokenpak.vault.chunk_shaping import _inject_skeleton_into_blocks  # type: ignore[import]
+    from tokenpak.vault.search import _compile_from_results, score_and_sort  # type: ignore[import]
 
     vault_idx = get_vault_index()
     if not vault_idx.available:
@@ -595,7 +602,9 @@ def inject_vault_context(
     _t3 = time.perf_counter()
     semantic_scorer = None
     try:
-        from tokenpak.core.runtime.proxy import SEMANTIC_SCORER as semantic_scorer  # type: ignore[import]
+        from tokenpak.core.runtime.proxy import (
+            SEMANTIC_SCORER as semantic_scorer,  # type: ignore[import]
+        )
     except Exception:
         pass
 

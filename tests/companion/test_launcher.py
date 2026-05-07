@@ -12,11 +12,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
-from tokenpak.companion.config import CompanionConfig
 from tokenpak.companion import launcher
-
+from tokenpak.companion.config import CompanionConfig
 
 # ---------------------------------------------------------------------------
 # Helpers

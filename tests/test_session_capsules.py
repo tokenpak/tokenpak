@@ -1,5 +1,6 @@
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.memory.session_capsules", reason="module not available in current build")
 from tokenpak._internal.memory.session_capsules import (
     REQUIRED_CAPSULE_SECTIONS,
@@ -9,7 +10,6 @@ from tokenpak._internal.memory.session_capsules import (
     serialize_capsule,
 )
 from tokenpak.vault.retrieval import sort_retrieval_results
-
 
 RAW_SESSION = """---
 id: sess-001

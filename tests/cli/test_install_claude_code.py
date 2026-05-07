@@ -19,7 +19,6 @@ Coverage
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import types
 from pathlib import Path
@@ -28,10 +27,9 @@ from unittest import mock
 import pytest
 
 from tokenpak.cli.commands.install import (
-    PROXY_URL,
     MODE_PROFILE_MAP,
+    PROXY_URL,
     _atomic_write_settings,
-    _backup_settings,
     _read_settings,
     _settings_path,
     _systemd_unit_path,
@@ -45,7 +43,6 @@ from tokenpak.cli.commands.install import (
     run_smoke_test,
     select_mode,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

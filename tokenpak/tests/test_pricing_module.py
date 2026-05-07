@@ -1,15 +1,15 @@
 """Unit tests for tokenpak/pricing.py"""
 import pytest
+
 from tokenpak.telemetry.pricing import (
-    MODEL_RATES,
     DEFAULT_RATE,
-    get_rates,
-    estimate_savings,
+    MODEL_RATES,
     calculate_request_cost,
     calculate_request_cost_baseline,
+    estimate_savings,
     get_price,
+    get_rates,
 )
-
 
 # ---------------------------------------------------------------------------
 # MODEL_RATES / DEFAULT_RATE constants

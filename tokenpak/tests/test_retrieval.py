@@ -9,8 +9,6 @@ import sys
 import types
 from unittest.mock import MagicMock
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # Patch broken ingest module before any tokenpak imports
 # ---------------------------------------------------------------------------
@@ -24,21 +22,19 @@ sys.modules.setdefault("tokenpak.vault.ingest.schema_converter", _fake_sc)
 sys.modules.setdefault("tokenpak.vault.ingest.api", MagicMock())
 
 from tokenpak.vault.search import (  # noqa: E402
+    COVERAGE_OK,
+    COVERAGE_STRONG,
     RETRIEVED_CONTEXT_HEADER,
-    DEFAULT_MAX_TOKENS,
-    sort_retrieval_results,
-    inject_retrieved_context,
-    measure_injection_consistency,
+    all_must_hits_found,
+    chunks_contain_term,
+    compute_coverage_score,
     compute_final_score,
     extract_must_hit_terms,
-    chunks_contain_term,
-    all_must_hits_found,
-    compute_coverage_score,
+    inject_retrieved_context,
     interpret_coverage,
-    COVERAGE_STRONG,
-    COVERAGE_OK,
+    measure_injection_consistency,
+    sort_retrieval_results,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

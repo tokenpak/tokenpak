@@ -4,12 +4,9 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from tokenpak.compression.compiler import (
-    compile_with_refs,
     _build_ephemeral_block,
     _cache_get,
     _cache_key,
@@ -18,6 +15,7 @@ from tokenpak.compression.compiler import (
     _load_cache,
     _prune_stale,
     _save_cache,
+    compile_with_refs,
 )
 from tokenpak.compression.reference_scanner import Reference
 
@@ -200,7 +198,7 @@ class TestEphemeralBlockBuilder:
         )
         content = "x" * 100
         block = _build_ephemeral_block(ref, content)
-        
+
         # 100 chars * 0.25 = 25 tokens
         assert block["tokens"] == int(100 * 0.25)
 
@@ -212,7 +210,7 @@ class TestCompileWithRefs:
         """compile_with_refs with _inject_refs=False skips reference fetching."""
         blocks = [{"content": "test", "tokens": 10}]
         query = "test query"
-        
+
         with patch("tokenpak.compression.compiler.pack") as mock_pack:
             mock_pack.return_value = "packed result"
             result = compile_with_refs(
@@ -221,7 +219,7 @@ class TestCompileWithRefs:
                 budget=1000,
                 _inject_refs=False
             )
-            
+
             assert result == "packed result"
             mock_pack.assert_called_once_with(blocks, 1000)
 
@@ -229,7 +227,7 @@ class TestCompileWithRefs:
         """compile_with_refs handles empty block list."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_path = Path(tmpdir) / "cache.json"
-            
+
             with patch("tokenpak.compression.compiler.scan_for_references", return_value=[]):
                 with patch("tokenpak.compression.compiler.pack") as mock_pack:
                     mock_pack.return_value = "packed"
@@ -239,7 +237,7 @@ class TestCompileWithRefs:
                         budget=100,
                         cache_path=str(cache_path)
                     )
-                    
+
                     assert result == "packed"
 
     def test_compile_with_cached_refs(self):
@@ -249,7 +247,7 @@ class TestCompileWithRefs:
             raw_match="http://example.com",
             resolved_url="http://example.com"
         )
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_path = Path(tmpdir) / "cache.json"
             cache = {
@@ -259,9 +257,9 @@ class TestCompileWithRefs:
                 }
             }
             _save_cache(cache, str(cache_path))
-            
+
             blocks = [{"content": "test", "tokens": 50}]
-            
+
             with patch("tokenpak.compression.compiler.scan_for_references", return_value=[ref]):
                 with patch("tokenpak.compression.compiler.pack") as mock_pack:
                     mock_pack.return_value = "packed"
@@ -271,7 +269,7 @@ class TestCompileWithRefs:
                         budget=1000,
                         cache_path=str(cache_path)
                     )
-                    
+
                     assert result == "packed"
                     # Verify pack was called with blocks + ephemeral
                     args, kwargs = mock_pack.call_args
@@ -285,18 +283,18 @@ class TestCompileWithRefs:
             raw_match="http://example.com",
             resolved_url="http://example.com"
         )
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_path = Path(tmpdir) / "cache.json"
-            
+
             # Create blocks that use most of budget
             blocks = [
                 {"content": "a" * 100, "tokens": 400},  # Uses 400/500
             ]
-            
+
             refs = [ref]
             fetched_content = "x" * 200  # Would be 50 tokens
-            
+
             with patch("tokenpak.compression.compiler.scan_for_references", return_value=refs):
                 with patch("tokenpak.compression.compiler.fetch_reference") as mock_fetch:
                     mock_fetch.return_value = fetched_content
@@ -308,12 +306,12 @@ class TestCompileWithRefs:
                             budget=500,
                             cache_path=str(cache_path)
                         )
-                        
+
                         # Verify pack was called
                         args, kwargs = mock_pack.call_args
                         all_blocks = args[0]
                         budget_arg = args[1]
-                        
+
                         assert budget_arg == 500
                         # Check if ephemeral was included (50 tokens fit in 100 remaining)
                         total_tokens = sum(b.get("tokens", 0) for b in all_blocks)

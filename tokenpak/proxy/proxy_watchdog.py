@@ -11,6 +11,7 @@ Monitors proxy health and automatically fixes common issues:
 
 import json
 import logging
+import os
 import subprocess
 import sys
 import time

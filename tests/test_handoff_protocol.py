@@ -12,8 +12,8 @@ Covers:
 from __future__ import annotations
 
 import json
-import pytest
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Top-level imports
@@ -21,12 +21,9 @@ import pytest
 
 def test_top_level_imports():
     from tokenpak import (
-        TokenPak,
         Handoff,
         HandoffBlock,
-        HandoffManager,
-        ContextRef,
-        HandoffStatus,
+        TokenPak,
     )
     assert TokenPak is not None
     assert Handoff is not None
@@ -61,7 +58,7 @@ def test_handoff_block_round_trip():
 # ---------------------------------------------------------------------------
 
 def test_token_pak_add_and_get():
-    from tokenpak import TokenPak, HandoffBlock
+    from tokenpak import HandoffBlock, TokenPak
     pack = TokenPak()
     block = HandoffBlock(type="memory", id="m1", content="data")
     pack.add(block)
@@ -70,7 +67,7 @@ def test_token_pak_add_and_get():
 
 
 def test_token_pak_chaining():
-    from tokenpak import TokenPak, HandoffBlock
+    from tokenpak import HandoffBlock, TokenPak
     pack = (
         TokenPak()
         .add(HandoffBlock(type="memory", id="a", content="aaa"))
@@ -80,7 +77,7 @@ def test_token_pak_chaining():
 
 
 def test_token_pak_blocks_by_type():
-    from tokenpak import TokenPak, HandoffBlock
+    from tokenpak import HandoffBlock, TokenPak
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="m1", content="1"))
     pack.add(HandoffBlock(type="memory", id="m2", content="2"))
@@ -90,7 +87,7 @@ def test_token_pak_blocks_by_type():
 
 
 def test_token_pak_remove():
-    from tokenpak import TokenPak, HandoffBlock
+    from tokenpak import HandoffBlock, TokenPak
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="m1", content="x"))
     assert pack.remove("m1") is True
@@ -104,7 +101,7 @@ def test_token_pak_to_prompt_empty():
 
 
 def test_token_pak_to_prompt_format():
-    from tokenpak import TokenPak, HandoffBlock
+    from tokenpak import HandoffBlock, TokenPak
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="s1", content="state here"))
     pack.add(HandoffBlock(type="evidence", id="e1", content="evidence here"))
@@ -116,7 +113,7 @@ def test_token_pak_to_prompt_format():
 
 
 def test_token_pak_round_trip():
-    from tokenpak import TokenPak, HandoffBlock
+    from tokenpak import HandoffBlock, TokenPak
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="x", content="hello"))
     d = pack.to_dict()
@@ -130,7 +127,7 @@ def test_token_pak_round_trip():
 # ---------------------------------------------------------------------------
 
 def test_handoff_wire_basic():
-    from tokenpak import Handoff, TokenPak, HandoffBlock
+    from tokenpak import Handoff, HandoffBlock, TokenPak
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="t", content="task state"))
     h = Handoff(pack=pack, from_agent="cali", to_agent="sue")
@@ -140,7 +137,7 @@ def test_handoff_wire_basic():
 
 
 def test_handoff_wire_round_trip():
-    from tokenpak import Handoff, TokenPak, HandoffBlock
+    from tokenpak import Handoff, HandoffBlock, TokenPak
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="task_state", content="some state"))
     pack.add(HandoffBlock(type="evidence", id="findings", content="research output"))
@@ -188,6 +185,7 @@ def test_handoff_wire_metadata():
 
 def test_crewai_prepare_receive_wire(tmp_path):
     from crewai_tokenpak import TokenPakHandoff
+
     from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf")
     h = TokenPakHandoff(budget=1000, manager=mgr)
@@ -216,6 +214,7 @@ def test_crewai_legacy_dict_api():
 def test_crewai_unknown_agents_no_crash(tmp_path):
     """Unknown agents: wire still produced, HandoffManager just skips."""
     from crewai_tokenpak import TokenPakHandoff
+
     from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf2")
     h = TokenPakHandoff(budget=1000, manager=mgr)
@@ -264,6 +263,7 @@ def test_autogen_receive_and_compress():
 )
 def test_autogen_prepare_apply_handoff(tmp_path):
     from autogen_tokenpak import TokenPakAssistant
+
     from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf3")
     alice = TokenPakAssistant(name="cali", budget=2000, manager=mgr)
@@ -291,7 +291,8 @@ def test_autogen_prepare_apply_handoff(tmp_path):
 )
 def test_autogen_handoff_wire_round_trip(tmp_path):
     from autogen_tokenpak import TokenPakAssistant
-    from tokenpak import HandoffBlock, Handoff
+
+    from tokenpak import Handoff, HandoffBlock
     from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf4")
     a = TokenPakAssistant(name="cali", budget=2000, manager=mgr)

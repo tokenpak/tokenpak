@@ -13,7 +13,6 @@ All tests are hermetic (no network, no subprocess) and use the actual
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from textwrap import dedent
 from unittest.mock import patch
@@ -32,8 +31,7 @@ from tokenpak.prove.adapter import (
     list_providers,
     run_arm,
 )
-from tokenpak.prove.scenario import Scenario, Turn, _detect_provider, resolve_scenario
-
+from tokenpak.prove.scenario import Scenario, _detect_provider, resolve_scenario
 
 # ---------------------------------------------------------------------------
 # Helpers

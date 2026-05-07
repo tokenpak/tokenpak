@@ -13,11 +13,10 @@ out of the slim core and into named optional extras.
 
 from __future__ import annotations
 
-import sys
-import tomllib
 from pathlib import Path
 
 import pytest
+import tomllib
 
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 

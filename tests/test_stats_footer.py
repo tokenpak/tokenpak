@@ -12,27 +12,18 @@ Covers:
 
 from __future__ import annotations
 
-import io
-import json
 import os
-import sys
-import threading
-import time
-import tempfile
-import urllib.request
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from tokenpak.telemetry.proxy_collector import RequestStats, TelemetryCollector
 from tokenpak.telemetry.footer import (
-    render_footer_oneline,
     render_footer,
     render_footer_compact,
+    render_footer_oneline,
 )
-
+from tokenpak.telemetry.proxy_collector import RequestStats, TelemetryCollector
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -220,7 +211,7 @@ class TestConfigRoundTrip:
     def test_set_and_get_stats_footer_true(self, tmp_path):
         config_file = tmp_path / "config.json"
         with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
-            from tokenpak._internal.config import set_config, _load
+            from tokenpak._internal.config import _load, set_config
             set_config("stats_footer", True)
             data = _load()
             assert data["stats_footer"] is True
@@ -228,7 +219,7 @@ class TestConfigRoundTrip:
     def test_set_and_get_stats_footer_false(self, tmp_path):
         config_file = tmp_path / "config.json"
         with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
-            from tokenpak._internal.config import set_config, _load
+            from tokenpak._internal.config import _load, set_config
             set_config("stats_footer", False)
             data = _load()
             assert data["stats_footer"] is False

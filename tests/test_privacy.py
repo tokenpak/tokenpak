@@ -2,9 +2,11 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.fingerprint.privacy", reason="module not available in current build")
 import pytest
-from tokenpak._internal.fingerprint.privacy import apply_privacy, PrivacyLevel
+
+from tokenpak._internal.fingerprint.privacy import PrivacyLevel, apply_privacy
 
 
 class TestPrivacyLevel:
@@ -315,16 +317,16 @@ class TestApplyPrivacyMultipleLevels:
                 {"type": "code", "hash": "def"},
             ],
         }
-        
+
         minimal = apply_privacy(fingerprint, PrivacyLevel.MINIMAL)
         standard = apply_privacy(fingerprint, PrivacyLevel.STANDARD)
         full = apply_privacy(fingerprint, PrivacyLevel.FULL)
-        
+
         # All should be valid dicts
         assert isinstance(minimal, dict)
         assert isinstance(standard, dict)
         assert isinstance(full, dict)
-        
+
         # FULL should be most detailed
         assert full == fingerprint
 
@@ -335,7 +337,7 @@ class TestApplyPrivacyMultipleLevels:
             "total_tokens": 50,
             "segments": [{"type": "text"}],
         }
-        
+
         for level in [PrivacyLevel.MINIMAL, PrivacyLevel.STANDARD, PrivacyLevel.FULL]:
             result = apply_privacy(fingerprint, level)
             assert result["fingerprint_id"] == "important_id"
@@ -358,7 +360,7 @@ class TestApplyPrivacyRealWorldScenarios:
                 {"type": "test", "token_count": 290, "hash": "h3"},
             ],
         }
-        
+
         for level in [PrivacyLevel.MINIMAL, PrivacyLevel.STANDARD, PrivacyLevel.FULL]:
             result = apply_privacy(fingerprint, level)
             assert result["total_tokens"] == 500
@@ -379,7 +381,7 @@ class TestApplyPrivacyRealWorldScenarios:
                 {"type": "paragraph"},
             ],
         }
-        
+
         standard = apply_privacy(fingerprint, PrivacyLevel.STANDARD)
         assert standard["segment_type_distribution"]["paragraph"] == 3
         assert standard["segment_type_distribution"]["code_block"] == 1
