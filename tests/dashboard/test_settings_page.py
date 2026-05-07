@@ -212,7 +212,25 @@ class TestAlertSettingsPersist:
             },
         )
         assert r.status_code == 422
-        assert "Webhook URL edits are disabled" in r.text
+        assert "Webhook URL cannot be saved here" in r.text
+
+    def test_alerts_htmx_rejects_slack_destination_post(self, client):
+        r = client.post(
+            "/settings/claude-code/htmx/alerts",
+            data={
+                "cache_alert_webhook_enabled": "1",
+                "cache_alert_slack_channel": "#tokenpak-alerts",
+                "cache_alert_threshold": "30",
+            },
+        )
+        assert r.status_code == 422
+        assert "Slack destination cannot be saved here" in r.text
+
+    def test_alerts_page_marks_slack_destination_read_only(self, client):
+        r = client.get("/settings/claude-code")
+        assert r.status_code == 200
+        assert "Slack destinations are read-only here" in r.text
+        assert 'name="cache_alert_slack_channel"' not in r.text
 
 
 # ---------------------------------------------------------------------------
@@ -306,26 +324,54 @@ class TestInputValidation:
         })
         assert errors == []
 
-    def test_webhook_url_write_rejected_by_validation(self):
-        errors = validate_settings({"TOKENPAK_CACHE_ALERT_WEBHOOK_URL": "https://example.com/hook"})
+    @pytest.mark.parametrize(
+        ("key", "value"),
+        [
+            ("ANTHROPIC_API_KEY", "sk-ant-test"),
+            ("OPENAI_API_KEY", "sk-test"),
+            ("TOKENPAK_REMOTE_HOST", "https://remote.example.invalid"),
+            ("TOKENPAK_OLLAMA_UPSTREAM", "https://ollama.example.invalid"),
+            ("TOKENPAK_CACHE_ALERT_WEBHOOK_URL", "https://example.com/hook"),
+            ("TOKENPAK_CACHE_ALERT_SLACK_CHANNEL", "#tokenpak-alerts"),
+        ],
+    )
+    def test_sensitive_remote_excluded_keys_rejected_by_validation(self, key, value):
+        errors = validate_settings({key: value})
         assert errors
         assert "dashboard writes are disabled" in errors[0]
 
-    def test_webhook_url_write_aborts_without_creating_file(self, tmp_env_file):
-        ok, errors = write_settings(
-            {"TOKENPAK_CACHE_ALERT_WEBHOOK_URL": "https://example.com/hook"},
-            path=tmp_env_file,
-        )
+    @pytest.mark.parametrize(
+        ("key", "value"),
+        [
+            ("ANTHROPIC_API_KEY", "sk-ant-test"),
+            ("OPENAI_API_KEY", "sk-test"),
+            ("TOKENPAK_REMOTE_HOST", "https://remote.example.invalid"),
+            ("TOKENPAK_OLLAMA_UPSTREAM", "https://ollama.example.invalid"),
+            ("TOKENPAK_CACHE_ALERT_WEBHOOK_URL", "https://example.com/hook"),
+            ("TOKENPAK_CACHE_ALERT_SLACK_CHANNEL", "#tokenpak-alerts"),
+        ],
+    )
+    def test_sensitive_remote_excluded_keys_abort_without_creating_file(self, tmp_env_file, key, value):
+        ok, errors = write_settings({key: value}, path=tmp_env_file)
         assert not ok
         assert errors
         assert not tmp_env_file.exists()
 
-    def test_webhook_url_write_rejected_even_with_skip_validation(self, tmp_env_file):
-        ok, errors = write_settings(
-            {"TOKENPAK_CACHE_ALERT_WEBHOOK_URL": "https://example.com/hook"},
-            path=tmp_env_file,
-            skip_validation=True,
-        )
+    @pytest.mark.parametrize(
+        ("key", "value"),
+        [
+            ("ANTHROPIC_API_KEY", "sk-ant-test"),
+            ("OPENAI_API_KEY", "sk-test"),
+            ("TOKENPAK_REMOTE_HOST", "https://remote.example.invalid"),
+            ("TOKENPAK_OLLAMA_UPSTREAM", "https://ollama.example.invalid"),
+            ("TOKENPAK_CACHE_ALERT_WEBHOOK_URL", "https://example.com/hook"),
+            ("TOKENPAK_CACHE_ALERT_SLACK_CHANNEL", "#tokenpak-alerts"),
+        ],
+    )
+    def test_sensitive_remote_excluded_keys_rejected_even_with_skip_validation(
+        self, tmp_env_file, key, value
+    ):
+        ok, errors = write_settings({key: value}, path=tmp_env_file, skip_validation=True)
         assert not ok
         assert errors
         assert not tmp_env_file.exists()

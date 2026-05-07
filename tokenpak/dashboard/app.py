@@ -668,12 +668,16 @@ def htmx_settings_alerts(
     }
     if cache_alert_webhook_url:
         return HTMLResponse(
-            '<p class="settings-error">Webhook URL edits are disabled in the dashboard; '
-            'edit tokenpak.env manually or request a webhook exception.</p>',
+            '<p class="settings-error">Webhook URL cannot be saved here. '
+            'Configure remote alert endpoints outside the dashboard.</p>',
             status_code=422,
         )
     if cache_alert_slack_channel:
-        updates["TOKENPAK_CACHE_ALERT_SLACK_CHANNEL"] = cache_alert_slack_channel
+        return HTMLResponse(
+            '<p class="settings-error">Slack destination cannot be saved here. '
+            'Configure alert delivery outside the dashboard.</p>',
+            status_code=422,
+        )
 
     errors = validate_settings(updates)
     if errors:
