@@ -70,10 +70,18 @@ _PROFILES = frozenset({
     "claude-code-sdk", "claude-code-ide", "claude-code-cron",
 })
 
-# Sue's CCI-13 carve-out permits local-admin writes only. Webhook URLs
-# point at remote hosts, so the dashboard persistence layer must not create
-# or update them without an explicit architecture exception.
-_FORBIDDEN_SETTINGS_WRITES = frozenset({"TOKENPAK_CACHE_ALERT_WEBHOOK_URL"})
+# Sue's CCI-13 carve-out permits local-admin writes only. Sensitive
+# credentials, provider/remote endpoints, and remote alert destinations must
+# not be created or updated through the dashboard settings route without an
+# explicit architecture exception.
+_FORBIDDEN_SETTINGS_WRITES = frozenset({
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "TOKENPAK_CACHE_ALERT_SLACK_CHANNEL",
+    "TOKENPAK_CACHE_ALERT_WEBHOOK_URL",
+    "TOKENPAK_OLLAMA_UPSTREAM",
+    "TOKENPAK_REMOTE_HOST",
+})
 
 
 def _validate_bool(key: str, value: str) -> None:
