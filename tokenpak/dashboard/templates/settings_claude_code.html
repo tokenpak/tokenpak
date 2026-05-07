@@ -255,11 +255,9 @@
           </div>
         </div>
         <div class="form-row">
-          <div class="form-group">
-            <label for="cache_alert_slack_channel">Slack channel (optional)</label>
-            <input type="text" id="cache_alert_slack_channel" name="cache_alert_slack_channel"
-                   placeholder="#tokenpak-alerts"
-                   value="{{ cache_alert_slack_channel }}">
+          <div class="form-group" style="flex:2">
+            <label>Slack destination</label>
+            <p class="field-help">Slack destinations are read-only here. Configure alert delivery outside the dashboard.</p>
           </div>
           <button type="submit" class="btn-save">Save</button>
         </div>
