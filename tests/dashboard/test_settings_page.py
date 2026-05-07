@@ -202,6 +202,18 @@ class TestAlertSettingsPersist:
             )
         assert r.status_code == 200
 
+    def test_alerts_htmx_rejects_webhook_url_post(self, client):
+        r = client.post(
+            "/settings/claude-code/htmx/alerts",
+            data={
+                "cache_alert_webhook_enabled": "1",
+                "cache_alert_webhook_url": "https://example.com/hook",
+                "cache_alert_threshold": "30",
+            },
+        )
+        assert r.status_code == 422
+        assert "Webhook URL edits are disabled" in r.text
+
 
 # ---------------------------------------------------------------------------
 # 3. Atomic-write safety
@@ -293,6 +305,30 @@ class TestInputValidation:
             "TOKENPAK_CACHE_ALERT_THRESHOLD": "50.0",
         })
         assert errors == []
+
+    def test_webhook_url_write_rejected_by_validation(self):
+        errors = validate_settings({"TOKENPAK_CACHE_ALERT_WEBHOOK_URL": "https://example.com/hook"})
+        assert errors
+        assert "dashboard writes are disabled" in errors[0]
+
+    def test_webhook_url_write_aborts_without_creating_file(self, tmp_env_file):
+        ok, errors = write_settings(
+            {"TOKENPAK_CACHE_ALERT_WEBHOOK_URL": "https://example.com/hook"},
+            path=tmp_env_file,
+        )
+        assert not ok
+        assert errors
+        assert not tmp_env_file.exists()
+
+    def test_webhook_url_write_rejected_even_with_skip_validation(self, tmp_env_file):
+        ok, errors = write_settings(
+            {"TOKENPAK_CACHE_ALERT_WEBHOOK_URL": "https://example.com/hook"},
+            path=tmp_env_file,
+            skip_validation=True,
+        )
+        assert not ok
+        assert errors
+        assert not tmp_env_file.exists()
 
     def test_write_aborts_on_invalid_input(self, tmp_env_file):
         ok, errors = write_settings(
