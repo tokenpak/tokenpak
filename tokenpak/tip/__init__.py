@@ -29,6 +29,7 @@ Exported surface:
 from __future__ import annotations
 
 from tokenpak.tip.capabilities import (
+    MULTIPAK_CAPABILITIES,
     TIP_CACHE_PROMPT_KEY_PRESERVED,
     TIP_CACHE_PROVIDER_AWARE,
     TIP_CACHE_PROXY_MANAGED,
@@ -36,9 +37,19 @@ from tokenpak.tip.capabilities import (
     TIP_CACHE_TTL_ORDERING,
     TIP_CAPSULES_V1,
     TIP_COMPRESSION_V1,
+    TIP_CONTEXT_COVERAGE,
+    TIP_CONTEXT_HANDOFF,
+    TIP_CONTEXT_PACKAGE,
+    TIP_CONTEXT_POLICY,
+    TIP_CONTEXT_RESUME,
     TIP_FIDELITY_POLICY_V1,
     TIP_INTENT_CLASSIFICATION_V1,
     TIP_INTENT_SUGGESTION_V1,
+    TIP_PAK_CAPTURE,
+    TIP_PAK_HYDRATE,
+    TIP_PAK_INDEX,
+    TIP_PAK_PROMOTE,
+    TIP_PAK_RECALL,
     TIP_ROUTE_CLASS_V1,
     TIP_TELEMETRY_ATTRIBUTION_V1,
     TIP_TOOL_SCHEMA_STABILITY_V1,
@@ -46,8 +57,37 @@ from tokenpak.tip.capabilities import (
 )
 from tokenpak.tip.cache_contract import CacheMissReason, CachePolicy
 from tokenpak.tip.compression_contract import CompressionPolicy, ProtectedSpanType
+from tokenpak.tip.context_package import (
+    ContextLevel,
+    ContextPackage,
+    ContextScope,
+    CoverageConfidence,
+    CoverageReport,
+    CoverageState,
+    PolicyDecision,
+    context_level_label,
+    parse_context_level,
+)
 from tokenpak.tip.fidelity_contract import FidelityPolicy
 from tokenpak.tip.optimization_contract import OptimizationContract
+from tokenpak.tip.pak import (
+    Pak,
+    PakAnchor,
+    PakAuthority,
+    PakConfidence,
+    PakPrivacy,
+    PakPrivacyClass,
+    PakRelationships,
+    PakRetention,
+    PakRetentionPolicy,
+    PakScope,
+    PakSource,
+    PakSourceType,
+    PakStatus,
+    PakSubtype,
+    all_subtypes,
+    default_retention_for,
+)
 from tokenpak.tip.route_contract import OptimizationRouteClass
 from tokenpak.tip.telemetry_contract import SavingsSource, TelemetryPolicy
 from tokenpak.tip.trace_contract import (
@@ -75,12 +115,35 @@ __all__ = [
     "TIP_TOOL_SCHEMA_STABILITY_V1",
     "TIP_CAPSULES_V1",
     "ALL_OPTIMIZATION_CAPABILITIES",
+    # MultiPak (Std 32):
+    "TIP_PAK_CAPTURE",
+    "TIP_PAK_INDEX",
+    "TIP_PAK_RECALL",
+    "TIP_PAK_HYDRATE",
+    "TIP_PAK_PROMOTE",
+    "TIP_CONTEXT_PACKAGE",
+    "TIP_CONTEXT_HANDOFF",
+    "TIP_CONTEXT_RESUME",
+    "TIP_CONTEXT_COVERAGE",
+    "TIP_CONTEXT_POLICY",
+    "MULTIPAK_CAPABILITIES",
     # Enums
     "OptimizationRouteClass",
     "FidelityPolicy",
     "CacheMissReason",
     "ProtectedSpanType",
     "SavingsSource",
+    # MultiPak enums:
+    "PakSubtype",
+    "PakAuthority",
+    "PakStatus",
+    "PakConfidence",
+    "PakRetention",
+    "PakSourceType",
+    "PakPrivacyClass",
+    "ContextLevel",
+    "CoverageState",
+    "CoverageConfidence",
     # Dataclasses
     "CachePolicy",
     "CompressionPolicy",
@@ -92,4 +155,21 @@ __all__ = [
     "CompressionTrace",
     "Recommendation",
     "OptimizationTrace",
+    # MultiPak dataclasses:
+    "Pak",
+    "PakAnchor",
+    "PakPrivacy",
+    "PakRelationships",
+    "PakRetentionPolicy",
+    "PakScope",
+    "PakSource",
+    "ContextPackage",
+    "ContextScope",
+    "CoverageReport",
+    "PolicyDecision",
+    # MultiPak helpers:
+    "all_subtypes",
+    "default_retention_for",
+    "context_level_label",
+    "parse_context_level",
 ]
