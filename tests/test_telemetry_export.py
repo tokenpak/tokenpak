@@ -91,7 +91,24 @@ class TestParseDate:
 # ---------------------------------------------------------------------------
 # TelemetryStorage.query_requests
 # ---------------------------------------------------------------------------
-
+#
+# TSR-05j / WS-E (2026-05-08) — class-level skip. `query_requests`
+# was part of the never-implemented TelemetryExporter (per the
+# `_EXPORTER_REMOVED` flag at the top of this file). The current
+# `TelemetryStorage` (alias for `TelemetryDB`) doesn't expose
+# `query_requests`; nor does `_make_storage()` work — the file's
+# `_make_storage` calls `storage._conn()` but the canonical class
+# has no `_conn` accessor with that signature (visible failure:
+# "TypeError: function takes exactly 1 argument (0 given)").
+#
+# These tests share the same fate as the already-skipped
+# TestParseDate class: they exercise an exporter surface that never
+# shipped. Skip with the existing `_EXPORTER_REMOVED` reason for
+# consistency.
+@pytest.mark.skipif(
+    _EXPORTER_REMOVED,
+    reason="TelemetryExporter removed; query_requests + _make_storage no longer functional",
+)
 class TestQueryRequests:
     def test_no_filters_returns_all(self):
         s = _make_storage(_row("r1", "2026-03-01"), _row("r2", "2026-03-10"))
