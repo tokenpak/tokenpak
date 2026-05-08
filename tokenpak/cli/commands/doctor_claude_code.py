@@ -534,7 +534,9 @@ def _check_pythonpath_drift() -> CheckResult:
         )
 
     # No systemd unit — fall back to home-directory heuristic
-    # The 2026-04-08 calibot incident: PYTHONPATH referenced /home/sue/ instead of current user
+    # 2026-04-08 PYTHONPATH-drift incident: PYTHONPATH referenced /home/<other-user>/
+    # instead of the current user's home, causing imports to silently load
+    # the wrong codebase. This check guards against that recurrence.
     if proc_pythonpath and home_str not in proc_pythonpath:
         wrong_user = re.search(r"/home/(\w+)/", proc_pythonpath)
         wrong_name = wrong_user.group(1) if wrong_user else "unknown"

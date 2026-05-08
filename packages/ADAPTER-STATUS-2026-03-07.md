@@ -1,6 +1,6 @@
 # TokenPak Adapter Installation Status — 2026-03-07
 
-**System:** Cali (CaliBOT, /home/cali/tokenpak)
+**System:** Cali (<dev-host>, /home/<user>/tokenpak)
 **Date:** 2026-03-07 17:48 PST
 **Verified:** Real installation, real imports, real test runs
 
@@ -14,12 +14,12 @@ pip3 list | grep tokenpak
 
 Output:
 ```
-autogen-tokenpak                         0.1.0           /home/cali/tokenpak/packages/autogen-tokenpak
-crewai-tokenpak                          0.1.0           /home/cali/tokenpak/packages/crewai-tokenpak
-langchain-tokenpak                       0.1.0           /home/cali/tokenpak/packages/langchain-tokenpak
-langfuse-tokenpak                        0.1.0           /home/cali/tokenpak/packages/langfuse-tokenpak
-llamaindex-tokenpak                      0.1.0           /home/cali/tokenpak/packages/llamaindex-tokenpak
-tokenpak                                 1.0.0rc1        /home/cali/tokenpak
+autogen-tokenpak                         0.1.0           /home/<user>/tokenpak/packages/autogen-tokenpak
+crewai-tokenpak                          0.1.0           /home/<user>/tokenpak/packages/crewai-tokenpak
+langchain-tokenpak                       0.1.0           /home/<user>/tokenpak/packages/langchain-tokenpak
+langfuse-tokenpak                        0.1.0           /home/<user>/tokenpak/packages/langfuse-tokenpak
+llamaindex-tokenpak                      0.1.0           /home/<user>/tokenpak/packages/llamaindex-tokenpak
+tokenpak                                 1.0.0rc1        /home/<user>/tokenpak
 ```
 
 ## Import Verification

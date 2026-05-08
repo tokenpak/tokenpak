@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# sync-check: 2026-04-15 — origin remote updated to suewu:~/tokenpak-origin.git
+# sync-check: 2026-04-15 — origin remote updated to <shared-host>:~/tokenpak-origin.git
 """Tests for alert delivery channels (webhook + Slack).
 
 Uses a local stub HTTP server instead of httpbin.org to avoid flakiness.
