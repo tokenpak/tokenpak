@@ -22,10 +22,9 @@ See:
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from enum import Enum, IntEnum
 from typing import Any, Mapping, Optional
-
 
 # ---------------------------------------------------------------------------
 # Delivery levels and coverage states

@@ -28,7 +28,9 @@ Exported surface:
 
 from __future__ import annotations
 
+from tokenpak.tip.cache_contract import CacheMissReason, CachePolicy
 from tokenpak.tip.capabilities import (
+    ALL_OPTIMIZATION_CAPABILITIES,
     MULTIPAK_CAPABILITIES,
     TIP_CACHE_PROMPT_KEY_PRESERVED,
     TIP_CACHE_PROVIDER_AWARE,
@@ -53,9 +55,7 @@ from tokenpak.tip.capabilities import (
     TIP_ROUTE_CLASS_V1,
     TIP_TELEMETRY_ATTRIBUTION_V1,
     TIP_TOOL_SCHEMA_STABILITY_V1,
-    ALL_OPTIMIZATION_CAPABILITIES,
 )
-from tokenpak.tip.cache_contract import CacheMissReason, CachePolicy
 from tokenpak.tip.compression_contract import CompressionPolicy, ProtectedSpanType
 from tokenpak.tip.context_package import (
     ContextLevel,

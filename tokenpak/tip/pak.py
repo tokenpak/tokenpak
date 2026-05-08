@@ -38,7 +38,6 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Iterable, Mapping, Optional
 
-
 # ---------------------------------------------------------------------------
 # Subtype, authority, status, confidence, retention enums
 # ---------------------------------------------------------------------------
