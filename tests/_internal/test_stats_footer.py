@@ -24,17 +24,15 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
+import pytest  # noqa: F401 — kept for downstream pytest fixtures + markers
 
-# WS-A residual import guard — TSR-01-followup.
-# tokenpak._internal is the canonical closed-source namespace per
-# Std 25 §1.1 + Std 32 §1.3 (slim OSS surface excludes
-# `tokenpak._internal/*`). Tests in this file reach into it via the
-# stats-footer integration test; skip cleanly on slim install.
-pytest.importorskip(
-    "tokenpak._internal",
-    reason="tokenpak._internal is closed-source per Std 25 §1.1 — absent on slim OSS",
-)
+# TSR-07 / WS-F (2026-05-08) — this file lives in tests/_internal/.
+# The directory is excluded from the default OSS pytest collection via
+# pyproject.toml `norecursedirs`, so the prior TSR-01-followup
+# `pytest.importorskip("tokenpak._internal")` module-level guard is
+# now redundant and removed. To run, invoke `pytest tests/_internal/`
+# explicitly on an install that provides `tokenpak._internal`
+# (Pro daemon-equipped or dev-with-extras). See `tests/_internal/README.md`.
 
 from tokenpak.telemetry.proxy_collector import RequestStats, TelemetryCollector
 from tokenpak.telemetry.footer import (

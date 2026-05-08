@@ -21,16 +21,12 @@ import time
 from http.client import HTTPConnection
 from pathlib import Path
 
-import pytest
+import pytest  # noqa: F401 — kept for downstream pytest fixtures + markers
 
-# WS-A residual import guard — TSR-01-followup.
-# Budget-enforcement tests reach into tokenpak._internal during the
-# standalone-proxy import path (closed-source per Std 25 §1.1).
-# Skip cleanly on slim install.
-pytest.importorskip(
-    "tokenpak._internal",
-    reason="tokenpak._internal is closed-source per Std 25 §1.1 — absent on slim OSS",
-)
+# TSR-07 / WS-F (2026-05-08) — relocated to tests/_internal/proxy/.
+# Default OSS gate excludes this directory via pyproject.toml
+# `norecursedirs`; the previous TSR-01-followup module-level
+# importorskip is no longer needed. See tests/_internal/README.md.
 
 # ---------------------------------------------------------------------------
 # Repo root + path to the standalone proxy.py
