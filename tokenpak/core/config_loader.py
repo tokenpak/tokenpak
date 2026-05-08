@@ -383,6 +383,22 @@ failover:
         claude-sonnet-4-5: gemini-1.5-pro
       credential_env: GOOGLE_API_KEY
 
+# TIP Spend Guard (proxy-side pre-send circuit breaker, available v1.5.1+)
+# Standard 29 governs the wire contract; docs/spend-guard.md is the user guide.
+# Every key has a TOKENPAK_SPEND_GUARD_* env-var counterpart.
+spend_guard:
+  enabled: true                       # global on/off
+  warn_tokens: 100000                 # advisory band — no UX surface yet
+  warn_cost_usd: 2.0
+  block_tokens: 500000                # holds request, prompts user
+  block_cost_usd: 10.0
+  hard_block_tokens: 1000000          # immutable ceiling
+  hard_block_cost_usd: 50.0
+  session_block_cost_usd: 10.0        # death-by-1000-cuts defense
+  session_window_seconds: 3600        # 1h sliding window
+  pending_ttl_seconds: 600            # held requests expire after 10 min
+  audit_db_path: ~/.tokenpak/spend_guard.db
+
 # Custom providers — register any OpenAI/Anthropic/Google-compatible endpoint.
 # Each entry becomes a routable provider with full compression/caching pipeline.
 # providers:

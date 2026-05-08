@@ -145,6 +145,59 @@ class CircuitOpenError(ProxyError):
         self.retry_after = retry_after
 
 
+class SpendGuardBlocked(ProxyError):
+    """Request held by TIP Spend Guard before provider send. (TP-ESG01)
+
+    Recoverable — the caller can release with Yes/No or ``[TIP: allow=once]``.
+    See standards/29-spend-guard-agent-contract.md for the structured-error
+    contract agents must honor.
+    """
+
+    error_code = "TP-ESG01"
+
+    def __init__(
+        self,
+        message: str = "TIP Spend Guard blocked this request before provider send.",
+        *,
+        pending_id: str | None = None,
+        projected_cost_usd: float | None = None,
+        projected_tokens: int | None = None,
+        threshold_hit: str | None = None,
+    ) -> None:
+        detail = {
+            "pending_id": pending_id,
+            "projected_cost_usd": projected_cost_usd,
+            "projected_tokens": projected_tokens,
+            "threshold_hit": threshold_hit,
+            "retryable": True,
+            "recovery_status": "user_action_required",
+        }
+        super().__init__(message, detail=detail, error_type="tokenpak_spend_guard_blocked")
+
+
+class SpendGuardHardBlocked(ProxyError):
+    """Hard-block ceiling exceeded — cannot be released. (TP-ESG02)"""
+
+    error_code = "TP-ESG02"
+
+    def __init__(
+        self,
+        message: str = "TIP Spend Guard hard-blocked this request.",
+        *,
+        projected_cost_usd: float | None = None,
+        projected_tokens: int | None = None,
+        threshold_hit: str | None = None,
+    ) -> None:
+        detail = {
+            "projected_cost_usd": projected_cost_usd,
+            "projected_tokens": projected_tokens,
+            "threshold_hit": threshold_hit,
+            "retryable": False,
+            "recovery_status": "terminally_blocked",
+        }
+        super().__init__(message, detail=detail, error_type="tokenpak_spend_guard_hard_blocked")
+
+
 class ProxyStartupError(ProxyError):
     """Error during proxy server startup. (TP-E100)"""
 

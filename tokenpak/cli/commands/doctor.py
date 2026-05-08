@@ -805,6 +805,55 @@ def run_doctor(
     else:
         _record("failover_config", "pass", "Failover config     not configured (optional)")
 
+    # Spend Guard (TIP Spend Guard — proxy-side circuit breaker)
+    # Ref: standards/29-spend-guard-agent-contract.md, docs/spend-guard.md
+    try:
+        from tokenpak.proxy.spend_guard.policy import load_config as _load_sg_cfg
+        sg = _load_sg_cfg()
+        if sg.enabled:
+            sg_audit = Path(os.path.expanduser(sg.audit_db_path))
+            audit_present = "audit-db present" if sg_audit.exists() else "audit-db not yet created"
+            _record(
+                "spend_guard",
+                "pass",
+                (
+                    f"Spend Guard         enabled — block=${sg.block_cost_usd:g}/"
+                    f"{sg.block_tokens // 1000}K, hard=${sg.hard_block_cost_usd:g}/"
+                    f"{sg.hard_block_tokens // 1000_000}M, "
+                    f"session=${sg.session_block_cost_usd:g}/"
+                    f"{sg.session_window_seconds // 60}min ({audit_present})"
+                ),
+                detail=(
+                    f"warn={sg.warn_tokens}/${sg.warn_cost_usd}, "
+                    f"block={sg.block_tokens}/${sg.block_cost_usd}, "
+                    f"hard_block={sg.hard_block_tokens}/${sg.hard_block_cost_usd}, "
+                    f"session_block_cost_usd=${sg.session_block_cost_usd} "
+                    f"window={sg.session_window_seconds}s, "
+                    f"pending_ttl={sg.pending_ttl_seconds}s, "
+                    f"audit_db={sg.audit_db_path}"
+                ),
+            )
+        else:
+            _record(
+                "spend_guard",
+                "warn",
+                "Spend Guard         disabled — runaway requests will not be blocked pre-send",
+                detail="Set spend_guard.enabled=true in ~/.tokenpak/config.yaml or unset TOKENPAK_SPEND_GUARD_ENABLED=0",
+            )
+    except ImportError:
+        _record(
+            "spend_guard",
+            "warn",
+            "Spend Guard         module not available — upgrade to TokenPak v1.5.1+",
+        )
+    except Exception as _sg_e:
+        _record(
+            "spend_guard",
+            "warn",
+            f"Spend Guard         could not load config: {type(_sg_e).__name__}",
+            detail=str(_sg_e),
+        )
+
     # Required dirs
     required_dirs = [tokenpak_dir / "cache"]
     missing_dirs = [d for d in required_dirs if not d.exists()]

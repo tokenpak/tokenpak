@@ -97,17 +97,39 @@ class ConfigValidator:
         return self.errors
 
     def _validate_required_fields(self, config: Dict[str, Any]) -> None:
-        """Check that all required fields are present or set via environment variables."""
+        """Check that all required fields are present or set via environment variables.
+
+        ``api_keys`` is satisfied by ANY of:
+          - present in the config dict
+          - one of the canonical env vars set
+            (``ANTHROPIC_API_KEY``, ``OPENAI_API_KEY``, ``GOOGLE_API_KEY``,
+            ``GEMINI_API_KEY``)
+          - byte-passthrough mode is in use (the proxy never injects its own
+            keys — caller-supplied auth is forwarded verbatim, so the field
+            is not actually required for runtime operation).
+
+        The previous implementation defined ``_has_env_api_key`` but never
+        called it, leaving the env-var bypass advertised in the suggestion
+        message dead code. Fixed 2026-05-07.
+        """
         for field in self.REQUIRED_FIELDS:
             if field not in config:
                 if field == "api_keys":
+                    # Honor the documented env-var bypass.
+                    if self._has_env_api_key():
+                        continue
                     self.errors.append(
                         ConfigValidationError(
                             field=field,
-                            expected="present in config",
-                            actual="missing",
+                            expected="present in config or env var set",
+                            actual="missing (and no env var set)",
                             message="Required field 'api_keys' is missing",
-                            suggestion='Add api_keys to config (e.g., {"anthropic": "sk-..."}) or set ANTHROPIC_API_KEY env var',
+                            suggestion=(
+                                'Add api_keys to config (e.g., {"anthropic": "sk-..."}), '
+                                'set ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY '
+                                'env var, or — if using byte-passthrough — use a placeholder '
+                                'value (the proxy forwards caller-supplied auth verbatim).'
+                            ),
                         )
                     )
                 else:

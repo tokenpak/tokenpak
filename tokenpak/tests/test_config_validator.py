@@ -82,16 +82,44 @@ class TestRequiredFields:
         errors = v.validate(MINIMAL_VALID)
         assert errors == []
 
-    def test_missing_api_keys_returns_error(self):
+    def test_missing_api_keys_returns_error(self, monkeypatch):
+        # Isolate from the dev environment — clear any provider env vars.
+        for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
+            monkeypatch.delenv(var, raising=False)
         v = make_validator()
         errors = v.validate({})
         assert any(e.field == "api_keys" for e in errors)
 
-    def test_missing_api_keys_suggestion_mentions_env(self):
+    def test_missing_api_keys_suggestion_mentions_env(self, monkeypatch):
+        for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
+            monkeypatch.delenv(var, raising=False)
         v = make_validator()
         errors = v.validate({})
         err = next(e for e in errors if e.field == "api_keys")
         assert "ANTHROPIC_API_KEY" in err.suggestion or "api_keys" in err.suggestion
+
+    def test_env_var_bypasses_api_keys_requirement(self, monkeypatch):
+        """Regression: prior to 2026-05-07 the validator advertised an
+        env-var bypass that was never wired in. Setting ANTHROPIC_API_KEY
+        (or any provider key) MUST silence the missing-api_keys error."""
+        for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-not-used")
+        v = make_validator()
+        errors = v.validate({})
+        assert not any(e.field == "api_keys" for e in errors)
+
+    def test_env_var_bypass_each_provider(self, monkeypatch):
+        """Each canonical provider env var must satisfy the requirement."""
+        for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
+            for clear in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
+                monkeypatch.delenv(clear, raising=False)
+            monkeypatch.setenv(var, "test-value")
+            v = make_validator()
+            errors = v.validate({})
+            assert not any(e.field == "api_keys" for e in errors), (
+                f"Setting {var} should have bypassed the api_keys requirement"
+            )
 
 
 # ---------------------------------------------------------------------------
