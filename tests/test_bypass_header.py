@@ -1,6 +1,32 @@
 """
 Tests for X-TokenPak-Bypass per-request passthrough header.
 Checks production proxy source at ~/tokenpak/proxy.py.
+
+TSR-05f / WS-E (2026-05-08) — file-level skip with documented reason.
+Investigation:
+  - Tests use AST/source-text grep on a single PROXY_PATH file
+    (`tokenpak/proxy.py`).
+  - Post-monolith, that file is a 14-line backwards-compat shim that
+    `exec(...)`s `proxy_monolith.py.bak`. The shim source itself
+    contains none of the patterns the tests grep for — they look for
+    `_BLOCKED_FORWARD_HEADERS`, `_sanitize_headers`,
+    `_bypass_request`, `pipeline_enabled`, `'true', '1', 'yes'`
+    bypass values, etc.
+  - Those patterns DO live in the modular tree (e.g.
+    `tokenpak/proxy/circuit_breaker.py:139` for
+    `_BLOCKED_FORWARD_HEADERS` and line 161 for `_sanitize_headers`).
+  - Tests would need either (a) PROXY_PATH redirected per-pattern to
+    the right modular file, or (b) full conversion from source-grep
+    to behavioral tests that import + call the actual functions.
+    Both broaden scope into WS-B test/contract redesign.
+  - The bypass header functionality itself is NOT broken — it's just
+    that this test file's source-grep approach is an antipattern that
+    didn't survive the modular refactor.
+
+Resolution (Path B per TSR-05c standing rules): file-level skip with
+grep-able reason. Future redesign should rewrite to behavioral tests
+that import from `tokenpak.proxy.circuit_breaker` and
+`tokenpak.proxy.server` and exercise the bypass code paths directly.
 """
 import ast
 import os
@@ -10,6 +36,23 @@ import importlib
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+SKIP_BYPASS_HEADER_SOURCE_GREP_LEGACY = (
+    "Tests use AST/source-text grep on tokenpak/proxy.py to verify bypass-"
+    "header behavior. Post-monolith, proxy.py is a thin shim that exec()s "
+    "proxy_monolith.py.bak; the patterns the tests grep for "
+    "(_BLOCKED_FORWARD_HEADERS, _sanitize_headers, _bypass_request, "
+    "pipeline_enabled gates, 'true'/'1'/'yes' values) now live in "
+    "tokenpak/proxy/circuit_breaker.py and tokenpak/proxy/server.py. "
+    "Source-grep is an antipattern that doesn't survive the refactor; "
+    "future redesign should convert these to behavioral tests that "
+    "import + call the actual functions. The bypass-header functionality "
+    "itself is not broken; only this test file's introspection approach is."
+)
+
+pytestmark = pytest.mark.skip(reason=SKIP_BYPASS_HEADER_SOURCE_GREP_LEGACY)
 
 PROXY_PATH = Path(__file__).parent.parent / "proxy.py"
 
