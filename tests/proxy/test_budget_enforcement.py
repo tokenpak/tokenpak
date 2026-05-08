@@ -23,6 +23,15 @@ from pathlib import Path
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# Budget-enforcement tests reach into tokenpak._internal during the
+# standalone-proxy import path (closed-source per Std 25 §1.1).
+# Skip cleanly on slim install.
+pytest.importorskip(
+    "tokenpak._internal",
+    reason="tokenpak._internal is closed-source per Std 25 §1.1 — absent on slim OSS",
+)
+
 # ---------------------------------------------------------------------------
 # Repo root + path to the standalone proxy.py
 # ---------------------------------------------------------------------------

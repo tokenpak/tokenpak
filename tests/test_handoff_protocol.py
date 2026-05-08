@@ -187,7 +187,14 @@ def test_handoff_wire_metadata():
 # ---------------------------------------------------------------------------
 
 def test_crewai_prepare_receive_wire(tmp_path):
-    from crewai_tokenpak import TokenPakHandoff
+    # WS-A residual import guard — TSR-01-followup. crewai_tokenpak is an
+    # optional companion package; only the 3 crewai-specific tests in this
+    # file need it. Other handoff-protocol tests run normally.
+    crewai_tokenpak = pytest.importorskip(
+        "crewai_tokenpak",
+        reason="crewai_tokenpak optional companion — install separately to exercise",
+    )
+    TokenPakHandoff = crewai_tokenpak.TokenPakHandoff
     from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf")
     h = TokenPakHandoff(budget=1000, manager=mgr)
@@ -206,7 +213,11 @@ def test_crewai_prepare_receive_wire(tmp_path):
 
 
 def test_crewai_legacy_dict_api():
-    from crewai_tokenpak import TokenPakHandoff
+    crewai_tokenpak = pytest.importorskip(
+        "crewai_tokenpak",
+        reason="crewai_tokenpak optional companion — install separately to exercise",
+    )
+    TokenPakHandoff = crewai_tokenpak.TokenPakHandoff
     h = TokenPakHandoff(budget=500)
     state = {"a": 1, "b": 2}
     out = h.receive_handoff(state)
@@ -215,7 +226,11 @@ def test_crewai_legacy_dict_api():
 
 def test_crewai_unknown_agents_no_crash(tmp_path):
     """Unknown agents: wire still produced, HandoffManager just skips."""
-    from crewai_tokenpak import TokenPakHandoff
+    crewai_tokenpak = pytest.importorskip(
+        "crewai_tokenpak",
+        reason="crewai_tokenpak optional companion — install separately to exercise",
+    )
+    TokenPakHandoff = crewai_tokenpak.TokenPakHandoff
     from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf2")
     h = TokenPakHandoff(budget=1000, manager=mgr)

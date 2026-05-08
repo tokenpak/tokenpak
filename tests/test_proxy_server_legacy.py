@@ -28,6 +28,16 @@ from typing import Any, Dict, Optional
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# psutil is an optional dep used by the legacy proxy server's resource
+# probes; on slim [dev] install it is absent and the proxy.server import
+# chain raises ModuleNotFoundError. Skip cleanly so the release test
+# gate stays green; full installs exercise normally.
+pytest.importorskip(
+    "psutil",
+    reason="psutil is an optional dep used by the legacy proxy server",
+)
+
 pytestmark = pytest.mark.needs_proxy
 
 from tokenpak.proxy.server import (

@@ -49,8 +49,12 @@ def test_proxy_server_import():
 # 2. Config
 # ---------------------------------------------------------------------------
 
+# WS-A residual import guard — TSR-01-followup. tokenpak._internal is the
+# closed-source namespace per Std 25 §1.1; tests below probe it. Skip
+# them cleanly on slim OSS install — full installs exercise normally.
 @pytest.mark.quick
 def test_config_returns_dict():
+    pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_config
     config = get_config()
     assert isinstance(config, dict)
@@ -58,18 +62,21 @@ def test_config_returns_dict():
 
 @pytest.mark.quick
 def test_config_debug_flag_is_bool():
+    pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_debug_enabled
     assert isinstance(get_debug_enabled(), bool)
 
 
 @pytest.mark.quick
 def test_config_metrics_flag_is_bool():
+    pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_metrics_enabled
     assert isinstance(get_metrics_enabled(), bool)
 
 
 @pytest.mark.quick
 def test_config_consistent_across_calls():
+    pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_config
     c1 = get_config()
     c2 = get_config()
@@ -226,6 +233,7 @@ def test_savings_payload_structure():
 @pytest.mark.quick
 def test_vault_index_structure_valid(tmp_path: Path):
     """VaultHealth parses a well-formed index.json without errors."""
+    pytest.importorskip("tokenpak.vault_health", reason="vault_health absent on slim OSS")
     from tokenpak.vault_health import VaultHealth, IndexStatus
 
     vault_root = tmp_path
@@ -249,6 +257,7 @@ def test_vault_index_structure_valid(tmp_path: Path):
 @pytest.mark.quick
 def test_vault_index_missing_reports_missing(tmp_path: Path):
     """VaultHealth reports MISSING when no index.json exists."""
+    pytest.importorskip("tokenpak.vault_health", reason="vault_health absent on slim OSS")
     from tokenpak.vault_health import VaultHealth, IndexStatus
 
     vault_root = tmp_path
@@ -286,6 +295,7 @@ def test_credential_empty_string_fails():
 
 @pytest.mark.quick
 def test_config_debug_default_is_false_or_bool():
+    pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_debug_enabled
     val = get_debug_enabled()
     assert val in (True, False)

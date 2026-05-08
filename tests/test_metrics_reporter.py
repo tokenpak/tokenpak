@@ -20,6 +20,15 @@ from unittest import mock
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# The metrics reporter tests transitively reach into tokenpak._internal
+# (closed-source per Std 25 §1.1 + Std 32 §1.3). On slim [dev] install
+# the per-test imports raise ModuleNotFoundError. Skip cleanly.
+pytest.importorskip(
+    "tokenpak._internal",
+    reason="tokenpak._internal is closed-source per Std 25 §1.1 — absent on slim OSS",
+)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

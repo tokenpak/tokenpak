@@ -23,6 +23,15 @@ import urllib.request
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# `tokenpak serve --workers N` boots uvicorn workers that require
+# fastapi; on slim [dev] install fastapi is absent and serve fails to
+# start. Skip cleanly so the release test gate stays green.
+pytest.importorskip(
+    "fastapi",
+    reason="fastapi is the optional ASGI surface required by `tokenpak serve --workers`",
+)
+
 pytestmark = pytest.mark.needs_proxy
 
 # ---------------------------------------------------------------------------

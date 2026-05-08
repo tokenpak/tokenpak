@@ -15,6 +15,16 @@ from unittest.mock import patch
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# tokenpak.enterprise (policy engine, SLA router, audit/compliance/SLA
+# CLI commands) is not part of the slim OSS surface. On slim [dev]
+# install every test in this file fails at first sub-import. Skip
+# cleanly so the release test gate stays green.
+pytest.importorskip(
+    "tokenpak.enterprise",
+    reason="tokenpak.enterprise (policy/SLA/audit) not part of slim OSS surface",
+)
+
 
 # ---------------------------------------------------------------------------
 # 1. Enterprise module interfaces are importable

@@ -5,6 +5,15 @@ import pytest
 from io import StringIO
 from unittest.mock import patch
 
+# WS-A residual import guard — TSR-01-followup.
+# tokenpak.tokens is referenced transitively from the replay CLI imports
+# (via tokenpak.cli's lazy module wiring); it is not part of the slim
+# OSS surface. Skip cleanly when absent.
+pytest.importorskip(
+    "tokenpak.tokens",
+    reason="tokenpak.tokens not part of slim OSS surface (replay-CLI dep)",
+)
+
 from tokenpak.telemetry.replay import ReplayEntry, ReplayStore
 from tokenpak.cli import build_parser, cmd_replay_list, cmd_replay_show, cmd_replay_run
 

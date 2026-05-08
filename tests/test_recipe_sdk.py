@@ -31,7 +31,19 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-import yaml
+
+# WS-A residual import guard — TSR-01-followup.
+# tokenpak.recipe_sdk is not part of the slim OSS surface; tests reach
+# into it for scaffold/validate/test/benchmark behavior. PyYAML is also
+# an optional dep used by the recipe fixture writer.
+pytest.importorskip(
+    "tokenpak.recipe_sdk",
+    reason="recipe SDK not part of slim OSS surface — install full extras to exercise",
+)
+yaml = pytest.importorskip(
+    "yaml",
+    reason="PyYAML optional dep required by recipe-fixture writer",
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

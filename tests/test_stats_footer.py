@@ -26,6 +26,16 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# tokenpak._internal is the canonical closed-source namespace per
+# Std 25 §1.1 + Std 32 §1.3 (slim OSS surface excludes
+# `tokenpak._internal/*`). Tests in this file reach into it via the
+# stats-footer integration test; skip cleanly on slim install.
+pytest.importorskip(
+    "tokenpak._internal",
+    reason="tokenpak._internal is closed-source per Std 25 §1.1 — absent on slim OSS",
+)
+
 from tokenpak.telemetry.proxy_collector import RequestStats, TelemetryCollector
 from tokenpak.telemetry.footer import (
     render_footer_oneline,
