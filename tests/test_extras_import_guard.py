@@ -23,7 +23,15 @@ from __future__ import annotations
 import importlib
 import pathlib
 import sys
-import tomllib
+
+import pytest
+
+# tomllib is stdlib only on Python 3.11+. On 3.10 it doesn't exist, so the
+# slim release test gate must skip cleanly there. This test file's purpose
+# (post-demotion guarded-import smoke) is Python-version-independent —
+# running it on 3.11/3.12/3.13 is sufficient coverage of the invariant.
+tomllib = pytest.importorskip("tomllib", reason="tomllib is stdlib in Python 3.11+; this test runs on 3.11/3.12/3.13")
+
 import types
 import unittest
 from unittest.mock import patch

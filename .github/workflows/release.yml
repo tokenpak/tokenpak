@@ -37,6 +37,11 @@ jobs:
   #     `try: ... except ImportError as exc: pytest.skip(..., allow_module_level=True)`.
   #     `importorskip` on the bare namespace returns truthy and won't help here.
   #
+  #   • Python-version-dependent stdlib modules (e.g. `tomllib` is stdlib only
+  #     on 3.11+; absent on 3.10) → same `pytest.importorskip("tomllib", ...)`
+  #     pattern. The test runs on the matrix versions where the stdlib module
+  #     is available; coverage stays adequate via the supported-version matrix.
+  #
   # When this gate is red, do NOT bypass it via `--ignore=...`. Either fix
   # the failing test's import guard or add the missing extra to this step.
   test:
