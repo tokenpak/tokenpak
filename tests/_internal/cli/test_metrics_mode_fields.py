@@ -16,28 +16,22 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
-import pytest
+import pytest  # noqa: F401 — kept for downstream pytest fixtures + markers
 
-# WS-A residual import guard — TSR-01-followup.
-# Two distinct import-time prerequisites must both hold for any test in
-# this file to run:
-#   1. tokenpak._internal — closed-source namespace per Std 25 §1.1;
-#      every helper here mocks tokenpak._internal.config.* attributes
-#      and fails at runtime if the namespace is absent.
-#   2. detect_consumption_mode — referenced as a symbol on
-#      tokenpak.telemetry.anon_metrics; not currently exported on the
-#      slim or full OSS surface (a separate WS-D / TSR-04 item).
-# Skip cleanly when either is unavailable. The WS-C schema-drift and
-# WS-D missing-export work for this file remain unbundled per the
-# TSR-01-followup scope rules.
-try:
-    import tokenpak._internal  # noqa: F401
-    from tokenpak.telemetry.anon_metrics import detect_consumption_mode  # noqa: F401
-except ImportError as _exc:
-    pytest.skip(
-        f"slim OSS: required closed-source / unexported symbol ({_exc})",
-        allow_module_level=True,
-    )
+# TSR-07 / WS-F (2026-05-08) — relocated to tests/_internal/cli/.
+# Default OSS gate excludes this directory via pyproject.toml
+# `norecursedirs`; the previous TSR-01-followup try/except module-
+# level skip is no longer needed.
+#
+# Note: the schema-drift and pure-detect carve-outs from this file
+# (created by TSR-03 and TSR-04 respectively) remain at the public
+# locations:
+#   - tests/cli/test_anon_metrics_schema.py — 7 schema invariants
+#   - tests/cli/test_consumption_mode_detect.py — 10 detect cases
+# Those carve-outs continue to verify the public contract on slim OSS.
+# The tests in THIS file (record_stores_*_mode + TestConfigHelpers)
+# all depend on tokenpak._internal at runtime — hence the relocation.
+# See tests/_internal/README.md.
 
 
 # ---------------------------------------------------------------------------

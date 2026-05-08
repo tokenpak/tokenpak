@@ -18,16 +18,12 @@ import threading
 from pathlib import Path
 from unittest import mock
 
-import pytest
+import pytest  # noqa: F401 — kept for downstream pytest fixtures + markers
 
-# WS-A residual import guard — TSR-01-followup.
-# The metrics reporter tests transitively reach into tokenpak._internal
-# (closed-source per Std 25 §1.1 + Std 32 §1.3). On slim [dev] install
-# the per-test imports raise ModuleNotFoundError. Skip cleanly.
-pytest.importorskip(
-    "tokenpak._internal",
-    reason="tokenpak._internal is closed-source per Std 25 §1.1 — absent on slim OSS",
-)
+# TSR-07 / WS-F (2026-05-08) — relocated to tests/_internal/.
+# Default OSS gate excludes this directory via pyproject.toml
+# `norecursedirs`; the previous TSR-01-followup module-level
+# importorskip is no longer needed. See tests/_internal/README.md.
 
 # ---------------------------------------------------------------------------
 # Helpers
