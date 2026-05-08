@@ -4,6 +4,28 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — MultiPak Pro Phase 1 OSS surface (Std 32)
+
+### Added
+
+- **MultiPak Pro Phase 1 OSS surface** ([Std 32](standards/32-multipak-pro-architecture.md) §1.3 + §9). Pure additions; no behavior change in existing flows. `multipak.enabled=false` by default until 1-week soak per Std 32 §13.1 Decision #6. Phase 0 contracts (`tokenpak/tip/{pak,context_package,capabilities}.py`) shipped in the prior release; Phase 1 wires those contracts into the four OSS surfaces:
+  - `tokenpak/vault/pak_adapter.py` — wraps `VaultIndex.search()` to produce `Pak` instances with `PakSubtype.VAULT`. Read-only; no daemon contact.
+  - `tokenpak/companion/journal/pak_aware.py` — opt-in promotion-candidate marker + query helper. Auto-capture unchanged per Std 32 §4.4. Stub `journal_entry_to_pak_stub()` builds Interaction-Pak-shaped previews.
+  - `tokenpak pak {inspect,export,import,status}` CLI subcommand. JSON output schema matches the `/pak/v1/status` HTTP endpoint exactly. Vault Paks served by OSS adapter; other subtypes return `pro_daemon_required` with exit 1.
+  - `/pak/v1/{status,inspect/<pak-id>,recall}` proxy routes. Standardized 501 envelope (`error`, `reason`, `suggested_action`, `daemon_state`) for Pro-gated endpoints.
+  - `tokenpak/licensing/daemon_probe.py` — fast-path-safe presence check (`active`/`unavailable`) reading `~/.tokenpak/pro/daemon.sock-info` per Std 25 §2.1.
+  - `pro.multipak.enabled` config key documented in default `config.yaml`.
+
+### Test coverage
+
+100 new tests across 4 files (vault adapter / Pak-aware journal / pak CLI / `/pak/v1/*` endpoints). Daemon-present + daemon-absent paths covered per Std 32 §10. Privacy-contract assertion: Pak fields structurally disjoint from license-payload prefixes per Std 32 §7.1.
+
+### Pro daemon work — gated
+
+`tokenpak-paid` daemon code (capture pipeline, recall ranking, Handoff Paks, anchor hydration, encrypted Pak store) remains gated by Std 25 §9.3.
+
+---
+
 ## [Unreleased] — install footprint extras split (TIP7-001 / TIP7-002)
 
 ### Breaking — install footprint: heavy extras are now opt-in
