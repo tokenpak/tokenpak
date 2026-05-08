@@ -10,12 +10,12 @@ _Last updated: 2026-03-24 | Phase 6 Production Hardening_
 | `/stats` | < 15ms | < 250ms | < 500ms | < 0.1% |
 | `/v1/messages` (passthrough) | < 50ms overhead | — | — | < 0.1% |
 
-> **Note:** Targets reflect TrixBot (4GB RAM, Python HTTPServer, 20-worker bounded pool).
+> **Note:** Targets reflect <dev-host> (4GB RAM, Python HTTPServer, 20-worker bounded pool).
 > Production deployment with asyncio server (`server_async.py`) should achieve p99 < 20ms.
 
 ## Measured Performance (2026-03-24)
 
-Benchmark run on TrixBot, 100 req/sec sustained for 5s:
+Benchmark run on <dev-host>, 100 req/sec sustained for 5s:
 
 | Endpoint | p50 | p95 | p99 | Errors |
 |----------|-----|-----|-----|--------|
