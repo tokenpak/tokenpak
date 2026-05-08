@@ -280,6 +280,37 @@ class MetricsStore:
 _store: Optional[MetricsStore] = None
 
 
+def detect_consumption_mode() -> str:
+    """Best-effort detection of the current consumption mode.
+
+    Returns one of: cli, tui, tmux, sdk, ide, cron, or empty string if unknown.
+    Mirrors the shell logic in tokenpak-status/check.sh (CCI-09 heuristic).
+    Never raises.
+
+    TSR-04 / WS-D restoration: this function shipped in commit 3a5b63cd58
+    (CCI-21, 2026-04-08) and was reverted by commit 88d3d9deb0 (the same
+    `_internal/` tree cleanup that reverted the v1.1 schema fields TSR-03
+    restored). Function logic is canonical CCI-21 verbatim; environment
+    heuristics match `tokenpak-status/check.sh`. No private API used.
+    """
+    try:
+        if os.environ.get("CRON_INVOCATION"):
+            return "cron"
+        term_program = os.environ.get("TERM_PROGRAM", "")
+        if term_program in ("cursor", "Windsurf"):
+            return "ide"
+        if term_program == "vscode":
+            return "ide"
+        if os.environ.get("TMUX"):
+            return "tmux"
+        import sys
+        if not sys.stdin.isatty():
+            return "sdk"
+        return "cli"
+    except Exception:
+        return ""
+
+
 def get_store() -> MetricsStore:
     global _store
     if _store is None:
