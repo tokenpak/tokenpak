@@ -247,6 +247,7 @@ _COMMAND_GROUPS = {
         ("claude", "Launch with Claude Code"),
         ("codex", "Launch with Codex"),
         ("creds", "Discover credentials + doctor"),
+        ("pak", "Inspect/export/import Paks (MultiPak Pro Phase 1)"),
         ("test", "Interactive A/B test"),
         ("prove", "A/B value proof"),
     ],
@@ -2901,6 +2902,7 @@ def build_parser():
     _build_claude_parser(sub)
     _build_codex_parser(sub)
     _build_creds_parser(sub)
+    _build_pak_parser(sub)
     _build_prove_parser(sub)
     _build_test_parser(sub)
     _build_telemetry_parser(sub)
@@ -5845,6 +5847,19 @@ def cmd_lock_renew(args):
     except LockConflictError as e:
         print(f"❌ {e}")
         raise SystemExit(1)
+
+
+def _build_pak_parser(sub):
+    """Register the ``tokenpak pak`` subcommand (MultiPak Pro Phase 1, Std 32 §1.3).
+
+    Implementation lives in :mod:`tokenpak.cli.commands.pak` to keep the
+    handler module isolated and grow naturally as Phase 2+ adds
+    ``recall|hydrate|promote|prune`` actions. Lazy import keeps
+    ``tokenpak --help`` fast.
+    """
+    from tokenpak.cli.commands.pak import build_pak_parser
+
+    build_pak_parser(sub)
 
 
 def _build_lock_parser(sub):
