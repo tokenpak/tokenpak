@@ -32,7 +32,6 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
-
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -78,12 +77,23 @@ def _send_error(handler: Any, status: int, code: str, detail: str = "") -> None:
 
 
 def try_handle_get(handler: Any) -> bool:
-    """If handler.path starts with /tpk/v1/, handle it and return True.
+    """If handler.path starts with /tpk/v1/ or /pak/v1/, handle it and return True.
 
     Return False to let the default dispatch continue.
+
+    Two namespaces are handled here:
+
+    - ``/tpk/v1/*`` — the OSS app API (vault, budget, journal, capsules,
+      models). This is the canonical proxy-owned read surface per glossary
+      ``api-tpk-v1``.
+    - ``/pak/v1/*`` — the MultiPak Pro daemon protocol surface (Std 25 §2.1,
+      Std 32 §1.3). Stubs return ``not_implemented`` when the Pro daemon is
+      absent; ``status`` always works.
     """
     parsed = urlparse(handler.path)
     path = parsed.path
+    if path.startswith("/pak/v1/"):
+        return _try_handle_pak_get(handler, path, parsed)
     if not path.startswith("/tpk/v1/"):
         return False
 
@@ -154,6 +164,8 @@ def try_handle_post(handler: Any) -> bool:
     """POST dispatch for app endpoints that accept a body."""
     parsed = urlparse(handler.path)
     path = parsed.path
+    if path.startswith("/pak/v1/"):
+        return _try_handle_pak_post(handler, path)
     if not path.startswith("/tpk/v1/"):
         return False
 
@@ -779,3 +791,304 @@ def _handle_tokens_estimate(handler: Any, body: dict[str, Any]) -> None:
         "tokens": int(tokens),
         "chars_per_token": round(chars / max(1, tokens), 2),
     })
+
+
+# ---------------------------------------------------------------------------
+# /pak/v1/* — MultiPak Pro daemon protocol surface (Std 25 §2.1, Std 32 §1.3)
+# ---------------------------------------------------------------------------
+#
+# The /pak/v1/* namespace is distinct from /tpk/v1/* by design:
+#
+#   /tpk/v1/*  — OSS app API (proxy-owned vault/budget/journal/capsules).
+#                Glossary: ``api-tpk-v1``. Stable contract for OSS clients.
+#
+#   /pak/v1/*  — Pro daemon protocol surface. Stubs return ``not_implemented``
+#                when the closed-source ``tokenpak-paid-daemon`` is absent.
+#                /pak/v1/status always works (diagnostic surface).
+#
+# Phase 1 OSS ships read-only Vault Pak inspection via the adapter; everything
+# else is a 501 stub gated on daemon presence per Std 25 §3.4 fallback contract.
+
+
+def _try_handle_pak_get(handler: Any, path: str, parsed: Any) -> bool:
+    """Dispatch GET requests under /pak/v1/*.
+
+    Returns True after sending a response (sets the contract that the
+    proxy's main GET handler must not fall through). Authorization gate
+    is the same as /tpk/v1/* — localhost + optional X-TPK-Key.
+    """
+    if not _is_authorized(handler):
+        _send_error(
+            handler,
+            401,
+            "unauthorized",
+            "localhost-only; set X-TPK-Key if TOKENPAK_PROXY_KEY is configured",
+        )
+        return True
+
+    # ── /pak/v1/status ──────────────────────────────────────────────────
+    # Diagnostic surface — works regardless of daemon presence. Mirrors the
+    # `tokenpak pak status` CLI.
+    if path == "/pak/v1/status":
+        _handle_pak_status(handler)
+        return True
+
+    # ── /pak/v1/inspect/<pak-id> ────────────────────────────────────────
+    # Read-only Pak inspection. Vault Paks (pak_id starts with "vault:")
+    # are served via the OSS adapter; other subtypes require the daemon.
+    # ``#`` is URL-significant (fragment delimiter) and is mandatory in
+    # vault block IDs — clients MUST percent-encode as ``%23``; the handler
+    # decodes via :func:`urllib.parse.unquote` to recover the canonical id.
+    if path.startswith("/pak/v1/inspect/"):
+        from urllib.parse import unquote
+
+        pak_id = unquote(path[len("/pak/v1/inspect/"):])
+        _handle_pak_inspect(handler, pak_id)
+        return True
+
+    _send_error(
+        handler,
+        404,
+        "not_found",
+        f"unknown /pak/v1 endpoint: {path}",
+    )
+    return True
+
+
+def _try_handle_pak_post(handler: Any, path: str) -> bool:
+    """Dispatch POST requests under /pak/v1/*."""
+    if not _is_authorized(handler):
+        _send_error(handler, 401, "unauthorized")
+        return True
+
+    # ── POST /pak/v1/recall ─────────────────────────────────────────────
+    # Pro-only per Std 32 §1.3 row 8. Always 501 in OSS; the daemon owns
+    # ranking, hydration, and packaging.
+    if path == "/pak/v1/recall":
+        _send_pak_not_implemented(
+            handler,
+            reason="pro_daemon_required",
+            detail="Recall ranking is a Pro-only feature; install tokenpak-paid to enable.",
+        )
+        return True
+
+    _send_error(
+        handler,
+        404,
+        "not_found",
+        f"POST /pak/v1{path[len('/pak/v1'):]} not implemented yet",
+    )
+    return True
+
+
+def _send_pak_not_implemented(
+    handler: Any,
+    *,
+    reason: str,
+    detail: str,
+    suggested_action: str = "Install tokenpak-paid (Pro) to enable this surface.",
+) -> None:
+    """Standardized 501 response for Pro-gated /pak/v1/* endpoints.
+
+    The shape is stable across all Pro-gated endpoints so clients can
+    treat ``error == "not_implemented"`` + ``reason`` as the canonical
+    "daemon absent" signal. ``daemon_state`` mirrors Std 25 §3.4 telemetry
+    so callers can disambiguate "Pro never installed" from "Pro present
+    but version-incompatible" once Phase 2 ships.
+    """
+    from tokenpak.licensing.daemon_probe import detect_daemon_state
+
+    _send_json(
+        handler,
+        501,
+        {
+            "error": "not_implemented",
+            "reason": reason,
+            "detail": detail,
+            "suggested_action": suggested_action,
+            "daemon_state": detect_daemon_state(),
+        },
+    )
+
+
+def _handle_pak_status(handler: Any) -> None:
+    """GET /pak/v1/status — diagnostic snapshot.
+
+    Always-on: works without daemon, without ``multipak.enabled``, without
+    a configured Pak store. Provides the four signals a CLI / dashboard
+    needs to render Pro readiness:
+
+    - ``daemon_state`` — Std 25 §3.4 fallback-contract value.
+    - ``multipak_enabled`` — config flag (``pro.multipak.enabled``).
+    - ``pak_store_present`` — does ``~/.tokenpak/pro/state/multipak/``
+      exist on disk?
+    - ``vault_paks_indexed`` — block count from the OSS vault index.
+    - ``promotion_candidates`` — count of journal entries marked ready
+      for daemon-side promotion.
+    """
+    from tokenpak.licensing.daemon_probe import detect_daemon_state
+
+    state = detect_daemon_state()
+
+    # multipak.enabled config flag — read dynamically per
+    # ``feedback_always_dynamic.md``. The flag lives under ``pro.multipak.
+    # enabled`` in ``~/.tokenpak/config.yaml``. Default false until soak.
+    multipak_enabled = _read_multipak_enabled()
+
+    # Pak store presence — directory existence is sufficient signal.
+    pak_store_dir = Path.home() / ".tokenpak" / "pro" / "state" / "multipak"
+    pak_store_present = pak_store_dir.is_dir()
+
+    # Vault index block count (best-effort — empty when index unavailable).
+    vault_paks_indexed = _vault_block_count()
+
+    # Promotion-candidate count (best-effort — zero when journal absent).
+    promotion_candidates = _promotion_candidate_count()
+
+    _send_json(
+        handler,
+        200,
+        {
+            "daemon_state": state,
+            "multipak_enabled": multipak_enabled,
+            "pak_store_present": pak_store_present,
+            "vault_paks_indexed": vault_paks_indexed,
+            "promotion_candidates": promotion_candidates,
+        },
+    )
+
+
+def _handle_pak_inspect(handler: Any, pak_id: str) -> None:
+    """GET /pak/v1/inspect/<pak-id> — return a Pak's serialized form.
+
+    Vault Paks (``pak_id`` starts with ``vault:``) are served by the OSS
+    Vault Pak adapter — no daemon needed. Other subtypes require the
+    daemon (Phase 2+) and return 501.
+    """
+    if not pak_id:
+        _send_error(handler, 400, "invalid_request", "pak_id required")
+        return
+
+    if pak_id.startswith("vault:"):
+        # The vault adapter wraps a vault block by id; for now we fetch
+        # the underlying block via the existing vault-bridge helper and
+        # convert. Returns 404 when the block isn't indexed.
+        block_id = pak_id[len("vault:"):]
+        try:
+            from tokenpak.proxy.vault_bridge import get_vault_index
+
+            vi = get_vault_index()
+            if vi is None:
+                _send_error(
+                    handler,
+                    503,
+                    "vault_unavailable",
+                    "vault index not loaded",
+                )
+                return
+            blocks = getattr(vi, "blocks", None) or {}
+            block_dict = blocks.get(block_id)
+            if block_dict is None:
+                _send_error(
+                    handler,
+                    404,
+                    "pak_not_found",
+                    f"vault block not indexed: {block_id}",
+                )
+                return
+            from tokenpak.vault.pak_adapter import vault_block_to_pak
+
+            pak = vault_block_to_pak(block_dict)
+            _send_json(handler, 200, pak.to_dict())
+            return
+        except Exception as exc:
+            _send_error(
+                handler,
+                500,
+                "internal_error",
+                f"vault inspect failed: {exc}",
+            )
+            return
+
+    # Non-Vault subtypes: daemon required.
+    _send_pak_not_implemented(
+        handler,
+        reason="pro_daemon_required",
+        detail=(
+            f"Inspecting Pak {pak_id!r} requires the Pro daemon "
+            "(non-Vault subtypes are encrypted at rest)."
+        ),
+    )
+
+
+def _read_multipak_enabled() -> bool:
+    """Read ``pro.multipak.enabled`` from ``~/.tokenpak/config.yaml``.
+
+    Default ``False`` per Std 32 §13.1 Decision #6 (opt-in until 1-week
+    soak post-bootstrap). Resilient to missing/malformed config — never
+    raises; failures degrade to ``False``.
+
+    Lookup order:
+    1. ``pro.multipak.enabled`` (Std 25 §2.1 Pro-config layout)
+    2. ``multipak.enabled`` (legacy/unscoped fallback — accepted but not
+       canonical; configs should migrate).
+    """
+    try:
+        from tokenpak.core.config_loader import load_config
+    except ImportError:
+        return False
+    try:
+        cfg = load_config()
+    except Exception:
+        return False
+    if not isinstance(cfg, dict):
+        return False
+    pro = cfg.get("pro")
+    if isinstance(pro, dict):
+        mp = pro.get("multipak")
+        if isinstance(mp, dict):
+            v = mp.get("enabled")
+            if isinstance(v, bool):
+                return v
+    # Legacy fallback path
+    mp = cfg.get("multipak")
+    if isinstance(mp, dict):
+        v = mp.get("enabled")
+        if isinstance(v, bool):
+            return v
+    return False
+
+
+def _vault_block_count() -> int:
+    """Best-effort vault index block count for /pak/v1/status.
+
+    Returns 0 when the vault subsystem isn't loaded — the surface should
+    work even on hosts without a vault index. Never raises.
+    """
+    try:
+        from tokenpak.proxy.vault_bridge import get_vault_index
+
+        vi = get_vault_index()
+        if vi is None:
+            return 0
+        return len(getattr(vi, "blocks", {}) or {})
+    except Exception:
+        return 0
+
+
+def _promotion_candidate_count() -> int:
+    """Count of journal entries marked as Pak promotion candidates.
+
+    Reads from the canonical companion journal DB at
+    ``~/.tokenpak/companion/journal.db``. Returns 0 when the DB is
+    absent or unreadable. Never raises.
+    """
+    db_path = Path.home() / ".tokenpak" / "companion" / "journal.db"
+    if not db_path.exists():
+        return 0
+    try:
+        from tokenpak.companion.journal.pak_aware import count_promotion_candidates
+
+        return count_promotion_candidates(db_path)
+    except Exception:
+        return 0
