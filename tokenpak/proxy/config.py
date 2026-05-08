@@ -131,6 +131,54 @@ BUDGET_TOTAL_TOKENS: int = _cfg("budget.total_tokens", 12000, "TOKENPAK_BUDGET_T
 CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_FOOTER", bool)
 HTTP100_KEEPALIVE_ENABLED: bool = _cfg("features.http100_keepalive", False, "TOKENPAK_HTTP100_KEEPALIVE", bool)
 
+# ---------------------------------------------------------------------------
+# TIP Spend Guard (proxy-side pre-send circuit breaker)
+# ---------------------------------------------------------------------------
+# Surface knobs alongside compression/dlp/etc. so they're discoverable in this
+# canonical config layer. The actual SpendGuardConfig dataclass in
+# tokenpak/proxy/spend_guard/policy.py reads YAML + env vars directly (it
+# pre-dates this surface and has the same semantics), but exposing the
+# constants here keeps the proxy/config.py inventory consistent and makes
+# them visible to anyone grepping for tunables.
+# Authoritative behavior: tokenpak/proxy/spend_guard/policy.py:load_config()
+# Standard: standards/29-spend-guard-agent-contract.md §5
+SPEND_GUARD_ENABLED: bool = _cfg(
+    "spend_guard.enabled", True, "TOKENPAK_SPEND_GUARD_ENABLED", bool
+)
+SPEND_GUARD_WARN_TOKENS: int = _cfg(
+    "spend_guard.warn_tokens", 100_000, "TOKENPAK_SPEND_GUARD_WARN_TOKENS", int
+)
+SPEND_GUARD_WARN_COST_USD: float = _cfg(
+    "spend_guard.warn_cost_usd", 2.0, "TOKENPAK_SPEND_GUARD_WARN_COST_USD", float
+)
+SPEND_GUARD_BLOCK_TOKENS: int = _cfg(
+    "spend_guard.block_tokens", 500_000, "TOKENPAK_SPEND_GUARD_BLOCK_TOKENS", int
+)
+SPEND_GUARD_BLOCK_COST_USD: float = _cfg(
+    "spend_guard.block_cost_usd", 10.0, "TOKENPAK_SPEND_GUARD_BLOCK_COST_USD", float
+)
+SPEND_GUARD_HARD_BLOCK_TOKENS: int = _cfg(
+    "spend_guard.hard_block_tokens", 1_000_000, "TOKENPAK_SPEND_GUARD_HARD_BLOCK_TOKENS", int
+)
+SPEND_GUARD_HARD_BLOCK_COST_USD: float = _cfg(
+    "spend_guard.hard_block_cost_usd", 50.0, "TOKENPAK_SPEND_GUARD_HARD_BLOCK_COST_USD", float
+)
+SPEND_GUARD_SESSION_BLOCK_COST_USD: float = _cfg(
+    "spend_guard.session_block_cost_usd", 10.0,
+    "TOKENPAK_SPEND_GUARD_SESSION_BLOCK_COST_USD", float
+)
+SPEND_GUARD_SESSION_WINDOW_SECONDS: int = _cfg(
+    "spend_guard.session_window_seconds", 3600,
+    "TOKENPAK_SPEND_GUARD_SESSION_WINDOW_SECONDS", int
+)
+SPEND_GUARD_PENDING_TTL_SECONDS: int = _cfg(
+    "spend_guard.pending_ttl_seconds", 600, "TOKENPAK_SPEND_GUARD_PENDING_TTL", int
+)
+SPEND_GUARD_AUDIT_DB_PATH: str = _cfg(
+    "spend_guard.audit_db_path", "~/.tokenpak/spend_guard.db",
+    "TOKENPAK_SPEND_GUARD_AUDIT_DB", str
+)
+
 # Tier 1 modules
 SEMANTIC_CACHE_ENABLED: bool = _cfg(
     "features.semantic_cache", False, "TOKENPAK_SEMANTIC_CACHE", bool
