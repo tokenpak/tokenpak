@@ -76,6 +76,7 @@ shared secret to require `Authorization: Bearer <token>` on remote requests
 - **Client integration** — one command wires Claude Code, Cursor, Aider, and 6 other clients
 - **Model routing** — send requests to the right model automatically, with fallback rules
 - **Cost tracking** — per model, per session, per agent; local SQLite, zero cloud
+- **TIP Spend Guard** — pre-send circuit breaker; blocks runaway requests before provider call. Yes/No release or `[TIP: allow=once max=$X]` directive. Catches both single-request spikes and the death-by-1000-cuts pattern via session-cumulative tracking. See [docs/spend-guard.md](docs/spend-guard.md).
 - **Vault indexing + semantic search** — index your codebase; search without an LLM call
 - **CLI + proxy server** — `tokenpak serve`, `tokenpak cost`, `tokenpak savings`
 - **A/B testing and replay/debug** — compare compression configs, replay past requests
