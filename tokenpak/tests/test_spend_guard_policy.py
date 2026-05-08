@@ -34,8 +34,16 @@ class TestKevinDefaults:
         assert cfg.hard_block_cost_usd == 50.0
 
 
-class TestDecide:
+def _per_request_cfg() -> SpendGuardConfig:
+    """Disable the session-cumulative check so the per-request bands are
+    the only thing under test in this class."""
     cfg = SpendGuardConfig()
+    cfg.session_block_cost_usd = 0.0
+    return cfg
+
+
+class TestDecide:
+    cfg = _per_request_cfg()
 
     def test_small_request_allowed(self):
         d = decide(_est(projected_input_tokens=1000, projected_output_tokens=500,
@@ -80,7 +88,7 @@ class TestDecide:
 
 
 class TestTIPDirective:
-    cfg = SpendGuardConfig()
+    cfg = _per_request_cfg()
 
     def test_tip_allow_once_within_ceiling(self):
         tip = TIPDirective(allow_scope="once", max_cost_usd=15.0)
@@ -102,6 +110,34 @@ class TestTIPDirective:
         d = decide(_est(projected_input_tokens=1_500_000, projected_output_tokens=10_000,
                         projected_cost_usd=80.0), self.cfg, tip=tip)
         assert d.decision == "hard_block"
+
+
+class TestSessionCumulative:
+    """Defense against the death-by-1000-cuts spike pattern."""
+
+    def test_default_session_threshold_is_10_dollars(self):
+        cfg = SpendGuardConfig()
+        assert cfg.session_block_cost_usd == 10.0
+
+    def test_session_block_when_running_plus_cost_exceeds(self):
+        cfg = SpendGuardConfig()
+        d = decide(_est(projected_cost_usd=0.5),
+                   cfg, session_running_cost_usd=9.7)
+        assert d.decision == "block"
+        assert d.reason == "session_cumulative_cost_exceeded"
+
+    def test_session_allow_when_under(self):
+        cfg = SpendGuardConfig()
+        d = decide(_est(projected_cost_usd=0.5),
+                   cfg, session_running_cost_usd=5.0)
+        assert d.decision == "allow"
+
+    def test_session_disabled_when_zero(self):
+        cfg = SpendGuardConfig()
+        cfg.session_block_cost_usd = 0.0
+        d = decide(_est(projected_cost_usd=0.5),
+                   cfg, session_running_cost_usd=100.0)
+        assert d.decision == "allow"
 
 
 class TestEnvOverrides:

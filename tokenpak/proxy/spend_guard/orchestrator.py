@@ -157,7 +157,20 @@ def evaluate(
         _log.warning("spend_guard: estimator failure (passthrough): %s", e)
         return GuardOutcome.passthrough(body)
 
-    decision = decide(est, cfg, tip=tip_directive)
+    # Session-cumulative running cost — read from monitor.db.
+    session_running = 0.0
+    if cfg.session_block_cost_usd > 0:
+        try:
+            from .session_state import session_cumulative_cost
+            session_running = session_cumulative_cost(
+                session_id, window_seconds=cfg.session_window_seconds
+            )
+        except Exception as e:
+            _log.debug("spend_guard: session_state lookup failed: %s", e)
+            session_running = 0.0
+
+    decision = decide(est, cfg, tip=tip_directive,
+                      session_running_cost_usd=session_running)
 
     # ── [TIP: estimate=on] short-circuit (only when allowed by policy)
     if tip_directive is not None and tip_directive.estimate_only and decision.decision != "hard_block":

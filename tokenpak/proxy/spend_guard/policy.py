@@ -45,6 +45,13 @@ class SpendGuardConfig:
     audit_db_path: str = "~/.tokenpak/spend_guard.db"
     # Below this projected-cost floor we don't even audit (avoid noise).
     audit_min_cost_usd: float = 0.10
+    # Session-cumulative defense (catches the death-by-1000-cuts pattern).
+    # When the running spend on a session in the last
+    # ``session_window_seconds`` plus this projected request would exceed
+    # ``session_block_cost_usd``, the request is blocked. Set to 0.0 to
+    # disable session-cumulative checking entirely.
+    session_block_cost_usd: float = 10.0
+    session_window_seconds: int = 3600
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +126,8 @@ def load_config(raw_config: Optional[dict] = None) -> SpendGuardConfig:
         ("TOKENPAK_SPEND_GUARD_BLOCK_COST_USD", "block_cost_usd", float),
         ("TOKENPAK_SPEND_GUARD_HARD_BLOCK_COST_USD", "hard_block_cost_usd", float),
         ("TOKENPAK_SPEND_GUARD_PENDING_TTL", "pending_ttl_seconds", int),
+        ("TOKENPAK_SPEND_GUARD_SESSION_BLOCK_COST_USD", "session_block_cost_usd", float),
+        ("TOKENPAK_SPEND_GUARD_SESSION_WINDOW_SECONDS", "session_window_seconds", int),
     ):
         if env_key in env:
             try:
@@ -140,6 +149,8 @@ def decide(
     estimate: RiskEstimate,
     cfg: Optional[SpendGuardConfig] = None,
     tip: Optional[TIPDirective] = None,
+    *,
+    session_running_cost_usd: float = 0.0,
 ) -> PreflightDecision:
     """Compare the estimate to thresholds and return a verdict.
 
@@ -208,6 +219,26 @@ def decide(
             threshold_hit="tip_ceiling",
             risk=estimate,
         )
+
+    # 2.5 Session-cumulative defense (death-by-1000-cuts).
+    # If session running spend + this projected cost would cross the
+    # session block ceiling, block. Disabled when
+    # session_block_cost_usd == 0.
+    if cfg.session_block_cost_usd > 0:
+        session_total_after = session_running_cost_usd + cost
+        if session_total_after >= cfg.session_block_cost_usd:
+            # If a TIP directive is present and authorized this request
+            # (we already returned allow above), we wouldn't be here.
+            return PreflightDecision(
+                decision="block",
+                reason="session_cumulative_cost_exceeded",
+                requires_approval=True,
+                threshold_hit=(
+                    f"session_block_cost_usd>={cfg.session_block_cost_usd}"
+                    f" running={session_running_cost_usd:.2f}"
+                ),
+                risk=estimate,
+            )
 
     # 3. Block band
     if cost >= cfg.block_cost_usd:
