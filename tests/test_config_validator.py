@@ -10,6 +10,16 @@ from pathlib import Path
 
 import pytest
 
+# tokenpak.cli.commands.validate_config short-circuits to (False, ["…not
+# installed"]) when jsonschema or yaml are absent. Both are optional in
+# the slim [dev] install — without these guards every test in this file
+# fails with the install-instruction message instead of exercising the
+# validator. Skip cleanly on slim install so the release test gate stays
+# green; tests run with full assertions on installs that include
+# jsonschema + yaml (full / dev-with-extras).
+pytest.importorskip("jsonschema", reason="jsonschema is an optional dep; install via pip install jsonschema or tokenpak[full]")
+pytest.importorskip("yaml", reason="PyYAML is an optional dep; install via pip install pyyaml or tokenpak[full]")
+
 from tokenpak.cli.commands.validate_config import validate_file, load_schema
 
 
