@@ -1,6 +1,11 @@
 """Tests for improved pace and field-relative speed scoring."""
 
 import pytest
+
+# trackedge is a separate project not installed in the slim release test env;
+# skip cleanly so the release auto-publish gate doesn't error on collection.
+pytest.importorskip("trackedge.processing.feature_engine", reason="trackedge is a separate project not installed in slim test env")
+
 from trackedge.processing.feature_engine import (
     calculate_pace_metrics,
     classify_pace_style_improved,

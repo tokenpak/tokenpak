@@ -21,7 +21,15 @@ from __future__ import annotations
 
 
 import pytest
+
+# Tier 2 modules live under tokenpak._internal — that namespace is not part of
+# the slim OSS surface. The earlier importorskip only checked
+# tokenpak.agentic.error_normalizer which masked the deeper tokenpak._internal
+# requirement; check both so the release test gate skips cleanly on a slim
+# install regardless of which of the two surfaces is missing first.
+pytest.importorskip("tokenpak._internal", reason="tokenpak._internal not present in slim OSS install")
 pytest.importorskip("tokenpak.agentic.error_normalizer", reason="module not available in current build")
+
 import json
 import os
 import sys

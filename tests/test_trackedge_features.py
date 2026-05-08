@@ -1,10 +1,12 @@
 """Tests for TrackEdge feature and scoring engines."""
 
 import pytest
-import numpy as np
 
-# trackedge is a separate project not installed in this environment — skip all tests here
-trackedge = pytest.importorskip("trackedge.processing.feature_engine", reason="trackedge package not installed (separate project)")
+# Both numpy and trackedge are optional in the slim install. numpy must be
+# skipped FIRST — without it, the previous `import numpy as np` at module top
+# erroured collection on a slim install before the trackedge importorskip ran.
+np = pytest.importorskip("numpy", reason="numpy not installed (optional dep — install via tokenpak[intelligence])")
+trackedge = pytest.importorskip("trackedge.processing.feature_engine", reason="trackedge is a separate project not installed in slim test env")
 
 from trackedge.processing.feature_engine import (
     speed_score, pace_style, race_pace_scenario, class_fit,
