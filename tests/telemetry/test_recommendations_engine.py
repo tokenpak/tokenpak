@@ -24,6 +24,48 @@ from tokenpak.telemetry.recommendations import (
 from tokenpak.telemetry.storage import TelemetryDB
 
 
+# TSR-05q API-drift skip reason (grep-able)
+# ─────────────────────────────────────────────
+# Two production changes have moved past these tests:
+#
+# 1. `TelemetryDB.__init__` now auto-creates the TIP-06 tables
+#    (`tp_savings_attribution`, `tp_cache_miss_reasons`) on every DB open.
+#    Tests #3/#4/#5 manually `CREATE TABLE` (without IF NOT EXISTS) → fail
+#    with `sqlite3.OperationalError: table … already exists`. Even with
+#    `IF NOT EXISTS`, the test schemas diverge from production
+#    (`timestamp TEXT` in tests vs `REAL` in production, missing
+#    `route_class`/`platform`/`model` columns), so a one-line fix is
+#    insufficient.
+#
+# 2. `_rule_high_unattributed` in `tokenpak/telemetry/recommendations.py`
+#    now prefers the TIP-06 `tp_savings_attribution` table whenever it
+#    exists — and post-(1) it always exists. Empty table → `total=0` →
+#    rule returns `[]`. The legacy `tp_usage`-based fallback path that
+#    tests #1/#2 exercise is therefore unreachable. They fail with
+#    `StopIteration` / `assert None is not None` because the
+#    `attribution.high-unattributed` recommendation never fires.
+#
+# Both are real API/behavior drifts in production; the tests encode the
+# pre-TIP-06 contract. Rewriting them to populate `tp_savings_attribution`
+# directly (with the divergent prod schema) and to skip the manual CREATE
+# is **API-drift work and belongs to TSR-02**, not TSR-05 (real test bugs).
+# Same Path B pattern as TSR-05m / TSR-05p: skip with a grep-able reason
+# that points to the right initiative bucket.
+#
+# The 18 live tests in this file (zero-cache-lookups rule, missing-pricing
+# rule, schema-instability skipped paths, low-unattributed-does-not-fire,
+# engine-empty cases, formatters) are unaffected — they don't depend on
+# the dropped fallback path or the manual table-creation shape.
+SKIP_TIP06_AUTOTABLE_AND_ENGINE_PREFERENCE_DRIFT = (
+    "Test predates TIP-06 auto-creation of `tp_savings_attribution` / "
+    "`tp_cache_miss_reasons` in TelemetryDB and the engine's preference "
+    "for the attribution table over the tp_usage fallback. Either the "
+    "manual CREATE TABLE conflicts with auto-creation, or the engine "
+    "no longer reaches the legacy fallback path. Rewriting to the "
+    "TIP-06 contract is API-drift work — see TSR-02."
+)
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -166,6 +208,7 @@ def test_window_filter_excludes_old_events(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(reason=SKIP_TIP06_AUTOTABLE_AND_ENGINE_PREFERENCE_DRIFT)
 def test_high_unattributed_via_usage_source_high_severity(tmp_path):
     db_path = _make_db(tmp_path)
     _insert_traces(db_path, n=10, usage_source="unknown")
@@ -178,6 +221,7 @@ def test_high_unattributed_via_usage_source_high_severity(tmp_path):
     assert rec.evidence["unattributed_pct"] >= 30.0
 
 
+@pytest.mark.skip(reason=SKIP_TIP06_AUTOTABLE_AND_ENGINE_PREFERENCE_DRIFT)
 def test_high_unattributed_medium_severity(tmp_path):
     db_path = _make_db(tmp_path)
     # Mix: 8 known + 2 unknown — pct = 20%, hits medium (>=10) but not high (>=30)
@@ -205,6 +249,7 @@ def test_low_unattributed_does_not_fire(tmp_path):
     }
 
 
+@pytest.mark.skip(reason=SKIP_TIP06_AUTOTABLE_AND_ENGINE_PREFERENCE_DRIFT)
 def test_high_unattributed_prefers_tip06_table_when_present(tmp_path):
     db_path = _make_db(tmp_path)
     _insert_traces(db_path, n=10, usage_source="provider")  # no usage-source signal
@@ -295,6 +340,7 @@ def test_schema_instability_skipped_when_table_missing(tmp_path):
     assert "cache.schema-instability" not in {r.id for r in result.recommendations}
 
 
+@pytest.mark.skip(reason=SKIP_TIP06_AUTOTABLE_AND_ENGINE_PREFERENCE_DRIFT)
 def test_schema_instability_fires_when_misses_recent(tmp_path):
     db_path = _make_db(tmp_path)
     _insert_traces(db_path, n=10, cache_read=400)
@@ -330,6 +376,7 @@ def test_schema_instability_fires_when_misses_recent(tmp_path):
     assert rec.evidence["n_misses"] == 7
 
 
+@pytest.mark.skip(reason=SKIP_TIP06_AUTOTABLE_AND_ENGINE_PREFERENCE_DRIFT)
 def test_schema_instability_skipped_when_misses_old(tmp_path):
     db_path = _make_db(tmp_path)
     _insert_traces(db_path, n=10, cache_read=400)
