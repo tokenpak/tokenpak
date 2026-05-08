@@ -12,6 +12,38 @@ import time
 from unittest.mock import patch, MagicMock, call
 
 
+# TSR-05r speculative-contract skip reason (grep-able)
+# ─────────────────────────────────────────────
+# Four tests below assert against `CacheManager` API surface that **never
+# existed** in `tokenpak/cache/cache_manager.py` git history:
+#
+#   - `CacheManager(ttl=...)` kwarg in `__init__`            (never existed)
+#   - `cache.invalidate(model=...)` method                   (never existed)
+#   - `cache.get_stats()` method                             (never existed)
+#
+# Verified via `git log -S 'def invalidate' --all -- tokenpak/cache/cache_manager.py`
+# (0 hits) and `git log -S 'def get_stats' --all -- tokenpak/cache/cache_manager.py`
+# (0 hits). The actual `CacheManager` interface is `__init__(volatile_cache,
+# stable_cache, volatile_threshold)` + `get / set / delete / clear` +
+# `volatile / stable` properties — no `ttl` kwarg, no `invalidate`, no
+# `get_stats`.
+#
+# These were added in the "comprehensive integration test suite" sweep
+# (commit 84f4f19b90 / 28a1448d2f) and encoded a speculative contract that
+# never landed in production. Same Path B pattern as TSR-05b's `/ready`
+# endpoint skip — assertions against an intended-but-never-built surface.
+#
+# `test_cache_manual_invalidation` (only uses `cache.clear()`, which DOES
+# exist) is unaffected and remains live, as do the 4 tests in
+# TestCacheHitDetection / TestCacheTokenReduction / TestCacheResponseTime
+# that aren't skipped or already-`pytest.skip`-guarded.
+SKIP_CACHE_MANAGER_SPECULATIVE_API = (
+    "Test asserts CacheManager API (ttl= kwarg, invalidate(), get_stats()) "
+    "that never existed in cache_manager.py git history. Speculative "
+    "contract — see TSR-05b for the same pattern (Path B skip)."
+)
+
+
 class TestCacheHitDetection:
     """Test cache hit detection."""
 
@@ -202,6 +234,7 @@ class TestCacheResponseTime:
 class TestCacheInvalidation:
     """Test cache invalidation behavior."""
 
+    @pytest.mark.skip(reason=SKIP_CACHE_MANAGER_SPECULATIVE_API)
     def test_cache_ttl_expiration(self):
         """Test cache entries expire after TTL."""
         try:
@@ -240,6 +273,7 @@ class TestCacheInvalidation:
         cache.clear()
         assert cache.get(request) is None
 
+    @pytest.mark.skip(reason=SKIP_CACHE_MANAGER_SPECULATIVE_API)
     def test_cache_selective_invalidation(self):
         """Test selective cache invalidation by key pattern."""
         try:
@@ -266,6 +300,7 @@ class TestCacheInvalidation:
         assert cache.get(req2) is not None
 
 
+@pytest.mark.skip(reason=SKIP_CACHE_MANAGER_SPECULATIVE_API)
 class TestCacheStatistics:
     """Test cache statistics collection."""
 
