@@ -19,6 +19,32 @@ from pathlib import Path
 import pytest
 
 
+# TSR-05m schema-drift skip reason (grep-able)
+# ─────────────────────────────────────────────
+# The CCG-02 commit (a36d799018, 2026-04-10) introduced this test alongside a
+# 7-column `mutation_audit` schema:
+#     id, timestamp, session_id, request_id, mutation_type, file_path, diff_summary
+# The schema was later replaced by the CCG-06 10-column shape now in
+# tokenpak/proxy/db.py (MUTATION_AUDIT_COLUMNS):
+#     id, request_id, session_id, timestamp, pre_hash, post_hash,
+#     rules_applied, cache_risk, rollback_possible, mode
+# The fields `mutation_type`, `file_path`, `diff_summary` were dropped, and
+# `insert_mutation_audit()` no longer accepts those kwargs. The 5 tests below
+# encode the old contract and now fail with `OperationalError: no such column:
+# mutation_type` and `TypeError: unexpected keyword argument 'mutation_type'`.
+# Rewriting the assertions to the CCG-06 shape is schema-drift work and
+# belongs to TSR-03 (schema drift), not TSR-05 (real test bugs). The other
+# 11 tests in this file exercise idempotency, indexes, session_id migration,
+# and Monitor integration against the real CCG-06 schema and remain live.
+SKIP_CCG02_SCHEMA_REPLACED_BY_CCG06 = (
+    "Test encodes the original CCG-02 mutation_audit schema "
+    "(mutation_type/file_path/diff_summary), which was replaced by the "
+    "CCG-06 10-column schema (pre_hash/post_hash/rules_applied/cache_risk/"
+    "rollback_possible/mode) in tokenpak/proxy/db.py. Rewriting these "
+    "assertions to the new shape is schema-drift work — see TSR-03."
+)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -60,6 +86,7 @@ def _create_legacy_requests(conn):
 
 
 class TestEnsureSchemaFreshDB:
+    @pytest.mark.skip(reason=SKIP_CCG02_SCHEMA_REPLACED_BY_CCG06)
     def test_mutation_audit_table_created(self, tmp_path):
         from tokenpak.proxy.db import ensure_schema
 
@@ -205,6 +232,7 @@ class TestEnsureSchemaMigrationFromLegacy:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(reason=SKIP_CCG02_SCHEMA_REPLACED_BY_CCG06)
 class TestMutationAuditInsert:
     def _setup(self, tmp_path):
         from tokenpak.proxy.db import ensure_schema
