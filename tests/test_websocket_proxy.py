@@ -22,6 +22,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# The websockets library is the transport backend used by every test in
+# this file (server-side `serve as ws_serve` plus client-side connect
+# inside test methods). On slim [dev] install it is absent and tests
+# fail at the first import. Skip the file cleanly.
+pytest.importorskip(
+    "websockets",
+    reason="websockets is the optional transport backend exercised by every test in this file",
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers

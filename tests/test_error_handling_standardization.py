@@ -8,6 +8,16 @@ from unittest.mock import patch
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# tokenpak.infrastructure is the canonical home for the exception
+# hierarchy + logging-config helpers tested here; it is not part of the
+# slim OSS surface. On slim [dev] install the per-test imports raise
+# ModuleNotFoundError before any assertion runs. Skip cleanly.
+pytest.importorskip(
+    "tokenpak.infrastructure",
+    reason="tokenpak.infrastructure not part of slim OSS surface",
+)
+
 
 # ---------------------------------------------------------------------------
 # Exception hierarchy tests

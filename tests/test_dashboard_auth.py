@@ -21,6 +21,15 @@ from pathlib import Path
 from unittest import mock
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# tokenpak.token_manager is the dashboard-token surface; not part of
+# the slim OSS install. On slim [dev] every test in this file fails at
+# the fixture's first import. Skip cleanly.
+pytest.importorskip(
+    "tokenpak.token_manager",
+    reason="tokenpak.token_manager (dashboard token) not part of slim OSS surface",
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers: patch TOKEN_FILE to a tmp file

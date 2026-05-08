@@ -30,6 +30,16 @@ from pathlib import Path
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# tokenpak.pro is the closed-source Pro daemon namespace per Std 25 §1.1;
+# it is not present on a slim OSS install. The audit-log tests in this
+# file all reach into tokenpak.pro.audit; without the namespace they
+# fail at fixture/test time. Skip cleanly on slim install.
+pytest.importorskip(
+    "tokenpak.pro",
+    reason="tokenpak.pro is the closed-source Pro daemon namespace (Std 25 §1.1) — absent on slim OSS",
+)
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------

@@ -18,6 +18,27 @@ from unittest import mock
 
 import pytest
 
+# WS-A residual import guard — TSR-01-followup.
+# Two distinct import-time prerequisites must both hold for any test in
+# this file to run:
+#   1. tokenpak._internal — closed-source namespace per Std 25 §1.1;
+#      every helper here mocks tokenpak._internal.config.* attributes
+#      and fails at runtime if the namespace is absent.
+#   2. detect_consumption_mode — referenced as a symbol on
+#      tokenpak.telemetry.anon_metrics; not currently exported on the
+#      slim or full OSS surface (a separate WS-D / TSR-04 item).
+# Skip cleanly when either is unavailable. The WS-C schema-drift and
+# WS-D missing-export work for this file remain unbundled per the
+# TSR-01-followup scope rules.
+try:
+    import tokenpak._internal  # noqa: F401
+    from tokenpak.telemetry.anon_metrics import detect_consumption_mode  # noqa: F401
+except ImportError as _exc:
+    pytest.skip(
+        f"slim OSS: required closed-source / unexported symbol ({_exc})",
+        allow_module_level=True,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Helpers

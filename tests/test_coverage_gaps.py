@@ -17,6 +17,18 @@ import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+# WS-A residual import guard — TSR-01-followup.
+# `tokenpak.watchdog` (CooldownManager) and `tokenpak.agent.*` are not
+# part of the slim OSS surface. Coverage-gap tests in this file reach
+# into them; skip cleanly when absent. Full installs that ship the
+# agent + watchdog modules exercise normally.
+pytest.importorskip(
+    "tokenpak.watchdog",
+    reason="tokenpak.watchdog (CooldownManager) not part of slim OSS surface",
+)
+
 
 # ---------------------------------------------------------------------------
 # 1. doctor.py — Colors helper

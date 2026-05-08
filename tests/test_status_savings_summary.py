@@ -14,6 +14,17 @@ from io import StringIO
 from unittest.mock import patch, MagicMock
 import sys
 
+# WS-A residual import guard — TSR-01-followup.
+# `tokenpak status` and the savings summary it produces transitively
+# pull in `fastapi` via the dashboard surface; on a slim [dev] install
+# fastapi is absent and the import chain raises ModuleNotFoundError
+# during fixture / mock setup. Skip cleanly so the release test gate
+# stays green; full-install runs exercise normally.
+pytest.importorskip(
+    "fastapi",
+    reason="fastapi is an optional dep transitively required by the status-savings stats path",
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers

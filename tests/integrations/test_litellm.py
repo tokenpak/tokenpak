@@ -9,6 +9,17 @@ import types
 import pytest
 from types import SimpleNamespace
 
+# WS-A residual import guard — TSR-01-followup.
+# tokenpak.integrations.litellm is the LiteLLM adapter module; it is not
+# part of the slim OSS surface (per Std 32 §1.3 — only the canonical
+# proxy + companion ship). On slim [dev] install every test in this file
+# fails at first sub-import; skip the file cleanly so the release test
+# gate stays green.
+pytest.importorskip(
+    "tokenpak.integrations.litellm",
+    reason="LiteLLM adapter not part of slim OSS surface — install full extras to exercise",
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
