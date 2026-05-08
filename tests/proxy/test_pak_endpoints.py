@@ -190,11 +190,52 @@ def test_status_daemon_state_is_unavailable_by_default():
     assert body["daemon_state"] == "unavailable"
 
 
-def test_status_multipak_enabled_defaults_false():
-    """Std 32 §13.1 Decision #6 — opt-in until 1-week soak."""
+def test_status_multipak_enabled_defaults_false(monkeypatch):
+    """Std 32 §13.1 Decision #6 — opt-in until 1-week soak.
+
+    Mocks load_config to {} (no multipak section) so this test isn't
+    dependent on the developer's user config.
+    """
+    from tokenpak.core import config_loader
+
+    monkeypatch.setattr(config_loader, "load_config", lambda *a, **k: {})
     h = _get("/pak/v1/status")
     body = h.response_json()
     assert body["multipak_enabled"] is False
+
+
+def test_status_multipak_enabled_reads_pro_section(monkeypatch):
+    """Canonical config path: pro.multipak.enabled = true."""
+    from tokenpak.core import config_loader
+
+    cfg = {"pro": {"multipak": {"enabled": True}}}
+    monkeypatch.setattr(config_loader, "load_config", lambda *a, **k: cfg)
+    h = _get("/pak/v1/status")
+    assert h.response_json()["multipak_enabled"] is True
+
+
+def test_status_multipak_enabled_legacy_path(monkeypatch):
+    """Legacy config layout (multipak.enabled at top level) still honored."""
+    from tokenpak.core import config_loader
+
+    cfg = {"multipak": {"enabled": True}}
+    monkeypatch.setattr(config_loader, "load_config", lambda *a, **k: cfg)
+    h = _get("/pak/v1/status")
+    assert h.response_json()["multipak_enabled"] is True
+
+
+def test_status_multipak_enabled_pro_wins_over_legacy(monkeypatch):
+    """When both pro.multipak.enabled and multipak.enabled are set,
+    the canonical pro section wins."""
+    from tokenpak.core import config_loader
+
+    cfg = {
+        "pro": {"multipak": {"enabled": False}},
+        "multipak": {"enabled": True},
+    }
+    monkeypatch.setattr(config_loader, "load_config", lambda *a, **k: cfg)
+    h = _get("/pak/v1/status")
+    assert h.response_json()["multipak_enabled"] is False
 
 
 def test_status_rejects_non_localhost():

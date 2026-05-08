@@ -1035,7 +1035,7 @@ def _read_multipak_enabled() -> bool:
        canonical; configs should migrate).
     """
     try:
-        from tokenpak.config import load_config  # type: ignore[import-not-found]
+        from tokenpak.core.config_loader import load_config
     except ImportError:
         return False
     try:

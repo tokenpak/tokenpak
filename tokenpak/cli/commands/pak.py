@@ -247,7 +247,7 @@ def _read_multipak_enabled() -> bool:
     to avoid pulling the proxy module graph for `tokenpak pak status`.
     """
     try:
-        from tokenpak.config import load_config  # type: ignore[import-not-found]
+        from tokenpak.core.config_loader import load_config
     except ImportError:
         return False
     try:
