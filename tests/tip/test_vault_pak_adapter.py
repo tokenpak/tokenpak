@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
@@ -34,7 +33,6 @@ from tokenpak.vault.pak_adapter import (
     search_as_paks,
     vault_block_to_pak,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

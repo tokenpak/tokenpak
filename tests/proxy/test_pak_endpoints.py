@@ -12,7 +12,6 @@ from __future__ import annotations
 import io
 import json
 import socket
-import threading
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -20,7 +19,6 @@ from unittest.mock import patch
 import pytest
 
 from tokenpak.licensing import daemon_probe
-
 
 # ---------------------------------------------------------------------------
 # daemon_probe — sock-info parsing + reachability

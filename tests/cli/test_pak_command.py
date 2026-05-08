@@ -13,7 +13,6 @@ import argparse
 import json
 import subprocess
 import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -25,7 +24,6 @@ from tokenpak.cli.commands.pak import (
     cmd_pak_inspect,
     cmd_pak_status,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

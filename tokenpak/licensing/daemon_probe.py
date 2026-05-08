@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import socket
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Literal, Optional
 
 DaemonState = Literal["active", "unavailable", "tip_mismatch"]
 

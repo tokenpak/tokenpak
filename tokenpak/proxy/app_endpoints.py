@@ -32,7 +32,6 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
-
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
