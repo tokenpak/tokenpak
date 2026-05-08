@@ -4,11 +4,22 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — MultiPak Pro Phase 1 OSS surface (Std 32)
+## [v1.5.2] — 2026-05-08 — MultiPak Pro Phase 0 + Phase 1 OSS surface (Std 32)
 
-### Added
+> **Release batching note**: this PATCH release ships both the Phase 0 TIP capability constants + `Pak`/`ContextPackage` data contracts (originally landed in PR #101) and the Phase 1 OSS surface (PR #102). Two-step v1.5.2 → v1.5.3 was originally intended; PR #102 merged immediately after PR #101 + the registry companion PR before a release-bump window opened, so the two phases ship together as a single batched PATCH per the release-protocol allowance.
+>
+> Both phases are pure additions; this is a normal additive PATCH per [`feedback_initiative_completion_versioning`](.claude/projects/-home-sue/memory/feedback_initiative_completion_versioning.md). No breaking changes.
 
-- **MultiPak Pro Phase 1 OSS surface** ([Std 32](standards/32-multipak-pro-architecture.md) §1.3 + §9). Pure additions; no behavior change in existing flows. `multipak.enabled=false` by default until 1-week soak per Std 32 §13.1 Decision #6. Phase 0 contracts (`tokenpak/tip/{pak,context_package,capabilities}.py`) shipped in the prior release; Phase 1 wires those contracts into the four OSS surfaces:
+### Added — Phase 0 (TIP capability + data contracts)
+
+- 10 new TIP capability constants under `tokenpak.tip.capabilities` (`tip.pak.{capture,index,recall,hydrate,promote}`, `tip.context.{package,handoff,resume,coverage,policy}`).
+- `Pak` + `ContextPackage` frozen dataclasses with full JSON round-trip in `tokenpak.tip.pak` and `tokenpak.tip.context_package`.
+- Companion `tokenpak/registry` 0.2.0 release: 10 capability-catalog entries + JSON Schemas (`pak-v1`, `context-package-v1`) + extended `profiles` enum admitting `tip-paid-local-daemon`.
+- 54 contract tests in `tests/tip/test_multipak_contracts.py`.
+
+### Added — Phase 1 (OSS surface)
+
+- **MultiPak Pro Phase 1 OSS surface** ([Std 32](standards/32-multipak-pro-architecture.md) §1.3 + §9). Pure additions; no behavior change in existing flows. `multipak.enabled=false` by default until 1-week soak per Std 32 §13.1 Decision #6. Wires the Phase 0 contracts (`tokenpak/tip/{pak,context_package,capabilities}.py`, shipped above in the same release) into the four OSS surfaces:
   - `tokenpak/vault/pak_adapter.py` — wraps `VaultIndex.search()` to produce `Pak` instances with `PakSubtype.VAULT`. Read-only; no daemon contact.
   - `tokenpak/companion/journal/pak_aware.py` — opt-in promotion-candidate marker + query helper. Auto-capture unchanged per Std 32 §4.4. Stub `journal_entry_to_pak_stub()` builds Interaction-Pak-shaped previews.
   - `tokenpak pak {inspect,export,import,status}` CLI subcommand. JSON output schema matches the `/pak/v1/status` HTTP endpoint exactly. Vault Paks served by OSS adapter; other subtypes return `pro_daemon_required` with exit 1.
