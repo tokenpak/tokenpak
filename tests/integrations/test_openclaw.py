@@ -402,7 +402,12 @@ class TestRateLimitHandling:
 
     def test_rate_limit_backoff_wait_time_increases(self):
         """RateLimitBackoff wait time grows with each attempt."""
-        from tokenpak.handlers.rate_limit import RateLimitBackoff
+        # WS-D path restoration — TSR-04. The handlers tree relocated
+        # from tokenpak.handlers/ to tokenpak.proxy.handlers/ in commit
+        # 837514caff (2026-04-20). The backwards-compat shim was removed
+        # in the subsequent 17-module consolidation refactor
+        # (fbea4b1079). Update to the canonical location.
+        from tokenpak.proxy.handlers.rate_limit import RateLimitBackoff
 
         backoff = RateLimitBackoff(base_wait=1.0, max_wait=60.0, jitter_factor=0.0)
         waits = [backoff.wait_time(attempt) for attempt in range(4)]
@@ -415,7 +420,12 @@ class TestRateLimitHandling:
 
     def test_rate_limit_backoff_respects_max_wait(self):
         """RateLimitBackoff never exceeds max_wait."""
-        from tokenpak.handlers.rate_limit import RateLimitBackoff
+        # WS-D path restoration — TSR-04. The handlers tree relocated
+        # from tokenpak.handlers/ to tokenpak.proxy.handlers/ in commit
+        # 837514caff (2026-04-20). The backwards-compat shim was removed
+        # in the subsequent 17-module consolidation refactor
+        # (fbea4b1079). Update to the canonical location.
+        from tokenpak.proxy.handlers.rate_limit import RateLimitBackoff
 
         backoff = RateLimitBackoff(base_wait=1.0, max_wait=5.0, jitter_factor=0.0)
         for attempt in range(10):
@@ -424,7 +434,12 @@ class TestRateLimitHandling:
 
     def test_rate_limit_backoff_uses_retry_after(self):
         """Retry-After header value is respected when provided."""
-        from tokenpak.handlers.rate_limit import RateLimitBackoff
+        # WS-D path restoration — TSR-04. The handlers tree relocated
+        # from tokenpak.handlers/ to tokenpak.proxy.handlers/ in commit
+        # 837514caff (2026-04-20). The backwards-compat shim was removed
+        # in the subsequent 17-module consolidation refactor
+        # (fbea4b1079). Update to the canonical location.
+        from tokenpak.proxy.handlers.rate_limit import RateLimitBackoff
 
         backoff = RateLimitBackoff(base_wait=1.0, max_wait=60.0, jitter_factor=0.0)
         wait = backoff.wait_time(0, retry_after=30.0)

@@ -247,10 +247,34 @@ def test_crewai_unknown_agents_no_crash(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(
-    not __import__('importlib').util.find_spec('autogen_tokenpak'),
-    reason='autogen_tokenpak package not installed'
+def _autogen_assistant_unavailable() -> bool:
+    """True iff autogen_tokenpak.TokenPakAssistant cannot be imported.
+
+    WS-D guard refinement — TSR-04. The previous `@skipif` checked only
+    that the `autogen_tokenpak` package was installed; it didn't catch
+    the case where the package is installed but the `TokenPakAssistant`
+    symbol is not re-exported (because the optional `tokenpak_agents`
+    dep is absent — see autogen_tokenpak/__init__.py's try/except
+    re-export). Result: tests fail at the per-test `from
+    autogen_tokenpak import TokenPakAssistant` instead of skipping.
+
+    Probe the actual import path so the skip predicate matches the
+    symbol the tests need.
+    """
+    try:
+        from autogen_tokenpak import TokenPakAssistant  # noqa: F401
+        return False
+    except ImportError:
+        return True
+
+
+_AUTOGEN_SKIP = pytest.mark.skipif(
+    _autogen_assistant_unavailable(),
+    reason="autogen_tokenpak.TokenPakAssistant not exposed (needs tokenpak_agents installed)",
 )
+
+
+@_AUTOGEN_SKIP
 def test_autogen_assistant_creation():
     from autogen_tokenpak import TokenPakAssistant
     a = TokenPakAssistant(name="alice", budget=2000)
@@ -258,11 +282,7 @@ def test_autogen_assistant_creation():
     assert a.budget == 2000
 
 
-
-@pytest.mark.skipif(
-    not __import__('importlib').util.find_spec('autogen_tokenpak'),
-    reason='autogen_tokenpak package not installed'
-)
+@_AUTOGEN_SKIP
 def test_autogen_receive_and_compress():
     from autogen_tokenpak import TokenPakAssistant
     a = TokenPakAssistant(name="alice", budget=2000)
@@ -272,11 +292,7 @@ def test_autogen_receive_and_compress():
     assert len(msgs) >= 1
 
 
-
-@pytest.mark.skipif(
-    not __import__('importlib').util.find_spec('autogen_tokenpak'),
-    reason='autogen_tokenpak package not installed'
-)
+@_AUTOGEN_SKIP
 def test_autogen_prepare_apply_handoff(tmp_path):
     from autogen_tokenpak import TokenPakAssistant
     from tokenpak.agentic.handoff import HandoffManager
@@ -299,11 +315,7 @@ def test_autogen_prepare_apply_handoff(tmp_path):
     assert any("quantum" in m.get("content", "") for m in msgs)
 
 
-
-@pytest.mark.skipif(
-    not __import__('importlib').util.find_spec('autogen_tokenpak'),
-    reason='autogen_tokenpak package not installed'
-)
+@_AUTOGEN_SKIP
 def test_autogen_handoff_wire_round_trip(tmp_path):
     from autogen_tokenpak import TokenPakAssistant
     from tokenpak import HandoffBlock, Handoff
