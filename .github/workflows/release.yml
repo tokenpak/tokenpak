@@ -12,6 +12,33 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────
   # Step 1: Run tests to ensure tag is release-worthy
   # ─────────────────────────────────────────────────────────────────────
+  #
+  # Test-gate contract (TIP7-001 + 2026-05-08 follow-up):
+  #
+  # This job installs only the [dev] extra — pytest, ruff, black, etc. — and
+  # NOT [full] / [retrieval] / [intelligence] etc. That's intentional: the
+  # auto-publish gate must pass on a slim install so users following the
+  # documented "pip install tokenpak" path get the same suite that ships.
+  #
+  # Test files that depend on optional/external/internal modules MUST guard
+  # their imports at module load time so collection succeeds without the
+  # extra installed:
+  #
+  #   • Optional deps (numpy, fastapi, scipy, pandas, llmlingua, litellm) →
+  #     `pytest.importorskip("dep_name", reason="...")` after `import pytest`.
+  #
+  #   • External packages bundled in extras (sentence-transformers, etc.) →
+  #     same `pytest.importorskip` call.
+  #
+  #   • Symbols missing from a namespace package that DOES exist in slim OSS
+  #     (e.g. `from tokenpak.compaction import CompactionMode` where
+  #     `tokenpak.compaction/` is a namespace dir but the submodule isn't
+  #     bundled) → wrap the import in
+  #     `try: ... except ImportError as exc: pytest.skip(..., allow_module_level=True)`.
+  #     `importorskip` on the bare namespace returns truthy and won't help here.
+  #
+  # When this gate is red, do NOT bypass it via `--ignore=...`. Either fix
+  # the failing test's import guard or add the missing extra to this step.
   test:
     name: Run Tests
     runs-on: ubuntu-latest

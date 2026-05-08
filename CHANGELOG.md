@@ -4,6 +4,18 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — release auto-publish test-gate fix (TIP7-001 follow-up)
+
+### Fixed
+
+- **Release auto-publish workflow** (`.github/workflows/release.yml`) — the `Run Tests` step on the `[dev]`-only install was tripped by 14 test files that did unconditional imports of optional/external/internal modules (numpy, fastapi, scipy, trackedge, websocket_proxy, provider_health, tokenpak.companion.mcp_server, tokenpak.compaction, tokenpak.extraction, tokenpak._internal). v1.5.1 and v1.5.2 both fell back to manual `twine upload` per `feedback_release_path_hardening` because of this gate. Each affected test now guards its imports at module load:
+  - Optional/external deps installable via extras: `pytest.importorskip("dep_name", reason="…")` immediately after `import pytest`.
+  - Namespace packages where the directory exists in slim OSS but the required submodule symbols don't (`tokenpak.compaction`, `tokenpak.extraction`, `tokenpak._internal`, `tokenpak.companion.mcp_server`): `try: from … import …  except ImportError as exc: pytest.skip(…, allow_module_level=True)` — `importorskip` on the bare namespace returns truthy and doesn't help.
+- **Workflow contract documented** — `release.yml`'s `test` job now carries a top-of-job comment block describing what the gate does and doesn't cover, the import-guard contract for optional deps, and the rule "do not bypass via `--ignore`; either fix the test's guard or add the missing extra to this step."
+- **Acceptance** — `pytest tests/ --collect-only -q` now succeeds with 0 errors on a `[dev]`-only install (was 13 collection errors); MultiPak Phase 0/1 contract + surface tests (54 + 100 = 154) remain green.
+
+---
+
 ## [v1.5.2] — 2026-05-08 — MultiPak Pro Phase 0 + Phase 1 OSS surface (Std 32)
 
 > **Release batching note**: this PATCH release ships both the Phase 0 TIP capability constants + `Pak`/`ContextPackage` data contracts (originally landed in PR #101) and the Phase 1 OSS surface (PR #102). Two-step v1.5.2 → v1.5.3 was originally intended; PR #102 merged immediately after PR #101 + the registry companion PR before a release-bump window opened, so the two phases ship together as a single batched PATCH per the release-protocol allowance.
