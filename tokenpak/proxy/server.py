@@ -907,6 +907,68 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 target_url[:60],
             )
 
+        # ── TIP Spend Guard: pre-send circuit breaker ─────────────────────────
+        # Blocks risky requests BEFORE provider send. Returns structured
+        # error.type=tokenpak_spend_guard_blocked (HTTP 402) when the policy
+        # engine projects cost or token count above thresholds.
+        # See tokenpak/proxy/spend_guard/ + standards/29-spend-guard-agent-contract.md
+        # Disabled with: spend_guard.enabled=false in config.yaml
+        #            or: TOKENPAK_SPEND_GUARD_ENABLED=0
+        if should_log and is_messages and body:
+            try:
+                from tokenpak.proxy.spend_guard import evaluate as _sg_evaluate
+                from tokenpak.proxy.request_pipeline import _resolve_session_id
+                # Resolve model cheaply from the request body — full route
+                # resolution happens later for the forward path.
+                _sg_model = ""
+                try:
+                    _sg_body_json = json.loads(body.decode("utf-8", errors="replace"))
+                    _sg_model = str(_sg_body_json.get("model") or "")
+                except Exception:
+                    pass
+                _sg_session = _resolve_session_id(self.headers, _sg_model or "unknown")
+                _sg_outcome = _sg_evaluate(
+                    body,
+                    _sg_model or "claude-sonnet-4-6",  # safe default rate
+                    _sg_session,
+                    dict(self.headers),
+                )
+                # Forwarded outcomes update body for downstream pipeline.
+                if _sg_outcome.kind in ("forward", "forward_modified"):
+                    if _sg_outcome.body is not None:
+                        body = _sg_outcome.body
+                elif _sg_outcome.kind == "replay":
+                    # TSG-03: held request is being replayed — substitute body
+                    # and headers, then continue down the normal forward path.
+                    if _sg_outcome.body is not None:
+                        body = _sg_outcome.body
+                    if _sg_outcome.headers:
+                        # Merge replayed headers (but don't drop incoming
+                        # auth — the replay headers ARE the original auth).
+                        for _hk, _hv in _sg_outcome.headers.items():
+                            try:
+                                self.headers[_hk] = _hv  # type: ignore[index]
+                            except Exception:
+                                pass
+                else:
+                    # block / hard_block / cancel / reprompt / estimate
+                    _sg_resp = _sg_outcome.response_body or b"{}"
+                    self.send_response(_sg_outcome.http_status or 402)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(_sg_resp)))
+                    self.send_header("X-TokenPak-Spend-Guard", _sg_outcome.kind)
+                    self.end_headers()
+                    self.wfile.write(_sg_resp)
+                    return
+            except ImportError:
+                pass  # spend guard not installed
+            except Exception as _sg_exc:
+                import logging as _sg_log
+                _sg_log.getLogger(__name__).debug(
+                    "tokenpak.spend_guard: error (passthrough): %s: %s",
+                    type(_sg_exc).__name__, _sg_exc,
+                )
+
         # ── DLP outbound secret scan ──────────────────────────────────────────
         # Scans the raw request body for secrets before compression/forwarding.
         # Default: TOKENPAK_DLP_ENABLED=1, TOKENPAK_DLP_MODE=warn (log only).

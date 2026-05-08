@@ -218,7 +218,7 @@ markers = [
     "needs_proxy: test requires a running tokenpak proxy (starts ProxyServer or subprocess)",
     "needs_webhook: test requires a live external API or webhook endpoint (e.g. ANTHROPIC_API_KEY)",
     "needs_internal_alerts: test requires tokenpak._internal.alerts (internal-only module)",
-    "needs_cali_env: test requires calibot-specific filesystem paths (/home/cali/tokenpak)",
+    "needs_cali_env: test requires a specific dev-host filesystem layout (/home/<user>/tokenpak)",
     "needs_fast_host: test has timing-sensitive assertions that fail on slow hosts (benchmarks, latency targets)",
 ]
 timeout = 30

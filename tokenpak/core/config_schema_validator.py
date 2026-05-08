@@ -51,6 +51,7 @@ _KNOWN_TOP_KEYS = {
     "monitoring",
     "security",
     "rate_limiting",
+    "spend_guard",
 }
 
 _KNOWN_FEATURE_KEYS = {

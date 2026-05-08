@@ -2,7 +2,7 @@
 
 **Version:** v1.0 RC1  
 **Date:** 2026-03-06  
-**Environment:** TrixBot (4GB RAM, Python 3.12)
+**Environment:** <dev-host> (4GB RAM, Python 3.12)
 
 ## Summary
 

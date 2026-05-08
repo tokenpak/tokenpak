@@ -79,7 +79,7 @@ from tokenpak.runtime.providers import Provider  # noqa: E402
 _FIXTURES = Path(__file__).parent.parent / "fixtures"
 _FAILING_REQ = json.loads((_FIXTURES / "cali_failing_request_2026-04-08.json").read_bytes())
 
-# Proxy.py files to test — calibot is mandatory, SueWu is optional
+# Proxy.py files to test — primary dev-host's proxy.py is mandatory, others are optional
 _PROXY_FILES: list[Path] = [_PROJECT_ROOT / "proxy.py"]
 _SUE_PROXY = _SUE_PROJECT_ROOT / "proxy.py"
 if _SUE_PROXY.exists():

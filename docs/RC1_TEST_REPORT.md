@@ -3,7 +3,7 @@
 **Date:** 2026-03-06  
 **Tester:** Trix (Automated Agent)  
 **Version:** 1.0.0-rc1  
-**Python:** 3.12.3 on Linux (TrixBot / Ubuntu)  
+**Python:** 3.12.3 on Linux (<dev-host> / Ubuntu)  
 **Task:** p2-tokenpak-v1-release-candidate-test
 
 ---
@@ -151,9 +151,9 @@ gap is highest priority since it's in the getting-started flow.
 
 | Item | Status |
 |------|--------|
-| Python 3.12.3 | ✅ Tested on TrixBot |
+| Python 3.12.3 | ✅ Tested on <dev-host> |
 | Python &lt;3.10 | ❌ Not supported; `pyproject.toml` sets `python_requires = ">=3.10"` |
-| Linux (Ubuntu 24.04, TrixBot) | ✅ |
+| Linux (Ubuntu 24.04, <dev-host>) | ✅ |
 | Windows / macOS | ❌ Not tested in this run |
 | Installed version matches source | ✅ 1.0.0-rc1 |
 

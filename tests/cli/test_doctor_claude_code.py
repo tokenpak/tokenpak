@@ -11,7 +11,7 @@ Coverage:
   4. Check 4 fails when active profile is not claude-code-*
   5. Check 5 fails when round-trip returns non-200
   6. Check 6 passes (skip) when no traffic and no DB
-  7. Check 7 fails on PYTHONPATH drift (calibot incident pattern)
+  7. Check 7 fails on PYTHONPATH drift (2026-04-08 incident pattern)
   8. Check 8 fails when sources disagree on proxy URL
   9. Check 9 fails when neither plugin dir candidate exists
   Additional: Check 7 passes when PYTHONPATH matches canonical
@@ -347,12 +347,12 @@ def test_check6_sessions_via_endpoint(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Test 7: PYTHONPATH drift (calibot incident) → check 7 fails
+# Test 7: PYTHONPATH drift (2026-04-08 incident pattern) → check 7 fails
 # ---------------------------------------------------------------------------
 
 
-def test_check7_pythonpath_drift_calibot_incident(tmp_home, monkeypatch):
-    """Check 7 detects drift where proc PYTHONPATH references /home/sue/ (calibot incident)."""
+def test_check7_pythonpath_drift_incident(tmp_home, monkeypatch):
+    """Check 7 detects drift where proc PYTHONPATH references the wrong user's home (2026-04-08 incident pattern)."""
     pid = 42001
     (tmp_home / ".tokenpak").mkdir(parents=True, exist_ok=True)
     (tmp_home / ".tokenpak" / "proxy.pid").write_text(str(pid))

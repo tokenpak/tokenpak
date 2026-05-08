@@ -2,7 +2,7 @@
 
 **Task:** COMP-02 — Verify hook pipeline in real TUI session  
 **Date:** 2026-04-14  
-**Tester:** Trix (Claude Code v2.1.104 on TrixBot)  
+**Tester:** Trix (Claude Code v2.1.104 on <dev-host>)  
 **Method:** `--include-hook-events --output-format stream-json` via `run_probe.sh`
 
 ---

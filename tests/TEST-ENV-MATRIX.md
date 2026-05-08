@@ -5,7 +5,7 @@ Defined in `pyproject.toml [tool.pytest.ini_options].markers` and documented in 
 
 ---
 
-## Hermetic developer run (SueWu-friendly)
+## Hermetic developer run (hermetic-friendly)
 
 ```bash
 pytest -m 'not needs_proxy and not needs_webhook and not needs_internal_alerts \
@@ -13,7 +13,7 @@ pytest -m 'not needs_proxy and not needs_webhook and not needs_internal_alerts \
 ```
 
 This excludes all env-dependent tests. Safe to run on any host without a proxy daemon,
-API keys, internal modules, or calibot-specific filesystem layout.
+API keys, internal modules, or <dev-host>-specific filesystem layout.
 
 ---
 
@@ -94,14 +94,14 @@ pytest -m needs_internal_alerts --tb=short -q
 
 ### `needs_cali_env`
 
-**Requires:** Calibot-specific filesystem paths (`/home/cali/tokenpak`).
+**Requires:** <dev-host>-specific filesystem paths (`/home/<user>/tokenpak`).
 
-These tests hardcode `/home/cali/tokenpak` as the project root (either via
-`sys.path.insert` or by treating calibot's `proxy.py` as mandatory). They pass on
-calibot and may import-error or silently skip the calibot-mandatory test cases on
-SueWu or any other host.
+These tests hardcode `/home/<user>/tokenpak` as the project root (either via
+`sys.path.insert` or by treating the dev-host's `proxy.py` as mandatory). They pass on
+<dev-host> and may import-error or silently skip the <dev-host>-mandatory test cases on
+<shared-host> or any other host.
 
-**How to run (on calibot only):**
+**How to run (on <dev-host> only):**
 ```bash
 pytest -m needs_cali_env --tb=short -q
 ```
@@ -110,8 +110,8 @@ pytest -m needs_cali_env --tb=short -q
 
 | File | Notes |
 |------|-------|
-| `tests/test_optimize.py` | `sys.path.insert(0, "/home/cali/tokenpak")` |
-| `tests/proxy/test_cache_control_ttl_ordering_regression.py` | calibot `proxy.py` is mandatory for Cases A–F |
+| `tests/test_optimize.py` | `sys.path.insert(0, "/home/<user>/tokenpak")` |
+| `tests/proxy/test_cache_control_ttl_ordering_regression.py` | <dev-host> `proxy.py` is mandatory for Cases A–F |
 | `tests/proxy/test_semantic_cache_streaming_regression.py` | loads top-level `proxy.py` from `_PROJECT_ROOT` |
 
 ---
@@ -121,10 +121,10 @@ pytest -m needs_cali_env --tb=short -q
 **Requires:** A host with sufficient CPU/IO throughput to meet latency assertions.
 
 Benchmarks with hard p50/p95/p99 targets (e.g. p99 < 500ms at 100 rps). These
-targets were set against TrixBot (4 GB RAM). On SueWu, a shared CI host, or any
+targets were set against <alt-dev-host> (4 GB RAM). On <shared-host>, a shared CI host, or any
 host under load, the same targets may not be met even though the code is correct.
 
-**How to run (on calibot/TrixBot only):**
+**How to run (on dev-host (with <dev-host>-style layout) / dev-host (alt) only):**
 ```bash
 pytest -m needs_fast_host --tb=short -q
 ```
@@ -144,7 +144,7 @@ pytest -m needs_fast_host --tb=short -q
 |------|---------|
 | Hermetic dev run (no env deps) | `pytest -m 'not needs_proxy and not needs_webhook and not needs_internal_alerts and not needs_cali_env and not needs_fast_host'` |
 | Proxy integration only | `pytest -m needs_proxy` |
-| Calibot full run | `pytest -m 'not needs_webhook'` |
+| <dev-host> full run | `pytest -m 'not needs_webhook'` |
 | Fast CI smoke | `pytest -m 'quick and not needs_proxy'` |
 | All env markers except fast-host | `pytest -m 'not needs_fast_host'` |
 
@@ -157,6 +157,6 @@ pytest -m needs_fast_host --tb=short -q
   They are pre-existing and outside the scope of this matrix.
 - Markers are advisory, not enforcing: a test marked `needs_proxy` will still run if you
   include it in your filter — it just may hang or fail. The marker only controls `-m` selection.
-- `needs_cali_env` tests on SueWu may import-error or silently test only the SueWu path.
-  The `test_cache_control_ttl_ordering_regression.py` tests SueWu's `proxy.py` as optional
-  (skipped if absent) and calibot's as mandatory.
+- `needs_cali_env` tests on <shared-host> may import-error or silently test only the <shared-host> path.
+  The `test_cache_control_ttl_ordering_regression.py` tests <shared-host>'s `proxy.py` as optional
+  (skipped if absent) and the dev-host's as mandatory.
