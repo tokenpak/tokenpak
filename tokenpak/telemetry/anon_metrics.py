@@ -6,6 +6,8 @@ Collects only:
   - compression ratio
   - latency_ms
   - date (UTC day bucket — no timestamp precision below day)
+  - active_profile (loaded profile name, e.g. "balanced", "agentic")
+  - consumption_mode (auto-detected mode: cli/tui/tmux/sdk/ide/cron)
 
 NO prompt content, NO response content, NO user-identifiable data.
 
@@ -26,7 +28,13 @@ from typing import List, Optional
 METRICS_DB = Path(os.path.expanduser("~/.tokenpak/metrics.db"))
 
 # Version tag lets the ingest endpoint evolve schemas without breakage.
-SCHEMA_VERSION = "1.0"
+# v1.1 — TSR-03 / CCI-21 restoration (2026-05-08): adds active_profile +
+# consumption_mode fields. Original commit 3a5b63cd58 was reverted by
+# refactor 88d3d9deb0 ("delete deprecated agent/ + _internal/ trees").
+# Schema is restored here; the _internal.config helpers + the
+# detect_consumption_mode() function live separately and are not part
+# of TSR-03's scope.
+SCHEMA_VERSION = "1.1"
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +66,10 @@ class MetricsRecord:
     # Routing
     model: str = ""
 
+    # Consumption context (CCI-21 restored — anonymous categorical, no PII)
+    active_profile: str = ""      # loaded profile name (e.g. "balanced", "agentic", "claude-code-cli")
+    consumption_mode: str = ""    # auto-detected mode (cli/tui/tmux/sdk/ide/cron) — may differ from profile
+
     # Schema version
     schema_version: str = SCHEMA_VERSION
 
@@ -74,10 +86,16 @@ class MetricsRecord:
         # Strip local-only fields
         d.pop("local_id", None)
         d.pop("synced", None)
+        # Omit empty mode fields to keep payload minimal for old installs
+        if not d.get("active_profile"):
+            d.pop("active_profile", None)
+        if not d.get("consumption_mode"):
+            d.pop("consumption_mode", None)
         return d
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "MetricsRecord":
+        keys = row.keys()
         return cls(
             local_id=row["local_id"],
             date_utc=row["date_utc"],
@@ -87,6 +105,8 @@ class MetricsRecord:
             compression_ratio=row["compression_ratio"],
             latency_ms=row["latency_ms"],
             model=row["model"],
+            active_profile=row["active_profile"] if "active_profile" in keys else "",
+            consumption_mode=row["consumption_mode"] if "consumption_mode" in keys else "",
             schema_version=row["schema_version"],
             synced=bool(row["synced"]),
         )
@@ -102,6 +122,8 @@ class MetricsRecord:
             "compression_ratio",
             "latency_ms",
             "model",
+            "active_profile",
+            "consumption_mode",
             "schema_version",
             "synced",
         }
@@ -144,10 +166,26 @@ class MetricsStore:
                     compression_ratio REAL NOT NULL DEFAULT 0.0,
                     latency_ms      REAL NOT NULL DEFAULT 0.0,
                     model           TEXT NOT NULL DEFAULT '',
-                    schema_version  TEXT NOT NULL DEFAULT '1.0',
+                    active_profile  TEXT NOT NULL DEFAULT '',
+                    consumption_mode TEXT NOT NULL DEFAULT '',
+                    schema_version  TEXT NOT NULL DEFAULT '1.1',
                     synced          INTEGER NOT NULL DEFAULT 0
                 )
             """)
+            # CCI-21 restoration migration: add the two new columns to
+            # databases that were created against the v1.0 schema.
+            existing = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(metrics)").fetchall()
+            }
+            if "active_profile" not in existing:
+                conn.execute(
+                    "ALTER TABLE metrics ADD COLUMN active_profile TEXT NOT NULL DEFAULT ''"
+                )
+            if "consumption_mode" not in existing:
+                conn.execute(
+                    "ALTER TABLE metrics ADD COLUMN consumption_mode TEXT NOT NULL DEFAULT ''"
+                )
             conn.commit()
 
     def record(self, rec: MetricsRecord) -> None:
@@ -157,8 +195,9 @@ class MetricsStore:
                 """
                 INSERT OR IGNORE INTO metrics
                     (local_id, date_utc, input_tokens, output_tokens, tokens_saved,
-                     compression_ratio, latency_ms, model, schema_version, synced)
-                VALUES (?,?,?,?,?,?,?,?,?,0)
+                     compression_ratio, latency_ms, model,
+                     active_profile, consumption_mode, schema_version, synced)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,0)
                 """,
                 (
                     rec.local_id,
@@ -169,6 +208,8 @@ class MetricsStore:
                     rec.compression_ratio,
                     rec.latency_ms,
                     rec.model,
+                    rec.active_profile,
+                    rec.consumption_mode,
                     rec.schema_version,
                 ),
             )
@@ -253,8 +294,17 @@ def record_request(
     tokens_saved: int,
     latency_ms: float,
     model: str,
+    active_profile: str = "",
+    consumption_mode: str = "",
 ) -> None:
-    """Record one request. No-op if metrics are disabled. Never raises."""
+    """Record one request. No-op if metrics are disabled. Never raises.
+
+    `active_profile` and `consumption_mode` are CCI-21 schema fields
+    (v1.1). Callers pass them explicitly when known; auto-detection
+    helpers (e.g. detect_consumption_mode, get_active_profile) live
+    separately and are not wired in here. Empty strings default to
+    omission from the upload payload via to_upload_dict().
+    """
     try:
         from tokenpak.core.config import get_metrics_enabled
 
@@ -268,6 +318,8 @@ def record_request(
             compression_ratio=compression_ratio,
             latency_ms=round(latency_ms, 1),
             model=model,
+            active_profile=active_profile,
+            consumption_mode=consumption_mode,
         )
         get_store().record(rec)
         # Also write to local JSONL file when TOKENPAK_TELEMETRY_MODE=local (default).
