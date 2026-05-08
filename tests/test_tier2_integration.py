@@ -22,14 +22,13 @@ from __future__ import annotations
 
 import pytest
 
-# Tier 2 modules live under tokenpak._internal — that namespace is not part of
-# the slim OSS surface. The earlier importorskip only checked
-# tokenpak.agentic.error_normalizer which masked the deeper tokenpak._internal
-# requirement; check both so the release test gate skips cleanly on a slim
-# install regardless of which of the two surfaces is missing first.
-pytest.importorskip("tokenpak._internal", reason="tokenpak._internal not present in slim OSS install")
-pytest.importorskip("tokenpak.agentic.error_normalizer", reason="module not available in current build")
-
+# Tier 2 integration tests require the tokenpak._internal namespace and a
+# constellation of agentic/regression submodules that don't ship in the slim
+# OSS install. importorskip on those bare namespaces returned truthy because
+# the namespace package directories exist; the deeper symbol imports below
+# still failed at module level. Wrap the full module-import block in
+# try/except + skip-at-module-level so the release test gate stays green
+# regardless of which inner symbol is missing first.
 import json
 import os
 import sys
@@ -39,20 +38,21 @@ import time
 from pathlib import Path
 from dataclasses import dataclass, field
 
-import pytest
-
 # Direct module imports (per acceptance criteria)
-from tokenpak.agentic.error_normalizer import ErrorNormalizer
-from tokenpak._internal.agentic.failure_memory import FailureMemoryDB, FailureSignature
-from tokenpak.budget_controller import BudgetController, IntentClass, ClassificationResult
-from tokenpak.monitoring.request_logger import RequestLogger
-from tokenpak.cache.registry import CacheRegistry
-from tokenpak.compression.salience.router import detect_content_type, extract as salience_extract
-from tokenpak.compression.fidelity_tiers import TierSelector, FidelityTier
-from tokenpak._internal.regression.retrieval_watchdog import (
-    RetrievalQualityWatchdog,
-    QueryRetrievalRecord,
-)
+try:
+    from tokenpak.agentic.error_normalizer import ErrorNormalizer
+    from tokenpak._internal.agentic.failure_memory import FailureMemoryDB, FailureSignature
+    from tokenpak.budget_controller import BudgetController, IntentClass, ClassificationResult
+    from tokenpak.monitoring.request_logger import RequestLogger
+    from tokenpak.cache.registry import CacheRegistry
+    from tokenpak.compression.salience.router import detect_content_type, extract as salience_extract
+    from tokenpak.compression.fidelity_tiers import TierSelector, FidelityTier
+    from tokenpak._internal.regression.retrieval_watchdog import (
+        RetrievalQualityWatchdog,
+        QueryRetrievalRecord,
+    )
+except ImportError as _exc:
+    pytest.skip(f"tokenpak._internal / Tier 2 modules not present in slim OSS install: {_exc}", allow_module_level=True)
 
 
 # ---------------------------------------------------------------------------

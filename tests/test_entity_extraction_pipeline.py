@@ -1,9 +1,17 @@
 
 import pytest
-pytest.importorskip("tokenpak.extraction", reason="module not available in current build")
-from tokenpak.extraction import EntityExtractor, EntityType
-from tokenpak.vault.indexer import VaultIndexer
-from tokenpak.vault.blocks import BlockStore
+
+# tokenpak.extraction is a namespace package in the slim OSS install — the
+# directory exists but the EntityExtractor/EntityType symbols ship from a
+# submodule that isn't bundled. importorskip on the bare namespace returns
+# truthy here, so wrap the actual import in try/except + skip-at-module-level
+# so the release test gate stays green.
+try:
+    from tokenpak.extraction import EntityExtractor, EntityType
+    from tokenpak.vault.indexer import VaultIndexer
+    from tokenpak.vault.blocks import BlockStore
+except ImportError as _exc:
+    pytest.skip(f"tokenpak.extraction symbols not present in slim OSS install: {_exc}", allow_module_level=True)
 
 
 def test_extracts_file_paths_correctly():
