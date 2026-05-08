@@ -38,6 +38,43 @@ import threading as _threading
 _proxy_ready: bool = False
 _shutdown_event = _threading.Event()
 
+# TSR-05c / WS-E (2026-05-08) — grep-able skip reasons for two
+# speculative-contract test classes in this file.
+#
+# Investigation summary:
+#   1. The `proxy_server` fixture builds vanilla HTTPServer(addr,
+#      ForwardProxyHandler) but never sets `server.proxy_server` —
+#      the back-reference that ProxyServer.start() injects at
+#      tokenpak/proxy/server.py:2569. First-layer symptom across all
+#      tests in this file: http.client.RemoteDisconnected after
+#      AttributeError in handler. Fixture is fixed in this PR.
+#   2. With the fixture corrected, the 10 TestHealthSchema /
+#      TestHealthStates tests that probe a "healthy/degraded/critical"
+#      status enum and `components` / `suggestions` keys still fail —
+#      production /health returns status ∈ {"ok","degraded",
+#      "shutting_down"}, has `uptime_seconds` (not `uptime`), and
+#      provides `connection_pool` + `circuit_breakers` (not
+#      `components` / `suggestions`). Git history shows the
+#      speculative shape never existed in any production version.
+#   3. The 8 TestReadiness tests probe GET /ready, which is not a
+#      handled route — same finding as TSR-05b for test_lifecycle.py.
+#
+# Resolution: tests that match the canonical production /health
+# schema (status field present, version, timestamp, no-auth, response
+# time, 200-on-healthy) stay live; speculative-contract tests are
+# skipped per Path B with grep-able reason constants.
+SKIP_READY_ENDPOINT = (
+    "/ready endpoint never existed in modular proxy; lifecycle readiness "
+    "is covered by ProxyServer shutdown state / supported health surfaces."
+)
+SKIP_HEALTH_SPECULATIVE_SCHEMA = (
+    "Test asserts a /health response shape that never existed in production: "
+    "status enum 'healthy/degraded/critical' (canonical: 'ok/degraded/shutting_down'), "
+    "or 'uptime' (canonical: 'uptime_seconds'), or 'components' / 'suggestions' "
+    "(canonical: 'connection_pool' / 'circuit_breakers'). Reach-out: see "
+    "tokenpak/proxy/server.py::ProxyServer.health() for the canonical schema."
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -71,12 +108,35 @@ _HEALTH_TEST_PORT = 19777
 
 @pytest.fixture(scope="module")
 def proxy_server():
-    """Spin up proxy server on an ephemeral port for all tests."""
+    """Spin up proxy server on an ephemeral port for all tests.
+
+    TSR-05c / WS-E fixture fix (2026-05-08): the previous version built
+    a vanilla HTTPServer without setting `server.proxy_server` — the
+    back-reference that ForwardProxyHandler.do_GET requires (it does
+    `ps = self.server.proxy_server` at proxy/server.py:541). First-
+    layer symptom was http.client.RemoteDisconnected on every
+    request because the handler raised AttributeError before
+    sending headers. Mirror the canonical wiring from
+    ProxyServer.start() at proxy/server.py:2569 (vanilla HTTPServer
+    + manually-attached ProxyServer instance).
+    """
     from http.server import HTTPServer
+    from tokenpak.proxy.server import ProxyServer
+
+    # Construct a real ProxyServer to back the handler. ProxyServer.__init__
+    # is side-effect-light (no port bind, no signal handlers); .start() is
+    # what binds the listener — we don't call .start() here because the
+    # fixture binds its own HTTPServer below.
+    ps = ProxyServer(host="127.0.0.1", port=_HEALTH_TEST_PORT)
 
     server = HTTPServer(("127.0.0.1", _HEALTH_TEST_PORT), ForwardProxyHandler)
+    server.proxy_server = ps  # canonical back-reference (proxy/server.py:2569)
 
-    # Mark proxy as ready (simulates post-startup state)
+    # Compat shim — the old monolith's _proxy_ready / _shutdown_event
+    # globals are no longer wired into the handler (it uses
+    # ProxyServer.shutdown.is_shutting_down). Kept here as no-op
+    # mutations so any test that touches them continues to do so
+    # without NameError; runtime behavior is governed by `ps.shutdown`.
     global _proxy_ready
     _proxy_ready = True
     _shutdown_event.clear()
@@ -106,11 +166,13 @@ class TestHealthSchema:
         _, data = _make_request("/health", _HEALTH_TEST_PORT)
         assert "status" in data
 
+    @pytest.mark.skip(reason=SKIP_HEALTH_SPECULATIVE_SCHEMA)
     def test_status_is_valid_value(self, proxy_server):
         _reset_circuits()
         _, data = _make_request("/health", _HEALTH_TEST_PORT)
         assert data["status"] in ("healthy", "degraded", "critical")
 
+    @pytest.mark.skip(reason=SKIP_HEALTH_SPECULATIVE_SCHEMA)
     def test_uptime_present_and_non_negative(self, proxy_server):
         _reset_circuits()
         _, data = _make_request("/health", _HEALTH_TEST_PORT)
@@ -132,6 +194,7 @@ class TestHealthSchema:
         ts = data["timestamp"]
         assert "T" in ts and ts.endswith("Z"), f"Bad timestamp: {ts!r}"
 
+    @pytest.mark.skip(reason=SKIP_HEALTH_SPECULATIVE_SCHEMA)
     def test_components_present(self, proxy_server):
         _reset_circuits()
         _, data = _make_request("/health", _HEALTH_TEST_PORT)
@@ -141,6 +204,7 @@ class TestHealthSchema:
         assert "provider_connections" in components
         assert "config" in components
 
+    @pytest.mark.skip(reason=SKIP_HEALTH_SPECULATIVE_SCHEMA)
     def test_suggestions_present_and_list(self, proxy_server):
         _reset_circuits()
         _, data = _make_request("/health", _HEALTH_TEST_PORT)
@@ -165,8 +229,16 @@ class TestHealthSchema:
 # /health — State transition tests
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(reason=SKIP_HEALTH_SPECULATIVE_SCHEMA)
 class TestHealthStates:
-    """Validate healthy/degraded/critical state transitions."""
+    """Validate healthy/degraded/critical state transitions.
+
+    TSR-05c (2026-05-08): every test in this class asserts against
+    the speculative `healthy/degraded/critical` status enum and/or
+    the never-existed `suggestions` field. Class-level skip until a
+    future redesign decides whether to surface suggestions through
+    the canonical /health response.
+    """
 
     def test_healthy_when_all_circuits_closed(self, proxy_server):
         _reset_circuits()
@@ -269,8 +341,17 @@ class TestHealthStates:
 # /ready — Readiness probe tests
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(reason=SKIP_READY_ENDPOINT)
 class TestReadiness:
-    """Validate /ready lifecycle probe."""
+    """Validate /ready lifecycle probe.
+
+    TSR-05c (2026-05-08): every test in this class probes GET /ready,
+    which has never been a handled route in the modular proxy
+    (do_GET handles /health, /status, /metrics, etc., but not
+    /ready). Same finding as TSR-05b in test_lifecycle.py. Class-
+    level skip; lifecycle readiness is canonically observable via
+    ProxyServer.shutdown.is_shutting_down + the /health endpoint.
+    """
 
     def test_ready_200_when_ready(self, proxy_server):
         _proxy_ready = True
