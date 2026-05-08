@@ -27,6 +27,10 @@ from typing import Optional
 
 import pytest
 
+# websocket_proxy is a standalone external package, not bundled with tokenpak
+# OSS or any of its extras. Skip cleanly so the release test gate stays green.
+pytest.importorskip("websocket_proxy", reason="websocket_proxy is a separate external package not installed in slim test env")
+
 try:
     import websockets
     WEBSOCKETS_AVAILABLE = True

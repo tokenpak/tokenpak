@@ -29,6 +29,10 @@ from typing import List
 
 import pytest
 
+# fastapi is an optional dep ([serve]/[telemetry]); skip cleanly when absent
+# so the release test gate stays green without installing tokenpak[full].
+pytest.importorskip("fastapi", reason="fastapi not installed (optional dep — install via tokenpak[serve] or [telemetry])")
+
 # Ensure project root on path
 import sys
 ROOT = Path(__file__).parent.parent

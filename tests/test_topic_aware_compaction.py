@@ -15,15 +15,23 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.compaction", reason="module not available in current build")
+
+# tokenpak.compaction is a namespace package in the slim OSS install — the
+# directory exists but the CompactionMode/TopicAwarePolicy/etc. symbols ship
+# from submodules that aren't bundled. importorskip on the bare namespace
+# returns truthy here, so wrap the actual import in try/except +
+# skip-at-module-level so the release test gate stays green.
 import unittest
 
-from tokenpak.compaction import (
-    CompactionMode,
-    TopicAwarePolicy,
-    TopicBoundaryDetector,
-    TopicSegment,
-)
+try:
+    from tokenpak.compaction import (
+        CompactionMode,
+        TopicAwarePolicy,
+        TopicBoundaryDetector,
+        TopicSegment,
+    )
+except ImportError as _exc:
+    pytest.skip(f"tokenpak.compaction symbols not present in slim OSS install: {_exc}", allow_module_level=True)
 
 # ---------------------------------------------------------------------------
 # Test data: Multi-topic content

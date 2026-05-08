@@ -21,6 +21,11 @@ from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# fastapi is an optional dep ([serve]/[telemetry]); skip cleanly when absent
+# so the release test gate stays green without installing tokenpak[full].
+pytest.importorskip("fastapi", reason="fastapi not installed (optional dep — install via tokenpak[serve] or [telemetry])")
+
 from fastapi.testclient import TestClient
 
 from tokenpak.telemetry.server import create_app, parse_filter
