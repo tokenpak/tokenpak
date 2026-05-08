@@ -237,9 +237,14 @@ class TestReindex:
         mock_processor = MagicMock()
         mock_processor.process.return_value = "print('hello')"
 
-        with patch("tokenpak.registry.BlockRegistry", return_value=mock_registry), \
-             patch("tokenpak.processors.get_processor", return_value=mock_processor), \
-             patch("tokenpak.tokens.count_tokens", return_value=5):
+        # TSR-05s: import paths follow the modular tree — these previously
+        # patched `tokenpak.{registry,processors,tokens}.*` which were the
+        # pre-refactor monolith locations. The watcher's `_reindex()` now
+        # imports from `tokenpak.core.registry`, `tokenpak.compression.processors`,
+        # and `tokenpak.telemetry.tokens`. Patches updated to match.
+        with patch("tokenpak.core.registry.BlockRegistry", return_value=mock_registry), \
+             patch("tokenpak.compression.processors.get_processor", return_value=mock_processor), \
+             patch("tokenpak.telemetry.tokens.count_tokens", return_value=5):
 
             w = VaultWatcher(cfg, on_change=called.append)
             w._reindex([str(f)])
@@ -254,8 +259,8 @@ class TestReindex:
         mock_registry = MagicMock()
         mock_registry.has_changed.return_value = False  # no change
 
-        with patch("tokenpak.registry.BlockRegistry", return_value=mock_registry), \
-             patch("tokenpak.processors.get_processor", return_value=MagicMock()):
+        with patch("tokenpak.core.registry.BlockRegistry", return_value=mock_registry), \
+             patch("tokenpak.compression.processors.get_processor", return_value=MagicMock()):
             w = VaultWatcher(cfg)
             w._reindex([str(f)])
 
@@ -271,9 +276,9 @@ class TestReindex:
         mock_processor = MagicMock()
         mock_processor.process.return_value = "def foo(): pass"
 
-        with patch("tokenpak.registry.BlockRegistry", return_value=mock_registry), \
-             patch("tokenpak.processors.get_processor", return_value=mock_processor), \
-             patch("tokenpak.tokens.count_tokens", return_value=3):
+        with patch("tokenpak.core.registry.BlockRegistry", return_value=mock_registry), \
+             patch("tokenpak.compression.processors.get_processor", return_value=mock_processor), \
+             patch("tokenpak.telemetry.tokens.count_tokens", return_value=3):
             w = VaultWatcher(cfg)
             w._reindex([str(f)])
 
