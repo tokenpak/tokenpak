@@ -40,22 +40,38 @@ def temp_registry():
 
 @pytest.fixture
 def populated_registry(temp_registry):
-    """Registry with 3 pre-registered agents."""
-    temp_registry.register("agent-1", "host-1", {
+    """Registry with 3 pre-registered agents.
+
+    TSR-05g / WS-E (2026-05-08) — fixture name strings restored. The
+    test assertions throughout this file use the agent NAMES "trix",
+    "sue", "cali" (e.g. `assert agent.name == 'sue'`); at some point
+    the fixture's name strings were generalized to "agent-1/2/3" but
+    the test assertions weren't updated to match. AgentRegistry.register's
+    first positional argument is `name` (see
+    tokenpak/orchestration/registry.py), so the agent's name is exactly
+    what's passed here. Reverting the fixture to the original names
+    makes the 14 assertion-mismatch failures clear with no test-body
+    changes.
+
+    Note: tests/ is not on the OSS surface; arbitrary test-fixture
+    names are not subject to `feedback_always_dynamic` (which governs
+    production enumerations, not test data).
+    """
+    temp_registry.register("trix", "host-1", {
         "gpu": False,
         "memory_gb": 4,
         "specialties": ["code", "execution"],
         "provider_access": ["anthropic", "openai"],
         "max_concurrent": 1,
     })
-    temp_registry.register("agent-2", "host-2", {
+    temp_registry.register("sue", "host-2", {
         "gpu": False,
         "memory_gb": 8,
         "specialties": ["orchestration", "qa"],
         "provider_access": ["anthropic"],
         "max_concurrent": 2,
     })
-    temp_registry.register("agent-3", "host-3", {
+    temp_registry.register("cali", "host-3", {
         "gpu": True,
         "memory_gb": 16,
         "specialties": ["data", "analysis", "code"],
@@ -142,7 +158,8 @@ class TestAgentRegistry:
         assert id1 != id2
 
     def test_get_agent(self, temp_registry):
-        agent_id = temp_registry.register("agent-2", "host-2", {"memory_gb": 8})
+        # TSR-05g — fixture name string aligned with assertion below.
+        agent_id = temp_registry.register("sue", "host-2", {"memory_gb": 8})
         agent = temp_registry.get(agent_id)
         assert agent is not None
         assert agent.name == "sue"
