@@ -36,8 +36,27 @@ jobs:
 
       - name: Run determinism tests (run ${{ matrix.run }})
         run: |
+          # pytest exit codes:
+          #   0 = all tests passed
+          #   1 = tests failed
+          #   2 = test execution interrupted by user
+          #   3 = internal pytest error
+          #   4 = pytest command-line usage error
+          #   5 = no tests collected
+          # Exit 5 happens when tests/determinism/ uses pytest.importorskip()
+          # for a module not present in the install layout (e.g. tokenpak.pack
+          # in slim builds). Treat 5 as a pass with a workflow warning so a
+          # legitimate skip-only state doesn't false-fail the gate. Any real
+          # failure (exit 1, 2, 3, 4) still fails the workflow.
+          set +e
           pytest tests/determinism/ -v --tb=long \
             --junit-xml=test-results/determinism-run-${{ matrix.run }}.xml
+          EXIT_CODE=$?
+          if [ "$EXIT_CODE" -eq 5 ]; then
+            echo "::warning::No determinism tests collected (likely importorskip in current build); treating as pass."
+            exit 0
+          fi
+          exit $EXIT_CODE
 
       - name: Upload test results
         if: always()

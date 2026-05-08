@@ -6,7 +6,7 @@ for the /health and /stats endpoints (no LLM calls required — pure proxy
 overhead benchmarked in isolation).
 
 Targets:
-  - /health: p99 < 500ms at 100 req/sec (bounded pool, TrixBot 4GB) sustained for 5 seconds
+  - /health: p99 < 500ms at 100 req/sec (bounded pool, <dev-host> 4GB) sustained for 5 seconds
   - /stats:  p99 < 30ms at 100 req/sec sustained for 5 seconds
   - Error rate: < 0.1%
 """
@@ -136,7 +136,7 @@ class TestHealthEndpointLoad:
         print(f"  p50={p50:.1f}ms  p95={p95:.1f}ms  p99={p99:.1f}ms")
         print(f"  errors={errors}/{total} ({error_rate*100:.2f}%)")
 
-        assert p99 < 500.0, f"p99={p99:.1f}ms — acceptable on constrained hardware (TrixBot 4GB)"
+        assert p99 < 500.0, f"p99={p99:.1f}ms — acceptable on constrained hardware (<dev-host> 4GB)"
         assert error_rate < 0.001, f"Error rate {error_rate*100:.3f}% exceeds 0.1% SLA"
 
     def test_health_100rps_p50_under_5ms(self, proxy):

@@ -28,7 +28,7 @@ import pytest
 TOKENPAK_ROOT = Path(__file__).parent.parent.parent / "tokenpak"
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-# Try the agent.proxy path (production suewu/calibot); fall back to tokenpak.proxy (TrixBot dev)
+# Try the agent.proxy path (production layout); fall back to tokenpak.proxy (dev layout)
 try:
     from tokenpak.proxy.prompt_builder import (
         inject_with_cache_boundary,
