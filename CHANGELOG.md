@@ -6,6 +6,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v1.5.1] — 2026-05-07
+
 ### Added (2026-05-07 — TIP Spend Guard OSS, initiative `2026-05-07-tip-spend-guard-oss`)
 - **TIP Spend Guard** — proxy-side pre-send circuit breaker that blocks risky requests before they reach the upstream provider. New package `tokenpak/proxy/spend_guard/` (estimator, policy, pending store, intent parser, replay engine, TIP-header parser, audit log, orchestrator, session-state). Hooked into `proxy/server.py` immediately after body read, before DLP. Returns HTTP 402 Payment Required with `error.type=tokenpak_spend_guard_blocked` JSON; user releases via Yes/No reply or `[TIP: allow=once max=$X]` directive; hard-block ceiling cannot be bypassed. Default `enabled: true` with thresholds: warn=100K/$2, block=500K/$10, hard_block=1M/$50, **session_block_cost_usd=$10** (death-by-1000-cuts defense). Pricing pulled from `tokenpak.models.get_rates` (single source of truth). Audit log at `~/.tokenpak/spend_guard.db`. Standard 29 (`29-spend-guard-agent-contract.md`) governs the wire contract. New errors `SpendGuardBlocked (TP-ESG01)` and `SpendGuardHardBlocked (TP-ESG02)` in `core/error_handling.py`. Glossary 08 amended: "Spend Guard" promoted to canonical proxy-side term; companion side renamed to "advisory budget." User-facing docs at `docs/spend-guard.md`. Canonical spike-replay test against the actual 2026-05-07 09:28-10:56 monitor.db trace proves block fires at minute 09:38 with cumulative spend < $10 — 91% reduction vs actual $99.67 spike. **149 tests** in `tokenpak/tests/test_spend_guard_*.py`. (TSG-01..05 / Sue, in-session)
 
