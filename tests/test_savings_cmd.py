@@ -12,6 +12,33 @@ from unittest.mock import patch
 
 import pytest
 
+
+# TSR-05t deprecated-command skip reason (grep-able)
+# ─────────────────────────────────────────────
+# `tokenpak savings` is now deprecated. `run_savings_cmd()` emits a
+# deprecation banner followed by `tokenpak status`'s default view:
+#
+#   ⚠️  `tokenpak savings` is deprecated.
+#       All savings data is now shown in `tokenpak status` (default view).
+#
+# Two tests encode the pre-deprecation contract:
+#   - `test_json_output` calls `json.loads(captured.out)` — banner text
+#     prefixed → `JSONDecodeError`.
+#   - `test_no_db_graceful` asserts `"No data" / "✖" / "not found"` —
+#     deprecation banner + delegated status output replace those markers.
+#
+# Both contracts are gone for good (the command is deprecated). Path B
+# skip with grep-able reason; the 5 live tests that don't depend on the
+# deprecated wire format remain meaningful guards on the
+# `query_savings()` business logic.
+SKIP_SAVINGS_CMD_DEPRECATED = (
+    "Test asserts the pre-deprecation `tokenpak savings` wire format. "
+    "The command now emits a deprecation banner and delegates to "
+    "`tokenpak status`; the old JSON / no-data output shape is gone. "
+    "Live tests covering `query_savings()` business logic remain."
+)
+
+
 from tokenpak.cli.commands.savings import (
     _query_by_model,
     _query_savings,
@@ -144,6 +171,7 @@ def test_query_by_model_returns_breakdown(temp_db):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(reason=SKIP_SAVINGS_CMD_DEPRECATED)
 def test_json_output(temp_db, capsys):
     """AC5 (json flag): output must be valid JSON with summary key."""
     args = SimpleNamespace(period="24h", verbose=False, as_json=True)
@@ -182,6 +210,7 @@ def test_human_output_shows_four_values(temp_db, capsys):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(reason=SKIP_SAVINGS_CMD_DEPRECATED)
 def test_no_db_graceful(tmp_path, capsys):
     """Missing DB should print error, not crash."""
     missing = str(tmp_path / "nonexistent.db")
