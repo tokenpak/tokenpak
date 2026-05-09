@@ -19,6 +19,40 @@ from types import SimpleNamespace
 
 import pytest
 
+
+# TSR-04 module-level skip — superseded design (grep-able)
+# ─────────────────────────────────────────────
+# CCG-12 (db0f08c6e5, 2026-04-10) shipped a proxy-side per-session policy
+# feature: a `session_policies` SQLite table + three CLI commands
+# (`cmd_session_budget_set`, `cmd_session_mode_set`, `cmd_session_route_pin`)
+# + `_lookup_session_policy()` / `_get_session_spend()` helpers in proxy.py.
+#
+# That whole feature has since been **removed from production** in favor of
+# the companion-side advisory budget (per Std 32, Glossary 08 entry
+# "advisory budget (companion)" — "stored in ~/.tokenpak/companion/budget.db").
+# Verification:
+#   - `grep -rn 'session_policies' tokenpak/`           → 0 results
+#   - `grep -rn 'def cmd_session_' tokenpak/`           → 0 results
+#   - `grep -rn '_lookup_session_policy' tokenpak/`     → 0 results
+#
+# The test's 10 ERRORs (post-#147 baseline) all stem from monkeypatching a
+# CLI helper that exists under a different name (`_get_monitor_db` →
+# `_get_monitor_db_path`) AND from importing `cmd_session_budget_set` /
+# `cmd_session_mode_set` / `cmd_session_route_pin` from `tokenpak.cli`,
+# none of which exist on the public surface anymore.
+#
+# Skipping the entire module is correct: the contract is gone by design,
+# not regressed. The advisory-budget path has its own tests under
+# `tests/companion/`. Same Path B pattern as TSR-05t (deprecated `tokenpak
+# savings`) — superseded API/wire-format, not a real test bug.
+pytest.skip(
+    "CCG-12 per-session policy feature superseded by companion advisory "
+    "budget (Std 32 / Glossary 08). Production removed `cmd_session_*` "
+    "and `session_policies` table; this test asserts a contract that no "
+    "longer exists. See TSR-04 / #106.",
+    allow_module_level=True,
+)
+
 # Make sure the tokenpak package is importable from the repo root.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -45,7 +79,7 @@ def tmp_monitor_db(tmp_path, monkeypatch):
     monkeypatch.setenv("TOKENPAK_DB", db_path)
     # Patch the CLI helper to return this path directly.
     import tokenpak.cli as _cli
-    monkeypatch.setattr(_cli, "_get_monitor_db", lambda: db_path)
+    monkeypatch.setattr(_cli, "_get_monitor_db_path", lambda: Path(db_path))
     return db_path
 
 
