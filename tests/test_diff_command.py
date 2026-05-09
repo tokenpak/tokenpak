@@ -8,6 +8,26 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+
+# TSR-05v Pro-tier speculative-contract skip reason (grep-able)
+# ─────────────────────────────────────────────
+# Tests below patch `tokenpak.infrastructure.license_activation.is_pro`
+# — that path never existed in OSS:
+#   - `git log -S 'def is_pro' -- tokenpak/`         → 0 hits
+#   - `find tokenpak -path '*/infrastructure/*'`     → 0 results
+# Pro-tier license activation lives in the closed-source `tokenpak-paid`
+# daemon per Std 25; OSS doesn't carry an `is_pro` symbol. Speculative
+# contract — same Path B pattern as TSR-05u (#134) on the same patch
+# path, TSR-05r (#131) `CacheManager.get_stats`, and TSR-05b (#116)
+# `/ready` endpoint.
+SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS = (
+    "Test patches `tokenpak.infrastructure.license_activation.is_pro` "
+    "— that path never existed in OSS (Pro-tier license activation "
+    "lives in closed-source tokenpak-paid per Std 25). Speculative "
+    "contract; same Path B pattern as TSR-05u / TSR-05r / TSR-05b."
+)
+
+
 from tokenpak.cli.commands.diff import (
     DiffBlock,
     ContextDiff,
@@ -191,6 +211,7 @@ def test_print_diff_json_output(capsys):
 # Pro gating
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(reason=SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS)
 def test_diff_gated_non_pro(capsys):
     """Non-Pro license should print an upgrade prompt and exit."""
     import pytest
@@ -206,6 +227,7 @@ def test_diff_gated_non_pro(capsys):
     assert "Pro" in captured.out or "license" in captured.out.lower()
 
 
+@pytest.mark.skip(reason=SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS)
 def test_diff_empty_when_no_trace(capsys):
     """No trace in DB → clean empty diff output."""
     with (
