@@ -1,8 +1,6 @@
 """Unit tests for processors/data.py — DataProcessor."""
 import json
 
-import pytest
-
 from tokenpak.compression.processors.data import DataProcessor
 
 

@@ -18,11 +18,8 @@ import tempfile
 import time
 from pathlib import Path
 
-import pytest
-
 from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
 from tokenpak.telemetry.storage import TelemetryDB
-
 
 # ---------------------------------------------------------------------------
 # Helpers

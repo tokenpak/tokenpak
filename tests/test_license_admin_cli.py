@@ -6,13 +6,11 @@ Run:  pytest tests/test_license_admin_cli.py -v
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.license.admin_cli", reason="module not available in current build")
 import hashlib
 import json
-import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -23,9 +21,8 @@ try:
 except ImportError:
     CRYPTO_AVAILABLE = False
 
+from tokenpak._internal.license.admin_cli import build_parser, cmd_genkeys, cmd_keygen, cmd_verify
 from tokenpak._internal.license.keys import generate_keypair
-from tokenpak._internal.license.admin_cli import build_parser, cmd_keygen, cmd_verify, cmd_genkeys
-
 
 # ─────────────────────────────────────────────
 # Fixtures
@@ -184,8 +181,9 @@ class TestKeygenCommand:
 class TestVerifyCommand:
 
     def _make_token(self, keypair_files, tier="pro", days=365):
-        from datetime import datetime, timezone, timedelta
-        from tokenpak._internal.license.keys import sign_license, format_license_key, LicensePayload
+        from datetime import datetime, timedelta, timezone
+
+        from tokenpak._internal.license.keys import LicensePayload, format_license_key, sign_license
         priv_path, _ = keypair_files
         priv = Path(priv_path).read_bytes()
         expires = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
@@ -313,11 +311,15 @@ class TestCustomerIdPayload:
     """Verify customer_id survives the sign → verify round-trip."""
 
     def test_customer_id_roundtrip(self):
-        from tokenpak._internal.license.keys import (
-            generate_keypair, sign_license, verify_license,
-            format_license_key, LicensePayload
-        )
         from datetime import datetime, timezone
+
+        from tokenpak._internal.license.keys import (
+            LicensePayload,
+            format_license_key,
+            generate_keypair,
+            sign_license,
+            verify_license,
+        )
         priv, pub = generate_keypair()
         payload = LicensePayload(
             key_id=format_license_key(),
@@ -333,11 +335,15 @@ class TestCustomerIdPayload:
         assert result.customer_id == "abc123hash"
 
     def test_no_customer_id_defaults_none(self):
-        from tokenpak._internal.license.keys import (
-            generate_keypair, sign_license, verify_license,
-            format_license_key, LicensePayload
-        )
         from datetime import datetime, timezone
+
+        from tokenpak._internal.license.keys import (
+            LicensePayload,
+            format_license_key,
+            generate_keypair,
+            sign_license,
+            verify_license,
+        )
         priv, pub = generate_keypair()
         payload = LicensePayload(
             key_id=format_license_key(),

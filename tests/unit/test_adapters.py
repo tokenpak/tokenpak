@@ -15,27 +15,23 @@ Coverage:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.adapters.anthropic", reason="module not available in current build")
 import json
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-
+from tokenpak.adapters.anthropic import AnthropicAdapter
 from tokenpak.adapters.base import (
-    TokenPakAdapter,
     TokenPakAdapterError,
     TokenPakAuthError,
     TokenPakConfigError,
     TokenPakTimeoutError,
 )
-from tokenpak.adapters.anthropic import AnthropicAdapter
-from tokenpak.adapters.openai import OpenAIAdapter
 from tokenpak.adapters.langchain import LangChainAdapter, _normalise_messages
 from tokenpak.adapters.litellm import LiteLLMAdapter, _resolve_provider
-
+from tokenpak.adapters.openai import OpenAIAdapter
 
 # ─── Shared helpers ────────────────────────────────────────────────────────
 

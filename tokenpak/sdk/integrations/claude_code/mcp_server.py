@@ -36,7 +36,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Vault root resolution (CCP-07)
 # ---------------------------------------------------------------------------
@@ -375,8 +374,8 @@ def _handle_summarize_related_issues(params: Dict[str, Any]) -> Dict[str, Any]:
     if not query:
         return {"status": "error", "error": "query is required and must be non-empty"}
 
-    from tokenpak.vault.search import extract_must_hit_terms  # lazy
     from tokenpak.vault.retrieval.vault_index import VaultIndex  # lazy
+    from tokenpak.vault.search import extract_must_hit_terms  # lazy
 
     tokenpak_dir = os.path.join(vault_root, ".tokenpak")
     index = VaultIndex(tokenpak_dir)

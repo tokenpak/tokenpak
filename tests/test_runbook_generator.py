@@ -15,24 +15,18 @@ Coverage:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.agentic.runbook_generator", reason="module not available in current build")
-import json
-import re
 from pathlib import Path
 
 import pytest
-
 from tokenpak.agentic.runbook_generator import (
     Episode,
     RunbookDB,
-    RunbookEntry,
     maybe_generate,
     render_markdown,
-    should_generate,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

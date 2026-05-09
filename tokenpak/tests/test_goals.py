@@ -7,21 +7,19 @@ Tests cover:
 - Edge cases: empty goals, boundary conditions, state persistence
 """
 
-import pytest
-import json
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
-from unittest import mock
+
+import pytest
 
 from tokenpak.cli.goals import (
-    GoalType,
-    GoalStatus,
-    GoalProgress,
     Goal,
     GoalManager,
+    GoalProgress,
+    GoalStatus,
+    GoalType,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -93,13 +91,13 @@ def test_goal_progress_construction():
         target_value=100.0,
         progress_percent=50.0,
     )
-    
+
     assert progress.goal_id == "goal_001"
     assert progress.current_value == 50.0
     assert progress.target_value == 100.0
     assert progress.progress_percent == 50.0
-    assert progress.milestone_25_fired == False
-    assert progress.milestone_50_fired == False
+    assert not progress.milestone_25_fired
+    assert not progress.milestone_50_fired
     assert progress.pace_status == "on_track"
 
 
@@ -107,7 +105,7 @@ def test_goal_progress_to_dict():
     """Test GoalProgress serialization."""
     progress = GoalProgress(goal_id="goal_001", current_value=50.0, target_value=100.0)
     data = progress.to_dict()
-    
+
     assert isinstance(data, dict)
     assert data["goal_id"] == "goal_001"
     assert data["current_value"] == 50.0
@@ -128,10 +126,10 @@ def test_goal_progress_from_dict():
         "pace_alert_fired": False,
         "last_update": 1234567890.0,
     }
-    
+
     progress = GoalProgress.from_dict(data)
     assert progress.goal_id == "goal_001"
-    assert progress.milestone_25_fired == True
+    assert progress.milestone_25_fired
     assert progress.current_value == 50.0
 
 
@@ -146,7 +144,7 @@ def test_goal_construction(sample_goal):
     assert sample_goal.name == "Monthly Savings Target"
     assert sample_goal.goal_type == "savings"
     assert sample_goal.target_value == 500.0
-    assert sample_goal.enabled == True
+    assert sample_goal.enabled
 
 
 def test_goal_days_remaining(sample_goal):
@@ -154,7 +152,7 @@ def test_goal_days_remaining(sample_goal):
     # Set end_date to 10 days in the future
     future = (date.today() + timedelta(days=10)).isoformat()
     sample_goal.end_date = future
-    
+
     remaining = sample_goal.days_remaining()
     assert 9 <= remaining <= 10
 
@@ -164,7 +162,7 @@ def test_goal_days_elapsed(sample_goal):
     # Set start_date to 5 days ago
     past = (date.today() - timedelta(days=5)).isoformat()
     sample_goal.start_date = past
-    
+
     elapsed = sample_goal.days_elapsed()
     assert elapsed == 5
 
@@ -173,7 +171,7 @@ def test_goal_total_days(sample_goal):
     """Test Goal.total_days() calculation."""
     sample_goal.start_date = "2026-03-01"
     sample_goal.end_date = "2026-03-31"
-    
+
     total = sample_goal.total_days()
     assert total == 30
 
@@ -189,7 +187,7 @@ def test_goal_expected_progress_percent():
         start_date=(date.today() - timedelta(days=15)).isoformat(),
         end_date=(date.today() + timedelta(days=15)).isoformat(),
     )
-    
+
     expected = goal.expected_progress_percent()
     # Should be around 50% (15 days elapsed out of ~30 total)
     assert 45 <= expected <= 55
@@ -198,7 +196,7 @@ def test_goal_expected_progress_percent():
 def test_goal_to_dict(sample_goal):
     """Test Goal serialization."""
     data = sample_goal.to_dict()
-    
+
     assert isinstance(data, dict)
     assert data["goal_id"] == "goal_001"
     assert data["name"] == "Monthly Savings Target"
@@ -214,7 +212,7 @@ def test_goal_from_dict():
         "start_date": "2026-03-01",
         "end_date": "2026-03-31",
     }
-    
+
     goal = Goal.from_dict(data)
     assert goal.goal_id == "goal_001"
     assert goal.name == "Test Goal"
@@ -233,12 +231,12 @@ def test_goal_manager_add_goal(goal_manager):
         target_value=1000.0,
         description="Save $1000 on API calls",
     )
-    
+
     assert goal.goal_id is not None
     assert goal.name == "Test Savings Goal"
     assert goal.goal_type == "savings"
     assert goal.target_value == 1000.0
-    
+
     # Verify it was added to manager
     assert goal.goal_id in goal_manager.goals
     assert goal.goal_id in goal_manager.progress
@@ -256,11 +254,11 @@ def test_goal_manager_get_goal(goal_manager):
         goal_type="compression",
         target_value=50.0,
     )
-    
+
     retrieved = goal_manager.get_goal(created.goal_id)
     assert retrieved is not None
     assert retrieved.name == "Retrieve Test"
-    
+
     progress = goal_manager.get_progress(created.goal_id)
     assert progress is not None
     assert progress.goal_id == created.goal_id
@@ -279,13 +277,13 @@ def test_goal_manager_edit_goal(goal_manager):
         goal_type="savings",
         target_value=100.0,
     )
-    
+
     updated = goal_manager.edit_goal(goal.goal_id, name="Updated Name", target_value=200.0)
-    
+
     assert updated is not None
     assert updated.name == "Updated Name"
     assert updated.target_value == 200.0
-    
+
     # Verify progress target was updated
     progress = goal_manager.get_progress(goal.goal_id)
     assert progress.target_value == 200.0
@@ -310,10 +308,10 @@ def test_goal_manager_delete_goal(goal_manager):
         target_value=100.0,
     )
     goal_id = goal.goal_id
-    
+
     result = goal_manager.delete_goal(goal_id)
-    
-    assert result == True
+
+    assert result
     assert goal_id not in goal_manager.goals
     assert goal_id not in goal_manager.progress
 
@@ -321,7 +319,7 @@ def test_goal_manager_delete_goal(goal_manager):
 def test_goal_manager_delete_goal_not_found(goal_manager):
     """Test 4b: GoalManager.delete_goal() returns False for non-existent goal."""
     result = goal_manager.delete_goal("nonexistent")
-    assert result == False
+    assert not result
 
 
 # ---------------------------------------------------------------------------
@@ -338,9 +336,9 @@ def test_goal_manager_update_progress(goal_manager):
         start_date=(date.today() - timedelta(days=15)).isoformat(),
         end_date=(date.today() + timedelta(days=15)).isoformat(),
     )
-    
+
     progress = goal_manager.update_progress(goal.goal_id, current_value=60.0)
-    
+
     assert progress is not None
     assert progress.current_value == 60.0
     assert progress.progress_percent == 60.0
@@ -357,10 +355,10 @@ def test_goal_manager_update_progress_ahead(goal_manager):
         start_date=(date.today() - timedelta(days=1)).isoformat(),
         end_date=(date.today() + timedelta(days=29)).isoformat(),
     )
-    
+
     # After 1 day, only ~3% time elapsed, but we're at 50% progress
     progress = goal_manager.update_progress(goal.goal_id, current_value=50.0)
-    
+
     assert progress.pace_status == "ahead"
 
 
@@ -373,10 +371,10 @@ def test_goal_manager_update_progress_behind(goal_manager):
         start_date=(date.today() - timedelta(days=25)).isoformat(),
         end_date=(date.today() + timedelta(days=5)).isoformat(),
     )
-    
+
     # After 25 days, ~83% time elapsed, but only at 10% progress
     progress = goal_manager.update_progress(goal.goal_id, current_value=10.0)
-    
+
     assert progress.pace_status == "behind"
 
 
@@ -390,7 +388,7 @@ def test_goal_manager_list_goals(goal_manager):
     goal1 = goal_manager.add_goal("Goal 1", "savings", 100.0)
     goal2 = goal_manager.add_goal("Goal 2", "compression", 50.0)
     goal3 = goal_manager.add_goal("Goal 3", "cache", 75.0)
-    
+
     all_goals = goal_manager.list_goals()
     assert len(all_goals) == 3
 
@@ -400,7 +398,7 @@ def test_goal_manager_list_goals_by_type(goal_manager):
     goal_manager.add_goal("Savings 1", "savings", 100.0)
     goal_manager.add_goal("Savings 2", "savings", 200.0)
     goal_manager.add_goal("Compression 1", "compression", 50.0)
-    
+
     # list_goals should filter by goal_type
     compression_goals = goal_manager.list_goals(goal_type="compression")
     assert len(compression_goals) == 1
@@ -412,22 +410,22 @@ def test_goal_manager_list_goals_by_status(goal_manager):
     goal1 = goal_manager.add_goal("Completed Goal", "savings", 100.0)
     goal2 = goal_manager.add_goal("Active Goal", "savings", 100.0)
     goal3 = goal_manager.add_goal("Another Active", "savings", 100.0)
-    
+
     # Mark goal1 as completed
     goal_manager.update_progress(goal1.goal_id, 100.0)
-    
+
     # Partially progress the others
     goal_manager.update_progress(goal2.goal_id, 50.0)
     goal_manager.update_progress(goal3.goal_id, 75.0)
-    
+
     # Get all first to verify baseline
     all_goals = goal_manager.list_goals()
     assert len(all_goals) == 3
-    
+
     completed = goal_manager.list_goals(status="completed")
     assert len(completed) == 1
     assert completed[0].goal_id == goal1.goal_id
-    
+
     active = goal_manager.list_goals(status="active")
     assert len(active) == 2  # goal2 and goal3
 
@@ -440,19 +438,19 @@ def test_goal_manager_list_goals_by_status(goal_manager):
 def test_goal_manager_check_milestones(goal_manager):
     """Test 7: GoalManager.check_milestones() fires milestone events."""
     goal = goal_manager.add_goal("Milestone Test", "savings", 100.0)
-    
+
     # Update to 25%
     goal_manager.update_progress(goal.goal_id, 25.0)
     events = goal_manager.check_milestones(goal.goal_id)
-    
+
     assert len(events) == 1
     assert events[0]["milestone"] == 25
     assert "25%" in events[0]["message"]
-    
+
     # Update to 50% (should trigger 50% milestone)
     goal_manager.update_progress(goal.goal_id, 50.0)
     events = goal_manager.check_milestones(goal.goal_id)
-    
+
     assert len(events) == 1
     assert events[0]["milestone"] == 50
 
@@ -460,11 +458,11 @@ def test_goal_manager_check_milestones(goal_manager):
 def test_goal_manager_check_milestones_multiple(goal_manager):
     """Test milestones fire in order when jumping progress."""
     goal = goal_manager.add_goal("Jump Test", "savings", 100.0)
-    
+
     # Jump straight to 75%
     goal_manager.update_progress(goal.goal_id, 75.0)
     events = goal_manager.check_milestones(goal.goal_id)
-    
+
     # Should fire 25%, 50%, 75% all at once
     assert len(events) >= 3
     milestones = [e["milestone"] for e in events]
@@ -476,14 +474,14 @@ def test_goal_manager_check_milestones_multiple(goal_manager):
 def test_goal_manager_check_milestones_no_duplicates(goal_manager):
     """Test milestones don't fire twice."""
     goal = goal_manager.add_goal("No Dup Test", "savings", 100.0)
-    
+
     # Fire 25% milestone
     goal_manager.update_progress(goal.goal_id, 25.0)
     events1 = goal_manager.check_milestones(goal.goal_id)
-    
+
     # Check again without progress change
     events2 = goal_manager.check_milestones(goal.goal_id)
-    
+
     assert len(events1) == 1
     assert len(events2) == 0  # No duplicate
 
@@ -502,12 +500,12 @@ def test_goal_manager_check_pace_alerts_behind(goal_manager):
         start_date=(date.today() - timedelta(days=25)).isoformat(),
         end_date=(date.today() + timedelta(days=5)).isoformat(),
     )
-    
+
     # 83% time elapsed, but only 10% progress (behind)
     goal_manager.update_progress(goal.goal_id, 10.0)
-    
+
     alert = goal_manager.check_pace_alerts(goal.goal_id)
-    
+
     assert alert is not None
     assert alert["type"] == "pace"
     assert alert["status"] == "behind"
@@ -523,12 +521,12 @@ def test_goal_manager_check_pace_alerts_no_alert_if_on_track(goal_manager):
         start_date=(date.today() - timedelta(days=15)).isoformat(),
         end_date=(date.today() + timedelta(days=15)).isoformat(),
     )
-    
+
     # On track: ~50% time, 50% progress
     goal_manager.update_progress(goal.goal_id, 50.0)
-    
+
     alert = goal_manager.check_pace_alerts(goal.goal_id)
-    
+
     assert alert is None
 
 
@@ -541,14 +539,14 @@ def test_goal_manager_check_pace_alerts_no_duplicate(goal_manager):
         start_date=(date.today() - timedelta(days=25)).isoformat(),
         end_date=(date.today() + timedelta(days=5)).isoformat(),
     )
-    
+
     # First check: alert fires
     goal_manager.update_progress(goal.goal_id, 10.0)
     alert1 = goal_manager.check_pace_alerts(goal.goal_id)
-    
+
     # Second check: no duplicate
     alert2 = goal_manager.check_pace_alerts(goal.goal_id)
-    
+
     assert alert1 is not None
     assert alert2 is None
 
@@ -561,7 +559,7 @@ def test_goal_manager_check_pace_alerts_no_duplicate(goal_manager):
 def test_goal_manager_get_summary_stats_empty(goal_manager):
     """Test 9: GoalManager.get_summary_stats() with no goals."""
     stats = goal_manager.get_summary_stats()
-    
+
     assert stats["total_goals"] == 0
     assert stats["active_goals"] == 0
     assert stats["completed_goals"] == 0
@@ -573,13 +571,13 @@ def test_goal_manager_get_summary_stats_with_goals(goal_manager):
     goal1 = goal_manager.add_goal("Goal 1", "savings", 100.0)
     goal2 = goal_manager.add_goal("Goal 2", "savings", 100.0)
     goal3 = goal_manager.add_goal("Goal 3", "savings", 100.0)
-    
+
     goal_manager.update_progress(goal1.goal_id, 25.0)  # 25%
     goal_manager.update_progress(goal2.goal_id, 50.0)  # 50%
     goal_manager.update_progress(goal3.goal_id, 100.0)  # 100%
-    
+
     stats = goal_manager.get_summary_stats()
-    
+
     assert stats["total_goals"] == 3
     assert stats["completed_goals"] == 1  # goal3
     assert stats["active_goals"] == 2  # goal1, goal2
@@ -598,21 +596,21 @@ def test_goal_manager_persistence(temp_goals_dir):
         goals_path=f"{temp_goals_dir}/goals.yaml",
         state_path=f"{temp_goals_dir}/goal_state.json",
     )
-    
+
     goal = gm1.add_goal("Persistent Goal", "savings", 500.0)
     gm1.update_progress(goal.goal_id, 250.0)
-    
+
     # Create new manager instance (should load from disk)
     gm2 = GoalManager(
         goals_path=f"{temp_goals_dir}/goals.yaml",
         state_path=f"{temp_goals_dir}/goal_state.json",
     )
-    
+
     # Verify goal was loaded
     loaded_goal = gm2.get_goal(goal.goal_id)
     assert loaded_goal is not None
     assert loaded_goal.name == "Persistent Goal"
-    
+
     loaded_progress = gm2.get_progress(goal.goal_id)
     assert loaded_progress is not None
     assert loaded_progress.current_value == 250.0
@@ -631,13 +629,13 @@ def test_goal_manager_custom_metric_goal(goal_manager):
         target_value=85.0,
         metric_name="cache_hit_rate",
     )
-    
+
     assert goal.goal_type == "metric"
     assert goal.metric_name == "cache_hit_rate"
-    
+
     # Update with custom metric value
     progress = goal_manager.update_progress(goal.goal_id, 72.5)
-    
+
     assert progress.progress_percent == (72.5 / 85.0) * 100
 
 
@@ -654,12 +652,12 @@ def test_goal_manager_rolling_window_goal(goal_manager):
         target_value=100.0,
         rolling_window=True,
     )
-    
-    assert goal.rolling_window == True
-    
+
+    assert goal.rolling_window
+
     # Verify it's stored and retrievable
     retrieved = goal_manager.get_goal(goal.goal_id)
-    assert retrieved.rolling_window == True
+    assert retrieved.rolling_window
 
 
 if __name__ == "__main__":

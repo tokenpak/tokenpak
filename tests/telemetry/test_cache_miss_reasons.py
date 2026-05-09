@@ -11,17 +11,13 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 from tokenpak.telemetry.cache_miss import (
     CacheMissRecord,
-    MissReasonSummary,
     aggregate_cache_miss_reasons,
     cache_stage_trace_to_miss_record,
     format_miss_reason_summary,
 )
 from tokenpak.telemetry.storage import TelemetryDB
-
 
 # ---------------------------------------------------------------------------
 # CacheMissRecord

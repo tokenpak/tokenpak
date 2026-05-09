@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from tokenpak.proxy.spend_guard.tip_header import (
     DIRECTIVE_REGISTRY,
     parse_and_strip_tip_header,

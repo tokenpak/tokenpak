@@ -21,7 +21,8 @@ import sys
 import time
 from pathlib import Path
 
-from .adapter import ArmConfig, ArmResult, TurnResult, run_arm as adapter_run_arm
+from .adapter import ArmConfig, ArmResult, TurnResult
+from .adapter import run_arm as adapter_run_arm
 from .display import LiveDisplay
 from .reporter import format_matrix_report, save_result
 from .scenario import Scenario
@@ -147,7 +148,7 @@ def run_proof(
         print(f"         {lf}", file=sys.stderr)
 
     if display:
-        print(f"\n  Live display still running — close with: tmux kill-session -t tokenpak-prove", file=sys.stderr)
+        print("\n  Live display still running — close with: tmux kill-session -t tokenpak-prove", file=sys.stderr)
 
     print("", file=sys.stderr)
     return results, proof_id

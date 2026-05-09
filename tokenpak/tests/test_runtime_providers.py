@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for tokenpak.core.runtime.providers — Provider enum and detect_provider()."""
 
-import pytest
 from tokenpak.core.runtime.providers import Provider, detect_provider
-
 
 # ---------------------------------------------------------------------------
 # Provider enum

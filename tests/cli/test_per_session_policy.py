@@ -19,7 +19,6 @@ from types import SimpleNamespace
 
 import pytest
 
-
 # TSR-04 module-level skip — superseded design (grep-able)
 # ─────────────────────────────────────────────
 # CCG-12 (db0f08c6e5, 2026-04-10) shipped a proxy-side per-session policy

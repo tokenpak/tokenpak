@@ -9,8 +9,6 @@ Verifies that:
 
 from __future__ import annotations
 
-import sys
-from io import StringIO
 from unittest.mock import patch
 
 import pytest
@@ -34,12 +32,8 @@ pytest.importorskip(
 def test_policy_engine_imports():
     """PolicyEngine and related classes can be imported."""
     from tokenpak.enterprise.policy import (
-        EnforcementResult,
-        Policy,
-        PolicyAction,
         PolicyEngine,
         PolicyEngineBase,
-        PolicyScope,
     )
     assert issubclass(PolicyEngine, PolicyEngineBase)
 
@@ -47,12 +41,8 @@ def test_policy_engine_imports():
 def test_sla_router_imports():
     """SLARouter and related classes can be imported."""
     from tokenpak.enterprise.sla import (
-        RoutingDecision,
-        SLAProfile,
         SLARouter,
         SLARouterBase,
-        SLAStatus,
-        SLATier,
     )
     assert issubclass(SLARouter, SLARouterBase)
 
@@ -60,12 +50,8 @@ def test_sla_router_imports():
 def test_governance_engine_imports():
     """GovernanceEngine and related classes can be imported."""
     from tokenpak.enterprise.governance import (
-        ClassificationResult,
-        DataClass,
         GovernanceEngine,
         GovernanceEngineBase,
-        GovernanceRule,
-        RuleEffect,
     )
     assert issubclass(GovernanceEngine, GovernanceEngineBase)
 

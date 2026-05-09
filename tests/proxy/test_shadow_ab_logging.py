@@ -20,8 +20,8 @@ Tests:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
-import importlib
 import json
 import os
 import sqlite3
@@ -29,11 +29,9 @@ import sys
 import tempfile
 import threading
 import time
-import types
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from unittest.mock import MagicMock, patch
-
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Import proxy

@@ -12,9 +12,7 @@ Edge case tests for vault retrieval functions:
 
 from __future__ import annotations
 
-
 import pytest
-
 
 # TSR-05ae empty-injection-contract drift skip reason (grep-able)
 # ─────────────────────────────────────────────
@@ -44,20 +42,16 @@ except ImportError:
     pytest.skip("Cannot import inject_retrieved_context from tokenpak.vault.retrieval — removed in current build", allow_module_level=True)
 import concurrent.futures
 import threading
-import time
 from typing import Any, Dict, List, Tuple
-from unittest.mock import patch
 
 import pytest
 
 from tokenpak.vault.retrieval import (
+    all_must_hits_found,
+    extract_must_hit_terms,
     inject_retrieved_context,
     sort_retrieval_results,
-    compute_final_score,
-    extract_must_hit_terms,
-    all_must_hits_found,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

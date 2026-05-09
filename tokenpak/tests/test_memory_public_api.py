@@ -1,14 +1,13 @@
 """Integration tests for tokenpak.companion.memory public API."""
 
-import pytest
 from tokenpak.companion.memory import (
     REQUIRED_CAPSULE_SECTIONS,
+    DecisionMemoryDB,
+    DecisionRecord,
     build_session_capsule,
     capsule_retrieval_score,
     score_capsule_sections,
     serialize_capsule,
-    DecisionMemoryDB,
-    DecisionRecord,
 )
 
 

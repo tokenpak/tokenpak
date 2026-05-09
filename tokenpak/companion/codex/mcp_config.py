@@ -12,11 +12,12 @@ mechanism differs.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
+if TYPE_CHECKING:
+    from tokenpak.companion.config import CompanionConfig
 
 SERVER_NAME = "tokenpak-companion"
 
@@ -97,7 +98,6 @@ def unregister() -> bool:
 
 def get_env_vars(config: "CompanionConfig") -> dict[str, str]:
     """Build env vars to forward to the MCP server subprocess."""
-    from ..config import CompanionConfig
 
     env: dict[str, str] = {}
     if config.budget_daily_usd > 0:

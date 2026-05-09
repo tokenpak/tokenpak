@@ -20,9 +20,9 @@ from typing import Callable
 
 from ..config import CompanionConfig
 from .mcp_config import SERVER_NAME
+from .rates_snapshot import DEFAULT_SNAPSHOT_PATH
+from .rates_snapshot import count as rates_count
 from .skills_installer import bundled_skill_names
-from .rates_snapshot import DEFAULT_SNAPSHOT_PATH, count as rates_count
-
 
 CheckFn = Callable[[], "tuple[bool, str]"]
 

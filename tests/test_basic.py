@@ -1,16 +1,18 @@
 
 import pytest
+
 pytest.importorskip("tokenpak.registry", reason="module not available in current build")
 import hashlib
 import unittest
 from pathlib import Path
 
-from tokenpak.registry import BlockRegistry, Block
-from tokenpak.walker import walk_directory
-from tokenpak.processors import get_processor
-from tokenpak.tokens import count_tokens
-from tokenpak.wire import pack
 from tokenpak.budget import BudgetBlock, quadratic_allocate
+from tokenpak.registry import Block, BlockRegistry
+from tokenpak.tokens import count_tokens
+from tokenpak.walker import walk_directory
+from tokenpak.wire import pack
+
+from tokenpak.processors import get_processor
 
 
 class TokenPakSmokeTest(unittest.TestCase):

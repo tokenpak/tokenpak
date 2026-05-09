@@ -19,9 +19,6 @@ Acceptance Criteria Addressed:
 
 from __future__ import annotations
 
-
-import pytest
-
 # Tier 2 integration tests require the tokenpak._internal namespace and a
 # constellation of agentic/regression submodules that don't ship in the slim
 # OSS install. importorskip on those bare namespaces returned truthy because
@@ -29,28 +26,26 @@ import pytest
 # still failed at module level. Wrap the full module-import block in
 # try/except + skip-at-module-level so the release test gate stays green
 # regardless of which inner symbol is missing first.
-import json
-import os
-import sys
 import tempfile
-import threading
-import time
 from pathlib import Path
-from dataclasses import dataclass, field
+
+import pytest
 
 # Direct module imports (per acceptance criteria)
 try:
-    from tokenpak.agentic.error_normalizer import ErrorNormalizer
     from tokenpak._internal.agentic.failure_memory import FailureMemoryDB, FailureSignature
-    from tokenpak.budget_controller import BudgetController, IntentClass, ClassificationResult
-    from tokenpak.monitoring.request_logger import RequestLogger
-    from tokenpak.cache.registry import CacheRegistry
-    from tokenpak.compression.salience.router import detect_content_type, extract as salience_extract
-    from tokenpak.compression.fidelity_tiers import TierSelector, FidelityTier
     from tokenpak._internal.regression.retrieval_watchdog import (
-        RetrievalQualityWatchdog,
         QueryRetrievalRecord,
+        RetrievalQualityWatchdog,
     )
+    from tokenpak.agentic.error_normalizer import ErrorNormalizer
+    from tokenpak.budget_controller import BudgetController, ClassificationResult, IntentClass
+    from tokenpak.monitoring.request_logger import RequestLogger
+
+    from tokenpak.cache.registry import CacheRegistry
+    from tokenpak.compression.fidelity_tiers import FidelityTier, TierSelector
+    from tokenpak.compression.salience.router import detect_content_type
+    from tokenpak.compression.salience.router import extract as salience_extract
 except ImportError as _exc:
     pytest.skip(f"tokenpak._internal / Tier 2 modules not present in slim OSS install: {_exc}", allow_module_level=True)
 
@@ -195,7 +190,7 @@ class TestBudgetController:
             complexity_score=0.3,
         )
         decision = bc.decide(classification)
-        
+
         # Escalate on low coverage (below default 0.55)
         escalated = bc.maybe_escalate(decision, coverage_score=0.3, intent=IntentClass.CODE_Q)
         assert escalated.target_tier == "T2_32K"  # +1 tier escalation
@@ -209,7 +204,7 @@ class TestBudgetController:
             complexity_score=0.3,
         )
         decision = bc.decide(classification)
-        
+
         # No escalation on good coverage
         stable = bc.maybe_escalate(decision, coverage_score=0.7, intent=IntentClass.CODE_Q)
         assert stable.target_tier == decision.target_tier
@@ -283,10 +278,10 @@ class TestCacheRegistry:
     def test_cache_registry_register_named_cache(self):
         """register() stores named cache instances."""
         from tokenpak.cache.volatile_cache import VolatileCache
-        
+
         test_cache = VolatileCache(ttl=300.0, name="test_cache")
         CacheRegistry.register("test_cache", test_cache, overwrite=True)
-        
+
         retrieved = CacheRegistry.get("test_cache")
         assert retrieved is not None
         assert retrieved._name == "test_cache"
@@ -296,7 +291,7 @@ class TestCacheRegistry:
         # Ensure at least the default caches are registered
         _ = CacheRegistry.get_default()
         _ = CacheRegistry.get_stable()
-        
+
         names = CacheRegistry.names()
         assert isinstance(names, list)
         assert "default" in names or "stable" in names
@@ -304,10 +299,10 @@ class TestCacheRegistry:
     def test_cache_registry_duplicate_register_raises(self):
         """Registering duplicate name (without overwrite) raises ValueError."""
         from tokenpak.cache.volatile_cache import VolatileCache
-        
+
         cache = VolatileCache(ttl=300.0, name="dup_test")
         CacheRegistry.register("dup_test", cache, overwrite=True)
-        
+
         with pytest.raises(ValueError):
             CacheRegistry.register("dup_test", cache, overwrite=False)
 
@@ -338,7 +333,7 @@ class TestRetrievalWatchdog:
     def test_retrieval_watchdog_low_relevance(self):
         """observe() may alert when relevance scores are low."""
         watchdog = RetrievalQualityWatchdog()
-        
+
         # Feed baseline queries (good retrieval)
         for i in range(5):
             good_record = QueryRetrievalRecord(
@@ -351,7 +346,7 @@ class TestRetrievalWatchdog:
                 chunk_ids_ordered=["c1", "c2", "c3", "c4", "c5"],
             )
             watchdog.observe(good_record)
-        
+
         # Now test with poor retrieval
         poor_record = QueryRetrievalRecord(
             query_id="q_poor",
@@ -396,7 +391,7 @@ class TestFailureMemory:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "failure_sigs.json"
             db = FailureMemoryDB(storage_path=path)
-            
+
             # Add a failure signature
             sig = FailureSignature(
                 signature_id="pg_conn_refused",
@@ -406,7 +401,7 @@ class TestFailureMemory:
                 repair_recipe=["systemctl start postgresql"],
             )
             db.add(sig)
-            
+
             # Should be able to match
             match = db.match("Connection refused on postgres port")
             assert match is not None or match is None  # Depends on pattern matching
@@ -416,17 +411,17 @@ class TestFailureMemory:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "failure_sigs.json"
             db = FailureMemoryDB(storage_path=path)
-            
+
             sig = FailureSignature(
                 signature_id="test_sig",
                 error_class="test_error",
                 error_pattern="test pattern",
             )
             db.add(sig)
-            
+
             # Record a successful repair
             updated = db.record_repair_outcome("test_sig", success=True)
-            
+
             # Verify it was updated
             assert updated is not None or updated is None  # Depends on impl
 
@@ -435,7 +430,7 @@ class TestFailureMemory:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "failure_sigs.json"
             db = FailureMemoryDB(storage_path=path)
-            
+
             # Try to match with empty DB
             match = db.match("This error definitely won't match anything")
             assert match is None or match is not None  # Either result is OK
@@ -586,16 +581,16 @@ class TestTier2MultiModuleIntegration:
     def test_error_normalizer_with_failure_memory(self):
         """ErrorNormalizer + FailureMemory work together."""
         normalizer = ErrorNormalizer()
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "failure_sigs.json"
             failure_db = FailureMemoryDB(storage_path=path)
-            
+
             # Simulate error handling
             raw_error = "HTTP 429: rate limit exceeded (try again later)"
             normalized = normalizer.normalize(raw_error)
             assert normalized == "RATE_LIMIT"
-            
+
             # Add a signature for this error pattern
             sig = FailureSignature(
                 signature_id="rate_limit_error",
@@ -608,17 +603,17 @@ class TestTier2MultiModuleIntegration:
         """BudgetController + RequestLogger work together."""
         bc = BudgetController()
         logger = RequestLogger.get_instance()
-        
+
         # Create request with budget constraints
         classification = ClassificationResult(
             intent=IntentClass.CODE_EDIT,
             complexity_score=0.6,
         )
         decision = bc.decide(classification)
-        
+
         # Log the request
         request_id = logger.new_request_id({"X-Model": "claude-3-5-sonnet"})
-        
+
         assert decision.target_tier == "T2_32K"
         assert request_id is not None
 
@@ -634,13 +629,13 @@ class TestTier2MultiModuleIntegration:
 '''
         # Extract salient code
         result = salience_extract(code)
-        
+
         # Select fidelity tier based on extraction result
         selector = TierSelector()
         lines_ratio = result.lines_out / max(result.lines_in, 1)
         complexity = min(1.0, lines_ratio)
         tier = selector.select(complexity_score=complexity, budget_remaining=0.5)
-        
+
         assert result is not None
         assert tier in FidelityTier.ascending()
 
@@ -655,69 +650,69 @@ class TestTier2SessionDictEntries:
     def test_session_dict_error_normalizer_applied(self):
         """SESSION["error_normalizer_applied"] is set when error is normalized."""
         SESSION = {}
-        
+
         normalizer = ErrorNormalizer()
         raw_error = "HTTP 401: unauthorized"
         normalized = normalizer.normalize(raw_error)
-        
+
         if normalized != "UNKNOWN_ERROR":
             SESSION["error_normalizer_applied"] = True
-        
+
         assert SESSION.get("error_normalizer_applied") is True or normalized == "AUTH_FAILURE"
 
     def test_session_dict_budget_controller_entries(self):
         """SESSION dict has budget_controller_tier and budget_controller_action."""
         SESSION = {}
-        
+
         bc = BudgetController()
         classification = ClassificationResult(
             intent=IntentClass.CODE_EDIT,
             complexity_score=0.5,
         )
         decision = bc.decide(classification)
-        
+
         SESSION["budget_controller_tier"] = decision.target_tier
         SESSION["budget_controller_action"] = "process"
-        
+
         assert SESSION["budget_controller_tier"] == "T2_32K"
         assert SESSION["budget_controller_action"] == "process"
 
     def test_session_dict_request_logger_id(self):
         """SESSION["request_logger_id"] is set on new request."""
         SESSION = {}
-        
+
         logger = RequestLogger.get_instance()
         request_id = logger.new_request_id({})
         SESSION["request_logger_id"] = request_id
-        
+
         assert SESSION["request_logger_id"] is not None
 
     def test_session_dict_salience_router_applied(self):
         """SESSION["salience_router_applied"] count is set."""
         SESSION = {}
-        
+
         code = "def foo():\n    return 42"
         result = salience_extract(code)
-        
+
         if result.reduction_pct > 0:
             SESSION["salience_router_applied"] = 1
-        
+
         assert "salience_router_applied" in SESSION or SESSION.get("salience_router_applied", 0) >= 0
 
     def test_session_dict_fidelity_tier(self):
         """SESSION["fidelity_tier"] is set to selected tier name."""
         SESSION = {}
-        
+
         selector = TierSelector()
         tier = selector.select(complexity_score=0.5, budget_remaining=0.5)
         SESSION["fidelity_tier"] = tier.name if hasattr(tier, 'name') else str(tier)
-        
+
         assert "fidelity_tier" in SESSION
 
     def test_session_dict_retrieval_watchdog_alert(self):
         """SESSION["retrieval_watchdog_alert"] is set on alert."""
         SESSION = {}
-        
+
         watchdog = RetrievalQualityWatchdog()
         record = QueryRetrievalRecord(
             query_id="q1",
@@ -727,10 +722,10 @@ class TestTier2SessionDictEntries:
             relevance_scores=[0.8, 0.8, 0.8],
         )
         alert = watchdog.observe(record)
-        
+
         if alert is not None:
             SESSION["retrieval_watchdog_alert"] = str(alert)
-        
+
         # No assertion needed — just verify key could be set
 
 
@@ -779,11 +774,11 @@ class TestTier2ErrorPaths:
     def test_fidelity_selector_with_boundary_values(self):
         """TierSelector handles boundary complexity/budget values."""
         selector = TierSelector()
-        
+
         # Extreme cases
         tier_min = selector.select(complexity_score=0.0, budget_remaining=0.0)
         tier_max = selector.select(complexity_score=1.0, budget_remaining=1.0)
-        
+
         assert tier_min in FidelityTier.ascending()
         assert tier_max in FidelityTier.ascending()
 

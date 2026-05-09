@@ -1,5 +1,4 @@
 """Unit tests for processors/code.py — CodeProcessor."""
-import pytest
 
 from tokenpak.compression.processors.code import (
     CodeCompactionMode,
@@ -7,7 +6,6 @@ from tokenpak.compression.processors.code import (
     _make_template_stub,
     _sha256_stub,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

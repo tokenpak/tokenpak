@@ -1,9 +1,8 @@
 """Tests for tokenpak replay store (Phase 1 — task 1.9)."""
 
-import pytest
-from datetime import datetime, timedelta
-from tokenpak.telemetry.replay import ReplayEntry, ReplayStore, get_replay_store
+from datetime import datetime
 
+from tokenpak.telemetry.replay import ReplayEntry, ReplayStore, get_replay_store
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -153,7 +152,8 @@ class TestReplayStore:
         assert self.store.get(e.replay_id).model == "claude-3-opus"
 
     def test_close_and_reopen(self):
-        import tempfile, os
+        import os
+        import tempfile
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             path = f.name
         try:
@@ -179,7 +179,8 @@ class TestGetReplayStore:
         assert s1 is s2
 
     def test_new_path_replaces_singleton(self):
-        import tempfile, os
+        import os
+        import tempfile
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             path = f.name
         try:

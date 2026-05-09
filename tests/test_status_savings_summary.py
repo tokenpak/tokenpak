@@ -9,10 +9,10 @@ Verifies:
 - Proxy unreachable: no savings line (no crash)
 """
 
-import pytest
 from io import StringIO
-from unittest.mock import patch, MagicMock
-import sys
+from unittest.mock import patch
+
+import pytest
 
 # WS-A residual import guard — TSR-01-followup.
 # `tokenpak status` and the savings summary it produces transitively

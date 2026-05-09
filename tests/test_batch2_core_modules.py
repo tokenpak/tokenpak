@@ -1,6 +1,6 @@
 """test_batch2_core_modules.py — Reworked core module tests
 
-Actual tests for: CooldownManager, ClaimIndexer, Privacy, 
+Actual tests for: CooldownManager, ClaimIndexer, Privacy,
 ScriptHooks, StatsAPI, DebugLogger, StreamTranslator modules.
 
 All tests use REAL module APIs (verified by reading source first).
@@ -8,6 +8,7 @@ All tests use REAL module APIs (verified by reading source first).
 
 
 import pytest
+
 pytest.importorskip("tokenpak.infrastructure.cooldown", reason="module not available in current build")
 import json
 import tempfile
@@ -15,19 +16,26 @@ import time
 from pathlib import Path
 
 import pytest
-
-from tokenpak.infrastructure.cooldown import CooldownManager
-from tokenpak._internal.ingest.claim_indexer import extract_claims_from_text, extract_claims_from_document
-from tokenpak._internal.fingerprint.privacy import apply_privacy, PrivacyLevel
+from tokenpak._internal.fingerprint.privacy import PrivacyLevel, apply_privacy
+from tokenpak._internal.ingest.claim_indexer import (
+    extract_claims_from_document,
+    extract_claims_from_text,
+)
 from tokenpak._internal.macros.script_hooks import (
-    get_hook_path, hook_exists, list_hooks, install_hook, fire_hook
+    fire_hook,
+    get_hook_path,
+    list_hooks,
+)
+from tokenpak.infrastructure.cooldown import CooldownManager
+from tokenpak.infrastructure.debug import DebugLogger
+
+from tokenpak.proxy.providers.stream_translator import (
+    _AnthropicToOpenAIStream,
+    _OpenAIToAnthropicStream,
+    _parse_sse_line,
+    _sse_line,
 )
 from tokenpak.proxy.stats_api import StatsAPI
-from tokenpak.infrastructure.debug import DebugLogger
-from tokenpak.proxy.providers.stream_translator import (
-    _AnthropicToOpenAIStream, _OpenAIToAnthropicStream, _parse_sse_line, _sse_line
-)
-
 
 # ============================================================================
 # CooldownManager Tests (Real API)
@@ -56,7 +64,7 @@ class TestCooldownManager:
         """Test clear_expired with non-expired cooldown."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_file = Path(tmpdir) / "cooldowns.json"
-            
+
             # Write a cooldown that's not expired yet
             future_time = time.time() + 3600  # 1 hour from now
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
@@ -66,7 +74,7 @@ class TestCooldownManager:
                     "errorCount": 2
                 }
             }))
-            
+
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.clear_expired()
             assert result == []  # Not expired yet
@@ -75,7 +83,7 @@ class TestCooldownManager:
         """Test clear_expired with expired cooldown."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_file = Path(tmpdir) / "cooldowns.json"
-            
+
             # Write a cooldown that IS expired
             past_time = time.time() - 3600  # 1 hour ago
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
@@ -85,7 +93,7 @@ class TestCooldownManager:
                     "errorCount": 2
                 }
             }))
-            
+
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.clear_expired()
             assert result == ["test:key"]
@@ -102,7 +110,7 @@ class TestCooldownManager:
         """Test get_active_cooldowns with active cooldown."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_file = Path(tmpdir) / "cooldowns.json"
-            
+
             future_time = time.time() + 3600
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
             cooldowns_file.write_text(json.dumps({
@@ -111,7 +119,7 @@ class TestCooldownManager:
                     "errorCount": 1
                 }
             }))
-            
+
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.get_active_cooldowns()
             assert "test:key" in result
@@ -128,7 +136,7 @@ class TestCooldownManager:
                     "errorCount": 2
                 }
             }))
-            
+
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             count = mgr.run_cycle()
             assert count == 1
@@ -359,11 +367,11 @@ class TestDebugLogger:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "debug.log"
             logger = DebugLogger(log_path=log_path)
-            
+
             with logger.record() as rec:
                 rec.set("model", "claude")
                 rec.add_step("validate", status="ok")
-            
+
             # Check log was written
             assert log_path.exists()
             content = log_path.read_text()
@@ -374,11 +382,11 @@ class TestDebugLogger:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "debug.log"
             logger = DebugLogger(log_path=log_path)
-            
+
             for i in range(3):
                 with logger.record() as rec:
                     rec.set("iteration", i)
-            
+
             lines = log_path.read_text().strip().split("\n")
             assert len(lines) == 3
 
@@ -387,13 +395,13 @@ class TestDebugLogger:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "debug.log"
             logger = DebugLogger(log_path=log_path)
-            
+
             try:
                 with logger.record() as rec:
                     rec.fail("test error")
-            except:
+            except Exception:
                 pass
-            
+
             content = log_path.read_text()
             assert len(content) > 0
 

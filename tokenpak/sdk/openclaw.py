@@ -30,7 +30,6 @@ from typing import Any, Optional
 
 from tokenpak.sdk.base import TokenPakAdapter
 
-
 _SESSION_MAP_PATH = Path.home() / ".tokenpak" / "openclaw_sessions.json"
 
 

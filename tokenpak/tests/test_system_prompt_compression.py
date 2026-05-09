@@ -4,7 +4,7 @@ Verifies: content preservation, protection accuracy, compression ratio improveme
 """
 import re
 import sys
-import os
+
 
 # Minimal stubs to test the functions without importing full proxy
 def count_tokens(text):
@@ -242,7 +242,7 @@ def test_projected_impact_realistic():
     protected_pct = 100 * protected / orig_tokens
     compression_pct = 100 * (orig_tokens - out_tokens) / orig_tokens
 
-    print(f"\nProjected impact (realistic system prompt):")
+    print("\nProjected impact (realistic system prompt):")
     print(f"  Original: {orig_tokens:,} tokens")
     print(f"  Protected (truly sensitive): {protected:,} tokens ({protected_pct:.1f}%)")
     print(f"  After compression: {out_tokens:,} tokens")

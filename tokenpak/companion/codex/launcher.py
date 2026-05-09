@@ -38,7 +38,7 @@ def main(args: list[str] | None = None) -> int:
     print(f"tokenpak: rates snapshot refreshed ({rates_path})", file=sys.stderr)
 
     # ── Step 1: Register MCP server ──────────────────────────
-    from .mcp_config import register, get_env_vars
+    from .mcp_config import get_env_vars, register
 
     env_vars = get_env_vars(config)
     if register(env_vars=env_vars):
@@ -48,7 +48,7 @@ def main(args: list[str] | None = None) -> int:
 
     # ── Step 2: Install hooks ────────────────────────────────
     if config.hooks_enabled:
-        from .hooks import install_hooks, ensure_hooks_feature_enabled
+        from .hooks import ensure_hooks_feature_enabled, install_hooks
 
         if ensure_hooks_feature_enabled():
             hooks_path = install_hooks(target="global")

@@ -29,8 +29,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib  # type: ignore[no-redef]
 
-from ..model import Credential, REFRESH_NONE, REFRESH_TOKENPAK
-
+from ..model import REFRESH_NONE, REFRESH_TOKENPAK, Credential
 
 PROVIDER_NAME = "user-config"
 CONFIG_PATH = Path.home() / ".tokenpak" / "credentials.toml"

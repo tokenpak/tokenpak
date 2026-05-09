@@ -10,17 +10,16 @@ Covers:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.triggers.store", reason="module not available in current build")
 import json
+
 import pytest
-from pathlib import Path
 from click.testing import CliRunner
-
 from tokenpak._internal.triggers.store import TriggerStore
-from tokenpak.cli.trigger_cmd import trigger_group
 
+from tokenpak.cli.trigger_cmd import trigger_group
 
 # ---------------------------------------------------------------------------
 # Fixtures

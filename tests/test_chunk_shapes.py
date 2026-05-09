@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
 from tokenpak.vault.chunk_shapes import (
     CHUNK_SHAPES,
+    _shape_code_contiguous,
+    _shape_decision_summary,
+    _shape_fact_chunk,
+    _shape_section_header,
     apply_shape,
     get_shape_for_intent,
     reshape_chunks,
-    _shape_code_contiguous,
-    _shape_fact_chunk,
-    _shape_decision_summary,
-    _shape_section_header,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -10,23 +10,19 @@ Coverage:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.workflow_performance", reason="module not available in current build")
-import json
 import time
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
 from tokenpak.workflow_performance import (
     MAX_HISTORY,
     WorkflowPerformanceTracker,
     WorkflowStats,
     record_workflow_execution,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

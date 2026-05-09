@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.escalation", reason="module not available in current build")
 from tokenpak.escalation import (
     detect_insufficient_context_signal,

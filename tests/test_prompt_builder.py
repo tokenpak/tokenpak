@@ -11,16 +11,15 @@ Tests verify:
 """
 
 import json
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from tokenpak.proxy.prompt_builder import (
     apply_stable_cache_control,
-    inject_with_cache_boundary,
     classify_system_blocks,
-    PromptBuilder,
+    inject_with_cache_boundary,
 )
 
 
@@ -178,7 +177,7 @@ if __name__ == "__main__":
             failed += 1
         except Exception as e:
             print(f"  ❌ {t.__name__}: unexpected error: {e}")
-            import traceback; traceback.print_exc()
+            import traceback; traceback.print_exc()  # noqa: I001
             failed += 1
     print(f"\n{'='*50}")
     print(f"Results: {passed}/{len(tests)} passed, {failed} failed")

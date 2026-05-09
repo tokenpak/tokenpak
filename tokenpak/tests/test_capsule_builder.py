@@ -21,16 +21,15 @@ import json
 import pytest
 
 from tokenpak.companion.capsules.builder import (
+    _MAX_PARA_CHARS,
     DEFAULT_HOT_WINDOW,
     DEFAULT_MIN_BLOCK_CHARS,
-    _MAX_PARA_CHARS,
     CapsuleBuilder,
     _capsule_id,
     _compress_paragraph,
     _compress_text,
     _wrap_capsule,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper factories

@@ -10,8 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .base import Retriever, RetrievalQuery, RetrievalResult, RetrieverType
-
+from .base import RetrievalQuery, RetrievalResult, Retriever, RetrieverType
 
 # BM25 hyperparameters
 _K1 = 1.5

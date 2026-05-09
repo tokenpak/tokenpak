@@ -10,7 +10,6 @@ import pytest
 
 from tokenpak.companion.budget.tracker import BudgetTracker, CostEstimate, _resolve_rates
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

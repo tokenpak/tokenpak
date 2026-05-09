@@ -27,7 +27,7 @@ def _render_summary(s: dict[str, Any]) -> str:
     if s.get("has_key"):
         lines.append(f"  Key       stored ({s['license_path']})")
     else:
-        lines.append(f"  Key       (none — Free tier)")
+        lines.append("  Key       (none — Free tier)")
     lines.append("")
     lines.append(
         f"  Gated features enabled: {s['enabled_gated_count']} / "

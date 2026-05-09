@@ -17,12 +17,11 @@ Attribution rules (per TIP telemetry_contract.SavingsSource):
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
 from tokenpak.tip.telemetry_contract import SavingsSource
 from tokenpak.tip.trace_contract import SavingsAttribution
-
 
 # ---------------------------------------------------------------------------
 # OpenAI usage parsing

@@ -8,14 +8,11 @@ Coverage goal: > 50% (targeting ~85%+)
 
 from __future__ import annotations
 
-import json
 import pathlib
-from unittest.mock import patch
 
 import pytest
 
 import tokenpak.cli.user_templates as ut
-
 
 # ---------------------------------------------------------------------------
 # Fixture: redirect TEMPLATES_DIR to a tmp directory so tests are isolated

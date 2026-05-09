@@ -16,8 +16,6 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-
 
 from tokenpak.models import get_rates as _registry_get_rates
 

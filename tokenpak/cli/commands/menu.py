@@ -15,13 +15,12 @@ from typing import Optional
 
 from tokenpak._formatting.colors import Color, paint, supports_color
 from tokenpak._formatting.picker import (
-    PickerUnavailable,
     _BACK_SENTINEL,
+    PickerUnavailable,
     getch,
     pick,
     prompt_input,
 )
-
 
 # ---------------------------------------------------------------------------
 # Brand header
@@ -65,7 +64,8 @@ def _status_strip() -> str:
 
     # Today's spend
     try:
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         resp = urllib.request.urlopen("http://127.0.0.1:8766/stats", timeout=1)
         data = _json.loads(resp.read())
         cost = data.get("cost", 0)

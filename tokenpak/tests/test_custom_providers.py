@@ -9,10 +9,8 @@ Covers:
   - Error handling for malformed entries
 """
 
-import os
 import json
-import textwrap
-from pathlib import Path
+import os
 from unittest.mock import patch
 
 import pytest
@@ -166,7 +164,6 @@ class TestLoadCustomProviders:
         assert providers == []
 
     def test_config_loader_import_error(self):
-        from tokenpak.proxy.custom_providers import load_custom_providers
 
         # When config_loader is not available, should return empty
         with patch.dict("sys.modules", {"tokenpak.core.config_loader": None}):
@@ -230,7 +227,7 @@ class TestCustomAdapterFactory:
 
     def _build_registry_with_custom(self, cfg: dict):
         from tokenpak.proxy.adapters import build_default_registry
-        from tokenpak.proxy.custom_providers import load_custom_providers, build_custom_adapters
+        from tokenpak.proxy.custom_providers import build_custom_adapters, load_custom_providers
 
         with _patch_config(cfg):
             providers = load_custom_providers()
@@ -341,9 +338,9 @@ class TestProviderDisplay:
     def test_display_with_custom_providers(self):
         from tokenpak.proxy.adapters import build_default_registry
         from tokenpak.proxy.custom_providers import (
-            load_custom_providers,
             build_custom_adapters,
             get_provider_display_list,
+            load_custom_providers,
         )
 
         cfg = _sample_providers_yaml()

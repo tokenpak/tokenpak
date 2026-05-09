@@ -1,7 +1,6 @@
 """Unit tests for extraction/models.py — dataclasses and EntitySet."""
 
 import pytest
-
 from extraction.models import (
     APIEndpoint,
     Deadline,
@@ -12,7 +11,6 @@ from extraction.models import (
     GlossaryTerm,
     SourceRef,
 )
-
 
 # ---------------------------------------------------------------------------
 # EntityType

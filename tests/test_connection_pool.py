@@ -25,7 +25,6 @@ import json
 import os
 import threading
 import time
-import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import List
 from unittest.mock import patch
@@ -41,7 +40,6 @@ from tokenpak.proxy.connection_pool import (
     reset_global_pool,
 )
 from tokenpak.proxy.server import ProxyServer
-
 
 # ---------------------------------------------------------------------------
 # Minimal test HTTP server (spin up locally, never hits real APIs)

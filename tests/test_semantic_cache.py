@@ -20,17 +20,14 @@ from __future__ import annotations
 
 import json
 import time
-import pytest
 
 from tokenpak.cache.semantic_cache import (
     SemanticCache,
     SemanticCacheConfig,
-    SemanticCacheEntry,
     SemanticCacheLookup,
-    _normalise,
-    _tokenize,
-    _jaccard,
     _hash,
+    _jaccard,
+    _normalise,
 )
 
 # ---------------------------------------------------------------------------

@@ -18,18 +18,13 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from tokenpak.services.optimization import (
-    CacheMissReason,
-    CacheStageTrace,
     OptimizationContext,
     SemanticCacheStage,
     get_cached_response,
 )
 from tokenpak.services.optimization.cache_stage import _get_cache_result
 from tokenpak.services.optimization.trace import OptimizationTrace
-
 
 # ---------------------------------------------------------------------------
 # Helpers

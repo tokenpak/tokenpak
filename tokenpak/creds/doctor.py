@@ -18,10 +18,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Callable
 
-from .model import Credential, REFRESH_EXTERNAL, REFRESH_NONE, KIND_OAUTH
+from .model import KIND_OAUTH, REFRESH_EXTERNAL, REFRESH_NONE, Credential
 from .providers import discover_all
-from .providers.user_config import config_perms_ok, CONFIG_PATH as USER_CONFIG_PATH
-
+from .providers.user_config import CONFIG_PATH as USER_CONFIG_PATH
+from .providers.user_config import config_perms_ok
 
 # 24h grace means "warn one day before expiry" — early enough to act,
 # not so early it's spam.

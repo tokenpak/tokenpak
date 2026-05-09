@@ -1,5 +1,4 @@
 """Unit tests for tokenpak.proxy.route_policy (SUE-MTC-03)."""
-import pytest
 
 from tokenpak.proxy.request import ROUTE_CLAUDE_CODE, ROUTE_OPENCLAW, ROUTE_SDK
 from tokenpak.proxy.route_policy import (

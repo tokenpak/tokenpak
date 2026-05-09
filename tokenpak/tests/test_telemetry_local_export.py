@@ -13,11 +13,8 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
 from unittest.mock import patch
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -163,7 +160,6 @@ class TestLocalExporterRemoteMode:
         assert list(tmp_path.glob("*.jsonl")) == [], "No file should be created in remote mode"
 
     def test_is_local_mode_true_by_default(self):
-        from tokenpak.telemetry import local_exporter
 
         with patch.dict(os.environ, {"TOKENPAK_TELEMETRY_MODE": "local"}):
             # Re-evaluate with patched env
@@ -171,7 +167,6 @@ class TestLocalExporterRemoteMode:
         assert result is True
 
     def test_is_local_mode_false_when_remote(self):
-        from tokenpak.telemetry import local_exporter
 
         with patch.dict(os.environ, {"TOKENPAK_TELEMETRY_MODE": "remote"}):
             result = os.environ.get("TOKENPAK_TELEMETRY_MODE", "local") == "local"
@@ -183,11 +178,10 @@ class TestRecordRequestIntegration:
 
     def test_record_request_creates_local_file(self, tmp_path):
         """End-to-end: record_request() → local JSONL written."""
-        from tokenpak.telemetry import anon_metrics, local_exporter
-
         # Use a fresh in-memory SQLite store
-        import sqlite3
         from unittest.mock import MagicMock
+
+        from tokenpak.telemetry import anon_metrics
 
         mock_store = MagicMock()
         mock_store.record = MagicMock()
@@ -213,8 +207,8 @@ class TestRecordRequestIntegration:
         assert parsed["input_tokens"] == 200
 
     def test_record_request_no_file_when_opted_out(self, tmp_path):
-        from tokenpak.telemetry import anon_metrics, local_exporter
-        from unittest.mock import MagicMock
+
+        from tokenpak.telemetry import anon_metrics
 
         with (
             patch("tokenpak.core.config.get_metrics_enabled", return_value=False),

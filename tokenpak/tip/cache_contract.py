@@ -9,9 +9,8 @@ actionable telemetry and recommendations.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal, Optional
-
 
 CacheScopeType = Literal["request", "session", "agent", "workspace", "global"]
 

@@ -2,20 +2,17 @@
 Tests for failover footer indicator (task F.6).
 """
 
-import pytest
 import logging
 from datetime import datetime
-from unittest.mock import patch
 
-from tokenpak.telemetry.proxy_collector import RequestStats
+import pytest
+
 from tokenpak.telemetry.footer import (
-    render_footer,
-    render_footer_oneline,
-    render_footer_with_failover,
-    render_footer_compact,
     log_failover_event,
+    render_footer,
+    render_footer_with_failover,
 )
-
+from tokenpak.telemetry.proxy_collector import RequestStats
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures

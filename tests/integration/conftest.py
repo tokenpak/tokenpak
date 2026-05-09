@@ -1,12 +1,10 @@
 """Shared fixtures and configuration for integration tests."""
 
 import os
-import json
-import threading
-import time
-from typing import Generator, Dict, Any
+from typing import Any, Dict
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 
 @pytest.fixture(scope="session")

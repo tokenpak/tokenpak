@@ -1,7 +1,5 @@
 """Unit tests for processors/code_treesitter.py — TreeSitterProcessor."""
-import pytest
 from unittest.mock import MagicMock, patch
-
 
 # ---------------------------------------------------------------------------
 # EXTENSION_TO_LANG — module-level constant
@@ -368,8 +366,8 @@ class TestTreeSitterProcessorInit:
         assert proc is not None
 
     def test_default_fallback_is_code_processor(self):
-        from tokenpak.compression.processors.code_treesitter import TreeSitterProcessor
         from tokenpak.compression.processors.code import CodeProcessor
+        from tokenpak.compression.processors.code_treesitter import TreeSitterProcessor
         proc = TreeSitterProcessor()
         assert isinstance(proc._fallback, CodeProcessor)
 

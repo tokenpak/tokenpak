@@ -46,18 +46,16 @@ from __future__ import annotations
 import json
 import types
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
 from tokenpak.cli.commands.setup import (
-    PROXY_URL,
     OPENAI_PROXY_URL,
+    PROXY_URL,
     configure_claude_code,
     detect_claude_code,
     run_setup_cmd,
 )
-
 
 # Reason strings for the feature-gap skips. Pulled to module top so the
 # initiative tracking ticket can grep for them and the restoration plan

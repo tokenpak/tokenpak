@@ -11,14 +11,12 @@ Coverage:
 
 
 import pytest
+
 try:
     from tokenpak.dashboard.account_dashboard import _get_license_key_id
 except ImportError:
-    pytest.skip(f"Cannot import _get_license_key_id from tokenpak.dashboard.account_dashboard — removed in current build", allow_module_level=True)
-import json
+    pytest.skip("Cannot import _get_license_key_id from tokenpak.dashboard.account_dashboard — removed in current build", allow_module_level=True)
 import os
-import tempfile
-from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -27,13 +25,12 @@ from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 
 from tokenpak.dashboard.account_dashboard import (
-    _get_license_key_id,
-    _check_pro_access,
-    _load_usage_data,
     _calculate_roi,
+    _check_pro_access,
+    _get_license_key_id,
+    _load_usage_data,
     router,
 )
-
 
 # ─────────────────────────────────────────────
 # License Detection
@@ -82,10 +79,10 @@ class TestAccessGating:
         with patch("tokenpak.dashboard.account_dashboard._get_license_key_id") as mock_get:
             mock_get.return_value = None
             request = MagicMock()
-            
+
             with pytest.raises(HTTPException) as exc:
                 _check_pro_access(request)
-            
+
             assert exc.value.status_code == status.HTTP_403_FORBIDDEN
             detail = exc.value.detail
             assert "Pro or higher" in detail["message"]
@@ -109,17 +106,17 @@ class TestUsageDataLoading:
             "total_saved": 500 if "22" in date_str else 1000,
             "request_count": 10 if "22" in date_str else 20,
         }
-        
+
         mock_manager = MagicMock()
         mock_manager.get_meter.return_value = mock_meter
         mock_manager_class.return_value = mock_manager
-        
+
         data = _load_usage_data(
             "TPAK-TEST-123",
             "2026-03-21",
             "2026-03-22"
         )
-        
+
         assert len(data) == 2
         assert data[0]["date"] == "2026-03-21"
         assert data[0]["input_tokens"] == 10000
@@ -135,13 +132,13 @@ class TestUsageDataLoading:
             "total_output": 0,
             "total_saved": 0,
         }
-        
+
         mock_manager = MagicMock()
         mock_manager.get_meter.return_value = mock_meter
         mock_manager_class.return_value = mock_manager
-        
+
         data = _load_usage_data("TPAK-TEST-123", "2026-03-21", "2026-03-22")
-        
+
         # Empty summaries are filtered out
         assert len(data) == 0
 
@@ -149,9 +146,9 @@ class TestUsageDataLoading:
     def test_load_usage_data_handles_error(self, mock_manager_class):
         """Return empty list on metering error (graceful degradation)."""
         mock_manager_class.side_effect = Exception("DB error")
-        
+
         data = _load_usage_data("TPAK-TEST-123", "2026-03-21", "2026-03-22")
-        
+
         assert data == []
 
 
@@ -193,7 +190,7 @@ class TestROICalculation:
 def client():
     """FastAPI test client with account dashboard router."""
     from fastapi import FastAPI
-    
+
     app = FastAPI()
     app.include_router(router)
     return TestClient(app)
@@ -215,9 +212,9 @@ class TestAccountDashboardRoutes:
                 "request_count": 10,
             }
         ]
-        
+
         response = client.get("/dashboard/account/usage?days=7")
-        
+
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert "Token Usage" in response.text
@@ -226,14 +223,14 @@ class TestAccountDashboardRoutes:
     def test_usage_route_pro_gate_blocks_oss(self, mock_check, client):
         """GET /dashboard/account/usage returns 403 for OSS users."""
         from fastapi import HTTPException
-        
+
         mock_check.side_effect = HTTPException(
             status_code=403,
             detail="Account dashboard requires Pro"
         )
-        
+
         response = client.get("/dashboard/account/usage")
-        
+
         assert response.status_code == 403
 
     @patch("tokenpak.dashboard.account_dashboard._check_pro_access")
@@ -249,9 +246,9 @@ class TestAccountDashboardRoutes:
                 "saved_tokens": 500,
             }
         ]
-        
+
         response = client.get("/dashboard/account/savings?days=30")
-        
+
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert "Compression Savings" in response.text
@@ -273,9 +270,9 @@ class TestAccountDashboardRoutes:
             "estimated_savings_usd": 0.15,
             "period": "since activation",
         }
-        
+
         response = client.get("/dashboard/account/roi")
-        
+
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert "Return on Investment" in response.text
@@ -294,9 +291,9 @@ class TestAccountDashboardRoutes:
                 "saved_tokens": 500,
             }
         ]
-        
+
         response = client.get("/dashboard/account/api/usage.json?days=7")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["key_id"] == "TPAK-TEST-123"
@@ -319,9 +316,9 @@ class TestAccountDashboardRoutes:
             "total_saved_tokens": 5000,
             "estimated_savings_usd": 0.15,
         }
-        
+
         response = client.get("/dashboard/account/api/savings.json?days=30")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["key_id"] == "TPAK-TEST-123"
@@ -339,7 +336,7 @@ class TestIntegration:
     def test_end_to_end_usage_page(self, mock_manager_class, mock_get_key, client):
         """Full flow: detect license, load data, render usage page."""
         mock_get_key.return_value = "TPAK-PRO-123"
-        
+
         mock_meter = MagicMock()
         mock_meter.get_daily_summary.return_value = {
             "total_input": 10000,
@@ -347,13 +344,13 @@ class TestIntegration:
             "total_saved": 1000,
             "request_count": 20,
         }
-        
+
         mock_manager = MagicMock()
         mock_manager.get_meter.return_value = mock_meter
         mock_manager_class.return_value = mock_manager
-        
+
         response = client.get("/dashboard/account/usage?days=7")
-        
+
         assert response.status_code == 200
         assert "Token Usage" in response.text
         assert "10,000" in response.text or "10000" in response.text
@@ -362,9 +359,9 @@ class TestIntegration:
     def test_oss_user_blocked_from_account_pages(self, mock_get_key, client):
         """OSS user (no license) can't access account-scoped pages."""
         mock_get_key.return_value = None  # No license
-        
+
         response = client.get("/dashboard/account/usage")
-        
+
         assert response.status_code == 403
 
 

@@ -10,14 +10,12 @@ Covers:
 - format_attribution()
 """
 
-import json
 import tempfile
 import time
 import unittest
 from pathlib import Path
 
 from tokenpak.telemetry.attribution import (
-    AGENT_EMOJI,
     AttributionRecord,
     AttributionTracker,
     detect_source,

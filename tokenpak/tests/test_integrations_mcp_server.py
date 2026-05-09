@@ -3,29 +3,22 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
-from types import SimpleNamespace
-from typing import Any, Dict
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from tokenpak.sdk.integrations.claude_code.mcp_server import (
     HANDLERS,
     TOOLS,
     _build_summary,
     _dispatch,
+    _handle_build_context_pack,
     _handle_extract_structured_fields,
+    _handle_prepare_review_packet,
     _handle_search_corpus,
     _handle_summarize_related_issues,
-    _handle_build_context_pack,
-    _handle_prepare_review_packet,
     _no_corpus_response,
     _resolve_vault_root,
     _shared_index_lock,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

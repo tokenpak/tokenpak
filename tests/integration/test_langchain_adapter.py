@@ -2,15 +2,15 @@
 
 Tests verify LangChain integration with TokenPak proxy works end-to-end:
 - ChatOpenAI via proxy base_url
-- ChatAnthropic via proxy base_url  
+- ChatAnthropic via proxy base_url
 - Token counting accuracy
 - Response format preservation
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
-import sys
 import os
+from unittest.mock import patch
+
+import pytest
 
 
 class TestLangChainIntegration:
@@ -27,8 +27,9 @@ class TestLangChainIntegration:
     def test_langchain_openai_adapter_config(self):
         """Test ChatOpenAI can be configured with TokenPak proxy."""
         try:
-            from langchain_tokenpak import ChatOpenAIWithTokenPak
             from unittest.mock import MagicMock, patch
+
+            from langchain_tokenpak import ChatOpenAIWithTokenPak
         except ImportError:
             pytest.skip("langchain_tokenpak.ChatOpenAIWithTokenPak not available")
 
@@ -54,7 +55,7 @@ class TestLangChainIntegration:
 
         text = "Hello, this is a test message for token counting."
         count = get_token_count(text)
-        
+
         # Rough validation: should count something reasonable
         assert isinstance(count, int)
         assert count > 0
@@ -78,7 +79,7 @@ class TestLangChainIntegration:
             }],
             "usage": {"prompt_tokens": 10, "completion_tokens": 8}
         }
-        
+
         # Adapter should preserve format
         try:
             formatted = format_response(mock_response)
@@ -138,7 +139,7 @@ class TestLangChainFrameworkIntegration:
 
         # Enable cache
         enable_cache(ttl=3600)
-        
+
         # Subsequent identical calls should hit cache
         # (would need real LLM call to verify fully)
         assert True  # Placeholder

@@ -6,9 +6,8 @@ that exposes CapsuleBuilder at the path the proxy pipeline expects.
 from __future__ import annotations
 
 import json
-import os
-import pytest
 
+import pytest
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Import checks
@@ -81,8 +80,9 @@ class TestCapsuleBuilderViaProxyModule:
             "tokenpak.capsule.builder",
             reason="tokenpak.capsule.builder absent on slim OSS install",
         )
-        from tokenpak.proxy.capsule_builder import CapsuleBuilder as CB_proxy
         from tokenpak.capsule.builder import CapsuleBuilder as CB_canonical
+
+        from tokenpak.proxy.capsule_builder import CapsuleBuilder as CB_proxy
         assert CB_proxy is CB_canonical
 
 
@@ -118,7 +118,7 @@ class TestMakeCapsuleBuilderFactory:
 
     def test_returns_capsule_builder_instance(self, monkeypatch):
         monkeypatch.delenv("TOKENPAK_CAPSULE_BUILDER", raising=False)
-        from tokenpak.proxy.capsule_builder import make_capsule_builder, CapsuleBuilder
+        from tokenpak.proxy.capsule_builder import CapsuleBuilder, make_capsule_builder
         b = make_capsule_builder()
         assert isinstance(b, CapsuleBuilder)
 

@@ -13,8 +13,7 @@ import json
 import os
 from pathlib import Path
 
-from ..model import Credential, REFRESH_EXTERNAL, KIND_OAUTH
-
+from ..model import KIND_OAUTH, REFRESH_EXTERNAL, Credential
 
 PROVIDER_NAME = "codex-cli"
 

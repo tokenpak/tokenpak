@@ -1,10 +1,8 @@
 """Unit tests for tokenpak/config_loader.py"""
 import os
-import json
-import pytest
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 # Reset module-level cache before each test
 import tokenpak.core.config_loader as _cl

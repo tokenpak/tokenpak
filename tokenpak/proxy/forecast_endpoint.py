@@ -26,7 +26,6 @@ import threading
 from collections import deque
 from typing import Union
 
-
 # ---------------------------------------------------------------------------
 # Rolling latency buffer (shared with server.py via import)
 # ---------------------------------------------------------------------------

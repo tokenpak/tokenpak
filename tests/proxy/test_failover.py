@@ -13,19 +13,14 @@ return a partially-rebuilt list.
 from __future__ import annotations
 
 import threading
-import time
-from dataclasses import dataclass, field
 from typing import List
 from unittest.mock import patch
-
-import pytest
 
 from tokenpak.proxy.failover import (
     FailoverConfig,
     FailoverManager,
     ProviderEntry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

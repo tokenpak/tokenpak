@@ -12,12 +12,11 @@ Covers:
 """
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.semantic.resolver", reason="module not available in current build")
 import sys
 from pathlib import Path
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -39,8 +38,8 @@ _REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 sys.path.insert(0, str(_REPO_ROOT / "tokenpak"))
 
-from tokenpak.semantic.loader import SemanticMapLoader, SemanticMapError, SemanticMap
-from tokenpak.semantic.resolver import SemanticResolver, ResolveResult
+from tokenpak.semantic.loader import SemanticMap, SemanticMapError, SemanticMapLoader
+from tokenpak.semantic.resolver import SemanticResolver
 
 
 # ---------------------------------------------------------------------------

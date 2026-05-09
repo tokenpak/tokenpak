@@ -12,6 +12,7 @@ Available schemas:
 """
 
 import warnings as _warnings
+
 _warnings.warn(
     "tokenpak.agent.state_schemas is deprecated, use tokenpak.core.state_schemas instead. "
     "This will be removed in v2.0.",

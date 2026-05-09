@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Optional
-
 
 # ---------------------------------------------------------------------------
 # Miss-reason vocabulary (mirrors CacheMissReason from TIP-02 cache_contract)

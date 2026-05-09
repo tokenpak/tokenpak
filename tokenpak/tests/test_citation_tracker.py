@@ -1,25 +1,20 @@
 """Unit tests for citation_tracker.py — LLM citation detection and utility scoring."""
 
-import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from tokenpak.telemetry.citation_tracker import (
-    track_citations,
-    update_utility,
-    get_utility_score,
-    get_utility_weight,
-    _extract_identifiers,
-    _load_utility,
-    _save_utility,
     CITE_DELTA,
     DECAY_DELTA,
     SCORE_MAX,
     SCORE_MIN,
-    MIN_MATCH_LEN,
-    DEFAULT_UTILITY_PATH,
+    _extract_identifiers,
+    _load_utility,
+    _save_utility,
+    get_utility_score,
+    get_utility_weight,
+    track_citations,
+    update_utility,
 )
 
 

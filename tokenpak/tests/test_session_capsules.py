@@ -10,12 +10,13 @@ Tests cover:
 """
 
 import pytest
+
 from tokenpak.companion.memory.session_capsules import (
-    build_session_capsule,
-    serialize_capsule,
-    score_capsule_sections,
-    capsule_retrieval_score,
     REQUIRED_CAPSULE_SECTIONS,
+    build_session_capsule,
+    capsule_retrieval_score,
+    score_capsule_sections,
+    serialize_capsule,
 )
 
 

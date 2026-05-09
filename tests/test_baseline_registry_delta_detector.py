@@ -2,16 +2,15 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.regression.baseline_registry", reason="module not available in current build")
-import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
 import pytest
-
 from tokenpak._internal.regression.baseline_registry import BaselineEntry, BaselineRegistry
-from tokenpak._internal.regression.delta_detector import DeltaDetector, DeltaResult
+from tokenpak._internal.regression.delta_detector import DeltaDetector
 
 
 @pytest.fixture

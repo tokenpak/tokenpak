@@ -1,6 +1,5 @@
 """Unit tests for budget.py — quadratic budget allocation with citation utility."""
 
-import pytest
 from tokenpak.telemetry.budget import BudgetBlock, quadratic_allocate
 
 

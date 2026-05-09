@@ -2,25 +2,20 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.shadow_reader", reason="module not available in current build")
 import json
 import os
 import tempfile
 
 import pytest
-
 from tokenpak.shadow_reader import (
-    validate,
-    top_terms,
-    log_validation_result,
+    MIN_TERM_RETENTION,
     apply_fallback,
     get_validation_stats,
-    ValidationResult,
-    MIN_COVERAGE,
-    MAX_COVERAGE,
-    MIN_TERM_RETENTION,
+    top_terms,
+    validate,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -5,10 +5,9 @@ from __future__ import annotations
 import json
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 
 # TSR-05u skip reasons (grep-able)
 # ─────────────────────────────────────────────
@@ -50,7 +49,6 @@ sys.path.insert(0, "/home/cali/tokenpak")
 
 from tokenpak.cli.commands.optimize import (
     _analyze_compression,
-    _analyze_redundancy,
     _build_recommendations,
     _model_cost_per_request,
     run_optimize,
@@ -212,8 +210,8 @@ class TestRunOptimize(unittest.TestCase):
         captured = []
         original_print = __builtins__["print"] if isinstance(__builtins__, dict) else print
 
-        import io
         import contextlib
+        import io
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             try:

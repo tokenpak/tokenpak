@@ -36,7 +36,6 @@ import types
 import unittest
 from unittest.mock import patch
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -272,7 +271,6 @@ class ExtrasGuardSmokeTest(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 def _standalone():
-    import os
 
     data = _load_pyproject()
     direct = _direct_deps(data)

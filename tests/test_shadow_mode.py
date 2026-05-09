@@ -2,19 +2,16 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.complexity", reason="module not available in current build")
-import json
 import os
 import tempfile
 import threading
-import time
 
 import pytest
-
-from tokenpak.complexity import score_complexity, TaskType, _classify_task_type
+from tokenpak.complexity import TaskType, score_complexity
+from tokenpak.elo import INITIAL_RATING, K_FACTOR, EloRatings
 from tokenpak.routing_ledger import RoutingLedger
-from tokenpak.elo import EloRatings, INITIAL_RATING, K_FACTOR
-
 
 # ---------------------------------------------------------------------------
 # Helpers

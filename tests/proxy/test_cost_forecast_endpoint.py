@@ -17,8 +17,8 @@ No real Anthropic API calls are made.
 """
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
 import json
 import os
@@ -40,6 +40,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-sk-cci11-dummy-not-real")
 os.environ.setdefault("TOKENPAK_VAULT_INDEX", "0")
 
 import importlib.util as _ilu  # noqa: E402
+
 _spec = _ilu.spec_from_file_location("proxy", _PROJECT_ROOT / "proxy.py")
 _proxy = _ilu.module_from_spec(_spec)
 sys.modules.setdefault("proxy", _proxy)

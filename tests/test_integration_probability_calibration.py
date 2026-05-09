@@ -6,18 +6,19 @@ These should all PASS with the current implementation.
 """
 
 import math
+
 import pytest
 
 # trackedge is a separate project not installed in the slim release test env;
 # skip cleanly so the release auto-publish gate doesn't error on collection.
 pytest.importorskip("trackedge.model.probability", reason="trackedge is a separate project not installed in slim test env")
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from trackedge.model.probability import softmax_probabilities, top_contenders
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -107,7 +108,7 @@ class TestTemperatureEffects:
 
     def test_t10_prevents_extreme_probabilities(self):
         """T=10 prevents 99%+ probabilities for realistic race spreads.
-        
+
         A 50pt gap IS expected to produce high probability (97%) — that is correct math.
         Real guardrail: no 99%+ probs for realistic spreads (<=20pt gap).
         """
@@ -125,7 +126,7 @@ class TestTemperatureEffects:
 
     def test_default_temperature_realistic(self):
         """Default T=15 → favorite should be competitive but not produce 99%+ probs.
-        
+
         Observed: 25pt gap with T=15 → favorite ~67% (expected/realistic for a strong horse).
         The guardrail is preventing 99%+, not 60%+. A 67% probability for a 25pt gap is valid.
         """

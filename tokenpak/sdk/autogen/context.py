@@ -1,9 +1,9 @@
 """AutoGen conversation context compression via TokenPak."""
 
-from dataclasses import dataclass
-from typing import Any, Dict, Optional, List
 import json
+from dataclasses import dataclass
 from functools import wraps
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -332,9 +332,11 @@ class TokenPakAssistant:
         # Import from the tokenpak package (may be on PYTHONPATH)
         try:
             from tokenpak.orchestration.handoff import (
+                HandoffBlock as HBlock,
+            )
+            from tokenpak.orchestration.handoff import (
                 HandoffWire,
                 TokenPak,
-                HandoffBlock as HBlock,
             )
         except ImportError:
             # Fallback: return simple JSON if tokenpak not available

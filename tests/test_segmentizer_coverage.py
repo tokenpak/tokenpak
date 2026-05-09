@@ -17,19 +17,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
-
-import pytest
 
 from tokenpak.compression.segmentizer import (
     Segment,
     SegmentType,
-    _sha256,
-    detect_anti_patterns,
-    detect_stale,
     segmentize,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

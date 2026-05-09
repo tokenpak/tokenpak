@@ -2,6 +2,7 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.ingest.claim_indexer", reason="module not available in current build")
 import pytest
 from tokenpak._internal.ingest.claim_indexer import (
@@ -252,10 +253,10 @@ class TestExtractClaimsComplexDocuments:
         """Test extraction from multi-paragraph text."""
         text = """
         Introduction: This study examines the impact.
-        
+
         We found significant results. The analysis shows 60% improvement.
         Our conclusion: the method works effectively.
-        
+
         Recommendations: adopt this approach widely.
         """
         claims = extract_claims_from_text(text)

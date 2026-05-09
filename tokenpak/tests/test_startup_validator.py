@@ -14,13 +14,10 @@ Coverage:
 """
 
 import logging
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from tokenpak.cli.cli_validate_config import format_errors, validate_config_file
 from tokenpak.startup_validator import setup_validation_logging, validate_on_startup
 
 

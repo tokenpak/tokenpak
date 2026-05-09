@@ -11,17 +11,15 @@ Covers:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.profiles", reason="module not available in current build")
-import json
 import os
-import pytest
 import tempfile
-import yaml
 from pathlib import Path
-from unittest import mock
 
-from tokenpak.profiles import PROFILES, get_profile, apply_profile
-
+import pytest
+import yaml
+from tokenpak.profiles import PROFILES, apply_profile, get_profile
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -86,7 +84,7 @@ def test_apply_minimal_profile():
     """Applying minimal profile should set correct features."""
     config = {"proxy": {"port": 8766}}
     result = apply_profile("minimal", config)
-    
+
     assert result["profile"] == "minimal"
     assert "modules" in result
     assert result["modules"]["compression"]["enabled"] is True
@@ -98,7 +96,7 @@ def test_apply_balanced_profile():
     """Applying balanced profile should enable compression + caching + routing."""
     config = {"proxy": {"port": 8766}}
     result = apply_profile("balanced", config)
-    
+
     assert result["profile"] == "balanced"
     assert result["modules"]["compression"]["enabled"] is True
     assert result["modules"]["semantic_cache"]["enabled"] is True
@@ -112,7 +110,7 @@ def test_apply_aggressive_profile():
     """Applying aggressive profile should enable all 16 features."""
     config = {"proxy": {"port": 8766}}
     result = apply_profile("aggressive", config)
-    
+
     assert result["profile"] == "aggressive"
     # Count enabled features
     enabled_count = sum(
@@ -129,7 +127,7 @@ def test_apply_profile_preserves_existing_config():
         "other_setting": "preserved",
     }
     result = apply_profile("balanced", config)
-    
+
     assert result["proxy"]["port"] == 8766
     assert result["proxy"]["host"] == "localhost"
     assert result["other_setting"] == "preserved"
@@ -144,18 +142,18 @@ def test_config_written_to_yaml(temp_config_dir, monkeypatch):
     monkeypatch.setenv("HOME", str(temp_config_dir))
     config_dir = Path(temp_config_dir) / ".tokenpak"
     config_file = config_dir / "config.yaml"
-    
+
     config = {
         "proxy": {"port": 8766, "provider": "anthropic"},
         "modules": {},
     }
     config = apply_profile("balanced", config)
-    
+
     config_dir.mkdir(parents=True, exist_ok=True)
     config_file.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
-    
+
     assert config_file.exists()
-    
+
     # Read back and verify
     loaded = yaml.safe_load(config_file.read_text())
     assert loaded["profile"] == "balanced"
@@ -172,7 +170,7 @@ def test_detect_anthropic_key(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-123")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    
+
     api_keys = {}
     if os.environ.get("ANTHROPIC_API_KEY"):
         api_keys["anthropic"] = os.environ["ANTHROPIC_API_KEY"]
@@ -180,7 +178,7 @@ def test_detect_anthropic_key(monkeypatch):
         api_keys["openai"] = os.environ["OPENAI_API_KEY"]
     if os.environ.get("GOOGLE_API_KEY"):
         api_keys["google"] = os.environ["GOOGLE_API_KEY"]
-    
+
     assert "anthropic" in api_keys
     assert api_keys["anthropic"] == "sk-test-123"
 
@@ -190,7 +188,7 @@ def test_detect_multiple_keys(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-anthropic-123")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-456")
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    
+
     api_keys = {}
     if os.environ.get("ANTHROPIC_API_KEY"):
         api_keys["anthropic"] = os.environ["ANTHROPIC_API_KEY"]
@@ -198,7 +196,7 @@ def test_detect_multiple_keys(monkeypatch):
         api_keys["openai"] = os.environ["OPENAI_API_KEY"]
     if os.environ.get("GOOGLE_API_KEY"):
         api_keys["google"] = os.environ["GOOGLE_API_KEY"]
-    
+
     assert len(api_keys) == 2
     assert "anthropic" in api_keys
     assert "openai" in api_keys
@@ -210,7 +208,7 @@ def test_no_api_keys_found(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    
+
     api_keys = {}
     if os.environ.get("ANTHROPIC_API_KEY"):
         api_keys["anthropic"] = os.environ["ANTHROPIC_API_KEY"]
@@ -218,7 +216,7 @@ def test_no_api_keys_found(monkeypatch):
         api_keys["openai"] = os.environ["OPENAI_API_KEY"]
     if os.environ.get("GOOGLE_API_KEY"):
         api_keys["google"] = os.environ["GOOGLE_API_KEY"]
-    
+
     assert len(api_keys) == 0
 
 
@@ -273,20 +271,20 @@ def test_config_creation_is_idempotent(temp_config_dir, monkeypatch):
     monkeypatch.setenv("HOME", str(temp_config_dir))
     config_dir = Path(temp_config_dir) / ".tokenpak"
     config_file = config_dir / "config.yaml"
-    
+
     # Create config first time
     config = {"proxy": {"port": 8766}}
     config = apply_profile("balanced", config)
     config_dir.mkdir(parents=True, exist_ok=True)
     config_file.write_text(yaml.dump(config))
     first_content = config_file.read_text()
-    
+
     # Create config again (should not fail)
     config = {"proxy": {"port": 8766}}
     config = apply_profile("balanced", config)
     config_file.write_text(yaml.dump(config))
     second_content = config_file.read_text()
-    
+
     # Content should be essentially the same (YAML may format slightly differently)
     assert yaml.safe_load(first_content) == yaml.safe_load(second_content)
 
@@ -307,9 +305,9 @@ def test_profile_descriptions_realistic():
     """Profile descriptions should match expected savings ranges."""
     minimal = get_profile("minimal")
     assert "5%" in minimal["description"]
-    
+
     balanced = get_profile("balanced")
     assert "30%" in balanced["description"]
-    
+
     aggressive = get_profile("aggressive")
     assert "40%" in aggressive["description"]

@@ -6,20 +6,16 @@ import json
 import os
 import sqlite3
 import tempfile
-import threading
-import pytest
-from unittest.mock import patch, MagicMock
 
 from tokenpak.core.runtime.proxy import (
-    _resolve_session_id,
+    _PROFILE_PRESETS,
+    SESSION,
+    Monitor,
     _prune_mutation_audit,
+    _resolve_session_id,
     _write_mutation_audit,
     can_compress,
-    Monitor,
-    SESSION,
-    _PROFILE_PRESETS,
 )
-
 
 # ---------------------------------------------------------------------------
 # _resolve_session_id

@@ -19,9 +19,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from .model import Credential, KIND_OAUTH
+from .model import KIND_OAUTH, Credential
 from .providers import resolve_secret
-
 
 # Default timeout for the test call. Kept short because these are
 # "does the key work at all" probes, not real traffic.

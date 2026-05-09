@@ -13,7 +13,7 @@ import sqlite3
 import urllib.request
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -26,8 +26,8 @@ _MONITOR_DB = os.environ.get(
 )
 SEP = "────────────────────────────────────────"
 
-from tokenpak.models import get_model_costs as _get_model_costs
 from tokenpak.models import get_cheaper_alternative as _get_cheaper_alternative
+from tokenpak.models import get_model_costs as _get_model_costs
 
 # Compression mode thresholds
 COMPRESSION_MODES = {

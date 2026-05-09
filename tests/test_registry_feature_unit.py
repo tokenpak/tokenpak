@@ -1,13 +1,12 @@
 """Unit tests for tokenpak.registry and tokenpak.pro.feature_matrix."""
 
 import pytest
+
 pytest.importorskip("tokenpak.registry", reason="module not available in current build")
-import os
-import tempfile
 import pytest
 
 # ── Registry ──────────────────────────────────────────────────────────────────
-from tokenpak.registry import Block, BlockRegistry, _cleanup_all_registries
+from tokenpak.registry import Block, BlockRegistry
 
 
 def _reg(tmp_path):
@@ -150,8 +149,7 @@ def test_block_slice_id_autogen():
 
 
 # ── FeatureMatrix ─────────────────────────────────────────────────────────────
-from tokenpak.pro.feature_matrix import FeatureMatrix, FEATURES, ADAPTERS
-
+from tokenpak.pro.feature_matrix import ADAPTERS, FEATURES, FeatureMatrix
 
 FM = FeatureMatrix()
 

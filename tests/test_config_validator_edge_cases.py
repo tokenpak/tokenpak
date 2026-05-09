@@ -11,11 +11,13 @@ Covers:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.config_validator", reason="module not available in current build")
-import pytest
 import json
-import tempfile
 import os
+import tempfile
+
+import pytest
 from tokenpak.config_validator import ConfigValidator
 
 
@@ -163,7 +165,7 @@ class TestIntegration:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             json.dump({"api_keys": {"a": "b"}}, f)
             fname = f.name
-        
+
         try:
             validator = ConfigValidator()
             result = validator.validate_file(fname)
@@ -255,7 +257,7 @@ class TestRecovery:
         """Invalid config → fix → retry succeeds."""
         config1 = {"port": 100}  # Invalid
         config2 = {"api_keys": {"a": "b"}, "port": 9000}  # Fixed
-        
+
         validator = ConfigValidator()
         assert not validator.is_valid(config1)
         assert validator.is_valid(config2)
@@ -285,7 +287,7 @@ class TestRecovery:
         """Validate config after migration."""
         old = {"api_key": "sk-test"}
         new = {"api_keys": {"anthropic": old["api_key"]}}
-        
+
         validator = ConfigValidator()
         assert validator.is_valid(new)
 
@@ -298,7 +300,7 @@ class TestRecovery:
         # Remove new feature for downgrade
         if "new_feature" in new_config:
             del new_config["new_feature"]
-        
+
         validator = ConfigValidator()
         assert validator.is_valid(new_config)
 

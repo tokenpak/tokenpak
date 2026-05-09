@@ -93,7 +93,7 @@ class ModelStats:
 
     def to_dict(self) -> dict:
         """Convert model stats to dictionary for serialization or reporting.
-        
+
         Returns:
             dict: Keys include model name, request counts, token metrics, cache hit rate,
                   compression efficiency, and cost analysis.

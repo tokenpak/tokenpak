@@ -34,7 +34,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any, Callable, Optional
-from unittest.mock import patch
 
 from tokenpak.orchestration.retry import (
     ImmediateAlertError,

@@ -1,14 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for tokenpak.compression.assembler — CanonBlockRegistry + ContextAssembler."""
 
-import json
 import tempfile
-from pathlib import Path
-
-import pytest
 
 from tokenpak.compression.assembler import CanonBlockRegistry, ContextAssembler
-
 
 # ─── CanonBlockRegistry ───────────────────────────────────────────────────────
 

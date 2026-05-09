@@ -2,16 +2,13 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.triggers.matcher", reason="module not available in current build")
+
 import pytest
-import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-from tokenpak._internal.triggers.store import TriggerStore, Trigger
-from tokenpak._internal.triggers.matcher import match_event
 from tokenpak._internal.triggers.daemon import _parse_interval_seconds
-
+from tokenpak._internal.triggers.matcher import match_event
+from tokenpak._internal.triggers.store import TriggerStore
 
 # ── Store CRUD ────────────────────────────────────────────────────────────────
 

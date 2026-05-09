@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .converters import llamaindex_nodes_to_blocks, blocks_to_llamaindex_nodes
-from .synthesizer import TokenPakSynthesizer
+from .converters import blocks_to_llamaindex_nodes, llamaindex_nodes_to_blocks
 from .query_engine import TokenPakQueryEngine
+from .synthesizer import TokenPakSynthesizer
 
 
 class TokenPakIndex:

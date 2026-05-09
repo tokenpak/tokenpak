@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
-from tokenpak.proxy.spend_guard.estimator import estimate, _count_text_tokens
+from tokenpak.proxy.spend_guard.estimator import _count_text_tokens, estimate
 
 
 class TestCountTextTokens:

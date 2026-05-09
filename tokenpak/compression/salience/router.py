@@ -11,10 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from .code_extractor import CodeExtractionResult, CodeExtractor
 from .detect import ContentType, detect_content_type
-from .log_extractor import LogExtractor, LogExtractionResult
-from .code_extractor import CodeExtractor, CodeExtractionResult
-from .doc_extractor import DocExtractor, DocExtractionResult
+from .doc_extractor import DocExtractionResult, DocExtractor
+from .log_extractor import LogExtractionResult, LogExtractor
 
 
 @dataclass

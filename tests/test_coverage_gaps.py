@@ -11,10 +11,7 @@ Files targeted (highest-miss, 0% coverage):
 """
 
 import json
-import sys
 import time
-import types
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest

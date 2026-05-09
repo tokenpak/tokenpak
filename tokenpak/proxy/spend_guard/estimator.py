@@ -12,7 +12,6 @@ The estimator runs on every inbound request, so it must stay sub-millisecond.
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from .contracts import RiskEstimate
 

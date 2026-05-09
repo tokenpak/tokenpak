@@ -18,9 +18,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch, call
-
-import pytest
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Import inject_with_cache_boundary directly from prompt_builder
@@ -31,13 +29,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 # Try the agent.proxy path (production layout); fall back to tokenpak.proxy (dev layout)
 try:
     from tokenpak.proxy.prompt_builder import (
-        inject_with_cache_boundary,
         apply_stable_cache_control,
+        inject_with_cache_boundary,
     )
 except ModuleNotFoundError:
     from tokenpak.proxy.prompt_builder import (  # type: ignore[assignment]
-        inject_with_cache_boundary,
         apply_stable_cache_control,
+        inject_with_cache_boundary,
     )
 
 

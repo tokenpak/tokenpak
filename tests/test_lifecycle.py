@@ -23,25 +23,24 @@ from __future__ import annotations
 import http.client
 import json
 import os
-import signal
 import socket
 import sys
 import threading
 import time
 from http.server import HTTPServer
-from io import StringIO
 from pathlib import Path
 from typing import Tuple
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+
+from tokenpak.core.runtime.proxy import SESSION
 
 # ---------------------------------------------------------------------------
 # Modular imports (migrated from proxy monolith)
 # ---------------------------------------------------------------------------
 from tokenpak.proxy.server import ForwardProxyHandler
 from tokenpak.proxy.startup import run_startup_checks
-from tokenpak.core.runtime.proxy import SESSION
 
 # Compat shims — the old monolith exposed these as module-level globals.
 # The modular tree uses ProxyServer.shutdown (GracefulShutdown) instead.

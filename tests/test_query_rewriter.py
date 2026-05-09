@@ -11,12 +11,12 @@ Tests for tokenpak.compression.query_rewriter:
 from __future__ import annotations
 
 import pytest
+
 from tokenpak.compression.query_rewriter import (
     QueryRewriter,
     RewriteResult,
     rewrite_query,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

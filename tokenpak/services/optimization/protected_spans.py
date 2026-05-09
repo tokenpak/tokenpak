@@ -24,7 +24,6 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Dict, FrozenSet, Iterable, List, Optional, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Span type constants (proposal Phase 3 Component D)
 # ---------------------------------------------------------------------------

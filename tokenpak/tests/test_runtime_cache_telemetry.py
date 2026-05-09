@@ -2,9 +2,10 @@
 """Unit tests for tokenpak.core.runtime.cache_telemetry — CacheTelemetry and ProviderCacheStats."""
 
 import threading
-import pytest
-from tokenpak.core.runtime.cache_telemetry import CacheTelemetry, ProviderCacheStats
 
+import pytest
+
+from tokenpak.core.runtime.cache_telemetry import CacheTelemetry, ProviderCacheStats
 
 # ---------------------------------------------------------------------------
 # ProviderCacheStats

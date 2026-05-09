@@ -8,10 +8,10 @@ Covers:
 """
 
 import json
-import tempfile
-import os
+
 import pytest
 
+from tokenpak.companion.memory.decision_memory import DecisionMemoryDB, DecisionRecord
 from tokenpak.companion.memory.session_capsules import (
     REQUIRED_CAPSULE_SECTIONS,
     build_session_capsule,
@@ -19,8 +19,6 @@ from tokenpak.companion.memory.session_capsules import (
     score_capsule_sections,
     serialize_capsule,
 )
-from tokenpak.companion.memory.decision_memory import DecisionMemoryDB, DecisionRecord
-
 
 # ---------------------------------------------------------------------------
 # Helpers

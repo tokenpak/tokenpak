@@ -13,8 +13,8 @@ Comprehensive test suite covering:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.goals", reason="module not available in current build")
-import json
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -24,8 +24,6 @@ from tokenpak.goals import (
     Goal,
     GoalManager,
     GoalProgress,
-    GoalType,
-    GoalStatus,
 )
 
 
@@ -42,7 +40,7 @@ class TestGoal(unittest.TestCase):
             start_date="2026-03-01",
             end_date="2026-03-31",
         )
-        
+
         self.assertEqual(goal.goal_id, "test_1")
         self.assertEqual(goal.name, "Q1 Savings")
         self.assertEqual(goal.goal_type, "savings")
@@ -53,7 +51,7 @@ class TestGoal(unittest.TestCase):
         today = datetime.now().date()
         start = today.isoformat()
         end = (today + timedelta(days=30)).isoformat()
-        
+
         goal = Goal(
             goal_id="test_2",
             name="Test Goal",
@@ -62,13 +60,13 @@ class TestGoal(unittest.TestCase):
             start_date=start,
             end_date=end,
         )
-        
+
         # Days elapsed should be 0 (started today)
         self.assertEqual(goal.days_elapsed(), 0)
-        
+
         # Days remaining should be 30
         self.assertEqual(goal.days_remaining(), 30)
-        
+
         # Total days should be 30
         self.assertEqual(goal.total_days(), 30)
 
@@ -78,7 +76,7 @@ class TestGoal(unittest.TestCase):
         today = datetime.now().date()
         start = (today - timedelta(days=10)).isoformat()
         end = (today + timedelta(days=20)).isoformat()
-        
+
         goal = Goal(
             goal_id="test_3",
             name="Mid-Progress Goal",
@@ -87,7 +85,7 @@ class TestGoal(unittest.TestCase):
             start_date=start,
             end_date=end,
         )
-        
+
         # Should be approximately 33% (10/30)
         expected = goal.expected_progress_percent()
         self.assertAlmostEqual(expected, 33.33, delta=1.0)
@@ -103,7 +101,7 @@ class TestGoal(unittest.TestCase):
             end_date="2026-03-31",
             description="Test compression goal",
         )
-        
+
         data = goal.to_dict()
         self.assertEqual(data["goal_id"], "test_4")
         self.assertEqual(data["name"], "Serialization Test")
@@ -126,7 +124,7 @@ class TestGoal(unittest.TestCase):
             "created_at": 1710000000.0,
             "metadata": {},
         }
-        
+
         goal = Goal.from_dict(data)
         self.assertEqual(goal.goal_id, "test_5")
         self.assertEqual(goal.name, "Deserialization Test")
@@ -143,7 +141,7 @@ class TestGoalProgress(unittest.TestCase):
             current_value=25.0,
             target_value=100.0,
         )
-        
+
         self.assertEqual(progress.goal_id, "test_1")
         self.assertEqual(progress.current_value, 25.0)
         self.assertEqual(progress.target_value, 100.0)
@@ -156,7 +154,7 @@ class TestGoalProgress(unittest.TestCase):
             target_value=100.0,
             progress_percent=50.0,
         )
-        
+
         data = progress.to_dict()
         self.assertIn("goal_id", data)
         self.assertEqual(data["current_value"], 50.0)
@@ -177,7 +175,7 @@ class TestGoalProgress(unittest.TestCase):
             "pace_alert_fired": False,
             "last_update": 1710000000.0,
         }
-        
+
         progress = GoalProgress.from_dict(data)
         self.assertEqual(progress.goal_id, "test_3")
         self.assertEqual(progress.current_value, 75.0)
@@ -204,7 +202,7 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         self.assertEqual(len(manager.goals), 0)
         self.assertEqual(len(manager.progress), 0)
 
@@ -214,14 +212,14 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Test Savings",
             goal_type="savings",
             target_value=100.0,
             description="Test goal",
         )
-        
+
         self.assertIsNotNone(goal.goal_id)
         self.assertEqual(goal.name, "Test Savings")
         self.assertEqual(len(manager.goals), 1)
@@ -233,19 +231,19 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal1 = manager.add_goal(
             name="Goal 1",
             goal_type="savings",
             target_value=50.0,
         )
-        
+
         goal2 = manager.add_goal(
             name="Goal 2",
             goal_type="compression",
             target_value=80.0,
         )
-        
+
         self.assertEqual(len(manager.goals), 2)
         self.assertNotEqual(goal1.goal_id, goal2.goal_id)
 
@@ -255,15 +253,15 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Original Name",
             goal_type="savings",
             target_value=100.0,
         )
-        
+
         edited = manager.edit_goal(goal.goal_id, name="Updated Name", target_value=150.0)
-        
+
         self.assertIsNotNone(edited)
         self.assertEqual(edited.name, "Updated Name")
         self.assertEqual(edited.target_value, 150.0)
@@ -274,7 +272,7 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         result = manager.edit_goal("nonexistent_id", name="Test")
         self.assertIsNone(result)
 
@@ -284,15 +282,15 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Delete Me",
             goal_type="savings",
             target_value=50.0,
         )
-        
+
         self.assertEqual(len(manager.goals), 1)
-        
+
         deleted = manager.delete_goal(goal.goal_id)
         self.assertTrue(deleted)
         self.assertEqual(len(manager.goals), 0)
@@ -304,7 +302,7 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         result = manager.delete_goal("nonexistent_id")
         self.assertFalse(result)
 
@@ -314,13 +312,13 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Retrievable Goal",
             goal_type="savings",
             target_value=75.0,
         )
-        
+
         retrieved = manager.get_goal(goal.goal_id)
         self.assertIsNotNone(retrieved)
         self.assertEqual(retrieved.name, "Retrievable Goal")
@@ -331,16 +329,16 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Progress Test",
             goal_type="savings",
             target_value=100.0,
         )
-        
+
         # Update to 50%
         progress = manager.update_progress(goal.goal_id, 50.0)
-        
+
         self.assertIsNotNone(progress)
         self.assertEqual(progress.current_value, 50.0)
         self.assertAlmostEqual(progress.progress_percent, 50.0, places=1)
@@ -351,13 +349,13 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Percent Test",
             goal_type="savings",
             target_value=200.0,
         )
-        
+
         progress = manager.update_progress(goal.goal_id, 150.0)
         self.assertAlmostEqual(progress.progress_percent, 75.0, places=1)
 
@@ -367,11 +365,11 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         manager.add_goal(name="Goal 1", goal_type="savings", target_value=50.0)
         manager.add_goal(name="Goal 2", goal_type="compression", target_value=80.0)
         manager.add_goal(name="Goal 3", goal_type="cache", target_value=90.0)
-        
+
         goals = manager.list_goals()
         self.assertEqual(len(goals), 3)
 
@@ -381,14 +379,14 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         manager.add_goal(name="Savings 1", goal_type="savings", target_value=50.0)
         manager.add_goal(name="Savings 2", goal_type="savings", target_value=75.0)
         manager.add_goal(name="Compression 1", goal_type="compression", target_value=80.0)
-        
+
         savings_goals = manager.list_goals(goal_type="savings")
         self.assertEqual(len(savings_goals), 2)
-        
+
         compression_goals = manager.list_goals(goal_type="compression")
         self.assertEqual(len(compression_goals), 1)
 
@@ -398,20 +396,20 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Milestone Test",
             goal_type="savings",
             target_value=100.0,
         )
-        
+
         # Update to 25%
         manager.update_progress(goal.goal_id, 25.0)
-        
+
         events = manager.check_milestones(goal.goal_id)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["milestone"], 25)
-        
+
         # Check that flag is set
         progress = manager.get_progress(goal.goal_id)
         self.assertTrue(progress.milestone_25_fired)
@@ -422,15 +420,15 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Milestone Test",
             goal_type="savings",
             target_value=100.0,
         )
-        
+
         manager.update_progress(goal.goal_id, 50.0)
-        
+
         events = manager.check_milestones(goal.goal_id)
         # When jumping to 50%, both 25% and 50% milestones fire
         self.assertEqual(len(events), 2)
@@ -444,15 +442,15 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Milestone Test",
             goal_type="savings",
             target_value=100.0,
         )
-        
+
         manager.update_progress(goal.goal_id, 75.0)
-        
+
         events = manager.check_milestones(goal.goal_id)
         # When jumping to 75%, 25%, 50%, and 75% milestones fire
         self.assertEqual(len(events), 3)
@@ -467,15 +465,15 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Milestone Test",
             goal_type="savings",
             target_value=100.0,
         )
-        
+
         manager.update_progress(goal.goal_id, 100.0)
-        
+
         events = manager.check_milestones(goal.goal_id)
         # When jumping to 100%, all milestones fire
         self.assertEqual(len(events), 4)
@@ -491,16 +489,16 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Multi-Milestone Test",
             goal_type="savings",
             target_value=100.0,
         )
-        
+
         # Jump straight to 75%
         manager.update_progress(goal.goal_id, 75.0)
-        
+
         events = manager.check_milestones(goal.goal_id)
         # Should fire 25%, 50%, 75% all at once
         self.assertEqual(len(events), 3)
@@ -515,19 +513,19 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="No Repeat Test",
             goal_type="savings",
             target_value=100.0,
         )
-        
+
         # First update to 50%
         manager.update_progress(goal.goal_id, 50.0)
         events1 = manager.check_milestones(goal.goal_id)
         # Both 25% and 50% fire on first update
         self.assertEqual(len(events1), 2)
-        
+
         # Second update to 60%
         manager.update_progress(goal.goal_id, 60.0)
         events2 = manager.check_milestones(goal.goal_id)
@@ -538,12 +536,12 @@ class TestGoalManager(unittest.TestCase):
         today = datetime.now().date()
         start = (today - timedelta(days=10)).isoformat()
         end = (today + timedelta(days=20)).isoformat()
-        
+
         manager = GoalManager(
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Pace Test",
             goal_type="savings",
@@ -551,7 +549,7 @@ class TestGoalManager(unittest.TestCase):
             start_date=start,
             end_date=end,
         )
-        
+
         # Update to ~33% (should be on track or close)
         progress = manager.update_progress(goal.goal_id, 33.0)
         self.assertIn(progress.pace_status, ["on_track", "ahead"])
@@ -561,12 +559,12 @@ class TestGoalManager(unittest.TestCase):
         today = datetime.now().date()
         start = (today - timedelta(days=20)).isoformat()
         end = (today + timedelta(days=10)).isoformat()
-        
+
         manager = GoalManager(
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Behind Test",
             goal_type="savings",
@@ -574,7 +572,7 @@ class TestGoalManager(unittest.TestCase):
             start_date=start,
             end_date=end,
         )
-        
+
         # Only at 10% when we should be at ~66% (20 of 30 days elapsed)
         progress = manager.update_progress(goal.goal_id, 10.0)
         self.assertEqual(progress.pace_status, "behind")
@@ -584,12 +582,12 @@ class TestGoalManager(unittest.TestCase):
         today = datetime.now().date()
         start = (today - timedelta(days=5)).isoformat()
         end = (today + timedelta(days=25)).isoformat()
-        
+
         manager = GoalManager(
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Ahead Test",
             goal_type="savings",
@@ -597,7 +595,7 @@ class TestGoalManager(unittest.TestCase):
             start_date=start,
             end_date=end,
         )
-        
+
         # At 50% when we should only be at ~16% (5 of 30 days)
         progress = manager.update_progress(goal.goal_id, 50.0)
         self.assertEqual(progress.pace_status, "ahead")
@@ -609,25 +607,25 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager1.add_goal(
             name="Persistent Goal",
             goal_type="savings",
             target_value=100.0,
         )
-        
+
         manager1.update_progress(goal.goal_id, 50.0)
-        
+
         # Create new manager instance and reload
         manager2 = GoalManager(
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         loaded_goal = manager2.get_goal(goal.goal_id)
         self.assertIsNotNone(loaded_goal)
         self.assertEqual(loaded_goal.name, "Persistent Goal")
-        
+
         loaded_progress = manager2.get_progress(goal.goal_id)
         self.assertIsNotNone(loaded_progress)
         self.assertEqual(loaded_progress.current_value, 50.0)
@@ -638,15 +636,15 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal1 = manager.add_goal(name="Goal 1", goal_type="savings", target_value=100.0)
         goal2 = manager.add_goal(name="Goal 2", goal_type="savings", target_value=100.0)
-        
+
         manager.update_progress(goal1.goal_id, 100.0)  # 100%
         manager.update_progress(goal2.goal_id, 50.0)   # 50%
-        
+
         stats = manager.get_summary_stats()
-        
+
         self.assertEqual(stats["total_goals"], 2)
         self.assertEqual(stats["completed_goals"], 1)
         self.assertEqual(stats["active_goals"], 1)
@@ -659,14 +657,14 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Cache Performance",
             goal_type="metric",
             target_value=95.0,
             metric_name="cache_hit_rate",
         )
-        
+
         self.assertEqual(goal.goal_type, "metric")
         self.assertEqual(goal.metric_name, "cache_hit_rate")
 
@@ -676,14 +674,14 @@ class TestGoalManager(unittest.TestCase):
             goals_path=str(self.goals_path),
             state_path=str(self.state_path),
         )
-        
+
         goal = manager.add_goal(
             name="Weekly Pace",
             goal_type="savings",
             target_value=25.0,
             rolling_window=True,
         )
-        
+
         self.assertTrue(goal.rolling_window)
 
 

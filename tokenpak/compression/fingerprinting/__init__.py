@@ -8,6 +8,7 @@ Public API:
 """
 
 import warnings as _warnings
+
 _warnings.warn(
     "tokenpak.compression.fingerprinting — structural fingerprinting."
     "This will be removed in v2.0.",

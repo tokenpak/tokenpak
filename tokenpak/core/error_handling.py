@@ -31,7 +31,6 @@ from __future__ import annotations
 
 from typing import Optional
 
-
 # ---------------------------------------------------------------------------
 # Base exception (from exceptions.py — richer interface)
 # ---------------------------------------------------------------------------

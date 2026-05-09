@@ -21,7 +21,12 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional
+
+if TYPE_CHECKING:
+    # Forward-ref only — actual import is delayed inside the start() path
+    # behind a watchdog-availability guard (see line ~99).
+    from watchdog.observers.api import BaseObserver
 
 logger = logging.getLogger(__name__)
 

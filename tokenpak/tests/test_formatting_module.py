@@ -20,12 +20,9 @@ import pytest
 # ---------------------------------------------------------------------------
 # Module imports
 # ---------------------------------------------------------------------------
-import tokenpak.compression.formatting.colors as _colors
-import tokenpak.compression.formatting.modes as _modes
 import tokenpak.compression.formatting.symbols as _symbols
 from tokenpak.compression.formatting import OutputFormatter, OutputMode, resolve_mode
 from tokenpak.compression.formatting.colors import Color, paint, supports_color
-
 
 # ===========================================================================
 # colors.py

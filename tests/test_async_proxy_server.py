@@ -11,7 +11,6 @@ Covers:
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import socket
@@ -19,7 +18,6 @@ import threading
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 
 import pytest
 
@@ -246,8 +244,7 @@ def test_async_backpressure_503(async_proxy):
     When concurrency limit is exceeded, the middleware returns 503.
     We test this by temporarily monkey-patching the semaphore value.
     """
-    import starlette.testclient
-    from tokenpak.proxy.server_async import create_async_app, ConcurrencyLimiterMiddleware
+    from tokenpak.proxy.server_async import create_async_app
 
     # Create a test app with max_concurrency=1
     app = create_async_app(async_proxy)
@@ -256,7 +253,6 @@ def test_async_backpressure_503(async_proxy):
     from starlette.testclient import TestClient
 
     # Create a fresh app with very low concurrency to trigger 503
-    from tokenpak.proxy.server_async import _proxy_server_ref
     tight_app = create_async_app(async_proxy)
 
     # Replace the middleware's semaphore with a depleted one

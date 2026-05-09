@@ -17,8 +17,8 @@ import json
 import socket
 import threading
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import patch
 
@@ -27,7 +27,6 @@ import pytest
 pytestmark = pytest.mark.needs_proxy
 
 from tokenpak.proxy.server import ProxyServer
-
 
 # ---------------------------------------------------------------------------
 # Helpers

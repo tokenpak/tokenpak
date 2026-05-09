@@ -3,18 +3,15 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.agentic.state_collector", reason="module not available in current build")
 import json
 import os
-import tempfile
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 from tokenpak.agentic.state_collector import (
     SCHEMA_VERSION,
     STALE_THRESHOLD_SECONDS,
@@ -27,7 +24,6 @@ from tokenpak.agentic.state_collector import (
     TestState,
     _run,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

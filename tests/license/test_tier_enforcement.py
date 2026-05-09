@@ -11,24 +11,22 @@ Covers:
 """
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.license.loader", reason="module not available in current build")
 import json
-import os
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-from tokenpak.license.tier import LicenseTier, TIER_FEATURES
 from tokenpak.license.gates import TierRequiredError, requires_tier
 from tokenpak.license.loader import (
+    get_active_features,
     get_active_tier,
     load_license,
     reset_for_testing,
-    get_active_features,
 )
+from tokenpak.license.tier import TIER_FEATURES, LicenseTier
 
 # ─────────────────────────────────────────────
 # Fixtures
@@ -187,7 +185,10 @@ def test_corrupt_license_file_falls_back_to_oss(tmp_path, monkeypatch):
 def test_expired_license_falls_back_to_oss(tmp_path, monkeypatch):
     """A license that is past expiry + grace period must fall back to OSS."""
     from tokenpak._internal.license.keys import (
-        generate_keypair, sign_license, LicensePayload, format_license_key
+        LicensePayload,
+        format_license_key,
+        generate_keypair,
+        sign_license,
     )
 
     private_pem, public_pem = generate_keypair()
@@ -306,8 +307,9 @@ def test_budget_alert_webhook_blocked_on_oss():
 
 def test_budget_alert_allowed_on_pro():
     """SlackChannel.send() must pass gate on Pro (actual HTTP call mocked)."""
+    from unittest.mock import MagicMock
+
     from tokenpak.alerts.channels.slack import SlackChannel
-    from unittest.mock import MagicMock, patch
 
     reset_for_testing(LicenseTier.PRO)
 

@@ -19,7 +19,6 @@ from pathlib import Path
 
 import pytest
 
-
 # TSR-05y compaction-threshold-raised skip reason (grep-able)
 # ─────────────────────────────────────────────
 # Production raised `COMPACT_THRESHOLD_TOKENS` from 1500 to 4500 (deliberate

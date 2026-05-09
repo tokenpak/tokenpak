@@ -1,12 +1,12 @@
 
 import pytest
+
 pytest.importorskip("tokenpak.aggregate", reason="module not available in current build")
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-
 from tokenpak.aggregate import (
     aggregate_records,
     load_requests,

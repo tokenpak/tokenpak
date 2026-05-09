@@ -4,15 +4,12 @@ Covers: BlockRegistry add/get/list, has_changed, search, get_stats,
         clear, close, batch_transaction, Block dataclass, version bump,
         context manager protocol, duplicate entries, and edge cases.
 """
-import time
-import tempfile
 import threading
-from pathlib import Path
+import time
 
 import pytest
 
 from tokenpak.core.registry import Block, BlockRegistry
-
 
 # ---------------------------------------------------------------------------
 # Helpers

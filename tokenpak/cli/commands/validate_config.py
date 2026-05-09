@@ -14,7 +14,7 @@ except ImportError:
     HAS_YAML = False
 
 try:
-    import jsonschema
+    import jsonschema  # noqa: F401  # availability check
     from jsonschema import Draft202012Validator, ValidationError
 
     HAS_JSONSCHEMA = True

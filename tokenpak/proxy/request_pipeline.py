@@ -8,17 +8,14 @@ _apply_budget, _shadow_validate.
 """
 
 import json
-import sys
 import threading
 import time
-from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from .config import (
-    _cfg,
     ROUTER_ENABLED,
-    VALIDATION_GATE_ENABLED,
     VALIDATION_GATE_BUDGET_CAP,
+    VALIDATION_GATE_ENABLED,
 )
 
 # ---------------------------------------------------------------------------

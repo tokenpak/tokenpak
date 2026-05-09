@@ -17,8 +17,8 @@ Covers:
 from __future__ import annotations
 
 import json
-import time
 import threading
+import time
 import urllib.request
 
 import pytest
@@ -28,11 +28,10 @@ from tokenpak.proxy.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitBreakerRegistry,
     CircuitState,
-    provider_from_url,
     _reset_registry_for_testing,
+    provider_from_url,
 )
 from tokenpak.proxy.server import ProxyServer
-
 
 # ---------------------------------------------------------------------------
 # Helpers

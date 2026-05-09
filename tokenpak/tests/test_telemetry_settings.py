@@ -11,15 +11,15 @@ from __future__ import annotations
 
 import json
 import pathlib
+
 import pytest
 
 from tokenpak.telemetry.settings import (
-    AlertSettings,
     DEFAULT_ALERT_CONFIG,
     SEVERITY_LEVELS,
+    AlertSettings,
     _deep_merge,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -246,10 +246,10 @@ class TestDeepMerge:
 
 try:
     from tokenpak.telemetry.config import (
+        CaptureConfig,
+        RetentionConfig,
         ServerConfig,
         StorageConfig,
-        RetentionConfig,
-        CaptureConfig,
         TelemetryConfig,
     )
     CONFIG_AVAILABLE = True

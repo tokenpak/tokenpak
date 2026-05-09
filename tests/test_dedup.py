@@ -3,10 +3,8 @@
 Tests deduplication logic for removing duplicate/near-duplicate messages.
 """
 
-import pytest
 
 from tokenpak.compression.dedup import (
-    DEDUP_JACCARD_THRESHOLD,
     count_duplicates,
     dedup_messages,
 )
@@ -23,7 +21,7 @@ class TestDedupMessages:
             {"role": "assistant", "content": "Hi"},
         ]
         result = dedup_messages(messages, keep="last")
-        
+
         # Should remove exact duplicate
         assert len(result) == 2
         assert result[0]["content"] == "Hello"
@@ -36,7 +34,7 @@ class TestDedupMessages:
             {"role": "user", "content": "Query"},
         ]
         result = dedup_messages(messages, keep="first")
-        
+
         assert len(result) == 1
         # First occurrence should be kept
         assert result[0] == messages[0]
@@ -48,7 +46,7 @@ class TestDedupMessages:
             {"role": "user", "content": "Query"},
         ]
         result = dedup_messages(messages, keep="last")
-        
+
         assert len(result) == 1
         # Last occurrence should be kept
         assert result[0] == messages[1]
@@ -124,7 +122,7 @@ class TestDedupMessages:
             {"role": "user", "content": "First"},  # duplicate of first
         ]
         result = dedup_messages(messages, keep="last")
-        
+
         # Should keep last occurrence of each unique message
         assert len(result) == 3
         # Verify content is present

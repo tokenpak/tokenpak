@@ -14,7 +14,6 @@ import sqlite3
 import time
 from typing import Optional
 
-
 _DEFAULT_TTL_DAYS = int(os.environ.get("TOKENPAK_EMBEDDING_CACHE_TTL_DAYS", "7"))
 _DEFAULT_MAX_MB = int(os.environ.get("TOKENPAK_EMBEDDING_CACHE_MAX_MB", "100"))
 

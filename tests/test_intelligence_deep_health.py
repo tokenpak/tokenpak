@@ -24,27 +24,23 @@ Covers:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.intelligence.deep_health", reason="module not available in current build")
 import os
-import time
-import tempfile
 import shutil
-from pathlib import Path
+import time
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-
-from tokenpak.intelligence.server import create_app
 from tokenpak.intelligence.deep_health import (
     CheckResult,
     DeepHealthChecker,
-    check_memory,
     check_disk,
+    check_memory,
 )
-
+from tokenpak.intelligence.server import create_app
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -243,8 +239,9 @@ def test_check_index_ok(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_check_index_stale(tmp_path):
-    from tokenpak.intelligence.deep_health import check_index
     import os
+
+    from tokenpak.intelligence.deep_health import check_index
     idx = tmp_path / "old_index.json"
     idx.write_text("{}")
     # Backdate modification time by 30 hours
@@ -276,7 +273,6 @@ def test_check_memory_ok_mock():
         return {"MemTotal": 16000000, "MemAvailable": 14000000}
 
     # Patch /proc/meminfo open
-    import builtins
     proc_content = "MemTotal:       16000000 kB\nMemAvailable:   14000000 kB\n"
     with patch("builtins.open", return_value=iter(proc_content.splitlines(keepends=True))):
         with patch.dict("sys.modules", {"psutil": None}):
@@ -332,7 +328,6 @@ def test_check_disk_ok():
 
 
 def test_check_disk_ok_mock():
-    import shutil
     fake_usage = shutil.disk_usage.__class__  # just use named tuple
 
     with patch("shutil.disk_usage") as mock_du:

@@ -11,14 +11,12 @@ Covers:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.enterprise.compliance", reason="module not available in current build")
 import csv
 import json
-import os
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -27,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tokenpak.enterprise.audit import AuditLog, _parse_date
 from tokenpak.enterprise.compliance import ComplianceReporter
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -312,6 +309,7 @@ def _run_cli(*args):
     """Run CLI and capture stdout."""
     import io
     from contextlib import redirect_stdout
+
     from tokenpak.cli import build_parser
     parser = build_parser()
     parsed = parser.parse_args(list(args))

@@ -13,7 +13,6 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-
 _BUNDLED_SKILLS = Path(__file__).parent / "skills"
 _DEFAULT_TARGET = Path.home() / ".codex" / "skills"
 

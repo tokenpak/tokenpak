@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.companion.journal.store import JournalEntry, JournalStore, SessionRecord
+from tokenpak.companion.journal.store import JournalStore, SessionRecord
 
 
 @pytest.fixture()

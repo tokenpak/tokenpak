@@ -4,27 +4,24 @@ Tests for agent registry + capability matching.
 
 
 import pytest
+
 pytest.importorskip("tokenpak.agentic.capabilities", reason="module not available in current build")
 import json
 import os
-import pytest
 import tempfile
 import time
 from pathlib import Path
 
-from tokenpak.agentic.registry import (
-    AgentRegistry,
-    AgentInfo,
-    get_registry,
-    DEFAULT_EXPIRE_SECONDS,
-)
+import pytest
 from tokenpak.agentic.capabilities import (
-    CapabilityMatcher,
     AgentCapabilities,
+    CapabilityMatcher,
     TaskRequirements,
-    MatchResult,
 )
-
+from tokenpak.agentic.registry import (
+    AgentInfo,
+    AgentRegistry,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -207,10 +204,10 @@ class TestAgentRegistry:
         temp_registry.register("fresh", "host1")
         time.sleep(1.5)
         temp_registry.register("new", "host2")
-        
+
         all_agents = temp_registry.list_all()
         active = temp_registry.list_active()
-        
+
         assert len(all_agents) == 2
         assert len(active) == 1
         assert active[0].name == "new"
@@ -221,10 +218,10 @@ class TestAgentRegistry:
         temp_registry.register("old2", "host2")
         time.sleep(1.5)
         temp_registry.register("fresh", "host3")
-        
+
         pruned = temp_registry.prune_stale()
         assert pruned == 2
-        
+
         remaining = temp_registry.list_all()
         assert len(remaining) == 1
         assert remaining[0].name == "fresh"
@@ -366,10 +363,10 @@ class TestCapabilityMatcher:
         agents = populated_registry.list_all()
         trix = next(a for a in agents if a.name == "trix")
         populated_registry.heartbeat(trix.agent_id, status="busy", current_task="task-1")
-        
+
         matcher = CapabilityMatcher(registry=populated_registry)
         matches = matcher.match(TaskRequirements(required_specialties=["code"]))
-        
+
         # Cali (idle) should rank higher than trix (busy)
         names = [m.agent.name for m in matches]
         assert names.index("cali") < names.index("trix")
@@ -381,24 +378,26 @@ class TestCapabilityMatcher:
 
 class TestAgentCLI:
     def test_list_no_agents(self, temp_registry, capsys, monkeypatch):
-        from tokenpak.cli import cmd_agent_list
         from types import SimpleNamespace
-        
+
+        from tokenpak.cli import cmd_agent_list
+
         # Patch the registry path
         monkeypatch.setattr("tokenpak.agentic.registry.REGISTRY_PATH", temp_registry.path)
-        
+
         args = SimpleNamespace(all=False, json=False)
         cmd_agent_list(args)
-        
+
         captured = capsys.readouterr()
         assert "No registered agents" in captured.out
 
     def test_register_and_list(self, temp_registry, capsys, monkeypatch):
-        from tokenpak.cli import cmd_agent_register, cmd_agent_list
         from types import SimpleNamespace
-        
+
+        from tokenpak.cli import cmd_agent_list, cmd_agent_register
+
         monkeypatch.setattr("tokenpak.agentic.registry.REGISTRY_PATH", temp_registry.path)
-        
+
         # Register
         args = SimpleNamespace(
             name="test",
@@ -410,27 +409,28 @@ class TestAgentCLI:
             json=False,
         )
         cmd_agent_register(args)
-        
+
         captured = capsys.readouterr()
         assert "Registered" in captured.out
-        
+
         # List
         args = SimpleNamespace(all=False, json=False)
         cmd_agent_list(args)
-        
+
         captured = capsys.readouterr()
         assert "test" in captured.out
         assert "testhost" in captured.out
 
     def test_match_json_output(self, populated_registry, capsys, monkeypatch):
-        from tokenpak.cli import cmd_agent_match
         from types import SimpleNamespace
-        
+
+        from tokenpak.cli import cmd_agent_match
+
         monkeypatch.setattr("tokenpak.agentic.registry.REGISTRY_PATH", populated_registry.path)
-        
+
         args = SimpleNamespace(gpu=True, memory=None, specialty=[], provider=[], json=True)
         cmd_agent_match(args)
-        
+
         captured = capsys.readouterr()
         data = json.loads(captured.out)
         assert len(data) == 1

@@ -25,15 +25,15 @@ Quick Start:
 from .converters import (
     LlamaBlock,
     Node,  # backward compat alias
-    llamaindex_node_to_block,
     block_to_llamaindex_node,
-    llamaindex_nodes_to_blocks,
     blocks_to_llamaindex_nodes,
+    llamaindex_node_to_block,
+    llamaindex_nodes_to_blocks,
 )
-from .synthesizer import TokenPakSynthesizer
-from .query_engine import TokenPakQueryEngine
-from .index import TokenPakIndex
 from .fusion import MultiIndexFusion
+from .index import TokenPakIndex
+from .query_engine import TokenPakQueryEngine
+from .synthesizer import TokenPakSynthesizer
 
 __version__ = "0.2.0"
 __all__ = ['LlamaBlock', 'Node', 'llamaindex_node_to_block', 'block_to_llamaindex_node', 'llamaindex_nodes_to_blocks', 'blocks_to_llamaindex_nodes', 'TokenPakSynthesizer', 'TokenPakQueryEngine', 'TokenPakIndex', 'MultiIndexFusion', 'converters', 'examples', 'fusion', 'index', 'query_engine', 'synthesizer', 'tests']

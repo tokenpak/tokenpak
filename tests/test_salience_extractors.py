@@ -12,16 +12,14 @@ Tests for the salience extractor suite:
 
 from __future__ import annotations
 
-import pytest
 from tokenpak.compression.salience import (
-    ContentType,
     CodeExtractor,
+    ContentType,
     DocExtractor,
     LogExtractor,
     detect_content_type,
     extract,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Fixtures

@@ -25,9 +25,9 @@ __all__ = ['SemanticMapLoader', 'SemanticMapError', 'SemanticResolver', 'Resolve
 
 # Term card features (from agent/semantic/)
 try:
-    from .term_card_builder import load_cards, save_cards, validate_card, enforce_caps
+    from .term_card_builder import enforce_caps, load_cards, save_cards, validate_card
     from .term_card_resolver import TermCardResolver
-    from .term_resolver import TermResolver, TermResolution
+    from .term_resolver import TermResolution, TermResolver
     __all__ = [
         "SemanticMapLoader", "SemanticMapError", "SemanticResolver", "ResolveResult",
         "load_cards", "save_cards", "validate_card", "enforce_caps",
@@ -46,7 +46,7 @@ from .term_resolver import (
 
 __all__ += [
     "TermResolution",
-    "TermResolver", 
+    "TermResolver",
     "TermResolverConfig",
     "resolve_terms",
 ]

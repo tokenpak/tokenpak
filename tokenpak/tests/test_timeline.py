@@ -1,10 +1,6 @@
 """test_timeline.py — Unit tests for timeline.py (savings history + trends)."""
 
 import json
-from datetime import datetime, timedelta
-from pathlib import Path
-
-import pytest
 
 from tokenpak import timeline
 

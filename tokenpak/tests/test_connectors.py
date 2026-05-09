@@ -10,8 +10,7 @@ Covers:
 """
 
 import hashlib
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from datetime import datetime
 
 import pytest
 
@@ -62,7 +61,7 @@ class TestConnectorsInit:
         assert "obsidian" in list_connectors()
 
     def test_get_connector_local_returns_instance(self):
-        import tempfile, os
+        import tempfile
 
         with tempfile.TemporaryDirectory() as td:
             cfg = ConnectorConfig(name="local", source_path=td)

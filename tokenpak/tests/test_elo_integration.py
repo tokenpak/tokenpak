@@ -9,9 +9,6 @@ These tests confirm:
 """
 
 import json
-from pathlib import Path
-
-import pytest
 
 from tokenpak.routing.broker import Broker
 from tokenpak.telemetry.elo import INITIAL_RATING

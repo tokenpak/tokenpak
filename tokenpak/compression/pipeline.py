@@ -8,17 +8,15 @@ in a single pass. Each stage is optional and toggled via constructor flags.
 from __future__ import annotations
 
 import re
-import sys
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from tokenpak.proxy.request import ProxyRequest
 
-from .dedup import dedup_messages
 from .alias_compressor import AliasCompressor, AliasResult
+from .dedup import dedup_messages
 from .directives import DirectiveApplier
 from .instruction_table import InstructionTable
 from .segmentizer import Segment, segmentize
@@ -240,10 +238,10 @@ def _shadow_validate(original: str, compressed: str) -> bool:
 def compact_text(text: str) -> str:
     """Compact a text string: normalise whitespace, truncate at sentence boundary, apply shadow check."""
     from tokenpak.proxy.config import (  # lazy import to avoid circular dep
-        COMPACT_MAX_CHARS,
         COMPACT_CACHE_SIZE,
-        SHADOW_ENABLED,
+        COMPACT_MAX_CHARS,
         COMPILATION_MODE,
+        SHADOW_ENABLED,
     )
 
     if not text:
@@ -277,18 +275,17 @@ def compact_request_body(
     """
     if request is not None:
         body_bytes = request.body
-    from tokenpak.proxy.config import (  # lazy import
-        COMPILATION_MODE,
-        COMPACT_THRESHOLD_TOKENS,
-        COMPACT_MAX_TOKENS,
-    )
-    from tokenpak.proxy.token_cache import count_tokens  # lazy import
-    from tokenpak.proxy.request_pipeline import classify_message_risk, can_compress  # lazy import
-
     from tokenpak.proxy.adapters.utils import (
         _detect_adapter,
         extract_request_tokens,
     )
+    from tokenpak.proxy.config import (  # lazy import
+        COMPACT_MAX_TOKENS,
+        COMPACT_THRESHOLD_TOKENS,
+        COMPILATION_MODE,
+    )
+    from tokenpak.proxy.request_pipeline import can_compress, classify_message_risk  # lazy import
+    from tokenpak.proxy.token_cache import count_tokens  # lazy import
 
     active_adapter = adapter or _detect_adapter("", {}, body_bytes)
     if active_adapter.source_format == "passthrough":

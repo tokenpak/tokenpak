@@ -10,17 +10,16 @@ Tests cover:
 """
 
 import json
+
 import pytest
-from typing import Dict, Any
 
 from tokenpak.compression.pack import (
-    PackBlock,
     CompiledResult,
     ContextPack,
+    PackBlock,
     pack_prompt,
 )
-from tokenpak.compression.report import CompileReport, Action
-
+from tokenpak.compression.report import CompileReport
 
 # ──────────────────────────────────────────────────────────────────────────
 # PackBlock Tests
@@ -183,7 +182,7 @@ class TestCompiledResult:
         assert "text" in data
         assert "report" in data
         assert data["text"] == "System prompt.\n\nDocument text."
-        
+
         # Verify it's actually JSON-serializable
         json_str = json.dumps(data)
         assert isinstance(json_str, str)
@@ -217,7 +216,7 @@ class TestContextPackBasics:
         pack = ContextPack()
         block = PackBlock(id="b1", type="test", content="text")
         result = pack.add(block)
-        
+
         # Should return self for chaining
         assert result is pack
         assert len(pack._blocks) == 1
@@ -229,7 +228,7 @@ class TestContextPackBasics:
         pack.add(PackBlock(id="b1", type="test", content="t1")).add(
             PackBlock(id="b2", type="test", content="t2")
         ).add(PackBlock(id="b3", type="test", content="t3"))
-        
+
         assert len(pack._blocks) == 3
         assert pack._blocks[0].id == "b1"
         assert pack._blocks[2].id == "b3"
@@ -239,10 +238,10 @@ class TestContextPackBasics:
         pack = ContextPack()
         pack.add(PackBlock(id="b1", type="test", content="t1"))
         pack.add(PackBlock(id="b2", type="test", content="t2"))
-        
+
         assert len(pack._blocks) == 2
         result = pack.clear()
-        
+
         assert result is pack  # Returns self
         assert len(pack._blocks) == 0
 
@@ -254,7 +253,7 @@ class TestContextPackCompile:
         """compile() with single block works."""
         pack = ContextPack()
         pack.add(PackBlock(id="sys", type="instructions", content="System prompt.", priority="critical"))
-        
+
         result = pack.compile()
         assert isinstance(result, CompiledResult)
         assert "System prompt" in result.text
@@ -264,7 +263,7 @@ class TestContextPackCompile:
         """compile() with no blocks returns empty result."""
         pack = ContextPack()
         result = pack.compile()
-        
+
         assert result.text == ""
         assert result.report.input_blocks == 0
         assert result.report.output_blocks == 0
@@ -275,7 +274,7 @@ class TestContextPackCompile:
         # Use priority to ensure order
         pack.add(PackBlock(id="b1", type="test", content="First", priority="high"))
         pack.add(PackBlock(id="b2", type="test", content="Second", priority="low"))
-        
+
         result = pack.compile()
         # Should contain both parts separated
         assert " | " in result.text
@@ -287,7 +286,7 @@ class TestContextPackCompile:
         pack = ContextPack(quality_threshold=0.6)
         pack.add(PackBlock(id="good", type="test", content="Good content", quality=0.8))
         pack.add(PackBlock(id="bad", type="test", content="Bad content", quality=0.4))
-        
+
         result = pack.compile()
         assert "Good content" in result.text
         assert "Bad content" not in result.text
@@ -297,7 +296,7 @@ class TestContextPackCompile:
         """Block with quality exactly at threshold is kept."""
         pack = ContextPack(quality_threshold=0.5)
         pack.add(PackBlock(id="edge", type="test", content="Edge case", quality=0.5))
-        
+
         result = pack.compile()
         assert "Edge case" in result.text
 
@@ -310,7 +309,7 @@ class TestContextPackCompile:
             content="Critical instruction",
             priority="critical"
         ))
-        
+
         result = pack.compile()
         # Critical block should be kept
         assert "Critical instruction" in result.text
@@ -326,7 +325,7 @@ class TestContextPackCompile:
             content=long_text,
             max_tokens=50  # Strict limit
         ))
-        
+
         result = pack.compile()
         # Output should be truncated
         assert len(result.text) < len(long_text)
@@ -337,7 +336,7 @@ class TestContextPackCompile:
         pack = ContextPack(budget=50)
         pack.add(PackBlock(id="b1", type="test", content="Block 1 " * 20, priority="critical"))
         pack.add(PackBlock(id="b2", type="test", content="Block 2 " * 20, priority="low"))
-        
+
         result = pack.compile()
         assert result.report.output_tokens <= pack.budget
 
@@ -348,7 +347,7 @@ class TestContextPackCompile:
         pack.add(PackBlock(id="crit", type="test", content="CRITICAL", priority="critical"))
         pack.add(PackBlock(id="med", type="test", content="MEDIUM", priority="medium"))
         pack.add(PackBlock(id="high", type="test", content="HIGH", priority="high"))
-        
+
         result = pack.compile()
         text = result.text
         # Critical should come before low
@@ -365,7 +364,7 @@ class TestContextPackCompile:
         pack = ContextPack()
         pack.add(PackBlock(id="b1", type="test", content="content1"))
         pack.add(PackBlock(id="b2", type="test", content="content2"))
-        
+
         result = pack.compile()
         assert len(result.report.decisions) == 2
         assert all(hasattr(d, 'block_id') for d in result.report.decisions)
@@ -376,7 +375,7 @@ class TestContextPackCompile:
         pack = ContextPack()
         pack.add(PackBlock(id="first", type="test", content="1", priority="high"))
         pack.add(PackBlock(id="second", type="test", content="2", priority="low"))
-        
+
         result = pack.compile()
         assert len(result.report.final_order) == 2
         # High should come before low
@@ -469,7 +468,7 @@ class TestEdgeCasesAndIntegration:
         """Compile with very small budget truncates content."""
         pack = ContextPack(budget=10)
         pack.add(PackBlock(id="b1", type="test", content="Very long content " * 50))
-        
+
         result = pack.compile()
         assert result.report.output_tokens <= pack.budget
 
@@ -481,7 +480,7 @@ class TestEdgeCasesAndIntegration:
             type="test",
             content="Hello 👋 World 🌍 Émojis: 📚🔬🎨"
         ))
-        
+
         result = pack.compile()
         assert "👋" in result.text
         assert "Émojis" in result.text
@@ -491,7 +490,7 @@ class TestEdgeCasesAndIntegration:
         long_id = "x" * 500
         pack = ContextPack()
         pack.add(PackBlock(id=long_id, type="test", content="content"))
-        
+
         result = pack.compile()
         assert long_id in result.report.final_order
 
@@ -500,7 +499,7 @@ class TestEdgeCasesAndIntegration:
         special_content = "Line1\nLine2\n\nLine3\t\tTabbed"
         pack = ContextPack()
         pack.add(PackBlock(id="special", type="test", content=special_content))
-        
+
         result = pack.compile()
         assert special_content in result.text
 
@@ -513,7 +512,7 @@ class TestEdgeCasesAndIntegration:
                 type="test",
                 content=f"Block {i} content"
             ))
-        
+
         result = pack.compile()
         assert result.report.input_blocks == 100
 
@@ -522,7 +521,7 @@ class TestEdgeCasesAndIntegration:
         pack = ContextPack()
         pack.add(PackBlock(id="dup", type="test", content="First"))
         pack.add(PackBlock(id="dup", type="test", content="Second"))
-        
+
         result = pack.compile()
         # Both should be processed (no dedup at add time)
         assert result.report.input_blocks == 2
@@ -531,7 +530,7 @@ class TestEdgeCasesAndIntegration:
         """quality=None is handled (not filtered)."""
         pack = ContextPack(quality_threshold=0.9)
         pack.add(PackBlock(id="nq", type="test", content="No quality", quality=None))
-        
+
         result = pack.compile()
         assert "No quality" in result.text
 
@@ -544,7 +543,7 @@ class TestEdgeCasesAndIntegration:
             content="Long content here",
             max_tokens=0
         ))
-        
+
         result = pack.compile()
         # Content should be severely truncated
         assert len(result.text) < 20
@@ -556,10 +555,10 @@ class TestEdgeCasesAndIntegration:
             p.add(PackBlock(id="a", type="test", content="Content A", priority="high"))
             p.add(PackBlock(id="b", type="test", content="Content B", priority="low"))
             return p
-        
+
         result1 = make_pack().compile()
         result2 = make_pack().compile()
-        
+
         assert result1.text == result2.text
         assert result1.report.output_tokens == result2.report.output_tokens
 

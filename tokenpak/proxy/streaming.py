@@ -17,7 +17,6 @@ import zlib
 from dataclasses import dataclass
 from typing import Any, Dict, Iterator
 
-
 # ---------------------------------------------------------------------------
 # StreamUsage dataclass (merged from agent.proxy.streaming)
 # ---------------------------------------------------------------------------

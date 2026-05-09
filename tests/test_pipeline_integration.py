@@ -5,25 +5,21 @@ produces the same output as the monolith for both Claude Code
 (byte-preserved) and OpenClaw (full pipeline) paths.
 """
 import json
-import pytest
 
-from tokenpak.proxy.request import (
-    ProxyRequest,
-    _find_system_array_close,
-    _byte_inject_system_block,
-    ROUTE_CLAUDE_CODE,
-    ROUTE_OPENCLAW,
-    ROUTE_SDK,
-)
-from tokenpak.proxy.route_policy import get_policy
 from tokenpak.proxy.pipeline import (
     process_request,
     stage_byte_restore,
     stage_cache_poison_removal,
-    stage_vault_injection,
 )
-from tokenpak.proxy.cache_poison import strip_cache_poisons
-
+from tokenpak.proxy.request import (
+    ROUTE_CLAUDE_CODE,
+    ROUTE_OPENCLAW,
+    ROUTE_SDK,
+    ProxyRequest,
+    _byte_inject_system_block,
+    _find_system_array_close,
+)
+from tokenpak.proxy.route_policy import get_policy
 
 # ---------------------------------------------------------------------------
 # Byte-level injection tests (_find_system_array_close + _byte_inject_system_block)

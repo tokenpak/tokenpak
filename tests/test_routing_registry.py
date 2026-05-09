@@ -2,11 +2,13 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.pro.routing.registry", reason="module not available in current build")
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import Mock, patch
-from tokenpak.pro.routing.registry import AdapterRegistry
 from tokenpak.pro.routing.detector import Provider
+from tokenpak.pro.routing.registry import AdapterRegistry
 
 
 class TestAdapterRegistry:

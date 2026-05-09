@@ -11,25 +11,22 @@ All tests are self-contained: no network I/O, no file I/O, mock time where neede
 
 from __future__ import annotations
 
-import gzip
 import time
-from unittest.mock import patch
 
 import pytest
+
+from tokenpak.proxy.cache import LRUCache
+from tokenpak.proxy.stats import StatsCollector
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Imports
 # ──────────────────────────────────────────────────────────────────────────────
-
 from tokenpak.server.websocket_proxy import (
     WebSocketConnectionManager,
     WebSocketConnectionStats,
     compress_chunk,
     decompress_chunk,
 )
-from tokenpak.proxy.cache import CacheEntry, CacheMetrics, LRUCache
-from tokenpak.proxy.stats import StatsCollector
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. Compression utilities

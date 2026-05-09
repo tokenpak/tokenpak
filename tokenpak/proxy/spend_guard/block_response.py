@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from typing import Optional
 
 from .contracts import PendingRequest, PreflightDecision, RiskEstimate
-
 
 # Stable error.type strings — agents key on these. Single source of truth.
 ERR_BLOCKED = "tokenpak_spend_guard_blocked"

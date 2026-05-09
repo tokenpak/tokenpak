@@ -2,24 +2,24 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.citation_tracker", reason="module not available in current build")
 import json
 import os
 import tempfile
-import pytest
 
+import pytest
 from tokenpak.citation_tracker import (
-    track_citations,
-    update_utility,
-    get_utility_score,
-    get_utility_weight,
-    SCORE_MIN,
-    SCORE_MAX,
     CITE_DELTA,
     DECAY_DELTA,
+    SCORE_MAX,
+    SCORE_MIN,
+    get_utility_score,
+    get_utility_weight,
+    track_citations,
+    update_utility,
 )
 from tokenpak.wire import make_slice_id, pack
-
 
 # ---------------------------------------------------------------------------
 # make_slice_id

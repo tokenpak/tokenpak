@@ -17,7 +17,6 @@ Covers Component 3 of `2026-04-28-tokenpak-vault-directory-scheduling`:
 from __future__ import annotations
 
 import json
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -25,7 +24,6 @@ import pytest
 
 from tokenpak.vault import config as vault_config
 from tokenpak.vault import doctor_check
-
 
 HOUR = 3600
 DAY = 24 * HOUR

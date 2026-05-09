@@ -12,12 +12,9 @@ Coverage:
 """
 
 import sqlite3
-import tempfile
 from datetime import datetime
-from pathlib import Path
 
 import pytest
-
 
 # TSR-05m schema-drift skip reason (grep-able)
 # ─────────────────────────────────────────────

@@ -1,8 +1,6 @@
 """Unit tests for processors/text.py — TextProcessor."""
-import pytest
 
 from tokenpak.compression.processors.text import TextProcessor
-
 
 # ---------------------------------------------------------------------------
 # Instantiation

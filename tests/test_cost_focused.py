@@ -7,9 +7,16 @@ Covers:
 - Rate calculation for different providers
 """
 
+
 import pytest
-from datetime import datetime
-from tokenpak.telemetry.cost import CostEngine, CostResult, Pricing, calculate_baseline, calculate_savings
+
+from tokenpak.telemetry.cost import (
+    CostEngine,
+    CostResult,
+    Pricing,
+    calculate_baseline,
+    calculate_savings,
+)
 
 
 class TestCostEngine:
@@ -183,9 +190,9 @@ class TestCostSavings:
         """Savings correctly calculated from baseline and actual."""
         baseline_usd = 10.0
         actual_usd = 5.0
-        
+
         savings_usd, savings_percent = calculate_savings(baseline_usd, actual_usd)
-        
+
         assert savings_usd == 5.0
         assert savings_percent == 50.0
 
@@ -193,9 +200,9 @@ class TestCostSavings:
         """No savings when baseline equals actual."""
         baseline_usd = 10.0
         actual_usd = 10.0
-        
+
         savings_usd, savings_percent = calculate_savings(baseline_usd, actual_usd)
-        
+
         assert savings_usd == 0.0
         assert savings_percent == 0.0
 
@@ -203,9 +210,9 @@ class TestCostSavings:
         """100% savings when actual is zero."""
         baseline_usd = 10.0
         actual_usd = 0.0
-        
+
         savings_usd, savings_percent = calculate_savings(baseline_usd, actual_usd)
-        
+
         assert savings_usd == 10.0
         assert savings_percent == 100.0
 
@@ -213,9 +220,9 @@ class TestCostSavings:
         """Savings percentage scales correctly."""
         baseline_usd = 100.0
         actual_usd = 75.0  # 25% savings
-        
+
         savings_usd, savings_percent = calculate_savings(baseline_usd, actual_usd)
-        
+
         assert savings_usd == 25.0
         assert savings_percent == 25.0
 
@@ -234,7 +241,7 @@ class TestEdgeCases:
             effective_date="2026-03-17"
         )
         cost = calculate_baseline(1, 0, pricing)
-        
+
         # 1 token * $0.015/token = $0.015
         assert cost == pytest.approx(0.015, rel=0.01)
 
@@ -248,10 +255,10 @@ class TestEdgeCases:
             version="1.0",
             effective_date="2026-03-17"
         )
-        
+
         cost_1m = calculate_baseline(1_000_000, 0, pricing)
         cost_10m = calculate_baseline(10_000_000, 0, pricing)
-        
+
         # 10M should be ~10x more expensive
         assert cost_10m == pytest.approx(cost_1m * 10, rel=0.01)
 
@@ -265,10 +272,10 @@ class TestEdgeCases:
             version="1.0",
             effective_date="2026-03-17"
         )
-        
+
         cost_input_only = calculate_baseline(1_000_000, 0, pricing)
         cost_output_only = calculate_baseline(0, 1_000_000, pricing)
         cost_both = calculate_baseline(1_000_000, 1_000_000, pricing)
-        
+
         # Combined should equal sum
         assert cost_both == pytest.approx(cost_input_only + cost_output_only, rel=0.01)

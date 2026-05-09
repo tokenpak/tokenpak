@@ -6,10 +6,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from tokenpak.companion.config import CompanionConfig
-
 
 # ---------------------------------------------------------------------------
 # Default values

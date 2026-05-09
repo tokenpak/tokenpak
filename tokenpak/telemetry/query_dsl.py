@@ -8,7 +8,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from tokenpak.telemetry.query_models import CostSummary, DailyTrend, ModelCompressionBreakdown, ModelUsage, SavingsReport
+from tokenpak.telemetry.query_models import (
+    CostSummary,
+    DailyTrend,
+    ModelCompressionBreakdown,
+    ModelUsage,
+    SavingsReport,
+)
 
 
 @dataclass

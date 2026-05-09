@@ -35,19 +35,19 @@ Local RAG Pipeline:
 """
 
 from .auto_budget import (
+    DEFAULT_OUTPUT_FRACTION,
+    MODEL_CONTEXT_LENGTHS,
     auto_budget,
     get_context_length,
-    MODEL_CONTEXT_LENGTHS,
-    DEFAULT_OUTPUT_FRACTION,
 )
-from .ollama import TokenPakOllama
 from .lmstudio import TokenPakLMStudio
+from .ollama import TokenPakOllama
 from .openai_compat import TokenPakOpenAICompat
 from .utils import (
-    blocks_from_texts,
-    pack_from_blocks,
     Block,
     TokenPak,
+    blocks_from_texts,
+    pack_from_blocks,
 )
 
 __version__ = "0.1.0"

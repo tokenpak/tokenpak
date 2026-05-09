@@ -12,11 +12,17 @@ Covers:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.compaction.modes", reason="module not available in current build")
-import re
 import unittest
+
+from tokenpak.compaction.modes import (
+    compact_aggressive,
+    compact_balanced,
+    compact_lossless,
+    compact_semantic,
+)
 
 from tokenpak.compaction import (
     BlockPolicy,
@@ -24,13 +30,6 @@ from tokenpak.compaction import (
     CompactionPolicy,
     compact,
 )
-from tokenpak.compaction.modes import (
-    compact_lossless,
-    compact_balanced,
-    compact_aggressive,
-    compact_semantic,
-)
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

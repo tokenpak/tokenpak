@@ -14,9 +14,9 @@ No live API calls are made.
 """
 
 import sys
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ===========================================================================
 # engines/__init__.py — package imports and get_engine() factory
@@ -51,22 +51,22 @@ def test_engines_dict_has_fast():
 
 
 def test_get_engine_no_args_returns_heuristic():
-    from tokenpak.compression.engines import get_engine, HeuristicEngine
+    from tokenpak.compression.engines import HeuristicEngine, get_engine
     assert isinstance(get_engine(), HeuristicEngine)
 
 
 def test_get_engine_heuristic_by_name():
-    from tokenpak.compression.engines import get_engine, HeuristicEngine
+    from tokenpak.compression.engines import HeuristicEngine, get_engine
     assert isinstance(get_engine("heuristic"), HeuristicEngine)
 
 
 def test_get_engine_fast_returns_heuristic():
-    from tokenpak.compression.engines import get_engine, HeuristicEngine
+    from tokenpak.compression.engines import HeuristicEngine, get_engine
     assert isinstance(get_engine("fast"), HeuristicEngine)
 
 
 def test_get_engine_unknown_name_falls_back_to_heuristic():
-    from tokenpak.compression.engines import get_engine, HeuristicEngine
+    from tokenpak.compression.engines import HeuristicEngine, get_engine
     assert isinstance(get_engine("nonexistent_engine_xyz"), HeuristicEngine)
 
 
@@ -200,8 +200,8 @@ def test_heuristic_compact_none_hints_works():
 
 
 def test_heuristic_compact_target_zero_skips_truncation():
-    from tokenpak.compression.engines.heuristic import HeuristicEngine
     from tokenpak.compression.engines.base import CompactionHints
+    from tokenpak.compression.engines.heuristic import HeuristicEngine
 
     mock_proc = MagicMock()
     long_output = "X" * 2000
@@ -215,8 +215,8 @@ def test_heuristic_compact_target_zero_skips_truncation():
 
 
 def test_heuristic_compact_truncates_when_over_target():
-    from tokenpak.compression.engines.heuristic import HeuristicEngine
     from tokenpak.compression.engines.base import CompactionHints
+    from tokenpak.compression.engines.heuristic import HeuristicEngine
 
     mock_proc = MagicMock()
     mock_proc.process.return_value = "A" * 200
@@ -230,8 +230,8 @@ def test_heuristic_compact_truncates_when_over_target():
 
 
 def test_heuristic_compact_no_truncation_when_under_target():
-    from tokenpak.compression.engines.heuristic import HeuristicEngine
     from tokenpak.compression.engines.base import CompactionHints
+    from tokenpak.compression.engines.heuristic import HeuristicEngine
 
     expected = "short output text"
     mock_proc = MagicMock()
@@ -268,8 +268,8 @@ def test_heuristic_compact_processor_not_called_for_empty():
 
 
 def test_heuristic_compact_truncates_at_newline_boundary():
-    from tokenpak.compression.engines.heuristic import HeuristicEngine
     from tokenpak.compression.engines.base import CompactionHints
+    from tokenpak.compression.engines.heuristic import HeuristicEngine
 
     mock_proc = MagicMock()
     # 20 A's + newline + 20 B's; target_tokens=5 → target_chars=20

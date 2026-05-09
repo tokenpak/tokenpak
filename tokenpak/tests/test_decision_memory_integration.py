@@ -9,13 +9,13 @@ Tests verify:
 - Database integrity and schema
 """
 
-import pytest
+import os
 import sqlite3
 import tempfile
-import os
-import time
 import threading
-from pathlib import Path
+
+import pytest
+
 from tokenpak.companion.memory.decision_memory import DecisionMemoryDB, DecisionRecord
 
 
@@ -50,7 +50,7 @@ class TestDecisionMemoryIntegration:
         # Verify schema exists
         with sqlite3.connect(temp_db) as conn:
             cursor = conn.cursor()
-            
+
             # Check decisions table exists
             cursor.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='decisions'"
@@ -89,13 +89,13 @@ class TestDecisionMemoryIntegration:
             decision="5000ms default",
             confidence=0.90
         )
-        
+
         # Create new instance (simulating restart)
         db2 = DecisionMemoryDB(db_path=temp_db)
-        
+
         # Retrieve records from second instance
         results = db2.retrieve(query="Should we use HTTP100?", top_k=1)
-        
+
         assert len(results) == 1
         assert results[0].decision == "Yes, for SSE streams"
         assert results[0].confidence == 0.85
@@ -104,70 +104,70 @@ class TestDecisionMemoryIntegration:
     def test_learning_loop_success_increases_confidence(self, temp_db):
         """Test that record_outcome() increases confidence on success."""
         db = DecisionMemoryDB(db_path=temp_db)
-        
+
         # Record initial decision
         record_id = db.record(
             query="Deploy proxy?",
             decision="Yes, to production",
             confidence=0.70
         )
-        
+
         # Get initial confidence
         initial_results = db.retrieve(query="Deploy proxy?", top_k=1)
         initial_confidence = initial_results[0].confidence
-        
+
         # Record successful outcome
         db.record_outcome(record_id, outcome="Deployment successful", success=True)
-        
+
         # Check confidence increased
         updated_results = db.retrieve(query="Deploy proxy?", top_k=1)
         updated_confidence = updated_results[0].confidence
-        
+
         assert updated_confidence > initial_confidence, "Success should increase confidence"
         assert abs(updated_confidence - initial_confidence) >= 0.04, "Increase should be ~5%"
 
     def test_learning_loop_failure_decreases_confidence(self, temp_db):
         """Test that record_outcome() decreases confidence on failure."""
         db = DecisionMemoryDB(db_path=temp_db)
-        
+
         # Record initial decision with high confidence
         record_id = db.record(
             query="Use aggressive mode?",
             decision="Yes, compress aggressively",
             confidence=0.95
         )
-        
+
         # Get initial confidence
         initial_results = db.retrieve(query="Use aggressive mode?", top_k=1)
         initial_confidence = initial_results[0].confidence
-        
+
         # Record failed outcome
         db.record_outcome(record_id, outcome="Compression failed", success=False)
-        
+
         # Check confidence decreased
         updated_results = db.retrieve(query="Use aggressive mode?", top_k=1)
         updated_confidence = updated_results[0].confidence
-        
+
         assert updated_confidence < initial_confidence, "Failure should decrease confidence"
         assert abs(updated_confidence - initial_confidence) >= 0.08, "Decrease should be ~10%"
 
     def test_retrieve_with_long_query_string(self, temp_db):
         """Test retrieve() handles very long query strings."""
         db = DecisionMemoryDB(db_path=temp_db)
-        
+
         # Create a very long query (4KB+)
         long_query = "What should we do? " * 200  # ~4000 chars
-        
+
         # Record with long query
         record_id = db.record(
             query=long_query,
             decision="Process in chunks",
             confidence=0.80
         )
-        
+
         # Retrieve using long query
         results = db.retrieve(query=long_query, top_k=5)
-        
+
         assert len(results) > 0
         assert results[0].id == record_id
         assert results[0].decision == "Process in chunks"
@@ -175,9 +175,9 @@ class TestDecisionMemoryIntegration:
     def test_concurrent_write_safety(self, temp_db):
         """Test that concurrent writes don't corrupt the database."""
         db = DecisionMemoryDB(db_path=temp_db)
-        
+
         errors = []
-        
+
         def writer_thread(thread_id):
             try:
                 for i in range(10):
@@ -188,18 +188,18 @@ class TestDecisionMemoryIntegration:
                     )
             except Exception as e:
                 errors.append(e)
-        
+
         # Spawn 3 threads writing concurrently
         threads = [threading.Thread(target=writer_thread, args=(i,)) for i in range(3)]
-        
+
         for t in threads:
             t.start()
-        
+
         for t in threads:
             t.join()
-        
+
         assert len(errors) == 0, f"No errors during concurrent writes: {errors}"
-        
+
         # Verify all records were written
         with sqlite3.connect(temp_db) as conn:
             cursor = conn.cursor()
@@ -210,28 +210,28 @@ class TestDecisionMemoryIntegration:
     def test_update_confidence_persists(self, temp_db):
         """Test that update_confidence() changes are persisted."""
         db = DecisionMemoryDB(db_path=temp_db)
-        
+
         # Record initial decision
         record_id = db.record(
             query="Test query",
             decision="Test decision",
             confidence=0.50
         )
-        
+
         # Update confidence
         new_confidence = 0.92
         db.update_confidence(record_id, new_confidence=new_confidence)
-        
+
         # Create new instance and verify change persisted
         db2 = DecisionMemoryDB(db_path=temp_db)
         results = db2.retrieve(query="Test query", top_k=1)
-        
+
         assert results[0].confidence == new_confidence
 
     def test_record_count_and_retrieval_statistics(self, temp_db):
         """Test database record count and retrieval statistics."""
         db = DecisionMemoryDB(db_path=temp_db)
-        
+
         # Record some decisions with varying confidence
         confidences = [0.5, 0.6, 0.7, 0.8, 0.9]
         for i, conf in enumerate(confidences):
@@ -240,14 +240,14 @@ class TestDecisionMemoryIntegration:
                 decision=f"Decision {i}",
                 confidence=conf
             )
-        
+
         # Verify count by querying database
         with sqlite3.connect(temp_db) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM decisions")
             total = cursor.fetchone()[0]
             assert total == 5
-            
+
             cursor.execute("SELECT AVG(confidence) FROM decisions")
             avg_conf = cursor.fetchone()[0]
             assert 0.0 <= avg_conf <= 1.0
@@ -256,15 +256,15 @@ class TestDecisionMemoryIntegration:
     def test_empty_db_retrieve_returns_empty(self, temp_db):
         """Test that retrieve() on empty DB returns empty list."""
         db = DecisionMemoryDB(db_path=temp_db)
-        
+
         results = db.retrieve(query="nonexistent query", top_k=5)
-        
+
         assert results == []
 
     def test_retrieve_respects_top_k_limit(self, temp_db):
         """Test that retrieve() respects the top_k parameter."""
         db = DecisionMemoryDB(db_path=temp_db)
-        
+
         # Record 10 decisions with same query but different confidence
         query = "Multi-record query"
         for i in range(10):
@@ -273,16 +273,16 @@ class TestDecisionMemoryIntegration:
                 decision=f"Decision {i}",
                 confidence=0.5 + (i * 0.04)  # 0.5 to 0.86
             )
-        
+
         # Retrieve with different top_k values
         results_3 = db.retrieve(query=query, top_k=3)
         results_5 = db.retrieve(query=query, top_k=5)
         results_all = db.retrieve(query=query, top_k=100)
-        
+
         assert len(results_3) == 3
         assert len(results_5) == 5
         assert len(results_all) == 10
-        
+
         # Verify sorted by confidence (descending)
         confidences = [r.confidence for r in results_all]
         assert confidences == sorted(confidences, reverse=True)
@@ -290,16 +290,16 @@ class TestDecisionMemoryIntegration:
     def test_decision_record_dataclass_valid(self, temp_db):
         """Test that DecisionRecord dataclass is properly populated."""
         db = DecisionMemoryDB(db_path=temp_db)
-        
+
         record_id = db.record(
             query="Dataclass test",
             decision="Test decision",
             confidence=0.75,
             notes="Test notes"
         )
-        
+
         results = db.retrieve(query="Dataclass test", top_k=1)
-        
+
         record = results[0]
         assert isinstance(record, DecisionRecord)
         assert record.id == record_id

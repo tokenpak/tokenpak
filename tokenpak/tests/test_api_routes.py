@@ -13,9 +13,7 @@ from __future__ import annotations
 import json
 import time
 import unittest
-from unittest import mock
 from unittest.mock import MagicMock, patch
-
 
 # ---------------------------------------------------------------------------
 # RouteRegistry

@@ -15,7 +15,7 @@ import json
 import time
 from dataclasses import asdict
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -28,7 +28,6 @@ from tokenpak.alerts import (
     load_state,
     save_state,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -10,12 +10,9 @@ Integration tests for compression telemetry (Phase 5 observability):
 from __future__ import annotations
 
 import json
-import os
 import sys
-import time
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
 
 import pytest
 
@@ -25,14 +22,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tokenpak.proxy.stats import (
-    CompressionStats,
-    get_compression_stats,
-    reset_singleton,
-    DEFAULT_LOG_PATH,
     MAX_LOG_BYTES,
     ROLLING_WINDOW,
+    CompressionStats,
 )
-
 
 # TSR-05e / WS-E (2026-05-08) — grep-able skip reason for tests that
 # assert against legacy CompressionStats interfaces / event-dict
@@ -298,7 +291,7 @@ class TestCLIOutput:
 
         buf = io.StringIO()
         with redirect_stdout(buf):
-            print(f"TokenPak Compression Stats (last 100 requests)")
+            print("TokenPak Compression Stats (last 100 requests)")
             print("─" * 45)
             print(f"{'Requests:':<17}{requests_total} total, {requests_errors} errors")
             print(f"{'Avg ratio:':<17}{avg_ratio} ({pct_reduction}% token reduction)")

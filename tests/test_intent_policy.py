@@ -10,17 +10,18 @@ Verifies:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.proxy.intent_policy", reason="module not available in current build")
 import pytest
 from tokenpak.proxy.intent_policy import (
-    decide,
-    resolve_policy,
-    known_intents,
     CONFIDENCE_THRESHOLD,
     FALLBACK_POLICY,
     DecisionAction,
-    RoutingDecision,
+    decide,
+    known_intents,
+    resolve_policy,
 )
+
 from tokenpak.compression.slot_filler import SlotFiller
 
 

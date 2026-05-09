@@ -8,7 +8,6 @@ merged from agent.proxy.circuit_breaker (FIN-07).
 Extracted from runtime/proxy.py (L812-1146) as part of TPK-RESTRUCTURE-003.
 """
 import os
-import re
 import socket
 import threading
 import time
@@ -174,7 +173,6 @@ def _sanitize_headers(raw_headers) -> dict:
 
 def _suggest_model(requested: str) -> Optional[str]:
     """Return the closest known model name for a given (possibly wrong) model string."""
-    import sys as _sys
 
     from tokenpak.models import known_models
     _known = known_models()

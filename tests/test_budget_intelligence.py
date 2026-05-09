@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
-from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
-
 
 # TSR-05w Pro-tier speculative-contract skip reason (grep-able)
 # ─────────────────────────────────────────────
@@ -36,10 +34,8 @@ from tokenpak.cli.commands.budget import (
     _calc_burn_rate,
     _calc_depletion_eta,
     _generate_suggestions,
-    _budget_history,
     print_budget_intelligence,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

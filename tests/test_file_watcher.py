@@ -2,26 +2,21 @@
 
 from __future__ import annotations
 
-import os
 import sys
-import threading
 import time
-import tempfile
-import textwrap
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tokenpak.vault.watcher import (
+    DEFAULT_IGNORE_PATTERNS,
     VaultWatcher,
     WatcherConfig,
     WatcherStats,
-    DEFAULT_IGNORE_PATTERNS,
 )
-
 
 # ---------------------------------------------------------------------------
 # WatcherConfig
@@ -293,7 +288,6 @@ class TestReindex:
 class TestCLIWatchArg:
     def test_watch_flag_present_in_parser(self):
         """Ensure the CLI parser accepts --watch without error."""
-        import argparse
         from tokenpak.cli import build_parser
         parser = build_parser()
         args = parser.parse_args(["index", "/tmp", "--watch"])

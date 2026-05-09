@@ -35,7 +35,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
 import urllib.request
 from typing import Callable, Dict, Optional
 
@@ -245,7 +244,9 @@ def register_auth_alert_hook(hook: Optional[NotificationHook] = None) -> None:
             url="https://your-endpoint.com/tokenpak-alerts",
         ))
     """
-    from tokenpak.security.auth_guard import AUTH_GUARD  # noqa: PLC0415 (lazy import — avoids circular)
+    from tokenpak.security.auth_guard import (
+        AUTH_GUARD,  # noqa: PLC0415 (lazy import — avoids circular)
+    )
 
     effective_hook = hook if hook is not None else _on_auth_failure
     AUTH_GUARD.on_auth_failure(effective_hook)

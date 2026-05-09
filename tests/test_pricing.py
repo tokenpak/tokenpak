@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.pricing", reason="module not available in current build")
 import pytest
-
 from tokenpak.pricing import (
     DEFAULT_RATE,
     MODEL_RATES,
@@ -17,7 +16,6 @@ from tokenpak.pricing import (
     get_price,
     get_rates,
 )
-
 
 # ── Model rate lookups ────────────────────────────────────────────────────────
 

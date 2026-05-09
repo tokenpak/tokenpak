@@ -1,17 +1,14 @@
 """Unit tests for tokenpak/plugins/registry.py — PluginRegistry."""
 
-import importlib
 import json
 import logging
 import os
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from tokenpak.plugins.base import CompressorPlugin
 from tokenpak.plugins.registry import PluginRegistry
-
 
 # ---------------------------------------------------------------------------
 # Concrete plugin fixtures

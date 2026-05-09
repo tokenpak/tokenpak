@@ -6,14 +6,12 @@ Run:  pytest tests/test_license_system.py -v
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.license.keys", reason="module not available in current build")
 import json
 import time
-import tempfile
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -28,22 +26,20 @@ except ImportError:
     CRYPTO_AVAILABLE = False
 
 from tokenpak._internal.license.keys import (
+    LicensePayload,
+    format_license_key,
     generate_keypair,
     sign_license,
     verify_license,
-    format_license_key,
-    LicensePayload,
 )
+from tokenpak.infrastructure.license_store import LicenseStore
 from tokenpak.infrastructure.license_validation import (
-    LicenseValidator,
-    LicenseTier,
-    LicenseStatus,
-    SeatRegistry,
-    TIER_FEATURES,
     GRACE_PERIOD_DAYS,
+    LicenseStatus,
+    LicenseTier,
+    LicenseValidator,
+    SeatRegistry,
 )
-from tokenpak.infrastructure.license_store import LicenseStore, CachedLicense
-
 
 # ─────────────────────────────────────────────
 # Fixtures

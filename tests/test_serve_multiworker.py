@@ -171,7 +171,7 @@ class TestDefaultWorkers:
         calls = []
         monkeypatch.setattr(uvicorn, "run", lambda app, **kw: calls.append(kw))
 
-        from tokenpak.cli.commands.serve import _default_workers, run_serve_cmd
+        from tokenpak.cli.commands.serve import run_serve_cmd
 
         args = argparse.Namespace(host="127.0.0.1", port=BASE_PORT + 3, workers=None)
         run_serve_cmd(args)
@@ -272,6 +272,7 @@ class TestTelemetryWAL:
     def test_concurrent_writes_do_not_corrupt(self, tmp_path):
         """Multiple threads writing to the same SQLite WAL DB don't corrupt it."""
         import threading
+
         from tokenpak.telemetry.storage import TelemetryDB
 
         db_path = str(tmp_path / "concurrent.db")
@@ -321,6 +322,7 @@ class TestArgparse:
     def test_workers_arg_passed_to_run(self, monkeypatch):
         """Verify workers=4 is forwarded through main() → run_serve_cmd."""
         import uvicorn
+
         from tokenpak.cli.commands import serve as serve_mod
 
         received = {}

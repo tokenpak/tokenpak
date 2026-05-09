@@ -2,6 +2,7 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.timeline", reason="module not available in current build")
 import json
 import tempfile

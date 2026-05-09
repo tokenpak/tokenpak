@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 from types import SimpleNamespace
-from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,7 +22,6 @@ from tokenpak.sdk.integrations.litellm.parser import (
     parse_tokenpak_request,
 )
 from tokenpak.sdk.integrations.litellm.proxy import ProxyHandler, _json_error
-
 
 # ---------------------------------------------------------------------------
 # Helpers

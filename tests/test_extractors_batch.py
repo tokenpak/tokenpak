@@ -9,10 +9,10 @@ Tests for salience extraction modules:
 
 import pytest
 
-from tokenpak.compression.salience.code_extractor import CodeExtractor, CodeExtractionResult
-from tokenpak.compression.salience.doc_extractor import DocExtractor, DocExtractionResult
-from tokenpak.compression.salience.log_extractor import LogExtractor, LogExtractionResult
-from tokenpak.compression.slot_filler import SlotFiller, FilledSlots
+from tokenpak.compression.salience.code_extractor import CodeExtractionResult, CodeExtractor
+from tokenpak.compression.salience.doc_extractor import DocExtractionResult, DocExtractor
+from tokenpak.compression.salience.log_extractor import LogExtractionResult, LogExtractor
+from tokenpak.compression.slot_filler import FilledSlots, SlotFiller
 
 
 class TestCodeExtractor:
@@ -231,7 +231,7 @@ class TestSlotFiller:
         template = "Hello {name}, you have {count} messages"
         slots = {"name": "Alice", "count": "5"}
         result = filler.fill(template, slots)
-        
+
         assert isinstance(result, FilledSlots)
 
     def test_fill_slots_empty(self, filler):

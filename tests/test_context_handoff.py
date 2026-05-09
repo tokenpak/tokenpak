@@ -11,24 +11,20 @@ Covers:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.agentic.handoff", reason="module not available in current build")
 import json
 import time
-from pathlib import Path
 
 import pytest
-
 from tokenpak.agentic.handoff import (
+    REGISTERED_AGENTS,
     ContextRef,
-    Handoff,
     HandoffManager,
     HandoffStatus,
-    REGISTERED_AGENTS,
     _generate_summary,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -188,7 +184,7 @@ def test_receive_is_idempotent(tmp_manager):
 def test_apply_full_lifecycle(tmp_manager, sample_file):
     refs = [ContextRef(type="file", path=sample_file)]
     h = tmp_manager.create_handoff(from_agent="cali", to_agent="sue", context_refs=refs)
-    
+
     # receive first
     received = tmp_manager.receive_handoff(h.id)
     assert received.status == HandoffStatus.RECEIVED
@@ -255,13 +251,13 @@ def test_expire_stale(tmp_manager):
     h1 = tmp_manager.create_handoff(from_agent="cali", to_agent="sue")
     h2 = tmp_manager.create_handoff(from_agent="sue", to_agent="cali")
     h3 = tmp_manager.create_handoff(from_agent="cali", to_agent="trix")
-    
+
     # Expire h1 and h2 manually
     for hid in [h1.id, h2.id]:
         h = tmp_manager.get_handoff(hid)
         h.expires_at = time.time() - 1
         (tmp_manager.handoff_dir / f"{hid}.json").write_text(json.dumps(h.to_dict()))
-    
+
     # Apply h3 (should not be expired)
     tmp_manager.apply_handoff(h3.id)
 
@@ -277,7 +273,7 @@ def test_expire_stale_does_not_re_expire(tmp_manager):
     h = tmp_manager.create_handoff(from_agent="cali", to_agent="sue")
     h.expires_at = time.time() - 1
     (tmp_manager.handoff_dir / f"{h.id}.json").write_text(json.dumps(h.to_dict()))
-    
+
     c1 = tmp_manager.expire_stale()
     c2 = tmp_manager.expire_stale()
     assert c1 == 1
@@ -314,7 +310,7 @@ def test_list_filter_status(tmp_manager):
     h1 = tmp_manager.create_handoff(from_agent="cali", to_agent="sue")
     h2 = tmp_manager.create_handoff(from_agent="cali", to_agent="sue")
     tmp_manager.apply_handoff(h2.id)
-    
+
     pending = tmp_manager.list_handoffs(status=HandoffStatus.PENDING)
     applied = tmp_manager.list_handoffs(status=HandoffStatus.APPLIED)
     assert len(pending) == 1

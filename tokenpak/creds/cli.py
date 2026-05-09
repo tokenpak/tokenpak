@@ -12,10 +12,11 @@ import sys
 import time
 from datetime import datetime, timezone
 
-from .doctor import Issue, run as doctor_run
-from .model import Credential, KIND_OAUTH
-from .providers import discover_all
 from . import store
+from .doctor import Issue
+from .doctor import run as doctor_run
+from .model import KIND_OAUTH, Credential
+from .providers import discover_all
 
 
 def _age_or_expiry(cred: Credential, now: int) -> str:
@@ -110,7 +111,7 @@ def cmd_route(args: list[str]) -> int:
     the caller identity and an explicit tag. No network calls, no
     side effects.
     """
-    from .router import RouteContext, select, AmbiguousRoute, NoRoute
+    from .router import AmbiguousRoute, NoRoute, RouteContext, select
 
     if not args or args[0].startswith("-"):
         print(

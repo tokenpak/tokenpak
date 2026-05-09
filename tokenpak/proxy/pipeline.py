@@ -25,10 +25,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from tokenpak.proxy.request import ProxyRequest
-
 
 # ---------------------------------------------------------------------------
 # Pipeline trace — lightweight record of what each stage did

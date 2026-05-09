@@ -21,7 +21,7 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
     import click
@@ -646,7 +646,7 @@ def run(
 
     # --- 2. TRAFFIC ---
     print()
-    print(f"  📡 Traffic")
+    print("  📡 Traffic")
     print(f"     Requests             {total_reqs:>10,}")
     print(f"     Input tokens         {_fmt_num(sent_tok):>10}   sent to provider")
     print(f"     Output tokens        {_fmt_num(output_tok):>10}")
@@ -658,7 +658,7 @@ def run(
     # displayed below so you can see which hits tokenpak actually caused.
     print()
     total_cache_handled = sent_tok + cache_read_tok
-    print(f"  🔄 Cache activity (observed)")
+    print("  🔄 Cache activity (observed)")
     print(f"     Token cache rate     {provider_cache_pct:>9.0f}%   {_fmt_num(cache_read_tok)} of {_fmt_num(total_cache_handled)} input tokens")
     print(f"     Request hit rate     {tp_cache_hit_rate:>9.0f}%   {tp_cache_hits:,} of {tp_cache_hits + tp_cache_misses:,} requests")
     if cache_read_tok > 0 or cache_proxy_tok or cache_client_tok or cache_unknown_tok:
@@ -682,7 +682,7 @@ def run(
         model_rows = savings_all["models"]
         show_limit = len(model_rows) if full else 6
         print()
-        print(f"  🤖 Models (all time)")
+        print("  🤖 Models (all time)")
         print(f"     {'Model':<26} {'Reqs':>6}  {'Input':>8}  {'Cache%':>6}  {'Compressed':>10}")
         print(f"     {'─' * 26} {'─' * 6}  {'─' * 8}  {'─' * 6}  {'─' * 10}")
         for m in model_rows[:show_limit]:
@@ -707,7 +707,7 @@ def run(
 
     # --- 5. PERFORMANCE ---
     print()
-    print(f"  ⚡ Performance")
+    print("  ⚡ Performance")
     uptime_str = _fmt_uptime(uptime_s) if uptime_s > 0 else "n/a"
     latency_str = "n/a"
     if proxy_up and stats:
@@ -736,11 +736,11 @@ def run(
     # --- 6. HEALTH ---
     print()
     if not proxy_up:
-        print(f"  ⚠️  Proxy unreachable — showing DB data only")
+        print("  ⚠️  Proxy unreachable — showing DB data only")
     elif errors > 0:
         print(f"  ⚠️  {errors} error(s) — run `tokenpak doctor`")
     else:
-        print(f"  ✅ Healthy")
+        print("  ✅ Healthy")
 
     # === MEME LINE ===
     if not no_meme:
@@ -874,7 +874,7 @@ def _print_by_source_inline(db_path: Optional[str] = None) -> None:
     if not rows:
         return
     print()
-    print(f"  📱 Sources (all time)")
+    print("  📱 Sources (all time)")
     print(f"     {'Source':<20} {'Reqs':>7}  {'Cost':>10}  {'Cache%':>6}")
     print(f"     {'─' * 20} {'─' * 7}  {'─' * 10}  {'─' * 6}")
     for r in rows:
@@ -891,7 +891,7 @@ def _print_by_provider_inline(db_path: Optional[str] = None) -> None:
     if not rows:
         return
     print()
-    print(f"  🏢 Providers (all time)")
+    print("  🏢 Providers (all time)")
     print(f"     {'Provider':<20} {'Reqs':>7}  {'Cost':>10}  {'Cache%':>6}")
     print(f"     {'─' * 20} {'─' * 7}  {'─' * 10}  {'─' * 6}")
     for r in rows:
@@ -1039,7 +1039,7 @@ def run_full(
         print(f"{mark} | {requests:,} req | {pct}")
         return
 
-    print(f"\nTOKENPAK  |  Status (Full)")
+    print("\nTOKENPAK  |  Status (Full)")
     print(SEP_LEGACY)
 
     print(f"{'✅  Proxy running':<28}port {proxy_base.split(':')[-1]} — hybrid mode")

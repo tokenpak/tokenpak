@@ -23,14 +23,12 @@ Coverage:
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from tokenpak.cli.commands.doctor_claude_code import (
-    DEFAULT_PROXY_URL,
     NUM_CHECKS,
     _check_active_profile,
     _check_auth_flow,
@@ -41,13 +39,9 @@ from tokenpak.cli.commands.doctor_claude_code import (
     _check_pythonpath_drift,
     _check_sample_roundtrip,
     _check_telemetry_visible,
-    _get_canonical_pythonpath_from_unit,
-    _get_url_from_env_file,
-    _get_url_from_unit,
     _normalise_url,
     run_claude_code_checks,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

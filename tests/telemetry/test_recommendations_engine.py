@@ -12,17 +12,16 @@ import pytest
 
 from tokenpak.telemetry.models import Cost, TelemetryEvent, Usage
 from tokenpak.telemetry.recommendations import (
-    Recommendation,
-    RecommendationsEngine,
-    RecommendationsResult,
     SEVERITY_HIGH,
     SEVERITY_MEDIUM,
     SEVERITY_TRACKING,
+    Recommendation,
+    RecommendationsEngine,
+    RecommendationsResult,
     format_human,
     format_json,
 )
 from tokenpak.telemetry.storage import TelemetryDB
-
 
 # TSR-05q API-drift skip reason (grep-able)
 # ─────────────────────────────────────────────

@@ -25,8 +25,7 @@ import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
-
+from typing import Callable, Optional
 
 DEFAULT_PROXY_URL = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
 
@@ -247,12 +246,12 @@ def _apply_claude_code(proxy_url: str) -> ApplyResult:
     """
     try:
         from tokenpak.cli.commands.install import (
+            MODE_PROFILE_MAP,
             _atomic_write_settings,
             _backup_settings,
             _read_settings,
             _settings_path,
             auto_detect_mode,
-            MODE_PROFILE_MAP,
         )
     except Exception as exc:  # pragma: no cover — import failure
         return ApplyResult(
@@ -540,7 +539,6 @@ def _apply_continue(proxy_url: str) -> ApplyResult:
     stdlib-only companion. If only config.yaml exists we fall back to
     print-only with a helpful error rather than clobber the user's YAML.
     """
-    import datetime
     import shutil as _shutil
 
     continue_dir = Path.home() / ".continue"
@@ -788,7 +786,7 @@ def _render_one(integration: Integration, proxy_url: str) -> str:
     if loc:
         lines.append(f"  Detected   {loc}")
     else:
-        lines.append(f"  Detected   (not installed on this host — instructions below still apply)")
+        lines.append("  Detected   (not installed on this host — instructions below still apply)")
     lines.append("")
     for ln in integration.instructions(proxy_url).splitlines():
         lines.append("  " + ln)

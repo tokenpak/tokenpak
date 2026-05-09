@@ -13,7 +13,6 @@ from tokenpak.compression.budgets.topic_aware import (
     place_topic_aware_breakpoints,
 )
 
-
 # ============================================================================
 # TopicSegment
 # ============================================================================

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import os
 import sqlite3
 import sys
 import threading
@@ -23,7 +22,6 @@ import time
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 

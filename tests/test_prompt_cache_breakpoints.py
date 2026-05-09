@@ -1,10 +1,10 @@
 import json
 
+from tokenpak.proxy.adapters.anthropic_adapter import AnthropicAdapter
 from tokenpak.proxy.prompt_builder import (
     apply_deterministic_cache_breakpoints,
     get_stats,
 )
-from tokenpak.proxy.adapters.anthropic_adapter import AnthropicAdapter
 
 
 def _mk_body() -> bytes:

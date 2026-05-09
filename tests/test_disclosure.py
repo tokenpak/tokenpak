@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.ingest.disclosure", reason="module not available in current build")
 from tokenpak._internal.ingest.disclosure import (
-    DocumentView,
-    SectionView,
     LEVEL_FULL_SECTIONS,
     LEVEL_RAW_CHUNKS,
     LEVEL_SECTION_SUMMARIES,
     LEVEL_SUMMARY_MAP,
+    DocumentView,
+    SectionView,
     build_disclosure_payload,
     choose_disclosure_level,
     shortlist_sections,

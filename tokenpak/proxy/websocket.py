@@ -19,10 +19,10 @@ from typing import Dict
 from urllib.parse import urlparse
 
 from tokenpak.proxy.config import (
-    WS_PORT,
-    WS_MAX_CONNECTIONS,
     UPSTREAM_ROUTES,
     UPSTREAM_TIMEOUT,
+    WS_MAX_CONNECTIONS,
+    WS_PORT,
 )
 
 # ---------------------------------------------------------------------------

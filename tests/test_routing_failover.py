@@ -2,12 +2,14 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.pro.routing.failover", reason="module not available in current build")
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
-from tokenpak.pro.routing.failover import FailoverHandler
+from unittest.mock import Mock
+
+import pytest
 from tokenpak.pro.routing.detector import Provider
+from tokenpak.pro.routing.failover import FailoverHandler
 
 
 class TestFailoverHandler:

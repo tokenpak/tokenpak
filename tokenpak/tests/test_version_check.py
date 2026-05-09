@@ -9,9 +9,6 @@ import json
 import tempfile
 from pathlib import Path
 from unittest import mock
-from typing import Optional
-
-import pytest
 
 from tokenpak import version_check
 

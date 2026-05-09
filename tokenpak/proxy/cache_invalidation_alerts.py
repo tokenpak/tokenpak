@@ -33,7 +33,6 @@ from typing import Any, Dict, List, NamedTuple, Optional
 
 from tokenpak.proxy.cache_invalidator import (
     CacheInvalidatorEvent,
-    _canonical_tools,
     _detect_cache_invalidators,
 )
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .salience.doc_extractor import DocExtractor, DocExtractionResult
+from .salience.doc_extractor import DocExtractionResult, DocExtractor
 
 
 class DocCompressor:

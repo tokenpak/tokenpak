@@ -28,7 +28,6 @@ import sqlite3
 import threading
 from typing import List, NamedTuple, Optional
 
-
 # ---------------------------------------------------------------------------
 # Event representation
 # ---------------------------------------------------------------------------

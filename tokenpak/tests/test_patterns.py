@@ -2,8 +2,6 @@
 
 import re
 
-import pytest
-
 from extraction.patterns import (
     API_ENDPOINT_RE,
     CONFIG_KEY_RE,
@@ -15,7 +13,6 @@ from extraction.patterns import (
     ORG_RE,
     PERSON_RE,
 )
-
 
 # ---------------------------------------------------------------------------
 # FILE_PATH_RE

@@ -1,11 +1,9 @@
 """Unit tests for tokenpak/tokens.py — token counting and truncation utilities."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # Import module under test
 from tokenpak import tokens as tok
-
 
 # ---------------------------------------------------------------------------
 # count_tokens

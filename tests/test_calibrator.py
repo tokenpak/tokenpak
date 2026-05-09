@@ -2,28 +2,24 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.calibrator", reason="module not available in current build")
 import json
 import os
 import tempfile
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from tokenpak.calibrator import (
-    log_retry,
-    log_success,
+    MAX_EVENTS,
+    _downgrade_mode,
+    _event_weight,
     compute_retry_rate,
     get_effective_mode,
     load_calibration,
-    _downgrade_mode,
-    _event_weight,
-    _MODE_ORDER,
-    MAX_EVENTS,
-    RETRY_RATE_THRESHOLD,
-    DEFAULT_CALIBRATION_PATH,
+    log_retry,
+    log_success,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -279,7 +275,7 @@ class TestGetEffectiveMode:
         # Manually write a hybrid override but caller requests strict
         data = load_calibration(self.path)
         data["overrides"]["CODE"] = "hybrid"
-        import json; from pathlib import Path; Path(self.path).write_text(json.dumps(data))
+        from pathlib import Path; Path(self.path).write_text(json.dumps(data))  # noqa: I001
         mode = get_effective_mode("strict", "CODE", calibration_path=self.path)
         assert mode == "strict"
 

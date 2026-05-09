@@ -22,9 +22,7 @@ import os
 import tempfile
 import time
 import unittest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
-
+from unittest.mock import MagicMock, mock_open, patch
 
 # ---------------------------------------------------------------------------
 # CheckResult
@@ -264,6 +262,7 @@ class TestCheckMemoryProcMeminfo(unittest.TestCase):
 
     def test_procmeminfo_ok(self):
         import sys
+
         from tokenpak.proxy.intelligence.deep_health import check_memory
 
         # 37.5% used — should be ok
@@ -275,6 +274,7 @@ class TestCheckMemoryProcMeminfo(unittest.TestCase):
 
     def test_procmeminfo_warning(self):
         import sys
+
         from tokenpak.proxy.intelligence.deep_health import check_memory
 
         # 88% used
@@ -286,6 +286,7 @@ class TestCheckMemoryProcMeminfo(unittest.TestCase):
 
     def test_procmeminfo_total_zero_returns_error(self):
         import sys
+
         from tokenpak.proxy.intelligence.deep_health import check_memory
 
         meminfo = "MemTotal:       0 kB\nMemAvailable:   0 kB\n"
@@ -392,8 +393,6 @@ class TestCheckProvider(unittest.TestCase):
         self.assertEqual(result.error, "api_key_not_configured")
 
     def test_successful_response_returns_ok(self):
-        import urllib.request
-        import urllib.error
 
         mock_resp = MagicMock()
         mock_resp.status = 200

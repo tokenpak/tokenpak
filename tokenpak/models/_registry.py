@@ -12,12 +12,10 @@ import json
 import logging
 import re
 import threading
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
-from ._families import FamilyRule, get_sorted_families, PROVIDER_PREFIXES
+from ._families import PROVIDER_PREFIXES, FamilyRule, get_sorted_families
 
 log = logging.getLogger(__name__)
 

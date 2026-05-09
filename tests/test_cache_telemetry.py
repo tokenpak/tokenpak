@@ -8,7 +8,6 @@ CacheTelemetryCollector.
 from __future__ import annotations
 
 import time
-import pytest
 
 from tokenpak.cache.telemetry import (
     CacheMetrics,
@@ -16,7 +15,6 @@ from tokenpak.cache.telemetry import (
     get_collector,
     reset_collector,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

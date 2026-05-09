@@ -11,19 +11,21 @@ Tests cover the public API:
 
 import base64
 import json
+
 import pytest
+
 from tokenpak.companion.trace import (
+    TRACE_ENVELOPE_KEY,
+    TRACE_HEADER,
     TokenPakTrace,
     TraceBuilder,
-    TRACE_HEADER,
-    TRACE_ENVELOPE_KEY,
-    attach_trace_header,
-    strip_trace_header,
-    read_trace_header,
-    attach_trace_envelope,
-    strip_trace,
-    read_trace_envelope,
     assert_no_leak,
+    attach_trace_envelope,
+    attach_trace_header,
+    read_trace_envelope,
+    read_trace_header,
+    strip_trace,
+    strip_trace_header,
 )
 
 
@@ -474,7 +476,7 @@ class TestNoLeakGuard:
                 {
                     "message": {
                         "content": [
-                            {"type": "text", "text": f"Safe text"},
+                            {"type": "text", "text": "Safe text"},
                             {"type": "text", "text": f"Unsafe {TRACE_HEADER}"},
                         ]
                     }

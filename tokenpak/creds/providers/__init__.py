@@ -25,7 +25,7 @@ BUILTIN_PROVIDERS: list[tuple[str, Callable[[], list[Credential]]]] = []
 def _register():
     """Lazy-register built-ins. Lets each provider module import cleanly
     without side-effects on import order."""
-    from . import codex_cli, claude_cli, env_pool, user_config, openclaw
+    from . import claude_cli, codex_cli, env_pool, openclaw, user_config
 
     BUILTIN_PROVIDERS.clear()
     BUILTIN_PROVIDERS.extend(
@@ -66,7 +66,7 @@ def resolve_secret(cred: Credential) -> "str | None":
     rather than raising, so callers can report "credential not
     resolvable" without a traceback in their logs.
     """
-    from . import codex_cli, claude_cli, env_pool, user_config, openclaw
+    from . import claude_cli, codex_cli, env_pool, openclaw, user_config
 
     resolvers = {
         codex_cli.PROVIDER_NAME: codex_cli.resolve,

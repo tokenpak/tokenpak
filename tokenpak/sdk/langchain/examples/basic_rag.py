@@ -1,6 +1,6 @@
 """Basic RAG example for langchain-tokenpak."""
 
-from langchain_tokenpak import TokenPakMemory, TokenPakContextManager
+from langchain_tokenpak import TokenPakContextManager, TokenPakMemory
 
 
 def example():

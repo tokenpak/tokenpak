@@ -41,6 +41,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "smoke-test-not-real")
 os.environ.setdefault("TOKENPAK_VAULT_INDEX", "0")
 
 import importlib.util as _ilu  # noqa: E402
+
 _spec = _ilu.spec_from_file_location("proxy", _PROJECT_ROOT / "proxy.py")
 _proxy = _ilu.module_from_spec(_spec)
 sys.modules.setdefault("proxy", _proxy)

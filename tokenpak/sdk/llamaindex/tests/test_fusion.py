@@ -1,9 +1,9 @@
 """Tests for MultiIndexFusion."""
 
 import asyncio
+
 import pytest
 from llamaindex_tokenpak import MultiIndexFusion
-
 
 # --- Mock engines ---
 

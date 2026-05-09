@@ -26,7 +26,7 @@ from typing import Optional
 
 import httpx
 
-from tokenpak._formatting.picker import getch as _getch, pick as _shared_pick
+from tokenpak._formatting.picker import pick as _shared_pick
 
 _TEST_HEADER = "\n  \033[1mtokenpak test\033[0m\n"
 
@@ -457,7 +457,7 @@ def _map_platform_to_adapter(platform: str, provider: str, model: str):
       - codex: `codex exec` vs `tokenpak codex exec`
       - api/proxy: direct HTTP vs proxy HTTP (raw API key route)
     """
-    from tokenpak.prove.adapter import ArmConfig, _resolve_api_key, _get_provider
+    from tokenpak.prove.adapter import ArmConfig, _get_provider, _resolve_api_key
 
     proxy_available = _detect_proxy_running()
 
@@ -540,7 +540,7 @@ def run_test(
     test_id: str,
 ) -> None:
     """Execute the test and display results."""
-    from tokenpak.prove.adapter import ArmConfig, ArmResult, TurnResult, run_arm
+    from tokenpak.prove.adapter import ArmResult, TurnResult, run_arm
 
     scenario = _SCENARIOS[test_id]
     arms_cfg = _map_platform_to_adapter(platform, provider, model)
@@ -648,7 +648,7 @@ def run_test(
     if display and display._method == "tmux-split":
         display.stop()
     elif display and display._method == "terminal":
-        print(f"\n  Live view window still open for review.")
+        print("\n  Live view window still open for review.")
 
     print()
 
@@ -767,20 +767,20 @@ def run(args=None) -> None:
 
     # Build confirmation screen
     sys.stdout.write("\033[2J\033[H")
-    sys.stdout.write(f"\n  \033[1mtokenpak test\033[0m\n\n")
-    sys.stdout.write(f"  Ready to run:\n\n")
+    sys.stdout.write("\n  \033[1mtokenpak test\033[0m\n\n")
+    sys.stdout.write("  Ready to run:\n\n")
     sys.stdout.write(f"    Test:       {scenario['name']}\n")
     sys.stdout.write(f"    Platform:   {platform}\n")
     sys.stdout.write(f"    Provider:   {provider}\n")
     sys.stdout.write(f"    Model:      {model}\n")
-    sys.stdout.write(f"    Turns:      5\n")
+    sys.stdout.write("    Turns:      5\n")
     sys.stdout.write(f"    Proxy:      {proxy_status}\n")
     sys.stdout.write(f"    Arms:       {len(arms)}\n")
     for i, a in enumerate(arms):
         sys.stdout.write(f"      [{i+1}] {a.name}\n")
     if active_warning:
         sys.stdout.write(active_warning)
-    sys.stdout.write(f"\n")
+    sys.stdout.write("\n")
     sys.stdout.flush()
 
     confirm = _pick("", confirm_options)

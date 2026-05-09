@@ -19,10 +19,11 @@ import pytest
 # tokenpak/alerts/__init__.py is a shim that imports tokenpak._internal.alerts;
 # if that module does not exist the entire package init fails at collection time.
 try:
-    from tokenpak.alerts.channels.webhook import WebhookChannel
-    from tokenpak.alerts.channels.slack import SlackChannel
-    from tokenpak.alerts.channels import dispatch_alert, _load_channel_configs
     from tokenpak.license.tier import LicenseTier
+
+    from tokenpak.alerts.channels import _load_channel_configs, dispatch_alert
+    from tokenpak.alerts.channels.slack import SlackChannel
+    from tokenpak.alerts.channels.webhook import WebhookChannel
     _ALERTS_AVAILABLE = True
 except ImportError:
     WebhookChannel = None  # type: ignore[assignment,misc]
@@ -294,7 +295,6 @@ class TestChannelRegistry:
         (tokenpak_dir / "config.json").write_text(json.dumps(config))
 
         # Reload with patched HOME
-        from pathlib import Path
         with patch("tokenpak.alerts.channels.Path") as mock_path:
             mock_path.home.return_value = tmp_path
             mock_path.return_value = tmp_path / ".tokenpak" / "config.json"
@@ -316,7 +316,7 @@ class TestChannelRegistry:
 class TestCheckAlertsDispatch:
     def test_check_alerts_calls_dispatch_when_fired(self, stub_server):
         """When check_alerts() fires a rule, dispatch_alert is called."""
-        from tokenpak._internal.alerts import check_alerts, AlertRule
+        from tokenpak._internal.alerts import AlertRule, check_alerts
 
         webhook_url = f"{stub_server}/check-alerts-dispatch"
         cfg = [{"type": "webhook", "url": webhook_url}]

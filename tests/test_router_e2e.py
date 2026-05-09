@@ -11,11 +11,12 @@ Verifies the complete flow:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.proxy.intent_policy", reason="module not available in current build")
-import pytest
-import json
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add proxy location to path
 sys.path.insert(0, str(Path.home()))
@@ -81,8 +82,9 @@ class TestRouterE2E:
 
     def test_slot_filler_with_policy(self):
         """Full pipeline: fill slots → resolve policy."""
-        from tokenpak.compression.slot_filler import SlotFiller
         from tokenpak.proxy.intent_policy import decide
+
+        from tokenpak.compression.slot_filler import SlotFiller
 
         filler = SlotFiller()
 
@@ -96,7 +98,7 @@ class TestRouterE2E:
 
     def test_low_confidence_fallback_behavior(self):
         """Low-confidence results should use fallback recipe."""
-        from tokenpak.proxy.intent_policy import decide, CONFIDENCE_THRESHOLD
+        from tokenpak.proxy.intent_policy import CONFIDENCE_THRESHOLD, decide
 
         low_conf = CONFIDENCE_THRESHOLD - 0.05
         decision = decide("plan", {}, low_conf)
