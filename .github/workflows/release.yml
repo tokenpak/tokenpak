@@ -67,6 +67,30 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────
   # Step 2: Build distribution artifacts
   # ─────────────────────────────────────────────────────────────────────
+  #
+  # Dist-purity contract (TSR-08-D / 2026-05-09 v1.5.3 burn lesson):
+  #
+  # The `dist/` directory uploaded as the `dist` artifact MUST contain only
+  # valid Python distribution files: `*.whl` and `*.tar.gz`. Nothing else.
+  #
+  # `pypa/gh-action-pypi-publish` enumerates `dist/*` and uploads each entry
+  # to PyPI. Any non-distribution file (e.g. SHA256SUMS, RELEASE_NOTES.md)
+  # is rejected with `InvalidDistribution: Unknown distribution format` and
+  # the entire publish fails. This was the v1.5.3 failure mode and the same
+  # defect documented in `feedback_release_path_hardening` ("SHA256SUMS
+  # outside dist/").
+  #
+  # Therefore:
+  #   • SHA256SUMS is generated at the repo root (./SHA256SUMS), NEVER inside dist/.
+  #   • Checksums are uploaded as a separate `checksums` artifact.
+  #   • The `release` job downloads both `dist` and `checksums` to attach
+  #     everything to the GitHub Release.
+  #   • The `publish` job downloads ONLY the `dist` artifact and runs a
+  #     pre-publish guard that fails if `dist/` contains anything other than
+  #     `*.whl` or `*.tar.gz`.
+  #
+  # If you add a new release artifact, give it its own artifact name; do
+  # NOT drop it into `dist/`.
   build:
     name: Build Distribution
     runs-on: ubuntu-latest
@@ -88,17 +112,44 @@ jobs:
       - name: Verify package
         run: twine check dist/*
 
-      - name: Generate checksums
+      - name: Assert dist/ purity (only .whl + .tar.gz)
         run: |
-          cd dist
-          sha256sum * > SHA256SUMS
+          set -euo pipefail
+          shopt -s nullglob
+          extras=()
+          for f in dist/*; do
+            base="$(basename "$f")"
+            case "$base" in
+              *.whl|*.tar.gz) ;;
+              *) extras+=("$base") ;;
+            esac
+          done
+          if [ "${#extras[@]}" -gt 0 ]; then
+            echo "ERROR: dist/ contains non-distribution files: ${extras[*]}" >&2
+            echo "       PyPI publish would fail. See dist-purity contract above." >&2
+            exit 1
+          fi
+          echo "dist/ purity check OK:"
+          ls -la dist/
+
+      - name: Generate checksums (outside dist/)
+        run: |
+          # SHA256SUMS lives at repo root, NEVER inside dist/.
+          # See dist-purity contract on the build job.
+          ( cd dist && sha256sum *.whl *.tar.gz ) > SHA256SUMS
           cat SHA256SUMS
 
-      - name: Upload artifacts
+      - name: Upload dist artifact (wheels + sdist only)
         uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
+
+      - name: Upload checksums artifact (SHA256SUMS only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: SHA256SUMS
 
   # ─────────────────────────────────────────────────────────────────────
   # Step 3: Create GitHub Release with artifacts
@@ -110,11 +161,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download artifacts
+      - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
+
+      - name: Download checksums artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: checksums
+          path: .
 
       - name: Extract version from tag
         id: version
@@ -124,13 +181,13 @@ jobs:
         id: notes
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
-          
+
           # Try to extract section from CHANGELOG.md
           if [ -f CHANGELOG.md ]; then
             # Extract the section for this version
             NOTES=$(awk "/## \[$VERSION\]|## $VERSION/{flag=1; next} /## \[|## [0-9]/{flag=0} flag" CHANGELOG.md)
           fi
-          
+
           # Fallback if no changelog entry
           if [ -z "$NOTES" ]; then
             NOTES="Release v$VERSION
@@ -148,11 +205,11 @@ jobs:
           ## Checksums
 
           \`\`\`
-          $(cat dist/SHA256SUMS)
+          $(cat SHA256SUMS)
           \`\`\`
           "
           fi
-          
+
           # Write to file for the release action
           echo "$NOTES" > RELEASE_NOTES.md
           cat RELEASE_NOTES.md
@@ -167,7 +224,7 @@ jobs:
           files: |
             dist/*.whl
             dist/*.tar.gz
-            dist/SHA256SUMS
+            SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -184,11 +241,35 @@ jobs:
     permissions:
       id-token: write  # Required for Trusted Publisher (OIDC)
     steps:
-      - name: Download artifacts
+      - name: Download dist artifact only
         uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
+
+      - name: Pre-publish dist/ purity guard
+        # Re-asserts the dist-purity contract immediately before the upload
+        # action enumerates dist/*. If anything other than .whl or .tar.gz
+        # appears here, fail loudly rather than letting twine produce a
+        # confusing `InvalidDistribution` error.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          extras=()
+          for f in dist/*; do
+            base="$(basename "$f")"
+            case "$base" in
+              *.whl|*.tar.gz) ;;
+              *) extras+=("$base") ;;
+            esac
+          done
+          if [ "${#extras[@]}" -gt 0 ]; then
+            echo "ERROR: dist/ has non-distribution files entering the publish action: ${extras[*]}" >&2
+            echo "       This is the v1.5.3 failure mode. See dist-purity contract in this workflow." >&2
+            exit 1
+          fi
+          echo "Pre-publish dist/ purity OK:"
+          ls -la dist/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

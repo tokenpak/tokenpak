@@ -17,7 +17,7 @@ Sub-package imports:
 
 from __future__ import annotations
 
-__version__ = "1.5.3"
+__version__ = "1.5.4"
 __author__ = "TokenPak Contributors"
 __license__ = "Apache-2.0"
 __description__ = "Deterministic compression for multi-agent AI workflows"
