@@ -9,7 +9,7 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .base import Retriever, RetrievalQuery, RetrievalResult, RetrieverType
+from .base import RetrievalQuery, RetrievalResult, Retriever, RetrieverType
 
 logger = logging.getLogger(__name__)
 

@@ -2,17 +2,18 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.ingest.claim_indexer", reason="module not available in current build")
 import pytest
 from tokenpak._internal.ingest.claim_indexer import (
     ClaimEvidence,
-    extract_claims_from_text,
-    extract_claims_from_document,
-    link_claims_by_proximity,
-    compact_for_retrieval,
-    _extract_metrics_from_text,
-    _extract_citations_from_text,
     _calculate_confidence,
+    _extract_citations_from_text,
+    _extract_metrics_from_text,
+    compact_for_retrieval,
+    extract_claims_from_document,
+    extract_claims_from_text,
+    link_claims_by_proximity,
 )
 
 
@@ -332,11 +333,11 @@ class TestIntegration:
         # Extract
         claims = extract_claims_from_document(document)
         assert len(claims) > 0
-        
+
         # Link
         linked = link_claims_by_proximity(claims)
         assert len(linked) > 0
-        
+
         # Compact
         compact = compact_for_retrieval(claims, top_n=2)
         assert len(compact) > 0
@@ -346,23 +347,23 @@ class TestIntegration:
         """Test on realistic research document excerpt."""
         text = """
         Abstract: Our study found significant improvements in efficiency metrics.
-        
+
         Methods: We analyzed 500 transactions [1] over 12 months (2023-2024).
         Results show a 42% reduction in latency and 28% cost savings [2].
         The study involved 15 participants and achieved 99.5% success rate.
-        
+
         Conclusion: We recommend implementing this approach in production.
         Our analysis (Smith et al., 2024) indicates long-term viability.
         """
         claims = extract_claims_from_text(text)
         assert len(claims) > 2
-        
+
         # Check that we extracted metrics
         all_metrics = []
         for claim in claims:
             all_metrics.extend(claim.metrics)
         assert any("42" in m or "500" in m for m in all_metrics)
-        
+
         # Check that we extracted citations
         all_citations = []
         for claim in claims:

@@ -30,7 +30,12 @@ logger = logging.getLogger(__name__)
 # Attempt to import Pillow; set a flag so the rest of the module can branch.
 # ---------------------------------------------------------------------------
 try:
-    from PIL import Image, ImageEnhance, ImageFilter, ImageOps  # type: ignore
+    from PIL import (  # type: ignore  # noqa: F401
+        Image,
+        ImageEnhance,
+        ImageFilter,
+        ImageOps,
+    )
 
     _PILLOW_AVAILABLE = True
 except ImportError:  # pragma: no cover

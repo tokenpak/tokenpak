@@ -21,21 +21,20 @@ Coverage:
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("tokenpak.agentic.retry", reason="module not available in current build")
+from unittest.mock import MagicMock, patch
 
 import pytest
-pytest.importorskip("tokenpak.agentic.retry", reason="module not available in current build")
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call as mock_call
+from tokenpak.agentic.retry import RetryExhaustedError
 
 from tokenpak.routing.fallback import (
-    FallbackRouter,
     FallbackExhaustedError,
+    FallbackRouter,
     fallback_call,
     get_recent_fallback_events,
 )
-from tokenpak.agentic.retry import RetryExhaustedError
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,7 +71,8 @@ def _always_fail(error_msg: str = "HTTP 500 server error"):
 
 class TestFallbackRouterSuccess:
     def test_success_first_try(self, tmp_path):
-        fn = lambda ctx, state: "result"
+        def fn(ctx, state):
+            return "result"
         router = FallbackRouter(state_dir=tmp_path)
         assert router.call(fn=fn, context=_ctx()) == "result"
 
@@ -192,7 +192,7 @@ class TestFallbackRouterFailover:
 
     def test_failover_enabled_drives_provider_switch(self, tmp_path):
         """When failover enabled, FailoverManager provides provider ordering."""
-        from tokenpak.proxy.failover import FailoverConfig, ProviderEntry, FailoverManager
+        from tokenpak.proxy.failover import FailoverConfig, FailoverManager, ProviderEntry
         chain = [
             ProviderEntry(provider="anthropic", model_map={}, credential_env="ANTHROPIC_API_KEY"),
             ProviderEntry(provider="openai", model_map={}, credential_env="OPENAI_API_KEY"),
@@ -250,7 +250,8 @@ class TestFallbackRouterHandoff:
 
 class TestFunctionalAPI:
     def test_fallback_call_success(self, tmp_path):
-        fn = lambda ctx, state: "functional-ok"
+        def fn(ctx, state):
+            return "functional-ok"
         result = fallback_call(fn=fn, context=_ctx(), state_dir=tmp_path)
         assert result == "functional-ok"
 

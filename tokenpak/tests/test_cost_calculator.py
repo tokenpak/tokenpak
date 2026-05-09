@@ -7,13 +7,13 @@ Cost calculation is implemented in tokenpak/pricing.py — this file tests those
 import pytest
 
 from tokenpak.telemetry.pricing import (
-    MODEL_RATES,
     DEFAULT_RATE,
+    MODEL_RATES,
     calculate_request_cost,
     calculate_request_cost_baseline,
-    get_rates,
-    get_price,
     estimate_savings,
+    get_price,
+    get_rates,
 )
 
 

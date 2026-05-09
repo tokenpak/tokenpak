@@ -12,9 +12,9 @@ Covers:
 """
 
 import pytest
-from tokenpak.compression.alias_compressor import AliasCompressor, AliasResult
-from tokenpak.compression.pipeline import CompressionPipeline
 
+from tokenpak.compression.alias_compressor import AliasCompressor
+from tokenpak.compression.pipeline import CompressionPipeline
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -140,7 +140,7 @@ def test_roundtrip_expand():
     expanded = compressor.expand(aliased_text, result.symbol_table)
 
     # Expanded body should contain the original path
-    assert LONG_PATH in expanded, f"Expanded text should contain original path"
+    assert LONG_PATH in expanded, "Expanded text should contain original path"
 
 
 # ---------------------------------------------------------------------------

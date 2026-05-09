@@ -3,30 +3,29 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
 import yaml
 
 from tokenpak.cli.fleet import (
+    FleetAgentRow,
     FleetMachine,
     FleetStats,
-    FleetAgentRow,
-    _get_fleet_config_path,
-    load_fleet_config,
-    save_fleet_config,
-    _query_machine_aggregate,
-    query_fleet_agent_rows,
-    _query_machine,
-    query_fleet,
+    _calc_savings,
     _fmt_cost,
     _fmt_tokens,
-    _calc_savings,
-    render_fleet_table,
+    _query_machine,
+    _query_machine_aggregate,
+    interactive_add_machine,
+    load_fleet_config,
+    query_fleet,
+    query_fleet_agent_rows,
     render_fleet_agent_table,
     render_fleet_json,
-    interactive_add_machine,
+    render_fleet_table,
+    save_fleet_config,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

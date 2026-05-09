@@ -10,6 +10,7 @@ import pytest
 pytest.importorskip("provider_health", reason="provider_health is a separate external package not installed in slim test env")
 
 import time
+
 from provider_health import (
     ProviderHealthMonitor,
     ProviderMetrics,

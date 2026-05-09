@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.context_composer", reason="module not available in current build")
 import pytest
-
 from tokenpak.context_composer import (
     ComposedContext,
     ContextComposer,

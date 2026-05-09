@@ -2,17 +2,13 @@
 """Unit tests for calibration.py — worker count optimization and dynamic adjustment."""
 
 import json
-import os
 import tempfile
 from pathlib import Path
 from unittest import mock
 
-import pytest
-
 from tokenpak.orchestration.calibration import (
     _candidate_workers,
     _host_key,
-    _run_index_once,
     _sample_files,
     calibrate_workers,
     get_recommended_workers,
@@ -132,7 +128,7 @@ class TestSampleFiles:
         """Sample files returns a list of file tuples."""
         with mock.patch(
             "tokenpak.orchestration.calibration.walk_directory",
-            return_value=[(f"/path/file.txt", "text", None)],
+            return_value=[("/path/file.txt", "text", None)],
         ):
             result = _sample_files("/dummy")
             assert isinstance(result, list)
@@ -186,7 +182,7 @@ class TestCalibrateWorkers:
         self, mock_walk, mock_candidates, mock_run_index
     ):
         """calibrate_workers persists profile to disk."""
-        mock_walk.return_value = [(f"/file.txt", "text", None)]
+        mock_walk.return_value = [("/file.txt", "text", None)]
         mock_candidates.return_value = [1, 2]
         mock_run_index.side_effect = [1.5, 1.5, 1.0, 1.0]
 

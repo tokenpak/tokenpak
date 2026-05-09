@@ -13,10 +13,8 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import unittest
-from typing import Any, Dict
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -86,22 +84,25 @@ class TestRequestSchemas(unittest.TestCase):
         self.assertIn("messages", required)
 
     def test_get_request_schema_returns_anthropic(self):
-        from tokenpak.validation.request_schema import get_request_schema, ANTHROPIC_MESSAGE_SCHEMA
+        from tokenpak.validation.request_schema import ANTHROPIC_MESSAGE_SCHEMA, get_request_schema
         schema = get_request_schema("anthropic")
         self.assertEqual(schema["title"], ANTHROPIC_MESSAGE_SCHEMA["title"])
 
     def test_get_request_schema_returns_openai(self):
-        from tokenpak.validation.request_schema import get_request_schema, OPENAI_CHAT_SCHEMA
+        from tokenpak.validation.request_schema import OPENAI_CHAT_SCHEMA, get_request_schema
         schema = get_request_schema("openai")
         self.assertEqual(schema["title"], OPENAI_CHAT_SCHEMA["title"])
 
     def test_get_request_schema_returns_openai_responses(self):
-        from tokenpak.validation.request_schema import get_request_schema, OPENAI_RESPONSES_SCHEMA
+        from tokenpak.validation.request_schema import OPENAI_RESPONSES_SCHEMA, get_request_schema
         schema = get_request_schema("openai-codex")
         self.assertEqual(schema["title"], OPENAI_RESPONSES_SCHEMA["title"])
 
     def test_get_request_schema_returns_google(self):
-        from tokenpak.validation.request_schema import get_request_schema, GOOGLE_GENERATE_CONTENT_SCHEMA
+        from tokenpak.validation.request_schema import (
+            GOOGLE_GENERATE_CONTENT_SCHEMA,
+            get_request_schema,
+        )
         schema = get_request_schema("google")
         self.assertEqual(schema["title"], GOOGLE_GENERATE_CONTENT_SCHEMA["title"])
 
@@ -525,7 +526,7 @@ class TestProxyValidationIntegration(unittest.TestCase):
         """
         End-to-end: RequestValidator in strict mode should cause proxy to return 400.
         """
-        from tokenpak.validation.request_validator import RequestValidator, RequestValidationResult
+        from tokenpak.validation.request_validator import RequestValidator
 
         # Simulate what proxy does when body is invalid in strict mode
         v = RequestValidator(mode="strict")
@@ -577,8 +578,9 @@ class TestModuleExports(unittest.TestCase):
 
     def test_validate_request_convenience_function(self):
         import os
-        from tokenpak.validation import validate_request
+
         from tokenpak.validation import request_validator as _rv_mod
+        from tokenpak.validation import validate_request
         _rv_mod._validator = None
         with patch.dict(os.environ, {"TOKENPAK_REQUEST_VALIDATION": "warn"}):
             result = validate_request(

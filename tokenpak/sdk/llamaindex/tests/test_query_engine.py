@@ -1,8 +1,8 @@
 """Tests for TokenPakQueryEngine."""
 
 import asyncio
-from llamaindex_tokenpak import TokenPakQueryEngine
 
+from llamaindex_tokenpak import TokenPakQueryEngine
 
 # --- Mock query engine ---
 

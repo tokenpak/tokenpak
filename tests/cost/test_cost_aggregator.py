@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.cost.cost_aggregator", reason="module not available in current build")
 import csv
 import io
 from datetime import date, timedelta
 
 import pytest
-
-from tokenpak.telemetry.cost_tracker import CostTracker
 from tokenpak.cost.cost_aggregator import (
     BurnRateAlarm,
     CostAggregator,
     DailySummary,
 )
+
+from tokenpak.telemetry.cost_tracker import CostTracker
 
 # ---------------------------------------------------------------------------
 # Fixtures

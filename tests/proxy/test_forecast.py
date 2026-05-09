@@ -13,7 +13,6 @@ from __future__ import annotations
 import os
 import sqlite3
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any, Dict
 
@@ -33,7 +32,6 @@ from tokenpak.proxy.forecast_endpoint import (  # noqa: E402
     estimate_cache_hit_likelihood,
     estimate_ttfb_ms,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -554,6 +554,7 @@ def is_known_intent(intent: str) -> bool:
     return intent in _BASE_POLICY
 
 
-def known_intents() -> list[str]:
-    """Return list of all known canonical intent strings."""
-    return list(_BASE_POLICY.keys())
+# NOTE: known_intents() is defined earlier in this module (~line 419).
+# A duplicate definition at this point was removed 2026-05-09 (#153 ruff
+# cleanup, F811): both copies returned `list(_BASE_POLICY.keys())`, the
+# later one shadowed the earlier, and behavior is unchanged.

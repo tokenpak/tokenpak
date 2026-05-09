@@ -6,16 +6,14 @@ from __future__ import annotations
 import pytest
 
 from tokenpak.telemetry.budget_controller import (
-    BudgetController,
-    BudgetDecision,
-    BudgetThresholdAlert,
-    ClassificationResult,
     DEFAULT_TIER_ORDER,
     DEFAULT_TIER_TOKENS,
-    IntentClass,
     TIER_MAP,
+    BudgetController,
+    BudgetDecision,
+    ClassificationResult,
+    IntentClass,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

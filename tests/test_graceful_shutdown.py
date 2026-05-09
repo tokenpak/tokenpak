@@ -12,16 +12,13 @@ Acceptance criteria coverage:
 from __future__ import annotations
 
 import json
-import os
 import signal
-import tempfile
 import threading
 import time
 import urllib.error
 import urllib.request
 
 import pytest
-
 
 # TSR-05x missing-method skip reason (grep-able)
 # ─────────────────────────────────────────────
@@ -54,7 +51,6 @@ SKIP_FLUSH_SHUTDOWN_RECORD_NOT_IMPLEMENTED = (
 
 
 from tokenpak.proxy.server import GracefulShutdown, ProxyServer
-
 
 # ---------------------------------------------------------------------------
 # GracefulShutdown unit tests

@@ -20,13 +20,11 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
-import os
 import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Tuple
-from unittest import mock
 
 import pytest
 
@@ -34,12 +32,10 @@ from tokenpak.proxy import proxy_auth as pa
 from tokenpak.proxy import server as proxy_server
 from tokenpak.proxy.proxy_auth import (
     PROXY_AUTH_ENV_VAR,
-    ProxyAuthDecision,
     check_proxy_auth,
     hash_token,
     strip_proxy_auth_for_upstream,
 )
-
 
 _TEST_TOKEN = "s3cr3t-test-t0ken-A6-P0-06"
 _REMOTE_IP = "10.20.30.40"

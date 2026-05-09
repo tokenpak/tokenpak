@@ -2,18 +2,17 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.pricing", reason="module not available in current build")
 import sqlite3
-import os
-import pytest
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from tokenpak.pricing import (
+    MODEL_RATES,
     calculate_fleet_savings,
     calculate_savings_breakdown,
-    MODEL_RATES,
 )
-
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 

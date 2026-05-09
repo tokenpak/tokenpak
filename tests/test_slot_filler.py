@@ -1,9 +1,8 @@
 """Tests for tokenpak.compression.slot_filler module."""
 
-import pytest
 from tokenpak.compression.slot_filler import (
-    SlotFiller,
     FilledSlots,
+    SlotFiller,
 )
 
 

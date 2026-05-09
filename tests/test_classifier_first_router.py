@@ -10,11 +10,10 @@ Covers:
 """
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.proxy.intent_policy", reason="module not available in current build")
 import importlib.util
-import os
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -59,15 +58,15 @@ _classify_intent = _proxy._classify_intent
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "tokenpak"))
 
-from tokenpak.compression.slot_filler import SlotFiller  # noqa: E402
 from tokenpak.proxy.intent_policy import (  # noqa: E402
+    CANONICAL_INTENTS,
+    DecisionAction,
+    RoutingDecision,
     decide,
     is_known_intent,
-    CANONICAL_INTENTS,
-    RoutingDecision,
-    DecisionAction,
 )
 
+from tokenpak.compression.slot_filler import SlotFiller  # noqa: E402
 
 # ============================================================================
 # Intent classifier — expanded canonical set

@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import json
-from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # TSR-05v Pro-tier speculative-contract skip reason (grep-able)
 # ─────────────────────────────────────────────
@@ -29,16 +27,15 @@ SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS = (
 
 
 from tokenpak.cli.commands.diff import (
-    DiffBlock,
     ContextDiff,
-    _classify_segment,
-    _is_pinned,
+    DiffBlock,
     _build_diff_from_segments,
+    _classify_segment,
     _empty_diff,
+    _is_pinned,
     print_diff,
     run_diff_cmd,
 )
-
 
 # ---------------------------------------------------------------------------
 # DiffBlock

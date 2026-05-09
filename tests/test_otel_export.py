@@ -9,11 +9,11 @@ correctly whether or not the SDK is installed, and must never raise.
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 import types
-import os
 import unittest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 

@@ -31,7 +31,7 @@ class AttributionRecord:
 
     def to_dict(self) -> dict:
         """Convert attribution record to dictionary for JSON serialization.
-        
+
         Returns:
             dict: Record with all metrics including tokens/cost saved and cache hit status
         """
@@ -112,7 +112,7 @@ class AttributionTracker:
 
     def record(self, rec: AttributionRecord) -> None:
         """Add an attribution record to the tracker.
-        
+
         Args:
             rec: Attribution record to track. Auto-timestamps if not set.
         """
@@ -125,7 +125,7 @@ class AttributionTracker:
     @property
     def records(self) -> List[AttributionRecord]:
         """Get all tracked attribution records.
-        
+
         Returns:
             list: Copy of internal records list
         """

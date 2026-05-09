@@ -20,7 +20,6 @@ from unittest.mock import patch
 
 from tokenpak.proxy.adapters.embedding_router import EmbeddingRouter
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------

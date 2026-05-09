@@ -6,34 +6,29 @@ These should all PASS with the current implementation.
 """
 
 import math
+
 import pytest
 
 # trackedge is a separate project not installed in the slim release test env;
 # skip cleanly so the release auto-publish gate doesn't error on collection.
 pytest.importorskip("trackedge.processing.feature_engine", reason="trackedge is a separate project not installed in slim test env")
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from trackedge.processing.feature_engine import (
-    speed_score,
-    pace_style,
-    race_pace_scenario,
+    apply_shrinkage,
     class_fit,
-    workout_fitness,
-    layoff_penalty,
     connections_score,
     first_time_starter_reweight,
-    apply_shrinkage,
-    filter_comparable_races,
-    calculate_pace_metrics,
-    classify_pace_style_improved,
-    race_pace_projection,
-    pace_fit_adjustment,
-    speed_score_field_relative,
+    layoff_penalty,
+    pace_style,
+    race_pace_scenario,
+    speed_score,
+    workout_fitness,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -11,13 +11,10 @@ No live API calls, no network I/O.
 """
 
 import json
-import os
-import threading
 import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ============================================================================
 # circuit_breaker.py
@@ -871,7 +868,6 @@ class TestClassifyIntent:
 
     def test_semantic_resolver_exception_falls_through(self):
         """If semantic resolver raises, should still classify via keywords."""
-        from tokenpak.proxy.request_pipeline import _classify_intent
 
         with patch(
             "tokenpak.proxy.request_pipeline._classify_intent",

@@ -10,7 +10,7 @@ refresh tokens can't be consumed twice. See ``project_tokenpak_codex_three_paths
 for the refresh-reuse failure pattern this subsystem was built to prevent.
 """
 
-from .model import Credential, REFRESH_EXTERNAL, REFRESH_TOKENPAK, REFRESH_NONE
+from .model import REFRESH_EXTERNAL, REFRESH_NONE, REFRESH_TOKENPAK, Credential
 
 __all__ = [
     "Credential",

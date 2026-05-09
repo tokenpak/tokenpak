@@ -13,29 +13,22 @@ Coverage:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.intelligence.ab_optimizer", reason="module not available in current build")
-import json
-import math
-import tempfile
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
-
 from tokenpak.intelligence.ab_optimizer import (
+    MIN_SAMPLES,
     ABOptimizerStore,
     ExperimentStatus,
-    MIN_SAMPLES,
     PromotionAction,
-    SignificanceResult,
     VariantStats,
     _welch_t_pvalue,
     compute_significance,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -392,8 +385,8 @@ class TestGetResults:
 # ---------------------------------------------------------------------------
 
 try:
-    from fastapi.testclient import TestClient
     from fastapi import FastAPI
+    from fastapi.testclient import TestClient
     from tokenpak.intelligence.ab_router import ab_router
     from tokenpak.intelligence.auth import LicenseTier
     _HAS_FASTAPI_CLIENT = True
@@ -406,7 +399,6 @@ class TestABRouterEndpoints:
     @pytest.fixture
     def client(self, tmp_path: Path) -> TestClient:
         """Build a minimal FastAPI app with the AB router and Pro auth."""
-        import importlib
         import tokenpak.intelligence.ab_router as ab_mod
 
         # Point router at temp DB

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import os
-import stat as _stat
 import time
 import uuid as _uuid
 from pathlib import Path

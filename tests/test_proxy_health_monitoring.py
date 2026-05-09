@@ -15,12 +15,10 @@ No network calls to real APIs.
 
 import os
 import sys
-import json
-import unittest
-from unittest.mock import Mock, patch, MagicMock
-from io import BytesIO
 import tempfile
+import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 # Ensure we can import tokenpak.proxy
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -201,10 +199,10 @@ class TestSessionTracking(unittest.TestCase):
         session = {"input_tokens": 0, "output_tokens": 0}
         initial_input = session.get("input_tokens", 0)
         initial_output = session.get("output_tokens", 0)
-        
+
         session["input_tokens"] = initial_input + 1000
         session["output_tokens"] = initial_output + 500
-        
+
         self.assertEqual(session["input_tokens"], initial_input + 1000)
         self.assertEqual(session["output_tokens"], initial_output + 500)
 
@@ -213,7 +211,7 @@ class TestSessionTracking(unittest.TestCase):
         session = {"cost": 0.0}
         initial_cost = session.get("cost", 0.0)
         session["cost"] = initial_cost + 0.0015
-        
+
         self.assertGreater(session["cost"], initial_cost)
         self.assertIsInstance(session["cost"], (int, float))
 
@@ -222,10 +220,10 @@ class TestSessionTracking(unittest.TestCase):
         session = {"cache_read_tokens": 0, "cache_creation_tokens": 0}
         initial_read = session.get("cache_read_tokens", 0)
         initial_creation = session.get("cache_creation_tokens", 0)
-        
+
         session["cache_read_tokens"] = initial_read + 500
         session["cache_creation_tokens"] = initial_creation + 1000
-        
+
         self.assertGreater(session["cache_read_tokens"], initial_read)
         self.assertGreater(session["cache_creation_tokens"], initial_creation)
 
@@ -234,7 +232,7 @@ class TestSessionTracking(unittest.TestCase):
         session = {"injection_hits": 0, "injection_skips": 0}
         session["injection_hits"] = session.get("injection_hits", 0) + 1
         session["injection_skips"] = session.get("injection_skips", 0) + 1
-        
+
         self.assertGreater(session.get("injection_hits", 0), 0)
         self.assertGreater(session.get("injection_skips", 0), 0)
 
@@ -306,7 +304,7 @@ class TestFailOpenBehavior(unittest.TestCase):
         class MockVaultIndex:
             def __init__(self):
                 self.available = False
-        
+
         vault = MockVaultIndex()
         self.assertTrue(hasattr(vault, "available"))
         self.assertIsInstance(vault.available, bool)
@@ -314,12 +312,12 @@ class TestFailOpenBehavior(unittest.TestCase):
     def test_router_disabled_if_unavailable(self):
         """Test: Router can be safely disabled."""
         ROUTER_ENABLED = False
-        
+
         def _get_router():
             if not ROUTER_ENABLED:
                 return None
             return "initialized"
-        
+
         # Router is gracefully disabled
         self.assertIsInstance(ROUTER_ENABLED, bool)
         # _get_router should return None if disabled
@@ -340,7 +338,7 @@ class TestFailOpenBehavior(unittest.TestCase):
                 raise ImportError("not available")
             except ImportError:
                 return None  # Fall back gracefully
-        
+
         result = _get_validation_gate()
         # Should return None or a ValidationGate instance
         self.assertTrue(result is None or hasattr(result, "validate_request"))
@@ -350,7 +348,7 @@ class TestFailOpenBehavior(unittest.TestCase):
         class MockMonitor:
             def log(self, *args, **kwargs):
                 pass
-        
+
         MONITOR = MockMonitor()
         self.assertIsNotNone(MONITOR)
         self.assertTrue(hasattr(MONITOR, "log") and callable(MONITOR.log))
@@ -365,15 +363,15 @@ class TestFailOpenBehavior(unittest.TestCase):
                 except Exception as e:
                     # Fail-open: log and continue
                     pass
-        
+
         handler = ProxyHandler()
         self.assertTrue(hasattr(handler, "_proxy_to"))
 
     def test_pipeline_stage_traces_safe_append(self):
         """Test: Pipeline trace stages can be safely appended even if module fails."""
         from dataclasses import dataclass, field
-        from typing import List, Any, Dict
-        
+        from typing import Any, Dict, List
+
         @dataclass
         class StageTrace:
             name: str
@@ -383,7 +381,7 @@ class TestFailOpenBehavior(unittest.TestCase):
             tokens_delta: int = 0
             duration_ms: float = 0.0
             details: Dict[str, Any] = field(default_factory=dict)
-        
+
         @dataclass
         class PipelineTrace:
             request_id: str
@@ -397,7 +395,7 @@ class TestFailOpenBehavior(unittest.TestCase):
             duration_ms: float = 0.0
             stages: List[StageTrace] = field(default_factory=list)
             status: str = "pending"
-        
+
         trace = PipelineTrace(
             request_id="test-123",
             timestamp="12:00:00",
@@ -412,7 +410,7 @@ class TestFailOpenBehavior(unittest.TestCase):
         class MockRegistry:
             def detect(self, path, headers, body):
                 return None
-        
+
         ADAPTER_REGISTRY = MockRegistry()
         self.assertIsNotNone(ADAPTER_REGISTRY)
         self.assertTrue(hasattr(ADAPTER_REGISTRY, "detect"))
@@ -424,7 +422,7 @@ class TestFailOpenBehavior(unittest.TestCase):
                 pass
             def get_last(self):
                 return None
-        
+
         TRACE_STORAGE = MockTraceStorage()
         self.assertIsNotNone(TRACE_STORAGE)
         self.assertTrue(hasattr(TRACE_STORAGE, "store"))

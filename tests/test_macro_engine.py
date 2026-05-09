@@ -8,26 +8,25 @@ Covers:
 - CLI commands: list, create, run, show, delete
 """
 
-import json
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.macros.engine", reason="module not available in current build")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tokenpak._internal.macros.engine import (
-    MacroEngine,
     MacroDefinition,
-    MacroStep,
+    MacroEngine,
     MacroResult,
+    MacroStep,
     StepResult,
     _resolve_vars,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

@@ -43,7 +43,7 @@ def demo_auto_budget():
     print("=" * 60)
     print("1. AUTO-BUDGET")
     print("=" * 60)
-    from tokenpak_local.auto_budget import auto_budget, get_context_length, budget_info
+    from tokenpak_local.auto_budget import auto_budget, budget_info, get_context_length
 
     models = ["llama3", "phi3", "llama3.1:8b", "mistral", "qwen2.5:7b", "unknown-model"]
     print(f"{'Model':<25} {'Context':>10} {'Budget (75%)':>14}")
@@ -103,6 +103,7 @@ def demo_ollama():
 
     with patch.dict("sys.modules", {"ollama": mock_sdk}):
         import importlib
+
         import tokenpak_local.ollama as mod
 
         importlib.reload(mod)
@@ -203,14 +204,15 @@ def demo_rag_pipeline():
 
     with patch.dict("sys.modules", {"ollama": mock_sdk}):
         import importlib
+
         import tokenpak_local.ollama as mod
 
         importlib.reload(mod)
         mod._OLLAMA_AVAILABLE = True
         mod._ollama_sdk = mock_sdk
 
-        from tokenpak_local.utils import blocks_from_texts, pack_from_blocks
         from tokenpak_local.auto_budget import auto_budget
+        from tokenpak_local.utils import blocks_from_texts, pack_from_blocks
 
         # Simulated retrieval results
         query = "What is TokenPak?"

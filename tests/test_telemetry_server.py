@@ -15,10 +15,7 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import time
-from typing import Any, Dict
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -30,7 +27,6 @@ from fastapi.testclient import TestClient
 
 from tokenpak.telemetry.server import create_app, parse_filter
 from tokenpak.telemetry.storage import TelemetryDB
-
 
 # ---------------------------------------------------------------------------
 # Helpers

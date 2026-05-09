@@ -12,10 +12,9 @@ Covers:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.compaction.modes", reason="module not available in current build")
-import re
 import unittest
 
 from tokenpak.compaction import (
@@ -25,12 +24,11 @@ from tokenpak.compaction import (
     compact,
 )
 from tokenpak.compaction.modes import (
-    compact_lossless,
-    compact_balanced,
     compact_aggressive,
+    compact_balanced,
+    compact_lossless,
     compact_semantic,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

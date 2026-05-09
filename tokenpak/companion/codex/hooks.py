@@ -18,7 +18,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 _HOOKS_DIR = Path(__file__).parent
 _PRE_SEND_HOOK = _HOOKS_DIR / "hooks_pre_send.sh"
 _STOP_HOOK = _HOOKS_DIR / "hooks_stop.sh"

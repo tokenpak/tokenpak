@@ -3,10 +3,10 @@ Tests for TokenPak Live Monitor Dashboard.
 """
 
 import pytest
+
 pytest.importorskip("tokenpak.monitor.server", reason="module not available in current build")
 import json
 import os
-import pathlib
 import tempfile
 import threading
 import time
@@ -15,14 +15,12 @@ import urllib.request
 from unittest.mock import MagicMock, patch
 
 from tokenpak.monitor.server import (
-    DEFAULT_PORT,
     DASHBOARD_HTML,
     MonitorHandler,
     ThreadedHTTPServer,
     _fetch_errors,
     _fetch_stats,
 )
-
 
 # ── Stats parsing ────────────────────────────────────────────────
 

@@ -32,6 +32,9 @@ Quick start::
     print(block_id)   # "spfx-3a7f1c..."
 """
 
+from tokenpak.cache.registry import CacheRegistry
+
+from .cache_manager import CacheManager
 from .prefix_registry import (
     StablePrefixRegistry,
     canonicalize,
@@ -39,7 +42,6 @@ from .prefix_registry import (
     get_registry,
     reset_registry,
 )
-from tokenpak.cache.registry import CacheRegistry
 from .semantic_cache import (
     SemanticCache,
     SemanticCacheConfig,
@@ -49,6 +51,5 @@ from .semantic_cache import (
 from .stable_cache import StableCache
 from .telemetry import CacheMetrics, CacheTelemetryCollector, get_collector, reset_collector
 from .volatile_cache import VolatileCache
-from .cache_manager import CacheManager
 
 __all__ = ['StableCache', 'VolatileCache', 'CacheManager', 'CacheRegistry', 'CacheMetrics', 'CacheTelemetryCollector', 'get_collector', 'reset_collector', 'SemanticCache', 'SemanticCacheConfig', 'SemanticCacheEntry', 'SemanticCacheLookup', 'StablePrefixRegistry', 'fingerprint', 'canonicalize', 'get_registry', 'reset_registry', 'prefix_registry', 'registry', 'semantic_cache', 'stable_cache', 'telemetry', 'volatile_cache']

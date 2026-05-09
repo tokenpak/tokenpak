@@ -1,9 +1,9 @@
 """Tests for tokenpak replay CLI commands (task: p1-tokenpak-replay-cli)."""
 
 import json
-import pytest
-from io import StringIO
 from unittest.mock import patch
+
+import pytest
 
 # WS-A residual import guard — TSR-01-followup.
 # tokenpak.tokens is referenced transitively from the replay CLI imports
@@ -14,9 +14,8 @@ pytest.importorskip(
     reason="tokenpak.tokens not part of slim OSS surface (replay-CLI dep)",
 )
 
+from tokenpak.cli import build_parser, cmd_replay_list, cmd_replay_run, cmd_replay_show
 from tokenpak.telemetry.replay import ReplayEntry, ReplayStore
-from tokenpak.cli import build_parser, cmd_replay_list, cmd_replay_show, cmd_replay_run
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -285,8 +284,9 @@ class TestCmdReplayRun:
 
 class TestReplayClearCLI:
     def test_clear_empty_store(self, capsys):
+        from unittest.mock import MagicMock, patch
+
         from tokenpak.cli import cmd_replay_clear
-        from unittest.mock import patch, MagicMock
         store = ReplayStore(":memory:")
         args = MagicMock()
         with patch("tokenpak._cli_core._get_replay_store", return_value=store):
@@ -296,8 +296,9 @@ class TestReplayClearCLI:
         assert "entries" in out or "entry" in out
 
     def test_clear_with_entries(self, capsys):
+        from unittest.mock import MagicMock, patch
+
         from tokenpak.cli import cmd_replay_clear
-        from unittest.mock import patch, MagicMock
         store, _ = make_store_with_entries()
         assert store.count() > 0
         args = MagicMock()
@@ -309,9 +310,10 @@ class TestReplayClearCLI:
 
     def test_clear_via_argparse(self, capsys):
         """End-to-end: tokenpak replay clear via CLI parser."""
-        from tokenpak.cli import _build_replay_parser
         import argparse
         from unittest.mock import patch
+
+        from tokenpak.cli import _build_replay_parser
         store, _ = make_store_with_entries()
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers()

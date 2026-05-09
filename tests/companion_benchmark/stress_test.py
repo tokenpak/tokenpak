@@ -307,13 +307,13 @@ def main():
     hook_ms = hook_200k.get("elapsed_ms", 0)
     if hook_ms > 1000:
         print(f"  WARNING: Hook pipeline at 200k tokens takes {hook_ms:.0f}ms (> 1s)")
-        print(f"  This will add perceptible delay to every prompt in long sessions.")
+        print("  This will add perceptible delay to every prompt in long sessions.")
     elif hook_ms > 500:
         print(f"  CAUTION: Hook pipeline at 200k tokens takes {hook_ms:.0f}ms (> 500ms)")
-        print(f"  Borderline — may be noticeable on slower machines.")
+        print("  Borderline — may be noticeable on slower machines.")
     else:
         print(f"  OK: Hook pipeline at 200k tokens takes {hook_ms:.0f}ms (< 500ms)")
-        print(f"  Should be imperceptible to users.")
+        print("  Should be imperceptible to users.")
 
 
 if __name__ == "__main__":

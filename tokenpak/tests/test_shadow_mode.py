@@ -6,14 +6,10 @@ Unit tests for tokenpak shadow mode modules (shadow_hook.py and shadow_reader.py
 from __future__ import annotations
 
 import json
-import os
 import threading
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # ShadowHook tests

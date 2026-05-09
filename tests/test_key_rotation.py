@@ -5,10 +5,8 @@ Tests: 429 failover, 401 failover, client-key bypass, single-key compat, roundro
 import importlib
 import os
 import sys
-import threading
-import time
 import unittest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 
 def load_proxy_module(env_overrides: dict):

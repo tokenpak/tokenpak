@@ -14,18 +14,16 @@ Covers:
 """
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.ingest.table_extractor", reason="module not available in current build")
 import pytest
-
 from tokenpak._internal.ingest.table_extractor import (
     NormalizedTable,
     TableExtractor,
     _detect_numeric_columns,
     _is_numeric,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

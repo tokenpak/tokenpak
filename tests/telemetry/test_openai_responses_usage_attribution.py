@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from tokenpak.services.optimization.attribution_stage import (
     AttributionStage,
     get_attributions,
@@ -23,7 +21,6 @@ from tokenpak.services.optimization.attribution_stage import (
 from tokenpak.services.optimization.context import OptimizationContext
 from tokenpak.services.optimization.trace import OptimizationTrace
 from tokenpak.tip.telemetry_contract import SavingsSource
-
 
 # ---------------------------------------------------------------------------
 # Helpers

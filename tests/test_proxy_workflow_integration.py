@@ -11,16 +11,11 @@ AC coverage:
 """
 from __future__ import annotations
 
-import importlib
 import os
 import sys
 import tempfile
-import types
 from pathlib import Path
 from unittest.mock import patch
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers — reload proxy_workflow with a given env var state
@@ -249,6 +244,7 @@ class TestWorkflowCLI:
     def test_list_type_proxy_filters_correctly(self):
         """--type proxy should only return workflows tagged 'proxy'."""
         from click.testing import CliRunner
+
         from tokenpak.cli.commands.workflow import list_cmd
 
         mgr = self._make_manager()
@@ -280,8 +276,9 @@ class TestWorkflowCLI:
     def test_recover_type_proxy_filters_correctly(self):
         """tokenpak workflow recover --type proxy only shows incomplete proxy workflows."""
         from click.testing import CliRunner
+        from tokenpak.agentic.workflow import WorkflowStep
+
         from tokenpak.cli.commands.workflow import recover_cmd
-        from tokenpak.agentic.workflow import WorkflowManager, WorkflowStep
 
         mgr = self._make_manager()
 
@@ -313,8 +310,9 @@ class TestWorkflowCLI:
     def test_list_no_type_shows_all(self):
         """Without --type, all workflows are shown."""
         from click.testing import CliRunner
+        from tokenpak.agentic.workflow import WorkflowStep
+
         from tokenpak.cli.commands.workflow import list_cmd
-        from tokenpak.agentic.workflow import WorkflowManager, WorkflowStep
 
         mgr = self._make_manager()
         mgr.create(

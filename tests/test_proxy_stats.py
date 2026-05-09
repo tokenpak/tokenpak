@@ -1,12 +1,11 @@
 """
 Tests for tokenpak.proxy.stats.StatsCollector
 """
-import time
 import threading
+
 import pytest
 
 from tokenpak.proxy.stats import StatsCollector
-
 
 # ---------------------------------------------------------------------------
 # Helpers

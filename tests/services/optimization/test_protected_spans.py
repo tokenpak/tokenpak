@@ -13,7 +13,6 @@ from tokenpak.services.optimization.protected_spans import (
     text_is_protected,
 )
 
-
 # ---- file_path ------------------------------------------------------------
 
 

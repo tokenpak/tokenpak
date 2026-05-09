@@ -13,18 +13,15 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-import pytest
-
+from tokenpak.vault.blocks import BlockStore, SliceStore
+from tokenpak.vault.indexer import VaultIndexer
 from tokenpak.vault.slicer import (
     SliceRecord,
     detect_split_strategy,
     should_slice,
     slice_content,
 )
-from tokenpak.vault.blocks import BlockStore, SliceStore
-from tokenpak.vault.indexer import VaultIndexer
 from tokenpak.vault.symbols import SymbolTable
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

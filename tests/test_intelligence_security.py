@@ -25,8 +25,8 @@ Coverage
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.intelligence.server", reason="module not available in current build")
 import logging
 import time
@@ -34,7 +34,6 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-
 from tokenpak.intelligence.auth import (
     APIKeyValidator,
     LicenseTier,

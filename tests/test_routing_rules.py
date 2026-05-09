@@ -1,21 +1,16 @@
 """Tests for manual model routing rules (tokenpak route)."""
 
-import json
-import tempfile
 import pytest
-from pathlib import Path
 
 from tokenpak.routing.rules import (
+    RouteEngine,
     RoutePattern,
     RouteRule,
     RouteStore,
-    RouteEngine,
-    parse_pattern_args,
     _count_tokens_approx,
     _extract_prompt_text,
-    DEFAULT_ROUTES_PATH,
+    parse_pattern_args,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

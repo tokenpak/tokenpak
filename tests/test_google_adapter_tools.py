@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
+
 import pytest
 
 from tokenpak.proxy.adapters import GoogleGenerativeAIAdapter
 from tokenpak.proxy.adapters.canonical import CanonicalRequest
-
 
 # TSR-05i / WS-E (2026-05-08) — grep-able skip reason for tests that
 # assert behaviors the canonical GoogleGenerativeAIAdapter never had:

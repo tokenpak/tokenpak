@@ -32,7 +32,6 @@ from typing import Callable, Optional
 
 from tokenpak.core.runtime.providers import Provider
 
-
 __all__ = [
     "CacheMode",
     "FallbackPolicy",

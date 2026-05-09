@@ -13,12 +13,6 @@ Covers:
 
 from __future__ import annotations
 
-import json
-import threading
-import time
-import urllib.request
-import urllib.error
-
 import pytest
 
 from tokenpak.proxy.passthrough import (
@@ -27,7 +21,6 @@ from tokenpak.proxy.passthrough import (
     forward_headers,
     validate_auth,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -15,14 +15,9 @@ Covers:
 from __future__ import annotations
 
 import json
-import math
-import os
 from pathlib import Path
 
-import pytest
-
 from tokenpak.compression.canon import (
-    DEFAULT_VALIDATION_LOG,
     MAX_AVG_SENTENCE_LEN,
     MAX_COVERAGE,
     MAX_SENTENCE_LEN,
@@ -41,7 +36,6 @@ from tokenpak.compression.canon import (
     top_terms,
     validate,
 )
-
 
 # ── Constants sanity checks ───────────────────────────────────────────────────
 

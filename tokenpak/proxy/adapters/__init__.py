@@ -1,5 +1,7 @@
 """Provider format adapters for TokenPak proxy."""
 
+from tokenpak.proxy.adapters.registry import AdapterRegistry
+
 from .anthropic_adapter import AnthropicAdapter
 from .base import FormatAdapter
 from .canonical import CanonicalRequest, CanonicalResponse
@@ -14,7 +16,6 @@ from .openai_codex_responses_adapter import OpenAICodexResponsesAdapter
 from .openai_embedding_adapter import OpenAIEmbeddingAdapter
 from .openai_responses_adapter import OpenAIResponsesAdapter
 from .passthrough_adapter import PassthroughAdapter
-from tokenpak.proxy.adapters.registry import AdapterRegistry
 from .voyage_embedding_adapter import VoyageEmbeddingAdapter
 
 

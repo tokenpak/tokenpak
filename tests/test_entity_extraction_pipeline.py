@@ -8,8 +8,9 @@ import pytest
 # so the release test gate stays green.
 try:
     from tokenpak.extraction import EntityExtractor, EntityType
-    from tokenpak.vault.indexer import VaultIndexer
+
     from tokenpak.vault.blocks import BlockStore
+    from tokenpak.vault.indexer import VaultIndexer
 except ImportError as _exc:
     pytest.skip(f"tokenpak.extraction symbols not present in slim OSS install: {_exc}", allow_module_level=True)
 

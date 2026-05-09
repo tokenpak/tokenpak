@@ -13,10 +13,7 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
-from tokenpak.proxy.streaming import StreamHandler, extract_sse_tokens
-
+from tokenpak.proxy.streaming import StreamHandler
 
 # ---------------------------------------------------------------------------
 # Helpers

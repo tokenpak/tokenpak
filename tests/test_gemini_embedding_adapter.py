@@ -6,7 +6,6 @@ import json
 import os
 import unittest
 from unittest.mock import patch
-from urllib.parse import parse_qs, urlparse
 
 from tokenpak.proxy.adapters.canonical import CanonicalEmbeddingRequest
 from tokenpak.proxy.adapters.gemini_embedding_adapter import GeminiEmbeddingAdapter

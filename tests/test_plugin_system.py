@@ -1,19 +1,13 @@
 """Tests for the TokenPak plugin system."""
-import importlib
 import json
 import logging
-import os
 import sys
 import textwrap
-import types
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from tokenpak.plugins.base import CompressorPlugin
 from tokenpak.plugins.registry import PluginRegistry
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures

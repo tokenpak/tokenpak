@@ -34,7 +34,6 @@ from typing import Iterable, Optional
 
 from tokenpak.vault import config as vault_config
 
-
 # ``expected_interval_seconds × DEFAULT_STALE_FACTOR`` is the staleness threshold.
 # Spec: "Warns if last rebuild > expected interval × 2".
 DEFAULT_STALE_FACTOR = 2

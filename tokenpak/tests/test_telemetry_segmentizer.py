@@ -1,17 +1,15 @@
 """Unit tests for telemetry segmentizer — TTL, batch, and merge logic."""
 
-import json
+
 import pytest
-from unittest.mock import patch
-from datetime import datetime, timedelta
 
 from tokenpak.telemetry.segmentizer import (
     Segment,
     SegmentType,
-    segmentize,
     _estimate_tokens,
     _make_segment_id,
     _sha256,
+    segmentize,
 )
 
 
@@ -59,7 +57,7 @@ class TestSegmentization:
         """Single user message should create one segment."""
         messages = [{"role": "user", "content": "Hello"}]
         segments = segmentize(messages)
-        
+
         assert len(segments) == 1
         assert segments[0].segment_type == SegmentType.user.value
         assert segments[0].order == 0
@@ -71,7 +69,7 @@ class TestSegmentization:
             {"role": "assistant", "content": "4"},
         ]
         segments = segmentize(messages)
-        
+
         assert len(segments) == 2
         assert segments[0].segment_type == SegmentType.user.value
         # Last assistant is NOT marked as context; it's the current response
@@ -86,7 +84,7 @@ class TestSegmentization:
             {"role": "assistant", "content": "A2"},
         ]
         segments = segmentize(messages)
-        
+
         assert len(segments) == 4
         # First assistant is context
         assert segments[1].segment_type == SegmentType.assistant_context.value
@@ -97,9 +95,9 @@ class TestSegmentization:
         """Tools should create synthetic tool_schema segment."""
         messages = [{"role": "user", "content": "Help"}]
         tools = [{"name": "search", "description": "Search"}]
-        
+
         segments = segmentize(messages, tools=tools)
-        
+
         # One message + one tool_schema segment
         assert len(segments) == 2
         assert segments[0].segment_type == SegmentType.user.value
@@ -109,9 +107,9 @@ class TestSegmentization:
     def test_segmentize_without_tools(self):
         """Without tools, should have no tool_schema segment."""
         messages = [{"role": "user", "content": "Help"}]
-        
+
         segments = segmentize(messages, tools=None)
-        
+
         assert len(segments) == 1
         assert segments[0].segment_type == SegmentType.user.value
 
@@ -119,10 +117,10 @@ class TestSegmentization:
         """Segment IDs should be stable across calls (UUID5)."""
         messages = [{"role": "user", "content": "Q"}]
         trace_id = "trace-123"
-        
+
         segments1 = segmentize(messages, trace_id=trace_id)
         segments2 = segmentize(messages, trace_id=trace_id)
-        
+
         assert segments1[0].segment_id == segments2[0].segment_id
 
 
@@ -173,7 +171,7 @@ class TestHashingAndContent:
         id1 = _make_segment_id("trace-1", 0)
         id2 = _make_segment_id("trace-1", 0)
         id3 = _make_segment_id("trace-2", 0)
-        
+
         assert id1 == id2  # Same input
         assert id1 != id3  # Different trace ID
         assert len(id1) == 36  # UUID format (with dashes)
@@ -186,7 +184,7 @@ class TestContentVariations:
         """Content can be a simple string."""
         messages = [{"role": "user", "content": "Hello"}]
         segments = segmentize(messages)
-        
+
         assert segments[0].raw_len > 0
         assert "Hello" in str(segments[0].raw_len) or segments[0].tokens_raw > 0
 
@@ -202,7 +200,7 @@ class TestContentVariations:
             }
         ]
         segments = segmentize(messages)
-        
+
         assert len(segments) == 1
         assert segments[0].raw_len > 0
         # Should include both text blocks
@@ -223,7 +221,7 @@ class TestContentVariations:
             }
         ]
         segments = segmentize(messages)
-        
+
         assert len(segments) == 1
         assert segments[0].raw_len > 0
         # Should have tokens for text + image sentinel
@@ -236,7 +234,7 @@ class TestContentVariations:
         ]
         messages = [{"role": "user", "content": "Help"}]
         segments = segmentize(messages, tools=tools)
-        
+
         tool_seg = segments[1]
         assert tool_seg.segment_type == SegmentType.tool_schema.value
         # Content should include tool names
@@ -255,7 +253,7 @@ class TestRelevanceScoring:
             {"role": "user", "content": "Q2"},
         ]
         segments = segmentize(messages)
-        
+
         for seg in segments:
             assert 0.0 <= seg.relevance_score <= 1.0
 
@@ -267,7 +265,7 @@ class TestRelevanceScoring:
             {"role": "user", "content": "new question"},
         ]
         segments = segmentize(messages)
-        
+
         # Last user message should have high relevance
         last_user = segments[2]
         first_user = segments[0]
@@ -295,7 +293,7 @@ class TestEdgeCases:
         long_text = "x" * 100000  # 100KB
         messages = [{"role": "user", "content": long_text}]
         segments = segmentize(messages)
-        
+
         assert len(segments) == 1
         assert segments[0].raw_len == 100000
         assert segments[0].tokens_raw > 0
@@ -307,7 +305,7 @@ class TestEdgeCases:
             for i in range(100)
         ]
         segments = segmentize(messages)
-        
+
         assert len(segments) == 100
         for i, seg in enumerate(segments):
             assert seg.order == i
@@ -318,7 +316,7 @@ class TestEdgeCases:
             {"role": "user", "content": "你好世界 🌍 مرحبا"}
         ]
         segments = segmentize(messages)
-        
+
         assert len(segments) == 1
         assert segments[0].raw_len > 0
         assert len(segments[0].raw_hash) == 64  # Valid SHA256
@@ -331,7 +329,7 @@ class TestTraceIdAndDeterminism:
         """Empty trace_id should still produce valid segments."""
         messages = [{"role": "user", "content": "Hello"}]
         segments = segmentize(messages, trace_id="")
-        
+
         assert len(segments) == 1
         assert segments[0].trace_id == ""
         assert segments[0].segment_id != ""  # Even with empty trace_id
@@ -339,10 +337,10 @@ class TestTraceIdAndDeterminism:
     def test_trace_id_affects_segment_id(self):
         """Different trace IDs should produce different segment IDs."""
         messages = [{"role": "user", "content": "Same content"}]
-        
+
         seg1 = segmentize(messages, trace_id="trace-A")[0]
         seg2 = segmentize(messages, trace_id="trace-B")[0]
-        
+
         assert seg1.segment_id != seg2.segment_id
         assert seg1.trace_id != seg2.trace_id
 
@@ -353,10 +351,10 @@ class TestTraceIdAndDeterminism:
             {"role": "assistant", "content": "A"},
         ]
         tools = [{"name": "t", "description": "d"}]
-        
+
         r1 = segmentize(messages, tools=tools, trace_id="t1")
         r2 = segmentize(messages, tools=tools, trace_id="t1")
-        
+
         for s1, s2 in zip(r1, r2):
             assert s1.trace_id == s2.trace_id
             assert s1.segment_id == s2.segment_id

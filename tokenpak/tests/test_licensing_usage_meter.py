@@ -17,20 +17,17 @@ import http.server
 import json
 import socketserver
 import threading
-import time
 from pathlib import Path
 
 import pytest
 
 from tokenpak.licensing.usage_meter import (
-    UsageEvent,
     UsageMeter,
     _reset_default_meter_for_testing,
     flush_default,
     get_default_meter,
     record_usage,
 )
-
 
 # ---------------------------------------------------------------------------
 # In-process HTTP stub

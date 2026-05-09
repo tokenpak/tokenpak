@@ -7,11 +7,12 @@ Covers:
 - Cache poisoning prevention
 """
 
-import pytest
-from tokenpak.telemetry.cost import CostEngine, Pricing, calculate_baseline, calculate_savings
-import tempfile
 import os
+import tempfile
 
+import pytest
+
+from tokenpak.telemetry.cost import CostEngine, Pricing, calculate_baseline, calculate_savings
 
 # ─────────────────────────────────────────────────────────────────────────
 # COST MODULE TESTS (40 tests)

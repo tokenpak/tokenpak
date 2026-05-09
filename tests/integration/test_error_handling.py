@@ -8,9 +8,10 @@ Tests verify adapters handle common error scenarios gracefully:
 - Proxy unavailable
 """
 
-import pytest
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
 
 # Guard: skip entire module if openai is not installed (prevents collection errors)
 pytest.importorskip("openai")
@@ -75,7 +76,7 @@ class TestMissingAPIKey:
 
         with pytest.raises(AdapterError) as exc_info:
             raise AdapterError("API key required. Set OPENAI_API_KEY environment variable.")
-        
+
         assert "API key required" in str(exc_info.value)
         assert "OPENAI_API_KEY" in str(exc_info.value)
 
@@ -103,7 +104,7 @@ class TestNetworkErrors:
 
         with patch("tokenpak.client.requests.post") as mock_post:
             mock_post.side_effect = ConnectionError("Service unavailable")
-            
+
             with pytest.raises(ConnectionError):
                 client = TokenPakClient("http://localhost:8767")
                 client.send_request({"model": "gpt-4"})
@@ -198,7 +199,7 @@ class TestRateLimiting:
             pytest.skip("exponential_backoff not available")
 
         delays = [exponential_backoff(i) for i in range(4)]
-        
+
         # Each delay should be greater than the previous
         assert delays[0] < delays[1] < delays[2] < delays[3]
 
@@ -249,10 +250,10 @@ class TestErrorRecovery:
 
         cache = CacheManager()
         request = {"model": "gpt-4", "messages": [{"role": "user", "content": "Hi"}]}
-        
+
         # Store response
         cache.set(request, {"content": "cached", "tokens": 10})
-        
+
         # On API error, should return cache
         cached = cache.get(request)
         assert cached is not None

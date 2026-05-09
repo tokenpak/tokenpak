@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.user_templates", reason="module not available in current build")
-import json
 import types
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
-
 import tokenpak.user_templates as ut
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

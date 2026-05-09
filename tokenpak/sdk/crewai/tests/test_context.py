@@ -1,6 +1,6 @@
 from crewai_tokenpak.context import TokenPakContext
-from crewai_tokenpak.handoff import TokenPakHandoff
 from crewai_tokenpak.crew import TokenPakCrew
+from crewai_tokenpak.handoff import TokenPakHandoff
 
 
 def test_context_register_agent():
@@ -24,7 +24,7 @@ def test_context_budget_exceeded():
     success = ctx.add_context(
         "analyst", "this is way too long text that exceeds budget"
     )
-    assert success == False
+    assert not success
 
 
 def test_context_get_usage():

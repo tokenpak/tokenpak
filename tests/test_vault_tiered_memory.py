@@ -4,13 +4,11 @@ Tests: _get_content(), _enforce_cache_limit(), cache hit/miss/eviction, cache_st
 """
 import json
 import threading
-import time
 from collections import OrderedDict
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 
 # TSR-05ad fragile-fixture skip reason (grep-able)
 # ─────────────────────────────────────────────
@@ -55,7 +53,6 @@ SKIP_VAULT_INDEX_FIXTURE_FRAGILE = (
 def make_vault_index(tmp_path: Path, max_bytes: int = 1024 * 1024):
     """Create a VaultIndex pointed at a temp tokenpak dir."""
     # Minimal import — proxy.py is a flat module, we import just what we need
-    import importlib, sys, types
 
     # Patch config constants before import if not already imported
     import proxy as px

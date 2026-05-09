@@ -13,15 +13,14 @@ Covers:
 
 from __future__ import annotations
 
-
-import pytest
-
 # tokenpak.compaction is a namespace package in the slim OSS install — the
 # directory exists but the CompactionMode/TopicAwarePolicy/etc. symbols ship
 # from submodules that aren't bundled. importorskip on the bare namespace
 # returns truthy here, so wrap the actual import in try/except +
 # skip-at-module-level so the release test gate stays green.
 import unittest
+
+import pytest
 
 try:
     from tokenpak.compaction import (
@@ -40,36 +39,36 @@ except ImportError as _exc:
 MULTI_TOPIC_TEXT = """
 ## Introduction to Machine Learning
 
-Machine learning is a subset of artificial intelligence that focuses on 
-learning patterns from data. It enables systems to improve their performance 
+Machine learning is a subset of artificial intelligence that focuses on
+learning patterns from data. It enables systems to improve their performance
 through experience without being explicitly programmed.
 
 ## Deep Learning Fundamentals
 
-Deep learning uses neural networks with multiple layers to extract 
-increasingly abstract features from raw input. The key advancement is 
-the ability to automatically discover the representations needed for 
+Deep learning uses neural networks with multiple layers to extract
+increasingly abstract features from raw input. The key advancement is
+the ability to automatically discover the representations needed for
 feature detection or classification.
 
 ## Recent Deep Learning Advances
 
-Recently, transformer models have revolutionized the field. Specifically, 
-the development of attention mechanisms has enabled breakthrough performance 
-on natural language processing tasks. Currently, foundation models like GPT 
+Recently, transformer models have revolutionized the field. Specifically,
+the development of attention mechanisms has enabled breakthrough performance
+on natural language processing tasks. Currently, foundation models like GPT
 are being actively developed and deployed.
 
 ## Conclusion
 
-Machine learning continues to evolve rapidly. The combination of classic 
-algorithms and modern deep learning approaches provides powerful solutions 
+Machine learning continues to evolve rapidly. The combination of classic
+algorithms and modern deep learning approaches provides powerful solutions
 for real-world problems.
 """
 
 SINGLE_TOPIC_TEXT = """
-Python is a high-level, interpreted programming language that emphasizes 
-code readability and simplicity. Created by Guido van Rossum in 1989, 
-Python has grown to become one of the most popular programming languages 
-in the world. Its clear syntax makes it ideal for both beginners and 
+Python is a high-level, interpreted programming language that emphasizes
+code readability and simplicity. Created by Guido van Rossum in 1989,
+Python has grown to become one of the most popular programming languages
+in the world. Its clear syntax makes it ideal for both beginners and
 experienced developers.
 """
 

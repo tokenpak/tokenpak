@@ -15,8 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..model import Credential, REFRESH_EXTERNAL, REFRESH_NONE, KIND_OAUTH
-
+from ..model import KIND_OAUTH, REFRESH_EXTERNAL, REFRESH_NONE, Credential
 
 PROVIDER_NAME = "openclaw"
 AGENTS_ROOT = Path.home() / ".openclaw" / "agents"

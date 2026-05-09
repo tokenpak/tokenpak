@@ -1,6 +1,7 @@
 """Teacher pack builder for deterministic context recipe generation."""
 
 import warnings as _warnings
+
 _warnings.warn(
     "tokenpak.compression.teacher — context recipe generation."
     "This will be removed in v2.0.",

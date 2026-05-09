@@ -238,11 +238,11 @@ def _render_dashboard(data: Dict[str, Any]) -> None:
     """Print a single dashboard frame using rich."""
     try:
         from rich import box
-        from rich.columns import Columns
+        from rich.columns import Columns  # noqa: F401  # availability check
         from rich.console import Console
-        from rich.panel import Panel
+        from rich.panel import Panel  # noqa: F401  # availability check
         from rich.table import Table
-        from rich.text import Text
+        from rich.text import Text  # noqa: F401  # availability check
     except ImportError:
         _render_plain(data)
         return

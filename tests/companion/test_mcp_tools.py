@@ -11,7 +11,6 @@ Integration (JSON-RPC protocol) tests are in test_mcp_server.py.
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -62,8 +61,8 @@ from tokenpak.companion.mcp.tools import (
 # into this slice; it routes to a future focused per-handler PR.
 def _proxy_reachable() -> bool:
     """Probe whether a tokenpak proxy is reachable at the canonical port."""
-    import urllib.request
     import urllib.error
+    import urllib.request
     try:
         urllib.request.urlopen("http://127.0.0.1:8766/health", timeout=0.5)
         return True

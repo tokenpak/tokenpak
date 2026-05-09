@@ -13,20 +13,13 @@ Covers:
 from __future__ import annotations
 
 import threading
-import time
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from tokenpak.proxy.degradation import (
-    DegradationEvent,
     DegradationEventType,
     DegradationTracker,
-    get_degradation_tracker,
 )
 from tokenpak.proxy.startup import format_startup_report, run_startup_checks
-
 
 # ===========================================================================
 # AC1 — Passthrough Mode

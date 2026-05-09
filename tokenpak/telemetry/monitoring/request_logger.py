@@ -61,7 +61,7 @@ _LEVEL_ORDER = {LEVEL_DEBUG: 0, LEVEL_INFO: 1, LEVEL_WARN: 2}
 def _load_logging_config() -> Dict[str, Any]:
     """Return the merged logging config (env vars override config.yaml)."""
     from tokenpak.core.config_loader import get
-    
+
     defaults: Dict[str, Any] = {
         "enabled": get("logging.enabled", True, "TOKENPAK_LOG_ENABLED", bool),
         "level": get("logging.level", LEVEL_INFO, "TOKENPAK_LOG_LEVEL", str).lower(),

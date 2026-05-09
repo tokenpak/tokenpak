@@ -23,7 +23,7 @@ import time
 from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 try:
     from tokenpak.telemetry.tokens import count_tokens

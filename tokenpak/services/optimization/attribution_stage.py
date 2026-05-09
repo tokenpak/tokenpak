@@ -26,7 +26,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from .context import OptimizationContext
-from .stage import EligibilityResult, OptimizationStage
+from .stage import EligibilityResult
 
 _log = logging.getLogger(__name__)
 

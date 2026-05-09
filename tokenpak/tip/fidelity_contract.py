@@ -13,6 +13,13 @@ that constrains what the optimization pipeline may do to request bytes.
 from __future__ import annotations
 
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Forward-ref type only — actual import is delayed inside
+    # default_policy_for_route() to avoid the circular dependency with
+    # route_contract noted there.
+    from tokenpak.tip.route_contract import OptimizationRouteClass
 
 
 class FidelityPolicy(str, Enum):

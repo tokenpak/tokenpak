@@ -42,12 +42,14 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from tokenpak.security import sanitize_model_name
+
 from .auth import (
     APIKeyValidator,
     LicenseTier,
     RateLimiter,
     TokenPakAuthMiddleware,
 )
+
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────────────────────

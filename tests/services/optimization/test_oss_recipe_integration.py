@@ -7,7 +7,6 @@ from __future__ import annotations
 import pytest
 
 try:
-    from tokenpak.compression.recipes import get_oss_engine
     _ENGINE_AVAILABLE = True
 except Exception:  # pragma: no cover - the engine should always be available
     _ENGINE_AVAILABLE = False
@@ -18,7 +17,6 @@ from tokenpak.services.optimization.route_recipe_policy import (
     RouteClass,
     select_recipes,
 )
-
 
 pytestmark = pytest.mark.skipif(
     not _ENGINE_AVAILABLE, reason="OSS recipe engine unavailable in this build",

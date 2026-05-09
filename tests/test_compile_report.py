@@ -10,15 +10,13 @@ Covers:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.report", reason="module not available in current build")
 import json
-import time
 
 import pytest
-
-from tokenpak.report import Action, CompileReport, Decision
 from tokenpak.pack import ContextPack, PackBlock
-
+from tokenpak.report import Action, CompileReport, Decision
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 

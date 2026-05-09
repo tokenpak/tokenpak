@@ -513,7 +513,7 @@ def _check_pythonpath_drift() -> CheckResult:
             return CheckResult(
                 check="pythonpath_drift",
                 status="pass",
-                message=f"Check 7  PYTHONPATH drift     OK — proc matches systemd unit",
+                message="Check 7  PYTHONPATH drift     OK — proc matches systemd unit",
                 detail=f"pid={pid} proc_pythonpath={proc_pythonpath!r} canonical={canonical_pythonpath!r}",
                 remediation="",
             )

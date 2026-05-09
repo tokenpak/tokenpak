@@ -11,12 +11,9 @@ Run:
 from __future__ import annotations
 
 import os
-from typing import Any
 
-import pytest
-
+from tokenpak.telemetry.models import AntiPattern, StaleReason
 from tokenpak.telemetry.segmentizer import (
-    BOILERPLATE_PATTERNS,
     STALE_SCORE_PENALTIES,
     Segment,
     SegmentType,
@@ -40,8 +37,6 @@ from tokenpak.telemetry.segmentizer import (
     segmentize,
     summarize_anti_patterns,
 )
-from tokenpak.telemetry.models import AntiPattern, StaleReason
-
 
 # ---------------------------------------------------------------------------
 # Helpers

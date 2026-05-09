@@ -6,12 +6,11 @@ Run with: python examples/basic_usage.py
 """
 
 from llamaindex_tokenpak import (
-    TokenPakSynthesizer,
-    TokenPakQueryEngine,
     MultiIndexFusion,
+    TokenPakQueryEngine,
+    TokenPakSynthesizer,
     llamaindex_node_to_block,
 )
-
 
 # ---------------------------------------------------------------------------
 # Example 1: Node ↔ Block conversion

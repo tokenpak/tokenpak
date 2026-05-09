@@ -20,19 +20,16 @@ from unittest.mock import patch
 
 import pytest
 
+from tokenpak.proxy.failover import (
+    FailoverManager,
+    load_failover_config,
+    write_default_config,
+)
 from tokenpak.proxy.providers.detector import detect_provider
 from tokenpak.proxy.providers.translator import (
     translate_request,
     translate_response,
 )
-from tokenpak.proxy.failover import (
-    FailoverConfig,
-    FailoverManager,
-    ProviderEntry,
-    load_failover_config,
-    write_default_config,
-)
-
 
 # ---------------------------------------------------------------------------
 # Helpers

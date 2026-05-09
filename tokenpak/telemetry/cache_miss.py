@@ -11,9 +11,8 @@ These records are persisted to ``tp_cache_miss_reasons`` via TelemetryDB.
 from __future__ import annotations
 
 import time
-from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 
 @dataclass

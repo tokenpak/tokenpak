@@ -1,9 +1,6 @@
 """TokenPak Telemetry Collector — watches session files and sends to ingest API."""
 from __future__ import annotations
 
-# Re-export RequestStats for tests that import from this module
-from tokenpak.telemetry.proxy_collector import RequestStats as RequestStats  # noqa: F401
-
 import json
 import logging
 import time
@@ -14,6 +11,9 @@ from typing import Any, Callable, Optional
 import requests
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+
+# Re-export RequestStats for tests that import from this module
+from tokenpak.telemetry.proxy_collector import RequestStats as RequestStats  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

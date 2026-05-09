@@ -19,18 +19,14 @@ import threading
 import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from io import BytesIO
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from tokenpak.proxy.streaming import (
     StreamHandler,
-    StreamUsage,
     extract_sse_tokens,
     iter_sse_events,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

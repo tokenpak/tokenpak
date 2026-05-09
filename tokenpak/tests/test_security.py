@@ -8,8 +8,6 @@ from __future__ import annotations
 import json
 import os
 import stat
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -21,7 +19,6 @@ from tokenpak.security import (
     sanitize_model_name,
     secure_write_config,
 )
-
 
 # ---------------------------------------------------------------------------
 # secure_write_config

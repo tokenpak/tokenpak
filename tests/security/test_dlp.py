@@ -11,11 +11,9 @@ Covers:
 - Multi-finding text
 - DLPBlockError content
 """
-import os
 import pytest
 
-from tokenpak.security.dlp import DLPScanner, DLPMatch, DLPBlockError
-
+from tokenpak.security.dlp import DLPBlockError, DLPScanner
 
 # ---------------------------------------------------------------------------
 # Helper fixtures

@@ -1,19 +1,19 @@
 """Unit tests for the Claude Code registry adapter (CCA-01)."""
 
 import pytest
+
 pytest.importorskip("tokenpak.registry.claude_code.launcher", reason="module not available in current build")
 import os
 import urllib.error
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from tokenpak.proxy import ProxyRequest, ROUTE_CLAUDE_CODE
 from tokenpak.registry.claude_code.adapter import ClaudeCodeAdapter
 from tokenpak.registry.claude_code.config import ClaudeCodeConfig
 from tokenpak.registry.claude_code.health import check_proxy_health
 from tokenpak.registry.claude_code.launcher import build_launch_env
 
+from tokenpak.proxy import ProxyRequest
 
 # ---------------------------------------------------------------------------
 # ClaudeCodeConfig
@@ -233,8 +233,9 @@ class TestBuildLaunchEnv:
 
 class TestAdapterRegistration:
     def test_register_adds_to_extensions(self):
-        from tokenpak import extensions
         from tokenpak.registry.claude_code import register
+
+        from tokenpak import extensions
 
         # Ensure clean state for this test
         extensions._EXTENSIONS.pop("claude-code", None)
@@ -246,8 +247,9 @@ class TestAdapterRegistration:
         assert isinstance(adapter, ClaudeCodeAdapter)
 
     def test_registered_adapter_has_correct_name(self):
-        from tokenpak import extensions
         from tokenpak.registry.claude_code import register
+
+        from tokenpak import extensions
 
         extensions._EXTENSIONS.pop("claude-code", None)
         register()

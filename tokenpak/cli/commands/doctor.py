@@ -394,7 +394,7 @@ def run_doctor(
             _record(
                 "vault_index",
                 "warn",
-                f"Vault index         not found (run: tokenpak index <path>)",
+                "Vault index         not found (run: tokenpak index <path>)",
             )
 
     # === Check 7b: Registered vault paths staleness (VDS-03) ====================

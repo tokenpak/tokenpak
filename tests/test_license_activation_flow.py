@@ -14,15 +14,13 @@ Run:  pytest tests/test_license_activation_flow.py -v
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.license.keys", reason="module not available in current build")
 import json
-import os
 import stat
 import time
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -33,32 +31,29 @@ try:
 except ImportError:
     CRYPTO_AVAILABLE = False
 
+import tokenpak.infrastructure.license_activation as activation
 from tokenpak._internal.license.keys import (
+    LicensePayload,
+    format_license_key,
     generate_keypair,
     sign_license,
-    format_license_key,
-    LicensePayload,
 )
-from tokenpak.infrastructure.license_validation import (
-    LicenseValidator,
-    LicenseTier,
-    LicenseStatus,
-    GRACE_PERIOD_DAYS,
-)
-import tokenpak.infrastructure.license_activation as activation
 from tokenpak.infrastructure.license_activation import (
+    _clear_plan_cache,
+    _load_plan_cache,
+    _save_plan_cache,
     activate,
     deactivate,
     get_plan,
+    is_enterprise,
     is_pro,
     is_team,
-    is_enterprise,
-    _load_plan_cache,
-    _save_plan_cache,
-    _clear_plan_cache,
-    _load_stored_token,
 )
-
+from tokenpak.infrastructure.license_validation import (
+    GRACE_PERIOD_DAYS,
+    LicenseStatus,
+    LicenseTier,
+)
 
 # ─────────────────────────────────────────────
 # Fixtures

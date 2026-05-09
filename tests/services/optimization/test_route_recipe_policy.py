@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-import pytest
-
 from tokenpak.services.optimization.protected_spans import SpanType
 from tokenpak.services.optimization.route_recipe_policy import (
     ALL_FIDELITY_TIERS,
@@ -19,7 +17,6 @@ from tokenpak.services.optimization.route_recipe_policy import (
     get_route_policy,
     select_recipes,
 )
-
 
 # ---- DEFAULT_POLICIES coverage --------------------------------------------
 

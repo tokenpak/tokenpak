@@ -28,14 +28,7 @@ grep-able reason. Future redesign should rewrite to behavioral tests
 that import from `tokenpak.proxy.circuit_breaker` and
 `tokenpak.proxy.server` and exercise the bypass code paths directly.
 """
-import ast
-import os
-import sys
-import types
-import importlib
-import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 

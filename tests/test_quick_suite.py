@@ -19,13 +19,10 @@ Covers:
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
-from io import BytesIO
 from unittest.mock import MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # 1. Proxy import
@@ -166,8 +163,6 @@ def test_vault_block_store_in_memory():
 @pytest.mark.quick
 def test_health_endpoint_mock_200():
     """Health handler returns 200 via mock handler (no live server)."""
-    import sys
-    import time as _time
 
     # Minimal mock to exercise the /health routing path in proxy_endpoints
     handler = MagicMock()
@@ -234,7 +229,7 @@ def test_savings_payload_structure():
 def test_vault_index_structure_valid(tmp_path: Path):
     """VaultHealth parses a well-formed index.json without errors."""
     pytest.importorskip("tokenpak.vault_health", reason="vault_health absent on slim OSS")
-    from tokenpak.vault_health import VaultHealth, IndexStatus
+    from tokenpak.vault_health import IndexStatus, VaultHealth
 
     vault_root = tmp_path
     tokenpak_dir = vault_root / ".tokenpak"
@@ -258,7 +253,7 @@ def test_vault_index_structure_valid(tmp_path: Path):
 def test_vault_index_missing_reports_missing(tmp_path: Path):
     """VaultHealth reports MISSING when no index.json exists."""
     pytest.importorskip("tokenpak.vault_health", reason="vault_health absent on slim OSS")
-    from tokenpak.vault_health import VaultHealth, IndexStatus
+    from tokenpak.vault_health import IndexStatus, VaultHealth
 
     vault_root = tmp_path
     tokenpak_dir = vault_root / ".tokenpak"

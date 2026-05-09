@@ -2,19 +2,18 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak.processors.code_treesitter", reason="module not available in current build")
 import warnings
-import pytest
 
+import pytest
+from tokenpak.processors import get_processor
 from tokenpak.processors.code_treesitter import (
-    extract,
-    is_available,
     TreeSitterProcessor,
     _detect_language,
-    EXTENSION_TO_LANG,
+    extract,
+    is_available,
 )
-from tokenpak.processors import get_processor
-
 
 # ---------------------------------------------------------------------------
 # Skip all tests if tree-sitter is not available

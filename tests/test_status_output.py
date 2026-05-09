@@ -10,17 +10,13 @@ Covers:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.formatting.modes", reason="module not available in current build")
-import sys
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
-from tokenpak.formatting.modes import OutputMode
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -125,7 +121,6 @@ def make_args(**kwargs):
 
 def run_cmd_status(args, capsys):
     """Import and run cmd_status, patching proxy calls."""
-    import time
 
     with patch("tokenpak.cli._proxy_get") as mock_proxy, \
          patch("time.time", return_value=1_770_400_000.0):

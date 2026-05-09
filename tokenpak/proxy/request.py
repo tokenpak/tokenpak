@@ -199,9 +199,9 @@ class HTTPProxy:
         Returns:
             ProxyResponse from the upstream provider.
         """
-        import urllib.request
-        import urllib.error
         import json as _json
+        import urllib.error
+        import urllib.request
 
         # Build forwarded headers
         fwd_headers = dict(request.headers)

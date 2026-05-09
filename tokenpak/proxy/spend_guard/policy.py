@@ -20,7 +20,7 @@ Defaults match Kevin's 2026-05-07 overrides on the published proposal:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from .contracts import PreflightDecision, RiskEstimate, TIPDirective

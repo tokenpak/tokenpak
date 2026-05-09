@@ -16,19 +16,15 @@ Tests:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
-import base64
-import importlib
 import json
 import os
-import struct
 import sys
 import threading
-import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import patch
-
 
 # ---------------------------------------------------------------------------
 # Import proxy module

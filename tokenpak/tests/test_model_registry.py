@@ -5,24 +5,19 @@ from __future__ import annotations
 
 import threading
 
-import pytest
-
 from tokenpak.models import (
-    ModelInfo,
+    detect_provider,
+    get_all_tiers,
     get_cheaper_alternative,
+    get_default_routes,
     get_model_costs,
     get_pricing,
     get_rates,
-    get_tier,
-    translate_model,
-    detect_provider,
     get_shadow_target,
-    get_default_routes,
-    get_all_tiers,
+    get_tier,
     known_models,
-    get_registry,
+    translate_model,
 )
-
 
 # ---------------------------------------------------------------------------
 # Known models: exact match from seed catalog

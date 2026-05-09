@@ -1,14 +1,14 @@
 """Unit tests for context_composer.py"""
 
 import pytest
+
 from tokenpak.compression.context_composer import (
+    ComposedContext,
     ContextComposer,
     RetrievedChunk,
-    ComposedContext,
     _count_tokens,
     _message_tokens,
 )
-
 
 # ---------------------------------------------------------------------------
 # Token counting tests

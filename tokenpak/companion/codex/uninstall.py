@@ -11,14 +11,14 @@ Idempotent: running twice is safe.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
-from .mcp_config import SERVER_NAME, unregister as mcp_unregister
-from .skills_installer import uninstall_skills
 from .hooks import TOKENPAK_HOOK_MARKER
+from .mcp_config import SERVER_NAME
+from .mcp_config import unregister as mcp_unregister
 from .rates_snapshot import DEFAULT_SNAPSHOT_PATH
+from .skills_installer import uninstall_skills
 
 
 def remove_mcp() -> bool:

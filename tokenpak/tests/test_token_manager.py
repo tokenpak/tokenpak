@@ -1,20 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for tokenpak/token_manager.py"""
 
-import pytest
 import tempfile
-import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
 
 from tokenpak.telemetry.token_manager import (
     generate_token,
+    get_token,
     load_or_create_token,
     regenerate_token,
-    get_token,
-    TOKEN_FILE,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper fixtures
@@ -76,7 +74,7 @@ def test_load_existing_token(mock_token_file):
     mock_token_file.parent.mkdir(parents=True, exist_ok=True)
     test_token = "abcd1234efgh5678ijkl9012mnop3456"
     mock_token_file.write_text(test_token)
-    
+
     result = load_or_create_token()
     assert result == test_token
 
@@ -85,9 +83,9 @@ def test_create_token_if_missing(mock_token_file):
     """load_or_create_token() should create a new token if file is missing."""
     # Ensure the file doesn't exist
     assert not mock_token_file.exists()
-    
+
     token = load_or_create_token()
-    
+
     # Should have created the file
     assert mock_token_file.exists()
     # Should have written a valid token
@@ -109,7 +107,7 @@ def test_load_or_create_token_strips_whitespace(mock_token_file):
     # Write token with extra whitespace
     test_token = "abcd1234efgh5678ijkl9012mnop3456"
     mock_token_file.write_text(f"  {test_token}  \n")
-    
+
     result = load_or_create_token()
     assert result == test_token
 
@@ -117,7 +115,7 @@ def test_load_or_create_token_strips_whitespace(mock_token_file):
 def test_load_or_create_sets_secure_permissions(mock_token_file):
     """load_or_create_token() should set file permissions to 0o600."""
     load_or_create_token()
-    
+
     # Check file permissions
     stat_info = mock_token_file.stat()
     # 0o600 means owner read+write only
@@ -133,10 +131,10 @@ def test_regenerate_token_creates_new_token(mock_token_file):
     """regenerate_token() should create a new token and overwrite the file."""
     # Create initial token
     initial_token = load_or_create_token()
-    
+
     # Regenerate
     new_token = regenerate_token()
-    
+
     # New token should be different
     assert new_token != initial_token
     # File should contain the new token
@@ -156,9 +154,9 @@ def test_regenerate_token_valid_hex(mock_token_file):
 def test_regenerate_overwrites_missing_file(mock_token_file):
     """regenerate_token() should work even if no token file exists initially."""
     assert not mock_token_file.exists()
-    
+
     token = regenerate_token()
-    
+
     assert mock_token_file.exists()
     assert mock_token_file.read_text().strip() == token
 
@@ -166,7 +164,7 @@ def test_regenerate_overwrites_missing_file(mock_token_file):
 def test_regenerate_token_sets_secure_permissions(mock_token_file):
     """regenerate_token() should set file permissions to 0o600."""
     regenerate_token()
-    
+
     stat_info = mock_token_file.stat()
     file_mode = stat_info.st_mode & 0o777
     assert file_mode == 0o600
@@ -181,7 +179,7 @@ def test_get_token_returns_existing_token(mock_token_file):
     test_token = "abcd1234efgh5678ijkl9012mnop3456"
     mock_token_file.parent.mkdir(parents=True, exist_ok=True)
     mock_token_file.write_text(test_token)
-    
+
     result = get_token()
     assert result == test_token
 
@@ -189,7 +187,7 @@ def test_get_token_returns_existing_token(mock_token_file):
 def test_get_token_raises_if_missing(mock_token_file):
     """get_token() should raise FileNotFoundError if token file is missing."""
     assert not mock_token_file.exists()
-    
+
     with pytest.raises(FileNotFoundError):
         get_token()
 
@@ -199,7 +197,7 @@ def test_get_token_strips_whitespace(mock_token_file):
     test_token = "abcd1234efgh5678ijkl9012mnop3456"
     mock_token_file.parent.mkdir(parents=True, exist_ok=True)
     mock_token_file.write_text(f"\n  {test_token}  \n")
-    
+
     result = get_token()
     assert result == test_token
 
@@ -207,10 +205,10 @@ def test_get_token_strips_whitespace(mock_token_file):
 def test_get_token_error_message_helpful(mock_token_file):
     """get_token() error message should suggest how to fix it."""
     assert not mock_token_file.exists()
-    
+
     with pytest.raises(FileNotFoundError) as exc_info:
         get_token()
-    
+
     # Check error message includes helpful info
     error_msg = str(exc_info.value).lower()
     assert "token" in error_msg
@@ -225,9 +223,9 @@ def test_token_file_directory_creation(mock_token_file):
     """load_or_create_token() should create parent directories if needed."""
     # Ensure parent dirs don't exist
     assert not mock_token_file.parent.exists()
-    
+
     load_or_create_token()
-    
+
     # Parent directory should now exist
     assert mock_token_file.parent.exists()
 
@@ -251,7 +249,7 @@ def test_load_or_create_after_regenerate(mock_token_file):
 def test_token_format_consistency():
     """All token-generating functions should produce consistent format."""
     gen = generate_token()
-    
+
     # All should be 32 hex chars
     assert len(gen) == 32
     assert all(c in "0123456789abcdef" for c in gen.lower())
@@ -272,7 +270,7 @@ def test_token_with_leading_trailing_newlines(mock_token_file):
     """Should handle tokens with various whitespace edge cases."""
     test_token = "abcd1234efgh5678ijkl9012mnop3456"
     mock_token_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Test with various whitespace patterns
     whitespace_patterns = [
         f"\n{test_token}",
@@ -281,7 +279,7 @@ def test_token_with_leading_trailing_newlines(mock_token_file):
         f"  {test_token}  ",
         f"\t{test_token}\t",
     ]
-    
+
     for pattern in whitespace_patterns:
         mock_token_file.write_text(pattern)
         result = get_token()

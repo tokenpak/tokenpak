@@ -5,7 +5,6 @@ import pytest
 
 from tokenpak.core.validation.frontmatter import FrontmatterDiagnostics, parse_frontmatter
 
-
 # ---------------------------------------------------------------------------
 # FrontmatterDiagnostics
 # ---------------------------------------------------------------------------

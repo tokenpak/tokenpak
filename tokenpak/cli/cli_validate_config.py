@@ -326,7 +326,7 @@ class ConfigValidator:
                         line=self._get_line("port"),
                         field="server.port",
                         message=f"Port {port} out of valid range (1-65535)",
-                        suggestion=f"Use port between 1024-49151 (e.g., 8766)",
+                        suggestion="Use port between 1024-49151 (e.g., 8766)",
                     )
                 )
 
@@ -526,7 +526,7 @@ class ConfigValidator:
                         line=self._get_line(key),
                         field=f"{prefix}{key}" if prefix else key,
                         message=suggestion,
-                        suggestion=f"Check spelling or remove if not needed",
+                        suggestion="Check spelling or remove if not needed",
                         is_warning=True,
                     )
                 )

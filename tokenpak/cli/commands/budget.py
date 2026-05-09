@@ -272,18 +272,18 @@ def _get_recent_budget_alerts(limit: int = 20) -> list[dict]:
 def print_budget_alerts(limit: int = 10, raw: bool = False) -> None:
     """Show recent budget threshold alerts."""
     alerts = _get_recent_budget_alerts(limit=limit)
-    
+
     if raw:
         print(json.dumps(alerts, indent=2))
         return
-    
-    print(f"TOKENPAK  |  Recent Budget Alerts")
+
+    print("TOKENPAK  |  Recent Budget Alerts")
     print(SEP)
     if not alerts:
         print("  No budget alerts recorded.")
         print()
         return
-    
+
     print(f"  {'Level':<10}{'Triggered':>20}{'% Used':>10}{'Budget/Spent':>25}{'Message':>30}")
     print(f"  {'-'*10}{'-'*20}{'-'*10}{'-'*25}{'-'*30}")
     for a in alerts:

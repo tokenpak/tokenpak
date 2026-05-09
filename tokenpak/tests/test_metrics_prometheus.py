@@ -1,24 +1,21 @@
 """Unit tests for tokenpak.telemetry.metrics.prometheus module."""
 
-import math
 import sqlite3
 import tempfile
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from tokenpak.telemetry.metrics.prometheus import (
-    _escape_label_value,
-    _labels,
+    PrometheusRegistry,
     _counter,
+    _escape_label_value,
     _gauge,
     _histogram_lines,
-    PrometheusRegistry,
+    _labels,
     build_metrics_text,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper function tests

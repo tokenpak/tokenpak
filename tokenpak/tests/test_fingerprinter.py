@@ -12,23 +12,17 @@ Tests cover:
 
 from __future__ import annotations
 
-import json
-import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from tokenpak.compression.fingerprinter import (
-    FingerPrinter,
     Fingerprint,
+    FingerPrinter,
     FingerprintGenerator,
     FingerprintSync,
     PrivacyLevel,
     SyncResult,
     apply_privacy,
 )
-
 
 # ── FingerprintGenerator — initialization ─────────────────────────────────────
 

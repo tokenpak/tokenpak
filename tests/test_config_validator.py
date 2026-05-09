@@ -20,7 +20,7 @@ import pytest
 pytest.importorskip("jsonschema", reason="jsonschema is an optional dep; install via pip install jsonschema or tokenpak[full]")
 pytest.importorskip("yaml", reason="PyYAML is an optional dep; install via pip install pyyaml or tokenpak[full]")
 
-from tokenpak.cli.commands.validate_config import validate_file, load_schema
+from tokenpak.cli.commands.validate_config import load_schema, validate_file
 
 
 class TestSchemaLoading:
@@ -43,15 +43,15 @@ class TestSchemaLoading:
         """Schema should define all TokenPak config fields."""
         schema = load_schema()
         props = schema["properties"]
-        
+
         # Core fields
         assert "port" in props
         assert "mode" in props
         assert "compression" in props
-        
+
         # Feature section
         assert "features" in props
-        
+
         # Vault/budget
         assert "vault" in props
         assert "budget" in props
@@ -103,7 +103,7 @@ class TestValidateFile:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("{invalid json")
             temp_path = f.name
-        
+
         try:
             is_valid, messages = validate_file(temp_path)
             assert is_valid is False
@@ -116,13 +116,13 @@ class TestValidateFile:
         config_path = "tests/fixtures/invalid_config_bad_port.yaml"
         is_valid, messages = validate_file(config_path)
         assert is_valid is False
-        
+
         # Should have multiple messages
         assert len(messages) > 1
-        
+
         # First should be the summary
         assert "error" in messages[0].lower() or "failed" in messages[0].lower()
-        
+
         # Subsequent should explain the error
         msg_text = "\n".join(messages)
         assert "field" in msg_text.lower() or "port" in msg_text.lower()
@@ -132,7 +132,7 @@ class TestValidateFile:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({"port": 8766}, f)
             temp_path = f.name
-        
+
         try:
             is_valid, messages = validate_file(temp_path)
             # Should be valid since port is the only real constraint
@@ -151,7 +151,7 @@ class TestValidateFile:
                 }
             }, f)
             temp_path = f.name
-        
+
         try:
             is_valid, messages = validate_file(temp_path)
             # Negative max_chars should fail (minimum: 1)
@@ -171,7 +171,7 @@ class TestValidateFile:
                 }
             }, f)
             temp_path = f.name
-        
+
         try:
             is_valid, messages = validate_file(temp_path)
             assert is_valid is False
@@ -184,7 +184,7 @@ class TestValidateFile:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({"port": 8766, "mode": "turbo"}, f)
             temp_path = f.name
-        
+
         try:
             is_valid, messages = validate_file(temp_path)
             assert is_valid is False
@@ -198,7 +198,7 @@ class TestValidateFile:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({"port": 1024}, f)
             temp_path = f.name
-        
+
         try:
             is_valid, messages = validate_file(temp_path)
             assert is_valid is True
@@ -210,7 +210,7 @@ class TestValidateFile:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({"port": 65535}, f)
             temp_path = f.name
-        
+
         try:
             is_valid, messages = validate_file(temp_path)
             assert is_valid is True
@@ -227,7 +227,7 @@ class TestValidateFile:
                 }
             }, f)
             temp_path = f.name
-        
+
         try:
             is_valid, messages = validate_file(temp_path)
             assert is_valid is False
@@ -247,7 +247,7 @@ class TestValidateFile:
                 }
             }, f)
             temp_path = f.name
-        
+
         try:
             is_valid, messages = validate_file(temp_path)
             assert is_valid is False

@@ -31,8 +31,8 @@ Both /home/cali/tokenpak/proxy.py and /home/sue/tokenpak/proxy.py are tested whe
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.runtime.providers", reason="module not available in current build")
 import io
 import json
@@ -64,6 +64,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-sk-ccg17-dummy-not-real")
 os.environ.setdefault("TOKENPAK_VAULT_INDEX", "0")
 
 import importlib.util as _ilu
+
 _spec = _ilu.spec_from_file_location("proxy", _PROJECT_ROOT / "proxy.py")
 _proxy = _ilu.module_from_spec(_spec)
 sys.modules.setdefault("proxy", _proxy)

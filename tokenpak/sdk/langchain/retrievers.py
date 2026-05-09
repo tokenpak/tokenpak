@@ -1,4 +1,4 @@
-from .converters import doc_to_block, blocks_to_docs
+from .converters import blocks_to_docs, doc_to_block
 
 
 class TokenPakRetriever:

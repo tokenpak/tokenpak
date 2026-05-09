@@ -12,17 +12,15 @@ Adapter fallback chain tests:
 from __future__ import annotations
 
 import json
-from typing import Mapping, Optional
-from unittest.mock import MagicMock, patch, call
+
 import pytest
 
+from tokenpak.proxy.adapters.anthropic_adapter import AnthropicAdapter
 from tokenpak.proxy.adapters.base import FormatAdapter
 from tokenpak.proxy.adapters.canonical import CanonicalRequest
-from tokenpak.proxy.adapters.registry import AdapterRegistry
-from tokenpak.proxy.adapters.anthropic_adapter import AnthropicAdapter
 from tokenpak.proxy.adapters.openai_chat_adapter import OpenAIChatAdapter
 from tokenpak.proxy.adapters.passthrough_adapter import PassthroughAdapter
-
+from tokenpak.proxy.adapters.registry import AdapterRegistry
 
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures

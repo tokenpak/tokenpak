@@ -1,16 +1,12 @@
 """Unit tests for request_ledger.py — request record appending and ledger management."""
 
 import json
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime
 from unittest.mock import patch
 
-import pytest
-
 from tokenpak.telemetry.request_ledger import (
-    REQUESTS_PATH,
-    append_request,
     MAX_REQUESTS,
+    append_request,
 )
 
 

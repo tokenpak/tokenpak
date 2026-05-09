@@ -91,7 +91,7 @@ class StateManager:
 
     def set_goal(self, goal: str) -> None:
         """Set the high-level goal for the session.
-        
+
         Args:
             goal: Goal description
         """
@@ -99,7 +99,7 @@ class StateManager:
 
     def set_current_task(self, task: str) -> None:
         """Set the currently-active task.
-        
+
         Args:
             task: Task description
         """
@@ -107,7 +107,7 @@ class StateManager:
 
     def mark_done(self, item: str) -> None:
         """Move item from open → done (if present), or just append to done.
-        
+
         Args:
             item: Item to mark as completed
         """
@@ -118,7 +118,7 @@ class StateManager:
 
     def add_open(self, item: str) -> None:
         """Add a new open/in-progress item to the state.
-        
+
         Args:
             item: Item description
         """
@@ -126,7 +126,7 @@ class StateManager:
 
     def add_next(self, item: str) -> None:
         """Add a queued item for next action.
-        
+
         Args:
             item: Item description
         """
@@ -134,7 +134,7 @@ class StateManager:
 
     def add_constraint(self, constraint: str) -> None:
         """Add a constraint or limitation to the session state.
-        
+
         Args:
             constraint: Constraint description
         """
@@ -142,7 +142,7 @@ class StateManager:
 
     def set_def(self, key: str, value: Any) -> None:
         """Set a key-value definition or config in the state defs map.
-        
+
         Args:
             key: Definition key
             value: Definition value

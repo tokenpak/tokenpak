@@ -16,7 +16,6 @@ from pathlib import Path
 
 from tokenpak.models import get_rates, known_models
 
-
 DEFAULT_SNAPSHOT_PATH = Path.home() / ".tokenpak" / "companion" / "run" / "model_rates.tsv"
 
 

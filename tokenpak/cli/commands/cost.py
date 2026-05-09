@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-import os
 import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
@@ -14,8 +13,8 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
-
 from tokenpak.core.paths import get_db_path as _get_db_path
+
 _MONITOR_DB = str(_get_db_path("monitor.db"))
 
 SEP = "────────────────────────────────────────"

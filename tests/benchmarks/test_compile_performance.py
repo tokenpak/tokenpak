@@ -21,15 +21,14 @@ CI usage:
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.pack", reason="module not available in current build")
 import statistics
 import time
 from typing import List
 
 import pytest
-
 from tokenpak.pack import ContextPack, PackBlock
 
 from .conftest import make_large_pack, make_medium_pack, make_small_pack

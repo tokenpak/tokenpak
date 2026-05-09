@@ -24,16 +24,18 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from tokenpak.vault.ingest.schema_converter import should_serve_schema
 from tokenpak.companion.memory.session_capsules import capsule_retrieval_score
+from tokenpak.vault.ingest.schema_converter import should_serve_schema
 
 # ---------------------------------------------------------------------------
 # Query expansion — optional; falls back to plain re.findall when unavailable
 # ---------------------------------------------------------------------------
 try:
     from tokenpak.vault.query_expansion import (
-        tokenize as _qe_tokenize,
         expand_query as _qe_expand,
+    )
+    from tokenpak.vault.query_expansion import (
+        tokenize as _qe_tokenize,
     )
     _QUERY_EXPANSION_AVAILABLE = True
 except ImportError:
@@ -240,7 +242,6 @@ def measure_injection_consistency(
 # Multi-Signal Scoring + Coverage Score
 # ===========================================================================
 
-import re
 
 # ---------------------------------------------------------------------------
 # Scoring constants

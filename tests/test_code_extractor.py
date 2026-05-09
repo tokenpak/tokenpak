@@ -1,9 +1,8 @@
 """Tests for tokenpak.compression.salience.code_extractor module."""
 
-import pytest
 from tokenpak.compression.salience.code_extractor import (
-    CodeExtractor,
     CodeExtractionResult,
+    CodeExtractor,
 )
 
 
@@ -141,7 +140,7 @@ class TestCodeExtractorPython:
         code = """class MyClass:
     def __init__(self):
         self.value = 0
-    
+
     def method(self):
         return self.value
 """
@@ -469,7 +468,7 @@ def calculate():
         code = """class Outer:
     def method1(self):
         pass
-    
+
     def method2(self):
         pass
 """

@@ -12,14 +12,11 @@ import json
 import os
 import tempfile
 
-import pytest
-
 from tokenpak.core.config_schema_validator import (
     format_errors,
     validate_config_dict,
     validate_config_file,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

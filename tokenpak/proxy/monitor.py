@@ -15,7 +15,8 @@ from queue import Empty, Queue
 # Migration system (optional — graceful fallback)
 # ---------------------------------------------------------------------------
 try:
-    from db_migrations import migrate as db_migrate, get_current_schema_version
+    from db_migrations import get_current_schema_version
+    from db_migrations import migrate as db_migrate
     MIGRATION_AVAILABLE = True
 except ImportError:
     MIGRATION_AVAILABLE = False

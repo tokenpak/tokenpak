@@ -31,7 +31,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # TSR-05h / WS-E (2026-05-08) — file-level skip with documented reason.
 #
 # Investigation:

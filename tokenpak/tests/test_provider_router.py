@@ -7,9 +7,7 @@ before triggering the import chain.
 import json
 import sys
 import types
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Patch the broken ingest module BEFORE importing anything from tokenpak.agent
@@ -26,11 +24,9 @@ sys.modules.setdefault("tokenpak.vault.ingest.api", MagicMock())
 
 from tokenpak.proxy.router import (  # noqa: E402
     ProviderRouter,
-    RouteResult,
     estimate_cost,
     get_model_tier,
 )
-
 
 # ---------------------------------------------------------------------------
 # ProviderRouter — provider detection from path

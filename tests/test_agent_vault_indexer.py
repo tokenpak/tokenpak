@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
-
-import pytest
 
 from tokenpak.vault.blocks import BlockRecord, BlockStore, SliceStore
 from tokenpak.vault.indexer import VaultIndexer
 from tokenpak.vault.symbols import SymbolTable
-
 
 # ---------------------------------------------------------------------------
 # Helpers

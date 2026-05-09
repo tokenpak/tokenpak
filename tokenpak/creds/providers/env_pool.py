@@ -12,8 +12,7 @@ from __future__ import annotations
 import os
 import re
 
-from ..model import Credential, REFRESH_NONE, KIND_API_KEY
-
+from ..model import KIND_API_KEY, REFRESH_NONE, Credential
 
 PROVIDER_NAME = "env-pool"
 

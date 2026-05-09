@@ -4,18 +4,17 @@ Note: Direct FastAPI app creation has version compatibility issues,
 so these tests use mocks and direct function testing instead.
 """
 
-import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+
 import pytest
 
 from tokenpak.telemetry.server import (
-    parse_filter,
-    TelemetryEvent,
+    EventResult,
     IngestRequest,
     IngestResponse,
-    EventResult,
+    TelemetryEvent,
+    parse_filter,
 )
 
 
@@ -274,11 +273,11 @@ class TestServerModuleImports:
     def test_server_models_available(self):
         """All expected models should be available."""
         from tokenpak.telemetry.server import (
-            TelemetryEvent,
+            CapsuleBody,
+            EventResult,
             IngestRequest,
             IngestResponse,
-            EventResult,
-            CapsuleBody,
+            TelemetryEvent,
         )
         assert TelemetryEvent is not None
         assert IngestRequest is not None

@@ -15,11 +15,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import tokenpak.sdk._pro_hooks as ph
 from tokenpak.compression.wire import make_slice_id, pack
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -1,9 +1,9 @@
 """Tests for LRU cache eviction policy."""
 
-import time
-import pytest
 import threading
-from tokenpak.proxy.cache import LRUCache, CacheEntry
+import time
+
+from tokenpak.proxy.cache import CacheEntry, LRUCache
 
 
 class TestCacheEvictionLRU:

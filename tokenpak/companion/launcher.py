@@ -33,7 +33,6 @@ from pathlib import Path
 
 from .config import CompanionConfig
 
-
 # System prompt fragment injected via --append-system-prompt-file
 _SYSTEM_PROMPT = """\
 ## tokenpak companion

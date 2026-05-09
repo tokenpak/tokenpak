@@ -17,13 +17,11 @@ Covers:
 from __future__ import annotations
 
 import pytest
+
 from tokenpak.compression.schema_extractor import (
-    CONFIDENCE_THRESHOLD,
     TEMPLATES,
-    ExtractionResult,
     SchemaExtractor,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

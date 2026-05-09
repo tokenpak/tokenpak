@@ -6,14 +6,15 @@ vault_dir/.tokenpak/index.json and blocks at vault_dir/.tokenpak/blocks/.
 
 
 import pytest
+
 pytest.importorskip("tokenpak.vault_health", reason="module not available in current build")
 import json
-import pytest
 import tempfile
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 
-from tokenpak.vault_health import VaultHealth, IndexStatus
+import pytest
+from tokenpak.vault_health import IndexStatus, VaultHealth
 
 
 class TestVaultHealth:
@@ -76,7 +77,8 @@ class TestVaultHealth:
 
     def test_stale_index_with_old_mtime(self, temp_vault):
         """Test detection of staleness when index mtime is very old."""
-        import os, time
+        import os
+        import time
         vault_root = temp_vault["root"]
         index_path = temp_vault["index_path"]
 

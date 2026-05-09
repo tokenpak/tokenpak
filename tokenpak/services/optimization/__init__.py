@@ -26,9 +26,20 @@ as immutable. Mutation belongs to follow-up tasks (TIP-04 onward) and lives
 behind a separate flag.
 """
 
+from .attribution_stage import (
+    AttributionStage,
+    get_attributions,
+    is_attribution_v2_enabled,
+)
+from .cache_stage import SemanticCacheStage, get_cached_response
+from .cache_trace import CacheMissReason, CacheStageTrace
 from .compression_stage import (
     RouteClassCompressionStage,
+)
+from .compression_stage import (
     is_stage_enabled as is_route_compression_enabled,
+)
+from .compression_stage import (
     register_with_default_pipeline as register_route_compression_stage,
 )
 from .context import OptimizationContext
@@ -52,15 +63,8 @@ from .route_recipe_policy import (
     select_recipes,
 )
 from .stage import EligibilityResult, OptimizationStage
-from .trace import OptimizationTrace, StageTrace
-from .cache_stage import SemanticCacheStage, get_cached_response
-from .cache_trace import CacheMissReason, CacheStageTrace
-from .attribution_stage import (
-    AttributionStage,
-    is_attribution_v2_enabled,
-    get_attributions,
-)
 from .telemetry_sink import TelemetrySink
+from .trace import OptimizationTrace, StageTrace
 
 __all__ = [
     "OptimizationContext",

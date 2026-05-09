@@ -11,10 +11,7 @@ import json
 import os
 import tempfile
 
-import pytest
-
 from tokenpak.core.config_validator import ConfigValidationError, ConfigValidator
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -50,7 +50,6 @@ import os
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------

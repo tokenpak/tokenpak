@@ -12,13 +12,9 @@ Tests:
 8. _serve_dashboard returns 401 on wrong token (proxy)
 """
 
-import os
-import sys
 import stat
-import importlib
-import tempfile
-from pathlib import Path
 from unittest import mock
+
 import pytest
 
 # WS-A residual import guard — TSR-01-followup.
@@ -148,8 +144,9 @@ def _make_handler(path="/dashboard", auth_enabled=True):
 
 def test_dashboard_returns_401_missing_token(tmp_token_file):
     """Missing ?token param → 401."""
-    import proxy as p4
     import tokenpak.token_manager as tm
+
+    import proxy as p4
 
     handler = _make_handler("/dashboard")
     with mock.patch.object(p4, "DASHBOARD_AUTH_ENABLED", True):
@@ -161,8 +158,9 @@ def test_dashboard_returns_401_missing_token(tmp_token_file):
 
 def test_dashboard_returns_401_wrong_token(tmp_token_file):
     """Wrong ?token param → 401."""
-    import proxy as p4
     import tokenpak.token_manager as tm
+
+    import proxy as p4
 
     handler = _make_handler("/dashboard?token=wrongtoken12345678901234567890")
     with mock.patch.object(p4, "DASHBOARD_AUTH_ENABLED", True):

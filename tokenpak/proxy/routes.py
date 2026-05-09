@@ -25,7 +25,7 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 
 class ProxyRoutesMixin:
@@ -167,20 +167,36 @@ class ProxyRoutesMixin:
     def _route_health(self):
         """Handle GET /health with 1-second response cache."""
         import time as _time_module
-        from tokenpak.proxy.request_pipeline import (
-            _router_health, _health_cache, _HEALTH_CACHE_TTL,
+
+        from tokenpak.core.runtime.proxy import (
+            CANON_AVAILABLE,
+            CAPSULE_BUILDER,
+            SESSION,
+            TERM_RESOLVER,
+            TOOL_REGISTRY_AVAILABLE,
+            VAULT_INDEX,
+            _get_tool_registry,
+            _request_latencies,
         )
-        from tokenpak.proxy.stats import build_health_response
         from tokenpak.proxy.config import (
-            COMPILATION_MODE, ROUTER_ENABLED, SKELETON_ENABLED, SHADOW_ENABLED,
-            BUDGET_TOTAL_TOKENS, TERM_RESOLVER_ENABLED, TERM_RESOLVER_TOP_K,
-            TERM_RESOLVER_MAX_BYTES, QUERY_EXPANSION_ENABLED, UPSTREAM_TIMEOUT,
+            BUDGET_TOTAL_TOKENS,
+            COMPILATION_MODE,
+            QUERY_EXPANSION_ENABLED,
+            ROUTER_ENABLED,
+            SHADOW_ENABLED,
+            SKELETON_ENABLED,
+            TERM_RESOLVER_ENABLED,
+            TERM_RESOLVER_MAX_BYTES,
+            TERM_RESOLVER_TOP_K,
+            UPSTREAM_TIMEOUT,
         )
         from tokenpak.proxy.fallback import _provider_circuits
-        from tokenpak.core.runtime.proxy import (
-            SESSION, VAULT_INDEX, CAPSULE_BUILDER, CANON_AVAILABLE,
-            TOOL_REGISTRY_AVAILABLE, TERM_RESOLVER, _request_latencies, _get_tool_registry,
+        from tokenpak.proxy.request_pipeline import (
+            _HEALTH_CACHE_TTL,
+            _health_cache,
+            _router_health,
         )
+        from tokenpak.proxy.stats import build_health_response
 
         now = _time_module.monotonic()
         if (
@@ -228,12 +244,22 @@ class ProxyRoutesMixin:
 
     def _route_stats(self):
         """Handle GET /stats."""
-        from tokenpak.proxy.stats import build_stats_response
-        from tokenpak.proxy.config import (
-            COMPILATION_MODE, ROUTER_ENABLED, SKELETON_ENABLED, SHADOW_ENABLED,
-            BUDGET_TOTAL_TOKENS, MAX_COMPRESSION_TIME_MS,
+        from tokenpak.core.runtime.proxy import (
+            CANON_AVAILABLE,
+            CAPSULE_BUILDER,
+            MONITOR,
+            SESSION,
+            VAULT_INDEX,
         )
-        from tokenpak.core.runtime.proxy import SESSION, VAULT_INDEX, CAPSULE_BUILDER, CANON_AVAILABLE, MONITOR
+        from tokenpak.proxy.config import (
+            BUDGET_TOTAL_TOKENS,
+            COMPILATION_MODE,
+            MAX_COMPRESSION_TIME_MS,
+            ROUTER_ENABLED,
+            SHADOW_ENABLED,
+            SKELETON_ENABLED,
+        )
+        from tokenpak.proxy.stats import build_stats_response
 
         self._send_json(
             build_stats_response(
@@ -260,7 +286,7 @@ class ProxyRoutesMixin:
 
     def _route_stats_last(self):
         """Handle GET /stats/last — per-request stats for the most recent request."""
-        from tokenpak.core.runtime.proxy import SESSION, LAST_REQUEST, _LAST_REQUEST_LOCK
+        from tokenpak.core.runtime.proxy import _LAST_REQUEST_LOCK, LAST_REQUEST, SESSION
 
         with _LAST_REQUEST_LOCK:
             if LAST_REQUEST["request_id"] is None:
@@ -384,7 +410,7 @@ class ProxyRoutesMixin:
 
     def _route_metrics_prometheus(self):
         """Handle GET /metrics — Prometheus text format metrics."""
-        from tokenpak.core.runtime.proxy import SESSION, VAULT_INDEX, MONITOR
+        from tokenpak.core.runtime.proxy import MONITOR, SESSION, VAULT_INDEX
 
         try:
             from tokenpak.telemetry.metrics.prometheus import build_metrics_text
@@ -412,7 +438,7 @@ class ProxyRoutesMixin:
 
     def _route_metrics_dashboard(self):
         """Handle GET /metrics/dashboard — comprehensive 8-metric dashboard payload."""
-        from tokenpak.core.runtime.proxy import SESSION, MONITOR
+        from tokenpak.core.runtime.proxy import MONITOR, SESSION
 
         today_stats = MONITOR.get_stats(hours=24)
         recent_reqs = MONITOR.recent(limit=100)

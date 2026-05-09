@@ -15,6 +15,7 @@ Covers:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.benchmark", reason="module not available in current build")
 import json
 import subprocess
@@ -23,13 +24,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from tokenpak.benchmark import (
     BUILTIN_SAMPLES,
     _run_single_compression_test,
     run_compression_benchmark,
 )
-
 
 # ---------------------------------------------------------------------------
 # _run_single_compression_test unit tests

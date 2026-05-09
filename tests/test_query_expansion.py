@@ -1,19 +1,13 @@
 """Tests for tokenpak.vault.query_expansion module."""
 
-import pytest
 from tokenpak.vault.query_expansion import (
-    ALIASES,
-    STOP_WORDS,
-    SUFFIX_RULES,
     WEIGHT_ALIAS,
     WEIGHT_ORIGINAL,
     WEIGHT_STEM,
     expand_query,
     stem_token,
     tokenize,
-    get_query_terms_with_weights,
 )
-
 
 # ─── Stop word removal ────────────────────────────────────────────────────────
 
@@ -286,12 +280,12 @@ def test_benchmark_alias_expansion_coverage():
         results.append((abbrev, full_form, hit, sorted(expanded_names)[:5]))
 
     recall = hits / len(BENCHMARK_QUERIES) * 100.0
-    print(f"\n=== Benchmark Results ===")
+    print("\n=== Benchmark Results ===")
     print(f"{'Abbrev':<20} {'Full Form':<20} {'Hit':<6} {'Top Expansions'}")
     print("-" * 80)
     for abbrev, full, hit, top_exp in results:
         print(f"{abbrev:<20} {full:<20} {'✅' if hit else '❌':<6} {top_exp}")
     print(f"\nRecall: {hits}/{len(BENCHMARK_QUERIES)} = {recall:.1f}%")
-    print(f"Target: ≥15% improvement over zero-expansion baseline (0%)")
+    print("Target: ≥15% improvement over zero-expansion baseline (0%)")
 
     assert recall >= 15.0, f"Recall {recall:.1f}% is below 15% minimum"

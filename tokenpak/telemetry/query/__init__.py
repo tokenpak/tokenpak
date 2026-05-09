@@ -6,17 +6,16 @@ continue to work after the Phase 5B package restructure.
 """
 
 from tokenpak.telemetry.query_dsl import (  # noqa: F401
+    QueryFilter,
+    build_sql_where,
     get_cost_summary,
     get_daily_trend,
     get_model_compression_breakdown,
     get_model_usage,
     get_recent_events,
     get_savings_report,
-    QueryFilter,
     parse_filter,
-    build_sql_where,
 )
-
 from tokenpak.telemetry.query_models import (  # noqa: F401
     CostSummary,
     DailyTrend,

@@ -12,33 +12,26 @@ Covers at least 3 functions/classes from each of the 3 compaction modules.
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak.compaction.topic_aware", reason="module not available in current build")
 import unittest
 
 from tokenpak.compaction import (
-    BlockPolicy,
     CompactionMode,
-    CompactionPolicy,
     TopicAwarePolicy,
     compact,
 )
 from tokenpak.compaction.modes import (
-    _normalise_whitespace,
     _multi_blank_sub,
+    _normalise_whitespace,
     _trim_to_tokens,
-    compact_lossless,
-    compact_balanced,
-    compact_aggressive,
 )
-from tokenpak.compaction.policy import BlockPolicy, CompactionPolicy, TopicAwarePolicy
 from tokenpak.compaction.topic_aware import (
-    TopicSegment,
     TopicBoundaryDetector,
+    TopicSegment,
     place_topic_aware_breakpoints,
 )
-
 
 # ---------------------------------------------------------------------------
 # 1. modes.py — edge cases and helpers

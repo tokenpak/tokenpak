@@ -176,13 +176,13 @@ class TraceBuilder:
         rule_id: Optional[str] = None,
     ) -> "TraceBuilder":
         """Record routing decision: which provider/model was selected and why.
-        
+
         Args:
             provider: LLM provider (e.g. 'anthropic', 'openai')
             model: Model ID (e.g. 'claude-3-haiku')
             reason: Free-form reason string
             rule_id: Optional rule/policy ID that triggered this routing
-        
+
         Returns:
             Self for chaining
         """
@@ -203,13 +203,13 @@ class TraceBuilder:
         trim_applied: bool = False,
     ) -> "TraceBuilder":
         """Record budget tier and token allocation for this request.
-        
+
         Args:
             tier: Budget tier name (e.g. 'economy', 'balanced', 'unlimited')
             tokens: Token allocation for this request
             reasons: List of reasons why this tier was selected
             trim_applied: Whether context was trimmed to fit budget
-        
+
         Returns:
             Self for chaining
         """
@@ -231,14 +231,14 @@ class TraceBuilder:
         retrieval_ms: Optional[float] = None,
     ) -> "TraceBuilder":
         """Record context retrieval stats: sources used and coverage metrics.
-        
+
         Args:
             sources: List of retrieval sources used (e.g. ['semantic_cache', 'vault'])
             top_k: Number of top results returned
             coverage: Coverage score (0.0-1.0, percentage of query answered)
             cache_hit: Whether the semantic cache was hit
             retrieval_ms: Time spent retrieving context
-        
+
         Returns:
             Self for chaining
         """
@@ -260,13 +260,13 @@ class TraceBuilder:
         compression_ratio: Optional[float] = None,
     ) -> "TraceBuilder":
         """Record compression packing stats: turns kept/dropped and injection.
-        
+
         Args:
             kept_turns: Number of conversation turns retained
             dropped_turns: Number of turns trimmed for budget
             inject_tokens: Injected synthetic tokens for context markers
             compression_ratio: Actual compression ratio achieved (0.0-1.0)
-        
+
         Returns:
             Self for chaining
         """
@@ -308,10 +308,10 @@ class TraceBuilder:
 
     def warn(self, message: str) -> "TraceBuilder":
         """Attach a warning message to the trace (non-fatal issues).
-        
+
         Args:
             message: Warning message
-        
+
         Returns:
             Self for chaining
         """

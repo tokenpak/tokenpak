@@ -27,15 +27,15 @@ import os
 import threading
 import time
 from typing import List
-from unittest.mock import patch
 
 import pytest
 
+import tokenpak.proxy.circuit_breaker as _cb_mod
 from tokenpak.proxy.circuit_breaker import (
+    CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerRegistry,
     CircuitState,
-    CircuitBreaker,
     RateLimitCircuitBreaker,
     RateLimitCircuitBreakerRegistry,
     _enrich_upstream_error,
@@ -48,8 +48,6 @@ from tokenpak.proxy.circuit_breaker import (
     get_rate_limit_registry,
     provider_from_url,
 )
-import tokenpak.proxy.circuit_breaker as _cb_mod
-
 
 # ===========================================================================
 # A. Regression: reload_config() (TRIX-MTC-07 guard — keep intact)

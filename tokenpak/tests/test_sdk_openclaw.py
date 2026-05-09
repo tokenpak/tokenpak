@@ -9,8 +9,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from tokenpak.sdk.openclaw import (
     detect_openclaw,
     discover_openclaw_configs,

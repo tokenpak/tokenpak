@@ -62,7 +62,7 @@ def _make_db(tmp_path) -> str:
 
 class TestSchemaAndMigration:
     def test_creates_audit_events_table(self, tmp_path):
-        from tokenpak.pro.audit_log import ProxyAuditLog, _AUDIT_EVENTS_NEW_COLUMNS
+        from tokenpak.pro.audit_log import _AUDIT_EVENTS_NEW_COLUMNS, ProxyAuditLog
 
         db_path = _make_db(tmp_path)
         log = ProxyAuditLog(db_path)
@@ -117,7 +117,7 @@ class TestSchemaAndMigration:
         assert "cost_usd" in col_names
 
     def test_schema_version_recorded(self, tmp_path):
-        from tokenpak.pro.audit_log import ProxyAuditLog, _AUDIT_SCHEMA_VERSION
+        from tokenpak.pro.audit_log import _AUDIT_SCHEMA_VERSION, ProxyAuditLog
 
         db_path = _make_db(tmp_path)
         ProxyAuditLog(db_path)
@@ -212,8 +212,6 @@ class TestWriteEvent:
 class TestAsyncWrite:
     def test_background_write_does_not_block(self, tmp_path):
         """_write_proxy_audit_event should return quickly without waiting for DB."""
-        import importlib.util
-        import sys
 
         # Load proxy.py module so we can call _write_proxy_audit_event
         proxy_path = _REPO_ROOT / "proxy.py"
@@ -268,7 +266,7 @@ class TestAsyncWrite:
 class TestUserIdHashing:
     def test_token_is_hashed_not_stored(self, tmp_path):
         """user_id must be a hash digest — not the literal token value."""
-        from tokenpak.pro.audit_log import ProxyAuditLog, _hash_user_id
+        from tokenpak.pro.audit_log import _hash_user_id
 
         raw_token = "super-secret-key-value"
         hashed = _hash_user_id(raw_token)
@@ -376,9 +374,7 @@ class TestProxyEndToEnd:
         proxy module, verifying it is called with the expected arguments without
         relying on the background thread flushing to SQLite within the test window.
         """
-        import importlib.util
         import socket as _socket
-        from unittest.mock import patch, call
 
         proxy_path = _REPO_ROOT / "proxy.py"
         if not proxy_path.exists():

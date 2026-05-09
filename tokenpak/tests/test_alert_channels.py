@@ -11,11 +11,9 @@ import smtplib
 import time
 from unittest import mock
 
-import pytest
-
-from tokenpak.alerts.channels import telegram, email as email_channel
 from tokenpak.alerts import channels as ch_registry
-
+from tokenpak.alerts.channels import email as email_channel
+from tokenpak.alerts.channels import telegram
 
 # ---------------------------------------------------------------------------
 # Helpers

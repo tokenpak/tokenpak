@@ -2,40 +2,37 @@
 
 
 import pytest
+
 pytest.importorskip("tokenpak._internal.macros.premade_macros", reason="module not available in current build")
 import json
 import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tokenpak._internal.macros.scheduler import MacroScheduler, ScheduledMacro
-from tokenpak._internal.macros.script_hooks import (
-    fire_hook,
-    fire_on_budget_alert,
-    fire_on_error,
-    fire_on_request,
-    fire_on_response,
-    hook_exists,
-    install_hook,
-    list_hooks,
-    HOOK_NAMES,
-)
 from tokenpak._internal.macros.premade_macros import (
     PREMADE_MACROS,
     PremadeMacroRunner,
     format_macro_output,
     install_macro,
     list_macros,
-    run_macro,
 )
-
+from tokenpak._internal.macros.scheduler import MacroScheduler
+from tokenpak._internal.macros.script_hooks import (
+    HOOK_NAMES,
+    fire_hook,
+    fire_on_budget_alert,
+    fire_on_request,
+    fire_on_response,
+    hook_exists,
+    install_hook,
+    list_hooks,
+)
 
 # ── MacroScheduler ─────────────────────────────────────────────────────────────
 

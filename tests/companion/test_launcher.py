@@ -14,7 +14,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # TSR-05aa banner-text-drift skip reason (grep-able)
 # ─────────────────────────────────────────────
 # `test_main_banner_written_to_stderr` asserts the literal substring
@@ -45,9 +44,8 @@ SKIP_LAUNCHER_BANNER_TEXT_DRIFT = (
 )
 
 
-from tokenpak.companion.config import CompanionConfig
 from tokenpak.companion import launcher
-
+from tokenpak.companion.config import CompanionConfig
 
 # ---------------------------------------------------------------------------
 # Helpers

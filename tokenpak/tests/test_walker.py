@@ -3,15 +3,13 @@
 import os
 import tempfile
 from pathlib import Path
-import pytest
 
 from tokenpak.vault.walker import (
-    walk_directory,
-    detect_file_type,
     FILE_TYPES,
-    FILE_NAME_TYPES,
-    SKIP_DIRS,
     MAX_FILE_SIZE,
+    SKIP_DIRS,
+    detect_file_type,
+    walk_directory,
 )
 
 
@@ -101,9 +99,9 @@ class TestWalkDirectory:
             # Create a markdown file
             test_file = Path(tmpdir) / "test.md"
             test_file.write_text("# Test")
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 1
             path, file_type, size = result[0]
             assert path == str(test_file)
@@ -117,9 +115,9 @@ class TestWalkDirectory:
             (tmppath / "doc.md").write_text("# Doc")
             (tmppath / "code.py").write_text("print('hi')")
             (tmppath / "config.json").write_text("{}")
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 3
             types = {Path(r[0]).name: r[1] for r in result}
             assert types["doc.md"] == "text"
@@ -134,9 +132,9 @@ class TestWalkDirectory:
             subdir.mkdir()
             (tmppath / "root.md").write_text("Root")
             (subdir / "nested.py").write_text("code")
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 2
             filenames = [Path(r[0]).name for r in result]
             assert "root.md" in filenames
@@ -147,13 +145,13 @@ class TestWalkDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             (tmppath / "keep.md").write_text("Keep")
-            
+
             skip_dir = tmppath / "node_modules"
             skip_dir.mkdir()
             (skip_dir / "package.json").write_text("{}")
-            
+
             result = walk_directory(tmpdir)
-            
+
             # Should only find keep.md, not package.json in node_modules
             assert len(result) == 1
             assert Path(result[0][0]).name == "keep.md"
@@ -163,13 +161,13 @@ class TestWalkDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             (tmppath / "file.md").write_text("Content")
-            
+
             git_dir = tmppath / ".git"
             git_dir.mkdir()
             (git_dir / "config").write_text("git config")
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 1
             assert Path(result[0][0]).name == "file.md"
 
@@ -178,13 +176,13 @@ class TestWalkDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             (tmppath / "module.py").write_text("code")
-            
+
             cache_dir = tmppath / "__pycache__"
             cache_dir.mkdir()
             (cache_dir / "module.pyc").write_text("bytecode")
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 1
             assert Path(result[0][0]).name == "module.py"
 
@@ -193,13 +191,13 @@ class TestWalkDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             (tmppath / "app.py").write_text("code")
-            
+
             venv_dir = tmppath / "venv"
             venv_dir.mkdir()
             (venv_dir / "pyvenv.cfg").write_text("venv config")
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 1
             assert Path(result[0][0]).name == "app.py"
 
@@ -208,13 +206,13 @@ class TestWalkDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             (tmppath / "visible.md").write_text("Visible")
-            
+
             hidden_dir = tmppath / ".hidden"
             hidden_dir.mkdir()
             (hidden_dir / "secret.txt").write_text("Secret")
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 1
             assert Path(result[0][0]).name == "visible.md"
 
@@ -224,9 +222,9 @@ class TestWalkDirectory:
             tmppath = Path(tmpdir)
             (tmppath / "content.md").write_text("Has content")
             (tmppath / "empty.md").write_text("")
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 1
             assert Path(result[0][0]).name == "content.md"
 
@@ -235,10 +233,10 @@ class TestWalkDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             (tmppath / "small.txt").write_text("x" * 1000)
-            
+
             # Use a very small max_size for testing
             result = walk_directory(tmpdir, max_size=500)
-            
+
             # small.txt is 1000 bytes, exceeds max_size of 500
             assert len(result) == 0
 
@@ -247,11 +245,11 @@ class TestWalkDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             (tmppath / "file.txt").write_text("x" * 100)
-            
+
             # Pass large max_size
             result = walk_directory(tmpdir, max_size=1000)
             assert len(result) == 1
-            
+
             # Pass small max_size
             result = walk_directory(tmpdir, max_size=50)
             assert len(result) == 0
@@ -263,9 +261,9 @@ class TestWalkDirectory:
             (tmppath / "z_file.md").write_text("Z")
             (tmppath / "a_file.md").write_text("A")
             (tmppath / "m_file.md").write_text("M")
-            
+
             result = walk_directory(tmpdir)
-            
+
             paths = [Path(r[0]).name for r in result]
             assert paths == ["a_file.md", "m_file.md", "z_file.md"]
 
@@ -276,9 +274,9 @@ class TestWalkDirectory:
             content = "Hello, world!"
             test_file = tmppath / "test.txt"
             test_file.write_text(content)
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 1
             path, file_type, size = result[0]
             assert size == len(content)
@@ -288,10 +286,10 @@ class TestWalkDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             (tmppath / "file.md").write_text("Content")
-            
+
             # Call with relative path
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 1
             path = result[0][0]
             assert os.path.isabs(path)
@@ -301,14 +299,14 @@ class TestWalkDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             (tmppath / "keep.md").write_text("Keep")
-            
+
             # Create multiple skip directories
             for skip_dir in ["node_modules", ".git", "__pycache__"]:
                 (tmppath / skip_dir).mkdir()
                 (tmppath / skip_dir / "ignore.txt").write_text("Ignore")
-            
+
             result = walk_directory(tmpdir)
-            
+
             # Should only find keep.md
             assert len(result) == 1
             assert Path(result[0][0]).name == "keep.md"
@@ -320,9 +318,9 @@ class TestWalkDirectory:
             deep = tmppath / "a" / "b" / "c" / "d" / "e"
             deep.mkdir(parents=True)
             (deep / "deep.txt").write_text("Deep content")
-            
+
             result = walk_directory(tmpdir)
-            
+
             assert len(result) == 1
             assert Path(result[0][0]).name == "deep.txt"
 

@@ -16,8 +16,6 @@ Tests:
 from __future__ import annotations
 
 import asyncio
-import gzip
-import io
 import json
 import socket
 import threading
@@ -41,10 +39,7 @@ from websocket_proxy import (
     WebSocketConnectionManager,
     compress_chunk,
     decompress_chunk,
-    run_websocket_server,
-    start_websocket_server_thread,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

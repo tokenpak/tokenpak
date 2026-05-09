@@ -24,7 +24,6 @@ from tokenpak.core.error_handling import (
     format_error,
 )
 
-
 # TSR-04c: API drift on 7 of the 21 tests below. The original
 # `tokenpak.infrastructure.error_handling` constructors accepted `code=`
 # kwargs and `retry_after_seconds=`; the renamed-and-refactored

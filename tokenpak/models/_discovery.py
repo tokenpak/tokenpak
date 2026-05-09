@@ -19,8 +19,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ._families import get_sorted_families
-from ._registry import ModelInfo, get_registry
+from ._registry import get_registry
 
 log = logging.getLogger(__name__)
 
@@ -88,8 +87,8 @@ class ModelDiscovery:
 
     def _discover_provider(self, provider: str, config: dict[str, str]) -> None:
         """Poll a single provider's model list endpoint."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         api_key = os.environ.get(config.get("api_key_env", ""), "")
         if not api_key:

@@ -23,7 +23,6 @@ Test groups:
 
 from __future__ import annotations
 
-import os
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -36,10 +35,10 @@ import pytest
 # ---------------------------------------------------------------------------
 try:
     from tokenpak.dashboard.session_filter import (
+        SESSION_COLUMNS,
+        VALID_STATUSES,
         FilterParams,
         SessionFilter,
-        VALID_STATUSES,
-        SESSION_COLUMNS,
     )
 except ImportError as exc:
     pytest.fail(f"Failed to import session_filter: {exc}")
@@ -384,7 +383,7 @@ class TestRegressions:
         assert ProxyServer is not None
 
     def test_session_filter_importable_from_dashboard(self):
-        from tokenpak.dashboard.session_filter import SessionFilter, FilterParams
+        from tokenpak.dashboard.session_filter import FilterParams, SessionFilter
         assert SessionFilter is not None
         assert FilterParams is not None
 

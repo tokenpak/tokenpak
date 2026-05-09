@@ -17,10 +17,10 @@ from typing import Any, Callable, Dict, Optional
 # ---------------------------------------------------------------------------
 INGEST_ENTRIES_DIR = Path.home() / "vault" / ".tokenpak" / "entries"
 
-from tokenpak.vault.ingest.schema_converter import convert_document
 from tokenpak.compression.extraction import EntityExtractor
 from tokenpak.compression.processors import get_processor
 from tokenpak.telemetry.tokens import count_tokens
+from tokenpak.vault.ingest.schema_converter import convert_document
 from tokenpak.vault.walker import detect_file_type, walk_directory
 
 from .blocks import BlockRecord, BlockStore, SliceStore, get_block_store
@@ -219,8 +219,8 @@ class VaultIndexer:
 
 def _vault_index_reload_timer() -> None:
     """Single background timer for periodic vault index reload — replaces per-request thread spawns."""
-    from tokenpak.proxy.vault_bridge import get_vault_index  # lazy import
     from tokenpak.proxy.config import VAULT_INDEX_RELOAD_INTERVAL  # lazy import
+    from tokenpak.proxy.vault_bridge import get_vault_index  # lazy import
 
     get_vault_index().maybe_reload()
     t = threading.Timer(VAULT_INDEX_RELOAD_INTERVAL, _vault_index_reload_timer)
@@ -270,7 +270,7 @@ def _ingest_write_entry(entry: Dict[str, Any]) -> str:
 
 def sync_to_vault() -> None:
     """Write current tokenpak stats to ~/vault/System/tokenpak-stats.json."""
-    from tokenpak.proxy.config import COMPILATION_MODE, ACTIVE_PROFILE  # lazy import
+    from tokenpak.proxy.config import ACTIVE_PROFILE, COMPILATION_MODE  # lazy import
 
     vault_path = Path.home() / "vault" / "System" / "tokenpak-stats.json"
     if vault_path.parent.exists():

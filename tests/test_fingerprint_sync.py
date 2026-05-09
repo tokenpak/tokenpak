@@ -6,29 +6,24 @@ Run:  pytest tests/test_fingerprint_sync.py -v
 
 from __future__ import annotations
 
-
 import pytest
+
 pytest.importorskip("tokenpak._internal.fingerprint.generator", reason="module not available in current build")
 import json
-import tempfile
 import time
 import uuid
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from tokenpak._internal.fingerprint.generator import FingerprintGenerator, Fingerprint, Segment
+from tokenpak._internal.fingerprint.generator import Fingerprint, FingerprintGenerator
 from tokenpak._internal.fingerprint.privacy import PrivacyLevel, apply_privacy
 from tokenpak._internal.fingerprint.sync import (
     Directive,
     FingerprintSync,
-    SyncResult,
     _oss_fallback_directives,
-    _write_cache,
     _read_cache,
+    _write_cache,
 )
-
 
 # ─────────────────────────────────────────────
 # Fixtures

@@ -12,24 +12,21 @@ Verifies:
 
 
 import pytest
+
 pytest.importorskip("tokenpak.infrastructure.state_manager", reason="module not available in current build")
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
-
-from tokenpak.infrastructure.state_manager import (
-    IntentStateManager,
-    MultiSchemaStateManager,
-    select_state_manager,
-)
 from tokenpak._internal.state_schemas import (
     INTENT_SCHEMA_MAP,
     SCHEMAS_DIR,
     get_schema_path,
 )
-
+from tokenpak.infrastructure.state_manager import (
+    IntentStateManager,
+    MultiSchemaStateManager,
+    select_state_manager,
+)
 
 # ---------------------------------------------------------------------------
 # Schema file existence + validity

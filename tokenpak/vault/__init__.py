@@ -7,7 +7,12 @@ import os as _os
 _VAULT_TOKENPAK: str = _os.path.expanduser("~/.tokenpak/vault")
 
 try:
-    from tokenpak.vault.query_expansion import tokenize, expand_query, stem_token, get_query_terms_with_weights
+    from tokenpak.vault.query_expansion import (
+        expand_query,
+        get_query_terms_with_weights,
+        stem_token,
+        tokenize,
+    )
 except ImportError:
     pass
 

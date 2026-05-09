@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for connectors.url_adapter — URLAdapter and helpers."""
 
-import io
-import urllib.error
 from http.client import HTTPMessage
 from unittest.mock import MagicMock, patch
 
@@ -15,7 +13,6 @@ from tokenpak.sources.url_adapter import (
     _extract_title,
     _strip_html,
 )
-
 
 # ---------------------------------------------------------------------------
 # _strip_html

@@ -5,17 +5,13 @@ modelled on real tool_output / retrieval / memory / assistant_context data.
 """
 from __future__ import annotations
 
-import pytest
-
 from tokenpak.compression.recipes import (
+    PHRASE_MAP,
     CompressionRuleEngine,
     ContentSegment,
     RecipeType,
-    PHRASE_MAP,
     _count_tokens,
-    _TRUNCATE_TAIL_TOKEN_THRESHOLD,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

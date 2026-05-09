@@ -12,10 +12,6 @@ import os
 import sqlite3
 import tempfile
 from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers: build a temp monitor.db with known fixture data

@@ -15,13 +15,10 @@ Covers:
 
 from __future__ import annotations
 
-import json
-import sys
 import os
+import sys
 import threading
 import time
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -32,7 +29,6 @@ from tokenpak.cache.prefix_registry import (
     get_registry,
     reset_registry,
 )
-
 
 # ---------------------------------------------------------------------------
 # canonicalize
@@ -307,11 +303,8 @@ class TestSingleton:
 
 def test_public_api_importable():
     from tokenpak.cache import (
-        StablePrefixRegistry,
         fingerprint,
-        canonicalize,
         get_registry,
-        reset_registry,
     )
     assert callable(fingerprint)
     assert callable(get_registry)

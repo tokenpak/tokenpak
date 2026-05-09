@@ -47,7 +47,6 @@ Coverage retained for current production:
 from __future__ import annotations
 
 import json
-import os
 import types
 from pathlib import Path
 from unittest import mock
@@ -55,10 +54,9 @@ from unittest import mock
 import pytest
 
 from tokenpak.cli.commands.install import (
-    PROXY_URL,
     MODE_PROFILE_MAP,
+    PROXY_URL,
     _atomic_write_settings,
-    _backup_settings,
     _read_settings,
     _settings_path,
     _systemd_unit_path,
@@ -72,7 +70,6 @@ from tokenpak.cli.commands.install import (
     run_smoke_test,
     select_mode,
 )
-
 
 # Reason strings for the feature-gap skips. Pulled to module top so the
 # initiative tracking ticket can grep for them and the restoration plan

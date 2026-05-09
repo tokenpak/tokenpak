@@ -1,14 +1,13 @@
 """Tests for agent/compression/directives.py"""
 
-import pytest
 from tokenpak.compression.directives import (
-    parse_directives,
+    DirectiveResult,
+    apply_agent_dedup,
     apply_compression_directives,
     apply_context_plan,
-    apply_agent_dedup,
-    extract_model_route,
     apply_directives,
-    DirectiveResult,
+    extract_model_route,
+    parse_directives,
 )
 
 # ---------------------------------------------------------------------------

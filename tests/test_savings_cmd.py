@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import sys
 from datetime import date, timedelta
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-
 
 # TSR-05t deprecated-command skip reason (grep-able)
 # ─────────────────────────────────────────────

@@ -13,14 +13,14 @@ from fastapi import APIRouter, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from tokenpak.telemetry.query.api import EntryStore
-from tokenpak.telemetry.query.audit import AuditGenerator
-from tokenpak.telemetry.query.timeline import TimelineGenerator
 from tokenpak.dashboard.settings_persistence import (
     load_settings_context,
     validate_settings,
     write_settings,
 )
+from tokenpak.telemetry.query.api import EntryStore
+from tokenpak.telemetry.query.audit import AuditGenerator
+from tokenpak.telemetry.query.timeline import TimelineGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -755,8 +755,8 @@ def create_dashboard_app() -> FastAPI:
 
 def create_combined_app() -> FastAPI:
     """Ingest + Query + Dashboard on port 17888."""
-    from tokenpak.vault.ingest.api import router as ingest_router
     from tokenpak.telemetry.query.api import router as query_router
+    from tokenpak.vault.ingest.api import router as ingest_router
 
     app = FastAPI(title="TokenPak API + Dashboard", version="5.3.0")
     app.include_router(ingest_router)

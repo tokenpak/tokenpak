@@ -37,7 +37,6 @@ import gc
 import logging
 import os
 import threading
-import time
 
 logger = logging.getLogger("tokenpak.memory_guard")
 

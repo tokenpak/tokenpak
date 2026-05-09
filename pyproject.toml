@@ -258,5 +258,19 @@ ignore = [
     "F841",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# __init__.py files exist for re-export; "unused" imports are intentional
+# public-surface symbols. Adding to __all__ would be a behavior change
+# (makes them officially public); per-file-ignore is the idiomatic ruff
+# convention for this pattern.
+"__init__.py" = ["F401"]
+
+# Test files use widespread `try: import dep except ImportError: pytest.skip`
+# availability-check patterns where the import binding is never referenced
+# but its presence is the test signal. Suppressing F401 fleet-wide for tests
+# is safer than per-line noqa proliferation; tests are not production code.
+"tests/**" = ["F401"]
+"tokenpak/tests/**" = ["F401"]
+
 [tool.mypy]
 ignore_missing_imports = true

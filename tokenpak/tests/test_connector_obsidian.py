@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for connectors.obsidian — ObsidianConnector."""
 
-import pytest
 
 from tokenpak.sources.base import ConnectorConfig
 from tokenpak.sources.obsidian import ObsidianConnector

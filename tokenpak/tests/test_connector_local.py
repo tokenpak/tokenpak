@@ -4,8 +4,6 @@
 import time
 from pathlib import Path
 
-import pytest
-
 from tokenpak.sources.base import ConnectorConfig
 from tokenpak.sources.local import LocalConnector
 
