@@ -23,13 +23,13 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.pack", reason="module not available in current build")
+pytest.importorskip("tokenpak.compression.pack", reason="module not available in current build")
 import statistics
 import time
 from typing import List
 
 import pytest
-from tokenpak.pack import ContextPack, PackBlock
+from tokenpak.compression.pack import ContextPack, PackBlock
 
 from .conftest import make_large_pack, make_medium_pack, make_small_pack
 
