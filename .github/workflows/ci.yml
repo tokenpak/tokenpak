@@ -35,6 +35,17 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install package (needed for the import chain pulled in by tokenpak.cli)
+        # scripts/generate-cli-docs.py imports `tokenpak.cli`, which transitively
+        # pulls in tokenpak.compression.recipes (yaml), tokenpak.telemetry
+        # (requests), and other runtime deps. Mocking each external dep
+        # one-at-a-time in the script is a whack-a-mole game; installing the
+        # package once is more robust. [dev] is the smallest extras set that
+        # covers the full runtime import chain.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
       - name: Check CLI docs are current
         run: bash scripts/check-cli-docs.sh
 
