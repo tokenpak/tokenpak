@@ -26,7 +26,25 @@ is out of scope per task constraints).
 from __future__ import annotations
 
 import pytest
-from starlette.testclient import TestClient
+
+# TSR-04: fastapi/starlette are in the optional `[serve]` / `[telemetry]`
+# extras (see pyproject.toml). Slim install does not pull them. Without
+# these guards, the test module raises ModuleNotFoundError 13 times at
+# collection-time (one per parametrized case + class-level helpers), each
+# becoming a pytest ERROR status that blocks the release.yml auto-publish
+# gate. Canonical guard pattern matches tests/test_phase5b_query_api.py,
+# tests/test_telemetry_server.py, tests/dashboard/test_per_mode_panels.py,
+# tests/dashboard/test_settings_page.py.
+pytest.importorskip(
+    "fastapi",
+    reason="fastapi is optional (install [serve] or [telemetry] extra)",
+)
+pytest.importorskip(
+    "starlette",
+    reason="starlette is a fastapi dep; same optional-extra guard",
+)
+
+from starlette.testclient import TestClient  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
