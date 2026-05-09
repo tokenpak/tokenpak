@@ -9,6 +9,21 @@ Tests verify TokenPak handles concurrent requests correctly:
 
 import pytest
 import threading
+
+
+# TSR-05z speculative-contract skip reason (grep-able)
+# ─────────────────────────────────────────────
+# `test_cache_write_safety` calls `CacheManager.get_stats()`, which never
+# existed in `tokenpak/cache/cache_manager.py` git history (`git log -S 'def
+# get_stats' --all -- tokenpak/cache/cache_manager.py` → 0 hits). Same
+# speculative-contract pattern as **TSR-05r (#131)** which skipped the
+# `TestCacheStatistics` class in `tests/integration/test_caching.py` for
+# the identical reason; this is the same `CacheManager.get_stats()` call
+# in a different file.
+SKIP_CACHE_MANAGER_SPECULATIVE_API = (
+    "Test calls `CacheManager.get_stats()` which never existed on the "
+    "class. Speculative contract; same Path B pattern as TSR-05r (#131)."
+)
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import MagicMock, patch
@@ -172,6 +187,7 @@ class TestConcurrentCaching:
         # All reads should return the same response
         assert all(r == expected_response for r in results)
 
+    @pytest.mark.skip(reason=SKIP_CACHE_MANAGER_SPECULATIVE_API)
     def test_cache_write_safety(self):
         """Test concurrent cache writes are safe."""
         try:
