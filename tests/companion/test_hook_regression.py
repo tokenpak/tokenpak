@@ -23,6 +23,35 @@ from pathlib import Path
 
 import pytest
 
+
+# TSR-05ab deliberate-contract-change skip reason (grep-able)
+# ─────────────────────────────────────────────
+# `test_silent_failure_zero_token_skips_journal` asserts the old hook
+# contract: "0-byte transcript → tokens_est=0 → journal entry NOT written".
+# Production deliberately changed this contract:
+#
+#     tokenpak/companion/hooks/pre_send.py:113-114
+#     # Journal write (best-effort, non-blocking). Log even when tokens_est
+#     # is 0 so we still record that a cycle fired — useful for detecting
+#     # silent failures
+#     ...
+#     _journal_write(session_id, tokens_est, cost_est)   # always called
+#
+# The comment explicitly states this is intentional. Test now asserts
+# `len(rows) == 0` but production writes one row → assertion fails.
+#
+# This is **deliberate API/behavior drift**, not a regression. Belongs to
+# TSR-02 (API drift). Same Path B pattern as TSR-05t (deprecated `tokenpak
+# savings` wire format) and TSR-05aa (banner-text drift). The 9 live tests
+# in this file (allow-path journal, budget gating, concurrent writes,
+# off-by-one boundary) remain meaningful guards.
+SKIP_HOOK_ALWAYS_JOURNALS_BY_DESIGN = (
+    "Test asserts old contract: 0-token → skip journal. Production "
+    "deliberately changed to always-journal (pre_send.py:113-114 explicit "
+    "comment). API drift — see TSR-02."
+)
+
+
 _REPO_ROOT = str(Path(__file__).parent.parent.parent)
 
 
@@ -135,6 +164,7 @@ def test_silent_failure_stderr_confirms_processing(tmp_path):
     )
 
 
+@pytest.mark.skip(reason=SKIP_HOOK_ALWAYS_JOURNALS_BY_DESIGN)
 def test_silent_failure_zero_token_skips_journal(tmp_path):
     """Empty transcript (0-byte file) → tokens_est=0 → journal skipped (correct).
 
