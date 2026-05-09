@@ -52,13 +52,58 @@ def compress_payload(pipeline, payload):
 
 
 class TestCompressionRegression:
-    """Regression tests for compression quality"""
-    
-    @pytest.fixture
-    def pipeline(self):
-        """Initialize compression pipeline"""
-        return CompressionPipeline()
-    
+    """Regression tests for compression quality.
+
+    Implementation note (TSR-05l, 2026-05-08)
+    ─────────────────────────────────────────
+    The compression pipeline's `InstructionTable` stage is a stateful learning
+    compressor — content must be observed at least `min_occurrences` (= 2)
+    times before an instruction ID is allocated and the content is replaced
+    with a `[INSTRUCTION:POLICY_NN]` tag. A fresh table cannot compress on the
+    first call. Without deterministic warmup, this test passes only on dev
+    machines whose `~/.tokenpak/instruction_table.json` happens to have
+    accumulated entries for these exact payloads (a host-state pollution bug).
+
+    The fixture below makes the test hermetic:
+      1. The pipeline is constructed with `instruction_table_path` pointing
+         at a per-class temp directory — no read/write of the user's real
+         `~/.tokenpak/instruction_table.json`.
+      2. Each payload is run through the pipeline **twice** before measuring.
+         First pass: `_observe_text()` increments `seen_count` to 1.
+         Second pass: `seen_count` reaches `min_occurrences=2`, an ID is
+         allocated, and subsequent measurement calls emit compression tags.
+
+    This produces a deterministic "warm-table" baseline that matches what
+    real users see after the proxy has been running long enough for repeated
+    patterns to be learned. It does NOT measure cold-table compression
+    (which would always be ~1% by design — the table can't compress what
+    it has never seen).
+
+    See `tokenpak/compression/instruction_table.py:124-157` for the
+    observation / ID-allocation contract.
+    """
+
+    @pytest.fixture(scope="class")
+    def pipeline(self, tmp_path_factory):
+        """Pipeline with isolated, warmed InstructionTable (see class docstring)."""
+        # Per-class temp dir → no host state pollution.
+        table_dir = tmp_path_factory.mktemp("tsr05l_instruction_table")
+        table_path = table_dir / "instruction_table.json"
+        p = CompressionPipeline(instruction_table_path=str(table_path))
+
+        # Warmup: each payload's content must reach seen_count >= 2 before
+        # the InstructionTable can compress. Two passes is the minimum.
+        for payload_file in get_payload_files():
+            with open(payload_file) as f:
+                payload = json.load(f)
+            messages = payload.get("messages")
+            if not messages:
+                continue
+            for _ in range(2):
+                p.run(messages)
+
+        return p
+
     @pytest.fixture
     def baselines(self):
         """Load baseline ratios"""
