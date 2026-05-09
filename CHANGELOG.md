@@ -4,7 +4,38 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [v1.5.4] — 2026-05-09 — `release.yml` SHA256SUMS-in-`dist/` defect fix (TSR-08-D)
+
+> **Release scope**: this PATCH release supersedes v1.5.3 for PyPI. v1.5.3 itself was tagged and the `Release TokenPak` workflow's `Run Tests`, `Build Distribution`, and `Create GitHub Release` jobs all completed green — proving the TSR-04/05/06 test-suite recovery work landed correctly — but the final `Publish to PyPI` step failed with `InvalidDistribution: Unknown distribution format: 'SHA256SUMS'`. Root cause: `SHA256SUMS` was generated inside `dist/`, and `pypa/gh-action-pypi-publish` enumerates `dist/*` and rejects every non-`.whl`/`.tar.gz` entry. This is the same defect documented in [`feedback_release_path_hardening`](.claude/projects/-home-sue/memory/feedback_release_path_hardening.md) ("SHA256SUMS outside dist/") that bit the v1.3.3–v1.3.5 burn arc; the lesson was captured but never enforced at the workflow level.
+>
+> v1.5.3 is retained as a historical GitHub-tag-only release; **v1.5.4 is the first version of the TSR-08 line published to PyPI**.
+>
+> Pure additive PATCH per [`feedback_initiative_completion_versioning`](.claude/projects/-home-sue/memory/feedback_initiative_completion_versioning.md). No breaking changes. No new public API surface. All TSR-04/05/06 content from v1.5.3 carries forward unchanged.
+
+### Fixed — `release.yml` dist-purity contract (TSR-08-D)
+
+- **`.github/workflows/release.yml` `build` job** — `SHA256SUMS` now generated at the **repo root** (`./SHA256SUMS`), never inside `dist/`. Two separate artifacts uploaded: `dist` (wheels + sdist only) and `checksums` (SHA256SUMS only).
+- **`build` job pre-upload guard** — explicit assertion that `dist/` contains only `*.whl` and `*.tar.gz`; any other file fails the build with a pointer to the dist-purity contract comment block.
+- **`release` job** — downloads both artifacts; GitHub Release attaches `dist/*.whl` + `dist/*.tar.gz` + `SHA256SUMS` (the last from the repo root, not from `dist/`).
+- **`publish` job** — downloads only the `dist` artifact and runs a **second** dist-purity guard immediately before invoking `pypa/gh-action-pypi-publish@release/v1`. Defense-in-depth: if a future change ever lets a non-distribution file slip into `dist/`, the publish step fails with a clear message instead of an opaque `InvalidDistribution` error.
+- **Workflow-hardening contract documented** — top of the `build` job now carries a "Dist-purity contract" comment block: `dist/` MUST contain only `*.whl` and `*.tar.gz`; SHA256SUMS lives at repo root; new release artifacts get their own artifact name and never go into `dist/`. References the v1.5.3 burn explicitly.
+
+### Acceptance
+
+- `pytest tests/ -q --tb=short` (the `release.yml` `Run Tests` gate) is **green on Python 3.10 / 3.11 / 3.12 / 3.13** — unchanged from v1.5.3.
+- `Release TokenPak` workflow completes **without manual `twine` recovery** end-to-end on the v1.5.4 tag.
+- `pip install tokenpak==1.5.4` from a fresh venv succeeds.
+- GitHub Release attaches `SHA256SUMS` alongside the wheel and sdist; PyPI receives only the wheel and sdist.
+
+### Carried forward from v1.5.3 (unchanged)
+
+All Release Test Suite Recovery content (TIP7-001, TSR-01..07, TSR-05b–05ae, TSR-06b/c/d) — see the v1.5.3 entry below for the full per-PR breakdown.
+
+---
+
 ## [v1.5.3] — 2026-05-09 — Release Test Suite Recovery (TSR-04 / TSR-05 / TSR-06)
+
+> **Status**: GitHub-tag-only release. The `Release TokenPak` workflow's `Publish to PyPI` step failed on a pre-existing `release.yml` defect (`SHA256SUMS` inside `dist/`); see v1.5.4 above for the workflow fix and the actual PyPI release. v1.5.3 is **not on PyPI**; install with `pip install tokenpak==1.5.4` instead.
 
 > **Release scope**: this PATCH release contains **only** the release-test-suite recovery work (TSR-01 through TSR-07, plus the TIP7-001 follow-up). No feature work, no MultiPak Pro implementation, no cloud/sync/pricing surface. The goal of this release is to restore the `Release TokenPak` auto-publish path that v1.5.1 and v1.5.2 both fell back to manual `twine upload` to complete (per [`feedback_release_path_hardening`](.claude/projects/-home-sue/memory/feedback_release_path_hardening.md)).
 >
