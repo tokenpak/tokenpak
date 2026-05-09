@@ -11,6 +11,16 @@ concurrency:
   group: benchmarks-${{ github.ref }}
   cancel-in-progress: true
 
+# The "Post comment on PR" step uses marocchino/sticky-pull-request-comment@v2
+# which needs `pull-requests: write` to publish a benchmark summary back to
+# the PR. Without this, the step fails with "Resource not accessible by
+# integration" and tanks the whole job even though the actual benchmarks +
+# threshold checks pass. Read-only contents is sufficient — the workflow
+# only checks out the repo.
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   benchmark:
     name: Compile Latency (Python 3.12)
