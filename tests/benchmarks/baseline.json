@@ -1,76 +1,76 @@
 {
   "100_none": {
-    "median_ms": 0.004299916326999664,
+    "median_ms": 0.01,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "500_none": {
-    "median_ms": 0.005567912012338638,
+    "median_ms": 0.01,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "1000_none": {
-    "median_ms": 0.007895752787590027,
+    "median_ms": 0.02,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "5000_none": {
-    "median_ms": 0.029725953936576843,
+    "median_ms": 0.1,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "10000_none": {
-    "median_ms": 0.05596969276666641,
+    "median_ms": 0.15,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "100_light": {
-    "median_ms": 1.635019201785326,
+    "median_ms": 5.5,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "500_light": {
-    "median_ms": 3.7067951634526253,
+    "median_ms": 12.7,
     "ratio": 1.5481049562682216,
     "savings_pct": 35.4
   },
   "1000_light": {
-    "median_ms": 3.6718128249049187,
+    "median_ms": 13.1,
     "ratio": 2.9183673469387754,
     "savings_pct": 65.73
   },
   "5000_light": {
-    "median_ms": 3.860270604491234,
+    "median_ms": 12.9,
     "ratio": 14.70262390670554,
     "savings_pct": 93.2
   },
   "10000_light": {
-    "median_ms": 4.063758999109268,
+    "median_ms": 13.2,
     "ratio": 29.22740524781341,
     "savings_pct": 96.58
   },
   "100_aggressive": {
-    "median_ms": 30.204127077013254,
+    "median_ms": 5.0,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "500_aggressive": {
-    "median_ms": 47.10036003962159,
+    "median_ms": 13.1,
     "ratio": 1.5481049562682216,
     "savings_pct": 35.4
   },
   "1000_aggressive": {
-    "median_ms": 31.26044338569045,
+    "median_ms": 13.2,
     "ratio": 2.9183673469387754,
     "savings_pct": 65.73
   },
   "5000_aggressive": {
-    "median_ms": 31.147214584052563,
+    "median_ms": 13.0,
     "ratio": 14.70262390670554,
     "savings_pct": 93.2
   },
   "10000_aggressive": {
-    "median_ms": 31.35858289897442,
+    "median_ms": 13.9,
     "ratio": 29.22740524781341,
     "savings_pct": 96.58
   }
