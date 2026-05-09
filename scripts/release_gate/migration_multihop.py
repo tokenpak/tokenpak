@@ -17,13 +17,12 @@ Usage:
 
 Authority: Std 30 §14.1 (R16), Std 10 §E9, ratified 2026-05-09.
 """
+
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 import sys
-import sqlite3
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -55,7 +54,10 @@ def main() -> int:
     args = parser.parse_args()
 
     if not MIGRATIONS_DIR.is_dir() or not any(MIGRATIONS_DIR.iterdir()):
-        print(f"migration_multihop: SKIPPED — migrations dir empty/absent at {MIGRATIONS_DIR}", file=sys.stderr)
+        print(
+            f"migration_multihop: SKIPPED — migrations dir empty/absent at {MIGRATIONS_DIR}",
+            file=sys.stderr,
+        )
         print("  This gate becomes active once migrations land. Std 30 §14.1.", file=sys.stderr)
         return 0
 
@@ -71,8 +73,13 @@ def main() -> int:
     # the first actual migration ships (the migration framework itself dictates
     # the harness shape). Tracker: Std 30 §14.1 R16 follow-up.
 
-    print("migration_multihop: harness-pending — full multi-hop assertion will activate", file=sys.stderr)
-    print("  with the first telemetry migration. Until then, this script returns 0.", file=sys.stderr)
+    print(
+        "migration_multihop: harness-pending — full multi-hop assertion will activate",
+        file=sys.stderr,
+    )
+    print(
+        "  with the first telemetry migration. Until then, this script returns 0.", file=sys.stderr
+    )
     return 0
 
 

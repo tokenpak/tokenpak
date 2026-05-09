@@ -26,7 +26,6 @@ fail collection with a teaching error message.
 """
 import pytest
 
-
 # Std 30 §5 / Std 02 §13 — directory -> taxonomy marker mapping
 TAXONOMY_DIR_RULES = (
     ("tests/_internal/", "internal"),

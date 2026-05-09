@@ -10,6 +10,7 @@ Usage:
 
 Authority: Std 30 §7, ratified 2026-05-09.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,12 +53,14 @@ def build_snapshot() -> dict:
     for spec in TRACKED_STORES:
         path = Path(spec["path"]).expanduser()
         ddl = collect_ddl(path)
-        stores.append({
-            "path": spec["path"],
-            "purpose": spec["purpose"],
-            "exists": path.is_file(),
-            "ddl": ddl,
-        })
+        stores.append(
+            {
+                "path": spec["path"],
+                "purpose": spec["purpose"],
+                "exists": path.is_file(),
+                "ddl": ddl,
+            }
+        )
     return {
         "version": "1.0",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -97,8 +100,13 @@ def main() -> int:
 
         if fingerprint(on_disk) != fingerprint(snapshot):
             print("telemetry-schema snapshot drift detected", file=sys.stderr)
-            print("If intentional: ship a migration test in the same PR per Std 10 §E8 + §E9", file=sys.stderr)
-            print("and run `make telemetry-snapshot` to update the on-disk snapshot.", file=sys.stderr)
+            print(
+                "If intentional: ship a migration test in the same PR per Std 10 §E8 + §E9",
+                file=sys.stderr,
+            )
+            print(
+                "and run `make telemetry-snapshot` to update the on-disk snapshot.", file=sys.stderr
+            )
             return 1
         print("telemetry-schema snapshot matches on-disk", file=sys.stderr)
         return 0

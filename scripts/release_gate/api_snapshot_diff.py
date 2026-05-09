@@ -12,19 +12,21 @@ Output: list of added (+) and removed (-) symbols, one per line. Exit 0 always
 (diff itself is informational; gating happens in api_snapshot_check.py via the
 PR body declaration check).
 """
+
 from __future__ import annotations
 
 import json
 import subprocess
 import sys
-from pathlib import Path
 
 SNAP_PATH = "tokenpak/_snapshots/public-api.json"
 
 
 def load_at(ref: str) -> set[tuple[str, str]]:
     try:
-        out = subprocess.check_output(["git", "show", f"{ref}:{SNAP_PATH}"], stderr=subprocess.DEVNULL)
+        out = subprocess.check_output(
+            ["git", "show", f"{ref}:{SNAP_PATH}"], stderr=subprocess.DEVNULL
+        )
         data = json.loads(out)
         return {(s["module"], s["name"]) for s in data.get("symbols", [])}
     except subprocess.CalledProcessError:

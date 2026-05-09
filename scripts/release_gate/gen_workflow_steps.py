@@ -13,6 +13,7 @@ Usage:
 
 Authority: Std 21 §12 + Std 30 §13.3, ratified 2026-05-09.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,11 +33,13 @@ def load_yaml_safe(path: Path) -> dict | None:
     extracts steps via line-based regex (lossy but sufficient for the snapshot)."""
     try:
         import yaml
+
         return yaml.safe_load(path.read_text())
     except ImportError:
         pass
     try:
         from ruamel.yaml import YAML
+
         return YAML(typ="safe").load(path.read_text())
     except ImportError:
         pass
@@ -48,6 +51,7 @@ def extract_steps_regex(path: Path) -> list[dict[str, str]]:
     """Lossy fallback: extract step names + ids by line scanning. Used only
     when YAML libs aren't available."""
     import re
+
     steps = []
     current_job = "?"
     text = path.read_text()
@@ -74,12 +78,14 @@ def extract_steps(workflow: dict, workflow_filename: str) -> list[dict[str, str]
         for step in job.get("steps", []) or []:
             if not isinstance(step, dict):
                 continue
-            steps.append({
-                "workflow": workflow_filename,
-                "job": job_name,
-                "id": step.get("id", "") or "",
-                "name": step.get("name", "") or "",
-            })
+            steps.append(
+                {
+                    "workflow": workflow_filename,
+                    "job": job_name,
+                    "id": step.get("id", "") or "",
+                    "name": step.get("name", "") or "",
+                }
+            )
     return steps
 
 
@@ -123,7 +129,9 @@ def main() -> int:
         except Exception as e:
             print(f"on-disk snapshot is not valid JSON: {e}", file=sys.stderr)
             return 1
-        on_disk_steps = {(s["workflow"], s["job"], s["id"], s["name"]) for s in on_disk.get("steps", [])}
+        on_disk_steps = {
+            (s["workflow"], s["job"], s["id"], s["name"]) for s in on_disk.get("steps", [])
+        }
         new_steps = {(s["workflow"], s["job"], s["id"], s["name"]) for s in snapshot["steps"]}
         added = sorted(new_steps - on_disk_steps)
         removed = sorted(on_disk_steps - new_steps)
@@ -133,14 +141,20 @@ def main() -> int:
                 print(f"  + [{w}][{j}] id={i} name={n}", file=sys.stderr)
             for w, j, i, n in removed:
                 print(f"  - [{w}][{j}] id={i} name={n}", file=sys.stderr)
-            print("\nIf intentional: run `make workflow-steps-snapshot` and commit; removals require", file=sys.stderr)
+            print(
+                "\nIf intentional: run `make workflow-steps-snapshot` and commit; removals require",
+                file=sys.stderr,
+            )
             print("`removes-ci-step: <step.id>` in PR body per Std 21 §12.", file=sys.stderr)
             return 1
         print("workflow-steps snapshot matches on-disk", file=sys.stderr)
         return 0
 
     args.out.write_text(body)
-    print(f"workflow-steps snapshot written: {args.out} ({len(snapshot['steps'])} steps)", file=sys.stderr)
+    print(
+        f"workflow-steps snapshot written: {args.out} ({len(snapshot['steps'])} steps)",
+        file=sys.stderr,
+    )
     return 0
 
 

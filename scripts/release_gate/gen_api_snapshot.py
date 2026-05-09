@@ -25,12 +25,12 @@ Flags:
 
 Authority: Std 30 §7 (R7), ratified 2026-05-09.
 """
+
 from __future__ import annotations
 
 import argparse
 import importlib
 import json
-import os
 import pkgutil
 import sys
 import time
@@ -44,6 +44,7 @@ def _is_package_owned(value, package_name: str) -> bool:
     """Return True iff this attribute is genuinely owned by the package
     (not a re-exported import or a stdlib name)."""
     import inspect
+
     # Modules themselves are not API symbols (they're navigation, not surface)
     if inspect.ismodule(value):
         return False
@@ -130,6 +131,7 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
 def get_package_version() -> str:
     try:
         import tokenpak
+
         return getattr(tokenpak, "__version__", "unknown")
     except Exception:
         return "unknown"
@@ -157,7 +159,10 @@ def main() -> int:
 
     if args.check:
         if not args.out.exists():
-            print(f"public-api.json missing at {args.out}; run `make api-snapshot` first", file=sys.stderr)
+            print(
+                f"public-api.json missing at {args.out}; run `make api-snapshot` first",
+                file=sys.stderr,
+            )
             return 1
         on_disk = args.out.read_text()
         # Compare sets of symbols (ignore generated_at timestamp drift)
@@ -176,7 +181,9 @@ def main() -> int:
                 print(f"  + {m}.{n}", file=sys.stderr)
             for m, n in removed:
                 print(f"  - {m}.{n}", file=sys.stderr)
-            print("\nIf intentional: run `make api-snapshot` and commit the change", file=sys.stderr)
+            print(
+                "\nIf intentional: run `make api-snapshot` and commit the change", file=sys.stderr
+            )
             print("plus a `.changeset/` entry. Removals also require a", file=sys.stderr)
             print("`removes-public-symbol:` line in the PR body per Std 21 §11.", file=sys.stderr)
             return 1
@@ -184,7 +191,10 @@ def main() -> int:
         return 0
 
     args.out.write_text(body)
-    print(f"public-api snapshot written: {args.out} ({len(snapshot['symbols'])} symbols)", file=sys.stderr)
+    print(
+        f"public-api snapshot written: {args.out} ({len(snapshot['symbols'])} symbols)",
+        file=sys.stderr,
+    )
     return 0
 
 

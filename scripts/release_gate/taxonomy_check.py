@@ -23,9 +23,9 @@ Exit codes:
 
 Authority: Std 02 §13, Std 30 §5 (R5), ratified 2026-05-09.
 """
+
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -54,8 +54,12 @@ def main() -> int:
     try:
         result = subprocess.run(
             [
-                sys.executable, "-m", "pytest",
-                "--collect-only", "-q", "--no-header",
+                sys.executable,
+                "-m",
+                "pytest",
+                "--collect-only",
+                "-q",
+                "--no-header",
                 # Don't error on collection issues here — let those surface separately
                 "--continue-on-collection-errors",
             ],
@@ -75,7 +79,10 @@ def main() -> int:
             nodeids.append(line.split(" ")[0])
 
     if not nodeids:
-        print(f"no tests collected (rc={result.returncode}); cannot validate taxonomy", file=sys.stderr)
+        print(
+            f"no tests collected (rc={result.returncode}); cannot validate taxonomy",
+            file=sys.stderr,
+        )
         if result.stderr:
             print(result.stderr[-2000:], file=sys.stderr)
         return 2
@@ -94,7 +101,10 @@ def main() -> int:
     for path, marker in files_seen.items():
         by_marker[marker] = by_marker.get(marker, 0) + 1
 
-    print(f"taxonomy_check: {len(files_seen)} test files across {len(by_marker)} markers", file=sys.stderr)
+    print(
+        f"taxonomy_check: {len(files_seen)} test files across {len(by_marker)} markers",
+        file=sys.stderr,
+    )
     for marker in sorted(by_marker):
         print(f"  {marker:10s}: {by_marker[marker]:4d} files", file=sys.stderr)
 
