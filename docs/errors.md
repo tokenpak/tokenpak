@@ -230,7 +230,7 @@ When you see an error:
 2. **Check the suggestion** — it tells you how to fix it
 3. **Read this reference** — for more context on the error code
 4. **Check the logs** — `tail -f ~/.tokenpak/tokenpak.log`
-5. **GitHub Issues** — https://github.com/openclaw/tokenpak/issues
+5. **GitHub Issues** — https://github.com/tokenpak/tokenpak/issues
 
 ## Error Log Format
 
@@ -238,8 +238,8 @@ Errors are logged with full context:
 
 ```
 2026-03-16 19:00:00 ERROR TP-E202: Invalid API key for anthropic
-  Context: GET https://api.anthropic.com/v1/messages
-  Fix: Check your anthropic API key in TokenPak config
+ Context: GET https://api.anthropic.com/v1/messages
+ Fix: Check your anthropic API key in TokenPak config
 ```
 
 This helps diagnose issues quickly.

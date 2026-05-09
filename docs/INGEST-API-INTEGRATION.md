@@ -17,16 +17,16 @@ Ingest a single usage entry.
 **Request:**
 ```json
 {
-  "model": "claude-3-opus-20240229",
-  "tokens": 5000,
-  "cost": 0.15,
-  "timestamp": "2026-03-10T15:37:00Z",
-  "agent": "my-agent",
-  "provider": "anthropic",
-  "session_id": "sess-abc123",
-  "extra": {
-    "custom_field": "value"
-  }
+ "model": "claude-3-opus-20240229",
+ "tokens": 5000,
+ "cost": 0.15,
+ "timestamp": "2026-03-10T15:37:00Z",
+ "agent": "my-agent",
+ "provider": "anthropic",
+ "session_id": "sess-abc123",
+ "extra": {
+ "custom_field": "value"
+ }
 }
 ```
 
@@ -44,8 +44,8 @@ Ingest a single usage entry.
 **Response (200 OK):**
 ```json
 {
-  "status": "ok",
-  "ids": ["550e8400-e29b-41d4-a716-446655440000"]
+ "status": "ok",
+ "ids": ["550e8400-e29b-41d4-a716-446655440000"]
 }
 ```
 
@@ -64,43 +64,43 @@ Ingest multiple entries atomically.
 **Request:**
 ```json
 {
-  "events": [
-    {
-      "model": "claude-3-opus-20240229",
-      "tokens": 5000,
-      "cost": 0.15
-    },
-    {
-      "model": "gpt-4-turbo",
-      "tokens": 3000,
-      "cost": 0.12
-    }
-  ]
+ "events": [
+ {
+ "model": "claude-3-opus-20240229",
+ "tokens": 5000,
+ "cost": 0.15
+ },
+ {
+ "model": "gpt-4-turbo",
+ "tokens": 3000,
+ "cost": 0.12
+ }
+ ]
 }
 ```
 
 **Fields:**
 - `events` (required, array): List of entry objects (same schema as /ingest)
-  - Max 1000 entries per batch
-  - Min 1 entry required
+ - Max 1000 entries per batch
+ - Min 1 entry required
 
 **Response (200 OK):**
 ```json
 {
-  "status": "ok",
-  "ids": ["id1", "id2"],
-  "errors": null
+ "status": "ok",
+ "ids": ["id1", "id2"],
+ "errors": null
 }
 ```
 
 If some entries fail but others succeed, successful entries are written and errors are reported:
 ```json
 {
-  "status": "ok",
-  "ids": ["id1"],
-  "errors": [
-    "event[1]: tokens must be non-negative int"
-  ]
+ "status": "ok",
+ "ids": ["id1"],
+ "errors": [
+ "event[1]: tokens must be non-negative int"
+ ]
 }
 ```
 
@@ -138,23 +138,23 @@ Example file content:
 1. **Structure:** Must be a JSON object
 2. **Required fields:** model, tokens, cost
 3. **Type checks:**
-   - `model` — non-empty string
-   - `tokens` — non-negative integer
-   - `cost` — non-negative number (int or float)
-   - `timestamp` — ISO 8601 string (if provided)
+ - `model` — non-empty string
+ - `tokens` — non-negative integer
+ - `cost` — non-negative number (int or float)
+ - `timestamp` — ISO 8601 string (if provided)
 4. **Timestamp format:** Must be valid ISO 8601 (e.g., `2026-03-10T15:37:00Z` or `2026-03-10T15:37:00+00:00`)
 
 ### Batch Entry (/ingest/batch)
 
 1. **Structure:** Must be a JSON object with `events` key
 2. **Events array:**
-   - Required, non-empty list
-   - Max 1000 entries
-   - Each entry validated as above
+ - Required, non-empty list
+ - Max 1000 entries
+ - Each entry validated as above
 3. **Partial failure handling:**
-   - Individual entry errors don't stop the batch
-   - All valid entries are written to JSONL
-   - Errors are returned alongside successful IDs
+ - Individual entry errors don't stop the batch
+ - All valid entries are written to JSONL
+ - Errors are returned alongside successful IDs
 
 ---
 
@@ -165,14 +165,14 @@ All errors follow a consistent JSON structure:
 **Single entry error:**
 ```json
 {
-  "error": "human-readable error message"
+ "error": "human-readable error message"
 }
 ```
 
 **Batch error (all failed):**
 ```json
 {
-  "error": "all events failed: event[0]: ...; event[1]: ..."
+ "error": "all events failed: event[0]: ...; event[1]: ..."
 }
 ```
 
@@ -186,14 +186,14 @@ The proxy detects and routes ingest requests early in `do_POST()`:
 
 ```python
 if self.path == "/ingest" or self.path == "/ingest/batch":
-    self._ingest(self.path)
+ self._ingest(self.path)
 ```
 
 ### Session Tracking
 
 Ingest entries are tracked in the global SESSION dict:
 ```python
-SESSION["ingest_entries"]  # Count of successfully written entries
+SESSION["ingest_entries"] # Count of successfully written entries
 ```
 
 This is included in health/stats responses for monitoring.
@@ -228,25 +228,25 @@ Tests cover:
 **Single entry:**
 ```bash
 curl -X POST http://localhost:8766/ingest \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "claude-3-opus",
-    "tokens": 1000,
-    "cost": 0.03,
-    "agent": "my-agent"
-  }'
+ -H "Content-Type: application/json" \
+ -d '{
+ "model": "claude-3-opus",
+ "tokens": 1000,
+ "cost": 0.03,
+ "agent": "my-agent"
+ }'
 ```
 
 **Batch entries:**
 ```bash
 curl -X POST http://localhost:8766/ingest/batch \
-  -H "Content-Type: application/json" \
-  -d '{
-    "events": [
-      {"model": "claude-3-opus", "tokens": 1000, "cost": 0.03},
-      {"model": "gpt-4", "tokens": 500, "cost": 0.02}
-    ]
-  }'
+ -H "Content-Type: application/json" \
+ -d '{
+ "events": [
+ {"model": "claude-3-opus", "tokens": 1000, "cost": 0.03},
+ {"model": "gpt-4", "tokens": 500, "cost": 0.02}
+ ]
+ }'
 ```
 
 ### Using Python
@@ -256,27 +256,27 @@ import requests
 
 # Single entry
 resp = requests.post(
-    "http://localhost:8766/ingest",
-    json={
-        "model": "claude-3-opus",
-        "tokens": 1000,
-        "cost": 0.03,
-        "agent": "my-agent"
-    }
+ "http://localhost:8766/ingest",
+ json={
+ "model": "claude-3-opus",
+ "tokens": 1000,
+ "cost": 0.03,
+ "agent": "my-agent"
+ }
 )
-print(resp.json())  # {"status": "ok", "ids": [...]}
+print(resp.json()) # {"status": "ok", "ids": [...]}
 
 # Batch
 resp = requests.post(
-    "http://localhost:8766/ingest/batch",
-    json={
-        "events": [
-            {"model": "claude-3-opus", "tokens": 1000, "cost": 0.03},
-            {"model": "gpt-4", "tokens": 500, "cost": 0.02}
-        ]
-    }
+ "http://localhost:8766/ingest/batch",
+ json={
+ "events": [
+ {"model": "claude-3-opus", "tokens": 1000, "cost": 0.03},
+ {"model": "gpt-4", "tokens": 500, "cost": 0.02}
+ ]
+ }
 )
-print(resp.json())  # {"status": "ok", "ids": [...]}
+print(resp.json()) # {"status": "ok", "ids": [...]}
 ```
 
 ---
@@ -286,16 +286,16 @@ print(resp.json())  # {"status": "ok", "ids": [...]}
 ### File Structure in tokenpak.proxy.py
 
 1. **Handler methods** (class ForwardProxyHandler):
-   - `_ingest(path)` — Router for /ingest endpoints
-   - `_ingest_single(payload)` — Handle single entry requests
-   - `_ingest_batch(payload)` — Handle batch requests
+ - `_ingest(path)` — Router for /ingest endpoints
+ - `_ingest_single(payload)` — Handle single entry requests
+ - `_ingest_batch(payload)` — Handle batch requests
 
 2. **Storage function** (module-level):
-   - `_ingest_write_entry(entry)` — Write entry to JSONL, return ID
+ - `_ingest_write_entry(entry)` — Write entry to JSONL, return ID
 
 3. **Configuration**:
-   - `INGEST_ENTRIES_DIR` — ~/vault/.tokenpak/entries
-   - Entries grouped by date (timestamp.split('T')[0])
+ - `INGEST_ENTRIES_DIR` — ~/vault/.tokenpak/entries
+ - Entries grouped by date (timestamp.split('T')[0])
 
 ---
 
@@ -330,10 +330,10 @@ curl http://localhost:8766/health
 Look for:
 ```json
 {
-  "stats": {
-    "ingest_entries": 42,
-    ...
-  }
+ "stats": {
+ "ingest_entries": 42,
+ ...
+ }
 }
 ```
 

@@ -76,6 +76,21 @@ elo_ratings.json
 build/
 proxy.py.bak*
 
+# Backup / corrupted DB / typecheck reports — must never be tracked
+*.bak
+*.corrupt-*
+monitor.db*
+mypy*.txt
+
+# Build / cache directories that should never enter the public tree
+.benchmarks/
+.grimp_cache/
+.import_linter_cache/
+
+# Workbench / agent state directories
+.tokenpak/
+.claude/
+
 # Large generated artifacts (never track)
 coverage.json
 coverage_report.txt

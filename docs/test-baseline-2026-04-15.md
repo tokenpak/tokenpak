@@ -1,7 +1,7 @@
 # Test Suite Baseline — 2026-04-15
 
-Captured after TEST-COLLECT-01 collection error fixes.  
-Run command: `python3 -m pytest tests/ --timeout=60 -q --tb=line`  
+Captured after TEST-COLLECT-01 collection error fixes.
+Run command: `python3 -m pytest tests/ --timeout=60 -q --tb=line`
 Duration: ~4 min 7 sec (246.87s)
 
 ---

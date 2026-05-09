@@ -203,12 +203,11 @@ python_files = [
 ]
 norecursedirs = [
     "tests/archive",
-    # TSR-07 / WS-F (2026-05-08) — closed-source / `_internal`-dependent
-    # tests live in tests/_internal/. Excluded from the default OSS gate
-    # per Std 25 §1.1 (closed-source boundary). To run, invoke
-    # `pytest tests/_internal/` explicitly on a Pro daemon-equipped
-    # install (or override-ini norecursedirs= in a Pro-side CI config).
-    # See `tests/_internal/README.md`.
+    # Closed-source / `_internal`-dependent tests live in tests/_internal/
+    # and are excluded from the default OSS gate. To run, invoke
+    # `pytest tests/_internal/` explicitly on a daemon-equipped install
+    # (or override-ini `norecursedirs=` in a Pro-side CI config). See
+    # `tests/_internal/README.md`.
     "tests/_internal",
     ".git",
     "__pycache__",

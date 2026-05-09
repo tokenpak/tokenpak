@@ -44,9 +44,9 @@ What anonymous metrics include:
 - OS/Python version
 - TokenPak version
 - **Active profile** — the loaded workflow profile name (e.g. `balanced`, `agentic`, `claude-code-cli`).
-  This is an anonymous categorical string that tells us which mode users adopt most.
+ This is an anonymous categorical string that tells us which mode users adopt most.
 - **Consumption mode** — the auto-detected invocation mode (one of `cli`, `tui`, `tmux`, `sdk`, `ide`, `cron`).
-  Detected from environment variables at runtime; no user-identifying information.
+ Detected from environment variables at runtime; no user-identifying information.
 
 What they never include: prompts, responses, file names, API keys, user identifiers.
 
@@ -65,41 +65,41 @@ Telemetry is stored in SQLite at `~/.tokenpak/telemetry.db` (and an agent-level 
 ```sql
 -- One row per LLM request
 tp_events (
-    trace_id        TEXT,    -- unique per request
-    request_id      TEXT,
-    event_type      TEXT,    -- e.g. "completion"
-    ts              REAL,    -- unix timestamp
-    provider        TEXT,    -- "anthropic" | "openai" | "google"
-    model           TEXT,    -- e.g. "claude-opus-4-6"
-    agent_id        TEXT,
-    duration_ms     REAL,
-    status          TEXT,    -- "ok" | "error"
-    error_class     TEXT
+ trace_id TEXT, -- unique per request
+ request_id TEXT,
+ event_type TEXT, -- e.g. "completion"
+ ts REAL, -- unix timestamp
+ provider TEXT, -- "anthropic" | "openai" | "google"
+ model TEXT, -- e.g. "claude-opus-4-6"
+ agent_id TEXT,
+ duration_ms REAL,
+ status TEXT, -- "ok" | "error"
+ error_class TEXT
 )
 
 -- Token counts and compression stats
 tp_usage (
-    trace_id        TEXT,
-    input_tokens    INT,     -- tokens sent to provider (after compression)
-    output_tokens   INT,
-    tokens_saved    INT,     -- how many were compressed away
-    savings_pct     REAL,
-    cache_hit       BOOLEAN  -- provider-level cache hit if applicable
+ trace_id TEXT,
+ input_tokens INT, -- tokens sent to provider (after compression)
+ output_tokens INT,
+ tokens_saved INT, -- how many were compressed away
+ savings_pct REAL,
+ cache_hit BOOLEAN -- provider-level cache hit if applicable
 )
 
 -- Cost estimates
 tp_costs (
-    trace_id        TEXT,
-    cost_usd        REAL,    -- estimated cost based on pricing catalog
-    cost_saved_usd  REAL
+ trace_id TEXT,
+ cost_usd REAL, -- estimated cost based on pricing catalog
+ cost_saved_usd REAL
 )
 
 -- Per-block segment breakdown
 tp_segments (
-    trace_id        TEXT,
-    segment_type    TEXT,    -- "code" | "markdown" | "text" | etc.
-    tokens_raw      INT,
-    tokens_after    INT
+ trace_id TEXT,
+ segment_type TEXT, -- "code" | "markdown" | "text" | etc.
+ tokens_raw INT,
+ tokens_after INT
 )
 ```
 
@@ -145,22 +145,22 @@ Output:
 ```
 Trace: req-a1b2c3
 Model: claude-opus-4-6 (anthropic)
-Time:  2026-03-06 08:14:22 PST
+Time: 2026-03-06 08:14:22 PST
 Status: ok (1,847ms)
 
 Pipeline:
-  dedup:        0 removed
-  segmentize:   12 blocks
-  directives:   applied
+ dedup: 0 removed
+ segmentize: 12 blocks
+ directives: applied
 
 Tokens:
-  raw:          8,240
-  compressed:   4,891
-  saved:        3,349 (40.6%)
+ raw: 8,240
+ compressed: 4,891
+ saved: 3,349 (40.6%)
 
 Cost:
-  estimated:    $0.074
-  saved:        $0.050
+ estimated: $0.074
+ saved: $0.050
 ```
 
 ### Export
@@ -214,7 +214,7 @@ You can automate pruning with a cron job or systemd timer:
 
 ```bash
 # crontab -e
-0 3 * * 0  tokenpak maintenance prune --days 90
+0 3 * * 0 tokenpak maintenance prune --days 90
 ```
 
 ---

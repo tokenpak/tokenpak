@@ -73,34 +73,34 @@ TokenPak loads rate limit configuration from `~/tokenpak/config/rate-limits.yaml
 
 ```yaml
 rate_limiting:
-  enabled: true
-  strategies:
-    default:
-      name: exponential_backoff
-      base_delay_ms: 1000
-      max_delay_ms: 60000
-      exponential_base: 2.0
-      jitter_factor: 0.1
-      max_retries: 3
+ enabled: true
+ strategies:
+ default:
+ name: exponential_backoff
+ base_delay_ms: 1000
+ max_delay_ms: 60000
+ exponential_base: 2.0
+ jitter_factor: 0.1
+ max_retries: 3
 
-    openai:
-      base_delay_ms: 500
-      exponential_base: 1.5
-      max_retries: 5
+ openai:
+ base_delay_ms: 500
+ exponential_base: 1.5
+ max_retries: 5
 
-    anthropic:
-      base_delay_ms: 1000
-      max_retries: 3
+ anthropic:
+ base_delay_ms: 1000
+ max_retries: 3
 
-    google:
-      base_delay_ms: 2000
-      max_retries: 4
+ google:
+ base_delay_ms: 2000
+ max_retries: 4
 
-  alerts:
-    enabled: true
-    thresholds:
-      rate_limit_events_per_hour: 5
-      backoff_duration_seconds: 300
+ alerts:
+ enabled: true
+ thresholds:
+ rate_limit_events_per_hour: 5
+ backoff_duration_seconds: 300
 ```
 
 The `RetryEngine` also reads `~/.tokenpak/config.json` for `retry.wait_seconds`, `retry.downgrade_chain`, and `retry.per_error` keys, which take precedence over defaults but are overridden by caller-supplied parameters.

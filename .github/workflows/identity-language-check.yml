@@ -1,0 +1,97 @@
+name: Identity & language check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  identity-language:
+    name: No internal identity / workflow language in changed files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute changed files
+        id: changed
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          # Only files added or modified in this PR; binary files skipped.
+          git diff --name-only --diff-filter=AM "$base" "$head" \
+            | grep -vE "^(packages/tests/|tests/|sdk/dist/|\.github/workflows/identity-language-check\.yml|\.github/workflows/public-layout-check\.yml|\.pre-commit-config\.yaml)" \
+            | grep -E '\.(md|py|yml|yaml|json|toml|sh|js|ts|tsx)$' \
+            > changed-files.txt || true
+          echo "Changed files (filtered):"
+          cat changed-files.txt | sed 's/^/  /'
+
+      - name: Scan for forbidden identity / language
+        run: |
+          set -euo pipefail
+          if [ ! -s changed-files.txt ]; then
+            echo "No relevant files changed; skipping."
+            exit 0
+          fi
+
+          # Patterns that must NEVER appear in newly added or modified
+          # public-surface text. Existing legacy occurrences in
+          # untouched files are tolerated as historical debt.
+          # Notes on word-boundary choice:
+          #   - \bSue\b matches the agent name but NOT product names
+          #     like "SuePak" (none currently).
+          #   - "claude" without a hyphen would match user-facing
+          #     "Claude Code" / "Claude API" — those are legitimate.
+          #     We do NOT pattern-match bare "claude" here.
+          patterns=(
+            '\bSue\b'
+            '\bCali\b'
+            '\bTrix\b'
+            '\bSuki\b'
+            '\bAya\b'
+            '\bDee\b'
+            '\bReiPo\b'
+            '\bopenclaw\b'
+            '\bfleet\b'
+            'TSR-[0-9]'
+            'TPS-[0-9]'
+            'CCI-[0-9]'
+            'MTC-[0-9]'
+            'OAS-[0-9]'
+            'TIP7-[0-9]'
+            'TRIX-MTC'
+            'WS-[0-9]'
+            '\.claude/projects'
+            '/home/sue/'
+            'trixxie168'
+            '\bStd 2[0-9]\b'
+            '\bStd 3[0-9]\b'
+            'Suki: auto-commit'
+          )
+
+          fail=0
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            for p in "${patterns[@]}"; do
+              if grep -nE "$p" "$f" 2>/dev/null; then
+                # Print with file:line:match for clickable error annotation
+                while IFS= read -r line; do
+                  ln=$(echo "$line" | cut -d: -f1)
+                  echo "::error file=$f,line=$ln::Forbidden pattern '$p' in changed file."
+                done < <(grep -nE "$p" "$f")
+                fail=1
+              fi
+            done
+          done < changed-files.txt
+
+          if [ "$fail" -ne 0 ]; then
+            echo
+            echo "One or more changed files contain forbidden identity / workflow language."
+            echo "See CONTRIBUTING.md → Public language rules."
+            exit 1
+          fi
+          echo "Identity / language check OK."

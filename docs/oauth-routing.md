@@ -69,14 +69,14 @@ claude "review this PR"
 ```bash
 # Anthropic API key
 curl http://localhost:8766/v1/messages \
-  -H "x-api-key: sk-ant-..." \
-  -H "anthropic-version: 2023-06-01" \
-  -d '{"model":"claude-sonnet-4-6","messages":[...]}'
+ -H "x-api-key: sk-ant-..." \
+ -H "anthropic-version: 2023-06-01" \
+ -d '{"model":"claude-sonnet-4-6","messages":[...]}'
 
-# OpenAI API key  
+# OpenAI API key
 curl http://localhost:8766/v1/chat/completions \
-  -H "Authorization: Bearer sk-openai..." \
-  -d '{"model":"gpt-4o","messages":[...]}'
+ -H "Authorization: Bearer sk-openai..." \
+ -d '{"model":"gpt-4o","messages":[...]}'
 ```
 
 ---
@@ -86,24 +86,24 @@ curl http://localhost:8766/v1/chat/completions \
 ### API Key Flow (Static)
 ```
 Client ──► Proxy ──► Provider
-           │
-           ├─ Validate Bearer sk-... or x-api-key present
-           ├─ Detect provider from path/body
-           ├─ Forward auth header unchanged (ZERO storage)
-           └─ Cache keying: ENABLED (key prefix stable)
+ │
+ ├─ Validate Bearer sk-... or x-api-key present
+ ├─ Detect provider from path/body
+ ├─ Forward auth header unchanged (ZERO storage)
+ └─ Cache keying: ENABLED (key prefix stable)
 ```
 
 ### OAuth Bearer Flow (Session)
 ```
 Client ──► Proxy ──► Provider
-           │
-           ├─ Detect Bearer <non-sk> → auth_type=oauth
-           ├─ Detect provider:
-           │    /v1/responses           → openai-codex
-           │    /v1/messages + non-sk   → anthropic (Claude Code OAuth)
-           │    /v1/chat/completions    → openai
-           ├─ Forward OAuth token unchanged (ZERO storage, ZERO logging)
-           └─ Cache keying: DISABLED (OAuth tokens may expire mid-session)
+ │
+ ├─ Detect Bearer <non-sk> → auth_type=oauth
+ ├─ Detect provider:
+ │ /v1/responses → openai-codex
+ │ /v1/messages + non-sk → anthropic (Claude Code OAuth)
+ │ /v1/chat/completions → openai
+ ├─ Forward OAuth token unchanged (ZERO storage, ZERO logging)
+ └─ Cache keying: DISABLED (OAuth tokens may expire mid-session)
 ```
 
 ---

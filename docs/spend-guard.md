@@ -27,17 +27,17 @@ When a client sends a request to the TokenPak proxy:
 ```yaml
 # ~/.tokenpak/config.yaml
 spend_guard:
-  enabled: true                       # global on/off
-  warn_tokens: 100000                 # advisory only — no UX surface yet
-  warn_cost_usd: 2.0
-  block_tokens: 500000                # holds the request, prompts user
-  block_cost_usd: 10.0
-  hard_block_tokens: 1000000          # immutable ceiling
-  hard_block_cost_usd: 50.0
-  session_block_cost_usd: 10.0        # death-by-1000-cuts defense
-  session_window_seconds: 3600        # 1h sliding window
-  pending_ttl_seconds: 600            # held requests expire after 10 min
-  audit_db_path: ~/.tokenpak/spend_guard.db
+ enabled: true # global on/off
+ warn_tokens: 100000 # advisory only — no UX surface yet
+ warn_cost_usd: 2.0
+ block_tokens: 500000 # holds the request, prompts user
+ block_cost_usd: 10.0
+ hard_block_tokens: 1000000 # immutable ceiling
+ hard_block_cost_usd: 50.0
+ session_block_cost_usd: 10.0 # death-by-1000-cuts defense
+ session_window_seconds: 3600 # 1h sliding window
+ pending_ttl_seconds: 600 # held requests expire after 10 min
+ audit_db_path: ~/.tokenpak/spend_guard.db
 ```
 
 Every key is overrideable via `TOKENPAK_SPEND_GUARD_*` environment variables (e.g. `TOKENPAK_SPEND_GUARD_BLOCK_COST_USD=5.0`).
@@ -52,21 +52,21 @@ To disable entirely: `TOKENPAK_SPEND_GUARD_ENABLED=0` or `spend_guard.enabled: f
 
 ```json
 {
-  "error": {
-    "type": "tokenpak_spend_guard_blocked",
-    "message": "TIP Spend Guard blocked this request before provider send. Reply 'yes' to proceed, 'no' to cancel, or prepend '[TIP: allow=once]' to bypass.",
-    "reason": "session_cumulative_cost_exceeded",
-    "threshold_hit": "session_block_cost_usd>=10.0 running=9.85",
-    "projected_input_tokens": 78000,
-    "projected_output_tokens": 4000,
-    "projected_cost_usd": 0.62,
-    "model": "claude-opus-4-7",
-    "pending_id": "tpg_a1b2c3d4...",
-    "expires_at": 1715126400.0,
-    "approval_prompt": "Proceed? Yes / No",
-    "retryable": true,
-    "recovery_status": "user_action_required"
-  }
+ "error": {
+ "type": "tokenpak_spend_guard_blocked",
+ "message": "TIP Spend Guard blocked this request before provider send. Reply 'yes' to proceed, 'no' to cancel, or prepend '[TIP: allow=once]' to bypass.",
+ "reason": "session_cumulative_cost_exceeded",
+ "threshold_hit": "session_block_cost_usd>=10.0 running=9.85",
+ "projected_input_tokens": 78000,
+ "projected_output_tokens": 4000,
+ "projected_cost_usd": 0.62,
+ "model": "claude-opus-4-7",
+ "pending_id": "tpg_a1b2c3d4...",
+ "expires_at": 1715126400.0,
+ "approval_prompt": "Proceed? Yes / No",
+ "retryable": true,
+ "recovery_status": "user_action_required"
+ }
 }
 ```
 
@@ -139,15 +139,15 @@ Refactor the auth flow.
 Background agents (cron jobs, scheduled cycles, automated pipelines) have no human at the prompt. They MUST follow Standard 29 §6:
 
 1. **Pre-declare for known-large cycles.** Prepend the first prompt of any cycle expected to exceed $5 with:
-   ```text
-   [TIP: allow=once max=$8 reason="<cycle name>"]
-   ```
+ ```text
+ [TIP: allow=once max=$8 reason="<cycle name>"]
+ ```
 2. **Or set a tighter session ceiling per-cycle:**
-   ```bash
-   TOKENPAK_SPEND_GUARD_SESSION_BLOCK_COST_USD=20 \
-   ANTHROPIC_BASE_URL=http://127.0.0.1:8766 \
-   claude -p "..."
-   ```
+ ```bash
+ TOKENPAK_SPEND_GUARD_SESSION_BLOCK_COST_USD=20 \
+ ANTHROPIC_BASE_URL=http://127.0.0.1:8766 \
+ claude -p "..."
+ ```
 3. **Tolerate clean-exit on block.** Receive the structured 402, log it, terminate. **Never retry-loop** — the proxy enforces 30s anti-loop dedup, but a well-behaved agent shouldn't need that protection.
 
 A reference cron-prompt example lives at `~/vault/06_RUNTIME/cron-prompts/spend-guard-pre-declaration-example.md`.
@@ -161,10 +161,10 @@ Every guard decision writes one row to `~/.tokenpak/spend_guard.db`:
 ```sql
 -- Last 50 decisions for any session
 SELECT
-  datetime(ts, 'unixepoch', 'localtime') AS local_time,
-  session_id, event_type, decision,
-  projected_cost_usd, projected_tokens,
-  pending_id, tip_directive_json
+ datetime(ts, 'unixepoch', 'localtime') AS local_time,
+ session_id, event_type, decision,
+ projected_cost_usd, projected_tokens,
+ pending_id, tip_directive_json
 FROM spend_guard_audit
 ORDER BY ts DESC LIMIT 50;
 
@@ -177,7 +177,7 @@ ORDER BY n DESC;
 
 -- Sessions that hit the block band (with running cost when blocked)
 SELECT session_id, COUNT(*) AS blocks,
-       MAX(projected_cost_usd) AS max_projected
+ MAX(projected_cost_usd) AS max_projected
 FROM spend_guard_audit
 WHERE event_type = 'block'
 GROUP BY session_id
@@ -192,7 +192,7 @@ The audit writer is best-effort and non-blocking — guard decisions never wait 
 
 ## Threshold tuning
 
-The 2026-05-07 v1.5.1 ship-defaults are intentionally conservative. Sue (orchestrator) owns 7-day soak monitoring per Standard 29 §8:
+The 2026-05-07 v1.5.1 ship-defaults are intentionally conservative. The 7-day soak gate uses the standard threshold defaults:
 
 - **Day 1–2:** monitor `spend_guard_audit` for `block` rows. If false-positive rate > 5%, raise `session_block_cost_usd` to 15.0.
 - **Day 3–7:** review `tip_bypass` rows for repeating patterns that justify a permanent ceiling raise; or recommend per-cycle declared ceilings.

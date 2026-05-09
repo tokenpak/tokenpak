@@ -12,16 +12,16 @@ The error logger captures exceptions with full context for post-mortem analysis 
 from tokenpak.telemetry.error_logger import log_error
 
 try:
-    result = call_provider(model="gpt-4", input=user_prompt)
+ result = call_provider(model="gpt-4", input=user_prompt)
 except Exception as e:
-    log_error(
-        e,
-        request_id="req-123",
-        model="gpt-4",
-        provider="OpenAI",
-        input_size=2048,
-        cost_estimate=0.015
-    )
+ log_error(
+ e,
+ request_id="req-123",
+ model="gpt-4",
+ provider="OpenAI",
+ input_size=2048,
+ cost_estimate=0.015
+ )
 ```
 
 ### Log Files
@@ -29,26 +29,26 @@ except Exception as e:
 Logs are stored in `~/.tokenpak/logs/` as JSON Lines:
 
 ```
-errors-2026-03-23.jsonl  # Today's errors
-errors-2026-03-22.jsonl  # Yesterday's errors
-archive/                 # Logs >7 days old (gzipped)
+errors-2026-03-23.jsonl # Today's errors
+errors-2026-03-22.jsonl # Yesterday's errors
+archive/ # Logs >7 days old (gzipped)
 ```
 
 Each line is a valid JSON object:
 
 ```json
 {
-  "timestamp": "2026-03-23T15:30:00.123456",
-  "error_type": "TimeoutError",
-  "message": "Request timeout after 30s",
-  "stack_trace": "Traceback (most recent call last):\n  ...",
-  "context": {
-    "request_id": "req-123",
-    "model": "gpt-4",
-    "provider": "OpenAI",
-    "input_size": 2048,
-    "cost_estimate": 0.015
-  }
+ "timestamp": "2026-03-23T15:30:00.123456",
+ "error_type": "TimeoutError",
+ "message": "Request timeout after 30s",
+ "stack_trace": "Traceback (most recent call last):\n ...",
+ "context": {
+ "request_id": "req-123",
+ "model": "gpt-4",
+ "provider": "OpenAI",
+ "input_size": 2048,
+ "cost_estimate": 0.015
+ }
 }
 ```
 
@@ -86,16 +86,16 @@ Exceptions raised during proxy operation are automatically logged:
 ```python
 # In proxy request handler
 try:
-    response = await proxy.handle_request(request)
+ response = await proxy.handle_request(request)
 except Exception as e:
-    log_error(
-        e,
-        request_id=request.id,
-        model=request.model,
-        provider=request.provider,
-        input_size=len(request.input)
-    )
-    raise
+ log_error(
+ e,
+ request_id=request.id,
+ model=request.model,
+ provider=request.provider,
+ input_size=len(request.input)
+ )
+ raise
 ```
 
 ## Thread Safety

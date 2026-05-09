@@ -158,15 +158,15 @@ name: markdown
 version: "1.0"
 description: Compress markdown documents by removing redundant whitespace and collapsing list items
 targets:
-  - type: knowledge
-  - type: docs
+ - type: knowledge
+ - type: docs
 directives:
-  - strip_trailing_whitespace: true
-  - collapse_blank_lines: max=1
-  - remove_html_comments: true
-  - abbreviate_code_blocks:
-      max_lines: 30
-      placeholder: "# ... {n} lines omitted ..."
+ - strip_trailing_whitespace: true
+ - collapse_blank_lines: max=1
+ - remove_html_comments: true
+ - abbreviate_code_blocks:
+ max_lines: 30
+ placeholder: "# ... {n} lines omitted ..."
 ```
 
 Each directive maps to a compressor in `tokenpak/agent/compression/`. The `targets` field tells the pipeline which block types this recipe applies to.
@@ -176,9 +176,9 @@ Each directive maps to a compressor in `tokenpak/agent/compression/`. The `targe
 Say you want to keep more code lines visible. Change `max_lines: 30` to `max_lines: 50`:
 
 ```yaml
-  - abbreviate_code_blocks:
-      max_lines: 50
-      placeholder: "# ... {n} lines omitted ..."
+ - abbreviate_code_blocks:
+ max_lines: 50
+ placeholder: "# ... {n} lines omitted ..."
 ```
 
 Save the file.
@@ -237,13 +237,13 @@ To send alerts to Slack, add your webhook URL to `~/.tokenpak/config.json`:
 
 ```json
 {
-  "budget": {
-    "monthly_usd": 50,
-    "alert_at_pct": 80,
-    "alerts": {
-      "slack_webhook": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
-    }
-  }
+ "budget": {
+ "monthly_usd": 50,
+ "alert_at_pct": 80,
+ "alerts": {
+ "slack_webhook": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+ }
+ }
 }
 ```
 
@@ -317,11 +317,11 @@ sudo systemctl status tokenpak
 ```bash
 docker pull tokenpak/tokenpak:latest
 docker run -d \
-  --name tokenpak \
-  --restart unless-stopped \
-  -p 8766:8766 \
-  -v ~/.tokenpak:/root/.tokenpak \
-  tokenpak/tokenpak:latest
+ --name tokenpak \
+ --restart unless-stopped \
+ -p 8766:8766 \
+ -v ~/.tokenpak:/root/.tokenpak \
+ tokenpak/tokenpak:latest
 ```
 
 Or use Docker Compose for a full stack with Redis cache:

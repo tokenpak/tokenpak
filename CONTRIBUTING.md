@@ -254,22 +254,6 @@ black --check .
 
 ---
 
-## Submitting Work for QA (Agent Workflow)
-
-> **Internal agent protocol.** External contributors skip this section.
-
-Before setting task status to `review`, ensure your code is accessible to Sue's QA machine:
-
-1. `cd ~/Projects/tokenpak`
-2. `git push shared main` ← **REQUIRED** — Sue's QA cannot see local-only commits
-3. `git push origin main` ← push to GitHub too
-4. In the task file: add commit hash from `git log --oneline -1`
-5. Set `status: review` in the vault task file and push vault
-
-**Why this matters:** The `shared` remote (`<shared-qa-host>:~/tokenpak-origin.git`) is the QA verification path. Commits that only exist locally on a contributor's dev machine are invisible during QA review and will cause rejection.
-
----
-
 ## Submitting Changes
 
 1. **Branch from `master`**: `git checkout -b fix/your-fix`

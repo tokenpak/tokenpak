@@ -1,20 +1,41 @@
-# TokenPak Code Owners
-# These owners will be automatically requested for review on PRs.
+# CODEOWNERS — required reviewers on the public TokenPak repo.
+#
+# All public commits flow via the workbench → staging → public promotion
+# protocol; CODEOWNERS ensures release-critical paths get explicit
+# review even when the promotion is otherwise green.
 
 # Default owner for everything
-* @kaywhy331
+*                                                  @kaywhy331
+
+# Release-critical files
+/.github/workflows/release.yml                     @kaywhy331
+/pyproject.toml                                    @kaywhy331
+/CHANGELOG.md                                      @kaywhy331
+/tokenpak/__init__.py                              @kaywhy331
+
+# Public-surface guardrails
+/.github/CODEOWNERS                                @kaywhy331
+/.github/workflows/public-layout-check.yml         @kaywhy331
+/.github/workflows/identity-language-check.yml     @kaywhy331
+/.pre-commit-config.yaml                           @kaywhy331
+/.gitignore                                        @kaywhy331
 
 # Core proxy engine
-/tokenpak/proxy/ @kaywhy331
-/tokenpak/core/ @kaywhy331
+/tokenpak/proxy/                                   @kaywhy331
+/tokenpak/core/                                    @kaywhy331
 
 # Configuration and schemas
-/schemas/ @kaywhy331
-/tokenpak/config/ @kaywhy331
+/schemas/                                          @kaywhy331
+/tokenpak/config/                                  @kaywhy331
 
 # CI/CD
-/.github/workflows/ @kaywhy331
+/.github/workflows/                                @kaywhy331
 
-# Documentation
-/docs/ @kaywhy331
-/*.md @kaywhy331
+# Documentation surface
+/README.md                                         @kaywhy331
+/CONTRIBUTING.md                                   @kaywhy331
+/SECURITY.md                                       @kaywhy331
+/CODE_OF_CONDUCT.md                                @kaywhy331
+/LICENSE                                           @kaywhy331
+/LICENSE_COMMERCIAL.md                             @kaywhy331
+/docs/                                             @kaywhy331

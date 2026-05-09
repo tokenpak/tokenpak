@@ -1,0 +1,104 @@
+name: Public layout check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Read-only repo access; no secrets used.
+permissions:
+  contents: read
+
+jobs:
+  layout:
+    name: Layout check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Forbidden top-level paths
+        run: |
+          set -euo pipefail
+          # The following paths must NEVER appear at the root of the
+          # public repo. They are workbench / internal / runtime
+          # artifacts. The audit + cleanup of 2026-05-09 removed them;
+          # this guard prevents regression.
+          forbidden=(
+            standards
+            metrics-worker
+            monitoring
+            deployments
+            charts
+            portal
+            vscode-extension
+            trackedge
+            site
+            dashboard
+            artifacts
+            .tokenpak
+            .claude
+            .benchmarks
+            .grimp_cache
+            .import_linter_cache
+          )
+          fail=0
+          for p in "${forbidden[@]}"; do
+            if [ -e "$p" ]; then
+              echo "::error file=$p::Forbidden top-level path '$p' is present in the public repo."
+              fail=1
+            fi
+          done
+
+          # Forbidden file patterns (any depth)
+          if find . -path ./.git -prune -o \
+                  \( -name '*.bak' -o \
+                     -name '*.corrupt-*' -o \
+                     -name 'monitor.db*' -o \
+                     -name 'mypy*.txt' -o \
+                     -name 'proxy_monolith.py.bak' \) \
+                  -print | grep -q .; then
+            echo "::error::Forbidden file pattern present (*.bak / *.corrupt-* / monitor.db* / mypy*.txt)."
+            find . -path ./.git -prune -o \
+                  \( -name '*.bak' -o \
+                     -name '*.corrupt-*' -o \
+                     -name 'monitor.db*' -o \
+                     -name 'mypy*.txt' \) \
+                  -print | sed 's/^/  /' >&2
+            fail=1
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            echo
+            echo "Layout check failed. See README / CONTRIBUTING for the canonical public layout."
+            exit 1
+          fi
+          echo "Layout check OK."
+
+      - name: Required canonical entries present
+        run: |
+          set -euo pipefail
+          required=(
+            README.md
+            CHANGELOG.md
+            CONTRIBUTING.md
+            CODE_OF_CONDUCT.md
+            SECURITY.md
+            LICENSE
+            pyproject.toml
+            .gitignore
+            tokenpak
+            tests
+            docs
+          )
+          fail=0
+          for p in "${required[@]}"; do
+            if [ ! -e "$p" ]; then
+              echo "::error file=$p::Required canonical entry '$p' is missing."
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Required-entries check OK."

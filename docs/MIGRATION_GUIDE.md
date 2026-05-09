@@ -11,16 +11,16 @@ TokenPak now has a clean, documented public API. Import everything from the top-
 
 ```python
 from tokenpak import (
-    TelemetryCollector,
-    CompletionTracker,
-    CacheManager,
-    CompressionEngine,
-    HeuristicEngine,
-    Block,
-    BlockRegistry,
-    Budgeter,
-    BudgetBlock,
-    get_engine,
+ TelemetryCollector,
+ CompletionTracker,
+ CacheManager,
+ CompressionEngine,
+ HeuristicEngine,
+ Block,
+ BlockRegistry,
+ Budgeter,
+ BudgetBlock,
+ get_engine,
 )
 ```
 
@@ -202,24 +202,24 @@ tokenpak replay run <id> --diff
 ### v0.1 Config (Still Works)
 ```json
 {
-  "mode": "hybrid",
-  "vault_path": "~/.tokenpak/blocks"
+ "mode": "hybrid",
+ "vault_path": "~/.tokenpak/blocks"
 }
 ```
 
 ### v1.0 Config (New Options)
 ```json
 {
-  "mode": "hybrid",
-  "vault_path": "~/.tokenpak/blocks",
-  "cache_control": true,
-  "tool_schema_freeze": true,
-  "canon_enabled": true,
-  "budget": {
-    "daily_limit": 10.0,
-    "monthly_limit": 200.0,
-    "alert_threshold": 0.8
-  }
+ "mode": "hybrid",
+ "vault_path": "~/.tokenpak/blocks",
+ "cache_control": true,
+ "tool_schema_freeze": true,
+ "canon_enabled": true,
+ "budget": {
+ "daily_limit": 10.0,
+ "monthly_limit": 200.0,
+ "alert_threshold": 0.8
+ }
 }
 ```
 

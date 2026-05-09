@@ -112,7 +112,7 @@ response = client.chat.completions.create(
 
 ### OpenClaw
 
-In your `openclaw.json`:
+In your config file:
 ```json
 {
   "providers": {

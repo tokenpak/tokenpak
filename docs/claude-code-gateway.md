@@ -11,25 +11,25 @@ export ANTHROPIC_BASE_URL=http://127.0.0.1:8766
 claude --print "Hello" --model claude-sonnet-4-6
 ```
 
-All Claude Code requests flow through the proxy.  No SDK changes are needed.
+All Claude Code requests flow through the proxy. No SDK changes are needed.
 
 ---
 
-## Semantic Cache — Wire-Format Awareness (CCG-15)
+## Semantic Cache — Wire-Format Awareness
 
 TokenPak's semantic cache stores and serves LLM responses for near-duplicate
-queries.  As of CCG-15, the cache is **wire-format-aware**: JSON and SSE
+queries. As of CCG-15, the cache is **wire-format-aware**: JSON and SSE
 (Server-Sent Events / streaming) responses are stored and served separately.
 
 ### How It Works
 
-| Client request              | Cache key dimension | Served as              |
+| Client request | Cache key dimension | Served as |
 |-----------------------------|---------------------|------------------------|
-| `"stream": false` (JSON)    | `wire_format=json`  | `application/json`     |
-| `"stream": true`  (SSE)     | `wire_format=sse`   | `text/event-stream`    |
+| `"stream": false` (JSON) | `wire_format=json` | `application/json` |
+| `"stream": true` (SSE) | `wire_format=sse` | `text/event-stream` |
 
 A JSON-format cache entry is **never** served to a streaming client, and vice
-versa.  Cross-format lookups always return a cache miss.
+versa. Cross-format lookups always return a cache miss.
 
 ### Cache Hit Behaviour
 
@@ -49,9 +49,9 @@ when the entry was first populated.
 ### SSE Buffer Cap
 
 To prevent memory blowups on large streaming responses, the proxy accumulates
-SSE chunks in a bounded in-memory tee buffer (default: **256 KB**).  If a
+SSE chunks in a bounded in-memory tee buffer (default: **256 KB**). If a
 streaming response exceeds the cap, the response is forwarded to the client
-as normal but **not stored** in the cache.  No error is raised.
+as normal but **not stored** in the cache. No error is raised.
 
 The buffer cap is configurable via the `_SC_TEE_CAP` constant in `proxy.py`
 (default `256 * 1024` bytes).
@@ -68,15 +68,15 @@ on the lookup path and the store path.
 
 ```
 journalctl --user -u tokenpak-proxy | grep phase_semantic_cache
-# Claude Code requests:     phase_semantic_cache: skipped:streaming-or-agent
-# Non-CC streaming:         phase_semantic_cache: miss  (then hit on repeat)
-# JSON SDK requests:        phase_semantic_cache: miss  (then hit on repeat)
+# Claude Code requests: phase_semantic_cache: skipped:streaming-or-agent
+# Non-CC streaming: phase_semantic_cache: miss (then hit on repeat)
+# JSON SDK requests: phase_semantic_cache: miss (then hit on repeat)
 ```
 
 ### Why Claude Code Is Bypassed
 
 A cached SSE response carries the **original `message_id` and `tool_use` IDs**
-from the upstream Anthropic API.  When replayed into a fresh Claude Code agent
+from the upstream Anthropic API. When replayed into a fresh Claude Code agent
 loop, these stale IDs can desynchronize the agent's tool-call tracking, causing
 unpredictable failures.
 
@@ -87,10 +87,10 @@ do **not** have this constraint and benefit from SSE caching after CCG-15.
 
 The next tier of caching for Claude Code traffic will synthesize fresh
 `message_id` and `tool_use` IDs on cache hits, making replayed SSE responses
-safe for agent loops.  This is tracked as a separate task (no packet yet).
+safe for agent loops. This is tracked as a separate task (no packet yet).
 
 Until Tier 3 ships, the bypass guard remains active for all Claude Code
-requests.  The constant `"skipped:streaming-or-agent"` in the journal is the
+requests. The constant `"skipped:streaming-or-agent"` in the journal is the
 canonical indicator that the CCG-14/CCG-15 guard fired.
 
 ---
@@ -120,18 +120,18 @@ difference was JSON re-serialization in the pipeline.
 
 ```
 Claude Code CLI
-    │  Authorization: Bearer + all native headers
-    │  Body: ~110KB JSON (system prompt, tools, messages)
-    ▼
+ │ Authorization: Bearer + all native headers
+ │ Body: ~110KB JSON (system prompt, tools, messages)
+ ▼
 tokenpak proxy
-    ├─ Headers: forwarded verbatim (no allowlist filtering)
-    ├─ Auth: passed through unchanged
-    ├─ Body: original bytes preserved
-    │   └─ Byte-level vault injection (optional, budget-limited)
-    │      Splices text block directly into "system" array bytes
-    │      without json.loads/json.dumps round-trip
-    ▼
-api.anthropic.com  ← sees identical request to direct Claude Code
+ ├─ Headers: forwarded verbatim (no allowlist filtering)
+ ├─ Auth: passed through unchanged
+ ├─ Body: original bytes preserved
+ │ └─ Byte-level vault injection (optional, budget-limited)
+ │ Splices text block directly into "system" array bytes
+ │ without json.loads/json.dumps round-trip
+ ▼
+api.anthropic.com ← sees identical request to direct Claude Code
 ```
 
 ### What Works in Pass-Through Mode
@@ -143,7 +143,7 @@ api.anthropic.com  ← sees identical request to direct Claude Code
 | **Request logging** | Structured JSON logs | Model, tokens, latency, status |
 | **Budget enforcement** | Pre-send token estimate check | Returns 429 if exceeded |
 | **DB logging** | SQLite `monitor.db` | Full audit trail |
-| **Multi-provider failover** | Response-side 5xx detection | CCI-05 failover chain |
+| **Multi-provider failover** | Response-side 5xx detection | failover chain (planned) |
 
 ### What Does NOT Work in Pass-Through Mode
 
@@ -159,7 +159,7 @@ api.anthropic.com  ← sees identical request to direct Claude Code
 Instead of `json.loads → modify → json.dumps`, the proxy:
 
 1. Finds the closing `]` of the `"system"` array via byte scanning
-   (tracks string state + nesting depth, ~microseconds for 110KB)
+ (tracks string state + nesting depth, ~microseconds for 110KB)
 2. JSON-escapes the injection text with `json.dumps(text)`
 3. Splices `{"type": "text", "text": <escaped>}` at the bracket offset
 4. All other bytes remain untouched
@@ -191,23 +191,23 @@ currently not supported."
 
 ## Configuration
 
-| Environment variable              | Default | Description                                            |
+| Environment variable | Default | Description |
 |-----------------------------------|---------|--------------------------------------------------------|
-| `ANTHROPIC_BASE_URL`              | —       | Set to `http://127.0.0.1:8766` for Claude Code clients |
-| `TOKENPAK_CC_INJECT_MAX_CHARS`    | `2000`  | Max vault injection chars for Claude Code (~500 tokens) |
-| `TOKENPAK_CC_INJECT_MIN_QUERY`    | `50`    | Min user prompt length to trigger vault injection       |
-| `TOKENPAK_INJECT_MIN_SCORE`       | `2.0`   | Min BM25 relevance score for vault blocks               |
-| `TOKENPAK_INJECT_BUDGET`          | `4000`  | Vault search budget (tokens) — results trimmed by CC max |
-| `TOKENPAK_SEMANTIC_CACHE`         | `0`     | Enable semantic cache (`1` to enable)                   |
-| `TOKENPAK_UPSTREAM_TIMEOUT`       | `90`    | Upstream request timeout in seconds                     |
+| `ANTHROPIC_BASE_URL` | — | Set to `http://127.0.0.1:8766` for Claude Code clients |
+| `TOKENPAK_CC_INJECT_MAX_CHARS` | `2000` | Max vault injection chars for Claude Code (~500 tokens) |
+| `TOKENPAK_CC_INJECT_MIN_QUERY` | `50` | Min user prompt length to trigger vault injection |
+| `TOKENPAK_INJECT_MIN_SCORE` | `2.0` | Min BM25 relevance score for vault blocks |
+| `TOKENPAK_INJECT_BUDGET` | `4000` | Vault search budget (tokens) — results trimmed by CC max |
+| `TOKENPAK_SEMANTIC_CACHE` | `0` | Enable semantic cache (`1` to enable) |
+| `TOKENPAK_UPSTREAM_TIMEOUT` | `90` | Upstream request timeout in seconds |
 
 ---
 
 ## Related Tasks
 
-| Task   | Description                                                         |
+| Task | Description |
 |--------|---------------------------------------------------------------------|
-| CCG-14 | Tier 1 hotfix — bypass cache for streaming + Claude Code requests  |
-| CCG-15 | Tier 2 — wire-format-aware cache stores and serves SSE responses   |
-| CCG-16 | Regression tests for the CCG-14/15 guard composition               |
-| Tier 3 | Agent-aware cache — synthesize fresh IDs on hit (not yet scoped)   |
+| CCG-14 | Tier 1 hotfix — bypass cache for streaming + Claude Code requests |
+| CCG-15 | Tier 2 — wire-format-aware cache stores and serves SSE responses |
+| CCG-16 | Regression tests for the CCG-14/15 guard composition |
+| Tier 3 | Agent-aware cache — synthesize fresh IDs on hit (not yet scoped) |

@@ -26,16 +26,16 @@ pip install -e ".[dev]"
 
 1. **Fork** the repository (first-time contributors)
 2. **Branch** off `main` or `oss-launch`:
-   ```bash
-   git checkout -b feat/your-feature-name
-   ```
+ ```bash
+ git checkout -b feat/your-feature-name
+ ```
 3. **Make changes** and write/update tests
 4. **Run CI checks locally** before pushing:
-   ```bash
-   ruff check tokenpak/ tests/        # lint
-   mypy tokenpak/ --ignore-missing-imports  # type check
-   pytest tests/ --cov=tokenpak --cov-fail-under=70  # tests + coverage
-   ```
+ ```bash
+ ruff check tokenpak/ tests/ # lint
+ mypy tokenpak/ --ignore-missing-imports # type check
+ pytest tests/ --cov=tokenpak --cov-fail-under=70 # tests + coverage
+ ```
 5. **Push** your branch and open a Pull Request against `main` or `oss-launch`
 
 ---

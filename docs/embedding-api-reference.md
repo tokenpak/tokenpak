@@ -18,9 +18,9 @@ OpenAI-compatible request/response format. Drop in place of `https://api.openai.
 
 ```json
 {
-  "input": "text to embed",
-  "model": "voyage-3-large",
-  "dimensions": 1024
+ "input": "text to embed",
+ "model": "voyage-3-large",
+ "dimensions": 1024
 }
 ```
 
@@ -38,26 +38,26 @@ Standard OpenAI-compatible response, with an additional `_tokenpak` metadata blo
 
 ```json
 {
-  "object": "list",
-  "data": [
-    {
-      "object": "embedding",
-      "index": 0,
-      "embedding": [0.123, -0.456, "..."]
-    }
-  ],
-  "model": "voyage-3-large",
-  "usage": {
-    "prompt_tokens": 8,
-    "total_tokens": 8
-  },
-  "_tokenpak": {
-    "provider": "voyage",
-    "upstream_model": "voyage-3-large",
-    "latency_ms": 142.3,
-    "cached": false,
-    "fallback_used": false
-  }
+ "object": "list",
+ "data": [
+ {
+ "object": "embedding",
+ "index": 0,
+ "embedding": [0.123, -0.456, "..."]
+ }
+ ],
+ "model": "voyage-3-large",
+ "usage": {
+ "prompt_tokens": 8,
+ "total_tokens": 8
+ },
+ "_tokenpak": {
+ "provider": "voyage",
+ "upstream_model": "voyage-3-large",
+ "latency_ms": 142.3,
+ "cached": false,
+ "fallback_used": false
+ }
 }
 ```
 
@@ -98,13 +98,13 @@ When every provider in the chain is in cooldown or has been exhausted, the proxy
 
 ```json
 {
-  "error": {
-    "type": "all_providers_in_cooldown",
-    "message": "All embedding providers are temporarily unavailable.",
-    "providers": {
-      "voyage": { "cooldown_until": 1712700000.0, "seconds_remaining": 247.3, "last_error_code": 429 }
-    }
-  }
+ "error": {
+ "type": "all_providers_in_cooldown",
+ "message": "All embedding providers are temporarily unavailable.",
+ "providers": {
+ "voyage": { "cooldown_until": 1712700000.0, "seconds_remaining": 247.3, "last_error_code": 429 }
+ }
+ }
 }
 ```
 
@@ -129,27 +129,27 @@ When every provider in the chain is in cooldown or has been exhausted, the proxy
 
 ```bash
 curl http://localhost:8766/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -d '{"input": "The quick brown fox", "model": "voyage-3-large"}'
+ -H "Content-Type: application/json" \
+ -d '{"input": "The quick brown fox", "model": "voyage-3-large"}'
 ```
 
 ### Embed a batch
 
 ```bash
 curl http://localhost:8766/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": ["First document", "Second document"],
-    "model": "text-embedding-3-small"
-  }'
+ -H "Content-Type: application/json" \
+ -d '{
+ "input": ["First document", "Second document"],
+ "model": "text-embedding-3-small"
+ }'
 ```
 
 ### Request specific dimensions
 
 ```bash
 curl http://localhost:8766/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -d '{"input": "example", "model": "text-embedding-3-large", "dimensions": 256}'
+ -H "Content-Type: application/json" \
+ -d '{"input": "example", "model": "text-embedding-3-large", "dimensions": 256}'
 ```
 
 ### Override provider order at runtime

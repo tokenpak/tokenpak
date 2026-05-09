@@ -25,12 +25,12 @@ Overall statistics summary.
 **Response:**
 ```json
 {
-  "total_requests": 847,
-  "total_tokens_in": 2140000,
-  "total_tokens_saved": 891000,
-  "total_cost_usd": 10.42,
-  "compression_rate": 0.416,
-  "since": "2026-01-01T00:00:00Z"
+ "total_requests": 847,
+ "total_tokens_in": 2140000,
+ "total_tokens_saved": 891000,
+ "total_cost_usd": 10.42,
+ "compression_rate": 0.416,
+ "since": "2026-01-01T00:00:00Z"
 }
 ```
 
@@ -56,23 +56,23 @@ List recorded sessions with optional filters.
 **Response:**
 ```json
 {
-  "sessions": [
-    {
-      "id": "sess_abc123",
-      "timestamp": "2026-03-05T14:23:11Z",
-      "model": "claude-3-5-sonnet-20241022",
-      "agent": "cali",
-      "tokens_in": 4231,
-      "tokens_in_compressed": 2847,
-      "tokens_out": 612,
-      "cost_usd": 0.0041,
-      "compression_rate": 0.327,
-      "recipe": "python-strip-comments",
-      "latency_ms": 1243
-    }
-  ],
-  "total": 23,
-  "has_more": false
+ "sessions": [
+ {
+ "id": "sess_abc123",
+ "timestamp": "2026-03-05T14:23:11Z",
+ "model": "claude-3-5-sonnet-20241022",
+ "agent": "cali",
+ "tokens_in": 4231,
+ "tokens_in_compressed": 2847,
+ "tokens_out": 612,
+ "cost_usd": 0.0041,
+ "compression_rate": 0.327,
+ "recipe": "python-strip-comments",
+ "latency_ms": 1243
+ }
+ ],
+ "total": 23,
+ "has_more": false
 }
 ```
 
@@ -101,20 +101,20 @@ Team-wide aggregated stats. Requires admin token.
 **Response:**
 ```json
 {
-  "team_stats": {
-    "total_requests": 1243,
-    "total_cost_usd": 45.20,
-    "total_tokens_saved": 3100000,
-    "active_agents": 3
-  },
-  "by_agent": [
-    {
-      "agent": "cali",
-      "requests": 542,
-      "cost_usd": 19.40,
-      "tokens_saved": 1320000
-    }
-  ]
+ "team_stats": {
+ "total_requests": 1243,
+ "total_cost_usd": 45.20,
+ "total_tokens_saved": 3100000,
+ "active_agents": 3
+ },
+ "by_agent": [
+ {
+ "agent": "cali",
+ "requests": 542,
+ "cost_usd": 19.40,
+ "tokens_saved": 1320000
+ }
+ ]
 }
 ```
 
@@ -127,16 +127,16 @@ Per-agent detail. Requires admin token.
 **Response:**
 ```json
 {
-  "agent": "cali",
-  "requests_today": 14,
-  "cost_today_usd": 0.42,
-  "requests_month": 542,
-  "cost_month_usd": 19.40,
-  "budget_remaining_usd": 80.60,
-  "compression_rate": 0.41,
-  "top_models": [
-    { "model": "claude-3-5-sonnet", "requests": 380, "cost_usd": 14.20 }
-  ]
+ "agent": "cali",
+ "requests_today": 14,
+ "cost_today_usd": 0.42,
+ "requests_month": 542,
+ "cost_month_usd": 19.40,
+ "budget_remaining_usd": 80.60,
+ "compression_rate": 0.41,
+ "top_models": [
+ { "model": "claude-3-5-sonnet", "requests": 380, "cost_usd": 14.20 }
+ ]
 }
 ```
 
@@ -164,9 +164,9 @@ Replay a session with optional overrides.
 **Request body:**
 ```json
 {
-  "compress": false,
-  "model": "gpt-4o-mini",
-  "diff": true
+ "compress": false,
+ "model": "gpt-4o-mini",
+ "diff": true
 }
 ```
 
@@ -183,19 +183,19 @@ Proxy health and stats.
 **Response:**
 ```json
 {
-  "status": "ok",
-  "version": "0.1.1",
-  "uptime_seconds": 86400,
-  "compression": {
-    "enabled": true,
-    "mode": "hybrid",
-    "threshold_tokens": 4500
-  },
-  "session": {
-    "requests": 23,
-    "tokens_saved": 18341,
-    "cost_usd": 0.042
-  }
+ "status": "ok",
+ "version": "0.1.1",
+ "uptime_seconds": 86400,
+ "compression": {
+ "enabled": true,
+ "mode": "hybrid",
+ "threshold_tokens": 4500
+ },
+ "session": {
+ "requests": 23,
+ "tokens_saved": 18341,
+ "cost_usd": 0.042
+ }
 }
 ```
 
@@ -208,11 +208,11 @@ Detailed health check.
 **Response:**
 ```json
 {
-  "proxy": "ok",
-  "database": "ok",
-  "index": "ok",
-  "compression_pipeline": "ok",
-  "version": "0.1.1"
+ "proxy": "ok",
+ "database": "ok",
+ "index": "ok",
+ "compression_pipeline": "ok",
+ "version": "0.1.1"
 }
 ```
 
@@ -227,12 +227,12 @@ Current budget status.
 **Response:**
 ```json
 {
-  "monthly_usd": 50.0,
-  "spent_usd": 23.4,
-  "remaining_usd": 26.6,
-  "pct_used": 46.8,
-  "alert_at_pct": 80,
-  "on_exceeded": "warn"
+ "monthly_usd": 50.0,
+ "spent_usd": 23.4,
+ "remaining_usd": 26.6,
+ "pct_used": 46.8,
+ "alert_at_pct": 80,
+ "on_exceeded": "warn"
 }
 ```
 
@@ -247,11 +247,11 @@ List of distinct models seen in session history.
 **Response:**
 ```json
 {
-  "models": [
-    "claude-3-5-sonnet-20241022",
-    "gpt-4o",
-    "gpt-4o-mini"
-  ]
+ "models": [
+ "claude-3-5-sonnet-20241022",
+ "gpt-4o",
+ "gpt-4o-mini"
+ ]
 }
 ```
 
@@ -266,13 +266,13 @@ List active routing rules.
 **Response:**
 ```json
 {
-  "rules": [
-    {
-      "pattern": ".*test.*",
-      "model": "gpt-4o-mini",
-      "created": "2026-03-01T10:00:00Z"
-    }
-  ]
+ "rules": [
+ {
+ "pattern": ".*test.*",
+ "model": "gpt-4o-mini",
+ "created": "2026-03-01T10:00:00Z"
+ }
+ ]
 }
 ```
 
@@ -285,15 +285,15 @@ Test which model a prompt would be routed to.
 **Request:**
 ```json
 {
-  "prompt": "write unit tests for auth.py"
+ "prompt": "write unit tests for auth.py"
 }
 ```
 
 **Response:**
 ```json
 {
-  "model": "gpt-4o-mini",
-  "matched_rule": ".*test.*",
-  "fallback": "claude-3-5-sonnet-20241022"
+ "model": "gpt-4o-mini",
+ "matched_rule": ".*test.*",
+ "fallback": "claude-3-5-sonnet-20241022"
 }
 ```

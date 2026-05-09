@@ -37,7 +37,7 @@ tokenpak recommendations --json | jq '.recommendations[].id'
 | Rule id | Severity | Triggers when |
 |---|---|---|
 | `cache.zero-lookups` | high | At least 5 requests in the window have **0 total cache-read tokens** — TokenPak proxy is taking traffic but the semantic-cache stage isn't producing hits. |
-| `attribution.high-unattributed` | high (≥30%) / medium (≥10%) | A meaningful fraction of traffic can't be attributed to a savings source. Reads `tp_savings_attribution` (TIP-06) when present, falls back to `tp_usage.usage_source`. |
+| `attribution.high-unattributed` | high (≥30%) / medium (≥10%) | A meaningful fraction of traffic can't be attributed to a savings source. Reads `tp_savings_attribution` when present, falls back to `tp_usage.usage_source`. |
 | `errors.high-rate` | high (≥10%) / medium (≥3%) | A noticeable fraction of recent requests left the proxy in a non-`ok` state. |
 | `cache.schema-instability` | medium | At least 5 cache misses in the window were attributed to `tool_schema_digest_mismatch` — likely tool-schema normalization drift. |
 | `pricing.missing:<model>` | tracking | A model was seen in traffic but no pricing entry exists in `tp_pricing_catalog` or the bundled pricing helper. |

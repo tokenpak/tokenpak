@@ -1,7 +1,7 @@
 # TokenPak Performance Benchmarks
 
-**Version:** v1.0 RC1  
-**Date:** 2026-03-06  
+**Version:** v1.0 RC1
+**Date:** 2026-03-06
 **Environment:** <dev-host> (4GB RAM, Python 3.12)
 
 ## Summary
@@ -35,7 +35,7 @@ Duration: 93.13s
 
 ## Production Metrics (7-day rolling)
 
-From `~/.openclaw/workspace/~/.tokenpak/monitor.db`:
+From `~/.tokenpak/monitor.db`:
 
 | Metric | Value |
 |--------|-------|
@@ -94,13 +94,13 @@ Note: Latency includes upstream API time. TokenPak overhead is <50ms.
 
 ## Edge Cases Tested
 
-✅ Empty input handling  
-✅ Large inputs (>100K tokens) — chunked processing  
-✅ Unicode/emoji — preserved correctly  
-✅ Malformed JSON — graceful error  
-✅ Network timeouts — retry with backoff  
-✅ Rate limiting — automatic failover  
-✅ Concurrent requests — thread-safe  
+✅ Empty input handling
+✅ Large inputs (>100K tokens) — chunked processing
+✅ Unicode/emoji — preserved correctly
+✅ Malformed JSON — graceful error
+✅ Network timeouts — retry with backoff
+✅ Rate limiting — automatic failover
+✅ Concurrent requests — thread-safe
 
 ## Benchmark Methodology
 
@@ -126,10 +126,10 @@ Note: Latency includes upstream API time. TokenPak overhead is <50ms.
 
 ## Live Benchmarks (2026-03-08)
 
-**Captured:** 2026-03-08 10:40 AM PST  
-**Proxy version:** v0.4.0  
-**Proxy uptime:** ~0.8 hours (2862 seconds — recently restarted)  
-**Compilation mode:** hybrid  
+**Captured:** 2026-03-08 10:40 AM PST
+**Proxy version:** v0.4.0
+**Proxy uptime:** ~0.8 hours (2862 seconds — recently restarted)
+**Compilation mode:** hybrid
 
 ### Proxy Health Status
 
@@ -176,13 +176,13 @@ Note: Latency includes upstream API time. TokenPak overhead is <50ms.
 
 ## Live Benchmarks (2026-03-08 Evening)
 
-**Snapshot time:** 2026-03-08 ~21:10 PST  
-**Proxy version:** 0.4.0  
-**Uptime:** 4188 seconds (~69.8 minutes)  
-**Total requests served:** 0 (proxy restarted recently — stats reset)  
-**Compression ratio:** N/A (no requests since restart)  
-**Input tokens processed:** 0  
-**Tokens saved:** 0  
+**Snapshot time:** 2026-03-08 ~21:10 PST
+**Proxy version:** 0.4.0
+**Uptime:** 4188 seconds (~69.8 minutes)
+**Total requests served:** 0 (proxy restarted recently — stats reset)
+**Compression ratio:** N/A (no requests since restart)
+**Input tokens processed:** 0
+**Tokens saved:** 0
 
 **Features active at snapshot time:**
 - Compilation mode: hybrid
@@ -217,9 +217,9 @@ Note: Latency includes upstream API time. TokenPak overhead is <50ms.
 ### Proxy Status
 - `GET localhost:8766/health`: `status: ok`
 - Current runtime stats (from health payload at measurement time):
-  - requests: 1
-  - input_tokens: 24,727
-  - sent_input_tokens: 22,089
-  - saved_tokens: 2,638
-  - protected_tokens: 19,836
-  - errors: 3
+ - requests: 1
+ - input_tokens: 24,727
+ - sent_input_tokens: 22,089
+ - saved_tokens: 2,638
+ - protected_tokens: 19,836
+ - errors: 3

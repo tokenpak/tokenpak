@@ -1,9 +1,7 @@
 ---
 title: "TokenPak Architecture v2 — Universal Content Compiler"
 type: spec
-project: "[[Projects/tokenpak/overview]]"
 created: 2026-02-20
-author: Trix
 status: active
 tags:
   - type/architecture
@@ -424,15 +422,6 @@ Open source (MIT). All features included: CLI, text processing, compression, QMD
 | 11 | Documentation, examples, benchmarks |
 | 12 | Open source launch (GitHub, Hacker News, Discord) |
 
-### Agent Support
-
-| Agent | Role |
-|---|---|
-| **Kevin** | Architecture decisions, positioning, launch strategy |
-| **Cali** | Core implementation, multimodal processors, QMD integration |
-| **Trix** | Proxy/monitoring, benchmarks, documentation, DevOps |
-| **Sue** | Task management, QA, community prep |
-
 ---
 
 ## Success Metrics
@@ -475,4 +464,3 @@ Open source (MIT). All features included: CLI, text processing, compression, QMD
 ---
 
 *Architecture v2: 2026-02-20*
-*Authors: Trix 🐰 + Kevin*
