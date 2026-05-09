@@ -337,6 +337,195 @@ def test_unknown_pak_post_returns_404():
 
 
 # ---------------------------------------------------------------------------
+# POST /pak/v1/promote — Pro daemon forward (Std 32 §4)
+# ---------------------------------------------------------------------------
+#
+# When the daemon is absent → 501 ``pro_daemon_required``.
+# When the daemon is present → forward request body to the daemon's
+# loopback port and proxy back the response.
+#
+# Tests use a minimal stub HTTP server in a thread to stand in for the
+# real Pro daemon (which is closed-source and not importable here).
+
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+
+class _DaemonStub:
+    """Tiny localhost HTTP server that records forwarded requests.
+
+    Returns ``self.canned_response`` (status, body) for every POST it
+    receives, regardless of path. Use the ``with`` form to manage
+    lifecycle::
+
+        with _DaemonStub(canned_status=201, canned_body={"pak_id": "x"}) as stub:
+            ...
+    """
+
+    def __init__(self, *, canned_status: int = 201, canned_body: dict | None = None):
+        self.canned_status = canned_status
+        self.canned_body = canned_body or {"promoted": True, "pak_id": "pak-int-stub"}
+        self.received_path: str | None = None
+        self.received_body: bytes | None = None
+        self.received_headers: dict[str, str] = {}
+        self._server: HTTPServer | None = None
+        self._thread: threading.Thread | None = None
+
+    def __enter__(self) -> "_DaemonStub":
+        outer = self
+
+        class _Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_a, **_kw):  # silence noise
+                pass
+
+            def do_POST(self):  # noqa: N802
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                outer.received_path = self.path
+                outer.received_body = self.rfile.read(length) if length > 0 else b""
+                outer.received_headers = dict(self.headers.items())
+                resp = json.dumps(outer.canned_body).encode("utf-8")
+                self.send_response(outer.canned_status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp)))
+                self.end_headers()
+                self.wfile.write(resp)
+
+        self._server = HTTPServer(("127.0.0.1", 0), _Handler)
+        self.port = self._server.server_address[1]
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_a):
+        if self._server is not None:
+            self._server.shutdown()
+            self._server.server_close()
+
+
+def _write_sock_info(path: Path, port: int) -> None:
+    path.write_text(json.dumps({"port": port, "tip_version": "1.0", "started_at": 0}))
+
+
+def test_promote_returns_501_when_daemon_absent(tmp_path):
+    """No sock-info → daemon unavailable → 501 pro_daemon_required."""
+
+    missing = tmp_path / "absent.sock-info"
+    with patch.object(daemon_probe, "_SOCK_INFO_PATH", missing):
+        h = _post("/pak/v1/promote", body=b'{"any":"thing"}')
+    assert h.response_status() == 501
+    body = h.response_json()
+    assert body["error"] == "not_implemented"
+    assert body["reason"] == "pro_daemon_required"
+
+
+def test_promote_forwards_to_daemon_when_active(tmp_path):
+    """sock-info present + reachable → forward body, proxy response."""
+
+    sock_path = tmp_path / "daemon.sock-info"
+    payload = b'{"source":"llm_response","content":"hi everyone","captured_at":"2026-05-09T17:00:00+00:00","platform":"x"}'
+
+    with _DaemonStub(canned_status=201, canned_body={"promoted": True, "pak_id": "pak-int-abc123"}) as stub:
+        _write_sock_info(sock_path, stub.port)
+        with patch.object(daemon_probe, "_SOCK_INFO_PATH", sock_path):
+            h = _post("/pak/v1/promote", body=payload)
+
+    assert h.response_status() == 201
+    body = h.response_json()
+    assert body["promoted"] is True
+    assert body["pak_id"] == "pak-int-abc123"
+    # Confirm the body actually reached the daemon stub
+    assert stub.received_path == "/pak/v1/promote"
+    assert stub.received_body == payload
+
+
+def test_promote_forwards_skip_response_intact(tmp_path):
+    """Daemon's 200-with-promoted=false propagates verbatim."""
+
+    sock_path = tmp_path / "daemon.sock-info"
+    with _DaemonStub(
+        canned_status=200,
+        canned_body={"promoted": False, "filter_decision": "skip", "reason": "trivial"},
+    ) as stub:
+        _write_sock_info(sock_path, stub.port)
+        with patch.object(daemon_probe, "_SOCK_INFO_PATH", sock_path):
+            h = _post(
+                "/pak/v1/promote",
+                body=b'{"source":"llm_response","content":"thanks","captured_at":"2026-05-09T17:00:00+00:00","platform":"x"}',
+            )
+    assert h.response_status() == 200
+    body = h.response_json()
+    assert body["promoted"] is False
+    assert body["filter_decision"] == "skip"
+
+
+def test_promote_returns_503_when_daemon_dies_mid_flight(tmp_path):
+    """sock-info points at a dead port → daemon_unreachable.
+
+    Probe sees a live port (we wrote sock-info while the stub was up);
+    after closing the stub, the probe call will see the port as dead
+    too — so technically this test exercises a probe-failed path. The
+    503 path covers genuine TOCTOU where the daemon dies *between*
+    the probe and the forward; we trust http.client.HTTPConnection to
+    fail on connect for an empty port, which it does.
+
+    To exercise the real TOCTOU we'd need a deeper stub; this test
+    covers the closely-related "stale sock-info" case where the file
+    points at a port nobody owns.
+    """
+
+    sock_path = tmp_path / "daemon.sock-info"
+    # Pick a port and bind it just to discover it, then release.
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    dead_port = s.getsockname()[1]
+    s.close()
+
+    _write_sock_info(sock_path, dead_port)
+    with patch.object(daemon_probe, "_SOCK_INFO_PATH", sock_path):
+        h = _post("/pak/v1/promote", body=b"{}")
+
+    # Probe sees connection refused → "unavailable" → 501 (not 503).
+    # 503 path requires probe to succeed and forward to fail; that
+    # requires the daemon to die between two ops, which is hard to
+    # script. We accept either outcome here as long as it's a documented
+    # error.
+    assert h.response_status() in (501, 503)
+    body = h.response_json()
+    assert body["error"] in ("not_implemented", "daemon_unreachable")
+
+
+def test_promote_does_not_forward_auth_headers(tmp_path, monkeypatch):
+    """Caller's X-TPK-Key must NOT leak to the daemon (defense in depth).
+
+    The daemon is loopback-only and requires no auth; passing the OSS
+    proxy key through would expose it to the daemon's logs needlessly.
+    """
+
+    monkeypatch.setenv("TOKENPAK_PROXY_KEY", "secret-key-value")
+    sock_path = tmp_path / "daemon.sock-info"
+    with _DaemonStub(canned_status=201) as stub:
+        _write_sock_info(sock_path, stub.port)
+        # Build a handler with the matching X-TPK-Key so auth passes
+        from tokenpak.proxy.app_endpoints import try_handle_post
+
+        h = _StubHandler(
+            "/pak/v1/promote",
+            client_address=("127.0.0.1", 0),
+            body=b"{}",
+            headers={"Content-Length": "2", "X-TPK-Key": "secret-key-value"},
+        )
+        with patch.object(daemon_probe, "_SOCK_INFO_PATH", sock_path):
+            try_handle_post(h)
+
+    assert h.response_status() == 201
+    # No auth header reached the daemon
+    assert "X-TPK-Key" not in stub.received_headers
+    assert "x-tpk-key" not in stub.received_headers
+    # And the secret value isn't anywhere in the forwarded headers
+    assert not any("secret-key-value" in v for v in stub.received_headers.values())
+
+
+# ---------------------------------------------------------------------------
 # Integration with /tpk/v1/* — the new /pak/v1/* dispatch must not break
 # ---------------------------------------------------------------------------
 
