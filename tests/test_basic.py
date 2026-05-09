@@ -7,12 +7,11 @@ import unittest
 from pathlib import Path
 
 from tokenpak.budget import BudgetBlock, quadratic_allocate
+from tokenpak.processors import get_processor
 from tokenpak.registry import Block, BlockRegistry
 from tokenpak.tokens import count_tokens
 from tokenpak.walker import walk_directory
 from tokenpak.wire import pack
-
-from tokenpak.processors import get_processor
 
 
 class TokenPakSmokeTest(unittest.TestCase):

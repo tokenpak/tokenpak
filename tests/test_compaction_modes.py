@@ -17,18 +17,17 @@ import pytest
 pytest.importorskip("tokenpak.compaction.modes", reason="module not available in current build")
 import unittest
 
-from tokenpak.compaction.modes import (
-    compact_aggressive,
-    compact_balanced,
-    compact_lossless,
-    compact_semantic,
-)
-
 from tokenpak.compaction import (
     BlockPolicy,
     CompactionMode,
     CompactionPolicy,
     compact,
+)
+from tokenpak.compaction.modes import (
+    compact_aggressive,
+    compact_balanced,
+    compact_lossless,
+    compact_semantic,
 )
 
 # ---------------------------------------------------------------------------

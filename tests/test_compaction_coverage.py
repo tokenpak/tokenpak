@@ -17,6 +17,11 @@ import pytest
 pytest.importorskip("tokenpak.compaction.topic_aware", reason="module not available in current build")
 import unittest
 
+from tokenpak.compaction import (
+    CompactionMode,
+    TopicAwarePolicy,
+    compact,
+)
 from tokenpak.compaction.modes import (
     _multi_blank_sub,
     _normalise_whitespace,
@@ -26,12 +31,6 @@ from tokenpak.compaction.topic_aware import (
     TopicBoundaryDetector,
     TopicSegment,
     place_topic_aware_breakpoints,
-)
-
-from tokenpak.compaction import (
-    CompactionMode,
-    TopicAwarePolicy,
-    compact,
 )
 
 # ---------------------------------------------------------------------------
