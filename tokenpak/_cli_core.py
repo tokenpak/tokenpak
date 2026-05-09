@@ -2272,8 +2272,8 @@ def _build_creds_parser(sub):
             "  tokenpak creds remove openai-work\n"
             "  tokenpak creds test openai-work                      # cheap live probe\n"
             "  tokenpak creds route api.anthropic.com               # what'd I pick?\n"
-            "  tokenpak creds route api.openai.com --caller openclaw:main:* \\\n"
-            "       --tag codex-personal"
+            "  tokenpak creds route api.openai.com --caller my-app:profile:* \\\n"
+            "       --tag work"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -2472,7 +2472,7 @@ def _build_stub_parsers(sub):
     p_oc_refresh.add_argument(
         "--config-path", default=None,
         help="Target a specific openclaw.json (default: refresh every install "
-             "discovered on this host — main, governor, etc.)",
+             "discovered on this host)",
     )
 
     p_oc_detect = oc_sub.add_parser(
@@ -2662,14 +2662,14 @@ def build_parser():
         "--reindex-all",
         action="store_true",
         dest="reindex_all",
-        help="Reindex every directory registered in ~/.tokenpak/vault.yaml (VDS-01)",
+        help="Reindex every directory registered in ~/.tokenpak/vault.yaml",
     )
     p_index.add_argument(
         "--reindex-path",
         dest="reindex_path",
         default=None,
         metavar="PATH",
-        help="Reindex a single directory registered in ~/.tokenpak/vault.yaml (VDS-01)",
+        help="Reindex a single directory registered in ~/.tokenpak/vault.yaml",
     )
     p_index.set_defaults(func=cmd_index)
 

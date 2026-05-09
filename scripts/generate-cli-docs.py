@@ -256,6 +256,15 @@ def generate(stdout_only: bool = False) -> str:
     # Build a map of all subparsers keyed by command name
     submap = _get_subparser_map(parser) or {}
 
+    # Subcommands present in the parser for backward compatibility but
+    # not part of the documented public CLI surface. They are excluded
+    # from `docs/cli-reference.md` so the generated docs reflect the
+    # public surface only. Removing these subcommands from the parser
+    # entirely is tracked under the internal-integration cleanup
+    # follow-up; until then this filter keeps the docs clean.
+    _INTERNAL_SUBCOMMANDS = frozenset({"openclaw"})
+    submap = {k: v for k, v in submap.items() if k not in _INTERNAL_SUBCOMMANDS}
+
     lines = [
         "# CLI Reference",
         "",
