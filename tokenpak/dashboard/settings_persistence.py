@@ -70,6 +70,19 @@ _PROFILES = frozenset({
     "claude-code-sdk", "claude-code-ide", "claude-code-cron",
 })
 
+# Sue's CCI-13 carve-out permits local-admin writes only. Sensitive
+# credentials, provider/remote endpoints, and remote alert destinations must
+# not be created or updated through the dashboard settings route without an
+# explicit architecture exception.
+_FORBIDDEN_SETTINGS_WRITES = frozenset({
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "TOKENPAK_CACHE_ALERT_SLACK_CHANNEL",
+    "TOKENPAK_CACHE_ALERT_WEBHOOK_URL",
+    "TOKENPAK_OLLAMA_UPSTREAM",
+    "TOKENPAK_REMOTE_HOST",
+})
+
 
 def _validate_bool(key: str, value: str) -> None:
     if value.lower() not in _BOOL_VALUES:
@@ -121,6 +134,9 @@ def validate_settings(updates: dict[str, str]) -> list[str]:
     """Return a list of validation error messages (empty if all valid)."""
     errors: list[str] = []
     for key, value in updates.items():
+        if key in _FORBIDDEN_SETTINGS_WRITES:
+            errors.append(f"{key}: dashboard writes are disabled; edit tokenpak.env manually or request a webhook exception")
+            continue
         validator = _VALIDATORS.get(key)
         if validator is None:
             continue
@@ -189,6 +205,14 @@ def write_settings(
     ``(False, [error_messages])``. On success attempts a SIGHUP to the
     running proxy for live-reloadable settings.
     """
+    forbidden = [key for key in updates if key in _FORBIDDEN_SETTINGS_WRITES]
+    if forbidden:
+        errors = [
+            f"{key}: dashboard writes are disabled; edit tokenpak.env manually or request a webhook exception"
+            for key in forbidden
+        ]
+        return False, errors
+
     if not skip_validation:
         errors = validate_settings(updates)
         if errors:
@@ -272,7 +296,6 @@ def load_settings_context(path: Path | None = None) -> dict[str, Any]:
         "budget_total":              _i("TOKENPAK_BUDGET_TOTAL", 12000),
         # Cache invalidation alerts
         "cache_alert_webhook_enabled": _b("TOKENPAK_CACHE_ALERT_WEBHOOK_ENABLED", "0"),
-        "cache_alert_webhook_url":     _s("TOKENPAK_CACHE_ALERT_WEBHOOK_URL"),
         "cache_alert_slack_channel":   _s("TOKENPAK_CACHE_ALERT_SLACK_CHANNEL"),
         "cache_alert_threshold":       _f("TOKENPAK_CACHE_ALERT_THRESHOLD", 50.0),
         # Local-first routing

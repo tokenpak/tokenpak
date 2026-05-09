@@ -149,13 +149,33 @@ def main(args: list[str] | None = None) -> int:
 
 
 _SESSION_PREFIX = "\U0001f4e6"  # 📦
+# ANSI foreground colors for the branded session label. Foreground-only
+# (no background fill) so the chat-header background falls through to
+# the user's terminal default.
+_LBL_TEAL = "\033[38;2;0;180;170m"   # brackets + "Pak" — TokenPak teal
+_LBL_WHITE = "\033[38;2;255;255;255m"  # "📦 Token"        — white
+_LBL_GRAY = "\033[38;2;90;94;105m"   # "Claude Companion" — muted gray
+_LBL_RESET = "\033[0m"
+# Default session label shown in the top-HR chat-header. Kept in sync
+# with ``hooks/session_start_name.sh`` so the post-/clear restore
+# matches the launcher's startup label exactly. Real ESC bytes here —
+# they pass through ``os.execvpe`` to ``--name`` as raw argv bytes.
+_DEFAULT_SESSION_LABEL = (
+    f"{_LBL_TEAL}[ "
+    f"{_LBL_WHITE}{_SESSION_PREFIX} Token"
+    f"{_LBL_TEAL}Pak"
+    f"{_LBL_GRAY} Claude Companion"
+    f"{_LBL_TEAL} ]"
+    f"{_LBL_RESET}"
+)
 
 
 def _prefix_session_name(args: list[str]) -> list[str]:
     """Prefix the Claude Code session name with 📦.
 
     Handles ``--name VALUE``, ``-n VALUE``, and ``--name=VALUE`` forms.
-    If no name flag is present, injects ``--name "📦 tokenpak"``.
+    If no name flag is present, injects the default branded label
+    (``[ 📦 TokenPak Claude Companion ]``).
     Returns a new list (never mutates the input).
     """
     args = list(args)  # shallow copy
@@ -167,8 +187,8 @@ def _prefix_session_name(args: list[str]) -> list[str]:
             _, val = arg.split("=", 1)
             args[i] = f"--name={_SESSION_PREFIX} {val}"
             return args
-    # No name flag found — inject a default
-    args.extend(["--name", f"{_SESSION_PREFIX} tokenpak claude"])
+    # No name flag found — inject the default branded label
+    args.extend(["--name", _DEFAULT_SESSION_LABEL])
     return args
 
 
@@ -205,6 +225,35 @@ def _write_settings(config: CompanionConfig) -> str:
     Load the user's ``~/.claude/settings.json`` as the base and layer the
     companion's MCP permission + pre-send hook on top. Falls back to a
     minimal dict when the user has no global settings.
+
+    Persistent top-HR session label via ``SessionStart`` hook
+    ---------------------------------------------------------
+    The launcher passes ``--name "<ANSI-styled label>"`` at startup,
+    painting ``[ 📦 TokenPak Claude Companion ]`` (teal brackets +
+    ``Pak``, white ``📦 Token``, gray ``Claude Companion``) in the
+    top-HR chat-header — foreground-only, no background fill, so the
+    user's terminal background shows through. But ``--name`` is
+    per-session: ``/clear`` creates a *new* session (new ``session_id``)
+    and the new session inherits no name — the top-HR reverts to
+    default white/gray chrome with no branding.
+
+    Claude Code's ``SessionStart`` hook fires on session-creation
+    events (``startup``, ``clear``, ``resume``, ``compact``). When a
+    hook emits ``hookSpecificOutput.sessionTitle``, the TUI uses that
+    string for the new session's display label. We register a tiny
+    bash hook (``hooks/session_start_name.sh``) with matcher
+    ``"clear"`` so the label — including its ANSI styling — is
+    reasserted after every ``/clear``. The hook emits ANSI escapes as
+    JSON ``\\u001b`` literals (real ESC bytes are invalid in JSON
+    strings; ``\\u001b`` is the standards-compliant form, decoded back
+    to ESC by the consumer's JSON parser).
+
+    The terminal-tab title (OSC 0 sequence in :func:`main` before
+    ``os.execvpe``) is unrelated — it's a one-shot pre-exec write that
+    Claude Code itself rewrites on its own cadence.
+
+    User overrides win: only injects when the user has not configured
+    a ``SessionStart`` entry in their global settings.
     """
     # Prefer the bash hook (~30ms) when available; fall back to the
     # Python hook (~400ms) when only the .py is installed. When neither
@@ -221,6 +270,14 @@ def _write_settings(config: CompanionConfig) -> str:
         hook_cmd = f"python3 {hook_py}"
     else:
         hook_cmd = None
+
+    # SessionStart hook that re-emits the top-HR session label after
+    # /clear. Skipped when the bundled script is missing on this host
+    # (same defensive pattern as pre_send.sh above).
+    session_name_hook = hooks_dir / "session_start_name.sh"
+    session_name_cmd = (
+        f"bash {session_name_hook}" if session_name_hook.is_file() else None
+    )
 
     settings: dict = {}
     user_settings_path = Path.home() / ".claude" / "settings.json"
@@ -271,6 +328,26 @@ def _write_settings(config: CompanionConfig) -> str:
                 ],
             }
         ]
+
+    # Install SessionStart hook — restores the branded top-HR label
+    # after /clear. Only injected when the user has not configured
+    # their own SessionStart hook (their override wins). Unlike the
+    # UserPromptSubmit hook above, this is purely cosmetic and never
+    # competes with user logic on the same matcher.
+    if config.hooks_enabled and session_name_cmd is not None:
+        hooks = settings.setdefault("hooks", {})
+        if "SessionStart" not in hooks:
+            hooks["SessionStart"] = [
+                {
+                    "matcher": "clear",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": session_name_cmd,
+                        }
+                    ],
+                }
+            ]
 
     path = config.run_dir / "settings.json"
     path.write_text(json.dumps(settings, indent=2))
