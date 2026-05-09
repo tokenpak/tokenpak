@@ -9,6 +9,29 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+
+# TSR-05w Pro-tier speculative-contract skip reason (grep-able)
+# ─────────────────────────────────────────────
+# 3rd recurrence in the WS-E sweep — same pattern as TSR-05u (#134) and
+# TSR-05v (#135). Tests below patch
+# `tokenpak.infrastructure.license_activation.is_pro` — that path never
+# existed in OSS:
+#   - `git log -S 'def is_pro' -- tokenpak/`         → 0 hits
+#   - `find tokenpak -path '*/infrastructure/*'`     → 0 results
+# Pro-tier license activation lives in the closed-source `tokenpak-paid`
+# daemon per Std 25; OSS doesn't carry an `is_pro` symbol.
+#
+# If a 4th recurrence appears, this should be promoted to a project-wide
+# pytest marker (e.g. `@pytest.mark.requires_tokenpak_paid`) registered
+# in conftest.py with auto-skip when the OSS-only flag is set.
+SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS = (
+    "Test patches `tokenpak.infrastructure.license_activation.is_pro` "
+    "— that path never existed in OSS (Pro-tier license activation "
+    "lives in closed-source tokenpak-paid per Std 25). Speculative "
+    "contract; same Path B pattern as TSR-05u / TSR-05v / TSR-05r / TSR-05b."
+)
+
+
 from tokenpak.cli.commands.budget import (
     _calc_burn_rate,
     _calc_depletion_eta,
@@ -159,6 +182,7 @@ def test_suggestions_max_three():
 # print_budget_intelligence — non-Pro gate
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(reason=SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS)
 def test_intelligence_gated_non_pro(capsys):
     """Non-Pro license should print an upgrade prompt and not show data."""
     with patch("tokenpak.infrastructure.license_activation.is_pro", return_value=False):
@@ -167,6 +191,7 @@ def test_intelligence_gated_non_pro(capsys):
     assert "Pro" in captured.out or "license" in captured.out.lower()
 
 
+@pytest.mark.skip(reason=SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS)
 def test_intelligence_json_output(capsys):
     """--json mode should produce parseable JSON with required keys."""
     burn = {
