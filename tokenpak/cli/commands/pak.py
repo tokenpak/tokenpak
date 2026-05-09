@@ -50,7 +50,7 @@ def build_pak_parser(sub: Any) -> None:
         "pak",
         help="Inspect, export, import Pak files (MultiPak Pro Phase 1)",
         description=(
-            "MultiPak Pro Phase 1 OSS surface. Read-only Vault Pak "
+            "MultiPak Pro Phase 1 OSS surface (Std 32). Read-only Vault Pak "
             "operations work without Pro; other Pak subtypes require the "
             "tokenpak-paid daemon."
         ),

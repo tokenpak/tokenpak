@@ -1002,6 +1002,7 @@ Start the live monitor dashboard.
 
 - `--port` — Dashboard port (default: 8767) (default: 8767)
 
+
 ### `tokenpak optimize`
 
 Analyze and optimize a prompt for better compression efficiency.
