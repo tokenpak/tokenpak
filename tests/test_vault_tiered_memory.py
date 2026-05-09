@@ -12,6 +12,42 @@ from unittest.mock import patch
 import pytest
 
 
+# TSR-05ad fragile-fixture skip reason (grep-able)
+# ─────────────────────────────────────────────
+# `test_compile_injection_uses_get_content` builds a `VaultIndex` instance
+# via `__new__` + manual attribute stubbing, then calls `compile_injection`
+# expecting it to read content from `_get_content()`. Two layers of fragility:
+#
+# 1. The fixture stubs SOME of `VaultIndex`'s BM25 internal state (`_df`,
+#    `_block_tfs`, `_avg_dl`, `_doc_count`) but not all of it. The legacy
+#    `compile_injection` (loaded via the `proxy_monolith.py.bak` shim)
+#    additionally requires `_block_dl` (precomputed doc lengths) and
+#    `_inverted` (term → block_id index). Each missing attribute surfaces
+#    as a separate `AttributeError`.
+#
+# 2. Even with the fixture fully stubbed, `compile_injection` calls into
+#    `tokenpak.vault.query_expansion`, which makes outbound calls to
+#    embedding providers (Voyage / Ollama / OpenAI / Gemini / Jina). On
+#    CI runners and most dev hosts these aren't reachable → 30s timeout.
+#
+# Both problems indicate the test was written when `compile_injection`
+# was a thinner pure-BM25 path. The modular tree expanded it into a
+# multi-stage pipeline that needs live providers. Restoring the test
+# requires either (a) stubbing the full BM25 state + mocking
+# `query_expansion` to a no-op, or (b) rewriting around the new pipeline.
+# Both are larger than a TSR-05 slice — belongs to TSR-02 (API drift) or
+# a dedicated vault-tiered-memory rewrite. Path B skip with grep-able
+# reason; the 14 live tests in this file (cache-stats, enforce-cache-limit,
+# get_content, load, etc.) remain meaningful guards.
+SKIP_VAULT_INDEX_FIXTURE_FRAGILE = (
+    "Test stubs partial VaultIndex BM25 state; fixture is incomplete "
+    "(missing _block_dl + _inverted) and even when complete, "
+    "compile_injection() calls into query_expansion → 30s embedding-"
+    "provider network timeout. Belongs to TSR-02 / vault-tiered-memory "
+    "rewrite, not TSR-05."
+)
+
+
 # ---------------------------------------------------------------------------
 # Helpers — build a minimal VaultIndex without importing the full proxy
 # ---------------------------------------------------------------------------
@@ -223,6 +259,7 @@ class TestLoad:
 
 
 class TestCompileInjectionWithCache:
+    @pytest.mark.skip(reason=SKIP_VAULT_INDEX_FIXTURE_FRAGILE)
     def test_compile_injection_uses_get_content(self, tmp_path):
         """compile_injection() should use _get_content(), populating cache."""
         import proxy as px
