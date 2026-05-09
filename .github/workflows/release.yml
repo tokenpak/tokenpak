@@ -87,13 +87,17 @@ jobs:
             dev)  MARKERS="oss or optional" ;;
             full) MARKERS="oss or optional or internal" ;;
           esac
+          # IMPORTANT: pipe to tee, then capture pytest's exit code via
+          # PIPESTATUS[0] — `$?` after a pipe captures TEE's exit (always 0)
+          # which would silently swallow test failures. Std 30 §4 (R4) gate
+          # depends on this being correct.
           set +e
           pytest tests/ \
             -m "$MARKERS" \
             --continue-on-collection-errors \
             -q --tb=short \
             2>&1 | tee pytest-output.log
-          PYTEST_RC=$?
+          PYTEST_RC=${PIPESTATUS[0]}
           set -e
           COLLECT_ERRORS=$(grep -c "^ERROR collecting" pytest-output.log || true)
           echo "collection_errors=$COLLECT_ERRORS" >> "$GITHUB_OUTPUT"
