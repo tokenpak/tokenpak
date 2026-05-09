@@ -29,6 +29,7 @@ import time
 from typing import List
 
 import pytest
+
 from tokenpak.compression.pack import ContextPack, PackBlock
 
 from .conftest import make_large_pack, make_medium_pack, make_small_pack
