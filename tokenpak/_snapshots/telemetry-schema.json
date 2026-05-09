@@ -1,0 +1,274 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-09T18:16:57Z",
+  "stores": [
+    {
+      "path": "~/.tokenpak/telemetry.db",
+      "purpose": "User-facing telemetry counters",
+      "exists": true,
+      "ddl": {
+        "objects": [
+          {
+            "type": "index",
+            "name": "idx_events_agent",
+            "sql": "CREATE INDEX idx_events_agent\n    ON tp_events (agent_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_events_model",
+            "sql": "CREATE INDEX idx_events_model\n    ON tp_events (model)"
+          },
+          {
+            "type": "index",
+            "name": "idx_events_provider",
+            "sql": "CREATE INDEX idx_events_provider\n    ON tp_events (provider)"
+          },
+          {
+            "type": "index",
+            "name": "idx_events_trace",
+            "sql": "CREATE INDEX idx_events_trace\n    ON tp_events (trace_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_events_ts",
+            "sql": "CREATE INDEX idx_events_ts\n    ON tp_events (ts)"
+          },
+          {
+            "type": "index",
+            "name": "idx_intent_events_class",
+            "sql": "CREATE INDEX idx_intent_events_class\n    ON intent_events (intent_class, timestamp)"
+          },
+          {
+            "type": "index",
+            "name": "idx_intent_events_confidence",
+            "sql": "CREATE INDEX idx_intent_events_confidence\n    ON intent_events (intent_confidence)"
+          },
+          {
+            "type": "index",
+            "name": "idx_parity_event_type",
+            "sql": "CREATE INDEX idx_parity_event_type ON tp_parity_trace (event_type, ts)"
+          },
+          {
+            "type": "index",
+            "name": "idx_parity_lane",
+            "sql": "CREATE INDEX idx_parity_lane ON tp_parity_trace (lane_id, ts)"
+          },
+          {
+            "type": "index",
+            "name": "idx_parity_session",
+            "sql": "CREATE INDEX idx_parity_session ON tp_parity_trace (session_id, ts)"
+          },
+          {
+            "type": "index",
+            "name": "idx_parity_trace_id",
+            "sql": "CREATE INDEX idx_parity_trace_id ON tp_parity_trace (trace_id, ts)"
+          },
+          {
+            "type": "index",
+            "name": "idx_patches_applied",
+            "sql": "CREATE INDEX idx_patches_applied\n    ON intent_patches (applied, created_at)"
+          },
+          {
+            "type": "index",
+            "name": "idx_patches_contract",
+            "sql": "CREATE INDEX idx_patches_contract\n    ON intent_patches (contract_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_patches_mode",
+            "sql": "CREATE INDEX idx_patches_mode\n    ON intent_patches (mode, created_at)"
+          },
+          {
+            "type": "index",
+            "name": "idx_patches_suggestion",
+            "sql": "CREATE INDEX idx_patches_suggestion\n    ON intent_patches (suggestion_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_policy_decisions_action",
+            "sql": "CREATE INDEX idx_policy_decisions_action\n    ON intent_policy_decisions (action, timestamp)"
+          },
+          {
+            "type": "index",
+            "name": "idx_policy_decisions_contract",
+            "sql": "CREATE INDEX idx_policy_decisions_contract\n    ON intent_policy_decisions (contract_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_policy_decisions_reason",
+            "sql": "CREATE INDEX idx_policy_decisions_reason\n    ON intent_policy_decisions (decision_reason)"
+          },
+          {
+            "type": "index",
+            "name": "idx_rollup_agent_date",
+            "sql": "CREATE INDEX idx_rollup_agent_date\n    ON tp_rollup_daily_agent (date)"
+          },
+          {
+            "type": "index",
+            "name": "idx_rollup_model_date",
+            "sql": "CREATE INDEX idx_rollup_model_date\n    ON tp_rollup_daily_model (date)"
+          },
+          {
+            "type": "index",
+            "name": "idx_rollup_provider_date",
+            "sql": "CREATE INDEX idx_rollup_provider_date\n    ON tp_rollup_daily_provider (date)"
+          },
+          {
+            "type": "index",
+            "name": "idx_segments_trace",
+            "sql": "CREATE INDEX idx_segments_trace\n    ON tp_segments (trace_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_suggestions_contract",
+            "sql": "CREATE INDEX idx_suggestions_contract\n    ON intent_suggestions (contract_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_suggestions_decision",
+            "sql": "CREATE INDEX idx_suggestions_decision\n    ON intent_suggestions (decision_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_suggestions_type",
+            "sql": "CREATE INDEX idx_suggestions_type\n    ON intent_suggestions (suggestion_type, timestamp)"
+          },
+          {
+            "type": "index",
+            "name": "idx_tp_pricing_model",
+            "sql": "CREATE INDEX idx_tp_pricing_model\n        ON tp_pricing(model, effective_date)"
+          },
+          {
+            "type": "index",
+            "name": "idx_tp_pricing_version",
+            "sql": "CREATE INDEX idx_tp_pricing_version\n        ON tp_pricing(version)"
+          },
+          {
+            "type": "table",
+            "name": "intent_events",
+            "sql": "CREATE TABLE intent_events (\n    request_id           TEXT PRIMARY KEY,\n    contract_id          TEXT NOT NULL,\n    timestamp            TEXT NOT NULL,\n    raw_prompt_hash      TEXT NOT NULL,\n    intent_class         TEXT NOT NULL,\n    intent_confidence    REAL NOT NULL,\n    intent_slots_present TEXT NOT NULL,\n    intent_slots_missing TEXT NOT NULL,\n    intent_source        TEXT NOT NULL,\n    catch_all_reason     TEXT,\n    tip_headers_emitted  INTEGER NOT NULL,\n    tip_headers_stripped INTEGER NOT NULL,\n    tokens_in            INTEGER,\n    tokens_out           INTEGER,\n    latency_ms           INTEGER\n)"
+          },
+          {
+            "type": "table",
+            "name": "intent_patches",
+            "sql": "CREATE TABLE intent_patches (\n    patch_id              TEXT PRIMARY KEY,\n    contract_id           TEXT NOT NULL,\n    decision_id           TEXT NOT NULL,\n    suggestion_id         TEXT NOT NULL,\n    created_at            TEXT NOT NULL,\n    mode                  TEXT NOT NULL,\n    target                TEXT NOT NULL,\n    original_hash         TEXT NOT NULL,\n    patch_text            TEXT NOT NULL,\n    reason                TEXT NOT NULL,\n    confidence            REAL NOT NULL,\n    safety_flags          TEXT NOT NULL,    -- JSON array\n    requires_confirmation INTEGER NOT NULL,\n    applied               INTEGER NOT NULL,\n    source                TEXT NOT NULL\n)"
+          },
+          {
+            "type": "table",
+            "name": "intent_policy_decisions",
+            "sql": "CREATE TABLE intent_policy_decisions (\n    decision_id              TEXT PRIMARY KEY,\n    request_id               TEXT,\n    contract_id              TEXT,\n    timestamp                TEXT NOT NULL,\n    mode                     TEXT NOT NULL,\n    intent_class             TEXT NOT NULL,\n    intent_confidence        REAL NOT NULL,\n    action                   TEXT NOT NULL,\n    decision_reason          TEXT NOT NULL,\n    safety_flags             TEXT NOT NULL,    -- JSON list\n    recommended_provider     TEXT,\n    recommended_model        TEXT,\n    budget_action            TEXT,\n    compression_profile      TEXT,\n    cache_strategy           TEXT,\n    delivery_strategy        TEXT,\n    warning_message          TEXT,\n    requires_user_confirmation INTEGER NOT NULL,\n    config_mode              TEXT,\n    config_dry_run           INTEGER,\n    config_allow_auto_routing INTEGER,\n    config_allow_unverified_providers INTEGER,\n    config_low_confidence_threshold REAL\n)"
+          },
+          {
+            "type": "table",
+            "name": "intent_suggestions",
+            "sql": "CREATE TABLE intent_suggestions (\n    suggestion_id          TEXT PRIMARY KEY,\n    decision_id            TEXT NOT NULL,\n    contract_id            TEXT NOT NULL,\n    timestamp              TEXT NOT NULL,\n    suggestion_type        TEXT NOT NULL,\n    title                  TEXT NOT NULL,\n    message                TEXT NOT NULL,\n    recommended_action     TEXT,\n    confidence             REAL NOT NULL,\n    safety_flags           TEXT NOT NULL,    -- JSON array\n    requires_confirmation  INTEGER NOT NULL,\n    user_visible           INTEGER NOT NULL,\n    expires_at             TEXT,\n    source                 TEXT NOT NULL\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_costs",
+            "sql": "CREATE TABLE tp_costs (\n    trace_id                TEXT NOT NULL PRIMARY KEY,\n    cost_input              REAL NOT NULL DEFAULT 0,\n    cost_output             REAL NOT NULL DEFAULT 0,\n    cost_cache_read         REAL NOT NULL DEFAULT 0,\n    cost_cache_write        REAL NOT NULL DEFAULT 0,\n    cost_total              REAL NOT NULL DEFAULT 0,\n    cost_source             TEXT NOT NULL DEFAULT 'provider',\n    pricing_version         TEXT NOT NULL DEFAULT 'v1',\n    baseline_input_tokens   INTEGER NOT NULL DEFAULT 0,\n    actual_input_tokens     INTEGER NOT NULL DEFAULT 0,\n    output_tokens           INTEGER NOT NULL DEFAULT 0,\n    baseline_cost           REAL NOT NULL DEFAULT 0,\n    actual_cost             REAL NOT NULL DEFAULT 0,\n    savings_total           REAL NOT NULL DEFAULT 0,\n    savings_qmd             REAL NOT NULL DEFAULT 0,\n    savings_tp              REAL NOT NULL DEFAULT 0\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_events",
+            "sql": "CREATE TABLE tp_events (\n    trace_id        TEXT NOT NULL,\n    request_id      TEXT NOT NULL DEFAULT '',\n    event_type      TEXT NOT NULL DEFAULT '',\n    ts              REAL NOT NULL DEFAULT 0,\n    provider        TEXT NOT NULL DEFAULT '',\n    model           TEXT NOT NULL DEFAULT '',\n    agent_id        TEXT NOT NULL DEFAULT '',\n    api             TEXT NOT NULL DEFAULT '',\n    stop_reason     TEXT NOT NULL DEFAULT '',\n    session_id      TEXT NOT NULL DEFAULT '',\n    duration_ms     REAL NOT NULL DEFAULT 0,\n    status          TEXT NOT NULL DEFAULT 'ok',\n    error_class     TEXT,\n    payload         TEXT NOT NULL DEFAULT '{}',\n    span_id         TEXT NOT NULL DEFAULT '',\n    node_id         TEXT NOT NULL DEFAULT '', route TEXT NOT NULL DEFAULT '',\n    PRIMARY KEY (trace_id, request_id, event_type)\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_parity_trace",
+            "sql": "CREATE TABLE tp_parity_trace (\n    trace_id              TEXT NOT NULL,       -- ties events of one request\n    event_type            TEXT NOT NULL,       -- one of ALL_EVENTS\n    ts                    REAL NOT NULL,       -- epoch seconds (float)\n    pid                   INTEGER,             -- os.getpid() at emit time\n    ppid                  INTEGER,             -- os.getppid() at emit time\n    tokenpak_home         TEXT,                -- $TOKENPAK_HOME or default\n    telemetry_db_path     TEXT,                -- the db_path the writer used\n    -- Identity\n    request_id            TEXT,\n    session_id            TEXT,\n    provider              TEXT,\n    auth_plane            TEXT,\n    credential_class      TEXT,\n    -- Retry classification (iter-4 dimensions)\n    retry_phase           TEXT,                -- one of RETRY_PHASES\n    retry_owner           TEXT,                -- one of RETRY_OWNERS\n    retry_signal          TEXT,                -- one of RETRY_SIGNALS\n    retry_count           INTEGER,\n    retry_after_seconds   REAL,\n    -- Tool result classification\n    tool_command_first    TEXT,\n    tool_result_stdout_chars  INTEGER,\n    tool_result_stderr_chars  INTEGER,\n    tool_result_tokens_est    INTEGER,\n    -- Request size\n    body_bytes            INTEGER,\n    companion_added_chars INTEGER,             -- deferred capture in v1\n    intent_guidance_chars INTEGER,             -- deferred capture in v1\n    -- Concurrency / lane indicators\n    queue_wait_ms         REAL,\n    lock_wait_ms          REAL,\n    sqlite_write_ms       REAL,\n    lane_id               TEXT,                -- NCP-3I-v2 \u2014 \"<pid>:<thread_id>\"\n    concurrent_stream_count INTEGER,           -- NCP-3I-v2\n    -- NCP-3I-v2 stream-integrity dimensions (H10)\n    stream_started        INTEGER,\n    stream_completed      INTEGER,\n    stream_aborted        INTEGER,\n    upstream_status       INTEGER,\n    downstream_status     INTEGER,\n    response_content_type TEXT,\n    sse_event_count       INTEGER,\n    sse_last_event_type   TEXT,\n    bytes_from_upstream   INTEGER,\n    bytes_to_client       INTEGER,\n    json_parse_error_seen INTEGER,\n    stream_exception_class    TEXT,\n    stream_exception_message_hash TEXT,\n    connection_closed_early INTEGER,\n    -- Free-form note (caller-supplied; MUST NOT contain prompt content)\n    notes                 TEXT\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_pricing",
+            "sql": "CREATE TABLE tp_pricing (\n        id             INTEGER PRIMARY KEY AUTOINCREMENT,\n        version        TEXT    NOT NULL,\n        effective_date DATE    NOT NULL,\n        provider       TEXT    NOT NULL,\n        model          TEXT    NOT NULL,\n        input_rate     REAL    NOT NULL,\n        output_rate    REAL    NOT NULL,\n        currency       TEXT    NOT NULL DEFAULT 'USD',\n        source         TEXT    NOT NULL DEFAULT 'official',\n        created_at     DATETIME DEFAULT CURRENT_TIMESTAMP\n    )"
+          },
+          {
+            "type": "table",
+            "name": "tp_pricing_catalog",
+            "sql": "CREATE TABLE tp_pricing_catalog (\n    version         TEXT NOT NULL PRIMARY KEY,\n    captured_at     REAL NOT NULL DEFAULT 0,\n    catalog_json    TEXT NOT NULL DEFAULT '{}'\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_requests",
+            "sql": "CREATE TABLE tp_requests (\n    request_id      TEXT PRIMARY KEY,\n    timestamp       TEXT NOT NULL,\n    tokens_raw      INTEGER NOT NULL DEFAULT 0,\n    tokens_sent     INTEGER NOT NULL DEFAULT 0,\n    tokens_saved    INTEGER NOT NULL DEFAULT 0,\n    percent_saved   REAL NOT NULL DEFAULT 0,\n    cost_saved      REAL NOT NULL DEFAULT 0\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_rollup_daily_agent",
+            "sql": "CREATE TABLE tp_rollup_daily_agent (\n    date            TEXT NOT NULL,\n    agent_id        TEXT NOT NULL,\n    total_requests  INTEGER NOT NULL DEFAULT 0,\n    total_tokens    INTEGER NOT NULL DEFAULT 0,\n    total_cost      REAL NOT NULL DEFAULT 0,\n    total_savings   REAL NOT NULL DEFAULT 0,\n    avg_raw_tokens  REAL NOT NULL DEFAULT 0,\n    avg_final_tokens REAL NOT NULL DEFAULT 0,\n    avg_cost        REAL NOT NULL DEFAULT 0,\n    PRIMARY KEY (date, agent_id)\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_rollup_daily_model",
+            "sql": "CREATE TABLE tp_rollup_daily_model (\n    date            TEXT NOT NULL,\n    model           TEXT NOT NULL,\n    total_requests  INTEGER NOT NULL DEFAULT 0,\n    total_tokens    INTEGER NOT NULL DEFAULT 0,\n    total_cost      REAL NOT NULL DEFAULT 0,\n    total_savings   REAL NOT NULL DEFAULT 0,\n    avg_raw_tokens  REAL NOT NULL DEFAULT 0,\n    avg_final_tokens REAL NOT NULL DEFAULT 0,\n    avg_cost        REAL NOT NULL DEFAULT 0,\n    PRIMARY KEY (date, model)\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_rollup_daily_provider",
+            "sql": "CREATE TABLE tp_rollup_daily_provider (\n    date            TEXT NOT NULL,\n    provider        TEXT NOT NULL,\n    total_requests  INTEGER NOT NULL DEFAULT 0,\n    total_tokens    INTEGER NOT NULL DEFAULT 0,\n    total_cost      REAL NOT NULL DEFAULT 0,\n    total_savings   REAL NOT NULL DEFAULT 0,\n    avg_raw_tokens  REAL NOT NULL DEFAULT 0,\n    avg_final_tokens REAL NOT NULL DEFAULT 0,\n    avg_cost        REAL NOT NULL DEFAULT 0,\n    PRIMARY KEY (date, provider)\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_rollup_state",
+            "sql": "CREATE TABLE tp_rollup_state (\n    key             TEXT NOT NULL PRIMARY KEY,\n    value           TEXT NOT NULL DEFAULT '',\n    updated_at      REAL NOT NULL DEFAULT 0\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_segments",
+            "sql": "CREATE TABLE tp_segments (\n    trace_id            TEXT NOT NULL,\n    segment_id          TEXT NOT NULL,\n    ord                 INTEGER NOT NULL DEFAULT 0,\n    segment_type        TEXT NOT NULL DEFAULT '',\n    raw_hash            TEXT NOT NULL DEFAULT '',\n    final_hash          TEXT NOT NULL DEFAULT '',\n    raw_len             INTEGER NOT NULL DEFAULT 0,\n    final_len           INTEGER NOT NULL DEFAULT 0,\n    tokens_raw          INTEGER NOT NULL DEFAULT 0,\n    tokens_after_qmd    INTEGER NOT NULL DEFAULT 0,\n    tokens_after_tp     INTEGER NOT NULL DEFAULT 0,\n    actions             TEXT NOT NULL DEFAULT '[]',\n    relevance_score     REAL NOT NULL DEFAULT 0.5,\n    segment_source      TEXT NOT NULL DEFAULT '',\n    content_type        TEXT NOT NULL DEFAULT 'text',\n    raw_len_chars       INTEGER NOT NULL DEFAULT 0,\n    raw_len_bytes       INTEGER NOT NULL DEFAULT 0,\n    final_len_chars     INTEGER NOT NULL DEFAULT 0,\n    final_len_bytes     INTEGER NOT NULL DEFAULT 0,\n    debug_ref           TEXT,\n    PRIMARY KEY (trace_id, segment_id)\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_sessions",
+            "sql": "CREATE TABLE tp_sessions (\n    id              INTEGER PRIMARY KEY AUTOINCREMENT,\n    started_at      TEXT NOT NULL,\n    ended_at        TEXT,\n    requests        INTEGER NOT NULL DEFAULT 0,\n    tokens_raw      INTEGER NOT NULL DEFAULT 0,\n    tokens_sent     INTEGER NOT NULL DEFAULT 0,\n    tokens_saved    INTEGER NOT NULL DEFAULT 0,\n    cost_saved      REAL NOT NULL DEFAULT 0\n)"
+          },
+          {
+            "type": "table",
+            "name": "tp_usage",
+            "sql": "CREATE TABLE tp_usage (\n    trace_id              TEXT NOT NULL PRIMARY KEY,\n    usage_source          TEXT NOT NULL DEFAULT 'unknown',\n    confidence            TEXT NOT NULL DEFAULT 'low',\n    input_billed          INTEGER NOT NULL DEFAULT 0,\n    output_billed         INTEGER NOT NULL DEFAULT 0,\n    input_est             INTEGER NOT NULL DEFAULT 0,\n    output_est            INTEGER NOT NULL DEFAULT 0,\n    cache_read            INTEGER NOT NULL DEFAULT 0,\n    cache_write           INTEGER NOT NULL DEFAULT 0,\n    total_tokens          INTEGER NOT NULL DEFAULT 0,\n    total_tokens_billed   INTEGER NOT NULL DEFAULT 0,\n    total_tokens_est      INTEGER NOT NULL DEFAULT 0,\n    provider_usage_raw    TEXT NOT NULL DEFAULT '{}'\n)"
+          }
+        ]
+      }
+    },
+    {
+      "path": "~/.tokenpak/spend_guard.db",
+      "purpose": "TIP Spend Guard audit log per Std 29 \u00a77",
+      "exists": true,
+      "ddl": {
+        "objects": [
+          {
+            "type": "index",
+            "name": "idx_audit_event_ts",
+            "sql": "CREATE INDEX idx_audit_event_ts ON spend_guard_audit(event_type, ts)"
+          },
+          {
+            "type": "index",
+            "name": "idx_audit_session_ts",
+            "sql": "CREATE INDEX idx_audit_session_ts ON spend_guard_audit(session_id, ts)"
+          },
+          {
+            "type": "index",
+            "name": "idx_pending_hash",
+            "sql": "CREATE INDEX idx_pending_hash ON pending_requests(request_hash, status)"
+          },
+          {
+            "type": "index",
+            "name": "idx_pending_session",
+            "sql": "CREATE INDEX idx_pending_session ON pending_requests(session_id, status)"
+          },
+          {
+            "type": "table",
+            "name": "pending_requests",
+            "sql": "CREATE TABLE pending_requests (\n            pending_id TEXT PRIMARY KEY,\n            session_id TEXT NOT NULL,\n            created_at REAL NOT NULL,\n            expires_at REAL NOT NULL,\n            request_hash TEXT NOT NULL,\n            provider TEXT NOT NULL DEFAULT '',\n            model TEXT NOT NULL DEFAULT '',\n            projected_tokens INTEGER NOT NULL DEFAULT 0,\n            projected_cost_usd REAL NOT NULL DEFAULT 0.0,\n            raw_request_blob BLOB NOT NULL,\n            raw_request_headers TEXT NOT NULL DEFAULT '{}',\n            target_url TEXT NOT NULL DEFAULT '',\n            status TEXT NOT NULL DEFAULT 'pending'\n        )"
+          },
+          {
+            "type": "table",
+            "name": "spend_guard_audit",
+            "sql": "CREATE TABLE spend_guard_audit (\n            id INTEGER PRIMARY KEY AUTOINCREMENT,\n            ts REAL NOT NULL,\n            session_id TEXT NOT NULL DEFAULT '',\n            event_type TEXT NOT NULL,\n            decision TEXT NOT NULL DEFAULT '',\n            reason TEXT NOT NULL DEFAULT '',\n            projected_tokens INTEGER NOT NULL DEFAULT 0,\n            projected_cost_usd REAL NOT NULL DEFAULT 0.0,\n            pending_id TEXT NOT NULL DEFAULT '',\n            request_hash TEXT NOT NULL DEFAULT '',\n            tip_directive_json TEXT NOT NULL DEFAULT '',\n            extra_json TEXT NOT NULL DEFAULT ''\n        )"
+          }
+        ]
+      }
+    }
+  ]
+}

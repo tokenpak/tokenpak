@@ -53,24 +53,92 @@ jobs:
   # When this gate is red, do NOT bypass it via `--ignore=...`. Either fix
   # the failing test's import guard or add the missing extra to this step.
   test:
-    name: Run Tests
+    # Std 30 §3 (R3) install-shape parity: matrix runs slim/dev/full so the
+    # release gate validates what each install shape actually ships.
+    # Std 30 §4 (R4) collection-error visibility: --continue-on-collection-errors +
+    # discrete collection_errors output.
+    # Std 30 §5 (R5) test taxonomy markers: -m selection per shape per Std 30 §3.
+    name: Run Tests (shape=${{ matrix.shape }} py=${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shape: [slim, dev, full]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
+      - name: Install (shape=${{ matrix.shape }})
+        run: |
+          python -m pip install --upgrade pip
+          case "${{ matrix.shape }}" in
+            slim) pip install -e . ;;
+            dev)  pip install -e ".[dev]" ;;
+            full) pip install -e ".[dev,retrieval,code-compression,intelligence,data,compression]" ;;
+          esac
 
-      - name: Run tests
-        run: pytest tests/ -q --tb=short
+      - name: Run tests with collection-error visibility
+        id: pytest
+        run: |
+          case "${{ matrix.shape }}" in
+            slim) MARKERS="oss" ;;
+            dev)  MARKERS="oss or optional" ;;
+            full) MARKERS="oss or optional or internal" ;;
+          esac
+          set +e
+          pytest tests/ \
+            -m "$MARKERS" \
+            --continue-on-collection-errors \
+            -q --tb=short \
+            2>&1 | tee pytest-output.log
+          PYTEST_RC=$?
+          set -e
+          COLLECT_ERRORS=$(grep -c "^ERROR collecting" pytest-output.log || true)
+          echo "collection_errors=$COLLECT_ERRORS" >> "$GITHUB_OUTPUT"
+          echo "pytest_rc=$PYTEST_RC" >> "$GITHUB_OUTPUT"
+
+      - name: Gate on collection errors (Std 30 §4)
+        if: steps.pytest.outputs.collection_errors != '0'
+        run: |
+          echo "::error::Collection errors detected (count=${{ steps.pytest.outputs.collection_errors }}). See Std 30 §4 — collection errors are a distinct, non-mergeable error class."
+          exit 1
+
+      - name: Gate on test failures
+        if: steps.pytest.outputs.pytest_rc != '0' && steps.pytest.outputs.collection_errors == '0'
+        run: |
+          echo "::error::pytest exited ${{ steps.pytest.outputs.pytest_rc }} with no collection errors — runtime failures."
+          exit 1
 
       - name: Smoke test CLI
+        if: matrix.shape == 'dev' && matrix.python-version == '3.12'
         run: python -m tokenpak.cli --help
+
+  release-gate-snapshots:
+    # Std 30 §7 + §13.3 (R7 + R11): snapshot checks before any build/release.
+    name: Release-gate snapshot validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (dev shape)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: api-snapshot-check (Std 30 §7 R7)
+        run: make api-snapshot-check
+      - name: workflow-steps-check (Std 30 §13.3 R11)
+        run: make workflow-steps-check
+      - name: telemetry-check (Std 30 §7 R7)
+        run: make telemetry-check
+      - name: taxonomy-check (Std 30 §5 R5)
+        run: make taxonomy-check
 
   # ─────────────────────────────────────────────────────────────────────
   # Step 2: Build distribution artifacts
@@ -102,7 +170,7 @@ jobs:
   build:
     name: Build Distribution
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, release-gate-snapshots]
     steps:
       - uses: actions/checkout@v4
 
@@ -186,6 +254,23 @@ jobs:
           fi
           echo "dist/ purity check OK:"
           ls -la dist/
+
+      - name: Assert sdist / wheel content purity (Std 30 §13.1 R9)
+        # Inclusion-direction guard: shipped artifacts MUST NOT contain
+        # _internal/ paths. Catches the failure mode that R6/R7 don't
+        # (those catch *removal* of public surfaces; this catches
+        # *inclusion* of private surfaces in the OSS distribution).
+        run: |
+          set -euo pipefail
+          if unzip -l dist/*.whl | grep -E '_internal/|tests/_internal/'; then
+            echo "::error::wheel contains _internal/ paths — Std 30 §13.1 violation"
+            exit 1
+          fi
+          if tar -tzf dist/*.tar.gz | grep -E '_internal/|tests/_internal/'; then
+            echo "::error::sdist contains _internal/ paths — Std 30 §13.1 violation"
+            exit 1
+          fi
+          echo "✅  sdist + wheel content purity: no _internal/ paths"
 
       - name: Generate checksums (outside dist/)
         run: |

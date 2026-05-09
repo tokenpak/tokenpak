@@ -226,6 +226,11 @@ markers = [
     "needs_internal_alerts: test requires tokenpak._internal.alerts (internal-only module)",
     "needs_cali_env: test requires a specific dev-host filesystem layout (/home/<user>/tokenpak)",
     "needs_fast_host: test has timing-sensitive assertions that fail on slow hosts (benchmarks, latency targets)",
+    # Std 02 §13 + Std 30 §5 (R5) — taxonomy markers (auto-applied by tests/conftest.py)
+    "oss: public OSS surface; runs in slim/dev/full install shapes (default for tests/)",
+    "optional: requires a named optional extra; runs in dev/full (tests/optional/)",
+    "internal: internal/Pro/closed-source surface; runs in full only (tests/_internal/, excluded from OSS sdist)",
+    "legacy: historical-compat tests; nightly only (tests/legacy/)",
 ]
 timeout = 30
 
