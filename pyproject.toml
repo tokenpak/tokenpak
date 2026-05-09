@@ -266,7 +266,7 @@ ignore = [
 
 # Test files use widespread `try: import dep except ImportError: pytest.skip`
 # availability-check patterns where the import binding is never referenced
-# but its presence is the test signal. Suppressing F401 fleet-wide for tests
+# but its presence is the test signal. Suppressing F401 globally for tests
 # is safer than per-line noqa proliferation; tests are not production code.
 "tests/**" = ["F401"]
 "tokenpak/tests/**" = ["F401"]

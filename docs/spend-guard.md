@@ -198,7 +198,7 @@ The 2026-05-07 v1.5.1 ship-defaults are intentionally conservative. The 7-day so
 - **Day 3–7:** review `tip_bypass` rows for repeating patterns that justify a permanent ceiling raise; or recommend per-cycle declared ceilings.
 - **Day 8+:** thresholds locked unless a new Standard 29 review is invoked.
 
-To override locally without waiting for fleet tuning: set the `TOKENPAK_SPEND_GUARD_*` env vars in your shell, or the `spend_guard:` block in `~/.tokenpak/config.yaml`.
+To override locally without waiting for the next default-tuning rollout: set the `TOKENPAK_SPEND_GUARD_*` env vars in your shell, or the `spend_guard:` block in `~/.tokenpak/config.yaml`.
 
 ---
 

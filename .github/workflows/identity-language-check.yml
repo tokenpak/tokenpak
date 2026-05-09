@@ -47,6 +47,14 @@ jobs:
           #   - "claude" without a hyphen would match user-facing
           #     "Claude Code" / "Claude API" — those are legitimate.
           #     We do NOT pattern-match bare "claude" here.
+          #   - \bfleet\b is the one pattern whose internal sense
+          #     ("agent fleet", "fleet worker", "fleet workflow",
+          #     "fleet orchestration") collides with legitimate public
+          #     CLI surface (`tokenpak fleet`, `--fleet`,
+          #     `fleet.yaml`, "fleet-wide", "multi-instance fleet").
+          #     The legitimate public surfaces are masked before the
+          #     fleet grep via content_for_pattern() below; the rule
+          #     still catches every internal-execution use.
           patterns=(
             '\bSue\b'
             '\bCali\b'
@@ -73,16 +81,49 @@ jobs:
             'Suki: auto-commit'
           )
 
+          # Mask known-public uses of "fleet" before the fleet grep.
+          # All other patterns see the file content unchanged.
+          # Allowlist (public CLI/config/product-capability surface):
+          #   tokenpak fleet               -> CLI verb
+          #   --fleet                      -> CLI flag
+          #   fleet.yaml                   -> config file
+          #   fleet config(uration)        -> public capability prose
+          #   fleet command                -> public capability prose
+          #   fleet management             -> public capability prose
+          #   fleet-wide                   -> public help/doc idiom
+          #   multi-instance fleet         -> public tmux deployment mode
+          #   multi-instance-fleet         -> anchor-name form of above
+          # Internal-execution senses ("agent fleet", "bot fleet",
+          # "internal fleet", "fleet worker", "fleet workflow",
+          # "fleet orchestration", "Sue/Suki/Cali/Trix fleet") are
+          # NOT masked and remain forbidden.
+          content_for_pattern() {
+            local pat="$1" file="$2"
+            if [ "$pat" = '\bfleet\b' ]; then
+              sed -E \
+                -e 's/tokenpak[[:space:]]+fleet/tokenpak __PUBLIC_FLEET_VERB__/g' \
+                -e 's/--fleet([^a-zA-Z]|$)/--__PUBLIC_FLEET_FLAG__\1/g' \
+                -e 's/fleet\.yaml/__PUBLIC_FLEET_CONFIG__.yaml/g' \
+                -e 's/fleet[[:space:]]+(config|configuration|command|management)/__PUBLIC_FLEET_PHRASE__ \1/g' \
+                -e 's/fleet-wide/__PUBLIC_FLEET_PHRASE__-wide/g' \
+                -e 's/multi-instance[[:space:]]+fleet/multi-instance __PUBLIC_TMUX_MODE__/g' \
+                -e 's/multi-instance-fleet/multi-instance-__PUBLIC_TMUX_MODE__/g' \
+                "$file"
+            else
+              cat "$file"
+            fi
+          }
+
           fail=0
           while IFS= read -r f; do
             [ -f "$f" ] || continue
             for p in "${patterns[@]}"; do
-              if grep -nE "$p" "$f" 2>/dev/null; then
+              if grep -nE "$p" <(content_for_pattern "$p" "$f") 2>/dev/null; then
                 # Print with file:line:match for clickable error annotation
                 while IFS= read -r line; do
                   ln=$(echo "$line" | cut -d: -f1)
                   echo "::error file=$f,line=$ln::Forbidden pattern '$p' in changed file."
-                done < <(grep -nE "$p" "$f")
+                done < <(grep -nE "$p" <(content_for_pattern "$p" "$f"))
                 fail=1
               fi
             done
