@@ -124,10 +124,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install (dev shape)
+      - name: Install (all extras for canonical snapshot reproduction)
+        # public-api.json captures the COMPLETE public surface, so the
+        # snapshot validation MUST install every optional extra. Without
+        # them, modules under telemetry/server (fastapi+pydantic),
+        # vault/ingest/api (fastapi), retrieval (sentence-transformers),
+        # etc. raise IMPORT_ERROR during snapshot generation and the diff
+        # fires with phantom removals. Per Std 30 §3 (R3) install-shape
+        # parity: the canonical snapshot install is the union of all
+        # non-agent-framework extras, ensuring the checked-in snapshot is
+        # stable across hosts.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,full,serve,telemetry,tokens,otel]"
       - name: api-snapshot-check (Std 30 §7 R7)
         run: make api-snapshot-check
       - name: workflow-steps-check (Std 30 §13.3 R11)
