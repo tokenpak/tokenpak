@@ -27,13 +27,18 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run integration tests
+        # Integration tests focus on integration-path coverage and don't
+        # exercise enough of the codebase to hit 80% on their own (last
+        # observed: ~2%). The combined-coverage gate in the
+        # 'Combined Coverage' job below enforces the 80% bar on the full
+        # test suite. Removing the per-job gate eliminates the false
+        # failure without weakening the overall coverage requirement.
         run: |
           pytest tests/integrations/ -v --tb=short \
             -m integration \
             --cov=tokenpak \
             --cov-report=xml:coverage-integration.xml \
-            --cov-report=term-missing \
-            --cov-fail-under=80
+            --cov-report=term-missing
         env:
           # No real API keys — tests use mocks only
           TOKENPAK_TEST_MODE: "1"
