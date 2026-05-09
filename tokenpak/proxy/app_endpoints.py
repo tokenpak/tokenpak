@@ -861,6 +861,15 @@ def _try_handle_pak_post(handler: Any, path: str) -> bool:
         _send_error(handler, 401, "unauthorized")
         return True
 
+    # ── POST /pak/v1/promote ────────────────────────────────────────────
+    # Pro-gated capture pipeline (Std 32 §4). When the Pro daemon is
+    # reachable, forward the request body to the daemon's loopback port
+    # and proxy the response back. When the daemon is absent or
+    # unreachable, return the standardized 501 ``pro_daemon_required``.
+    if path == "/pak/v1/promote":
+        _handle_pak_promote_forward(handler)
+        return True
+
     # ── POST /pak/v1/recall ─────────────────────────────────────────────
     # Pro-only per Std 32 §1.3 row 8. Always 501 in OSS; the daemon owns
     # ranking, hydration, and packaging.
@@ -879,6 +888,118 @@ def _try_handle_pak_post(handler: Any, path: str) -> bool:
         f"POST /pak/v1{path[len('/pak/v1'):]} not implemented yet",
     )
     return True
+
+
+def _handle_pak_promote_forward(handler: Any) -> None:
+    """Forward POST /pak/v1/promote to the Pro daemon's loopback port.
+
+    Std 32 §4 capture pipeline lives in the closed-source daemon. The
+    OSS proxy's job here is to:
+
+    1. Probe daemon presence via ``daemon_probe.detect_daemon_state``.
+    2. If absent → return 501 ``pro_daemon_required``.
+    3. If present → read the daemon's port from sock-info, POST the
+       request body to the daemon's ``/pak/v1/promote``, stream the
+       response back.
+
+    Defensive details:
+
+    - The auth headers from the caller are NOT forwarded to the daemon.
+      The daemon is loopback-only by construction (Std 25 §2.1), so
+      it requires no auth on /pak/v1/*; passing the OSS caller's auth
+      headers through would leak them into the daemon's logs needlessly.
+    - Short timeout (5s). The daemon is local; if it's not responding
+      within that, we treat it as TOCTOU race (probe said active,
+      daemon stopped between probe and forward) and return 503.
+    - Body is read once, fully, before forwarding. We don't stream —
+      the capture pipeline payloads are small (<<1MB).
+    """
+    import http.client
+
+    from tokenpak.licensing.daemon_probe import (
+        detect_daemon_state,
+        sock_info_path,
+    )
+
+    state = detect_daemon_state()
+    if state != "active":
+        _send_pak_not_implemented(
+            handler,
+            reason="pro_daemon_required",
+            detail=(
+                "Capture pipeline is a Pro-only feature; install tokenpak-paid "
+                "and start the daemon to enable."
+            ),
+        )
+        return
+
+    # Read sock-info to discover the daemon's port.
+    try:
+        info_raw = sock_info_path().read_text(encoding="utf-8")
+        info = json.loads(info_raw)
+        daemon_port = int(info["port"])
+    except (OSError, ValueError, KeyError, TypeError):
+        # Sock-info disappeared or malformed between probe and read.
+        _send_pak_not_implemented(
+            handler,
+            reason="pro_daemon_required",
+            detail="Daemon sock-info missing or malformed at forward time.",
+        )
+        return
+
+    # Read the inbound body.
+    try:
+        length = int(handler.headers.get("Content-Length", "0") or "0")
+    except ValueError:
+        length = 0
+    body = handler.rfile.read(length) if length > 0 else b""
+
+    # Forward to daemon. Auth headers are intentionally NOT propagated.
+    conn = http.client.HTTPConnection("127.0.0.1", daemon_port, timeout=5.0)
+    try:
+        conn.request(
+            "POST",
+            "/pak/v1/promote",
+            body=body,
+            headers={
+                "Content-Type": handler.headers.get("Content-Type", "application/json"),
+                "Content-Length": str(len(body)),
+            },
+        )
+        resp = conn.getresponse()
+        resp_body = resp.read()
+        # Mirror the daemon's status code and content-type.
+        handler.send_response(resp.status)
+        ct = resp.getheader("Content-Type") or "application/json; charset=utf-8"
+        handler.send_header("Content-Type", ct)
+        handler.send_header("Content-Length", str(len(resp_body)))
+        handler.send_header("X-TokenPak-Forwarded-From-Daemon", "1")
+        handler.end_headers()
+        handler.wfile.write(resp_body)
+    except (OSError, TimeoutError, http.client.HTTPException) as exc:
+        # TOCTOU — daemon went away between probe and forward, or
+        # connection failed. Treat as 503 so the caller can retry; not
+        # 501, because we KNOW the daemon should be there.
+        _send_json(
+            handler,
+            503,
+            {
+                "error": "daemon_unreachable",
+                "detail": (
+                    f"Pro daemon was reachable at probe time but request failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                "suggested_action": (
+                    "Retry the request; if the failure persists, restart the "
+                    "tokenpak-paid daemon."
+                ),
+            },
+        )
+    finally:
+        try:
+            conn.close()
+        except Exception:  # pragma: no cover — defensive
+            pass
 
 
 def _send_pak_not_implemented(
