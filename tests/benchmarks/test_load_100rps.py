@@ -191,7 +191,23 @@ class TestSLATargets:
         assert actual_rps >= 85, f"Only achieved {actual_rps:.1f} req/sec (target: 100)"
 
     def test_health_response_valid_under_load(self, proxy):
-        """Spot-check: /health responses are valid JSON under load."""
+        """Spot-check: /health responses are valid JSON under load.
+
+        TSR-06d (2026-05-09): per-request `urlopen(timeout=...)` 2s → 10s
+        and thread `join(timeout=...)` 5s → 15s. Tests against a real
+        proxy at 50-way concurrency on shared GitHub Actions runners
+        sometimes saw urlopen exceed the 2s ceiling — flaked on Python
+        3.12 in PR #146 and Python 3.11 in PR #150 with messages like
+        `<urlopen error timed out>`.
+
+        The test asserts ZERO errors out of 50 concurrent requests under
+        contention. The original 2s/5s budget was tight enough that one
+        scheduling-stalled request out of 50 would trip it. The bumps
+        widen the per-request slack without weakening the test's intent
+        (verify /health is concurrency-safe and returns valid JSON).
+        Real-runtime /health responses on this host complete in <1ms;
+        the new timeouts only mask scheduling jitter on shared runners.
+        """
         import json
         url = f"http://127.0.0.1:{proxy.port}/health"
         results = []
@@ -199,7 +215,7 @@ class TestSLATargets:
 
         def _check():
             try:
-                with urllib.request.urlopen(url, timeout=2) as resp:
+                with urllib.request.urlopen(url, timeout=10) as resp:
                     data = json.loads(resp.read())
                     results.append(data.get("status"))
             except Exception as e:
@@ -209,7 +225,7 @@ class TestSLATargets:
         for t in threads:
             t.start()
         for t in threads:
-            t.join(timeout=5)
+            t.join(timeout=15)
 
         assert len(errors) == 0, f"Errors under concurrent load: {errors[:3]}"
         assert all(s in ("ok", "degraded", "shutting_down") for s in results), \
