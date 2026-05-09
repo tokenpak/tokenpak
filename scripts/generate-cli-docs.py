@@ -145,7 +145,17 @@ def _format_action(action: argparse.Action) -> Optional[str]:
     desc = action.help or ""
     # Append default if non-trivial
     if action.default not in (None, argparse.SUPPRESS, False, True):
-        desc = f"{desc} (default: {action.default})" if desc else f"default: {action.default}"
+        # Normalize host-specific paths so the generated docs are stable
+        # across runners. argparse defaults that contain the runtime user's
+        # home directory (e.g. /home/sue, /home/runner) get rewritten to
+        # `~`. Without this, docs/cli-reference.md drifts every time it's
+        # regenerated on a different machine and the CLI Docs CI gate
+        # spuriously fails.
+        default_str = str(action.default)
+        home = os.path.expanduser("~")
+        if home and home != "~" and default_str.startswith(home):
+            default_str = "~" + default_str[len(home):]
+        desc = f"{desc} (default: {default_str})" if desc else f"default: {default_str}"
 
     # Append choices
     if action.choices:

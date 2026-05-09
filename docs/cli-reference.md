@@ -289,7 +289,7 @@ View and edit config
   - `--force` — Overwrite existing config
 - `path`
 - `migrate`
-  - `--config-json` — Path to legacy config.json (default: ~/.tokenpak/config.json) (default: /home/sue/.tokenpak/config.json)
+  - `--config-json` — Path to legacy config.json (default: ~/.tokenpak/config.json) (default: ~/.tokenpak/config.json)
   - `--dry-run` — Print what would change without writing
 
 ### `tokenpak explain`
