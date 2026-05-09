@@ -128,8 +128,22 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
+      - name: Install dependencies (full extras for accurate coverage)
+        # The Coverage Gate runs the FULL test suite. The 2026-05-01 extras-split
+        # (proposals/2026-05-01-tokenpak-install-footprint-extras-split.md) made
+        # large code paths (retrieval, code-compression, intelligence, data,
+        # compression, integrations-litellm) unimportable on `[dev]` alone —
+        # so coverage on `[dev]` measures ~25%, far below the 80% bar.
+        #
+        # Install `[dev,full]` here so every code path is importable, then
+        # measure coverage against the actual surface. Per Std 30 §3 (R3): the
+        # `full` shape is the canonical install for the maximally-comprehensive
+        # gate; this Coverage Gate is exactly that gate.
+        #
+        # PR #160 (#153 bucket 4) dropped the per-job 80% from integration.yml's
+        # integration job; this commit completes the corresponding repair on
+        # the combined Coverage Gate's install shape.
+        run: pip install -e ".[dev,full]"
 
       # Advisory until issue #161 lands a realistic threshold.
       #
