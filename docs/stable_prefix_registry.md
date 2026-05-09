@@ -1,6 +1,6 @@
 # Stable Prefix Content-Address Registry
 
-**Module:** `tokenpak/cache/prefix_registry.py`  
+**Module:** `tokenpak/cache/prefix_registry.py`
 **Public via:** `from tokenpak.cache import StablePrefixRegistry, fingerprint, get_registry`
 
 ---
@@ -39,16 +39,16 @@ reg = get_registry()
 
 # Register / look up a stable block
 block_id, is_new = reg.get_or_create(system_prompt_payload)
-print(block_id)   # "spfx-3a7f1c..."
+print(block_id) # "spfx-3a7f1c..."
 
 # Inspect metadata
 meta = reg.metadata(block_id)
 # {
-#   "block_id":   "spfx-3a7f1c...",
-#   "first_seen": 1741620000.123,  # Unix timestamp
-#   "last_seen":  1741623600.456,
-#   "hit_count":  7,
-#   "size_bytes": 412
+# "block_id": "spfx-3a7f1c...",
+# "first_seen": 1741620000.123, # Unix timestamp
+# "last_seen": 1741623600.456,
+# "hit_count": 7,
+# "size_bytes": 412
 # }
 ```
 
@@ -64,12 +64,12 @@ from tokenpak.cache import get_registry
 reg = get_registry()
 
 def record_stable_prefix(payload: dict, request_id: str) -> str:
-    block_id, is_new = reg.get_or_create(payload)
-    logger.debug(
-        "[proxy] stable_prefix block_id=%s is_new=%s request_id=%s",
-        block_id, is_new, request_id
-    )
-    return block_id
+ block_id, is_new = reg.get_or_create(payload)
+ logger.debug(
+ "[proxy] stable_prefix block_id=%s is_new=%s request_id=%s",
+ block_id, is_new, request_id
+ )
+ return block_id
 ```
 
 No changes to the outgoing payload. No risk of cache breakage.
@@ -83,7 +83,7 @@ No changes to the outgoing payload. No risk of cache breakage.
 Returns the stable block ID for `payload`. Pure function, no state.
 
 ```python
-fingerprint({"b": 1, "a": 2}) == fingerprint({"a": 2, "b": 1})  # True
+fingerprint({"b": 1, "a": 2}) == fingerprint({"a": 2, "b": 1}) # True
 ```
 
 ### `canonicalize(payload) -> bytes`

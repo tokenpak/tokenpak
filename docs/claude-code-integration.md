@@ -25,7 +25,7 @@ claude "summarize this file" < README.md
 TokenPak auto-detects your consumption mode and applies the right profile (`claude-code-cli`, `claude-code-tui`, etc.) based on your session headers. No manual profile selection required.
 
 !!! tip "One-command setup (coming soon)"
-    `tokenpak install --claude-code` will automate proxy startup, shell-rc injection, and profile selection. Track progress at [CCI-15](https://github.com/tokenpak/tokenpak/issues).
+ `tokenpak install --claude-code` will automate proxy startup, shell-rc injection, and profile selection.
 
 ---
 
@@ -69,7 +69,7 @@ tokenpak status
 $ claude "what does this repo do?" < README.md
 
 [tokenpak] profile=claude-code-cli vault_blocks=3 tokens_in=1842 tokens_out=247
-            cache_hit=true saved=$0.021
+ cache_hit=true saved=$0.021
 ```
 
 The inline savings line appears in stderr and is captured in the proxy log. It does not interfere with stdout, so script pipelines work unmodified.
@@ -112,22 +112,22 @@ TokenPak detects interactive mode via the `X-Claude-Code-Interactive: 1` header 
 ### What you get
 
 - All CLI features (vault injection, caching, cost tracking)
-- **Savings tape** — a live per-turn cost bar rendered in the TUI sidebar showing tokens and USD per exchange (coming in CCI-14)
-- **Cache hit highlighting** — turns with cache hits show a ✓ indicator in the TUI (coming in CCI-14)
+- **Savings tape** — a live per-turn cost bar rendered in the TUI sidebar showing tokens and USD per exchange
+- **Cache hit highlighting** — turns with cache hits show a ✓ indicator in the TUI
 - **Session-level cost summary** — displayed when the session ends
 
 ### What to expect
 
 ```
 ╭─ Claude ──────────────────────────────────────────╮
-│ > explain the auth flow                            │
-│                                                    │
-│  [tokenpak] ✓ cache hit · 2,140 tokens · $0.008   │
+│ > explain the auth flow │
+│ │
+│ [tokenpak] ✓ cache hit · 2,140 tokens · $0.008 │
 ╰────────────────────────────────────────────────────╯
 ```
 
 !!! note "Savings tape is a preview feature"
-    The inline per-turn display (CCI-14) is under active development. Current builds show the savings summary at session end only.
+ The inline per-turn display is under active development. Current builds show the savings summary at session end only.
 
 [▶ View TUI mode recording](demo/claude-code/tui.cast) · [recording script](demo/claude-code/tui.sh)
 
@@ -178,11 +178,11 @@ Dashboard at `http://localhost:8766/dashboard` shows per-session spend:
 
 ```
 Sessions active: 3
-  project-a  2,840 tokens  $0.014
-  project-b  1,180 tokens  $0.006
-  research   4,200 tokens  $0.021
+ project-a 2,840 tokens $0.014
+ project-b 1,180 tokens $0.006
+ research 4,200 tokens $0.021
 ────────────────────────────
-  Total       8,220 tokens  $0.041  (saved $0.019)
+ Total 8,220 tokens $0.041 (saved $0.019)
 ```
 
 [▶ View tmux mode recording](demo/claude-code/tmux.cast) · [recording script](demo/claude-code/tmux.sh)
@@ -194,7 +194,7 @@ Sessions active: 3
 | tmux profile not auto-detected | Needs ≥2 active sessions; single-session falls back to `claude-code-tui` |
 | Sessions not appearing as separate in dashboard | Each `tmux new-session` must be a fresh shell; re-used shell inherits the same session-id |
 | High memory use under many parallel sessions | Set `TOKENPAK_COMPACT_THRESHOLD_TOKENS=2500` to compress earlier |
-| Cache shared unintentionally | Expected behavior; set `TOKENPAK_CACHE_SCOPE=session` to isolate (coming in CCI-06) |
+| Cache shared unintentionally | Expected behavior; set `TOKENPAK_CACHE_SCOPE=session` to isolate |
 
 ---
 
@@ -214,7 +214,7 @@ Developers building applications with the [Claude Agent SDK](https://github.com/
 import anthropic
 
 client = anthropic.Anthropic(
-    base_url="http://localhost:8766",  # route through tokenpak
+ base_url="http://localhost:8766", # route through tokenpak
 )
 ```
 
@@ -224,7 +224,7 @@ client = anthropic.Anthropic(
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
-  baseURL: "http://localhost:8766",
+ baseURL: "http://localhost:8766",
 });
 ```
 
@@ -234,7 +234,7 @@ const client = new Anthropic({
 from claude_agent_sdk import ClaudeAgent
 
 agent = ClaudeAgent(
-    base_url="http://localhost:8766",
+ base_url="http://localhost:8766",
 )
 ```
 
@@ -247,20 +247,20 @@ tokenpak serve --port 8766 &
 ### What you get
 
 - **Cost tracking per SDK call** — model, tokens, USD logged to the dashboard
-- **Provider failover** — if Anthropic's API is unavailable, routes to a fallback provider transparently (coming in CCI-05)
+- **Provider failover** — if Anthropic's API is unavailable, routes to a fallback provider transparently
 - **Rate limit smoothing** — request queue absorbs burst traffic to avoid 429s
 - **Telemetry** — per-call latency, token counts, and cache hit rates visible at `/dashboard`
 
 !!! note "Vault injection is off for SDK mode"
-    SDK callers own their context; tokenpak does not inject vault content into SDK requests. This is intentional — your application controls the system prompt.
+ SDK callers own their context; tokenpak does not inject vault content into SDK requests. This is intentional — your application controls the system prompt.
 
 ### What to expect
 
 ```python
 response = client.messages.create(
-    model="claude-opus-4-5",
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello"}],
+ model="claude-opus-4-5",
+ max_tokens=1024,
+ messages=[{"role": "user", "content": "Hello"}],
 )
 # Proxy log: profile=claude-code-sdk tokens_in=12 tokens_out=34 latency=310ms
 ```
@@ -274,7 +274,7 @@ response = client.messages.create(
 | `AuthenticationError` when using `base_url` | Pass your real API key to the client; tokenpak forwards it upstream |
 | SDK detected as wrong profile | Check `User-Agent`; SDK profile activates on `anthropic-sdk-*` and `claude-agent-sdk-*` UAs |
 | Streaming responses interrupted | Ensure `stream=True` and that no network proxy between app and tokenpak buffers the stream |
-| Fallback provider not routing | CCI-05 (provider failover) is not yet shipped; set `ANTHROPIC_API_KEY` for now |
+| Fallback provider not routing | Provider failover is not yet shipped; set `ANTHROPIC_API_KEY` for now |
 
 ---
 
@@ -295,9 +295,9 @@ export ANTHROPIC_BASE_URL=http://localhost:8766
 tokenpak serve --port 8766 &
 
 # Then launch your IDE from the same shell:
-code .          # VSCode
-cursor .        # Cursor
-windsurf .      # Windsurf
+code . # VSCode
+cursor . # Cursor
+windsurf . # Windsurf
 # JetBrains: set ANTHROPIC_BASE_URL in IDE → Settings → Tools → Terminal environment
 ```
 
@@ -305,12 +305,12 @@ windsurf .      # Windsurf
 
 ```json
 {
-  "terminal.integrated.env.linux": {
-    "ANTHROPIC_BASE_URL": "http://localhost:8766"
-  },
-  "terminal.integrated.env.osx": {
-    "ANTHROPIC_BASE_URL": "http://localhost:8766"
-  }
+ "terminal.integrated.env.linux": {
+ "ANTHROPIC_BASE_URL": "http://localhost:8766"
+ },
+ "terminal.integrated.env.osx": {
+ "ANTHROPIC_BASE_URL": "http://localhost:8766"
+ }
 }
 ```
 
@@ -328,11 +328,11 @@ TokenPak detects IDE mode via the `User-Agent` header set by IDE extensions (e.g
 ```
 # In the IDE terminal after a Claude Code request:
 [tokenpak] profile=claude-code-ide vault_blocks=2 tokens_in=3210 tokens_out=512
-            cache_hit=partial saved=$0.038
+ cache_hit=partial saved=$0.038
 ```
 
 !!! note "IDE mode recording"
-    asciinema captures terminal output only. The IDE savings header and status-bar display require a screen recording. [▶ View IDE mode recording](demo/claude-code/ide.cast) · [recording script](demo/claude-code/ide.sh) — Kevin will replace the placeholder with a screen recording if available.
+ asciinema captures terminal output only. The IDE savings header and status-bar display require a screen recording. [▶ View IDE mode recording](demo/claude-code/ide.cast) · [recording script](demo/claude-code/ide.sh) — Kevin will replace the placeholder with a screen recording if available.
 
 ### Troubleshooting
 
@@ -371,17 +371,17 @@ For CI (GitHub Actions, etc.):
 ```yaml
 # .github/workflows/claude-review.yml
 env:
-  ANTHROPIC_BASE_URL: http://localhost:8766
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+ ANTHROPIC_BASE_URL: http://localhost:8766
+ ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
 steps:
-  - name: Start TokenPak proxy
-    run: |
-      pip install tokenpak
-      tokenpak serve --port 8766 &
-      sleep 1
-  - name: Run Claude review
-    run: claude --print "review this PR diff" < diff.txt
+ - name: Start TokenPak proxy
+ run: |
+ pip install tokenpak
+ tokenpak serve --port 8766 &
+ sleep 1
+ - name: Run Claude review
+ run: claude --print "review this PR diff" < diff.txt
 ```
 
 TokenPak detects cron/worker mode via the `X-Claude-Code-NonInteractive: 1` header. The `agent-claude-worker.sh` script sets this header automatically via `ANTHROPIC_CUSTOM_HEADERS`.
@@ -398,7 +398,7 @@ TokenPak detects cron/worker mode via the `X-Claude-Code-NonInteractive: 1` head
 ```bash
 $ ANTHROPIC_BASE_URL=http://localhost:8766 claude --print "daily standup summary"
 [tokenpak] profile=claude-code-cron tokens_in=892 tokens_out=134 saved=$0.011
-           budget_remaining=$4.83 / $5.00 today
+ budget_remaining=$4.83 / $5.00 today
 ```
 
 [▶ View cron mode recording](demo/claude-code/cron.cast) · [recording script](demo/claude-code/cron.sh)
@@ -411,7 +411,7 @@ $ ANTHROPIC_BASE_URL=http://localhost:8766 claude --print "daily standup summary
 | Budget limit hit mid-run | Increase `TOKENPAK_BUDGET_DAILY_LIMIT_USD` or check for runaway loops |
 | CI proxy not reachable | Add `sleep 1` after starting proxy; CI runners start services asynchronously |
 | Vault injection in CI injects wrong context | Set `TOKENPAK_VAULT_INJECT=0` to disable vault in CI; re-enable for specific jobs |
-| `tokenpak install --service` not available | CCI-15 (installer) is not yet released; use `tokenpak serve &` with a process manager instead |
+| `tokenpak install --service` not available | The installer is not yet released; use `tokenpak serve &` with a process manager instead |
 
 ---
 
@@ -421,7 +421,7 @@ These features apply across all six modes.
 
 ### Vault Injection
 
-**Status: shipped (CCI-01)**
+**Status: shipped**
 
 TokenPak automatically enriches requests with relevant content from your vault (markdown notes, project docs, code snippets). Defaults: top 5 results, max 4 000 tokens, min relevance score 2.0.
 
@@ -437,19 +437,19 @@ Vault injection is disabled for the `claude-code-sdk` profile.
 
 ### Cache Invalidation Alerts
 
-**Status: coming soon (CCI-03)**
+**Status: coming soon**
 
 When a vault document changes and invalidates a cached context block, tokenpak will surface a warning. Currently, cache evictions are silent.
 
 ### Cost Forecasting
 
-**Status: coming soon (CCI-11)**
+**Status: coming soon**
 
 The `/forecast` endpoint will estimate cost for a pending request before it is sent. Currently, cost reporting is post-hoc only.
 
 ### Compliance Routing (Bedrock)
 
-**Status: shipped (CCI-07)**
+**Status: shipped**
 
 For teams in regulated industries (HIPAA, FedRAMP, SOC 2), tokenpak can route all Claude Code traffic through AWS Bedrock instead of `api.anthropic.com`. Claude Code never knows — the wire format is translated transparently in both directions.
 
@@ -459,7 +459,7 @@ For teams in regulated industries (HIPAA, FedRAMP, SOC 2), tokenpak can route al
 export TOKENPAK_COMPLIANCE_PROVIDER=bedrock
 export AWS_ACCESS_KEY_ID=<your-key>
 export AWS_SECRET_ACCESS_KEY=<your-secret>
-export AWS_DEFAULT_REGION=us-east-1   # default; change to your Bedrock region
+export AWS_DEFAULT_REGION=us-east-1 # default; change to your Bedrock region
 
 # Now all claude invocations route to Bedrock automatically
 claude "explain this function" < src/main.py
@@ -470,7 +470,7 @@ claude "explain this function" < src/main.py
 ```bash
 # Set header for a single call — overrides TOKENPAK_COMPLIANCE_PROVIDER
 ANTHROPIC_CUSTOM_HEADERS='{"X-TokenPak-Compliance": "bedrock"}' \
-  claude "sensitive query here"
+ claude "sensitive query here"
 ```
 
 **What happens under the hood:**
@@ -505,7 +505,7 @@ Unknown model IDs pass through unchanged (forward-compatible).
 
 ### Multi-Provider Failover
 
-**Status: coming soon (CCI-05, CCI-06)**
+**Status: coming soon**
 
 Automatic failover to AWS Bedrock or local Ollama when Anthropic's API is unavailable or rate-limited. Currently, tokenpak routes all traffic to the single upstream configured in `ANTHROPIC_BASE_URL`.
 
@@ -513,7 +513,7 @@ Automatic failover to AWS Bedrock or local Ollama when Anthropic's API is unavai
 
 ## Settings UI
 
-**Status: coming soon (CCI-13)**
+**Status: coming soon**
 
 A web UI at `http://localhost:8766/settings/claude-code` will provide point-and-click control over per-mode profiles, vault injection depth, budget caps, and provider routing.
 
@@ -529,7 +529,7 @@ tokenpak config get claude-code
 
 ## Doctor Command
 
-**Status: coming soon (CCI-12)**
+**Status: coming soon**
 
 `tokenpak doctor --claude-code` will run a health check specific to Claude Code integration: verify the proxy is reachable at `ANTHROPIC_BASE_URL`, confirm profile auto-detection is working, and flag misconfigured vault paths.
 

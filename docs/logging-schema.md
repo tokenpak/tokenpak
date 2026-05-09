@@ -28,24 +28,24 @@ Standard request log entry.
 
 ```json
 {
-  "timestamp": "2026-03-10T06:00:00.123456Z",
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "level": "info",
-  "endpoint": "/compile",
-  "client_ip": "192.168.1.100",
-  "method": "POST",
-  "status_code": 200,
-  "request_size": 5000,
-  "response_size": 3000,
-  "latency_ms": 45.234,
-  "compression_ratio": 0.6,
-  "message": "Compilation successful",
-  "context": {
-    "input_blocks": 20,
-    "output_blocks": 15,
-    "blocks_removed": 5,
-    "compression_methods": ["truncation", "deduplication"]
-  }
+ "timestamp": "2026-03-10T06:00:00.123456Z",
+ "request_id": "550e8400-e29b-41d4-a716-446655440000",
+ "level": "info",
+ "endpoint": "/compile",
+ "client_ip": "192.168.1.100",
+ "method": "POST",
+ "status_code": 200,
+ "request_size": 5000,
+ "response_size": 3000,
+ "latency_ms": 45.234,
+ "compression_ratio": 0.6,
+ "message": "Compilation successful",
+ "context": {
+ "input_blocks": 20,
+ "output_blocks": 15,
+ "blocks_removed": 5,
+ "compression_methods": ["truncation", "deduplication"]
+ }
 }
 ```
 
@@ -110,53 +110,53 @@ Per-block decision record within CompileAudit.
 
 ```json
 {
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "timestamp": "2026-03-10T06:00:00.123456Z",
-  "input_block_count": 20,
-  "input_blocks_by_type": {
-    "instruction": 5,
-    "knowledge": 10,
-    "evidence": 5
-  },
-  "input_total_size": 50000,
-  "output_block_count": 15,
-  "output_blocks_by_type": {
-    "instruction": 5,
-    "knowledge": 8,
-    "evidence": 2
-  },
-  "output_total_size": 35000,
-  "blocks_audited": [
-    {
-      "block_id": "block-k-1",
-      "block_type": "knowledge",
-      "original_size": 1000,
-      "final_size": 0,
-      "action": "removed",
-      "compression_method": null,
-      "reason": "Duplicate of block-k-2"
-    },
-    {
-      "block_id": "block-e-1",
-      "block_type": "evidence",
-      "original_size": 2000,
-      "final_size": 1000,
-      "action": "compacted",
-      "compression_method": "truncation",
-      "reason": "Truncated to 500 tokens"
-    }
-  ],
-  "compression_methods_used": {
-    "truncation": 3,
-    "deduplication": 2
-  },
-  "parse_latency_ms": 5.0,
-  "compile_latency_ms": 30.0,
-  "render_latency_ms": 5.0,
-  "total_latency_ms": 40.0,
-  "compression_ratio": 0.7,
-  "tokens_removed": 5000,
-  "errors": []
+ "request_id": "550e8400-e29b-41d4-a716-446655440000",
+ "timestamp": "2026-03-10T06:00:00.123456Z",
+ "input_block_count": 20,
+ "input_blocks_by_type": {
+ "instruction": 5,
+ "knowledge": 10,
+ "evidence": 5
+ },
+ "input_total_size": 50000,
+ "output_block_count": 15,
+ "output_blocks_by_type": {
+ "instruction": 5,
+ "knowledge": 8,
+ "evidence": 2
+ },
+ "output_total_size": 35000,
+ "blocks_audited": [
+ {
+ "block_id": "block-k-1",
+ "block_type": "knowledge",
+ "original_size": 1000,
+ "final_size": 0,
+ "action": "removed",
+ "compression_method": null,
+ "reason": "Duplicate of block-k-2"
+ },
+ {
+ "block_id": "block-e-1",
+ "block_type": "evidence",
+ "original_size": 2000,
+ "final_size": 1000,
+ "action": "compacted",
+ "compression_method": "truncation",
+ "reason": "Truncated to 500 tokens"
+ }
+ ],
+ "compression_methods_used": {
+ "truncation": 3,
+ "deduplication": 2
+ },
+ "parse_latency_ms": 5.0,
+ "compile_latency_ms": 30.0,
+ "render_latency_ms": 5.0,
+ "total_latency_ms": 40.0,
+ "compression_ratio": 0.7,
+ "tokens_removed": 5000,
+ "errors": []
 }
 ```
 
@@ -181,14 +181,14 @@ Audit trail for `/cache/*` requests.
 
 ```json
 {
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "timestamp": "2026-03-10T06:00:00.123456Z",
-  "operation": "get",
-  "block_id": "block-k-1",
-  "cache_hit": true,
-  "cached_value_size": 1000,
-  "ttl_seconds": null,
-  "message": "Cache hit for block-k-1"
+ "request_id": "550e8400-e29b-41d4-a716-446655440000",
+ "timestamp": "2026-03-10T06:00:00.123456Z",
+ "operation": "get",
+ "block_id": "block-k-1",
+ "cache_hit": true,
+ "cached_value_size": 1000,
+ "ttl_seconds": null,
+ "message": "Cache hit for block-k-1"
 }
 ```
 
@@ -210,19 +210,19 @@ Audit trail for `/metrics` requests.
 
 ```json
 {
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "timestamp": "2026-03-10T06:00:00.123456Z",
-  "aggregation_window": "24h",
-  "data_points_returned": 1440,
-  "metrics_included": [
-    "compression_ratio",
-    "latency_p50",
-    "latency_p95",
-    "latency_p99",
-    "blocks_removed",
-    "requests_per_second",
-    "cache_hit_rate"
-  ]
+ "request_id": "550e8400-e29b-41d4-a716-446655440000",
+ "timestamp": "2026-03-10T06:00:00.123456Z",
+ "aggregation_window": "24h",
+ "data_points_returned": 1440,
+ "metrics_included": [
+ "compression_ratio",
+ "latency_p50",
+ "latency_p95",
+ "latency_p99",
+ "blocks_removed",
+ "requests_per_second",
+ "cache_hit_rate"
+ ]
 }
 ```
 

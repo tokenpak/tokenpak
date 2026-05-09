@@ -31,11 +31,11 @@ tokenpak start
 Run the one-shot configurator for your tool:
 
 ```bash
-tokenpak integrate                    # list clients + detection status
-tokenpak integrate claude-code --apply    # writes ~/.claude/settings.json
-tokenpak integrate cursor --apply         # writes Cursor settings.json
-tokenpak integrate continue --apply       # writes ~/.continue/config.json
-tokenpak integrate aider --apply          # writes ~/.aider.conf.yml
+tokenpak integrate # list clients + detection status
+tokenpak integrate claude-code --apply # writes ~/.claude/settings.json
+tokenpak integrate cursor --apply # writes Cursor settings.json
+tokenpak integrate continue --apply # writes ~/.continue/config.json
+tokenpak integrate aider --apply # writes ~/.aider.conf.yml
 ```
 
 Every `--apply` backs up the existing config and prints a rollback command.
@@ -44,9 +44,9 @@ For clients without auto-apply (Cline, SDKs), `tokenpak integrate <client>` prin
 ### Minute 4: See your savings
 
 ```bash
-tokenpak demo     # see compression in action on a sample prompt
-tokenpak cost     # view today's spend and tokens saved
-tokenpak status   # live snapshot: requests, cache hit rate, models used
+tokenpak demo # see compression in action on a sample prompt
+tokenpak cost # view today's spend and tokens saved
+tokenpak status # live snapshot: requests, cache hit rate, models used
 ```
 
 That's it. Every request is now routed through tokenpak.
@@ -77,8 +77,8 @@ pack.add_conversation([{"role": "user", "content": "Summarize the docs"}])
 from openai import OpenAI
 client = OpenAI()
 response = client.chat.completions.create(
-    model="gpt-4",
-    messages=pack.to_messages()
+ model="gpt-4",
+ messages=pack.to_messages()
 )
 
 # See how much was saved
@@ -111,13 +111,13 @@ from openai import OpenAI
 
 # Just change base_url — everything else stays the same
 client = OpenAI(
-    api_key="your-openai-key",
-    base_url="http://localhost:8766"
+ api_key="your-openai-key",
+ base_url="http://localhost:8766"
 )
 
 response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[{"role": "user", "content": "Your prompt here"}]
+ model="gpt-4",
+ messages=[{"role": "user", "content": "Your prompt here"}]
 )
 ```
 
@@ -128,9 +128,9 @@ from langchain_openai import ChatOpenAI
 
 # Point LangChain at the proxy
 llm = ChatOpenAI(
-    model="gpt-4",
-    openai_api_base="http://localhost:8766",
-    openai_api_key="your-key"
+ model="gpt-4",
+ openai_api_base="http://localhost:8766",
+ openai_api_key="your-key"
 )
 
 response = llm.invoke("Your prompt here")
@@ -147,8 +147,8 @@ Most frameworks support a `base_url` or `api_base` parameter. Set it to `http://
 ### "It's not connecting"
 
 ```bash
-tokenpak status    # is the proxy running?
-tokenpak start     # start it if not
+tokenpak status # is the proxy running?
+tokenpak start # start it if not
 ```
 
 Check that your client is pointing at `http://localhost:8766` (not `https://`).
@@ -162,8 +162,8 @@ TokenPak is a passthrough proxy — it never stores or modifies your credentials
 ### "I'm not seeing any savings"
 
 ```bash
-tokenpak cost --week    # check a longer time window
-tokenpak demo           # verify compression is working
+tokenpak cost --week # check a longer time window
+tokenpak demo # verify compression is working
 ```
 
 Short prompts compress less. Savings show up most on long conversations and large document contexts.

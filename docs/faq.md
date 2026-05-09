@@ -218,9 +218,9 @@ Or disable compression for specific request patterns:
 
 ```json
 {
-  "compression": {
-    "exclude_patterns": [".*system.*", ".*code-review.*"]
-  }
+ "compression": {
+ "exclude_patterns": [".*system.*", ".*code-review.*"]
+ }
 }
 ```
 
@@ -246,9 +246,9 @@ tokenpak config set pricing.my-model.output_per_1k 0.015
 ### How do I reset cost history?
 
 ```bash
-tokenpak prune --older-than 0d    # delete all history
+tokenpak prune --older-than 0d # delete all history
 # or
-rm ~/.tokenpak/stats.db            # nuclear option
+rm ~/.tokenpak/stats.db # nuclear option
 ```
 
 ### Where is my data stored?
@@ -305,7 +305,7 @@ tokenpak index ~/vault
 
 ```bash
 tokenpak budget set --monthly 50
-tokenpak budget alert --at 80    # alert at 80% of budget
+tokenpak budget alert --at 80 # alert at 80% of budget
 ```
 
 ### Budget alert isn't triggering
@@ -333,7 +333,7 @@ tokenpak budget alert --at 80
 ### Per-request trace (debug mode)
 
 ```
-[DEBUG] POST /v1/messages  →  anthropic  (claude-opus-4-6)
+[DEBUG] POST /v1/messages → anthropic (claude-opus-4-6)
 [DEBUG] Input tokens raw: 8,240 | after compression: 4,891 | saved: 3,349 (40.6%)
 [DEBUG] Forwarding request to api.anthropic.com
 [DEBUG] Response: 200 OK in 1,234ms
@@ -342,16 +342,16 @@ tokenpak budget alert --at 80
 ### Failover event
 
 ```
-[WARN]  Primary provider failed: anthropic (timeout)
-[INFO]  Failover: anthropic → openai (gpt-4o)
+[WARN] Primary provider failed: anthropic (timeout)
+[INFO] Failover: anthropic → openai (gpt-4o)
 ```
 
 ### Systemd log commands
 
 ```bash
-journalctl --user -u tokenpak -f          # live logs
-journalctl --user -u tokenpak -n 100      # last 100 lines
-journalctl --user -u tokenpak -p err      # errors only
+journalctl --user -u tokenpak -f # live logs
+journalctl --user -u tokenpak -n 100 # last 100 lines
+journalctl --user -u tokenpak -p err # errors only
 ```
 
 ---
@@ -359,9 +359,9 @@ journalctl --user -u tokenpak -p err      # errors only
 ## Getting Help
 
 ```bash
-tokenpak doctor        # comprehensive self-diagnosis
+tokenpak doctor # comprehensive self-diagnosis
 tokenpak logs --errors # recent errors
-tokenpak --version     # version info for bug reports
+tokenpak --version # version info for bug reports
 ```
 
 File issues at: https://github.com/tokenpak/tokenpak/issues

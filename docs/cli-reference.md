@@ -108,8 +108,8 @@ Index a directory
 - `--watch` — Watch directory and auto-reindex on file changes
 - `--debounce` — Debounce delay in ms for watch mode (default: 500) (default: 500)
 - `--no-treesitter` — Force regex-based code processing (skip tree-sitter)
-- `--reindex-all` — Reindex every directory registered in ~/.tokenpak/vault.yaml (VDS-01)
-- `--reindex-path` — Reindex a single directory registered in ~/.tokenpak/vault.yaml (VDS-01)
+- `--reindex-all` — Reindex every directory registered in ~/.tokenpak/vault.yaml
+- `--reindex-path` — Reindex a single directory registered in ~/.tokenpak/vault.yaml
 
 ### `tokenpak search`
 
@@ -566,8 +566,8 @@ Examples:
   tokenpak creds remove openai-work
   tokenpak creds test openai-work                      # cheap live probe
   tokenpak creds route api.anthropic.com               # what'd I pick?
-  tokenpak creds route api.openai.com --caller openclaw:main:* \
-       --tag codex-personal
+  tokenpak creds route api.openai.com --caller my-app:profile:* \
+       --tag work
 
 **Flags:**
 
@@ -575,7 +575,7 @@ Examples:
 
 ### `tokenpak pak`
 
-MultiPak Pro Phase 1 OSS surface (Std 32). Read-only Vault Pak operations work without Pro; other Pak subtypes require the tokenpak-paid daemon.
+MultiPak Pro Phase 1 OSS surface. Read-only Vault Pak operations work without Pro; other Pak subtypes require the tokenpak-paid daemon.
 
 **Subcommands:**
 
@@ -1002,14 +1002,6 @@ Start the live monitor dashboard.
 
 - `--port` — Dashboard port (default: 8767) (default: 8767)
 
-### `tokenpak openclaw`
-
-**Subcommands:**
-
-- `refresh-models`
-  - `--proxy-url` — Proxy URL to query (default: $TOKENPAK_PROXY_URL or http://localhost:8766)
-  - `--config-path` — Target a specific openclaw.json (default: refresh every install discovered on this host — main, governor, etc.)
-- `detect`
 
 ### `tokenpak optimize`
 

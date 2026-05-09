@@ -92,8 +92,8 @@ None of the alternatives in the table above were designed around Claude Code's c
 | **Per-mode profiles** (CLI / TUI / tmux / SDK / IDE / cron auto-detected) | ✅ 6 profiles, auto-detected via session headers | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
 | **Vault context injection post-cache-boundary** | ✅ Yes — injected before upstream call, respects `cache_control` boundary | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
 | **Multi-provider failover presenting as Anthropic-compatible** | ✅ Yes — Bedrock / Vertex / OpenAI behind a single `ANTHROPIC_BASE_URL` | ⚠️ Routing only (changes base URL) | ❌ No | ⚠️ Routing only (changes SDK target) | ⚠️ Routing only (changes SDK target) | ❌ No | ⚠️ Routing only (changes SDK target) |
-| **One-command Claude Code installer** (`tokenpak install --claude-code`) | ✅ Yes (CCI-15) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
-| **`tokenpak doctor --claude-code` health check** | ✅ Yes (CCI-12) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **One-command Claude Code installer** (`tokenpak install --claude-code`) | ✅ Yes | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **`tokenpak doctor --claude-code` health check** | ✅ Yes | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
 | **Inline savings reporting** (TUI footer / IDE header / SSE event) | ✅ Yes — 3 surfaces, per-turn | ❌ No (dashboard only) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
 | **Per-host config drift detection** | ✅ Yes — flags when profile or vault config diverges across hosts | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
 

@@ -151,8 +151,8 @@ TokenPak includes proxy-mode support for Google Vertex AI via the generative AI 
 |----------|---------|--------|--------|-------|
 | v1.0+ | 0.2+ | 3.10+ | 🔲 | Not tested; supports custom client override |
 
-**Location:** Example in docs or framework-adapter ecosystem  
-**Integration:** Use OpenAI/Anthropic adapters as custom client  
+**Location:** Example in docs or framework-adapter ecosystem
+**Integration:** Use OpenAI/Anthropic adapters as custom client
 **Reference:** [AutoGen Documentation](https://microsoft.github.io/autogen/)
 
 ### CrewAI
@@ -161,8 +161,8 @@ TokenPak includes proxy-mode support for Google Vertex AI via the generative AI 
 |----------|--------|--------|--------|-------|
 | v1.0+ | 0.27+ | 3.10+ | 🔲 | Not tested; uses LangChain/LiteLLM underneath |
 
-**Location:** Via LangChain or LiteLLM adapter  
-**Integration:** Override LLM provider with TokenPak-wrapped client  
+**Location:** Via LangChain or LiteLLM adapter
+**Integration:** Override LLM provider with TokenPak-wrapped client
 **Reference:** [CrewAI Documentation](https://docs.crewai.com)
 
 ### LlamaIndex
@@ -171,8 +171,8 @@ TokenPak includes proxy-mode support for Google Vertex AI via the generative AI 
 |----------|-----------|--------|--------|-------|
 | v1.0+ | 0.9+ | 3.10+ | 🔲 | Not tested; use OpenAI/Anthropic adapters as custom LLM |
 
-**Location:** Via custom LLM callback  
-**Integration:** Override default LLM with TokenPak wrapper  
+**Location:** Via custom LLM callback
+**Integration:** Override default LLM with TokenPak wrapper
 **Reference:** [LlamaIndex Documentation](https://docs.llamaindex.ai)
 
 ### Langfuse
@@ -181,8 +181,8 @@ TokenPak includes proxy-mode support for Google Vertex AI via the generative AI 
 |----------|----------|--------|--------|-------|
 | v1.0+ | 2.0+ | 3.10+ | 🔲 | Not tested; telemetry integration possible |
 
-**Location:** Observability layer on top of adapters  
-**Integration:** Combine with any TokenPak adapter for telemetry  
+**Location:** Observability layer on top of adapters
+**Integration:** Combine with any TokenPak adapter for telemetry
 **Reference:** [Langfuse Documentation](https://langfuse.com)
 
 ---
@@ -218,15 +218,15 @@ The TokenPak proxy (`tokenpak.proxy.py`) supports routing to these providers:
 ## Known Issues & Workarounds
 
 ### Issue: Old OpenAI SDK + Streaming
-If using OpenAI SDK < 1.0 with streaming, token counts may be delayed or incomplete.  
+If using OpenAI SDK < 1.0 with streaming, token counts may be delayed or incomplete.
 **Workaround:** Upgrade to OpenAI SDK 1.x or 2.x.
 
 ### Issue: Anthropic SDK Cache Tokens (< 0.24)
-Older Anthropic SDK versions don't report cache tokens in usage.  
+Older Anthropic SDK versions don't report cache tokens in usage.
 **Workaround:** Upgrade to latest Anthropic SDK (0.28+).
 
 ### Issue: LangChain LLM vs Provider Token Counts
-LangChain may derive token counts differently than the underlying provider.  
+LangChain may derive token counts differently than the underlying provider.
 **Workaround:** Use TokenPak telemetry for ground-truth token tracking; verify against provider bills.
 
 ---
@@ -249,7 +249,6 @@ Include:
 ## Last Updated
 
 - **Date:** 2026-03-11
-- **By:** Cali
 - **TokenPak Version:** 1.0+
 
 For current adapter status, check:

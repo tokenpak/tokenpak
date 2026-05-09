@@ -5,7 +5,7 @@ Compute baseline compression ratios for all test payloads.
 Usage:
     python3 scripts/compute_compression_baselines.py [--out PATH]
 
-State assumptions (TSR-05l, 2026-05-08):
+State assumptions:
     `CompressionPipeline.run()` is the canonical OSS API. Its strongest
     stage — `InstructionTable` — is a stateful learning compressor that
     only emits a `[INSTRUCTION:POLICY_NN]` tag once a content hash has
@@ -52,7 +52,7 @@ def compress_payload(pipeline: CompressionPipeline, payload: dict) -> Any:
     """Run the pipeline against a single payload's messages.
 
     Errors are intentionally NOT swallowed — fail loudly so a refactored
-    or renamed API doesn't silently produce zero-baseline output (TSR-05l
+    or renamed API doesn't silently produce zero-baseline output
     history note in the module docstring).
     """
     if "messages" not in payload:

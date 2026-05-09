@@ -17,25 +17,25 @@ Get TokenPak running in under 5 minutes.
 ## Install
 
 === "pip"
-    ```bash
-    pip install tokenpak
-    ```
+ ```bash
+ pip install tokenpak
+ ```
 
 === "From source"
-    ```bash
-    git clone https://github.com/tokenpak/tokenpak
-    cd tokenpak
-    pip install -e .
-    ```
+ ```bash
+ git clone https://github.com/tokenpak/tokenpak
+ cd tokenpak
+ pip install -e .
+ ```
 
 === "With optional extras"
-    ```bash
-    # Accurate token counting (recommended)
-    pip install tokenpak[tiktoken]
+ ```bash
+ # Accurate token counting (recommended)
+ pip install tokenpak[tiktoken]
 
-    # ML-powered compression (advanced)
-    pip install tokenpak[ml]
-    ```
+ # ML-powered compression (advanced)
+ pip install tokenpak[ml]
+ ```
 
 ---
 
@@ -55,7 +55,7 @@ config file automatically — no manual editing required.
 - **Google AI SDK**: prints the one-line export command
 
 !!! tip "Non-interactive / CI"
-    Run `tokenpak setup` and answer the prompts, or set the proxy URL manually using the instructions in the [manual alternative](#connect-your-llm-client-manual-alternative) section below.
+ Run `tokenpak setup` and answer the prompts, or set the proxy URL manually using the instructions in the [manual alternative](#connect-your-llm-client-manual-alternative) section below.
 
 The wizard never reads or writes API keys — only proxy URLs.
 
@@ -70,11 +70,11 @@ tokenpak serve --port 8766
 The proxy starts on `http://localhost:8766` and is ready to accept requests immediately.
 
 !!! tip "Run in background"
-    ```bash
-    tokenpak serve --port 8766 &
-    # Stop with:
-    tokenpak stop
-    ```
+ ```bash
+ tokenpak serve --port 8766 &
+ # Stop with:
+ tokenpak stop
+ ```
 
 ---
 
@@ -83,37 +83,37 @@ The proxy starts on `http://localhost:8766` and is ready to accept requests imme
 If you prefer to configure your client manually instead of using `tokenpak setup`:
 
 === "Claude Code"
-    Configure in `~/.claude/settings.json`:
-    ```json
-    {
-      "env": {
-        "ANTHROPIC_BASE_URL": "http://localhost:8766"
-      }
-    }
-    ```
-    Or set in your shell config:
-    ```bash
-    export ANTHROPIC_BASE_URL=http://localhost:8766
-    ```
+ Configure in `~/.claude/settings.json`:
+ ```json
+ {
+ "env": {
+ "ANTHROPIC_BASE_URL": "http://localhost:8766"
+ }
+ }
+ ```
+ Or set in your shell config:
+ ```bash
+ export ANTHROPIC_BASE_URL=http://localhost:8766
+ ```
 
 === "OpenAI Python"
-    ```python
-    from openai import OpenAI
+ ```python
+ from openai import OpenAI
 
-    client = OpenAI(
-        base_url="http://localhost:8766/v1",
-        api_key="your-key-here"
-    )
-    ```
+ client = OpenAI(
+ base_url="http://localhost:8766/v1",
+ api_key="your-key-here"
+ )
+ ```
 
 === "OpenAI CLI"
-    ```bash
-    export OPENAI_BASE_URL=http://localhost:8766/v1
-    ```
+ ```bash
+ export OPENAI_BASE_URL=http://localhost:8766/v1
+ ```
 
 === "Any HTTP client"
-    Replace your provider base URL with `http://localhost:8766`.
-    TokenPak auto-detects the provider from the `Authorization` header and routes accordingly.
+ Replace your provider base URL with `http://localhost:8766`.
+ TokenPak auto-detects the provider from the `Authorization` header and routes accordingly.
 
 Your credentials pass through unchanged. TokenPak never stores them.
 
@@ -172,8 +172,8 @@ This runs once and saves a profile to `~/.tokenpak/calibration.json`. Future ind
 Protect yourself from runaway costs:
 
 ```bash
-tokenpak budget set --monthly 50      # $50/month limit
-tokenpak budget alert --at 80%        # warn at 80%
+tokenpak budget set --monthly 50 # $50/month limit
+tokenpak budget alert --at 80% # warn at 80%
 ```
 
 ---

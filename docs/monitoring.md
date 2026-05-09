@@ -34,9 +34,9 @@ The proxy must be running on port 8766 (`tokenpak serve`) for live data.
 
 ```
 tokenpak monitor (port 8767)
-├── GET /                 → dashboard.html (self-contained)
-├── GET /api/stats        → proxied from localhost:8766/stats
-└── GET /api/errors       → reads ~/.tokenpak/logs/errors-*.jsonl
+├── GET / → dashboard.html (self-contained)
+├── GET /api/stats → proxied from localhost:8766/stats
+└── GET /api/errors → reads ~/.tokenpak/logs/errors-*.jsonl
 ```
 
 - No external JS dependencies — pure vanilla JS

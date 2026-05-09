@@ -8,27 +8,27 @@ TokenPak is a **deterministic token-budget compiler** for large language models.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Applications / Integrations              │
-│  (adapters: LiteLLM, CrewAI, LangChain, LLamaIndex, etc.)  │
+│ Applications / Integrations │
+│ (adapters: LiteLLM, CrewAI, LangChain, LLamaIndex, etc.) │
 └─────────────────────────────────────────────────────────────┘
-                           ↓ ↓ ↓
+ ↓ ↓ ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                     TokenPak Proxy & CLI                    │
-│  (serve.py, cli.py, proxy.py — handle requests/responses)  │
+│ TokenPak Proxy & CLI │
+│ (serve.py, cli.py, proxy.py — handle requests/responses) │
 └─────────────────────────────────────────────────────────────┘
-                           ↓ ↓ ↓
+ ↓ ↓ ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    Core Processing Layer                    │
-│  Compression │ Token Counting │ Budget Allocation │ Routing │
+│ Core Processing Layer │
+│ Compression │ Token Counting │ Budget Allocation │ Routing │
 └─────────────────────────────────────────────────────────────┘
-                           ↓ ↓ ↓
+ ↓ ↓ ↓
 ┌─────────────────────────────────────────────────────────────┐
-│              Telemetry & Cost Tracking Layer                │
-│  (telemetry/, cost_router.py — metrics, costs, analytics)  │
+│ Telemetry & Cost Tracking Layer │
+│ (telemetry/, cost_router.py — metrics, costs, analytics) │
 └─────────────────────────────────────────────────────────────┘
-                           ↓ ↓ ↓
+ ↓ ↓ ↓
 ┌─────────────────────────────────────────────────────────────┐
-│            LLM Provider APIs (OpenAI, Anthropic, Google)    │
+│ LLM Provider APIs (OpenAI, Anthropic, Google) │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -97,9 +97,9 @@ Allocates tokens across context sections (state, recent, evidence, tools) and tr
 ```python
 budgeter = Budgeter(total_tokens=4096)
 trimmed = budgeter.allocate({
-    'state': {'text': '...', 'priority': 'critical'},
-    'recent': {'text': '...', 'priority': 'high'},
-    'evidence': {'items': [...], 'priority': 'medium'},
+ 'state': {'text': '...', 'priority': 'critical'},
+ 'recent': {'text': '...', 'priority': 'high'},
+ 'evidence': {'items': [...], 'priority': 'medium'},
 })
 ```
 
@@ -111,7 +111,7 @@ Multiple compression strategies available:
 - **Recursive**: Token-aware recursive chunking
 
 ```python
-engine = get_engine("heuristic")  # or "llmlinga", "recursive"
+engine = get_engine("heuristic") # or "llmlinga", "recursive"
 compressed = engine.compress(context, max_tokens=2048)
 ```
 
@@ -176,13 +176,13 @@ All adapters follow the same pattern:
 
 ```python
 from tokenpak import (
-    Budgeter,
-    Block,
-    BlockRegistry,
-    CompressionEngine,
-    TelemetryCollector,
-    get_engine,
-    count_tokens,
+ Budgeter,
+ Block,
+ BlockRegistry,
+ CompressionEngine,
+ TelemetryCollector,
+ get_engine,
+ count_tokens,
 )
 
 # For adapters

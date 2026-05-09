@@ -54,8 +54,8 @@ sudo ufw allow out 443/tcp
 pip install tokenpak
 
 # With optional extras
-pip install tokenpak[tiktoken]   # accurate token counting (recommended)
-pip install tokenpak[ml]         # ML-powered compression via LLMLingua
+pip install tokenpak[tiktoken] # accurate token counting (recommended)
+pip install tokenpak[ml] # ML-powered compression via LLMLingua
 ```
 
 ### Option 2: From Source
@@ -85,13 +85,13 @@ Run the container:
 
 ```bash
 docker run -d \
-  --name tokenpak \
-  --restart unless-stopped \
-  -p 127.0.0.1:8766:8766 \
-  -e ANTHROPIC_API_KEY="sk-ant-..." \
-  -e OPENAI_API_KEY="sk-..." \
-  -v tokenpak-data:/home/tokenpak/.tokenpak \
-  tokenpak/tokenpak:latest
+ --name tokenpak \
+ --restart unless-stopped \
+ -p 127.0.0.1:8766:8766 \
+ -e ANTHROPIC_API_KEY="sk-ant-..." \
+ -e OPENAI_API_KEY="sk-..." \
+ -v tokenpak-data:/home/tokenpak/.tokenpak \
+ tokenpak/tokenpak:latest
 ```
 
 > Binding to `127.0.0.1:8766` keeps the port local-only. Use a reverse proxy (nginx, Caddy) for external access.
@@ -100,8 +100,8 @@ docker run -d \
 
 ```bash
 tokenpak --version
-tokenpak doctor        # checks Python version, deps, config
-tokenpak status        # verify proxy is reachable
+tokenpak doctor # checks Python version, deps, config
+tokenpak status # verify proxy is reachable
 ```
 
 ---
@@ -114,26 +114,26 @@ Default location: `~/.tokenpak/config.json`
 
 ```json
 {
-  "proxy": {
-    "port": 8766,
-    "host": "127.0.0.1",
-    "passthrough_url": "https://api.openai.com"
-  },
-  "compression": {
-    "enabled": true,
-    "level": "balanced",
-    "threshold_tokens": 4500
-  },
-  "budget": {
-    "monthly_usd": 100,
-    "alert_at_pct": 80
-  },
-  "vault": {
-    "db_path": "~/.tokenpak/registry.db",
-    "watch": false
-  },
-  "stats_footer": false,
-  "debug": false
+ "proxy": {
+ "port": 8766,
+ "host": "127.0.0.1",
+ "passthrough_url": "https://api.openai.com"
+ },
+ "compression": {
+ "enabled": true,
+ "level": "balanced",
+ "threshold_tokens": 4500
+ },
+ "budget": {
+ "monthly_usd": 100,
+ "alert_at_pct": 80
+ },
+ "vault": {
+ "db_path": "~/.tokenpak/registry.db",
+ "watch": false
+ },
+ "stats_footer": false,
+ "debug": false
 }
 ```
 
@@ -171,7 +171,7 @@ sudo chown tokenpak:tokenpak /etc/tokenpak/secrets.env
 
 # Add secrets
 echo "ANTHROPIC_API_KEY=sk-ant-..." | sudo tee -a /etc/tokenpak/secrets.env
-echo "OPENAI_API_KEY=sk-..."        | sudo tee -a /etc/tokenpak/secrets.env
+echo "OPENAI_API_KEY=sk-..." | sudo tee -a /etc/tokenpak/secrets.env
 ```
 
 Reference in systemd: `EnvironmentFile=/etc/tokenpak/secrets.env`
@@ -197,9 +197,9 @@ Inject at runtime via your deployment tooling (e.g., `aws secretsmanager get-sec
 echo "sk-ant-..." | docker secret create anthropic_api_key -
 
 docker service create \
-  --secret anthropic_api_key \
-  --env ANTHROPIC_API_KEY_FILE=/run/secrets/anthropic_api_key \
-  tokenpak
+ --secret anthropic_api_key \
+ --env ANTHROPIC_API_KEY_FILE=/run/secrets/anthropic_api_key \
+ tokenpak
 ```
 
 ---
@@ -280,41 +280,41 @@ sudo journalctl -u tokenpak -f
 version: "3.9"
 
 services:
-  tokenpak:
-    image: tokenpak/tokenpak:latest
-    container_name: tokenpak
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8766:8766"
-    environment:
-      - TOKENPAK_MODE=hybrid
-      - TOKENPAK_COMPACT=1
-      - TOKENPAK_PORT=8766
-    env_file:
-      - .env.secrets          # ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
-    volumes:
-      - tokenpak-data:/home/tokenpak/.tokenpak
-    healthcheck:
-      test: ["CMD", "tokenpak", "status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+ tokenpak:
+ image: tokenpak/tokenpak:latest
+ container_name: tokenpak
+ restart: unless-stopped
+ ports:
+ - "127.0.0.1:8766:8766"
+ environment:
+ - TOKENPAK_MODE=hybrid
+ - TOKENPAK_COMPACT=1
+ - TOKENPAK_PORT=8766
+ env_file:
+ - .env.secrets # ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
+ volumes:
+ - tokenpak-data:/home/tokenpak/.tokenpak
+ healthcheck:
+ test: ["CMD", "tokenpak", "status"]
+ interval: 30s
+ timeout: 10s
+ retries: 3
+ start_period: 10s
 
-  # Optional: nginx reverse proxy for TLS termination
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    ports:
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/tokenpak.conf:ro
-      - ./certs:/etc/nginx/certs:ro
-    depends_on:
-      - tokenpak
+ # Optional: nginx reverse proxy for TLS termination
+ nginx:
+ image: nginx:alpine
+ restart: unless-stopped
+ ports:
+ - "443:443"
+ volumes:
+ - ./nginx.conf:/etc/nginx/conf.d/tokenpak.conf:ro
+ - ./certs:/etc/nginx/certs:ro
+ depends_on:
+ - tokenpak
 
 volumes:
-  tokenpak-data:
+ tokenpak-data:
 ```
 
 `.env.secrets` (chmod 600, never commit):
@@ -352,7 +352,7 @@ tokenpak cost --week
 tokenpak savings --lifetime
 
 # Dashboard
-# http://localhost:8766/dashboard  (runs alongside the proxy)
+# http://localhost:8766/dashboard (runs alongside the proxy)
 ```
 
 ---
@@ -384,28 +384,28 @@ For high throughput, run multiple instances behind a load balancer.
 
 ```nginx
 upstream tokenpak {
-    least_conn;
-    server 10.0.1.10:8766;
-    server 10.0.1.11:8766;
-    server 10.0.1.12:8766;
-    keepalive 32;
+ least_conn;
+ server 10.0.1.10:8766;
+ server 10.0.1.11:8766;
+ server 10.0.1.12:8766;
+ keepalive 32;
 }
 
 server {
-    listen 443 ssl;
-    server_name tokenpak.internal;
+ listen 443 ssl;
+ server_name tokenpak.internal;
 
-    ssl_certificate     /etc/nginx/certs/tokenpak.crt;
-    ssl_certificate_key /etc/nginx/certs/tokenpak.key;
+ ssl_certificate /etc/nginx/certs/tokenpak.crt;
+ ssl_certificate_key /etc/nginx/certs/tokenpak.key;
 
-    location / {
-        proxy_pass http://tokenpak;
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 120s;
-    }
+ location / {
+ proxy_pass http://tokenpak;
+ proxy_http_version 1.1;
+ proxy_set_header Connection "";
+ proxy_set_header Host $host;
+ proxy_set_header X-Real-IP $remote_addr;
+ proxy_read_timeout 120s;
+ }
 }
 ```
 
@@ -455,9 +455,9 @@ Redis gives multi-instance cache sharing so duplicate requests (same prompt, sam
 ### Proxy won't start
 
 ```bash
-tokenpak doctor          # auto-diagnoses common issues
-tokenpak status          # check if already running on that port
-lsof -i :8766            # see what's using the port
+tokenpak doctor # auto-diagnoses common issues
+tokenpak status # check if already running on that port
+lsof -i :8766 # see what's using the port
 ```
 
 Common fixes:
@@ -487,8 +487,8 @@ echo $OPENAI_API_KEY | head -c 20
 
 # Test provider connectivity directly
 curl https://api.anthropic.com/v1/models \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01"
+ -H "x-api-key: $ANTHROPIC_API_KEY" \
+ -H "anthropic-version: 2023-06-01"
 ```
 
 ### High latency
@@ -568,53 +568,53 @@ Best for: Team use, high availability.
 **Architecture:**
 ```
 Internet → ALB (HTTPS:443) → EC2 Auto Scaling Group (tokenpak:8766)
-                                         ↓
-                                   RDS PostgreSQL (telemetry)
-                                   ElastiCache Redis (cache)
+ ↓
+ RDS PostgreSQL (telemetry)
+ ElastiCache Redis (cache)
 ```
 
 **Step-by-step:**
 
 1. **Launch EC2 instance** (t3.small minimum, t3.medium recommended)
-   - AMI: Ubuntu 22.04 LTS
-   - Security group: allow port 8766 from ALB security group only
+ - AMI: Ubuntu 22.04 LTS
+ - Security group: allow port 8766 from ALB security group only
 
 2. **Install TokenPak:**
-   ```bash
-   sudo apt update && sudo apt install -y python3.11 python3.11-pip
-   pip3 install tokenpak[tiktoken,postgres,redis]
-   ```
+ ```bash
+ sudo apt update && sudo apt install -y python3.11 python3.11-pip
+ pip3 install tokenpak[tiktoken,postgres,redis]
+ ```
 
 3. **Store secrets in AWS Secrets Manager:**
-   ```bash
-   aws secretsmanager create-secret \
-     --name tokenpak/api-keys \
-     --secret-string '{"ANTHROPIC_API_KEY":"sk-ant-...","OPENAI_API_KEY":"sk-..."}'
-   ```
+ ```bash
+ aws secretsmanager create-secret \
+ --name tokenpak/api-keys \
+ --secret-string '{"ANTHROPIC_API_KEY":"sk-ant-...","OPENAI_API_KEY":"sk-..."}'
+ ```
 
-   Retrieve at startup (in `/etc/tokenpak/secrets.env`):
-   ```bash
-   aws secretsmanager get-secret-value \
-     --secret-id tokenpak/api-keys \
-     --query SecretString --output text \
-     | jq -r 'to_entries[] | "\(.key)=\(.value)"' \
-     > /etc/tokenpak/secrets.env
-   chmod 600 /etc/tokenpak/secrets.env
-   ```
+ Retrieve at startup (in `/etc/tokenpak/secrets.env`):
+ ```bash
+ aws secretsmanager get-secret-value \
+ --secret-id tokenpak/api-keys \
+ --query SecretString --output text \
+ | jq -r 'to_entries[] | "\(.key)=\(.value)"' \
+ > /etc/tokenpak/secrets.env
+ chmod 600 /etc/tokenpak/secrets.env
+ ```
 
 4. **Configure for PostgreSQL + Redis:**
-   ```bash
-   export TOKENPAK_DB=postgresql://tokenpak:pass@rds-endpoint:5432/tokenpak
-   export TOKENPAK_CACHE_URL=redis://elasticache-endpoint:6379/0
-   tokenpak db migrate
-   ```
+ ```bash
+ export TOKENPAK_DB=postgresql://tokenpak:pass@rds-endpoint:5432/tokenpak
+ export TOKENPAK_CACHE_URL=redis://elasticache-endpoint:6379/0
+ tokenpak db migrate
+ ```
 
 5. **Set up systemd service** (see Running as a Service section above)
 
 6. **Create ALB:**
-   - Target group: HTTP, port 8766, health check path `/health`
-   - Listener: HTTPS:443 → target group
-   - SSL cert via AWS ACM
+ - Target group: HTTP, port 8766, health check path `/health`
+ - Listener: HTTPS:443 → target group
+ - SSL cert via AWS ACM
 
 7. **Auto Scaling Group** with the EC2 as launch template; scale on CPU > 60%.
 
@@ -629,48 +629,48 @@ Best for: Serverless, pay-per-request, zero ops.
 **Architecture:**
 ```
 Clients → Cloud Run (tokenpak, auto-scales 0→N)
-                 ↓
-          Cloud SQL PostgreSQL + Memorystore Redis
+ ↓
+ Cloud SQL PostgreSQL + Memorystore Redis
 ```
 
 **Step-by-step:**
 
 1. **Build and push image:**
-   ```bash
-   git clone https://github.com/tokenpak/tokenpak
-   cd tokenpak
-   gcloud builds submit --tag gcr.io/YOUR_PROJECT/tokenpak
-   ```
+ ```bash
+ git clone https://github.com/tokenpak/tokenpak
+ cd tokenpak
+ gcloud builds submit --tag gcr.io/YOUR_PROJECT/tokenpak
+ ```
 
 2. **Store secrets in Secret Manager:**
-   ```bash
-   echo -n "sk-ant-..." | gcloud secrets create anthropic-api-key --data-file=-
-   echo -n "sk-..."     | gcloud secrets create openai-api-key --data-file=-
-   ```
+ ```bash
+ echo -n "sk-ant-..." | gcloud secrets create anthropic-api-key --data-file=-
+ echo -n "sk-..." | gcloud secrets create openai-api-key --data-file=-
+ ```
 
 3. **Deploy to Cloud Run:**
-   ```bash
-   gcloud run deploy tokenpak \
-     --image gcr.io/YOUR_PROJECT/tokenpak \
-     --platform managed \
-     --region us-central1 \
-     --port 8766 \
-     --no-allow-unauthenticated \
-     --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest,OPENAI_API_KEY=openai-api-key:latest" \
-     --set-env-vars "TOKENPAK_MODE=hybrid,TOKENPAK_HOST=0.0.0.0" \
-     --min-instances 1 \
-     --max-instances 10 \
-     --memory 512Mi \
-     --cpu 1
-   ```
+ ```bash
+ gcloud run deploy tokenpak \
+ --image gcr.io/YOUR_PROJECT/tokenpak \
+ --platform managed \
+ --region us-central1 \
+ --port 8766 \
+ --no-allow-unauthenticated \
+ --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest,OPENAI_API_KEY=openai-api-key:latest" \
+ --set-env-vars "TOKENPAK_MODE=hybrid,TOKENPAK_HOST=0.0.0.0" \
+ --min-instances 1 \
+ --max-instances 10 \
+ --memory 512Mi \
+ --cpu 1
+ ```
 
 4. **Restrict access:**
-   ```bash
-   # Allow only your VPC or specific service accounts
-   gcloud run services add-iam-policy-binding tokenpak \
-     --member="serviceAccount:your-sa@project.iam.gserviceaccount.com" \
-     --role="roles/run.invoker"
-   ```
+ ```bash
+ # Allow only your VPC or specific service accounts
+ gcloud run services add-iam-policy-binding tokenpak \
+ --member="serviceAccount:your-sa@project.iam.gserviceaccount.com" \
+ --role="roles/run.invoker"
+ ```
 
 5. Point clients at the Cloud Run URL with `Authorization: Bearer $(gcloud auth print-identity-token)`.
 
@@ -685,46 +685,46 @@ Best for: Teams already on Azure, enterprise compliance requirements.
 **Architecture:**
 ```
 Clients → Azure Container Apps (tokenpak, auto-scale)
-                      ↓
-             Azure Database for PostgreSQL + Azure Cache for Redis
+ ↓
+ Azure Database for PostgreSQL + Azure Cache for Redis
 ```
 
 **Step-by-step:**
 
 1. **Store secrets in Key Vault:**
-   ```bash
-   az keyvault secret set --vault-name mykeyvault --name anthropic-api-key --value "sk-ant-..."
-   az keyvault secret set --vault-name mykeyvault --name openai-api-key   --value "sk-..."
-   ```
+ ```bash
+ az keyvault secret set --vault-name mykeyvault --name anthropic-api-key --value "sk-ant-..."
+ az keyvault secret set --vault-name mykeyvault --name openai-api-key --value "sk-..."
+ ```
 
 2. **Create Container Apps environment:**
-   ```bash
-   az containerapp env create \
-     --name tokenpak-env \
-     --resource-group myRG \
-     --location eastus
-   ```
+ ```bash
+ az containerapp env create \
+ --name tokenpak-env \
+ --resource-group myRG \
+ --location eastus
+ ```
 
 3. **Deploy:**
-   ```bash
-   az containerapp create \
-     --name tokenpak \
-     --resource-group myRG \
-     --environment tokenpak-env \
-     --image tokenpak/tokenpak:latest \
-     --target-port 8766 \
-     --ingress internal \
-     --min-replicas 1 \
-     --max-replicas 10 \
-     --secrets \
-       "anthropic-key=keyvaultref:https://mykeyvault.vault.azure.net/secrets/anthropic-api-key,identityref:system" \
-       "openai-key=keyvaultref:https://mykeyvault.vault.azure.net/secrets/openai-api-key,identityref:system" \
-     --env-vars \
-       "ANTHROPIC_API_KEY=secretref:anthropic-key" \
-       "OPENAI_API_KEY=secretref:openai-key" \
-       "TOKENPAK_MODE=hybrid" \
-       "TOKENPAK_HOST=0.0.0.0"
-   ```
+ ```bash
+ az containerapp create \
+ --name tokenpak \
+ --resource-group myRG \
+ --environment tokenpak-env \
+ --image tokenpak/tokenpak:latest \
+ --target-port 8766 \
+ --ingress internal \
+ --min-replicas 1 \
+ --max-replicas 10 \
+ --secrets \
+ "anthropic-key=keyvaultref:https://mykeyvault.vault.azure.net/secrets/anthropic-api-key,identityref:system" \
+ "openai-key=keyvaultref:https://mykeyvault.vault.azure.net/secrets/openai-api-key,identityref:system" \
+ --env-vars \
+ "ANTHROPIC_API_KEY=secretref:anthropic-key" \
+ "OPENAI_API_KEY=secretref:openai-key" \
+ "TOKENPAK_MODE=hybrid" \
+ "TOKENPAK_HOST=0.0.0.0"
+ ```
 
 4. Restrict ingress to your VNet or specific IP ranges.
 
@@ -746,7 +746,7 @@ If running as a service:
 
 ```bash
 pip install --upgrade tokenpak
-sudo systemctl restart tokenpak   # or: docker compose pull && docker compose up -d
+sudo systemctl restart tokenpak # or: docker compose pull && docker compose up -d
 ```
 
 ---

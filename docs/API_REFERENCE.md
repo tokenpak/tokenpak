@@ -2,7 +2,7 @@
 
 > Auto-generated from source code docstrings and type hints via `scripts/generate_api_reference.py`.
 
-**Public classes:** 313  
+**Public classes:** 313
 **Public methods:** 1275
 
 ## API Index
@@ -69,13 +69,13 @@ TokenPak adapter for the Anthropic Messages API.
 Usage
 -----
 >>> adapter = AnthropicAdapter(
-...     base_url="http://127.0.0.1:8767",
-...     api_key="sk-ant-...",
+... base_url="http://127.0.0.1:8767",
+... api_key="sk-ant-...",
 ... )
 >>> response = adapter.call({
-...     "model": "claude-3-5-sonnet-20241022",
-...     "max_tokens": 1024,
-...     "messages": [{"role": "user", "content": "Hello"}],
+... "model": "claude-3-5-sonnet-20241022",
+... "max_tokens": 1024,
+... "messages": [{"role": "user", "content": "Hello"}],
 ... })
 >>> tokens = adapter.extract_tokens(response)
 
@@ -124,12 +124,12 @@ Abstract base class for all TokenPak SDK/framework adapters.
 Parameters
 ----------
 base_url:
-    TokenPak proxy endpoint, e.g. ``"http://127.0.0.1:8767"``.
-    Must not have a trailing slash.
+ TokenPak proxy endpoint, e.g. ``"http://127.0.0.1:8767"``.
+ Must not have a trailing slash.
 api_key:
-    Provider API key forwarded transparently through the proxy.
+ Provider API key forwarded transparently through the proxy.
 timeout_s:
-    Request timeout in seconds.  Defaults to 120.
+ Request timeout in seconds. Defaults to 120.
 
 #### `__init__`
 
@@ -210,16 +210,16 @@ based on the ``provider`` field in the request (default: ``"openai"``).
 Usage
 -----
 >>> adapter = LangChainAdapter(
-...     base_url="http://127.0.0.1:8767",
-...     api_key="sk-...",
+... base_url="http://127.0.0.1:8767",
+... api_key="sk-...",
 ... )
 >>> response = adapter.call({
-...     "model": "gpt-4o",
-...     "provider": "openai",
-...     "messages": [
-...         {"role": "system", "content": "You are helpful."},
-...         {"role": "human", "content": "Hello"},
-...     ],
+... "model": "gpt-4o",
+... "provider": "openai",
+... "messages": [
+... {"role": "system", "content": "You are helpful."},
+... {"role": "human", "content": "Hello"},
+... ],
 ... })
 
 #### `__init__`
@@ -278,19 +278,19 @@ delegates to the appropriate underlying adapter.
 Usage
 -----
 >>> adapter = LiteLLMAdapter(
-...     base_url="http://127.0.0.1:8767",
-...     api_key="sk-...",
+... base_url="http://127.0.0.1:8767",
+... api_key="sk-...",
 ... )
 >>> # OpenAI via LiteLLM prefix
 >>> response = adapter.call({
-...     "model": "openai/gpt-4o",
-...     "messages": [{"role": "user", "content": "Hi"}],
+... "model": "openai/gpt-4o",
+... "messages": [{"role": "user", "content": "Hi"}],
 ... })
 >>> # Anthropic via LiteLLM prefix
 >>> response = adapter.call({
-...     "model": "anthropic/claude-3-5-sonnet-20241022",
-...     "messages": [{"role": "user", "content": "Hi"}],
-...     "max_tokens": 512,
+... "model": "anthropic/claude-3-5-sonnet-20241022",
+... "messages": [{"role": "user", "content": "Hi"}],
+... "max_tokens": 512,
 ... })
 >>> tokens = adapter.extract_tokens(response)
 
@@ -347,12 +347,12 @@ TokenPak adapter for the OpenAI Chat Completions API.
 Usage
 -----
 >>> adapter = OpenAIAdapter(
-...     base_url="http://127.0.0.1:8767",
-...     api_key="sk-...",
+... base_url="http://127.0.0.1:8767",
+... api_key="sk-...",
 ... )
 >>> response = adapter.call({
-...     "model": "gpt-4o",
-...     "messages": [{"role": "user", "content": "Hello"}],
+... "model": "gpt-4o",
+... "messages": [{"role": "user", "content": "Hello"}],
 ... })
 >>> tokens = adapter.extract_tokens(response)
 
@@ -399,9 +399,9 @@ def extract_tokens(self, response: dict[str, Any]) -> dict[str, Any]
 Abstract base class for TokenPak platform adapters.
 
 Each concrete adapter must implement:
-  - ``platform_name`` property
-  - ``detect(request_headers, env)`` classmethod
-  - ``get_config()`` instance method
+ - ``platform_name`` property
+ - ``detect(request_headers, env)`` classmethod
+ - ``get_config()`` instance method
 
 #### `platform_name`
 
@@ -410,7 +410,7 @@ def platform_name(self) -> str
 ```
 
 - **Returns:** `str`
-- **Description:** Human-readable platform identifier (e.g. "openclaw", "claude_cli").
+- **Description:** Human-readable platform identifier (e.g. "claude_cli").
 
 #### `detect`
 
@@ -490,11 +490,6 @@ def get_config(self) -> Dict[str, Any]
 
 - **Returns:** `Dict[str, Any]`
 
-### `tokenpak.agent.adapters.openclaw.OpenClawAdapter`
-
-**Bases:** BaseAdapter
-
-Adapter for requests originating from the OpenClaw agent runtime.
 
 #### `platform_name`
 
@@ -527,12 +522,12 @@ def get_config(self) -> Dict[str, Any]
 Standard capability schema for agents.
 
 Attributes:
-    gpu: Whether agent has GPU access
-    memory_gb: Available memory in GB
-    specialties: List of specialty tags (e.g., "code", "research", "data")
-    max_concurrent: Maximum concurrent tasks
-    provider_access: List of providers agent can use (e.g., ["anthropic", "openai"])
-    custom: Additional custom capabilities
+ gpu: Whether agent has GPU access
+ memory_gb: Available memory in GB
+ specialties: List of specialty tags (e.g., "code", "research", "data")
+ max_concurrent: Maximum concurrent tasks
+ provider_access: List of providers agent can use (e.g., ["anthropic", "openai"])
+ custom: Additional custom capabilities
 
 #### `to_dict`
 
@@ -557,10 +552,10 @@ def from_dict(cls, data: Dict[str, Any]) -> 'AgentCapabilities'
 Match task requirements against registered agents.
 
 Usage:
-    matcher = CapabilityMatcher()
-    requirements = TaskRequirements(requires_gpu=True, min_memory_gb=8)
-    matches = matcher.match(requirements)
-    # matches is List[MatchResult], sorted by score descending
+ matcher = CapabilityMatcher()
+ requirements = TaskRequirements(requires_gpu=True, min_memory_gb=8)
+ matches = matcher.match(requirements)
+ # matches is List[MatchResult], sorted by score descending
 
 #### `__init__`
 
@@ -703,10 +698,10 @@ def ttl_remaining_s(self) -> float
 A single content block inside a TokenPak.
 
 Attributes:
-    type:     Semantic type label, e.g. "memory", "evidence", "task_state".
-    id:       Unique identifier within the pack.
-    content:  Text content.
-    metadata: Optional key/value metadata.
+ type: Semantic type label, e.g. "memory", "evidence", "task_state".
+ id: Unique identifier within the pack.
+ content: Text content.
+ metadata: Optional key/value metadata.
 
 #### `to_dict`
 
@@ -803,11 +798,11 @@ JSON-serialisable wire representation of a :class:`Handoff` + :class:`TokenPak`.
 
 Usage::
 
-    wire_obj = HandoffWire(pack=pack, from_agent="research", to_agent="writer")
-    wire_str = wire_obj.to_wire()
+ wire_obj = HandoffWire(pack=pack, from_agent="research", to_agent="writer")
+ wire_str = wire_obj.to_wire()
 
-    wire_obj2 = HandoffWire.from_wire(wire_str)
-    context   = wire_obj2.pack.to_prompt()
+ wire_obj2 = HandoffWire.from_wire(wire_str)
+ context = wire_obj2.pack.to_prompt()
 
 This is intentionally separate from :class:`HandoffManager` (file-based
 persistence) — the wire format is for direct in-process or network passing.
@@ -849,10 +844,10 @@ Designed for passing structured context between agents.
 
 Example::
 
-    pack = TokenPak()
-    pack.add(HandoffBlock(type="memory", id="task_state", content=state))
-    pack.add(HandoffBlock(type="evidence", id="findings", content=research))
-    prompt = pack.to_prompt()
+ pack = TokenPak()
+ pack.add(HandoffBlock(type="memory", id="task_state", content=state))
+ pack.add(HandoffBlock(type="evidence", id="findings", content=research))
+ prompt = pack.to_prompt()
 
 #### `__init__`
 
@@ -940,11 +935,11 @@ File lock registry for multi-agent coordination.
 Parameters
 ----------
 agent_id : str
-    Identifier for the agent claiming locks (default: $TOKENPAK_AGENT or 'cali').
+ Identifier for the agent claiming locks (default: $TOKENPAK_AGENT or 'cali').
 lock_dir : Path | str | None
-    Directory where lock files are stored.
+ Directory where lock files are stored.
 timeout_s : int
-    Default lock timeout in seconds.
+ Default lock timeout in seconds.
 
 #### `__init__`
 
@@ -1078,11 +1073,11 @@ def heartbeat_age_seconds(self) -> float
 Persistent agent registry with heartbeat tracking.
 
 Usage:
-    registry = AgentRegistry()
-    agent_id = registry.register("worker-1", "host-1", {"gpu": False, "memory_gb": 4})
-    registry.heartbeat(agent_id)
-    agents = registry.list_active()
-    registry.deregister(agent_id)
+ registry = AgentRegistry()
+ agent_id = registry.register("worker-1", "host-1", {"gpu": False, "memory_gb": 4})
+ registry.heartbeat(agent_id)
+ agents = registry.list_active()
+ registry.deregister(agent_id)
 
 #### `__init__`
 
@@ -1217,29 +1212,29 @@ def to_dict(self) -> dict
 Parameters
 ----------
 fn : callable
-    The task function. Signature: fn(context, partial_state) -> result.
-    Should update partial_state in-place as it makes progress.
+ The task function. Signature: fn(context, partial_state) -> result.
+ Should update partial_state in-place as it makes progress.
 context : dict
-    Task metadata (task name, args, agent_id, etc.).
+ Task metadata (task name, args, agent_id, etc.).
 partial_state : dict | None
-    Mutable state tracking progress. Created fresh if None.
+ Mutable state tracking progress. Created fresh if None.
 state_dir : Path | None
-    Where to persist partial state on failure.
+ Where to persist partial state on failure.
 agent_id : str | None
-    Current agent identifier.
+ Current agent identifier.
 wait_seconds : list[float]
-    Wait times between Level-0 retries. Defaults to config or [1, 2, 4].
+ Wait times between Level-0 retries. Defaults to config or [1, 2, 4].
 per_error : dict[str, str] | None
-    Map of HTTP status code str → behavior ("wait", "retry", "alert").
-    Merged over DEFAULT_PER_ERROR; config file takes next priority.
+ Map of HTTP status code str → behavior ("wait", "retry", "alert").
+ Merged over DEFAULT_PER_ERROR; config file takes next priority.
 on_model_downgrade : callable | None
-    Hook: (current_model) -> next_model string.
+ Hook: (current_model) -> next_model string.
 on_provider_switch : callable | None
-    Hook: (current_provider) -> next_provider string.
+ Hook: (current_provider) -> next_provider string.
 on_handoff : callable | None
-    Hook: (context, partial_state) -> bool (True = accepted).
+ Hook: (context, partial_state) -> bool (True = accepted).
 on_human_alert : callable | None
-    Hook: (alert_dict) -> None. Default: logs at CRITICAL level.
+ Hook: (alert_dict) -> None. Default: logs at CRITICAL level.
 
 #### `__init__`
 
@@ -1528,12 +1523,12 @@ def is_warning(self) -> bool
 Dynamic token-budget manager for a sequence of workflow steps.
 
 Args:
-    total:      Total token budget for the entire workflow.
-    steps:      Ordered list of step names (execution order).
-    min_floor:  Minimum tokens guaranteed per pending step (default 100).
-    warn_pct:   Overspend fraction that triggers a warning (default 1.20 = 120%).
-    critical_pct: Remaining-budget fraction that triggers a critical alert
-                  (default 0.20 = 20% of total remaining is critical).
+ total: Total token budget for the entire workflow.
+ steps: Ordered list of step names (execution order).
+ min_floor: Minimum tokens guaranteed per pending step (default 100).
+ warn_pct: Overspend fraction that triggers a warning (default 1.20 = 120%).
+ critical_pct: Remaining-budget fraction that triggers a critical alert
+ (default 0.20 = 20% of total remaining is critical).
 
 #### `__init__`
 
@@ -1657,8 +1652,8 @@ Load, inspect, and clear expired auth cooldowns from disk.
 
 Cooldown entry format (cooldowns.json):
 {
-    "anthropic:default": {"cooldownUntil": 1709000000, "errorCount": 3},
-    ...
+ "anthropic:default": {"cooldownUntil": 1709000000, "errorCount": 3},
+ ...
 }
 Entry is cleared when: cooldownUntil < now AND errorCount < HIGH_ERROR_THRESHOLD
 
@@ -1826,7 +1821,7 @@ Apply compression directives to a messages list using the rule-based directive e
 Parameters
 ----------
 directives : list[dict], optional
-    List of directive dicts.
+ List of directive dicts.
 
 #### `__init__`
 
@@ -1940,22 +1935,22 @@ def size(self) -> int
 Orchestrates the TokenPak compression pipeline.
 
 Stages (all optional, enabled by default):
-  1. dedup    — remove duplicate / near-duplicate message turns
-  2. segment  — classify messages into typed Segment objects
-  3. directives — apply compression directives
+ 1. dedup — remove duplicate / near-duplicate message turns
+ 2. segment — classify messages into typed Segment objects
+ 3. directives — apply compression directives
 
 Custom compression hooks can be added via :meth:`add_hook`.
 
 Parameters
 ----------
 enable_dedup : bool
-    Whether to run the dedup stage.
+ Whether to run the dedup stage.
 enable_segmentation : bool
-    Whether to run the segmentizer stage.
+ Whether to run the segmentizer stage.
 enable_directives : bool
-    Whether to run the directive-application stage.
+ Whether to run the directive-application stage.
 trace_id : str
-    Optional trace ID forwarded to segmentize().
+ Optional trace ID forwarded to segmentize().
 
 #### `__init__`
 
@@ -2137,13 +2132,13 @@ Applies text reduction rules in a fixed order:
 2. LIST_DEDUP
 3. BOILERPLATE_STRIP
 4. TRUNCATE_TAIL
-5. PHRASE_SUBSTITUTION  (last — ensures phrases not re-introduced)
+5. PHRASE_SUBSTITUTION (last — ensures phrases not re-introduced)
 
 Usage::
 
-    engine = CompressionRuleEngine()
-    recipes = engine.select_recipes(segment)
-    compressed = engine.apply_recipes(segment, recipes)
+ engine = CompressionRuleEngine()
+ recipes = engine.select_recipes(segment)
+ compressed = engine.apply_recipes(segment, recipes)
 
 #### `__init__`
 
@@ -2251,12 +2246,12 @@ def to_segments(self, recipe: Recipe, available_blocks: Mapping[str, Any]) -> li
 Extracts slot values from raw text for a given intent.
 
 Slot definitions are loaded from slot_definitions.yaml (co-located with
-this module).  All extraction is regex/keyword based — no LLM.
+this module). All extraction is regex/keyword based — no LLM.
 
 Usage::
 
-    filler = SlotFiller()
-    result = filler.fill("summarize", "summarize the vault for last 7 days")
+ filler = SlotFiller()
+ result = filler.fill("summarize", "summarize the vault for last 7 days")
 
 #### `__init__`
 
@@ -2298,16 +2293,16 @@ Handles POST /v1/export/csv requests.
 
 Usage (from _ProxyHandler.do_POST)::
 
-    body, status, headers = ExportAPI.handle(
-        raw_body=body_bytes,
-        traces=[t.to_dict() for t in ps.trace_storage.get_all()],
-        session_stats=ps.session_stats(),
-    )
-    self.send_response(status)
-    for k, v in headers.items():
-        self.send_header(k, v)
-    self.end_headers()
-    self.wfile.write(body)
+ body, status, headers = ExportAPI.handle(
+ raw_body=body_bytes,
+ traces=[t.to_dict() for t in ps.trace_storage.get_all()],
+ session_stats=ps.session_stats(),
+ )
+ self.send_response(status)
+ for k, v in headers.items():
+ self.send_header(k, v)
+ self.end_headers()
+ self.wfile.write(body)
 
 #### `handle`
 
@@ -2326,11 +2321,11 @@ Generate CSV files from tokenpak proxy data.
 
 Usage::
 
-    exporter = CSVExporter(traces, session_stats)
-    csv_bytes, filename = exporter.export(
-        data_type=ExportDataType.TRACES,
-        fmt=ExportFormat.FULL,
-    )
+ exporter = CSVExporter(traces, session_stats)
+ csv_bytes, filename = exporter.export(
+ data_type=ExportDataType.TRACES,
+ fmt=ExportFormat.FULL,
+ )
 
 #### `__init__`
 
@@ -2380,9 +2375,9 @@ Server-side session filter backed by SQLite.
 
 Usage::
 
-    sf = SessionFilter()
-    result = sf.query(FilterParams(model="gpt-4o", status="success"))
-    # result = {"sessions": [...], "total": N, "limit": 50, "offset": 0}
+ sf = SessionFilter()
+ result = sf.query(FilterParams(model="gpt-4o", status="success"))
+ # result = {"sessions": [...], "total": N, "limit": 50, "offset": 0}
 
 #### `__init__`
 
@@ -2440,10 +2435,10 @@ def record(self) -> Iterator[_DebugRecord]
 Manage debug mode state persisted to disk.
 
 Schema:
-    {
-        "enabled": bool,
-        "requests_remaining": int | null   # null = unlimited
-    }
+ {
+ "enabled": bool,
+ "requests_remaining": int | null # null = unlimited
+ }
 
 #### `__init__`
 
@@ -2526,12 +2521,12 @@ def to_dict(self) -> dict
 
 Generates a structural Fingerprint from prompt text or message lists.
 
-    Usage:
-        gen = FingerprintGenerator()
-        fp = gen.generate("You are a helpful assistant.
+ Usage:
+ gen = FingerprintGenerator()
+ fp = gen.generate("You are a helpful assistant.
 
 What is 2+2?")
-        fp = gen.generate_from_messages([{"role": "system", "content": "..."}])
+ fp = gen.generate_from_messages([{"role": "system", "content": "..."}])
 
 #### `__init__`
 
@@ -2590,11 +2585,11 @@ Syncs fingerprints to the intelligence server and caches returned directives.
 Syncs fingerprints and caches returned directives. Falls back to cached directives when offline.
 
 Usage:
-    sync = FingerprintSync()
-    result = sync.sync(fingerprint)
-    result = sync.sync(fingerprint, dry_run=True)
-    directives = sync.cached_directives(fingerprint_id)
-    sync.clear_cache()
+ sync = FingerprintSync()
+ result = sync.sync(fingerprint)
+ result = sync.sync(fingerprint, dry_run=True)
+ directives = sync.cached_directives(fingerprint_id)
+ sync.clear_cache()
 
 #### `__init__`
 
@@ -2798,10 +2793,10 @@ def grace_status(self) -> dict
 Validates TokenPak license tokens.
 
 Usage:
-    validator = LicenseValidator(public_pem=PUBLIC_KEY_BYTES)
-    result = validator.validate(token)
-    if result.is_usable:
-        ...
+ validator = LicenseValidator(public_pem=PUBLIC_KEY_BYTES)
+ result = validator.validate(token)
+ if result.is_usable:
+ ...
 
 #### `__init__`
 
@@ -3391,10 +3386,10 @@ Thread-safe circuit breaker for a single provider.
 
 State machine::
 
-    CLOSED  ──(threshold failures in window)──▶  OPEN
-    OPEN    ──(recovery_timeout elapsed)──────▶  HALF_OPEN
-    HALF_OPEN ─(success)─▶  CLOSED
-    HALF_OPEN ─(failure)─▶  OPEN  (timer reset)
+ CLOSED ──(threshold failures in window)──▶ OPEN
+ OPEN ──(recovery_timeout elapsed)──────▶ HALF_OPEN
+ HALF_OPEN ─(success)─▶ CLOSED
+ HALF_OPEN ─(failure)─▶ OPEN (timer reset)
 
 #### `__init__`
 
@@ -3568,18 +3563,18 @@ Usage
 -----
 ::
 
-    pool = ConnectionPool()
+ pool = ConnectionPool()
 
-    # Non-streaming request
-    with pool.request("POST", "https://api.anthropic.com/v1/messages",
-                      content=body, headers=headers) as response:
-        data = response.read()
+ # Non-streaming request
+ with pool.request("POST", "https://api.anthropic.com/v1/messages",
+ content=body, headers=headers) as response:
+ data = response.read()
 
-    # Streaming request (SSE)
-    with pool.stream("POST", "https://api.anthropic.com/v1/messages",
-                     content=body, headers=headers) as response:
-        for chunk in response.iter_bytes(chunk_size=4096):
-            ...
+ # Streaming request (SSE)
+ with pool.stream("POST", "https://api.anthropic.com/v1/messages",
+ content=body, headers=headers) as response:
+ for chunk in response.iter_bytes(chunk_size=4096):
+ ...
 
 Lifecycle
 ---------
@@ -3665,17 +3660,17 @@ Connection pool configuration.
 Attributes
 ----------
 max_connections : int
-    Maximum total connections per provider (default: 20).
+ Maximum total connections per provider (default: 20).
 max_keepalive_connections : int
-    Maximum keep-alive connections per provider (default: 10).
+ Maximum keep-alive connections per provider (default: 10).
 keepalive_expiry : float
-    Seconds before an idle keep-alive connection is evicted (default: 30).
+ Seconds before an idle keep-alive connection is evicted (default: 30).
 connect_timeout : float
-    Seconds to wait for a new TCP connection (default: 10).
+ Seconds to wait for a new TCP connection (default: 10).
 read_timeout : float
-    Seconds to wait for a response (default: 300 — LLM responses can be slow).
+ Seconds to wait for a response (default: 300 — LLM responses can be slow).
 http2 : bool
-    Enable HTTP/2 when ``h2`` is installed (default: True).
+ Enable HTTP/2 when ``h2`` is installed (default: True).
 
 #### `from_env`
 
@@ -3729,9 +3724,9 @@ Thread-safe, bounded in-memory log of degradation events.
 
 Usage::
 
-    from tokenpak.agent.proxy.degradation import get_degradation_tracker
-    tracker = get_degradation_tracker()
-    tracker.record("compression_failure", "CompressionError: …", recovered=True)
+ from tokenpak.agent.proxy.degradation import get_degradation_tracker
+ tracker = get_degradation_tracker()
+ tracker.record("compression_failure", "CompressionError: …", recovered=True)
 
 #### `__init__`
 
@@ -3827,13 +3822,13 @@ Orchestrates provider failover.
 
 Usage::
 
-    mgr = FailoverManager()
-    for attempt in mgr.iter_providers("claude-sonnet-4-5", preferred="anthropic"):
-        try:
-            result = call_provider(attempt.provider, attempt.model, ...)
-            break
-        except ProviderError:
-            continue
+ mgr = FailoverManager()
+ for attempt in mgr.iter_providers("claude-sonnet-4-5", preferred="anthropic"):
+ try:
+ result = call_provider(attempt.provider, attempt.model, ...)
+ break
+ except ProviderError:
+ continue
 
 #### `__init__`
 
@@ -3909,9 +3904,9 @@ def get_credential(self) -> Optional[str]
 Per-provider circuit breaker.
 
 States:
-    closed   → normal operation
-    open     → skip provider (too many failures)
-    half-open → one probe attempt after cool-down
+ closed → normal operation
+ open → skip provider (too many failures)
+ half-open → one probe attempt after cool-down
 
 #### `__init__`
 
@@ -4003,17 +3998,17 @@ Orchestrates multi-provider failover for LLM proxy requests.
 
 Usage::
 
-    engine = FailoverEngine()
-    for attempt in engine.iter_attempts(original_model="claude-sonnet-4-5",
-                                         original_provider="anthropic"):
-        try:
-            response = call_provider(attempt.provider, attempt.model, ...)
-            engine.record_success(attempt.provider)
-            break
-        except ProviderError as exc:
-            error = classify_error(http_status=exc.status)
-            if not engine.handle_error(attempt, error):
-                raise  # all providers exhausted
+ engine = FailoverEngine()
+ for attempt in engine.iter_attempts(original_model="claude-sonnet-4-5",
+ original_provider="anthropic"):
+ try:
+ response = call_provider(attempt.provider, attempt.model, ...)
+ engine.record_success(attempt.provider)
+ break
+ except ProviderError as exc:
+ error = classify_error(http_status=exc.status)
+ if not engine.handle_error(attempt, error):
+ raise # all providers exhausted
 
 #### `__init__`
 
@@ -4131,12 +4126,12 @@ Usage
 -----
 ::
 
-    pt = CredentialPassthrough()
-    ok, err = pt.validate_auth(request_headers)
-    if not ok:
-        return 401, err
+ pt = CredentialPassthrough()
+ ok, err = pt.validate_auth(request_headers)
+ if not ok:
+ return 401, err
 
-    fwd_headers = pt.build_forward_headers(request_headers, config)
+ fwd_headers = pt.build_forward_headers(request_headers, config)
 
 #### `__init__`
 
@@ -4181,21 +4176,21 @@ Stateless prompt builder that separates stable from volatile content.
 
 Typical use in proxy::
 
-    builder = PromptBuilder()
-    parts = builder.decompose(body_bytes)
+ builder = PromptBuilder()
+ parts = builder.decompose(body_bytes)
 
-    # Add vault injection to volatile tail
-    if vault_text:
-        parts.volatile_blocks.append({"type": "text", "text": vault_text})
+ # Add vault injection to volatile tail
+ if vault_text:
+ parts.volatile_blocks.append({"type": "text", "text": vault_text})
 
-    # Get final body with cache_control correctly placed
-    new_body = builder.build(parts)
+ # Get final body with cache_control correctly placed
+ new_body = builder.build(parts)
 
 The builder:
-  - Classifies existing system blocks as stable vs volatile
-  - Marks last stable block with cache_control: ephemeral
-  - Does NOT cache_control volatile blocks
-  - Preserves tool schemas (frozen externally by tool_schema_registry)
+ - Classifies existing system blocks as stable vs volatile
+ - Marks last stable block with cache_control: ephemeral
+ - Does NOT cache_control volatile blocks
+ - Preserves tool schemas (frozen externally by tool_schema_registry)
 
 #### `decompose`
 
@@ -4616,16 +4611,16 @@ Stateful SSE stream translator between provider formats.
 
 Usage::
 
-    t = StreamingTranslator("anthropic", "openai")
-    for raw_line in upstream_sse_lines:
-        out = t.translate_chunk(raw_line)
-        if out:
-            for line in out:
-                yield line + "\n\n"
+ t = StreamingTranslator("anthropic", "openai")
+ for raw_line in upstream_sse_lines:
+ out = t.translate_chunk(raw_line)
+ if out:
+ for line in out:
+ yield line + "\n\n"
 
 Args:
-    source_provider: "anthropic" | "openai" | "google"
-    target_provider: "anthropic" | "openai" | "google"
+ source_provider: "anthropic" | "openai" | "google"
+ target_provider: "anthropic" | "openai" | "google"
 
 #### `__init__`
 
@@ -4690,8 +4685,8 @@ Coordinates graceful shutdown for the proxy.
 
 Lifecycle
 ---------
-1. ``begin()``          — signal that shutdown has started (new requests → 503)
-2. ``track_request()``  — context manager: increment/decrement in-flight counter
+1. ``begin()`` — signal that shutdown has started (new requests → 503)
+2. ``track_request()`` — context manager: increment/decrement in-flight counter
 3. ``wait_for_drain()`` — block until all in-flight requests finish or timeout
 
 #### `__init__`
@@ -4768,15 +4763,15 @@ TokenPak HTTP proxy server.
 Parameters
 ----------
 host : str
-    Bind host (default "0.0.0.0").
+ Bind host (default "0.0.0.0").
 port : int
-    Bind port (default from TOKENPAK_PORT env var or 8766).
+ Bind port (default from TOKENPAK_PORT env var or 8766).
 compilation_mode : str
-    "strict" | "hybrid" | "aggressive"
+ "strict" | "hybrid" | "aggressive"
 request_hook : callable, optional
-    Called for each intercepted request before forwarding.
-    Signature: (body: bytes, model: str, trace: PipelineTrace | None)
-                -> (body, sent_tokens, raw_tokens, protected_tokens)
+ Called for each intercepted request before forwarding.
+ Signature: (body: bytes, model: str, trace: PipelineTrace | None)
+ -> (body, sent_tokens, raw_tokens, protected_tokens)
 
 #### `__init__`
 
@@ -4942,16 +4937,16 @@ Thread-safe compression telemetry recorder.
 
 Usage::
 
-    stats = CompressionStats()
-    stats.record_compression(
-        model="claude-sonnet-4-6",
-        input_tokens=4200,
-        output_tokens=1800,
-        ratio=0.57,
-        latency_ms=42,
-        status="ok",
-    )
-    summary = stats.get_stats()
+ stats = CompressionStats()
+ stats.record_compression(
+ model="claude-sonnet-4-6",
+ input_tokens=4200,
+ output_tokens=1800,
+ ratio=0.57,
+ latency_ms=42,
+ status="ok",
+ )
+ summary = stats.get_stats()
 
 #### `__init__`
 
@@ -5307,15 +5302,15 @@ Wraps any provider request function with:
 Parameters
 ----------
 agent_id : str
-    Identifier of the agent/proxy instance making calls.
+ Identifier of the agent/proxy instance making calls.
 state_dir : Path | None
-    Override state persistence directory.
+ Override state persistence directory.
 on_handoff : callable | None
-    Hook: (context, partial_state) -> bool
+ Hook: (context, partial_state) -> bool
 on_human_alert : callable | None
-    Hook: (alert_dict) -> None
+ Hook: (alert_dict) -> None
 failover_manager : FailoverManager | None
-    Pre-configured failover manager (loads from config.yaml if None).
+ Pre-configured failover manager (loads from config.yaml if None).
 
 #### `__init__`
 
@@ -5366,11 +5361,11 @@ Persists to a JSON file. A background thread marks stale agents.
 
 Usage::
 
-    registry = AgentRegistry("~/.tokenpak/team/agents.json")
-    registry.register("cali", capabilities=["compression", "tools"])
-    registry.heartbeat("cali")
-    agents = registry.list_agents()
-    registry.start_health_checker()
+ registry = AgentRegistry("~/.tokenpak/team/agents.json")
+ registry.register("cali", capabilities=["compression", "tools"])
+ registry.heartbeat("cali")
+ agents = registry.list_agents()
+ registry.start_health_checker()
 
 #### `__init__`
 
@@ -5475,15 +5470,15 @@ JSON-backed shared vault for team context blocks.
 
 Merge strategy (team blocks lower priority than local)::
 
-    merged = merge_with_local(local_blocks)
-    # local_blocks override team blocks at the same path
+ merged = merge_with_local(local_blocks)
+ # local_blocks override team blocks at the same path
 
 Usage::
 
-    vault = SharedVault("~/.tokenpak/team/shared_vault.json")
-    vault.push_block(block)
-    blocks = vault.pull_blocks()
-    merged = vault.merge_with_local(local_blocks)
+ vault = SharedVault("~/.tokenpak/team/shared_vault.json")
+ vault.push_block(block)
+ blocks = vault.pull_blocks()
+ merged = vault.merge_with_local(local_blocks)
 
 #### `__init__`
 
@@ -5631,11 +5626,11 @@ JSON-backed store for team templates with RBAC.
 
 Usage::
 
-    store = TemplateStore("~/.tokenpak/team/templates.json")
-    store.create("summarise", "Summarise this: {{content}}", created_by="admin", actor_role="admin")
-    templates = store.list_templates()
-    template = store.get("summarise")
-    rendered = template.render({"content": "..."})
+ store = TemplateStore("~/.tokenpak/team/templates.json")
+ store.create("summarise", "Summarise this: {{content}}", created_by="admin", actor_role="admin")
+ templates = store.list_templates()
+ template = store.get("summarise")
+ rendered = template.render({"content": "..."})
 
 #### `__init__`
 
@@ -5751,10 +5746,10 @@ Track actual API spend against configured budget limits.
 
 Usage::
 
-    tracker = BudgetTracker(db_path="~/.tokenpak/budget.db")
-    tracker.record_spend(0.012, request_id="req-001", model="claude-sonnet")
-    status = tracker.get_status("daily")
-    print(status.to_dict())
+ tracker = BudgetTracker(db_path="~/.tokenpak/budget.db")
+ tracker.record_spend(0.012, request_id="req-001", model="claude-sonnet")
+ status = tracker.get_status("daily")
+ print(status.to_dict())
 
 #### `__init__`
 
@@ -5968,9 +5963,9 @@ Track per-request LLM cost with SQLite persistence.
 
 Usage::
 
-    tracker = CostTracker("~/.tokenpak/cost.db")
-    cost = tracker.record_request("claude-sonnet-4-5", 1000, 250)
-    summary = tracker.get_summary("day")
+ tracker = CostTracker("~/.tokenpak/cost.db")
+ cost = tracker.record_request("claude-sonnet-4-5", 1000, 250)
+ summary = tracker.get_summary("day")
 
 #### `__init__`
 
@@ -6075,8 +6070,8 @@ SQLite-backed store for capturing and retrieving replay entries.
 Thread-safe via per-thread connections (WAL mode).
 
 Args:
-    db_path: Path to SQLite file.  Pass ``":memory:"`` for ephemeral
-             (useful in tests).
+ db_path: Path to SQLite file. Pass ``":memory:"`` for ephemeral
+ (useful in tests).
 
 #### `__init__`
 
@@ -6165,10 +6160,10 @@ Persist request stats to a local SQLite database.
 
 Usage::
 
-    storage = TelemetryStorage("~/.tokenpak/telemetry.db")
-    storage.save_request(stats)
-    rows = storage.list_requests(limit=50)
-    storage.close()
+ storage = TelemetryStorage("~/.tokenpak/telemetry.db")
+ storage.save_request(stats)
+ rows = storage.list_requests(limit=50)
+ storage.close()
 
 #### `__init__`
 
@@ -6335,10 +6330,10 @@ Falls back to regex-based extraction for JS/TS and other languages.
 
 Usage::
 
-    parser = ASTParser()
-    nodes = parser.parse_file("mymodule.py", source_code)
-    for node in nodes:
-        print(node.kind, node.name, node.signature)
+ parser = ASTParser()
+ nodes = parser.parse_file("mymodule.py", source_code)
+ for node in nodes:
+ print(node.kind, node.name, node.signature)
 
 #### `parse_file`
 
@@ -6398,11 +6393,11 @@ vaults). For large vaults, Phase 1 introduces SQLite persistence.
 
 Usage::
 
-    store = BlockStore("~/.tokenpak/blocks.json")
-    store.save(record)
-    block = store.get("path/to/file.py#abc123")
-    results = store.search("token compression", top_k=5)
-    store.flush()
+ store = BlockStore("~/.tokenpak/blocks.json")
+ store.save(record)
+ block = store.get("path/to/file.py#abc123")
+ results = store.search("token compression", top_k=5)
+ store.flush()
 
 #### `__init__`
 
@@ -6487,12 +6482,12 @@ Index a directory of code and doc files into compressed block storage.
 
 Usage::
 
-    indexer = VaultIndexer()
-    results = indexer.index_directory("~/projects/myapp")
-    print(f"Indexed {results['files_indexed']} files")
+ indexer = VaultIndexer()
+ results = indexer.index_directory("~/projects/myapp")
+ print(f"Indexed {results['files_indexed']} files")
 
-    # Search indexed content
-    blocks = indexer.search("authentication middleware")
+ # Search indexed content
+ blocks = indexer.search("authentication middleware")
 
 #### `__init__`
 
@@ -6578,10 +6573,10 @@ Build and query a symbol table from source files.
 
 Usage::
 
-    table = SymbolTable()
-    table.index_file("mymodule.py", source_code)
-    results = table.lookup("MyClass")
-    all_syms = table.all_symbols()
+ table = SymbolTable()
+ table.index_file("mymodule.py", source_code)
+ results = table.lookup("MyClass")
+ all_syms = table.all_symbols()
 
 #### `__init__`
 
@@ -6722,10 +6717,10 @@ Handles GET /health requests.
 Parameters
 ----------
 start_time : float, optional
-    Proxy start time (Unix epoch).  Defaults to module import time if not
-    provided — useful for standalone/test usage.
+ Proxy start time (Unix epoch). Defaults to module import time if not
+ provided — useful for standalone/test usage.
 version : str, optional
-    Override proxy version string.
+ Override proxy version string.
 
 #### `__init__`
 
@@ -6762,11 +6757,11 @@ Handles GET /metrics requests — returns Prometheus text exposition format.
 Parameters
 ----------
 proxy_server : ProxyServer, optional
-    Live proxy server instance for session + circuit-breaker data.
-    If None, metrics are collected from available global registries only.
+ Live proxy server instance for session + circuit-breaker data.
+ If None, metrics are collected from available global registries only.
 db_path : str or Path, optional
-    Path to TelemetryDB for per-provider/model breakdowns.
-    Defaults to the project-level ``telemetry.db`` when not set.
+ Path to TelemetryDB for per-provider/model breakdowns.
+ Defaults to the project-level ``telemetry.db`` when not set.
 
 #### `__init__`
 
@@ -6843,10 +6838,10 @@ def paths(self) -> list[str]
 Lightweight file-based registry for CANON blocks.
 
 Stores canonical block wire text at:
-  .tokenpak/blocks/BLOCK_ID@vN.tpkb
+ .tokenpak/blocks/BLOCK_ID@vN.tpkb
 
 Tracks versions in manifest:
-  .tokenpak/blocks/manifest.json  →  {block_id: {hash, version}}
+ .tokenpak/blocks/manifest.json → {block_id: {hash, version}}
 
 #### `__init__`
 
@@ -6889,25 +6884,25 @@ def read_block_content(self, block_id: str, version_str: str) -> Optional[str]
 
 Assembles TPK wire-format context payloads.
 
-  Session state (which blocks have been sent at which version) is
-  persisted to .tokenpak/state/session_<id>.state.json so it survives
-  across turns without holding all context in memory.
+ Session state (which blocks have been sent at which version) is
+ persisted to .tokenpak/state/session_<id>.state.json so it survives
+ across turns without holding all context in memory.
 
-  Usage:
-      assembler = ContextAssembler(session_id="abc123")
+ Usage:
+ assembler = ContextAssembler(session_id="abc123")
 
-      # First turn — inlines SOUL.md, sends ref for TOOLS if unchanged
-      canon = assembler.assemble_context({
-          "SOUL":  (soul_content, None),   # version auto-detected
-          "TOOLS": (tools_content, None),
-      })
-      # canon → "CANON:
+ # First turn — inlines SOUL.md, sends ref for TOOLS if unchanged
+ canon = assembler.assemble_context({
+ "SOUL": (soul_content, None), # version auto-detected
+ "TOOLS": (tools_content, None),
+ })
+ # canon → "CANON:
 SOUL=[full content]
 TOOLS=[full content]"
 
-      # Second turn — sends refs only
-      canon = assembler.assemble_context({...})
-      # canon → "CANON:
+ # Second turn — sends refs only
+ canon = assembler.assemble_context({...})
+ # canon → "CANON:
 SOUL=@SOUL#v1
 TOOLS=@TOOLS#v1"
 
@@ -7183,7 +7178,7 @@ def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None
 ```
 
 - **Returns:** `None`
-- **Description:** Store *value* under *key*.  Evicts LRU entry if at capacity.
+- **Description:** Store *value* under *key*. Evicts LRU entry if at capacity.
 
 #### `invalidate`
 
@@ -7221,30 +7216,30 @@ Snapshot of cache behaviour for a single proxy request.
 Parameters
 ----------
 request_id:
-    Unique identifier for the request (any string; auto-generated if
-    ``""`` is passed, but callers should supply a meaningful id).
+ Unique identifier for the request (any string; auto-generated if
+ ``""`` is passed, but callers should supply a meaningful id).
 stable_prefix_tokens:
-    Estimated token count of the *stable* portion of the prompt that
-    is expected to be cache-resident after the first request.
+ Estimated token count of the *stable* portion of the prompt that
+ is expected to be cache-resident after the first request.
 stable_cached:
-    True when the LLM reported cache-read tokens > 0.
+ True when the LLM reported cache-read tokens > 0.
 cache_miss_reason:
-    Human-readable diagnosis string when the cache missed.
-    ``None`` means cache hit (or unknown miss, not diagnosed).
+ Human-readable diagnosis string when the cache missed.
+ ``None`` means cache hit (or unknown miss, not diagnosed).
 volatile_tail_tokens:
-    Tokens in the *volatile* tail (user message + tool call etc.).
+ Tokens in the *volatile* tail (user message + tool call etc.).
 total_input_tokens:
-    Total input token count as reported by the LLM API response.
+ Total input token count as reported by the LLM API response.
 cache_read_tokens:
-    Tokens served from the prompt cache (``cache_read_input_tokens``
-    in Anthropic's usage object).
+ Tokens served from the prompt cache (``cache_read_input_tokens``
+ in Anthropic's usage object).
 cache_creation_tokens:
-    Tokens written into the prompt cache for this request
-    (``cache_creation_input_tokens``).
+ Tokens written into the prompt cache for this request
+ (``cache_creation_input_tokens``).
 output_tokens:
-    Output / completion tokens for this request.
+ Output / completion tokens for this request.
 timestamp:
-    Unix epoch seconds when the request was recorded.
+ Unix epoch seconds when the request was recorded.
 
 #### `cache_hit`
 
@@ -7310,8 +7305,8 @@ All public methods are safe to call from multiple threads.
 Parameters
 ----------
 max_recent:
-    Maximum number of per-request ``CacheMetrics`` objects to retain
-    in memory.  Older entries are dropped (FIFO) to bound memory use.
+ Maximum number of per-request ``CacheMetrics`` objects to retain
+ in memory. Older entries are dropped (FIFO) to bound memory use.
 
 #### `__init__`
 
@@ -7513,13 +7508,13 @@ Compress verbose historical context blocks in an LLM request payload.
 Parameters
 ----------
 enabled : bool
-    Master switch.  When *False* (the default), :meth:`process` is a
-    no-op (returns original bytes + empty stats).
+ Master switch. When *False* (the default), :meth:`process` is a
+ no-op (returns original bytes + empty stats).
 min_block_chars : int
-    Minimum character length of a text block to qualify for compression.
+ Minimum character length of a text block to qualify for compression.
 hot_window : int
-    Number of trailing messages to leave untouched (the "hot window").
-    Capsule compression applies only to messages *before* this window.
+ Number of trailing messages to leave untouched (the "hot window").
+ Capsule compression applies only to messages *before* this window.
 
 #### `__init__`
 
@@ -7627,10 +7622,10 @@ def to_dict(self) -> Dict[str, Any]
 Top-level compaction policy.
 
 Attributes:
-    mode:            Default compaction mode for all blocks.
-    max_tokens:      Global token budget ceiling (across all blocks).
-    priority_order:  Block types ordered by priority when trimming.
-    per_block_limits: Per-block-type overrides (keyed by block type).
+ mode: Default compaction mode for all blocks.
+ max_tokens: Global token budget ceiling (across all blocks).
+ priority_order: Block types ordered by priority when trimming.
+ per_block_limits: Per-block-type overrides (keyed by block type).
 
 #### `from_dict`
 
@@ -8282,15 +8277,15 @@ Immutable append-only audit log backed by SQLite WAL.
 
 The log is *append-only*: rows are never updated or deleted during normal
 operation (only the retention pruner removes rows older than the configured
-retention window).  Each row carries a SHA-256 hash of its own content
+retention window). Each row carries a SHA-256 hash of its own content
 chained to the previous row's hash, making tampering detectable.
 
 Parameters
 ----------
 path:
-    File-system path to the SQLite database, or ``":memory:"`` for tests.
+ File-system path to the SQLite database, or ``":memory:"`` for tests.
 retention_days:
-    How long to keep entries (default: 90 days, configurable).
+ How long to keep entries (default: 90 days, configurable).
 
 #### `__init__`
 
@@ -8418,9 +8413,9 @@ Generate compliance reports from audit log + config.
 Parameters
 ----------
 audit_db:
-    Path to the audit SQLite database.
+ Path to the audit SQLite database.
 organization:
-    Organization name to include in reports.
+ Organization name to include in reports.
 
 #### `__init__`
 
@@ -8477,15 +8472,15 @@ def to_dict(self) -> dict
 Builds an EVIDENCE section from memory search results and files.
 
 Integration with memory search (replacing full chunk dumps):
-    # Old way:
-    memory_results = memory.search(query, top_k=10)
-    context_text = "\n\n".join([r['text'] for r in memory_results])
+ # Old way:
+ memory_results = memory.search(query, top_k=10)
+ context_text = "\n\n".join([r['text'] for r in memory_results])
 
-    # New way:
-    memory_results = memory.search(query, top_k=10)
-    pack = EvidencePack()
-    pack.add_from_memory(memory_results, query, max_items=10)
-    context_text = pack.to_wire_format()
+ # New way:
+ memory_results = memory.search(query, top_k=10)
+ pack = EvidencePack()
+ pack.add_from_memory(memory_results, query, max_items=10)
+ context_text = pack.to_wire_format()
 
 #### `__init__`
 
@@ -8585,13 +8580,13 @@ Compute wait durations for retrying after a 429 rate-limit response.
 Parameters
 ----------
 base_wait:
-    Initial wait in seconds (attempt 0).
+ Initial wait in seconds (attempt 0).
 max_wait:
-    Hard ceiling on the returned wait time.
+ Hard ceiling on the returned wait time.
 jitter_factor:
-    Fraction of the computed wait to add as random jitter.
-    0.0 = no jitter (deterministic, good for tests).
-    0.1 = ±10 % jitter (default in production use).
+ Fraction of the computed wait to add as random jitter.
+ 0.0 = no jitter (deterministic, good for tests).
+ 0.1 = ±10 % jitter (default in production use).
 
 #### `__init__`
 
@@ -8617,12 +8612,12 @@ def wait_time(self, attempt: int, *, retry_after: float | None = None) -> float
 LiteLLM Router middleware that compiles TokenPak packs before sending.
 
 Args:
-    compaction: Default compaction strategy for all calls.
-        ``"none"`` — no compaction (raw blocks concatenated)
-        ``"balanced"`` — heuristic compaction (default)
-        ``"aggressive"`` — hard-truncate to fit budget
-    budget: Default token budget.  Per-call ``tokenpak_budget=`` overrides this.
-    telemetry: Whether to attach ``tokenpak_stats`` to responses.
+ compaction: Default compaction strategy for all calls.
+ ``"none"`` — no compaction (raw blocks concatenated)
+ ``"balanced"`` — heuristic compaction (default)
+ ``"aggressive"`` — hard-truncate to fit budget
+ budget: Default token budget. Per-call ``tokenpak_budget=`` overrides this.
+ telemetry: Whether to attach ``tokenpak_stats`` to responses.
 
 #### `__init__`
 
@@ -8666,10 +8661,10 @@ def wrap_kwargs(self, **kwargs: Any) -> Dict[str, Any]
 ASGI-compatible handler for the ``/tokenpak`` proxy endpoint.
 
 Args:
-    default_model: Fallback model if request doesn't specify one.
-    budget: Default token budget.
-    compaction: Default compaction strategy.
-    litellm_kwargs: Extra kwargs forwarded to every ``litellm.completion`` call.
+ default_model: Fallback model if request doesn't specify one.
+ budget: Default token budget.
+ compaction: Default compaction strategy.
+ litellm_kwargs: Extra kwargs forwarded to every ``litellm.completion`` call.
 
 #### `__init__`
 
@@ -9065,11 +9060,11 @@ Runs all deep health checks, optionally in parallel.
 Parameters
 ----------
 db_path:
-    Override database path for testing.
+ Override database path for testing.
 index_path:
-    Override index file path for testing.
+ Override index file path for testing.
 provider_timeout:
-    HTTP timeout for provider probe requests (seconds).
+ HTTP timeout for provider probe requests (seconds).
 
 #### `__init__`
 
@@ -9665,7 +9660,7 @@ RequestLogger in one batch.
 Parameters
 ----------
 request_id : str
-    Shared with the corresponding RequestLogRecord for correlation.
+ Shared with the corresponding RequestLogRecord for correlation.
 
 #### `__init__`
 
@@ -9729,9 +9724,9 @@ Assembles a full /health response payload.
 Parameters
 ----------
 start_time : float
-    Unix timestamp of when the proxy process started (for uptime calc).
+ Unix timestamp of when the proxy process started (for uptime calc).
 version : str
-    Proxy version string (defaults to tokenpak.__version__).
+ Proxy version string (defaults to tokenpak.__version__).
 
 #### `__init__`
 
@@ -9759,10 +9754,10 @@ Collects and renders TokenPak proxy metrics in Prometheus text format.
 Parameters
 ----------
 proxy_server : ProxyServer, optional
-    Live proxy server instance for session + circuit-breaker data.
+ Live proxy server instance for session + circuit-breaker data.
 db_path : str or Path, optional
-    Path to the TelemetryDB for per-provider/model breakdowns.
-    Falls back to the default ``telemetry.db`` path if not set.
+ Path to the TelemetryDB for per-provider/model breakdowns.
+ Falls back to the default ``telemetry.db`` path if not set.
 
 #### `__init__`
 
@@ -9827,26 +9822,26 @@ Async structured request logger for the TokenPak proxy.
 
 Usage::
 
-    logger = RequestLogger()
+ logger = RequestLogger()
 
-    # At request start:
-    req_id = logger.new_request_id(headers)  # honours X-Request-ID
+ # At request start:
+ req_id = logger.new_request_id(headers) # honours X-Request-ID
 
-    # At request end:
-    record = logger.build_record(
-        request_id=req_id,
-        client_ip="127.0.0.1",
-        method="POST",
-        endpoint="/v1/chat/completions",
-        request_body_size=4096,
-        response_status=200,
-        response_body_size=512,
-        compression_ratio=0.72,
-        latency_ms=120.5,
-        model="claude-3-5-sonnet",
-        provider="anthropic",
-    )
-    logger.log(record)
+ # At request end:
+ record = logger.build_record(
+ request_id=req_id,
+ client_ip="127.0.0.1",
+ method="POST",
+ endpoint="/v1/chat/completions",
+ request_body_size=4096,
+ response_status=200,
+ response_body_size=512,
+ compression_ratio=0.72,
+ latency_ms=120.5,
+ model="claude-3-5-sonnet",
+ provider="anthropic",
+ )
+ logger.log(record)
 
 The logger writes to a background queue processed by a daemon thread.
 Call ``logger.stop()`` for clean shutdown (flushes queue).
@@ -9983,9 +9978,9 @@ def to_json(self) -> Dict[str, Any]
 Budget-aware context compiler with full transparency reports.
 
 Args:
-    budget:            Total token budget for the compiled output.
-    quality_threshold: Blocks with quality < this are REMOVED (default 0.5).
-    separator:         String placed between blocks in text output.
+ budget: Total token budget for the compiled output.
+ quality_threshold: Blocks with quality < this are REMOVED (default 0.5).
+ separator: String placed between blocks in text output.
 
 #### `__init__`
 
@@ -10481,8 +10476,8 @@ no instance state ever holds credential values.
 Parameters
 ----------
 require_auth : bool
-    When *True* (default) ``validate_auth`` rejects requests that
-    carry no recognisable auth header. Set to *False* for open endpoints.
+ When *True* (default) ``validate_auth`` rejects requests that
+ carry no recognisable auth header. Set to *False* for open endpoints.
 
 #### `__init__`
 
@@ -10772,7 +10767,7 @@ def match_payload(self, payload: Dict[str, Any]) -> Optional[RouteRule]
 
 Pattern conditions for a routing rule.
 
-At least one field must be set.  All set fields must match (AND logic).
+At least one field must be set. All set fields must match (AND logic).
 
 #### `is_empty`
 
@@ -11204,9 +11199,9 @@ Adapter for the Anthropic Messages API.
 Supports:
 - Text and tool-use content blocks in requests and responses.
 - Prompt-caching usage fields (``cache_creation_input_tokens``,
-  ``cache_read_input_tokens``).
+ ``cache_read_input_tokens``).
 - All ``stop_reason`` variants (end_turn, max_tokens, stop_sequence,
-  tool_use).
+ tool_use).
 
 #### `detect`
 
@@ -11254,14 +11249,14 @@ canonical TokenPak telemetry types.
 Sub-classes
 -----------
 Each adapter is responsible for a single provider (e.g. Anthropic,
-OpenAI, Gemini).  Adapters are stateless; every method is a pure
+OpenAI, Gemini). Adapters are stateless; every method is a pure
 transformation from raw ``dict`` → canonical object.
 
 Detection contract
 ------------------
 ``detect`` returns ``(provider_name, confidence)`` where *confidence* is
-in the range ``[0.0, 1.0]``.  The registry picks the adapter with the
-highest confidence score.  Return ``0.0`` if the payload definitively
+in the range ``[0.0, 1.0]``. The registry picks the adapter with the
+highest confidence score. Return ``0.0`` if the payload definitively
 does *not* match.
 
 #### `detect`
@@ -11593,9 +11588,9 @@ Thread-safe in-memory cache with per-entry TTL.
 Parameters
 ----------
 default_ttl:
-    Default time-to-live in seconds (300 = 5 min).
+ Default time-to-live in seconds (300 = 5 min).
 max_size:
-    Maximum number of entries before eviction (LRU-like — clears expired).
+ Maximum number of entries before eviction (LRU-like — clears expired).
 
 #### `__init__`
 
@@ -11773,7 +11768,7 @@ def validate_version(cls, v) -> Any
 Cost calculation service with DB-backed versioned pricing.
 
 Args:
-    db_path: Path to telemetry SQLite database.
+ db_path: Path to telemetry SQLite database.
 
 #### `__init__`
 
@@ -12035,8 +12030,8 @@ def delta_magnitude(self) -> float
 Reads from telemetry rollup tables and generates actionable insights.
 
 Args:
-    db_path: Path to telemetry SQLite database.
-    thresholds: Override default thresholds dict.
+ db_path: Path to telemetry SQLite database.
+ thresholds: Override default thresholds dict.
 
 #### `__init__`
 
@@ -12296,27 +12291,27 @@ Cost computation result for a single LLM call.
 Parameters
 ----------
 trace_id:
-    Parent trace identifier.
+ Parent trace identifier.
 cost_input:
-    Provider-reported cost for input tokens (USD).
+ Provider-reported cost for input tokens (USD).
 cost_output:
-    Provider-reported cost for output tokens (USD).
+ Provider-reported cost for output tokens (USD).
 cost_cache_read:
-    Provider-reported cost for cache read tokens (USD).
+ Provider-reported cost for cache read tokens (USD).
 cost_cache_write:
-    Provider-reported cost for cache write tokens (USD).
+ Provider-reported cost for cache write tokens (USD).
 cost_total:
-    Total provider-reported cost (USD).
+ Total provider-reported cost (USD).
 cost_source:
-    Source of cost data: ``"provider"``, ``"estimated"``, or ``"unknown"``.
+ Source of cost data: ``"provider"``, ``"estimated"``, or ``"unknown"``.
 baseline_cost:
-    What the call would have cost without compression (USD).
+ What the call would have cost without compression (USD).
 savings_total:
-    Total savings = ``baseline_cost - cost_total`` (USD).
+ Total savings = ``baseline_cost - cost_total`` (USD).
 savings_qmd:
-    Savings attributable to the QMD pass (USD).
+ Savings attributable to the QMD pass (USD).
 savings_tp:
-    Savings attributable to the TokenPak compression pass (USD).
+ Savings attributable to the TokenPak compression pass (USD).
 
 #### `savings_pct`
 
@@ -12325,7 +12320,7 @@ def savings_pct(self) -> float
 ```
 
 - **Returns:** `float`
-- **Description:** Percentage savings relative to baseline (0–100).  Returns 0 when
+- **Description:** Percentage savings relative to baseline (0–100). Returns 0 when
 
 ### `tokenpak.telemetry.models.TelemetryEvent`
 
@@ -12336,35 +12331,35 @@ Top-level lifecycle event for a single LLM request/response cycle.
 Parameters
 ----------
 trace_id:
-    Globally unique identifier for the full conversation trace.
+ Globally unique identifier for the full conversation trace.
 request_id:
-    Identifier for this specific request within the trace.
+ Identifier for this specific request within the trace.
 event_type:
-    Lifecycle phase: ``"request_start"``, ``"request_end"``,
-    ``"error"``, ``"cache_hit"``, ``"retry"``, …
+ Lifecycle phase: ``"request_start"``, ``"request_end"``,
+ ``"error"``, ``"cache_hit"``, ``"retry"``, …
 ts:
-    Unix timestamp (float seconds) at which the event was recorded.
+ Unix timestamp (float seconds) at which the event was recorded.
 provider:
-    Lower-case provider name: ``"anthropic"``, ``"openai"``,
-    ``"gemini"``, ``"unknown"``.
+ Lower-case provider name: ``"anthropic"``, ``"openai"``,
+ ``"gemini"``, ``"unknown"``.
 model:
-    Model identifier as reported by the provider.
+ Model identifier as reported by the provider.
 agent_id:
-    Optional identifier for the agent / worker that issued the call.
+ Optional identifier for the agent / worker that issued the call.
 api:
-    API endpoint used (e.g. ``"anthropic-messages"``, ``"openai-responses"``).
+ API endpoint used (e.g. ``"anthropic-messages"``, ``"openai-responses"``).
 stop_reason:
-    Provider-reported stop reason (e.g. ``"end_turn"``, ``"max_tokens"``).
+ Provider-reported stop reason (e.g. ``"end_turn"``, ``"max_tokens"``).
 session_id:
-    Session identifier from which this event originated.
+ Session identifier from which this event originated.
 duration_ms:
-    Request duration in milliseconds.
+ Request duration in milliseconds.
 status:
-    Outcome: ``"ok"``, ``"error"``, ``"timeout"``, ``"cancelled"``.
+ Outcome: ``"ok"``, ``"error"``, ``"timeout"``, ``"cancelled"``.
 error_class:
-    Exception class name when ``status == "error"``; ``None`` otherwise.
+ Exception class name when ``status == "error"``; ``None`` otherwise.
 payload:
-    Arbitrary JSON-serialisable dict for additional event metadata.
+ Arbitrary JSON-serialisable dict for additional event metadata.
 
 #### `payload_json`
 
@@ -12639,17 +12634,17 @@ Pricing record for a single model.
 Parameters
 ----------
 model:
-    Model identifier (as it appears in the catalog).
+ Model identifier (as it appears in the catalog).
 provider:
-    Provider name (``"anthropic"``, ``"openai"``, ``"gemini"``).
+ Provider name (``"anthropic"``, ``"openai"``, ``"gemini"``).
 input_per_token:
-    USD cost per input token.
+ USD cost per input token.
 output_per_token:
-    USD cost per output token.
+ USD cost per output token.
 cache_read_per_token:
-    USD cost per cache-read token (``None`` if caching not supported).
+ USD cost per cache-read token (``None`` if caching not supported).
 cache_write_per_token:
-    USD cost per cache-write token (``None`` if caching not supported).
+ USD cost per cache-write token (``None`` if caching not supported).
 
 #### `__init__`
 
@@ -12677,20 +12672,20 @@ Versioned pricing catalog loaded from ``pricing_catalog.json``.
 Attributes
 ----------
 version:
-    Catalog version string (from ``_meta.version``).
+ Catalog version string (from ``_meta.version``).
 models:
-    Dict mapping model identifiers to :class:`ModelPricing` records.
+ Dict mapping model identifiers to :class:`ModelPricing` records.
 
 Examples
 --------
 >>> catalog = PricingCatalog.load()
 >>> cost = catalog.compute_cost(
-...     trace_id="t1",
-...     model="claude-sonnet-4-6",
-...     baseline_input_tokens=100_000,
-...     actual_input_tokens=60_000,
-...     output_tokens=5_000,
-...     cache_read=20_000,
+... trace_id="t1",
+... model="claude-sonnet-4-6",
+... baseline_input_tokens=100_000,
+... actual_input_tokens=60_000,
+... output_tokens=5_000,
+... cache_read=20_000,
 ... )
 
 #### `__init__`
@@ -12754,9 +12749,9 @@ Collects and renders TokenPak metrics in Prometheus text exposition format.
 
 Usage::
 
-    collector = PrometheusMetricsCollector(storage)
-    text = collector.collect()
-    # Return as text/plain; charset=utf-8
+ collector = PrometheusMetricsCollector(storage)
+ text = collector.collect()
+ # Return as text/plain; charset=utf-8
 
 #### `__init__`
 
@@ -12879,7 +12874,7 @@ This class provides query interfaces and delegates refresh to the DB.
 Parameters
 ----------
 db:
-    TelemetryDB instance to query rollups from.
+ TelemetryDB instance to query rollups from.
 
 #### `__init__`
 
@@ -13154,8 +13149,8 @@ SQLite-backed telemetry store.
 Parameters
 ----------
 path:
-    Path to the SQLite database file.  Pass ``":memory:"`` for an
-    in-memory database (useful for testing).
+ Path to the SQLite database file. Pass ``":memory:"`` for an
+ in-memory database (useful for testing).
 
 #### `__init__`
 
@@ -13417,8 +13412,8 @@ SQLite-backed telemetry store.
 Parameters
 ----------
 path:
-    Path to the SQLite database file.  Pass ``":memory:"`` for an
-    in-memory database (useful for testing).
+ Path to the SQLite database file. Pass ``":memory:"`` for an
+ in-memory database (useful for testing).
 
 #### `__init__`
 
@@ -13733,10 +13728,10 @@ def to_dict(self) -> Dict[str, Any]
 Validates incoming LLM proxy requests against provider schemas.
 
 Args:
-    mode: "strict" | "warn" | "off"
-          strict → reject invalid requests (caller must return HTTP 400)
-          warn   → log errors but treat as valid (default)
-          off    → always return valid=True, skip all work
+ mode: "strict" | "warn" | "off"
+ strict → reject invalid requests (caller must return HTTP 400)
+ warn → log errors but treat as valid (default)
+ off → always return valid=True, skip all work
 
 #### `__init__`
 
@@ -13771,11 +13766,11 @@ def validate_bytes(self, body: bytes, target_url: str, provider: str) -> Request
 Validates TokenPak responses against the schema contract.
 
 Usage:
-    validator = ResponseValidator()
-    result = validator.validate(response_dict)
-    if not result.valid:
-        for error in result.errors:
-            print(f"{error['field']}: {error['reason']}")
+ validator = ResponseValidator()
+ result = validator.validate(response_dict)
+ if not result.valid:
+ for error in result.errors:
+ print(f"{error['field']}: {error['reason']}")
 
 #### `__init__`
 
@@ -13949,8 +13944,8 @@ Manage and auto-clear expired auth cooldowns.
 
 Cooldown entries are stored in ~/.tokenpak/cooldowns.json:
 {
-    "anthropic:default": {"cooldownUntil": 1709000000, "errorCount": 3},
-    ...
+ "anthropic:default": {"cooldownUntil": 1709000000, "errorCount": 3},
+ ...
 }
 When cooldownUntil < now AND errorCount is low, the entry is cleared.
 

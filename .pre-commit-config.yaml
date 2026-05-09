@@ -50,6 +50,23 @@ repos:
         args: [--baseline, .secrets.baseline]
         exclude: tests/.*|\.env\.example
 
+  # ── Public-surface guards (local hooks) ─────────────────────────────────
+  # These keep workbench / internal language out of the public repo.
+  - repo: local
+    hooks:
+      - id: forbidden-language
+        name: No internal identity / workflow language in changed files
+        language: pygrep
+        # Patterns intentionally narrow: word-boundary on agent names so
+        # product references (Claude Code, Anthropic, etc.) are unaffected.
+        entry: '\bSue\b|\bCali\b|\bTrix\b|\bSuki\b|\bAya\b|\bDee\b|\bReiPo\b|\bopenclaw\b|\bfleet\b|TSR-[0-9]|TPS-[0-9]|CCI-[0-9]|MTC-[0-9]|OAS-[0-9]|TIP7-[0-9]|TRIX-MTC|WS-[0-9]|\.claude/projects|/home/sue/|trixxie168|\bStd 2[0-9]\b|\bStd 3[0-9]\b|Suki: auto-commit'
+        types_or: [markdown, python, yaml, toml, shell, javascript, ts, json]
+      - id: forbidden-files
+        name: No backup / corrupt-DB / typecheck artifact files
+        language: pygrep
+        entry: '^(.*\.bak|.*\.corrupt-.*|monitor\.db.*|mypy.*\.txt)$'
+        types: [file]
+
 # ── Global exclusions ─────────────────────────────────────────────────────
 exclude: |
   (?x)^(

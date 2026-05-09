@@ -8,9 +8,9 @@ MultiPak Pro is the local-first cross-platform AI context-continuity layer for T
 
 > Start anywhere. Continue anywhere. MultiPak brings the right Paks into the current AI session without dumping the full history.
 
-The full feature set is **Pro** (closed-source local Rust daemon, gated by [Std 25 §9.3](../standards/25-pro-tier-architecture.md)). Phase 1 is what TokenPak ships **today** in OSS — the contracts, the Vault Pak adapter, the read-only inspection surface, and the daemon hooks.
+The full feature set is **Pro** (closed-source local Rust daemon, gated by the relevant standard). Phase 1 is what TokenPak ships **today** in OSS — the contracts, the Vault Pak adapter, the read-only inspection surface, and the daemon hooks.
 
-## Pak taxonomy ([Std 32 §2](../standards/32-multipak-pro-architecture.md))
+## Pak taxonomy (the relevant standard)
 
 5 canonical subtypes:
 
@@ -28,25 +28,25 @@ The full feature set is **Pro** (closed-source local Rust daemon, gated by [Std 
 $ tokenpak pak status
 MultiPak Pro Phase 1 status
 ───────────────────────────
-❌ Daemon state           : unavailable
-⚠️  multipak.enabled       : False
-⚠️  Pak store present      : False
-📦 Vault Paks indexed     : 15922
-📦 Promotion candidates   : 0
+❌ Daemon state : unavailable
+⚠️ multipak.enabled : False
+⚠️ Pak store present : False
+📦 Vault Paks indexed : 15922
+📦 Promotion candidates : 0
 
-ℹ️  Pro daemon not installed — Vault Pak inspection still works via the OSS
-   adapter. Install tokenpak-paid for the full surface.
+ℹ️ Pro daemon not installed — Vault Pak inspection still works via the OSS
+ adapter. Install tokenpak-paid for the full surface.
 ```
 
 `tokenpak pak status --json` emits the same JSON shape as `GET /pak/v1/status`:
 
 ```json
 {
-  "daemon_state": "unavailable",
-  "multipak_enabled": false,
-  "pak_store_present": false,
-  "vault_paks_indexed": 15922,
-  "promotion_candidates": 0
+ "daemon_state": "unavailable",
+ "multipak_enabled": false,
+ "pak_store_present": false,
+ "vault_paks_indexed": 15922,
+ "promotion_candidates": 0
 }
 ```
 
@@ -59,7 +59,7 @@ MultiPak Pro Phase 1 status
 | `tokenpak pak import <dir> -o <pak>` | ❌ Pro | Capture pipeline is Pro-only |
 | `tokenpak pak status` | ✅ always | Diagnostic; never errors |
 
-Exit codes follow [Std 03 §1](../standards/03-cli-ux-standard.md): `0` success, `1` user-facing error (missing Pak, Pro required), `2` argparse usage error.
+Exit codes follow the relevant standard: `0` success, `1` user-facing error (missing Pak, Pro required), `2` argparse usage error.
 
 ### Pak ID format
 
@@ -83,7 +83,7 @@ Always works. Same JSON payload as `tokenpak pak status --json`.
 
 ### `POST /pak/v1/recall`
 
-Always 501 in Phase 1 — recall ranking is Pro-only ([Std 32 §1.3](../standards/32-multipak-pro-architecture.md) row 8).
+Always 501 in Phase 1 — recall ranking is Pro-only (the relevant standard row 8).
 
 ### Standardized 501 envelope
 
@@ -91,37 +91,37 @@ Every Pro-gated endpoint returns this shape, so clients can treat `error == "not
 
 ```json
 {
-  "error": "not_implemented",
-  "reason": "pro_daemon_required",
-  "detail": "<human message>",
-  "suggested_action": "Install tokenpak-paid (Pro) to enable this surface.",
-  "daemon_state": "unavailable"
+ "error": "not_implemented",
+ "reason": "pro_daemon_required",
+ "detail": "<human message>",
+ "suggested_action": "Install tokenpak-paid (Pro) to enable this surface.",
+ "daemon_state": "unavailable"
 }
 ```
 
-`daemon_state` mirrors [Std 25 §3.4](../standards/25-pro-tier-architecture.md) telemetry. Phase 1 only emits `"active"` or `"unavailable"`. Phase 2 adds `"tip_mismatch"` and the four state-machine values (`offline-grace`, `offline-expired`, `user-revoked`, `billing-grace`).
+`daemon_state` mirrors the relevant standard telemetry. Phase 1 only emits `"active"` or `"unavailable"`. Phase 2 adds `"tip_mismatch"` and the four state-machine values (`offline-grace`, `offline-expired`, `user-revoked`, `billing-grace`).
 
 ## Configuration — `pro.multipak.enabled`
 
-Default `false` per [Std 32 §13.1 Decision #6](../standards/32-multipak-pro-architecture.md) (opt-in until 1-week soak post-bootstrap).
+Default `false` per [ ](../standards/32-multipak-pro-architecture.md) (opt-in until 1-week soak post-bootstrap).
 
 ```yaml
 # ~/.tokenpak/config.yaml
 pro:
-  multipak:
-    enabled: false   # set true once Pro is installed and you've completed soak
+ multipak:
+ enabled: false # set true once Pro is installed and you've completed soak
 ```
 
 The OSS read-only path (Vault Pak inspection, `/pak/v1/status`) **works regardless** of this flag. The flag mainly governs whether the daemon is consulted at all.
 
 ## Companion journal coexistence
 
-Per [Std 32 §4.4](../standards/32-multipak-pro-architecture.md) the OSS companion journal continues to auto-capture every prompt — local-only, no upload. This is the existing entry point per the [companion guide](../tokenpak/companion/GUIDE.md). Promotion of a journal entry to a MultiPak Interaction Pak is the **opt-in step**:
+Per the relevant standard the OSS companion journal continues to auto-capture every prompt — local-only, no upload. This is the existing entry point per the [companion guide](../tokenpak/companion/GUIDE.md). Promotion of a journal entry to a MultiPak Interaction Pak is the **opt-in step**:
 
 ```python
 from tokenpak.companion.journal.pak_aware import (
-    mark_promotion_candidate,
-    list_promotion_candidates,
+ mark_promotion_candidate,
+ list_promotion_candidates,
 )
 from pathlib import Path
 
@@ -132,14 +132,14 @@ mark_promotion_candidate(db, entry_id=42)
 
 # List candidates the daemon should consider
 for entry in list_promotion_candidates(db, session_id="my-session"):
-    print(entry.entry_id, entry.entry_type, entry.content[:80])
+ print(entry.entry_id, entry.entry_type, entry.content[:80])
 ```
 
 Phase 1 OSS code never auto-promotes. The Pro daemon (Phase 2+) consumes this surface to enumerate entries it should consider for Interaction Pak promotion.
 
-## Privacy contract ([Std 32 §7](../standards/32-multipak-pro-architecture.md))
+## Privacy contract (the relevant standard)
 
-**No memory content ever crosses the license-validation boundary** ([Std 25 §4.4](../standards/25-pro-tier-architecture.md)). The Pak schema is structurally disjoint from license-payload field prefixes (`license_token`, `tenant_id`, `fingerprint`, `issuer`, `signature`) — enforced by the Phase 0 contract tests and the [`09 §3.11.b`](../standards/09-audit-rubric.md) quarterly audit.
+**No memory content ever crosses the license-validation boundary** (the relevant standard). The Pak schema is structurally disjoint from license-payload field prefixes (`license_token`, `tenant_id`, `fingerprint`, `issuer`, `signature`) — enforced by the Phase 0 contract tests and the [`09 §3.11.b`](../standards/09-audit-rubric.md) quarterly audit.
 
 Pak content stays local. The license refresh request carries only the license token, the per-install ed25519 public key, and the hardware-bound machine fingerprint — never Paks, anchors, prompts, completions, or telemetry.
 
@@ -149,7 +149,7 @@ Pak content stays local. The license refresh request carries only the license to
 |---|---|---|
 | **0** | TIP capability constants + Pak/ContextPackage contracts | ✅ shipped (PR #101 / registry PR #4) |
 | **1** | Vault Pak adapter + Pak-aware journal + `tokenpak pak` CLI + `/pak/v1/*` stubs | ⏳ this PR |
-| 2 | Capture pipeline + recall + ranking + SQLite FTS | gated by [Std 25 §9.3](../standards/25-pro-tier-architecture.md) |
+| 2 | Capture pipeline + recall + ranking + SQLite FTS | gated by the relevant standard |
 | 3 | Context Package builder + Handoff Pak + VS Code + MCP adapters | gated |
 | 4 | Anchor Hydration + coverage scoring + audit log | gated |
 | 5 | Encrypted store + retention engine + dashboard surfaces | gated |

@@ -33,15 +33,15 @@ client = anthropic.Anthropic(api_key="sk-ant-...")
 
 # After (through TokenPak proxy) — ONE LINE CHANGE
 client = anthropic.Anthropic(
-    api_key="sk-ant-...",
-    base_url="http://localhost:8766",
+ api_key="sk-ant-...",
+ base_url="http://localhost:8766",
 )
 
 # Your existing code works unchanged
 message = client.messages.create(
-    model="claude-opus-4-5",
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Explain quantum entanglement."}]
+ model="claude-opus-4-5",
+ max_tokens=1024,
+ messages=[{"role": "user", "content": "Explain quantum entanglement."}]
 )
 print(message.content[0].text)
 ```
@@ -77,26 +77,26 @@ TOKENPAK_MODE=aggressive tokenpak serve
 import requests
 
 response = requests.post(
-    "http://localhost:8766/v1/messages",
-    headers={
-        "x-api-key": "sk-ant-...",
-        "x-tokenpak-mode": "aggressive",   # Override mode for this request
-        "Content-Type": "application/json",
-    },
-    json={
-        "model": "claude-sonnet-4-5",
-        "max_tokens": 512,
-        "messages": [
-            {
-                "role": "user",
-                "content": (
-                    "Here's a 500-line Python file:\n"
-                    + open("myproject/main.py").read()
-                    + "\n\nWhat's the main entry point?"
-                )
-            }
-        ],
-    }
+ "http://localhost:8766/v1/messages",
+ headers={
+ "x-api-key": "sk-ant-...",
+ "x-tokenpak-mode": "aggressive", # Override mode for this request
+ "Content-Type": "application/json",
+ },
+ json={
+ "model": "claude-sonnet-4-5",
+ "max_tokens": 512,
+ "messages": [
+ {
+ "role": "user",
+ "content": (
+ "Here's a 500-line Python file:\n"
+ + open("myproject/main.py").read()
+ + "\n\nWhat's the main entry point?"
+ )
+ }
+ ],
+ }
 )
 print(response.json()["content"][0]["text"])
 ```
@@ -135,19 +135,19 @@ tokenpak index ~/my-project/docs --watch
 # based on semantic similarity to your request
 
 client = anthropic.Anthropic(
-    api_key="sk-ant-...",
-    base_url="http://localhost:8766",
+ api_key="sk-ant-...",
+ base_url="http://localhost:8766",
 )
 
 # This request will automatically get relevant docs injected
 # from your vault without you doing anything
 message = client.messages.create(
-    model="claude-sonnet-4-5",
-    max_tokens=1024,
-    messages=[{
-        "role": "user",
-        "content": "How do I configure the cache timeout in our system?"
-    }]
+ model="claude-sonnet-4-5",
+ max_tokens=1024,
+ messages=[{
+ "role": "user",
+ "content": "How do I configure the cache timeout in our system?"
+ }]
 )
 # Response will have context from your docs injected automatically
 ```
@@ -156,11 +156,11 @@ message = client.messages.create(
 # Check what was injected in the last request
 curl http://localhost:8766/recent | python3 -m json.tool | grep -A5 "vault_injection"
 # {
-#   "vault_injection": {
-#     "chunks_injected": 3,
-#     "tokens_injected": 412,
-#     "top_chunks": ["docs/config.md#cache-timeout", ...]
-#   }
+# "vault_injection": {
+# "chunks_injected": 3,
+# "tokens_injected": 412,
+# "top_chunks": ["docs/config.md#cache-timeout", ...]
+# }
 # }
 ```
 
@@ -180,90 +180,90 @@ from urllib3.util.retry import Retry
 
 
 def create_tokenpak_session(
-    proxy_url: str = "http://localhost:8766",
-    max_retries: int = 3,
-    backoff_factor: float = 0.5,
+ proxy_url: str = "http://localhost:8766",
+ max_retries: int = 3,
+ backoff_factor: float = 0.5,
 ) -> requests.Session:
-    """Create a requests Session that routes through TokenPak with retry logic."""
-    session = requests.Session()
-    retry = Retry(
-        total=max_retries,
-        backoff_factor=backoff_factor,
-        status_forcelist=[429, 500, 502, 503, 529],  # 529 = Anthropic overloaded
-        allowed_methods=["POST"],
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount("http://", adapter)
-    return session
+ """Create a requests Session that routes through TokenPak with retry logic."""
+ session = requests.Session()
+ retry = Retry(
+ total=max_retries,
+ backoff_factor=backoff_factor,
+ status_forcelist=[429, 500, 502, 503, 529], # 529 = Anthropic overloaded
+ allowed_methods=["POST"],
+ )
+ adapter = HTTPAdapter(max_retries=retry)
+ session.mount("http://", adapter)
+ return session
 
 
 def check_proxy_health(proxy_url: str = "http://localhost:8766") -> dict:
-    """Check if proxy and upstream providers are healthy."""
-    try:
-        r = requests.get(f"{proxy_url}/health", timeout=2)
-        data = r.json()
-        cb = data.get("circuit_breakers", {})
-        if cb.get("any_open"):
-            open_providers = [
-                name for name, status in cb.get("providers", {}).items()
-                if status.get("state") == "open"
-            ]
-            print(f"⚠️  Circuit breaker OPEN for: {open_providers}")
-        return data
-    except requests.RequestException:
-        return {"status": "unreachable"}
+ """Check if proxy and upstream providers are healthy."""
+ try:
+ r = requests.get(f"{proxy_url}/health", timeout=2)
+ data = r.json()
+ cb = data.get("circuit_breakers", {})
+ if cb.get("any_open"):
+ open_providers = [
+ name for name, status in cb.get("providers", {}).items()
+ if status.get("state") == "open"
+ ]
+ print(f"⚠️ Circuit breaker OPEN for: {open_providers}")
+ return data
+ except requests.RequestException:
+ return {"status": "unreachable"}
 
 
 def chat_with_retry(
-    prompt: str,
-    model: str = "claude-sonnet-4-5",
-    proxy_url: str = "http://localhost:8766",
-    api_key: str = None,
+ prompt: str,
+ model: str = "claude-sonnet-4-5",
+ proxy_url: str = "http://localhost:8766",
+ api_key: str = None,
 ) -> str:
-    """Send a chat message with full retry + health check logic."""
-    # Check health before sending
-    health = check_proxy_health(proxy_url)
-    if health.get("status") not in ("ok", "degraded"):
-        raise RuntimeError(f"Proxy unhealthy: {health}")
+ """Send a chat message with full retry + health check logic."""
+ # Check health before sending
+ health = check_proxy_health(proxy_url)
+ if health.get("status") not in ("ok", "degraded"):
+ raise RuntimeError(f"Proxy unhealthy: {health}")
 
-    session = create_tokenpak_session(proxy_url)
+ session = create_tokenpak_session(proxy_url)
 
-    for attempt in range(3):
-        try:
-            r = session.post(
-                f"{proxy_url}/v1/messages",
-                headers={
-                    "x-api-key": api_key or "sk-ant-...",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "max_tokens": 1024,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-                timeout=30,
-            )
-            r.raise_for_status()
-            return r.json()["content"][0]["text"]
+ for attempt in range(3):
+ try:
+ r = session.post(
+ f"{proxy_url}/v1/messages",
+ headers={
+ "x-api-key": api_key or "sk-ant-...",
+ "Content-Type": "application/json",
+ },
+ json={
+ "model": model,
+ "max_tokens": 1024,
+ "messages": [{"role": "user", "content": prompt}],
+ },
+ timeout=30,
+ )
+ r.raise_for_status()
+ return r.json()["content"][0]["text"]
 
-        except requests.HTTPError as e:
-            if e.response.status_code == 529:
-                wait = 2 ** attempt
-                print(f"Rate limited, waiting {wait}s (attempt {attempt + 1}/3)")
-                time.sleep(wait)
-            else:
-                raise
+ except requests.HTTPError as e:
+ if e.response.status_code == 529:
+ wait = 2 ** attempt
+ print(f"Rate limited, waiting {wait}s (attempt {attempt + 1}/3)")
+ time.sleep(wait)
+ else:
+ raise
 
-    raise RuntimeError("Max retries exceeded")
+ raise RuntimeError("Max retries exceeded")
 
 
 # Usage
 if __name__ == "__main__":
-    response = chat_with_retry(
-        "What is the capital of France?",
-        api_key="sk-ant-your-key-here",
-    )
-    print(response)
+ response = chat_with_retry(
+ "What is the capital of France?",
+ api_key="sk-ant-your-key-here",
+ )
+ print(response)
 ```
 
 ---
@@ -282,70 +282,70 @@ import websockets
 
 
 async def stream_chat(
-    prompt: str,
-    model: str = "claude-sonnet-4-5",
-    ws_url: str = "ws://localhost:8767/ws",
-    api_key: str = None,
+ prompt: str,
+ model: str = "claude-sonnet-4-5",
+ ws_url: str = "ws://localhost:8767/ws",
+ api_key: str = None,
 ):
-    """Stream a chat response via WebSocket with gzip compression."""
-    async with websockets.connect(ws_url) as ws:
-        # Send request
-        await ws.send(json.dumps({
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 1024,
-            "stream": True,
-            "api_key": api_key or "sk-ant-...",
-        }))
+ """Stream a chat response via WebSocket with gzip compression."""
+ async with websockets.connect(ws_url) as ws:
+ # Send request
+ await ws.send(json.dumps({
+ "model": model,
+ "messages": [{"role": "user", "content": prompt}],
+ "max_tokens": 1024,
+ "stream": True,
+ "api_key": api_key or "sk-ant-...",
+ }))
 
-        full_text = ""
-        print("Assistant: ", end="", flush=True)
+ full_text = ""
+ print("Assistant: ", end="", flush=True)
 
-        async for message in ws:
-            # Messages are gzip-compressed binary frames
-            if isinstance(message, bytes):
-                decompressed = gzip.decompress(message).decode("utf-8")
-                event = json.loads(decompressed)
-            else:
-                event = json.loads(message)
+ async for message in ws:
+ # Messages are gzip-compressed binary frames
+ if isinstance(message, bytes):
+ decompressed = gzip.decompress(message).decode("utf-8")
+ event = json.loads(decompressed)
+ else:
+ event = json.loads(message)
 
-            event_type = event.get("type")
+ event_type = event.get("type")
 
-            if event_type == "content_block_delta":
-                delta = event.get("delta", {})
-                if delta.get("type") == "text_delta":
-                    text = delta.get("text", "")
-                    print(text, end="", flush=True)
-                    full_text += text
+ if event_type == "content_block_delta":
+ delta = event.get("delta", {})
+ if delta.get("type") == "text_delta":
+ text = delta.get("text", "")
+ print(text, end="", flush=True)
+ full_text += text
 
-            elif event_type == "message_stop":
-                print()  # newline after streaming
-                break
+ elif event_type == "message_stop":
+ print() # newline after streaming
+ break
 
-            elif event_type == "stats":
-                usage = event.get("usage", {})
-                print(f"\n[tokens: in={usage.get('input_tokens',0)}, "
-                      f"out={usage.get('output_tokens',0)}]")
+ elif event_type == "stats":
+ usage = event.get("usage", {})
+ print(f"\n[tokens: in={usage.get('input_tokens',0)}, "
+ f"out={usage.get('output_tokens',0)}]")
 
-            elif "error" in event:
-                print(f"\n[error: {event['error']['message']}]")
-                break
+ elif "error" in event:
+ print(f"\n[error: {event['error']['message']}]")
+ break
 
-        return full_text
+ return full_text
 
 
 async def main():
-    # Multiple concurrent streams
-    tasks = [
-        stream_chat("Tell me a joke"),
-        stream_chat("What is 2+2?"),
-    ]
-    results = await asyncio.gather(*tasks)
-    return results
+ # Multiple concurrent streams
+ tasks = [
+ stream_chat("Tell me a joke"),
+ stream_chat("What is 2+2?"),
+ ]
+ results = await asyncio.gather(*tasks)
+ return results
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+ asyncio.run(main())
 ```
 
 ### Verify WebSocket Is Running
@@ -355,9 +355,9 @@ if __name__ == "__main__":
 curl http://localhost:8766/health | python3 -m json.tool
 
 # Test WebSocket with websocat (CLI tool)
-# pip install websocat  (or brew install websocat)
+# pip install websocat (or brew install websocat)
 echo '{"model":"claude-haiku-4-5","messages":[{"role":"user","content":"hi"}],"max_tokens":50,"api_key":"sk-ant-..."}' \
-  | websocat ws://localhost:8767/ws
+ | websocat ws://localhost:8767/ws
 ```
 
 ---
@@ -379,13 +379,13 @@ echo '{"model":"claude-haiku-4-5","messages":[{"role":"user","content":"hi"}],"m
 ## Environment Variables
 
 ```bash
-TOKENPAK_PORT=8766              # HTTP proxy port (default: 8766)
-TOKENPAK_MODE=hybrid            # Compression mode: strict|hybrid|aggressive
-TOKENPAK_WS_PORT=8767           # WebSocket port (default: PROXY_PORT+1)
-TOKENPAK_REQUEST_TIMEOUT=30     # Per-request upstream timeout (seconds, 0=disabled)
-VAULT_INDEX_PATH=~/.tokenpak    # Path to vault index directory
-TOKENPAK_INJECT_BUDGET=2200     # Max tokens injected per request
-TOKENPAK_INJECT_MIN_SCORE=0.6   # Minimum similarity score for vault injection
+TOKENPAK_PORT=8766 # HTTP proxy port (default: 8766)
+TOKENPAK_MODE=hybrid # Compression mode: strict|hybrid|aggressive
+TOKENPAK_WS_PORT=8767 # WebSocket port (default: PROXY_PORT+1)
+TOKENPAK_REQUEST_TIMEOUT=30 # Per-request upstream timeout (seconds, 0=disabled)
+VAULT_INDEX_PATH=~/.tokenpak # Path to vault index directory
+TOKENPAK_INJECT_BUDGET=2200 # Max tokens injected per request
+TOKENPAK_INJECT_MIN_SCORE=0.6 # Minimum similarity score for vault injection
 ```
 
 ## See Also
@@ -411,7 +411,7 @@ preserve_code_blocks = true
 target_ratio = 0.5
 
 [vault]
-enabled = false  # skip vault injection for local dev
+enabled = false # skip vault injection for local dev
 ```
 
 ### Scenario 2: CI/CD Pipeline
@@ -419,14 +419,14 @@ enabled = false  # skip vault injection for local dev
 # Optimize for speed, disable vault, structured logs
 [proxy]
 port = 8766
-mode = "off"       # passthrough only — don't compress CI prompts
+mode = "off" # passthrough only — don't compress CI prompts
 log_level = "error"
 
 [vault]
 enabled = false
 
 [cache]
-enabled = true     # cache deterministic responses between runs
+enabled = true # cache deterministic responses between runs
 ttl_seconds = 3600
 ```
 
@@ -436,7 +436,7 @@ ttl_seconds = 3600
 [proxy]
 port = 8766
 mode = "hybrid"
-bind = "0.0.0.0"   # allow LAN connections
+bind = "0.0.0.0" # allow LAN connections
 max_connections = 50
 
 [compression]

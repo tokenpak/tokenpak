@@ -18,15 +18,15 @@ docker run -p 8766:8766 tokenpak
 
 # With config volume
 docker run -p 8766:8766 \
-  -v $(pwd)/config/tokenpack.config.json:/app/tokenpack.config.json:ro \
-  -v tokenpak-logs:/logs \
-  tokenpak
+ -v $(pwd)/config/tokenpack.config.json:/app/tokenpack.config.json:ro \
+ -v tokenpak-logs:/logs \
+ tokenpak
 
 # With environment variables
 docker run -p 8766:8766 \
-  -e TOKENPAK_LOG_LEVEL=debug \
-  -e TOKENPAK_ENABLE_METRICS=true \
-  tokenpak
+ -e TOKENPAK_LOG_LEVEL=debug \
+ -e TOKENPAK_ENABLE_METRICS=true \
+ tokenpak
 ```
 
 ### Docker Compose (Recommended)
@@ -57,7 +57,7 @@ docker-compose down
 
 ```bash
 docker build -t tokenpak:latest .
-docker build -t tokenpak:v1.0.0 .  # With version tag
+docker build -t tokenpak:v1.0.0 . # With version tag
 ```
 
 ### Build with Custom Base Image
@@ -116,7 +116,7 @@ docker-compose exec tokenpak tail -f /logs/proxy-2026-03-10.log
 
 # Mount custom path
 volumes:
-  - /var/log/tokenpak:/logs
+ - /var/log/tokenpak:/logs
 ```
 
 ### Cache Volume
@@ -125,8 +125,8 @@ Optional cache persistence:
 
 ```yaml
 volumes:
-  tokenpak-cache:
-    driver: local
+ tokenpak-cache:
+ driver: local
 ```
 
 ### Config Volume (Development)
@@ -143,25 +143,25 @@ docker run -v $(pwd)/config:/app/config:ro tokenpak
 
 ```nginx
 upstream tokenpak {
-    server localhost:8766;
+ server localhost:8766;
 }
 
 server {
-    listen 80;
-    server_name api.example.com;
+ listen 80;
+ server_name api.example.com;
 
-    location / {
-        proxy_pass http://tokenpak;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Timeout settings
-        proxy_connect_timeout 30s;
-        proxy_send_timeout 30s;
-        proxy_read_timeout 30s;
-    }
+ location / {
+ proxy_pass http://tokenpak;
+ proxy_set_header Host $host;
+ proxy_set_header X-Real-IP $remote_addr;
+ proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+ proxy_set_header X-Forwarded-Proto $scheme;
+
+ # Timeout settings
+ proxy_connect_timeout 30s;
+ proxy_send_timeout 30s;
+ proxy_read_timeout 30s;
+ }
 }
 ```
 
@@ -169,23 +169,23 @@ server {
 
 ```yaml
 services:
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - tokenpak
-    networks:
-      - tokenpak-network
+ nginx:
+ image: nginx:alpine
+ ports:
+ - "80:80"
+ - "443:443"
+ volumes:
+ - ./nginx.conf:/etc/nginx/nginx.conf:ro
+ - ./ssl:/etc/nginx/ssl:ro
+ depends_on:
+ - tokenpak
+ networks:
+ - tokenpak-network
 
-  tokenpak:
-    # ... existing config
-    networks:
-      - tokenpak-network
+ tokenpak:
+ # ... existing config
+ networks:
+ - tokenpak-network
 ```
 
 ## Health Checks
@@ -206,11 +206,11 @@ curl http://localhost:8766/health
 
 ```json
 {
-  "status": "healthy",
-  "version": "1.0.0",
-  "uptime_seconds": 3600,
-  "request_count": 15000,
-  "last_request": "2026-03-10T06:30:00Z"
+ "status": "healthy",
+ "version": "1.0.0",
+ "uptime_seconds": 3600,
+ "request_count": 15000,
+ "last_request": "2026-03-10T06:30:00Z"
 }
 ```
 
@@ -218,13 +218,13 @@ curl http://localhost:8766/health
 
 ```yaml
 livenessProbe:
-  httpGet:
-    path: /health
-    port: 8766
-  initialDelaySeconds: 40
-  periodSeconds: 30
-  timeoutSeconds: 10
-  failureThreshold: 3
+ httpGet:
+ path: /health
+ port: 8766
+ initialDelaySeconds: 40
+ periodSeconds: 30
+ timeoutSeconds: 10
+ failureThreshold: 3
 ```
 
 ## Multi-Container Setup (With Redis)
@@ -249,13 +249,13 @@ docker-compose --profile with-cache up -d
 
 # View both services
 docker-compose ps
-# tokenpak    Up (healthy)
-# redis       Up
+# tokenpak Up (healthy)
+# redis Up
 
 # Connect TokenPak to Redis
 # Requires: TOKENPAK_CACHE_TYPE=redis
-#          TOKENPAK_REDIS_HOST=redis
-#          TOKENPAK_REDIS_PORT=6379
+# TOKENPAK_REDIS_HOST=redis
+# TOKENPAK_REDIS_PORT=6379
 ```
 
 ## Troubleshooting
@@ -283,7 +283,7 @@ docker-compose logs tokenpak | grep -i error
 
 # Increase health check start period if startup is slow
 healthcheck:
-  start_period: 60s  # Increase from 40s
+ start_period: 60s # Increase from 40s
 ```
 
 ### High Memory Usage
@@ -297,9 +297,9 @@ docker run -m 512m tokenpak
 
 # Or in docker-compose
 deploy:
-  resources:
-    limits:
-      memory: 512M
+ resources:
+ limits:
+ memory: 512M
 ```
 
 ### Logs Not Persisting
@@ -326,11 +326,11 @@ docker push gcr.io/PROJECT_ID/tokenpak
 
 # Deploy to Cloud Run
 gcloud run deploy tokenpak \
-  --image gcr.io/PROJECT_ID/tokenpak \
-  --port 8766 \
-  --memory 512Mi \
-  --timeout 30 \
-  --allow-unauthenticated
+ --image gcr.io/PROJECT_ID/tokenpak \
+ --port 8766 \
+ --memory 512Mi \
+ --timeout 30 \
+ --allow-unauthenticated
 ```
 
 ### AWS ECS
@@ -355,11 +355,11 @@ az acr build --registry myregistry --image tokenpak:latest .
 
 # Deploy
 az container create \
-  --resource-group mygroup \
-  --name tokenpak \
-  --image myregistry.azurecr.io/tokenpak:latest \
-  --ports 8766 \
-  --memory 0.5
+ --resource-group mygroup \
+ --name tokenpak \
+ --image myregistry.azurecr.io/tokenpak:latest \
+ --ports 8766 \
+ --memory 0.5
 ```
 
 ## Production Checklist
@@ -384,32 +384,32 @@ az container create \
 
 ```yaml
 deploy:
-  resources:
-    limits:
-      cpus: '2'
-      memory: 1G
-    reservations:
-      cpus: '1'
-      memory: 512M
+ resources:
+ limits:
+ cpus: '2'
+ memory: 1G
+ reservations:
+ cpus: '1'
+ memory: 512M
 ```
 
 ### Log Rotation
 
 ```yaml
 logging:
-  driver: "json-file"
-  options:
-    max-size: "10m"    # Rotate at 10MB
-    max-file: "3"      # Keep 3 files
+ driver: "json-file"
+ options:
+ max-size: "10m" # Rotate at 10MB
+ max-file: "3" # Keep 3 files
 ```
 
 ### Connection Pool
 
 ```bash
 docker run \
-  -e TOKENPAK_CACHE_POOL_SIZE=10 \
-  -e TOKENPAK_DB_POOL_SIZE=5 \
-  tokenpak
+ -e TOKENPAK_CACHE_POOL_SIZE=10 \
+ -e TOKENPAK_DB_POOL_SIZE=5 \
+ tokenpak
 ```
 
 ## Security Best Practices
@@ -429,13 +429,13 @@ docker run \
 
 ```yaml
 volumes:
-  - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+ - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
 
 # In prometheus.yml
 scrape_configs:
-  - job_name: 'tokenpak'
-    static_configs:
-      - targets: ['localhost:8766']
+ - job_name: 'tokenpak'
+ static_configs:
+ - targets: ['localhost:8766']
 ```
 
 ### Container Logs

@@ -80,9 +80,9 @@ To ensure that repeated requests with semantically identical queries produce byt
 
 ```python
 key=lambda item: (
-    -item[1],               # BM25 score descending (primary)
-    item[0].get("source_path", ""),  # file path ascending (tie-break A)
-    item[0].get("block_id", ""),     # chunk ID ascending (tie-break B)
+ -item[1], # BM25 score descending (primary)
+ item[0].get("source_path", ""), # file path ascending (tie-break A)
+ item[0].get("block_id", ""), # chunk ID ascending (tie-break B)
 )
 ```
 
@@ -129,7 +129,7 @@ system_prompt = f"Current time: {datetime.now().isoformat()}"
 
 # ✅ Safe
 logger.info(f"Request at {datetime.now()}")
-system_prompt = "You are an AI assistant."  # static
+system_prompt = "You are an AI assistant." # static
 ```
 
 Detection: `prompt_builder.py` flags blocks matching `\bcurrent time\b`, `\bcurrent date\b`, ISO timestamp patterns.
@@ -167,15 +167,15 @@ To check for new poison sources:
 ```bash
 # Timestamps in proxy
 grep -r "datetime\|time\.time\|date\." ~/Projects/tokenpak/tokenpak/proxy/ \
-  --include="*.py" | grep -v "logger\|#"
+ --include="*.py" | grep -v "logger\|#"
 
 # UUIDs in proxy
 grep -r "uuid\|uuid4" ~/Projects/tokenpak/tokenpak/proxy/ \
-  --include="*.py" | grep -v "logger\|#\|header"
+ --include="*.py" | grep -v "logger\|#\|header"
 
 # Dynamic tool schema rendering
 grep -r "render_tool\|get_tool_schema" ~/Projects/tokenpak/tokenpak/proxy/ \
-  --include="*.py"
+ --include="*.py"
 ```
 
 ---
@@ -243,14 +243,14 @@ Returns hit/miss statistics for the telemetry query cache.
 **Response:**
 ```json
 {
-  "status": "ok",
-  "cache": {
-    "size": 42,
-    "hits": 1280,
-    "misses": 320,
-    "hit_rate": 80.0,
-    "max_size": 1000
-  }
+ "status": "ok",
+ "cache": {
+ "size": 42,
+ "hits": 1280,
+ "misses": 320,
+ "hit_rate": 80.0,
+ "max_size": 1000
+ }
 }
 ```
 
@@ -288,29 +288,29 @@ Returns hit/miss statistics for the telemetry query cache.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  ANTHROPIC MESSAGES API REQUEST                                         │
-│                                                                         │
-│  "system": [                                                            │
-│    ┌──────────────────────────────────────────────────────────────────┐ │
-│    │ STABLE PREFIX (byte-identical across requests)                   │ │
-│    │                                                                  │ │
-│    │  { type: "text", text: "<SOUL.md + project context>" },         │ │
-│    │  { type: "text", text: "<static policy blocks>" },              │ │
-│    │  { type: "text", text: "<last stable block>",                   │ │
-│    │            cache_control: { type: "ephemeral" } }  ◄── MARKER   │ │
-│    └──────────────────────────────────────────────────────────────────┘ │
-│    ┌──────────────────────────────────────────────────────────────────┐ │
-│    │ VOLATILE TAIL (changes per request — NOT cached)                │ │
-│    │                                                                  │ │
-│    │  { type: "text", text: "<BM25 vault injection>" },             │ │
-│    └──────────────────────────────────────────────────────────────────┘ │
-│  ]                                                                      │
-│                                                                         │
-│  "tools": [ <frozen by ToolSchemaRegistry — byte-identical> ]          │
-│                                                                         │
-│  "messages": [                                                          │
-│    { role: "user", content: "<user message>" }  ◄── always volatile    │
-│  ]                                                                      │
+│ ANTHROPIC MESSAGES API REQUEST │
+│ │
+│ "system": [ │
+│ ┌──────────────────────────────────────────────────────────────────┐ │
+│ │ STABLE PREFIX (byte-identical across requests) │ │
+│ │ │ │
+│ │ { type: "text", text: "<SOUL.md + project context>" }, │ │
+│ │ { type: "text", text: "<static policy blocks>" }, │ │
+│ │ { type: "text", text: "<last stable block>", │ │
+│ │ cache_control: { type: "ephemeral" } } ◄── MARKER │ │
+│ └──────────────────────────────────────────────────────────────────┘ │
+│ ┌──────────────────────────────────────────────────────────────────┐ │
+│ │ VOLATILE TAIL (changes per request — NOT cached) │ │
+│ │ │ │
+│ │ { type: "text", text: "<BM25 vault injection>" }, │ │
+│ └──────────────────────────────────────────────────────────────────┘ │
+│ ] │
+│ │
+│ "tools": [ <frozen by ToolSchemaRegistry — byte-identical> ] │
+│ │
+│ "messages": [ │
+│ { role: "user", content: "<user message>" } ◄── always volatile │
+│ ] │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -318,37 +318,37 @@ Returns hit/miss statistics for the telemetry query cache.
 
 ```
 Incoming Request
-      │
-      ▼
+ │
+ ▼
 ┌─────────────────┐
-│ ToolSchemaReg.  │  normalize_request()
-│ (freeze tools)  │  → deterministic JSON, byte-identical
+│ ToolSchemaReg. │ normalize_request()
+│ (freeze tools) │ → deterministic JSON, byte-identical
 └────────┬────────┘
-         │
-         ▼
+ │
+ ▼
 ┌─────────────────┐
-│ PromptBuilder   │  apply_stable_cache_control()
-│ (classify       │  → classify system blocks
-│  stable/volat.) │  → add cache_control to last stable block
+│ PromptBuilder │ apply_stable_cache_control()
+│ (classify │ → classify system blocks
+│ stable/volat.) │ → add cache_control to last stable block
 └────────┬────────┘
-         │
-         ▼
+ │
+ ▼
 ┌─────────────────┐
-│ Vault Retrieval │  inject_retrieved_context()
-│ (BM25 + sort)   │  → sort (-score, path, chunk_id)
-│                 │  → cap at 4,000 tokens
-│                 │  → append after cache boundary
+│ Vault Retrieval │ inject_retrieved_context()
+│ (BM25 + sort) │ → sort (-score, path, chunk_id)
+│ │ → cap at 4,000 tokens
+│ │ → append after cache boundary
 └────────┬────────┘
-         │
-         ▼
+ │
+ ▼
 ┌─────────────────┐
-│  Anthropic API  │  Cache hit if stable prefix is byte-identical
+│ Anthropic API │ Cache hit if stable prefix is byte-identical
 └─────────────────┘
-         │
-         ▼
+ │
+ ▼
 ┌─────────────────┐
-│ Telemetry       │  Record cache_read_input_tokens
-│ (cache stats)   │  /v1/cache/stats available
+│ Telemetry │ Record cache_read_input_tokens
+│ (cache stats) │ /v1/cache/stats available
 └─────────────────┘
 ```
 
@@ -358,17 +358,17 @@ Incoming Request
 System Block Classification (prompt_builder.py)
 
 Block text
-    │
-    ├─ Contains ISO timestamp?         → VOLATILE
-    ├─ Contains "current time/date"?   → VOLATILE
-    ├─ Contains <retrieved_context>?   → VOLATILE
-    ├─ Contains vault block header?    → VOLATILE
-    │   (--- [path] (relevance: X) ---)
-    │
-    └─ None of the above              → STABLE
-                                           │
-                               Last STABLE block gets
-                               cache_control: ephemeral
+ │
+ ├─ Contains ISO timestamp? → VOLATILE
+ ├─ Contains "current time/date"? → VOLATILE
+ ├─ Contains <retrieved_context>? → VOLATILE
+ ├─ Contains vault block header? → VOLATILE
+ │ (--- [path] (relevance: X) ---)
+ │
+ └─ None of the above → STABLE
+ │
+ Last STABLE block gets
+ cache_control: ephemeral
 ```
 
 ---

@@ -25,7 +25,6 @@ Find your problem fast. Every section follows **Problem → Cause → Fix** with
 17. [Performance Profiling](#17-performance-profiling)
 18. [Cloud Deployments](#18-cloud-deployments)
 19. [Quick Triage Runbook](#19-quick-triage-runbook)
-20. [OpenClaw Integration Issues](#20-openclaw-integration-issues)
 21. [Getting More Help](#getting-more-help)
 
 ---
@@ -125,10 +124,10 @@ printenv | grep -iE 'ANTHROPIC_API_KEY|OPENAI_API_KEY'
 
 # Test the key directly (Anthropic example)
 curl -s -o /dev/null -w "%{http_code}" \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "content-type: application/json" \
-  -d '{"model":"claude-haiku-3-5","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}' \
-  https://api.anthropic.com/v1/messages
+ -H "x-api-key: $ANTHROPIC_API_KEY" \
+ -H "content-type: application/json" \
+ -d '{"model":"claude-haiku-3-5","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}' \
+ https://api.anthropic.com/v1/messages
 
 # Should return 200. If 401, the key is bad.
 ```
@@ -151,8 +150,8 @@ tokenpak serve
 
 **Fix:**
 1. Go to the provider's console:
-   - Anthropic: https://console.anthropic.com/settings/keys
-   - OpenAI: https://platform.openai.com/api-keys
+ - Anthropic: https://console.anthropic.com/settings/keys
+ - OpenAI: https://platform.openai.com/api-keys
 2. Generate a new API key
 3. Update your environment variable
 4. Restart TokenPak
@@ -207,9 +206,9 @@ curl -s -o /dev/null -w "%{http_code}" https://api.anthropic.com/v1/messages
 ```bash
 # Test with a cheaper model first
 curl -s -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "content-type: application/json" \
-  -d '{"model":"claude-haiku-3-5","max_tokens":10,"messages":[{"role":"user","content":"test"}]}' \
-  https://api.anthropic.com/v1/messages
+ -H "content-type: application/json" \
+ -d '{"model":"claude-haiku-3-5","max_tokens":10,"messages":[{"role":"user","content":"test"}]}' \
+ https://api.anthropic.com/v1/messages
 ```
 
 If Haiku works but Opus doesn't, your account may not have access to that model tier.
@@ -317,12 +316,12 @@ For example, `port` must be an integer, not a string.
 **Fix:**
 ```json
 {
-  "port": 8766,
-  "mode": "hybrid",
-  "compression": {
-    "enabled": true,
-    "threshold_tokens": 4500
-  }
+ "port": 8766,
+ "mode": "hybrid",
+ "compression": {
+ "enabled": true,
+ "threshold_tokens": 4500
+ }
 }
 ```
 
@@ -346,8 +345,8 @@ TokenPak looks for config in this order:
 mkdir -p ~/.tokenpak
 cat > ~/.tokenpak/config.json << 'EOF'
 {
-  "port": 8766,
-  "mode": "hybrid"
+ "port": 8766,
+ "mode": "hybrid"
 }
 EOF
 
@@ -383,10 +382,10 @@ docker inspect <container_id> | grep -A5 Mounts
 **Fix:**
 ```bash
 docker run -d \
-  -e ANTHROPIC_API_KEY="sk-ant-..." \
-  -e TOKENPAK_PORT=8766 \
-  -p 8766:8766 \
-  tokenpak:latest
+ -e ANTHROPIC_API_KEY="sk-ant-..." \
+ -e TOKENPAK_PORT=8766 \
+ -p 8766:8766 \
+ tokenpak:latest
 ```
 
 ### Cause B: Port conflict inside container
@@ -395,15 +394,15 @@ docker run -d \
 ```bash
 # Ensure TOKENPAK_PORT matches the EXPOSE and -p mapping
 docker run -d \
-  -e TOKENPAK_PORT=8766 \
-  -p 8766:8766 \
-  tokenpak:latest
+ -e TOKENPAK_PORT=8766 \
+ -p 8766:8766 \
+ tokenpak:latest
 
 # If you change the port, update all three:
 docker run -d \
-  -e TOKENPAK_PORT=9000 \
-  -p 9000:9000 \
-  tokenpak:latest
+ -e TOKENPAK_PORT=9000 \
+ -p 9000:9000 \
+ tokenpak:latest
 ```
 
 ### Cause C: Config path doesn't exist in container
@@ -412,10 +411,10 @@ docker run -d \
 ```bash
 # Mount your config file
 docker run -d \
-  -v ~/.tokenpak/config.json:/app/config.json \
-  -e TOKENPAK_CONFIG=/app/config.json \
-  -p 8766:8766 \
-  tokenpak:latest
+ -v ~/.tokenpak/config.json:/app/config.json \
+ -e TOKENPAK_CONFIG=/app/config.json \
+ -p 8766:8766 \
+ tokenpak:latest
 ```
 
 ### Cause D: Python version mismatch in image
@@ -520,18 +519,18 @@ Requests through TokenPak are noticeably slower than going directly to the provi
 # Measure TokenPak overhead vs direct provider
 # Step 1: Time through TokenPak
 time curl -s -o /dev/null \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "content-type: application/json" \
-  -d '{"model":"claude-haiku-3-5","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}' \
-  http://127.0.0.1:8766/v1/messages
+ -H "x-api-key: $ANTHROPIC_API_KEY" \
+ -H "content-type: application/json" \
+ -d '{"model":"claude-haiku-3-5","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}' \
+ http://127.0.0.1:8766/v1/messages
 
 # Step 2: Time direct to provider
 time curl -s -o /dev/null \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "content-type: application/json" \
-  -d '{"model":"claude-haiku-3-5","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}' \
-  https://api.anthropic.com/v1/messages
+ -H "x-api-key: $ANTHROPIC_API_KEY" \
+ -H "anthropic-version: 2023-06-01" \
+ -H "content-type: application/json" \
+ -d '{"model":"claude-haiku-3-5","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}' \
+ https://api.anthropic.com/v1/messages
 
 # The difference is TokenPak overhead. Should be < 50ms.
 ```
@@ -600,7 +599,7 @@ from pathlib import Path
 db = TelemetryDB(str(Path.home() / '.tokenpak/telemetry.db'))
 traces = db.list_traces(limit=5)
 for t in traces:
-    print(f'  trace={t[\"trace_id\"][:12]}... cost={t.get(\"actual_cost\", 0):.4f}')
+ print(f' trace={t[\"trace_id\"][:12]}... cost={t.get(\"actual_cost\", 0):.4f}')
 db.close()
 "
 ```
@@ -645,7 +644,7 @@ import sqlite3
 from pathlib import Path
 conn = sqlite3.connect(str(Path.home() / '.tokenpak/telemetry.db'))
 for row in conn.execute('SELECT usage_source, COUNT(*) FROM tp_usage GROUP BY usage_source').fetchall():
-    print(f'  {row[0]}: {row[1]} records')
+ print(f' {row[0]}: {row[1]} records')
 conn.close()
 "
 ```
@@ -907,9 +906,9 @@ docker stats --no-stream
 
 1. Confirm object/cache eviction policy is active.
 2. Limit max in-memory cache size via env/config:
-   ```bash
-   export TOKENPAK_COMPACT_CACHE_SIZE=2000
-   ```
+ ```bash
+ export TOKENPAK_COMPACT_CACHE_SIZE=2000
+ ```
 3. Capture a heap profile in staging to identify retained objects.
 4. Roll instances with a shorter lifetime until root cause is fixed.
 
@@ -933,10 +932,10 @@ pidstat -u -p $(pgrep -f 'proxy.py|tokenpak' | tr '\n' ',') 1 5
 ### Fix
 
 1. Reduce compression level for hot paths:
-   ```bash
-   export TOKENPAK_MODE=strict
-   tokenpak serve
-   ```
+ ```bash
+ export TOKENPAK_MODE=strict
+ tokenpak serve
+ ```
 2. Tune worker count for available vCPU.
 3. Offload expensive preprocessing to an async/background stage.
 
@@ -1039,36 +1038,6 @@ az container show --resource-group <rg> --name tokenpak --query "instanceView.ev
 
 ---
 
-## 20. OpenClaw Integration Issues
-
-### 20.1 Primary model reverting after restart
-
-**Symptoms:** Gateway shows TokenPak routing but after restart reverts to direct provider.
-
-**Root cause:** `tokenpak-inject.sh` (runs as `ExecStartPre`) overwrites manually-set TokenPak primaries during startup.
-
-**Diagnose:**
-```bash
-python3 -c "import json; cfg=json.load(open('$HOME/.openclaw/openclaw.json')); print(cfg['agents']['defaults']['model']['primary'])"
-systemctl --user restart openclaw-gateway.service
-sleep 5
-python3 -c "import json; cfg=json.load(open('$HOME/.openclaw/openclaw.json')); print(cfg['agents']['defaults']['model']['primary'])"
-```
-
-**Fix (permanent):** In `~/.local/bin/tokenpak-inject.sh`, add early exit in `interleave()`:
-```python
-if primary and is_tp(primary.split("/", 1)[0]):
-    return model_cfg, False  # already on tokenpak — don't change
-```
-
----
-
-### 20.2 Missing TokenPak source files (bytecode only)
-
-**Symptoms:** `ImportError: cannot import name 'server'`; only `.pyc` files exist.
-
-**Fix:**
-```bash
 # Backup broken package and restore from main repo
 mv ~/vault/Projects/tokenpak/packages/pypi/tokenpak ~/vault/Projects/tokenpak/packages/pypi/tokenpak.broken
 cp -r ~/tokenpak ~/vault/Projects/tokenpak/packages/pypi/tokenpak
@@ -1125,16 +1094,15 @@ python3 -c "import tokenpak; print('recompiled')"
 python3 << 'EOF'
 import json
 from pathlib import Path
-cfg = json.load(open(Path.home() / '.openclaw/openclaw.json'))
 models = cfg['agents']['defaults']['models']
 aliases = {}
 for model, spec in models.items():
-    alias = spec.get('alias')
-    if alias:
-        if alias in aliases:
-            print(f"Duplicate: {alias} → {aliases[alias]} AND {model}")
-        else:
-            aliases[alias] = model
+ alias = spec.get('alias')
+ if alias:
+ if alias in aliases:
+ print(f"Duplicate: {alias} → {aliases[alias]} AND {model}")
+ else:
+ aliases[alias] = model
 EOF
 ```
 

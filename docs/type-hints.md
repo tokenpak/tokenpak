@@ -46,10 +46,10 @@ from typing import Any, Dict
 from tokenpak import Budgeter
 
 components: Dict[str, Any] = {
-    'state': {'text': '...', 'priority': 'critical'},
-    'recent': {'text': '...', 'priority': 'high'},
-    'evidence': {'items': [], 'priority': 'medium'},
-    'tools': {'text': '...', 'priority': 'variable'},
+ 'state': {'text': '...', 'priority': 'critical'},
+ 'recent': {'text': '...', 'priority': 'high'},
+ 'evidence': {'items': [], 'priority': 'medium'},
+ 'tools': {'text': '...', 'priority': 'variable'},
 }
 
 budgeter = Budgeter()

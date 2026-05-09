@@ -19,23 +19,23 @@ from tokenpak.middleware import LoggingConfig, init_logger
 
 # Initialize logger
 config = LoggingConfig(
-    enabled=True,
-    level="info",
-    destination="file",
-    retention_days=30,
+ enabled=True,
+ level="info",
+ destination="file",
+ retention_days=30,
 )
 logger = init_logger(config)
 
 # Log a request
 logger.log_request(
-    endpoint="/compile",
-    method="POST",
-    request_size=5000,
-    response_size=3000,
-    status_code=200,
-    latency_ms=45.2,
-    compression_ratio=0.6,
-    message="Compilation successful",
+ endpoint="/compile",
+ method="POST",
+ request_size=5000,
+ response_size=3000,
+ status_code=200,
+ latency_ms=45.2,
+ compression_ratio=0.6,
+ message="Compilation successful",
 )
 ```
 
@@ -46,15 +46,15 @@ logger.log_request(
 ```python
 @dataclass
 class LoggingConfig:
-    enabled: bool = True                    # Enable/disable logging
-    level: LogLevel = "info"                # debug, info, warn, error
-    destination: Destination = "file"       # file, stdout, syslog
-    retention_days: int = 30                # Log file retention
-    include_request_body: bool = False      # Include full request (privacy)
-    include_response_body: bool = False     # Include full response (privacy)
-    log_dir: Optional[str] = None           # Default: ~/.tokenpak/logs
-    async_buffer_size: int = 1000           # Buffer size before flush
-    flush_interval_sec: int = 5             # Async flush interval
+ enabled: bool = True # Enable/disable logging
+ level: LogLevel = "info" # debug, info, warn, error
+ destination: Destination = "file" # file, stdout, syslog
+ retention_days: int = 30 # Log file retention
+ include_request_body: bool = False # Include full request (privacy)
+ include_response_body: bool = False # Include full response (privacy)
+ log_dir: Optional[str] = None # Default: ~/.tokenpak/logs
+ async_buffer_size: int = 1000 # Buffer size before flush
+ flush_interval_sec: int = 5 # Async flush interval
 ```
 
 ### Destinations
@@ -89,29 +89,29 @@ config = LoggingConfig(destination="syslog")
 
 ```json
 {
-  "timestamp": "2026-03-10T06:00:00Z",
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "level": "info",
-  "endpoint": "/compile",
-  "client_ip": "192.168.1.1",
-  "method": "POST",
-  "status_code": 200,
-  "request_size": 5000,
-  "response_size": 3000,
-  "latency_ms": 45.2,
-  "compression_ratio": 0.6,
-  "message": "Compilation successful",
-  "context": {
-    "blocks": 10,
-    "compression_methods": ["truncation", "dedup"]
-  }
+ "timestamp": "2026-03-10T06:00:00Z",
+ "request_id": "550e8400-e29b-41d4-a716-446655440000",
+ "level": "info",
+ "endpoint": "/compile",
+ "client_ip": "192.168.1.1",
+ "method": "POST",
+ "status_code": 200,
+ "request_size": 5000,
+ "response_size": 3000,
+ "latency_ms": 45.2,
+ "compression_ratio": 0.6,
+ "message": "Compilation successful",
+ "context": {
+ "blocks": 10,
+ "compression_methods": ["truncation", "dedup"]
+ }
 }
 ```
 
 ### Text (Stdout)
 
 ```
-[2026-03-10T06:00:00Z] INFO  550e8400-e29b-41d4-a716-446655440000 POST /compile -> 200 [5000→3000B (ratio: 60.0%)] 45.2ms | Compilation successful
+[2026-03-10T06:00:00Z] INFO 550e8400-e29b-41d4-a716-446655440000 POST /compile -> 200 [5000→3000B (ratio: 60.0%)] 45.2ms | Compilation successful
 ```
 
 ## Request Logging
@@ -120,13 +120,13 @@ config = LoggingConfig(destination="syslog")
 
 ```python
 logger.log_request(
-    endpoint="/compile",
-    method="POST",
-    status_code=200,
-    request_size=5000,
-    response_size=3000,
-    latency_ms=45.2,
-    compression_ratio=0.6,
+ endpoint="/compile",
+ method="POST",
+ status_code=200,
+ request_size=5000,
+ response_size=3000,
+ latency_ms=45.2,
+ compression_ratio=0.6,
 )
 ```
 
@@ -134,10 +134,10 @@ logger.log_request(
 
 ```python
 logger.log_request(
-    endpoint="/compile",
-    client_ip="192.168.1.1",
-    status_code=200,
-    # ... other params
+ endpoint="/compile",
+ client_ip="192.168.1.1",
+ status_code=200,
+ # ... other params
 )
 ```
 
@@ -145,14 +145,14 @@ logger.log_request(
 
 ```python
 logger.log_request(
-    endpoint="/compile",
-    status_code=200,
-    context={
-        "blocks": 10,
-        "compression_methods": ["truncation", "dedup"],
-        "blocks_removed": 3,
-        "tokens_removed": 500,
-    },
+ endpoint="/compile",
+ status_code=200,
+ context={
+ "blocks": 10,
+ "compression_methods": ["truncation", "dedup"],
+ "blocks_removed": 3,
+ "tokens_removed": 500,
+ },
 )
 ```
 
@@ -160,9 +160,9 @@ logger.log_request(
 
 ```python
 logger.log_request(
-    endpoint="/compile",
-    status_code=200,
-    request_id="custom-id-123",
+ endpoint="/compile",
+ status_code=200,
+ request_id="custom-id-123",
 )
 ```
 
@@ -174,22 +174,22 @@ logger.log_request(
 from tokenpak.middleware import create_compile_audit, BlockType
 
 audit = create_compile_audit(
-    request_id="550e8400-e29b-41d4-a716-446655440000",
-    input_block_count=20,
-    input_blocks_by_type={
-        BlockType.INSTRUCTION: 5,
-        BlockType.KNOWLEDGE: 10,
-        BlockType.EVIDENCE: 5,
-    },
-    input_total_size=50000,
+ request_id="550e8400-e29b-41d4-a716-446655440000",
+ input_block_count=20,
+ input_blocks_by_type={
+ BlockType.INSTRUCTION: 5,
+ BlockType.KNOWLEDGE: 10,
+ BlockType.EVIDENCE: 5,
+ },
+ input_total_size=50000,
 )
 
 # Populate output
 audit.output_block_count = 15
 audit.output_blocks_by_type = {
-    BlockType.INSTRUCTION: 5,
-    BlockType.KNOWLEDGE: 8,
-    BlockType.EVIDENCE: 2,
+ BlockType.INSTRUCTION: 5,
+ BlockType.KNOWLEDGE: 8,
+ BlockType.EVIDENCE: 2,
 }
 audit.output_total_size = 35000
 audit.compression_ratio = 0.7
@@ -208,9 +208,9 @@ middleware.log_compile_audit(audit)
 from tokenpak.middleware import create_cache_audit
 
 audit = create_cache_audit(
-    request_id="550e8400-e29b-41d4-a716-446655440000",
-    operation="get",
-    block_id="block-abc123",
+ request_id="550e8400-e29b-41d4-a716-446655440000",
+ operation="get",
+ block_id="block-abc123",
 )
 audit.cache_hit = True
 audit.cached_value_size = 1000
@@ -224,8 +224,8 @@ middleware.log_cache_audit(audit)
 from tokenpak.middleware import create_metrics_audit
 
 audit = create_metrics_audit(
-    request_id="550e8400-e29b-41d4-a716-446655440000",
-    aggregation_window="24h",
+ request_id="550e8400-e29b-41d4-a716-446655440000",
+ aggregation_window="24h",
 )
 audit.data_points_returned = 1440
 audit.metrics_included = ["compression_ratio", "latency", "blocks_removed"]
@@ -250,9 +250,9 @@ middleware = LoggingMiddleware(logger)
 @app.route("/compile", methods=["POST"])
 @middleware.wrap_request("/compile", "POST")
 def compile_blocks():
-    body = request.get_json()
-    result = compress(body)
-    return {"result": result}, 200
+ body = request.get_json()
+ result = compress(body)
+ return {"result": result}, 200
 ```
 
 ### Starlette/FastAPI Integration
@@ -270,9 +270,9 @@ middleware = LoggingMiddleware(logger)
 @app.post("/compile")
 @middleware.wrap_request("/compile", "POST")
 async def compile_blocks(request: Request):
-    body = await request.json()
-    result = compress(body)
-    return {"result": result}
+ body = await request.json()
+ result = compress(body)
+ return {"result": result}
 ```
 
 ## Log Analysis

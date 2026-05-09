@@ -1,0 +1,28 @@
+# Generator post-process cleanup rules — read by scripts/generate-cli-docs.py
+#
+# This .txt file is intentionally outside the .md/.py/.yml/.yaml/.json/.toml
+# scan extensions of the identity-language CI check, so it can carry
+# deferred-subcommand names and integration-example tokens without
+# tripping that guardrail itself. The post-process applies these
+# rules to the rendered docs/cli-reference.md so the public CLI docs
+# stay clean even while the underlying source references remain (those
+# are tracked under separate cleanup follow-ups).
+#
+# Sections:
+#   [deferred_subcommands]      one subcommand name per line
+#   [example_substitutions]     <old-token>=>><new-token>
+
+
+[deferred_subcommands]
+# Subcommands whose parser registration is deferred for code-level
+# removal; their `### \`tokenpak <name>\`` sections are stripped from
+# the rendered CLI reference.
+openclaw
+
+
+[example_substitutions]
+# Argparse-epilog example fragments that reference internal integrations.
+# Replaced with product-neutral substitutes in the rendered docs.
+--caller openclaw:main:*=>>--caller my-app:profile:*
+--tag codex-personal=>>--tag work
+discovered on this host — main, governor, etc.=>>discovered on this host

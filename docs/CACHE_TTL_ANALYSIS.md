@@ -3,8 +3,8 @@
 ## Current Configuration
 - TTL: **5 minutes effective** (default Anthropic prompt cache TTL)
 - Source in code:
-  - `tokenpak/agent/proxy/prompt_builder.py` sets `cache_control: {"type": "ephemeral"}` on stable system block(s)
-  - No `ttl` field is currently set in TokenPak request shaping, so provider default applies
+ - `tokenpak/agent/proxy/prompt_builder.py` sets `cache_control: {"type": "ephemeral"}` on stable system block(s)
+ - No `ttl` field is currently set in TokenPak request shaping, so provider default applies
 - Configurability in current TokenPak code: **Not exposed as a local setting today** (would require adding `ttl: "1h"` in emitted `cache_control` where appropriate)
 
 ## Anthropic Cache Behavior
@@ -13,8 +13,8 @@
 - Supported longer TTL: **1 hour** via `cache_control: {"type":"ephemeral", "ttl":"1h"}`
 - Max TTL (per current Claude docs): **1 hour**
 - Notes:
-  - Cache refreshes when reused within TTL window
-  - 1-hour TTL has higher cache-write pricing than 5-minute TTL
+ - Cache refreshes when reused within TTL window
+ - 1-hour TTL has higher cache-write pricing than 5-minute TTL
 
 ## Request Pattern Analysis (monitor.db)
 Computed from `requests.timestamp` gaps between consecutive requests.

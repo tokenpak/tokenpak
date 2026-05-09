@@ -23,8 +23,8 @@ from functools import lru_cache
 
 @lru_cache(maxsize=1024)
 def count_tokens(content: str, model: str) -> int:
-    # Uses tiktoken if available, otherwise a fast heuristic
-    ...
+ # Uses tiktoken if available, otherwise a fast heuristic
+ ...
 ```
 
 Cache size: 1,024 entries (configurable). Evicts the least recently used entry when full.
@@ -93,10 +93,10 @@ Calibration runs a bounded benchmark (min 1 worker, max `--max-workers`, default
 **Benchmark (572-file vault):**
 
 ```
-Workers: 1   → 180.2s (baseline)
-Workers: 4   → 6.8s
-Workers: 8   → 3.3s   ← auto-selected on this machine
-Throughput:    ~2,738 files/sec
+Workers: 1 → 180.2s (baseline)
+Workers: 4 → 6.8s
+Workers: 8 → 3.3s ← auto-selected on this machine
+Throughput: ~2,738 files/sec
 ```
 
 ### Zero-token search

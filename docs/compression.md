@@ -10,10 +10,10 @@ Compression only activates when the request exceeds a token threshold (default: 
 
 ```
 Request received
-       │
-       ├── input_tokens < threshold → passthrough (0ms overhead)
-       │
-       └── input_tokens ≥ threshold → compression pipeline
+ │
+ ├── input_tokens < threshold → passthrough (0ms overhead)
+ │
+ └── input_tokens ≥ threshold → compression pipeline
 ```
 
 Adjust the threshold:
@@ -33,17 +33,17 @@ Scans the message history for duplicate or near-duplicate turns. If the same con
 ```python
 # Before
 messages = [
-    {"role": "user", "content": "Here is the code:\n<500 lines>"},
-    {"role": "assistant", "content": "I'll review it."},
-    {"role": "user", "content": "Here is the code:\n<500 lines>"},  # ← duplicate
-    {"role": "user", "content": "Now fix line 42."},
+ {"role": "user", "content": "Here is the code:\n<500 lines>"},
+ {"role": "assistant", "content": "I'll review it."},
+ {"role": "user", "content": "Here is the code:\n<500 lines>"}, # ← duplicate
+ {"role": "user", "content": "Now fix line 42."},
 ]
 
 # After dedup
 messages = [
-    {"role": "user", "content": "Here is the code:\n<500 lines>"},
-    {"role": "assistant", "content": "I'll review it."},
-    {"role": "user", "content": "Now fix line 42."},
+ {"role": "user", "content": "Here is the code:\n<500 lines>"},
+ {"role": "assistant", "content": "I'll review it."},
+ {"role": "user", "content": "Now fix line 42."},
 ]
 ```
 
@@ -75,18 +75,18 @@ Example directive (`recipes/oss/code-review.yaml`):
 
 ```yaml
 directives:
-  - type: code
-    action: signature_only     # keep function signatures, strip bodies
-    language: [python, js, ts]
-    preserve_docstrings: true
+ - type: code
+ action: signature_only # keep function signatures, strip bodies
+ language: [python, js, ts]
+ preserve_docstrings: true
 
-  - type: markdown
-    action: keep_headers       # strip body text, keep heading structure
-    max_depth: 3
+ - type: markdown
+ action: keep_headers # strip body text, keep heading structure
+ max_depth: 3
 
-  - type: text
-    action: filter_tokens
-    ratio: 0.6                 # keep top 60% by importance score
+ - type: text
+ action: filter_tokens
+ ratio: 0.6 # keep top 60% by importance score
 ```
 
 Built-in recipes live in `recipes/oss/`. Pro recipes add more aggressive options.
@@ -100,15 +100,15 @@ After the pipeline, the `PipelineResult` object contains:
 ```python
 @dataclass
 class PipelineResult:
-    messages: List[Dict]    # compressed messages (same format, fewer tokens)
-    segments: List[Segment] # per-segment metadata
-    tokens_raw: int         # tokens before compression
-    tokens_after: int       # tokens after compression
-    duration_ms: float      # pipeline wall time
-    stages_run: List[str]   # which stages ran
+ messages: List[Dict] # compressed messages (same format, fewer tokens)
+ segments: List[Segment] # per-segment metadata
+ tokens_raw: int # tokens before compression
+ tokens_after: int # tokens after compression
+ duration_ms: float # pipeline wall time
+ stages_run: List[str] # which stages ran
 
-    @property
-    def savings_pct(self) -> float: ...
+ @property
+ def savings_pct(self) -> float: ...
 ```
 
 ---
@@ -156,8 +156,8 @@ Add your own compression logic via the pipeline hook API:
 from tokenpak.agent.compression.pipeline import CompressionPipeline
 
 def my_hook(messages):
-    # Remove messages older than 10 turns
-    return messages[-10:]
+ # Remove messages older than 10 turns
+ return messages[-10:]
 
 pipeline = CompressionPipeline()
 pipeline.add_hook(my_hook)
@@ -181,13 +181,13 @@ version: "1.0"
 description: Custom compression for my workflow
 
 directives:
-  - type: text
-    action: filter_tokens
-    ratio: 0.7
+ - type: text
+ action: filter_tokens
+ ratio: 0.7
 
-  - type: code
-    action: signature_only
-    language: [python]
+ - type: code
+ action: signature_only
+ language: [python]
 ```
 
 Apply a recipe:
@@ -211,10 +211,10 @@ tokenpak compress myfile.txt
 Output:
 
 ```
-Input:  12,840 tokens
-Output:  6,918 tokens
-Saved:   5,922 tokens (46.1%)
-Time:    8.4ms
+Input: 12,840 tokens
+Output: 6,918 tokens
+Saved: 5,922 tokens (46.1%)
+Time: 8.4ms
 
 Stages: dedup (0 removed) → segmentize (14 blocks) → directives (applied)
 ```

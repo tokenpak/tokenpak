@@ -25,16 +25,16 @@ LLM APIs charge per token. Most conversations are bloated with repetitive contex
 ## Core Principles
 
 === "Zero Data"
-    We never see your prompts, code, or responses. Everything happens locally.
+ We never see your prompts, code, or responses. Everything happens locally.
 
 === "Zero Credentials"
-    Pure passthrough proxy — your API keys go directly to providers, never stored by TokenPak.
+ Pure passthrough proxy — your API keys go directly to providers, never stored by TokenPak.
 
 === "Zero Lock-in"
-    Downgrade anytime. Keep all your data. No vendor dependencies.
+ Downgrade anytime. Keep all your data. No vendor dependencies.
 
 === "Zero Tokens for Ops"
-    Status, search, cost reports — all free. CLI-first, deterministic.
+ Status, search, cost reports — all free. CLI-first, deterministic.
 
 ---
 
@@ -53,29 +53,29 @@ Then point your LLM client at `http://localhost:8766`. That's it. See [Getting S
 
 <div class="grid cards" markdown>
 
--   :material-fast-forward: **[Getting Started](getting-started.md)**
+- :material-fast-forward: **[Getting Started](getting-started.md)**
 
-    Install TokenPak and run your first compressed request in 5 minutes.
+ Install TokenPak and run your first compressed request in 5 minutes.
 
--   :material-console: **[CLI Reference](cli-reference.md)**
+- :material-console: **[CLI Reference](cli-reference.md)**
 
-    Every command, every flag, with examples.
+ Every command, every flag, with examples.
 
--   :material-lan: **[Proxy Setup](guides/proxy-setup.md)**
+- :material-lan: **[Proxy Setup](guides/proxy-setup.md)**
 
-    Connect Claude Code, OpenAI clients, or any HTTP-based LLM tool.
+ Connect Claude Code, OpenAI clients, or any HTTP-based LLM tool.
 
--   :material-chef-hat: **[Recipe Development](guides/recipes.md)**
+- :material-chef-hat: **[Recipe Development](guides/recipes.md)**
 
-    Build custom compression recipes for your domain.
+ Build custom compression recipes for your domain.
 
--   :material-chart-bar: **[Telemetry & Dashboard](guides/telemetry.md)**
+- :material-chart-bar: **[Telemetry & Dashboard](guides/telemetry.md)**
 
-    Track costs, view savings, export reports.
+ Track costs, view savings, export reports.
 
--   :material-server: **[Team Server](guides/team-server.md)**
+- :material-server: **[Team Server](guides/team-server.md)**
 
-    Deploy a shared TokenPak instance for your whole team.
+ Deploy a shared TokenPak instance for your whole team.
 
 </div>
 
@@ -129,24 +129,24 @@ Then point your LLM client at `http://localhost:8766`. That's it. See [Getting S
 
 ```bash
 # Core
-tokenpak serve           # Start proxy
-tokenpak status          # Health check
-tokenpak cost            # Cost report
-tokenpak savings         # Token savings
+tokenpak serve # Start proxy
+tokenpak status # Health check
+tokenpak cost # Cost report
+tokenpak savings # Token savings
 
 # Compression
-tokenpak compress        # Dry-run compression
-tokenpak demo            # Live demo
-tokenpak trace           # Debug pipeline
+tokenpak compress # Dry-run compression
+tokenpak demo # Live demo
+tokenpak trace # Debug pipeline
 
 # Vault
-tokenpak index           # Index directory
-tokenpak vault search    # Semantic search
-tokenpak calibrate       # Auto-tune performance
+tokenpak index # Index directory
+tokenpak vault search # Semantic search
+tokenpak calibrate # Auto-tune performance
 
 # Routing
-tokenpak route add       # Add routing rule
-tokenpak route list      # List rules
+tokenpak route add # Add routing rule
+tokenpak route list # List rules
 ```
 
 See [CLI Reference](cli-reference.md) for complete documentation.
@@ -155,12 +155,12 @@ See [CLI Reference](cli-reference.md) for complete documentation.
 
 ```python
 from tokenpak import (
-    TelemetryCollector,    # Usage tracking
-    CacheManager,          # Token cache
-    CompressionEngine,     # Compression base class
-    HeuristicEngine,       # Rule-based compression
-    Budgeter,              # Token budget allocation
-    BlockRegistry,         # Content-addressed storage
+ TelemetryCollector, # Usage tracking
+ CacheManager, # Token cache
+ CompressionEngine, # Compression base class
+ HeuristicEngine, # Rule-based compression
+ Budgeter, # Token budget allocation
+ BlockRegistry, # Content-addressed storage
 )
 ```
 

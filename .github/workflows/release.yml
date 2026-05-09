@@ -13,7 +13,7 @@ jobs:
   # Step 1: Run tests to ensure tag is release-worthy
   # ─────────────────────────────────────────────────────────────────────
   #
-  # Test-gate contract (TIP7-001 + 2026-05-08 follow-up):
+  # Test-gate contract:
   #
   # This job installs only the [dev] extra — pytest, ruff, black, etc. — and
   # NOT [full] / [retrieval] / [intelligence] etc. That's intentional: the
@@ -68,7 +68,7 @@ jobs:
   # Step 2: Build distribution artifacts
   # ─────────────────────────────────────────────────────────────────────
   #
-  # Dist-purity contract (TSR-08-D / 2026-05-09 v1.5.3 burn lesson):
+  # Dist-purity contract (2026-05-09 cleanup):
   #
   # The `dist/` directory uploaded as the `dist` artifact MUST contain only
   # valid Python distribution files: `*.whl` and `*.tar.gz`. Nothing else.

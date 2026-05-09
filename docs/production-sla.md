@@ -29,7 +29,7 @@ Reports: `status`, `uptime_seconds`, `compression_ratio_avg`, `circuit_breakers`
 
 ```bash
 curl http://localhost:8766/health
-curl http://localhost:8766/health?deep=true   # includes memory + disk
+curl http://localhost:8766/health?deep=true # includes memory + disk
 ```
 
 ### Index Freshness Check
@@ -47,7 +47,7 @@ Set `TOKENPAK_REQUEST_TIMEOUT=<seconds>` to enforce per-request upstream timeout
 Default: `0` (disabled — rely on pool defaults).
 
 ```bash
-export TOKENPAK_REQUEST_TIMEOUT=30   # 30s hard timeout per request
+export TOKENPAK_REQUEST_TIMEOUT=30 # 30s hard timeout per request
 ```
 
 Timeout is passed directly to the connection pool's `stream()` and `request()` calls.

@@ -27,11 +27,11 @@ tokenpak update --dry-run
 ## Update Flags
 
 ```bash
-tokenpak update               # Full update (proxy + config)
-tokenpak update --check       # Check for updates, don't install
-tokenpak update --dry-run     # Preview changes
-tokenpak update --force       # Update even if already up to date
-tokenpak update --core-only   # Skip config merge
+tokenpak update # Full update (proxy + config)
+tokenpak update --check # Check for updates, don't install
+tokenpak update --dry-run # Preview changes
+tokenpak update --force # Update even if already up to date
+tokenpak update --core-only # Skip config merge
 ```
 
 ## Update Flow
@@ -48,7 +48,7 @@ When multiple agents share a vault, all agents should run the same versions.
 ```bash
 # On each agent machine:
 tokenpak update
-tokenpak version   # verify all match
+tokenpak version # verify all match
 ```
 
 The lock file at `~/vault/System/tokenpak.lock.json` acts as the canonical version pin. Any agent with drift will warn on startup.
@@ -58,8 +58,8 @@ The lock file at `~/vault/System/tokenpak.lock.json` acts as the canonical versi
 To pull the latest config from the canonical vault/git source:
 
 ```bash
-tokenpak config sync            # sync from vault (git)
-tokenpak config sync --dry-run  # preview only
+tokenpak config sync # sync from vault (git)
+tokenpak config sync --dry-run # preview only
 tokenpak config pull --source=url --url=https://example.com/tokenpak-config.json
 ```
 

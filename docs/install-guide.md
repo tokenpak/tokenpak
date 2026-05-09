@@ -40,9 +40,9 @@ pip install tokenpak tiktoken
 python3 -m venv ~/my_tokenpak_env
 
 # Activate it
-source ~/my_tokenpak_env/bin/activate  # Linux/macOS
+source ~/my_tokenpak_env/bin/activate # Linux/macOS
 # or
-~/my_tokenpak_env\Scripts\activate     # Windows
+~/my_tokenpak_env\Scripts\activate # Windows
 
 # Install TokenPak
 pip install tokenpak[ml,tiktoken]
@@ -95,8 +95,8 @@ EOF
 
 **Solution:** Make sure you're running Python from the correct environment:
 ```bash
-which python3  # Should show path in your venv
-pip list | grep tokenpak  # Should show tokenpak installed
+which python3 # Should show path in your venv
+pip list | grep tokenpak # Should show tokenpak installed
 ```
 
 If not in a venv, reinstall:
@@ -115,7 +115,7 @@ pip install tokenpak[tiktoken]
 
 **Solution:** Use `--user` flag or a virtual environment:
 ```bash
-pip install --user tokenpak  # Install to user directory
+pip install --user tokenpak # Install to user directory
 # OR use a venv (recommended)
 ```
 
