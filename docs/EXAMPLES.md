@@ -390,7 +390,7 @@ TOKENPAK_INJECT_MIN_SCORE=0.6 # Minimum similarity score for vault injection
 
 ## See Also
 
-- [API Reference](../API.md) — Full endpoint documentation
+- [API Reference](API_REFERENCE.md) — Full endpoint documentation
 - [Production SLA](production-sla.md) — Performance targets
 
 ---
