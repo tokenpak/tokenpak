@@ -14,8 +14,8 @@ from unittest.mock import patch
 
 import pytest
 
-# TSR-05aa banner-text-drift skip reason (grep-able)
-# ─────────────────────────────────────────────
+# Banner-text-drift skip reason (grep-able):
+#
 # `test_main_banner_written_to_stderr` asserts the literal substring
 # `"companion ready"` (lowercase) appears in stderr after `launcher.main([])`.
 # Production launcher no longer emits that exact phrase; current stderr
@@ -30,8 +30,7 @@ import pytest
 # the assertion would still fail even with claude present, because the
 # banner phrase itself drifted.
 #
-# Belongs to TSR-02 (API/behavior drift). Same Path B pattern as TSR-05t
-# (deprecated `tokenpak savings` wire format). Live tests in this file
+# Treated as API/behavior drift; the live tests in this file
 # (write_mcp_config / write_settings / write_system_prompt /
 # main_generates_all_config_files / prefix_session_name helpers /
 # main_passes_through_extra_args / main_proxy_detection_exception_path)
@@ -39,8 +38,7 @@ import pytest
 SKIP_LAUNCHER_BANNER_TEXT_DRIFT = (
     "Test asserts literal `\"companion ready\"` in launcher stderr. "
     "Production banner now emits `\"TokenPak Companion / Ready • ...\"` "
-    "without the lowercase `companion ready` substring. API drift — "
-    "see TSR-02."
+    "without the lowercase `companion ready` substring. API drift."
 )
 
 
@@ -209,11 +207,24 @@ def test_main_passes_through_extra_args(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_prefix_session_name_no_flag():
-    """When no --name/-n flag is present, injects a default name."""
+    """When no --name/-n flag is present, injects the default branded label.
+
+    The default label is the ANSI-styled brand label (teal brackets +
+    'TokenPak', white '📦 Token', gray 'Claude Companion'). The 📦 SESSION
+    PREFIX appears inside the brand text but is not the first character —
+    the leading teal-bracket ANSI escape comes first.
+    """
     result = launcher._prefix_session_name(["--no-update-notifier"])
     assert "--name" in result
     idx = result.index("--name")
-    assert result[idx + 1].startswith(launcher._SESSION_PREFIX)
+    label = result[idx + 1]
+    # The branded default label IS exactly _DEFAULT_SESSION_LABEL.
+    assert label == launcher._DEFAULT_SESSION_LABEL
+    # And it contains the 📦 prefix character (just not at index 0).
+    assert launcher._SESSION_PREFIX in label
+    # Quick sanity: TokenPak brand tokens are present.
+    assert "Token" in label
+    assert "Pak" in label
 
 
 def test_prefix_session_name_long_flag():
