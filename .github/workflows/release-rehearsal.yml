@@ -1,0 +1,252 @@
+name: Release Rehearsal
+
+# Release rehearsal workflow per the release-gate trust contract.
+#
+# The release-gate trust contract requires a regularly-run rehearsal that
+# exercises the full release path EXCEPT for publish-to-PyPI and the
+# GitHub Release create step. The rehearsal validates that the build,
+# test, dist-purity, and checksum surface is green so that — when a real
+# `v*` tag is pushed and `release.yml` fires — there are no surprises.
+#
+# Hard guarantees of this workflow:
+#
+#   • This workflow MUST NOT publish to PyPI.
+#   • This workflow MUST NOT create a GitHub Release.
+#   • This workflow MUST NOT push a tag back to the repo.
+#   • This workflow MUST NOT invoke the `record-publish` job in
+#     `release.yml` (it lives in a separate workflow; rehearsal cannot
+#     reach it).
+#   • This workflow MUST NOT write to the release-gate state DB. It
+#     uploads a `rehearsal-event` artifact; an operator-side helper
+#     reads it and idempotently records the outcome on the operator
+#     host.
+#
+# Triggers:
+#
+#   1. `workflow_dispatch` — manual run, no inputs:
+#        gh workflow run "Release Rehearsal" --ref main
+#      The canonical operator path. Use this for ad-hoc rehearsals or
+#      pre-tag confidence checks against any branch.
+#
+#   2. `push: tags: 'rehearsal-*'` — throwaway tag, deleted by the
+#      operator after the run completes:
+#        git tag rehearsal-YYYY-MM-DD-HHMM
+#        git push <remote> rehearsal-YYYY-MM-DD-HHMM
+#      Produces a real-tag history for audit. The tag MUST be deleted
+#      after the run; the operator-side helper handles deletion via
+#      `gh api -X DELETE`. Tag pattern `rehearsal-*` never matches the
+#      `release.yml` tag trigger pattern `v*`, so a rehearsal tag
+#      cannot accidentally trigger a real release.
+#
+# Permissions are intentionally read-only. This workflow does not need
+# `contents: write` because it does not push, tag, or release.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'rehearsal-*'
+
+permissions:
+  contents: read
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────
+  # Step 1: Run tests on the slim install (same test-gate contract as
+  # release.yml — see release.yml for the full contract notes).
+  # ─────────────────────────────────────────────────────────────────────
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest tests/ -q --tb=short
+
+      - name: Smoke test CLI
+        run: python -m tokenpak.cli --help
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Step 2: Build distribution artifacts and validate dist/ purity.
+  #
+  # The dist-purity contract is owned by release.yml; we re-assert it
+  # here to catch any regression early. The 2026-05-09 cleanup is the
+  # source of truth: dist/ may contain only `*.whl` and `*.tar.gz`;
+  # SHA256SUMS lives at the repo root and is uploaded as a separate
+  # `checksums` artifact.
+  # ─────────────────────────────────────────────────────────────────────
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Verify package
+        run: twine check dist/*
+
+      - name: Assert dist/ purity (only .whl + .tar.gz)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          extras=()
+          for f in dist/*; do
+            base="$(basename "$f")"
+            case "$base" in
+              *.whl|*.tar.gz) ;;
+              *) extras+=("$base") ;;
+            esac
+          done
+          if [ "${#extras[@]}" -gt 0 ]; then
+            echo "ERROR: dist/ contains non-distribution files: ${extras[*]}" >&2
+            echo "       This would fail the real release publish step." >&2
+            exit 1
+          fi
+          echo "dist/ purity check OK:"
+          ls -la dist/
+
+      - name: Generate checksums (outside dist/)
+        run: |
+          ( cd dist && sha256sum *.whl *.tar.gz ) > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload dist artifact (wheels + sdist only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+      - name: Upload checksums artifact (SHA256SUMS only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: SHA256SUMS
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Step 3: Record the rehearsal outcome as an uploadable artifact.
+  #
+  # No DB write happens here. An operator-side helper polls completed
+  # Release Rehearsal runs, downloads the `rehearsal-event` artifact,
+  # and idempotently records the corresponding row in the release-gate
+  # state DB on the operator host. Re-running the helper is a no-op.
+  #
+  # Both pass and fail outcomes are recorded — `if: always()` ensures
+  # this job runs even if test or build failed, so the gate sees the
+  # full picture (per the release-gate trust contract's failure-mode
+  # rule).
+  # ─────────────────────────────────────────────────────────────────────
+  rehearsal-record:
+    name: Record Rehearsal Event
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: always()
+    steps:
+      - name: Determine outcome
+        id: outcome
+        run: |
+          set -euo pipefail
+          # Aggregate result: pass iff every required job passed.
+          test_result="${{ needs.test.result }}"
+          build_result="${{ needs.build.result }}"
+          if [ "$test_result" = "success" ] && [ "$build_result" = "success" ]; then
+            result="pass"
+          else
+            result="fail"
+          fi
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          echo "test_result=$test_result" >> "$GITHUB_OUTPUT"
+          echo "build_result=$build_result" >> "$GITHUB_OUTPUT"
+          echo "Rehearsal outcome: $result (test=$test_result, build=$build_result)"
+
+      - name: Compose rehearsal-event payload
+        id: payload
+        run: |
+          set -euo pipefail
+          # Tag-trigger runs supply a `rehearsal-*` ref; manual dispatch
+          # runs supply the branch name. Both are useful for audit.
+          REF="${GITHUB_REF}"
+          SHA="${GITHUB_SHA}"
+          RUN_ID="${GITHUB_RUN_ID}"
+          EVENT_NAME="${GITHUB_EVENT_NAME}"
+          TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          RESULT="${{ steps.outcome.outputs.result }}"
+          TEST_RESULT="${{ steps.outcome.outputs.test_result }}"
+          BUILD_RESULT="${{ steps.outcome.outputs.build_result }}"
+
+          # `cause` semantics match the release-gate increments table:
+          #   rehearsal_run  — pass; delta=0 (no counter change)
+          #   rehearsal_fail — fail; delta=+1 (counter increments)
+          if [ "$RESULT" = "pass" ]; then
+            CAUSE="rehearsal_run"
+          else
+            CAUSE="rehearsal_fail"
+          fi
+
+          mkdir -p rehearsal-event
+          cat > rehearsal-event/event.json <<EOF
+          {
+            "ref": "${REF}",
+            "sha": "${SHA}",
+            "run_id": "${RUN_ID}",
+            "event_name": "${EVENT_NAME}",
+            "timestamp": "${TIMESTAMP}",
+            "cause": "${CAUSE}",
+            "result": "${RESULT}",
+            "test_result": "${TEST_RESULT}",
+            "build_result": "${BUILD_RESULT}"
+          }
+          EOF
+          echo "Rehearsal event:"
+          cat rehearsal-event/event.json
+
+      - name: Upload rehearsal-event artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rehearsal-event
+          path: rehearsal-event/
+          retention-days: 90
+
+      - name: Workflow summary
+        run: |
+          {
+            echo "## Release Rehearsal — outcome"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Result | **${{ steps.outcome.outputs.result }}** |"
+            echo "| Test job | ${{ steps.outcome.outputs.test_result }} |"
+            echo "| Build job | ${{ steps.outcome.outputs.build_result }} |"
+            echo "| Event | ${GITHUB_EVENT_NAME} |"
+            echo "| Ref | ${GITHUB_REF} |"
+            echo "| Run | [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
+            echo ""
+            echo "### What this run did NOT do"
+            echo ""
+            echo "- ❌ No PyPI publish"
+            echo "- ❌ No GitHub Release created"
+            echo "- ❌ No tag pushed"
+            echo "- ❌ No record-publish job invoked"
+            echo "- ❌ No release-gate DB write (operator-side helper records the event from the uploaded artifact)"
+          } >> "$GITHUB_STEP_SUMMARY"
