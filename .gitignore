@@ -96,3 +96,4 @@ coverage.json
 coverage_report.txt
 benchmark.json
 bandit-baseline.json
+README.local.md

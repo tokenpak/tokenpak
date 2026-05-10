@@ -22,7 +22,7 @@ Welcome to the TokenPak docs. Start here, then dive into specifics.
 
 | Guide | Description |
 |-------|-------------|
-| [Architecture](ARCHITECTURE.md) | System design and compression pipeline |
+| [Architecture](architecture.md) | System design and compression pipeline |
 | [Compression](compression.md) | How compression works, modes, recipes |
 | [Cache System](cache.md) | LRU cache, vault registry, change detection |
 | [Telemetry](telemetry.md) | Cost tracking, privacy model, data retention |
