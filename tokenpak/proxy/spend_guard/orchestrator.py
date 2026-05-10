@@ -179,8 +179,22 @@ def evaluate(
             _log.debug("spend_guard: session_state lookup failed: %s", e)
             session_running = 0.0
 
-    decision = decide(est, cfg, tip=tip_directive,
-                      session_running_cost_usd=session_running)
+    # Resolve max context for THIS model so decide() can derive the
+    # block-tokens band as 80% of context. None → fallback path inside
+    # decide() (uses cfg.block_tokens). Lookup is best-effort; any error
+    # falls through to fallback.
+    model_max_context_tokens: Optional[int] = None
+    try:
+        from ._context_window import get_model_max_context
+        model_max_context_tokens = get_model_max_context(model)
+    except Exception as e:
+        _log.debug("spend_guard: context_window lookup failed: %s", e)
+
+    decision = decide(
+        est, cfg, tip=tip_directive,
+        session_running_cost_usd=session_running,
+        model_max_context_tokens=model_max_context_tokens,
+    )
 
     # ── [TIP: estimate=on] short-circuit (only when allowed by policy)
     if tip_directive is not None and tip_directive.estimate_only and decision.decision != "hard_block":

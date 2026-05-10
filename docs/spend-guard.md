@@ -30,7 +30,7 @@ spend_guard:
  enabled: true # global on/off
  warn_tokens: 100000 # advisory only — no UX surface yet
  warn_cost_usd: 2.0
- block_tokens: 500000 # holds the request, prompts user
+ block_tokens: 500000 # FALLBACK only — see "Dynamic block-tokens band" below
  block_cost_usd: 10.0
  hard_block_tokens: 1000000 # immutable ceiling
  hard_block_cost_usd: 50.0
@@ -43,6 +43,53 @@ spend_guard:
 Every key is overrideable via `TOKENPAK_SPEND_GUARD_*` environment variables (e.g. `TOKENPAK_SPEND_GUARD_BLOCK_COST_USD=5.0`).
 
 To disable entirely: `TOKENPAK_SPEND_GUARD_ENABLED=0` or `spend_guard.enabled: false`.
+
+### Dynamic block-tokens band
+
+The block-tokens threshold (the "hold the request, prompt user" band) **derives dynamically per request from the selected model's max context window**:
+
+```
+effective_block_tokens = floor(model_max_context_tokens * 0.80)
+```
+
+Examples (with the 0.80 default ratio):
+
+| Model max context | Derived block_tokens |
+|---|---|
+| 200,000 (Claude Opus/Sonnet/Haiku 4.x) | 160,000 |
+| 1,000,000 (Gemini 1.5/2.0/2.5 Flash; gpt-4.1) | 800,000 |
+| 2,000,000 (Gemini 1.5/2.0/2.5 Pro) | 1,600,000 — capped by `hard_block_tokens` to 1,000,000 |
+| 500,000 (hypothetical) | 400,000 |
+| 128,000 (gpt-4o) | 102,400 |
+
+**`block_tokens: 500000` in config is the conservative *fallback* used only when the model's context window is unavailable from the registry.** It is not the universal default. The fallback is intentionally conservative so an unknown model does not silently inherit a wide band.
+
+The hard `hard_block_tokens: 1000000` ceiling stays as an immutable safety cap on top of the derived band — even a 5M-context model never exceeds the 1M ceiling. The derived block value is bounded above by the hard ceiling; the hard-block check fires first if a request crosses 1M.
+
+When the dynamic path is unavailable (unknown model, lookup error), the audit row's `threshold_hit` field reads `block_tokens_fallback>=<N> ...` so operators can see that dynamic derivation didn't apply for that request.
+
+#### Currently-known frontier models
+
+The registry ships with context-window data for current frontier-class models:
+
+- **Anthropic Claude:** all 3.x and 4.x lines (Opus, Sonnet, Haiku) at 200K.
+- **OpenAI:** gpt-4.1 family at ~1M; gpt-4o at 128K; o1/o3/o4-mini at 200K; gpt-3.5-turbo at 16K; gpt-4 at 8K.
+- **Google Gemini:** Pro lines at 2M; Flash lines at 1M.
+
+Local/open-source models (Llama, Mistral, Phi, Gemma, Qwen, DeepSeek, etc.) are not in this registry — local-model context handling lives in the SDK's separate budgeting helper. For local-model traffic that flows through the proxy, the configured `block_tokens` fallback applies.
+
+#### Advanced override
+
+If you need a non-default ratio, the public API exposes `derive_block_threshold(max_context, ratio=0.80, fallback_tokens=None)` for testing and custom integrations:
+
+```python
+from tokenpak.proxy.spend_guard import derive_block_threshold
+derive_block_threshold(200_000)            # → 160_000
+derive_block_threshold(1_000_000, ratio=0.5)  # → 500_000
+derive_block_threshold(None, fallback_tokens=200_000)  # → 200_000
+```
+
+The default ratio 0.80 is published as `tokenpak.proxy.spend_guard.DEFAULT_BLOCK_RATIO`.
 
 ---
 
