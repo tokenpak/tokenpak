@@ -287,3 +287,58 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Step 5: Record clean publish event for the release-gate state cache
+  # ─────────────────────────────────────────────────────────────────────
+  #
+  # Post-publish gate-state sync:
+  #
+  # The canonical release-gate state cache lives on the operator host
+  # outside the repo. This job uploads a small artifact recording the
+  # publish event ({tag, sha, run_id, timestamp}); a separate operator-side
+  # helper polls the GitHub API for completed Release TokenPak runs,
+  # downloads the artifact, and idempotently writes the corresponding
+  # increment row + updates the cache row.
+  #
+  # Idempotency contract: the operator-side helper inserts only if no row
+  # exists for this tag with cause='auto_publish_clean'. Re-running the
+  # helper (or re-uploading the artifact) is a no-op.
+  #
+  # Gate parity: this job MUST run only when `publish` ran (i.e., real tag
+  # push, non-prerelease). Manual workflow_dispatch preflight runs and
+  # rc/alpha/beta tag pushes do NOT record a publish event — the gate
+  # counter only decrements on real, clean, non-prerelease publishes.
+  record-publish:
+    name: Record Publish Event
+    runs-on: ubuntu-latest
+    needs: publish
+    if: ${{ github.event_name == 'push' && !contains(github.ref, 'rc') && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') }}
+    steps:
+      - name: Compose publish-event payload
+        id: payload
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          SHA="${GITHUB_SHA}"
+          RUN_ID="${GITHUB_RUN_ID}"
+          TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p publish-event
+          cat > publish-event/event.json <<EOF
+          {
+            "tag": "${TAG}",
+            "sha": "${SHA}",
+            "run_id": "${RUN_ID}",
+            "timestamp": "${TIMESTAMP}",
+            "cause": "auto_publish_clean"
+          }
+          EOF
+          echo "Publish event:"
+          cat publish-event/event.json
+
+      - name: Upload publish-event artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-event
+          path: publish-event/
+          retention-days: 90
