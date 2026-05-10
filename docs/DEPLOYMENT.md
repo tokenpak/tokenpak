@@ -770,7 +770,7 @@ sudo rm -rf /etc/tokenpak
 
 ## See Also
 
-- [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) — FAQ, common errors, performance tuning
+- [Troubleshooting](troubleshooting.md) — FAQ, common errors, performance tuning
 - [ARCHITECTURE.md](../ARCHITECTURE.md) — internals and design decisions
-- [API.md](../API.md) — proxy API reference
-- [docs/guides/team-server.md](guides/team-server.md) — shared team proxy setup
+- [API Reference](API_REFERENCE.md) — proxy API reference
+- [Team Server Setup](guides/team-server.md) — shared team proxy setup

@@ -8,7 +8,7 @@ Welcome to the TokenPak docs. Start here, then dive into specifics.
 |-------|-------------|
 | [Getting Started](getting-started.md) | Install and run in 5 minutes |
 | [CLI Reference](cli-reference.md) | All commands and flags |
-| [API Reference](API.md) | Python API for programmatic use |
+| [API Reference](API_REFERENCE.md) | Python API for programmatic use |
 
 ## Operations
 
