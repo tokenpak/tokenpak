@@ -28,6 +28,7 @@ Authority:
 
 from __future__ import annotations
 
+from ._context_window import get_model_max_context
 from .contracts import (
     GuardOutcome,
     PendingRequest,
@@ -36,7 +37,13 @@ from .contracts import (
     TIPDirective,
 )
 from .estimator import estimate as estimate_request
-from .policy import decide as decide_policy
+from .policy import (
+    DEFAULT_BLOCK_RATIO,
+    derive_block_threshold,
+)
+from .policy import (
+    decide as decide_policy,
+)
 
 __all__ = [
     "GuardOutcome",
@@ -46,6 +53,9 @@ __all__ = [
     "TIPDirective",
     "estimate_request",
     "decide_policy",
+    "derive_block_threshold",
+    "DEFAULT_BLOCK_RATIO",
+    "get_model_max_context",
     "evaluate",
 ]
 

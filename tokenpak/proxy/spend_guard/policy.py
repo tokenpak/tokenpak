@@ -12,10 +12,15 @@ projected tokens and projected cost against four configurable bands:
 - ``hard_block`` — cannot be released; even ``[TIP: bypass=on]`` does not
   override (proposal §4 second example).
 
-Defaults match Kevin's 2026-05-07 overrides on the published proposal:
+Default thresholds:
     warn:        100,000 tokens / $2.00
-    block:       500,000 tokens / $10.00     (proposal had 250,000 / $5)
-    hard_block: 1,000,000 tokens / $50.00
+    block:       derived dynamically — 80% of selected model's max context
+                 (e.g. 200K context → 160K block; 1M context → 800K block).
+                 The configured ``block_tokens`` value (default 500,000) is
+                 the conservative *fallback* used only when the model's
+                 context window is unavailable.
+    hard_block: 1,000,000 tokens / $50.00 — immutable safety cap on top of
+                 the derived block threshold.
 """
 
 from __future__ import annotations
@@ -24,6 +29,63 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .contracts import PreflightDecision, RiskEstimate, TIPDirective
+
+# Default fraction of a model's max context above which a request is held.
+# Centralized so callers (decide(), tests) reference one value.
+DEFAULT_BLOCK_RATIO: float = 0.80
+
+
+def derive_block_threshold(
+    model_max_context_tokens: Optional[int],
+    ratio: float = DEFAULT_BLOCK_RATIO,
+    fallback_tokens: Optional[int] = None,
+) -> Optional[int]:
+    """Derive the soft-block token threshold from a model's max context.
+
+    Pure function. No I/O. No global state. Trivially testable.
+
+    Returns ``floor(model_max_context_tokens * ratio)`` when the context is
+    known and positive. Returns ``fallback_tokens`` when the context is
+    unknown (``None`` or non-positive) — the caller is then responsible for
+    deciding what to do with the fallback (the spend guard's caller layers
+    a final ``hard_block_tokens`` cap on whichever value is returned).
+
+    The result is also bounded to never exceed ``model_max_context_tokens``
+    (a ``ratio > 1`` is clamped to the model's max).
+
+    Args:
+        model_max_context_tokens: Max input+output context the selected
+            model accepts, in tokens. ``None`` or non-positive → fallback.
+        ratio: Fraction of context above which to block.
+            Default :data:`DEFAULT_BLOCK_RATIO` (0.80). Must be in (0, 1]
+            for the dynamic path; values outside that range fall through
+            to ``fallback_tokens``.
+        fallback_tokens: Returned when the dynamic path can't apply. May
+            itself be ``None`` — caller handles.
+
+    Returns:
+        Integer token threshold, or ``fallback_tokens`` (which may be
+        ``None``).
+
+    Examples::
+
+        derive_block_threshold(1_000_000)   # → 800_000
+        derive_block_threshold(  200_000)   # → 160_000
+        derive_block_threshold(  500_000)   # → 400_000
+        derive_block_threshold(None, fallback_tokens=500_000)   # → 500_000
+        derive_block_threshold(0,    fallback_tokens=500_000)   # → 500_000
+    """
+    if not isinstance(ratio, (int, float)) or ratio <= 0 or ratio > 1:
+        return fallback_tokens
+    if model_max_context_tokens is None:
+        return fallback_tokens
+    if not isinstance(model_max_context_tokens, int) or model_max_context_tokens <= 0:
+        return fallback_tokens
+    derived = int(model_max_context_tokens * ratio)
+    # Never exceed the model's context (defensive against ratio rounding).
+    if derived > model_max_context_tokens:
+        derived = model_max_context_tokens
+    return derived
 
 
 @dataclass
@@ -37,8 +99,15 @@ class SpendGuardConfig:
     enabled: bool = True
     warn_tokens: int = 100_000
     warn_cost_usd: float = 2.0
-    block_tokens: int = 500_000          # Kevin override, was 250_000
-    block_cost_usd: float = 10.0         # Kevin override, was 5.0
+    # ``block_tokens`` is the *fallback* soft-block threshold used only when
+    # the selected model's max context window is unknown to the registry
+    # (see ``_context_window.get_model_max_context``). When the model's
+    # context window IS known, the effective threshold is derived
+    # dynamically as 80% of that context — e.g. 200K context → 160K block,
+    # 1M context → 800K block. The configured fallback is intentionally
+    # conservative so unknown models do not silently inherit a large band.
+    block_tokens: int = 500_000
+    block_cost_usd: float = 10.0
     hard_block_tokens: int = 1_000_000
     hard_block_cost_usd: float = 50.0
     pending_ttl_seconds: int = 600
@@ -151,6 +220,7 @@ def decide(
     tip: Optional[TIPDirective] = None,
     *,
     session_running_cost_usd: float = 0.0,
+    model_max_context_tokens: Optional[int] = None,
 ) -> PreflightDecision:
     """Compare the estimate to thresholds and return a verdict.
 
@@ -161,7 +231,13 @@ def decide(
     2. TIP-declared ceiling, if present and within hard-block band.
        ``[TIP: allow=once max=$X]`` lets the request through provided
        ``estimate.projected_cost_usd <= X`` and ``X < hard_block_cost_usd``.
-    3. ``block`` — if EITHER cost OR tokens cross the block band.
+    3. ``block`` — if EITHER cost OR tokens cross the block band. The
+       block-tokens band derives dynamically from ``model_max_context_tokens``
+       when supplied (``80% × max_context``). When ``model_max_context_tokens``
+       is ``None``, the configured ``cfg.block_tokens`` fallback applies.
+       The effective block-tokens value is then capped by
+       ``cfg.hard_block_tokens`` so a 2M-context model never out-runs the
+       safety ceiling.
     4. ``warn`` — advisory only.
     5. ``allow`` — default.
     """
@@ -170,6 +246,27 @@ def decide(
 
     cost = estimate.projected_cost_usd
     tokens = estimate.projected_input_tokens + estimate.projected_output_tokens
+
+    # Resolve the effective block-tokens band for THIS request.
+    # - dynamic path: 80% of model max context (when known).
+    # - fallback path: cfg.block_tokens (configured static fallback).
+    # In both cases, the result is bounded above by cfg.hard_block_tokens
+    # so the immutable safety ceiling always wins.
+    derived_block_tokens = derive_block_threshold(
+        model_max_context_tokens,
+        ratio=DEFAULT_BLOCK_RATIO,
+        fallback_tokens=cfg.block_tokens,
+    )
+    if derived_block_tokens is None:
+        # Both dynamic + fallback unavailable; degrade to hard ceiling.
+        effective_block_tokens = cfg.hard_block_tokens
+        threshold_source = "block_tokens_unresolved"
+    elif model_max_context_tokens is not None and model_max_context_tokens > 0:
+        effective_block_tokens = min(derived_block_tokens, cfg.hard_block_tokens)
+        threshold_source = "block_tokens_dynamic"
+    else:
+        effective_block_tokens = min(derived_block_tokens, cfg.hard_block_tokens)
+        threshold_source = "block_tokens_fallback"
 
     # 1. Hard-block (immutable ceiling)
     if cost >= cfg.hard_block_cost_usd:
@@ -201,7 +298,7 @@ def decide(
         # band so a bare bypass=on can't swallow $40 silently.
         if tip.bypass and tip.max_cost_usd is None and tip.max_tokens is None:
             cost_ok = cost < cfg.block_cost_usd
-            tokens_ok = tokens < cfg.block_tokens
+            tokens_ok = tokens < effective_block_tokens
         if cost_ok and tokens_ok:
             return PreflightDecision(
                 decision="allow",
@@ -249,12 +346,19 @@ def decide(
             threshold_hit=f"block_cost_usd>={cfg.block_cost_usd}",
             risk=estimate,
         )
-    if tokens >= cfg.block_tokens:
+    if tokens >= effective_block_tokens:
         return PreflightDecision(
             decision="block",
             reason="projected_tokens_exceeded",
             requires_approval=True,
-            threshold_hit=f"block_tokens>={cfg.block_tokens}",
+            threshold_hit=(
+                f"{threshold_source}>={effective_block_tokens}"
+                + (
+                    f" max_context={model_max_context_tokens}"
+                    if model_max_context_tokens
+                    else ""
+                )
+            ),
             risk=estimate,
         )
 
