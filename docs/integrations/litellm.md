@@ -172,4 +172,4 @@ messages = blocks_to_messages(blocks, budget=4000)
 
 The long-term goal is a PR to [litellm/litellm](https://github.com/BerriAI/litellm)
 adding `tokenpak=` as a first-class parameter. This integration serves as the
-reference implementation. See `ROADMAP.md` for status.
+reference implementation. See `../roadmap.md` for status.

@@ -771,6 +771,6 @@ sudo rm -rf /etc/tokenpak
 ## See Also
 
 - [Troubleshooting](troubleshooting.md) — FAQ, common errors, performance tuning
-- [ARCHITECTURE.md](../ARCHITECTURE.md) — internals and design decisions
+- [ARCHITECTURE.md](architecture.md) — internals and design decisions
 - [API Reference](API_REFERENCE.md) — proxy API reference
 - [Team Server Setup](guides/team-server.md) — shared team proxy setup

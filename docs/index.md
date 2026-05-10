@@ -100,7 +100,7 @@ Then point your LLM client at `http://localhost:8766`. That's it. See [Getting S
 
 | Document | What It Covers |
 |----------|----------------|
-| [ARCHITECTURE.md](../ARCHITECTURE.md) | System design, compression pipeline, block registry |
+| [ARCHITECTURE.md](architecture.md) | System design, compression pipeline, block registry |
 | [Compression Deep Dive](compression.md) | How compression works, modes, recipes |
 | [Cache System](cache.md) | LRU cache, vault registry, change detection |
 
@@ -196,7 +196,7 @@ pytest
 | Search latency | **~23ms** |
 | Cold start overhead | **< 100ms** |
 
-See [ARCHITECTURE.md](../ARCHITECTURE.md) for benchmarks.
+See [ARCHITECTURE.md](architecture.md) for benchmarks.
 
 ---
 
