@@ -1,0 +1,828 @@
+[
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python 3.12"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Download baseline benchmarks"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Run compile benchmarks"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 5,
+    "step_id": null,
+    "step_name": "Check latency thresholds"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 6,
+    "step_id": null,
+    "step_name": "Generate benchmark report"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 7,
+    "step_id": null,
+    "step_name": "Regression detection vs baseline"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 8,
+    "step_id": null,
+    "step_name": "Format PR comment"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 9,
+    "step_id": null,
+    "step_name": "Post comment on PR"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 10,
+    "step_id": null,
+    "step_name": "Upload benchmark results"
+  },
+  {
+    "workflow": "benchmarks.yml",
+    "job": "benchmark",
+    "step_idx": 11,
+    "step_id": null,
+    "step_name": "Save baseline (main branch only)"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "cli-docs-check",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "Checkout repository"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "cli-docs-check",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "cli-docs-check",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install package (needed for the import chain pulled in by tokenpak.cli)"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "cli-docs-check",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Check CLI docs are current"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "docs-audit",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "Checkout repository"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "docs-audit",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Run doc audit script"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "headline-benchmark",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "Checkout repository"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "headline-benchmark",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "headline-benchmark",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "headline-benchmark",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Run headline benchmark"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "lint",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "Checkout repository"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "lint",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "lint",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "lint",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Lint with Ruff"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "slim-install-smoke",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "Checkout repository"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "slim-install-smoke",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "slim-install-smoke",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Run slim install smoke"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "Checkout repository"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python ${{ matrix.python-version }}"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Run unit tests"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Run Phase 2 coverage tests (Tier-1 modules)"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 5,
+    "step_id": null,
+    "step_name": "Check Tier-1 coverage gate (minimum 50%)"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 6,
+    "step_id": null,
+    "step_name": "Check overall coverage (minimum 45%)"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 7,
+    "step_id": null,
+    "step_name": "Upload coverage (Tier-1)"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 8,
+    "step_id": null,
+    "step_name": "Upload test results"
+  },
+  {
+    "workflow": "ci.yml",
+    "job": "test",
+    "step_idx": 9,
+    "step_id": null,
+    "step_name": "Upload Phase 2 test results"
+  },
+  {
+    "workflow": "determinism.yml",
+    "job": "determinism",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "Checkout"
+  },
+  {
+    "workflow": "determinism.yml",
+    "job": "determinism",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python"
+  },
+  {
+    "workflow": "determinism.yml",
+    "job": "determinism",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "determinism.yml",
+    "job": "determinism",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Run determinism tests (run ${{ matrix.run }})"
+  },
+  {
+    "workflow": "determinism.yml",
+    "job": "determinism",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Upload test results"
+  },
+  {
+    "workflow": "identity-language-check.yml",
+    "job": "identity-language",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "identity-language-check.yml",
+    "job": "identity-language",
+    "step_idx": 1,
+    "step_id": "changed",
+    "step_name": "Compute changed files"
+  },
+  {
+    "workflow": "identity-language-check.yml",
+    "job": "identity-language",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Scan for forbidden identity / language"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "breaking-change-detection",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "breaking-change-detection",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python 3.12"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "breaking-change-detection",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "breaking-change-detection",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Check config schema version"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "breaking-change-detection",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Detect CLI command renames (deprecation check)"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "breaking-change-detection",
+    "step_idx": 5,
+    "step_id": null,
+    "step_name": "Detect required config field additions (migration check)"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "chaos",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "chaos",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python ${{ matrix.python-version }}"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "chaos",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "chaos",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Run chaos tests"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "chaos",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Upload chaos coverage"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "coverage-gate",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "coverage-gate",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python 3.12"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "coverage-gate",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "coverage-gate",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Full test suite with combined coverage"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "coverage-gate",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Upload combined coverage"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "integration",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "integration",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python ${{ matrix.python-version }}"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "integration",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "integration",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Run integration tests"
+  },
+  {
+    "workflow": "integration.yml",
+    "job": "integration",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Upload integration coverage"
+  },
+  {
+    "workflow": "public-layout-check.yml",
+    "job": "layout",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "public-layout-check.yml",
+    "job": "layout",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Forbidden top-level paths"
+  },
+  {
+    "workflow": "public-layout-check.yml",
+    "job": "layout",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Required canonical entries present"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "build",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "build",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python 3.12"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "build",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install build tools"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "build",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Build wheel and sdist"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "build",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Verify package"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "build",
+    "step_idx": 5,
+    "step_id": null,
+    "step_name": "Assert dist/ purity (only .whl + .tar.gz)"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "build",
+    "step_idx": 6,
+    "step_id": null,
+    "step_name": "Generate checksums (outside dist/)"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "build",
+    "step_idx": 7,
+    "step_id": null,
+    "step_name": "Upload dist artifact (wheels + sdist only)"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "build",
+    "step_idx": 8,
+    "step_id": null,
+    "step_name": "Upload checksums artifact (SHA256SUMS only)"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "rehearsal-record",
+    "step_idx": 0,
+    "step_id": "outcome",
+    "step_name": "Determine outcome"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "rehearsal-record",
+    "step_idx": 1,
+    "step_id": "payload",
+    "step_name": "Compose rehearsal-event payload"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "rehearsal-record",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Upload rehearsal-event artifact"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "rehearsal-record",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Workflow summary"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "test",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "test",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python 3.12"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "test",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "test",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Run tests"
+  },
+  {
+    "workflow": "release-rehearsal.yml",
+    "job": "test",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Smoke test CLI"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python 3.12"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install build tools"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Build wheel and sdist"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Verify package"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 5,
+    "step_id": null,
+    "step_name": "Assert dist/ purity (only .whl + .tar.gz)"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 6,
+    "step_id": null,
+    "step_name": "Generate checksums (outside dist/)"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 7,
+    "step_id": null,
+    "step_name": "Upload dist artifact (wheels + sdist only)"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 8,
+    "step_id": null,
+    "step_name": "Upload checksums artifact (SHA256SUMS only)"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "publish",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "Download dist artifact only"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "publish",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Pre-publish dist/ purity guard"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "publish",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Publish to PyPI"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "record-publish",
+    "step_idx": 0,
+    "step_id": "payload",
+    "step_name": "Compose publish-event payload"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "record-publish",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Upload publish-event artifact"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "release",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "release",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Download dist artifact"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "release",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Download checksums artifact"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "release",
+    "step_idx": 3,
+    "step_id": "version",
+    "step_name": "Extract version from tag"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "release",
+    "step_idx": 4,
+    "step_id": "notes",
+    "step_name": "Generate release notes"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "release",
+    "step_idx": 5,
+    "step_id": null,
+    "step_name": "Create GitHub Release"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "test",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "test",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Set up Python 3.12"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "test",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Install dependencies"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "test",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Run tests"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "test",
+    "step_idx": 4,
+    "step_id": null,
+    "step_name": "Smoke test CLI"
+  },
+  {
+    "workflow": "repo-hygiene.yml",
+    "job": "hygiene",
+    "step_idx": 0,
+    "step_id": null,
+    "step_name": "actions/checkout@v4"
+  },
+  {
+    "workflow": "repo-hygiene.yml",
+    "job": "hygiene",
+    "step_idx": 1,
+    "step_id": null,
+    "step_name": "Check for internal filenames"
+  },
+  {
+    "workflow": "repo-hygiene.yml",
+    "job": "hygiene",
+    "step_idx": 2,
+    "step_id": null,
+    "step_name": "Check for hardcoded internal IPs"
+  },
+  {
+    "workflow": "repo-hygiene.yml",
+    "job": "hygiene",
+    "step_idx": 3,
+    "step_id": null,
+    "step_name": "Check for internal hostnames"
+  }
+]

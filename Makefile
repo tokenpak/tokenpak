@@ -18,7 +18,7 @@ MKDOCS      := $(VENV_BIN)/mkdocs
 UNAME := $(shell uname -s)
 
 # ── Phony targets ──────────────────────────────────────────────────────────────
-.PHONY: help dev test lint format check build docs clean install hooks benchmark-headline
+.PHONY: help dev test lint format check build docs clean install hooks benchmark-headline workflow-steps-snapshot workflow-steps-check
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:  ## Show this help message
@@ -113,3 +113,24 @@ clean:  ## Remove build artifacts, caches, and dist/
 clean-all: clean  ## Remove everything including venv
 	rm -rf $(VENV)
 	@echo "✅  Full clean (including venv)"
+
+# ── Workflow-step ratchet ─────────────────────────────────────────────────────
+# Regenerates and verifies the deterministic snapshot of every GitHub Actions
+# workflow step under .github/workflows/. The snapshot lives in
+# tokenpak/_snapshots/workflow-steps.json and is the canonical pin for the
+# release-gate workflow-as-code refactor isolation rule. See
+# tokenpak/_snapshots/README.md for the full ratchet protocol, including the
+# `removes-ci-step:` PR-body declaration required for any PR that removes a
+# workflow step.
+#
+# `workflow-steps-snapshot` REGENERATES the snapshot in place. Run this before
+# committing any change under .github/workflows/.
+#
+# `workflow-steps-check` VERIFIES the committed snapshot matches the current
+# workflow set. Exit 0 = no drift; exit 1 = drift detected (snapshot stale or
+# step removed without declaration).
+workflow-steps-snapshot:  ## Regenerate the workflow-step snapshot
+	$(PYTHON) scripts/snapshot-workflow-steps.py
+
+workflow-steps-check:  ## Verify the workflow-step snapshot matches current workflows
+	$(PYTHON) scripts/snapshot-workflow-steps.py --check
