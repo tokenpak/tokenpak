@@ -11,7 +11,7 @@ concurrency:
   group: benchmarks-${{ github.ref }}
   cancel-in-progress: true
 
-# The "Post comment on PR" step uses marocchino/sticky-pull-request-comment@v2
+# The "Post comment on PR" step uses marocchino/sticky-pull-request-comment@v3
 # which needs `pull-requests: write` to publish a benchmark summary back to
 # the PR. Without this, the step fails with "Resource not accessible by
 # integration" and tanks the whole job even though the actual benchmarks +
@@ -106,7 +106,7 @@ jobs:
 
       - name: Post comment on PR
         if: github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: tokenpak-benchmarks
           path: pr_comment.md
