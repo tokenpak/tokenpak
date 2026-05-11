@@ -148,7 +148,7 @@ jobs:
           if ! git merge-base --is-ancestor "${{ github.sha }}" origin/main; then
             echo "::error::Tag ${{ github.ref }} (sha ${{ github.sha }}) is not reachable from origin/main." >&2
             echo "::error::Public release tags MUST be on commits already merged to main via the documented promotion path." >&2
-            echo "::error::Per Std 21 §9.4: workbench → staging → public → tag/publish." >&2
+            echo "::error::Required path: workbench → staging → public → tag/publish (see CONTRIBUTING.md)." >&2
             exit 1
           fi
           echo "::notice::Tag ${{ github.ref }} verified on origin/main."
