@@ -29,8 +29,16 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import parse_qs, urlparse
+
+from tokenpak.companion.recall import (
+    LIST_LIMIT_DEFAULT,
+    PakListFilters,
+)
+
+if TYPE_CHECKING:  # noqa: F401 — types only used in string-quoted hints
+    from tokenpak.companion.recall import PakRow, RecallStore
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -86,9 +94,9 @@ def try_handle_get(handler: Any) -> bool:
     - ``/tpk/v1/*`` — the OSS app API (vault, budget, journal, capsules,
       models). This is the canonical proxy-owned read surface per glossary
       ``api-tpk-v1``.
-    - ``/pak/v1/*`` — the MultiPak Pro daemon protocol surface (Std 25 §2.1,
-      Std 32 §1.3). Stubs return ``not_implemented`` when the Pro daemon is
-      absent; ``status`` always works.
+    - ``/pak/v1/*`` — the MultiPak Pro daemon protocol surface. Stubs return
+      ``not_implemented`` when the Pro daemon is absent; ``status`` always
+      works.
     """
     parsed = urlparse(handler.path)
     path = parsed.path
@@ -794,7 +802,7 @@ def _handle_tokens_estimate(handler: Any, body: dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# /pak/v1/* — MultiPak Pro daemon protocol surface (Std 25 §2.1, Std 32 §1.3)
+# /pak/v1/* — MultiPak Pro daemon protocol surface
 # ---------------------------------------------------------------------------
 #
 # The /pak/v1/* namespace is distinct from /tpk/v1/* by design:
@@ -807,7 +815,7 @@ def _handle_tokens_estimate(handler: Any, body: dict[str, Any]) -> None:
 #                /pak/v1/status always works (diagnostic surface).
 #
 # Phase 1 OSS ships read-only Vault Pak inspection via the adapter; everything
-# else is a 501 stub gated on daemon presence per Std 25 §3.4 fallback contract.
+# else is a 501 stub gated on daemon presence per the daemon fallback contract.
 
 
 def _try_handle_pak_get(handler: Any, path: str, parsed: Any) -> bool:
@@ -826,6 +834,8 @@ def _try_handle_pak_get(handler: Any, path: str, parsed: Any) -> bool:
         )
         return True
 
+    qs = parse_qs(parsed.query or "")
+
     # ── /pak/v1/status ──────────────────────────────────────────────────
     # Diagnostic surface — works regardless of daemon presence. Mirrors the
     # `tokenpak pak status` CLI.
@@ -833,9 +843,18 @@ def _try_handle_pak_get(handler: Any, path: str, parsed: Any) -> bool:
         _handle_pak_status(handler)
         return True
 
+    # ── /pak/v1/list ─────────────────────────────────────────────────────
+    # Paginated listing of recall-store Pak metadata rows. OSS read path.
+    # Supports filter-by-project and filter-by-pak_type (both byte-literal),
+    # cursor-based pagination, and a hard cap of LIST_LIMIT_MAX rows/page.
+    if path == "/pak/v1/list":
+        _handle_pak_list(handler, qs)
+        return True
+
     # ── /pak/v1/inspect/<pak-id> ────────────────────────────────────────
     # Read-only Pak inspection. Vault Paks (pak_id starts with "vault:")
-    # are served via the OSS adapter; other subtypes require the daemon.
+    # are served via the OSS adapter; other ``pak_id`` values fall back to a
+    # recall-store metadata lookup and return 404 if unknown.
     # ``#`` is URL-significant (fragment delimiter) and is mandatory in
     # vault block IDs — clients MUST percent-encode as ``%23``; the handler
     # decodes via :func:`urllib.parse.unquote` to recover the canonical id.
@@ -862,17 +881,17 @@ def _try_handle_pak_post(handler: Any, path: str) -> bool:
         return True
 
     # ── POST /pak/v1/promote ────────────────────────────────────────────
-    # Pro-gated capture pipeline (Std 32 §4). When the Pro daemon is
-    # reachable, forward the request body to the daemon's loopback port
-    # and proxy the response back. When the daemon is absent or
-    # unreachable, return the standardized 501 ``pro_daemon_required``.
+    # Pro-gated capture pipeline. When the Pro daemon is reachable, forward
+    # the request body to the daemon's loopback port and proxy the response
+    # back. When the daemon is absent or unreachable, return the standardized
+    # 501 ``pro_daemon_required``.
     if path == "/pak/v1/promote":
         _handle_pak_promote_forward(handler)
         return True
 
     # ── POST /pak/v1/recall ─────────────────────────────────────────────
-    # Pro-only per Std 32 §1.3 row 8. Always 501 in OSS; the daemon owns
-    # ranking, hydration, and packaging.
+    # Pro-only. Always 501 in OSS; the daemon owns ranking, hydration, and
+    # packaging.
     if path == "/pak/v1/recall":
         _send_pak_not_implemented(
             handler,
@@ -893,8 +912,8 @@ def _try_handle_pak_post(handler: Any, path: str) -> bool:
 def _handle_pak_promote_forward(handler: Any) -> None:
     """Forward POST /pak/v1/promote to the Pro daemon's loopback port.
 
-    Std 32 §4 capture pipeline lives in the closed-source daemon. The
-    OSS proxy's job here is to:
+    The capture pipeline lives in the closed-source daemon. The OSS proxy's
+    job here is to:
 
     1. Probe daemon presence via ``daemon_probe.detect_daemon_state``.
     2. If absent → return 501 ``pro_daemon_required``.
@@ -905,9 +924,9 @@ def _handle_pak_promote_forward(handler: Any) -> None:
     Defensive details:
 
     - The auth headers from the caller are NOT forwarded to the daemon.
-      The daemon is loopback-only by construction (Std 25 §2.1), so
-      it requires no auth on /pak/v1/*; passing the OSS caller's auth
-      headers through would leak them into the daemon's logs needlessly.
+      The daemon is loopback-only by construction, so it requires no auth
+      on /pak/v1/*; passing the OSS caller's auth headers through would
+      leak them into the daemon's logs needlessly.
     - Short timeout (5s). The daemon is local; if it's not responding
       within that, we treat it as TOCTOU race (probe said active,
       daemon stopped between probe and forward) and return 503.
@@ -1013,9 +1032,10 @@ def _send_pak_not_implemented(
 
     The shape is stable across all Pro-gated endpoints so clients can
     treat ``error == "not_implemented"`` + ``reason`` as the canonical
-    "daemon absent" signal. ``daemon_state`` mirrors Std 25 §3.4 telemetry
-    so callers can disambiguate "Pro never installed" from "Pro present
-    but version-incompatible" once Phase 2 ships.
+    "daemon absent" signal. ``daemon_state`` mirrors the daemon
+    fallback-contract telemetry so callers can disambiguate "Pro never
+    installed" from "Pro present but version-incompatible" once Phase 2
+    ships.
     """
     from tokenpak.licensing.daemon_probe import detect_daemon_state
 
@@ -1032,6 +1052,146 @@ def _send_pak_not_implemented(
     )
 
 
+def _handle_pak_list(handler: Any, qs: dict[str, list[str]]) -> None:
+    """GET /pak/v1/list — paginated metadata listing from the recall store.
+
+    Query parameters (all optional):
+        project     — filter rows by exact ``project`` value (byte-literal).
+        pak_type    — filter rows by exact ``pak_type`` value (byte-literal).
+        limit       — page size; clamped to ``[1, LIST_LIMIT_MAX]`` (default
+                      ``LIST_LIMIT_DEFAULT``). Invalid integers yield 400.
+        cursor      — opaque token returned by a previous response; resumes
+                      after the row it identifies. Invalid cursors yield 400.
+
+    Response shape (always — including the empty page):
+
+        {
+          "items":       [<pak metadata dict>, ...],
+          "next_cursor": "<token>" | null,
+          "limit":       <int, the effective limit>,
+          "truncated":   true | false
+        }
+
+    ``items`` is metadata only: no body bytes, no anchors, no full text.
+    ``next_cursor`` is non-null whenever more rows match the filters than
+    fit on this page (i.e. ``truncated`` is true). When ``truncated`` is
+    false, ``next_cursor`` is always null.
+    """
+    # Parse + clamp limit ------------------------------------------------------
+    limit_raw = (qs.get("limit", [""]) or [""])[0]
+    if limit_raw == "":
+        limit_arg = LIST_LIMIT_DEFAULT
+    else:
+        try:
+            limit_arg = int(limit_raw)
+        except ValueError:
+            _send_error(
+                handler,
+                400,
+                "invalid_request",
+                f"limit must be an integer (got {limit_raw!r})",
+            )
+            return
+        if limit_arg < 1:
+            _send_error(
+                handler,
+                400,
+                "invalid_request",
+                "limit must be >= 1",
+            )
+            return
+
+    project = (qs.get("project", [None]) or [None])[0]
+    pak_type = (qs.get("pak_type", [None]) or [None])[0]
+    cursor = (qs.get("cursor", [None]) or [None])[0]
+
+    filters = PakListFilters(
+        project=project,
+        pak_type=pak_type,
+        limit=limit_arg,
+        cursor=cursor,
+    )
+
+    try:
+        store = _open_recall_store_default()
+    except Exception as exc:
+        _send_error(
+            handler,
+            500,
+            "internal_error",
+            f"recall store unavailable: {exc}",
+        )
+        return
+
+    try:
+        try:
+            result = store.list_paks(filters)
+        except ValueError as exc:
+            # Invalid cursor surface — keep client-facing wording neutral.
+            _send_error(handler, 400, "invalid_request", str(exc))
+            return
+    finally:
+        store.close()
+
+    _send_json(
+        handler,
+        200,
+        {
+            "items": [_pak_row_to_dict(r) for r in result.items],
+            "next_cursor": result.next_cursor,
+            "limit": result.limit,
+            "truncated": result.truncated,
+        },
+    )
+
+
+def _pak_row_to_dict(row: "PakRow") -> dict[str, Any]:
+    """Serialise a :class:`PakRow` into the wire-shape dict.
+
+    Field set is exactly the ``paks`` schema columns — no derived fields,
+    no body bytes, no anchor refs. Nullable columns surface as ``null``
+    via the standard JSON encoder.
+    """
+    return {
+        "pak_id": row.pak_id,
+        "pak_type": row.pak_type,
+        "project": row.project,
+        "topic": row.topic,
+        "source_type": row.source_type,
+        "authority": row.authority,
+        "title": row.title,
+        "summary": row.summary,
+        "content_hash": row.content_hash,
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+        "superseded_by": row.superseded_by,
+    }
+
+
+def _open_recall_store_default() -> "RecallStore":
+    """Open the recall store at its default location.
+
+    Wrapped so test code can monkey-patch this single function rather
+    than reach into ``tokenpak.companion.recall`` directly.
+    """
+    from tokenpak.companion.recall import open_recall_store
+
+    return open_recall_store()
+
+
+def _recall_get_pak(pak_id: str) -> Optional["PakRow"]:
+    """Convenience: open store, fetch one row, close store.
+
+    Used by ``_handle_pak_inspect`` non-vault fallback. Lifted out so
+    tests can patch the open path independently from the inspect logic.
+    """
+    store = _open_recall_store_default()
+    try:
+        return store.get_pak(pak_id)
+    finally:
+        store.close()
+
+
 def _handle_pak_status(handler: Any) -> None:
     """GET /pak/v1/status — diagnostic snapshot.
 
@@ -1039,7 +1199,7 @@ def _handle_pak_status(handler: Any) -> None:
     a configured Pak store. Provides the four signals a CLI / dashboard
     needs to render Pro readiness:
 
-    - ``daemon_state`` — Std 25 §3.4 fallback-contract value.
+    - ``daemon_state`` — fallback-contract value emitted by the probe.
     - ``multipak_enabled`` — config flag (``pro.multipak.enabled``).
     - ``pak_store_present`` — does ``~/.tokenpak/pro/state/multipak/``
       exist on disk?
@@ -1082,9 +1242,17 @@ def _handle_pak_status(handler: Any) -> None:
 def _handle_pak_inspect(handler: Any, pak_id: str) -> None:
     """GET /pak/v1/inspect/<pak-id> — return a Pak's serialized form.
 
-    Vault Paks (``pak_id`` starts with ``vault:``) are served by the OSS
-    Vault Pak adapter — no daemon needed. Other subtypes require the
-    daemon (Phase 2+) and return 501.
+    Resolution order:
+
+    1. If ``pak_id`` starts with ``vault:`` the OSS Vault Pak adapter
+       serves it from the vault index. Returns 404 if the underlying
+       block isn't indexed.
+    2. Otherwise the OSS recall store is consulted for a metadata row.
+       Returns 200 with the row's metadata if present, 404 if not.
+
+    No surface beyond this lookup is exposed by the OSS endpoint — the
+    body bytes of a Pak are not part of the metadata index by design
+    (the index is content-hash-keyed, not content-bearing).
     """
     if not pak_id:
         _send_error(handler, 400, "invalid_request", "pak_id required")
@@ -1131,26 +1299,40 @@ def _handle_pak_inspect(handler: Any, pak_id: str) -> None:
             )
             return
 
-    # Non-Vault subtypes: daemon required.
-    _send_pak_not_implemented(
-        handler,
-        reason="pro_daemon_required",
-        detail=(
-            f"Inspecting Pak {pak_id!r} requires the Pro daemon "
-            "(non-Vault subtypes are encrypted at rest)."
-        ),
-    )
+    # Non-vault id — consult the OSS recall metadata store. A hit returns
+    # the metadata row; a miss returns 404. No further fallback in OSS.
+    try:
+        row = _recall_get_pak(pak_id)
+    except Exception as exc:
+        _send_error(
+            handler,
+            500,
+            "internal_error",
+            f"recall lookup failed: {exc}",
+        )
+        return
+
+    if row is None:
+        _send_error(
+            handler,
+            404,
+            "pak_not_found",
+            f"no Pak with pak_id {pak_id!r}",
+        )
+        return
+
+    _send_json(handler, 200, _pak_row_to_dict(row))
 
 
 def _read_multipak_enabled() -> bool:
     """Read ``pro.multipak.enabled`` from ``~/.tokenpak/config.yaml``.
 
-    Default ``False`` per Std 32 §13.1 Decision #6 (opt-in until 1-week
-    soak post-bootstrap). Resilient to missing/malformed config — never
-    raises; failures degrade to ``False``.
+    Default ``False`` (opt-in until the 1-week soak post-bootstrap
+    completes). Resilient to missing/malformed config — never raises;
+    failures degrade to ``False``.
 
     Lookup order:
-    1. ``pro.multipak.enabled`` (Std 25 §2.1 Pro-config layout)
+    1. ``pro.multipak.enabled`` (canonical Pro-config layout).
     2. ``multipak.enabled`` (legacy/unscoped fallback — accepted but not
        canonical; configs should migrate).
     """

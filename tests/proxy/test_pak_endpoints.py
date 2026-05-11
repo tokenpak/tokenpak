@@ -252,13 +252,37 @@ def test_inspect_empty_pak_id_returns_400():
     assert h.response_status() == 400
 
 
-def test_inspect_non_vault_returns_501_not_implemented():
+def test_inspect_non_vault_unknown_returns_404_oss_safe(tmp_path, monkeypatch):
+    """Non-vault inspect with no matching recall row → 404, OSS-safe wording.
+
+    Per PR 3 decision 2: ``pro_daemon_required`` 501 is removed entirely
+    from the OSS inspect surface. A non-vault ``pak_id`` that has no
+    metadata row in the recall store yields the same 404 contract as
+    any other read miss. No Pro / daemon / license wording leaks from
+    this path.
+    """
+    from tokenpak.companion.recall import RecallStore
+    from tokenpak.proxy import app_endpoints
+
+    store_path = tmp_path / "recall.db"
+    with RecallStore.open(store_path):
+        pass  # empty store
+    monkeypatch.setattr(
+        app_endpoints,
+        "_open_recall_store_default",
+        lambda: RecallStore.open(store_path),
+    )
+
     h = _get("/pak/v1/inspect/journal:s1:42")
-    assert h.response_status() == 501
+    assert h.response_status() == 404
     body = h.response_json()
-    assert body["error"] == "not_implemented"
-    assert body["reason"] == "pro_daemon_required"
-    assert body["daemon_state"] == "unavailable"
+    assert body["error"] == "pak_not_found"
+    # OSS-safe — no Pro / daemon / license wording leaks here.
+    blob = json.dumps(body).lower()
+    assert "pro_daemon_required" not in blob
+    assert "pro daemon" not in blob
+    assert "tokenpak-paid" not in blob
+    assert "license" not in blob
 
 
 def test_inspect_vault_returns_404_when_block_not_indexed():
@@ -311,6 +335,282 @@ def test_inspect_vault_returns_pak_when_indexed(tmp_path):
 def test_inspect_unknown_endpoint_returns_404():
     h = _get("/pak/v1/inspectoid/x")
     assert h.response_status() == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /pak/v1/list — PR 3 OSS list surface
+# ---------------------------------------------------------------------------
+#
+# Decisions from PR 3 review (2026-05-11):
+#   1. Response envelope: {items, next_cursor, limit, truncated} (always).
+#   2. No ``pro_daemon_required`` 501 anywhere on the OSS list path.
+#   3. Filter key is byte-literal ``?pak_type=...`` (no alias expansion).
+#   4. Default + cap = 100; surplus triggers ``truncated=true`` + cursor.
+#
+# These tests inject a tmp ``RecallStore`` via the
+# ``_open_recall_store_default`` shim so the suite never depends on the
+# user's real recall.db.
+
+
+def _patch_recall_store(monkeypatch, tmp_path, seed_rows: list[dict] | None = None):
+    """Replace the default recall-store opener with one pointing at a
+    freshly-seeded tmp DB. Returns the resolved DB path for follow-up
+    assertions.
+    """
+    from tokenpak.companion.recall import RecallStore
+    from tokenpak.proxy import app_endpoints
+
+    store_path = tmp_path / "recall.db"
+    with RecallStore.open(store_path) as store:
+        for r in (seed_rows or []):
+            store.upsert_pak(**r)
+
+    monkeypatch.setattr(
+        app_endpoints,
+        "_open_recall_store_default",
+        lambda: RecallStore.open(store_path),
+    )
+    return store_path
+
+
+def _list_seed_row(
+    pak_id: str,
+    *,
+    now: str,
+    pak_type: str = "vault",
+    project: str | None = "alpha",
+    source_type: str = "doc",
+    authority: str = "llm_generated",
+) -> dict:
+    return {
+        "pak_id": pak_id,
+        "pak_type": pak_type,
+        "source_type": source_type,
+        "authority": authority,
+        "title": f"title-{pak_id}",
+        "content_hash": (pak_id * 4)[:32],
+        "project": project,
+        "now": now,
+    }
+
+
+def test_list_envelope_shape_on_empty_store(tmp_path, monkeypatch, require_fts5):
+    """Decision 1 — even an empty store returns the cursor-pagination envelope.
+
+    No bare array, no missing keys; ``next_cursor`` is ``null`` and
+    ``truncated`` is ``false``.
+    """
+    _patch_recall_store(monkeypatch, tmp_path)
+    h = _get("/pak/v1/list")
+    assert h.response_status() == 200
+    body = h.response_json()
+    assert set(body.keys()) == {"items", "next_cursor", "limit", "truncated"}
+    assert body["items"] == []
+    assert body["next_cursor"] is None
+    assert body["truncated"] is False
+    assert body["limit"] == 100  # decision 4 default
+
+
+def test_list_envelope_shape_with_rows(tmp_path, monkeypatch, require_fts5):
+    """Decision 1 — non-empty page still uses the envelope, never a bare array."""
+    _patch_recall_store(
+        monkeypatch,
+        tmp_path,
+        seed_rows=[
+            _list_seed_row("a", now="2026-05-11T10:00:00Z"),
+            _list_seed_row("b", now="2026-05-11T10:01:00Z"),
+        ],
+    )
+    h = _get("/pak/v1/list")
+    body = h.response_json()
+    assert h.response_status() == 200
+    assert isinstance(body["items"], list)
+    assert [r["pak_id"] for r in body["items"]] == ["b", "a"]
+    # Each item carries the metadata schema, not body bytes.
+    first = body["items"][0]
+    assert {
+        "pak_id",
+        "pak_type",
+        "project",
+        "topic",
+        "source_type",
+        "authority",
+        "title",
+        "summary",
+        "content_hash",
+        "created_at",
+        "updated_at",
+        "superseded_by",
+    } <= set(first.keys())
+    assert body["next_cursor"] is None
+    assert body["truncated"] is False
+
+
+def test_list_default_and_cap_at_100(tmp_path, monkeypatch, require_fts5):
+    """Decision 4 — default limit is 100; asking for more is clamped to 100."""
+    rows = [
+        _list_seed_row(f"r{i:03d}", now=f"2026-05-11T10:{i // 60:02d}:{i % 60:02d}Z")
+        for i in range(105)
+    ]
+    _patch_recall_store(monkeypatch, tmp_path, seed_rows=rows)
+
+    # No limit → default 100.
+    h = _get("/pak/v1/list")
+    body = h.response_json()
+    assert body["limit"] == 100
+    assert len(body["items"]) == 100
+    assert body["truncated"] is True
+    assert body["next_cursor"] is not None
+
+    # Explicit cap-exceeding limit → silently clamped, no error.
+    h2 = _get("/pak/v1/list?limit=500")
+    body2 = h2.response_json()
+    assert body2["limit"] == 100
+    assert len(body2["items"]) == 100
+    assert body2["truncated"] is True
+
+
+def test_list_smaller_limit_truncates_when_more_remain(
+    tmp_path, monkeypatch, require_fts5
+):
+    """Decision 4 — sub-cap limit still surfaces truncated + cursor when more rows match."""
+    _patch_recall_store(
+        monkeypatch,
+        tmp_path,
+        seed_rows=[
+            _list_seed_row("a", now="2026-05-11T10:00:00Z"),
+            _list_seed_row("b", now="2026-05-11T10:01:00Z"),
+            _list_seed_row("c", now="2026-05-11T10:02:00Z"),
+        ],
+    )
+    h = _get("/pak/v1/list?limit=2")
+    body = h.response_json()
+    assert body["limit"] == 2
+    assert [r["pak_id"] for r in body["items"]] == ["c", "b"]
+    assert body["truncated"] is True
+    assert body["next_cursor"] is not None
+
+
+def test_list_cursor_round_trip_completes_page(
+    tmp_path, monkeypatch, require_fts5
+):
+    """Decision 1 + 4 — feeding ``next_cursor`` back yields the remainder."""
+    _patch_recall_store(
+        monkeypatch,
+        tmp_path,
+        seed_rows=[
+            _list_seed_row("a", now="2026-05-11T10:00:00Z"),
+            _list_seed_row("b", now="2026-05-11T10:01:00Z"),
+            _list_seed_row("c", now="2026-05-11T10:02:00Z"),
+            _list_seed_row("d", now="2026-05-11T10:03:00Z"),
+        ],
+    )
+    page1 = _get("/pak/v1/list?limit=2").response_json()
+    cursor = page1["next_cursor"]
+    assert cursor
+
+    # URL-encode the cursor (urlsafe-b64 has no special chars, but be defensive).
+    from urllib.parse import quote
+
+    page2 = _get(f"/pak/v1/list?limit=2&cursor={quote(cursor)}").response_json()
+    assert [r["pak_id"] for r in page2["items"]] == ["b", "a"]
+    assert page2["truncated"] is False
+    assert page2["next_cursor"] is None
+
+
+def test_list_pak_type_filter_byte_literal(tmp_path, monkeypatch, require_fts5):
+    """Decision 3 — ``?pak_type=`` matches exactly, no alias / casefold expansion."""
+    _patch_recall_store(
+        monkeypatch,
+        tmp_path,
+        seed_rows=[
+            _list_seed_row("a", now="2026-05-11T10:00:00Z", pak_type="vault"),
+            _list_seed_row("b", now="2026-05-11T10:01:00Z", pak_type="interaction"),
+            _list_seed_row("c", now="2026-05-11T10:02:00Z", pak_type="vault"),
+        ],
+    )
+
+    only_vault = _get("/pak/v1/list?pak_type=vault").response_json()
+    assert [r["pak_id"] for r in only_vault["items"]] == ["c", "a"]
+
+    only_inter = _get("/pak/v1/list?pak_type=interaction").response_json()
+    assert [r["pak_id"] for r in only_inter["items"]] == ["b"]
+
+    # ``project`` value MUST NOT alias-expand to ``vault`` at this layer.
+    alias_miss = _get("/pak/v1/list?pak_type=project").response_json()
+    assert alias_miss["items"] == []
+
+    # Casefold is not honored — PR 3 byte-literal contract.
+    casefold_miss = _get("/pak/v1/list?pak_type=VAULT").response_json()
+    assert casefold_miss["items"] == []
+
+
+def test_list_project_filter_byte_literal(tmp_path, monkeypatch, require_fts5):
+    """``?project=`` is also byte-literal in PR 3."""
+    _patch_recall_store(
+        monkeypatch,
+        tmp_path,
+        seed_rows=[
+            _list_seed_row("a", now="2026-05-11T10:00:00Z", project="alpha"),
+            _list_seed_row("b", now="2026-05-11T10:01:00Z", project="beta"),
+            _list_seed_row("c", now="2026-05-11T10:02:00Z", project="alpha"),
+        ],
+    )
+    only_alpha = _get("/pak/v1/list?project=alpha").response_json()
+    assert [r["pak_id"] for r in only_alpha["items"]] == ["c", "a"]
+
+
+def test_list_invalid_limit_returns_400(tmp_path, monkeypatch, require_fts5):
+    """Non-integer ``limit`` → 400 invalid_request, not a 500 / silent fallback."""
+    _patch_recall_store(monkeypatch, tmp_path)
+    h = _get("/pak/v1/list?limit=not-an-int")
+    assert h.response_status() == 400
+    body = h.response_json()
+    assert body["error"] == "invalid_request"
+
+
+def test_list_zero_limit_returns_400(tmp_path, monkeypatch, require_fts5):
+    """``limit=0`` is rejected at the HTTP layer (storage clamps; HTTP refuses)."""
+    _patch_recall_store(monkeypatch, tmp_path)
+    h = _get("/pak/v1/list?limit=0")
+    assert h.response_status() == 400
+
+
+def test_list_invalid_cursor_returns_400(tmp_path, monkeypatch, require_fts5):
+    """A bogus cursor surfaces as 400 invalid_request (mapped from store ValueError)."""
+    _patch_recall_store(monkeypatch, tmp_path)
+    h = _get("/pak/v1/list?cursor=not-a-cursor!!!")
+    assert h.response_status() == 400
+    assert h.response_json()["error"] == "invalid_request"
+
+
+def test_list_rejects_non_localhost(tmp_path, monkeypatch, require_fts5):
+    """Auth gate matches every other /pak/v1/* surface."""
+    _patch_recall_store(monkeypatch, tmp_path)
+    h = _get("/pak/v1/list", client_ip="10.0.0.1")
+    assert h.response_status() == 401
+
+
+def test_list_no_pro_wording_anywhere(tmp_path, monkeypatch, require_fts5):
+    """Decision 2 scope-guard — no Pro / daemon / license wording leaks
+    from the OSS list response, regardless of empty / non-empty / cursor state.
+    """
+    _patch_recall_store(
+        monkeypatch,
+        tmp_path,
+        seed_rows=[_list_seed_row("a", now="2026-05-11T10:00:00Z")],
+    )
+    blob = json.dumps(_get("/pak/v1/list").response_json()).lower()
+    for forbidden in (
+        "pro_daemon_required",
+        "pro daemon",
+        "tokenpak-paid",
+        "license",
+        "cloud",
+        "sync",
+        "pricing",
+    ):
+        assert forbidden not in blob, f"OSS leak: {forbidden!r} appeared in /pak/v1/list response"
 
 
 # ---------------------------------------------------------------------------

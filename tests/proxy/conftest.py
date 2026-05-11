@@ -15,12 +15,41 @@ from __future__ import annotations
 
 import json
 import socket
+import sqlite3
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Generator
 
 import pytest
+
+# ---------------------------------------------------------------------------
+# FTS5 availability — shared with the /pak/v1/list HTTP coverage which opens
+# RecallStore (FTS5 virtual table is created at open time).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def fts5_available() -> bool:
+    """``True`` iff the linked SQLite build has FTS5 compiled in."""
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute("CREATE VIRTUAL TABLE _probe USING fts5(x)")
+    except sqlite3.OperationalError:
+        return False
+    finally:
+        conn.close()
+    return True
+
+
+@pytest.fixture
+def require_fts5(fts5_available: bool) -> None:
+    """Skip a /pak/v1/list test that needs FTS5 when it isn't compiled in."""
+    if not fts5_available:
+        pytest.skip(
+            "FTS5 extension not compiled into this SQLite build; "
+            "skipping /pak/v1/list HTTP coverage that opens RecallStore."
+        )
 
 # ---------------------------------------------------------------------------
 # Paths to canned fixture responses

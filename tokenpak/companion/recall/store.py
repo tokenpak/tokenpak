@@ -12,12 +12,18 @@ The module exposes:
 - ``RecallStore.upsert_pak(...)`` — metadata-only write path. Inserts a
   new row keyed on ``pak_id`` or replaces the existing row's metadata
   in place. The v2 FTS triggers keep ``paks_fts`` consistent.
+- ``RecallStore.list_paks(filters)`` — metadata-only read path. Returns
+  a paginated :class:`PakListResult` ordered newest-first. Caps page
+  size at ``LIST_LIMIT_MAX``; supports keyset pagination via opaque
+  cursor tokens.
+- ``RecallStore.get_pak(pak_id)`` — single-row metadata fetch, or ``None``.
 - ``open_recall_store(path)`` — convenience factory that resolves the
   default DB location when ``path`` is ``None``.
-- ``UpsertResult`` — NamedTuple describing the outcome of an upsert.
+- ``UpsertResult`` / ``PakRow`` / ``PakListFilters`` / ``PakListResult``
+  — NamedTuple records describing inputs / outputs.
 
-This module does *not* expose any read / query / recall surface; that
-is deferred to a later phase.
+This module does *not* expose any ranking, scoring, or full-text
+search surface; those are deferred to a later phase.
 
 Default DB path resolution
 --------------------------
@@ -37,13 +43,14 @@ on so cascade behaviour from the schema fires as expected.
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from types import TracebackType
-from typing import NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 
 from tokenpak.companion.recall.migrations import apply_migrations, current_version
 from tokenpak.companion.recall.schema import SCHEMA_VERSION
@@ -63,6 +70,84 @@ _REQUIRED_FIELDS: tuple[str, ...] = (
     "title",
     "content_hash",
 )
+
+
+# Pagination bounds for ``list_paks``. The default and the maximum are the
+# same: callers asking for more than ``LIST_LIMIT_MAX`` rows are silently
+# clamped, and callers passing nothing get the same page size.
+LIST_LIMIT_DEFAULT: int = 100
+LIST_LIMIT_MAX: int = 100
+
+
+# Column order used by ``list_paks`` and ``get_pak`` — kept aligned with
+# the :class:`PakRow` field order so the rowset can be splat into the
+# NamedTuple constructor positionally.
+_PAK_COLUMNS: str = (
+    "pak_id, pak_type, project, topic, source_type, authority, "
+    "title, summary, content_hash, created_at, updated_at, superseded_by"
+)
+
+
+class PakRow(NamedTuple):
+    """A single ``paks`` row, as read by :meth:`RecallStore.list_paks` /
+    :meth:`RecallStore.get_pak`.
+
+    Field order matches :data:`_PAK_COLUMNS` so a positional unpack of
+    the SQLite row builds the record without translation. ``project``,
+    ``topic``, and ``superseded_by`` are nullable in the schema; the
+    rest are required.
+    """
+
+    pak_id: str
+    pak_type: str
+    project: Optional[str]
+    topic: Optional[str]
+    source_type: str
+    authority: str
+    title: str
+    summary: str
+    content_hash: str
+    created_at: str
+    updated_at: str
+    superseded_by: Optional[str]
+
+
+class PakListFilters(NamedTuple):
+    """Inputs to :meth:`RecallStore.list_paks`.
+
+    Attributes:
+        project: When set, restrict rows to ``project = <value>``. Byte-literal
+            match — no alias expansion.
+        pak_type: When set, restrict rows to ``pak_type = <value>``. Byte-literal
+            match — no alias expansion.
+        limit: Requested page size. Clamped to ``[1, LIST_LIMIT_MAX]``.
+        cursor: Opaque pagination cursor returned by a previous call. ``None``
+            on the first page.
+    """
+
+    project: Optional[str] = None
+    pak_type: Optional[str] = None
+    limit: int = LIST_LIMIT_DEFAULT
+    cursor: Optional[str] = None
+
+
+class PakListResult(NamedTuple):
+    """Outputs from :meth:`RecallStore.list_paks`.
+
+    Attributes:
+        items: The rows on this page, newest-first.
+        next_cursor: Opaque cursor to pass to the next call, or ``None``
+            when no more rows match the filters.
+        limit: The effective page size used (after clamping).
+        truncated: ``True`` if more rows match the filters than this page
+            returned. Always implies ``next_cursor`` is not ``None`` when
+            ``items`` is non-empty.
+    """
+
+    items: list[PakRow]
+    next_cursor: Optional[str]
+    limit: int
+    truncated: bool
 
 
 class UpsertResult(NamedTuple):
@@ -311,6 +396,104 @@ class RecallStore:
 
         return UpsertResult(pak_id=pak_id, inserted=inserted, body_changed=body_changed)
 
+    # Metadata read surface -------------------------------------------------
+
+    def list_paks(self, filters: Optional[PakListFilters] = None) -> PakListResult:
+        """Return a paginated page of ``paks`` rows, newest-first.
+
+        Page ordering is ``(updated_at DESC, pak_id DESC)`` — the latter is
+        the tiebreak when two rows share an ``updated_at``. Pagination is
+        keyset-based: the cursor encodes the last row's ``(updated_at, pak_id)``
+        tuple so the next page can resume without offsets (which scale poorly
+        and skip rows under concurrent writes).
+
+        Filters compose with ``AND``. ``project`` and ``pak_type`` are
+        byte-literal — the schema column value must equal the filter
+        verbatim. No alias / casefold / normalisation is applied.
+
+        Parameters:
+            filters: A :class:`PakListFilters` record. If ``None``, defaults
+                are used (no filters, full page).
+
+        Returns:
+            :class:`PakListResult`. ``items`` is a possibly-empty list of
+            :class:`PakRow`. ``truncated`` is ``True`` iff more rows match
+            than fit on this page; in that case ``next_cursor`` is the
+            cursor to use to fetch the next page. The ``limit`` field
+            reports the effective limit after clamping.
+
+        Raises:
+            ValueError: ``filters.cursor`` is set and not a valid opaque
+                cursor.
+        """
+        f = filters if filters is not None else PakListFilters()
+
+        # Clamp limit to [1, LIST_LIMIT_MAX]. Non-positive values fall back
+        # to the default rather than rejecting — defensive.
+        raw_limit = f.limit if isinstance(f.limit, int) and f.limit > 0 else LIST_LIMIT_DEFAULT
+        limit = min(raw_limit, LIST_LIMIT_MAX)
+
+        where_clauses: list[str] = []
+        params: list[Any] = []
+        if f.project is not None:
+            where_clauses.append("project = ?")
+            params.append(f.project)
+        if f.pak_type is not None:
+            where_clauses.append("pak_type = ?")
+            params.append(f.pak_type)
+        if f.cursor:
+            cur_ts, cur_id = _decode_cursor(f.cursor)
+            # Keyset for ORDER BY updated_at DESC, pak_id DESC: the next page
+            # starts strictly after (cur_ts, cur_id) in that DESC ordering —
+            # i.e. (updated_at, pak_id) is less than the cursor's tuple.
+            where_clauses.append(
+                "(updated_at < ? OR (updated_at = ? AND pak_id < ?))"
+            )
+            params.extend([cur_ts, cur_ts, cur_id])
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        sql = (
+            f"SELECT {_PAK_COLUMNS} FROM paks "
+            f"{where_sql} "
+            "ORDER BY updated_at DESC, pak_id DESC "
+            "LIMIT ?"
+        )
+        # Fetch one more than the limit so we can detect truncation without
+        # a separate COUNT query.
+        params.append(limit + 1)
+        rows = self._conn.execute(sql, params).fetchall()
+        truncated = len(rows) > limit
+        if truncated:
+            rows = rows[:limit]
+        items: list[PakRow] = [PakRow(*row) for row in rows]
+        next_cursor: Optional[str] = None
+        if truncated and items:
+            last = items[-1]
+            next_cursor = _encode_cursor(last.updated_at, last.pak_id)
+        return PakListResult(
+            items=items,
+            next_cursor=next_cursor,
+            limit=limit,
+            truncated=truncated,
+        )
+
+    def get_pak(self, pak_id: str) -> Optional[PakRow]:
+        """Return the ``paks`` row for ``pak_id``, or ``None`` if absent.
+
+        Whitespace-only or empty ``pak_id`` returns ``None`` rather than
+        running the SELECT — the schema rejects empty primary keys at
+        write time, so a lookup on one is unambiguously a miss.
+        """
+        if not pak_id or not pak_id.strip():
+            return None
+        row = self._conn.execute(
+            f"SELECT {_PAK_COLUMNS} FROM paks WHERE pak_id = ?",
+            (pak_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return PakRow(*row)
+
     def close(self) -> None:
         """Close the underlying connection.
 
@@ -347,7 +530,45 @@ def _short_hash(value: object) -> str:
     return s[:12] + ("…" if len(s) > 12 else "")
 
 
+# Cursor encode/decode --------------------------------------------------------
+#
+# The cursor is an opaque token to the caller: the only contract is that
+# passing a cursor returned by a previous call yields the rows that would
+# have come on the next page. The encoding chosen here is base64 of
+# ``"<updated_at>|<pak_id>"`` — short, URL-safe, and easy to decode in
+# tests without exposing the schema-level keyset detail.
+
+_CURSOR_SEP = "|"
+
+
+def _encode_cursor(updated_at: str, pak_id: str) -> str:
+    raw = f"{updated_at}{_CURSOR_SEP}{pak_id}".encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_cursor(cursor: str) -> tuple[str, str]:
+    if not isinstance(cursor, str) or not cursor:
+        raise ValueError("invalid cursor: empty or non-string")
+    # Re-pad — ``urlsafe_b64encode`` may have produced a token without
+    # trailing ``=`` after the ``rstrip`` step above.
+    pad = (-len(cursor)) % 4
+    padded = cursor + ("=" * pad)
+    try:
+        raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ValueError(f"invalid cursor: {exc!r}") from exc
+    parts = raw.split(_CURSOR_SEP, 1)
+    if len(parts) != 2:
+        raise ValueError("invalid cursor: missing separator")
+    return parts[0], parts[1]
+
+
 __all__ = [
+    "LIST_LIMIT_DEFAULT",
+    "LIST_LIMIT_MAX",
+    "PakListFilters",
+    "PakListResult",
+    "PakRow",
     "RecallStore",
     "UpsertResult",
     "default_recall_db_path",
