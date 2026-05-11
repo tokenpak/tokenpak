@@ -53,7 +53,7 @@ class TestRunawayBlocks:
     def test_runaway_blocks_then_replay(self, tmp_db):
         cfg, _ = tmp_db
         # 600K-token user message → blocks
-        runaway = _opus_body(2_400_000, max_tokens=4000)
+        runaway = _opus_body(740_000, max_tokens=4000)
         out_block = evaluate(runaway, "claude-opus-4-7", "sess-replay", {},
                              config=cfg)
         assert out_block.kind == "block"
@@ -67,7 +67,7 @@ class TestRunawayBlocks:
 
     def test_runaway_blocks_then_cancel(self, tmp_db):
         cfg, _ = tmp_db
-        runaway = _opus_body(2_400_000, max_tokens=4000)
+        runaway = _opus_body(740_000, max_tokens=4000)
         out_block = evaluate(runaway, "claude-opus-4-7", "sess-cancel", {},
                              config=cfg)
         assert out_block.kind == "block"
@@ -82,7 +82,7 @@ class TestRunawayBlocks:
 
     def test_ambiguous_re_prompts(self, tmp_db):
         cfg, _ = tmp_db
-        runaway = _opus_body(2_400_000, max_tokens=4000)
+        runaway = _opus_body(740_000, max_tokens=4000)
         evaluate(runaway, "claude-opus-4-7", "sess-amb", {}, config=cfg)
         out = evaluate(_opus_body("I'm thinking about it"), "claude-opus-4-7",
                        "sess-amb", {}, config=cfg)
@@ -92,7 +92,10 @@ class TestRunawayBlocks:
 class TestTIPDirectivesE2E:
     def test_tip_allow_once_bypasses(self, tmp_db):
         cfg, _ = tmp_db
-        body = _opus_body("[TIP: allow=once max=$15] " + "x" * 2_400_000,
+        # 740K chars / 4 ≈ 185K tokens → in [180K, 200K) → soft block
+        # under v1.5.2 defaults (90% ≤ projected_input < 100%). TIP
+        # allow=once with sufficient ceiling clears the soft block.
+        body = _opus_body("[TIP: allow=once max=$15] " + "x" * 740_000,
                           max_tokens=4000)
         out = evaluate(body, "claude-opus-4-7", "sess-tip-allow", {},
                        config=cfg)
@@ -113,7 +116,7 @@ class TestTIPDirectivesE2E:
 
     def test_tip_cancel_discards_pending(self, tmp_db):
         cfg, _ = tmp_db
-        runaway = _opus_body(2_400_000)
+        runaway = _opus_body(740_000)
         evaluate(runaway, "claude-opus-4-7", "sess-tip-cancel", {}, config=cfg)
         out = evaluate(_opus_body("[TIP: cancel] never mind"), "claude-opus-4-7",
                        "sess-tip-cancel", {}, config=cfg)
@@ -139,7 +142,7 @@ class TestAntiLoop:
         # Use a different session for each iteration's first block; same
         # request_hash should hit the anti-loop cache. We verify by
         # checking the audit log for 'anti_loop_hit' events.
-        runaway = _opus_body(2_400_000, max_tokens=4000)
+        runaway = _opus_body(740_000, max_tokens=4000)
         # First call — blocks normally, stores pending.
         evaluate(runaway, "claude-opus-4-7", "sess-loop-A", {}, config=cfg)
         # Different session, same body — anti-loop kicks in.
@@ -155,7 +158,7 @@ class TestAntiLoop:
 class TestConcurrentSessions:
     def test_session_a_blocked_does_not_affect_session_b(self, tmp_db):
         cfg, _ = tmp_db
-        runaway = _opus_body(2_400_000, max_tokens=4000)
+        runaway = _opus_body(740_000, max_tokens=4000)
         evaluate(runaway, "claude-opus-4-7", "sess-A", {}, config=cfg)
         # Session B small request — must still pass.
         out = evaluate(_opus_body("hi"), "claude-opus-4-7", "sess-B", {},
@@ -177,14 +180,14 @@ class TestDisabled:
 class TestAuditTrail:
     def test_block_writes_audit_row(self, tmp_db):
         cfg, db = tmp_db
-        runaway = _opus_body(2_400_000)
+        runaway = _opus_body(740_000)
         evaluate(runaway, "claude-opus-4-7", "sess-audit", {}, config=cfg)
         rows = query_recent(db, session_id="sess-audit", limit=10)
         assert any(r["event_type"] == "block" for r in rows)
 
     def test_replay_writes_audit_row(self, tmp_db):
         cfg, db = tmp_db
-        runaway = _opus_body(2_400_000)
+        runaway = _opus_body(740_000)
         evaluate(runaway, "claude-opus-4-7", "sess-audit2", {}, config=cfg)
         evaluate(_opus_body("yes"), "claude-opus-4-7", "sess-audit2", {},
                  config=cfg)

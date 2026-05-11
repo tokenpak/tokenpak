@@ -87,19 +87,46 @@ def _row_to_risk(row: dict) -> RiskEstimate:
     )
 
 
-class TestSpikeReplay:
-    """Canonical replay against the 2026-05-07 09:28-10:56 trace."""
+def _dollar_plane_cfg() -> SpendGuardConfig:
+    """Reconstruct the v1.5.1 dollar-plane default profile for tests that
+    exercise the LEGACY session-cumulative defense.
+
+    Under v1.5.2 defaults (Standard 29 §5, Kevin DECISION 2026-05-11 rev 2),
+    the dollar plane is opt-in only. These tests explicitly engage it to
+    keep regression coverage on the legacy band.
+    """
+    import warnings
+
+    from tokenpak.proxy.spend_guard.policy import load_config
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return load_config(raw_config={"spend_guard": {
+            "block_cost_usd": 10.0,
+            "hard_block_cost_usd": 50.0,
+            "session_block_cost_usd": 10.0,
+        }})
+
+
+class TestSpikeReplayLegacyDollarPlane:
+    """Replay against the 2026-05-07 09:28-10:56 trace under the LEGACY
+    dollar-plane profile (v1.5.1 defaults, now opt-in).
+
+    Kept as a regression on the legacy defense so the opt-in path remains
+    correct. The canonical v1.5.2 defense is exercised below in
+    :class:`TestSpikeReplayContextWindowPercent`.
+    """
 
     def test_per_request_alone_does_not_catch_spike(self):
-        """Confirm the per-request projection band can't catch the spike.
+        """Confirm the per-request dollar band can't catch the spike.
 
-        This is informational — proves session-cumulative is the relevant
-        defense. With Kevin's $10 per-request block threshold, NO single
-        spike row crosses it (max single-row spend is ~$1.25).
+        Informational — proves session-cumulative is the relevant defense
+        within the dollar plane. With the v1.5.1 $10 per-request block
+        threshold, NO single spike row crosses it (max single-row spend
+        is ~$1.25).
         """
         rows = _load_spike_rows()
-        cfg = SpendGuardConfig()  # session-cumulative DISABLED via override
-        cfg.session_block_cost_usd = 0.0
+        cfg = _dollar_plane_cfg()
+        cfg.session_block_cost_usd = 0.0  # isolate per-request behavior
         any_blocked = False
         for r in rows:
             d = decide(_row_to_risk(r), cfg)
@@ -107,15 +134,16 @@ class TestSpikeReplay:
                 any_blocked = True
                 break
         assert any_blocked is False, (
-            "Per-request alone caught the spike — defense level higher than "
-            "expected; tighten thresholds in the regression."
+            "Per-request dollar plane caught the spike — defense level "
+            "higher than expected; tighten thresholds in the regression."
         )
 
     def test_session_cumulative_blocks_before_10_dollars(self):
-        """Acceptance lock: session-cumulative blocks before $10 of spend."""
+        """Acceptance lock: session-cumulative dollar plane blocks before
+        $10 of spend when explicitly configured."""
         rows = _load_spike_rows()
-        cfg = SpendGuardConfig()
-        # Defaults: session_block_cost_usd=10.0, window=3600
+        cfg = _dollar_plane_cfg()
+        # Dollar plane: session_block_cost_usd=10.0, window=3600
 
         running = 0.0
         first_block_idx = None
@@ -133,23 +161,15 @@ class TestSpikeReplay:
                 first_block_running = running
                 first_block_ts = r["timestamp"]
                 break
-            # If allowed, the request would have been forwarded; the proxy
-            # would record its actual cost in monitor.db — i.e. the
-            # row['estimated_cost'] already reflects the post-call truth.
             running += r["estimated_cost"] or 0.0
 
         assert first_block_idx is not None, (
             "Session-cumulative did NOT block the spike — defense failed."
         )
-        # Acceptance: blocked before $10 cumulative spend.
         assert first_block_running < 10.0, (
             f"Block fired too late — running={first_block_running:.2f} at "
             f"index {first_block_idx} ({first_block_ts}); spec says < $10."
         )
-        # Sanity: blocked within the first ~10 minutes of the spike window.
-        # Spike started 09:28; with Kevin's $10 ceiling we expect the
-        # block to fire by the 09:35-09:40 bucket (running cost crosses
-        # $10 around minute 09:38 in the recorded trace).
         assert first_block_ts < "2026-05-07T09:40", (
             f"Block fired at {first_block_ts}; expected within first 12 min."
         )
@@ -159,7 +179,7 @@ class TestSpikeReplay:
         block, total wire-side spend never exceeds the threshold + the
         last (blocked) request's projected cost."""
         rows = _load_spike_rows()
-        cfg = SpendGuardConfig()
+        cfg = _dollar_plane_cfg()
 
         running = 0.0
         forwarded = 0.0
@@ -177,9 +197,79 @@ class TestSpikeReplay:
             forwarded += r["estimated_cost"] or 0.0
 
         assert blocked_at is not None
-        # The actual recorded spike total was ~$99.67. With 'no' on first
-        # block, we expect to forward less than $11 (the running cost just
-        # before block — which by definition is < $10 — plus zero replays).
         assert forwarded < 11.0, (
             f"Forwarded ${forwarded:.2f} before block; spec says < $11."
+        )
+
+
+class TestSpikeReplayContextWindowPercent:
+    """Canonical v1.5.2 replay — the per-request context-window-% basis
+    at 90% catches the spike pattern without any session-cumulative
+    bookkeeping.
+
+    Acceptance from the 2026-05-11 task packet §4:
+    > Regression: ``test_spend_guard_spike_replay.py`` must continue to
+    > flag the 2026-05-07 09:28-10:56 trace under the new 90% default —
+    > verify each large-context request in the spike pattern crosses the
+    > 90% line.
+
+    The spike pattern was characterized by repeated large-context calls
+    on Opus 4.7 (200K context) where each request's cached context was
+    near or above 180K (90% of 200K). The % basis catches those rows
+    per-request, no cumulative state required.
+    """
+
+    def test_at_least_one_spike_row_blocks_under_default(self):
+        """Under the v1.5.2 default profile, at least one row of the
+        recorded spike crosses the 90% context-window line."""
+        rows = _load_spike_rows()
+        cfg = SpendGuardConfig()  # v1.5.2 defaults — % basis at 90%
+        blocked_count = 0
+        first_block_ts = None
+        for r in rows:
+            est = _row_to_risk(r)
+            d = decide(est, cfg, model_max_context_tokens=200_000)
+            if d.decision in ("block", "hard_block"):
+                blocked_count += 1
+                if first_block_ts is None:
+                    first_block_ts = r["timestamp"]
+        assert blocked_count > 0, (
+            "Spike replay produced 0 blocks under v1.5.2 default policy. "
+            "The per-request context-window-% defense must catch at least "
+            "one large-context row in the recorded spike. If this assertion "
+            "fires, the spike trace shape may have changed, or the % basis "
+            "implementation regressed."
+        )
+        assert first_block_ts < "2026-05-07T10:00", (
+            f"First block fired at {first_block_ts}; expected during the "
+            "spike window (09:28..10:00)."
+        )
+
+    def test_total_forwarded_bounded_under_context_window_basis(self):
+        """If the user says 'no' on the first block, total wire-side spend
+        is bounded by the cost of pre-block rows.
+
+        The spike total was ~$99.67. Under the v1.5.2 % basis, the first
+        block fires when a row's context first crosses 180K — typically
+        well before $99 cumulative spend.
+        """
+        rows = _load_spike_rows()
+        cfg = SpendGuardConfig()  # v1.5.2 defaults
+        forwarded = 0.0
+        blocked_at = None
+        for r in rows:
+            est = _row_to_risk(r)
+            d = decide(est, cfg, model_max_context_tokens=200_000)
+            if d.decision in ("block", "hard_block"):
+                blocked_at = r["timestamp"]
+                break
+            forwarded += r["estimated_cost"] or 0.0
+        assert blocked_at is not None, (
+            "% basis did NOT block the spike under v1.5.2 defaults."
+        )
+        # The full spike was $99.67; we expect to forward well under that
+        # before the first context-window-% block fires.
+        assert forwarded < 99.0, (
+            f"Forwarded ${forwarded:.2f} before first % block; expected "
+            "substantially less than the unguarded $99.67 total."
         )

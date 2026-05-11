@@ -142,8 +142,27 @@ HTTP100_KEEPALIVE_ENABLED: bool = _cfg("features.http100_keepalive", False, "TOK
 # them visible to anyone grepping for tunables.
 # Authoritative behavior: tokenpak/proxy/spend_guard/policy.py:load_config()
 # Standard: standards/29-spend-guard-agent-contract.md §5
+# v1.5.2 (Kevin DECISION 2026-05-11 rev 2): default basis is
+# context-window-utilisation %. Dollar bands stay reachable as opt-in
+# profile overrides — see SPEND_GUARD_*_COST_USD knobs below.
 SPEND_GUARD_ENABLED: bool = _cfg(
     "spend_guard.enabled", True, "TOKENPAK_SPEND_GUARD_ENABLED", bool
+)
+SPEND_GUARD_DEFAULT_BASIS: str = _cfg(
+    "spend_guard.default_basis", "context_window_percent",
+    "TOKENPAK_SPEND_GUARD_DEFAULT_BASIS", str
+)
+SPEND_GUARD_DEFAULT_CONTEXT_WINDOW_PERCENT: int = _cfg(
+    "spend_guard.default_context_window_percent", 90,
+    "TOKENPAK_SPEND_GUARD_CONTEXT_WINDOW_PERCENT", int
+)
+SPEND_GUARD_HARD_STOP_CONTEXT_WINDOW_PERCENT: int = _cfg(
+    "spend_guard.hard_stop_context_window_percent", 100,
+    "TOKENPAK_SPEND_GUARD_HARD_STOP_CONTEXT_WINDOW_PERCENT", int
+)
+SPEND_GUARD_DOLLAR_CAP_ENABLED_BY_DEFAULT: bool = _cfg(
+    "spend_guard.dollar_cap_enabled_by_default", False,
+    "TOKENPAK_SPEND_GUARD_DOLLAR_CAP_ENABLED", bool
 )
 SPEND_GUARD_WARN_TOKENS: int = _cfg(
     "spend_guard.warn_tokens", 100_000, "TOKENPAK_SPEND_GUARD_WARN_TOKENS", int
@@ -154,17 +173,21 @@ SPEND_GUARD_WARN_COST_USD: float = _cfg(
 SPEND_GUARD_BLOCK_TOKENS: int = _cfg(
     "spend_guard.block_tokens", 500_000, "TOKENPAK_SPEND_GUARD_BLOCK_TOKENS", int
 )
+# Dollar bands default to 0.0 (disabled) under v1.5.2. The canonical
+# defense is the context-window-% basis; dollar caps are opt-in profile
+# overrides (Standard 29 §5.1). Setting any of these to a positive value
+# engages the dollar plane and emits a DeprecationWarning.
 SPEND_GUARD_BLOCK_COST_USD: float = _cfg(
-    "spend_guard.block_cost_usd", 10.0, "TOKENPAK_SPEND_GUARD_BLOCK_COST_USD", float
+    "spend_guard.block_cost_usd", 0.0, "TOKENPAK_SPEND_GUARD_BLOCK_COST_USD", float
 )
 SPEND_GUARD_HARD_BLOCK_TOKENS: int = _cfg(
     "spend_guard.hard_block_tokens", 1_000_000, "TOKENPAK_SPEND_GUARD_HARD_BLOCK_TOKENS", int
 )
 SPEND_GUARD_HARD_BLOCK_COST_USD: float = _cfg(
-    "spend_guard.hard_block_cost_usd", 50.0, "TOKENPAK_SPEND_GUARD_HARD_BLOCK_COST_USD", float
+    "spend_guard.hard_block_cost_usd", 0.0, "TOKENPAK_SPEND_GUARD_HARD_BLOCK_COST_USD", float
 )
 SPEND_GUARD_SESSION_BLOCK_COST_USD: float = _cfg(
-    "spend_guard.session_block_cost_usd", 10.0,
+    "spend_guard.session_block_cost_usd", 0.0,
     "TOKENPAK_SPEND_GUARD_SESSION_BLOCK_COST_USD", float
 )
 SPEND_GUARD_SESSION_WINDOW_SECONDS: int = _cfg(
