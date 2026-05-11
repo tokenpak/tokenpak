@@ -4,11 +4,14 @@
 This module is intentionally pure data: no I/O, no connections, no logic.
 Migrations import these constants; the migration runner is the only writer.
 
-Schema shape (PR 1 — foundation only, no recall behavior):
+Schema shape:
 - ``schema_version`` — single-row pin for the migration runner.
 - ``paks``           — metadata index for Pak records (no full content).
-- ``paks_fts``       — FTS5 virtual table over title + summary (foundation only;
-                       PR 1 leaves the table empty — write triggers land later).
+- ``paks_fts``       — FTS5 virtual table over title + summary.
+- ``paks_fts`` triggers (v2) — ``AFTER INSERT|UPDATE|DELETE`` on ``paks``
+                       keep the FTS shadow in lockstep with the metadata
+                       row. The triggers are the only write-side contract
+                       between ``paks`` and ``paks_fts``.
 - ``pak_anchors``    — anchor refs into source files / symbols / URLs.
 - ``pak_relations``  — supersession + dependency edges.
 
@@ -28,7 +31,7 @@ from __future__ import annotations
 
 from typing import Final
 
-SCHEMA_VERSION: Final[int] = 1
+SCHEMA_VERSION: Final[int] = 2
 """Latest schema version applied by the current code."""
 
 
@@ -141,3 +144,60 @@ EXPECTED_INDEXES_V1: Final[frozenset[str]] = frozenset(
     }
 )
 """Named indexes that must exist after v1 is applied."""
+
+
+# v2 — FTS shadow triggers ----------------------------------------------------
+#
+# The v2 migration adds three ``AFTER`` triggers on ``paks`` that keep the
+# ``paks_fts`` shadow table consistent with the metadata row. Only ``title``
+# and ``summary`` are mirrored — those are the only FTS columns.
+#
+# The ``UPDATE`` trigger is filtered to ``OF title, summary`` so cosmetic
+# updates (``updated_at`` alone, or unrelated columns like ``project``)
+# don't rewrite the FTS row needlessly.
+
+SQL_CREATE_PAKS_AI_FTS_TRIGGER: Final[str] = """
+CREATE TRIGGER IF NOT EXISTS paks_ai_fts
+AFTER INSERT ON paks BEGIN
+    INSERT INTO paks_fts (pak_id, title, summary)
+    VALUES (NEW.pak_id, NEW.title, COALESCE(NEW.summary, ''));
+END
+""".strip()
+
+
+SQL_CREATE_PAKS_AU_FTS_TRIGGER: Final[str] = """
+CREATE TRIGGER IF NOT EXISTS paks_au_fts
+AFTER UPDATE OF title, summary ON paks BEGIN
+    DELETE FROM paks_fts WHERE pak_id = OLD.pak_id;
+    INSERT INTO paks_fts (pak_id, title, summary)
+    VALUES (NEW.pak_id, NEW.title, COALESCE(NEW.summary, ''));
+END
+""".strip()
+
+
+SQL_CREATE_PAKS_AD_FTS_TRIGGER: Final[str] = """
+CREATE TRIGGER IF NOT EXISTS paks_ad_fts
+AFTER DELETE ON paks BEGIN
+    DELETE FROM paks_fts WHERE pak_id = OLD.pak_id;
+END
+""".strip()
+
+
+ALL_DDL_V2_TRIGGERS: Final[tuple[str, ...]] = (
+    SQL_CREATE_PAKS_AI_FTS_TRIGGER,
+    SQL_CREATE_PAKS_AU_FTS_TRIGGER,
+    SQL_CREATE_PAKS_AD_FTS_TRIGGER,
+)
+"""Statements introduced by the v2 migration (FTS shadow triggers).
+
+Each statement uses ``IF NOT EXISTS`` so re-application is safe."""
+
+
+EXPECTED_TRIGGERS_V2: Final[frozenset[str]] = frozenset(
+    {
+        "paks_ai_fts",
+        "paks_au_fts",
+        "paks_ad_fts",
+    }
+)
+"""Named triggers that must exist after v2 is applied."""

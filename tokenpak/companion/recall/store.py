@@ -1,16 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 """``RecallStore`` — opens (and lazily migrates) the recall storage database.
 
-PR-1 surface
-------------
-This module is intentionally minimal. It exposes:
+Surface
+-------
+The module exposes:
 
 - ``RecallStore`` — a thin wrapper around an ``sqlite3.Connection`` that
   knows how to open the file, apply PRAGMAs, run any pending migrations,
   and close. The underlying connection is exposed as ``self.conn`` for
-  later PRs to attach read/write helpers without changing this surface.
+  later code to attach further helpers without changing this surface.
+- ``RecallStore.upsert_pak(...)`` — metadata-only write path. Inserts a
+  new row keyed on ``pak_id`` or replaces the existing row's metadata
+  in place. The v2 FTS triggers keep ``paks_fts`` consistent.
 - ``open_recall_store(path)`` — convenience factory that resolves the
   default DB location when ``path`` is ``None``.
+- ``UpsertResult`` — NamedTuple describing the outcome of an upsert.
+
+This module does *not* expose any read / query / recall surface; that
+is deferred to a later phase.
 
 Default DB path resolution
 --------------------------
@@ -30,17 +37,53 @@ on so cascade behaviour from the schema fires as expected.
 
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from types import TracebackType
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from tokenpak.companion.recall.migrations import apply_migrations, current_version
 from tokenpak.companion.recall.schema import SCHEMA_VERSION
 
 _DEFAULT_REL_PATH = ".tokenpak/companion/recall.db"
 _ENV_VAR = "TOKENPAK_RECALL_DB"
+
+_log = logging.getLogger(__name__)
+
+
+# Required (non-empty, non-whitespace) fields on ``upsert_pak``.
+_REQUIRED_FIELDS: tuple[str, ...] = (
+    "pak_id",
+    "pak_type",
+    "source_type",
+    "authority",
+    "title",
+    "content_hash",
+)
+
+
+class UpsertResult(NamedTuple):
+    """The outcome of a single :meth:`RecallStore.upsert_pak` call.
+
+    Attributes:
+        pak_id: The stable identity the row was written under.
+        inserted: ``True`` if the row was newly created; ``False`` if an
+            existing row was updated in place.
+        body_changed: ``True`` iff an existing row's ``content_hash``
+            differed from the incoming value. Always ``False`` when
+            ``inserted`` is ``True``.
+    """
+
+    pak_id: str
+    inserted: bool
+    body_changed: bool
+
+
+def _utc_now_iso8601() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def default_recall_db_path() -> Path:
@@ -111,6 +154,163 @@ class RecallStore:
         """The schema version currently applied to the underlying DB."""
         return current_version(self._conn)
 
+    # Metadata write surface ------------------------------------------------
+
+    def upsert_pak(
+        self,
+        *,
+        pak_id: str,
+        pak_type: str,
+        source_type: str,
+        authority: str,
+        title: str,
+        content_hash: str,
+        summary: str = "",
+        project: Optional[str] = None,
+        topic: Optional[str] = None,
+        superseded_by: Optional[str] = None,
+        now: Optional[str] = None,
+    ) -> UpsertResult:
+        """Insert or update a single Pak metadata row.
+
+        The write is keyed on ``pak_id`` — that is the stable external
+        identity callers use to address a Pak. Behaviour:
+
+        - **No existing row** → INSERT. ``created_at`` and ``updated_at``
+          are both set to ``now`` (or the current UTC time if ``now``
+          is omitted).
+        - **Existing row, identical ``content_hash``** → metadata-only
+          UPDATE. ``created_at`` is preserved; ``updated_at`` is bumped.
+        - **Existing row, different ``content_hash``** → UPDATE that
+          replaces metadata and bumps ``content_hash`` / ``updated_at``.
+          A warning is emitted (``logging.WARNING``) because the source
+          object changed under the same identity; downstream audit /
+          versioning lands in a later PR.
+
+        Required (non-empty) fields are listed in ``_REQUIRED_FIELDS``;
+        ``ValueError`` is raised if any are missing or all-whitespace.
+
+        The FTS5 shadow is kept consistent by the v2 triggers — callers
+        do not write to ``paks_fts`` directly.
+
+        Parameters:
+            pak_id: Stable Pak identity (e.g. ``vault://block/foo``).
+            pak_type: Kind of Pak (e.g. ``vault``, ``code``).
+            source_type: Source classification (e.g. ``code``, ``doc``).
+            authority: Authority label for the source.
+            title: Short heading; indexed in FTS.
+            content_hash: Hex digest of the underlying body bytes.
+            summary: Short summary; indexed in FTS. Defaults to ``""``.
+            project: Optional project tag.
+            topic: Optional topic tag.
+            superseded_by: Optional ``pak_id`` of a superseding row.
+            now: Optional ISO-8601 UTC string for deterministic testing.
+
+        Returns:
+            :class:`UpsertResult` describing what happened.
+
+        Raises:
+            ValueError: One of the required fields was missing /
+                empty / whitespace-only.
+            sqlite3.IntegrityError: A FK constraint failed (e.g. an
+                unknown ``superseded_by``).
+        """
+        # Validation -------------------------------------------------------
+        values = {
+            "pak_id": pak_id,
+            "pak_type": pak_type,
+            "source_type": source_type,
+            "authority": authority,
+            "title": title,
+            "content_hash": content_hash,
+        }
+        for name in _REQUIRED_FIELDS:
+            v = values[name]
+            if v is None or not isinstance(v, str) or not v.strip():
+                raise ValueError(
+                    f"upsert_pak: required field {name!r} must be a non-empty string"
+                )
+        if summary is None:
+            summary = ""
+
+        ts = now if now is not None else _utc_now_iso8601()
+        conn = self._conn
+
+        # Transaction ------------------------------------------------------
+        # ``apply_migrations`` leaves the connection in autocommit mode
+        # (``isolation_level=None``); make BEGIN explicit so the lookup +
+        # write happen atomically and the FTS triggers fire as one unit.
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT content_hash FROM paks WHERE pak_id = ?",
+                (pak_id,),
+            ).fetchone()
+            if row is None:
+                conn.execute(
+                    "INSERT INTO paks ("
+                    "pak_id, pak_type, project, topic, source_type, authority, "
+                    "title, summary, content_hash, created_at, updated_at, superseded_by"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        pak_id,
+                        pak_type,
+                        project,
+                        topic,
+                        source_type,
+                        authority,
+                        title,
+                        summary,
+                        content_hash,
+                        ts,
+                        ts,
+                        superseded_by,
+                    ),
+                )
+                inserted = True
+                body_changed = False
+            else:
+                old_hash = row[0]
+                body_changed = old_hash != content_hash
+                conn.execute(
+                    "UPDATE paks SET "
+                    "pak_type = ?, project = ?, topic = ?, source_type = ?, "
+                    "authority = ?, title = ?, summary = ?, content_hash = ?, "
+                    "updated_at = ?, superseded_by = ? "
+                    "WHERE pak_id = ?",
+                    (
+                        pak_type,
+                        project,
+                        topic,
+                        source_type,
+                        authority,
+                        title,
+                        summary,
+                        content_hash,
+                        ts,
+                        superseded_by,
+                        pak_id,
+                    ),
+                )
+                inserted = False
+                if body_changed:
+                    _log.warning(
+                        "recall.upsert_pak: content_hash changed for pak_id=%s "
+                        "(old=%s new=%s); replacing metadata in place.",
+                        pak_id,
+                        _short_hash(old_hash),
+                        _short_hash(content_hash),
+                    )
+            conn.execute("COMMIT")
+        except Exception:
+            try:
+                conn.execute("ROLLBACK")
+            except sqlite3.OperationalError:
+                pass
+            raise
+
+        return UpsertResult(pak_id=pak_id, inserted=inserted, body_changed=body_changed)
+
     def close(self) -> None:
         """Close the underlying connection.
 
@@ -141,8 +341,15 @@ def open_recall_store(path: Optional[Path] = None) -> RecallStore:
     return RecallStore.open(path)
 
 
+def _short_hash(value: object) -> str:
+    """Render a hash for log lines without leaking the whole digest."""
+    s = "" if value is None else str(value)
+    return s[:12] + ("…" if len(s) > 12 else "")
+
+
 __all__ = [
     "RecallStore",
+    "UpsertResult",
     "default_recall_db_path",
     "open_recall_store",
     "SCHEMA_VERSION",

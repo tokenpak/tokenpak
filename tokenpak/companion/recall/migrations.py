@@ -29,7 +29,11 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import NamedTuple
 
-from tokenpak.companion.recall.schema import ALL_DDL_V1, SCHEMA_VERSION
+from tokenpak.companion.recall.schema import (
+    ALL_DDL_V1,
+    ALL_DDL_V2_TRIGGERS,
+    SCHEMA_VERSION,
+)
 
 
 class Migration(NamedTuple):
@@ -49,6 +53,11 @@ MIGRATIONS: tuple[Migration, ...] = (
         version=1,
         name="initial_schema",
         statements=ALL_DDL_V1,
+    ),
+    Migration(
+        version=2,
+        name="paks_fts_triggers",
+        statements=ALL_DDL_V2_TRIGGERS,
     ),
 )
 """Ordered tuple of all known migrations. New entries APPEND; never edit

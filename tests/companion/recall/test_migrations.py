@@ -123,9 +123,10 @@ def test_failure_inside_migration_does_not_advance_version(
         after = current_version(conn)
     finally:
         conn.close()
-    # The bad migration should NOT have advanced the version past v1.
+    # All clean migrations apply first, then v99 errors; the version is
+    # left at the latest clean migration (``SCHEMA_VERSION``), not past it.
     assert before == 0
-    assert after == SCHEMA_VERSION  # v1 applied before v99 errored
+    assert after == SCHEMA_VERSION
     assert after < 99
 
 
@@ -142,3 +143,70 @@ def test_db_at_newer_version_than_code_is_left_alone(tmp_path: Path, require_fts
     # Re-open with the current (older) code — must not regress.
     with RecallStore.open(db_path) as store:
         assert store.schema_version == 999
+
+
+# ----- v1 → v2 upgrade coverage --------------------------------------------
+
+def test_v2_applies_on_top_of_v1_only(tmp_path: Path, require_fts5: None) -> None:
+    """A DB seeded at v1 advances to v2 without re-running v1's DDL."""
+    db_path = tmp_path / "recall.db"
+
+    # Hand-roll a v1 database by applying only the first migration.
+    conn = sqlite3.connect(str(db_path))
+    try:
+        only_v1 = MIGRATIONS[0]
+        conn.execute("BEGIN")
+        for stmt in only_v1.statements:
+            conn.execute(stmt)
+        # Persist the v1 schema_version row by hand so the runner doesn't
+        # start from 0 the next time around.
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_version (id, version, applied_at) "
+            "VALUES (1, 1, ?)",
+            ("2026-05-11T00:00:00Z",),
+        )
+        conn.execute("COMMIT")
+        # Smoke-check the v1 state has no v2 triggers yet.
+        trig_before = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+    assert "paks_ai_fts" not in trig_before
+
+    # Now open via RecallStore: the runner should apply v2 only.
+    with RecallStore.open(db_path) as store:
+        assert store.schema_version == SCHEMA_VERSION  # i.e. 2
+        trig_after = {
+            r[0]
+            for r in store.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+            ).fetchall()
+        }
+    assert {"paks_ai_fts", "paks_au_fts", "paks_ad_fts"}.issubset(trig_after)
+
+
+def test_v2_is_idempotent_on_already_v2_db(tmp_path: Path, require_fts5: None) -> None:
+    """Re-opening a v2 DB does not re-run v2 (and does not error)."""
+    db_path = tmp_path / "recall.db"
+    with RecallStore.open(db_path) as first:
+        assert first.schema_version == SCHEMA_VERSION
+    with RecallStore.open(db_path) as second:
+        assert second.schema_version == SCHEMA_VERSION
+        trig = {
+            r[0]
+            for r in second.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+            ).fetchall()
+        }
+    assert {"paks_ai_fts", "paks_au_fts", "paks_ad_fts"}.issubset(trig)
+
+
+def test_schema_version_constant_is_v2() -> None:
+    """``SCHEMA_VERSION`` should track the v2 migration head."""
+    assert SCHEMA_VERSION == 2
+    assert MIGRATIONS[-1].version == 2
+    assert MIGRATIONS[-1].name == "paks_fts_triggers"
