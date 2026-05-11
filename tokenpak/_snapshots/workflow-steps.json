@@ -634,54 +634,75 @@
     "job": "build",
     "step_idx": 1,
     "step_id": null,
-    "step_name": "Set up Python 3.12"
+    "step_name": "Check action pins (peeled-commit or floating-tag only)"
   },
   {
     "workflow": "release.yml",
     "job": "build",
     "step_idx": 2,
     "step_id": null,
-    "step_name": "Install build tools"
+    "step_name": "Validate tag source (public-main ancestry)"
   },
   {
     "workflow": "release.yml",
     "job": "build",
     "step_idx": 3,
     "step_id": null,
-    "step_name": "Build wheel and sdist"
+    "step_name": "Set up Python 3.12"
   },
   {
     "workflow": "release.yml",
     "job": "build",
     "step_idx": 4,
     "step_id": null,
-    "step_name": "Verify package"
+    "step_name": "Install build tools"
   },
   {
     "workflow": "release.yml",
     "job": "build",
     "step_idx": 5,
     "step_id": null,
-    "step_name": "Assert dist/ purity (only .whl + .tar.gz)"
+    "step_name": "Build wheel and sdist"
   },
   {
     "workflow": "release.yml",
     "job": "build",
     "step_idx": 6,
     "step_id": null,
-    "step_name": "Generate checksums (outside dist/)"
+    "step_name": "Verify package"
   },
   {
     "workflow": "release.yml",
     "job": "build",
     "step_idx": 7,
     "step_id": null,
-    "step_name": "Upload dist artifact (wheels + sdist only)"
+    "step_name": "Assert dist/ purity (only .whl + .tar.gz)"
   },
   {
     "workflow": "release.yml",
     "job": "build",
     "step_idx": 8,
+    "step_id": null,
+    "step_name": "Generate checksums (outside dist/)"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 9,
+    "step_id": null,
+    "step_name": "Assert SHA256SUMS outside dist/"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 10,
+    "step_id": null,
+    "step_name": "Upload dist artifact (wheels + sdist only)"
+  },
+  {
+    "workflow": "release.yml",
+    "job": "build",
+    "step_idx": 11,
     "step_id": null,
     "step_name": "Upload checksums artifact (SHA256SUMS only)"
   },

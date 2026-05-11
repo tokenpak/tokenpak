@@ -106,6 +106,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ───────────────────────────────────────────────────────────────
+      # Release-gate hardening: action pin enforcement.
+      #
+      # Verifies that every `uses: <owner>/<repo>@<ref>` reference in
+      # .github/workflows/*.yml is either a full 40-char commit SHA or
+      # a non-hex floating ref (version tag, branch, slashed ref).
+      # Abbreviated SHA pins (7–39 hex chars) are rejected — see the
+      # script header for the rationale.
+      #
+      # Runs unconditionally on every release-workflow invocation
+      # (tag push or workflow_dispatch preflight) so an abbreviated-SHA
+      # pin that slips through PR review still fails before any build,
+      # release artifact, or PyPI publish.
+      # ───────────────────────────────────────────────────────────────
+      - name: Check action pins (peeled-commit or floating-tag only)
+        run: bash scripts/check-action-pins.sh
+
+      # ───────────────────────────────────────────────────────────────
+      # Release-gate hardening: tag-source validation.
+      #
+      # Public release tags MUST sit on a commit reachable from
+      # origin/main. The documented promotion path is:
+      #
+      #     workbench → staging PR → public PR → public main → tag
+      #
+      # A tag pushed against a feature branch (never merged) would
+      # otherwise auto-publish to PyPI without the public-PR gate.
+      # This step fails fast on that pattern.
+      #
+      # Skipped on `workflow_dispatch` preflight runs (no tag ref) and
+      # on non-`v*` tag pushes (e.g. release-rehearsal `rehearsal-*`
+      # tags, which are explicitly out of `on.push.tags` anyway but
+      # the guard is doubly safe).
+      # ───────────────────────────────────────────────────────────────
+      - name: Validate tag source (public-main ancestry)
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=200
+          if ! git merge-base --is-ancestor "${{ github.sha }}" origin/main; then
+            echo "::error::Tag ${{ github.ref }} (sha ${{ github.sha }}) is not reachable from origin/main." >&2
+            echo "::error::Public release tags MUST be on commits already merged to main via the documented promotion path." >&2
+            echo "::error::Per Std 21 §9.4: workbench → staging → public → tag/publish." >&2
+            exit 1
+          fi
+          echo "::notice::Tag ${{ github.ref }} verified on origin/main."
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
@@ -146,6 +193,34 @@ jobs:
           # See dist-purity contract on the build job.
           ( cd dist && sha256sum *.whl *.tar.gz ) > SHA256SUMS
           cat SHA256SUMS
+
+      # ───────────────────────────────────────────────────────────────
+      # Release-gate hardening: dist-purity ratchet on the checksum
+      # path. SHA256SUMS MUST live at repo root, never inside dist/.
+      # This is the exact v1.5.3 regression pattern (checksum file
+      # ended up in dist/, PyPI publish rejected the directory).
+      #
+      # The build-job `Assert dist/ purity` step already covers the
+      # general case (only .whl / .tar.gz in dist/); this step is a
+      # narrower, named guard against the specific SHA256SUMS-in-dist
+      # failure mode so the regression — if it ever recurs — produces
+      # a diagnostic message that names the failure rather than a
+      # generic "non-distribution files" line.
+      # ───────────────────────────────────────────────────────────────
+      - name: Assert SHA256SUMS outside dist/
+        run: |
+          set -euo pipefail
+          if [ -f dist/SHA256SUMS ]; then
+            echo "::error::SHA256SUMS detected inside dist/ — this is the v1.5.3 regression pattern." >&2
+            echo "       Checksum file MUST live at repo root, not inside dist/." >&2
+            ls -la dist/ >&2
+            exit 1
+          fi
+          if [ ! -f SHA256SUMS ]; then
+            echo "::error::SHA256SUMS missing from repo root after checksum generation." >&2
+            exit 1
+          fi
+          echo "::notice::SHA256SUMS is at repo root (outside dist/); dist-purity preserved on the checksum path."
 
       - name: Upload dist artifact (wheels + sdist only)
         uses: actions/upload-artifact@v4
