@@ -4,6 +4,28 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [v1.5.6] — 2026-05-11
+
+### Repository
+
+- **Release-workflow hardening.** Three workflow-level guards added to `release.yml`:
+  - **Tag-source validation.** A public release tag must point to a commit reachable from `origin/main`. Tags pushed against a feature branch (never merged) are rejected before any build or publish. Skipped on `workflow_dispatch` preflight runs and on non-`v*` tags (rehearsal tags).
+  - **Action-pin enforcement.** A new `scripts/check-action-pins.sh` scans every `uses: <owner>/<repo>@<ref>` reference in `.github/workflows/` and rejects abbreviated SHA pins (7–39 hex chars). Full 40-character commit SHAs and floating version-tag refs (e.g. `@v4`) remain allowed.
+  - **Checksum dist-purity guard.** A named step asserts that `SHA256SUMS` lives at the repository root, never inside `dist/`. The general dist-purity guard already covers this, but the named step produces a diagnostic that points at the v1.5.3 failure mode if it ever recurs.
+- **Workflow-step ratchet.** `tokenpak/_snapshots/workflow-steps.json` records the canonical step set for the release workflow; CI fails if a step is added or removed without an accompanying snapshot update.
+
+### Acceptance
+
+- `pytest tests/ -q --tb=short` is green on Python 3.10 / 3.11 / 3.12 / 3.13.
+- `pip install tokenpak==1.5.6` from a fresh virtualenv succeeds.
+- All public-surface guardrails (`Public layout check`, `Repo Hygiene Check`, `Identity & language check`, `CLI Docs Up-to-date`) pass on `main`.
+
+### No behavior change
+
+This release ships no runtime, CLI, or public-API behavior change. It is a release-workflow hardening patch and the first release cut on the hardened path.
+
+---
+
 ## [v1.5.5] — 2026-05-09
 
 ### Repository
