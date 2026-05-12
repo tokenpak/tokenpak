@@ -180,7 +180,8 @@ class RiskFlagEntry(NamedTuple):
     OSS callers may expose, persist, inspect, export, and validate
     ``severity="block"`` data; OSS does *not* enforce a Pro-style
     assembly refusal path on it — that enforcement is Pro Phase 3
-    Context Package builder behaviour. See Std 32 §13.1 Decision #11.
+    Context Package builder behaviour (OSS = data plane,
+    Pro = enforcement).
 
     Attributes:
         risk_flag: Snake_case enum identifier (e.g. ``"mandatory_context_missing"``).
@@ -658,7 +659,7 @@ class RecallStore:
         OSS exposes / persists / inspects / exports / validates
         ``severity="block"`` data. OSS does *not* implement an
         assembly-refusal path on it (that lives in the Pro Phase 3
-        Context Package builder, per Std 32 §13.1 Decision #11).
+        Context Package builder — OSS = data plane, Pro = enforcement).
 
         Parameters:
             pak_id: An existing row in ``paks``.

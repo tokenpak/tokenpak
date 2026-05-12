@@ -215,14 +215,14 @@ EXPECTED_TRIGGERS_V2: Final[frozenset[str]] = frozenset(
 #
 # Intentionally NOT added in this migration: any column on ``paks``, any
 # FTS5 index over reason_codes / risk_flags, any /pak/v1/list filtering by
-# reason or flag. Those would be a Pro-tier scoring surface (Std 32 §5.2)
-# and stay deferred to Pro Phase 2.
+# reason or flag. Those would be a Pro-tier scoring surface and stay
+# deferred to Pro Phase 2.
 #
-# References:
-#     - Std 32 §5.4 (reason-code registry) — codes catalogue.
-#     - Std 32 §5.5 (risk-flag registry) — flags catalogue + severity.
-#     - Std 25 §1.1 — TIP capabilities (incl. these join tables) must land
-#       in OSS before the Pro daemon can JOIN against them.
+# Catalogues live in the public ``tokenpak/registry`` repo:
+#     - schemas/tip/pak-reason-codes-v1.schema.json — reason codes.
+#     - schemas/tip/pak-risk-flags-v1.schema.json   — risk flags + severity.
+# Architectural invariant: TIP capabilities (incl. these join tables)
+# must land in OSS before the Pro daemon can JOIN against them.
 
 SQL_CREATE_PAK_REASON_CODES: Final[str] = """
 CREATE TABLE IF NOT EXISTS pak_reason_codes (

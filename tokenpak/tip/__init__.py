@@ -117,7 +117,7 @@ __all__ = [
     "TIP_TOOL_SCHEMA_STABILITY_V1",
     "TIP_CAPSULES_V1",
     "ALL_OPTIMIZATION_CAPABILITIES",
-    # MultiPak (Std 32):
+    # MultiPak:
     "TIP_PAK_CAPTURE",
     "TIP_PAK_INDEX",
     "TIP_PAK_RECALL",

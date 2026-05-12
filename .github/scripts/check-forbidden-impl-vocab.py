@@ -3,10 +3,9 @@
 """Forbidden Implementation Vocabulary check (advisory).
 
 Scans files changed in this pull request for compound-form vocabulary
-that exposes implementation strategy hints. The full rule lives in
-``01_PROJECTS/tokenpak/standards/08-naming-glossary.md`` → "Forbidden
-Implementation Vocabulary" (Std 08 addendum, ratified per Std 32 §13.1
-Decision #12).
+that exposes implementation strategy hints. The full rule lives in the
+project's naming glossary, "Forbidden Implementation Vocabulary"
+addendum (ratified 2026-05-11).
 
 Detection rule
 --------------
@@ -25,8 +24,8 @@ Case-insensitive, word-boundary anchored.
 Scope rule
 ----------
 **Delta-only** against the PR base ref (default ``origin/main``); legacy
-occurrences in untouched files are tolerated as historical debt per the
-Std 20 §9 precedent the identity-language-check workflow follows.
+occurrences in untouched files are tolerated as historical debt — mirrors
+the delta-style behavior of the sibling identity-language-check workflow.
 
 Rollout
 -------

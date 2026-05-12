@@ -26,12 +26,11 @@ from pathlib import Path
 import pytest
 
 from tokenpak.companion.recall import (
+    RISK_FLAG_SEVERITIES,
     ReasonCodeEntry,
     RecallStore,
-    RISK_FLAG_SEVERITIES,
     RiskFlagEntry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

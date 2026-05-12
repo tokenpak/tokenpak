@@ -11,13 +11,8 @@ This module defines the OSS-side schema for the Context Package and the
 Handoff Pak (which is a Context Package targeted at a specific external
 platform). The build engine that produces these packages lives in the
 ``tokenpak-paid`` daemon (closed source). The schema must land in OSS
-first — Std 25 §1.1 inviolable rule.
-
-See:
-- ``32-multipak-pro-architecture.md §6`` — context delivery levels.
-- ``32-multipak-pro-architecture.md §7`` — privacy/policy enforcement.
-- ``32-multipak-pro-architecture.md §10`` — coverage states.
-- PRD §17 — wire schema reference.
+first — an inviolable architectural rule preserving the open-tier vs.
+paid-tier boundary.
 """
 
 from __future__ import annotations
@@ -34,7 +29,7 @@ from typing import Any, Mapping, Optional
 class ContextLevel(IntEnum):
     """How much of each referenced Pak is materialized in the package.
 
-    Std 32 §6 + PRD §13. Levels are integer-ordered; higher = more content.
+    Levels are integer-ordered; higher = more content.
 
     - 0 ``no_memory``: empty package. Returned for general/unrelated requests.
     - 1 ``pointer_only``: candidate Pak IDs only, no content.
@@ -85,7 +80,7 @@ def parse_context_level(value: int | str) -> ContextLevel:
 class CoverageState(str, Enum):
     """Reported coverage of a Context Package vs. the requested intent.
 
-    Std 32 §10 + PRD §28. Every package emits a coverage state; consumers
+    Every package emits a coverage state; consumers
     use it to decide whether to warn the user, request clarification, or
     block downstream tool calls.
 
@@ -124,7 +119,7 @@ class CoverageConfidence(str, Enum):
 
 @dataclass(frozen=True)
 class CoverageReport:
-    """Per-package coverage scoring (Std 32 §10).
+    """Per-package coverage scoring.
 
     ``required_paks`` is the count the resolver determined were required to
     satisfy intent; ``included_paks`` is how many made it into the package.
@@ -146,7 +141,7 @@ class CoverageReport:
 class ContextScope:
     """Scoping fields on a package — mirrors :class:`PakScope` but for the
     package as a whole. ``user_scope`` is always ``local_user`` in v1
-    (no cross-tenant sharing — Std 32 §12)."""
+    (no cross-tenant sharing in this release)."""
 
     user_scope: str = "local_user"
     project_scope: Optional[str] = None
@@ -157,10 +152,9 @@ class ContextScope:
 class AnchorBlockPosition(str, Enum):
     """Where hydrated anchor snippets sit relative to the rest of the package.
 
-    Std 32 §5.6 (addendum). Read by the Pro Phase 3 Context Package
-    builder; OSS persistence + inspection treat the value transparently
-    per Std 32 §13.1 Decision #11 (OSS/Pro split: OSS = data surface,
-    Pro = enforcement).
+    Read by the Pro Phase 3 Context Package builder; OSS persistence +
+    inspection treat the value transparently (OSS/Pro split: OSS = data
+    surface, Pro = enforcement).
 
     - ``end``: anchor snippets appended after the main Pak content.
     - ``inline``: anchor snippets interleaved with their referencing block.
@@ -177,10 +171,10 @@ class OrderingHints:
     """Optional cache-aware ordering preferences for a Context Package.
 
     Additive within TIP-1.x — receivers that don't recognise the field
-    ignore it and produce a valid (just unoptimised) package per Std 31 §2.
+    ignore it and produce a valid (just unoptimised) package.
     The Pro Phase 3 Context Package builder is the authoritative consumer;
     OSS persists / inspects / exports / validates the field transparently
-    (Std 32 §13.1 Decision #12).
+    (OSS = data plane, Pro = enforcement).
 
     Attributes:
         stable_first: Place stable/reusable Pak content before volatile
@@ -194,7 +188,7 @@ class OrderingHints:
         anchor_block_position: Where hydrated anchor snippets sit (see
             :class:`AnchorBlockPosition`). Default ``END``.
 
-    Reference: Std 32 §5.6 (addendum) — ordering hints registry.
+    The supported hint fields are catalogued in the public registry.
     """
 
     stable_first: bool = True
@@ -244,7 +238,7 @@ class OrderingHints:
 
 @dataclass(frozen=True)
 class PolicyDecision:
-    """Records what the policy gate did (Std 32 §7 + the
+    """Records what the policy gate did (uses the
     ``tip.context.policy`` capability).
 
     ``blocked_pak_ids`` and ``blocked_anchor_ids`` are non-empty whenever
@@ -273,7 +267,7 @@ class ContextPackage:
 
     ``recall_query`` records the natural-language intent the package was
     built for (used for audit + telemetry; never sent on the license-
-    validation egress path per Std 32 §7.1).
+    validation egress path).
 
     ``memory_horizon`` is the time-scope the recall searched
     (``recent`` / ``historical`` / ``project_lifetime``); informational only.
@@ -291,10 +285,10 @@ class ContextPackage:
     memory_horizon: str = "recent"
     privacy_class: str = "local_only"
     ordering_hints: Optional[OrderingHints] = None
-    """Optional cache-aware ordering preferences (Std 32 §5.6 addendum).
+    """Optional cache-aware ordering preferences.
 
     Additive within TIP-1.x — receivers that don't recognise this field
-    ignore it and produce a valid (just unoptimised) package per Std 31 §2.
+    ignore it and produce a valid (just unoptimised) package.
     """
 
     # ---- Round-trip ------------------------------------------------------

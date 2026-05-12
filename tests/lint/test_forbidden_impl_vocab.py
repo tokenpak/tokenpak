@@ -27,7 +27,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Load the script module by file path (it lives outside the package tree).
 # ---------------------------------------------------------------------------

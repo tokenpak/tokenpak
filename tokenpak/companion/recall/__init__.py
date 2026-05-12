@@ -24,12 +24,12 @@ from tokenpak.companion.recall.schema import SCHEMA_VERSION
 from tokenpak.companion.recall.store import (
     LIST_LIMIT_DEFAULT,
     LIST_LIMIT_MAX,
+    RISK_FLAG_SEVERITIES,
     PakListFilters,
     PakListResult,
     PakRow,
     ReasonCodeEntry,
     RecallStore,
-    RISK_FLAG_SEVERITIES,
     RiskFlagEntry,
     default_recall_db_path,
     open_recall_store,
