@@ -58,12 +58,14 @@ from tokenpak.tip.capabilities import (
 )
 from tokenpak.tip.compression_contract import CompressionPolicy, ProtectedSpanType
 from tokenpak.tip.context_package import (
+    AnchorBlockPosition,
     ContextLevel,
     ContextPackage,
     ContextScope,
     CoverageConfidence,
     CoverageReport,
     CoverageState,
+    OrderingHints,
     PolicyDecision,
     context_level_label,
     parse_context_level,
@@ -115,7 +117,7 @@ __all__ = [
     "TIP_TOOL_SCHEMA_STABILITY_V1",
     "TIP_CAPSULES_V1",
     "ALL_OPTIMIZATION_CAPABILITIES",
-    # MultiPak (Std 32):
+    # MultiPak:
     "TIP_PAK_CAPTURE",
     "TIP_PAK_INDEX",
     "TIP_PAK_RECALL",
@@ -144,6 +146,7 @@ __all__ = [
     "ContextLevel",
     "CoverageState",
     "CoverageConfidence",
+    "AnchorBlockPosition",
     # Dataclasses
     "CachePolicy",
     "CompressionPolicy",
@@ -166,6 +169,7 @@ __all__ = [
     "ContextPackage",
     "ContextScope",
     "CoverageReport",
+    "OrderingHints",
     "PolicyDecision",
     # MultiPak helpers:
     "all_subtypes",

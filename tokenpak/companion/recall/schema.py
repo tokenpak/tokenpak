@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from typing import Final
 
-SCHEMA_VERSION: Final[int] = 2
+SCHEMA_VERSION: Final[int] = 3
 """Latest schema version applied by the current code."""
 
 
@@ -201,3 +201,80 @@ EXPECTED_TRIGGERS_V2: Final[frozenset[str]] = frozenset(
     }
 )
 """Named triggers that must exist after v2 is applied."""
+
+
+# v3 — Reason-code + risk-flag join tables ------------------------------------
+#
+# Two many-to-many join tables that surface per-Pak reason codes and risk
+# flags. The codes / flags are registry-defined enums (see the sibling
+# ``tokenpak/registry`` repo, ``schemas/tip/pak-reason-codes-v1.schema.json``
+# and ``schemas/tip/pak-risk-flags-v1.schema.json``). The runtime does not
+# enforce the enum here — validators and the registry schema do — so the
+# table accepts any non-empty string and stays additive when new codes /
+# flags land in a later Class B amendment.
+#
+# Intentionally NOT added in this migration: any column on ``paks``, any
+# FTS5 index over reason_codes / risk_flags, any /pak/v1/list filtering by
+# reason or flag. Those would be a Pro-tier scoring surface and stay
+# deferred to Pro Phase 2.
+#
+# Catalogues live in the public ``tokenpak/registry`` repo:
+#     - schemas/tip/pak-reason-codes-v1.schema.json — reason codes.
+#     - schemas/tip/pak-risk-flags-v1.schema.json   — risk flags + severity.
+# Architectural invariant: TIP capabilities (incl. these join tables)
+# must land in OSS before the Pro daemon can JOIN against them.
+
+SQL_CREATE_PAK_REASON_CODES: Final[str] = """
+CREATE TABLE IF NOT EXISTS pak_reason_codes (
+    pak_id       TEXT NOT NULL REFERENCES paks(pak_id) ON DELETE CASCADE,
+    reason_code  TEXT NOT NULL,
+    weight       REAL NOT NULL DEFAULT 1.0 CHECK (weight BETWEEN 0.0 AND 1.0),
+    created_at   TEXT NOT NULL,
+    PRIMARY KEY (pak_id, reason_code)
+)
+""".strip()
+
+
+SQL_CREATE_PAK_RISK_FLAGS: Final[str] = """
+CREATE TABLE IF NOT EXISTS pak_risk_flags (
+    pak_id       TEXT NOT NULL REFERENCES paks(pak_id) ON DELETE CASCADE,
+    risk_flag    TEXT NOT NULL,
+    severity     TEXT NOT NULL CHECK (severity IN ('info', 'warn', 'block')),
+    created_at   TEXT NOT NULL,
+    PRIMARY KEY (pak_id, risk_flag)
+)
+""".strip()
+
+
+SQL_CREATE_V3_INDEXES: Final[tuple[str, ...]] = (
+    "CREATE INDEX IF NOT EXISTS idx_pak_reason_codes_code     ON pak_reason_codes(reason_code)",
+    "CREATE INDEX IF NOT EXISTS idx_pak_risk_flags_flag       ON pak_risk_flags(risk_flag)",
+    "CREATE INDEX IF NOT EXISTS idx_pak_risk_flags_severity   ON pak_risk_flags(severity)",
+)
+
+
+ALL_DDL_V3: Final[tuple[str, ...]] = (
+    SQL_CREATE_PAK_REASON_CODES,
+    SQL_CREATE_PAK_RISK_FLAGS,
+    *SQL_CREATE_V3_INDEXES,
+)
+"""Statements introduced by the v3 migration (reason-code + risk-flag join tables)."""
+
+
+EXPECTED_TABLES_V3: Final[frozenset[str]] = frozenset(
+    {
+        "pak_reason_codes",
+        "pak_risk_flags",
+    }
+)
+"""Tables that must exist after v3 is applied (in addition to v1/v2)."""
+
+
+EXPECTED_INDEXES_V3: Final[frozenset[str]] = frozenset(
+    {
+        "idx_pak_reason_codes_code",
+        "idx_pak_risk_flags_flag",
+        "idx_pak_risk_flags_severity",
+    }
+)
+"""Named indexes that must exist after v3 is applied."""

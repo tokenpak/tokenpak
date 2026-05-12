@@ -37,12 +37,14 @@ from tokenpak.tip import (
     TIP_PAK_INDEX,
     TIP_PAK_PROMOTE,
     TIP_PAK_RECALL,
+    AnchorBlockPosition,
     ContextLevel,
     ContextPackage,
     ContextScope,
     CoverageConfidence,
     CoverageReport,
     CoverageState,
+    OrderingHints,
     Pak,
     PakAnchor,
     PakAuthority,
@@ -477,3 +479,96 @@ class TestPrivacyContract:
         pkg_field_names = {f.name for f in dataclasses.fields(ContextPackage)}
         for forbidden in self.FORBIDDEN_FIELD_PREFIXES:
             assert not any(name.startswith(forbidden) for name in pkg_field_names)
+
+
+# ---------------------------------------------------------------------------
+# OrderingHints (Std 32 §5.6 addendum) — additive within TIP-1.x
+# ---------------------------------------------------------------------------
+
+
+class TestOrderingHintsDefaultsAndRoundTrip:
+    """``ordering_hints`` is optional and additive on ``ContextPackage``.
+
+    Std 32 §5.6 + Std 31 §2: receivers that don't recognise this field
+    ignore it and produce a valid (just unoptimised) package — so the
+    pre-addendum byte shape must be preserved when ``ordering_hints``
+    is ``None``.
+    """
+
+    def test_default_is_none_and_dict_omits_field(self):
+        pkg = _make_context_package()
+        assert pkg.ordering_hints is None
+        d = pkg.to_dict()
+        assert "ordering_hints" not in d, (
+            "to_dict must omit the field entirely when None — preserves the "
+            "pre-addendum byte shape per Std 31 §2 additive-receiver rule."
+        )
+
+    def test_round_trip_with_default_hints(self):
+        hints = OrderingHints()
+        pkg = dataclasses.replace(_make_context_package(), ordering_hints=hints)
+        restored = ContextPackage.from_dict(pkg.to_dict())
+        assert restored == pkg
+        assert restored.ordering_hints == OrderingHints()
+        assert restored.ordering_hints.anchor_block_position is AnchorBlockPosition.END
+
+    def test_round_trip_with_explicit_hints(self):
+        hints = OrderingHints(
+            stable_first=False,
+            task_delta_after_stable_context=False,
+            output_requirements_near_end=False,
+            cache_sensitive_blocks=("block_a", "block_b"),
+            anchor_block_position=AnchorBlockPosition.INLINE,
+        )
+        pkg = dataclasses.replace(_make_context_package(), ordering_hints=hints)
+        d = pkg.to_dict()
+        assert d["ordering_hints"]["anchor_block_position"] == "inline"
+        assert d["ordering_hints"]["cache_sensitive_blocks"] == ["block_a", "block_b"]
+        restored = ContextPackage.from_dict(d)
+        assert restored == pkg
+
+    def test_round_trip_omit_anchors(self):
+        hints = OrderingHints(anchor_block_position=AnchorBlockPosition.OMIT)
+        pkg = dataclasses.replace(_make_context_package(), ordering_hints=hints)
+        restored = ContextPackage.from_dict(pkg.to_dict())
+        assert restored.ordering_hints.anchor_block_position is AnchorBlockPosition.OMIT
+
+    def test_json_serializable_with_hints(self):
+        hints = OrderingHints(
+            cache_sensitive_blocks=("blk_release_notes",),
+        )
+        pkg = dataclasses.replace(_make_context_package(), ordering_hints=hints)
+        encoded = json.dumps(pkg.to_dict(), sort_keys=True)
+        decoded = json.loads(encoded)
+        assert ContextPackage.from_dict(decoded) == pkg
+
+    def test_unknown_anchor_block_position_raises(self):
+        """Closed enum within a TIP minor: unknown value is a receiver-side bug."""
+        with pytest.raises(ValueError) as exc:
+            OrderingHints.from_wire({"anchor_block_position": "middle"})
+        assert "anchor_block_position" in str(exc.value)
+
+    def test_unknown_outer_field_does_not_break_receiver(self):
+        """Field set is additive — unrecognised siblings of ``ordering_hints``
+        in the wire form are silently ignored (just dropped by ``from_dict``).
+
+        This pins the Std 31 §2 promise: future addendums that add new
+        optional fields to ``ContextPackage`` will not break consumers
+        on the current TIP minor.
+        """
+        pkg = _make_context_package()
+        d = pkg.to_dict()
+        d["future_addendum_field_xyz"] = "ignored-by-current-receivers"
+        restored = ContextPackage.from_dict(d)
+        assert restored == pkg
+
+    def test_hints_field_is_frozen_on_dataclass(self):
+        """``OrderingHints`` is frozen — receivers can pass instances safely."""
+        h = OrderingHints()
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            h.stable_first = False  # type: ignore[misc]
+
+    def test_anchor_block_position_string_enum_is_closed(self):
+        """The enum is closed within a TIP minor (Std 32 §5.6)."""
+        values = {v.value for v in AnchorBlockPosition}
+        assert values == {"end", "inline", "omit"}

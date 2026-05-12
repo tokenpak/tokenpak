@@ -47,6 +47,7 @@ import base64
 import logging
 import os
 import sqlite3
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from types import TracebackType
@@ -148,6 +149,56 @@ class PakListResult(NamedTuple):
     next_cursor: Optional[str]
     limit: int
     truncated: bool
+
+
+class ReasonCodeEntry(NamedTuple):
+    """One row in ``pak_reason_codes``.
+
+    The ``reason_code`` string is a registry-defined enum value (see the
+    sibling ``tokenpak/registry`` repo, ``schemas/tip/pak-reason-codes-v1.schema.json``);
+    the runtime does not enforce the catalogue here — additive new codes
+    land via a separate Class B amendment and the JSON Schema validator.
+
+    Attributes:
+        reason_code: Snake_case enum identifier (e.g. ``"current_task"``).
+        weight: Caller-supplied weight in ``[0.0, 1.0]``. The CHECK
+            constraint at the SQL layer rejects out-of-range values.
+            Defaults to ``1.0`` if omitted.
+    """
+
+    reason_code: str
+    weight: float = 1.0
+
+
+class RiskFlagEntry(NamedTuple):
+    """One row in ``pak_risk_flags``.
+
+    The ``risk_flag`` string is a registry-defined enum value (see the
+    sibling ``tokenpak/registry`` repo, ``schemas/tip/pak-risk-flags-v1.schema.json``).
+    ``severity`` is one of ``"info"``, ``"warn"``, or ``"block"``.
+
+    OSS callers may expose, persist, inspect, export, and validate
+    ``severity="block"`` data; OSS does *not* enforce a Pro-style
+    assembly refusal path on it — that enforcement is Pro Phase 3
+    Context Package builder behaviour (OSS = data plane,
+    Pro = enforcement).
+
+    Attributes:
+        risk_flag: Snake_case enum identifier (e.g. ``"mandatory_context_missing"``).
+        severity: One of ``{"info", "warn", "block"}``. The CHECK
+            constraint at the SQL layer rejects other values.
+    """
+
+    risk_flag: str
+    severity: str
+
+
+# Severity values accepted by ``set_pak_risk_flags``. The constant exists
+# so tests / callers can assert against the same string set the schema
+# CHECK constraint enforces. Discovery-style: callers reading this list
+# (or the registry JSON) drive their own validation; the table itself
+# stays the source of truth.
+RISK_FLAG_SEVERITIES: frozenset[str] = frozenset({"info", "warn", "block"})
 
 
 class UpsertResult(NamedTuple):
@@ -494,6 +545,192 @@ class RecallStore:
             return None
         return PakRow(*row)
 
+    # Reason-code + risk-flag join surface ---------------------------------
+
+    def set_pak_reason_codes(
+        self,
+        pak_id: str,
+        codes: Sequence[ReasonCodeEntry],
+        *,
+        now: Optional[str] = None,
+    ) -> None:
+        """Replace the reason-code set for ``pak_id``.
+
+        Idempotent under ``=`` semantics: the operation is DELETE-then-INSERT
+        inside one transaction, so calling twice with the same ``codes`` set
+        leaves the table in the same final state and emits no row-count
+        delta.
+
+        Duplicate ``reason_code`` values within ``codes`` are rejected with
+        ``ValueError`` before any write — the (``pak_id``, ``reason_code``)
+        primary key would otherwise raise mid-transaction, masking the
+        caller's intent.
+
+        Parameters:
+            pak_id: An existing row in ``paks``. Foreign-key enforcement
+                (``PRAGMA foreign_keys=ON`` set in :meth:`_apply_pragmas`)
+                raises ``sqlite3.IntegrityError`` if the parent row is absent.
+            codes: Sequence of :class:`ReasonCodeEntry`. May be empty —
+                that clears any previously-stored codes for ``pak_id``.
+            now: Optional ISO-8601 UTC string for ``created_at``. Defaults
+                to the current UTC time.
+
+        Raises:
+            ValueError: ``pak_id`` is empty/whitespace, an entry's
+                ``reason_code`` is empty/whitespace, an entry's ``weight``
+                falls outside ``[0.0, 1.0]``, or ``codes`` contains
+                duplicate ``reason_code`` values.
+            sqlite3.IntegrityError: ``pak_id`` does not reference a row
+                in ``paks`` (foreign-key violation).
+        """
+        if not pak_id or not pak_id.strip():
+            raise ValueError("set_pak_reason_codes: pak_id must be a non-empty string")
+        seen: set[str] = set()
+        cleaned: list[tuple[str, float]] = []
+        for entry in codes:
+            code = entry.reason_code
+            weight = entry.weight
+            if not isinstance(code, str) or not code.strip():
+                raise ValueError(
+                    "set_pak_reason_codes: reason_code must be a non-empty string"
+                )
+            if not isinstance(weight, (int, float)) or not (0.0 <= float(weight) <= 1.0):
+                raise ValueError(
+                    f"set_pak_reason_codes: weight for {code!r} must be in [0.0, 1.0]"
+                )
+            if code in seen:
+                raise ValueError(
+                    f"set_pak_reason_codes: duplicate reason_code {code!r} in input"
+                )
+            seen.add(code)
+            cleaned.append((code, float(weight)))
+
+        ts = now if now is not None else _utc_now_iso8601()
+        conn = self._conn
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DELETE FROM pak_reason_codes WHERE pak_id = ?", (pak_id,))
+            if cleaned:
+                conn.executemany(
+                    "INSERT INTO pak_reason_codes "
+                    "(pak_id, reason_code, weight, created_at) VALUES (?, ?, ?, ?)",
+                    [(pak_id, code, weight, ts) for code, weight in cleaned],
+                )
+            conn.execute("COMMIT")
+        except Exception:
+            try:
+                conn.execute("ROLLBACK")
+            except sqlite3.OperationalError:
+                pass
+            raise
+
+    def get_pak_reason_codes(self, pak_id: str) -> list[ReasonCodeEntry]:
+        """Return the reason codes attached to ``pak_id``.
+
+        Returns the codes in ascending order by ``reason_code`` so the
+        caller sees a stable ordering across calls. The result is a list
+        of :class:`ReasonCodeEntry`; an unknown ``pak_id`` returns ``[]``.
+
+        Whitespace-only or empty ``pak_id`` returns ``[]`` without a
+        round-trip to the DB.
+        """
+        if not pak_id or not pak_id.strip():
+            return []
+        rows = self._conn.execute(
+            "SELECT reason_code, weight FROM pak_reason_codes "
+            "WHERE pak_id = ? ORDER BY reason_code ASC",
+            (pak_id,),
+        ).fetchall()
+        return [ReasonCodeEntry(reason_code=r[0], weight=float(r[1])) for r in rows]
+
+    def set_pak_risk_flags(
+        self,
+        pak_id: str,
+        flags: Sequence[RiskFlagEntry],
+        *,
+        now: Optional[str] = None,
+    ) -> None:
+        """Replace the risk-flag set for ``pak_id``.
+
+        Mirrors :meth:`set_pak_reason_codes` — idempotent DELETE-then-INSERT
+        under one transaction. Duplicate ``risk_flag`` values within
+        ``flags`` are rejected with ``ValueError`` before write.
+
+        OSS exposes / persists / inspects / exports / validates
+        ``severity="block"`` data. OSS does *not* implement an
+        assembly-refusal path on it (that lives in the Pro Phase 3
+        Context Package builder — OSS = data plane, Pro = enforcement).
+
+        Parameters:
+            pak_id: An existing row in ``paks``.
+            flags: Sequence of :class:`RiskFlagEntry`. May be empty.
+            now: Optional ISO-8601 UTC string for ``created_at``.
+
+        Raises:
+            ValueError: ``pak_id`` is empty/whitespace, an entry's
+                ``risk_flag`` is empty/whitespace, an entry's ``severity``
+                is not in ``{"info", "warn", "block"}``, or ``flags``
+                contains duplicate ``risk_flag`` values.
+            sqlite3.IntegrityError: ``pak_id`` does not reference a row
+                in ``paks``.
+        """
+        if not pak_id or not pak_id.strip():
+            raise ValueError("set_pak_risk_flags: pak_id must be a non-empty string")
+        seen: set[str] = set()
+        cleaned: list[tuple[str, str]] = []
+        for entry in flags:
+            flag = entry.risk_flag
+            severity = entry.severity
+            if not isinstance(flag, str) or not flag.strip():
+                raise ValueError(
+                    "set_pak_risk_flags: risk_flag must be a non-empty string"
+                )
+            if severity not in RISK_FLAG_SEVERITIES:
+                raise ValueError(
+                    f"set_pak_risk_flags: severity for {flag!r} must be one of "
+                    f"{sorted(RISK_FLAG_SEVERITIES)!r}, got {severity!r}"
+                )
+            if flag in seen:
+                raise ValueError(
+                    f"set_pak_risk_flags: duplicate risk_flag {flag!r} in input"
+                )
+            seen.add(flag)
+            cleaned.append((flag, severity))
+
+        ts = now if now is not None else _utc_now_iso8601()
+        conn = self._conn
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DELETE FROM pak_risk_flags WHERE pak_id = ?", (pak_id,))
+            if cleaned:
+                conn.executemany(
+                    "INSERT INTO pak_risk_flags "
+                    "(pak_id, risk_flag, severity, created_at) VALUES (?, ?, ?, ?)",
+                    [(pak_id, flag, severity, ts) for flag, severity in cleaned],
+                )
+            conn.execute("COMMIT")
+        except Exception:
+            try:
+                conn.execute("ROLLBACK")
+            except sqlite3.OperationalError:
+                pass
+            raise
+
+    def get_pak_risk_flags(self, pak_id: str) -> list[RiskFlagEntry]:
+        """Return the risk flags attached to ``pak_id``.
+
+        Returns flags ordered by ``risk_flag`` ascending. An unknown
+        ``pak_id`` (or empty/whitespace) returns ``[]``.
+        """
+        if not pak_id or not pak_id.strip():
+            return []
+        rows = self._conn.execute(
+            "SELECT risk_flag, severity FROM pak_risk_flags "
+            "WHERE pak_id = ? ORDER BY risk_flag ASC",
+            (pak_id,),
+        ).fetchall()
+        return [RiskFlagEntry(risk_flag=r[0], severity=r[1]) for r in rows]
+
     def close(self) -> None:
         """Close the underlying connection.
 
@@ -569,7 +806,10 @@ __all__ = [
     "PakListFilters",
     "PakListResult",
     "PakRow",
+    "ReasonCodeEntry",
     "RecallStore",
+    "RISK_FLAG_SEVERITIES",
+    "RiskFlagEntry",
     "UpsertResult",
     "default_recall_db_path",
     "open_recall_store",

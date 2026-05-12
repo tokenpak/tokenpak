@@ -205,8 +205,99 @@ def test_v2_is_idempotent_on_already_v2_db(tmp_path: Path, require_fts5: None) -
     assert {"paks_ai_fts", "paks_au_fts", "paks_ad_fts"}.issubset(trig)
 
 
-def test_schema_version_constant_is_v2() -> None:
-    """``SCHEMA_VERSION`` should track the v2 migration head."""
-    assert SCHEMA_VERSION == 2
-    assert MIGRATIONS[-1].version == 2
-    assert MIGRATIONS[-1].name == "paks_fts_triggers"
+def test_schema_version_constant_is_v3() -> None:
+    """``SCHEMA_VERSION`` should track the v3 migration head."""
+    assert SCHEMA_VERSION == 3
+    assert MIGRATIONS[-1].version == 3
+    assert MIGRATIONS[-1].name == "pak_reason_codes_and_risk_flags"
+
+
+# ----- v2 → v3 upgrade coverage --------------------------------------------
+
+
+def test_v3_applies_on_top_of_v2_only(tmp_path: Path, require_fts5: None) -> None:
+    """A DB seeded at v2 advances to v3 without re-running v1/v2 DDL.
+
+    Verifies the Std 32 §5.4 / §5.5 addendum: the v3 migration adds two
+    join tables (``pak_reason_codes`` + ``pak_risk_flags``) and three
+    indexes; nothing else changes. Critically, no column is added to
+    ``paks`` — that boundary is enforced by PR 2's no-Pro-leakage rule.
+    """
+    db_path = tmp_path / "recall.db"
+
+    # Hand-roll a v2 database by applying v1 + v2 only.
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("BEGIN")
+        for mig in MIGRATIONS:
+            if mig.version > 2:
+                break
+            for stmt in mig.statements:
+                conn.execute(stmt)
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_version (id, version, applied_at) "
+            "VALUES (1, 2, ?)",
+            ("2026-05-11T00:00:00Z",),
+        )
+        conn.execute("COMMIT")
+        # Snapshot the v2-era ``paks`` schema to assert it is byte-stable
+        # across the v3 migration.
+        paks_columns_before = [
+            r[1]
+            for r in conn.execute("PRAGMA table_info(paks)").fetchall()
+        ]
+        # Smoke-check the v2 state has no v3 tables yet.
+        tables_before = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+    assert "pak_reason_codes" not in tables_before
+    assert "pak_risk_flags" not in tables_before
+
+    # Open via RecallStore: the runner applies v3 only.
+    with RecallStore.open(db_path) as store:
+        assert store.schema_version == SCHEMA_VERSION  # i.e. 3
+        tables_after = {
+            r[0]
+            for r in store.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        indexes_after = {
+            r[0]
+            for r in store.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index'"
+            ).fetchall()
+        }
+        paks_columns_after = [
+            r[1]
+            for r in store.conn.execute("PRAGMA table_info(paks)").fetchall()
+        ]
+    assert {"pak_reason_codes", "pak_risk_flags"}.issubset(tables_after)
+    assert {
+        "idx_pak_reason_codes_code",
+        "idx_pak_risk_flags_flag",
+        "idx_pak_risk_flags_severity",
+    }.issubset(indexes_after)
+    # ``paks`` is unchanged — addendum's no-new-column rule.
+    assert paks_columns_after == paks_columns_before
+
+
+def test_v3_is_idempotent_on_already_v3_db(tmp_path: Path, require_fts5: None) -> None:
+    """Re-opening a v3 DB does not re-run v3 (and does not error)."""
+    db_path = tmp_path / "recall.db"
+    with RecallStore.open(db_path) as first:
+        assert first.schema_version == SCHEMA_VERSION
+    with RecallStore.open(db_path) as second:
+        assert second.schema_version == SCHEMA_VERSION
+        tables = {
+            r[0]
+            for r in second.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+    assert {"pak_reason_codes", "pak_risk_flags"}.issubset(tables)

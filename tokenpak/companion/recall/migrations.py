@@ -32,6 +32,7 @@ from typing import NamedTuple
 from tokenpak.companion.recall.schema import (
     ALL_DDL_V1,
     ALL_DDL_V2_TRIGGERS,
+    ALL_DDL_V3,
     SCHEMA_VERSION,
 )
 
@@ -58,6 +59,11 @@ MIGRATIONS: tuple[Migration, ...] = (
         version=2,
         name="paks_fts_triggers",
         statements=ALL_DDL_V2_TRIGGERS,
+    ),
+    Migration(
+        version=3,
+        name="pak_reason_codes_and_risk_flags",
+        statements=ALL_DDL_V3,
     ),
 )
 """Ordered tuple of all known migrations. New entries APPEND; never edit
