@@ -154,6 +154,94 @@ class ContextScope:
     target_task: Optional[str] = None
 
 
+class AnchorBlockPosition(str, Enum):
+    """Where hydrated anchor snippets sit relative to the rest of the package.
+
+    Std 32 §5.6 (addendum). Read by the Pro Phase 3 Context Package
+    builder; OSS persistence + inspection treat the value transparently
+    per Std 32 §13.1 Decision #11 (OSS/Pro split: OSS = data surface,
+    Pro = enforcement).
+
+    - ``end``: anchor snippets appended after the main Pak content.
+    - ``inline``: anchor snippets interleaved with their referencing block.
+    - ``omit``: drop anchors; useful for budget-constrained packages.
+    """
+
+    END = "end"
+    INLINE = "inline"
+    OMIT = "omit"
+
+
+@dataclass(frozen=True)
+class OrderingHints:
+    """Optional cache-aware ordering preferences for a Context Package.
+
+    Additive within TIP-1.x — receivers that don't recognise the field
+    ignore it and produce a valid (just unoptimised) package per Std 31 §2.
+    The Pro Phase 3 Context Package builder is the authoritative consumer;
+    OSS persists / inspects / exports / validates the field transparently
+    (Std 32 §13.1 Decision #12).
+
+    Attributes:
+        stable_first: Place stable/reusable Pak content before volatile
+            task delta. Cache-aware.
+        task_delta_after_stable_context: Mandatory and primary Paks appear
+            after stable/reusable Paks.
+        output_requirements_near_end: Output-shape instructions immediately
+            precede the cursor.
+        cache_sensitive_blocks: Block IDs whose ordering must not change
+            once assembled (cache stability).
+        anchor_block_position: Where hydrated anchor snippets sit (see
+            :class:`AnchorBlockPosition`). Default ``END``.
+
+    Reference: Std 32 §5.6 (addendum) — ordering hints registry.
+    """
+
+    stable_first: bool = True
+    task_delta_after_stable_context: bool = True
+    output_requirements_near_end: bool = True
+    cache_sensitive_blocks: tuple[str, ...] = ()
+    anchor_block_position: AnchorBlockPosition = AnchorBlockPosition.END
+
+    def to_wire(self) -> dict[str, Any]:
+        """Wire-form mapping for embedding in a Context Package payload."""
+        return {
+            "stable_first": self.stable_first,
+            "task_delta_after_stable_context": self.task_delta_after_stable_context,
+            "output_requirements_near_end": self.output_requirements_near_end,
+            "cache_sensitive_blocks": list(self.cache_sensitive_blocks),
+            "anchor_block_position": self.anchor_block_position.value,
+        }
+
+    @classmethod
+    def from_wire(cls, data: Mapping[str, Any]) -> "OrderingHints":
+        """Parse from a wire-form mapping.
+
+        Unknown ``anchor_block_position`` values raise ``ValueError`` —
+        the registry is the source of truth and unknown values indicate a
+        receiver-side bug, not a benign extension (the field set itself is
+        additive, but the enum is closed within a given TIP minor)."""
+        raw_pos = data.get("anchor_block_position", AnchorBlockPosition.END.value)
+        try:
+            pos = AnchorBlockPosition(raw_pos)
+        except ValueError as exc:
+            raise ValueError(
+                f"unknown anchor_block_position: {raw_pos!r}; expected one of "
+                f"{[v.value for v in AnchorBlockPosition]!r}"
+            ) from exc
+        return cls(
+            stable_first=bool(data.get("stable_first", True)),
+            task_delta_after_stable_context=bool(
+                data.get("task_delta_after_stable_context", True)
+            ),
+            output_requirements_near_end=bool(
+                data.get("output_requirements_near_end", True)
+            ),
+            cache_sensitive_blocks=tuple(data.get("cache_sensitive_blocks", ())),
+            anchor_block_position=pos,
+        )
+
+
 @dataclass(frozen=True)
 class PolicyDecision:
     """Records what the policy gate did (Std 32 §7 + the
@@ -202,15 +290,30 @@ class ContextPackage:
     generated_at: str  # ISO-8601 timestamp.
     memory_horizon: str = "recent"
     privacy_class: str = "local_only"
+    ordering_hints: Optional[OrderingHints] = None
+    """Optional cache-aware ordering preferences (Std 32 §5.6 addendum).
+
+    Additive within TIP-1.x — receivers that don't recognise this field
+    ignore it and produce a valid (just unoptimised) package per Std 31 §2.
+    """
 
     # ---- Round-trip ------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Render to JSON-serializable form matching the wire schema."""
+        """Render to JSON-serializable form matching the wire schema.
+
+        ``ordering_hints`` is omitted entirely when ``None`` so older
+        receivers see the byte-stable pre-addendum shape; consumers that
+        recognise the field read it from the emitted mapping otherwise.
+        """
         d = asdict(self)
         d["context_level"] = context_level_label(self.context_level)
         d["coverage"]["state"] = self.coverage.state.value
         d["coverage"]["confidence"] = self.coverage.confidence.value
+        if self.ordering_hints is None:
+            d.pop("ordering_hints", None)
+        else:
+            d["ordering_hints"] = self.ordering_hints.to_wire()
         return d
 
     @classmethod
@@ -253,6 +356,11 @@ class ContextPackage:
             generated_at=data["generated_at"],
             memory_horizon=data.get("memory_horizon", "recent"),
             privacy_class=data.get("privacy_class", "local_only"),
+            ordering_hints=(
+                OrderingHints.from_wire(data["ordering_hints"])
+                if data.get("ordering_hints") is not None
+                else None
+            ),
         )
 
     # ---- Convenience -----------------------------------------------------
@@ -266,12 +374,14 @@ class ContextPackage:
 
 
 __all__ = [
+    "AnchorBlockPosition",
     "ContextLevel",
     "ContextPackage",
     "ContextScope",
     "CoverageConfidence",
     "CoverageReport",
     "CoverageState",
+    "OrderingHints",
     "PolicyDecision",
     "context_level_label",
     "parse_context_level",

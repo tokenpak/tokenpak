@@ -1,0 +1,43 @@
+name: Forbidden Implementation Vocabulary Check
+
+# Std 08 → Forbidden Implementation Vocabulary (addendum ratified per
+# Std 32 §13.1 Decision #12, 2026-05-11). Scans pull-request deltas
+# for compound-form vocabulary that exposes implementation strategy
+# hints; standalone ``basis`` is intentionally NOT flagged to avoid
+# false positives in normal English.
+#
+# Rollout phase: ADVISORY (continue-on-error: true). The final enforce
+# flip is an explicit governance review after a one-week zero-false-
+# positive soak, not automatic.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  forbidden-impl-vocab:
+    name: Forbidden Implementation Vocabulary (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Scan changed files for forbidden compound forms
+        # Advisory phase: a hit prints ``::error`` annotations in the PR
+        # UI but does not fail the workflow. Flip to ``false`` after the
+        # explicit governance enforce decision.
+        continue-on-error: true
+        env:
+          GITHUB_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          python3 .github/scripts/check-forbidden-impl-vocab.py
