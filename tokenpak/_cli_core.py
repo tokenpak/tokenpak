@@ -3223,6 +3223,8 @@ def cmd_status(args):
             no_meme=no_meme,
             days=getattr(args, "days", 0),
             hours=getattr(args, "hours", 0),
+            fleet=getattr(args, "fleet", False),
+            since=getattr(args, "since", None),
         )
     except Exception as e:
         print(f"⚠️  Savings-first status failed ({e}), falling back to legacy output...")
@@ -3543,6 +3545,8 @@ def _build_status_parser(sub):
     p_status.add_argument("--no-meme", dest="no_meme", action="store_true", help="Suppress tagline")
     p_status.add_argument("--days", type=int, default=0, help="Filter to last N days (combinable with --hours)")
     p_status.add_argument("--hours", type=int, default=0, help="Filter to last N hours (combinable with --days)")
+    p_status.add_argument("--fleet", action="store_true", help="Fleet rollup view — reads rollup_daily (FTA-06)")
+    p_status.add_argument("--since", default=None, help="With --fleet: window in days, e.g. '7d' (default: 7d)")
     p_status.set_defaults(func=cmd_status)
 
 
