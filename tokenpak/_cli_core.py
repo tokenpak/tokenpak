@@ -298,7 +298,7 @@ def _print_quick_help():
     print(
         "Usage: tokenpak <command> [options]\n"
         "\n"
-        "TokenPak — LLM Proxy with Context Compression\n"
+        "TokenPak — LLM Proxy with Prompt Packing\n"
         "\n"
         "Quick Start:\n"
         "  start        Start the proxy (localhost:8766)\n"
@@ -306,9 +306,9 @@ def _print_quick_help():
         "  restart      Restart the proxy\n"
         "  logs         Show recent proxy logs\n"
         "  serve        Serve the proxy (alias for start)\n"
-        "  demo         See compression in action\n"
+        "  demo         See Prompt Packing in action\n"
         "  cost         View your API spend\n"
-        "  savings      View compression savings\n"
+        "  savings      View Savings Ledger\n"
         "  status       Check proxy health\n"
         "\n"
         "Tools:\n"
@@ -320,7 +320,7 @@ def _print_quick_help():
         "  fingerprint  Fingerprint sync and cache management\n"
         "  preview      Preview compression dry-run (see token savings)\n"
         "  compress     Compress text/JSON/code directly\n"
-        "  optimize     Optimize prompts for better compression\n"
+        "  optimize     Optimize prompts for better Prompt Packing efficiency\n"
         "  last         Show details of last compressed request\n"
         "  vault        Vault index health diagnostic and repair\n"
         "  diff         Show context changes (Pro)\n"
@@ -2546,7 +2546,7 @@ def _build_stub_parsers(sub):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="tokenpak",
-        description="TokenPak — LLM Proxy with Context Compression",
+        description="TokenPak — LLM Proxy with Prompt Packing",
         add_help=False,  # we handle --help ourselves for progressive disclosure
     )
     parser.add_argument(
@@ -2580,7 +2580,7 @@ def build_parser():
         help="Start the proxy (localhost:8766)",
         description=(
             "Start the TokenPak proxy server, which routes LLM API requests through\n"
-            "context compression. The proxy listens on localhost:PORT and forwards\n"
+            "Prompt Packing. The proxy listens on localhost:PORT and forwards\n"
             "compressed requests to your configured LLM providers.\n\n"
             "Example:\n"
             "  tokenpak serve --port 8888 --workers 4\n\n"
@@ -7908,9 +7908,9 @@ def _build_optimize_parser(sub):
     """Build the optimize command parser."""
     p_optimize = sub.add_parser(
         "optimize",
-        help="Optimize prompts for better compression",
+        help="Optimize prompts for better Prompt Packing efficiency",
         description=(
-            "Analyze and optimize a prompt for better compression efficiency.\n"
+            "Analyze and optimize a prompt for better Prompt Packing efficiency.\n"
             "Suggests rewording and restructuring to reduce compressed token count.\n\n"
             "Example:\n"
             "  tokenpak optimize < myprompt.txt\n"

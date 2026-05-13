@@ -324,7 +324,7 @@ _SEARCH_ALIASES: dict[str, list[str]] = {
     "check_health": ["status", "health", "ping", "alive", "proxy status"],
     "view_spend":   ["cost", "spend", "savings", "budget", "money", "price", "usage"],
     "configure":    ["config", "settings", "setup", "edit", "route", "recipe", "budget"],
-    "companion":    ["claude", "codex", "session", "capsule", "journal", "mcp", "companion"],
+    "companion":    ["claude", "codex", "session", "pak", "capsule", "journal", "mcp", "companion"],
     "diagnose":     ["doctor", "diag", "fix", "repair", "debug", "troubleshoot", "health check"],
     "browse_all":   ["all", "commands", "search", "find", "list"],
 }
