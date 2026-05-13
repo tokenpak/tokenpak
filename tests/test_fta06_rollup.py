@@ -23,6 +23,11 @@ from unittest.mock import patch
 
 import pytest
 
+# Module-level imports so the 40s tokenpak.cli eager-import of _cli_core
+# happens once during pytest collection, not inside each timed test.
+from tokenpak.cli._impl import run_fleet, _saved_pct
+from tokenpak.cli.commands.status import _parse_since
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -196,8 +201,6 @@ def _fixture_db_file(tmp_path: Path) -> Generator[str, None, None]:
 @pytest.mark.oss
 def test_run_fleet_table_output(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """run_fleet() prints a table with expected columns and at least one row."""
-    from tokenpak.cli._impl import run_fleet
-
     with _fixture_db_file(tmp_path) as db_path:
         run_fleet(since_days=7, as_json=False, db_path=db_path)
 
@@ -222,8 +225,6 @@ def test_run_fleet_table_output(tmp_path: Path, capsys: pytest.CaptureFixture) -
 @pytest.mark.oss
 def test_run_fleet_json_schema(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """run_fleet(as_json=True) emits valid JSON with expected top-level keys."""
-    from tokenpak.cli._impl import run_fleet
-
     with _fixture_db_file(tmp_path) as db_path:
         run_fleet(since_days=7, as_json=True, db_path=db_path)
 
@@ -261,7 +262,6 @@ def test_run_fleet_json_schema(tmp_path: Path, capsys: pytest.CaptureFixture) ->
 ])
 def test_parse_since(value: str, expected: int) -> None:
     """_parse_since handles valid and invalid inputs."""
-    from tokenpak.cli.commands.status import _parse_since
     assert _parse_since(value) == expected
 
 
@@ -272,8 +272,6 @@ def test_parse_since(value: str, expected: int) -> None:
 @pytest.mark.oss
 def test_run_fleet_empty_db(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """run_fleet() handles a DB with no rollup or requests rows gracefully."""
-    from tokenpak.cli._impl import run_fleet
-
     db_path = str(tmp_path / "empty.db")
     conn = sqlite3.connect(db_path)
     conn.execute(REQUESTS_DDL)
@@ -294,12 +292,10 @@ def test_run_fleet_empty_db(tmp_path: Path, capsys: pytest.CaptureFixture) -> No
 @pytest.mark.oss
 def test_saved_pct_tbd_for_pricing_unknown() -> None:
     """_saved_pct returns 'TBD' when estimated_cost=0 but would_have_saved>0."""
-    from tokenpak.cli._impl import _saved_pct
     assert _saved_pct(0.0, 100) == "TBD"
 
 
 @pytest.mark.oss
 def test_saved_pct_na_for_zero_data() -> None:
     """_saved_pct returns 'n/a' when both inputs are zero."""
-    from tokenpak.cli._impl import _saved_pct
     assert _saved_pct(0.0, 0) == "n/a"
