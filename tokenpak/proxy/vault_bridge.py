@@ -153,6 +153,8 @@ class VaultIndex:
                 "risk_class": bdata.get("risk_class", "narrative"),
                 "must_keep": bdata.get("must_keep", False),
                 "raw_tokens": bdata.get("raw_tokens", 0),
+                "source_type": bdata.get("source_type", "filesystem"),
+                "claude_transcript": bdata.get("claude_transcript"),
                 "content": content,
             }
 
