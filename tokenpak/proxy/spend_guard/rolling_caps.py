@@ -167,10 +167,14 @@ def compute_rolling_usage(
     )
     try:
         conn = sqlite3.connect(str(p), timeout=2.0)
-        # Fleet-wide totals
+        # Fleet-wide totals.
+        # tokens_total = input + output (cache_read EXCLUDED per Kevin
+        # 2026-05-15: Anthropic bills cache_read ~90% cheaper, so cache_read
+        # inflation should not trip the rolling tokens cap. cache_read is
+        # still recorded for observability + its own dedicated cap.
         row = conn.execute(
             """SELECT COALESCE(SUM(estimated_cost), 0.0),
-                      COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0) + COALESCE(SUM(cache_read_tokens), 0),
+                      COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0),
                       COALESCE(SUM(cache_read_tokens), 0)
                FROM requests
                WHERE timestamp >= ?""",
@@ -191,7 +195,7 @@ def compute_rolling_usage(
                 placeholders = ",".join("?" for _ in sessions)
                 row2 = conn.execute(
                     f"""SELECT COALESCE(SUM(estimated_cost), 0.0),
-                              COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0) + COALESCE(SUM(cache_read_tokens), 0),
+                              COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0),
                               COALESCE(SUM(cache_read_tokens), 0)
                        FROM requests
                        WHERE timestamp >= ?
@@ -246,8 +250,11 @@ def check_rolling_caps(
     usage = compute_rolling_usage(
         agent_id, config.window_seconds, monitor_db_path=monitor_db_path
     )
+    # tokens_total = input + output only (cache_read EXCLUDED per Kevin
+    # 2026-05-15: cache_read is ~90% cheaper and inflates the count without
+    # reflecting real cost. cache_read keeps its own dedicated cap dimension.
     projected_tokens_total = (
-        int(projected_input_tokens) + int(projected_output_tokens) + int(projected_cache_read_tokens)
+        int(projected_input_tokens) + int(projected_output_tokens)
     )
 
     def retry_after(cost_used: float, tokens_used: float, cap: float) -> int:
