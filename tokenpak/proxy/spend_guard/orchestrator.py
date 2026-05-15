@@ -167,6 +167,76 @@ def evaluate(
         _log.warning("spend_guard: estimator failure (passthrough): %s", e)
         return GuardOutcome.passthrough(body)
 
+    # ── Rolling/cumulative caps (Kevin 2026-05-15 post-incident P0).
+    # Records the session→agent mapping for future per-agent lookups,
+    # then evaluates per-agent and per-fleet rolling caps. If any cap
+    # would be exceeded by this request's projected cost, return a
+    # block (respect TIP bypass directives). Per-session caps continue
+    # to evaluate downstream — rolling caps SUPPLEMENT them.
+    try:
+        from .rolling_caps import (
+            RollingCapsConfig, check_rolling_caps, record_session_agent,
+        )
+        from .block_response import build_rolling_cap_block
+        # Agent attribution — case-insensitive header lookup.
+        agent_id = ""
+        for hk, hv in (headers or {}).items():
+            if str(hk).lower() == "x-tokenpak-agent":
+                agent_id = str(hv).strip().lower()
+                break
+        if agent_id and session_id:
+            record_session_agent(session_id, agent_id)
+        if cfg.rolling_caps_enabled and agent_id:
+            rc_cfg = RollingCapsConfig(
+                enabled=cfg.rolling_caps_enabled,
+                window_seconds=cfg.rolling_caps_window_seconds,
+                per_agent_max_cost_usd=cfg.rolling_caps_per_agent_max_cost_usd,
+                per_agent_max_tokens_total=cfg.rolling_caps_per_agent_max_tokens_total,
+                per_agent_max_cache_read_tokens=cfg.rolling_caps_per_agent_max_cache_read_tokens,
+                per_fleet_max_cost_usd=cfg.rolling_caps_per_fleet_max_cost_usd,
+                per_fleet_max_tokens_total=cfg.rolling_caps_per_fleet_max_tokens_total,
+                per_fleet_max_cache_read_tokens=cfg.rolling_caps_per_fleet_max_cache_read_tokens,
+            )
+            # Estimator doesn't directly project cache_read; use ratio
+            # from est.cache_hit_ratio applied to projected_input_tokens
+            # as a conservative estimate.
+            projected_cache_read = int(est.projected_input_tokens * float(getattr(est, "cache_hit_ratio", 0.0) or 0.0))
+            breach = check_rolling_caps(
+                agent_id=agent_id,
+                projected_cost_usd=float(est.projected_cost_usd),
+                projected_input_tokens=int(est.projected_input_tokens),
+                projected_output_tokens=int(est.projected_output_tokens),
+                projected_cache_read_tokens=projected_cache_read,
+                config=rc_cfg,
+            )
+            if breach is not None:
+                # TIP bypass respects existing semantics: [TIP: bypass=on]
+                # or [TIP: allow=once] both let this request through.
+                tip_allowed = (
+                    tip_directive is not None and (
+                        tip_directive.bypass or tip_directive.allow_scope is not None
+                    )
+                )
+                if not tip_allowed:
+                    _audit(cfg, "rolling_cap_block", session_id,
+                           decision_str="rolling_cap_block",
+                           projected_cost=est.projected_cost_usd, tip=tip_directive)
+                    return GuardOutcome(
+                        kind="block",
+                        response_body=build_rolling_cap_block(breach),
+                        http_status=402,
+                        audit_event="rolling_cap_block",
+                    )
+                else:
+                    _audit(cfg, "rolling_cap_tip_bypass", session_id,
+                           decision_str="allow",
+                           projected_cost=est.projected_cost_usd, tip=tip_directive)
+    except ImportError:
+        # rolling_caps module not yet installed — skip silently
+        pass
+    except Exception as e:
+        _log.debug("spend_guard: rolling-cap check failed (passthrough): %s", e)
+
     # Session-cumulative running cost — read from monitor.db.
     session_running = 0.0
     if cfg.session_block_cost_usd > 0:

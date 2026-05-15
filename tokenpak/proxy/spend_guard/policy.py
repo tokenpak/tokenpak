@@ -211,6 +211,19 @@ class SpendGuardConfig:
     # Below this projected-cost floor we don't even audit (avoid noise).
     audit_min_cost_usd: float = 0.10
 
+    # ── Rolling/cumulative caps (Kevin 2026-05-15 post-incident P0) ──
+    # Supplements the per-session cap. Catches the 2026-05-15 pattern
+    # where 64 sub-cap sessions cumulated to $566 in 8 hours. Default
+    # values per packet p0-rolling-spend-guard-caps-2026-05-15.md.
+    rolling_caps_enabled: bool = True
+    rolling_caps_window_seconds: int = 3600
+    rolling_caps_per_agent_max_cost_usd: float = 20.0
+    rolling_caps_per_agent_max_tokens_total: int = 5_000_000
+    rolling_caps_per_agent_max_cache_read_tokens: int = 4_000_000
+    rolling_caps_per_fleet_max_cost_usd: float = 60.0
+    rolling_caps_per_fleet_max_tokens_total: int = 15_000_000
+    rolling_caps_per_fleet_max_cache_read_tokens: int = 12_000_000
+
 
 # ---------------------------------------------------------------------------
 # Config loader — single source of truth for thresholds
@@ -307,19 +320,64 @@ def load_config(raw_config: Optional[dict] = None) -> SpendGuardConfig:
             except (TypeError, ValueError):
                 pass
 
-    # Per-request token bands + operational knobs
+    # Per-request token bands + operational knobs + rolling-cap integer fields
     for k in (
         "warn_tokens",
         "block_tokens",
         "hard_block_tokens",
         "pending_ttl_seconds",
         "session_window_seconds",
+        "rolling_caps_window_seconds",
+        "rolling_caps_per_agent_max_tokens_total",
+        "rolling_caps_per_agent_max_cache_read_tokens",
+        "rolling_caps_per_fleet_max_tokens_total",
+        "rolling_caps_per_fleet_max_cache_read_tokens",
     ):
         if k in sg:
             try:
                 setattr(cfg, k, int(sg[k]))
             except (TypeError, ValueError):
                 pass
+
+    # Rolling caps — bool + float fields
+    if "rolling_caps_enabled" in sg:
+        cfg.rolling_caps_enabled = _coerce_bool(sg["rolling_caps_enabled"])
+    for k in (
+        "rolling_caps_per_agent_max_cost_usd",
+        "rolling_caps_per_fleet_max_cost_usd",
+    ):
+        if k in sg:
+            try:
+                setattr(cfg, k, float(sg[k]))
+            except (TypeError, ValueError):
+                pass
+
+    # Rolling-cap nested style: also accept `rolling_caps:` subsection
+    rc_block = sg.get("rolling_caps") or {}
+    if isinstance(rc_block, dict):
+        if "enabled" in rc_block:
+            cfg.rolling_caps_enabled = _coerce_bool(rc_block["enabled"])
+        if "window_seconds" in rc_block:
+            try: cfg.rolling_caps_window_seconds = int(rc_block["window_seconds"])
+            except (TypeError, ValueError): pass
+        for sub, mapping in (
+            ("per_agent", {
+                "max_cost_usd": ("rolling_caps_per_agent_max_cost_usd", float),
+                "max_tokens_total": ("rolling_caps_per_agent_max_tokens_total", int),
+                "max_cache_read_tokens": ("rolling_caps_per_agent_max_cache_read_tokens", int),
+            }),
+            ("per_fleet", {
+                "max_cost_usd": ("rolling_caps_per_fleet_max_cost_usd", float),
+                "max_tokens_total": ("rolling_caps_per_fleet_max_tokens_total", int),
+                "max_cache_read_tokens": ("rolling_caps_per_fleet_max_cache_read_tokens", int),
+            }),
+        ):
+            sub_block = rc_block.get(sub) or {}
+            if isinstance(sub_block, dict):
+                for yaml_key, (attr, caster) in mapping.items():
+                    if yaml_key in sub_block:
+                        try: setattr(cfg, attr, caster(sub_block[yaml_key]))
+                        except (TypeError, ValueError): pass
 
     # Legacy dollar bands + warn-cost band
     for k in (
@@ -381,6 +439,15 @@ def load_config(raw_config: Optional[dict] = None) -> SpendGuardConfig:
         ("TOKENPAK_SPEND_GUARD_PENDING_TTL", "pending_ttl_seconds", int),
         ("TOKENPAK_SPEND_GUARD_SESSION_BLOCK_COST_USD", "session_block_cost_usd", float),
         ("TOKENPAK_SPEND_GUARD_SESSION_WINDOW_SECONDS", "session_window_seconds", int),
+        # Rolling caps env overrides
+        ("TOKENPAK_SPEND_GUARD_ROLLING_CAPS_ENABLED", "rolling_caps_enabled", _coerce_bool),
+        ("TOKENPAK_SPEND_GUARD_ROLLING_WINDOW_SECONDS", "rolling_caps_window_seconds", int),
+        ("TOKENPAK_SPEND_GUARD_ROLLING_PER_AGENT_COST_USD", "rolling_caps_per_agent_max_cost_usd", float),
+        ("TOKENPAK_SPEND_GUARD_ROLLING_PER_AGENT_TOKENS", "rolling_caps_per_agent_max_tokens_total", int),
+        ("TOKENPAK_SPEND_GUARD_ROLLING_PER_AGENT_CACHE_READ", "rolling_caps_per_agent_max_cache_read_tokens", int),
+        ("TOKENPAK_SPEND_GUARD_ROLLING_PER_FLEET_COST_USD", "rolling_caps_per_fleet_max_cost_usd", float),
+        ("TOKENPAK_SPEND_GUARD_ROLLING_PER_FLEET_TOKENS", "rolling_caps_per_fleet_max_tokens_total", int),
+        ("TOKENPAK_SPEND_GUARD_ROLLING_PER_FLEET_CACHE_READ", "rolling_caps_per_fleet_max_cache_read_tokens", int),
     ):
         if env_key in env:
             try:
