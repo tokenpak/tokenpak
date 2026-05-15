@@ -276,14 +276,121 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
         return ActivationResult(
             ok=False, summary="Could not write license file.", error=str(exc),
         )
-    return ActivationResult(
-        ok=True,
-        summary=(
-            "License key stored (pending validation — Pro tier not live yet). "
-            "Free-tier features remain active."
-        ),
-        license=lic,
-    )
+    # Best-effort: ask the Pro daemon for the verified tier. Fails closed
+    # — daemon unreachable, unverified signature, placeholder verifier
+    # key, or timeout keeps the stored license at tier=FREE /
+    # status=pending_validation. Local file edits MUST NEVER unlock Pro.
+    daemon_state, advisory = _consult_daemon_for_tier(lic)
+    if daemon_state == "verified":
+        summary = (
+            f"License key stored and verified by the Pro daemon. "
+            f"Active tier: {lic.tier}."
+        )
+    elif daemon_state == "unverified":
+        summary = (
+            "License key stored. Pro daemon rejected verification "
+            f"({advisory}). Pro features remain locked."
+        )
+    elif daemon_state == "placeholder":
+        summary = (
+            "License key stored. Pro daemon is shipping a placeholder "
+            "license public key (production rotation pending). "
+            "Verification is advisory only — Pro features remain locked."
+        )
+    elif daemon_state == "unreachable":
+        summary = (
+            "License key stored. Pro daemon not running — Pro features "
+            "remain locked until the daemon is reachable and "
+            "verification succeeds."
+        )
+    else:
+        summary = (
+            "License key stored (pending validation — Pro tier not live "
+            "yet). Free-tier features remain active."
+        )
+    return ActivationResult(ok=True, summary=summary, license=lic)
+
+
+def _consult_daemon_for_tier(lic: "License") -> tuple[str, str]:
+    """Ask the Pro daemon's ``/v1/features`` endpoint about ``lic``.
+
+    Returns ``(state, advisory)`` where ``state`` is one of:
+
+      ``"verified"``    — daemon returned ``signature.verified=true``
+                          AND ``signature.key_is_placeholder=false``
+                          AND ``is_valid=true``. ``lic`` was updated
+                          in place and saved with the daemon-reported
+                          tier + status="active".
+      ``"unverified"``  — daemon returned ``signature.verified=false``;
+                          advisory carries the failure reason.
+      ``"placeholder"`` — daemon reports placeholder verifier key.
+      ``"unreachable"`` — daemon probe failed, sock-info missing, HTTP
+                          error, malformed payload, or any exception.
+      ``"pending"``     — kept for forward-compatibility.
+
+    Fail-closed: any exception or unexpected payload shape collapses
+    to ``"unreachable"``. OSS NEVER claims Pro on partial info. Local
+    ``license.json`` edits never bypass this — the function only
+    writes back when the daemon explicitly returns a verified envelope.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    try:
+        from tokenpak.licensing.daemon_probe import (
+            detect_daemon_state, sock_info_path,
+        )
+    except ImportError:
+        return ("unreachable", "daemon_probe_unavailable")
+
+    if detect_daemon_state() != "active":
+        return ("unreachable", "daemon_not_listening")
+
+    try:
+        info_path = sock_info_path()
+        info = json.loads(info_path.read_text(encoding="utf-8"))
+        port = info.get("port")
+        if not isinstance(port, int):
+            return ("unreachable", "sock_info_missing_port")
+    except (OSError, json.JSONDecodeError, ValueError):
+        return ("unreachable", "sock_info_unreadable")
+
+    url = f"http://127.0.0.1:{port}/v1/features"
+    try:
+        with urllib.request.urlopen(url, timeout=2.0) as resp:
+            payload = json.loads(resp.read())
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError) as exc:
+        return ("unreachable", f"http_error:{type(exc).__name__}")
+
+    if not isinstance(payload, dict):
+        return ("unreachable", "malformed_payload")
+
+    sig = payload.get("signature") or {}
+    if not isinstance(sig, dict):
+        return ("unreachable", "malformed_signature_envelope")
+
+    if sig.get("key_is_placeholder", False):
+        return ("placeholder", "verifier_key_is_placeholder")
+
+    if not sig.get("verified", False):
+        reason = sig.get("reason", "unknown")
+        return ("unverified", f"signature_{reason}")
+
+    if not payload.get("is_valid", False):
+        return ("unverified", str(payload.get("degraded_reason", "not_valid")))
+
+    daemon_tier = str(payload.get("tier", TIER_FREE)).lower()
+    if daemon_tier in (TIER_PRO, TIER_TEAM, TIER_ENTERPRISE):
+        lic.tier = daemon_tier
+        lic.status = "active"
+        try:
+            save_license(lic)
+        except Exception:
+            return ("unreachable", "save_failed")
+        return ("verified", f"daemon_tier:{daemon_tier}")
+
+    return ("unverified", f"daemon_tier_not_paid:{daemon_tier}")
 
 
 def deactivate() -> bool:
