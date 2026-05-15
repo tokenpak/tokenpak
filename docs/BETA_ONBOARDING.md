@@ -12,6 +12,15 @@ If anything in this guide doesn't work for you, please capture the
 output and file a report. Beta means the rough edges are still
 visible by design.
 
+## Status
+
+This guide targets the **internal smoke beta** of TokenPak Beta 1.
+External / public beta is gated by release-governance items called out
+in `KNOWN_LIMITATIONS.md` and the project blocker ledger. If you
+received a link to this file from outside the internal tester pool,
+the public beta announcement hasn't shipped yet and some features
+described below are still being hardened.
+
 ---
 
 ## 1. Install

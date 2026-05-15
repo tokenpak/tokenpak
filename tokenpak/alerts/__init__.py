@@ -71,13 +71,17 @@ class AlertRuleState:
 
 
 def _get_config_path() -> Path:
-    """Return path to config file."""
-    return Path.home() / ".tokenpak" / "config.yaml"
+    """Return path to config file (Std 33-resolved)."""
+    from tokenpak import _paths
+
+    return _paths.under("config.yaml")
 
 
 def _get_state_path() -> Path:
-    """Return path to alert state file."""
-    return Path.home() / ".tokenpak" / "alert_state.json"
+    """Return path to alert state file (Std 33-resolved)."""
+    from tokenpak import _paths
+
+    return _paths.under("alert_state.json")
 
 
 def _get_default_rules() -> list[AlertRule]:

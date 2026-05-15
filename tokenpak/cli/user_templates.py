@@ -26,7 +26,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-TEMPLATES_DIR = Path.home() / ".tokenpak" / "templates"
+def _resolve_templates_dir() -> Path:
+    """Std 33: canonical ~/.tpk/templates with legacy ~/.tokenpak/templates fallback."""
+    from tokenpak import _paths
+
+    return _paths.under("templates")
+
+
+TEMPLATES_DIR = _resolve_templates_dir()
 VARIABLE_RE = re.compile(r"\{\{(\w+)\}\}")
 
 

@@ -48,9 +48,11 @@ def _load_channel_configs() -> list[dict]:
     import json
     from pathlib import Path
 
+    from tokenpak import _paths
+
     for config_path in (
-        Path.home() / ".tokenpak" / "config.yaml",
-        Path.home() / ".tokenpak" / "config.json",
+        _paths.under("config.yaml"),
+        _paths.under("config.json"),
     ):
         if not config_path.exists():
             continue
