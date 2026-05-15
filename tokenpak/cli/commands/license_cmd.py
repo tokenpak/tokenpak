@@ -91,18 +91,27 @@ def run_plan(args: argparse.Namespace) -> int:
 
 
 def run_activate(args: argparse.Namespace) -> int:
-    """`tokenpak activate <key>` — store a license key."""
+    """`tokenpak activate <key>` — store a license key.
+
+    Per Beta 1 hardening (Packet G), this rejects obviously invalid
+    inputs (empty, too short, wrong charset, placeholder strings) and
+    surfaces a non-zero exit so scripts / CI don't silently treat a
+    bad activation as success.
+    """
+    import sys as _sys
+
     key = (getattr(args, "key", "") or "").strip()
     email = (getattr(args, "email", "") or "").strip()
     if not key:
-        print("activate: provide a license key → tokenpak activate <key>")
-        return 2
+        print("activate: provide a license key → tokenpak activate <key>",
+              file=_sys.stderr)
+        _sys.exit(2)
     result = _lic.activate(key, email=email)
     if not result.ok:
-        print(f"✖ activate failed: {result.summary}")
+        print(f"✖ activate failed: {result.summary}", file=_sys.stderr)
         if result.error:
-            print(f"  detail: {result.error}")
-        return 1
+            print(f"  detail: {result.error}", file=_sys.stderr)
+        _sys.exit(1)
     print("")
     print(f"  ✅ {result.summary}")
     if result.license and result.license.activated_at:

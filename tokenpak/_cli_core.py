@@ -4498,6 +4498,11 @@ def main():
         "deactivate",
         "init",
         "monitor",
+        # Beta 1 verb families (TIP, features, PAKPlan preview, Std 33 home)
+        "tip",
+        "features",
+        "pakplan",
+        "home",
     }
     # If user asks --help on an unrecognised command, just show that command's usage + exit 0
     if (

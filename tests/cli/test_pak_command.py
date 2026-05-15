@@ -66,15 +66,19 @@ def test_parser_registers_pak_subcommand():
 
 def test_parser_registers_all_actions():
     parser = _make_parser()
-    for action in ("inspect", "export", "import", "status"):
+    for action in ("inspect", "export", "create", "import", "status"):
         # Each action requires a positional or option, so we provide enough
         # to make argparse happy and still validate registration.
         if action == "inspect":
             args = parser.parse_args(["pak", action, "vault:x#y"])
         elif action == "export":
             args = parser.parse_args(["pak", action, "vault:x#y", "-o", "/tmp/o"])
+        elif action == "create":
+            args = parser.parse_args(["pak", action, "/tmp/src",
+                                      "-o", "/tmp/out.pak.json"])
         elif action == "import":
-            args = parser.parse_args(["pak", action, "/tmp/in", "-o", "/tmp/out.pak"])
+            # Beta 1: import now takes a pak file (not a directory).
+            args = parser.parse_args(["pak", action, "/tmp/in.pak.json"])
         else:  # status
             args = parser.parse_args(["pak", action])
         assert args.pak_action == action
@@ -283,14 +287,20 @@ def test_export_vault_not_indexed_exits_1(capsys, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_import_returns_pro_required(capsys, tmp_path):
+def test_import_rejects_missing_file(capsys, tmp_path):
+    """Beta 1 ``pak import`` is OSS (Kevin directive 2026-05-15).
+
+    The verb installs a Pak file into the local store, verifying the
+    file's declared checksum. ``pak import`` against a non-existent
+    file must exit 1 with a clear ``file not found`` error.
+    """
     args = SimpleNamespace(
-        source_dir=str(tmp_path), output=str(tmp_path / "out.pak")
+        pak_file=str(tmp_path / "nope.pak.json"), force=False,
     )
     rc = cmd_pak_import(args)
     err = capsys.readouterr().err
     assert rc == 1
-    assert "Pro daemon" in err or "capture pipeline" in err
+    assert "file not found" in err
 
 
 # ---------------------------------------------------------------------------

@@ -579,26 +579,31 @@ def _read_multipak_enabled() -> bool:
 def _vault_block_count() -> int:
     """Best-effort vault index block count for `pak status`.
 
-    Fast-path: if no vault index file is on disk we return 0 without
-    importing the proxy module graph. This keeps ``pak status`` snappy
-    on a fresh install (the proxy package is heavy on import).
+    Tester contract: ``pak status`` must NEVER trigger a heavy vault
+    index load. The vault subsystem has its own ``tokenpak vault
+    status`` verb for that. We only report a count when the proxy
+    module is already loaded in this process AND the index is in
+    memory; otherwise we return 0 with the understanding that the
+    text/JSON output explains the user has to run ``tokenpak vault
+    status`` for the real count.
     """
-    from tokenpak import _paths
+    import sys as _sys
 
-    candidates = (
-        _paths.under("vault_index.json"),
-        _paths.under("index.json"),
-        Path.home() / "vault" / ".tokenpak" / "index.json",
-    )
-    if not any(p.exists() for p in candidates):
+    if "tokenpak.proxy.vault_bridge" not in _sys.modules:
         return 0
     try:
-        from tokenpak.proxy.vault_bridge import get_vault_index
+        from tokenpak.proxy.vault_bridge import get_vault_index  # type: ignore[import]
 
         vi = get_vault_index()
         if vi is None:
             return 0
-        return len(getattr(vi, "blocks", {}) or {})
+        # Some implementations build the index lazily on call — only
+        # consult an already-realised ``blocks`` mapping; never trigger
+        # population from this status path.
+        blocks = getattr(vi, "blocks", None)
+        if not isinstance(blocks, dict):
+            return 0
+        return len(blocks)
     except Exception:
         return 0
 
@@ -681,16 +686,55 @@ def _inspect_from_file(path: str, *, as_json: bool) -> int:
 
 
 def _print_pak_text(payload: dict) -> None:
+    """Render a Pak's metadata.
+
+    Handles two shapes:
+      - Beta 1 OSS file form (``schema_version: 1``, anchors with embedded
+        content, top-level objective/summary/checksum) produced by
+        ``pak create``.
+      - Vault Pak form (``status``/``authority``/``confidence``/``source``
+        sub-objects) produced by the Vault adapter.
+    """
     print(f"Pak {payload.get('pak_id', '?')}")
     print("─" * 40)
     print(f"  type        : {payload.get('pak_type', '?')}")
     print(f"  title       : {payload.get('title', '')}")
+
+    # Beta 1 file form
+    if payload.get("schema_version") is not None:
+        if payload.get("objective"):
+            print(f"  objective   : {payload['objective']}")
+        if payload.get("ttl"):
+            print(f"  ttl         : {payload['ttl']}")
+        if payload.get("token_estimate") is not None:
+            print(f"  tokens (est): {payload['token_estimate']}")
+        anchors = payload.get("anchors") or []
+        print(f"  anchors     : {len(anchors)}")
+        if payload.get("checksum"):
+            print(f"  checksum    : {payload['checksum'][:32]}…")
+        if payload.get("created_at"):
+            print(f"  created_at  : {payload['created_at']}")
+        scope = payload.get("scope", {}) or {}
+        if scope.get("source_root"):
+            print(f"  source_root : {scope['source_root']}")
+        if payload.get("summary"):
+            print()
+            print("Summary:")
+            print(f"  {payload['summary']}")
+        if payload.get("continuation_notes"):
+            print()
+            print("Continuation notes:")
+            print(f"  {payload['continuation_notes']}")
+        return
+
+    # Vault Pak form
     print(f"  status      : {payload.get('status', '?')}")
     print(f"  authority   : {payload.get('authority', '?')}")
     print(f"  confidence  : {payload.get('confidence', '?')}")
     src = payload.get("source", {}) or {}
     print(f"  source      : {src.get('platform', '?')} ({src.get('source_type', '?')})")
-    print(f"  source_hash : {src.get('source_hash', '')[:16]}…")
+    src_hash = src.get('source_hash', '') or ''
+    print(f"  source_hash : {src_hash[:16]}…" if src_hash else "  source_hash : ")
     print(f"  created_at  : {src.get('created_at', '?')}")
     scope = payload.get("scope", {}) or {}
     if scope.get("project"):
