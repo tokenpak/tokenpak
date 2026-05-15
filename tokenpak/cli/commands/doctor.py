@@ -67,7 +67,12 @@ def run_doctor(
     counts = {"pass": 0, "warn": 0, "fail": 0}
     fixes: list[tuple[str, Path]] = []
     checks: list[dict] = []
-    tokenpak_dir = Path.home() / ".tokenpak"
+    # Std 33: resolve through _paths so doctor reports the canonical
+    # home (~/.tpk/) when present, and surfaces the legacy fallback
+    # when the user hasn't run `tokenpak home migrate` yet.
+    from tokenpak import _paths
+
+    tokenpak_dir = _paths.home()
 
     def _record(
         name: str,
@@ -90,6 +95,40 @@ def run_doctor(
             if verbose and detail:
                 for line in detail.splitlines():
                     print(f"         {line}")
+
+    # === Check 0: Std 33 home boundary ==========================================
+    # Reports the resolved TokenPak home + flags legacy paths that should
+    # be migrated. Cheap, side-effect-free, runs before everything else
+    # so the operator sees the boundary state up front.
+    if _paths.is_legacy_active():
+        _record(
+            "home_boundary",
+            "warn",
+            f"~/.tpk/ boundary    legacy: {_paths.legacy_home()}",
+            detail=(
+                f"Using legacy ~/.tokenpak/ — canonical ~/.tpk/ is "
+                f"absent. Run `tokenpak home migrate` to copy your "
+                f"state to ~/.tpk/ (non-destructive, backup-first)."
+            ),
+        )
+    elif _paths.has_legacy() and _paths.has_canonical():
+        _record(
+            "home_boundary",
+            "warn",
+            f"~/.tpk/ boundary    canonical + legacy both present",
+            detail=(
+                f"Both {_paths.canonical_home()} and "
+                f"{_paths.legacy_home()} exist. Canonical wins. "
+                f"Once you've confirmed ~/.tpk/ is working, you can "
+                f"remove the legacy directory manually."
+            ),
+        )
+    else:
+        _record(
+            "home_boundary",
+            "pass",
+            f"~/.tpk/ boundary    {tokenpak_dir}",
+        )
 
     # === Check 1: Proxy health with latency =====================================
     proxy_port = int(os.environ.get("TOKENPAK_PORT", "8766"))
