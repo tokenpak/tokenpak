@@ -219,10 +219,14 @@ class SpendGuardConfig:
     rolling_caps_window_seconds: int = 3600
     rolling_caps_per_agent_max_cost_usd: float = 20.0
     rolling_caps_per_agent_max_tokens_total: int = 5_000_000
-    rolling_caps_per_agent_max_cache_read_tokens: int = 4_000_000
+    # cache_read caps DISABLED by default per Kevin 2026-05-15: cache_read
+    # is ~90% cheaper than input/output and inflates without reflecting
+    # real risk. cache_read remains recorded for observability + still
+    # configurable via spend_guard.rolling_caps.* if an operator opts in.
+    rolling_caps_per_agent_max_cache_read_tokens: int = 0
     rolling_caps_per_fleet_max_cost_usd: float = 60.0
     rolling_caps_per_fleet_max_tokens_total: int = 15_000_000
-    rolling_caps_per_fleet_max_cache_read_tokens: int = 12_000_000
+    rolling_caps_per_fleet_max_cache_read_tokens: int = 0
 
 
 # ---------------------------------------------------------------------------
