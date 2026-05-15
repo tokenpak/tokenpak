@@ -206,17 +206,61 @@ class ActivationResult:
 def activate(key: str, *, email: str = "") -> ActivationResult:
     """Store a license key for future validation.
 
-    Since no entitlement server exists yet, we don't know what tier a key
-    buys. Store it with status='pending_validation' and default to Free
-    entitlements until a real validator lands. This lets early buyers
-    install their key without the CLI failing, and any gated feature still
-    correctly reports Free until validation completes.
+    No entitlement server exists yet, so we cannot know what tier a key
+    buys. Tier defaults to Free; status is ``pending_validation`` until
+    a real validator lands. This intentionally fails *safe* — anybody
+    who tries to bypass payment by inventing a string sees Free-tier
+    behavior, never Pro.
+
+    The shape check below rejects obviously invalid inputs (empty,
+    whitespace, too short, non-printable, internal placeholder strings)
+    so the CLI never claims success on garbage. Genuine keys passing
+    the shape check are stored verbatim for the validator to verify
+    once wired (Packet G-private, Std 25 §3.4).
+
+    Important: this function does NOT grant Pro entitlements on its
+    own. It is a *store-and-stage* step. ``is_feature_enabled`` is the
+    single choke point that decides what a key buys.
     """
-    key = key.strip()
+    import re
+
+    key = (key or "").strip()
     if not key:
         return ActivationResult(
             ok=False, summary="No license key provided.",
             error="empty_key",
+        )
+    if len(key) < 16:
+        return ActivationResult(
+            ok=False,
+            summary=(
+                "License key is implausibly short (need ≥ 16 characters). "
+                "Paste the full key from your purchase confirmation."
+            ),
+            error="key_too_short",
+        )
+    if not key.isprintable():
+        return ActivationResult(
+            ok=False,
+            summary="License key contains non-printable characters.",
+            error="non_printable_key",
+        )
+    # Allow alphanumeric, dash, dot, underscore, slash, plus, equals
+    # (covers base64url + dotted token formats).
+    if not re.match(r"^[A-Za-z0-9._/+=\-]+$", key):
+        return ActivationResult(
+            ok=False,
+            summary=(
+                "License key has unexpected characters. Keys are "
+                "alphanumeric plus '-._/+='."
+            ),
+            error="bad_key_charset",
+        )
+    if key.lower() in {"test", "demo", "placeholder", "tbd", "free"}:
+        return ActivationResult(
+            ok=False,
+            summary=f"{key!r} is not a real license key.",
+            error="placeholder_key",
         )
     import datetime
     lic = License(
@@ -281,6 +325,91 @@ def describe_tier(tier: str) -> str:
         TIER_TEAM: "Team",
         TIER_ENTERPRISE: "Enterprise",
     }.get(tier, tier.title())
+
+
+def discover_plans() -> list[dict[str, Any]]:
+    """Derive the plan catalog dynamically from ``_GATES`` (Beta 1).
+
+    Tier presence is data-driven: a tier appears in the catalog only if
+    at least one feature is gated to it, which means adding a new
+    feature with a new tier automatically shows up here — no hardcoded
+    list to maintain (``feedback_always_dynamic.md``).
+
+    Pricing data is read from a discovery file at
+    ``<TOKENPAK_HOME>/pricing.json`` when present; otherwise the
+    ``price`` field is the string ``"unannounced"`` (honest, not the
+    misleading ``"TBD"`` that the Beta-1 readiness audit flagged).
+
+    Returns a list of dicts:
+        {tier, label, feature_count, features, price, blurb}
+    in canonical order Free → Pro → Team → Enterprise.
+    """
+    # Reverse the gate table: tier → [features]
+    tier_features: dict[str, list[str]] = {TIER_FREE: []}
+    for feature, required in _GATES.items():
+        tier_features.setdefault(required, []).append(feature)
+
+    pricing = _load_pricing_manifest()
+    blurbs = _default_blurbs()
+    order = (TIER_FREE, TIER_PRO, TIER_TEAM, TIER_ENTERPRISE)
+
+    catalog: list[dict[str, Any]] = []
+    for tier in order:
+        if tier != TIER_FREE and tier not in tier_features:
+            continue
+        feats = sorted(tier_features.get(tier, []))
+        catalog.append({
+            "tier": tier,
+            "label": describe_tier(tier),
+            "feature_count": len(feats),
+            "features": feats,
+            "price": pricing.get(tier, "unannounced"),
+            "blurb": blurbs.get(tier, ""),
+        })
+    return catalog
+
+
+def _load_pricing_manifest() -> dict[str, str]:
+    """Read ``<TOKENPAK_HOME>/pricing.json`` if present.
+
+    Shape: ``{"free": "$0", "pro": "$X/mo", ...}``. Missing / unparseable
+    file → empty dict (callers fall back to ``"unannounced"``).
+    """
+    try:
+        from tokenpak import _paths
+
+        p = _paths.under("pricing.json")
+        if not p.exists():
+            return {}
+        import json as _json
+
+        data = _json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): str(v) for k, v in data.items()}
+    except Exception:
+        return {}
+
+
+def _default_blurbs() -> dict[str, str]:
+    return {
+        TIER_FREE: (
+            "Full Free-tier feature set — proxy, vault, basic "
+            "compression, dashboard, savings tracking."
+        ),
+        TIER_PRO: (
+            "Adds advanced compression, smart routing, session "
+            "telemetry, trace + replay, CSV/JSON export."
+        ),
+        TIER_TEAM: (
+            "Adds budget enforcement, OAuth, real-time stats API, "
+            "shared vault, handoff system, workflow budgets."
+        ),
+        TIER_ENTERPRISE: (
+            "Adds A/B testing, shadow mode, regression detection, "
+            "FinOps + audit pages, DLP/PII scanning, connection pooling."
+        ),
+    }
 
 
 def summary_for_cli(lic: Optional[License] = None) -> dict[str, Any]:
