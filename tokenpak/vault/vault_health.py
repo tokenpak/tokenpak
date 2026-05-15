@@ -341,21 +341,38 @@ class VaultHealth:
                     logger.warning("VaultHealth: error indexing %s: %s", filepath, exc)
                     files_errored += 1
 
-        # Prune blocks for deleted files
+        # Preserve non-filesystem blocks (e.g. claude_transcript) across
+        # filesystem rebuilds — these were added by source adapters and have
+        # no representation under self.vault_dir.
+        preserved_non_filesystem = 0
+        for bid, entry in old_blocks.items():
+            if not isinstance(entry, dict):
+                continue
+            src_type = entry.get("source_type")
+            if src_type and src_type != "filesystem":
+                if bid not in new_blocks:
+                    new_blocks[bid] = entry
+                    preserved_non_filesystem += 1
+
+        # Prune blocks for deleted files (filesystem-source only)
         entries_removed = 0
         for bid in list(new_blocks.keys()):
             entry = new_blocks.get(bid)
-            if entry:
-                src = self.vault_dir / entry.get("source_path", "")
-                if not src.exists():
-                    del new_blocks[bid]
-                    entries_removed += 1
-                    block_file = self.blocks_dir / f"{bid}.txt"
-                    if block_file.exists():
-                        try:
-                            block_file.unlink()
-                        except OSError:
-                            pass
+            if not entry:
+                continue
+            src_type = entry.get("source_type", "filesystem")
+            if src_type != "filesystem":
+                continue
+            src = self.vault_dir / entry.get("source_path", "")
+            if not src.exists():
+                del new_blocks[bid]
+                entries_removed += 1
+                block_file = self.blocks_dir / f"{bid}.txt"
+                if block_file.exists():
+                    try:
+                        block_file.unlink()
+                    except OSError:
+                        pass
 
         entries_added = len(new_blocks) - (len(old_blocks) - entries_removed)
         elapsed = time.time() - t0

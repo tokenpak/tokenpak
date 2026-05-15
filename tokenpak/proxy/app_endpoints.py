@@ -298,13 +298,28 @@ def _handle_vault_search(handler: Any, qs: dict[str, list[str]]) -> None:
     out = []
     for block, score in results:
         block_id = block.get("block_id") or block.get("id") or ""
-        out.append({
+        source = block.get("source_type") or "vault"
+        row = {
             "block_id": block_id,
-            "path": block.get("path", ""),
+            "path": block.get("path") or block.get("source_path", ""),
             "score": round(float(score), 3),
-            "tokens": int(block.get("tokens", 0) or 0),
+            "tokens": int(block.get("tokens", 0) or block.get("raw_tokens", 0) or 0),
             "preview": (block.get("title") or block.get("summary") or "")[:200],
-        })
+            "source": source,
+        }
+        if source == "claude_transcript":
+            ct = block.get("claude_transcript") or {}
+            if ct:
+                row["claude_transcript"] = {
+                    "project_dir": ct.get("project_dir"),
+                    "project_cwd_guess": ct.get("project_cwd_guess"),
+                    "session_id": ct.get("session_id"),
+                    "session_file": ct.get("session_file"),
+                    "message_count": ct.get("message_count"),
+                    "first_timestamp": ct.get("first_timestamp"),
+                    "last_timestamp": ct.get("last_timestamp"),
+                }
+        out.append(row)
     _send_json(handler, 200, {"query": query, "count": len(out), "results": out})
 
 

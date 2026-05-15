@@ -186,6 +186,7 @@ tokenpak = [
     "state_schema.json",
     "models/data/*.json",
     "telemetry/data/*.json",
+    "tip/schemas/*.json",
     "dashboard/templates/**/*",
     "telemetry/dashboard/static/**/*",
     "telemetry/dashboard/templates/**/*",
