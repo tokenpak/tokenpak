@@ -105,25 +105,45 @@ jobs:
           # \bStd 2[0-9]\b / \bStd 3[0-9]\b patterns would forbid Std 30
           # implementation code from referencing Std 30 by number.
           #
-          # Scope is intentionally narrow:
-          #   - scripts/release_gate/**
-          #   - .github/workflows/release.yml
-          #   - .github/workflows/release-rehearsal.yml
-          #   - Makefile (release-gate targets)
+          # TWO-TIER SCOPE (intentionally narrow):
+          #
+          #   Tier 1 — release-gate implementation surfaces (human-authored):
+          #     - scripts/release_gate/**
+          #     - .github/workflows/release.yml
+          #     - .github/workflows/release-rehearsal.yml
+          #     - Makefile (release-gate targets)
+          #     Masks: Std 21 + Std 30 references only.
+          #
+          #   Tier 2 — release-gate generated-artifact surfaces:
+          #     - tokenpak/_snapshots/**
+          #     Masks: Std 21 + Std 30 references AND `openclaw` module
+          #     symbols (existing package modules like
+          #     `tokenpak.creds.providers.openclaw`, `tokenpak.sdk.openclaw`
+          #     are real generated symbol names captured in public-api.json;
+          #     forcing them to be renamed via the language check would
+          #     break the package).
           #
           # ONLY Std 21 and Std 30 are masked. Other Std numbers (22, 23,
-          # 31, 32, etc.) remain forbidden in these files. Outside these
+          # 31, 32, etc.) remain forbidden in these files. Outside Tier 1+2
           # paths the standards patterns apply unchanged.
           #
-          # This is a standards-implementation exception for release-gate
-          # code, NOT a general public-language exemption: agent names,
-          # internal fleet names, internal task IDs, /home/sue/ paths,
-          # .claude/projects paths, etc. all remain forbidden in
-          # release-gate code per the unchanged patterns above.
-          is_release_gate_path() {
+          # This is a standards-implementation + generated-artifact exception,
+          # NOT a general public-language exemption: agent names, internal
+          # fleet names, internal task IDs, /home/sue/ paths,
+          # .claude/projects paths, etc. all remain forbidden everywhere
+          # except where they are LITERAL GENERATED PACKAGE MODULE NAMES
+          # (which is the openclaw narrow case under Tier 2 only).
+          is_release_gate_impl_path() {
             case "$1" in
               scripts/release_gate/*|.github/workflows/release.yml|.github/workflows/release-rehearsal.yml|Makefile)
                 return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          is_release_gate_snapshot_path() {
+            case "$1" in
+              tokenpak/_snapshots/*) return 0 ;;
               *) return 1 ;;
             esac
           }
@@ -140,11 +160,25 @@ jobs:
                 -e 's/multi-instance[[:space:]]+fleet/multi-instance __PUBLIC_TMUX_MODE__/g' \
                 -e 's/multi-instance-fleet/multi-instance-__PUBLIC_TMUX_MODE__/g' \
                 "$file"
-            elif is_release_gate_path "$file"; then
-              # Release-gate implementation/test/workflow surface: mask the
-              # specific Std 21 / Std 30 references the code legitimately
-              # implements. All other patterns (agent names, internal IDs,
-              # paths, etc.) and all other Std numbers remain enforced.
+            elif is_release_gate_snapshot_path "$file"; then
+              # Tier 2 — generated-artifact scope: mask Std 21 / Std 30
+              # references AND the existing `openclaw` module-name symbols
+              # captured in the public-api snapshot. Other patterns
+              # (agent names like Sue/Cali/Trix/Suki/ReiPo, internal task
+              # IDs, /home/sue/ paths, .claude/projects, etc.) remain
+              # enforced even in snapshot files.
+              sed -E \
+                -e 's/\bStd 21\b/Std __PUBLIC_RELGATE_REF_21__/g' \
+                -e 's/\bStd 30\b/Std __PUBLIC_RELGATE_REF_30__/g' \
+                -e 's/\bopenclaw\b/__GENERATED_MODULE_OPENCLAW__/g' \
+                "$file"
+            elif is_release_gate_impl_path "$file"; then
+              # Tier 1 — release-gate implementation/test/workflow surface:
+              # mask the specific Std 21 / Std 30 references the code
+              # legitimately implements. All other patterns (agent names,
+              # internal IDs, paths, etc.) and all other Std numbers remain
+              # enforced. openclaw is NOT masked here — Tier 1 files should
+              # not reference openclaw.
               sed -E \
                 -e 's/\bStd 21\b/Std __PUBLIC_RELGATE_REF_21__/g' \
                 -e 's/\bStd 30\b/Std __PUBLIC_RELGATE_REF_30__/g' \
