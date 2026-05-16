@@ -18,7 +18,7 @@ MKDOCS      := $(VENV_BIN)/mkdocs
 UNAME := $(shell uname -s)
 
 # ── Phony targets ──────────────────────────────────────────────────────────────
-.PHONY: help dev test lint format check build docs clean install hooks benchmark-headline workflow-steps-snapshot workflow-steps-check
+.PHONY: help dev test lint format check build docs clean install hooks benchmark-headline
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:  ## Show this help message
@@ -114,23 +114,45 @@ clean-all: clean  ## Remove everything including venv
 	rm -rf $(VENV)
 	@echo "✅  Full clean (including venv)"
 
-# ── Workflow-step ratchet ─────────────────────────────────────────────────────
-# Regenerates and verifies the deterministic snapshot of every GitHub Actions
-# workflow step under .github/workflows/. The snapshot lives in
-# tokenpak/_snapshots/workflow-steps.json and is the canonical pin for the
-# release-gate workflow-as-code refactor isolation rule. See
-# tokenpak/_snapshots/README.md for the full ratchet protocol, including the
-# `removes-ci-step:` PR-body declaration required for any PR that removes a
-# workflow step.
-#
-# `workflow-steps-snapshot` REGENERATES the snapshot in place. Run this before
-# committing any change under .github/workflows/.
-#
-# `workflow-steps-check` VERIFIES the committed snapshot matches the current
-# workflow set. Exit 0 = no drift; exit 1 = drift detected (snapshot stale or
-# step removed without declaration).
-workflow-steps-snapshot:  ## Regenerate the workflow-step snapshot
-	$(PYTHON) scripts/snapshot-workflow-steps.py
+# ── Release-Gate Trust Contract (Std 30, ratified 2026-05-09) ────────────────
+.PHONY: api-snapshot api-snapshot-check api-snapshot-diff workflow-steps-snapshot \
+        workflow-steps-check telemetry-snapshot telemetry-check taxonomy-check \
+        deps-audit migration-multihop release-gate-snapshots release-gate-check
 
-workflow-steps-check:  ## Verify the workflow-step snapshot matches current workflows
-	$(PYTHON) scripts/snapshot-workflow-steps.py --check
+api-snapshot:  ## Std 30 §7 (R7) — regenerate tokenpak/_snapshots/public-api.json
+	$(PYTHON) scripts/release_gate/gen_api_snapshot.py
+
+api-snapshot-check:  ## Std 30 §7 — fail if public-api.json drifts from current source
+	$(PYTHON) scripts/release_gate/gen_api_snapshot.py --check
+
+api-snapshot-diff:  ## Std 30 §6 (R6) + Std 21 §11 — diff snapshots between BASE and HEAD
+	$(PYTHON) scripts/release_gate/api_snapshot_diff.py $(BASE) $(HEAD)
+
+workflow-steps-snapshot:  ## Std 30 §13.3 (R11) + Std 21 §12 — regenerate workflow-steps.json
+	$(PYTHON) scripts/release_gate/gen_workflow_steps.py
+
+workflow-steps-check:  ## Std 30 §13.3 — fail if workflow-steps.json drifts
+	$(PYTHON) scripts/release_gate/gen_workflow_steps.py --check
+
+telemetry-snapshot:  ## Std 30 §7 — regenerate tokenpak/_snapshots/telemetry-schema.json
+	$(PYTHON) scripts/release_gate/gen_telemetry_schema.py
+
+telemetry-check:  ## Std 30 §7 — fail if telemetry-schema.json drifts
+	$(PYTHON) scripts/release_gate/gen_telemetry_schema.py --check
+
+taxonomy-check:  ## Std 02 §13 + Std 30 §5 (R5) — every test has exactly one taxonomy marker
+	$(PYTHON) scripts/release_gate/taxonomy_check.py
+
+deps-audit:  ## Std 02 §14 + Std 30 §13.2 (R17) — uv lock --check + pip-audit + yanked-package scan
+	@command -v uv >/dev/null && uv lock --check || echo "uv not installed; skipping uv lock --check (install uv to enable)"
+	$(PYTHON) -m pip install --quiet pip-audit
+	$(PYTHON) -m pip_audit --strict --skip-editable
+
+migration-multihop:  ## Std 30 §14.1 (R16) + Std 10 §E9 — run migrations from each of last 6 minor versions
+	$(PYTHON) scripts/release_gate/migration_multihop.py
+
+release-gate-snapshots: api-snapshot workflow-steps-snapshot telemetry-snapshot  ## Regenerate ALL release-gate snapshots
+	@echo "✅  All release-gate snapshots regenerated"
+
+release-gate-check: api-snapshot-check workflow-steps-check telemetry-check taxonomy-check  ## Validate ALL release-gate snapshots
+	@echo "✅  All release-gate checks passed"
