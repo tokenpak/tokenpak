@@ -44,13 +44,13 @@ _ABS_PATH_PAREN_RE = None  # lazily compiled
 _SIDECAR_RE = None  # lazily compiled
 
 
-def _format_import_error(e: BaseException) -> str:
+def _format_import_error(e: BaseException, module_name: str = "") -> str:
     """Format an import-time exception as a host-independent IMPORT_ERROR string.
 
     Output shape: ``<IMPORT_ERROR: <ExceptionType>: <message>>``
 
-    Two normalizations make this host-independent so the snapshot does not
-    drift between developer hosts (where sidecar integration packages
+    Three normalizations make this host-independent so the snapshot does
+    not drift between developer hosts (where sidecar integration packages
     like ``autogen_tokenpak`` / ``crewai_tokenpak`` are editable-installed)
     and CI (where they are not):
 
@@ -65,6 +65,17 @@ def _format_import_error(e: BaseException) -> str:
          ``ModuleNotFoundError: No module named '<sidecar>'`` that the
          gateless CI environment would emit.
 
+      3. When the failing import is under ``tokenpak.sdk.<sidecar>.*`` (the
+         walk site of a sidecar integration), the error is normalized to
+         ``ModuleNotFoundError: No module named '<sidecar>_tokenpak'``
+         regardless of the actual exception. This covers the case where
+         the sidecar itself loads on the developer host but its transitive
+         imports fail (e.g. ``tokenpak.sdk.crewai.examples.basic_usage``
+         raises ``No module named 'tokenpak.agent.agentic'`` on the
+         developer host but ``No module named 'crewai_tokenpak'`` on CI —
+         both indicate the same effective state: the sidecar integration
+         is not usable in this environment).
+
     Without this normalization the snapshot captures host-specific noise
     and the release-gate snapshot check drifts on every developer-host
     regeneration.
@@ -78,6 +89,13 @@ def _format_import_error(e: BaseException) -> str:
         _SIDECAR_RE = re.compile(
             r"cannot import name '[^']+' from '([a-z_]+_tokenpak)'"
         )
+
+    # Walk-site sidecar normalization (transform 3 above)
+    m_walk = re.match(r"^tokenpak\.sdk\.([a-z_]+)\.", module_name)
+    if m_walk:
+        sidecar = m_walk.group(1)
+        return f"<IMPORT_ERROR: ModuleNotFoundError: No module named '{sidecar}_tokenpak'>"
+
     msg = _ABS_PATH_PAREN_RE.sub("", str(e))
     m = _SIDECAR_RE.search(msg)
     if m:
@@ -120,7 +138,7 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
     try:
         pkg = importlib.import_module(package_name)
     except Exception as e:
-        return [{"module": package_name, "name": _format_import_error(e)}]
+        return [{"module": package_name, "name": _format_import_error(e, name)}]
 
     def harvest(mod_name: str, mod) -> None:
         explicit_all = getattr(mod, "__all__", None)
@@ -165,7 +183,7 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
         try:
             mod = importlib.import_module(name)
         except Exception as e:
-            symbols.append({"module": name, "name": _format_import_error(e)})
+            symbols.append({"module": name, "name": _format_import_error(e, name)})
             continue
         harvest(name, mod)
 

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-16T18:40:11Z",
+  "generated_at": "2026-05-16T20:00:21Z",
   "package_version": "1.5.6",
   "symbols": [
     {
@@ -9649,6 +9649,10 @@
     },
     {
       "module": "tokenpak.proxy.server_extra.websocket_proxy",
+      "name": "WebSocketServerProtocol"
+    },
+    {
+      "module": "tokenpak.proxy.server_extra.websocket_proxy",
       "name": "compress_chunk"
     },
     {
@@ -16678,6 +16682,10 @@
     {
       "module": "tokenpak.vault.retrieval.vector_local",
       "name": "RetrieverType"
+    },
+    {
+      "module": "tokenpak.vault.retrieval.vector_local",
+      "name": "faiss"
     },
     {
       "module": "tokenpak.vault.scoring",
