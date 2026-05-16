@@ -1,6 +1,14 @@
 name: Release TokenPak
 
 on:
+  # Manual-dispatch entry point for pre-tag preflight runs against any branch
+  # (typically `main` immediately before pushing a tag). The dispatch uses the
+  # same test → build → dist-purity assert → checksum job graph as a real tag
+  # push; only the publish-to-PyPI job is skipped (see the publish job's `if:`).
+  # Use:
+  #   gh workflow run "Release TokenPak" --ref main
+  # Then verify the run is green before `git push <tag>`.
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
