@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-09T18:16:57Z",
+  "generated_at": "2026-05-16T19:45:06Z",
   "stores": [
     {
       "path": "~/.tokenpak/telemetry.db",
@@ -233,7 +233,7 @@
     },
     {
       "path": "~/.tokenpak/spend_guard.db",
-      "purpose": "TIP Spend Guard audit log per Std 29 \u00a77",
+      "purpose": "TIP Spend Guard audit log",
       "exists": true,
       "ddl": {
         "objects": [

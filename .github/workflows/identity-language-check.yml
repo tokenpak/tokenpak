@@ -150,7 +150,39 @@ jobs:
 
           content_for_pattern() {
             local pat="$1" file="$2"
-            if [ "$pat" = '\bfleet\b' ]; then
+            # Order matters here. Tier 2 snapshot files get checked FIRST
+            # because their masks must apply uniformly regardless of which
+            # pattern is being scanned for (the older form gated only on
+            # $pat='\bfleet\b' and never reached Tier 2 for fleet patterns,
+            # so tokenpak.cli.fleet leaked through even though Tier 2
+            # intends to allow it).
+            if is_release_gate_snapshot_path "$file"; then
+              # Tier 2 — generated-artifact scope. Apply ALL legitimate
+              # snapshot-scope masks unconditionally so the grep for each
+              # forbidden pattern sees a host-/symbol-cleaned file.
+              #
+              # Masks (snapshot-scope only):
+              #   - Std 21 / Std 30 governance references (legitimate
+              #     R7/R11 metadata about snapshot purpose)
+              #   - `fleet` (every occurrence reflects real public surface:
+              #     `tokenpak.cli.fleet` module path, `fleet` as a CLI
+              #     symbol name, etc.)
+              #   - `openclaw` (every occurrence reflects real generated
+              #     module names such as
+              #     `tokenpak.creds.providers.openclaw`,
+              #     `tokenpak.sdk.openclaw`, or bare provider-name strings)
+              #
+              # Other patterns (agent names Sue/Cali/Trix/Suki/Aya/Dee/ReiPo,
+              # internal task IDs, /home/sue/ paths, .claude/projects,
+              # other Std numbers, "Suki: auto-commit", etc.) remain
+              # enforced even in snapshot files.
+              sed -E \
+                -e 's/\bStd 21\b/Std __PUBLIC_RELGATE_REF_21__/g' \
+                -e 's/\bStd 30\b/Std __PUBLIC_RELGATE_REF_30__/g' \
+                -e 's/\bopenclaw\b/__GENERATED_SYMBOL_OPENCLAW__/g' \
+                -e 's/\bfleet\b/__GENERATED_SYMBOL_FLEET__/g' \
+                "$file"
+            elif [ "$pat" = '\bfleet\b' ]; then
               sed -E \
                 -e 's/tokenpak[[:space:]]+fleet/tokenpak __PUBLIC_FLEET_VERB__/g' \
                 -e 's/--fleet([^a-zA-Z]|$)/--__PUBLIC_FLEET_FLAG__\1/g' \
@@ -159,27 +191,6 @@ jobs:
                 -e 's/fleet-wide/__PUBLIC_FLEET_PHRASE__-wide/g' \
                 -e 's/multi-instance[[:space:]]+fleet/multi-instance __PUBLIC_TMUX_MODE__/g' \
                 -e 's/multi-instance-fleet/multi-instance-__PUBLIC_TMUX_MODE__/g' \
-                "$file"
-            elif is_release_gate_snapshot_path "$file"; then
-              # Tier 2 — generated-artifact scope: mask references the
-              # snapshot legitimately captures. Other patterns (agent names
-              # like Sue/Cali/Trix/Suki/ReiPo, internal task IDs,
-              # /home/sue/ paths, .claude/projects, etc.) remain enforced
-              # even in snapshot files.
-              #
-              # Masks:
-              #   - Std 21 / Std 30 governance references (R7/R11 file
-              #     metadata)
-              #   - `tokenpak.*.fleet` module-name symbols (real public CLI
-              #     module path, e.g. tokenpak.cli.fleet)
-              #   - `tokenpak.creds.providers.openclaw` and
-              #     `tokenpak.sdk.openclaw` module symbols (generated module
-              #     names captured in the public-api snapshot)
-              sed -E \
-                -e 's/\bStd 21\b/Std __PUBLIC_RELGATE_REF_21__/g' \
-                -e 's/\bStd 30\b/Std __PUBLIC_RELGATE_REF_30__/g' \
-                -e 's/(tokenpak(\.[a-z_]+)+)\.openclaw\b/\1.__M_OPENCLAW__/g' \
-                -e 's/(tokenpak(\.[a-z_]+)+)\.fleet\b/\1.__M_FLEET__/g' \
                 "$file"
             elif is_release_gate_impl_path "$file"; then
               # Tier 1 — release-gate implementation/test/workflow surface:

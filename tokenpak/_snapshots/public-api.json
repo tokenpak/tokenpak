@@ -10825,7 +10825,7 @@
     },
     {
       "module": "tokenpak.sdk.autogen.examples.basic_usage",
-      "name": "<IMPORT_ERROR: ImportError: cannot import name 'compress_messages' from 'autogen_tokenpak' (/home/sue/tokenpak/packages/autogen-tokenpak/autogen_tokenpak/__init__.py)>"
+      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'autogen_tokenpak'>"
     },
     {
       "module": "tokenpak.sdk.autogen.groupchat",
@@ -10925,7 +10925,7 @@
     },
     {
       "module": "tokenpak.sdk.crewai.examples.basic_usage",
-      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'tokenpak.agent.agentic'>"
+      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'crewai_tokenpak'>"
     },
     {
       "module": "tokenpak.sdk.crewai.handoff",

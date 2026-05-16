@@ -55,7 +55,8 @@ def _format_import_error(e: BaseException) -> str:
     and CI (where they are not):
 
       1. Parenthesized absolute filesystem paths are stripped from the
-         message — e.g. ``(/home/runner/...)`` or ``(/home/sue/...)``.
+         message — for example a developer-host build-path or a CI
+         runner-path embedded in an import error message.
 
       2. When the message indicates "cannot import name 'X' from '<sidecar>'"
          (the developer-host shape, raised because the sidecar is
