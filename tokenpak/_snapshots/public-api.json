@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-09T18:26:45Z",
-  "package_version": "1.5.4",
+  "generated_at": "2026-05-16T18:40:11Z",
+  "package_version": "1.5.6",
   "symbols": [
     {
       "module": "tokenpak",
@@ -1894,6 +1894,210 @@
     {
       "module": "tokenpak.companion.memory.session_capsules",
       "name": "serialize_capsule"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "LIST_LIMIT_DEFAULT"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "LIST_LIMIT_MAX"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "PakListFilters"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "PakListResult"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "PakRow"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "RISK_FLAG_SEVERITIES"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "ReasonCodeEntry"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "RecallStore"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "RiskFlagEntry"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "SCHEMA_VERSION"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "default_recall_db_path"
+    },
+    {
+      "module": "tokenpak.companion.recall",
+      "name": "open_recall_store"
+    },
+    {
+      "module": "tokenpak.companion.recall.migrations",
+      "name": "MIGRATIONS"
+    },
+    {
+      "module": "tokenpak.companion.recall.migrations",
+      "name": "Migration"
+    },
+    {
+      "module": "tokenpak.companion.recall.migrations",
+      "name": "SCHEMA_VERSION"
+    },
+    {
+      "module": "tokenpak.companion.recall.migrations",
+      "name": "apply_migrations"
+    },
+    {
+      "module": "tokenpak.companion.recall.migrations",
+      "name": "current_version"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "ALL_DDL_V1"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "ALL_DDL_V2_TRIGGERS"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "ALL_DDL_V3"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "EXPECTED_INDEXES_V1"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "EXPECTED_INDEXES_V3"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "EXPECTED_TABLES_V1"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "EXPECTED_TABLES_V3"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "EXPECTED_TRIGGERS_V2"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SCHEMA_VERSION"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_INDEXES"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_PAKS"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_PAKS_AD_FTS_TRIGGER"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_PAKS_AI_FTS_TRIGGER"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_PAKS_AU_FTS_TRIGGER"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_PAKS_FTS"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_PAK_ANCHORS"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_PAK_REASON_CODES"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_PAK_RELATIONS"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_PAK_RISK_FLAGS"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_SCHEMA_VERSION"
+    },
+    {
+      "module": "tokenpak.companion.recall.schema",
+      "name": "SQL_CREATE_V3_INDEXES"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "LIST_LIMIT_DEFAULT"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "LIST_LIMIT_MAX"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "PakListFilters"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "PakListResult"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "PakRow"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "RISK_FLAG_SEVERITIES"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "ReasonCodeEntry"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "RecallStore"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "RiskFlagEntry"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "SCHEMA_VERSION"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "UpsertResult"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "default_recall_db_path"
+    },
+    {
+      "module": "tokenpak.companion.recall.store",
+      "name": "open_recall_store"
     },
     {
       "module": "tokenpak.companion.trace",
@@ -7505,6 +7709,18 @@
     },
     {
       "module": "tokenpak.proxy.app_endpoints",
+      "name": "LIST_LIMIT_DEFAULT"
+    },
+    {
+      "module": "tokenpak.proxy.app_endpoints",
+      "name": "PakListFilters"
+    },
+    {
+      "module": "tokenpak.proxy.app_endpoints",
+      "name": "TYPE_CHECKING"
+    },
+    {
+      "module": "tokenpak.proxy.app_endpoints",
       "name": "try_handle_get"
     },
     {
@@ -7857,6 +8073,18 @@
     },
     {
       "module": "tokenpak.proxy.config",
+      "name": "SPEND_GUARD_DEFAULT_BASIS"
+    },
+    {
+      "module": "tokenpak.proxy.config",
+      "name": "SPEND_GUARD_DEFAULT_CONTEXT_WINDOW_PERCENT"
+    },
+    {
+      "module": "tokenpak.proxy.config",
+      "name": "SPEND_GUARD_DOLLAR_CAP_ENABLED_BY_DEFAULT"
+    },
+    {
+      "module": "tokenpak.proxy.config",
       "name": "SPEND_GUARD_ENABLED"
     },
     {
@@ -7866,6 +8094,10 @@
     {
       "module": "tokenpak.proxy.config",
       "name": "SPEND_GUARD_HARD_BLOCK_TOKENS"
+    },
+    {
+      "module": "tokenpak.proxy.config",
+      "name": "SPEND_GUARD_HARD_STOP_CONTEXT_WINDOW_PERCENT"
     },
     {
       "module": "tokenpak.proxy.config",
@@ -9509,6 +9741,10 @@
     },
     {
       "module": "tokenpak.proxy.spend_guard",
+      "name": "DEFAULT_BLOCK_RATIO"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard",
       "name": "GuardOutcome"
     },
     {
@@ -9533,11 +9769,19 @@
     },
     {
       "module": "tokenpak.proxy.spend_guard",
+      "name": "derive_block_threshold"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard",
       "name": "estimate_request"
     },
     {
       "module": "tokenpak.proxy.spend_guard",
       "name": "evaluate"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard",
+      "name": "get_model_max_context"
     },
     {
       "module": "tokenpak.proxy.spend_guard.audit",
@@ -9745,6 +9989,18 @@
     },
     {
       "module": "tokenpak.proxy.spend_guard.policy",
+      "name": "DEFAULT_BASIS_CONTEXT_WINDOW_PERCENT"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.policy",
+      "name": "DEFAULT_BASIS_DOLLAR"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.policy",
+      "name": "DEFAULT_BLOCK_RATIO"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.policy",
       "name": "PreflightDecision"
     },
     {
@@ -9762,6 +10018,10 @@
     {
       "module": "tokenpak.proxy.spend_guard.policy",
       "name": "decide"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.policy",
+      "name": "derive_block_threshold"
     },
     {
       "module": "tokenpak.proxy.spend_guard.policy",
@@ -10665,7 +10925,7 @@
     },
     {
       "module": "tokenpak.sdk.crewai.examples.basic_usage",
-      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'tokenpak.agent.agentic.handoff'>"
+      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'tokenpak.agent.agentic'>"
     },
     {
       "module": "tokenpak.sdk.crewai.handoff",
@@ -14865,6 +15125,10 @@
     },
     {
       "module": "tokenpak.tip",
+      "name": "AnchorBlockPosition"
+    },
+    {
+      "module": "tokenpak.tip",
       "name": "CacheMissReason"
     },
     {
@@ -14926,6 +15190,10 @@
     {
       "module": "tokenpak.tip",
       "name": "OptimizationTrace"
+    },
+    {
+      "module": "tokenpak.tip",
+      "name": "OrderingHints"
     },
     {
       "module": "tokenpak.tip",
@@ -15241,6 +15509,10 @@
     },
     {
       "module": "tokenpak.tip.context_package",
+      "name": "AnchorBlockPosition"
+    },
+    {
+      "module": "tokenpak.tip.context_package",
       "name": "ContextLevel"
     },
     {
@@ -15262,6 +15534,10 @@
     {
       "module": "tokenpak.tip.context_package",
       "name": "CoverageState"
+    },
+    {
+      "module": "tokenpak.tip.context_package",
+      "name": "OrderingHints"
     },
     {
       "module": "tokenpak.tip.context_package",
