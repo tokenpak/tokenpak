@@ -110,10 +110,27 @@ _TIER_ORDER = {
 
 
 def _license_path() -> Path:
+    """Resolve the license file path through Std 33's resolver.
+
+    Resolution order:
+      1. ``TOKENPAK_LICENSE_FILE`` env var (explicit override).
+      2. ``<TOKENPAK_HOME>/license.json`` via ``tokenpak._paths.under``,
+         which honors ``TOKENPAK_HOME`` then canonical ``~/.tpk/`` then
+         legacy ``~/.tokenpak/`` per Std 33.
+
+    Beta-1 Aya-found regression fix: previously this hardcoded
+    ``Path.home() / ".tokenpak" / "license.json"``, which silently
+    bypassed ``TOKENPAK_HOME``. On a host with the env set elsewhere
+    that meant ``activate`` would clobber the *real* home's
+    ``~/.tokenpak/license.json`` instead of writing under the test
+    sandbox — a sandbox-escape + Std 33 boundary violation in one.
+    """
     override = os.environ.get("TOKENPAK_LICENSE_FILE")
     if override:
         return Path(override)
-    return Path.home() / ".tokenpak" / "license.json"
+    from tokenpak import _paths
+
+    return _paths.under("license.json")
 
 
 @dataclass
