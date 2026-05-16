@@ -26,7 +26,7 @@ jobs:
   # Step 1: Run tests to ensure tag is release-worthy
   # ─────────────────────────────────────────────────────────────────────
   #
-  # Test-gate contract (TIP7-001 + 2026-05-08 follow-up):
+  # Test-gate contract (per the slim-install parity follow-up of 2026-05-08):
   #
   # This job installs only the [dev] extra — pytest, ruff, black, etc. — and
   # NOT [full] / [retrieval] / [intelligence] etc. That's intentional: the
@@ -149,6 +149,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev,full,serve,telemetry,tokens,otel]"
+          # python-multipart is required by FastAPI Form/UploadFile imports in
+          # vault/ingest/api and similar surfaces; without it the canonical
+          # snapshot generation raises IMPORT_ERROR on those modules and the
+          # api-snapshot-check fires phantom-removal noise. It is not yet an
+          # advertised optional extra, so install it explicitly here.
+          pip install python-multipart
       - name: api-snapshot-check (Std 30 §7 R7)
         run: make api-snapshot-check
       - name: workflow-steps-check (Std 30 §13.3 R11)
@@ -162,7 +168,7 @@ jobs:
   # Step 2: Build distribution artifacts
   # ─────────────────────────────────────────────────────────────────────
   #
-  # Dist-purity contract (TSR-08-D / 2026-05-09 v1.5.3 burn lesson):
+  # Dist-purity contract (per the v1.5.3 release-burn lesson of 2026-05-09):
   #
   # The `dist/` directory uploaded as the `dist` artifact MUST contain only
   # valid Python distribution files: `*.whl` and `*.tar.gz`. Nothing else.

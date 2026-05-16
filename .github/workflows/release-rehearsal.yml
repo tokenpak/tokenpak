@@ -1,7 +1,8 @@
 # release-rehearsal.yml — weekly dry-run of the full release pipeline.
 #
-# Std 30 §8 (R8) + §13.4 (R19). Triggered on Mondays 09:00 UTC by ReiPo
-# Phase 0.5 sub-sweep (or manually via workflow_dispatch). Runs every gate
+# Std 30 §8 (R8) + §13.4 (R19). Triggered on Mondays 09:00 UTC by the
+# weekly repository integrity audit cycle (or manually via workflow_dispatch).
+# Runs every gate
 # in the production release pipeline EXCEPT PyPI publish.
 #
 # Hard guard: the publish step contains `if: github.ref != 'refs/tags/rehearsal-*'`
