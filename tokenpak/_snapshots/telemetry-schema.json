@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-16T20:11:44Z",
+  "stores": [
+    {
+      "path": "~/.tokenpak/telemetry.db",
+      "purpose": "User-facing telemetry counters",
+      "exists": false,
+      "ddl": null
+    },
+    {
+      "path": "~/.tokenpak/spend_guard.db",
+      "purpose": "TIP Spend Guard audit log",
+      "exists": false,
+      "ddl": null
+    }
+  ]
+}
