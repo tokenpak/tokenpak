@@ -161,16 +161,25 @@ jobs:
                 -e 's/multi-instance-fleet/multi-instance-__PUBLIC_TMUX_MODE__/g' \
                 "$file"
             elif is_release_gate_snapshot_path "$file"; then
-              # Tier 2 — generated-artifact scope: mask Std 21 / Std 30
-              # references AND the existing `openclaw` module-name symbols
-              # captured in the public-api snapshot. Other patterns
-              # (agent names like Sue/Cali/Trix/Suki/ReiPo, internal task
-              # IDs, /home/sue/ paths, .claude/projects, etc.) remain
-              # enforced even in snapshot files.
+              # Tier 2 — generated-artifact scope: mask references the
+              # snapshot legitimately captures. Other patterns (agent names
+              # like Sue/Cali/Trix/Suki/ReiPo, internal task IDs,
+              # /home/sue/ paths, .claude/projects, etc.) remain enforced
+              # even in snapshot files.
+              #
+              # Masks:
+              #   - Std 21 / Std 30 governance references (R7/R11 file
+              #     metadata)
+              #   - `tokenpak.*.fleet` module-name symbols (real public CLI
+              #     module path, e.g. tokenpak.cli.fleet)
+              #   - `tokenpak.creds.providers.openclaw` and
+              #     `tokenpak.sdk.openclaw` module symbols (generated module
+              #     names captured in the public-api snapshot)
               sed -E \
                 -e 's/\bStd 21\b/Std __PUBLIC_RELGATE_REF_21__/g' \
                 -e 's/\bStd 30\b/Std __PUBLIC_RELGATE_REF_30__/g' \
-                -e 's/\bopenclaw\b/__GENERATED_MODULE_OPENCLAW__/g' \
+                -e 's/(tokenpak(\.[a-z_]+)+)\.openclaw\b/\1.__M_OPENCLAW__/g' \
+                -e 's/(tokenpak(\.[a-z_]+)+)\.fleet\b/\1.__M_FLEET__/g' \
                 "$file"
             elif is_release_gate_impl_path "$file"; then
               # Tier 1 — release-gate implementation/test/workflow surface:

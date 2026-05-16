@@ -28,7 +28,7 @@ DEFAULT_OUT = REPO_ROOT / "tokenpak" / "_snapshots" / "telemetry-schema.json"
 # (so a future creation produces a snapshot diff that flags the migration).
 TRACKED_STORES = [
     {"path": "~/.tokenpak/telemetry.db", "purpose": "User-facing telemetry counters"},
-    {"path": "~/.tokenpak/spend_guard.db", "purpose": "TIP Spend Guard audit log per Std 29 §7"},
+    {"path": "~/.tokenpak/spend_guard.db", "purpose": "TIP Spend Guard audit log"},
 ]
 
 

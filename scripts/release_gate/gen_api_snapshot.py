@@ -40,6 +40,50 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = REPO_ROOT / "tokenpak" / "_snapshots" / "public-api.json"
 
 
+_ABS_PATH_PAREN_RE = None  # lazily compiled
+_SIDECAR_RE = None  # lazily compiled
+
+
+def _format_import_error(e: BaseException) -> str:
+    """Format an import-time exception as a host-independent IMPORT_ERROR string.
+
+    Output shape: ``<IMPORT_ERROR: <ExceptionType>: <message>>``
+
+    Two normalizations make this host-independent so the snapshot does not
+    drift between developer hosts (where sidecar integration packages
+    like ``autogen_tokenpak`` / ``crewai_tokenpak`` are editable-installed)
+    and CI (where they are not):
+
+      1. Parenthesized absolute filesystem paths are stripped from the
+         message — e.g. ``(/home/runner/...)`` or ``(/home/sue/...)``.
+
+      2. When the message indicates "cannot import name 'X' from '<sidecar>'"
+         (the developer-host shape, raised because the sidecar is
+         editable-installed but has an unresolved internal import), both
+         the exception type AND message are rewritten to the canonical
+         ``ModuleNotFoundError: No module named '<sidecar>'`` that the
+         gateless CI environment would emit.
+
+    Without this normalization the snapshot captures host-specific noise
+    and the release-gate snapshot check drifts on every developer-host
+    regeneration.
+    """
+    import re
+
+    global _ABS_PATH_PAREN_RE, _SIDECAR_RE
+    if _ABS_PATH_PAREN_RE is None:
+        _ABS_PATH_PAREN_RE = re.compile(r"\s*\(/[^)]*\)")
+    if _SIDECAR_RE is None:
+        _SIDECAR_RE = re.compile(
+            r"cannot import name '[^']+' from '([a-z_]+_tokenpak)'"
+        )
+    msg = _ABS_PATH_PAREN_RE.sub("", str(e))
+    m = _SIDECAR_RE.search(msg)
+    if m:
+        return f"<IMPORT_ERROR: ModuleNotFoundError: No module named '{m.group(1)}'>"
+    return f"<IMPORT_ERROR: {type(e).__name__}: {msg}>"
+
+
 def _is_package_owned(value, package_name: str) -> bool:
     """Return True iff this attribute is genuinely owned by the package
     (not a re-exported import or a stdlib name)."""
@@ -75,7 +119,7 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
     try:
         pkg = importlib.import_module(package_name)
     except Exception as e:
-        return [{"module": package_name, "name": f"<IMPORT_ERROR: {type(e).__name__}: {e}>"}]
+        return [{"module": package_name, "name": _format_import_error(e)}]
 
     def harvest(mod_name: str, mod) -> None:
         explicit_all = getattr(mod, "__all__", None)
@@ -120,7 +164,7 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
         try:
             mod = importlib.import_module(name)
         except Exception as e:
-            symbols.append({"module": name, "name": f"<IMPORT_ERROR: {type(e).__name__}: {e}>"})
+            symbols.append({"module": name, "name": _format_import_error(e)})
             continue
         harvest(name, mod)
 

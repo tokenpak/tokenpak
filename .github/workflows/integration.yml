@@ -136,9 +136,10 @@ jobs:
         # so coverage on `[dev]` measures ~25%, far below the 80% bar.
         #
         # Install `[dev,full]` here so every code path is importable, then
-        # measure coverage against the actual surface. Per Std 30 §3 (R3): the
-        # `full` shape is the canonical install for the maximally-comprehensive
-        # gate; this Coverage Gate is exactly that gate.
+        # measure coverage against the actual surface. Per the install-shape
+        # parity rule, the `full` shape is the canonical install for the
+        # maximally-comprehensive gate; this Coverage Gate is exactly that
+        # gate.
         #
         # PR #160 (#153 bucket 4) dropped the per-job 80% from integration.yml's
         # integration job; this commit completes the corresponding repair on
