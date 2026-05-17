@@ -201,11 +201,11 @@ def cmd_pakplan_report(args: Any) -> int:
     print(f"  recall db   : {db}")
     print(f"  pak count   : {len(summaries)}")
     if reason_counts:
-        print(f"  reason codes:")
+        print("  reason codes:")
         for k, v in sorted(reason_counts.items(), key=lambda kv: -kv[1]):
             print(f"    {k:30s} {v}")
     if risk_counts:
-        print(f"  risk flags  :")
+        print("  risk flags  :")
         for k, v in sorted(risk_counts.items(), key=lambda kv: -kv[1]):
             print(f"    {k:30s} {v}")
     matches = payload["advisory_vocab"]["matches"]

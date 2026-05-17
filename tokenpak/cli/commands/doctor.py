@@ -106,16 +106,16 @@ def run_doctor(
             "warn",
             f"~/.tpk/ boundary    legacy: {_paths.legacy_home()}",
             detail=(
-                f"Using legacy ~/.tokenpak/ — canonical ~/.tpk/ is "
-                f"absent. Run `tokenpak home migrate` to copy your "
-                f"state to ~/.tpk/ (non-destructive, backup-first)."
+                "Using legacy ~/.tokenpak/ — canonical ~/.tpk/ is "
+                "absent. Run `tokenpak home migrate` to copy your "
+                "state to ~/.tpk/ (non-destructive, backup-first)."
             ),
         )
     elif _paths.has_legacy() and _paths.has_canonical():
         _record(
             "home_boundary",
             "warn",
-            f"~/.tpk/ boundary    canonical + legacy both present",
+            "~/.tpk/ boundary    canonical + legacy both present",
             detail=(
                 f"Both {_paths.canonical_home()} and "
                 f"{_paths.legacy_home()} exist. Canonical wins. "

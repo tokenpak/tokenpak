@@ -174,10 +174,12 @@ def evaluate(
     # block (respect TIP bypass directives). Per-session caps continue
     # to evaluate downstream — rolling caps SUPPLEMENT them.
     try:
-        from .rolling_caps import (
-            RollingCapsConfig, check_rolling_caps, record_session_agent,
-        )
         from .block_response import build_rolling_cap_block
+        from .rolling_caps import (
+            RollingCapsConfig,
+            check_rolling_caps,
+            record_session_agent,
+        )
         # Agent attribution — case-insensitive header lookup.
         agent_id = ""
         for hk, hv in (headers or {}).items():

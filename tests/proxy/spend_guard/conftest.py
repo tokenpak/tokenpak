@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import sqlite3
 import time
-import datetime as dt
 
 import pytest
 

@@ -21,7 +21,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Lane B — _paths resolver
 # ---------------------------------------------------------------------------
@@ -118,7 +117,7 @@ def test_pak_status_fast_fail_no_daemon(tmp_path, monkeypatch):
 
 
 def test_tip_conformance_passes_on_clean_install():
-    from tokenpak.cli.commands.tip import run_conformance_checks, summarize, exit_code_for
+    from tokenpak.cli.commands.tip import exit_code_for, run_conformance_checks, summarize
 
     results = run_conformance_checks()
     summary = summarize(results)

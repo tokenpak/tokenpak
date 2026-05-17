@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import pytest
 
+from tests.proxy.spend_guard.conftest import insert_request
 from tokenpak.proxy.spend_guard.rolling_caps import (
     RollingCapsConfig,
     check_rolling_caps,
     record_session_agent,
 )
-from tests.proxy.spend_guard.conftest import insert_request
 
 
 def default_cfg(**overrides) -> RollingCapsConfig:

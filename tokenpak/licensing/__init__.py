@@ -356,7 +356,8 @@ def _consult_daemon_for_tier(lic: "License") -> tuple[str, str]:
 
     try:
         from tokenpak.licensing.daemon_probe import (
-            detect_daemon_state, sock_info_path,
+            detect_daemon_state,
+            sock_info_path,
         )
     except ImportError:
         return ("unreachable", "daemon_probe_unavailable")

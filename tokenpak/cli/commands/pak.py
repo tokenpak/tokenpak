@@ -154,9 +154,8 @@ def cmd_pak_status(args: Any) -> int:
     Mirrors the GET /pak/v1/status payload — same field names, same
     types. Always exits 0 (status is informational, not pass/fail).
     """
-    from tokenpak.licensing.daemon_probe import detect_daemon_state
-
     from tokenpak import _paths
+    from tokenpak.licensing.daemon_probe import detect_daemon_state
 
     state = detect_daemon_state()
     multipak_enabled = _read_multipak_enabled()
@@ -362,8 +361,8 @@ def cmd_pak_create(args: Any) -> int:
     Pro encryption-at-rest + capture pipeline are additive; plain JSON
     is the OSS substrate.
     """
-    import hashlib
     import datetime
+    import hashlib
 
     src = Path(args.source_dir).expanduser()
     out = Path(args.output).expanduser()

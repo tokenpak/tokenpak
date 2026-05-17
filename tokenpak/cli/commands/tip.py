@@ -31,8 +31,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional
-
+from typing import Any, Iterable
 
 # ---------------------------------------------------------------------------
 # Public CLI entry: build the parser

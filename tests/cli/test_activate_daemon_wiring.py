@@ -207,8 +207,9 @@ def test_activate_placeholder_key_keeps_pending(isolated_license, tmp_path, monk
 
 
 def test_activate_http_timeout_keeps_pending(isolated_license, tmp_path, monkeypatch):
-    from tokenpak import licensing as _lic
     import urllib.error
+
+    from tokenpak import licensing as _lic
 
     monkeypatch.setattr(
         "tokenpak.licensing.daemon_probe.detect_daemon_state",

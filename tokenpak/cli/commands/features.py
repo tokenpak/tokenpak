@@ -15,8 +15,7 @@ Subcommands:
 from __future__ import annotations
 
 import json
-import sys
-from typing import Any, Optional
+from typing import Any
 
 
 def build_features_parser(sub: Any) -> None:

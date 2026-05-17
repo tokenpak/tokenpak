@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
+
 def _resolve_templates_dir() -> Path:
     """Std 33: canonical ~/.tpk/templates with legacy ~/.tokenpak/templates fallback."""
     from tokenpak import _paths

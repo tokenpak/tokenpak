@@ -10,6 +10,7 @@ import json
 
 import pytest
 
+from tests.proxy.spend_guard.conftest import insert_request
 from tokenpak.proxy.spend_guard.rolling_caps import (
     CapBreach,
     RollingCapsConfig,
@@ -17,8 +18,6 @@ from tokenpak.proxy.spend_guard.rolling_caps import (
     compute_rolling_usage,
     record_session_agent,
 )
-from tests.proxy.spend_guard.conftest import insert_request
-
 
 # ----- Configurations used across multiple tests -----
 

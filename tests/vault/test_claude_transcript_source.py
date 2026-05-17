@@ -22,7 +22,6 @@ import pytest
 from tokenpak.vault.sources import claude_transcript as ct
 from tokenpak.vault.vault_health import VaultHealth
 
-
 # ---------------------------------------------------------------------------
 # Fixtures — minimal synthetic transcript tree
 # ---------------------------------------------------------------------------
