@@ -3,12 +3,19 @@
 
 Codex hooks are configured via ``~/.codex/hooks.json`` (global) or
 ``<repo>/.codex/hooks.json`` (project-level).  The companion installs
-two hooks:
+two hooks today:
 
 - **UserPromptSubmit** → token estimation, budget gating, journal seed
 - **Stop** → session closeout, journal summary, cost recording
 
 Hooks must be enabled via the ``codex_hooks`` feature flag.
+
+The event set is held in :data:`_TOKENPAK_HOOK_EVENTS` — a declarative
+module-level table keyed by Codex event name. Adding a new event means
+appending an entry (and shipping a matching script); install / merge /
+uninstall flow through it without further code changes.  Per
+``feedback_always_dynamic.md``, no hardcoded enumeration of events lives
+inside a function body.
 """
 
 from __future__ import annotations
@@ -25,32 +32,40 @@ _STOP_HOOK = _HOOKS_DIR / "hooks_stop.sh"
 # Substring used to identify tokenpak-owned hook commands across merges.
 TOKENPAK_HOOK_MARKER = "tokenpak"
 
-# Events the companion owns. Add more here and they'll flow through
-# install / merge / uninstall without further code changes.
+# Declarative event table — adding an event here is the only code touch
+# needed for install / merge / uninstall to pick it up.
+_TOKENPAK_HOOK_EVENTS: dict[str, dict] = {
+    "UserPromptSubmit": {
+        "hooks": [
+            {
+                "type": "command",
+                "command": f"bash {_PRE_SEND_HOOK}",
+                "timeout": 10,
+                "statusMessage": "tokenpak: estimating cost...",
+            }
+        ]
+    },
+    "Stop": {
+        "hooks": [
+            {
+                "type": "command",
+                "command": f"bash {_STOP_HOOK}",
+                "timeout": 15,
+                "statusMessage": "tokenpak: closing session...",
+            }
+        ]
+    },
+}
+
+
 def _tokenpak_hook_events() -> dict[str, dict]:
-    """Return {event_name: hook_group} for every event the companion installs."""
-    return {
-        "UserPromptSubmit": {
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": f"bash {_PRE_SEND_HOOK}",
-                    "timeout": 10,
-                    "statusMessage": "tokenpak: estimating cost...",
-                }
-            ]
-        },
-        "Stop": {
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": f"bash {_STOP_HOOK}",
-                    "timeout": 15,
-                    "statusMessage": "tokenpak: closing session...",
-                }
-            ]
-        },
-    }
+    """Return the declarative event table.
+
+    Retained as a thin accessor so existing callers (and tests) keep a
+    stable import surface even though the data now lives in
+    :data:`_TOKENPAK_HOOK_EVENTS` at module top.
+    """
+    return _TOKENPAK_HOOK_EVENTS
 
 
 def generate_hooks_json() -> dict:
@@ -60,9 +75,7 @@ def generate_hooks_json() -> dict:
 
         {"hooks": {"<EventName>": [{"hooks": [{command...}]}]}}
     """
-    return {
-        "hooks": {event: [group] for event, group in _tokenpak_hook_events().items()}
-    }
+    return {"hooks": {event: [group] for event, group in _TOKENPAK_HOOK_EVENTS.items()}}
 
 
 def install_hooks(target: str = "global") -> Path:
@@ -128,8 +141,7 @@ def _merge_hooks(existing: dict, new: dict) -> dict:
                 non_tokenpak = [
                     c
                     for c in commands
-                    if isinstance(c, dict)
-                    and TOKENPAK_HOOK_MARKER not in c.get("command", "")
+                    if isinstance(c, dict) and TOKENPAK_HOOK_MARKER not in c.get("command", "")
                 ]
                 if non_tokenpak:
                     kept = {**group, "hooks": non_tokenpak}
