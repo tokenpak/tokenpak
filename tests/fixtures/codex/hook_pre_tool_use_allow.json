@@ -1,0 +1,12 @@
+{
+  "session_id": "fixture-pre-tool-allow",
+  "transcript_path": "",
+  "cwd": "/tmp/tp-l2a-fixture",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5",
+  "permission_mode": "default",
+  "turn_id": "turn-001",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu-allow-001",
+  "tool_input": {"command": "echo hello"}
+}

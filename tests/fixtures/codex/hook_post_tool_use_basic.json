@@ -1,0 +1,13 @@
+{
+  "session_id": "fixture-post-tool-basic",
+  "transcript_path": "",
+  "cwd": "/tmp/tp-l2a-fixture",
+  "hook_event_name": "PostToolUse",
+  "model": "gpt-5",
+  "permission_mode": "default",
+  "turn_id": "turn-003",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu-basic-001",
+  "tool_input": {"command": "echo hi"},
+  "tool_response": "hi\n"
+}

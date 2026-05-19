@@ -3,9 +3,13 @@
 
 Codex hooks are configured via ``~/.codex/hooks.json`` (global) or
 ``<repo>/.codex/hooks.json`` (project-level).  The companion installs
-two hooks today:
+five hooks (5 of 6 Codex stable lifecycle events; PermissionRequest is
+deferred to L5 — see L1 audit delta hooks #10):
 
+- **SessionStart** → capsule auto-load + branded banner
 - **UserPromptSubmit** → token estimation, budget gating, journal seed
+- **PreToolUse** → per-tool budget gate + trace stamp
+- **PostToolUse** → token-out journal
 - **Stop** → session closeout, journal summary, cost recording
 
 Hooks must be enabled via the ``codex_hooks`` feature flag.
@@ -26,7 +30,10 @@ import sys
 from pathlib import Path
 
 _HOOKS_DIR = Path(__file__).parent
+_SESSION_START_HOOK = _HOOKS_DIR / "hooks_session_start.sh"
 _PRE_SEND_HOOK = _HOOKS_DIR / "hooks_pre_send.sh"
+_PRE_TOOL_USE_HOOK = _HOOKS_DIR / "hooks_pre_tool_use.sh"
+_POST_TOOL_USE_HOOK = _HOOKS_DIR / "hooks_post_tool_use.sh"
 _STOP_HOOK = _HOOKS_DIR / "hooks_stop.sh"
 
 # Substring used to identify tokenpak-owned hook commands across merges.
@@ -35,6 +42,16 @@ TOKENPAK_HOOK_MARKER = "tokenpak"
 # Declarative event table — adding an event here is the only code touch
 # needed for install / merge / uninstall to pick it up.
 _TOKENPAK_HOOK_EVENTS: dict[str, dict] = {
+    "SessionStart": {
+        "hooks": [
+            {
+                "type": "command",
+                "command": f"bash {_SESSION_START_HOOK}",
+                "timeout": 5,
+                "statusMessage": "tokenpak: loading capsule...",
+            }
+        ]
+    },
     "UserPromptSubmit": {
         "hooks": [
             {
@@ -42,6 +59,25 @@ _TOKENPAK_HOOK_EVENTS: dict[str, dict] = {
                 "command": f"bash {_PRE_SEND_HOOK}",
                 "timeout": 10,
                 "statusMessage": "tokenpak: estimating cost...",
+            }
+        ]
+    },
+    "PreToolUse": {
+        "hooks": [
+            {
+                "type": "command",
+                "command": f"bash {_PRE_TOOL_USE_HOOK}",
+                "timeout": 5,
+                "statusMessage": "tokenpak: checking budget...",
+            }
+        ]
+    },
+    "PostToolUse": {
+        "hooks": [
+            {
+                "type": "command",
+                "command": f"bash {_POST_TOOL_USE_HOOK}",
+                "timeout": 5,
             }
         ]
     },
