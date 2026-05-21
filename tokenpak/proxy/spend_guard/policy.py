@@ -12,7 +12,7 @@ the projected request against the configured policy bands:
 - ``hard_block`` — cannot be released; even ``[TIP: bypass=on]`` /
   ``[TIP: allow=once]`` does NOT cross it.
 
-**Canonical default basis (Standard 29 §5, Kevin DECISION 2026-05-11 rev 2):**
+**Canonical default basis (Standard 29 §5 (2026-05-11 rev 2)):**
 context-window utilisation percent against the selected model's max
 context window — applied universally to every agent profile.
 
@@ -129,7 +129,7 @@ class SpendGuardConfig:
     :func:`load_config` (``tip_spend_guard:`` is accepted as an alias).
     Env-var overrides take precedence.
 
-    **Defaults (Standard 29 §5, Kevin DECISION 2026-05-11 rev 2):**
+    **Defaults (Standard 29 §5 (2026-05-11 rev 2)):**
 
     - ``default_basis = "context_window_percent"`` — block is denominated
       in context-window utilisation %, not dollars.
@@ -211,7 +211,7 @@ class SpendGuardConfig:
     # Below this projected-cost floor we don't even audit (avoid noise).
     audit_min_cost_usd: float = 0.10
 
-    # ── Rolling/cumulative caps (Kevin 2026-05-15 post-incident P0) ──
+    # ── Rolling/cumulative caps (2026-05-15 post-incident P0) ──
     # Supplements the per-session cap. Catches the 2026-05-15 pattern
     # where 64 sub-cap sessions cumulated to $566 in 8 hours. Default
     # values per packet p0-rolling-spend-guard-caps-2026-05-15.md.
@@ -219,7 +219,7 @@ class SpendGuardConfig:
     rolling_caps_window_seconds: int = 3600
     rolling_caps_per_agent_max_cost_usd: float = 20.0
     rolling_caps_per_agent_max_tokens_total: int = 5_000_000
-    # cache_read caps DISABLED by default per Kevin 2026-05-15: cache_read
+    # cache_read caps DISABLED by default: cache_read
     # is ~90% cheaper than input/output and inflates without reflecting
     # real risk. cache_read remains recorded for observability + still
     # configurable via spend_guard.rolling_caps.* if an operator opts in.
@@ -270,7 +270,7 @@ def load_config(raw_config: Optional[dict] = None) -> SpendGuardConfig:
     cfg = SpendGuardConfig()
 
     # File defaults — accept both ``spend_guard:`` (legacy) and
-    # ``tip_spend_guard:`` (canonical per Kevin DECISION 2026-05-11) keys.
+    # ``tip_spend_guard:`` (canonical (2026-05-11)) keys.
     # Canonical wins on conflict; legacy is a transparent alias.
     if raw_config is not None:
         sg_legacy = (raw_config or {}).get("spend_guard") or {}
