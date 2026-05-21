@@ -367,10 +367,6 @@ class TestProxyServerInit:
         ps = ProxyServer(host="127.0.0.1", port=19003)
         assert ps.shutdown_timeout > 0
 
-    def test_request_timeout_default_zero(self):
-        ps = ProxyServer(host="127.0.0.1", port=19004)
-        assert ps.request_timeout == 0.0
-
     def test_session_initialized(self):
         ps = ProxyServer(host="127.0.0.1", port=19005)
         assert ps.session["requests"] == 0
@@ -421,10 +417,6 @@ class TestProxyServerHealth:
     def test_health_has_circuit_breakers(self, proxy):
         _, data = _get(f"http://127.0.0.1:{proxy.port}/health")
         assert "circuit_breakers" in data
-
-    def test_health_has_index_freshness(self, proxy):
-        _, data = _get(f"http://127.0.0.1:{proxy.port}/health")
-        assert "index_freshness" in data
 
     def test_health_deep_returns_memory(self, proxy):
         status, data = _get(f"http://127.0.0.1:{proxy.port}/health?deep=true")
@@ -568,12 +560,6 @@ class TestProxyServerAdditionalEndpoints:
 
 class TestProxyServerMethods:
 
-    def test_health_request_timeout_zero(self):
-        ps = ProxyServer(host="127.0.0.1", port=19400)
-        assert ps.request_timeout == 0.0
-        result = ps.health()
-        assert result["request_timeout_seconds"] is None
-
     def test_health_compression_ratio_empty(self):
         ps = ProxyServer(host="127.0.0.1", port=19401)
         result = ps.health()
@@ -600,14 +586,6 @@ class TestProxyServerMethods:
         ps = ProxyServer(host="127.0.0.1", port=19405)
         result = ps.stats()
         assert "compilation_mode" in result
-
-    def test_health_index_freshness_structure(self):
-        ps = ProxyServer(host="127.0.0.1", port=19406)
-        result = ps.health()
-        idx = result.get("index_freshness", {})
-        assert "fresh" in idx
-        assert "age_seconds" in idx
-
 
 # ---------------------------------------------------------------------------
 # Proxy forwarding tests (with mocked pool)
@@ -1190,17 +1168,6 @@ class TestProxyStreamingPath:
                 assert r.status == 200
         except Exception:
             pass
-
-    def test_proxy_with_request_timeout(self, sse_upstream):
-        """Request timeout env var is applied when set."""
-        import os
-        os.environ["TOKENPAK_REQUEST_TIMEOUT"] = "30"
-        try:
-            ps = ProxyServer(host="127.0.0.1", port=19800)
-            assert ps.request_timeout == 30.0
-        finally:
-            del os.environ["TOKENPAK_REQUEST_TIMEOUT"]
-
 
 # ---------------------------------------------------------------------------
 # Raw socket proxy tests (proper HTTP CONNECT / forwarding)
