@@ -167,7 +167,7 @@ def evaluate(
         _log.warning("spend_guard: estimator failure (passthrough): %s", e)
         return GuardOutcome.passthrough(body)
 
-    # ── Rolling/cumulative caps (Kevin 2026-05-15 post-incident P0).
+    # ── Rolling/cumulative caps (2026-05-15 post-incident P0).
     # Records the session→agent mapping for future per-agent lookups,
     # then evaluates per-agent and per-fleet rolling caps. If any cap
     # would be exceeded by this request's projected cost, return a

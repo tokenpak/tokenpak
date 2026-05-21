@@ -168,7 +168,7 @@ def compute_rolling_usage(
     try:
         conn = sqlite3.connect(str(p), timeout=2.0)
         # Fleet-wide totals.
-        # tokens_total = input + output (cache_read EXCLUDED per Kevin
+        # tokens_total = input + output (cache_read EXCLUDED
         # 2026-05-15: Anthropic bills cache_read ~90% cheaper, so cache_read
         # inflation should not trip the rolling tokens cap. cache_read is
         # still recorded for observability + its own dedicated cap.
@@ -243,14 +243,14 @@ def check_rolling_caps(
     Returns None when:
         - Rolling caps are disabled
         - Usage is below all configured caps (with projected_add included)
-        - Any computation error (fail-open per Std 29 §9.8)
+        - Any computation error (fail-open per Standard 29 §9.8)
     """
     if not config.enabled:
         return None
     usage = compute_rolling_usage(
         agent_id, config.window_seconds, monitor_db_path=monitor_db_path
     )
-    # tokens_total = input + output only (cache_read EXCLUDED per Kevin
+    # tokens_total = input + output only (cache_read EXCLUDED
     # 2026-05-15: cache_read is ~90% cheaper and inflates the count without
     # reflecting real cost. cache_read keeps its own dedicated cap dimension.
     projected_tokens_total = (

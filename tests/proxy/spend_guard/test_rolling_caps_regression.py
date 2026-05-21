@@ -34,9 +34,9 @@ def default_cfg(**overrides) -> RollingCapsConfig:
 def test_rolling_cap_2026_05_15_overnight_regression(tmp_monitor_db):
     """Replay the 2026-05-15 overnight pattern.
 
-    Suki cron fired 23 times in 8 hours = ~2.875 cycles/hour. Per cycle:
+    A periodic worker fired 23 times in 8 hours = ~2.875 cycles/hour. Per cycle:
     input ~865k, cache_read ~5M, cost ~$8. Within a 1-hour window we see
-    ~3 Suki cycles cumulating to ~$24. Per-agent cost cap ($20) should
+    ~3 periodic worker cycles cumulating to ~$24. Per-agent cost cap ($20) should
     block by cycle 3 (when cumulative pushes over $20).
 
     PASS condition: cap fires at-or-before cycle 3 of an hour's run.
@@ -44,12 +44,12 @@ def test_rolling_cap_2026_05_15_overnight_regression(tmp_monitor_db):
     cfg = default_cfg()
     blocked_at = None
     for cycle in range(1, 6):  # try 5 cycles within the hour
-        sid = f"suki-cycle-{cycle}"
-        record_session_agent(sid, "suki")
+        sid = f"agent-a-cycle-{cycle}"
+        record_session_agent(sid, "agent-a")
         # Each cycle: $8 cost, ~865k input, ~5M cache_read
         # Check the cap BEFORE inserting (simulating preflight)
         breach = check_rolling_caps(
-            agent_id="suki",
+            agent_id="agent-a",
             projected_cost_usd=8.0,
             projected_input_tokens=865_000,
             projected_output_tokens=15_000,
@@ -77,7 +77,7 @@ def test_rolling_cap_2026_05_15_overnight_regression(tmp_monitor_db):
 def test_rolling_cap_2026_05_13_burst_regression(tmp_monitor_db):
     """Replay the 2026-05-13 burst spike.
 
-    Original pattern: Suki burning ~$216/hour via rapid-fire concurrent
+    Original pattern: A burst pattern at ~$216/hour via rapid-fire concurrent
     cycles. Roughly $35/cycle bursts. Rolling cap at $20/agent/hour
     blocks within 1-2 cycles.
 
@@ -86,10 +86,10 @@ def test_rolling_cap_2026_05_13_burst_regression(tmp_monitor_db):
     cfg = default_cfg()
     blocked_at = None
     for cycle in range(1, 5):
-        sid = f"suki-burst-{cycle}"
-        record_session_agent(sid, "suki")
+        sid = f"agent-a-burst-{cycle}"
+        record_session_agent(sid, "agent-a")
         breach = check_rolling_caps(
-            agent_id="suki",
+            agent_id="agent-a",
             projected_cost_usd=35.0,  # burst cycle is bigger
             projected_input_tokens=2_000_000,
             projected_output_tokens=50_000,
@@ -114,12 +114,12 @@ def test_rolling_cap_2026_05_13_burst_regression(tmp_monitor_db):
 
 
 def test_normal_bounded_cycle_passes(tmp_monitor_db):
-    """Sanity: a normal small cycle (Aya-class evidence work) should NOT
+    """Sanity: a normal small cycle (low-volume per-cycle work) should NOT
     breach. 1 cycle at $0.50, ~100k tokens, 800k cache_read."""
     cfg = default_cfg()
-    record_session_agent("aya-normal-1", "aya")
+    record_session_agent("agent-b-normal-1", "agent-b")
     breach = check_rolling_caps(
-        agent_id="aya",
+        agent_id="agent-b",
         projected_cost_usd=0.50,
         projected_input_tokens=100_000,
         projected_output_tokens=2_000,
@@ -127,7 +127,7 @@ def test_normal_bounded_cycle_passes(tmp_monitor_db):
         config=cfg,
         monitor_db_path=tmp_monitor_db,
     )
-    assert breach is None, f"normal Aya cycle should not trip cap; got {breach}"
+    assert breach is None, f"normal low-volume cycle should not trip cap; got {breach}"
 
 
 def test_rolling_cap_supplements_per_session_cap(tmp_monitor_db):
