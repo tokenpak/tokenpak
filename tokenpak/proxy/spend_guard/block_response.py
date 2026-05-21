@@ -20,6 +20,7 @@ ERR_HARD_BLOCKED = "tokenpak_spend_guard_hard_blocked"
 ERR_PENDING_WAITING = "tokenpak_spend_guard_pending"
 ERR_CANCELLED = "tokenpak_spend_guard_cancelled"
 ERR_REPROMPT = "tokenpak_spend_guard_reprompt"
+ERR_ROLLING_CAP_BLOCKED = "tokenpak_spend_guard_rolling_cap_blocked"
 INFO_ESTIMATE = "tokenpak_spend_guard_estimate"
 
 # HTTP status — 402 Payment Required best-fits "request requires
@@ -144,3 +145,35 @@ def estimate_only(risk: RiskEstimate) -> bytes:
         }
     }
     return json.dumps(payload).encode()
+
+
+def build_rolling_cap_block(breach) -> bytes:
+    """Build the JSON response body for a rolling-cap block.
+
+    `breach` is a :class:`rolling_caps.CapBreach` dataclass instance.
+    Returns the structured 402 body bytes; the caller wraps the HTTP
+    status and headers.
+    """
+    payload = {
+        "error": {
+            "type": ERR_ROLLING_CAP_BLOCKED,
+            "message": (
+                "TIP Spend Guard rolling cap exceeded: "
+                f"{breach.cap_dimension} (agent={breach.agent_id}, "
+                f"window={breach.window_seconds}s, used={breach.used:.4g}, "
+                f"cap={breach.cap:.4g}, would_add={breach.projected_add:.4g}). "
+                "Reply 'yes' or prepend '[TIP: allow=once]' to bypass; "
+                "wait ~30 min for usage to age out, or operator may raise "
+                "the cap in spend_guard.rolling_caps."
+            ),
+            "cap_dimension": breach.cap_dimension,
+            "agent_id": breach.agent_id,
+            "window_seconds": breach.window_seconds,
+            "used": breach.used,
+            "cap": breach.cap,
+            "projected_add": breach.projected_add,
+            "retry_after_seconds": breach.retry_after_seconds,
+            "bypass_directive": "[TIP: allow=once]",
+        }
+    }
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
