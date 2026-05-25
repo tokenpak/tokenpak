@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Tests for tokenpak/precompute.py — Intent-specific precomputation pipeline."""
 
 from __future__ import annotations

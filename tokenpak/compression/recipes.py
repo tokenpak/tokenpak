@@ -205,7 +205,7 @@ class RecipeEngine:
 # Compression Recipe System (OSS tier)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_OSS_RECIPES_DIR = Path(__file__).parent.parent.parent / "recipes" / "oss"
+_OSS_RECIPES_DIR = Path(__file__).parent.parent / "recipes_oss"
 
 
 @dataclass(frozen=True)

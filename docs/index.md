@@ -5,7 +5,7 @@
 TokenPak is an open-source LLM proxy that compresses context, routes requests intelligently, and tracks costs — all without touching your prompts or credentials.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ---
 

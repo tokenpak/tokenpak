@@ -94,7 +94,12 @@ PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
 LISTEN_ADDRESS = _cfg("listen_address", "127.0.0.1", "TOKENPAK_BIND_ADDRESS", str)
 PROXY_AUTH_KEY = os.environ.get("TOKENPAK_PROXY_KEY", "")
 DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", False, "TOKENPAK_DASHBOARD_AUTH", bool)
-MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
+def _resolve_monitor_db() -> str:
+    from tokenpak._paths import monitor_db as _monitor_db
+    result = _monitor_db(mode="write")
+    return str(result)
+
+MONITOR_DB = _resolve_monitor_db()
 BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
 BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "80"))
 # CCG-02: mutation_audit TTL — prune rows older than this many days

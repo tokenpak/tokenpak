@@ -3,7 +3,7 @@
 **TokenPak integration for Langfuse** — Visualize context packs in your traces so developers see structured blocks instead of raw prompts.
 
 [![PyPI version](https://img.shields.io/pypi/v/langfuse-tokenpak)](https://pypi.org/project/langfuse-tokenpak/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ---
 

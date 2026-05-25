@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """tests/test_table_extractor.py
 
 Tests for tokenpak._internal.ingest.table_extractor (Phase 5D).

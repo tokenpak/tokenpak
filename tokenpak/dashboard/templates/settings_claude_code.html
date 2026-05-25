@@ -230,7 +230,7 @@
     <!-- ── Cache invalidation alerts ─────────────────────────────── -->
     <div class="settings-card" id="card-alerts">
       <h2>Cache Invalidation Alerts</h2>
-      <p class="card-desc">Fire a webhook or Slack notification when the cache hit rate drops below the threshold.</p>
+      <p class="card-desc">Configure local cache alert behavior. Remote webhook URLs are not editable from this dashboard.</p>
       <form action="/settings/claude-code/htmx/alerts" method="post"
             onsubmit="return htmxSubmit(this, 'status-alerts')">
         <div class="toggle-row">
@@ -240,15 +240,13 @@
             <span class="toggle-slider"></span>
           </label>
           <div>
-            <div class="toggle-label">Enable webhook alerts</div>
+            <div class="toggle-label">Enable cache alerts</div>
           </div>
         </div>
         <div class="form-row">
           <div class="form-group" style="flex:2">
-            <label for="cache_alert_webhook_url">Webhook URL</label>
-            <input type="text" id="cache_alert_webhook_url" name="cache_alert_webhook_url"
-                   placeholder="https://hooks.slack.com/…"
-                   value="{{ cache_alert_webhook_url }}">
+            <label>Webhook URL</label>
+            <p class="field-help">Remote webhook destinations are intentionally read-only here. Edit <code>tokenpak.env</code> manually or request an explicit webhook exception.</p>
           </div>
           <div class="form-group">
             <label for="cache_alert_threshold">Alert threshold (%)</label>
@@ -257,11 +255,9 @@
           </div>
         </div>
         <div class="form-row">
-          <div class="form-group">
-            <label for="cache_alert_slack_channel">Slack channel (optional)</label>
-            <input type="text" id="cache_alert_slack_channel" name="cache_alert_slack_channel"
-                   placeholder="#tokenpak-alerts"
-                   value="{{ cache_alert_slack_channel }}">
+          <div class="form-group" style="flex:2">
+            <label>Slack destination</label>
+            <p class="field-help">Slack destinations are read-only here. Configure alert delivery outside the dashboard.</p>
           </div>
           <button type="submit" class="btn-save">Save</button>
         </div>

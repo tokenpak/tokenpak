@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """tests/test_document_parser.py
 
 Tests for tokenpak._internal.ingest.document_parser (Phase 5E).
