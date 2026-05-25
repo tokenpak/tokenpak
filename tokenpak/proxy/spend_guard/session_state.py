@@ -24,7 +24,7 @@ from typing import Optional
 _log = logging.getLogger(__name__)
 
 def _path() -> Path:
-    from tokenpak._paths import monitor_db, home
+    from tokenpak._paths import home, monitor_db
     result = monitor_db(mode="read")
     if result is not None:
         return result

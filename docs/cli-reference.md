@@ -14,8 +14,9 @@ context compression. The proxy listens on localhost:PORT and forwards
 compressed requests to your configured LLM providers.
 
 Example:
-  tokenpak serve --port 8888 --workers 4
+  tokenpak start --port 8888 --workers 4
 
+(See also `tokenpak serve` for telemetry/ingest variants.)
 The proxy reads config from tokenpak.yaml or ~/.tokenpak/config.yaml
 
 **Flags:**
@@ -78,6 +79,8 @@ Check proxy health
 - `--no-meme` — Suppress tagline
 - `--days` — Filter to last N days (combinable with --hours)
 - `--hours` — Filter to last N hours (combinable with --days)
+- `--fleet` — Fleet rollup view — reads rollup_daily (FTA-06)
+- `--since` — With --fleet: window in days, e.g. '7d' (default: 7d)
 
 ### `tokenpak logs`
 
@@ -359,6 +362,7 @@ Run diagnostics
 - `--deploy` — Push latest doctor to all agents (use with --fleet)
 - `--verbose`, `-v` — Show extra detail for each check
 - `--claude-code` — Run Claude Code integration checks (ENABLE_TOOL_SEARCH, mode, IDE detection)
+- `--conformance` — Run TIP self-conformance checks (alias for `tokenpak tip conformance`)
 
 ### `tokenpak diagnose`
 
@@ -585,9 +589,20 @@ MultiPak Pro Phase 1 OSS surface. Read-only Vault Pak operations work without Pr
 - `export`
   - `PAK_REF` — Pak ID to export
   - `--output`, `-o` — Output directory
-- `import`
+- `create` — Package a directory into a Pak JSON file. The Pak captures anchor file content, objective/summary metadata, and a sha256 checksum. Encrypted Pak archives + capture pipeline are Pro features; plain JSON Paks are OSS Beta 1.
   - `SOURCE_DIR` — Directory to package
   - `--output`, `-o` — Output Pak file path
+  - `--title` — Pak title (default: directory name) (default: )
+  - `--objective` — Pak objective (free-form) (default: )
+  - `--summary` — Pak summary (free-form) (default: )
+  - `--ttl` — Pak TTL hint (free-form, e.g. '7d') (default: )
+  - `--continuation-notes` — Notes for continuation (free-form) (default: )
+  - `--include-content` — Embed file content in the Pak (default: on; use --no-include-content to omit)
+  - `--no-include-content` — Omit file content; only record paths + per-file sha256
+  - `--max-bytes` — Skip files larger than this when embedding content (default: 2 MiB) (default: 2000000)
+- `import` — Copy a Pak file into the local Pak store under <TOKENPAK_HOME>/paks/ so it is discoverable by `pak inspect <id>`. Pro daemon adds encryption-at-rest + capture pipeline; OSS import is a plain copy with checksum verification.
+  - `PAK_FILE` — Path to a Pak file to install
+  - `--force` — Overwrite if a Pak with the same id is already installed
 - `status`
   - `--json` — Emit JSON instead of text
 
@@ -930,6 +945,21 @@ Example:
 
 ### `tokenpak deactivate`
 
+### `tokenpak features`
+
+Show every feature TokenPak knows about and whether the current license entitles you to use it. Use `tokenpak features explain <feature>` for a single-feature breakdown.
+
+**Flags:**
+
+- `--json` — Emit JSON instead of text
+- `--tier` — Filter to a specific tier: free|pro|team|enterprise
+
+**Subcommands:**
+
+- `explain`
+  - `FEATURE` — Feature key (e.g. T9_replay_system)
+  - `--json` — Emit JSON
+
 ### `tokenpak help`
 
 Show tier-aware help. Pass a command name for details, or --minimal for compact list.
@@ -940,6 +970,24 @@ Show tier-aware help. Pass a command name for details, or --minimal for compact 
 - `--more` — Show essential + intermediate commands
 - `--all` — Show all commands
 - `--minimal` — Show compact one-line command list
+
+### `tokenpak home`
+
+Inspect, validate, and migrate the TokenPak home directory. All paths resolve through tokenpak._paths so subcommands honor TOKENPAK_HOME and the canonical ~/.tpk/ boundary.
+
+**Subcommands:**
+
+- `path`
+  - `--json`
+- `init`
+  - `--force` — Overwrite an existing config.json
+- `validate`
+  - `--json`
+- `explain`
+  - `--json`
+- `migrate` — Copy the legacy ~/.tokenpak/ tree to the canonical ~/.tpk/ location. The legacy tree is left in place as a safety backup; you can prune it manually once satisfied.
+  - `--dry-run` — Show what would be copied without writing anything
+  - `--force` — Allow merging into an existing ~/.tpk/ (default: refuse and report what to do manually)
 
 ### `tokenpak init`
 
@@ -1019,6 +1067,21 @@ Example:
 - `--show-diff` — Show before/after token counts
 - `--json` — Machine-readable JSON output
 
+### `tokenpak pakplan`
+
+Read-only consumer surface over the PAKPlan recall foundation. Scoring + capture pipeline are Pro.
+
+**Subcommands:**
+
+- `preview`
+  - `--limit` — Max Paks to surface (default: 10) (default: 10)
+  - `--json` — Emit JSON
+- `explain`
+  - `PAK_ID` — Pak id (e.g. pak:abcd1234…)
+  - `--json` — Emit JSON
+- `report`
+  - `--json` — Emit JSON
+
 ### `tokenpak plan`
 
 **Flags:**
@@ -1085,6 +1148,26 @@ Interactive wizard for first-time TokenPak configuration.
   - `--since` — Only include events on or after this date
   - `--until` — Only include events on or before this date
   - `--provider` — Filter to a specific provider name
+
+### `tokenpak tip`
+
+TIP is the protocol layer that adapter providers and platform integrations declare against. This verb family exposes the OSS-side validation, inspection, and self-conformance surface.
+
+**Subcommands:**
+
+- `inspect`
+  - `--json` — Emit JSON instead of text
+- `validate`
+  - `REF` — Either a capability label (e.g. 'tip.compression.v1') or a filesystem path to a JSON document to check
+  - `--schema` — Schema name (e.g. 'tip-capabilities.v1') when validating a JSON file. Required for file mode.
+  - `--json` — Emit JSON result
+- `conformance`
+  - `--json` — Emit JSON result envelope
+- `doctor`
+  - `--json` — Emit JSON result envelope
+- `scaffold-adapter`
+  - `NAME` — Adapter name (e.g. 'my-platform')
+  - `--output`, `-o` — Output file path (default: ./<name>_adapter.py)
 
 ### `tokenpak usage`
 

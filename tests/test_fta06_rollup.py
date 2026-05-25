@@ -25,9 +25,8 @@ import pytest
 
 # Module-level imports so the 40s tokenpak.cli eager-import of _cli_core
 # happens once during pytest collection, not inside each timed test.
-from tokenpak.cli._impl import run_fleet, _saved_pct
+from tokenpak.cli._impl import _saved_pct, run_fleet
 from tokenpak.cli.commands.status import _parse_since
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
