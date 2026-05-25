@@ -12,7 +12,7 @@ from typing import Any, Dict
 # JSON Schema for TokenPak responses
 RESPONSE_SCHEMA: Dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://tokenpak.ai/schemas/response.json",
+    "$id": "https://docs.tokenpak.ai/schemas/tokenpak/response-v1.json",
     "title": "TokenPak Response",
     "description": "Schema for validated TokenPak proxy responses",
     "type": "object",
