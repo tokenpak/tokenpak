@@ -191,7 +191,8 @@ jobs:
                 -e 's/tokenpak[[:space:]]+fleet/tokenpak __PUBLIC_FLEET_VERB__/g' \
                 -e 's/--fleet([^a-zA-Z]|$)/--__PUBLIC_FLEET_FLAG__\1/g' \
                 -e 's/fleet\.yaml/__PUBLIC_FLEET_CONFIG__.yaml/g' \
-                -e 's/fleet[[:space:]]+(config|configuration|command|management)/__PUBLIC_FLEET_PHRASE__ \1/g' \
+                -e 's/fleet[[:space:]]+(config|configuration|command|management|rollup|status)/__PUBLIC_FLEET_PHRASE__ \1/g' \
+                -e 's/fleet-telemetry/__PUBLIC_FLEET_PHRASE__-telemetry/g' \
                 -e 's/fleet-wide/__PUBLIC_FLEET_PHRASE__-wide/g' \
                 -e 's/multi-instance[[:space:]]+fleet/multi-instance __PUBLIC_TMUX_MODE__/g' \
                 -e 's/multi-instance-fleet/multi-instance-__PUBLIC_TMUX_MODE__/g' \
