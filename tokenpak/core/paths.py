@@ -5,7 +5,7 @@ All modules that need to locate telemetry.db or monitor.db should import
 ``get_db_path`` from here instead of hardcoding paths.
 
 For ``monitor.db``, resolution delegates to ``tokenpak._paths.monitor_db()``
-which implements the full Std 33 resolution order including env var
+which implements the full home-directory resolution order including env var
 compatibility (``TOKENPAK_DB`` / ``TOKENPAK_MONITOR_DB``), canonical
 ``~/.tpk/``, and legacy ``~/.tokenpak/`` paths.
 
