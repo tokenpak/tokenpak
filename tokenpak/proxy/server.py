@@ -2539,15 +2539,12 @@ class ProxyServer:
         # Compression telemetry — writes events to ~/.tokenpak/compression_events.jsonl
         self.compression_stats = CompressionStats()
 
-        # SQLite request ledger — writes to ~/.tokenpak/monitor.db (symlink target).
+        # SQLite request ledger — resolved via _paths.monitor_db(mode="write").
         # Powers `tokenpak status`, `savings`, dashboards. Async write queue keeps
         # per-request cost <0.1ms. Fail-open: any DB error never breaks the proxy.
         try:
-            _db_path = os.environ.get(
-                "TOKENPAK_DB",
-                os.path.expanduser("~/.tokenpak/monitor.db"),
-            )
-            self.monitor: Optional[_DbMonitor] = _DbMonitor(_db_path)
+            from tokenpak.proxy.config import MONITOR_DB
+            self.monitor: Optional[_DbMonitor] = _DbMonitor(MONITOR_DB)
         except Exception:
             self.monitor = None
 

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # sync-check: 2026-04-15 — origin remote updated to <shared-host>:~/tokenpak-origin.git
 """Tests for alert delivery channels (webhook + Slack).
 

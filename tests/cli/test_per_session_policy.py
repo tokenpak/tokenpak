@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """tests/cli/test_per_session_policy.py
 
 CCG-12: Unit tests for per-session policy CLI commands.

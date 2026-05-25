@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Tests for tokenpak._internal.ingest.cross_doc — Cross-Document Normalization."""
 
 from __future__ import annotations

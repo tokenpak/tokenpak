@@ -23,12 +23,12 @@ from typing import Optional
 
 _log = logging.getLogger(__name__)
 
-# Where the proxy already records per-request cost.
-_DEFAULT_MONITOR_DB = "~/.tokenpak/monitor.db"
-
-
 def _path() -> Path:
-    return Path(os.path.expanduser(_DEFAULT_MONITOR_DB))
+    from tokenpak._paths import monitor_db, home
+    result = monitor_db(mode="read")
+    if result is not None:
+        return result
+    return home() / "monitor.db"
 
 
 def session_cumulative_cost(

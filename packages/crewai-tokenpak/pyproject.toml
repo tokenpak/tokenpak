@@ -7,7 +7,7 @@ name = "crewai-tokenpak"
 version = "0.1.0"
 description = "TokenPak integration for CrewAI — automatic context compression for multi-agent systems"
 readme = "README.md"
-license = "MIT"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 authors = [
   { name = "TokenPak Team" }

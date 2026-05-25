@@ -22,6 +22,7 @@ Layout (Std 33 §3):
         pinned_blocks.json      retain pins
         requests.jsonl          request log
         telemetry.db            telemetry store
+        monitor.db              request ledger
         companion/              companion subsystem state
         pro/                    Pro daemon coordination (sock-info, state)
 
@@ -33,11 +34,17 @@ Callsites that need a directory must call ``ensure_home()`` (creates
 from __future__ import annotations
 
 import os
+import sqlite3
 from pathlib import Path
+from typing import Any, Optional
 
 CANONICAL_DIRNAME = ".tpk"
 LEGACY_DIRNAME = ".tokenpak"
 ENV_VAR = "TOKENPAK_HOME"
+
+_MONITOR_DB_ENV = "TOKENPAK_DB"
+_MONITOR_DB_ENV_COMPAT = "TOKENPAK_MONITOR_DB"
+_MONITOR_TABLE = "requests"
 
 
 def home() -> Path:
@@ -120,6 +127,99 @@ def is_legacy_active() -> bool:
     return home() == legacy_home() and not has_canonical()
 
 
+# ---------------------------------------------------------------------------
+# Monitor DB resolver
+# ---------------------------------------------------------------------------
+
+
+def _is_valid_monitor_db(p: Path) -> bool:
+    """Check whether *p* is a usable monitor DB (exists, SQLite, has schema)."""
+    try:
+        resolved = p.resolve() if p.is_symlink() else p
+        if not resolved.is_file():
+            return False
+        if resolved.stat().st_size < 100:
+            return False
+        conn = sqlite3.connect(str(resolved), timeout=2)
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (_MONITOR_TABLE,),
+        )
+        found = cur.fetchone() is not None
+        conn.close()
+        return found
+    except Exception:
+        return False
+
+
+def _monitor_db_candidates() -> list[Path]:
+    """Ordered candidate paths for the monitor DB (read resolution order)."""
+    candidates: list[Path] = []
+    env_val = os.environ.get(_MONITOR_DB_ENV, "").strip()
+    if env_val:
+        candidates.append(Path(env_val).expanduser())
+    else:
+        env_compat = os.environ.get(_MONITOR_DB_ENV_COMPAT, "").strip()
+        if env_compat:
+            candidates.append(Path(env_compat).expanduser())
+    candidates.append(Path.home() / CANONICAL_DIRNAME / "monitor.db")
+    candidates.append(Path.home() / LEGACY_DIRNAME / "monitor.db")
+    candidates.append(Path.home() / "tokenpak" / "monitor.db")
+    return candidates
+
+
+def monitor_db(mode: str = "read") -> Optional[Path]:
+    """Resolve the monitor DB path.
+
+    mode="read":  Return the first valid active DB, or None if no
+                  valid DB exists. Does not create anything.
+    mode="write": Return the existing active DB if found, otherwise
+                  the canonical fresh-install path (~/.tpk/monitor.db).
+                  Creates the parent directory if needed, but does NOT
+                  create the DB file itself.
+    """
+    for candidate in _monitor_db_candidates():
+        if _is_valid_monitor_db(candidate):
+            return candidate
+    if mode == "write":
+        target = Path.home() / CANONICAL_DIRNAME / "monitor.db"
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        return target
+    return None
+
+
+def monitor_db_candidates() -> list[dict[str, Any]]:
+    """Return diagnostic info for each candidate path (for doctor/split-brain).
+
+    Each entry: {path, exists, valid, rows, selected}.
+    """
+    results: list[dict[str, Any]] = []
+    selected_path = monitor_db(mode="read")
+    for candidate in _monitor_db_candidates():
+        entry: dict[str, Any] = {
+            "path": str(candidate),
+            "exists": candidate.exists(),
+            "valid": False,
+            "rows": 0,
+            "selected": False,
+        }
+        if _is_valid_monitor_db(candidate):
+            entry["valid"] = True
+            entry["selected"] = (
+                selected_path is not None
+                and candidate.resolve() == selected_path.resolve()
+            )
+            try:
+                conn = sqlite3.connect(str(candidate.resolve()), timeout=2)
+                cur = conn.execute(f"SELECT COUNT(*) FROM {_MONITOR_TABLE}")
+                entry["rows"] = cur.fetchone()[0]
+                conn.close()
+            except Exception:
+                pass
+        results.append(entry)
+    return results
+
+
 __all__ = [
     "CANONICAL_DIRNAME",
     "LEGACY_DIRNAME",
@@ -133,4 +233,6 @@ __all__ = [
     "ensure_home",
     "under",
     "is_legacy_active",
+    "monitor_db",
+    "monitor_db_candidates",
 ]
