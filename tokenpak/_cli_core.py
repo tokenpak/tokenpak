@@ -1981,6 +1981,17 @@ def _cmd_dashboard_public(args):
 
 def cmd_doctor(args):
     """Run comprehensive diagnostics on TokenPak installation."""
+    if getattr(args, "conformance", False):
+        # Fast path — TIP self-conformance only. Mirrors `tokenpak tip
+        # conformance` so existing operators who learned the v1.3.7
+        # ``doctor --conformance`` flag get the same surface back.
+        from .cli.commands.tip import cmd_tip_conformance
+
+        class _A:
+            pass
+        a = _A()
+        a.json = bool(getattr(args, "json_output", False))
+        sys.exit(cmd_tip_conformance(a))
     if getattr(args, "fleet", False):
         from .cli.commands.doctor import run_fleet_doctor
 
@@ -2583,7 +2594,8 @@ def build_parser():
             "context compression. The proxy listens on localhost:PORT and forwards\n"
             "compressed requests to your configured LLM providers.\n\n"
             "Example:\n"
-            "  tokenpak serve --port 8888 --workers 4\n\n"
+            "  tokenpak start --port 8888 --workers 4\n\n"
+            "(See also `tokenpak serve` for telemetry/ingest variants.)\n"
             "The proxy reads config from tokenpak.yaml or ~/.tokenpak/config.yaml"
         ),
     )
@@ -2792,6 +2804,12 @@ def build_parser():
         action="store_true",
         help="Run Claude Code integration checks (ENABLE_TOOL_SEARCH, mode, IDE detection)",
     )
+    p_doctor.add_argument(
+        "--conformance",
+        dest="conformance",
+        action="store_true",
+        help="Run TIP self-conformance checks (alias for `tokenpak tip conformance`)",
+    )
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_diagnose = sub.add_parser("diagnose", help="Health check — config, vault, cache, proxy, disk")
@@ -2907,6 +2925,10 @@ def build_parser():
     _build_codex_parser(sub)
     _build_creds_parser(sub)
     _build_pak_parser(sub)
+    _build_tip_parser(sub)
+    _build_features_parser(sub)
+    _build_pakplan_parser(sub)
+    _build_home_parser(sub)
     _build_prove_parser(sub)
     _build_test_parser(sub)
     _build_telemetry_parser(sub)
@@ -3202,6 +3224,8 @@ def cmd_status(args):
             no_meme=no_meme,
             days=getattr(args, "days", 0),
             hours=getattr(args, "hours", 0),
+            fleet=getattr(args, "fleet", False),
+            since=getattr(args, "since", None),
         )
     except Exception as e:
         print(f"⚠️  Savings-first status failed ({e}), falling back to legacy output...")
@@ -3522,6 +3546,8 @@ def _build_status_parser(sub):
     p_status.add_argument("--no-meme", dest="no_meme", action="store_true", help="Suppress tagline")
     p_status.add_argument("--days", type=int, default=0, help="Filter to last N days (combinable with --hours)")
     p_status.add_argument("--hours", type=int, default=0, help="Filter to last N hours (combinable with --days)")
+    p_status.add_argument("--fleet", action="store_true", help="Fleet rollup view — reads rollup_daily (FTA-06)")
+    p_status.add_argument("--since", default=None, help="With --fleet: window in days, e.g. '7d' (default: 7d)")
     p_status.set_defaults(func=cmd_status)
 
 
@@ -4477,6 +4503,11 @@ def main():
         "deactivate",
         "init",
         "monitor",
+        # Beta 1 verb families (TIP, features, PAKPlan preview, Std 33 home)
+        "tip",
+        "features",
+        "pakplan",
+        "home",
     }
     # If user asks --help on an unrecognised command, just show that command's usage + exit 0
     if (
@@ -4611,7 +4642,14 @@ def main():
         if not getattr(args, "week", False) and not getattr(args, "month", False):
             pass  # cmd_cost already defaults to "daily" when neither flag set
 
-    args.func(args)
+    # Honor explicit non-zero return codes from handlers. Beta-1 Aya-found
+    # regression: handlers like cmd_pak_create and cmd_pak_import returned
+    # 1 on error but the dispatcher dropped the value, so callers in
+    # `set -e` scripts saw exit 0 even after a printed error. Handlers
+    # that return None or 0 keep the prior fall-through behavior.
+    _rc = args.func(args)
+    if isinstance(_rc, int) and _rc != 0:
+        sys.exit(_rc)
 
 
 # ── Route commands ────────────────────────────────────────────────────────────
@@ -5870,6 +5908,51 @@ def _build_pak_parser(sub):
     from tokenpak.cli.commands.pak import build_pak_parser
 
     build_pak_parser(sub)
+
+
+def _build_tip_parser(sub):
+    """Register the ``tokenpak tip`` subcommand (Beta 1 regression recovery).
+
+    Restores the v1.3.7 doctor-conformance surface as a dedicated verb
+    family. Implementation lives in :mod:`tokenpak.cli.commands.tip`.
+    """
+    from tokenpak.cli.commands.tip import build_tip_parser
+
+    build_tip_parser(sub)
+
+
+def _build_features_parser(sub):
+    """Register the ``tokenpak features`` subcommand (Beta 1, Packet G)."""
+    from tokenpak.cli.commands.features import build_features_parser
+
+    build_features_parser(sub)
+
+
+def _build_pakplan_parser(sub):
+    """Register the ``tokenpak pakplan`` subcommand (Beta 1 consumer surface).
+
+    The PAKPlan foundation (recall schema + reason/risk registries +
+    ordering hints) shipped at PR #184 / ``43bfb58e2c``. Beta 1 OSS
+    surface is preview/explain/report only — scoring + capture pipeline
+    remain Pro per Std 32 §5.2.
+    """
+    from tokenpak.cli.commands.pakplan import build_pakplan_parser
+
+    build_pakplan_parser(sub)
+
+
+def _build_home_parser(sub):
+    """Register the ``tokenpak home`` subcommand (Beta 1, Std 33 + Packet C).
+
+    Subcommands: ``path | init | validate | explain | migrate``.
+    Implementation lives in :mod:`tokenpak.cli.commands.home_cmd`. The
+    verb is ``home`` rather than ``config`` because the existing
+    ``config`` parser owns proxy config.yaml lifecycle commands; this
+    family owns the Std 33 TokenPak home directory.
+    """
+    from tokenpak.cli.commands.home_cmd import build_home_parser
+
+    build_home_parser(sub)
 
 
 def _build_lock_parser(sub):

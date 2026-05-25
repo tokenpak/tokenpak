@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Tests for TokenPak Goals — Savings Goals and Progress Tracking
 
 Comprehensive test suite covering:

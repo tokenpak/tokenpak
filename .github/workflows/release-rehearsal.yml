@@ -23,6 +23,10 @@ on:
     # Mondays 09:13 UTC (off-clock minute per scheduler best-practice)
     - cron: '13 9 * * 1'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   actions: read
@@ -73,7 +77,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           case "${{ matrix.shape }}" in
-            slim) pip install . ;;
+            # slim has no test-runner deps; install pytest + plugins so the
+            # pytest step below can run (PR #58 fix).
+            slim) pip install . pytest pytest-asyncio pytest-benchmark pytest-mock ;;
             dev)  pip install ".[dev]" ;;
             full) pip install ".[dev,retrieval,code-compression,intelligence,data,compression]" ;;
           esac

@@ -60,7 +60,7 @@ That's it. Every request is now routed through tokenpak.
 ### Install
 
 ```bash
-pip install tokenpak-sdk
+pip install tokenpak
 ```
 
 ### Compress and send

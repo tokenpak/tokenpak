@@ -5,7 +5,7 @@ TokenPak integration for LlamaIndex — automatic context compression for RAG pi
 Reduces token costs by 40-60% on retrieved nodes without sacrificing quality.
 
 [![PyPI version](https://img.shields.io/pypi/v/llamaindex-tokenpak)](https://pypi.org/project/llamaindex-tokenpak/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ---
 

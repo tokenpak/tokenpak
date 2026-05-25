@@ -1,6 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Pluggable adapter system for prove runs.
 
+NOTE — Privacy scope: this module is the proving/benchmarking harness
+(invoked via ``tokenpak test``). It is NOT imported by production proxy
+or services code. When ``log_path`` is supplied, this module writes
+transcripts (including raw user prompts) to the user-specified log
+file — this is opt-in developer-tool behavior, not a production
+persistence path. Production raw-text persistence is governed by
+tokenpak's documented persistence and telemetry policies.
+
 An adapter encodes how to execute a turn against a specific
 (platform, provider, model) combination and extract metrics from it.
 

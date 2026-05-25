@@ -110,10 +110,27 @@ _TIER_ORDER = {
 
 
 def _license_path() -> Path:
+    """Resolve the license file path through Std 33's resolver.
+
+    Resolution order:
+      1. ``TOKENPAK_LICENSE_FILE`` env var (explicit override).
+      2. ``<TOKENPAK_HOME>/license.json`` via ``tokenpak._paths.under``,
+         which honors ``TOKENPAK_HOME`` then canonical ``~/.tpk/`` then
+         legacy ``~/.tokenpak/`` per Std 33.
+
+    Beta-1 Aya-found regression fix: previously this hardcoded
+    ``Path.home() / ".tokenpak" / "license.json"``, which silently
+    bypassed ``TOKENPAK_HOME``. On a host with the env set elsewhere
+    that meant ``activate`` would clobber the *real* home's
+    ``~/.tokenpak/license.json`` instead of writing under the test
+    sandbox — a sandbox-escape + Std 33 boundary violation in one.
+    """
     override = os.environ.get("TOKENPAK_LICENSE_FILE")
     if override:
         return Path(override)
-    return Path.home() / ".tokenpak" / "license.json"
+    from tokenpak import _paths
+
+    return _paths.under("license.json")
 
 
 @dataclass
@@ -206,17 +223,61 @@ class ActivationResult:
 def activate(key: str, *, email: str = "") -> ActivationResult:
     """Store a license key for future validation.
 
-    Since no entitlement server exists yet, we don't know what tier a key
-    buys. Store it with status='pending_validation' and default to Free
-    entitlements until a real validator lands. This lets early buyers
-    install their key without the CLI failing, and any gated feature still
-    correctly reports Free until validation completes.
+    No entitlement server exists yet, so we cannot know what tier a key
+    buys. Tier defaults to Free; status is ``pending_validation`` until
+    a real validator lands. This intentionally fails *safe* — anybody
+    who tries to bypass payment by inventing a string sees Free-tier
+    behavior, never Pro.
+
+    The shape check below rejects obviously invalid inputs (empty,
+    whitespace, too short, non-printable, internal placeholder strings)
+    so the CLI never claims success on garbage. Genuine keys passing
+    the shape check are stored verbatim for the validator to verify
+    once wired (Packet G-private, Std 25 §3.4).
+
+    Important: this function does NOT grant Pro entitlements on its
+    own. It is a *store-and-stage* step. ``is_feature_enabled`` is the
+    single choke point that decides what a key buys.
     """
-    key = key.strip()
+    import re
+
+    key = (key or "").strip()
     if not key:
         return ActivationResult(
             ok=False, summary="No license key provided.",
             error="empty_key",
+        )
+    if len(key) < 16:
+        return ActivationResult(
+            ok=False,
+            summary=(
+                "License key is implausibly short (need ≥ 16 characters). "
+                "Paste the full key from your purchase confirmation."
+            ),
+            error="key_too_short",
+        )
+    if not key.isprintable():
+        return ActivationResult(
+            ok=False,
+            summary="License key contains non-printable characters.",
+            error="non_printable_key",
+        )
+    # Allow alphanumeric, dash, dot, underscore, slash, plus, equals
+    # (covers base64url + dotted token formats).
+    if not re.match(r"^[A-Za-z0-9._/+=\-]+$", key):
+        return ActivationResult(
+            ok=False,
+            summary=(
+                "License key has unexpected characters. Keys are "
+                "alphanumeric plus '-._/+='."
+            ),
+            error="bad_key_charset",
+        )
+    if key.lower() in {"test", "demo", "placeholder", "tbd", "free"}:
+        return ActivationResult(
+            ok=False,
+            summary=f"{key!r} is not a real license key.",
+            error="placeholder_key",
         )
     import datetime
     lic = License(
@@ -232,14 +293,122 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
         return ActivationResult(
             ok=False, summary="Could not write license file.", error=str(exc),
         )
-    return ActivationResult(
-        ok=True,
-        summary=(
-            "License key stored (pending validation — Pro tier not live yet). "
-            "Free-tier features remain active."
-        ),
-        license=lic,
-    )
+    # Best-effort: ask the Pro daemon for the verified tier. Fails closed
+    # — daemon unreachable, unverified signature, placeholder verifier
+    # key, or timeout keeps the stored license at tier=FREE /
+    # status=pending_validation. Local file edits MUST NEVER unlock Pro.
+    daemon_state, advisory = _consult_daemon_for_tier(lic)
+    if daemon_state == "verified":
+        summary = (
+            f"License key stored and verified by the Pro daemon. "
+            f"Active tier: {lic.tier}."
+        )
+    elif daemon_state == "unverified":
+        summary = (
+            "License key stored. Pro daemon rejected verification "
+            f"({advisory}). Pro features remain locked."
+        )
+    elif daemon_state == "placeholder":
+        summary = (
+            "License key stored. Pro daemon is shipping a placeholder "
+            "license public key (production rotation pending). "
+            "Verification is advisory only — Pro features remain locked."
+        )
+    elif daemon_state == "unreachable":
+        summary = (
+            "License key stored. Pro daemon not running — Pro features "
+            "remain locked until the daemon is reachable and "
+            "verification succeeds."
+        )
+    else:
+        summary = (
+            "License key stored (pending validation — Pro tier not live "
+            "yet). Free-tier features remain active."
+        )
+    return ActivationResult(ok=True, summary=summary, license=lic)
+
+
+def _consult_daemon_for_tier(lic: "License") -> tuple[str, str]:
+    """Ask the Pro daemon's ``/v1/features`` endpoint about ``lic``.
+
+    Returns ``(state, advisory)`` where ``state`` is one of:
+
+      ``"verified"``    — daemon returned ``signature.verified=true``
+                          AND ``signature.key_is_placeholder=false``
+                          AND ``is_valid=true``. ``lic`` was updated
+                          in place and saved with the daemon-reported
+                          tier + status="active".
+      ``"unverified"``  — daemon returned ``signature.verified=false``;
+                          advisory carries the failure reason.
+      ``"placeholder"`` — daemon reports placeholder verifier key.
+      ``"unreachable"`` — daemon probe failed, sock-info missing, HTTP
+                          error, malformed payload, or any exception.
+      ``"pending"``     — kept for forward-compatibility.
+
+    Fail-closed: any exception or unexpected payload shape collapses
+    to ``"unreachable"``. OSS NEVER claims Pro on partial info. Local
+    ``license.json`` edits never bypass this — the function only
+    writes back when the daemon explicitly returns a verified envelope.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    try:
+        from tokenpak.licensing.daemon_probe import (
+            detect_daemon_state,
+            sock_info_path,
+        )
+    except ImportError:
+        return ("unreachable", "daemon_probe_unavailable")
+
+    if detect_daemon_state() != "active":
+        return ("unreachable", "daemon_not_listening")
+
+    try:
+        info_path = sock_info_path()
+        info = json.loads(info_path.read_text(encoding="utf-8"))
+        port = info.get("port")
+        if not isinstance(port, int):
+            return ("unreachable", "sock_info_missing_port")
+    except (OSError, json.JSONDecodeError, ValueError):
+        return ("unreachable", "sock_info_unreadable")
+
+    url = f"http://127.0.0.1:{port}/v1/features"
+    try:
+        with urllib.request.urlopen(url, timeout=2.0) as resp:
+            payload = json.loads(resp.read())
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError) as exc:
+        return ("unreachable", f"http_error:{type(exc).__name__}")
+
+    if not isinstance(payload, dict):
+        return ("unreachable", "malformed_payload")
+
+    sig = payload.get("signature") or {}
+    if not isinstance(sig, dict):
+        return ("unreachable", "malformed_signature_envelope")
+
+    if sig.get("key_is_placeholder", False):
+        return ("placeholder", "verifier_key_is_placeholder")
+
+    if not sig.get("verified", False):
+        reason = sig.get("reason", "unknown")
+        return ("unverified", f"signature_{reason}")
+
+    if not payload.get("is_valid", False):
+        return ("unverified", str(payload.get("degraded_reason", "not_valid")))
+
+    daemon_tier = str(payload.get("tier", TIER_FREE)).lower()
+    if daemon_tier in (TIER_PRO, TIER_TEAM, TIER_ENTERPRISE):
+        lic.tier = daemon_tier
+        lic.status = "active"
+        try:
+            save_license(lic)
+        except Exception:
+            return ("unreachable", "save_failed")
+        return ("verified", f"daemon_tier:{daemon_tier}")
+
+    return ("unverified", f"daemon_tier_not_paid:{daemon_tier}")
 
 
 def deactivate() -> bool:
@@ -281,6 +450,91 @@ def describe_tier(tier: str) -> str:
         TIER_TEAM: "Team",
         TIER_ENTERPRISE: "Enterprise",
     }.get(tier, tier.title())
+
+
+def discover_plans() -> list[dict[str, Any]]:
+    """Derive the plan catalog dynamically from ``_GATES`` (Beta 1).
+
+    Tier presence is data-driven: a tier appears in the catalog only if
+    at least one feature is gated to it, which means adding a new
+    feature with a new tier automatically shows up here — no hardcoded
+    list to maintain (``feedback_always_dynamic.md``).
+
+    Pricing data is read from a discovery file at
+    ``<TOKENPAK_HOME>/pricing.json`` when present; otherwise the
+    ``price`` field is the string ``"unannounced"`` (honest, not the
+    misleading ``"TBD"`` that the Beta-1 readiness audit flagged).
+
+    Returns a list of dicts:
+        {tier, label, feature_count, features, price, blurb}
+    in canonical order Free → Pro → Team → Enterprise.
+    """
+    # Reverse the gate table: tier → [features]
+    tier_features: dict[str, list[str]] = {TIER_FREE: []}
+    for feature, required in _GATES.items():
+        tier_features.setdefault(required, []).append(feature)
+
+    pricing = _load_pricing_manifest()
+    blurbs = _default_blurbs()
+    order = (TIER_FREE, TIER_PRO, TIER_TEAM, TIER_ENTERPRISE)
+
+    catalog: list[dict[str, Any]] = []
+    for tier in order:
+        if tier != TIER_FREE and tier not in tier_features:
+            continue
+        feats = sorted(tier_features.get(tier, []))
+        catalog.append({
+            "tier": tier,
+            "label": describe_tier(tier),
+            "feature_count": len(feats),
+            "features": feats,
+            "price": pricing.get(tier, "unannounced"),
+            "blurb": blurbs.get(tier, ""),
+        })
+    return catalog
+
+
+def _load_pricing_manifest() -> dict[str, str]:
+    """Read ``<TOKENPAK_HOME>/pricing.json`` if present.
+
+    Shape: ``{"free": "$0", "pro": "$X/mo", ...}``. Missing / unparseable
+    file → empty dict (callers fall back to ``"unannounced"``).
+    """
+    try:
+        from tokenpak import _paths
+
+        p = _paths.under("pricing.json")
+        if not p.exists():
+            return {}
+        import json as _json
+
+        data = _json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): str(v) for k, v in data.items()}
+    except Exception:
+        return {}
+
+
+def _default_blurbs() -> dict[str, str]:
+    return {
+        TIER_FREE: (
+            "Full Free-tier feature set — proxy, vault, basic "
+            "compression, dashboard, savings tracking."
+        ),
+        TIER_PRO: (
+            "Adds advanced compression, smart routing, session "
+            "telemetry, trace + replay, CSV/JSON export."
+        ),
+        TIER_TEAM: (
+            "Adds budget enforcement, OAuth, real-time stats API, "
+            "shared vault, handoff system, workflow budgets."
+        ),
+        TIER_ENTERPRISE: (
+            "Adds A/B testing, shadow mode, regression detection, "
+            "FinOps + audit pages, DLP/PII scanning, connection pooling."
+        ),
+    }
 
 
 def summary_for_cli(lic: Optional[License] = None) -> dict[str, Any]:

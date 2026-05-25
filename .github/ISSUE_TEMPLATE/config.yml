@@ -4,5 +4,8 @@ contact_links:
     url: https://github.com/tokenpak/tokenpak/discussions
     about: Got a question or idea? Start a Discussion instead of an Issue.
   - name: 📖 Documentation
-    url: https://github.com/tokenpak/tokenpak/blob/main/README.md
-    about: Check the docs before filing a bug — it might already be covered.
+    url: https://docs.tokenpak.ai
+    about: Quickstart, installation, CLI reference, troubleshooting — check the docs before filing a bug.
+  - name: 🧪 Known Issues (OSS beta)
+    url: https://docs.tokenpak.ai/known-issues/
+    about: Beta limitations and documented surfaces that are work-in-progress. Worth scanning first.

@@ -67,7 +67,12 @@ def run_doctor(
     counts = {"pass": 0, "warn": 0, "fail": 0}
     fixes: list[tuple[str, Path]] = []
     checks: list[dict] = []
-    tokenpak_dir = Path.home() / ".tokenpak"
+    # Std 33: resolve through _paths so doctor reports the canonical
+    # home (~/.tpk/) when present, and surfaces the legacy fallback
+    # when the user hasn't run `tokenpak home migrate` yet.
+    from tokenpak import _paths
+
+    tokenpak_dir = _paths.home()
 
     def _record(
         name: str,
@@ -90,6 +95,40 @@ def run_doctor(
             if verbose and detail:
                 for line in detail.splitlines():
                     print(f"         {line}")
+
+    # === Check 0: Std 33 home boundary ==========================================
+    # Reports the resolved TokenPak home + flags legacy paths that should
+    # be migrated. Cheap, side-effect-free, runs before everything else
+    # so the operator sees the boundary state up front.
+    if _paths.is_legacy_active():
+        _record(
+            "home_boundary",
+            "warn",
+            f"~/.tpk/ boundary    legacy: {_paths.legacy_home()}",
+            detail=(
+                "Using legacy ~/.tokenpak/ — canonical ~/.tpk/ is "
+                "absent. Run `tokenpak home migrate` to copy your "
+                "state to ~/.tpk/ (non-destructive, backup-first)."
+            ),
+        )
+    elif _paths.has_legacy() and _paths.has_canonical():
+        _record(
+            "home_boundary",
+            "warn",
+            "~/.tpk/ boundary    canonical + legacy both present",
+            detail=(
+                f"Both {_paths.canonical_home()} and "
+                f"{_paths.legacy_home()} exist. Canonical wins. "
+                f"Once you've confirmed ~/.tpk/ is working, you can "
+                f"remove the legacy directory manually."
+            ),
+        )
+    else:
+        _record(
+            "home_boundary",
+            "pass",
+            f"~/.tpk/ boundary    {tokenpak_dir}",
+        )
 
     # === Check 1: Proxy health with latency =====================================
     proxy_port = int(os.environ.get("TOKENPAK_PORT", "8766"))
@@ -397,12 +436,12 @@ def run_doctor(
                 "Vault index         not found (run: tokenpak index <path>)",
             )
 
-    # === Check 7b: Registered vault paths staleness (VDS-03) ====================
-    # Reads ~/.tokenpak/vault.yaml + per-path index health (VDS-01) and warns
-    # when a registered directory's last rebuild is older than expected
-    # interval × 2, when the path is missing, when metadata is corrupt, or
-    # when the previous reindex failed. Manual schedules don't warn solely on
-    # age. Per VDS-03 spec — does not fail unrelated checks.
+    # === Check 7b: Registered vault paths staleness ============================
+    # Reads vault.yaml under the resolved TokenPak home + per-path index
+    # health and warns when a registered directory's last rebuild is older
+    # than expected interval × 2, when the path is missing, when metadata
+    # is corrupt, or when the previous reindex failed. Manual schedules
+    # don't warn solely on age. Does not fail unrelated checks.
     try:
         from tokenpak.vault import doctor_check as _vds03
 
@@ -685,7 +724,7 @@ def run_doctor(
                     "(tokenpak maintenance)",
                 )
         else:
-            _record("disk_usage", "warn", "Disk usage          ~/.tokenpak not found")
+            _record("disk_usage", "warn", f"Disk usage          {tokenpak_dir} not found")
     except Exception:
         _record("disk_usage", "warn", "Disk usage          could not measure")
 
@@ -838,7 +877,7 @@ def run_doctor(
                 "spend_guard",
                 "warn",
                 "Spend Guard         disabled — runaway requests will not be blocked pre-send",
-                detail="Set spend_guard.enabled=true in ~/.tokenpak/config.yaml or unset TOKENPAK_SPEND_GUARD_ENABLED=0",
+                detail=f"Set spend_guard.enabled=true in {tokenpak_dir}/config.yaml or unset TOKENPAK_SPEND_GUARD_ENABLED=0",
             )
     except ImportError:
         _record(
@@ -998,8 +1037,8 @@ def run_doctor(
             _record(
                 "cc_mode_tmux",
                 "pass",
-                "TMUX session        detected — ensure vault index uses shared file locks "
-                "(CCP-06 amendment: concurrent pane access may contend on ~/.tokenpak/index.json)",
+                f"TMUX session        detected — ensure vault index uses shared file locks "
+                f"(concurrent pane access may contend on {tokenpak_dir}/index.json)",
                 detail=(
                     f"TMUX={tmux_val}. Multiple Claude Code panes in the same TMUX session may "
                     "concurrently read/write the vault index. "
@@ -1089,7 +1128,7 @@ try:
 
     @click.command("doctor")
     @click.option("--fix", is_flag=True, help="Auto-fix issues where possible")
-    @click.option("--fleet", is_flag=True, help="Check all agents in ~/.tokenpak/fleet.yaml")
+    @click.option("--fleet", is_flag=True, help="Check all agents listed in fleet.yaml under the resolved TokenPak home")
     @click.option(
         "--deploy", is_flag=True, help="Push latest doctor to all agents (use with --fleet)"
     )
@@ -1119,7 +1158,7 @@ try:
 
         Exit codes: 0=all pass, 1=warnings only, 2=one or more errors.
 
-        Fleet mode: run doctor on all registered agents in ~/.tokenpak/fleet.yaml.
+        Fleet mode: run doctor on all registered agents in fleet.yaml under the resolved TokenPak home (see ``tokenpak home path``).
 
         Examples:
 

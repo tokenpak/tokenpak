@@ -185,6 +185,34 @@ class Monitor:
             conn.execute("ALTER TABLE requests ADD COLUMN user_id TEXT DEFAULT ''")
         except sqlite3.OperationalError:
             pass
+        # Reasoning-usage columns (Provider-Native Compatibility Foundation,
+        # Packet A 2026-05-16). Populated by the dynamic per-provider parser
+        # registry under tokenpak.services.providers. Null/0 for pre-feature
+        # rows and for providers without reasoning usage surfaces.
+        for _alter in (
+            "ALTER TABLE requests ADD COLUMN reasoning_tokens INTEGER DEFAULT NULL",
+            "ALTER TABLE requests ADD COLUMN visible_output_tokens INTEGER DEFAULT NULL",
+            "ALTER TABLE requests ADD COLUMN total_billable_tokens INTEGER DEFAULT NULL",
+            "ALTER TABLE requests ADD COLUMN reasoning_effort TEXT DEFAULT ''",
+            "ALTER TABLE requests ADD COLUMN reasoning_usage_source TEXT DEFAULT ''",
+            "ALTER TABLE requests ADD COLUMN provider_usage_ref TEXT DEFAULT ''",
+        ):
+            try:
+                conn.execute(_alter)
+            except sqlite3.OperationalError:
+                pass
+        # Stream-mode telemetry columns (Provider-Native Compatibility
+        # Foundation, Packet D 2026-05-16). Populated when the stream
+        # translator or byte-passthrough decision path resolves; empty
+        # string for non-streaming or pre-feature rows.
+        for _alter in (
+            "ALTER TABLE requests ADD COLUMN stream_mode TEXT DEFAULT ''",
+            "ALTER TABLE requests ADD COLUMN event_transform_applied INTEGER DEFAULT 0",
+        ):
+            try:
+                conn.execute(_alter)
+            except sqlite3.OperationalError:
+                pass
         conn.commit()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (

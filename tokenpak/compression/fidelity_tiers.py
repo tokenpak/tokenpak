@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Tiered Fidelity Representations for TokenPak.
 
 Stores the same source at multiple compression levels (L0–L4) and serves
