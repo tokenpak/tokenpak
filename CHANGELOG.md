@@ -4,6 +4,27 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [v1.7.0] — 2026-05-25
+
+### Added
+
+- Rolling cumulative spend caps for the spend-guard (`tokenpak/proxy/spend_guard/rolling_caps.py`)
+  with session/rolling-window enforcement and regression coverage.
+- Dynamic reasoning-usage parser registry with monitor.db columns for
+  provider reasoning-token accounting.
+
+### Changed
+
+- Unified the staging and public release lines into a single coherent
+  release: codex companion lifecycle hooks, vault atomic-write hardening,
+  and the release-gate trust-contract surface now ship together.
+
+### Fixed
+
+- CI stabilization: workflow concurrency cancellation, scoped release/
+  benchmark triggers, fastapi import guards, regenerated CLI reference,
+  and de-flaked time-relative test fixtures.
+
 ## [v1.6.1] — 2026-05-17
 
 ### Fixed
