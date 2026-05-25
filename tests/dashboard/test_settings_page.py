@@ -1,4 +1,4 @@
-"""CCI-13: Settings UI page (/settings/claude-code) — test suite.
+"""Settings UI page (/settings/claude-code) — test suite.
 
 Covers:
 - Page renders at /settings/claude-code

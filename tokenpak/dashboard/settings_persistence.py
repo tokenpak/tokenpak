@@ -1,6 +1,6 @@
 """tokenpak/dashboard/settings_persistence.py — Atomic read/write for tokenpak.env.
 
-CCI-13: Settings UI persistence layer. Reads the fleet env file, validates
+Settings UI persistence layer. Reads the fleet env file, validates
 incoming values, and writes atomically (tmp + os.replace) with a timestamped
 backup before every write.
 
@@ -70,10 +70,9 @@ _PROFILES = frozenset({
     "claude-code-sdk", "claude-code-ide", "claude-code-cron",
 })
 
-# Sue's CCI-13 carve-out permits local-admin writes only. Sensitive
-# credentials, provider/remote endpoints, and remote alert destinations must
-# not be created or updated through the dashboard settings route without an
-# explicit architecture exception.
+# Local-admin writes only. Sensitive credentials, provider/remote endpoints,
+# and remote alert destinations must not be created or updated through the
+# dashboard settings route without an explicit architecture exception.
 _FORBIDDEN_SETTINGS_WRITES = frozenset({
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
