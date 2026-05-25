@@ -2594,7 +2594,8 @@ def build_parser():
             "context compression. The proxy listens on localhost:PORT and forwards\n"
             "compressed requests to your configured LLM providers.\n\n"
             "Example:\n"
-            "  tokenpak serve --port 8888 --workers 4\n\n"
+            "  tokenpak start --port 8888 --workers 4\n\n"
+            "(See also `tokenpak serve` for telemetry/ingest variants.)\n"
             "The proxy reads config from tokenpak.yaml or ~/.tokenpak/config.yaml"
         ),
     )
