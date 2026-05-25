@@ -41,6 +41,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from tokenpak.vault._atomic import _atomic_write
+
 logger = logging.getLogger(__name__)
 
 # Default staleness threshold: index older than 24 hours is considered stale
@@ -319,9 +321,9 @@ class VaultHealth:
                         files_processed += 1
                         continue
 
-                    # Write block .txt file
+                    # Write block .txt file (atomic; see tokenpak/vault/_atomic.py)
                     block_file = self.blocks_dir / f"{block_id}.txt"
-                    block_file.write_text(content, encoding="utf-8")
+                    _atomic_write(block_file, content)
 
                     frontmatter = _parse_frontmatter(content) if ext == ".md" else {}
 
@@ -396,9 +398,9 @@ class VaultHealth:
         }
 
         try:
-            self.index_path.write_text(
+            _atomic_write(
+                self.index_path,
                 json.dumps(index_data, indent=2, ensure_ascii=False),
-                encoding="utf-8",
             )
         except OSError as exc:
             return RepairResult(
