@@ -17,6 +17,11 @@ import json
 import sqlite3
 import sys
 from contextlib import contextmanager
+
+# Fixture rows must fall inside the rollup's WHERE timestamp >= date('now','-7 days')
+# window and run_fleet's since-days filter, so use a date relative to today
+# rather than a hardcoded one (which ages out and silently yields 0 rows).
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Generator
 from unittest.mock import patch
@@ -27,6 +32,8 @@ import pytest
 # happens once during pytest collection, not inside each timed test.
 from tokenpak.cli._impl import _saved_pct, run_fleet
 from tokenpak.cli.commands.status import _parse_since
+
+_RECENT_DATE = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -101,12 +108,12 @@ def fixture_db() -> sqlite3.Connection:
             cache_creation_tokens, estimated_cost, would_have_saved)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         [
-            ("2026-05-12 10:00:00", "claude-sonnet-4-6", "agent-1", "host-a",
+            (f"{_RECENT_DATE} 10:00:00", "claude-sonnet-4-6", "agent-1", "host-a",
              1000, 200, 500, 100, 0.003, 0),
-            ("2026-05-12 11:00:00", "claude-sonnet-4-6", "agent-1", "host-a",
+            (f"{_RECENT_DATE} 11:00:00", "claude-sonnet-4-6", "agent-1", "host-a",
              2000, 300, 700, 150, 0.005, 0),
             # Different agent → second rollup row
-            ("2026-05-12 12:00:00", "claude-sonnet-4-6", "agent-2", "host-b",
+            (f"{_RECENT_DATE} 12:00:00", "claude-sonnet-4-6", "agent-2", "host-b",
              1500, 250, 600, 120, 0.004, 50),
         ],
     )
@@ -182,16 +189,18 @@ def _fixture_db_file(tmp_path: Path) -> Generator[str, None, None]:
             cache_creation_tokens, estimated_cost, would_have_saved)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         [
-            ("2026-05-12 10:00:00", "claude-sonnet-4-6", "agent-1", "host-a",
+            (f"{_RECENT_DATE} 10:00:00", "claude-sonnet-4-6", "agent-1", "host-a",
              1000, 200, 500, 100, 0.003, 0),
         ],
     )
     # Populate rollup_daily
-    conn.execute("""
+    conn.execute(
+        f"""
         INSERT INTO rollup_daily
-        VALUES ('2026-05-12', 'agent-1', 'host-a', 'claude-sonnet-4-6',
+        VALUES ('{_RECENT_DATE}', 'agent-1', 'host-a', 'claude-sonnet-4-6',
                 1, 1000, 200, 500, 100, 0.003, 0)
-    """)
+    """
+    )
     conn.commit()
     conn.close()
     yield db_path

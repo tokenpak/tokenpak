@@ -189,6 +189,7 @@ def test_json_output(temp_db, capsys):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(reason=SKIP_SAVINGS_CMD_DEPRECATED)
 def test_human_output_shows_four_values(temp_db, capsys):
     """AC2 via rendered output: raw/compressed/delta/% all present."""
     args = SimpleNamespace(period="24h", verbose=False, as_json=False)
