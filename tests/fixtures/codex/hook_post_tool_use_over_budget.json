@@ -1,0 +1,13 @@
+{
+  "session_id": "fixture-post-tool-over-budget",
+  "transcript_path": "",
+  "cwd": "/tmp/tp-l2a-fixture",
+  "hook_event_name": "PostToolUse",
+  "model": "gpt-5",
+  "permission_mode": "default",
+  "turn_id": "turn-004",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu-overbudget-001",
+  "tool_input": {"command": "yes"},
+  "tool_response": "OUTPUT_BLOB_PLACEHOLDER_VERY_LONG_RESPONSE_THAT_PUSHES_OVER_THE_HARDCAP_FOR_TEST_PURPOSES_AND_KEEPS_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING_AND_GOING"
+}

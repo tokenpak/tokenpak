@@ -77,7 +77,12 @@ if [ "$BUDGET" != "0" ] && [ -n "$BUDGET" ]; then
     EST_MICRO=$((TOKENS * RATE))
 
     if [ "$((DAILY_MICRO + EST_MICRO))" -gt "${BUDGET_MICRO:-0}" ] 2>/dev/null; then
-        echo "tokenpak: budget exceeded (\$$DAILY_TOTAL / \$$BUDGET daily)" >&2
+        MSG="tokenpak: budget exceeded (\$$DAILY_TOTAL / \$$BUDGET daily)"
+        echo "$MSG" >&2
+        # Codex hookSpecificOutput JSON block (audit delta hooks #3).
+        # Mirrors companion/hooks/pre_send.py:103-110 + .sh reference.
+        REASON=$(printf '%s' "$MSG" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","decision":"block","reason":"%s"}}\n' "$REASON"
         exit 2
     fi
 
