@@ -5,37 +5,37 @@
 # review even when the promotion is otherwise green.
 
 # Default owner for everything
-*                                                  @kaywhy331
+*                                                  @tokenpak
 
 # Release-critical files
-/.github/workflows/release.yml                     @kaywhy331
-/pyproject.toml                                    @kaywhy331
-/CHANGELOG.md                                      @kaywhy331
-/tokenpak/__init__.py                              @kaywhy331
+/.github/workflows/release.yml                     @tokenpak
+/pyproject.toml                                    @tokenpak
+/CHANGELOG.md                                      @tokenpak
+/tokenpak/__init__.py                              @tokenpak
 
 # Public-surface guardrails
-/.github/CODEOWNERS                                @kaywhy331
-/.github/workflows/public-layout-check.yml         @kaywhy331
-/.github/workflows/identity-language-check.yml     @kaywhy331
-/.pre-commit-config.yaml                           @kaywhy331
-/.gitignore                                        @kaywhy331
+/.github/CODEOWNERS                                @tokenpak
+/.github/workflows/public-layout-check.yml         @tokenpak
+/.github/workflows/identity-language-check.yml     @tokenpak
+/.pre-commit-config.yaml                           @tokenpak
+/.gitignore                                        @tokenpak
 
 # Core proxy engine
-/tokenpak/proxy/                                   @kaywhy331
-/tokenpak/core/                                    @kaywhy331
+/tokenpak/proxy/                                   @tokenpak
+/tokenpak/core/                                    @tokenpak
 
 # Configuration and schemas
-/schemas/                                          @kaywhy331
-/tokenpak/config/                                  @kaywhy331
+/schemas/                                          @tokenpak
+/tokenpak/config/                                  @tokenpak
 
 # CI/CD
-/.github/workflows/                                @kaywhy331
+/.github/workflows/                                @tokenpak
 
 # Documentation surface
-/README.md                                         @kaywhy331
-/CONTRIBUTING.md                                   @kaywhy331
-/SECURITY.md                                       @kaywhy331
-/CODE_OF_CONDUCT.md                                @kaywhy331
-/LICENSE                                           @kaywhy331
-/LICENSE_COMMERCIAL.md                             @kaywhy331
-/docs/                                             @kaywhy331
+/README.md                                         @tokenpak
+/CONTRIBUTING.md                                   @tokenpak
+/SECURITY.md                                       @tokenpak
+/CODE_OF_CONDUCT.md                                @tokenpak
+/LICENSE                                           @tokenpak
+/LICENSE_COMMERCIAL.md                             @tokenpak
+/docs/                                             @tokenpak
