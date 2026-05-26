@@ -252,7 +252,7 @@ import type {
 ## Links
 
 - [Full documentation](https://github.com/tokenpak/tokenpak/blob/main/README.md)
-- [TPK Protocol spec](https://github.com/kaywhy331/tokenpak)
+- [TPK Protocol spec](https://github.com/tokenpak/tokenpak)
 - [Python package (PyPI)](https://pypi.org/project/tokenpak/)
 - [Issue tracker](https://github.com/tokenpak/tokenpak/issues)
 
