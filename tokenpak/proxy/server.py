@@ -2037,7 +2037,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.wfile.write(resp)
 
     def _handle_cost_forecast(self) -> None:
-        """CCI-11: Handle POST /v1/messages/forecast — local cost forecast, no upstream call.
+        """Handle POST /v1/messages/forecast — local cost forecast, no upstream call.
 
         Accepts the same body shape as /v1/messages, runs count_tokens locally,
         applies the model pricing config, and returns an estimated cost breakdown.
