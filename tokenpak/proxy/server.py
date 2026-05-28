@@ -873,6 +873,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         is_streaming = False
         cache_read_tokens = 0
         cache_creation_tokens = 0
+        # Per-TTL prompt-cache attribution (additive telemetry; populated only
+        # when the upstream response includes ``usage.cache_creation`` breakdown).
+        cache_creation_1h_tokens = 0
+        cache_creation_5m_tokens = 0
 
         trace: Optional[PipelineTrace] = None
         if should_log and is_messages:
@@ -1520,6 +1524,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     output_tokens = sse_usage.get("output_tokens", 0)
                     cache_read_tokens = sse_usage.get("cache_read_input_tokens", 0)
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
+                    # Per-TTL prompt-cache attribution (additive telemetry).
+                    cache_creation_1h_tokens = sse_usage.get("cache_creation_ephemeral_1h_input_tokens", 0)
+                    cache_creation_5m_tokens = sse_usage.get("cache_creation_ephemeral_5m_input_tokens", 0)
             else:
                 # ── Non-streaming path ────────────────────────────────────
                 # Retry on transient upstream failures (RemoteProtocolError,
@@ -1602,6 +1609,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         usage = json.loads(body_for_metrics).get("usage", {})
                         cache_read_tokens = usage.get("cache_read_input_tokens", 0)
                         cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
+                        # Per-TTL prompt-cache attribution (additive, read-only).
+                        _cc_obj = usage.get("cache_creation")
+                        if isinstance(_cc_obj, dict):
+                            cache_creation_1h_tokens = int(_cc_obj.get("ephemeral_1h_input_tokens") or 0)
+                            cache_creation_5m_tokens = int(_cc_obj.get("ephemeral_5m_input_tokens") or 0)
                     except Exception:
                         pass
             latency_ms = int((time.time() - t0) * 1000)
@@ -1701,6 +1713,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             injected_sources="",
                             cache_read_tokens=cache_read_tokens,
                             cache_creation_tokens=cache_creation_tokens,
+                            cache_creation_ephemeral_1h_tokens=cache_creation_1h_tokens,
+                            cache_creation_ephemeral_5m_tokens=cache_creation_5m_tokens,
+                            ttl_attribution=(
+                                "mixed" if cache_creation_1h_tokens > 0 and cache_creation_5m_tokens > 0
+                                else "1h" if cache_creation_1h_tokens > 0
+                                else "5m" if cache_creation_5m_tokens > 0
+                                else "unknown" if cache_creation_tokens > 0
+                                else "none"
+                            ),
                             would_have_saved=int(saved),
                             cache_origin=_cache_origin,
                             user_id=getattr(self, "_tokenpak_user_id", "") or "",
@@ -1758,6 +1779,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         total_input_tokens=input_tokens,
                         cache_read_tokens=cache_read_tokens,
                         cache_creation_tokens=cache_creation_tokens,
+                        cache_creation_ephemeral_1h_tokens=cache_creation_1h_tokens,
+                        cache_creation_ephemeral_5m_tokens=cache_creation_5m_tokens,
+                        ttl_attribution=(
+                            "mixed" if cache_creation_1h_tokens > 0 and cache_creation_5m_tokens > 0
+                            else "1h" if cache_creation_1h_tokens > 0
+                            else "5m" if cache_creation_5m_tokens > 0
+                            else "unknown" if cache_creation_tokens > 0
+                            else "none"
+                        ),
                         output_tokens=output_tokens,
                     ))
                 except Exception:

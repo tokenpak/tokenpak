@@ -43,12 +43,13 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 __all__ = [
     "CacheMetrics",
     "CacheTelemetryCollector",
     "get_collector",
+    "parse_ttl_attribution",
     "reset_collector",
 ]
 
@@ -104,6 +105,13 @@ class CacheMetrics:
     cache_creation_tokens: int = 0
     output_tokens: int = 0
     timestamp: float = field(default_factory=time.time)
+    # Anthropic prompt-cache TTL attribution (additive telemetry, read-only).
+    # Populated from ``usage.cache_creation.{ephemeral_5m,ephemeral_1h}_input_tokens``
+    # when the upstream response includes the breakdown; ``ttl_attribution`` is
+    # ``"1h" | "5m" | "mixed" | "none" | "unknown"`` per ``parse_ttl_attribution``.
+    cache_creation_ephemeral_1h_tokens: int = 0
+    cache_creation_ephemeral_5m_tokens: int = 0
+    ttl_attribution: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Derived properties
@@ -153,10 +161,90 @@ class CacheMetrics:
             "total_input_tokens": self.total_input_tokens,
             "cache_read_tokens": self.cache_read_tokens,
             "cache_creation_tokens": self.cache_creation_tokens,
+            "cache_creation_ephemeral_1h_tokens": self.cache_creation_ephemeral_1h_tokens,
+            "cache_creation_ephemeral_5m_tokens": self.cache_creation_ephemeral_5m_tokens,
+            "ttl_attribution": self.ttl_attribution,
             "output_tokens": self.output_tokens,
             "cost_saved": round(self.cost_saved, 2),
             "timestamp": self.timestamp,
         }
+
+
+# ---------------------------------------------------------------------------
+# Anthropic prompt-cache TTL attribution parser
+# ---------------------------------------------------------------------------
+
+# Per-TTL breakdown keys Anthropic returns inside ``usage.cache_creation`` when
+# the extended (1 h) prompt-cache feature is used. The flat
+# ``usage.cache_creation_input_tokens`` total is always present and equals the
+# sum of the per-TTL fields when the breakdown is provided.
+_TTL_FIELD_1H = "ephemeral_1h_input_tokens"
+_TTL_FIELD_5M = "ephemeral_5m_input_tokens"
+
+
+def parse_ttl_attribution(usage: Any) -> Dict[str, Any]:
+    """Extract Anthropic prompt-cache TTL breakdown from a response ``usage`` object.
+
+    Read-only: never mutates or reserialises the request/response. Returns a
+    dict with three fields:
+
+    - ``ephemeral_1h_tokens`` (int): tokens cached with explicit ``ttl="1h"``,
+      from ``usage.cache_creation.ephemeral_1h_input_tokens`` if present.
+    - ``ephemeral_5m_tokens`` (int): tokens cached at the 5 m default,
+      from ``usage.cache_creation.ephemeral_5m_input_tokens`` if present.
+    - ``ttl_attribution`` (str): one of ``"1h"``, ``"5m"``, ``"mixed"``,
+      ``"none"`` (no cache creation occurred), or ``"unknown"`` (cache creation
+      occurred but no per-TTL breakdown is available — older API responses or
+      requests not using the extended cache feature).
+
+    The flat ``usage.cache_creation_input_tokens`` value is used to distinguish
+    ``"none"`` (zero cache creation) from ``"unknown"`` (cache creation but no
+    breakdown), so callers can tell silence from missing-telemetry. Fail-open:
+    a malformed ``usage`` returns ``{0, 0, "unknown"}``.
+    """
+    if not isinstance(usage, dict):
+        # Malformed / missing usage — distinct from "well-formed but zero
+        # creation" so callers can see the difference.
+        return {
+            "ephemeral_1h_tokens": 0,
+            "ephemeral_5m_tokens": 0,
+            "ttl_attribution": "unknown",
+        }
+    one_h = 0
+    five_m = 0
+    flat_creation = 0
+    try:
+        flat_creation = int(usage.get("cache_creation_input_tokens") or 0)
+        cc = usage.get("cache_creation")
+        if isinstance(cc, dict):
+            one_h = int(cc.get(_TTL_FIELD_1H) or 0)
+            five_m = int(cc.get(_TTL_FIELD_5M) or 0)
+    except Exception:
+        # Fail-open: malformed inner fields shouldn't break the request hot path.
+        return {
+            "ephemeral_1h_tokens": 0,
+            "ephemeral_5m_tokens": 0,
+            "ttl_attribution": "unknown",
+        }
+
+    if one_h > 0 and five_m > 0:
+        attribution = "mixed"
+    elif one_h > 0:
+        attribution = "1h"
+    elif five_m > 0:
+        attribution = "5m"
+    elif flat_creation > 0:
+        # Cache writes happened but the response omits the per-TTL breakdown.
+        attribution = "unknown"
+    else:
+        # No cache creation at all on this response.
+        attribution = "none"
+
+    return {
+        "ephemeral_1h_tokens": one_h,
+        "ephemeral_5m_tokens": five_m,
+        "ttl_attribution": attribution,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +280,11 @@ class CacheTelemetryCollector:
         self._total_output_tokens: int = 0
         self._total_cost_saved: float = 0.0
         self._miss_reasons: Dict[str, int] = {}
+        # Per-TTL prompt-cache attribution (additive; defaults to zeros for
+        # callers that don't populate the new CacheMetrics fields).
+        self._total_cache_creation_1h_tokens: int = 0
+        self._total_cache_creation_5m_tokens: int = 0
+        self._ttl_attribution_counts: Dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Write path
@@ -220,6 +313,18 @@ class CacheTelemetryCollector:
                 key = metrics.cache_miss_reason
                 self._miss_reasons[key] = self._miss_reasons.get(key, 0) + 1
 
+            # Per-TTL attribution roll-up (additive — only counts when the
+            # caller populated the new fields). ``ttl_attribution=None`` from
+            # legacy non-instrumented call sites is skipped; any string value
+            # (including ``"none"`` for "no cache creation on this request") is
+            # tallied so legitimate zero-creation traffic stays visible.
+            self._total_cache_creation_1h_tokens += metrics.cache_creation_ephemeral_1h_tokens
+            self._total_cache_creation_5m_tokens += metrics.cache_creation_ephemeral_5m_tokens
+            if metrics.ttl_attribution is not None:
+                self._ttl_attribution_counts[metrics.ttl_attribution] = (
+                    self._ttl_attribution_counts.get(metrics.ttl_attribution, 0) + 1
+                )
+
             # Bounded recent list
             self._recent.append(metrics)
             if len(self._recent) > self._max_recent:
@@ -241,6 +346,14 @@ class CacheTelemetryCollector:
             self._total_output_tokens = 0
             self._total_cost_saved = 0.0
             self._miss_reasons = {}
+            self._total_cache_creation_1h_tokens = 0
+            self._total_cache_creation_5m_tokens = 0
+            self._ttl_attribution_counts = {}
+
+    def by_ttl_attribution(self) -> Dict[str, int]:
+        """Return a copy of the TTL-attribution histogram (counts per category)."""
+        with self._lock:
+            return dict(self._ttl_attribution_counts)
 
     def hit_rate(self) -> float:
         """Fraction of requests that were cache hits (0.0–1.0)."""
@@ -298,6 +411,9 @@ class CacheTelemetryCollector:
             cache_creation = self._total_cache_creation_tokens
             input_total = self._total_input_tokens
             output_total = self._total_output_tokens
+            cache_creation_1h = self._total_cache_creation_1h_tokens
+            cache_creation_5m = self._total_cache_creation_5m_tokens
+            ttl_counts = dict(self._ttl_attribution_counts)
             recent_snap = list(self._recent)
 
         # Compute avg_cache_ratio outside the lock (from already-captured snapshot)
@@ -322,6 +438,9 @@ class CacheTelemetryCollector:
             "avg_cache_ratio_pct": round(avg_ratio * 100, 1),
             "total_cache_read_tokens": cache_read,
             "total_cache_creation_tokens": cache_creation,
+            "total_cache_creation_ephemeral_1h_tokens": cache_creation_1h,
+            "total_cache_creation_ephemeral_5m_tokens": cache_creation_5m,
+            "ttl_attribution_counts": ttl_counts,
             "total_input_tokens": input_total,
             "total_output_tokens": output_total,
             "estimated_cost_saved_tokens": cost_saved,
