@@ -81,8 +81,9 @@ def _db_writer_worker():
                            (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
                             latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
                             compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens,
-                            would_have_saved,cache_origin,user_id)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            would_have_saved,cache_origin,user_id,
+                            cache_creation_ephemeral_1h_tokens,cache_creation_ephemeral_5m_tokens,ttl_attribution)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         insert_params,
                     )
                     conn.commit()
@@ -175,6 +176,20 @@ class Monitor:
             pass
         try:
             conn.execute("ALTER TABLE requests ADD COLUMN cache_origin TEXT DEFAULT 'unknown'")
+        except sqlite3.OperationalError:
+            pass
+        # Anthropic prompt-cache TTL attribution (additive, backward-compatible).
+        # Older rows have NULL/0 here; readers must COALESCE for aggregation.
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_1h_tokens INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_5m_tokens INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN ttl_attribution TEXT DEFAULT NULL")
         except sqlite3.OperationalError:
             pass
         # P0-06 (A6): user_id holds the SHA-256 hex of the proxy auth bearer
@@ -271,6 +286,9 @@ class Monitor:
         would_have_saved=0,
         cache_origin="unknown",
         user_id="",
+        cache_creation_ephemeral_1h_tokens=0,
+        cache_creation_ephemeral_5m_tokens=0,
+        ttl_attribution=None,
     ):
         # P0-06 (A6): ``user_id`` is the SHA-256 hex of the proxy auth bearer
         # token populated by ``_ProxyHandler._enforce_proxy_auth``. Defaults to
@@ -297,6 +315,9 @@ class Monitor:
             would_have_saved,
             cache_origin,
             user_id or "",
+            int(cache_creation_ephemeral_1h_tokens or 0),
+            int(cache_creation_ephemeral_5m_tokens or 0),
+            ttl_attribution,
         )
         _queued = False
         try:
@@ -308,8 +329,9 @@ class Monitor:
                 "INSERT INTO requests (timestamp, model, request_type, input_tokens, output_tokens, "
                 "estimated_cost, latency_ms, status_code, endpoint, compilation_mode, protected_tokens, "
                 "compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens, "
-                "would_have_saved, cache_origin, user_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "would_have_saved, cache_origin, user_id, "
+                "cache_creation_ephemeral_1h_tokens, cache_creation_ephemeral_5m_tokens, ttl_attribution) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 insert_params,
             )
             _conn.commit()
