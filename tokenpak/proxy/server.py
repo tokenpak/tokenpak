@@ -30,7 +30,7 @@ import sys
 import threading
 import time
 import uuid
-from collections import deque
+from collections import OrderedDict, deque
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -1712,17 +1712,43 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 try:
                     _stable_tokens = max(0, input_tokens - (input_tokens - sent_input_tokens))
                     _miss_reason: Optional[str] = None
-                    if cache_read_tokens == 0:
-                        # Heuristic miss-reason diagnosis (best-effort)
+                    # Prefix-aware miss attribution. Read-only on the body: the
+                    # diagnosis parses for analysis only and never feeds back
+                    # into the forwarded bytes, so byte-preserved semantics are
+                    # untouched. Only runs when caching is in play (cheap byte
+                    # guard) and skips pathologically large bodies. Fail-open.
+                    _has_cc = isinstance(body, (bytes, bytearray)) and b'"cache_control"' in body
+                    if _has_cc and len(body) <= 4_000_000:
                         try:
-                            _body_text = body.decode("utf-8", errors="ignore") if isinstance(body, (bytes, bytearray)) else ""
+                            from tokenpak.proxy.cache_poison import diagnose_cache_miss
+                            from tokenpak.proxy.request_pipeline import (
+                                _resolve_session_id as _rsi_miss,
+                            )
+                            _sess_key = _rsi_miss(self.headers, model) or "default"
+                            with ps._cache_prefix_lock:
+                                _prior = ps._cache_prefix_state.get(_sess_key)
+                            _diag = diagnose_cache_miss(
+                                bytes(body),
+                                prior_prefix_fingerprint=_prior[0] if _prior else None,
+                                prior_prefix_id_hashes=_prior[1] if _prior else None,
+                            )
+                            # Update prior-prefix state on every request (hits too)
+                            # so the next miss has an accurate immediate baseline.
+                            with ps._cache_prefix_lock:
+                                ps._cache_prefix_state[_sess_key] = (
+                                    _diag.prefix_fingerprint,
+                                    _diag.prefix_id_hashes,
+                                )
+                                ps._cache_prefix_state.move_to_end(_sess_key)
+                                while len(ps._cache_prefix_state) > 512:
+                                    ps._cache_prefix_state.popitem(last=False)
+                            if cache_read_tokens == 0:
+                                _miss_reason = _diag.reason
+                                if os.environ.get("TOKENPAK_CACHE_MISS_DEBUG"):
+                                    # Opt-in, redacted: derived metadata only.
+                                    print(f"  ↪ {_diag.debug_line()}")
                         except Exception:
-                            _body_text = ""
-                        import re as _re
-                        if _re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", _body_text):
-                            _miss_reason = "timestamp"
-                        elif "request_id" in _body_text.lower() or "uuid" in _body_text.lower():
-                            _miss_reason = "uuid"
+                            _miss_reason = None
                     _get_cache_collector().record(CacheMetrics(
                         request_id=trace.request_id if trace else str(uuid.uuid4()),
                         stable_prefix_tokens=sent_input_tokens,
@@ -2011,7 +2037,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.wfile.write(resp)
 
     def _handle_cost_forecast(self) -> None:
-        """CCI-11: Handle POST /v1/messages/forecast — local cost forecast, no upstream call.
+        """Handle POST /v1/messages/forecast — local cost forecast, no upstream call.
 
         Accepts the same body shape as /v1/messages, runs count_tokens locally,
         applies the model pricing config, and returns an estimated cost breakdown.
@@ -2536,6 +2562,11 @@ class ProxyServer:
         # Rolling window of per-request compression ratios (last 100)
         self._compression_ratios: deque = deque(maxlen=100)
         self._compression_lock = threading.Lock()
+        # Per-session cached-prefix state for prefix-aware cache-miss
+        # attribution (telemetry only). session_id -> (fingerprint, id_hashes).
+        # Bounded LRU; never holds raw prompt content (hashes/fingerprints only).
+        self._cache_prefix_state: "OrderedDict[str, tuple]" = OrderedDict()
+        self._cache_prefix_lock = threading.Lock()
         # Compression telemetry — writes events to ~/.tokenpak/compression_events.jsonl
         self.compression_stats = CompressionStats()
 
