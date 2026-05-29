@@ -149,10 +149,12 @@ def main(args: list[str] | None = None) -> int:
 
 
 _SESSION_PREFIX = "\U0001f4e6"  # 📦
-# ANSI foreground colors for the branded session label. Foreground-only
-# (no background fill) so the chat-header background falls through to
-# the user's terminal default.
-_LBL_TEAL = "\033[38;2;0;180;170m"   # brackets + "Pak" — TokenPak teal
+# ANSI colors for the branded session label. A black background fill is
+# painted across the whole label so it reads as a solid TokenPak chip
+# regardless of the user's terminal background; the trailing reset clears
+# it. Foreground: white "📦 Token", teal "Pak", gray "Claude Companion".
+_LBL_BG_BLACK = "\033[48;2;0;0;0m"   # solid black background fill
+_LBL_TEAL = "\033[38;2;0;180;170m"   # "Pak" — TokenPak teal
 _LBL_WHITE = "\033[38;2;255;255;255m"  # "📦 Token"        — white
 _LBL_GRAY = "\033[38;2;90;94;105m"   # "Claude Companion" — muted gray
 _LBL_RESET = "\033[0m"
@@ -161,11 +163,10 @@ _LBL_RESET = "\033[0m"
 # matches the launcher's startup label exactly. Real ESC bytes here —
 # they pass through ``os.execvpe`` to ``--name`` as raw argv bytes.
 _DEFAULT_SESSION_LABEL = (
-    f"{_LBL_TEAL}[ "
-    f"{_LBL_WHITE}{_SESSION_PREFIX} Token"
+    f"{_LBL_BG_BLACK}"
+    f"{_LBL_WHITE} {_SESSION_PREFIX} Token"
     f"{_LBL_TEAL}Pak"
-    f"{_LBL_GRAY} Claude Companion"
-    f"{_LBL_TEAL} ]"
+    f"{_LBL_GRAY} Claude Companion "
     f"{_LBL_RESET}"
 )
 
@@ -175,7 +176,7 @@ def _prefix_session_name(args: list[str]) -> list[str]:
 
     Handles ``--name VALUE``, ``-n VALUE``, and ``--name=VALUE`` forms.
     If no name flag is present, injects the default branded label
-    (``[ 📦 TokenPak Claude Companion ]``).
+    (``📦 TokenPak Claude Companion``).
     Returns a new list (never mutates the input).
     """
     args = list(args)  # shallow copy
