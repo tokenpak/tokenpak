@@ -10,7 +10,7 @@ _To update: edit `tokenpak/cli.py` then run `python scripts/generate-cli-docs.py
 ### `tokenpak start`
 
 Start the TokenPak proxy server, which routes LLM API requests through
-context compression. The proxy listens on localhost:PORT and forwards
+Prompt Packing. The proxy listens on localhost:PORT and forwards
 compressed requests to your configured LLM providers.
 
 Example:
@@ -1053,7 +1053,7 @@ Start the live monitor dashboard.
 
 ### `tokenpak optimize`
 
-Analyze and optimize a prompt for better compression efficiency.
+Analyze and optimize a prompt for better Prompt Packing efficiency.
 Suggests rewording and restructuring to reduce compressed token count.
 
 Example:
