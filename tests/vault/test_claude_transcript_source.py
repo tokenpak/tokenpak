@@ -1,6 +1,6 @@
 """Tests for the Phase 0 claude_transcript source adapter.
 
-Covers the acceptance criteria from the Suki packet:
+Covers the source-adapter acceptance criteria:
 
 * Off-by-default (env-flag gated)
 * Parses real Claude Code JSONL line shapes
@@ -31,7 +31,7 @@ def fake_projects_root(tmp_path: Path) -> Path:
     """A ~/.claude/projects clone with two sessions across two project dirs."""
     root = tmp_path / "projects"
 
-    proj_a = root / "-home-sue"
+    proj_a = root / "-home-dev"
     proj_a.mkdir(parents=True)
     session_a = proj_a / "session-aaaa-1111.jsonl"
     session_a.write_text(
@@ -59,7 +59,7 @@ def fake_projects_root(tmp_path: Path) -> Path:
                     ],
                 },
                 "timestamp": "2026-05-15T10:00:05.000Z",
-                "cwd": "/home/sue",
+                "cwd": "/home/dev",
             }),
             json.dumps({
                 "type": "user",
@@ -74,7 +74,7 @@ def fake_projects_root(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
 
-    proj_b = root / "-home-sue--openclaw-workspace"
+    proj_b = root / "-home-dev--cache-app"
     proj_b.mkdir(parents=True)
     session_b = proj_b / "session-bbbb-2222.jsonl"
     session_b.write_text(
@@ -83,7 +83,7 @@ def fake_projects_root(tmp_path: Path) -> Path:
                 "type": "user",
                 "message": {
                     "role": "user",
-                    "content": "Plan the lane E migration for Std 30 trust gate.",
+                    "content": "Plan the database migration for the upcoming release.",
                 },
                 "timestamp": "2026-05-14T08:00:00.000Z",
             }),
@@ -153,7 +153,7 @@ def test_env_flag_enables(monkeypatch, tokenpak_dir, fake_projects_root):
 
 def test_parse_extracts_user_and_assistant_text(fake_projects_root):
     session = next(iter(
-        (fake_projects_root / "-home-sue").glob("*.jsonl")
+        (fake_projects_root / "-home-dev").glob("*.jsonl")
     ))
     msgs = ct.parse_jsonl_session(session)
 
@@ -168,7 +168,7 @@ def test_parse_extracts_user_and_assistant_text(fake_projects_root):
 
 def test_parse_tolerates_corrupt_jsonl(fake_projects_root):
     session = next(iter(
-        (fake_projects_root / "-home-sue").glob("*.jsonl")
+        (fake_projects_root / "-home-dev").glob("*.jsonl")
     ))
     # parse_jsonl_session should not raise even though the file ends with a
     # malformed JSON line.
@@ -194,8 +194,8 @@ def test_block_metadata_preserved(monkeypatch, tokenpak_dir, fake_projects_root)
 
     assert entry["source_type"] == "claude_transcript"
     ct_meta = entry["claude_transcript"]
-    assert ct_meta["project_dir"] == "-home-sue"
-    assert ct_meta["project_cwd_guess"] == "/home/sue"
+    assert ct_meta["project_dir"] == "-home-dev"
+    assert ct_meta["project_cwd_guess"] == "/home/dev"
     assert ct_meta["session_id"] == "session-aaaa-1111"
     assert ct_meta["session_file"].endswith("session-aaaa-1111.jsonl")
     assert ct_meta["message_count"] == 2
@@ -220,7 +220,7 @@ def test_block_id_is_stable_and_namespaced(monkeypatch, tokenpak_dir, fake_proje
 def test_no_transcript_mutation(monkeypatch, tokenpak_dir, fake_projects_root):
     monkeypatch.setenv(ct.ENV_FLAG, "1")
     session = next(iter(
-        (fake_projects_root / "-home-sue").glob("*.jsonl")
+        (fake_projects_root / "-home-dev").glob("*.jsonl")
     ))
     before_hash = hashlib.sha256(session.read_bytes()).hexdigest()
     before_mtime = session.stat().st_mtime
