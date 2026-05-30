@@ -13,7 +13,7 @@
 #     permissionDecision=deny + stderr reason + exit 2
 #   - Otherwise: exit 0
 #
-# Block-output shape mirrors hooks_pre_send.sh's PR-45 delivery
+# Block-output shape mirrors hooks_pre_send.sh's block delivery
 # (commit ad968849d4); see L1 audit delta hooks #3 for the canonical
 # reference shape on UserPromptSubmit.
 # ──────────────────────────────────────────────────────────────

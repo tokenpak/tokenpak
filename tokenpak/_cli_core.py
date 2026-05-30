@@ -888,15 +888,15 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
 
 
 def _cmd_reindex(args):
-    """``tokenpak index --reindex-all`` and ``--reindex-path <path>`` (VDS-01).
+    """``tokenpak index --reindex-all`` and ``--reindex-path <path>``.
 
     Reads registered directories from ``~/.tokenpak/vault.yaml`` and runs the
     existing block-registry indexer against each one. Updates per-path index
-    health metadata in the same vault.yaml so VDS-03's doctor staleness check
+    health metadata in the same vault.yaml so the doctor staleness check
     can read it.
 
     OSS — no license check. Schedule fields (`schedule`,
-    `expected_interval_seconds`) are written by the paid VDS-04 surface but
+    `expected_interval_seconds`) are written by the paid surface but
     are merely passive metadata here; the OSS path always reindexes on
     demand.
     """
@@ -1010,7 +1010,7 @@ def _registry_file_count(db_path: str) -> int:
 
 def cmd_index(args):
     """Index a directory with parallel processing and batch transactions."""
-    # --reindex-all / --reindex-path: VDS-01 OSS reindex flags driven by ~/.tokenpak/vault.yaml.
+    # --reindex-all / --reindex-path: OSS reindex flags driven by ~/.tokenpak/vault.yaml.
     if getattr(args, "reindex_all", False) or getattr(args, "reindex_path", None):
         return _cmd_reindex(args)
 
@@ -2674,14 +2674,14 @@ def build_parser():
         "--reindex-all",
         action="store_true",
         dest="reindex_all",
-        help="Reindex every directory registered in ~/.tokenpak/vault.yaml (VDS-01)",
+        help="Reindex every directory registered in ~/.tokenpak/vault.yaml",
     )
     p_index.add_argument(
         "--reindex-path",
         dest="reindex_path",
         default=None,
         metavar="PATH",
-        help="Reindex a single directory registered in ~/.tokenpak/vault.yaml (VDS-01)",
+        help="Reindex a single directory registered in ~/.tokenpak/vault.yaml",
     )
     p_index.set_defaults(func=cmd_index)
 

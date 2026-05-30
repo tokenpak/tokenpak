@@ -8,7 +8,7 @@ Provides:
 - StreamHandler: buffered stream handler with gzip support
 - iter_sse_events(): iterate parsed events from SSE bytes
 
-Merged from proxy/ and agent.proxy/ (FIN-07).
+Merged from proxy/ and agent.proxy/.
 """
 
 import io

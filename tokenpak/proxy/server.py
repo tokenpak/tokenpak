@@ -783,7 +783,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         elif self.path.split("?")[0] == "/v1/messages/forecast":
             self._handle_cost_forecast()
         elif self.path.startswith("/v1/messages/"):
-            # CCG-05: Default passthrough for unrecognised /v1/messages/* subpaths.
+            # Default passthrough for unrecognised /v1/messages/* subpaths.
             # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
             ps = self.server.proxy_server
             route = ps.router.route(self.path, dict(self.headers))
@@ -946,7 +946,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     if _sg_outcome.body is not None:
                         body = _sg_outcome.body
                 elif _sg_outcome.kind == "replay":
-                    # TSG-03: held request is being replayed — substitute body
+                    # Held request is being replayed — substitute body
                     # and headers, then continue down the normal forward path.
                     if _sg_outcome.body is not None:
                         body = _sg_outcome.body
@@ -1045,7 +1045,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 pass
             input_tokens = _estimate_tokens_from_body(body)
 
-            # TIP-03: Observe-only optimization pipeline.
+            # Observe-only optimization pipeline.
             # Pipeline composition lives in services/optimization/ per
             # 01-architecture-standard.md §1.3 invariant 1 (services/ owns
             # all pipeline composition). proxy/server.py only invokes it
@@ -1053,7 +1053,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # TOKENPAK_OPTIMIZATION_PIPELINE (default off); runs before
             # any body-mutating stage and never returns a different body
             # in observe-only mode. Trace is stashed locally for future
-            # telemetry persistence (TIP-04+).
+            # telemetry persistence.
             _optimization_trace = None
             try:
                 from tokenpak.services.optimization import run_observe_only as _opt_run
@@ -1087,7 +1087,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     type(_opt_exc).__name__, _opt_exc,
                 )
 
-            # CCG-11: Cache invalidator detection (log-only).
+            # Cache invalidator detection (log-only).
             # Skip transparent mode — transparent must remain side-effect-free.
             # Runs on original (pre-compression) body so semantic fields are intact.
             if ps.compilation_mode != "transparent":
@@ -1291,7 +1291,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             passthrough_cfg = PassthroughConfig(require_auth=False)
 
         # Build forwarding headers (client-supplied auth forwarded unchanged)
-        # CCG-04: For Anthropic routes apply a per-route allowlist (mirroring
+        # For Anthropic routes apply a per-route allowlist (mirroring
         # the WS-path tuple).  All other providers keep the existing blocklist
         # path (forward_headers) — their forwarding behavior is unchanged.
         if provider_from_url(target_url) == "anthropic":
@@ -1982,7 +1982,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     pass
 
     def _handle_count_tokens(self) -> None:
-        """CCG-05: Handle POST /v1/messages/count_tokens — compute token count locally.
+        """Handle POST /v1/messages/count_tokens — compute token count locally.
 
         Parses the Anthropic Messages body, sums token counts across system/messages/tools
         via the local count_tokens() helper, and returns {"input_tokens": N}.
@@ -2296,7 +2296,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         Returns a JSON object with a `sessions` array of the top 20 sessions
         by request count. Each entry contains the columns documented in
-        Spec Component 11 / CCG-13.
+        Spec Component 11.
         """
         import os
         import sqlite3 as _sqlite3

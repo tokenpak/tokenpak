@@ -911,9 +911,9 @@ def run_doctor(
     if claude_code:
         if not output_json:
             print()
-            print("── Claude Code checks (CCP-09) ─────────────────")
+            print("── Claude Code checks ─────────────────")
 
-        # CCP-09: ENABLE_TOOL_SEARCH check
+        # ENABLE_TOOL_SEARCH check
         # Required for MCP tool-use when ANTHROPIC_BASE_URL points at a non-first-party gateway.
         # Ref: code.claude.com/docs/en/env-vars — ENABLE_TOOL_SEARCH entry
         base_url = os.environ.get("ANTHROPIC_BASE_URL", "").strip()
@@ -955,8 +955,8 @@ def run_doctor(
                 detail=f"ANTHROPIC_BASE_URL={base_url} ENABLE_TOOL_SEARCH=true",
             )
 
-        # CCP-09 (2026-04-08 amendment): Active consumption mode detection
-        # Ref: CCP-22 mode matrix is the source of truth for mode→behavior mappings.
+        # Active consumption mode detection
+        # The mode matrix is the source of truth for mode→behavior mappings.
 
         # TTY / interactive mode
         is_tty = sys.stdin.isatty()
@@ -991,7 +991,7 @@ def run_doctor(
             )
 
         # $TERM_PROGRAM: IDE detection
-        # Ref: CCP-22 mode matrix — Cursor/Windsurf do not load Claude Code plugins.
+        # Mode matrix — Cursor/Windsurf do not load Claude Code plugins.
         term_program = os.environ.get("TERM_PROGRAM", "").strip()
         if term_program.lower() in ("cursor", "windsurf"):
             _record(
@@ -1000,12 +1000,12 @@ def run_doctor(
                 f"IDE detection       {term_program} detected — Claude Code plugins do NOT load in "
                 f"{term_program}\n"
                 "                    Workaround: use the tokenpak proxy directly "
-                "(ANTHROPIC_BASE_URL=http://localhost:8766) or the CCP-23 SDK helpers",
+                "(ANTHROPIC_BASE_URL=http://localhost:8766) or the SDK helpers",
                 detail=(
                     f"TERM_PROGRAM={term_program}. Cursor and Windsurf use Claude Code's API "
                     "but do not load plugins from --plugin-dir. "
-                    "Use the proxy endpoint or CCP-23 SDK helpers instead. "
-                    "Ref: CCP-22 mode matrix."
+                    "Use the proxy endpoint or SDK helpers instead. "
+                    "See the mode matrix."
                 ),
             )
         elif term_program.lower() == "vscode":
@@ -1020,8 +1020,8 @@ def run_doctor(
                 "cc_mode_ide",
                 "pass",
                 f"IDE detection       TERM_PROGRAM={term_program} — plugin load not verified "
-                "(check CCP-22 mode matrix)",
-                detail=f"TERM_PROGRAM={term_program}; consult CCP-22 mode matrix for this terminal.",
+                "(check the mode matrix)",
+                detail=f"TERM_PROGRAM={term_program}; consult the mode matrix for this terminal.",
             )
         else:
             _record(
@@ -1042,7 +1042,7 @@ def run_doctor(
                 detail=(
                     f"TMUX={tmux_val}. Multiple Claude Code panes in the same TMUX session may "
                     "concurrently read/write the vault index. "
-                    "The tokenpak plugin uses advisory file locks (CCP-06) to coordinate access."
+                    "The tokenpak plugin uses advisory file locks to coordinate access."
                 ),
             )
         else:

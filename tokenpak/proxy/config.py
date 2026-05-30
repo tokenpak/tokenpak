@@ -41,7 +41,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 _PROFILE_PRESETS: dict[str, dict[str, str]] = {
     "safe": {
-        # CCG-10: safe profile uses TOKENPAK_MODE=safe (Phase 2 Mode B).
+        # Safe profile uses TOKENPAK_MODE=safe (Phase 2 Mode B).
         # Stable cache control fires unconditionally; no body compression.
         "TOKENPAK_MODE": "safe",
         "TOKENPAK_STABLE_CACHE_CONTROL_AUTO": "true",
@@ -102,7 +102,7 @@ def _resolve_monitor_db() -> str:
 MONITOR_DB = _resolve_monitor_db()
 BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
 BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "80"))
-# CCG-02: mutation_audit TTL — prune rows older than this many days
+# mutation_audit TTL — prune rows older than this many days
 MUTATION_AUDIT_TTL_DAYS: int = int(os.environ.get("TOKENPAK_MUTATION_AUDIT_TTL_DAYS", "30"))
 VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
@@ -118,7 +118,7 @@ COMPACT_MAX_TOKENS = _cfg(
 )
 COMPACT_CACHE_SIZE = _cfg("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
 COMPILATION_MODE = _cfg("mode", "hybrid", "TOKENPAK_MODE", str).lower()
-# CCG-10: Auto-apply stable cache control in safe mode (TOKENPAK_MODE=safe)
+# Auto-apply stable cache control in safe mode (TOKENPAK_MODE=safe)
 STABLE_CACHE_CONTROL_AUTO: bool = _cfg(
     "features.stable_cache_control_auto", False, "TOKENPAK_STABLE_CACHE_CONTROL_AUTO", bool
 )
@@ -531,7 +531,7 @@ PROVIDER_DISPLAY = get_provider_display_list(ADAPTER_REGISTRY, CUSTOM_PROVIDERS)
 
 
 # ---------------------------------------------------------------------------
-# ProxyConfig — convenience wrapper around module-level settings (FIN-07)
+# ProxyConfig — convenience wrapper around module-level settings
 # ---------------------------------------------------------------------------
 
 class ProxyConfig:
