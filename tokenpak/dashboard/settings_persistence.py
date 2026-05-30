@@ -1,6 +1,6 @@
 """tokenpak/dashboard/settings_persistence.py — Atomic read/write for tokenpak.env.
 
-Settings UI persistence layer. Reads the fleet env file, validates
+Settings UI persistence layer. Reads the env file, validates
 incoming values, and writes atomically (tmp + os.replace) with a timestamped
 backup before every write.
 

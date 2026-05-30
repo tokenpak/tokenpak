@@ -478,7 +478,7 @@ def run(
       --json         Machine-readable JSON dump
       --days N       Filter to last N days
       --hours N      Filter to last N hours (combinable with --days)
-      --fleet        Fleet rollup view (reads rollup_daily table from FTA-06)
+      --fleet        Fleet rollup view (reads rollup_daily table)
       --since Nd     With --fleet: window in days (e.g. '7d')
     """
     if fleet:
@@ -1160,7 +1160,7 @@ if HAS_CLICK:
     @click.option("--db", "db_path", default=None, help="Monitor DB path override")
     @click.option("--days", default=0, type=int, help="Filter to last N days (combinable with --hours)")
     @click.option("--hours", default=0, type=int, help="Filter to last N hours (combinable with --days)")
-    @click.option("--fleet", is_flag=True, help="Fleet rollup view — reads rollup_daily (FTA-06)")
+    @click.option("--fleet", is_flag=True, help="Fleet rollup view — reads rollup_daily")
     @click.option("--since", default=None, help="With --fleet: window in days, e.g. '7d' (default: 7d)")
     def status_cmd(
         proxy: str,

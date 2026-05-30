@@ -217,6 +217,7 @@ jobs:
                 -e 's/configured in fleet/configured in __PUBLIC_FLEET_PHRASE__/g' \
                 -e 's/cli\.fleet/cli.__PUBLIC_FLEET_MODULE__/g' \
                 -e 's/configure fleet/configure __PUBLIC_FLEET_PHRASE__/g' \
+                -e 's/=fleet\b/=__PUBLIC_FLEET_KW__/g' \
                 "$file"
             elif is_release_gate_impl_path "$file"; then
               # Tier 1 — release-gate implementation/test/workflow surface:

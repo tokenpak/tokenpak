@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""tokenpak/cli/_impl.py — Fleet rollup status implementation (FTA-06).
+"""tokenpak/cli/_impl.py — Fleet rollup status implementation.
 
 Entry point: run_fleet(since_days, as_json, db_path)
 
