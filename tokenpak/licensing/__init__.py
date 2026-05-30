@@ -118,7 +118,7 @@ def _license_path() -> Path:
          which honors ``TOKENPAK_HOME`` then canonical ``~/.tpk/`` then
          legacy ``~/.tokenpak/`` per Std 33.
 
-    Beta-1 Aya-found regression fix: previously this hardcoded
+    Beta-1 regression fix (found during validation): previously this hardcoded
     ``Path.home() / ".tokenpak" / "license.json"``, which silently
     bypassed ``TOKENPAK_HOME``. On a host with the env set elsewhere
     that meant ``activate`` would clobber the *real* home's

@@ -4642,7 +4642,7 @@ def main():
         if not getattr(args, "week", False) and not getattr(args, "month", False):
             pass  # cmd_cost already defaults to "daily" when neither flag set
 
-    # Honor explicit non-zero return codes from handlers. Beta-1 Aya-found
+    # Honor explicit non-zero return codes from handlers. Beta-1
     # regression: handlers like cmd_pak_create and cmd_pak_import returned
     # 1 on error but the dispatcher dropped the value, so callers in
     # `set -e` scripts saw exit 0 even after a printed error. Handlers

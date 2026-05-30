@@ -26,7 +26,7 @@ beta is gated by:
    pre-authorization per `feedback_initiative_completion_versioning`).
 3. Production ed25519 public-key rotation in the Pro daemon
    (currently a placeholder).
-4. Final Packet J polish + Aya smoke pass on the release artifact.
+4. Final Packet J polish + integration smoke pass on the release artifact.
 
 If you received a link to this codebase from outside the internal
 tester pool, the public announcement hasn't happened and you should
