@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``tokenpak home`` CLI subcommand (Beta 1, Std 33 + Packet C).
+"""``tokenpak home`` CLI subcommand (Beta 1).
 
 Tester-friendly user-config surface that honors the canonical
 ``~/.tpk/`` boundary while preserving zero-touch fallback to the legacy
@@ -17,7 +17,7 @@ Subcommands:
     migrate              Backup-first move from ``~/.tokenpak/`` →
                          ``~/.tpk/`` (never destructive; never blind).
 
-The Pro daemon coordination layout (Std 25 §2.1) lives under
+The Pro daemon coordination layout lives under
 ``<home>/pro/`` and is intentionally not touched by these commands.
 """
 
@@ -34,7 +34,7 @@ def build_home_parser(sub: Any) -> None:
     """Register the ``tokenpak home`` subcommand."""
     p = sub.add_parser(
         "home",
-        help="Manage tokenpak's on-disk configuration (Std 33)",
+        help="Manage tokenpak's on-disk configuration",
         description=(
             "Inspect, validate, and migrate the TokenPak home directory. "
             "All paths resolve through tokenpak._paths so subcommands "

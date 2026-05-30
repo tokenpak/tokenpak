@@ -20,7 +20,7 @@ Phase 1 / Pro note
 ------------------
 A downstream miner that extracts decisions, incidents, standards-touches,
 and handoff-worthy facts into PAKPlan-shaped records belongs in
-``tokenpak-paid`` per Std 25 §9.3 + Std 32 §5.2, after the scorer ships.
+``tokenpak-paid``, after the scorer ships.
 **This module emits no PAKPlan records.**
 """
 

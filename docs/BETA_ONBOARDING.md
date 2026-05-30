@@ -45,7 +45,7 @@ Expected: a version like `1.5.6` (or newer).
 ## 2. Initialize your TokenPak home
 
 TokenPak stores its config, license, templates, and Pak store under
-a single home directory (Std 33). The canonical location is
+a single home directory. The canonical location is
 `~/.tpk/`. Older installs may have used `~/.tokenpak/` — we'll cover
 the migration path in step 3.
 

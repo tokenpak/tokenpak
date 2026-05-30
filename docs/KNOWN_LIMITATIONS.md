@@ -45,7 +45,7 @@ embedding is tracked as a follow-up packet.
 
 Beta 1 OSS Spend Guard surfaces warnings and reports. Hard-stop
 enforcement (the "actually block the request" path) is Pro Local
-only per Std 29 + Std 25.
+only.
 
 ## Setup command is two implementations
 
@@ -53,12 +53,12 @@ only per Std 29 + Std 25.
 (`cmd_setup` vs `run_setup_cmd`). Convergence is deferred to
 post-staging polish to avoid parser-rename collisions during Beta 1.
 For Beta 1 use `tokenpak home init` instead — it's the cleaner path
-for the Std 33 home boundary.
+for the canonical home-directory boundary.
 
 ## Doctor still references legacy paths in some checks
 
 Several diagnostic messages still print `~/.tokenpak/` even when the
-canonical `~/.tpk/` is in use. The actual *resolution* honors Std 33
+canonical `~/.tpk/` is in use. The actual *resolution* honors the canonical home layout
 (via `tokenpak._paths`); the cosmetic strings will migrate in a
 follow-on polish pass.
 

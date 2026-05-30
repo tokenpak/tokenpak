@@ -67,7 +67,7 @@ def run_doctor(
     counts = {"pass": 0, "warn": 0, "fail": 0}
     fixes: list[tuple[str, Path]] = []
     checks: list[dict] = []
-    # Std 33: resolve through _paths so doctor reports the canonical
+    # Resolve through _paths so doctor reports the canonical
     # home (~/.tpk/) when present, and surfaces the legacy fallback
     # when the user hasn't run `tokenpak home migrate` yet.
     from tokenpak import _paths
@@ -96,7 +96,7 @@ def run_doctor(
                 for line in detail.splitlines():
                     print(f"         {line}")
 
-    # === Check 0: Std 33 home boundary ==========================================
+    # === Check 0: home-directory boundary ==========================================
     # Reports the resolved TokenPak home + flags legacy paths that should
     # be migrated. Cheap, side-effect-free, runs before everything else
     # so the operator sees the boundary state up front.

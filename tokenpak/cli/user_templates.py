@@ -28,7 +28,7 @@ from typing import Dict, List, Optional
 
 
 def _resolve_templates_dir() -> Path:
-    """Std 33: canonical ~/.tpk/templates with legacy ~/.tokenpak/templates fallback."""
+    """Canonical ~/.tpk/templates with legacy ~/.tokenpak/templates fallback."""
     from tokenpak import _paths
 
     return _paths.under("templates")

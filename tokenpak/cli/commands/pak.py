@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``tokenpak pak`` CLI subcommand (Std 32 §1.3 row 5, Beta 1).
+"""``tokenpak pak`` CLI subcommand (MultiPak Pro Phase 1, Beta 1).
 
 Subcommands:
     create  <dir> --output       Package a directory into a Pak file (OSS)
@@ -14,7 +14,7 @@ JSON. Vault Paks are served by the OSS adapter. Encrypted Pak archives,
 the capture pipeline, scoring, recall and PAKPlan-driven preview are
 Pro features and route through the ``tokenpak-paid`` daemon.
 
-Exit codes (Std 03 §1):
+Exit codes:
     0  success
     1  user-facing error (missing file, daemon required for action, etc.)
     2  argparse usage error (handled by argparse itself)
@@ -52,7 +52,7 @@ def build_pak_parser(sub: Any) -> None:
         "pak",
         help="Inspect, export, import Pak files (MultiPak Pro Phase 1)",
         description=(
-            "MultiPak Pro Phase 1 OSS surface (Std 32). Read-only Vault Pak "
+            "MultiPak Pro Phase 1 OSS surface. Read-only Vault Pak "
             "operations work without Pro; other Pak subtypes require the "
             "tokenpak-paid daemon."
         ),
@@ -748,7 +748,7 @@ def _print_pak_text(payload: dict) -> None:
 def _emit_pro_required(detail: str, *, as_json: bool) -> int:
     """Standardized "this needs the Pro daemon" error response.
 
-    Exit code 1 (user-facing error per Std 03 §1). Mirrors the
+    Exit code 1 (user-facing error). Mirrors the
     /pak/v1/* 501 envelope so machine consumers see one shape.
     """
     payload = {

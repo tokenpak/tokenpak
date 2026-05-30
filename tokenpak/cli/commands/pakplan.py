@@ -5,7 +5,7 @@ PAKPlan is the planning surface that consumes the recall foundation
 shipped at PR #184 / ``43bfb58e2c`` (recall reason/risk join tables +
 Context Package ordering hints + advisory vocab lint registry).
 
-Beta 1 OSS scope (per Std 32 §5.2 + ``feedback_foundation_vs_runtime_distinction``):
+Beta 1 OSS scope:
     preview        Static dry-run preview of what a PAKPlan would
                    surface for the current recall db. No scoring; no
                    capture-pipeline ingest. Honest about being preview.
@@ -16,7 +16,7 @@ Beta 1 OSS scope (per Std 32 §5.2 + ``feedback_foundation_vs_runtime_distinctio
                    Pak metadata, if any).
 
 Scoring + the actual ranking pipeline + autonomous PAKPlan injection
-remain Pro Local (Std 25 §1.1, Std 32 §5.2). This OSS surface is
+remain Pro Local. This OSS surface is
 deliberately read-only and never speaks to the Pro daemon.
 """
 
@@ -36,7 +36,7 @@ def build_pakplan_parser(sub: Any) -> None:
         help="Inspect the recall foundation; preview/explain/report (OSS)",
         description=(
             "Read-only consumer surface over the PAKPlan recall "
-            "foundation (Std 32 §5). Scoring + capture pipeline are Pro."
+            "foundation. Scoring + capture pipeline are Pro."
         ),
     )
     psub = p.add_subparsers(dest="pakplan_action", required=False)
@@ -88,7 +88,7 @@ def cmd_pakplan_preview(args: Any) -> int:
         "scoring": "not-shipped-in-OSS",
         "note": (
             "Beta 1 OSS preview is unscored. Pro Local adds the scorer + "
-            "ranking pipeline (Std 32 §5.2)."
+            "ranking pipeline."
         ),
         "recall_db": str(db) if db else None,
         "pak_count": len(paks),

@@ -2464,7 +2464,7 @@ def _build_stub_parsers(sub):
 
     p_integrate.set_defaults(func=_integrate_dispatch)
 
-    # ── `openclaw` — manage OpenClaw adapter sync ─────────────────────────
+    # ── OpenClaw adapter sync subcommand ─────────────────────────
     p_openclaw = sub.add_parser(
         "openclaw",
         help="Manage OpenClaw integration (refresh model list, detect, setup)",
@@ -2522,7 +2522,7 @@ def _build_stub_parsers(sub):
                 return 1
             configs = result.get("configs", [])
             print("")
-            print("  TOKENPAK openclaw refresh-models")
+            print("  OpenClaw model refresh")
             print("  " + "─" * 40)
             print(f"  Proxy         {proxy_url}")
             print(f"  Installs      {len(configs)}")
@@ -2547,7 +2547,7 @@ def _build_stub_parsers(sub):
                     print("    No changes — already in sync.")
             print("")
             return 0
-        # Default: print help for openclaw
+        # Default: print help for the OpenClaw subcommand
         p_openclaw.print_help()
         return 0
 
@@ -4503,7 +4503,7 @@ def main():
         "deactivate",
         "init",
         "monitor",
-        # Beta 1 verb families (TIP, features, PAKPlan preview, Std 33 home)
+        # Beta 1 verb families (TIP, features, PAKPlan preview, home)
         "tip",
         "features",
         "pakplan",
@@ -5898,7 +5898,7 @@ def cmd_lock_renew(args):
 
 
 def _build_pak_parser(sub):
-    """Register the ``tokenpak pak`` subcommand (MultiPak Pro Phase 1, Std 32 §1.3).
+    """Register the ``tokenpak pak`` subcommand (MultiPak Pro Phase 1).
 
     Implementation lives in :mod:`tokenpak.cli.commands.pak` to keep the
     handler module isolated and grow naturally as Phase 2+ adds
@@ -5934,7 +5934,7 @@ def _build_pakplan_parser(sub):
     The PAKPlan foundation (recall schema + reason/risk registries +
     ordering hints) shipped at PR #184 / ``43bfb58e2c``. Beta 1 OSS
     surface is preview/explain/report only — scoring + capture pipeline
-    remain Pro per Std 32 §5.2.
+    remain Pro.
     """
     from tokenpak.cli.commands.pakplan import build_pakplan_parser
 
@@ -5942,13 +5942,13 @@ def _build_pakplan_parser(sub):
 
 
 def _build_home_parser(sub):
-    """Register the ``tokenpak home`` subcommand (Beta 1, Std 33 + Packet C).
+    """Register the ``tokenpak home`` subcommand (Beta 1).
 
     Subcommands: ``path | init | validate | explain | migrate``.
     Implementation lives in :mod:`tokenpak.cli.commands.home_cmd`. The
     verb is ``home`` rather than ``config`` because the existing
     ``config`` parser owns proxy config.yaml lifecycle commands; this
-    family owns the Std 33 TokenPak home directory.
+    family owns the TokenPak home directory.
     """
     from tokenpak.cli.commands.home_cmd import build_home_parser
 

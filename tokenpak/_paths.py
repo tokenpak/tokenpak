@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Canonical on-disk path resolver for TokenPak (Std 33).
+"""Canonical on-disk path resolver for TokenPak.
 
 Single source of truth for where TokenPak stores user state, system
 state, and Pro daemon coordination files. New code MUST route through
 this module rather than building ``Path.home() / ".tokenpak"`` ad hoc.
 
-Resolution order (Std 33 §2):
+Resolution order:
     1. ``TOKENPAK_HOME`` env var (operator override, e.g. for sandboxes)
     2. ``~/.tpk/`` (canonical default — Glossary 08 §TPK)
     3. ``~/.tokenpak/`` (legacy fallback, only when ``~/.tpk/`` is absent
        AND the legacy directory exists — preserves zero-touch upgrade)
 
-Layout (Std 33 §3):
+Layout:
     <home>/
         config.{json,yaml}      user config (config commands)
         license.json            license store (licensing module)
