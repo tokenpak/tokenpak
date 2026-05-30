@@ -1115,7 +1115,7 @@ EOF
 ### 1. Search existing issues
 
 Check if someone has already reported your problem:
-https://github.com/kaywhy331/tokenpak/issues
+https://github.com/tokenpak/tokenpak/issues
 
 ### 2. File a bug report
 
@@ -1145,7 +1145,7 @@ Include the following in your report:
 <paste sanitized config>
 ```
 
-File at: https://github.com/kaywhy331/tokenpak/issues/new
+File at: https://github.com/tokenpak/tokenpak/issues/new
 
 ### 3. Error codes reference
 
@@ -1170,5 +1170,5 @@ ss -ltnp | grep 8766
 
 ### 5. Community
 
-- **GitHub Discussions:** https://github.com/kaywhy331/tokenpak/discussions
+- **GitHub Discussions:** https://github.com/tokenpak/tokenpak/discussions
 - **Documentation:** See [Documentation Index](index.md) for the full documentation reference

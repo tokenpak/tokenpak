@@ -294,7 +294,7 @@ We aim to:
 ## Getting Help
 
 - Open a [GitHub Discussion](https://github.com/tokenpak/tokenpak/discussions)
-- Tag @kaywhy331 for blocking issues
+- Tag @tokenpak for blocking issues
 - Read the docs under `/docs`
 
 ---

@@ -8,14 +8,14 @@ Thank you for your interest in contributing! This guide covers how to get set up
 
 - Python 3.10, 3.11, 3.12, or 3.13
 - `git`
-- A GitHub account with fork access to `kaywhy331/tokenpak`
+- A GitHub account with fork access to `tokenpak/tokenpak`
 
 ---
 
 ## Local Setup
 
 ```bash
-git clone https://github.com/kaywhy331/tokenpak.git
+git clone https://github.com/tokenpak/tokenpak.git
 cd tokenpak
 pip install -e ".[dev]"
 ```
@@ -64,7 +64,7 @@ CI runs automatically on every push and pull request targeting `main` or `oss-la
 3. **Test Matrix** — `pytest` runs across Python 3.10, 3.11, 3.12, and 3.13 with `--cov-fail-under=70`
 4. **Coverage Upload** — Coverage report uploaded to Codecov from the Python 3.11 run
 
-CI badge: [![CI](https://github.com/kaywhy331/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/kaywhy331/tokenpak/actions)
+CI badge: [![CI](https://github.com/tokenpak/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/tokenpak/tokenpak/actions)
 
 ---
 
