@@ -5170,7 +5170,7 @@ def _build_trigger_parser(sub):
     )
 
     p_fire = tsub.add_parser("fire", help="Fire an event string and execute matching triggers")
-    p_fire.add_argument("event", help="Event string to fire (e.g. git:push, agent:finished:cali)")
+    p_fire.add_argument("event", help="Event string to fire (e.g. git:push, agent:finished:agent-1)")
     p_fire.set_defaults(func=cmd_trigger_fire)
 
     p_hook = tsub.add_parser("hook", help="Install/uninstall git hooks for trigger events")
@@ -6220,7 +6220,7 @@ def _build_agent_parser(sub):
     p_list.set_defaults(func=cmd_agent_list)
 
     p_register = asub.add_parser("register", help="Register this agent")
-    p_register.add_argument("name", help="Agent name (e.g., trix, sue, cali)")
+    p_register.add_argument("name", help="Agent name (e.g., agent-1, agent-2)")
     p_register.add_argument("--hostname", default=None, help="Hostname (default: auto-detect)")
     p_register.add_argument("--gpu", action="store_true", help="Has GPU")
     p_register.add_argument("--memory", type=float, default=4.0, help="Memory in GB")

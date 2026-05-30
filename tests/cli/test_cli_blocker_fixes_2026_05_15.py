@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Regression tests for the 3 blockers Aya independent smoke surfaced (Cycle 7).
+"""Regression tests for the 3 blockers an independent smoke pass surfaced.
 
-Aya pass at /tmp/aya-smoke-c7/aya-smoke.log (2026-05-15) found:
+An independent smoke pass (2026-05-15) found:
 
 1. ``tokenpak activate`` ignored ``TOKENPAK_HOME`` and wrote
    ``license.json`` to the host's real ``~/.tokenpak/`` instead of
@@ -61,7 +61,7 @@ def test_activate_writes_under_TOKENPAK_HOME(tmp_path, monkeypatch):
         lambda: "unavailable",
     )
 
-    result = _lic.activate("AYA-BOUNDARY-FIX-LICENSE-KEY-0001")
+    result = _lic.activate("BOUNDARY-FIX-LICENSE-KEY-0001")
     assert result.ok is True
 
     # The license MUST be under the sandbox, not under the host home.
@@ -105,7 +105,7 @@ def _run_cli(args, env_extra=None):
 
 
 def test_pak_create_missing_source_exits_nonzero(tmp_path):
-    """Aya blocker: pak create on missing src printed error but exited 0."""
+    """Blocker: pak create on missing src printed error but exited 0."""
     out = tmp_path / "out.pak.json"
     result = _run_cli(
         ["pak", "create", str(tmp_path / "nope"), "-o", str(out)],
@@ -118,7 +118,7 @@ def test_pak_create_missing_source_exits_nonzero(tmp_path):
 
 
 def test_pak_import_missing_file_exits_nonzero(tmp_path):
-    """Aya blocker: pak import of missing file printed error but exited 0."""
+    """Blocker: pak import of missing file printed error but exited 0."""
     result = _run_cli(
         ["pak", "import", str(tmp_path / "nope.pak.json")],
         env_extra={"TOKENPAK_HOME": str(tmp_path / "home")},
@@ -130,7 +130,7 @@ def test_pak_import_missing_file_exits_nonzero(tmp_path):
 
 
 def test_pak_import_duplicate_exits_nonzero(tmp_path):
-    """Aya blocker: duplicate pak import without --force exited 0."""
+    """Blocker: duplicate pak import without --force exited 0."""
     home = tmp_path / "home"
     src = tmp_path / "src"
     src.mkdir()

@@ -54,7 +54,7 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
     },
     "balanced": {
         "TOKENPAK_MODE": "hybrid",
-        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "1500",  # Flipped 2026-04-13 — see TRIX-01 / pmgtm initiative
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "1500",  # Flipped 2026-04-13
         "TOKENPAK_SKELETON_ENABLED": "true",
         "TOKENPAK_CAPSULE_BUILDER": "false",
         "TOKENPAK_SHADOW_ENABLED": "true",
@@ -108,7 +108,7 @@ VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
 COMPACT_MAX_CHARS = _cfg("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
 COMPACT_THRESHOLD_TOKENS = _cfg(
-    "compression.threshold_tokens", 1500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int  # Flipped 2026-04-13 — see TRIX-01 / pmgtm initiative
+    "compression.threshold_tokens", 1500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int  # Flipped 2026-04-13
 )
 # Skip compression for very large payloads — compression savings are marginal (<3%) but
 # synchronous processing adds 10-25s of silence before first SSE chunk, causing client timeouts.
@@ -242,7 +242,7 @@ ERROR_NORMALIZER_ENABLED: bool = _cfg(
     "features.error_normalizer", False, "TOKENPAK_ERROR_NORMALIZER", bool
 )
 BUDGET_CONTROLLER_ENABLED: bool = _cfg(
-    "features.budget_controller", True, "TOKENPAK_BUDGET_CONTROLLER", bool  # Flipped 2026-04-13 — see TRIX-01 / pmgtm initiative
+    "features.budget_controller", True, "TOKENPAK_BUDGET_CONTROLLER", bool  # Flipped 2026-04-13
 )
 REQUEST_LOGGER_ENABLED: bool = _cfg(
     "features.request_logger", False, "TOKENPAK_REQUEST_LOGGER", bool
