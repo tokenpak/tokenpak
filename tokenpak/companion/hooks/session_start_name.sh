@@ -18,7 +18,8 @@
 # Branded session label — must stay in sync with
 # ``tokenpak/companion/launcher.py::_DEFAULT_SESSION_LABEL``.
 #
-#   teal brackets + "Pak"   = \u001b[38;2;0;180;170m
+#   black background        = \u001b[48;2;0;0;0m
+#   teal "Pak"              = \u001b[38;2;0;180;170m
 #   white "📦 Token"         = \u001b[38;2;255;255;255m
 #   gray "Claude Companion" = \u001b[38;2;90;94;105m
 #   reset                   = \u001b[0m
@@ -27,7 +28,7 @@ cat <<'JSON'
 {
   "hookSpecificOutput": {
     "hookEventName": "SessionStart",
-    "sessionTitle": "\u001b[38;2;0;180;170m[ \u001b[38;2;255;255;255m📦 Token\u001b[38;2;0;180;170mPak\u001b[38;2;90;94;105m Claude Companion\u001b[38;2;0;180;170m ]\u001b[0m"
+    "sessionTitle": "\u001b[48;2;0;0;0m\u001b[38;2;255;255;255m 📦 Token\u001b[38;2;0;180;170mPak\u001b[38;2;90;94;105m Claude Companion \u001b[0m"
   }
 }
 JSON

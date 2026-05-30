@@ -41,7 +41,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 _PROFILE_PRESETS: dict[str, dict[str, str]] = {
     "safe": {
-        # CCG-10: safe profile uses TOKENPAK_MODE=safe (Phase 2 Mode B).
+        # Safe profile uses TOKENPAK_MODE=safe (Phase 2 Mode B).
         # Stable cache control fires unconditionally; no body compression.
         "TOKENPAK_MODE": "safe",
         "TOKENPAK_STABLE_CACHE_CONTROL_AUTO": "true",
@@ -54,7 +54,7 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
     },
     "balanced": {
         "TOKENPAK_MODE": "hybrid",
-        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "1500",  # Flipped 2026-04-13 — see TRIX-01 / pmgtm initiative
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "1500",  # Flipped 2026-04-13
         "TOKENPAK_SKELETON_ENABLED": "true",
         "TOKENPAK_CAPSULE_BUILDER": "false",
         "TOKENPAK_SHADOW_ENABLED": "true",
@@ -94,16 +94,21 @@ PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
 LISTEN_ADDRESS = _cfg("listen_address", "127.0.0.1", "TOKENPAK_BIND_ADDRESS", str)
 PROXY_AUTH_KEY = os.environ.get("TOKENPAK_PROXY_KEY", "")
 DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", False, "TOKENPAK_DASHBOARD_AUTH", bool)
-MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
+def _resolve_monitor_db() -> str:
+    from tokenpak._paths import monitor_db as _monitor_db
+    result = _monitor_db(mode="write")
+    return str(result)
+
+MONITOR_DB = _resolve_monitor_db()
 BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
 BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "80"))
-# CCG-02: mutation_audit TTL — prune rows older than this many days
+# mutation_audit TTL — prune rows older than this many days
 MUTATION_AUDIT_TTL_DAYS: int = int(os.environ.get("TOKENPAK_MUTATION_AUDIT_TTL_DAYS", "30"))
 VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
 COMPACT_MAX_CHARS = _cfg("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
 COMPACT_THRESHOLD_TOKENS = _cfg(
-    "compression.threshold_tokens", 1500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int  # Flipped 2026-04-13 — see TRIX-01 / pmgtm initiative
+    "compression.threshold_tokens", 1500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int  # Flipped 2026-04-13
 )
 # Skip compression for very large payloads — compression savings are marginal (<3%) but
 # synchronous processing adds 10-25s of silence before first SSE chunk, causing client timeouts.
@@ -113,7 +118,7 @@ COMPACT_MAX_TOKENS = _cfg(
 )
 COMPACT_CACHE_SIZE = _cfg("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
 COMPILATION_MODE = _cfg("mode", "hybrid", "TOKENPAK_MODE", str).lower()
-# CCG-10: Auto-apply stable cache control in safe mode (TOKENPAK_MODE=safe)
+# Auto-apply stable cache control in safe mode (TOKENPAK_MODE=safe)
 STABLE_CACHE_CONTROL_AUTO: bool = _cfg(
     "features.stable_cache_control_auto", False, "TOKENPAK_STABLE_CACHE_CONTROL_AUTO", bool
 )
@@ -237,7 +242,7 @@ ERROR_NORMALIZER_ENABLED: bool = _cfg(
     "features.error_normalizer", False, "TOKENPAK_ERROR_NORMALIZER", bool
 )
 BUDGET_CONTROLLER_ENABLED: bool = _cfg(
-    "features.budget_controller", True, "TOKENPAK_BUDGET_CONTROLLER", bool  # Flipped 2026-04-13 — see TRIX-01 / pmgtm initiative
+    "features.budget_controller", True, "TOKENPAK_BUDGET_CONTROLLER", bool  # Flipped 2026-04-13
 )
 REQUEST_LOGGER_ENABLED: bool = _cfg(
     "features.request_logger", False, "TOKENPAK_REQUEST_LOGGER", bool
@@ -526,7 +531,7 @@ PROVIDER_DISPLAY = get_provider_display_list(ADAPTER_REGISTRY, CUSTOM_PROVIDERS)
 
 
 # ---------------------------------------------------------------------------
-# ProxyConfig — convenience wrapper around module-level settings (FIN-07)
+# ProxyConfig — convenience wrapper around module-level settings
 # ---------------------------------------------------------------------------
 
 class ProxyConfig:

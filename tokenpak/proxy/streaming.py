@@ -8,7 +8,7 @@ Provides:
 - StreamHandler: buffered stream handler with gzip support
 - iter_sse_events(): iterate parsed events from SSE bytes
 
-Merged from proxy/ and agent.proxy/ (FIN-07).
+Merged from proxy/ and agent.proxy/.
 """
 
 import io
@@ -50,12 +50,21 @@ def extract_sse_tokens(sse_bytes: bytes) -> Dict[str, int]:
     - OpenAI: usage.completion_tokens
 
     Returns dict with keys:
-        output_tokens, cache_read_input_tokens, cache_creation_input_tokens
+        output_tokens, cache_read_input_tokens, cache_creation_input_tokens,
+        cache_creation_ephemeral_1h_input_tokens,
+        cache_creation_ephemeral_5m_input_tokens
+
+    The ``cache_creation_ephemeral_*`` keys are populated from the
+    ``usage.cache_creation`` sub-object when Anthropic includes the per-TTL
+    breakdown (extended cache feature). They default to 0 otherwise — additive,
+    backward-compatible with existing callers that only read the flat total.
     """
     result: Dict[str, int] = {
         "output_tokens": 0,
         "cache_read_input_tokens": 0,
         "cache_creation_input_tokens": 0,
+        "cache_creation_ephemeral_1h_input_tokens": 0,
+        "cache_creation_ephemeral_5m_input_tokens": 0,
     }
     try:
         text = sse_bytes.decode("utf-8", errors="replace")
@@ -78,6 +87,18 @@ def extract_sse_tokens(sse_bytes: bytes) -> Dict[str, int]:
                     result["cache_read_input_tokens"] = usage["cache_read_input_tokens"]
                 if "cache_creation_input_tokens" in usage:
                     result["cache_creation_input_tokens"] = usage["cache_creation_input_tokens"]
+                # Per-TTL breakdown (extended cache); additive, defaults stay 0
+                # if the sub-object or fields are absent.
+                cc = usage.get("cache_creation")
+                if isinstance(cc, dict):
+                    if "ephemeral_1h_input_tokens" in cc:
+                        result["cache_creation_ephemeral_1h_input_tokens"] = (
+                            cc["ephemeral_1h_input_tokens"] or 0
+                        )
+                    if "ephemeral_5m_input_tokens" in cc:
+                        result["cache_creation_ephemeral_5m_input_tokens"] = (
+                            cc["ephemeral_5m_input_tokens"] or 0
+                        )
 
             # Anthropic: output tokens arrive in message_delta
             if event.get("type") == "message_delta":

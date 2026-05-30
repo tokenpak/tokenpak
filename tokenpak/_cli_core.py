@@ -298,7 +298,7 @@ def _print_quick_help():
     print(
         "Usage: tokenpak <command> [options]\n"
         "\n"
-        "TokenPak — LLM Proxy with Context Compression\n"
+        "TokenPak — LLM Proxy with Prompt Packing\n"
         "\n"
         "Quick Start:\n"
         "  start        Start the proxy (localhost:8766)\n"
@@ -306,9 +306,9 @@ def _print_quick_help():
         "  restart      Restart the proxy\n"
         "  logs         Show recent proxy logs\n"
         "  serve        Serve the proxy (alias for start)\n"
-        "  demo         See compression in action\n"
+        "  demo         See Prompt Packing in action\n"
         "  cost         View your API spend\n"
-        "  savings      View compression savings\n"
+        "  savings      View Savings Ledger\n"
         "  status       Check proxy health\n"
         "\n"
         "Tools:\n"
@@ -320,7 +320,7 @@ def _print_quick_help():
         "  fingerprint  Fingerprint sync and cache management\n"
         "  preview      Preview compression dry-run (see token savings)\n"
         "  compress     Compress text/JSON/code directly\n"
-        "  optimize     Optimize prompts for better compression\n"
+        "  optimize     Optimize prompts for better Prompt Packing efficiency\n"
         "  last         Show details of last compressed request\n"
         "  vault        Vault index health diagnostic and repair\n"
         "  diff         Show context changes (Pro)\n"
@@ -888,15 +888,15 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
 
 
 def _cmd_reindex(args):
-    """``tokenpak index --reindex-all`` and ``--reindex-path <path>`` (VDS-01).
+    """``tokenpak index --reindex-all`` and ``--reindex-path <path>``.
 
     Reads registered directories from ``~/.tokenpak/vault.yaml`` and runs the
     existing block-registry indexer against each one. Updates per-path index
-    health metadata in the same vault.yaml so VDS-03's doctor staleness check
+    health metadata in the same vault.yaml so the doctor staleness check
     can read it.
 
     OSS — no license check. Schedule fields (`schedule`,
-    `expected_interval_seconds`) are written by the paid VDS-04 surface but
+    `expected_interval_seconds`) are written by the paid surface but
     are merely passive metadata here; the OSS path always reindexes on
     demand.
     """
@@ -1010,7 +1010,7 @@ def _registry_file_count(db_path: str) -> int:
 
 def cmd_index(args):
     """Index a directory with parallel processing and batch transactions."""
-    # --reindex-all / --reindex-path: VDS-01 OSS reindex flags driven by ~/.tokenpak/vault.yaml.
+    # --reindex-all / --reindex-path: OSS reindex flags driven by ~/.tokenpak/vault.yaml.
     if getattr(args, "reindex_all", False) or getattr(args, "reindex_path", None):
         return _cmd_reindex(args)
 
@@ -1981,6 +1981,17 @@ def _cmd_dashboard_public(args):
 
 def cmd_doctor(args):
     """Run comprehensive diagnostics on TokenPak installation."""
+    if getattr(args, "conformance", False):
+        # Fast path — TIP self-conformance only. Mirrors `tokenpak tip
+        # conformance` so existing operators who learned the v1.3.7
+        # ``doctor --conformance`` flag get the same surface back.
+        from .cli.commands.tip import cmd_tip_conformance
+
+        class _A:
+            pass
+        a = _A()
+        a.json = bool(getattr(args, "json_output", False))
+        sys.exit(cmd_tip_conformance(a))
     if getattr(args, "fleet", False):
         from .cli.commands.doctor import run_fleet_doctor
 
@@ -2453,7 +2464,7 @@ def _build_stub_parsers(sub):
 
     p_integrate.set_defaults(func=_integrate_dispatch)
 
-    # ── `openclaw` — manage OpenClaw adapter sync ─────────────────────────
+    # ── OpenClaw adapter sync subcommand ─────────────────────────
     p_openclaw = sub.add_parser(
         "openclaw",
         help="Manage OpenClaw integration (refresh model list, detect, setup)",
@@ -2511,7 +2522,7 @@ def _build_stub_parsers(sub):
                 return 1
             configs = result.get("configs", [])
             print("")
-            print("  TOKENPAK openclaw refresh-models")
+            print("  OpenClaw model refresh")
             print("  " + "─" * 40)
             print(f"  Proxy         {proxy_url}")
             print(f"  Installs      {len(configs)}")
@@ -2536,7 +2547,7 @@ def _build_stub_parsers(sub):
                     print("    No changes — already in sync.")
             print("")
             return 0
-        # Default: print help for openclaw
+        # Default: print help for the OpenClaw subcommand
         p_openclaw.print_help()
         return 0
 
@@ -2546,7 +2557,7 @@ def _build_stub_parsers(sub):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="tokenpak",
-        description="TokenPak — LLM Proxy with Context Compression",
+        description="TokenPak — LLM Proxy with Prompt Packing",
         add_help=False,  # we handle --help ourselves for progressive disclosure
     )
     parser.add_argument(
@@ -2580,10 +2591,11 @@ def build_parser():
         help="Start the proxy (localhost:8766)",
         description=(
             "Start the TokenPak proxy server, which routes LLM API requests through\n"
-            "context compression. The proxy listens on localhost:PORT and forwards\n"
+            "Prompt Packing. The proxy listens on localhost:PORT and forwards\n"
             "compressed requests to your configured LLM providers.\n\n"
             "Example:\n"
-            "  tokenpak serve --port 8888 --workers 4\n\n"
+            "  tokenpak start --port 8888 --workers 4\n\n"
+            "(See also `tokenpak serve` for telemetry/ingest variants.)\n"
             "The proxy reads config from tokenpak.yaml or ~/.tokenpak/config.yaml"
         ),
     )
@@ -2662,14 +2674,14 @@ def build_parser():
         "--reindex-all",
         action="store_true",
         dest="reindex_all",
-        help="Reindex every directory registered in ~/.tokenpak/vault.yaml (VDS-01)",
+        help="Reindex every directory registered in ~/.tokenpak/vault.yaml",
     )
     p_index.add_argument(
         "--reindex-path",
         dest="reindex_path",
         default=None,
         metavar="PATH",
-        help="Reindex a single directory registered in ~/.tokenpak/vault.yaml (VDS-01)",
+        help="Reindex a single directory registered in ~/.tokenpak/vault.yaml",
     )
     p_index.set_defaults(func=cmd_index)
 
@@ -2792,6 +2804,12 @@ def build_parser():
         action="store_true",
         help="Run Claude Code integration checks (ENABLE_TOOL_SEARCH, mode, IDE detection)",
     )
+    p_doctor.add_argument(
+        "--conformance",
+        dest="conformance",
+        action="store_true",
+        help="Run TIP self-conformance checks (alias for `tokenpak tip conformance`)",
+    )
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_diagnose = sub.add_parser("diagnose", help="Health check — config, vault, cache, proxy, disk")
@@ -2907,6 +2925,10 @@ def build_parser():
     _build_codex_parser(sub)
     _build_creds_parser(sub)
     _build_pak_parser(sub)
+    _build_tip_parser(sub)
+    _build_features_parser(sub)
+    _build_pakplan_parser(sub)
+    _build_home_parser(sub)
     _build_prove_parser(sub)
     _build_test_parser(sub)
     _build_telemetry_parser(sub)
@@ -3202,6 +3224,8 @@ def cmd_status(args):
             no_meme=no_meme,
             days=getattr(args, "days", 0),
             hours=getattr(args, "hours", 0),
+            fleet=getattr(args, "fleet", False),
+            since=getattr(args, "since", None),
         )
     except Exception as e:
         print(f"⚠️  Savings-first status failed ({e}), falling back to legacy output...")
@@ -3522,6 +3546,8 @@ def _build_status_parser(sub):
     p_status.add_argument("--no-meme", dest="no_meme", action="store_true", help="Suppress tagline")
     p_status.add_argument("--days", type=int, default=0, help="Filter to last N days (combinable with --hours)")
     p_status.add_argument("--hours", type=int, default=0, help="Filter to last N hours (combinable with --days)")
+    p_status.add_argument("--fleet", action="store_true", help="Fleet rollup view — reads rollup_daily")
+    p_status.add_argument("--since", default=None, help="With --fleet: window in days, e.g. '7d' (default: 7d)")
     p_status.set_defaults(func=cmd_status)
 
 
@@ -4477,6 +4503,11 @@ def main():
         "deactivate",
         "init",
         "monitor",
+        # Beta 1 verb families (TIP, features, PAKPlan preview, home)
+        "tip",
+        "features",
+        "pakplan",
+        "home",
     }
     # If user asks --help on an unrecognised command, just show that command's usage + exit 0
     if (
@@ -4611,7 +4642,14 @@ def main():
         if not getattr(args, "week", False) and not getattr(args, "month", False):
             pass  # cmd_cost already defaults to "daily" when neither flag set
 
-    args.func(args)
+    # Honor explicit non-zero return codes from handlers. Beta-1
+    # regression: handlers like cmd_pak_create and cmd_pak_import returned
+    # 1 on error but the dispatcher dropped the value, so callers in
+    # `set -e` scripts saw exit 0 even after a printed error. Handlers
+    # that return None or 0 keep the prior fall-through behavior.
+    _rc = args.func(args)
+    if isinstance(_rc, int) and _rc != 0:
+        sys.exit(_rc)
 
 
 # ── Route commands ────────────────────────────────────────────────────────────
@@ -5132,7 +5170,7 @@ def _build_trigger_parser(sub):
     )
 
     p_fire = tsub.add_parser("fire", help="Fire an event string and execute matching triggers")
-    p_fire.add_argument("event", help="Event string to fire (e.g. git:push, agent:finished:cali)")
+    p_fire.add_argument("event", help="Event string to fire (e.g. git:push, agent:finished:agent-1)")
     p_fire.set_defaults(func=cmd_trigger_fire)
 
     p_hook = tsub.add_parser("hook", help="Install/uninstall git hooks for trigger events")
@@ -5860,7 +5898,7 @@ def cmd_lock_renew(args):
 
 
 def _build_pak_parser(sub):
-    """Register the ``tokenpak pak`` subcommand (MultiPak Pro Phase 1, Std 32 §1.3).
+    """Register the ``tokenpak pak`` subcommand (MultiPak Pro Phase 1).
 
     Implementation lives in :mod:`tokenpak.cli.commands.pak` to keep the
     handler module isolated and grow naturally as Phase 2+ adds
@@ -5870,6 +5908,51 @@ def _build_pak_parser(sub):
     from tokenpak.cli.commands.pak import build_pak_parser
 
     build_pak_parser(sub)
+
+
+def _build_tip_parser(sub):
+    """Register the ``tokenpak tip`` subcommand (Beta 1 regression recovery).
+
+    Restores the v1.3.7 doctor-conformance surface as a dedicated verb
+    family. Implementation lives in :mod:`tokenpak.cli.commands.tip`.
+    """
+    from tokenpak.cli.commands.tip import build_tip_parser
+
+    build_tip_parser(sub)
+
+
+def _build_features_parser(sub):
+    """Register the ``tokenpak features`` subcommand (Beta 1, Packet G)."""
+    from tokenpak.cli.commands.features import build_features_parser
+
+    build_features_parser(sub)
+
+
+def _build_pakplan_parser(sub):
+    """Register the ``tokenpak pakplan`` subcommand (Beta 1 consumer surface).
+
+    The PAKPlan foundation (recall schema + reason/risk registries +
+    ordering hints) shipped at PR #184 / ``43bfb58e2c``. Beta 1 OSS
+    surface is preview/explain/report only — scoring + capture pipeline
+    remain Pro.
+    """
+    from tokenpak.cli.commands.pakplan import build_pakplan_parser
+
+    build_pakplan_parser(sub)
+
+
+def _build_home_parser(sub):
+    """Register the ``tokenpak home`` subcommand (Beta 1).
+
+    Subcommands: ``path | init | validate | explain | migrate``.
+    Implementation lives in :mod:`tokenpak.cli.commands.home_cmd`. The
+    verb is ``home`` rather than ``config`` because the existing
+    ``config`` parser owns proxy config.yaml lifecycle commands; this
+    family owns the TokenPak home directory.
+    """
+    from tokenpak.cli.commands.home_cmd import build_home_parser
+
+    build_home_parser(sub)
 
 
 def _build_lock_parser(sub):
@@ -6137,7 +6220,7 @@ def _build_agent_parser(sub):
     p_list.set_defaults(func=cmd_agent_list)
 
     p_register = asub.add_parser("register", help="Register this agent")
-    p_register.add_argument("name", help="Agent name (e.g., trix, sue, cali)")
+    p_register.add_argument("name", help="Agent name (e.g., agent-1, agent-2)")
     p_register.add_argument("--hostname", default=None, help="Hostname (default: auto-detect)")
     p_register.add_argument("--gpu", action="store_true", help="Has GPU")
     p_register.add_argument("--memory", type=float, default=4.0, help="Memory in GB")
@@ -7908,9 +7991,9 @@ def _build_optimize_parser(sub):
     """Build the optimize command parser."""
     p_optimize = sub.add_parser(
         "optimize",
-        help="Optimize prompts for better compression",
+        help="Optimize prompts for better Prompt Packing efficiency",
         description=(
-            "Analyze and optimize a prompt for better compression efficiency.\n"
+            "Analyze and optimize a prompt for better Prompt Packing efficiency.\n"
             "Suggests rewording and restructuring to reduce compressed token count.\n\n"
             "Example:\n"
             "  tokenpak optimize < myprompt.txt\n"

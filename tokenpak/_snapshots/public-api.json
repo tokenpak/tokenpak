@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-22T01:11:41Z",
-  "package_version": "1.6.1",
+  "generated_at": "2026-05-25T16:52:18Z",
+  "package_version": "1.7.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -796,6 +796,18 @@
       "name": "run_macro"
     },
     {
+      "module": "tokenpak.cli.commands.features",
+      "name": "build_features_parser"
+    },
+    {
+      "module": "tokenpak.cli.commands.features",
+      "name": "cmd_features_explain"
+    },
+    {
+      "module": "tokenpak.cli.commands.features",
+      "name": "cmd_features_list"
+    },
+    {
       "module": "tokenpak.cli.commands.handoff",
       "name": "SEP"
     },
@@ -826,6 +838,30 @@
     {
       "module": "tokenpak.cli.commands.help",
       "name": "run"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_cmd",
+      "name": "build_home_parser"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_cmd",
+      "name": "cmd_home_explain"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_cmd",
+      "name": "cmd_home_init"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_cmd",
+      "name": "cmd_home_migrate"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_cmd",
+      "name": "cmd_home_path"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_cmd",
+      "name": "cmd_home_validate"
     },
     {
       "module": "tokenpak.cli.commands.index",
@@ -1040,6 +1076,22 @@
       "name": "cmd_pak_status"
     },
     {
+      "module": "tokenpak.cli.commands.pakplan",
+      "name": "build_pakplan_parser"
+    },
+    {
+      "module": "tokenpak.cli.commands.pakplan",
+      "name": "cmd_pakplan_explain"
+    },
+    {
+      "module": "tokenpak.cli.commands.pakplan",
+      "name": "cmd_pakplan_preview"
+    },
+    {
+      "module": "tokenpak.cli.commands.pakplan",
+      "name": "cmd_pakplan_report"
+    },
+    {
       "module": "tokenpak.cli.commands.preview",
       "name": "cmd_preview"
     },
@@ -1210,6 +1262,26 @@
     {
       "module": "tokenpak.cli.commands.test",
       "name": "run_test"
+    },
+    {
+      "module": "tokenpak.cli.commands.tip",
+      "name": "CheckResult"
+    },
+    {
+      "module": "tokenpak.cli.commands.tip",
+      "name": "build_tip_parser"
+    },
+    {
+      "module": "tokenpak.cli.commands.tip",
+      "name": "exit_code_for"
+    },
+    {
+      "module": "tokenpak.cli.commands.tip",
+      "name": "run_conformance_checks"
+    },
+    {
+      "module": "tokenpak.cli.commands.tip",
+      "name": "summarize"
     },
     {
       "module": "tokenpak.cli.commands.trigger",
@@ -17014,6 +17086,54 @@
     {
       "module": "tokenpak.vault.slicer",
       "name": "slice_content"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "BLOCK_ID_PREFIX"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "ENV_FLAG"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "ENV_PROJECTS_DIR"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "SOURCE_TYPE"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "TranscriptBlock"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "TranscriptMessage"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "build_block"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "default_projects_root"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "index_claude_transcripts"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "is_enabled"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "iter_session_files"
+    },
+    {
+      "module": "tokenpak.vault.sources.claude_transcript",
+      "name": "parse_jsonl_session"
     },
     {
       "module": "tokenpak.vault.sqlite_backend",

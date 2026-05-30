@@ -12,11 +12,13 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+
+# CI-stabilization: release runs only on tag push or manual dispatch.
+# Branch-push (main) and pull_request triggers removed so ordinary
+# staging pushes and PRs no longer fire the release gate.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write  # Required for creating releases

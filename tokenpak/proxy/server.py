@@ -30,7 +30,7 @@ import sys
 import threading
 import time
 import uuid
-from collections import deque
+from collections import OrderedDict, deque
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -783,7 +783,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         elif self.path.split("?")[0] == "/v1/messages/forecast":
             self._handle_cost_forecast()
         elif self.path.startswith("/v1/messages/"):
-            # CCG-05: Default passthrough for unrecognised /v1/messages/* subpaths.
+            # Default passthrough for unrecognised /v1/messages/* subpaths.
             # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
             ps = self.server.proxy_server
             route = ps.router.route(self.path, dict(self.headers))
@@ -873,6 +873,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         is_streaming = False
         cache_read_tokens = 0
         cache_creation_tokens = 0
+        # Per-TTL prompt-cache attribution (additive telemetry; populated only
+        # when the upstream response includes ``usage.cache_creation`` breakdown).
+        cache_creation_1h_tokens = 0
+        cache_creation_5m_tokens = 0
 
         trace: Optional[PipelineTrace] = None
         if should_log and is_messages:
@@ -942,7 +946,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     if _sg_outcome.body is not None:
                         body = _sg_outcome.body
                 elif _sg_outcome.kind == "replay":
-                    # TSG-03: held request is being replayed — substitute body
+                    # Held request is being replayed — substitute body
                     # and headers, then continue down the normal forward path.
                     if _sg_outcome.body is not None:
                         body = _sg_outcome.body
@@ -1041,7 +1045,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 pass
             input_tokens = _estimate_tokens_from_body(body)
 
-            # TIP-03: Observe-only optimization pipeline.
+            # Observe-only optimization pipeline.
             # Pipeline composition lives in services/optimization/ per
             # 01-architecture-standard.md §1.3 invariant 1 (services/ owns
             # all pipeline composition). proxy/server.py only invokes it
@@ -1049,7 +1053,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # TOKENPAK_OPTIMIZATION_PIPELINE (default off); runs before
             # any body-mutating stage and never returns a different body
             # in observe-only mode. Trace is stashed locally for future
-            # telemetry persistence (TIP-04+).
+            # telemetry persistence.
             _optimization_trace = None
             try:
                 from tokenpak.services.optimization import run_observe_only as _opt_run
@@ -1083,7 +1087,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     type(_opt_exc).__name__, _opt_exc,
                 )
 
-            # CCG-11: Cache invalidator detection (log-only).
+            # Cache invalidator detection (log-only).
             # Skip transparent mode — transparent must remain side-effect-free.
             # Runs on original (pre-compression) body so semantic fields are intact.
             if ps.compilation_mode != "transparent":
@@ -1287,7 +1291,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             passthrough_cfg = PassthroughConfig(require_auth=False)
 
         # Build forwarding headers (client-supplied auth forwarded unchanged)
-        # CCG-04: For Anthropic routes apply a per-route allowlist (mirroring
+        # For Anthropic routes apply a per-route allowlist (mirroring
         # the WS-path tuple).  All other providers keep the existing blocklist
         # path (forward_headers) — their forwarding behavior is unchanged.
         if provider_from_url(target_url) == "anthropic":
@@ -1520,6 +1524,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     output_tokens = sse_usage.get("output_tokens", 0)
                     cache_read_tokens = sse_usage.get("cache_read_input_tokens", 0)
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
+                    # Per-TTL prompt-cache attribution (additive telemetry).
+                    cache_creation_1h_tokens = sse_usage.get("cache_creation_ephemeral_1h_input_tokens", 0)
+                    cache_creation_5m_tokens = sse_usage.get("cache_creation_ephemeral_5m_input_tokens", 0)
             else:
                 # ── Non-streaming path ────────────────────────────────────
                 # Retry on transient upstream failures (RemoteProtocolError,
@@ -1602,6 +1609,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         usage = json.loads(body_for_metrics).get("usage", {})
                         cache_read_tokens = usage.get("cache_read_input_tokens", 0)
                         cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
+                        # Per-TTL prompt-cache attribution (additive, read-only).
+                        _cc_obj = usage.get("cache_creation")
+                        if isinstance(_cc_obj, dict):
+                            cache_creation_1h_tokens = int(_cc_obj.get("ephemeral_1h_input_tokens") or 0)
+                            cache_creation_5m_tokens = int(_cc_obj.get("ephemeral_5m_input_tokens") or 0)
                     except Exception:
                         pass
             latency_ms = int((time.time() - t0) * 1000)
@@ -1701,6 +1713,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             injected_sources="",
                             cache_read_tokens=cache_read_tokens,
                             cache_creation_tokens=cache_creation_tokens,
+                            cache_creation_ephemeral_1h_tokens=cache_creation_1h_tokens,
+                            cache_creation_ephemeral_5m_tokens=cache_creation_5m_tokens,
+                            ttl_attribution=(
+                                "mixed" if cache_creation_1h_tokens > 0 and cache_creation_5m_tokens > 0
+                                else "1h" if cache_creation_1h_tokens > 0
+                                else "5m" if cache_creation_5m_tokens > 0
+                                else "unknown" if cache_creation_tokens > 0
+                                else "none"
+                            ),
                             would_have_saved=int(saved),
                             cache_origin=_cache_origin,
                             user_id=getattr(self, "_tokenpak_user_id", "") or "",
@@ -1712,17 +1733,43 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 try:
                     _stable_tokens = max(0, input_tokens - (input_tokens - sent_input_tokens))
                     _miss_reason: Optional[str] = None
-                    if cache_read_tokens == 0:
-                        # Heuristic miss-reason diagnosis (best-effort)
+                    # Prefix-aware miss attribution. Read-only on the body: the
+                    # diagnosis parses for analysis only and never feeds back
+                    # into the forwarded bytes, so byte-preserved semantics are
+                    # untouched. Only runs when caching is in play (cheap byte
+                    # guard) and skips pathologically large bodies. Fail-open.
+                    _has_cc = isinstance(body, (bytes, bytearray)) and b'"cache_control"' in body
+                    if _has_cc and len(body) <= 4_000_000:
                         try:
-                            _body_text = body.decode("utf-8", errors="ignore") if isinstance(body, (bytes, bytearray)) else ""
+                            from tokenpak.proxy.cache_poison import diagnose_cache_miss
+                            from tokenpak.proxy.request_pipeline import (
+                                _resolve_session_id as _rsi_miss,
+                            )
+                            _sess_key = _rsi_miss(self.headers, model) or "default"
+                            with ps._cache_prefix_lock:
+                                _prior = ps._cache_prefix_state.get(_sess_key)
+                            _diag = diagnose_cache_miss(
+                                bytes(body),
+                                prior_prefix_fingerprint=_prior[0] if _prior else None,
+                                prior_prefix_id_hashes=_prior[1] if _prior else None,
+                            )
+                            # Update prior-prefix state on every request (hits too)
+                            # so the next miss has an accurate immediate baseline.
+                            with ps._cache_prefix_lock:
+                                ps._cache_prefix_state[_sess_key] = (
+                                    _diag.prefix_fingerprint,
+                                    _diag.prefix_id_hashes,
+                                )
+                                ps._cache_prefix_state.move_to_end(_sess_key)
+                                while len(ps._cache_prefix_state) > 512:
+                                    ps._cache_prefix_state.popitem(last=False)
+                            if cache_read_tokens == 0:
+                                _miss_reason = _diag.reason
+                                if os.environ.get("TOKENPAK_CACHE_MISS_DEBUG"):
+                                    # Opt-in, redacted: derived metadata only.
+                                    print(f"  ↪ {_diag.debug_line()}")
                         except Exception:
-                            _body_text = ""
-                        import re as _re
-                        if _re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", _body_text):
-                            _miss_reason = "timestamp"
-                        elif "request_id" in _body_text.lower() or "uuid" in _body_text.lower():
-                            _miss_reason = "uuid"
+                            _miss_reason = None
                     _get_cache_collector().record(CacheMetrics(
                         request_id=trace.request_id if trace else str(uuid.uuid4()),
                         stable_prefix_tokens=sent_input_tokens,
@@ -1732,6 +1779,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         total_input_tokens=input_tokens,
                         cache_read_tokens=cache_read_tokens,
                         cache_creation_tokens=cache_creation_tokens,
+                        cache_creation_ephemeral_1h_tokens=cache_creation_1h_tokens,
+                        cache_creation_ephemeral_5m_tokens=cache_creation_5m_tokens,
+                        ttl_attribution=(
+                            "mixed" if cache_creation_1h_tokens > 0 and cache_creation_5m_tokens > 0
+                            else "1h" if cache_creation_1h_tokens > 0
+                            else "5m" if cache_creation_5m_tokens > 0
+                            else "unknown" if cache_creation_tokens > 0
+                            else "none"
+                        ),
                         output_tokens=output_tokens,
                     ))
                 except Exception:
@@ -1926,7 +1982,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     pass
 
     def _handle_count_tokens(self) -> None:
-        """CCG-05: Handle POST /v1/messages/count_tokens — compute token count locally.
+        """Handle POST /v1/messages/count_tokens — compute token count locally.
 
         Parses the Anthropic Messages body, sums token counts across system/messages/tools
         via the local count_tokens() helper, and returns {"input_tokens": N}.
@@ -2011,7 +2067,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.wfile.write(resp)
 
     def _handle_cost_forecast(self) -> None:
-        """CCI-11: Handle POST /v1/messages/forecast — local cost forecast, no upstream call.
+        """Handle POST /v1/messages/forecast — local cost forecast, no upstream call.
 
         Accepts the same body shape as /v1/messages, runs count_tokens locally,
         applies the model pricing config, and returns an estimated cost breakdown.
@@ -2240,7 +2296,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         Returns a JSON object with a `sessions` array of the top 20 sessions
         by request count. Each entry contains the columns documented in
-        Spec Component 11 / CCG-13.
+        Spec Component 11.
         """
         import os
         import sqlite3 as _sqlite3
@@ -2536,18 +2592,20 @@ class ProxyServer:
         # Rolling window of per-request compression ratios (last 100)
         self._compression_ratios: deque = deque(maxlen=100)
         self._compression_lock = threading.Lock()
+        # Per-session cached-prefix state for prefix-aware cache-miss
+        # attribution (telemetry only). session_id -> (fingerprint, id_hashes).
+        # Bounded LRU; never holds raw prompt content (hashes/fingerprints only).
+        self._cache_prefix_state: "OrderedDict[str, tuple]" = OrderedDict()
+        self._cache_prefix_lock = threading.Lock()
         # Compression telemetry — writes events to ~/.tokenpak/compression_events.jsonl
         self.compression_stats = CompressionStats()
 
-        # SQLite request ledger — writes to ~/.tokenpak/monitor.db (symlink target).
+        # SQLite request ledger — resolved via _paths.monitor_db(mode="write").
         # Powers `tokenpak status`, `savings`, dashboards. Async write queue keeps
         # per-request cost <0.1ms. Fail-open: any DB error never breaks the proxy.
         try:
-            _db_path = os.environ.get(
-                "TOKENPAK_DB",
-                os.path.expanduser("~/.tokenpak/monitor.db"),
-            )
-            self.monitor: Optional[_DbMonitor] = _DbMonitor(_db_path)
+            from tokenpak.proxy.config import MONITOR_DB
+            self.monitor: Optional[_DbMonitor] = _DbMonitor(MONITOR_DB)
         except Exception:
             self.monitor = None
 

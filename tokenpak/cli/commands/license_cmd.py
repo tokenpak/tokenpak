@@ -59,22 +59,16 @@ def run_license(args: argparse.Namespace) -> int:
 
 
 def run_plan(args: argparse.Namespace) -> int:
-    """`tokenpak plan` — show available plans + what the user has today."""
+    """`tokenpak plan` — show available plans + what the user has today.
+
+    Catalog is discovered dynamically from the gate table + an optional
+    ``<TOKENPAK_HOME>/pricing.json`` file. No hardcoded list, no
+    misleading ``"TBD"`` strings.
+    """
     s = _lic.summary_for_cli()
+    plans = _lic.discover_plans()
     if getattr(args, "as_json", False) or getattr(args, "json", False):
-        print(json.dumps({
-            "current": s,
-            "plans": [
-                {"tier": _lic.TIER_FREE, "label": _lic.describe_tier(_lic.TIER_FREE),
-                 "price": "$0", "blurb": "Full Free-tier feature set — proxy, vault, compression, dashboard."},
-                {"tier": _lic.TIER_PRO, "label": _lic.describe_tier(_lic.TIER_PRO),
-                 "price": "TBD", "blurb": "Code/log/JSON compression, smart routing, session telemetry, trace + replay."},
-                {"tier": _lic.TIER_TEAM, "label": _lic.describe_tier(_lic.TIER_TEAM),
-                 "price": "TBD", "blurb": "Budget enforcement, OAuth, real-time stats API, shared vault, handoff system."},
-                {"tier": _lic.TIER_ENTERPRISE, "label": _lic.describe_tier(_lic.TIER_ENTERPRISE),
-                 "price": "TBD", "blurb": "A/B testing, shadow mode, regression detection, FinOps + audit pages, DLP/PII."},
-            ],
-        }, indent=2))
+        print(json.dumps({"current": s, "plans": plans}, indent=2))
         return 0
     print("")
     print("  TOKENPAK plans")
@@ -82,37 +76,42 @@ def run_plan(args: argparse.Namespace) -> int:
     print(f"  You are on:  {s['tier_label']}  (status: {s['status']})")
     print("")
     print("  Available plans:")
-    print("    Free     Proxy, vault, compression, web dashboard,")
-    print("                   savings tracking. $0. Always available.")
-    print("    Pro            Code/log/JSON compression, smart routing,")
-    print("                   session telemetry, trace & replay, CSV/JSON")
-    print("                   export. — coming soon")
-    print("    Team           Budget enforcement, OAuth for API keys,")
-    print("                   real-time stats API, shared vault,")
-    print("                   handoff system. — coming soon")
-    print("    Enterprise     A/B testing, shadow mode, regression")
-    print("                   detection, FinOps + audit pages,")
-    print("                   PII/DLP scanning. — coming soon")
+    for plan in plans:
+        price = plan["price"]
+        suffix = "" if price not in ("unannounced", "") else "  — pricing not yet announced"
+        print(f"    {plan['label']:<11}  {price:<10}  ({plan['feature_count']} gated features){suffix}")
+        if plan["blurb"]:
+            print(f"               {plan['blurb']}")
     print("")
-    print("  Upgrade:   https://tokenpak.ai/pricing   (coming soon)")
-    print("  Activate:  tokenpak activate <your-key>")
+    print("  Use:")
+    print("    tokenpak features            see every feature + entitlement state")
+    print("    tokenpak activate <key>      install a paid license key")
     print("")
     return 0
 
 
 def run_activate(args: argparse.Namespace) -> int:
-    """`tokenpak activate <key>` — store a license key."""
+    """`tokenpak activate <key>` — store a license key.
+
+    Per Beta 1 hardening (Packet G), this rejects obviously invalid
+    inputs (empty, too short, wrong charset, placeholder strings) and
+    surfaces a non-zero exit so scripts / CI don't silently treat a
+    bad activation as success.
+    """
+    import sys as _sys
+
     key = (getattr(args, "key", "") or "").strip()
     email = (getattr(args, "email", "") or "").strip()
     if not key:
-        print("activate: provide a license key → tokenpak activate <key>")
-        return 2
+        print("activate: provide a license key → tokenpak activate <key>",
+              file=_sys.stderr)
+        _sys.exit(2)
     result = _lic.activate(key, email=email)
     if not result.ok:
-        print(f"✖ activate failed: {result.summary}")
+        print(f"✖ activate failed: {result.summary}", file=_sys.stderr)
         if result.error:
-            print(f"  detail: {result.error}")
-        return 1
+            print(f"  detail: {result.error}", file=_sys.stderr)
+        _sys.exit(1)
     print("")
     print(f"  ✅ {result.summary}")
     if result.license and result.license.activated_at:

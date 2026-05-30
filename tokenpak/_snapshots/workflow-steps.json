@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-16T20:06:28Z",
+  "generated_at": "2026-05-25T16:58:36Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"

@@ -41,7 +41,7 @@ def _days_ago(n: int) -> str:
     return (date.today() - timedelta(days=n)).strftime("%Y-%m-%d")
 
 
-# Consumption-mode panels (CCI-09). Keep the mode catalog as the single
+# Consumption-mode panels. Keep the mode catalog as the single
 # source of truth so routes, templates, and tests discover the same modes.
 MODE_PANELS: tuple[dict[str, str], ...] = (
     {"mode": "cli", "label": "CLI", "template": "partials/mode_cli.html"},
@@ -81,7 +81,7 @@ def _as_int(value: Any, default: int = 0) -> int:
 
 
 def _mode_from_profile(profile: str | None) -> str | None:
-    """Map a CCI-04 profile name (for example claude-code-tui) to a mode."""
+    """Map a consumption-mode profile name (for example claude-code-tui) to a mode."""
     if not profile:
         return None
     normalized = profile.lower().strip()
@@ -95,7 +95,7 @@ def _mode_from_profile(profile: str | None) -> str | None:
 
 
 def _active_profile_from_env(default_mode: str = "cli") -> str:
-    """Return the CCI-04 profile label shown in the shared dashboard header."""
+    """Return the consumption-mode profile label shown in the shared dashboard header."""
     for key in ("TOKENPAK_ACTIVE_PROFILE", "TOKENPAK_PROFILE", "TOKENPAK_COMPANION_PROFILE"):
         value = os.environ.get(key)
         if value:
@@ -106,7 +106,7 @@ def _active_profile_from_env(default_mode: str = "cli") -> str:
 
 
 def _detect_active_mode() -> str:
-    """Infer the consumption mode from CCI-04 profile/env signals."""
+    """Infer the consumption mode from profile/env signals."""
     for key in (
         "TOKENPAK_ACTIVE_PROFILE",
         "TOKENPAK_PROFILE",
@@ -354,7 +354,7 @@ def dashboard_overview(
             raise HTTPException(status_code=404, detail=f"Unknown mode: {mode!r}")
         ctx = _mode_data(mode, q)
         return templates.TemplateResponse(request, "per_mode.html", ctx)
-    # Default: detect mode from environment (CCI-04 active profile)
+    # Default: detect mode from environment (active profile)
     detected = _detect_active_mode()
     ctx = _mode_data(detected, q)
     return templates.TemplateResponse(request, "per_mode.html", ctx)
@@ -562,7 +562,7 @@ def api_audit(
 
 @router.get("/settings/claude-code", response_class=HTMLResponse)
 def settings_claude_code(request: Request):
-    """CCI-13: Settings UI page for Claude Code integration."""
+    """Settings UI page for Claude Code integration."""
     ctx = load_settings_context()
     ctx["request"] = request
     ctx["page_title"] = "Claude Code Settings"
@@ -667,9 +667,17 @@ def htmx_settings_alerts(
         "TOKENPAK_CACHE_ALERT_THRESHOLD": cache_alert_threshold,
     }
     if cache_alert_webhook_url:
-        updates["TOKENPAK_CACHE_ALERT_WEBHOOK_URL"] = cache_alert_webhook_url
+        return HTMLResponse(
+            '<p class="settings-error">Webhook URL cannot be saved here. '
+            'Configure remote alert endpoints outside the dashboard.</p>',
+            status_code=422,
+        )
     if cache_alert_slack_channel:
-        updates["TOKENPAK_CACHE_ALERT_SLACK_CHANNEL"] = cache_alert_slack_channel
+        return HTMLResponse(
+            '<p class="settings-error">Slack destination cannot be saved here. '
+            'Configure alert delivery outside the dashboard.</p>',
+            status_code=422,
+        )
 
     errors = validate_settings(updates)
     if errors:

@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: read
@@ -73,6 +77,12 @@ jobs:
             'TIP7-[0-9]'
             'TRIX-MTC'
             'WS-[0-9]'
+            'CCG-[0-9]'
+            'CCP-[0-9]'
+            'VDS-[0-9]'
+            'FIN-[0-9]'
+            'TSG-[0-9]'
+            'TIP-[0-9][0-9]'
             '\.claude/projects'
             '/home/sue/'
             'trixxie168'
@@ -183,14 +193,37 @@ jobs:
                 -e 's/\bfleet\b/__GENERATED_SYMBOL_FLEET__/g' \
                 "$file"
             elif [ "$pat" = '\bfleet\b' ]; then
+              # Mask ONLY the public `tokenpak fleet` feature surface (the
+              # multi-machine proxy fleet CLI/config command and its docs):
+              # the CLI verb/flag/config file, the `fleet` subcommand literal
+              # and argument references, and the feature's own docstrings.
+              # Internal-execution senses ("agent fleet", "fleet worker",
+              # "fleet runtime", "fleet governor", "fleet agents", "bot fleet")
+              # are deliberately NOT masked and remain forbidden.
               sed -E \
                 -e 's/tokenpak[[:space:]]+fleet/tokenpak __PUBLIC_FLEET_VERB__/g' \
                 -e 's/--fleet([^a-zA-Z]|$)/--__PUBLIC_FLEET_FLAG__\1/g' \
                 -e 's/fleet\.yaml/__PUBLIC_FLEET_CONFIG__.yaml/g' \
-                -e 's/fleet[[:space:]]+(config|configuration|command|management)/__PUBLIC_FLEET_PHRASE__ \1/g' \
+                -e 's/fleet[[:space:]]+(config|configuration|command|management|rollup|status)/__PUBLIC_FLEET_PHRASE__ \1/g' \
+                -e 's/fleet-telemetry/__PUBLIC_FLEET_PHRASE__-telemetry/g' \
                 -e 's/fleet-wide/__PUBLIC_FLEET_PHRASE__-wide/g' \
                 -e 's/multi-instance[[:space:]]+fleet/multi-instance __PUBLIC_TMUX_MODE__/g' \
                 -e 's/multi-instance-fleet/multi-instance-__PUBLIC_TMUX_MODE__/g' \
+                -e 's/"fleet"/"__PUBLIC_FLEET_LITERAL__"/g' \
+                -e 's/fleet=/__PUBLIC_FLEET_KW__=/g' \
+                -e 's/if fleet:/if __PUBLIC_FLEET_PARAM__:/g' \
+                -e 's/fleet: bool/__PUBLIC_FLEET_PARAM__: bool/g' \
+                -e 's/a fleet of/a __PUBLIC_FLEET_PHRASE__ of/g' \
+                -e 's/proxy fleet/proxy __PUBLIC_FLEET_PHRASE__/g' \
+                -e 's/fleet manifest/__PUBLIC_FLEET_PHRASE__ manifest/g' \
+                -e 's/fleet automation/__PUBLIC_FLEET_PHRASE__ automation/g' \
+                -e 's/Current fleet/Current __PUBLIC_FLEET_PHRASE__/g' \
+                -e 's/fleet init/__PUBLIC_FLEET_PHRASE__ init/g' \
+                -e 's/agents in fleet/agents in __PUBLIC_FLEET_PHRASE__/g' \
+                -e 's/configured in fleet/configured in __PUBLIC_FLEET_PHRASE__/g' \
+                -e 's/cli\.fleet/cli.__PUBLIC_FLEET_MODULE__/g' \
+                -e 's/configure fleet/configure __PUBLIC_FLEET_PHRASE__/g' \
+                -e 's/=fleet\b/=__PUBLIC_FLEET_KW__/g' \
                 "$file"
             elif is_release_gate_impl_path "$file"; then
               # Tier 1 — release-gate implementation/test/workflow surface:
@@ -202,6 +235,42 @@ jobs:
               sed -E \
                 -e 's/\bStd 21\b/Std __PUBLIC_RELGATE_REF_21__/g' \
                 -e 's/\bStd 30\b/Std __PUBLIC_RELGATE_REF_30__/g' \
+                "$file"
+            elif [ "$pat" = '\bopenclaw\b' ]; then
+              # Functional-symbol mask (exact literals only). A few OpenClaw
+              # references are real, non-renamable API/wire/CLI symbols: the SDK
+              # module import paths, the x-openclaw-* request headers, the
+              # `openclaw` CLI subcommand literal, the `openclaw:main` caller
+              # form, and the `openclaw.json` config filename. Mask ONLY those
+              # exact strings so editing a file that contains them does not trip
+              # the \bopenclaw\b rule.
+              #
+              # Public-facing identity/workflow language stays forbidden. This
+              # is NOT a blanket "openclaw allowed" exemption and is NOT scoped
+              # to any one file: any other bare "openclaw" (prose, comments,
+              # new identifiers) in a changed file is still caught, because only
+              # these exact module/header/CLI literals are masked. Human-facing
+              # prose uses the CamelCase "OpenClaw" brand, which is not matched
+              # by the lowercase \bopenclaw\b rule and needs no mask.
+              sed -E \
+                -e 's/tokenpak\.sdk\.openclaw/tokenpak.sdk.__FUNC_OPENCLAW_MODULE__/g' \
+                -e 's/tokenpak\.creds\.providers\.openclaw/tokenpak.creds.providers.__FUNC_OPENCLAW_MODULE__/g' \
+                -e 's/x-openclaw-session/x-__FUNC_OPENCLAW_HEADER__-session/g' \
+                -e 's/x-openclaw-workspace/x-__FUNC_OPENCLAW_HEADER__-workspace/g' \
+                -e 's/"openclaw"/"__FUNC_OPENCLAW_LITERAL__"/g' \
+                -e 's/openclaw:main/__FUNC_OPENCLAW_CALLER__:main/g' \
+                -e 's/openclaw\.json/__FUNC_OPENCLAW_CONFIG__.json/g' \
+                "$file"
+            elif [ "$pat" = '\.claude/projects' ]; then
+              # The Claude Code transcript source adapter legitimately reads the
+              # user's local Claude Code transcript directory
+              # (~/.claude/projects/<project-slug>/<session>.jsonl). That exact
+              # external-tool path is functional public surface and must stay
+              # visible to users in docs/code. Mask ONLY that literal path so it
+              # does not trip the \.claude/projects rule. Any other
+              # .claude/projects reference is still caught.
+              sed -E \
+                -e 's#~/\.claude/projects#~/__FUNC_CLAUDE_TRANSCRIPT_DIR__#g' \
                 "$file"
             else
               cat "$file"

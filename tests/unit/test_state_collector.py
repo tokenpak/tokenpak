@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Tests for tokenpak.agentic.state_collector."""
 
 from __future__ import annotations

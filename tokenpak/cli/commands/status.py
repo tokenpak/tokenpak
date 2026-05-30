@@ -430,6 +430,25 @@ def _shorten_model(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# --since=Nd parser helper
+# ---------------------------------------------------------------------------
+
+
+def _parse_since(since: str) -> int:
+    """Parse '--since' value like '7d', '14d', '1d' → integer days."""
+    s = since.strip().lower()
+    if s.endswith("d"):
+        try:
+            return max(1, int(s[:-1]))
+        except ValueError:
+            pass
+    try:
+        return max(1, int(s))
+    except ValueError:
+        return 7
+
+
+# ---------------------------------------------------------------------------
 # Savings-first default output (v3 layout)
 # ---------------------------------------------------------------------------
 
@@ -446,6 +465,8 @@ def run(
     db_path: Optional[str] = None,
     days: int = 0,
     hours: int = 0,
+    fleet: bool = False,
+    since: Optional[str] = None,
 ) -> None:
     """Print savings-first status to stdout.
 
@@ -457,7 +478,13 @@ def run(
       --json         Machine-readable JSON dump
       --days N       Filter to last N days
       --hours N      Filter to last N hours (combinable with --days)
+      --fleet        Fleet rollup view (reads rollup_daily table)
+      --since Nd     With --fleet: window in days (e.g. '7d')
     """
+    if fleet:
+        from tokenpak.cli._impl import run_fleet
+        since_days = _parse_since(since) if since else (days if days > 0 else 7)
+        return run_fleet(since_days=since_days, as_json=as_json, db_path=db_path)
     if as_json:
         return _run_json(proxy_base=proxy_base, db_path=db_path)
     if minimal:
@@ -1133,6 +1160,8 @@ if HAS_CLICK:
     @click.option("--db", "db_path", default=None, help="Monitor DB path override")
     @click.option("--days", default=0, type=int, help="Filter to last N days (combinable with --hours)")
     @click.option("--hours", default=0, type=int, help="Filter to last N hours (combinable with --days)")
+    @click.option("--fleet", is_flag=True, help="Fleet rollup view — reads rollup_daily")
+    @click.option("--since", default=None, help="With --fleet: window in days, e.g. '7d' (default: 7d)")
     def status_cmd(
         proxy: str,
         full: bool,
@@ -1143,12 +1172,15 @@ if HAS_CLICK:
         db_path: Optional[str],
         days: int,
         hours: int,
+        fleet: bool,
+        since: Optional[str],
     ) -> None:
         """Show savings report (default) or full technical status.
 
         Default output leads with dollar savings — the number that matters.
         Use --full for the legacy technical output.
         Use --days and --hours to filter to a specific time window.
+        Use --fleet to show the fleet rollup table (reads rollup_daily).
 
         Examples:
 
@@ -1160,6 +1192,9 @@ if HAS_CLICK:
           tokenpak status --full              # legacy technical output
           tokenpak status --minimal           # one-liner for scripts
           tokenpak status --json              # machine-readable
+          tokenpak status --fleet             # fleet rollup (last 7d)
+          tokenpak status --fleet --since 7d  # fleet rollup (last 7d)
+          tokenpak status --fleet --json      # fleet rollup as JSON
         """
         run(
             proxy_base=proxy,
@@ -1171,4 +1206,6 @@ if HAS_CLICK:
             db_path=db_path,
             days=days,
             hours=hours,
+            fleet=fleet,
+            since=since,
         )

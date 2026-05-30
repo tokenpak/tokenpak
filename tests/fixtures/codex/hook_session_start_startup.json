@@ -1,0 +1,9 @@
+{
+  "session_id": "fixture-session-start-startup",
+  "transcript_path": "",
+  "cwd": "/tmp/tp-l2a-fixture",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-5",
+  "source": "startup",
+  "permission_mode": "default"
+}

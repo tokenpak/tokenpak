@@ -1,5 +1,5 @@
 """
-Tests for tokenpak.validation.response_schema module.
+Tests for tokenpak.core.validation.response_schema module.
 
 Coverage targets:
 - RESPONSE_SCHEMA structure and required fields
@@ -12,7 +12,7 @@ Coverage targets:
 
 import pytest
 
-from tokenpak.validation.response_schema import (
+from tokenpak.core.validation.response_schema import (
     RESPONSE_SCHEMA,
     RESPONSE_SCHEMA_MINIMAL,
     get_schema,

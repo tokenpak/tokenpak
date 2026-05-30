@@ -3,7 +3,7 @@
 > Deterministic context compression for LLMs. Save 30–60% on token costs automatically.
 
 [![npm version](https://badge.fury.io/js/tokenpak.svg)](https://www.npmjs.com/package/tokenpak)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ## Installation
 
@@ -258,4 +258,4 @@ import type {
 
 ## License
 
-MIT © Kevin Yang
+Apache-2.0 — see [LICENSE](../LICENSE)

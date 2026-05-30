@@ -1,10 +1,9 @@
 name: Performance Benchmarks
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
 
 # Cancel in-progress runs for the same PR/branch
 concurrency:

@@ -1,10 +1,21 @@
 <!DOCTYPE html>
 <html>
-<head><title>TokenPak — Compression Savings</title></head>
+<head><title>TokenPak — Savings Ledger</title></head>
 <body>
-  <h1>Compression Savings</h1>
+  <h1>Savings Ledger</h1>
+  <p>Aggregate view of tokens, costs, and savings from Prompt Packing.</p>
   {% if savings is defined and savings %}
   <p>Tokens saved: {{ savings.tokens_saved | default(0) }}</p>
   {% endif %}
+
+  <section>
+    <h2>Savings Trace</h2>
+    <p class="empty-state">Per-request Savings Trace rows appear here once requests have been processed. Each row explains what Prompt Packing did on one request (stages applied, tokens before/after, cache origin).</p>
+  </section>
+
+  <section>
+    <h2>Cache Ledger</h2>
+    <p class="empty-state">Cache Ledger splits cache savings by origin (TokenPak cache vs. provider cache). Populates once cache_origin telemetry is available.</p>
+  </section>
 </body>
 </html>

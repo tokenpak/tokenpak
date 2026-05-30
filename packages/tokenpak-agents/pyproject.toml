@@ -9,7 +9,8 @@ description = "Unified TokenPak integrations for CrewAI, AutoGen, and Semantic K
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "TokenPak Team" }]
-dependencies = ["tokenpak-sdk>=0.1.0"]
+license = { text = "Apache-2.0" }
+dependencies = ["tokenpak>=1.5.0"]
 
 [project.optional-dependencies]
 crewai = ["crewai>=0.1.0"]

@@ -1,0 +1,96 @@
+name: 🧪 Beta Feedback
+description: Overall experience feedback — what worked, what surprised you, what felt off
+title: "[BETA] "
+labels: [beta-feedback]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is for **experience feedback** during the OSS beta — not specific bugs or feature proposals.
+        Tell us what your first day with TokenPak was like.
+
+        - For a reproducible bug, use the **Bug Report** template instead.
+        - For a concrete feature proposal, use the **Feature Request** template instead.
+        - For open-ended questions, use [GitHub Discussions](https://github.com/tokenpak/tokenpak/discussions).
+
+  - type: dropdown
+    id: how-long
+    attributes:
+      label: How long have you been using TokenPak?
+      options:
+        - "Less than 1 day"
+        - "1–3 days"
+        - "About a week"
+        - "2+ weeks"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Primary workflow tested
+      description: Pick the workflow you used most. If multiple, file separate Beta Feedback issues.
+      options:
+        - "Direct-API agent loop (LangChain / LlamaIndex / custom)"
+        - "Coding assistant (Claude Code, Cursor, Aider, Cline, Continue, Codex)"
+        - "Long multi-turn session"
+        - "CLI / SDK script"
+        - "Spend Guard"
+        - "Vault indexing + semantic search"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: worked
+    attributes:
+      label: What worked well?
+      description: What clicked for you immediately or saved you time?
+    validations:
+      required: true
+
+  - type: textarea
+    id: surprised
+    attributes:
+      label: What surprised you (good or bad)?
+      description: Anything you didn't expect — behavior, output, savings number, dashboard view, error message, anything
+    validations:
+      required: false
+
+  - type: textarea
+    id: friction
+    attributes:
+      label: Where did you hit friction?
+      description: Install, setup wizard, client integration, docs gap, missing CLI flag, confusing error — anything
+    validations:
+      required: true
+
+  - type: textarea
+    id: savings
+    attributes:
+      label: Observed savings
+      description: What does `tokenpak savings` show after your testing? Rough numbers are fine. Include whether the workload was direct-API or provider-cached if you know.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: would-recommend
+    attributes:
+      label: Would you recommend TokenPak to a colleague today?
+      options:
+        - "Yes — as-is"
+        - "Yes — with caveats"
+        - "Maybe — needs more polish"
+        - "Not yet"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: TokenPak version
+      description: Output of `tokenpak --version`
+      placeholder: "tokenpak 1.5.6"
+    validations:
+      required: true
