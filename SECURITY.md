@@ -1,7 +1,7 @@
 # Security Policy
 
 ## Reporting a Vulnerability
-If you discover a security issue, please email **security@tokenpak.dev**. Do not open a public issue.
+If you discover a security issue, please email **hello@tokenpak.ai**. Do not open a public issue.
 
 ## Responsible Disclosure
 We follow a 90‑day disclosure timeline:
