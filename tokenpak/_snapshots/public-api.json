@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-25T16:52:18Z",
+  "generated_at": "2026-05-30T16:37:44Z",
   "package_version": "1.7.0",
   "symbols": [
     {
@@ -354,6 +354,10 @@
     {
       "module": "tokenpak.cache.telemetry",
       "name": "get_collector"
+    },
+    {
+      "module": "tokenpak.cache.telemetry",
+      "name": "parse_ttl_attribution"
     },
     {
       "module": "tokenpak.cache.telemetry",
@@ -7849,7 +7853,15 @@
     },
     {
       "module": "tokenpak.proxy.cache_poison",
+      "name": "CacheMissDiagnosis"
+    },
+    {
+      "module": "tokenpak.proxy.cache_poison",
       "name": "classify_cache_miss_reason"
+    },
+    {
+      "module": "tokenpak.proxy.cache_poison",
+      "name": "diagnose_cache_miss"
     },
     {
       "module": "tokenpak.proxy.cache_poison",
