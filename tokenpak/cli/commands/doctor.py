@@ -1053,10 +1053,10 @@ def run_doctor(
                 detail="TMUX env var not set; no concurrent-access advisory needed.",
             )
 
-        # === CCI-12: 8-point Claude Code operational health checks ================
+        # === 8-point Claude Code operational health checks ======================
         if not output_json:
             print()
-            print("── Claude Code operational checks (CCI-12) ─────")
+            print("── Claude Code operational checks ─────")
         from .doctor_claude_code import run_claude_code_checks
         cc_fail_count, cc_results = run_claude_code_checks(output_json=output_json, verbose=verbose)
         for result in cc_results:

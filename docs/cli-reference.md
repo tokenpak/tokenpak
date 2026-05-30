@@ -79,7 +79,7 @@ Check proxy health
 - `--no-meme` — Suppress tagline
 - `--days` — Filter to last N days (combinable with --hours)
 - `--hours` — Filter to last N hours (combinable with --days)
-- `--fleet` — Fleet rollup view — reads rollup_daily (FTA-06)
+- `--fleet` — Fleet rollup view — reads rollup_daily
 - `--since` — With --fleet: window in days, e.g. '7d' (default: 7d)
 
 ### `tokenpak logs`
