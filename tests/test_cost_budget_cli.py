@@ -16,6 +16,23 @@ import pytest
 # Helpers to wire the module to a temp DB
 # ---------------------------------------------------------------------------
 
+# A fixed reference "today" used by the date-relative fixtures below. It is
+# pinned to a mid-month, mid-week date so that "today" and "yesterday" always
+# fall in the same calendar month AND the same rolling 7-day window, regardless
+# of the real wall-clock date the suite runs on. Without this, the fixture's
+# "yesterday" row crosses the month boundary on the 1st of any month and the
+# "month" window query drops it (the failure mode this guard prevents).
+_FROZEN_TODAY = date(2026, 6, 15)
+
+
+class _FrozenDate(date):
+    """date subclass whose today() returns the fixed reference date."""
+
+    @classmethod
+    def today(cls):
+        return _FROZEN_TODAY
+
+
 @pytest.fixture
 def temp_db(tmp_path):
     """Create a temp monitor.db with schema + sample rows."""
@@ -42,8 +59,8 @@ def temp_db(tmp_path):
             cache_creation_tokens INTEGER
         )
     """)
-    today = date.today().isoformat()
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    today = _FROZEN_TODAY.isoformat()
+    yesterday = (_FROZEN_TODAY - timedelta(days=1)).isoformat()
     rows = [
         (f"{today}T10:00:00", "claude-sonnet-4-6", "chat", 1000, 100, 0.003, 300, 200, "https://api.anthropic.com/v1/messages", "hybrid", 900, 100, 200, None, 500, 50),
         (f"{today}T11:00:00", "claude-haiku-4-5",  "chat",  500,  50, 0.001, 200, 200, "https://api.anthropic.com/v1/messages", "hybrid", 400,  50, 100, None, 200, 20),
@@ -66,7 +83,8 @@ def cost_mod(temp_db):
 
     import tokenpak.cli.commands.cost as cost
     importlib.reload(cost)
-    with patch.object(cost, "_MONITOR_DB", temp_db):
+    with patch.object(cost, "_MONITOR_DB", temp_db), \
+         patch.object(cost, "date", _FrozenDate):
         yield cost
 
 
@@ -79,7 +97,8 @@ def budget_mod(temp_db, tmp_path):
     importlib.reload(budget)
     cfg_path = tmp_path / "budget_config.yaml"
     with patch.object(budget, "_MONITOR_DB", temp_db), \
-         patch.object(budget, "_BUDGET_CONFIG", cfg_path):
+         patch.object(budget, "_BUDGET_CONFIG", cfg_path), \
+         patch.object(budget, "date", _FrozenDate):
         yield budget, cfg_path
 
 
