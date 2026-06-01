@@ -220,6 +220,28 @@ class ActivationResult:
     error: Optional[str] = None
 
 
+# Explicit, unmistakable prefix for the dev-shim activation path. Chosen so a
+# real purchased key can never accidentally trip the shim, and so the bypass
+# is greppable in any stored license.json (mirrors the manual temp-gate's
+# ``LOCAL-DEV-TEMP-NOT-A-REAL-KEY`` marker).
+_DEVSHIM_PREFIX = "TPK-DEVSHIM-"
+
+
+def _devshim_tier(key: str) -> str:
+    """Parse the requested tier out of a dev-shim key.
+
+    Shape: ``TPK-DEVSHIM-<TIER>-<anything>``. Recognizes any *paid* tier
+    name from the canonical tier constants (no separate hardcoded list,
+    per ``feedback_always_dynamic``); defaults to Pro when no tier segment
+    is present.
+    """
+    paid = {TIER_PRO, TIER_TEAM, TIER_ENTERPRISE}
+    for segment in key.lower().split("-"):
+        if segment in paid:
+            return segment
+    return TIER_PRO
+
+
 def activate(key: str, *, email: str = "") -> ActivationResult:
     """Store a license key for future validation.
 
@@ -238,6 +260,20 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
     Important: this function does NOT grant Pro entitlements on its
     own. It is a *store-and-stage* step. ``is_feature_enabled`` is the
     single choke point that decides what a key buys.
+
+    Two paths *can* produce an active paid tier:
+
+    1. **Daemon-verified (production):** ``_consult_daemon_for_tier``
+       below asks the local Pro daemon's ``/v1/features`` endpoint and
+       upgrades the stored license only on a verified, non-placeholder
+       signature. This is the real path; it is fail-closed.
+    2. **Dev shim (local development only):** when the environment sets
+       ``TOKENPAK_LICENSE_DEV_SHIM=1`` *and* the key starts with
+       ``TPK-DEVSHIM-``, activation writes ``status="active"`` at the
+       requested tier locally, bypassing the daemon. This is OFF by
+       default and exists purely so the activation path is reproducible
+       in tests/dev without K3 signing-key material. OSS users never see
+       it unless they explicitly opt in.
     """
     import re
 
@@ -280,6 +316,50 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
             error="placeholder_key",
         )
     import datetime
+
+    # ── Dev-shim activation (offline Pro local-daemon acceptance path) ───
+    # When TOKENPAK_LICENSE_DEV_SHIM=1 AND the key carries the explicit
+    # TPK-DEVSHIM- prefix, activate the requested tier locally WITHOUT a
+    # daemon round-trip. This makes the Pro activation path reproducible
+    # for testing without provisioning signing-key material or standing up
+    # a Pro daemon, and lets us retire the hand-edited ~/.tokenpak/license.json
+    # temp gate.
+    #
+    # PUBLIC SAFETY: OFF by default. With the env var unset (the only state
+    # OSS users ever see) this block is skipped entirely and activation falls
+    # through to the fail-closed daemon-consultation path below. A hand-edited
+    # license.json still never unlocks Pro — is_feature_enabled remains the
+    # choke point; only this explicitly-opted-in dev path or a daemon-verified
+    # signature can set status="active" at a paid tier.
+    if (
+        os.environ.get("TOKENPAK_LICENSE_DEV_SHIM") == "1"
+        and key.upper().startswith(_DEVSHIM_PREFIX)
+    ):
+        shim_tier = _devshim_tier(key)
+        lic = License(
+            tier=shim_tier,
+            key=key,
+            activated_at=datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            email=email,
+            status="active",
+        )
+        try:
+            save_license(lic)
+        except Exception as exc:
+            return ActivationResult(
+                ok=False, summary="Could not write license file.", error=str(exc),
+            )
+        return ActivationResult(
+            ok=True,
+            license=lic,
+            summary=(
+                f"License activated via DEV SHIM (TOKENPAK_LICENSE_DEV_SHIM=1) "
+                f"at tier={lic.tier}. This is a local development bypass, NOT a "
+                f"real entitlement — unset the env var and run 'tokenpak "
+                f"deactivate' to revert to Free."
+            ),
+        )
+
     lic = License(
         tier=TIER_FREE,                    # validator upgrades this once wired
         key=key,
