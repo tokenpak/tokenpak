@@ -360,7 +360,7 @@ Before marking complete, ensure:
 
 ## QA Sign-Off
 
-**Tested By**: [Sue or QA person]
+**Tested By**: [maintainer or QA]
 **Date**: [YYYY-MM-DD]
 **Result**: ✅ PASS / ❌ FAIL
 

@@ -1,8 +1,8 @@
 # Companion Probe Results
 
-**Task:** COMP-02 — Verify hook pipeline in real TUI session  
+**Task:** Verify the companion hook pipeline in a real TUI session  
 **Date:** 2026-04-14  
-**Tester:** Trix (Claude Code v2.1.104 on <dev-host>)  
+**Tester:** maintainer (Claude Code v2.1.104 on <dev-host>)  
 **Method:** `--include-hook-events --output-format stream-json` via `run_probe.sh`
 
 ---
@@ -34,7 +34,7 @@ All four tests pass. The tokenpak companion hook pipeline is viable.
 ```
 session_id:      0d64b7ea-...
 hook_event_name: UserPromptSubmit
-transcript_path: /home/trix/.claude/projects/.../0d64b7ea-....jsonl
+transcript_path: <home>/.claude/projects/.../0d64b7ea-....jsonl
 transcript readable: YES
 exit 0 (allow send)
 ```
@@ -82,8 +82,8 @@ The send was blocked: `num_turns: 0`, `total_cost_usd: 0`. No API call was made.
 ```json
 {
   "session_id": "0d64b7ea-...",
-  "transcript_path": "/home/trix/.claude/projects/.../0d64b7ea-....jsonl",
-  "cwd": "/home/trix/vault",
+  "transcript_path": "<home>/.claude/projects/.../0d64b7ea-....jsonl",
+  "cwd": "<home>/vault",
   "permission_mode": "bypassPermissions",
   "hook_event_name": "UserPromptSubmit",
   "prompt": "BLOCK_TEST"

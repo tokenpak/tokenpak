@@ -90,11 +90,11 @@ The host gateway is never affected by adapter failures; absence of
 ## Source of truth
 
 - Repo: `tokenpak/integrations/openclaw/hooks/openclaw-adapter/`
-- Handler: `handler.js` (OAS-02) — schema authority for `active.json` payload shape
+- Handler: `handler.js` — schema authority for `active.json` payload shape
 - Initiative: `2026-04-28-openclaw-adapter-session-binding` (Path C)
 - Phase A finding: `PHASE-A-MEMO.md`
 - Spec: `03-SPEC.md §Component 2`
-- Proxy-side reader: OAS-11 (`platform_bridge.py _openclaw_extract`)
+- Proxy-side reader: `platform_bridge.py _openclaw_extract`
 
 ## Revert
 

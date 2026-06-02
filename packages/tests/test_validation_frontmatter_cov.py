@@ -195,37 +195,37 @@ class TestAssignedToNormalization:
 
     def test_assigned_to_list_normalized(self):
         """assigned_to list is normalized to list of strings."""
-        yaml_block = "assigned_to:\n  - Sue\n  - Trix\n"
+        yaml_block = "assigned_to:\n  - alice\n  - bob\n"
         data, diag = parse_frontmatter(yaml_block)
-        assert data["assigned_to"] == ["Sue", "Trix"]
+        assert data["assigned_to"] == ["alice", "bob"]
         assert "assigned_to" in diag.normalized_fields
 
     def test_assigned_to_comma_separated(self):
         """assigned_to comma-separated string is split."""
-        yaml_block = "assigned_to: Sue, Trix, Cali\n"
+        yaml_block = "assigned_to: alice, bob, carol\n"
         data, diag = parse_frontmatter(yaml_block)
-        assert data["assigned_to"] == ["Sue", "Trix", "Cali"]
+        assert data["assigned_to"] == ["alice", "bob", "carol"]
         assert "assigned_to" in diag.normalized_fields
 
     def test_assigned_to_single_string_not_normalized(self):
         """Single string without comma is not converted to list (unless duplicate key)."""
-        yaml_block = "assigned_to: Sue\n"
+        yaml_block = "assigned_to: alice\n"
         data, diag = parse_frontmatter(yaml_block)
         # Without comma and no duplicate, should stay as-is
-        assert data["assigned_to"] == "Sue"
+        assert data["assigned_to"] == "alice"
 
     def test_assigned_to_whitespace_trimmed(self):
         """Whitespace is trimmed from assigned_to values."""
-        yaml_block = "assigned_to:  Sue  ,  Trix  \n"
+        yaml_block = "assigned_to:  alice  ,  bob  \n"
         data, diag = parse_frontmatter(yaml_block)
-        assert data["assigned_to"] == ["Sue", "Trix"]
+        assert data["assigned_to"] == ["alice", "bob"]
 
     def test_assigned_to_empty_values_filtered(self):
         """Empty values in assigned_to are filtered out."""
-        yaml_block = "assigned_to: Sue, , , Trix\n"
+        yaml_block = "assigned_to: alice, , , bob\n"
         data, diag = parse_frontmatter(yaml_block)
         assert "" not in data["assigned_to"]
-        assert data["assigned_to"] == ["Sue", "Trix"]
+        assert data["assigned_to"] == ["alice", "bob"]
 
 
 # ---------------------------------------------------------------------------

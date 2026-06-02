@@ -34,7 +34,7 @@ A future Pro-side CI matrix can run the union by overriding `norecursedirs` in a
 | `test_stats_footer.py` | OSS stats-footer rendering tests | Reads `tokenpak._internal.config.get_stats_footer_enabled()` |
 | `test_metrics_reporter.py` | OSS anonymous-metrics reporter tests | `mock.patch("tokenpak._internal.config.get_metrics_enabled")` |
 | `proxy/test_budget_enforcement.py` | OSS proxy budget-enforcement tests | Reads `tokenpak._internal.config.BUDGET_*` constants |
-| `cli/test_metrics_mode_fields.py` | OSS metrics mode-detection tests (record-stores-mode subset; the schema and pure-detect carve-outs live at `tests/cli/test_anon_metrics_schema.py` and `tests/cli/test_consumption_mode_detect.py` per TSR-03 + TSR-04) | `mock.patch("tokenpak._internal.config.get_metrics_enabled")` plus `from tokenpak._internal.config import get_active_profile` |
+| `cli/test_metrics_mode_fields.py` | OSS metrics mode-detection tests (record-stores-mode subset; the schema and pure-detect carve-outs live at `tests/cli/test_anon_metrics_schema.py` and `tests/cli/test_consumption_mode_detect.py`) | `mock.patch("tokenpak._internal.config.get_metrics_enabled")` plus `from tokenpak._internal.config import get_active_profile` |
 
 ## What does NOT live here
 
@@ -44,14 +44,14 @@ Tests that have only a **partial** runtime dependency on `_internal` (where most
 
 - **Std 25 §1.1** — declares `tokenpak._internal/*` closed-source per the Pro-tier boundary
 - **Std 32 §1.3** — slim-OSS surface excludes `tokenpak._internal/*`
-- **Initiative `2026-05-08-release-test-suite-recovery` Phase 4** (TSR-07) — relocated this directory + added the `pyproject.toml` `norecursedirs` exclusion
+- **Release-test-suite-recovery, Phase 4** — relocated this directory + added the `pyproject.toml` `norecursedirs` exclusion
 
 ## Lessons recorded
 
 The `88d3d9deb0` `_internal/` cleanup refactor stripped public-OSS adjacent code on two distinct occasions:
 
-1. **TSR-03** — `MetricsRecord` v1.1 schema fields (`active_profile`, `consumption_mode`, `SCHEMA_VERSION="1.1"`, SQLite migration)
-2. **TSR-04** — `tokenpak.telemetry.anon_metrics.detect_consumption_mode()` function
+1. The `MetricsRecord` v1.1 schema fields (`active_profile`, `consumption_mode`, `SCHEMA_VERSION="1.1"`, SQLite migration)
+2. The `tokenpak.telemetry.anon_metrics.detect_consumption_mode()` function
 
 Both restorations are now complete. Std 25 §1.4 amendment proposal queued at `~/vault/02_COMMAND_CENTER/proposals/2026-05-08-std-25-boundary-refactor-safety-amendment.md` to formalize the refactor-safety rule that would have prevented these regressions.
 

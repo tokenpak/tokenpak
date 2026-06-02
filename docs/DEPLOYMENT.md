@@ -393,7 +393,7 @@ upstream tokenpak {
 
 server {
  listen 443 ssl;
- server_name tokenpak.internal;
+ server_name tokenpak.example;
 
  ssl_certificate /etc/nginx/certs/tokenpak.crt;
  ssl_certificate_key /etc/nginx/certs/tokenpak.key;
