@@ -59,7 +59,7 @@ class InMemoryBackend(RetrievalBackendBase):
             {
                 "block_id": "api-compression",
                 "source_path": "docs/api.md",
-                "content": "The compression pipeline reduces prompt tokens by 40-60%.",
+                "content": "The compression pipeline reduces prompt tokens.",
                 "raw_tokens": 12,
             },
         ]

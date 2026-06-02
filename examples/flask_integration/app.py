@@ -6,7 +6,7 @@ TokenPak as a Flask decorator and before_request hook.
 Problem: Flask LLM apps send verbose prompts, wasting token budget.
 Solution: A decorator + before_request hook that compresses text fields automatically.
 
-Expected savings: 30-60% on prose inputs.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak flask
 """
 

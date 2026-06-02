@@ -11,7 +11,7 @@ Problem: Real-time data streams (logs, live APIs, file tails) produce
 Solution: A StreamingCompressor that buffers, compresses in chunks,
           and yields compressed output with stats.
 
-Expected savings: 40-65% on verbose log/prose streams.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak
 """
 

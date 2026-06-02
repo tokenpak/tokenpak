@@ -12,11 +12,11 @@
 
 ## Expected Results
 
-| Content Type | Typical Savings |
+| Content Type | Relative Savings |
 |---|---|
-| Verbose prose | 40–60% |
-| Over-commented code | 30–50% |
-| Instruction lists | 20–40% |
+| Verbose prose | High |
+| Over-commented code | Moderate |
+| Instruction lists | Low–Moderate |
 
 ## Setup
 

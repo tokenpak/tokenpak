@@ -9,7 +9,7 @@ Problem: Claude's API charges per token. Long conversation histories
 Solution: TokenPak wrapper for the Anthropic client that compresses
           older messages while preserving recent context.
 
-Expected savings: 30-60% on typical conversation histories.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak anthropic
 """
 

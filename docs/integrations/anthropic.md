@@ -59,11 +59,11 @@ client = anthropic.Anthropic(
 )
 ```
 
-| Mode | Description | Savings |
+| Mode | Description | Relative savings |
 |------|-------------|---------|
-| `hybrid` | Smart compression (default) | ~40-60% |
-| `aggressive` | Maximum compression | ~60-80% |
-| `off` | Passthrough only | 0% |
+| `hybrid` | Smart compression (default) | Moderate–High |
+| `aggressive` | Maximum compression | High |
+| `off` | Passthrough only | None |
 
 ## Config Example
 

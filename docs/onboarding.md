@@ -112,7 +112,7 @@ This shows your cumulative savings since install: total tokens saved, estimated 
 
 ### What to Look For
 
-A healthy setup saves 20–50% tokens on typical mixed workloads. If you're seeing less than 15%, check these:
+A healthy setup measurably reduces tokens on typical mixed workloads — check your own with `tokenpak savings`. If you're seeing little or no reduction, check these:
 
 - Is compression set to `balanced` or `aggressive` mode? (Check `~/.tokenpak/config.json`, key `compression.level`)
 - Are your requests using long system prompts or repetitive context? Those compress best.

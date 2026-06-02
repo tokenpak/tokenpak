@@ -429,7 +429,7 @@ Open source (MIT). All features included: CLI, text processing, compression, QMD
 ### Phase 1 (Month 1) — Validation
 - [ ] `tokenpak index` processes 1000+ files
 - [ ] QMD search returns relevant results across file types
-- [ ] 50%+ token reduction on real workloads (proven: 70.5% with QMD alone)
+- [ ] Meaningful token reduction on real workloads (validate via `make benchmark-headline`)
 - [ ] Proxy monitors all traffic (proven ✅)
 
 ### Phase 2 (Month 2) — Multimodal

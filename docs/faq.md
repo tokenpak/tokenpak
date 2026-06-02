@@ -8,12 +8,12 @@
 
 It depends on your usage pattern:
 
-| Use case | Typical savings |
+| Use case | Relative savings |
 |---|---|
-| Short Q&A / chat | 5–15% |
-| Code review with large context | 30–50% |
-| Long document analysis | 40–60% |
-| Codebase search + compressed context | Up to 84% (with vault indexing) |
+| Short Q&A / chat | Minimal |
+| Code review with large context | Moderate |
+| Long document analysis | High |
+| Codebase search + compressed context | High (with vault indexing) |
 
 Compression only activates above the threshold (default: 4,500 tokens). Small requests pass through unchanged.
 

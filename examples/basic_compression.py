@@ -64,7 +64,7 @@ def main():
         # Use sample text (documentation about TokenPak)
         text = """
         TokenPak is a context compression library designed for LLM agents.
-        It reduces token usage by 40-60% while preserving semantic meaning.
+        It reduces token usage while preserving semantic meaning.
         
         The library works with any LLM provider: OpenAI, Anthropic, Google,
         local models, and more. It uses heuristic-based compression to identify

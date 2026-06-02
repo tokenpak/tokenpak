@@ -9,7 +9,7 @@ Problem: LangChain chains pass verbose documents, chat history, and
 Solution: A TokenPak-backed message history class and a compression
           utility for document retrieval pipelines.
 
-Expected savings: 40-60% on retrieved documents, 30-50% on chat history.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak langchain langchain-core
 """
 

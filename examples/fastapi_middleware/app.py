@@ -6,7 +6,7 @@ TokenPak as FastAPI middleware — automatic request body compression.
 Problem: LLM-facing FastAPI apps receive verbose user inputs that inflate token costs.
 Solution: Middleware intercepts requests and compresses prompt fields transparently.
 
-Expected savings: 30-60% on prose inputs.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak fastapi uvicorn
 """
 

@@ -6,7 +6,7 @@ Compress large database result sets before passing to LLMs for analysis.
 Problem: SQL query results (especially verbose JSON/text columns) can blow token budgets.
 Solution: Compress result sets while preserving structure and key data.
 
-Expected savings: 40-65% on typical database output.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak
 """
 

@@ -359,12 +359,12 @@ Controls how the pack is compacted when it exceeds token budgets.
 
 ### Compaction Modes
 
-| Mode | Description | Reduction | Deterministic |
+| Mode | Description | Relative reduction | Deterministic |
 |------------|------------------------------------|-----------|---------------|
-| lossless | Whitespace/formatting only | 0–10% | ✅ |
-| balanced | Smart compression, preserves facts | 30–50% | ✅ |
-| aggressive | Maximum token reduction | 50–70% | ✅ |
-| semantic | Embedding-guided summarization | 60–80% | ❌ |
+| lossless | Whitespace/formatting only | Minimal | ✅ |
+| balanced | Smart compression, preserves facts | Moderate | ✅ |
+| aggressive | Maximum token reduction | High | ✅ |
+| semantic | Embedding-guided summarization | Maximum | ❌ |
 
 ---
 

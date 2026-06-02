@@ -2,7 +2,7 @@
 
 **Problem:** Long chat histories consume massive token budgets. A 50-turn conversation can eat 10,000+ tokens, leaving little room for new content and driving up API costs.
 
-**Solution:** Compress older turns while preserving recent context. TokenPak's `HeuristicEngine` compresses older messages by 40-70%, making space for continued conversation.
+**Solution:** Compress older turns while preserving recent context. TokenPak's `HeuristicEngine` compresses older messages substantially, making space for continued conversation.
 
 ## What This Shows
 
@@ -13,11 +13,11 @@
 
 ## Expected Results
 
-| History Length | Typical Savings |
+| History Length | Relative Savings |
 |---|---|
-| 10 turns | 30–50% |
-| 20 turns | 50–65% |
-| 50 turns | 60–75% |
+| 10 turns | Moderate |
+| 20 turns | High |
+| 50 turns | Very high |
 
 ## Setup
 

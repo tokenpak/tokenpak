@@ -205,7 +205,7 @@ def demo_rag_pipeline():
         retrieved_docs = [
             "TokenPak is an open protocol for compressing context sent to LLMs.",
             "It uses structured blocks to prioritize important information.",
-            "TokenPak reduces token usage by 40-60% in typical RAG workloads.",
+            "TokenPak reduces token usage in typical RAG workloads.",
             "The protocol is model-agnostic and works with any LLM API.",
         ]
 

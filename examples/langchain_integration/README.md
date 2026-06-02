@@ -1,6 +1,6 @@
 # LangChain Integration Example
 
-**Problem:** LangChain chains pass verbose documents, chat history, and retrieved context to LLMs — often wasting 40-60% of tokens on redundant content.
+**Problem:** LangChain chains pass verbose documents, chat history, and retrieved context to LLMs — often wasting a large share of tokens on redundant content.
 
 **Solution:** Drop-in TokenPak-backed components:
 - `TokenPakChatMessageHistory`: Compresses older turns automatically

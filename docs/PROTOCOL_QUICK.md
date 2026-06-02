@@ -48,12 +48,12 @@
 
 ## Compaction Modes
 
-| Mode | Reduction | Deterministic |
+| Mode | Relative reduction | Deterministic |
 |--------------|-----------|---------------|
-| `lossless` | 0–10% | ✅ |
-| `balanced` | 30–50% | ✅ |
-| `aggressive` | 50–70% | ✅ |
-| `semantic` | 60–80% | ❌ |
+| `lossless` | Minimal | ✅ |
+| `balanced` | Moderate | ✅ |
+| `aggressive` | High | ✅ |
+| `semantic` | Maximum | ❌ |
 
 ---
 

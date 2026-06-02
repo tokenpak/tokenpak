@@ -128,11 +128,11 @@ assistant = TokenPakAssistant(agent, budget=6000)
 
 ## Performance Metrics
 
-Typical compression ratios for conversation history:
+Relative compression for conversation history (measure your own with `tokenpak savings`):
 
-- **Single agent (1000 message depth):** 25-40% compression
-- **Group chat (500+ message history):** 35-50% compression
-- **Tool/function definitions:** 20-30% compression (schema deduplication)
+- **Single agent (1000 message depth):** moderate compression
+- **Group chat (500+ message history):** moderate–high compression
+- **Tool/function definitions:** low–moderate compression (schema deduplication)
 
 ## Design Notes
 

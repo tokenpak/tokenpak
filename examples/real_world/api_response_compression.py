@@ -7,7 +7,7 @@ Problem: API responses (REST, GraphQL) often include verbose metadata, nested ob
          and human-readable descriptions that inflate token usage.
 Solution: Extract relevant fields + compress prose fields before LLM injection.
 
-Expected savings: 50-75% on typical API responses.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak
 """
 
@@ -57,7 +57,7 @@ GITHUB_ISSUE = {
 
     ## Expected Impact
 
-    - Memory usage reduced by 60-80% for large documents
+    - Memory usage reduced for large documents
     - Latency for first compressed output reduced from O(n) to near-constant
     - Enables real-time use cases currently impossible with batch API
 
@@ -65,7 +65,7 @@ GITHUB_ISSUE = {
 
     - [ ] Streaming endpoint at `/v1/compress/stream`
     - [ ] Compatible with HTTP chunked transfer encoding
-    - [ ] Minimum 90% compression quality vs batch mode
+    - [ ] Comparable compression quality vs batch mode
     - [ ] Documentation and examples
     """,
     "labels": [

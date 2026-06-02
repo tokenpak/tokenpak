@@ -8,7 +8,7 @@ Problem: OpenAI charges per token. Verbose prompts cost more.
 Solution: Intercept messages before they reach the API, compress them,
           and track savings automatically.
 
-Expected savings: 30-60% on typical prompts.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak openai
 """
 

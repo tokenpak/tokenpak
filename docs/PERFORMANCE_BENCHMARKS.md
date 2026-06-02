@@ -49,20 +49,22 @@ From `~/.tokenpak/monitor.db`:
 
 ### By Compilation Mode
 
-| Mode | Compression | Use Case |
+Relative reduction by mode (measure your own with `tokenpak savings`):
+
+| Mode | Relative reduction | Use Case |
 |------|-------------|----------|
-| `strict` | 5-15% | Code-heavy prompts |
-| `hybrid` | 20-35% | Mixed content (default) |
-| `aggressive` | 40-60% | Narrative/docs |
+| `strict` | Low | Code-heavy prompts |
+| `hybrid` | Moderate | Mixed content (default) |
+| `aggressive` | High | Narrative/docs |
 
 ### By Content Type
 
-| Content | Compression | Notes |
+| Content | Relative reduction | Notes |
 |---------|-------------|-------|
-| System prompts | 10-20% | Protected by default |
-| Tool schemas | 0% (frozen) | ToolSchemaRegistry handles |
-| User messages | 15-25% | Style-contract aware |
-| Vault injection | 30-40% | BM25 retrieval |
+| System prompts | Low | Protected by default |
+| Tool schemas | None (frozen) | ToolSchemaRegistry handles |
+| User messages | Low–Moderate | Style-contract aware |
+| Vault injection | Moderate | BM25 retrieval |
 
 ## Latency
 

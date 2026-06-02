@@ -6,7 +6,7 @@ Demonstrates TokenPak's HeuristicEngine for compressing text content.
 Problem: LLM context windows are expensive. Verbose text wastes tokens.
 Solution: HeuristicEngine compresses text while preserving meaning.
 
-Expected compression: 40-60% reduction in typical prose/code.
+Expected compression: varies by input; measure in your own workflow.
 Setup: pip install tokenpak
 """
 

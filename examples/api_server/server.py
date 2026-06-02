@@ -7,7 +7,7 @@ to an LLM, reducing token costs automatically.
 Problem: Every token sent to the LLM API costs money. Verbose inputs waste budget.
 Solution: Intercept requests, compress content with TokenPak, forward to LLM.
 
-Expected savings: 30-60% on typical prose inputs.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak fastapi uvicorn httpx
 """
 

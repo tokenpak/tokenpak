@@ -9,7 +9,7 @@ new content and increasing API costs dramatically.
 Solution: Compress older turns while keeping recent turns intact. Use
 HeuristicEngine with a sliding window strategy.
 
-Expected compression: 40-70% reduction on older conversation turns.
+Expected compression: varies by input; measure in your own workflow.
 Setup: pip install tokenpak
 """
 

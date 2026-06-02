@@ -6,7 +6,7 @@ Compress retrieved document chunks before embedding or LLM injection.
 Problem: RAG pipelines retrieve verbose chunks that inflate context windows.
 Solution: Compress each chunk before injecting into the prompt, preserving semantics.
 
-Expected savings: 35-55% on typical retrieved documents.
+Expected savings: varies by input; measure in your own workflow.
 Setup: pip install tokenpak
 """
 

@@ -4,11 +4,11 @@ Production patterns for common TokenPak use cases.
 
 ## Examples
 
-| Example | Use Case | Savings |
+| Example | Use Case | Relative Savings |
 |---|---|---|
-| [vector_compression.py](./vector_compression.py) | Compress RAG retrieval chunks within token budget | 40-55% |
-| [db_query_compression.py](./db_query_compression.py) | Compress database result text fields | 40-65% |
-| [api_response_compression.py](./api_response_compression.py) | Compress third-party API responses | 50-75% |
+| [vector_compression.py](./vector_compression.py) | Compress RAG retrieval chunks within token budget | Moderate |
+| [db_query_compression.py](./db_query_compression.py) | Compress database result text fields | Moderate–High |
+| [api_response_compression.py](./api_response_compression.py) | Compress third-party API responses | High |
 
 ## Run Any Example
 

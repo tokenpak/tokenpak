@@ -6,7 +6,7 @@ Demonstrates TokenPak compression in async Python applications.
 Problem: Modern Python apps use asyncio, but naive compression blocks the event loop.
 Solution: Run TokenPak compression in a thread pool executor to stay non-blocking.
 
-Expected compression: 40-60% reduction.
+Expected compression: varies by input; measure in your own workflow.
 Setup: pip install tokenpak
 """
 

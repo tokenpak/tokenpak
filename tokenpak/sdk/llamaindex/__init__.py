@@ -3,7 +3,7 @@ llamaindex-tokenpak
 
 TokenPak integration for LlamaIndex — automatic context compression for RAG pipelines.
 
-Reduces token costs by 40-60% on retrieved nodes without sacrificing quality.
+Reduces token costs on retrieved nodes while preserving structure; measure your savings with `tokenpak savings`.
 
 Quick Start:
     from llamaindex_tokenpak import TokenPakSynthesizer, TokenPakQueryEngine
