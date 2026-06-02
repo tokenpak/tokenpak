@@ -26,7 +26,7 @@ from __future__ import annotations
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 
 class StatsCollector:
@@ -238,6 +238,173 @@ def reset_stats_collector() -> None:
         # Update module-level STATS as well
         import sys
         sys.modules[__name__].STATS = _SINGLETON
+
+
+def build_health_response(
+    *,
+    session: dict,
+    compilation_mode: str,
+    vault_info: dict,
+    router_info: dict,
+    router_enabled: bool,
+    capsule_available: bool,
+    canon_available: bool,
+    skeleton_enabled: bool,
+    shadow_enabled: bool,
+    budget_total_tokens: int,
+    tool_registry_stats: dict,
+    tool_registry_available: bool,
+    term_resolver_enabled: bool,
+    term_resolver_available: bool,
+    term_resolver_top_k: int,
+    term_resolver_max_bytes: int,
+    query_expansion_enabled: bool,
+    upstream_timeout: int,
+    provider_circuits: dict,
+    request_latencies: list,
+) -> dict:
+    """
+    Assemble the /health endpoint response dict.
+
+    All inputs are passed explicitly so this function is pure and testable.
+
+    Args:
+        session: Session-level counters dict.
+        compilation_mode: Active compilation mode string.
+        vault_info: Dict with ``available``, ``blocks``, ``path`` keys.
+        router_info: Dict returned by the router health helper.
+        router_enabled: Whether request routing is enabled.
+        capsule_available: Whether the capsule builder is initialised.
+        canon_available: Whether canon resolution is active.
+        skeleton_enabled: Whether skeleton mode is active.
+        shadow_enabled: Whether shadow reader is active.
+        budget_total_tokens: Configured token budget ceiling.
+        tool_registry_stats: Stats dict from ToolSchemaRegistry (may be empty).
+        tool_registry_available: Whether the tool registry is available.
+        term_resolver_enabled: Whether term resolver middleware is active.
+        term_resolver_available: Whether a TermResolver instance exists.
+        term_resolver_top_k: Configured top-k for term resolution.
+        term_resolver_max_bytes: Configured max bytes per term card.
+        query_expansion_enabled: Whether BM25 query expansion is active.
+        upstream_timeout: Upstream timeout in seconds.
+        provider_circuits: Dict of circuit-breaker state per provider.
+        request_latencies: Sorted list of recent request latency values (ms).
+
+    Returns:
+        JSON-serialisable dict suitable for ``self._send_json()``.
+    """
+    lats = sorted(request_latencies)
+    latency_info = {
+        "p50_latency_ms": lats[int(len(lats) * 0.50)] if lats else 0,
+        "p99_latency_ms": lats[int(len(lats) * 0.99)] if lats else 0,
+        "samples": len(lats),
+    }
+
+    return {
+        "status": "ok",
+        "compilation_mode": compilation_mode,
+        "vault_index": vault_info,
+        "router": {"enabled": router_enabled, **router_info},
+        "capsule_available": capsule_available,
+        "canon": {
+            "enabled": canon_available,
+            "session_hits": session.get("canon_hits", 0),
+        },
+        "skeleton": {"enabled": skeleton_enabled},
+        "shadow_reader": {"enabled": shadow_enabled},
+        "budget": {"enabled": True, "total_tokens": budget_total_tokens},
+        "tool_schema_registry": {
+            "enabled": tool_registry_available,
+            **(tool_registry_stats if tool_registry_available else {}),
+        },
+        "term_resolver": {
+            "enabled": term_resolver_enabled,
+            "available": term_resolver_available,
+            "top_k": term_resolver_top_k,
+            "max_bytes_per_card": term_resolver_max_bytes,
+        },
+        "query_expansion": {"enabled": query_expansion_enabled},
+        "cache_poison_removal": {"enabled": True},
+        "upstream_timeout_seconds": upstream_timeout,
+        "circuit_breakers": {
+            p: {"open": cb["open"], "failures": cb["failures"]}
+            for p, cb in provider_circuits.items()
+        },
+        "stats": {
+            "requests": session.get("requests", 0),
+            "input_tokens": session.get("input_tokens", 0),
+            "sent_input_tokens": session.get("sent_input_tokens", 0),
+            "saved_tokens": session.get("saved_tokens", 0),
+            "errors": session.get("errors", 0),
+            "cache_hits": session.get("cache_hits", 0),
+            "cache_misses": session.get("cache_misses", 0),
+            "cost": session.get("cost", 0),
+        },
+        "latency": latency_info,
+    }
+
+
+def build_stats_response(
+    *,
+    session: dict,
+    compilation_mode: str,
+    vault_info: dict,
+    router_enabled: bool,
+    capsule_available: bool,
+    compression_timeouts: int,
+    max_compression_time_ms: int,
+    canon_available: bool,
+    skeleton_enabled: bool,
+    shadow_enabled: bool,
+    budget_total_tokens: int,
+    monitor_today: Any,
+    monitor_by_model: Any,
+    monitor_recent: Any,
+) -> dict:
+    """
+    Assemble the /stats endpoint response dict.
+
+    All inputs are passed explicitly so this function is pure and testable.
+
+    Args:
+        session: Full session-level counters dict.
+        compilation_mode: Active compilation mode string.
+        vault_info: Dict with ``available``, ``blocks``, ``last_timing_ms`` keys.
+        router_enabled: Whether request routing is enabled.
+        capsule_available: Whether the capsule builder is initialised.
+        compression_timeouts: Count of compression timeouts this session.
+        max_compression_time_ms: Configured compression timeout ceiling (ms).
+        canon_available: Whether canon resolution is active.
+        skeleton_enabled: Whether skeleton mode is active.
+        shadow_enabled: Whether shadow reader is active.
+        budget_total_tokens: Configured token budget ceiling.
+        monitor_today: Today's stats from the Monitor instance.
+        monitor_by_model: Per-model stats from the Monitor instance.
+        monitor_recent: Recent request list from the Monitor instance.
+
+    Returns:
+        JSON-serialisable dict suitable for ``self._send_json()``.
+    """
+    return {
+        "session": session,
+        "compilation_mode": compilation_mode,
+        "vault_index": vault_info,
+        "router": {"enabled": router_enabled},
+        "capsule_available": capsule_available,
+        "compression_timeouts": compression_timeouts,
+        "max_compression_time_ms": max_compression_time_ms,
+        "canon": {
+            "enabled": canon_available,
+            "session_hits": session.get("canon_hits", 0),
+            "tokens_saved": session.get("canon_tokens_saved", 0),
+        },
+        "skeleton": {"enabled": skeleton_enabled},
+        "shadow_reader": {"enabled": shadow_enabled},
+        "budget": {"enabled": True, "total_tokens": budget_total_tokens},
+        "today": monitor_today,
+        "by_model": monitor_by_model,
+        "recent": monitor_recent,
+    }
 
 
 # ---------------------------------------------------------------------------
