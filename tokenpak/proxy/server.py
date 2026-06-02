@@ -160,11 +160,24 @@ def _get_upstream_semaphore(
 def _upstream_inflight_delta(
     provider: str, delta: int, session_key: Optional[str] = None
 ) -> int:
-    """Adjust and return the in-flight counter for (provider, session)."""
+    """Adjust and return the in-flight counter for (provider, session).
+
+    When a release (delta < 0) drives the counter to zero, the key is evicted
+    from both _upstream_inflight and _upstream_semaphores. session_key falls
+    back to the per-connection client "ip:port", so without eviction every
+    distinct key mints a permanent entry in both dicts that is never reclaimed
+    — they accumulate even with zero active connections, which is the RSS heap
+    leak. Entries are recreated lazily on the next request for the same key.
+    """
     key = (provider or "_unknown", session_key or "_shared")
     with _upstream_sem_lock:
-        _upstream_inflight[key] = max(0, _upstream_inflight.get(key, 0) + delta)
-        return _upstream_inflight[key]
+        count = max(0, _upstream_inflight.get(key, 0) + delta)
+        if delta < 0 and count == 0:
+            _upstream_inflight.pop(key, None)
+            _upstream_semaphores.pop(key, None)
+        else:
+            _upstream_inflight[key] = count
+        return count
 
 
 def get_upstream_inflight_snapshot() -> Dict[str, int]:
