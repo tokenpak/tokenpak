@@ -1,11 +1,11 @@
-# TokenPak — Cut your LLM token spend by 30–50%, zero config
+# TokenPak — Cut your LLM token spend with deterministic context compression, zero config
 
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-green.svg)](LICENSE)
 <!-- CI badge: pending repo transfer to tokenpak/tokenpak — add after transfer is confirmed -->
 
-TokenPak is a local proxy that compresses your LLM context before it hits the API — fewer tokens, lower cost, same results. No code changes, no cloud, no credentials stored.
+TokenPak is a local proxy that compresses your LLM context before it hits the API — fewer tokens, lower cost, no code changes, no cloud, no credentials stored.
 
 ---
 
@@ -71,8 +71,7 @@ shared secret to require `Authorization: Bearer <token>` on remote requests
 
 ## What's included (Free)
 
-- **Context compression** — 30–50% token reduction on real agent workloads, <50ms latency
-  Reproduce: `make benchmark-headline`
+- **Context compression** — deterministic token reduction on real agent workloads, <50ms latency. Measure your own savings with `tokenpak savings` (reproduce the headline benchmark with `make benchmark-headline`)
 - **Client integration** — one command wires Claude Code, Cursor, Aider, and 6 other clients
 - **Model routing** — send requests to the right model automatically, with fallback rules
 - **Cost tracking** — per model, per session, per agent; local SQLite, zero cloud

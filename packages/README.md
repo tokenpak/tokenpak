@@ -64,7 +64,7 @@ twine upload dist/*
 
 TokenPak is an open-source LLM proxy and context compression protocol. It helps:
 
-- **Reduce costs**: Compress context by 30-70%
+- **Reduce costs**: Compress context before it hits the API
 - **Improve quality**: Keep recent context intact
 - **Scale workflows**: Manage token budgets across agents
 

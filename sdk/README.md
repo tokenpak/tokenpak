@@ -1,6 +1,6 @@
 # TokenPak — npm SDK
 
-> Deterministic context compression for LLMs. Save 30–60% on token costs automatically.
+> Deterministic context compression for LLMs. Cut token costs automatically — measure your own savings with the SDK.
 
 [![npm version](https://badge.fury.io/js/tokenpak.svg)](https://www.npmjs.com/package/tokenpak)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)

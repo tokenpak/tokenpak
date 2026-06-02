@@ -2,7 +2,7 @@
 
 TokenPak integration for LlamaIndex — automatic context compression for RAG pipelines.
 
-Reduces token costs by 40-60% on retrieved nodes without sacrificing quality.
+Reduces token costs on retrieved nodes while preserving structure — measure your savings with `tokenpak savings`.
 
 [![PyPI version](https://img.shields.io/pypi/v/llamaindex-tokenpak)](https://pypi.org/project/llamaindex-tokenpak/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -144,14 +144,14 @@ nodes  = blocks_to_llamaindex_nodes(blocks)
 
 ## Performance
 
-Typical savings on RAG pipelines:
+Relative savings on RAG pipelines (measure your own with `tokenpak savings`):
 
-| Content Type      | Savings | Quality Impact |
+| Content Type      | Relative savings | Quality Impact |
 |-------------------|---------|----------------|
-| Narrative text    | 50-70%  | Minimal        |
-| Code blocks       | 10-20%  | Low (preserved)|
-| Structured data   | 30-40%  | Minimal        |
-| Recent context    | 0%      | None (kept)    |
+| Narrative text    | High    | Minimal        |
+| Code blocks       | Low     | Low (preserved)|
+| Structured data   | Moderate | Minimal       |
+| Recent context    | None    | None (kept)    |
 
 ---
 

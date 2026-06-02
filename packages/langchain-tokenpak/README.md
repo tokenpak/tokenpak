@@ -2,7 +2,7 @@
 
 TokenPak integration for LangChain — automatic context compression for RAG and chat chains.
 
-Reduces token costs by 30-60% on retrieved documents and chat history without sacrificing quality.
+Reduces token costs on retrieved documents and chat history while preserving recent context — measure your savings with `tokenpak savings`.
 
 ## Installation
 
@@ -236,20 +236,20 @@ See [examples/](./examples/) for complete working examples:
 
 ## Performance
 
-Typical savings:
+Relative savings by component (measure your own with `tokenpak savings`):
 
-| Component | Savings | Quality Impact |
+| Component | Relative savings | Quality Impact |
 |-----------|---------|---|
-| Retrieved docs (RAG) | 40-60% | Minimal (keep headers, code) |
-| Chat history | 30-50% | Low (preserve recent turns) |
-| Combined chain | 35-55% | Low (coordinated budgets) |
+| Retrieved docs (RAG) | High | Minimal (keep headers, code) |
+| Chat history | Moderate | Low (preserve recent turns) |
+| Combined chain | Moderate–High | Low (coordinated budgets) |
 
-Savings vary by content type:
+Compressibility varies by content type:
 
-- **Narrative text**: 50-70% compression
-- **Code**: 10-20% compression (preserved for quality)
-- **Structured data**: 30-40% compression
-- **Recent context**: 0% compression (preserved entirely)
+- **Narrative text**: high compression
+- **Code**: low compression (preserved for quality)
+- **Structured data**: moderate compression
+- **Recent context**: not compressed (preserved entirely)
 
 ## Documentation
 

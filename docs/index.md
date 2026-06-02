@@ -15,7 +15,7 @@ LLM APIs charge per token. Most conversations are bloated with repetitive contex
 
 | Metric | Value |
 |--------|-------|
-| Average token reduction | **43–84%** |
+| Average token reduction | **measure with `tokenpak savings`** |
 | Zero-token operations | **80%+** |
 | Cold start overhead | **< 100ms** |
 | Indexing throughput | **2,700+ files/sec** |
@@ -190,7 +190,7 @@ pytest
 
 | Metric | Value |
 |--------|-------|
-| Average token reduction | **43–84%** |
+| Average token reduction | **measure with `tokenpak savings`** |
 | Zero-token operations | **80%+** |
 | Indexing throughput | **2,700+ files/sec** |
 | Search latency | **~23ms** |
