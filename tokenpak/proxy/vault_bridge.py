@@ -655,7 +655,9 @@ def inject_vault_context(
     if not combined_injection:
         return body_bytes, 0, []
 
-    # Apply skeleton extraction to code blocks in injection text (70-90% reduction on code)
+    # Apply skeleton extraction to code blocks in injection text (code-body
+    # elision when the extractor is available). No fixed savings percentage is
+    # asserted here — any such claim must be backed by a committed benchmark.
     _t4 = time.perf_counter()
     if SKELETON_ENABLED:
         combined_injection = _inject_skeleton_into_blocks(combined_injection)

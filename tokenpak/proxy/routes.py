@@ -184,11 +184,11 @@ class ProxyRoutesMixin:
             QUERY_EXPANSION_ENABLED,
             ROUTER_ENABLED,
             SHADOW_ENABLED,
-            SKELETON_ENABLED,
             TERM_RESOLVER_ENABLED,
             TERM_RESOLVER_MAX_BYTES,
             TERM_RESOLVER_TOP_K,
             UPSTREAM_TIMEOUT,
+            skeleton_active,
         )
         from tokenpak.proxy.fallback import _provider_circuits
         from tokenpak.proxy.request_pipeline import (
@@ -220,7 +220,9 @@ class ProxyRoutesMixin:
             router_enabled=ROUTER_ENABLED,
             capsule_available=CAPSULE_BUILDER is not None,
             canon_available=CANON_AVAILABLE,
-            skeleton_enabled=SKELETON_ENABLED,
+            # Report from the real capability probe, not the intent flag:
+            # skeleton is "active" only if enabled AND the extractor imports.
+            skeleton_enabled=skeleton_active(),
             shadow_enabled=SHADOW_ENABLED,
             budget_total_tokens=BUDGET_TOTAL_TOKENS,
             tool_registry_stats=(
@@ -257,7 +259,7 @@ class ProxyRoutesMixin:
             MAX_COMPRESSION_TIME_MS,
             ROUTER_ENABLED,
             SHADOW_ENABLED,
-            SKELETON_ENABLED,
+            skeleton_active,
         )
         from tokenpak.proxy.stats import build_stats_response
 
@@ -275,7 +277,7 @@ class ProxyRoutesMixin:
                 compression_timeouts=SESSION.get("compression_timeouts", 0),
                 max_compression_time_ms=MAX_COMPRESSION_TIME_MS,
                 canon_available=CANON_AVAILABLE,
-                skeleton_enabled=SKELETON_ENABLED,
+                skeleton_enabled=skeleton_active(),
                 shadow_enabled=SHADOW_ENABLED,
                 budget_total_tokens=BUDGET_TOTAL_TOKENS,
                 monitor_today=MONITOR.get_stats(),
