@@ -15,7 +15,7 @@ Competitors compared: [Helicone](https://helicone.ai), [LangSmith](https://smith
 | Dimension | **TokenPak** | Helicone | LangSmith | LiteLLM | Portkey | Langfuse | OpenRouter |
 |---|---|---|---|---|---|---|---|
 | **Local-first** (proxy on your machine) | ✅ Yes | ✅ Yes (Docker) | ❌ No (enterprise BYOC only) | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No (cloud-only) |
-| **Open source** | ✅ MIT | ✅ MIT core | ❌ No | ✅ MIT | ✅ Gateway OSS | ✅ MIT | ❌ No |
+| **Open source** | ✅ Apache-2.0 | ✅ MIT core | ❌ No | ✅ MIT | ✅ Gateway OSS | ✅ MIT | ❌ No |
 | **Compression / token reduction** | ✅ Yes — deterministic, client-side | ✅ Yes (claimed up to 5×) | ❌ No | ❌ No | ❌ No (caching pass-through only) | ❌ No | ❌ No |
 | **Multi-provider routing** | ✅ Yes (smart routing) | ✅ Yes (100+ providers) | ❌ No (observability only) | ✅ Yes (100+ providers) | ✅ Yes (200+ providers) | ❌ No | ✅ Yes (290+ models) |
 | **Cost tracking** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |

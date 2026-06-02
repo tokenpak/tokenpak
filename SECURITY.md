@@ -11,13 +11,7 @@ We follow a 90‑day disclosure timeline:
 4. Public disclosure 90 days after report
 
 ## Supported Versions
-- v1.0.x — security updates
-- v0.9.x — critical fixes only
-- Earlier — unsupported
-
-## Service Status & Incidents
-
-For operational status and past incident reports, see [STATUS.md](STATUS.md).
+TokenPak is in Beta. Security updates target the latest released version (currently the v1.7.x line). Earlier versions are unsupported — upgrade to the latest release.
 
 ## Best Practices
 

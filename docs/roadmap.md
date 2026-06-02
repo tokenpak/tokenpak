@@ -14,7 +14,7 @@ This document outlines the planned development of TokenPak.
 - Local telemetry and monitoring
 - HTTP proxy server
 - systemd service support
-- MIT licensed
+- Apache-2.0 licensed
 
 ---
 

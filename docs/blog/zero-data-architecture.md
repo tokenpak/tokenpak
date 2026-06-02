@@ -109,4 +109,4 @@ Zero data architecture isn't a privacy checkbox. It's the foundation that makes 
 
 ---
 
-*TokenPak is open-source (MIT). [Get started](../getting-started.md) or [read the code](https://github.com/tokenpak/tokenpak).*
+*TokenPak is open-source (Apache-2.0). [Get started](../getting-started.md) or [read the code](https://github.com/tokenpak/tokenpak).*

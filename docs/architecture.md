@@ -389,7 +389,7 @@ def allocate_budget(blocks, total_budget):
 
 ## License
 
-Open source (MIT). All features included: CLI, text processing, compression, QMD integration, multimodal processing, monitoring dashboard, quality review queue, custom integrations, audit trails.
+Open source (Apache-2.0). All features included: CLI, text processing, compression, QMD integration, multimodal processing, monitoring dashboard, quality review queue, custom integrations, audit trails.
 
 ---
 
