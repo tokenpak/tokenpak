@@ -26,10 +26,7 @@ Compatibility preserved:
   `from tokenpak.proxy.passthrough import CLAUDE_CODE_HEADER_ALLOWLIST`
   continues to work unchanged.
 
-removes-public-symbol: tokenpak.proxy.server_extra.websocket_proxy.WebSocketServerProtocol
-
-- Upstream-driven: `websockets` 16 removed `websockets.server.WebSocketServerProtocol`.
-  This module's optional re-export already degrades to `None` when the upstream
-  symbol is unavailable, so the snapshot now reflects that reality. This is an
-  upstream/third-party compatibility surface, not a TokenPak-owned API removal,
-  and there is no behavior change beyond what the upstream library dictates.
+The snapshot is regenerated in the canonical release environment (the union of
+non-agent-framework extras) so that optional and third-party-conditional symbols
+(e.g. `websocket_proxy.WebSocketServerProtocol`, `vector_local.faiss`) are
+captured consistently with the release-gate check. No public symbol is removed.
