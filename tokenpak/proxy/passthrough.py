@@ -33,6 +33,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, Tuple
 
+# Back-compat re-export: the canonical CLAUDE_CODE_HEADER_ALLOWLIST now lives in
+# tokenpak.proxy.headers (frozenset). It is re-exported here so the historical
+# import path `from tokenpak.proxy.passthrough import CLAUDE_CODE_HEADER_ALLOWLIST`
+# keeps working unchanged (v1.7.1 compatibility alias).
+from tokenpak.proxy.headers import CLAUDE_CODE_HEADER_ALLOWLIST  # noqa: F401
+
 # ---------------------------------------------------------------------------
 # Per-route HTTP header forwarding allowlists
 # ---------------------------------------------------------------------------

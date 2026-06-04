@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-30T16:37:44Z",
-  "package_version": "1.7.0",
+  "generated_at": "2026-06-04T01:44:48Z",
+  "package_version": "1.7.1",
   "symbols": [
     {
       "module": "tokenpak",
@@ -762,6 +762,10 @@
     {
       "module": "tokenpak.cli.commands.doctor",
       "name": "run_fleet_doctor"
+    },
+    {
+      "module": "tokenpak.cli.commands.doctor",
+      "name": "run_stream_check"
     },
     {
       "module": "tokenpak.cli.commands.doctor_claude_code",
@@ -2174,6 +2178,50 @@
     {
       "module": "tokenpak.companion.recall.store",
       "name": "open_recall_store"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "EVENT_KIND"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "EVENT_NAME"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "EVENT_SEVERITY"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "GUARD_ENV"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "STREAM_TRUNCATED_CODE"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "STREAM_TRUNCATED_REMEDY"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "StreamTruncatedError"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "guard_enabled"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "guarded_stream"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "read_provider_errors"
+    },
+    {
+      "module": "tokenpak.companion.stream",
+      "name": "self_check"
     },
     {
       "module": "tokenpak.companion.trace",
@@ -8300,6 +8348,14 @@
       "name": "load_custom_providers"
     },
     {
+      "module": "tokenpak.proxy.config",
+      "name": "skeleton_active"
+    },
+    {
+      "module": "tokenpak.proxy.config",
+      "name": "skeleton_available"
+    },
+    {
       "module": "tokenpak.proxy.connection_pool",
       "name": "ConnectionPool"
     },
@@ -9733,10 +9789,6 @@
     },
     {
       "module": "tokenpak.proxy.server_extra.websocket_proxy",
-      "name": "WebSocketServerProtocol"
-    },
-    {
-      "module": "tokenpak.proxy.server_extra.websocket_proxy",
       "name": "compress_chunk"
     },
     {
@@ -10206,6 +10258,14 @@
     {
       "module": "tokenpak.proxy.stats",
       "name": "StatsCollector"
+    },
+    {
+      "module": "tokenpak.proxy.stats",
+      "name": "build_health_response"
+    },
+    {
+      "module": "tokenpak.proxy.stats",
+      "name": "build_stats_response"
     },
     {
       "module": "tokenpak.proxy.stats",
@@ -13893,6 +13953,10 @@
     },
     {
       "module": "tokenpak.telemetry.operational.rbac_auth",
+      "name": "SNAPSHOT_GEN_ENV"
+    },
+    {
+      "module": "tokenpak.telemetry.operational.rbac_auth",
       "name": "User"
     },
     {
@@ -16068,6 +16132,10 @@
       "name": "reshape_chunks"
     },
     {
+      "module": "tokenpak.vault.chunk_shaping",
+      "name": "skeleton_runtime_status"
+    },
+    {
       "module": "tokenpak.vault.config",
       "name": "SCHEMA_VERSION"
     },
@@ -16801,7 +16869,7 @@
     },
     {
       "module": "tokenpak.vault.retrieval.vector_local",
-      "name": "faiss"
+      "name": "SentenceTransformer"
     },
     {
       "module": "tokenpak.vault.scoring",
