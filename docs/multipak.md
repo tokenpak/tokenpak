@@ -103,7 +103,7 @@ Every Pro-gated endpoint returns this shape, so clients can treat `error == "not
 
 ## Configuration — `pro.multipak.enabled`
 
-Default `false` per [ ](../standards/32-multipak-pro-architecture.md) (opt-in until 1-week soak post-bootstrap).
+Default `false` (opt-in until 1-week soak post-bootstrap).
 
 ```yaml
 # ~/.tokenpak/config.yaml
@@ -116,7 +116,7 @@ The OSS read-only path (Vault Pak inspection, `/pak/v1/status`) **works regardle
 
 ## Companion journal coexistence
 
-Per the relevant standard the OSS companion journal continues to auto-capture every prompt — local-only, no upload. This is the existing entry point per the [companion guide](../tokenpak/companion/GUIDE.md). Promotion of a journal entry to a MultiPak Interaction Pak is the **opt-in step**:
+Per the relevant standard the OSS companion journal continues to auto-capture every prompt — local-only, no upload. This is the existing entry point per the [companion guide](https://github.com/tokenpak/tokenpak/blob/main/tokenpak/companion/GUIDE.md). Promotion of a journal entry to a MultiPak Interaction Pak is the **opt-in step**:
 
 ```python
 from tokenpak.companion.journal.pak_aware import (
@@ -139,7 +139,7 @@ Phase 1 OSS code never auto-promotes. The Pro daemon (Phase 2+) consumes this su
 
 ## Privacy contract (the relevant standard)
 
-**No memory content ever crosses the license-validation boundary** (the relevant standard). The Pak schema is structurally disjoint from license-payload field prefixes (`license_token`, `tenant_id`, `fingerprint`, `issuer`, `signature`) — enforced by the Phase 0 contract tests and the [`09 §3.11.b`](../standards/09-audit-rubric.md) quarterly audit.
+**No memory content ever crosses the license-validation boundary** (the relevant standard). The Pak schema is structurally disjoint from license-payload field prefixes (`license_token`, `tenant_id`, `fingerprint`, `issuer`, `signature`) — enforced by the Phase 0 contract tests and the quarterly audit.
 
 Pak content stays local. The license refresh request carries only the license token, the per-install ed25519 public key, and the hardware-bound machine fingerprint — never Paks, anchors, prompts, completions, or telemetry.
 
@@ -154,10 +154,3 @@ Pak content stays local. The license refresh request carries only the license to
 | 4 | Anchor Hydration + coverage scoring + audit log | gated |
 | 5 | Encrypted store + retention engine + dashboard surfaces | gated |
 | 6 | Embeddings (deferred per Decision #8) + supersession + auto-promotion | gated |
-
-## References
-
-- [Standard 32 — MultiPak Pro Architecture](../standards/32-multipak-pro-architecture.md) — the canonical authority for everything in this doc
-- [Standard 25 — Pro Tier Architecture](../standards/25-pro-tier-architecture.md) — daemon process model, license registry, fallback contract
-- [Standard 31 — TIP Versioning Strategy](../standards/31-tip-versioning-strategy.md) — capability negotiation rules
-- [Standard 23 — Provider Adapter Standard](../standards/23-provider-adapter-standard.md) — additive-only contract, offline test convention
