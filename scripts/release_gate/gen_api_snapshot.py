@@ -31,10 +31,16 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import os
 import pkgutil
 import sys
 import time
 from pathlib import Path
+
+# Mark this process as a snapshot-generation run before any tokenpak module
+# is imported, so library first-run side effects (e.g. RBAC admin bootstrap)
+# are skipped and cannot pollute deterministic snapshot output.
+os.environ.setdefault("TOKENPAK_SNAPSHOT_GEN", "1")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = REPO_ROOT / "tokenpak" / "_snapshots" / "public-api.json"

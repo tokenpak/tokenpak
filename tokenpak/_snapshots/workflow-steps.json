@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-25T16:58:36Z",
+  "generated_at": "2026-06-02T19:15:59Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"
@@ -311,6 +311,12 @@
       "job": "build",
       "id": "",
       "name": "Upload dist artifact (wheels + sdist only)"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "build",
+      "id": "",
+      "name": "Validate tag source on origin/main"
     },
     {
       "workflow": "release.yml",

@@ -1,5 +1,5 @@
 """
-Tests for tokenpak/agent/proxy/providers/stream_translator.py
+Tests for tokenpak/proxy/providers/stream_translator.py
 
 Coverage targets:
 - _parse_sse_line() — SSE line parsing
@@ -14,11 +14,7 @@ Coverage targets:
 import json
 import pytest
 
-# Import from the build location since source doesn't have it
-import sys
-sys.path.insert(0, "/home/cali/tokenpak/build/lib")
-
-from tokenpak.agent.proxy.providers.stream_translator import (
+from tokenpak.proxy.providers.stream_translator import (
     _parse_sse_line,
     _sse_line,
     _sse_done,

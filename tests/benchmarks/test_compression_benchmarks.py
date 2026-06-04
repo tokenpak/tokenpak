@@ -27,6 +27,13 @@ from typing import Any, Dict, List, Tuple
 
 import pytest
 
+# These benchmarks assert wall-clock latency thresholds (median_ms <= baseline×k)
+# and therefore flake on shared/noisy CI runners. Classify as needs_fast_host so
+# the always-on correctness matrix (ci.yml) excludes them; they still run and
+# report in the dedicated Performance Benchmarks workflow (benchmarks.yml).
+# See tests/conftest.py for the env-dependency marker convention.
+pytestmark = pytest.mark.needs_fast_host
+
 # ---------------------------------------------------------------------------
 # Path setup (allow running from repo root or tests/ dir)
 # ---------------------------------------------------------------------------

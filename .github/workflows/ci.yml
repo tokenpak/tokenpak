@@ -125,9 +125,16 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run unit tests
+        # needs_fast_host is excluded here on purpose: these are timing-sensitive
+        # perf/SLA assertions (wall-clock latency/throughput) that flake on shared
+        # GitHub runners, which are noisy and have no guaranteed capacity. They
+        # remain signal-bearing and run in the dedicated "Performance Benchmarks"
+        # workflow (benchmarks.yml: per-PR + nightly schedule) — just not in this
+        # always-on correctness matrix, so a noisy-runner blip cannot red-flag
+        # unrelated PRs. Marker convention: tests/conftest.py.
         run: |
           python -m pytest tests/ -v --tb=short \
-            -m "not integration and not chaos and not slow" \
+            -m "not integration and not chaos and not slow and not needs_fast_host" \
             --junitxml=reports/test-results-py${{ matrix.python-version }}.xml \
             --cov=tokenpak \
             --cov-report=xml \
@@ -172,7 +179,7 @@ jobs:
           }
 
       - name: Upload coverage (Tier-1)
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         if: matrix.python-version == '3.11'
         with:
           files: ./coverage.xml,./coverage-tier1.xml

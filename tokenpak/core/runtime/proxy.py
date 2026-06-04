@@ -3,12 +3,12 @@ tokenpak.core.runtime.proxy — compatibility shim
 
 The old monolithic proxy.py that lived here has been deleted as part of the
 TPK-CONSOLIDATION-B1 cleanup.  This shim re-exports canonical symbols from
-their new modular locations and provides inline implementations for CCG items
+their new modular locations and provides inline implementations for items
 that have not yet been extracted to the modular tree.
 
-CCG-04: CLAUDE_CODE_HEADER_ALLOWLIST, LEGACY_HEADER_ALLOWLIST, _classify_route
-CCG-06: _write_mutation_audit, _prune_mutation_audit
-CCG-07: _resolve_session_id
+CLAUDE_CODE_HEADER_ALLOWLIST, LEGACY_HEADER_ALLOWLIST, _classify_route
+_write_mutation_audit, _prune_mutation_audit
+_resolve_session_id
 """
 from __future__ import annotations
 
@@ -33,18 +33,18 @@ from tokenpak.proxy.server import ForwardProxyHandler  # noqa: F401
 from tokenpak.telemetry.monitoring.server import ThreadedHTTPServer  # noqa: F401
 
 # ---------------------------------------------------------------------------
-# can_compress — transparent mode must always return False (CCG-06 contract)
+# can_compress — transparent mode must always return False
 # ---------------------------------------------------------------------------
 
 def can_compress(risk_class: str, mode: str) -> bool:
     """Return whether compression is allowed. Transparent and safe modes always return False."""
-    if mode in ("strict", "transparent", "safe"):  # CCG-10: safe mode disables compression
+    if mode in ("strict", "transparent", "safe"):  # safe mode disables compression
         return False
     return _base_can_compress(risk_class, mode)
 
 
 # ---------------------------------------------------------------------------
-# _PROFILE_PRESETS — extend base with CCG-06 claude-code / transparent profiles
+# _PROFILE_PRESETS — extend base with claude-code / transparent profiles
 # ---------------------------------------------------------------------------
 _PROFILE_PRESETS: dict[str, dict[str, str]] = {
     **_BASE_PROFILE_PRESETS,
@@ -72,17 +72,17 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
 
 
 # ---------------------------------------------------------------------------
-# Monitor — subclass that adds CCG-02 schema additions (session_id +
+# Monitor — subclass that adds schema additions (session_id +
 # mutation_audit table) on top of the base modular Monitor._init_db.
 # ---------------------------------------------------------------------------
 class Monitor(_BaseMonitor):
-    """Monitor with CCG-02 schema additions (session_id column + mutation_audit table)
-    and CCG-07 session_id support in log()."""
+    """Monitor with schema additions (session_id column + mutation_audit table)
+    and session_id support in log()."""
 
     def _init_db(self):
         super()._init_db()
         conn = sqlite3.connect(str(self.db_path))
-        # CCG-02: session_id column on requests
+        # session_id column on requests
         try:
             conn.execute("ALTER TABLE requests ADD COLUMN session_id TEXT")
         except sqlite3.OperationalError:
@@ -90,7 +90,7 @@ class Monitor(_BaseMonitor):
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_requests_session ON requests(session_id)"
         )
-        # CCG-10: stable_hash and volatile_hash columns for safe-mode fingerprinting
+        # stable_hash and volatile_hash columns for safe-mode fingerprinting
         try:
             conn.execute("ALTER TABLE requests ADD COLUMN stable_hash TEXT")
         except sqlite3.OperationalError:
@@ -100,7 +100,7 @@ class Monitor(_BaseMonitor):
         except sqlite3.OperationalError:
             pass
         conn.commit()
-        # CCG-02: mutation_audit table
+        # mutation_audit table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS mutation_audit (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,7 +124,7 @@ class Monitor(_BaseMonitor):
             " ON mutation_audit(timestamp)"
         )
         conn.commit()
-        # CCG-11: cache_invalidator_events table (log-only, Phase 2)
+        # cache_invalidator_events table (log-only, Phase 2)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS cache_invalidator_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,7 +168,7 @@ class Monitor(_BaseMonitor):
         stable_hash="",
         volatile_hash="",
     ):
-        """Log a request; extends parent with session_id (CCG-07) and fingerprints (CCG-10)."""
+        """Log a request; extends parent with session_id and fingerprints."""
         from datetime import datetime
         try:
             _conn = sqlite3.connect(str(self.db_path))
@@ -210,7 +210,7 @@ class Monitor(_BaseMonitor):
 
 
 # ---------------------------------------------------------------------------
-# CCG-06: mutation audit helpers
+# mutation audit helpers
 # ---------------------------------------------------------------------------
 
 def _prune_mutation_audit(conn: sqlite3.Connection, ttl_days: int) -> int:
@@ -233,7 +233,7 @@ def _write_mutation_audit(
     cache_risk: str,
     mode: str,
 ) -> None:
-    """CCG-06: Write one mutation_audit row per request."""
+    """Write one mutation_audit row per request."""
     pre_hash = hashlib.sha256(body_pre).hexdigest()
     post_hash = hashlib.sha256(body_post).hexdigest()
     rollback_possible = 1
@@ -262,7 +262,7 @@ def _write_mutation_audit(
 
 
 # ---------------------------------------------------------------------------
-# CCG-07: session id resolver
+# session id resolver
 # ---------------------------------------------------------------------------
 
 def _resolve_session_id(headers, model: str) -> str:
@@ -288,11 +288,13 @@ def _resolve_session_id(headers, model: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# CCG-04: Per-route header allowlist — real implementation (re-exported from
-# tokenpak.proxy.passthrough where the HTTP path wiring also lives).
+# Per-route header allowlist — real implementation.
+# CLAUDE_CODE_HEADER_ALLOWLIST is canonical in tokenpak.proxy.headers (single
+# frozenset). LEGACY_HEADER_ALLOWLIST + _classify_route live in
+# tokenpak.proxy.passthrough alongside the HTTP-path wiring.
 # ---------------------------------------------------------------------------
+from tokenpak.proxy.headers import CLAUDE_CODE_HEADER_ALLOWLIST  # noqa: F401
 from tokenpak.proxy.passthrough import (  # noqa: F401
-    CLAUDE_CODE_HEADER_ALLOWLIST,
     LEGACY_HEADER_ALLOWLIST,
     _classify_route,
 )
@@ -301,7 +303,7 @@ from tokenpak.proxy.passthrough import (  # noqa: F401
 TOKENPAK_HEADER_ALLOWLIST = LEGACY_HEADER_ALLOWLIST  # noqa: F401
 
 # ---------------------------------------------------------------------------
-# SESSION — global request statistics dict.  The modular tree tracks per-
+# SESSION — global request statistics dict. The modular tree tracks per-
 # module state internally; this shim surfaces a single SESSION dict for
 # compatibility with tests and the /stats endpoint.
 # ---------------------------------------------------------------------------

@@ -48,7 +48,7 @@ jobs:
           TOKENPAK_TEST_MODE: "1"
 
       - name: Upload integration coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         if: matrix.python-version == '3.12'
         with:
           file: coverage-integration.xml
@@ -85,7 +85,7 @@ jobs:
           TOKENPAK_TEST_MODE: "1"
 
       - name: Upload chaos coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         if: matrix.python-version == '3.12'
         with:
           file: coverage-chaos.xml
@@ -176,7 +176,7 @@ jobs:
             --cov-fail-under=80
 
       - name: Upload combined coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           file: coverage-combined.xml
           flags: combined

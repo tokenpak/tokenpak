@@ -200,7 +200,11 @@ def _write_mcp_config(config: CompanionConfig) -> str:
             "tokenpak-companion": {
                 "type": "stdio",
                 "command": sys.executable,
-                "args": ["-m", "tokenpak.companion.mcp.server"],
+                # -P keeps the launch directory off sys.path so a ``tokenpak``
+                # dir/symlink in the cwd can't shadow the installed package
+                # (which would resolve it as a namespace package and drop
+                # ``__version__``, crashing the server on import).
+                "args": ["-P", "-m", "tokenpak.companion.mcp.server"],
             }
         }
     }

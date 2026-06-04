@@ -4,6 +4,7 @@ Gracefully degrades if sentence-transformers is not installed.
 """
 from __future__ import annotations
 
+import importlib.util
 import logging
 import warnings
 from pathlib import Path
@@ -13,13 +14,47 @@ from .base import RetrievalQuery, RetrievalResult, Retriever, RetrieverType
 
 logger = logging.getLogger(__name__)
 
-# Optional dependency checks
+# Optional dependency availability.
+#
+# ``sentence_transformers`` transitively pulls in ``transformers`` + ``torch``,
+# a ~13s cold import. Importing it at module-load time made every consumer of
+# the retrieval/proxy/companion import chain pay that cost up front; in
+# particular it pushed the companion MCP server's startup past Claude Code's
+# MCP-connect window, so the server never answered ``initialize`` in time and
+# Claude Code reported it as a failed setup.
+#
+# We therefore only *detect* availability here — ``find_spec`` locates the
+# package without executing it (cheap, no torch load) — and defer the actual
+# import to ``_load_sentence_transformer()``, which runs lazily inside
+# ``_ensure_model`` the first time vector/semantic retrieval is invoked.
 try:
-    from sentence_transformers import SentenceTransformer
-    _ST_AVAILABLE = True
-except ImportError:
+    _ST_AVAILABLE = importlib.util.find_spec("sentence_transformers") is not None
+except (ImportError, ValueError):  # pragma: no cover - defensive
     _ST_AVAILABLE = False
-    SentenceTransformer = None  # type: ignore[misc,assignment]
+
+# Populated lazily by ``_load_sentence_transformer()``. Kept at module scope
+# (rather than a local) so existing call sites and tests that reference
+# ``vector_local.SentenceTransformer`` keep working.
+SentenceTransformer = None  # type: ignore[misc,assignment]
+
+
+def _load_sentence_transformer():
+    """Import and return the ``SentenceTransformer`` class on demand.
+
+    Returns ``None`` if the backend is not installed. The heavy
+    ``sentence_transformers`` / ``transformers`` / ``torch`` import happens
+    here — not at module load — so importing this module stays cheap for
+    fast-start consumers such as the companion MCP server.
+    """
+    global SentenceTransformer
+    if SentenceTransformer is not None:
+        return SentenceTransformer
+    try:
+        from sentence_transformers import SentenceTransformer as _ST
+    except ImportError:
+        return None
+    SentenceTransformer = _ST
+    return _ST
 
 try:
     import numpy as np
@@ -102,8 +137,16 @@ class LocalVectorRetriever(Retriever):
         if not self._available:
             return False
         if self._model is None:
+            model_cls = _load_sentence_transformer()
+            if model_cls is None:
+                logger.warning(
+                    "sentence-transformers unavailable at model-load time; "
+                    "LocalVectorRetriever disabled."
+                )
+                self._available = False
+                return False
             try:
-                self._model = SentenceTransformer(self._model_name)
+                self._model = model_cls(self._model_name)
             except Exception as e:
                 logger.warning("Failed to load sentence-transformers model %r: %s", self._model_name, e)
                 self._available = False

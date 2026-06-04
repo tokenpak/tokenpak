@@ -124,6 +124,11 @@ jobs:
     name: Release-gate snapshot validation
     needs: preflight
     runs-on: ubuntu-latest
+    env:
+      # Skip first-run RBAC admin bootstrap during snapshot introspection so the
+      # ephemeral admin password is never emitted into (public) CI logs.
+      # See REIPO-SNAPGEN-LOG-HYGIENE-01.
+      TOKENPAK_SNAPSHOT_GEN: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

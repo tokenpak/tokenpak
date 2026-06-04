@@ -26,9 +26,12 @@ _SCHEMA_PATH = Path(__file__).parent / "state_schema.json"
 
 class StateManager:
     """
-    Manages compact JSON session state for TPK protocol.
+    Manages compact JSON session state for the TokenPak Integration Protocol (TIP).
 
-    Persists to: .tpk/state/session_<id>.state.json
+    Persists to: .tpk/state/session_<id>.state.json   (`.tpk/` is the brand-shortform
+    on-disk path, frozen by the 2026-05-06 terminology transition; do not rename.
+    The protocol layer is **TIP** — `TPK` is brand-shortform only, not an acronym.
+    See `08-naming-glossary.md` §TPK and §TIP.)
     Wire format: compact JSON (no whitespace), prefixed with STATE_JSON:
     """
 

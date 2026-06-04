@@ -1,14 +1,13 @@
 
 import pytest
 
-pytest.importorskip("tokenpak.formatting.formatter", reason="module not available in current build")
+pytest.importorskip("tokenpak._formatting.formatter", reason="module not available in current build")
 import types
 
-from tokenpak.formatting import symbols as FS
-from tokenpak.formatting.formatter import OutputFormatter
-from tokenpak.formatting.modes import OutputMode, resolve_mode
-
 from tokenpak import cli
+from tokenpak._formatting import symbols as FS
+from tokenpak._formatting.formatter import OutputFormatter
+from tokenpak._formatting.modes import OutputMode, resolve_mode
 
 
 def test_symbols_are_semantic_set():
@@ -22,9 +21,12 @@ def test_symbols_are_semantic_set():
 
 
 def test_formatter_header_and_divider():
+    import tokenpak
+
     f = OutputFormatter("Status")
     out = f.header()
-    assert "TOKENPAK v0.3.1  |  Status" in out
+    # Banner must reflect the live package version, not a hardcoded string.
+    assert f"TOKENPAK v{tokenpak.__version__}  |  Status" in out
     assert "─" * 40 in out
 
 

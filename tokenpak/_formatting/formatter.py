@@ -17,7 +17,9 @@ class OutputFormatter:
         self.color = supports_color()
 
     def header(self) -> str:
-        line1 = f"TOKENPAK v1.1.0  |  {self.section}"
+        from tokenpak import __version__
+
+        line1 = f"TOKENPAK v{__version__}  |  {self.section}"
         line2 = "─" * 40
         return "\n".join([line1, line2])
 

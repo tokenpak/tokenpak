@@ -2374,8 +2374,8 @@ def _build_stub_parsers(sub):
     instead of a traceback.
     """
     _STUBS = {
-        "audit": "Enterprise audit log management (not yet implemented)",
-        "compliance": "Generate compliance reports (not yet implemented)",
+        "audit": "Enterprise audit log management (available in TokenPak Pro)",
+        "compliance": "Generate compliance reports (available in TokenPak Pro)",
         "watch": "Live terminal savings dashboard (not yet implemented — use `tokenpak dashboard` instead)",
     }
 

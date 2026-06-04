@@ -153,22 +153,54 @@ def build_rolling_cap_block(breach) -> bytes:
     `breach` is a :class:`rolling_caps.CapBreach` dataclass instance.
     Returns the structured 402 body bytes; the caller wraps the HTTP
     status and headers.
+
+    Attribution clarity: for **per_fleet** breaches, ``agent_id`` is the
+    *triggering caller* (the request that tripped the cap), and ``used`` is the
+    **fleet-wide aggregate** across all tagged callers in the window — NOT the
+    triggering caller's own spend. The legacy ``(agent=X, used=$)`` wording was
+    routinely misread as "caller X spent $" and cost diagnostic time. The
+    message + body below are dimension-aware so an operator reads it correctly
+    once: ``triggered_by`` always names the caller; ``fleet_used``/``fleet_cap``
+    carry the aggregate for fleet-wide breaches. Legacy fields (``agent_id``,
+    ``used``, ``cap``, ``projected_add``) are retained unchanged for backward
+    compatibility.
     """
+    is_fleet = str(breach.cap_dimension).startswith("per_fleet")
+    scope = "fleet" if is_fleet else "agent"
+    if is_fleet:
+        attribution = (
+            f"triggered_by={breach.agent_id} (this caller tripped the cap; it is "
+            f"NOT necessarily the biggest spender). fleet_used={breach.used:.4g}, "
+            f"fleet_cap={breach.cap:.4g}, would_add={breach.projected_add:.4g}, "
+            f"window={breach.window_seconds}s. fleet_used is the SUM of all tagged "
+            f"agents in the window, not {breach.agent_id} alone."
+        )
+    else:
+        attribution = (
+            f"agent={breach.agent_id} used={breach.used:.4g} of its own cap="
+            f"{breach.cap:.4g} (this IS {breach.agent_id}'s rolling usage), "
+            f"would_add={breach.projected_add:.4g}, window={breach.window_seconds}s."
+        )
+    message = (
+        f"TIP Spend Guard rolling cap exceeded: {breach.cap_dimension} [{scope}]. "
+        f"{attribution} "
+        "Reply 'yes' or prepend '[TIP: allow=once]' to bypass; "
+        "wait ~30 min for usage to age out, or operator may raise "
+        "the cap in spend_guard.rolling_caps."
+    )
     payload = {
         "error": {
             "type": ERR_ROLLING_CAP_BLOCKED,
-            "message": (
-                "TIP Spend Guard rolling cap exceeded: "
-                f"{breach.cap_dimension} (agent={breach.agent_id}, "
-                f"window={breach.window_seconds}s, used={breach.used:.4g}, "
-                f"cap={breach.cap:.4g}, would_add={breach.projected_add:.4g}). "
-                "Reply 'yes' or prepend '[TIP: allow=once]' to bypass; "
-                "wait ~30 min for usage to age out, or operator may raise "
-                "the cap in spend_guard.rolling_caps."
-            ),
+            "message": message,
+            # --- attribution-clear fields ---
+            "scope": scope,                       # "fleet" | "agent"
+            "triggered_by": breach.agent_id,      # the caller that tripped the cap
+            "fleet_used": breach.used if is_fleet else None,
+            "fleet_cap": breach.cap if is_fleet else None,
+            "window_seconds": breach.window_seconds,
+            # --- backward-compatible legacy fields (DO NOT remove) ---
             "cap_dimension": breach.cap_dimension,
             "agent_id": breach.agent_id,
-            "window_seconds": breach.window_seconds,
             "used": breach.used,
             "cap": breach.cap,
             "projected_add": breach.projected_add,
@@ -176,4 +208,9 @@ def build_rolling_cap_block(breach) -> bytes:
             "bypass_directive": "[TIP: allow=once]",
         }
     }
+    # Optional per-agent breakdown — included only when the breach carries it
+    # (top-N by spend in the window). Full population is a separate slice.
+    contributing = getattr(breach, "contributing_agents", None)
+    if contributing:
+        payload["error"]["contributing_agents"] = contributing
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")

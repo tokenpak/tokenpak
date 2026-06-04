@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 SESSION_TTL_HOURS = 24
 API_KEY_PREFIX = "tp_"
 ADMIN_BOOTSTRAP_ENV = "TOKENPAK_ADMIN_BOOTSTRAP"  # set to "1" to force re-bootstrap
+SNAPSHOT_GEN_ENV = "TOKENPAK_SNAPSHOT_GEN"  # set to "1" by release-gate snapshot generators
 
 # ---------------------------------------------------------------------------
 # Schema
@@ -171,6 +172,13 @@ class RBACStore:
 
     def _maybe_bootstrap_admin(self):
         """Create default admin on first run if no users exist."""
+        # Skip first-run admin bootstrap during release-gate snapshot
+        # generation (gen_api_snapshot / gen_telemetry_schema set
+        # TOKENPAK_SNAPSHOT_GEN=1): introspecting the RBAC schema must not
+        # create a user, mutate the store, or emit bootstrap side effects
+        # that would pollute deterministic snapshot output.
+        if os.environ.get(SNAPSHOT_GEN_ENV) == "1":
+            return
         with self._conn() as conn:
             count = conn.execute("SELECT COUNT(*) FROM tp_users").fetchone()[0]
             force = os.environ.get(ADMIN_BOOTSTRAP_ENV) == "1"

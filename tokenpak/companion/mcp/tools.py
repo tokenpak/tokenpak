@@ -139,6 +139,20 @@ def _handle_check_budget(state: CompanionState, args: dict[str, Any]) -> str:
         })
     if status >= 400:
         return json.dumps(body)
+    # Honest-reporting (split-brain trust fix): the proxy only accounts for
+    # traffic actually routed through the TokenPak value plane. A client routed
+    # natively (e.g. provider-native caching, no TokenPak proxy in path) is NOT
+    # counted here — so a low/zero figure must never be read as authoritative
+    # total spend. Always attach an explicit scope note; never return a bare 0.
+    if isinstance(body, dict):
+        body = dict(body)
+        body["_tokenpak_scope"] = (
+            "Reflects ONLY traffic routed through the TokenPak value plane "
+            "(proxy/companion). Natively-routed client traffic is NOT counted "
+            "here; a low or zero figure does not mean low total spend. If this "
+            "client is not routed through TokenPak, treat TokenPak accounting "
+            "as unavailable for it."
+        )
     return json.dumps(body, indent=2)
 
 

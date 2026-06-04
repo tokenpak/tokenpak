@@ -222,14 +222,15 @@ def _recall_db() -> Optional[Path]:
     """Resolve the recall db path under the canonical TokenPak home."""
     from tokenpak import _paths
 
-    return _paths.under("companion", "journal.db")
+    return _paths.under("companion", "recall.db")
 
 
 def _query_paks(db: Path, *, limit: int) -> list[dict]:
     """Return up to ``limit`` Pak rows joined with their reasons + risks.
 
-    The exact table names follow the PR #184 foundation. We probe for
-    table presence to stay forward-compatible with future renames.
+    Reason/risk metadata lives in the recall store's ``pak_reason_codes``
+    and ``pak_risk_flags`` tables. We probe for the Pak table presence to
+    stay forward-compatible with future renames.
     """
     if not db.exists():
         return []
@@ -258,8 +259,8 @@ def _query_paks(db: Path, *, limit: int) -> list[dict]:
         out: list[dict] = []
         for r in rows:
             d = dict(r)
-            d["_reason_codes"] = _join_codes(conn, "pak_reasons", d.get("pak_id"))
-            d["_risk_flags"] = _join_codes(conn, "pak_risks", d.get("pak_id"))
+            d["_reason_codes"] = _join_codes(conn, "pak_reason_codes", d.get("pak_id"))
+            d["_risk_flags"] = _join_codes(conn, "pak_risk_flags", d.get("pak_id"))
             out.append(d)
         return out
     finally:

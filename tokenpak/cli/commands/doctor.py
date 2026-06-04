@@ -1123,6 +1123,43 @@ def run_doctor(
     return 0
 
 
+def run_stream_check(output_json: bool = False) -> int:
+    """Exercise the companion truncated-stream guard. Returns exit code.
+
+    Drives the defensive stream reader over a fake provider that closes the
+    connection mid-chunk (no terminal ``message_stop``). Exits 0 when the
+    guard flags the truncation with the stable ``TPK_STREAM_TRUNCATED`` code
+    and writes the structured ``provider.error`` telemetry event.
+    """
+    from tokenpak.companion import stream as _stream
+
+    result = _stream.self_check()
+    passed = bool(result.get("passed"))
+
+    if output_json:
+        print(json.dumps(result, indent=2))
+        return 0 if passed else 2
+
+    print("\nTOKENPAK  |  Doctor — stream guard")
+    print("──────────────────────────────\n")
+    if passed:
+        print(Colors.ok(
+            f"Stream guard        truncation flagged ({result.get('code')}); "
+            f"provider.error event written"
+        ))
+        print("\n──────────────────────────────")
+        print("0 errors, 0 warnings.")
+        return 0
+    print(Colors.fail(
+        "Stream guard        FAILED to flag truncated stream — "
+        f"flagged={result.get('flagged')} code={result.get('code')} "
+        f"event_written={result.get('event_written')}"
+    ))
+    print("\n──────────────────────────────")
+    print("1 error, 0 warnings.")
+    return 2
+
+
 try:
     import click
 
@@ -1142,6 +1179,10 @@ try:
         "--claude-code", "claude_code", is_flag=True,
         help="Run Claude Code integration checks (ENABLE_TOOL_SEARCH, mode, IDE detection)",
     )
+    @click.option(
+        "--stream", "stream", is_flag=True,
+        help="Exercise the truncated-stream guard via a fake provider that closes mid-chunk",
+    )
     def doctor_cmd(
         fix: bool,
         fleet: bool,
@@ -1149,6 +1190,7 @@ try:
         verbose: bool,
         output_json: bool,
         claude_code: bool,
+        stream: bool,
     ) -> None:
         """Run diagnostics on your TokenPak installation.
 
@@ -1172,7 +1214,9 @@ try:
           tokenpak doctor --fleet --fix     # check + fix all agents
           tokenpak doctor --fleet --deploy  # push latest doctor to all agents first
         """
-        if fleet:
+        if stream:
+            rc = run_stream_check(output_json=output_json)
+        elif fleet:
             rc = run_fleet_doctor(fix=fix, deploy=deploy)
         else:
             rc = run_doctor(fix=fix, output_json=output_json, verbose=verbose, claude_code=claude_code)

@@ -4,13 +4,19 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+  # Nightly signal-bearing run. Timing-sensitive perf/SLA tests (needs_fast_host)
+  # are excluded from the always-on PR correctness matrix because shared runners
+  # are noisy; this scheduled run keeps them executing and reporting on a regular
+  # cadence so real regressions are still caught (just not as a per-PR merge flake).
+  schedule:
+    - cron: "37 7 * * *"
 
 # Cancel in-progress runs for the same PR/branch
 concurrency:
   group: benchmarks-${{ github.ref }}
   cancel-in-progress: true
 
-# The "Post comment on PR" step uses marocchino/sticky-pull-request-comment@v2
+# The "Post comment on PR" step uses marocchino/sticky-pull-request-comment@v3
 # which needs `pull-requests: write` to publish a benchmark summary back to
 # the PR. Without this, the step fails with "Resource not accessible by
 # integration" and tanks the whole job even though the actual benchmarks +
@@ -105,7 +111,7 @@ jobs:
 
       - name: Post comment on PR
         if: github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: tokenpak-benchmarks
           path: pr_comment.md

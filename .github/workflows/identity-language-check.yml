@@ -200,6 +200,15 @@ jobs:
               # Internal-execution senses ("agent fleet", "fleet worker",
               # "fleet runtime", "fleet governor", "fleet agents", "bot fleet")
               # are deliberately NOT masked and remain forbidden.
+              #
+              # Functional spend-guard fleet surface (analogous to the openclaw
+              # functional-symbol mask below): the spend guard scopes rolling
+              # caps across a multi-instance fleet via the `x-tokenpak-fleet`
+              # request header and per-fleet / fleet-level capability prose.
+              # These are non-renamable API/protocol identifiers plus the public
+              # multi-instance-fleet capability — NOT internal-execution
+              # language — so those specific functional forms are masked; the
+              # internal senses listed above remain forbidden.
               sed -E \
                 -e 's/tokenpak[[:space:]]+fleet/tokenpak __PUBLIC_FLEET_VERB__/g' \
                 -e 's/--fleet([^a-zA-Z]|$)/--__PUBLIC_FLEET_FLAG__\1/g' \
@@ -224,6 +233,12 @@ jobs:
                 -e 's/cli\.fleet/cli.__PUBLIC_FLEET_MODULE__/g' \
                 -e 's/configure fleet/configure __PUBLIC_FLEET_PHRASE__/g' \
                 -e 's/=fleet\b/=__PUBLIC_FLEET_KW__/g' \
+                -e 's/x-tokenpak-fleet/x-tokenpak-__FUNCTIONAL_FLEET_HDR__/g' \
+                -e 's/per-fleet/per-__FUNCTIONAL_FLEET_SCOPE__/g' \
+                -e 's/fleet-level/__FUNCTIONAL_FLEET_SCOPE__-level/g' \
+                -e 's/fleet([- ])protection/__FUNCTIONAL_FLEET_SCOPE__\1protection/g' \
+                -e 's/fleet caps/__FUNCTIONAL_FLEET_SCOPE__ caps/g' \
+                -e 's#session ?/ ?fleet ?/ ?agent#session/__FUNCTIONAL_FLEET_SCOPE__/agent#g' \
                 "$file"
             elif is_release_gate_impl_path "$file"; then
               # Tier 1 — release-gate implementation/test/workflow surface:

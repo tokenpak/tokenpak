@@ -4,6 +4,52 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] — 2026-06-03
+
+Surgical patch release: fixes, hardening, and public-safety/CI hygiene only. No new
+features, no default-behavior changes, no breaking changes. (The install-footprint
+extras split remains parked for a future minor — see the Unreleased section below.)
+
+### Fixed
+
+- **proxy:** evict upstream inflight keys when the in-flight counter reaches zero,
+  preventing an upstream RSS leak under sustained load.
+- **proxy:** consolidate `CLAUDE_CODE_HEADER_ALLOWLIST` to a single canonical definition.
+- **companion:** `check_budget` no longer presents its result as authoritative total spend.
+- **companion:** lazy-load sentence-transformers so the MCP server starts quickly
+  (cold-start fix); launch the MCP server with a safe Python path (`-P`).
+- **companion:** defensive guard for truncated provider streams.
+- **pakplan:** read Pak recall from `recall.db` instead of a stale `journal.db`.
+- **spend-guard:** attribution-clear rolling-cap `402` response body.
+- **cli:** banner shows the live installed package version instead of a hardcoded string.
+- **paths:** fail-loud subdir allowlist in `_paths.under()` (and allow the `dispatch/` subdir).
+- **telemetry:** skip the RBAC admin bootstrap during snapshot generation.
+
+### Changed
+
+- **docs:** audit and compliance CLI stubs reworded as Pro-tier features; corrected
+  protocol terminology to TIP per the glossary.
+
+### Dependencies
+
+- Bump `websockets` to `>=16.0`; bump CI actions `codecov-action` 4→6,
+  `download-artifact` 4→8, `sticky-pull-request-comment` 2→3.
+
+### Internal
+
+- Suppress the ephemeral RBAC admin password from release-gate snapshot-validation CI
+  logs; snapshot generation now sets `TOKENPAK_SNAPSHOT_GEN=1` to skip the first-run
+  admin bootstrap during introspection.
+- CI: quarantine runner-sensitive perf/SLA tests from the blocking matrix; refresh the
+  release-gate workflow-steps snapshot; validate the release tag is reachable from the
+  release branch before build; mask functional identifiers in the identity check.
+
+### Note — licensing
+
+- The `tokenpak activate` licensing integration that landed on `main` during the v1.7.0
+  line ships to PyPI for the first time in **1.7.1**; users on the published 1.7.0 wheel
+  do not have it.
+
 ## [v1.7.0] — 2026-05-25
 
 > Corrected 2026-05-29: the Beta-1 CLI surface below was originally listed
