@@ -29,19 +29,20 @@ tokenpak demo
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  TokenPak — Live Compression Demo                    │
+│  TokenPak — Live Compression Demo (illustrative)     │
 ├──────────────────────────────────────────────────────┤
 │  Scenario              DevOps agent (config + logs)  │
 │  Savings drivers                      dedup + alias  │
 ├──────────────────────────────────────────────────────┤
 │  Original                                747 tokens  │
 │  Compressed                              502 tokens  │
-│  Saved                          245 tokens  (32.8%)  │
-│  Cost saved (est.)                $0.00073 per call  │
+│  Fewer tokens                            245 tokens  │
 ├──────────────────────────────────────────────────────┤
 │  Stages: dedup, alias, segmentize, directives        │
 └──────────────────────────────────────────────────────┘
 ```
+
+> Illustrative fixture — token counts vary by workload. Measure your own with `tokenpak savings`; receipt-backed ranges publish once the benchmark lane lands.
 
 ---
 
