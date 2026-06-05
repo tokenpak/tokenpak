@@ -38,9 +38,8 @@ def _find_claude_binary() -> Optional[str]:
 
     The tokenpak proxy runs under systemd user units whose PATH is often
     ``/usr/bin:/bin`` — it does NOT include npm/pip-user install dirs.
-    Mirrors the discovery walk in
-    ``~/vault/06_RUNTIME/scripts/agent-claude-worker.sh`` so fleet hosts
-    stay consistent without per-host env tweaks.
+    Mirrors the discovery walk a deployment-specific wrapper script performs,
+    so instances stay consistent without per-host env tweaks.
 
     Override: ``TOKENPAK_CLAUDE_BIN`` env var (absolute path) wins.
     """
@@ -323,7 +322,7 @@ def discover_openclaw_configs() -> list[Path]:
     at least one valid path):
 
       1. ``OPENCLAW_CONFIG_PATH`` env var (what systemd units set per
-         instance — e.g. ``/home/sue/.openclaw-governor/openclaw.json``
+         instance — e.g. ``~/.openclaw-governor/openclaw.json``
          for the governor). Honored as a single-target override.
       2. Glob ``$HOME/.openclaw*/openclaw.json`` — picks up ``main``,
          ``governor``, and any future siblings without code changes.
