@@ -1806,6 +1806,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass  # telemetry must never break request handling
 
+                # ── Opt-in capture intake (MultiPak Pro capture pipeline) ───
+                # Forward an opt-in-flagged model response to the loopback Pro
+                # daemon for capture. Structurally safe: runs only AFTER the
+                # response was already written to the client (above); guarded to
+                # the non-streaming path where the full body is buffered;
+                # fire-and-forget (daemon thread); OSS stores nothing. Inert
+                # unless TOKENPAK_PROXY_CAPTURE_INTAKE=1 AND the request carried
+                # `X-TokenPak-Capture: opt-in`. Fully fail-silent — cannot break
+                # a request or touch the byte-preserved response.
+                try:
+                    if not is_streaming and "body_for_metrics" in dir():
+                        from tokenpak.proxy.capture_intake import maybe_forward_capture
+                        maybe_forward_capture(self.headers, body_for_metrics, model)
+                except Exception:
+                    pass  # capture intake must never break request handling
+
                 # Track per-request compression ratio for rolling average
                 if input_tokens > 0:
                     ratio = round(saved / input_tokens, 4)
