@@ -83,29 +83,13 @@ shared secret to require `Authorization: Bearer <token>` on remote requests
 - **A/B testing and replay/debug** — compare compression configs, replay past requests
 - **50 built-in compression recipes** — YAML, customizable
 
-80%+ of operations cost zero tokens. See [docs/quickstart.md](docs/quickstart.md) and [docs/api-tpk-v1.md](docs/api-tpk-v1.md) to get started.
+Repeated context is reused from cache instead of re-sent on every call. See [docs/quickstart.md](docs/quickstart.md) and [docs/api-tpk-v1.md](docs/api-tpk-v1.md) to get started.
 
 ---
 
-## Pricing
+## Open source & editions
 
-| | Free | Pro | Team |
-|--|:--:|:--:|:--:|
-| Context compression | ✅ | ✅ | ✅ |
-| Client integration (all 9) | ✅ | ✅ | ✅ |
-| Model routing | ✅ | ✅ | ✅ |
-| Cost tracking | ✅ | ✅ | ✅ |
-| Vault indexing + search | ✅ | ✅ | ✅ |
-| CLI + proxy | ✅ | ✅ | ✅ |
-| Advanced compression recipes | — | ✅ | ✅ |
-| Budget enforcement + alerts | — | ✅ | ✅ |
-| Priority support | — | ✅ | ✅ |
-| Multi-agent coordination | — | — | ✅ |
-| Shared vault (team) | — | — | ✅ |
-| RBAC + audit logs | — | — | ✅ |
-| **Price** | **Free** | **$99/mo** | **$299/mo** |
-
-See [tokenpak.ai/pricing](https://tokenpak.ai/pricing) for full tier details and enterprise options.
+TokenPak's core is Apache-2.0 open source; TokenPak Pro and hosted services are proprietary. Commercial packaging is not published yet.
 
 ---
 
