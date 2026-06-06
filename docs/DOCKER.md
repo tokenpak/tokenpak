@@ -16,9 +16,9 @@ docker build -t tokenpak .
 # Basic (uses defaults)
 docker run -p 8766:8766 tokenpak
 
-# With config volume
+# With a custom config (optional — built-in defaults are used if omitted)
 docker run -p 8766:8766 \
- -v $(pwd)/config/tokenpak.config.json:/app/tokenpak.config.json:ro \
+ -v $(pwd)/config/config.yaml:/home/tokenpak/.tokenpak/config.yaml:ro \
  -v tokenpak-logs:/logs \
  tokenpak
 
@@ -35,8 +35,8 @@ docker run -p 8766:8766 \
 # Copy environment file
 cp .env.example .env
 
-# Copy config file
-cp config/tokenpak.config.json.example config/tokenpak.config.json
+# (Optional) Provide a custom config at config/config.yaml — Compose mounts it
+# to /home/tokenpak/.tokenpak/config.yaml. Omit it to run with built-in defaults.
 
 # Start services
 docker-compose up -d
@@ -89,7 +89,7 @@ Mount configuration at container startup:
 
 ```bash
 # Using docker run
-docker run -v $(pwd)/config/tokenpak.config.json:/app/tokenpak.config.json:ro tokenpak
+docker run -v $(pwd)/config/config.yaml:/home/tokenpak/.tokenpak/config.yaml:ro tokenpak
 
 # Using docker-compose (automatic)
 docker-compose up
@@ -268,7 +268,7 @@ docker-compose logs tokenpak
 
 # Common issues:
 # - Port already in use: change TOKENPAK_PORT in .env
-# - Config file missing: cp config/tokenpak.config.json.example config/tokenpak.config.json
+# - Custom config not applied: ensure config/config.yaml exists (Compose mounts it; omit for defaults)
 # - Permission denied: check volume mount permissions
 ```
 
