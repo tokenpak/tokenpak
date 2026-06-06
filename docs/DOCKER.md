@@ -18,7 +18,7 @@ docker run -p 8766:8766 tokenpak
 
 # With config volume
 docker run -p 8766:8766 \
- -v $(pwd)/config/tokenpack.config.json:/app/tokenpack.config.json:ro \
+ -v $(pwd)/config/tokenpak.config.json:/app/tokenpak.config.json:ro \
  -v tokenpak-logs:/logs \
  tokenpak
 
@@ -36,7 +36,7 @@ docker run -p 8766:8766 \
 cp .env.example .env
 
 # Copy config file
-cp config/tokenpack.config.json.example config/tokenpack.config.json
+cp config/tokenpak.config.json.example config/tokenpak.config.json
 
 # Start services
 docker-compose up -d
@@ -89,7 +89,7 @@ Mount configuration at container startup:
 
 ```bash
 # Using docker run
-docker run -v $(pwd)/config/tokenpack.config.json:/app/tokenpack.config.json:ro tokenpak
+docker run -v $(pwd)/config/tokenpak.config.json:/app/tokenpak.config.json:ro tokenpak
 
 # Using docker-compose (automatic)
 docker-compose up
@@ -268,7 +268,7 @@ docker-compose logs tokenpak
 
 # Common issues:
 # - Port already in use: change TOKENPAK_PORT in .env
-# - Config file missing: cp config/tokenpack.config.json.example config/tokenpack.config.json
+# - Config file missing: cp config/tokenpak.config.json.example config/tokenpak.config.json
 # - Permission denied: check volume mount permissions
 ```
 
