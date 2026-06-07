@@ -102,8 +102,13 @@ jobs:
           # which would silently swallow test failures. Std 30 §4 (R4) gate
           # depends on this being correct.
           set +e
+          # Quarantine runner-sensitive perf/SLA tests (needs_fast_host) from the
+          # blocking release gate: GitHub-hosted runners cannot meet wall-clock
+          # throughput / p99 SLAs deterministically (e.g. test_load_100rps.py).
+          # Mirrors the ci.yml quarantine (`not needs_fast_host`). Parens are
+          # required — $MARKERS contains `or` and `and` binds tighter than `or`.
           pytest tests/ \
-            -m "$MARKERS" \
+            -m "($MARKERS) and not needs_fast_host" \
             --continue-on-collection-errors \
             -q --tb=short \
             2>&1 | tee pytest-output.log
