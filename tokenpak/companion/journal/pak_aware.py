@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Pak-aware journal extension (Std 32 §1.3 row 4, §4.4, Phase 1).
+"""Pak-aware journal extension (Phase 1).
 
-Per Std 32 §4.4 the companion journal continues auto-capturing every
-session unchanged — local-only, no upload. Promotion of a journal entry to
-a MultiPak Interaction Pak is the **opt-in** step performed by the Pro
-daemon. This module ships the OSS-side surface for that opt-in:
+The companion journal continues auto-capturing every session unchanged —
+local-only, no upload. Promotion of a journal entry to a MultiPak
+Interaction Pak is the **opt-in** step performed by the Pro daemon. This
+module ships the OSS-side surface for that opt-in:
 
 - Mark a journal entry as a promotion candidate (write side, opt-in).
 - Query promotion candidates (read side, used by the Pro daemon).
@@ -18,7 +18,7 @@ TEXT column as additive keys (``is_promotion_candidate``,
 ``promoted_pak_id``).
 
 Privacy: the marker is pure metadata; entry content stays local. License
-egress (per Std 25 §4.4) never sees journal data.
+egress never sees journal data.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ KEY_PROMOTED_PAK_ID = "promoted_pak_id"
 # vault adapter's "tokenpak-vault" so recall ranking can distinguish.
 _PAK_PLATFORM = "tokenpak-companion-journal"
 
-# Journal entry_type → PakAuthority. Per Std 32 §5.2 ranking model:
+# Journal entry_type → PakAuthority. Per the ranking model:
 # user_approved > file_source > tool_result > llm_generated. Journal
 # entries don't yet carry user-approval signal so we route generously to
 # tool_result for milestones (concrete events) and llm_generated for the
@@ -250,7 +250,7 @@ def journal_entry_to_pak_stub(entry: JournalEntryRow) -> Pak:
     state. Phase 1 OSS code uses this for diagnostic output (``tokenpak
     pak inspect``) and for daemon ingest preview.
 
-    Per Std 32 §2.2 — Interaction Paks default to 180-day retention.
+    Interaction Paks default to 180-day retention.
     """
     pak_id = f"journal:{entry.session_id}:{entry.entry_id}"
     title = f"Journal entry [{entry.entry_type}] @ {_iso_from_ts(entry.timestamp)}"

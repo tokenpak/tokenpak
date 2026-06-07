@@ -58,7 +58,7 @@ class ProtectedSpanType:
     or ``SEMANTIC_SAFE``.
 
     Span detection logic belongs in proxy/optimization/protected_spans.py
-    (Component D, TIP-05+). This module only defines the canonical names.
+    (Component D). This module only defines the canonical names.
     """
 
     FILE_PATH = "file_path"

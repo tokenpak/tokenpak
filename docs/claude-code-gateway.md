@@ -18,7 +18,7 @@ All Claude Code requests flow through the proxy. No SDK changes are needed.
 ## Semantic Cache — Wire-Format Awareness
 
 TokenPak's semantic cache stores and serves LLM responses for near-duplicate
-queries. As of CCG-15, the cache is **wire-format-aware**: JSON and SSE
+queries. The cache is **wire-format-aware**: JSON and SSE
 (Server-Sent Events / streaming) responses are stored and served separately.
 
 ### How It Works
@@ -58,7 +58,7 @@ The buffer cap is configurable via the `_SC_TEE_CAP` constant in `proxy.py`
 
 ---
 
-## Claude Code Bypass — Tier 2 (CCG-14 + CCG-15)
+## Claude Code Bypass — Tier 2
 
 ### Current Behaviour (Tier 2)
 
@@ -81,7 +81,8 @@ loop, these stale IDs can desynchronize the agent's tool-call tracking, causing
 unpredictable failures.
 
 Non-Claude-Code streaming clients (e.g., raw OpenAI SDK with `stream=True`)
-do **not** have this constraint and benefit from SSE caching after CCG-15.
+do **not** have this constraint and benefit from SSE caching once wire-format
+awareness is enabled.
 
 ### Deferred — Tier 3 (Agent-Aware Cache)
 
@@ -91,7 +92,7 @@ safe for agent loops. This is tracked as a separate task (no packet yet).
 
 Until Tier 3 ships, the bypass guard remains active for all Claude Code
 requests. The constant `"skipped:streaming-or-agent"` in the journal is the
-canonical indicator that the CCG-14/CCG-15 guard fired.
+canonical indicator that the bypass guard fired.
 
 ---
 
@@ -152,7 +153,7 @@ api.anthropic.com ← sees identical request to direct Claude Code
 | **Compaction** | Requires JSON re-serialization (breaks billing) |
 | **Stable cache control** | Client manages its own cache_control TTL ordering |
 | **Cache cap / TTL hotfix** | Would modify client's cache_control blocks |
-| **Semantic cache** | Claude Code bypassed (stale message_id issue, CCG-14) |
+| **Semantic cache** | Claude Code bypassed (stale message_id issue) |
 
 ### Vault Injection — Byte-Level Splice
 
@@ -203,11 +204,11 @@ currently not supported."
 
 ---
 
-## Related Tasks
+## Related Work
 
-| Task | Description |
+| Item | Description |
 |--------|---------------------------------------------------------------------|
-| CCG-14 | Tier 1 hotfix — bypass cache for streaming + Claude Code requests |
-| CCG-15 | Tier 2 — wire-format-aware cache stores and serves SSE responses |
-| CCG-16 | Regression tests for the CCG-14/15 guard composition |
+| Tier 1 | Hotfix — bypass cache for streaming + Claude Code requests |
+| Tier 2 | Wire-format-aware cache stores and serves SSE responses |
+| Tests | Regression tests for the Tier 1/2 guard composition |
 | Tier 3 | Agent-aware cache — synthesize fresh IDs on hit (not yet scoped) |

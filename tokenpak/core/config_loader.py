@@ -292,7 +292,7 @@ mode: hybrid  # strict|hybrid|aggressive
 compression:
   enabled: true
   max_chars: 120
-  threshold_tokens: 1500  # was 4500 pre-TRIX-01; lowered for default savings
+  threshold_tokens: 1500  # lowered from 4500 for default savings
   cache_size: 2000
 
 features:
@@ -311,7 +311,7 @@ features:
   strict_mode: false
   # Tier 2 modules
   error_normalizer: false
-  budget_controller: true  # was false pre-TRIX-01; enabled for default budget enforcement
+  budget_controller: true  # enabled by default for budget enforcement
   request_logger: false
   salience_router: false
   cache_registry: false
@@ -384,7 +384,7 @@ failover:
       credential_env: GOOGLE_API_KEY
 
 # TIP Spend Guard (proxy-side pre-send circuit breaker, available v1.5.1+)
-# Standard 29 governs the wire contract; docs/spend-guard.md is the user guide.
+# docs/spend-guard.md is the user guide.
 # Every key has a TOKENPAK_SPEND_GUARD_* env-var counterpart.
 spend_guard:
   enabled: true                       # global on/off
@@ -399,16 +399,16 @@ spend_guard:
   pending_ttl_seconds: 600            # held requests expire after 10 min
   audit_db_path: ~/.tokenpak/spend_guard.db
 
-# MultiPak Pro (Std 32) — local-first cross-platform AI context continuity.
+# MultiPak Pro — local-first cross-platform AI context continuity.
 # Phase 1 OSS surface: Vault Pak adapter, companion Pak-aware journal,
 # tokenpak pak CLI, /pak/v1/* proxy stubs. Pro daemon (closed source)
-# is gated by Std 25 §9.3 and ships separately.
-# multipak.enabled defaults to false until 1-week soak per Std 32 §13.1
-# Decision #6. The OSS surface (read-only Vault Pak inspection,
+# ships separately.
+# multipak.enabled defaults to false until a 1-week soak completes.
+# The OSS surface (read-only Vault Pak inspection,
 # /pak/v1/status diagnostic) works regardless of this flag.
 pro:
   multipak:
-    enabled: false                    # opt-in until soak (Std 32 §13.1 D6)
+    enabled: false                    # opt-in until soak completes
 
 # Custom providers — register any OpenAI/Anthropic/Google-compatible endpoint.
 # Each entry becomes a routable provider with full compression/caching pipeline.

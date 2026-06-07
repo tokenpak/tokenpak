@@ -158,6 +158,46 @@ jobs:
             esac
           }
 
+          # Path-scoped allowlist for the OpenClaw provider/SDK/integration
+          # subsystem. `openclaw` is a real, public, non-renamable provider
+          # name: the integration ships under integrations/openclaw/**, and the
+          # SDK + creds + routing modules that implement/wire that provider
+          # reference it directly. In these specific files every `openclaw`
+          # occurrence is the legitimate provider/module name, so the
+          # \bopenclaw\b rule is fully masked HERE ONLY. This is path-scoped,
+          # NOT a global openclaw exemption — any other file referencing bare
+          # `openclaw` is still caught (and only the functional-literal masks
+          # below apply there).
+          is_openclaw_public_path() {
+            case "$1" in
+              tokenpak/integrations/openclaw/*) return 0 ;;
+              tokenpak/sdk/openclaw.py|tokenpak/sdk/registry.py|tokenpak/sdk/__init__.py) return 0 ;;
+              tokenpak/creds/providers/openclaw.py|tokenpak/creds/providers/__init__.py) return 0 ;;
+              tokenpak/creds/router.py|tokenpak/creds/doctor.py) return 0 ;;
+              tokenpak/services/routing_service/*|tokenpak/proxy/route_policy.py) return 0 ;;
+              tokenpak/tests/test_sdk_openclaw.py) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          # Path-scoped allowlist for the public `tokenpak fleet` / `dashboard
+          # --fleet` feature and its functional spend-guard fleet surface. In
+          # these specific feature files `fleet` is the user-facing
+          # multi-instance-proxy capability (machines the USER runs), not
+          # internal agent/governor language. The \bfleet\b rule is fully
+          # masked HERE ONLY. Internal-execution "fleet" (agent/governor/bot
+          # fleet) in any OTHER file remains forbidden (caught by the narrow
+          # masks below).
+          is_fleet_public_path() {
+            case "$1" in
+              tokenpak/cli/fleet.py|tokenpak/cli/commands/dashboard.py) return 0 ;;
+              tokenpak/tests/test_fleet.py|scripts/install-completions.sh) return 0 ;;
+              tokenpak/proxy/spend_guard/rolling_caps.py) return 0 ;;
+              tokenpak/integrations/openclaw/*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
           content_for_pattern() {
             local pat="$1" file="$2"
             # Order matters here. Tier 2 snapshot files get checked FIRST
@@ -192,6 +232,12 @@ jobs:
                 -e 's/\bopenclaw\b/__GENERATED_SYMBOL_OPENCLAW__/g' \
                 -e 's/\bfleet\b/__GENERATED_SYMBOL_FLEET__/g' \
                 "$file"
+            elif [ "$pat" = '\bfleet\b' ] && is_fleet_public_path "$file"; then
+              # Path-scoped allowlist (see is_fleet_public_path): the public
+              # fleet/dashboard feature + functional spend-guard fleet surface.
+              # Every `fleet` here is the user-facing multi-instance capability,
+              # so mask the whole word in these files only.
+              sed -E -e 's/\bfleet\b/__PUBLIC_FLEET_FEATURE__/g' "$file"
             elif [ "$pat" = '\bfleet\b' ]; then
               # Mask ONLY the public `tokenpak fleet` feature surface (the
               # multi-machine proxy fleet CLI/config command and its docs):
@@ -251,6 +297,12 @@ jobs:
                 -e 's/\bStd 21\b/Std __PUBLIC_RELGATE_REF_21__/g' \
                 -e 's/\bStd 30\b/Std __PUBLIC_RELGATE_REF_30__/g' \
                 "$file"
+            elif [ "$pat" = '\bopenclaw\b' ] && is_openclaw_public_path "$file"; then
+              # Path-scoped allowlist (see is_openclaw_public_path): the
+              # OpenClaw provider/SDK/integration subsystem — `openclaw` is the
+              # legitimate public provider/module name in these files, so mask
+              # the whole word here only.
+              sed -E -e 's/\bopenclaw\b/__INTEGRATION_OPENCLAW__/g' "$file"
             elif [ "$pat" = '\bopenclaw\b' ]; then
               # Functional-symbol mask (exact literals only). A few OpenClaw
               # references are real, non-renamable API/wire/CLI symbols: the SDK

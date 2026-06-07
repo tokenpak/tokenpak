@@ -2,7 +2,7 @@
 
 Covers the 2026-04-18 regression where `setup_openclaw()` only ever
 touched `~/.openclaw/openclaw.json` and missed sibling installs like
-`~/.openclaw-governor/openclaw.json` (the governor used by Suki).
+`~/.openclaw-governor/openclaw.json` (the governor install).
 """
 from __future__ import annotations
 

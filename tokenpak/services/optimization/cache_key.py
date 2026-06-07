@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Cache key / scope key derivation for the semantic cache stage (TIP-04).
+"""Cache key / scope key derivation for the semantic cache stage.
 
 Three helpers:
 

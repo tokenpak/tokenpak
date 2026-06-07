@@ -1,4 +1,4 @@
-"""Route-class compression policy (TIP-05).
+"""Route-class compression policy.
 
 Maps the canonical ``RouteClass`` strings (proposal Phase 3 Component A) to
 the safe compression recipes defined in ``recipes/oss/`` plus the protected

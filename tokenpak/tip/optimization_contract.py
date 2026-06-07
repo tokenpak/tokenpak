@@ -5,7 +5,7 @@
 a single object that the proxy optimization pipeline reads to determine which
 stages to apply, at what settings, and with what fidelity constraints.
 
-It is built once per request (by Component B's contract_builder, TIP-03+)
+It is built once per request (by Component B's contract_builder)
 from:
 - The resolved ``FormatAdapter`` (format capabilities)
 - The detected platform adapter (platform hints)
