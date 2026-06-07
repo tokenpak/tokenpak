@@ -117,7 +117,8 @@ clean-all: clean  ## Remove everything including venv
 # ── Release-Gate Trust Contract (Std 30, ratified 2026-05-09) ────────────────
 .PHONY: api-snapshot api-snapshot-check api-snapshot-diff workflow-steps-snapshot \
         workflow-steps-check telemetry-snapshot telemetry-check taxonomy-check \
-        deps-audit migration-multihop release-gate-snapshots release-gate-check
+        deps-audit migration-multihop release-gate-snapshots release-gate-check \
+        release-leak-check
 
 api-snapshot:  ## Std 30 §7 (R7) — regenerate tokenpak/_snapshots/public-api.json
 	$(PYTHON) scripts/release_gate/gen_api_snapshot.py
@@ -156,3 +157,8 @@ release-gate-snapshots: api-snapshot workflow-steps-snapshot telemetry-snapshot 
 
 release-gate-check: api-snapshot-check workflow-steps-check telemetry-check taxonomy-check  ## Validate ALL release-gate snapshots
 	@echo "✅  All release-gate checks passed"
+
+release-leak-check:  ## Full-tree public-leak scan of the built sdist + wheel (release gate)
+	$(PYTHON) -m pip install --quiet build
+	$(PYTHON) -m build
+	$(PYTHON) scripts/release_gate/check_release_leaks.py --dist dist/

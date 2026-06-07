@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-06-02T19:15:59Z",
+  "generated_at": "2026-06-07T21:07:28Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"
@@ -149,6 +149,54 @@
       "job": "install-shape-matrix",
       "id": "pytest",
       "name": "Pytest with --continue-on-collection-errors (Std 30 \u00a74 R4)"
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": ""
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": ""
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": ""
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": ""
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": "Build sdist + wheel for scanning"
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": "Build sdist + wheel for scanning"
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": "Scan shipped artifact for public-leak patterns"
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": "Scan shipped artifact for public-leak patterns"
     },
     {
       "workflow": "release-rehearsal.yml",
@@ -323,6 +371,30 @@
       "job": "build",
       "id": "",
       "name": "Verify package"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": ""
+    },
+    {
+      "workflow": "release.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": "Build sdist + wheel for scanning"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": "Scan shipped artifact for public-leak patterns"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "leak-scan",
+      "id": "",
+      "name": "Set up Python 3.12"
     },
     {
       "workflow": "release.yml",

@@ -27,8 +27,12 @@ jobs:
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           # Only files added or modified in this PR; binary files skipped.
+          # scripts/release_gate/check_release_leaks.py is excluded for the same
+          # reason this workflow and public-layout-check.yml are: it is the
+          # full-tree sibling scanner and intentionally contains the
+          # forbidden-pattern register + path-scoped allowlist literals.
           git diff --name-only --diff-filter=AM "$base" "$head" \
-            | grep -vE "^(packages/tests/|tests/|sdk/dist/|\.github/workflows/identity-language-check\.yml|\.github/workflows/public-layout-check\.yml|\.pre-commit-config\.yaml)" \
+            | grep -vE "^(packages/tests/|tests/|sdk/dist/|scripts/release_gate/check_release_leaks\.py|\.github/workflows/identity-language-check\.yml|\.github/workflows/public-layout-check\.yml|\.pre-commit-config\.yaml)" \
             | grep -E '\.(md|py|yml|yaml|json|toml|sh|js|ts|tsx)$' \
             > changed-files.txt || true
           echo "Changed files (filtered):"

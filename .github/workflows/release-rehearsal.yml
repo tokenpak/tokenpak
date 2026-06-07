@@ -147,9 +147,29 @@ jobs:
       - name: taxonomy-check (Std 30 §5 R5)
         run: make taxonomy-check
 
+  leak-scan:
+    # Full-tree public-leak gate (rehearsal mirror of release.yml). Keeps the
+    # weekly dry-run faithful to "every gate in the production release pipeline":
+    # scans the built sdist + wheel for internal identity / workflow language
+    # before artifacts are built.
+    name: Public-leak scan (full shipped tree)
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build sdist + wheel for scanning
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+      - name: Scan shipped artifact for public-leak patterns
+        run: python scripts/release_gate/check_release_leaks.py --dist dist/
+
   build-artifacts:
     name: Build sdist + wheel + sdist purity (R9)
-    needs: [install-shape-matrix, release-gate-snapshots]
+    needs: [install-shape-matrix, release-gate-snapshots, leak-scan]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
