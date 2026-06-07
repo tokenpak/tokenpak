@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Attribution stage (TIP-06) — parses upstream usage and emits SavingsAttribution records.
+"""Attribution stage — parses upstream usage and emits SavingsAttribution records.
 
 The AttributionStage is a post-response stage that:
 1. Inspects the upstream provider response usage dict.

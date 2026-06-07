@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Semantic cache optimization stage (TIP-04).
+"""Semantic cache optimization stage.
 
 ``SemanticCacheStage`` wraps ``SemanticCache`` (tokenpak.cache) as a generic
 ``OptimizationStage`` with route/fidelity policy, session-scoped cache keys,
@@ -11,7 +11,7 @@ without going through ``tokenpak.proxy.middleware.semantic_cache_middleware``
 (Level 4), maintaining the downward-only dependency rule from
 ``01-architecture-standard.md §2``.
 
-NOTE ON WIRE FORMAT: ``SemanticCache.store()`` is CCG-15 compliant — it stores
+NOTE ON WIRE FORMAT: ``SemanticCache.store()`` is wire-format-migration compliant — it stores
 raw bytes + content_type + wire_format. The stage serializes ``response: dict``
 → JSON bytes on record, and deserializes bytes → dict on hit, keeping the
 protocol layer wire-format-agnostic.
@@ -58,7 +58,7 @@ _TIP_CACHE_SEMANTIC_V1 = "tip.cache.semantic.v1"
 # ---------------------------------------------------------------------------
 
 # We attach results to OptimizationContext via a side attribute rather than
-# modifying the TIP-03 dataclass definition (additive, non-breaking).
+# modifying the optimization-context dataclass definition (additive, non-breaking).
 _CACHE_RESULT_ATTR = "_tip04_cache_result"
 _CACHED_RESPONSE_ATTR = "_tip04_cached_response"
 
@@ -187,7 +187,7 @@ class SemanticCacheStage:
 
             if lookup.hit:
                 if policy.allow_response_reuse and lookup.entry is not None:
-                    # CCG-15: entry.response is raw bytes — deserialize to dict
+                    # entry.response is raw bytes — deserialize to dict
                     try:
                         cached_dict = json.loads(lookup.entry.response)
                     except Exception:
@@ -226,7 +226,7 @@ class SemanticCacheStage:
         raw prompt text is stored — only the normalized query is persisted
         inside SemanticCache.
 
-        CCG-15: response dict is serialized to JSON bytes before storage so
+        Response dict is serialized to JSON bytes before storage so
         the cache entry is wire-format-aware.
         """
         policy = get_cache_policy_for_route(ctx.route)
@@ -240,7 +240,7 @@ class SemanticCacheStage:
         scope_key = make_scope_key(ctx)
         try:
             cache = self._get_or_create_cache(scope_key, policy)
-            # CCG-15: store raw bytes + content_type + wire_format
+            # store raw bytes + content_type + wire_format
             response_bytes = json.dumps(response).encode("utf-8")
             cache.store(query_text, response_bytes, "application/json", "json")
             cache_result = _get_cache_result(ctx)

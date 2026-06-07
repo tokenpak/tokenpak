@@ -7,8 +7,8 @@ Exposes:
   insert_mutation_audit(...) — insert a row into mutation_audit
   MUTATION_AUDIT_COLUMNS     — tuple of column names for verification
 
-These are the Wave-1 / CCG-02 additions that underpin per-session telemetry
-(CCG-03) and the mutation audit write path (CCG-06).
+These are the Wave-1 additions that underpin per-session telemetry
+and the mutation audit write path.
 """
 
 import sqlite3
@@ -30,13 +30,13 @@ MUTATION_AUDIT_COLUMNS: tuple[str, ...] = (
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
-    """Apply CCG-02 schema changes idempotently.
+    """Apply gateway schema changes idempotently.
 
     Safe to call on:
     - A brand-new empty database (creates everything from scratch).
     - An existing database that already has the requests table without
       session_id (adds the column without touching existing rows).
-    - A database that already has all CCG-02 changes (no-ops).
+    - A database that already has all gateway changes (no-ops).
 
     Callers are responsible for committing after this returns if they want
     the changes written to disk (the function does not commit).
@@ -53,7 +53,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         # Column already exists — expected on any DB that has run this before
         pass
 
-    # ── mutation_audit table (CCG-06 10-column schema) ────────────────────
+    # ── mutation_audit table (10-column schema) ────────────────────
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS mutation_audit (

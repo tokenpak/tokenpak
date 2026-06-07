@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Per-route-class semantic cache policy (TIP-04).
+"""Per-route-class semantic cache policy.
 
-``get_cache_policy_for_route`` returns a ``CachePolicy`` (from TIP-02) that
-reflects the proposal Component C policy table:
+``get_cache_policy_for_route`` returns a ``CachePolicy`` (from the upstream
+contract) that reflects the proposal Component C policy table:
 
     status_check / configuration_inspection / summarization
         → response reuse allowed, conservative thresholds
@@ -84,8 +84,9 @@ _RESPONSE_REUSE_THRESHOLDS: dict = {
 def get_cache_policy_for_route(route: Optional[str]) -> "CachePolicy":
     """Return the canonical ``CachePolicy`` for *route*.
 
-    When TIP-02 is unavailable, returns a minimal local stub so the stage
-    can still function — call sites should check ``.is_active()`` before use.
+    When the upstream contract is unavailable, returns a minimal local stub
+    so the stage can still function — call sites should check
+    ``.is_active()`` before use.
     """
     route_key = (route or "unknown").lower()
 
@@ -114,7 +115,7 @@ def get_cache_policy_for_route(route: Optional[str]) -> "CachePolicy":
 
 
 class _LocalCachePolicy:
-    """Minimal duck-type of CachePolicy when TIP-02 is unavailable."""
+    """Minimal duck-type of CachePolicy when the upstream contract is unavailable."""
 
     def __init__(
         self,

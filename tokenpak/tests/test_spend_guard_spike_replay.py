@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Canonical spike-replay test — TSG-05 acceptance lock.
+"""Canonical spike-replay test.
 
 Replays the 2026-05-07 09:28-10:56 UTC trace against the spend guard pipeline
 and asserts the guard would have blocked the runaway before $10 in spend.

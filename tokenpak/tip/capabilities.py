@@ -87,16 +87,16 @@ TIP_TOOL_SCHEMA_STABILITY_V1: str = "tip.tool-schema.stability.v1"
 TIP_CAPSULES_V1: str = "tip.capsules.v1"
 """Adapter supports session capsule injection and context compaction.
 
-Note: ``capsule`` is the legacy term superseded by ``Pak`` per glossary 08
+Note: ``capsule`` is the legacy term superseded by ``Pak`` per the glossary
 (ratified 2026-05-06). This capability label is preserved for backward
 compatibility; new Pak-related capabilities use the ``tip.pak.*`` and
 ``tip.context.*`` prefixes (see MultiPak block below)."""
 
-# --- MultiPak (Std 32, ratified 2026-05-07) ---
+# --- MultiPak (ratified 2026-05-07) ---
 # Cross-platform AI context continuity. Pak capture, recall, packaging,
 # handoff, and anchor hydration. OSS-side schema + capability declarations;
 # the engines that consume them live in the tokenpak-paid daemon.
-# Per Std 31 §2 these are fully additive within TIP-1.x — no version bump.
+# These are fully additive within TIP-1.x — no version bump.
 
 TIP_PAK_CAPTURE: str = "tip.pak.capture"
 """Component can create a Pak from a source (file, LLM response, tool output)."""
@@ -178,7 +178,7 @@ __all__ = [
     "TIP_INTENT_SUGGESTION_V1",
     "TIP_TOOL_SCHEMA_STABILITY_V1",
     "TIP_CAPSULES_V1",
-    # MultiPak (Std 32):
+    # MultiPak:
     "TIP_PAK_CAPTURE",
     "TIP_PAK_INDEX",
     "TIP_PAK_RECALL",

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Pro-daemon presence probe (Std 25 §3.4 fallback contract, Phase 1).
+"""Pro-daemon presence probe (fallback contract, Phase 1).
 
 Cheap local check for whether the closed-source ``tokenpak-paid-daemon``
-is running on this host. Per Std 25 §2.1 the daemon publishes its
-loopback port to ``~/.tokenpak/pro/daemon.sock-info`` (mode 0600) at
-startup. Phase 1 only distinguishes:
+is running on this host. The daemon publishes its loopback port to
+``~/.tokenpak/pro/daemon.sock-info`` (mode 0600) at startup. Phase 1 only
+distinguishes:
 
 - ``"active"`` — sock-info file present + readable + reachable on its
   declared port.
@@ -13,17 +13,17 @@ startup. Phase 1 only distinguishes:
 
 Phase 2+ adds ``"tip_mismatch"`` (TIP version negotiation) and the four
 state-machine values (``offline-grace``, ``offline-expired``,
-``user-revoked``, ``billing-grace``) per Std 25 §3.4 + §4.3. Those values
-require talking to the license registry, which is out of scope for OSS.
+``user-revoked``, ``billing-grace``). Those values require talking to the
+license registry, which is out of scope for OSS.
 
 The probe is **fast-path safe** — when the sock-info file is absent the
 function short-circuits before any I/O on the daemon. This is the
 overwhelming case (Pro daemon is opt-in install).
 
-Per Std 25 §1.1 the OSS code never extends TIP capabilities in private
-or assumes daemon presence; this module is the canonical way to ask
-"is Pro available right now?" rather than scattering ``Path.exists()``
-checks across call sites (per ``feedback_always_dynamic.md``).
+The OSS code never extends TIP capabilities in private or assumes daemon
+presence; this module is the canonical way to ask "is Pro available right
+now?" rather than scattering ``Path.exists()`` checks across call sites
+(per ``feedback_always_dynamic.md``).
 """
 
 from __future__ import annotations
@@ -35,9 +35,9 @@ from typing import Literal, Optional
 
 DaemonState = Literal["active", "unavailable", "tip_mismatch"]
 
-# Canonical sock-info file path. Constant rather than parameter — Std 25
-# §2.1 ratifies this as the single agreed location. If the daemon
-# version rolls forward and changes, the constant moves in lockstep.
+# Canonical sock-info file path. Constant rather than parameter — this is
+# the single agreed location. If the daemon version rolls forward and
+# changes, the constant moves in lockstep.
 _SOCK_INFO_PATH = Path.home() / ".tokenpak" / "pro" / "daemon.sock-info"
 
 # Connect timeout for the daemon probe. Short enough that a stale
@@ -55,7 +55,7 @@ def sock_info_path() -> Path:
 def _read_sock_info(path: Path) -> Optional[dict]:
     """Parse the sock-info file. Returns None on any error.
 
-    Expected shape (per Std 25 §2.1):
+    Expected shape:
         {"port": <int>, "tip_version": "<str>", "started_at": <unix-ts>}
 
     The function tolerates extra keys — the daemon may carry

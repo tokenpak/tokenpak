@@ -1,5 +1,5 @@
 """
-Unit tests for ``tokenpak.licensing.usage_meter`` (WS-5 / TRIX-MTC-08).
+Unit tests for ``tokenpak.licensing.usage_meter``.
 
 Covers acceptance criteria 4, 6, 7, 10:
   - Local buffering of events to a JSONL spool

@@ -189,7 +189,7 @@ CREATE INDEX IF NOT EXISTS idx_rollup_provider_date
 CREATE INDEX IF NOT EXISTS idx_rollup_agent_date
     ON tp_rollup_daily_agent (date);
 
--- TIP-06: Savings attribution by source (NEVER overclaims TokenPak savings)
+-- Savings attribution by source (NEVER overclaims TokenPak savings)
 CREATE TABLE IF NOT EXISTS tp_savings_attribution (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     request_id          TEXT NOT NULL DEFAULT '',
@@ -213,7 +213,7 @@ CREATE INDEX IF NOT EXISTS idx_savings_attr_source
 CREATE INDEX IF NOT EXISTS idx_savings_attr_ts
     ON tp_savings_attribution (timestamp);
 
--- TIP-06: Cache miss reasons for observability
+-- Cache miss reasons for observability
 CREATE TABLE IF NOT EXISTS tp_cache_miss_reasons (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     request_id  TEXT NOT NULL DEFAULT '',
@@ -1360,7 +1360,7 @@ class TelemetryDB:
         return [_row_to_dict(cur, r) for r in cur.fetchall()]
 
     # ------------------------------------------------------------------
-    # TIP-06: Savings attribution
+    # Savings attribution
     # ------------------------------------------------------------------
 
     def insert_savings_attribution(self, row: dict) -> None:
@@ -1425,7 +1425,7 @@ class TelemetryDB:
         return [_row_to_dict(cur, r) for r in cur.fetchall()]
 
     # ------------------------------------------------------------------
-    # TIP-06: Cache miss reasons
+    # Cache miss reasons
     # ------------------------------------------------------------------
 
     def insert_cache_miss(self, row: dict) -> None:

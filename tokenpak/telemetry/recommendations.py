@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Telemetry-driven recommendations engine (TIP-07 / Component F).
+"""Telemetry-driven recommendations engine (Component F).
 
 Reads existing TokenPak telemetry tables (``tp_events``, ``tp_usage``,
-``tp_pricing_catalog``) and the optional TIP-06 attribution tables
+``tp_pricing_catalog``) and the optional attribution tables
 (``tp_savings_attribution``, ``tp_cache_miss_reasons``) when present, then
 emits a ranked list of actionable recommendations.
 
@@ -268,7 +268,7 @@ def _rule_zero_cache_lookups(ctx: _RuleContext) -> list[Recommendation]:
 def _rule_high_unattributed(ctx: _RuleContext) -> list[Recommendation]:
     """Flag traffic whose savings/source cannot be attributed.
 
-    Prefers the TIP-06 ``tp_savings_attribution`` table. Falls back to
+    Prefers the ``tp_savings_attribution`` table. Falls back to
     ``tp_usage.usage_source`` so the rule still works on telemetry stores
     that predate the attribution-v2 migration.
     """

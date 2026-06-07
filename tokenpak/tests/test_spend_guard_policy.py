@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for tokenpak.proxy.spend_guard.policy.
 
-Acceptance hooks for TSG-01 (threshold engine) and the v1.5.2 recalibration
-(Standard 29 §5 default-basis = context_window_percent; Kevin DECISION
-2026-05-11 rev 2).
+Covers the threshold engine and the v1.5.2 recalibration
+(default-basis = context_window_percent).
 """
 
 from __future__ import annotations

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Savings attribution v2 — TIP-06.
+"""Savings attribution v2.
 
 Provides parsing helpers that extract per-source savings from provider API
 response usage fields, and aggregation utilities for reporting.
 
-Attribution rules (per TIP telemetry_contract.SavingsSource):
+Attribution rules (per ``telemetry_contract.SavingsSource``):
 - Provider/platform cache MUST be labelled PROVIDER_PROMPT_CACHE or
   PLATFORM_CACHE; never credited to TokenPak.
 - TokenPak-managed stages (semantic cache, compression, capsules, etc.)

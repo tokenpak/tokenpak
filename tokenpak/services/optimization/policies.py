@@ -4,7 +4,7 @@ The pipeline is gated on ``TOKENPAK_OPTIMIZATION_PIPELINE``. Three values:
 
     unset / "0" / "off"     — pipeline disabled (default; safe)
     "observe" / "1" / "on"  — pipeline runs in observe-only mode
-    "apply"                 — reserved for TIP-04+; treated as observe here
+    "apply"                 — reserved for a future mutate mode; treated as observe here
 
 Observe-only is the only mode this module supports. Anything stronger MUST
 be gated by an additional flag in the stage that wants to mutate.

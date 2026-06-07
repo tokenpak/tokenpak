@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for tokenpak.proxy.spend_guard.tip_header — TSG-04 acceptance."""
+"""Tests for tokenpak.proxy.spend_guard.tip_header."""
 
 from __future__ import annotations
 

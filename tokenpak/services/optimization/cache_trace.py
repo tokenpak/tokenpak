@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Cache stage trace model (TIP-04).
+"""Cache stage trace model.
 
 ``CacheStageTrace`` carries the outcome of a single semantic cache lookup
 for one optimization context. It is embedded in ``StageTrace.detail`` (as
@@ -8,7 +8,8 @@ callers in ``proxy/server.py`` can read the hit/miss outcome without parsing the
 stage trace log.
 
 Miss reason vocabulary mirrors ``tokenpak.tip.cache_contract.CacheMissReason``
-(copied inline for import-time safety when TIP-02 is not yet on this host).
+(copied inline for import-time safety when the cache contract is not yet on
+this host).
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import json
 from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------
-# Miss-reason vocabulary (mirrors CacheMissReason from TIP-02 cache_contract)
+# Miss-reason vocabulary (mirrors CacheMissReason from cache_contract)
 # ---------------------------------------------------------------------------
 
 class CacheMissReason:

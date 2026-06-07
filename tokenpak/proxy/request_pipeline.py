@@ -2,8 +2,8 @@
 tokenpak.proxy.request_pipeline — Router wiring, route engine singletons,
 intent classification, and style contract (protected content detection).
 
-Extracted from runtime/proxy.py (L1589-2144) as part of TPK-RESTRUCTURE-005.
-Extended in TPK-CONSOLIDATION-A2c with: _resolve_session_id (CCG-03),
+Extracted from runtime/proxy.py (L1589-2144) during the proxy restructure.
+Later extended with: _resolve_session_id (session-id resolution),
 _apply_budget, _shadow_validate.
 """
 
@@ -561,7 +561,7 @@ def classify_message_risk(msg: dict) -> str:
 
 
 def can_compress(risk_class: str, mode: str) -> bool:
-    if mode in ("strict", "safe"):  # CCG-10: safe mode disables compression
+    if mode in ("strict", "safe"):  # safe mode disables compression
         return False
     if risk_class == "protected":
         return False
@@ -571,7 +571,7 @@ def can_compress(risk_class: str, mode: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# CCG-10: Stable/volatile partition + fingerprinting (TOKENPAK_MODE=safe)
+# Stable/volatile partition + fingerprinting (TOKENPAK_MODE=safe)
 # ---------------------------------------------------------------------------
 
 def _partition_stable_volatile(body: bytes) -> tuple:
@@ -621,8 +621,8 @@ def _partition_stable_volatile(body: bytes) -> tuple:
 
 
 # ---------------------------------------------------------------------------
-# CCG-03: Session ID resolution
-# Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 1189–1212)
+# Session ID resolution
+# Transferred from monolith (lines 1189–1212)
 # ---------------------------------------------------------------------------
 
 def _resolve_session_id(headers: Any, model: str) -> str:

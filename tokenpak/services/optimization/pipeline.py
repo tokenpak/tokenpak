@@ -1,4 +1,4 @@
-"""Observe-only optimization pipeline (TIP-03).
+"""Observe-only optimization pipeline.
 
 The pipeline runs registered ``OptimizationStage`` instances against an
 ``OptimizationContext`` and emits a ``StageTrace`` for each. Observe-only

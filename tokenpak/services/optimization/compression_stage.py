@@ -1,4 +1,4 @@
-"""Route-class compression OptimizationStage (TIP-05).
+"""Route-class compression OptimizationStage.
 
 This is the proxy-pipeline-facing wrapper around ``route_recipe_policy``.
 The stage:
@@ -7,13 +7,13 @@ The stage:
 2. Skips early when its feature flag is off, the route is unknown, the
    adapter doesn't declare ``tip.compression.v1``, or the contract's
    fidelity tier disallows compression.
-3. When invoked via ``apply()`` (NOT in observe-only mode — the TIP-03
-   pipeline never calls it there), executes ``apply_policy()`` over the
-   raw body and writes savings into the trace's StageTrace.detail.
+3. When invoked via ``apply()`` (NOT in observe-only mode — the
+   observe-only pipeline never calls it there), executes ``apply_policy()``
+   over the raw body and writes savings into the trace's StageTrace.detail.
 
 The default observe-only pipeline only calls ``eligible(ctx)``; the body
 is therefore byte-preserved by construction. ``apply()`` is exposed for
-tests and for the future TIP-04+ enable-mutation milestone, gated behind
+tests and for the future enable-mutation milestone, gated behind
 ``TOKENPAK_ROUTE_COMPRESSION_STAGE`` plus the upstream pipeline-mode flag.
 """
 
@@ -135,7 +135,7 @@ class RouteClassCompressionStage:
     def apply(self, ctx: OptimizationContext) -> OptimizationContext:
         """Compress ``ctx.raw_body`` in place per the route policy.
 
-        The TIP-03 observe-only pipeline NEVER invokes this. Tests call it
+        The observe-only pipeline NEVER invokes this. Tests call it
         directly to verify protected-span preservation; future mutation-mode
         sites must guard with their own flag in addition to the stage's
         ``TOKENPAK_ROUTE_COMPRESSION_STAGE`` gate.

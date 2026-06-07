@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Phase 2 (CCG-13) — Top Sessions dashboard card.
+// Phase 2 — Top Sessions dashboard card.
 //
 // Reads /metrics/dashboard (JSON) and renders the `sessions` array as a
 // sortable table. No prompt content is exposed — session IDs only.

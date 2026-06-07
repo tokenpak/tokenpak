@@ -1,5 +1,5 @@
 """
-CCG-11: Cache invalidator detector (log-only).
+Cache invalidator detector (log-only).
 
 Detects per-session request changes that would invalidate Claude's prompt cache:
   - tools_changed

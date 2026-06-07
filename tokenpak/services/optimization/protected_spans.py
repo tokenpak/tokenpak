@@ -1,4 +1,4 @@
-"""Protected-span detection for the route-class compression policy (TIP-05).
+"""Protected-span detection for the route-class compression policy.
 
 A *protected span* is a slice of request text that compression must preserve
 byte-for-byte. The proposal (Phase 3 Component D) lists fifteen span types

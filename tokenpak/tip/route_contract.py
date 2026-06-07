@@ -12,7 +12,7 @@ different policy concerns.
 
 Assignment responsibility
 -------------------------
-The proxy (Component B, TIP-03+) will assign ``OptimizationRouteClass``
+The proxy (Component B) will assign ``OptimizationRouteClass``
 from intent-classification signals. Adapters may provide hints via
 platform metadata. Do not hardcode per-adapter route class mappings
 here — the assignment logic belongs in the proxy optimization layer.

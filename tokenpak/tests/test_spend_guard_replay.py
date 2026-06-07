@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for tokenpak.proxy.spend_guard.replay — TSG-03 acceptance."""
+"""Tests for tokenpak.proxy.spend_guard.replay."""
 
 from __future__ import annotations
 

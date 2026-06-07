@@ -1,20 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
-"""TokenPak vault config — ``~/.tokenpak/vault.yaml`` schema v1 (VDS-01).
+"""TokenPak vault config — ``~/.tokenpak/vault.yaml`` schema v1.
 
 The vault config registers directories that ``tokenpak index`` knows about. It
 is consumed by:
 
 * ``tokenpak index --reindex-all``                 (this module + cli)
 * ``tokenpak index --reindex-path <path>``         (this module + cli)
-* ``tokenpak doctor`` staleness check              (VDS-03)
-* paid ``tokenpak vault add/list/remove/reindex``  (VDS-04)
+* ``tokenpak doctor`` staleness check
+* paid ``tokenpak vault add/list/remove/reindex``
 
 Schema v1 (``~/.tokenpak/vault.yaml``)::
 
     version: 1
     paths:
       - path: /abs/path/to/dir
-        schedule: "every 6 hours"          # optional; raw grammar string (VDS-02)
+        schedule: "every 6 hours"          # optional; raw grammar string
         expected_interval_seconds: 21600   # optional; doctor staleness threshold input
         last_indexed: "2026-04-28T18:00:00Z"  # optional; updated by reindex flags
         last_index_status: "ok"            # optional; ok | failed | running
@@ -28,7 +28,7 @@ Env overrides:
   ``~/vault/.tokenpak`` (proxy-compatible default per spec).
 
 This module is OSS — no license check. It is the single source of truth for
-*which* directories tokenpak indexes; the paid scheduler (VDS-04) writes to
+*which* directories tokenpak indexes; the paid scheduler writes to
 the same file.
 """
 
@@ -238,7 +238,7 @@ def update_index_health(
 ) -> Optional[VaultPathEntry]:
     """Stamp the per-path index health metadata. Returns the entry, or None.
 
-    The doctor (VDS-03) reads ``last_indexed`` + ``expected_interval_seconds``
+    The doctor reads ``last_indexed`` + ``expected_interval_seconds``
     to decide whether an index is stale.
     """
     entry = cfg.find(path)

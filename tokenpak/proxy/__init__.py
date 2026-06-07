@@ -1,7 +1,7 @@
 """
 TokenPak proxy utilities.
 
-Unified proxy package merging core proxy and agent proxy modules (FIN-07).
+Unified proxy package merging core proxy and agent proxy modules.
 """
 
 from .cache import CacheEntry, CacheMetrics, LRUCache  # noqa: F401

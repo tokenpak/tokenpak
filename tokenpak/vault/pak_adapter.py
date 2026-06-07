@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Vault → Pak adapter (Std 32 §1.3 row 3, §2.1, Phase 1).
+"""Vault → Pak adapter (Phase 1).
 
 Wraps the existing :class:`tokenpak.vault.retrieval.vault_index.VaultIndex`
 to produce :class:`tokenpak.tip.pak.Pak` instances with subtype
@@ -7,12 +7,13 @@ to produce :class:`tokenpak.tip.pak.Pak` instances with subtype
 
 This is a **read-only** adapter — no writes to the vault, no daemon
 contact, no encryption (Vault Paks are derived from user-controlled
-project sources whose source-of-truth is the file on disk; per Std 32 §2.1
-authority is ``file_source`` and retention is ``source_lifetime``).
+project sources whose source-of-truth is the file on disk; per the
+MultiPak architecture authority is ``file_source`` and retention is
+``source_lifetime``).
 
-Hard rule (Std 32 §7.1, §7.3): nothing in this module touches the
-license-validation egress path; Pak content stays local. Privacy contract
-tests in ``tests/tip/test_multipak_contracts.py`` assert this structurally.
+Hard rule: nothing in this module touches the license-validation egress
+path; Pak content stays local. Privacy contract tests in
+``tests/tip/test_multipak_contracts.py`` assert this structurally.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ def _file_type_to_source_type(file_type: Optional[str]) -> PakSourceType:
     """Return the canonical PakSourceType for a vault ``file_type``.
 
     Unknown or missing values fall back to FILE — receivers must tolerate
-    unrecognized source types per Std 31 §2 capability-codes rule.
+    unrecognized source types per the capability-codes rule.
     """
     if not file_type:
         return PakSourceType.FILE
@@ -70,7 +71,8 @@ def _infer_project(source_path: str) -> Optional[str]:
 
     Returns None when no segment qualifies — recall scoring treats None as
     "unscoped" rather than over-claiming a project. This is conservative
-    by design: false positives in project_scope hard-filter on Std 32 §5.2.
+    by design: false positives in project_scope hard-filter on the recall
+    ranking model.
     """
     if not source_path:
         return None
@@ -165,7 +167,8 @@ def vault_block_to_pak(
     - ``confidence``: explicit confidence override; defaults to MEDIUM.
 
     The returned Pak is frozen, JSON-serializable (via ``.to_dict()``), and
-    structurally disjoint from license-payload field prefixes per Std 32 §7.1.
+    structurally disjoint from license-payload field prefixes per the
+    privacy contract.
     """
     block_id = block_dict["block_id"]
     source_path = block_dict.get("source_path") or block_id
@@ -224,10 +227,9 @@ def search_as_paks(
     :mod:`tokenpak.vault.search`; pass an explicit instance for tests or
     when consuming a non-default index.
 
-    Per Std 32 §1.3 row 3 this is the read-only Phase 1 surface — no
-    writes, no daemon contact, no Pak-store I/O. The Pro daemon's recall
-    resolver (Phase 2) consumes these Paks alongside Interaction and
-    Decision Paks for ranking.
+    This is the read-only Phase 1 surface — no writes, no daemon contact,
+    no Pak-store I/O. The Pro daemon's recall resolver (Phase 2) consumes
+    these Paks alongside Interaction and Decision Paks for ranking.
     """
     if vault_index is None:
         # Lazy import to avoid pulling the vault subsystem into the module
@@ -240,8 +242,8 @@ def search_as_paks(
             vault_index = get_vault_index()
         except Exception:
             # Vault unavailable (config error, missing index, etc.) — empty
-            # result is the correct UX per Std 32 §5.3 ("no relevant Paks →
-            # level 0, empty list").
+            # result is the correct UX ("no relevant Paks → level 0, empty
+            # list").
             return []
 
     if vault_index is None:

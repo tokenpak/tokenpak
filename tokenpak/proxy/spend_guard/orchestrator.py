@@ -6,9 +6,9 @@ inbound bytes and gets back a tagged outcome. All multi-step interaction
 (estimate → policy → pending → intent → replay → audit) lives here so the
 proxy hot path stays small.
 
-This module grows over TSG-02..04. Initial revision (TSG-02) wires
-estimate + policy + pending only. Subsequent revisions add intent parsing
-(TSG-03), TIP-header handling (TSG-04), and audit logging (TSG-04).
+This module is built up in stages. The initial revision wires
+estimate + policy + pending only. Subsequent revisions add intent parsing,
+TIP-header handling, and audit logging.
 """
 
 from __future__ import annotations
@@ -75,8 +75,8 @@ def evaluate(
     if not cfg.enabled:
         return GuardOutcome.passthrough(body)
 
-    # TSG-04 layer: TIP header parse + strip. Imported lazily so TSG-02 can
-    # run before TSG-04 lands. Until tip_header.py exists, treat as no-op.
+    # TIP header parse + strip. Imported lazily so the earlier stages can
+    # run before this lands. Until tip_header.py exists, treat as no-op.
     tip_directive = None
     forward_body = body
     try:
@@ -105,8 +105,8 @@ def evaluate(
         # Nothing to cancel — treat as no-op forward (with TIP stripped).
         return GuardOutcome(kind="forward_modified", body=forward_body)
 
-    # TSG-03 layer: pending check + intent parse. Lazy import for the same
-    # reason — TSG-02 commit can land before intent parser exists.
+    # Pending check + intent parse. Lazy import for the same
+    # reason — the earlier stage can land before the intent parser exists.
     store = PendingStore(cfg.audit_db_path)
     existing_pending = store.get_by_session(session_id)
     if existing_pending is not None:
@@ -131,8 +131,9 @@ def evaluate(
                    tip=tip_directive)
             return outcome
         except ImportError:
-            # Pre-TSG-03 fallback: subsequent requests during a pending
-            # block are themselves blocked with a "waiting approval" message.
+            # Fallback before the intent parser lands: subsequent requests
+            # during a pending block are themselves blocked with a
+            # "waiting approval" message.
             _audit(cfg, "pending_waiting", session_id,
                    decision_str="block", pending_id=existing_pending.pending_id,
                    tip=tip_directive)
@@ -359,7 +360,7 @@ def _audit(cfg, event_type, session_id, **fields) -> None:
         write_audit(cfg.audit_db_path, event_type=event_type,
                     session_id=session_id, **fields)
     except ImportError:
-        # TSG-04 not yet landed
+        # audit module not yet landed
         pass
     except Exception as e:
         _log.debug("spend_guard: audit write failed: %s", e)

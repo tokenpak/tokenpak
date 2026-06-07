@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Telemetry sink for the optimization pipeline (TIP-06).
+"""Telemetry sink for the optimization pipeline.
 
 ``TelemetrySink.persist()`` is the single call site for persisting:
 - Per-source savings attribution records (tp_savings_attribution)

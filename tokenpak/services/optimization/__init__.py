@@ -1,7 +1,7 @@
-"""Generic optimization pipeline (TIP-03).
+"""Generic optimization pipeline.
 
 Observe-only scaffolding for the optimization pipeline described in the
-TIP-First Codex Optimization Layer proposal (Phase 3 Component B, Phase 4
+optimization-layer design (Phase 3 Component B, Phase 4
 Milestone 2). Pipeline composition lives under ``services/`` per
 ``01-architecture-standard.md §1.3`` design invariant 1 ("services/ is
 the only place the compression → security → cache → routing → telemetry
@@ -17,12 +17,12 @@ Public surface:
     OptimizationPipeline  — runs registered stages in observe-only mode
     OptimizationTrace     — collected trace of stage decisions
     StageTrace            — per-stage trace entry
-    build_contract        — services-layer contract builder (consumes TIP-02 if present)
+    build_contract        — services-layer contract builder (consumes the upstream contract if present)
     is_pipeline_enabled   — read TOKENPAK_OPTIMIZATION_PIPELINE flag
 
 The default mode is observe-only. Stages declare eligibility but the pipeline
 NEVER invokes ``stage.apply()`` in this module; the request body is treated
-as immutable. Mutation belongs to follow-up tasks (TIP-04 onward) and lives
+as immutable. Mutation belongs to follow-up tasks and lives
 behind a separate flag.
 """
 
@@ -77,7 +77,7 @@ __all__ = [
     "build_contract",
     "is_pipeline_enabled",
     "run_observe_only",
-    # TIP-05 — route-class compression policy
+    # route-class compression policy
     "RouteClass",
     "FidelityTier",
     "RoutePolicy",
@@ -92,12 +92,12 @@ __all__ = [
     "RouteClassCompressionStage",
     "is_route_compression_enabled",
     "register_route_compression_stage",
-    # TIP-04 — semantic cache stage
+    # semantic cache stage
     "SemanticCacheStage",
     "get_cached_response",
     "CacheMissReason",
     "CacheStageTrace",
-    # TIP-06 — savings attribution + telemetry sink
+    # savings attribution + telemetry sink
     "AttributionStage",
     "is_attribution_v2_enabled",
     "get_attributions",

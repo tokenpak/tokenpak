@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Cache miss reason tracking — TIP-06.
+"""Cache miss reason tracking.
 
 Provides the ``CacheMissRecord`` dataclass and aggregation helpers for
 surfacing why semantic cache lookups fail. Miss reasons use the
@@ -105,7 +105,7 @@ def format_miss_reason_summary(
 
 
 # ---------------------------------------------------------------------------
-# DB row from TIP-04 CacheStageTrace
+# DB row from CacheStageTrace
 # ---------------------------------------------------------------------------
 
 

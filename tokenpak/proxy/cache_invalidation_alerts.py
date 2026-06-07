@@ -1,14 +1,14 @@
 """
-CCI-03: Cache invalidation alerts (extends CCG-11 from log-only to user-visible).
+Cache invalidation alerts (extends the base cache-invalidator from log-only to user-visible).
 
-Adds three things on top of CCG-11's base detector:
-  1. Two additional event types beyond CCG-11:
+Adds three things on top of the base detector:
+  1. Two additional event types beyond the base cache-invalidator:
        - cache_control_position_changed  (cache_control block moved between requests)
        - mcp_server_added                (mcp_servers field gained an entry)
      `claude_md_modified` is intentionally scoped down to in-request detection
      only — the task escalation note explicitly defers file-watching outside
      the proxy. When CLAUDE.md content rides in the system block, a change is
-     surfaced as system_changed (CCG-11 contract) rather than introducing a
+     surfaced as system_changed (base cache-invalidator contract) rather than introducing a
      misleadingly named separate event.
 
   2. Hashed before/after of the affected region (sha256 of the canonical
@@ -18,8 +18,8 @@ Adds three things on top of CCG-11's base detector:
      estimated_lost_savings_usd >= TOKENPAK_CACHE_INVALIDATION_ALERT_THRESHOLD_USD
      (default 1.0).
 
-Writes are additive: the existing cache_invalidator_events table (CCG-11) keeps
-its log-only contract; CCI-03 writes a separate cache_invalidations row that
+Writes are additive: the existing cache_invalidator_events table (base cache-invalidator) keeps
+its log-only contract; this module writes a separate cache_invalidations row that
 includes hashes + dollar estimate.
 """
 from __future__ import annotations
@@ -60,7 +60,7 @@ def _detect_extra_events(
     prev: Dict[str, Any],
     curr: Dict[str, Any],
 ) -> List[CacheInvalidatorEvent]:
-    """Detect CCI-03's additional event types beyond CCG-11.
+    """Detect additional event types beyond the base cache-invalidator.
 
     Returns events that are NOT already produced by `_detect_cache_invalidators`.
     """
@@ -274,7 +274,7 @@ def detect_and_alert(
     curr_body: bytes,
     model: Optional[str] = None,
 ) -> List[CacheInvalidationAlert]:
-    """Top-level CCI-03 entrypoint. Detect all event types, persist + alert.
+    """Top-level entrypoint. Detect all event types, persist + alert.
 
     Returns the list of CacheInvalidationAlert records created. Empty list if
     no invalidation events were detected.

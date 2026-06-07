@@ -1,9 +1,9 @@
 """Trace models for the optimization pipeline.
 
 These are services-layer mirror types: they carry just enough information
-for observe-only telemetry. When TIP-02 (``tokenpak.tip.trace_contract``)
-is available the pipeline can also emit a TIP-shaped trace — see
-``trace.to_tip_dict()``.
+for observe-only telemetry. When the trace contract
+(``tokenpak.tip.trace_contract``) is available the pipeline can also emit a
+contract-shaped trace — see ``trace.to_tip_dict()``.
 """
 
 from __future__ import annotations
@@ -83,11 +83,12 @@ class OptimizationTrace:
         }
 
     def to_tip_dict(self) -> Dict[str, Any]:
-        """Return a dict shaped for the TIP-02 trace contract.
+        """Return a dict shaped for the canonical trace contract.
 
         Falls back to ``to_dict()`` when ``tokenpak.tip`` isn't importable.
-        Once TIP-02 lands, this is the bridge into the canonical trace
-        schema; the `tip_version` discriminator confirms the shape.
+        When the trace contract is available, this is the bridge into the
+        canonical trace schema; the `tip_version` discriminator confirms the
+        shape.
         """
         try:
             from tokenpak.tip.trace_contract import OptimizationTrace as _TipTrace  # noqa: F401

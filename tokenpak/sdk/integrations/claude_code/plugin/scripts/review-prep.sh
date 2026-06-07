@@ -16,7 +16,7 @@
 #
 # Agent SDK note:
 #   This hook does NOT fire in the Anthropic Agent SDK unless the caller wires
-#   up the equivalent callback via CCP-23's tokenpak_hooks() (Pro path).
+#   up the equivalent callback via the tokenpak_hooks() helper (Pro path).
 #
 # Exit codes:
 #   0  — allow the command through
@@ -99,7 +99,7 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || _allow
 # ---------------------------------------------------------------------------
 # 5. Locate the review-cache directory
 # ---------------------------------------------------------------------------
-# CCP-08's prepare_review_packet writes a cache file per branch:
+# The prepare_review_packet tool writes a cache file per branch:
 #   ${CACHE_DIR}/<branch-name>        (plain marker)
 #   ${CACHE_DIR}/<branch-name>.json   (JSON artifact)
 # We accept either form.

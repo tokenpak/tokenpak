@@ -1,10 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""tokenpak recommendations — telemetry-driven action surface (TIP-07).
+"""tokenpak recommendations — telemetry-driven action surface.
 
 Thin CLI wrapper around :mod:`tokenpak.telemetry.recommendations`. The
 engine does all the work; this module only handles argv parsing and output
-selection so the CLI stays a presentation layer per Standard 01 §1.3
-(entrypoints are thin).
+selection so the CLI stays a thin presentation layer (entrypoints are thin).
 """
 
 from __future__ import annotations

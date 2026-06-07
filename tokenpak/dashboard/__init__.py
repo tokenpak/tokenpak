@@ -22,7 +22,7 @@ async def serve_dashboard_file(path: str) -> tuple[str, str] | None:
 
     Query strings are ignored so `/dashboard?mode=cli` resolves to the same
     local dashboard shell as `/dashboard`; client-side code reads the `mode`
-    parameter and renders the requested CCI-09 panel.
+    parameter and renders the requested panel.
     """
     files = get_dashboard_files()
 

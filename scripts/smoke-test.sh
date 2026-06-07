@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/smoke-test.sh — Fresh-venv smoke test for tokenpak CLI
 #
-# FIN-17 acceptance gate: verifies tokenpak installs and all CLI commands work
+# Acceptance gate: verifies tokenpak installs and all CLI commands work
 # in a clean environment with no pre-existing state.
 #
 # Usage:

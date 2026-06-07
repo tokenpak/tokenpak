@@ -28,7 +28,7 @@ _VOLATILE_EXTRA_KEYS = {
 
 class OpenAIResponsesAdapter(FormatAdapter):
     source_format = "openai-responses"
-    capabilities = frozenset({"tip.cache.semantic.v1"})  # TIP-04: eligible for semantic cache stage
+    capabilities = frozenset({"tip.cache.semantic.v1"})  # eligible for semantic cache stage
 
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
         return "/v1/responses" in path

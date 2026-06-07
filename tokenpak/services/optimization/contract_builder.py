@@ -1,11 +1,11 @@
 """Build a per-request ``OptimizationContract``.
 
-The contract is the TIP-02-shaped artifact that a stage consults to decide
-whether it is eligible. In this scaffold the builder produces a minimal
-proxy-local stand-in that records the inputs and exposes a ``has(...)``
-capability check; once TIP-02 (``tokenpak.tip.optimization_contract``) is
-imported into this workspace the builder will return a real
-``OptimizationContract`` instance.
+The contract is the upstream-contract-shaped artifact that a stage consults
+to decide whether it is eligible. In this scaffold the builder produces a
+minimal proxy-local stand-in that records the inputs and exposes a
+``has(...)`` capability check; once the upstream contract
+(``tokenpak.tip.optimization_contract``) is imported into this workspace the
+builder will return a real ``OptimizationContract`` instance.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ class _LocalOptimizationContract:
     Exposes the tiny surface the pipeline actually needs: a set of
     capability strings and a couple of context strings (route + platform).
 
-    TIP-02 ships a richer ``tokenpak.tip.optimization_contract.OptimizationContract``
+    The upstream contract ships a richer ``tokenpak.tip.optimization_contract.OptimizationContract``
     with cache/compression/telemetry sub-policies. The pipeline scaffolding
     treats the contract as opaque (``ctx.contract``) so callers can switch
     implementations without changes here.
@@ -40,9 +40,9 @@ class _LocalOptimizationContract:
 def _adapter_capabilities(adapter: Any) -> FrozenSet[str]:
     """Read ``capabilities`` off the format adapter, if it declares any.
 
-    Adapters today do not yet declare capabilities (TIP-04 wires that in);
-    a missing or non-iterable attribute returns an empty set, matching the
-    proposal's "graceful unknowns" rule.
+    Adapters today do not yet declare capabilities (a follow-up wires that
+    in); a missing or non-iterable attribute returns an empty set, matching
+    the proposal's "graceful unknowns" rule.
     """
     raw = getattr(adapter, "capabilities", None)
     if raw is None:
@@ -65,8 +65,8 @@ def build_contract(
     """Construct an OptimizationContract for the current request.
 
     Returns a ``tokenpak.tip.optimization_contract.OptimizationContract`` if
-    TIP-02 is importable; otherwise a ``_LocalOptimizationContract``. Both
-    expose ``.has(capability)``.
+    the upstream contract is importable; otherwise a
+    ``_LocalOptimizationContract``. Both expose ``.has(capability)``.
     """
     caps = _adapter_capabilities(adapter)
     route_class = route or ""
@@ -79,9 +79,9 @@ def build_contract(
         from tokenpak.tip.optimization_contract import (  # type: ignore[import-not-found]
             OptimizationContract as _TipContract,
         )
-        # Best-effort construction — TIP-02's signature is documented in
-        # the task packet but may differ slightly. If construction fails,
-        # fall back to the local stub.
+        # Best-effort construction — the upstream contract's signature is
+        # documented in the design but may differ slightly. If construction
+        # fails, fall back to the local stub.
         try:
             return _TipContract(
                 capabilities=caps,
