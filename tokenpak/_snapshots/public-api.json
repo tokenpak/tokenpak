@@ -9837,6 +9837,10 @@
     },
     {
       "module": "tokenpak.proxy.server_extra.websocket_proxy",
+      "name": "WebSocketServerProtocol"
+    },
+    {
+      "module": "tokenpak.proxy.server_extra.websocket_proxy",
       "name": "compress_chunk"
     },
     {
@@ -16918,6 +16922,10 @@
     {
       "module": "tokenpak.vault.retrieval.vector_local",
       "name": "SentenceTransformer"
+    },
+    {
+      "module": "tokenpak.vault.retrieval.vector_local",
+      "name": "faiss"
     },
     {
       "module": "tokenpak.vault.scoring",
