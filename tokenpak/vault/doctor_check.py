@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""TokenPak vault doctor staleness check (VDS-03).
+"""TokenPak vault doctor staleness check.
 
-Reads ``~/.tokenpak/vault.yaml`` (the v1 schema landed by VDS-01) plus the
+Reads ``~/.tokenpak/vault.yaml`` (the v1 schema) plus the
 per-path ``last_indexed`` / ``expected_interval_seconds`` health metadata,
 and emits one finding per registered path describing whether its index is:
 
@@ -20,9 +20,7 @@ Findings are returned as plain dicts so the caller (``cli/commands/doctor.py``)
 can format them; this module is the single source of truth for *what counts as
 stale*, not for how the warning is rendered.
 
-Spec: ``01_PROJECTS/tokenpak/initiatives/2026-04-28-tokenpak-vault-directory-scheduling/03-SPEC.md``
-Component 3 — "Warns if last rebuild > expected interval × 2"
-Acceptance: AC-VDS-06 in 05-ACCEPTANCE.md.
+Warns if last rebuild > expected interval × 2.
 """
 
 from __future__ import annotations
@@ -261,8 +259,8 @@ def _resolve_threshold(entry: vault_config.VaultPathEntry) -> float:
     """Compute ``expected_interval_seconds × DEFAULT_STALE_FACTOR``.
 
     Falls back to :data:`FALLBACK_INTERVAL_SECONDS` × factor when the entry has
-    no explicit interval (e.g. user wrote ``schedule: every 6 hours`` but VDS-02
-    hasn't filled ``expected_interval_seconds`` yet).
+    no explicit interval (e.g. user wrote ``schedule: every 6 hours`` but the
+    scheduler hasn't filled ``expected_interval_seconds`` yet).
     """
     eis = entry.expected_interval_seconds
     if eis is None or eis <= 0:
@@ -271,7 +269,7 @@ def _resolve_threshold(entry: vault_config.VaultPathEntry) -> float:
 
 
 def _parse_iso_z(value: str) -> datetime:
-    """Parse an ISO-8601 timestamp; supports the ``Z`` suffix used by VDS-01."""
+    """Parse an ISO-8601 timestamp; supports the ``Z`` suffix used by the schema."""
     if not value:
         raise ValueError("empty timestamp")
     text = value.strip()

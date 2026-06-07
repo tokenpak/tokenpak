@@ -1,4 +1,4 @@
-"""doctor_claude_code — CCI-12 Claude Code health checks for tokenpak doctor --claude-code.
+"""doctor_claude_code — Claude Code health checks for tokenpak doctor --claude-code.
 
 9 health checks:
   1. ANTHROPIC_BASE_URL is set (env + ~/.claude/settings.json)
@@ -624,7 +624,7 @@ def _check_install_consistency() -> CheckResult:
 
 
 def _check_plugin_dir() -> CheckResult:
-    """Check 9 (CCP-09): tokenpak plugin directory exists under ~/.claude/plugins/."""
+    """Check 9: tokenpak plugin directory exists under ~/.claude/plugins/."""
     home = Path.home()
     candidates = [home / ".claude" / "plugins" / name for name in _PLUGIN_DIR_NAMES]
 
@@ -664,7 +664,7 @@ def run_claude_code_checks(
     output_json: bool = False,
     verbose: bool = False,
 ) -> tuple[int, list[CheckResult]]:
-    """Run all 9 CCI-12 + CCP-09 Claude Code health checks.
+    """Run all 9 Claude Code health checks.
 
     Returns:
         (fail_count, checks) — fail_count is the number of failed checks.

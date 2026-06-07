@@ -56,7 +56,7 @@ Expected output when correctly configured:
 |---|---|---|
 | Claude Code CLI (terminal) | ✅ Yes | Standard path |
 | Claude Code VSCode extension | ✅ Yes | `TERM_PROGRAM=vscode` |
-| Cursor | ❌ No | Does not load `--plugin-dir` plugins; use the proxy directly or CCP-23 SDK helpers |
+| Cursor | ❌ No | Does not load `--plugin-dir` plugins; use the proxy directly or the SDK helpers |
 | Windsurf | ❌ No | Same as Cursor |
 
 ---

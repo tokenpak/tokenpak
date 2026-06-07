@@ -28,12 +28,10 @@ from typing import List, Optional
 METRICS_DB = Path(os.path.expanduser("~/.tokenpak/metrics.db"))
 
 # Version tag lets the ingest endpoint evolve schemas without breakage.
-# v1.1 — TSR-03 / CCI-21 restoration (2026-05-08): adds active_profile +
-# consumption_mode fields. Original commit 3a5b63cd58 was reverted by
-# refactor 88d3d9deb0 ("delete deprecated agent/ + _internal/ trees").
-# Schema is restored here; the _internal.config helpers + the
-# detect_consumption_mode() function live separately and are not part
-# of TSR-03's scope.
+# v1.1 restoration (2026-05-08): adds active_profile +
+# consumption_mode fields. Schema is restored here; the config helpers +
+# the detect_consumption_mode() function live separately and are not part
+# of this scope.
 SCHEMA_VERSION = "1.1"
 
 
@@ -66,7 +64,7 @@ class MetricsRecord:
     # Routing
     model: str = ""
 
-    # Consumption context (CCI-21 restored — anonymous categorical, no PII)
+    # Consumption context (anonymous categorical, no PII)
     active_profile: str = ""      # loaded profile name (e.g. "balanced", "agentic", "claude-code-cli")
     consumption_mode: str = ""    # auto-detected mode (cli/tui/tmux/sdk/ide/cron) — may differ from profile
 
@@ -172,7 +170,7 @@ class MetricsStore:
                     synced          INTEGER NOT NULL DEFAULT 0
                 )
             """)
-            # CCI-21 restoration migration: add the two new columns to
+            # Restoration migration: add the two new columns to
             # databases that were created against the v1.0 schema.
             existing = {
                 row[1]
@@ -284,14 +282,11 @@ def detect_consumption_mode() -> str:
     """Best-effort detection of the current consumption mode.
 
     Returns one of: cli, tui, tmux, sdk, ide, cron, or empty string if unknown.
-    Mirrors the shell logic in tokenpak-status/check.sh (CCI-09 heuristic).
+    Mirrors the shell logic in tokenpak-status/check.sh.
     Never raises.
 
-    TSR-04 / WS-D restoration: this function shipped in commit 3a5b63cd58
-    (CCI-21, 2026-04-08) and was reverted by commit 88d3d9deb0 (the same
-    `_internal/` tree cleanup that reverted the v1.1 schema fields TSR-03
-    restored). Function logic is canonical CCI-21 verbatim; environment
-    heuristics match `tokenpak-status/check.sh`. No private API used.
+    Environment heuristics match `tokenpak-status/check.sh`. No private
+    API used.
     """
     try:
         if os.environ.get("CRON_INVOCATION"):
@@ -330,8 +325,8 @@ def record_request(
 ) -> None:
     """Record one request. No-op if metrics are disabled. Never raises.
 
-    `active_profile` and `consumption_mode` are CCI-21 schema fields
-    (v1.1). Callers pass them explicitly when known; auto-detection
+    `active_profile` and `consumption_mode` are v1.1 schema fields.
+    Callers pass them explicitly when known; auto-detection
     helpers (e.g. detect_consumption_mode, get_active_profile) live
     separately and are not wired in here. Empty strings default to
     omission from the upload payload via to_upload_dict().

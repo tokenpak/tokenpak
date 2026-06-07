@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""End-to-end tests for the full TIP Spend Guard pipeline — TSG-05 acceptance.
+"""End-to-end tests for the full TIP Spend Guard pipeline.
 
 Drives ``evaluate()`` (the orchestrator) directly. Verifies that all the
-primitives from TSG-01..04 compose correctly: estimator → policy →
+primitives compose correctly: estimator → policy →
 pending → block_response → intent → replay → tip_header → audit.
 """
 

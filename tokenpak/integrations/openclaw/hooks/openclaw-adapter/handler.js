@@ -1,5 +1,5 @@
 /**
- * OpenClaw Adapter — active.json writer (Path C, OAS-02).
+ * OpenClaw Adapter — active.json writer (Path C).
  *
  * Subscribes to message:received (PRIMARY) and message:sent (keeps last_event_ts
  * fresh during long conversations). On each event with a sessionKey, atomically
@@ -9,7 +9,7 @@
  * Why Path C: OpenClaw v2026.3.23-2 has no outbound-request mutation hook
  * surface (PHASE-A-MEMO.md, 2026-04-28). The message-level hooks are the only
  * available rendezvous point; the proxy reads active.json on the receiving end
- * (OAS-11). Validation, staleness, and TTL enforcement live in the proxy.
+ * Validation, staleness, and TTL enforcement live in the proxy.
  *
  * Never throws — all error paths fall through to console.warn so the host
  * gateway is unaffected by file-system failures.

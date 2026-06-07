@@ -94,9 +94,9 @@ class TestParseFrontmatterValid:
         assert data["tags"] == ["alpha", "beta"]
 
     def test_nested_dict(self):
-        yaml = "meta:\n  owner: Trix\n  version: 1"
+        yaml = "meta:\n  owner: maintainer-a\n  version: 1"
         data, diag = parse_frontmatter(yaml)
-        assert data["meta"]["owner"] == "Trix"
+        assert data["meta"]["owner"] == "maintainer-a"
 
     def test_strict_mode_flag_in_diagnostics(self):
         _, diag = parse_frontmatter("key: value", strict=False)

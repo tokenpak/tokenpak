@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for tokenpak.proxy.spend_guard.estimator.
 
-Acceptance hooks for TSG-01: token + cost projection.
+Token + cost projection tests.
 """
 
 from __future__ import annotations

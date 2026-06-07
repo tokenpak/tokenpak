@@ -103,10 +103,10 @@ Detect the active consumption mode (best-effort from environment):
    - `vscode` → **IDE-VSCode** (plugin loads normally)
    - `cursor` or `Windsurf` → **IDE-unsupported** ⚠️
      > Cursor and Windsurf do not load Claude Code plugins. Use the proxy directly
-     > (`ANTHROPIC_BASE_URL=http://localhost:8766`) or the CCP-23 SDK helpers instead.
+     > (`ANTHROPIC_BASE_URL=http://localhost:8766`) or the SDK helpers instead.
 2. Check `$TMUX`:
    - Set → **TMUX** ⚠️
-     > TMUX multi-pane mode detected — vault index access uses shared file locks (CCP-06).
+     > TMUX multi-pane mode detected — vault index access uses shared file locks.
      > Avoid running concurrent `tokenpak index` operations from different panes.
 3. Check whether stdin is a TTY (`[ -t 0 ]`):
    - Not a TTY → **non-interactive / `-p` mode** ⚠️
@@ -121,7 +121,7 @@ Report:
 mode: <CLI | TUI | TMUX | IDE-VSCode | IDE-unsupported | non-interactive | cron>
 ```
 
-For the full per-mode behavior matrix, see `MODES.md` (CCP-22) in the plugin docs.
+For the full per-mode behavior matrix, see `MODES.md` in the plugin docs.
 
 ---
 

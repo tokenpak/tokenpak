@@ -3,7 +3,7 @@ tokenpak.proxy.circuit_breaker — Ollama routing, per-provider circuit breakers
 rate limiting, header sanitizing, and error enrichment helpers.
 
 Also contains the OOP CircuitBreaker / CircuitBreakerRegistry classes
-merged from agent.proxy.circuit_breaker (FIN-07).
+merged from the legacy agent proxy circuit breaker.
 
 Extracted from runtime/proxy.py (L812-1146) as part of TPK-RESTRUCTURE-003.
 """
@@ -389,7 +389,7 @@ if os.environ.get("TOKENPAK_OLLAMA_ENABLED", "0") == "1":
 
 
 # ===========================================================================
-# OOP Circuit Breaker (merged from agent.proxy.circuit_breaker — FIN-07)
+# OOP Circuit Breaker (merged from the legacy agent proxy circuit breaker)
 # ===========================================================================
 
 

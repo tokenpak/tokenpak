@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # tokenpak-uninstall.sh — Remove TokenPak ↔ OpenClaw integration artifacts.
 #
-# CURRENT SCOPE (OAS-06 — 2026-04-28):
-#   - Removes the openclaw-adapter hook bundle installed by OAS-05:
+# CURRENT SCOPE (2026-04-28):
+#   - Removes the openclaw-adapter hook bundle installed by the inject step:
 #       * ~/.openclaw/hooks/openclaw-adapter/ (directory)
 #       * hooks.internal.entries.openclaw-adapter (in ~/.openclaw/openclaw.json)
 #   - Idempotent — re-running on a clean host is a safe no-op.
@@ -12,7 +12,7 @@
 #     installed by tokenpak-inject.sh — those are out of scope here.
 #     A broader uninstaller (covering provider revert, systemd drop-ins,
 #     and ~/.tokenpak/ caches) once lived at integrations/openclaw/
-#     pre-restructure but is not part of OAS-06; future tickets can
+#     pre-restructure but is not part of this scope; future changes can
 #     restore that scope on top of this skeleton.
 #
 # DOCS:

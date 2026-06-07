@@ -3,12 +3,12 @@ TokenPak MCP server — stdio JSON-RPC 2.0 server for Claude Code.
 
 Exposes five tools:
 
-Atomic tools (CCP-06 / CCP-07):
+Atomic tools:
   search_corpus             — BM25 search over vault blocks
   extract_structured_fields — deterministic entity extraction from text
   summarize_related_issues  — related-issue lookup via vault symbol index
 
-Composite tools (CCP-08):
+Composite tools:
   build_context_pack    — compact packet of key facts, risks, constraints,
                           links, and next actions for a query
   prepare_review_packet — review-oriented bundle tied to a diff / branch /
@@ -18,7 +18,7 @@ All tool imports are lazy (inside handlers) to keep cold-start <1 s.
 All tools honour the no-corpus fallback when vault_root is unset/unreadable.
 
 Output schemas are documented in each tool's ``description`` field so that
-downstream skills (CCP-11..14) can consume them without surprises.
+downstream skills can consume them without surprises.
 
 Run as MCP server:
     python -m tokenpak.sdk.integrations.claude_code.mcp_server
@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional
 
 # ---------------------------------------------------------------------------
-# Vault root resolution (CCP-07)
+# Vault root resolution
 # ---------------------------------------------------------------------------
 
 def _resolve_vault_root() -> Optional[str]:
@@ -94,11 +94,11 @@ def _shared_index_lock(tokenpak_dir: str) -> Generator[None, None, None]:
     """
     Acquire a POSIX shared (read) flock on the vault index lock sentinel.
 
-    Multiple MCP server instances (TMUX multi-pane fleet) can hold LOCK_SH
+    Multiple MCP server instances (TMUX multi-pane setup) can hold LOCK_SH
     simultaneously.  An index rebuilder should hold LOCK_EX on the same
     sentinel before writing index.json or replacing the BM25 cache.
 
-    Locking discipline per CCP-06 amendment / CCP-22 mode matrix:
+    Locking discipline (shared-lock readers, exclusive index rebuilders):
       - Read path (MCP server, normal tool calls) → LOCK_SH
       - Write path (index rebuild) → LOCK_EX, held only during the write window
 
@@ -292,7 +292,7 @@ def _handle_search_corpus(params: Dict[str, Any]) -> Dict[str, Any]:
     tokenpak_dir = os.path.join(vault_root, ".tokenpak")
     index = VaultIndex(tokenpak_dir)
 
-    # LOCK_SH: allow concurrent readers; blocks exclusive index rebuilders (CCP-06/CCP-22)
+    # LOCK_SH: allow concurrent readers; blocks exclusive index rebuilders
     with _shared_index_lock(tokenpak_dir):
         index.maybe_reload()
 
@@ -380,7 +380,7 @@ def _handle_summarize_related_issues(params: Dict[str, Any]) -> Dict[str, Any]:
     tokenpak_dir = os.path.join(vault_root, ".tokenpak")
     index = VaultIndex(tokenpak_dir)
 
-    # LOCK_SH: allow concurrent readers; blocks exclusive index rebuilders (CCP-06/CCP-22)
+    # LOCK_SH: allow concurrent readers; blocks exclusive index rebuilders
     with _shared_index_lock(tokenpak_dir):
         index.maybe_reload()
 
@@ -418,7 +418,7 @@ def _handle_summarize_related_issues(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Composite tool handlers (CCP-08)
+# Composite tool handlers
 # ---------------------------------------------------------------------------
 
 def _build_summary(corpus_results: List[Dict], entities: Dict, related: List[Dict]) -> Dict[str, Any]:

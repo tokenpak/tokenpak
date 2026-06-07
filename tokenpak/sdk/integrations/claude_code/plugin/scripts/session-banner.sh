@@ -6,13 +6,13 @@
 #     tokenpak: active (mode=offline|with-proxy, proxy=<URL|unset>, vault=<path|unset>)
 #   Works even when the proxy is not running.
 #
-# NON-INTERACTIVE MODE (amendment 2026-04-08, CCP-22 matrix row "SessionStart banner")
+# NON-INTERACTIVE MODE
 #   In non-interactive mode, banner is written to stderr only so that
 #   --output-format json / pipe-to-jq stdout stays clean.
 #   Non-interactive is detected by:
 #     - [[ ! -t 1 ]]  (no TTY on stdout — covers: claude -p, cron, piped output)
 #     - CLAUDE_OUTPUT_FORMAT is set and is not "text"
-#   Reference: CCP-22 mode matrix.
+#   Reference: the plugin mode matrix.
 #
 # CONSTRAINTS
 #   - Proxy ping timeout: 0.1s (100ms max) — never blocks session start

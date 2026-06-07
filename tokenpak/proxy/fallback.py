@@ -244,7 +244,7 @@ INTERCEPT_HOSTS = {
 
 
 # ---------------------------------------------------------------------------
-# FallbackChain — OOP wrapper around key pool + upstream failover (FIN-07)
+# FallbackChain — OOP wrapper around key pool + upstream failover
 # ---------------------------------------------------------------------------
 
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Client-side usage meter — WS-5 (TRIX-MTC-08).
+"""Client-side usage meter.
 
 Records per-request token usage keyed by ``license_id`` and posts batches
 to the license server's ``POST /usage`` endpoint. Designed to be:
@@ -18,11 +18,11 @@ default — call sites opt in via :func:`get_default_meter` and
 :func:`record_usage`. See ``services/`` integration in
 ``services/usage_metering_bridge.py`` for the pipeline hook.
 
-Path note (2026-04-28): the WS-5 task spec calls for this client to live
-at ``tokenpak/agent/license/usage_meter.py``, but ``agent/license/`` was
-removed during the 2026-04-19 17-subsystem consolidation (FIN-07/FIN-11).
-The remaining canonical home for licensing code is ``tokenpak/licensing/``,
-which is where this module lives. See submission block for QA review.
+Path note (2026-04-28): an earlier layout placed this client at
+``tokenpak/agent/license/usage_meter.py``, but ``agent/license/`` was
+removed during the 2026-04-19 subsystem consolidation. The canonical
+home for licensing code is ``tokenpak/licensing/``, which is where this
+module lives.
 """
 
 from __future__ import annotations

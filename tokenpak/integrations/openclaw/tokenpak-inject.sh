@@ -533,7 +533,7 @@ def sync_codex_jwt():
             log(f"Warning: {af}: {e}")
     return changed > 0
 
-# ── 6. openclaw-adapter hook (Path C session-binding, OAS-05) ──────────
+# ── 6. openclaw-adapter hook (Path C session-binding) ──────────
 #
 # The openclaw-adapter hook (initiative
 # 2026-04-28-openclaw-adapter-session-binding) writes
@@ -602,7 +602,7 @@ def _files_equal(a, b):
 
 
 def install_openclaw_adapter():
-    """Install / upgrade the ``openclaw-adapter`` hook bundle (OAS-05).
+    """Install / upgrade the ``openclaw-adapter`` hook bundle.
 
     Returns True when the openclaw.json file was mutated (so the caller
     knows a save is needed); False when nothing changed.
@@ -703,7 +703,7 @@ def main():
     if sync_codex_jwt():
         total = True
 
-    # OAS-05: openclaw-adapter (Path C session-binding hook).
+    # openclaw-adapter (Path C session-binding hook).
     try:
         if install_openclaw_adapter():
             total = True

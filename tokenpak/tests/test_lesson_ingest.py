@@ -196,7 +196,7 @@ class TestIngestFromVault:
         """Test ingesting from multiple agents."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create logs for multiple agents
-            for agent in ['Sue', 'Trix', 'Cali']:
+            for agent in ['alice', 'bob', 'carol']:
                 agent_memory = Path(tmpdir) / '03_AGENT_PACKS' / agent / 'memory'
                 agent_memory.mkdir(parents=True)
 
@@ -292,7 +292,7 @@ class TestIntegration:
 
     def test_real_vault_log_pattern(self):
         """Test with a realistic vault daily log."""
-        content = """# Cali Daily Log — 2026-03-27
+        content = """# Daily Log — 2026-03-27
 
 ## Status Summary
 - **Vault sync:** ✓ Complete (rebase-merge cleanup handled)
@@ -312,7 +312,7 @@ class TestIntegration:
 ## Task Execution
 **Task:** p2-tokenpak-memory-lesson-ingestion-2026-03-27.md
 **Result:** Implemented core logic, tests passing, DB schema validated
-**Action:** Submitted for Sue QA review
+**Action:** Submitted for QA review
 
 ## Next Cycle
 Ready to pick up next available p3 task in queue.

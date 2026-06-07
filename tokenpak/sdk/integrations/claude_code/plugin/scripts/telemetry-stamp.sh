@@ -16,14 +16,13 @@
 #   Lines are hard-capped at 4096 bytes before append. If the JSONL line
 #   exceeds this (e.g. very long file_path), the file_path field is
 #   truncated with a "[truncated]" suffix so the line stays under PIPE_BUF.
-#   Reference: POSIX.1-2017 §write rationale; CCP-22 matrix row
-#   "telemetry-stamp hook" / TMUX column.
+#   Reference: POSIX.1-2017 §write rationale.
 #
 # LOSS-TOLERANT
 #   Always exits 0, even on disk-full, permission-denied, or
 #   network-unreachable errors.
 #
-# SCHEMA (proposed by CCP-17; must match CCI-09 plugin-telemetry ingest)
+# SCHEMA (must match the plugin-telemetry ingest endpoint)
 #   {
 #     "session_id":  string  -- CLAUDE_SESSION_ID or from hook context
 #     "ts":          string  -- ISO-8601 UTC timestamp (e.g. "2026-04-08T17:00:00Z")
@@ -32,11 +31,11 @@
 #     "exit_code":   number  -- tool exit code (0 = success)
 #     "duration_ms": number  -- tool execution duration in ms (0 if unavailable)
 #   }
-#   CCI-09 COORDINATION NOTE: CCI-09 (plugin-telemetry ingest endpoint at
-#   /v1/plugin-telemetry) had not shipped as of CCP-17 authoring (2026-04-08).
-#   Schema above is proposed by CCP-17. CCI-09 must match this exact shape
-#   when implemented. No sensitive data is included (no license keys, no raw
-#   prompt text, no file contents).
+#   COORDINATION NOTE: the plugin-telemetry ingest endpoint at
+#   /v1/plugin-telemetry must match this exact shape. Schema above is
+#   proposed here; the plugin-telemetry ingest endpoint must match this exact
+#   shape when implemented. No sensitive data is included (no license keys, no
+#   raw prompt text, no file contents).
 #
 # PROXY POST
 #   Gated behind ALL of:

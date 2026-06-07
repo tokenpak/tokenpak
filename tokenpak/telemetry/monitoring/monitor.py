@@ -468,14 +468,13 @@ def update_last_request(
 
 
 # ---------------------------------------------------------------------------
-# CCG-02: mutation_audit housekeeping
-# Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 2718–2731)
+# mutation_audit housekeeping
 # ---------------------------------------------------------------------------
 
 def _prune_mutation_audit(conn: "sqlite3.Connection", ttl_days: int) -> int:
     """Delete mutation_audit rows older than ttl_days. Returns number of rows deleted.
 
-    CCG-02: Should be called from the request-handling path or DB worker loop
+    Should be called from the request-handling path or DB worker loop
     on a periodic basis (e.g. once per N requests or on Monitor startup
     alongside _init_db).
     """

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Platform-origin extraction (Path C, OAS-11).
+"""Platform-origin extraction (Path C).
 
 When inbound traffic arrives at the proxy, we need to attribute it to the
 calling platform/session so wire-side telemetry can be grouped by the

@@ -1,5 +1,5 @@
 /**
- * Smoke test for openclaw-adapter handler.js (Path C, OAS-04).
+ * Smoke test for openclaw-adapter handler.js (Path C).
  *
  * Zero-dependency Node test (built-ins only). Isolates filesystem to
  * os.tmpdir()/openclaw-adapter-test-<pid>/ via process.env.HOME override
