@@ -126,12 +126,138 @@ def extract_lessons(filepath: str) -> List[Dict[str, Any]]:
     return lessons
 
 
+MARKDOWN_SUFFIXES = ('.md', '.markdown')
+
+
+def _record_lessons(lessons: List[Dict[str, Any]], db: DecisionMemoryDB, source: str) -> int:
+    """Write a list of extracted lessons to the DB. Returns count written.
+
+    Uses the same deterministic ``query`` key shape as :func:`ingest_from_vault`
+    (``lesson_<timestamp>_<task_id>``) so callers that later dedupe by query
+    hash can do so.  NOTE: ``DecisionMemoryDB.record`` currently always inserts
+    (it does not upsert on the query hash), so re-running ingestion re-inserts —
+    this matches the existing vault-path behavior and is intentionally not
+    changed here (out of scope for this change).
+    """
+    count = 0
+    for lesson in lessons:
+        query = f"lesson_{lesson['timestamp']}_{lesson.get('task_id', 'general')}"
+        db.record(
+            query=query,
+            decision=lesson['lesson'],
+            confidence=lesson['confidence'],
+            notes=f"source: {source}, section: {lesson['section']}",
+        )
+        count += 1
+    return count
+
+
+def ingest_from_dir(directory: str, db: DecisionMemoryDB) -> int:
+    """
+    Recursively ingest lessons from any directory of Markdown notes.
+
+    This is the generic "bring your own knowledge base" path: it does NOT
+    require the vault ``03_AGENT_PACKS/<agent>/memory/`` schema.  Every
+    ``.md`` / ``.markdown`` file under ``directory`` (at any depth) is parsed
+    with the same :func:`extract_lessons` parser used for vault logs.
+
+    Missing, unreadable, or empty directories return ``0`` without raising,
+    preserving the companion's fail-open posture.  Use :func:`ingest_sources`
+    for a structured per-source status report.
+
+    Args:
+        directory: path to a directory holding the user's Markdown notes
+        db: DecisionMemoryDB instance to write to
+
+    Returns:
+        Total count of lessons ingested
+    """
+    directory = os.path.expanduser(directory)
+    if not os.path.isdir(directory):
+        return 0
+
+    total_ingested = 0
+    for root, _dirs, files in os.walk(directory):
+        for filename in sorted(files):
+            if filename.lower().endswith(MARKDOWN_SUFFIXES):
+                filepath = os.path.join(root, filename)
+                try:
+                    lessons = extract_lessons(filepath)
+                except (OSError, UnicodeDecodeError):
+                    # Skip files we cannot read; never abort the whole walk.
+                    continue
+                rel = os.path.relpath(filepath, directory)
+                total_ingested += _record_lessons(lessons, db, source=rel)
+    return total_ingested
+
+
+def ingest_sources(
+    db: DecisionMemoryDB,
+    vault_dir: str | None = None,
+    memory_dirs: "list | None" = None,
+) -> Dict[str, Any]:
+    """
+    Ingest from all configured memory sources and report per-source status.
+
+    Orchestrates both ingestion paths so a fresh user gets a self-explaining
+    result instead of a bare ``0``:
+
+    - ``vault_dir`` (optional): vault-schema ingestion via
+      :func:`ingest_from_vault` (backwards-compatible default).
+    - ``memory_dirs`` (optional): generic per-directory ingestion via
+      :func:`ingest_from_dir` ("bring your own knowledge base").
+
+    Each source carries a ``reason`` classification so callers (status/doctor)
+    can distinguish *no source configured* from *configured but
+    missing/unreadable* from *present but no matching files*.
+
+    Returns:
+        ``{"total": int, "sources": [{"path", "kind", "ingested", "reason"}]}``
+    """
+    sources: List[Dict[str, Any]] = []
+    total = 0
+
+    if vault_dir:
+        vp = os.path.expanduser(vault_dir)
+        packs = os.path.join(vp, '03_AGENT_PACKS')
+        if not os.path.isdir(packs):
+            sources.append({"path": vault_dir, "kind": "vault",
+                            "ingested": 0, "reason": "missing-or-not-vault-schema"})
+        else:
+            n = ingest_from_vault(vault_dir, db)
+            sources.append({"path": vault_dir, "kind": "vault", "ingested": n,
+                            "reason": "ok" if n else "present-but-no-matching-files"})
+            total += n
+
+    for d in (memory_dirs or []):
+        ds = str(d)
+        dp = os.path.expanduser(ds)
+        if not os.path.exists(dp):
+            sources.append({"path": ds, "kind": "memory-dir", "ingested": 0,
+                            "reason": "missing"})
+        elif not os.path.isdir(dp):
+            sources.append({"path": ds, "kind": "memory-dir", "ingested": 0,
+                            "reason": "not-a-directory"})
+        else:
+            n = ingest_from_dir(ds, db)
+            sources.append({"path": ds, "kind": "memory-dir", "ingested": n,
+                            "reason": "ok" if n else "present-but-no-matching-files"})
+            total += n
+
+    if not sources:
+        sources.append({"path": None, "kind": None, "ingested": 0,
+                        "reason": "no-source-configured"})
+
+    return {"total": total, "sources": sources}
+
+
 def ingest_from_vault(vault_dir: str, db: DecisionMemoryDB) -> int:
     """
     Walk vault daily logs and ingest all lessons into the DecisionMemoryDB.
 
-    Scans all files matching <vault_dir>/agents/*/memory/YYYY-MM-DD.md
-    and extracts lessons, populating the database.
+    Scans all files matching ``<vault_dir>/03_AGENT_PACKS/<agent>/memory/YYYY-MM-DD.md``
+    and extracts lessons, populating the database.  This is the vault-schema
+    path; for arbitrary user note directories use :func:`ingest_from_dir`.
 
     Args:
         vault_dir: path to vault root directory

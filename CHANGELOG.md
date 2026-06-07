@@ -4,6 +4,42 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] — 2026-06-06
+
+Minor release: companion **memory-source ingestion** — point the companion at
+your own Markdown notes ("bring your own knowledge base"). Additive only: no
+changes to existing behavior, no breaking changes.
+
+### Added
+
+- **companion:** memory-source ingest library API — `ingest_from_dir()` and
+  `ingest_sources()` in `tokenpak.companion.memory.lesson_ingest` ingest lessons
+  from arbitrary directories of Markdown notes (scanned recursively),
+  independent of the built-in memory schema. `ingest_sources()` returns a
+  per-source status report whose `reason` distinguishes *no source configured*
+  from *missing* / *not-a-directory* / *present but no matching files* / *ok*.
+- **companion:** `TOKENPAK_COMPANION_MEMORY_DIRS` configuration — an
+  OS-path-separator- or comma-separated list of extra memory directories,
+  parsed into `CompanionConfig.memory_dirs` (`~` expanded; empty entries
+  dropped; fail-open, never raises).
+- **companion (MCP):** the `session_info` tool now reports the configured
+  `memory_dirs` and surfaces a hint when no memory source is set, so an empty
+  ingest is self-explaining.
+
+### Tests & docs
+
+- `tests/test_companion_memory_source.py` — coverage for the env-var parser,
+  `ingest_from_dir`, and the `ingest_sources` status contract.
+- Companion guide: a "Memory sources — bring your own knowledge base" section
+  documenting the env var, the library API, and the MCP surface.
+
+### Internal
+
+- Regenerated the public-API snapshot. Beyond the companion additions above,
+  this is a ratchet correction that absorbs already-public `tokenpak.proxy`
+  symbols the committed snapshot had drifted from — no new public API in this
+  release other than the companion additions.
+
 ## [1.7.1] — 2026-06-03
 
 Surgical patch release: fixes, hardening, and public-safety/CI hygiene only. No new

@@ -276,8 +276,18 @@ def _handle_session_info(state: CompanionState, args: dict[str, Any]) -> str:
             "budget_daily_usd": state.config.budget_daily_usd,
             "hooks_enabled": state.config.hooks_enabled,
             "prune_threshold": state.config.prune_threshold,
+            "memory_dirs": [str(p) for p in getattr(state.config, "memory_dirs", [])],
         },
     }
+    # Make "no lessons" self-explaining: report whether a memory source is
+    # configured at all (TOKENPAK_COMPANION_MEMORY_DIRS / vault), so a
+    # fresh user knows why ingestion may be empty and how to point it at notes.
+    if not local["config"]["memory_dirs"]:
+        local["config"]["memory_source_hint"] = (
+            "no memory dirs configured — set TOKENPAK_COMPANION_MEMORY_DIRS to "
+            "directories of your own Markdown notes, then ingest them with the "
+            "companion memory-source API (ingest_from_dir / ingest_sources)"
+        )
     status, proxy_info = _proxy_get("/tpk/v1/session/info")
     if status == 200:
         local["proxy"] = proxy_info

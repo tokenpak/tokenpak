@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-06-04T03:44:13Z",
-  "package_version": "1.7.1",
+  "generated_at": "2026-06-07T03:35:28Z",
+  "package_version": "1.8.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -1949,11 +1949,23 @@
     },
     {
       "module": "tokenpak.companion.memory.lesson_ingest",
+      "name": "MARKDOWN_SUFFIXES"
+    },
+    {
+      "module": "tokenpak.companion.memory.lesson_ingest",
       "name": "extract_lessons"
     },
     {
       "module": "tokenpak.companion.memory.lesson_ingest",
+      "name": "ingest_from_dir"
+    },
+    {
+      "module": "tokenpak.companion.memory.lesson_ingest",
       "name": "ingest_from_vault"
+    },
+    {
+      "module": "tokenpak.companion.memory.lesson_ingest",
+      "name": "ingest_sources"
     },
     {
       "module": "tokenpak.companion.memory.session_capsules",
@@ -7948,6 +7960,42 @@
       "name": "get_capsule_request_hook"
     },
     {
+      "module": "tokenpak.proxy.capture_intake",
+      "name": "ENABLE_ENV"
+    },
+    {
+      "module": "tokenpak.proxy.capture_intake",
+      "name": "OPTIN_HEADER"
+    },
+    {
+      "module": "tokenpak.proxy.capture_intake",
+      "name": "OPTIN_VALUE"
+    },
+    {
+      "module": "tokenpak.proxy.capture_intake",
+      "name": "build_capture_payload"
+    },
+    {
+      "module": "tokenpak.proxy.capture_intake",
+      "name": "extract_response_text"
+    },
+    {
+      "module": "tokenpak.proxy.capture_intake",
+      "name": "forward_to_daemon"
+    },
+    {
+      "module": "tokenpak.proxy.capture_intake",
+      "name": "maybe_forward_capture"
+    },
+    {
+      "module": "tokenpak.proxy.capture_intake",
+      "name": "opt_in_requested"
+    },
+    {
+      "module": "tokenpak.proxy.capture_intake",
+      "name": "should_attempt"
+    },
+    {
       "module": "tokenpak.proxy.circuit_breaker",
       "name": "CircuitBreaker"
     },
@@ -9786,10 +9834,6 @@
     {
       "module": "tokenpak.proxy.server_extra.websocket_proxy",
       "name": "WebSocketConnectionStats"
-    },
-    {
-      "module": "tokenpak.proxy.server_extra.websocket_proxy",
-      "name": "WebSocketServerProtocol"
     },
     {
       "module": "tokenpak.proxy.server_extra.websocket_proxy",
@@ -16874,10 +16918,6 @@
     {
       "module": "tokenpak.vault.retrieval.vector_local",
       "name": "SentenceTransformer"
-    },
-    {
-      "module": "tokenpak.vault.retrieval.vector_local",
-      "name": "faiss"
     },
     {
       "module": "tokenpak.vault.scoring",

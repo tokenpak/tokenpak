@@ -15,6 +15,11 @@ TOKENPAK_COMPANION_HOOKS        Enable hook pipeline (default: 1)
 TOKENPAK_COMPANION_MCP          Enable MCP server (default: 1)
 TOKENPAK_COMPANION_SHOW_COST    Show cost estimates in TUI (default: 1)
 TOKENPAK_COMPANION_PRUNE_THRESHOLD  Token count above which pruning is suggested (default: 50000)
+TOKENPAK_COMPANION_MEMORY_DIRS  Extra memory/knowledge directories to ingest lessons
+                                from (default: none).  OS-pathsep- or comma-separated
+                                list of directories holding your own Markdown notes —
+                                "bring your own knowledge base", no vault schema
+                                required.  ``~`` is expanded; empty entries dropped.
 TOKENPAK_COMPANION_BARE         Strip Claude Code native context (default: 0)
                                 Disables CLAUDE.md, auto memory, prompt history,
                                 system prompt injection, settings/hooks overlay,
@@ -49,6 +54,12 @@ class CompanionConfig:
     prune_threshold: int = 50_000
     bare: bool = False
 
+    # Generic "bring your own knowledge base" memory sources.  These are
+    # directories of the user's own Markdown notes the companion ingests
+    # lessons from — distinct from the vault schema and from
+    # ``additionalDirectories`` filesystem-access grants (EXTRA_DIRS).
+    memory_dirs: list[Path] = field(default_factory=list)
+
     # Session-scoped (set at launch, immutable after)
     session_id: str = ""
     project_dir: str = ""
@@ -82,6 +93,7 @@ class CompanionConfig:
                 os.environ.get("TOKENPAK_COMPANION_PRUNE_THRESHOLD", "50000")
             ),
             bare=_bool("TOKENPAK_COMPANION_BARE", False),
+            memory_dirs=_path_list("TOKENPAK_COMPANION_MEMORY_DIRS"),
         )
 
     def profile_overrides(self) -> None:
@@ -113,3 +125,25 @@ def _float(key: str, default: float) -> float:
         return float(val)
     except ValueError:
         return default
+
+
+def _path_list(key: str) -> list[Path]:
+    """Parse an env var holding a list of directories.
+
+    Accepts both the OS path separator (``:`` on POSIX, ``;`` on Windows) and
+    commas, so ``~/notes:~/work/journal`` and ``~/notes,~/work/journal`` both
+    work.  ``~`` is expanded; surrounding whitespace and empty entries are
+    dropped.  Returns ``[]`` when the var is unset or contains only empties —
+    never raises, preserving the companion's fail-open posture.
+    """
+    val = os.environ.get(key)
+    if not val:
+        return []
+    # Normalize the OS path separator to a comma, then split on commas.
+    raw = val.replace(os.pathsep, ",")
+    out: list[Path] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if part:
+            out.append(Path(os.path.expanduser(part)))
+    return out
