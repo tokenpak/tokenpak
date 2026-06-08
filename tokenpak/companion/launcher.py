@@ -14,7 +14,8 @@ Config files are written to the fixed location ~/.tokenpak/companion/run/
 What the user sees:
     $ tokenpak claude
 
-      📦 TokenPak Companion
+      📦 TokenPak Claude Companion
+         TokenPak v1.8.0
          Ready • Mode: Balanced • Budget: Unlimited
          Proxy active → http://localhost:8766
 
@@ -100,12 +101,14 @@ def main(args: list[str] | None = None) -> int:
         env["ANTHROPIC_BASE_URL"] = proxy_url
 
     # Print styled startup banner
-    from tokenpak.cli.commands.status import MEME_LINES
+    from tokenpak.cli.commands.status import MEME_LINES, _get_version
     meme = random.choice(MEME_LINES)
+    version = _get_version()  # dynamic, e.g. "v1.8.0" (single source: tokenpak.__version__)
 
     print(file=sys.stderr)
     bare_tag = " \u2022 Bare: ON" if config.bare else ""
-    print(f"  \U0001f4e6 Token{_TEAL}Pak{_RESET} Companion", file=sys.stderr)
+    print(f"  \U0001f4e6 Token{_TEAL}Pak{_RESET} Claude Companion", file=sys.stderr)
+    print(f"     {_DIM}TokenPak {version}{_RESET}", file=sys.stderr)
     print(f"     {_DIM}Ready \u2022 Mode: {mode} \u2022 Budget: {budget}{bare_tag}{_RESET}", file=sys.stderr)
     if proxy_url:
         print(f"     {_DIM}Proxy active \u2192 {proxy_url}{_RESET}", file=sys.stderr)
