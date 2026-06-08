@@ -306,14 +306,16 @@ def _write_settings(config: CompanionConfig) -> str:
     # vault checkout or any operator-state directory, and every session
     # trips the sandbox. Only adds dirs that actually exist on this host
     # — no phantom paths. Operators who need additional candidate dirs
-    # beyond ``~/vault`` can list them (colon-separated; absolute paths
-    # or names relative to ``$HOME``) in the
-    # ``TOKENPAK_COMPANION_EXTRA_DIRS`` environment variable.
+    # beyond ``~/vault`` can list them (absolute paths or names relative to
+    # ``$HOME``) in the ``TOKENPAK_COMPANION_EXTRA_DIRS`` environment variable.
+    # Entries are separated by the platform path separator (``:`` on POSIX,
+    # ``;`` on Windows), matching the convention used by ``$PATH``.
     add_dirs = permissions.setdefault("additionalDirectories", [])
     candidates: list[Path] = [Path.home() / "vault"]
     extra = os.environ.get("TOKENPAK_COMPANION_EXTRA_DIRS", "")
-    for entry in (s.strip() for s in extra.split(":") if s.strip()):
-        candidates.append(Path(entry) if entry.startswith("/") else Path.home() / entry)
+    for entry in (s.strip() for s in extra.split(os.pathsep) if s.strip()):
+        path = Path(entry)
+        candidates.append(path if path.is_absolute() else Path.home() / entry)
     for candidate in candidates:
         if candidate.is_dir():
             candidate_str = str(candidate)
