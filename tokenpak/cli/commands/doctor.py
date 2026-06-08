@@ -569,48 +569,55 @@ def run_doctor(
             "Recent error rate   monitor.db not found",
         )
 
-    # === Check 9: Token savings summary from last 100 requests ==================
+    # === Check 9: Token savings summary (honest, attribution-aware) =============
+    # Route through the same savings engine that ``tokenpak status`` uses so the
+    # doctor figure equals the status figure for the same window. That engine is
+    # cache-origin-aware: it credits only proxy-caused compression and cache
+    # reads, and never conflates client-placed (passthrough) cache with savings.
+    # The old path here did a raw SUM(input_tokens - compressed_tokens) over the
+    # last 100 rows with no origin filter, which over-claimed against an
+    # input-equals-100% denominator.
     if db_path.exists():
         try:
-            conn = sqlite3.connect(str(db_path))
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT "
-                "  COUNT(*) as total, "
-                "  SUM(input_tokens) as total_input, "
-                "  SUM(compressed_tokens) as total_sent, "
-                "  SUM(input_tokens - compressed_tokens) as tokens_saved, "
-                "  SUM(estimated_cost) as total_cost "
-                "FROM ("
-                "  SELECT input_tokens, compressed_tokens, estimated_cost "
-                "  FROM requests "
-                "  WHERE compressed_tokens IS NOT NULL AND input_tokens > 0 "
-                "  ORDER BY id DESC LIMIT 100"
-                ")"
-            )
-            row = cur.fetchone()
-            conn.close()
-            if row and row[0] and row[0] > 0:
-                total, total_input, total_sent, tokens_saved, total_cost = row
-                tokens_saved = tokens_saved or 0
-                total_input = total_input or 0
-                pct_saved = (tokens_saved / total_input * 100) if total_input > 0 else 0
-                cost_str = f"${total_cost:.4f}" if total_cost else "$0.0000"
-                _record(
-                    "token_savings",
-                    "pass",
-                    f"Token savings       {tokens_saved:,} saved ({pct_saved:.1f}%) "
-                    f"— {total} reqs, cost {cost_str}",
-                    detail=(
-                        f"total_input={total_input:,} sent={total_sent:,} "
-                        f"saved={tokens_saved:,} ({pct_saved:.1f}%) cost={cost_str}"
-                    ),
-                )
-            else:
+            from tokenpak.cli.commands.status import _calculate_fleet_savings
+
+            # Match the status default window ("today", user-local day) so the
+            # two surfaces report the same number.
+            report = _calculate_fleet_savings(db_path=str(db_path), period="today")
+            err = report.get("error")
+            if err in ("no_data", "db_not_found"):
                 _record(
                     "token_savings",
                     "warn",
-                    "Token savings       no compressed request data yet",
+                    "Token savings       no request data yet (today)",
+                )
+            elif err:
+                _record(
+                    "token_savings",
+                    "warn",
+                    f"Token savings       could not compute: {err}",
+                )
+            else:
+                totals = report["totals"]
+                models = report["models"]
+                saved_cost = totals["saved"]
+                pct_saved = totals["savings_pct"]
+                req_count = totals["requests"]
+                compressed_tok = sum(m["compressed_tokens"] for m in models)
+                with_cost = totals["with_cost"]
+                cost_str = f"${with_cost:.4f}"
+                _record(
+                    "token_savings",
+                    "pass",
+                    f"Token savings       ${saved_cost:.4f} saved ({pct_saved:.1f}%) "
+                    f"— {req_count} reqs today, cost {cost_str}",
+                    detail=(
+                        f"saved=${saved_cost:.4f} ({pct_saved:.1f}%) "
+                        f"compressed_tokens={compressed_tok:,} "
+                        f"cache_savings=${totals['cache_savings']:.4f} "
+                        f"compression_savings=${totals['compression_savings']:.4f} "
+                        f"cost={cost_str} window=today"
+                    ),
                 )
         except Exception as exc:
             _record(

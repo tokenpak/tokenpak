@@ -194,7 +194,7 @@ def _proxy_get(path: str, port: Optional[int] = None) -> "dict | None":
 _FIRST_RUN_FLAG = Path.home() / ".tokenpak" / ".seen_intro"
 
 # Commands shown in quick --help (beginner view)
-_QUICK_COMMANDS = ["start", "demo", "cost", "status"]
+_QUICK_COMMANDS = ["start", "demo", "cost", "status", "metrics"]
 
 # All commands grouped for `tokenpak help`
 _COMMAND_GROUPS = {
