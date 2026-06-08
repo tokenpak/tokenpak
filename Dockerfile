@@ -49,4 +49,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${TOKENPAK_PORT}/health', timeout=5)" || exit 1
 
 # Start proxy — reads port from TOKENPAK_PORT env var
-CMD ["python", "-m", "tokenpak.cli", "proxy"]
+CMD ["python", "-m", "tokenpak.cli", "serve"]

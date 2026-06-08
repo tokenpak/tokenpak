@@ -1,4 +1,8 @@
-# Core uses Python stdlib only
-# Optional for better token counting:
-# tiktoken>=0.5.0
-websockets>=16.0
+# Dependencies are declared canonically in pyproject.toml.
+#
+#   pip install tokenpak            # slim core
+#   pip install "tokenpak[serve]"   # proxy + WebSocket server (websockets, fastapi, ...)
+#   pip install "tokenpak[full]"    # all optional feature extras
+#
+# This file is intentionally minimal — do not duplicate pinned versions here;
+# add or change dependencies in pyproject.toml instead.

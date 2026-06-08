@@ -1,6 +1,7 @@
 [build-system]
 requires = [
-    "setuptools>=61.0",
+    # >=64 for modern PEP 660 editable installs (editable_wheel backend).
+    "setuptools>=64",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -164,6 +165,10 @@ serve = [
     "starlette>=0.36.0",
     "pydantic>=2.0.0",
     "fastapi>=0.100.0",
+    # Optional WebSocket proxy endpoint (tokenpak/proxy/websocket.py). The
+    # import is guarded (try/except ImportError) and the WS server is simply
+    # disabled when absent, so this is serve-only, not a core dependency.
+    "websockets>=12.0",
 ]
 telemetry = [
     "pydantic>=2.0.0",

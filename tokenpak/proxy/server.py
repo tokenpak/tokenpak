@@ -3082,7 +3082,12 @@ def main() -> None:
         ps.compilation_mode = os.environ.get("TOKENPAK_MODE", ps.compilation_mode)
         print(f"[tokenpak] config reloaded: mode={ps.compilation_mode}", flush=True)
 
-    signal.signal(signal.SIGHUP, _handle_sighup)
+    # SIGHUP-based hot-reload is POSIX-only; skip on platforms that lack it
+    # (e.g. Windows has no signal.SIGHUP attribute).
+    try:
+        signal.signal(signal.SIGHUP, _handle_sighup)
+    except (OSError, ValueError, AttributeError):
+        pass
 
     try:
         ps.start(blocking=True)
