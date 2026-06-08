@@ -1,0 +1,249 @@
+{
+  "$defs": {
+    "AcceptanceCriterion": {
+      "additionalProperties": false,
+      "description": "Supporting sketch \u2014 referenced by DispatchManifest / Reviewer I/O.\n\nThe Standards Delta references ``AcceptanceCriterion`` as a type but does\nnot specify its fields; this minimal shape is the supporting sketch.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "description"
+      ],
+      "title": "AcceptanceCriterion",
+      "type": "object"
+    },
+    "AutonomyMode": {
+      "description": "DispatchJob / DispatchManifest autonomy mode (Standards Delta v0 \u00a74.1).",
+      "enum": [
+        "advisory",
+        "draft",
+        "dispatch_with_approval",
+        "auto_dispatch_limited"
+      ],
+      "title": "AutonomyMode",
+      "type": "string"
+    },
+    "Constraint": {
+      "additionalProperties": false,
+      "description": "Supporting sketch \u2014 referenced by DispatchManifest / Reviewer I/O.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "description"
+      ],
+      "title": "Constraint",
+      "type": "object"
+    },
+    "Deliverable": {
+      "additionalProperties": false,
+      "description": "Supporting sketch \u2014 referenced by DispatchManifest deliverables list.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "description"
+      ],
+      "title": "Deliverable",
+      "type": "object"
+    },
+    "ManifestPermissions": {
+      "additionalProperties": false,
+      "description": "DispatchManifest.permissions block (Standards Delta v0 \u00a74.2).",
+      "properties": {
+        "allowed_actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Actions",
+          "type": "array"
+        },
+        "autonomy_mode": {
+          "$ref": "#/$defs/AutonomyMode"
+        },
+        "forbidden_actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Forbidden Actions",
+          "type": "array"
+        },
+        "requires_approval_for": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requires Approval For",
+          "type": "array"
+        }
+      },
+      "required": [
+        "autonomy_mode"
+      ],
+      "title": "ManifestPermissions",
+      "type": "object"
+    },
+    "ManifestStatus": {
+      "description": "DispatchManifest lifecycle status (Standards Delta v0 \u00a74.2).",
+      "enum": [
+        "draft",
+        "needs_decision",
+        "approved",
+        "active"
+      ],
+      "title": "ManifestStatus",
+      "type": "string"
+    },
+    "PathPolicy": {
+      "additionalProperties": false,
+      "description": "DispatchManifest.path_policy \u2014 consumed by the apply_patch tool (\u00a74.2).\n\n``denied_paths`` is guaranteed to always contain the four mandatory globs\n(``.env``, ``.git/**``, ``secrets/**``, ``license/**``); any missing\nmandatory entry is injected at validation time so the safety invariant\nholds regardless of caller input.",
+      "properties": {
+        "allow_delete_files": {
+          "default": false,
+          "title": "Allow Delete Files",
+          "type": "boolean"
+        },
+        "allow_new_files": {
+          "default": true,
+          "title": "Allow New Files",
+          "type": "boolean"
+        },
+        "allowed_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Paths",
+          "type": "array"
+        },
+        "denied_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Denied Paths",
+          "type": "array"
+        }
+      },
+      "title": "PathPolicy",
+      "type": "object"
+    },
+    "QualityRequirements": {
+      "additionalProperties": false,
+      "description": "DispatchManifest.quality_requirements block (Standards Delta v0 \u00a74.2).",
+      "properties": {
+        "docs_required": {
+          "title": "Docs Required",
+          "type": "boolean"
+        },
+        "evidence_required": {
+          "title": "Evidence Required",
+          "type": "boolean"
+        },
+        "review_required": {
+          "title": "Review Required",
+          "type": "boolean"
+        },
+        "test_required": {
+          "title": "Test Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "test_required",
+        "review_required",
+        "docs_required",
+        "evidence_required"
+      ],
+      "title": "QualityRequirements",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Scoped work contract derived from a DispatchJob (Standards Delta v0 \u00a74.2).\n\n``path_policy`` is consumed by the ``apply_patch`` tool (round-6 \u00a74.2) and\nalways carries the four mandatory denied globs (see :class:`PathPolicy`).",
+  "properties": {
+    "acceptance_criteria": {
+      "items": {
+        "$ref": "#/$defs/AcceptanceCriterion"
+      },
+      "title": "Acceptance Criteria",
+      "type": "array"
+    },
+    "constraints": {
+      "items": {
+        "$ref": "#/$defs/Constraint"
+      },
+      "title": "Constraints",
+      "type": "array"
+    },
+    "deliverables": {
+      "items": {
+        "$ref": "#/$defs/Deliverable"
+      },
+      "title": "Deliverables",
+      "type": "array"
+    },
+    "goal": {
+      "title": "Goal",
+      "type": "string"
+    },
+    "id": {
+      "description": "\"manifest_<ulid>\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "path_policy": {
+      "$ref": "#/$defs/PathPolicy"
+    },
+    "permissions": {
+      "$ref": "#/$defs/ManifestPermissions"
+    },
+    "quality_requirements": {
+      "$ref": "#/$defs/QualityRequirements"
+    },
+    "route_id": {
+      "description": "e.g. \"route.code_task.v1\"",
+      "title": "Route Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ManifestStatus"
+    }
+  },
+  "required": [
+    "id",
+    "job_id",
+    "route_id",
+    "goal",
+    "permissions",
+    "quality_requirements",
+    "status"
+  ],
+  "title": "DispatchManifest",
+  "type": "object"
+}

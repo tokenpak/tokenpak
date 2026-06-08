@@ -1,0 +1,47 @@
+# Default builder worker profile (Standards Delta v0 §5.1).
+#
+# One generic builder covering drafting + patch generation for v0.1-alpha;
+# route-specific behaviour is layered on via additive prompt overlays (§16),
+# not via separate worker profiles. Split into code/doc builders later only if
+# review pass-rate suffers in beta evaluation.
+#
+# `capabilities` is registry-bound: every entry MUST be in the §5.2 capability
+# registry or the registry loader rejects this profile fail-loud at load time.
+id: worker.builder.default.v1
+kind: tip_worker_profile
+
+roles:
+  - builder
+
+capabilities:
+  - answer_generation
+  - code_drafting
+  - patch_generation
+  - doc_drafting
+
+system_directives:
+  - Produce work that fully satisfies the manifest goal and acceptance criteria.
+  - Stay strictly within the manifest scope; do not expand it without a decision.
+  - Respect the manifest path policy for any file the work proposes to touch.
+  - Return a schema-valid station result only.
+
+allowed_tools:
+  - read_context
+  - write_artifact
+  - propose_patch
+  - apply_patch
+  - run_command
+
+input_schema: station_input.v1
+output_schema: station_result.v1
+
+default_loop_policy:
+  max_iterations: 3
+  max_tool_calls: 8
+  max_wall_seconds: 900
+
+permission_profile:
+  read_files: true
+  modify_files: policy_controlled
+  run_commands: policy_controlled
+  install_dependencies: false

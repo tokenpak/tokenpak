@@ -1,0 +1,42 @@
+# Default reviewer worker profile (Standards Delta v0 §5.1).
+#
+# Single-shot semantic reviewer: reads the build/draft output plus the manifest
+# acceptance criteria and emits a structured review verdict. It does not mutate
+# the workspace, so its permission profile denies file modification and command
+# execution.
+#
+# `capabilities` is registry-bound: every entry MUST be in the §5.2 capability
+# registry or the registry loader rejects this profile fail-loud at load time.
+id: worker.reviewer.default.v1
+kind: tip_worker_profile
+
+roles:
+  - reviewer
+
+capabilities:
+  - semantic_review
+  - doc_review
+
+system_directives:
+  - Evaluate the upstream output against each manifest acceptance criterion.
+  - Report a per-criterion pass / fail / unclear verdict with concise notes.
+  - Surface required fixes and risk flags; never silently pass a gap.
+  - Return a schema-valid review result only.
+
+allowed_tools:
+  - read_context
+  - write_artifact
+
+input_schema: reviewer_station_input.v1
+output_schema: reviewer_station_result.v1
+
+default_loop_policy:
+  max_iterations: 1
+  max_tool_calls: 4
+  max_wall_seconds: 600
+
+permission_profile:
+  read_files: true
+  modify_files: never
+  run_commands: never
+  install_dependencies: false

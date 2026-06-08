@@ -1,0 +1,91 @@
+# Dispatch integration fixture — decision-required failure path (P-FIXTURES-01).
+#
+# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# (see quick_answer.golden.yaml for the element index).
+#
+# Failure path: a code_task build completes, but the reviewer returns `warning`.
+# Per the §5.7 handoff table the Gatehouse auto-creates an accept/reject
+# DispatchDecision and the line halts with DECISION_REQUIRED — the package is
+# `decision_required`, not delivered. The decision is persisted and linked to the
+# run.
+name: decision_required
+kind: failure
+description: A reviewer `warning` auto-creates an accept/reject decision (§5.7).
+
+# (1) Input request text.
+input_request: "refactor the parser function and add a test"
+
+autonomy_mode: auto_dispatch_limited
+
+# (2) Expected DispatchManifest (assertable).
+expected_manifest:
+  detected_intent: code_task
+  route_id: route.code_task.v1
+  goal_contains: "refactor"
+  acceptance_criterion_ids:
+    - ac_code_1
+    - ac_code_2
+
+# (3) Expected DispatchRoute selection.
+expected_route:
+  id: route.code_task.v1
+  selection_status: auto_dispatch
+  precedence_layer: exact_route_trigger_match
+  uses_reviewer: true
+
+# (4) Expected worker/station sequence.
+expected_stations:
+  - station_id: build
+    worker_id: worker.builder.default.v1
+    status: completed
+  - station_id: review
+    worker_id: worker.reviewer.default.v1
+    status: completed
+
+# (5) Mock TIP responses (deterministic). `live: false` keeps CI offline.
+mock_tip:
+  live: false
+  worker_turns:
+    - result_payload:
+        summary: "refactor drafted"
+      output_schema_valid: true
+      tokens_used: 30
+  reviewer:
+    status: warning
+    reason: "naming nit on the refactored function"
+
+# (6) Expected DispatchDeliveryPackage (shape + key fields).
+expected_delivery_package:
+  status: decision_required
+  gatehouse_passed: true
+  cost_note_present: true
+  decision_present: true
+
+# (7) Expected DispatchReceipt (shape + telemetry fields).
+expected_receipt:
+  final_status: gate_review
+  station_count: 2
+  decision_count: 1
+  effect_count: 0
+
+# Expected decisions / gates that must fire.
+expected_decisions:
+  count: 1
+  option_ids:
+    - accept
+    - reject
+  persisted_and_linked: true
+expected_gates:
+  delivery_gate_fired: true
+  reviewer_gate_fired: true
+
+# (8) Pass/fail criteria.
+pass_fail:
+  line_status: decision_required
+  run_status: gate_review
+  asserts:
+    - "Build + reviewer both complete; reviewer returns `warning`."
+    - "Gatehouse auto-creates exactly one accept/reject DispatchDecision."
+    - "DeliveryPackage.status == decision_required (NOT delivered)."
+    - "The decision is persisted in the Run Ledger and linked onto the run record."
+    - "Receipt records the pending decision; final_status == gate_review."

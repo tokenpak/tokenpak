@@ -1,0 +1,86 @@
+# Dispatch integration fixture — blocked-reviewer failure path (P-FIXTURES-01).
+#
+# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# (see quick_answer.golden.yaml for the element index).
+#
+# Failure path: a code_task build completes, but the reviewer returns `fail`.
+# Per the §5.7 handoff table the Delivery Gate BLOCKS: the package is `blocked`,
+# carries the reviewer's required_fixes, and there is NO automatic repair loop
+# (v0.1-alpha).
+name: blocked_reviewer
+kind: failure
+description: A reviewer `fail` blocks delivery with required_fixes, no repair loop (§5.7).
+
+# (1) Input request text.
+input_request: "implement the new endpoint feature"
+
+autonomy_mode: auto_dispatch_limited
+
+# (2) Expected DispatchManifest (assertable).
+expected_manifest:
+  detected_intent: code_task
+  route_id: route.code_task.v1
+  goal_contains: "endpoint"
+  acceptance_criterion_ids:
+    - ac_code_1
+    - ac_code_2
+
+# (3) Expected DispatchRoute selection.
+expected_route:
+  id: route.code_task.v1
+  selection_status: auto_dispatch
+  precedence_layer: exact_route_trigger_match
+  uses_reviewer: true
+
+# (4) Expected worker/station sequence.
+expected_stations:
+  - station_id: build
+    worker_id: worker.builder.default.v1
+    status: completed
+  - station_id: review
+    worker_id: worker.reviewer.default.v1
+    status: completed
+
+# (5) Mock TIP responses (deterministic). `live: false` keeps CI offline.
+mock_tip:
+  live: false
+  worker_turns:
+    - result_payload:
+        summary: "endpoint drafted but incomplete"
+      output_schema_valid: true
+      tokens_used: 25
+  reviewer:
+    status: fail
+    reason: "acceptance criterion ac_code_2 is unmet"
+
+# (6) Expected DispatchDeliveryPackage (shape + key fields).
+expected_delivery_package:
+  status: blocked
+  gatehouse_passed: true        # structural checks pass; reviewer fail blocks
+  cost_note_present: true
+  required_fixes_empty: false   # blocked package carries required_fixes
+
+# (7) Expected DispatchReceipt (shape + telemetry fields).
+expected_receipt:
+  final_status: blocked
+  station_count: 2
+  decision_count: 0
+  effect_count: 0
+
+# Expected decisions / gates that must fire.
+expected_decisions:
+  count: 0
+expected_gates:
+  delivery_gate_fired: true
+  reviewer_gate_fired: true
+
+# (8) Pass/fail criteria.
+pass_fail:
+  line_status: blocked
+  run_status: blocked
+  asserts:
+    - "Build + reviewer both complete; reviewer returns `fail`."
+    - "DeliveryPackage.status == blocked; required_fixes is non-empty."
+    - "No automatic repair loop: nothing is re-dispatched (v0.1-alpha)."
+    - "No DispatchDecision is created (a `fail` blocks outright, unlike `warning`)."
+    - "Receipt final_status == blocked."

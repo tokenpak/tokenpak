@@ -1,0 +1,92 @@
+# Dispatch integration fixture — doc_task golden path (P-FIXTURES-01).
+#
+# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# (see quick_answer.golden.yaml for the element index).
+#
+# Golden path: a documentation request routes to the two-station doc_task route.
+# A builder station (doc_builder overlay) drafts the document; a reviewer station
+# (doc_review capability) passes; the Delivery Gate ships.
+name: doc_task_golden
+kind: golden
+description: A documentation request runs draft → reviewer-pass → delivery on doc_task.
+
+# (1) Input request text.
+input_request: "write documentation for the dispatch runtime in the readme"
+
+autonomy_mode: auto_dispatch_limited
+
+# (2) Expected DispatchManifest (assertable).
+expected_manifest:
+  detected_intent: doc_task
+  route_id: route.doc_task.v1
+  goal_contains: "documentation"
+  acceptance_criterion_ids:
+    - ac_doc_1
+  quality_requirements:
+    test_required: false
+    review_required: true
+    docs_required: true
+
+# (3) Expected DispatchRoute selection.
+expected_route:
+  id: route.doc_task.v1
+  selection_status: auto_dispatch
+  precedence_layer: exact_route_trigger_match
+  uses_reviewer: true
+
+# (4) Expected worker/station sequence (station_id, terminal status).
+expected_stations:
+  - station_id: draft
+    worker_id: worker.builder.default.v1
+    status: completed
+  - station_id: review
+    worker_id: worker.reviewer.default.v1
+    status: completed
+
+# (5) Mock TIP responses (deterministic). `live: false` keeps CI offline.
+mock_tip:
+  live: false
+  worker_turns:
+    - result_payload:
+        document: "## Dispatch runtime\nThe dispatch runtime executes routes sequentially."
+      output_schema_valid: true
+      tokens_used: 64
+      wall_seconds: 3
+  reviewer:
+    status: pass
+    reason: "document is clear and grounded in the acceptance criteria"
+
+# (6) Expected DispatchDeliveryPackage (shape + key fields).
+expected_delivery_package:
+  status: delivery_ready
+  gatehouse_passed: true
+  cost_note_present: true
+  required_fixes_empty: true
+
+# (7) Expected DispatchReceipt (shape + telemetry fields).
+expected_receipt:
+  final_status: delivered
+  station_count: 2
+  decision_count: 0
+  effect_count: 0
+  telemetry:
+    total_output_tokens: 64
+
+# Expected decisions / gates that must fire.
+expected_decisions:
+  count: 0
+expected_gates:
+  delivery_gate_fired: true
+  reviewer_gate_fired: true
+
+# (8) Pass/fail criteria.
+pass_fail:
+  line_status: delivered
+  run_status: delivered
+  asserts:
+    - "Route auto-selected as route.doc_task.v1 via exact_route_trigger_match."
+    - "Draft station completes, then reviewer station completes (one review call)."
+    - "Run Ledger persists the run + both station runs (draft payload read back equal)."
+    - "DeliveryPackage.status == delivery_ready; reviewer cost note present."
+    - "DispatchReceipt has 2 station rows, 0 decisions, 0 effects."
+    - "No decision fires; both the reviewer gate and the Delivery Gate fire."

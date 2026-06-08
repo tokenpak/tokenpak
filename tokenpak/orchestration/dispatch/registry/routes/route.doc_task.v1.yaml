@@ -1,0 +1,48 @@
+# doc_task route (Standards Delta v0 §4.3 + §13 routes + §16).
+#
+# Two-station route: a builder station (doc_builder overlay) drafts the document,
+# then a reviewer station reviews it for clarity / grounding against the manifest
+# acceptance criteria (§5.7). The reviewer uses the doc_review capability and
+# costs one extra LLM call (§5.7 cost note).
+#
+# Stations bind dynamically by `required_role` + `required_capabilities` against
+# the worker registry (§11) — NOT by hardcoded worker id. `required_capabilities`
+# is registry-bound: every entry MUST be in the §5.2 capability registry or the
+# route registry rejects this profile fail-loud at load time.
+id: route.doc_task.v1
+name: Doc Task
+description: Create or update a document, then review it for clarity and grounding.
+
+triggers:
+  intents:
+    - doc_task
+
+default_risk: low
+
+stations:
+  - id: draft
+    required_role: builder
+    prompt_overlay: overlay.doc_builder.v1
+    required_capabilities:
+      - doc_drafting
+    gates:
+      - acceptance_gate
+    output_schema: station_result.v1
+  - id: review
+    required_role: reviewer
+    required_capabilities:
+      - doc_review
+    gates:
+      - delivery_gate
+    output_schema: reviewer_station_result.v1
+
+retry_policy:
+  max_station_retries: 1
+  escalate_after_failure: false
+
+delivery:
+  include_summary: true
+  include_files_changed: true
+  include_tests: false
+  include_risks: true
+  include_next_steps: true

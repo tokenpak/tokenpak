@@ -1,0 +1,148 @@
+{
+  "$defs": {
+    "ModifyFilesPolicy": {
+      "description": "DispatchWorker permission_profile.modify_files (Standards Delta v0 \u00a75.1).",
+      "enum": [
+        "always",
+        "policy_controlled",
+        "never"
+      ],
+      "title": "ModifyFilesPolicy",
+      "type": "string"
+    },
+    "RunCommandsPolicy": {
+      "description": "DispatchWorker permission_profile.run_commands (Standards Delta v0 \u00a75.1).",
+      "enum": [
+        "always",
+        "policy_controlled",
+        "never"
+      ],
+      "title": "RunCommandsPolicy",
+      "type": "string"
+    },
+    "WorkerLoopDefault": {
+      "additionalProperties": false,
+      "description": "DispatchWorker.default_loop_policy \u2014 the \u00a75.1 three-field budget.\n\nDistinct from :class:`StationLoopPolicy`: \u00a75.1 specifies only the three\ninteger budget fields for a worker default; stop conditions live on the\nstation-level policy.",
+      "properties": {
+        "max_iterations": {
+          "title": "Max Iterations",
+          "type": "integer"
+        },
+        "max_tool_calls": {
+          "title": "Max Tool Calls",
+          "type": "integer"
+        },
+        "max_wall_seconds": {
+          "title": "Max Wall Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_iterations",
+        "max_tool_calls",
+        "max_wall_seconds"
+      ],
+      "title": "WorkerLoopDefault",
+      "type": "object"
+    },
+    "WorkerPermissionProfile": {
+      "additionalProperties": false,
+      "description": "DispatchWorker.permission_profile (Standards Delta v0 \u00a75.1).\n\n``install_dependencies`` is always ``False`` in v0.1-alpha (external side\neffects are forbidden \u2014 \u00a75.5).",
+      "properties": {
+        "install_dependencies": {
+          "default": false,
+          "description": "v0.1-alpha: always false",
+          "title": "Install Dependencies",
+          "type": "boolean"
+        },
+        "modify_files": {
+          "$ref": "#/$defs/ModifyFilesPolicy",
+          "default": "policy_controlled"
+        },
+        "read_files": {
+          "default": true,
+          "title": "Read Files",
+          "type": "boolean"
+        },
+        "run_commands": {
+          "$ref": "#/$defs/RunCommandsPolicy",
+          "default": "policy_controlled"
+        }
+      },
+      "title": "WorkerPermissionProfile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A registry-loaded TIP worker profile (Standards Delta v0 \u00a75.1).\n\n``capabilities`` is registry-bound: the loader rejects any string not in\nthe \u00a75.2 capability registry at construction time (fail-loud, per \u00a75.2\ngovernance rule). ``kind`` is the fixed literal ``\"tip_worker_profile\"``.",
+  "properties": {
+    "allowed_tools": {
+      "description": "registry-bound; see \u00a75.3",
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Tools",
+      "type": "array"
+    },
+    "capabilities": {
+      "description": "registry-bound; see \u00a75.2",
+      "items": {
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "default_loop_policy": {
+      "$ref": "#/$defs/WorkerLoopDefault"
+    },
+    "id": {
+      "description": "e.g. \"worker.builder.default.v1\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "input_schema": {
+      "description": "e.g. \"station_input.v1\"",
+      "title": "Input Schema",
+      "type": "string"
+    },
+    "kind": {
+      "const": "tip_worker_profile",
+      "default": "tip_worker_profile",
+      "title": "Kind",
+      "type": "string"
+    },
+    "output_schema": {
+      "description": "e.g. \"station_result.v1\"",
+      "title": "Output Schema",
+      "type": "string"
+    },
+    "permission_profile": {
+      "$ref": "#/$defs/WorkerPermissionProfile"
+    },
+    "roles": {
+      "description": "e.g. [\"builder\"]",
+      "items": {
+        "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+    },
+    "system_directives": {
+      "description": "base prompt; overlays additively append",
+      "items": {
+        "type": "string"
+      },
+      "title": "System Directives",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "input_schema",
+    "output_schema",
+    "default_loop_policy",
+    "permission_profile"
+  ],
+  "title": "DispatchWorker",
+  "type": "object"
+}

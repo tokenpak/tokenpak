@@ -1,0 +1,120 @@
+{
+  "$defs": {
+    "AutonomyMode": {
+      "description": "DispatchJob / DispatchManifest autonomy mode (Standards Delta v0 \u00a74.1).",
+      "enum": [
+        "advisory",
+        "draft",
+        "dispatch_with_approval",
+        "auto_dispatch_limited"
+      ],
+      "title": "AutonomyMode",
+      "type": "string"
+    },
+    "DispatchJobStatus": {
+      "description": "DispatchJob execution-tier state machine (Standards Delta v0 \u00a74.1 + \u00a76).\n\nTerminal states per \u00a76: ``delivered``, ``cancelled``, ``failed``,\n``withdrawn``. These do NOT map onto the Std 41 task-packet status enum;\nthe crosswalk in \u00a76 applies only when ``source_task_packet_id`` is set.",
+      "enum": [
+        "draft",
+        "manifest_ready",
+        "dispatched",
+        "running",
+        "gate_review",
+        "blocked",
+        "repairing",
+        "delivery_ready",
+        "delivered",
+        "cancelled",
+        "failed",
+        "withdrawn"
+      ],
+      "title": "DispatchJobStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level intake record for a dispatched request (Standards Delta v0 \u00a74.1).\n\n``status`` is the Dispatch execution-tier state machine (\u00a76), independent of\nthe Std 41 task-packet enum. ``source_task_packet_id`` is the Std 41\ncrosswalk hook: ``None`` means the job is standalone (not task-packet-linked).",
+  "properties": {
+    "assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "autonomy_mode": {
+      "$ref": "#/$defs/AutonomyMode"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "detected_intent": {
+      "description": "registry-bound; e.g. \"code_task\", \"doc_task\", \"quick_answer\", \"unknown\"",
+      "title": "Detected Intent",
+      "type": "string"
+    },
+    "id": {
+      "description": "\"job_<ulid>\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "missing_info": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Info",
+      "type": "array"
+    },
+    "raw_request": {
+      "title": "Raw Request",
+      "type": "string"
+    },
+    "risk_flags": {
+      "description": "registry-bound (PAKPlan risk_flag registry)",
+      "items": {
+        "type": "string"
+      },
+      "title": "Risk Flags",
+      "type": "array"
+    },
+    "route_hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Route Hint"
+    },
+    "source_task_packet_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Std 41 crosswalk hook; null = standalone job.",
+      "title": "Source Task Packet Id"
+    },
+    "status": {
+      "$ref": "#/$defs/DispatchJobStatus"
+    }
+  },
+  "required": [
+    "id",
+    "created_at",
+    "raw_request",
+    "detected_intent",
+    "autonomy_mode",
+    "status"
+  ],
+  "title": "DispatchJob",
+  "type": "object"
+}

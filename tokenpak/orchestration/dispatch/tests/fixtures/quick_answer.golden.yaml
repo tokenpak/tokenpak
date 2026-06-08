@@ -1,0 +1,97 @@
+# Dispatch integration fixture — quick_answer golden path (P-FIXTURES-01).
+#
+# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements:
+#   1. input_request                — the raw request text
+#   2. expected_manifest            — assertable DispatchManifest fields
+#   3. expected_route               — DispatchRoute selection
+#   4. expected_stations            — worker/station sequence
+#   5. mock_tip                     — deterministic mocked TIP responses (+ live flag)
+#   6. expected_delivery_package    — DeliveryPackage shape + key fields
+#   7. expected_receipt             — DispatchReceipt shape + telemetry fields
+#   8. pass_fail                    — pass/fail criteria
+#
+# Golden path: a bare question routes to the single-station quick_answer route.
+# One builder station answers; no reviewer (a direct answer needs no semantic
+# review — §5.7 cost note). The Delivery Gate is a structural pass-through.
+name: quick_answer_golden
+kind: golden
+description: A direct question is answered by the one-station quick_answer route.
+
+# (1) Input request text.
+input_request: "explain how the dispatch run ledger persists records"
+
+# Autonomy mode the FrontDock + runtime run under.
+autonomy_mode: auto_dispatch_limited
+
+# (2) Expected DispatchManifest (assertable).
+expected_manifest:
+  detected_intent: quick_answer
+  route_id: route.quick_answer.v1
+  goal_contains: "explain how"
+  acceptance_criterion_ids:
+    - ac_answer_1
+  quality_requirements:
+    test_required: false
+    review_required: false
+    docs_required: false
+
+# (3) Expected DispatchRoute selection.
+expected_route:
+  id: route.quick_answer.v1
+  selection_status: auto_dispatch
+  precedence_layer: exact_route_trigger_match
+  uses_reviewer: false
+
+# (4) Expected worker/station sequence (station_id, terminal status).
+expected_stations:
+  - station_id: answer
+    worker_id: worker.builder.default.v1
+    status: completed
+
+# (5) Mock TIP responses (deterministic). `live: false` keeps CI offline.
+mock_tip:
+  live: false
+  # One builder turn that emits a schema-valid answer payload, no tools.
+  worker_turns:
+    - result_payload:
+        answer: "The Run Ledger persists each record class to its own SQLite table."
+      output_schema_valid: true
+      tokens_used: 18
+      wall_seconds: 1
+  # No reviewer call on this route.
+  reviewer: null
+
+# (6) Expected DispatchDeliveryPackage (shape + key fields).
+expected_delivery_package:
+  status: delivery_ready
+  gatehouse_passed: true
+  cost_note_present: false      # no reviewer → no §5.7 cost note
+  required_fixes_empty: true
+
+# (7) Expected DispatchReceipt (shape + telemetry fields).
+expected_receipt:
+  final_status: delivered
+  station_count: 1
+  decision_count: 0
+  effect_count: 0
+  telemetry:
+    total_output_tokens: 18
+
+# Expected decisions / gates that must fire.
+expected_decisions:
+  count: 0
+expected_gates:
+  delivery_gate_fired: true
+  reviewer_gate_fired: false
+
+# (8) Pass/fail criteria (human + machine readable).
+pass_fail:
+  line_status: delivered
+  run_status: delivered
+  asserts:
+    - "Route auto-selected as route.quick_answer.v1 via exact_route_trigger_match."
+    - "Exactly one builder station 'answer' completes with a schema-valid payload."
+    - "Run Ledger persists the run + the single station run (read back equal)."
+    - "DeliveryPackage.status == delivery_ready; no reviewer cost note."
+    - "DispatchReceipt has 1 station row, 0 decisions, 0 effects; telemetry totals match."
+    - "No decision fires; the Delivery Gate fires once; no reviewer gate."

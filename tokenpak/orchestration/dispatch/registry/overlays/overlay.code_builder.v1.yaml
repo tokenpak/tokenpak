@@ -1,0 +1,20 @@
+# code_builder prompt overlay (Standards Delta v0 §16).
+#
+# Additive delta to the base builder prompt for the code_task route. The
+# overlay EXTENDS the base worker's system_directives; it never removes a base
+# directive (mode: additive). `required_capabilities` must be a subset of the
+# bound worker's capabilities AND of the station's required_capabilities for the
+# route to bind (capability intersection — §16 route-binding rule).
+id: overlay.code_builder.v1
+applies_to_role: builder
+mode: additive
+
+instructions:
+  - Produce patch-first implementation plans.
+  - Prefer minimal diffs.
+  - Respect the manifest path policy.
+  - Return schema-valid station result only.
+
+required_capabilities:
+  - code_drafting
+  - patch_generation

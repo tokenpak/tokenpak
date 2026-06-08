@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "StationRunStatus": {
+      "description": "DispatchStationRun status (Standards Delta v0 \u00a74.5).\n\nExact 9-member enum; required by P-SCHEMA-01 acceptance criteria to match\nthe Standards Delta \u00a74.5 list verbatim.",
+      "enum": [
+        "queued",
+        "context_ready",
+        "running",
+        "completed",
+        "failed",
+        "failed_interrupted",
+        "needs_recovery",
+        "cancelled",
+        "skipped"
+      ],
+      "title": "StationRunStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Per-station execution record within a run (Standards Delta v0 \u00a74.5).\n\n``status`` uses the exact 9-member :class:`StationRunStatus` enum required\nby the P-SCHEMA-01 acceptance criteria. ``result_payload`` is the\nschema-valid station output, or ``None`` if the station failed.",
+  "properties": {
+    "attempt_number": {
+      "default": 1,
+      "description": "1 for first try; increments on rerun",
+      "title": "Attempt Number",
+      "type": "integer"
+    },
+    "context_bundle_id": {
+      "title": "Context Bundle Id",
+      "type": "string"
+    },
+    "id": {
+      "description": "\"stationrun_<ulid>\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "iteration_count": {
+      "default": 0,
+      "title": "Iteration Count",
+      "type": "integer"
+    },
+    "prompt_overlay_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Prompt Overlay Id"
+    },
+    "result_payload": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Result Payload"
+    },
+    "result_schema_version": {
+      "title": "Result Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "station_id": {
+      "title": "Station Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/StationRunStatus"
+    },
+    "tip_request_ids": {
+      "description": "may be >1 due to loop iterations",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tip Request Ids",
+      "type": "array"
+    },
+    "tool_call_count": {
+      "default": 0,
+      "title": "Tool Call Count",
+      "type": "integer"
+    },
+    "wall_seconds": {
+      "default": 0,
+      "title": "Wall Seconds",
+      "type": "integer"
+    },
+    "worker_id": {
+      "title": "Worker Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "run_id",
+    "station_id",
+    "worker_id",
+    "context_bundle_id",
+    "status",
+    "result_schema_version"
+  ],
+  "title": "DispatchStationRun",
+  "type": "object"
+}

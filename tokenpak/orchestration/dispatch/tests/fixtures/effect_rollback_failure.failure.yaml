@@ -1,0 +1,96 @@
+# Dispatch integration fixture — effect-rollback failure path (P-FIXTURES-01).
+#
+# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# (see quick_answer.golden.yaml for the element index).
+#
+# Failure path (§5.5 case 3 + §4.8 / §5.5 step 5): a run is interrupted with an
+# applied file effect, then the workspace DRIFTS (the file was hand-edited after
+# the effect was recorded). On resume, effect reconciliation detects the drift
+# and CANNOT cleanly roll back automatically — it surfaces a DECISION_REQUIRED
+# outcome. Because exactly one effect drifted and it is cleanly revertible, a
+# `rollback_single_clean_effect` option is OFFERED (but never auto-applied —
+# automatic multi-effect rollback is DISABLED in v0.1-alpha). The line halts at
+# the resume decision; delivery never proceeds.
+#
+# This fixture exercises the rollback-failure surface: automatic rollback is the
+# operation that is *not* available, so the runtime must escalate to a decision.
+name: effect_rollback_failure
+kind: failure
+scenario: resume_drift        # harness branch: seed a drifted applied effect, then resume
+description: Resume drift can't auto-rollback → DECISION_REQUIRED with a rollback option (§5.5).
+
+# (1) Input request text.
+input_request: "implement a code fix in the parser module"
+
+autonomy_mode: auto_dispatch_limited
+
+# (2) Expected DispatchManifest (assertable).
+expected_manifest:
+  detected_intent: code_task
+  route_id: route.code_task.v1
+  goal_contains: "code fix"
+  acceptance_criterion_ids:
+    - ac_code_1
+    - ac_code_2
+
+# (3) Expected DispatchRoute selection.
+expected_route:
+  id: route.code_task.v1
+  selection_status: auto_dispatch
+  precedence_layer: exact_route_trigger_match
+  uses_reviewer: true
+
+# (4) The interrupted build station is the focus; reconciliation halts before review.
+expected_stations:
+  - station_id: build
+    worker_id: worker.builder.default.v1
+    status: needs_recovery
+
+# (5) Mock TIP responses (deterministic). The resume reconciliation is pure
+#     filesystem-hash policy (no LLM); the seeded effect + drift drive it.
+#     `live: false` keeps CI offline — no provider is ever called on this path.
+mock_tip:
+  live: false
+  # The drift scenario: an applied effect targeting this file, then the file is
+  # hand-edited (drift) before resume.
+  applied_effect:
+    target: "src/parser.py"
+    applied_content: "applied content"
+    drift_content: "hand-edited drift"
+
+# (6) No Delivery Package — the resume halts at the drift decision before any gate.
+expected_delivery_package:
+  status: null
+  none_expected: true
+
+# (7) Expected DispatchReceipt (shape + telemetry fields).
+expected_receipt:
+  final_status: blocked
+  station_count: 1
+  decision_count: 1
+  effect_count: 1
+
+# Expected decisions / gates that must fire.
+expected_decisions:
+  count: 1
+  option_ids_present:
+    - rollback_single_clean_effect    # offered (single clean effect) but never auto-applied
+    - rerun_from_clean_state
+    - cancel_job
+  auto_rollback_applied: false        # §4.8/§5.5 step 5: automatic rollback is DISABLED
+  persisted: true
+expected_gates:
+  delivery_gate_fired: false
+  reviewer_gate_fired: false
+
+# (8) Pass/fail criteria.
+pass_fail:
+  line_status: decision_required
+  run_status: blocked
+  asserts:
+    - "Resume reconciles the interrupted build station to `needs_recovery`."
+    - "Workspace drift is detected against the applied effect's after_hash."
+    - "Automatic rollback is NOT applied; a DECISION_REQUIRED outcome is surfaced."
+    - "The decision offers rollback_single_clean_effect / rerun_from_clean_state / cancel_job."
+    - "The drift decision is persisted; the run finalizes as `blocked`."
+    - "No Delivery Package and no gate fire (the line halts at the resume decision)."

@@ -1,0 +1,61 @@
+{
+  "additionalProperties": false,
+  "description": "A TIP result that arrived after cancellation (Standards Delta v0 \u00a74.9).\n\n``effects_applied`` is always ``False`` in v0.1-alpha (late effects are\nnever applied \u2014 \u00a75.6); ``recovery_allowed`` gates the inspect-only path\n(recovery itself is deferred to beta).",
+  "properties": {
+    "effects_applied": {
+      "default": false,
+      "description": "always false in v0.1-alpha",
+      "title": "Effects Applied",
+      "type": "boolean"
+    },
+    "id": {
+      "description": "\"late_<ulid>\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "received_at": {
+      "format": "date-time",
+      "title": "Received At",
+      "type": "string"
+    },
+    "recovery_allowed": {
+      "default": false,
+      "description": "v0.1-alpha: inspect-only; recovery deferred",
+      "title": "Recovery Allowed",
+      "type": "boolean"
+    },
+    "result_hash": {
+      "title": "Result Hash",
+      "type": "string"
+    },
+    "station_run_id": {
+      "title": "Station Run Id",
+      "type": "string"
+    },
+    "stored_artifact_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stored Artifact Id"
+    }
+  },
+  "required": [
+    "id",
+    "job_id",
+    "station_run_id",
+    "received_at",
+    "result_hash"
+  ],
+  "title": "LateResult",
+  "type": "object"
+}

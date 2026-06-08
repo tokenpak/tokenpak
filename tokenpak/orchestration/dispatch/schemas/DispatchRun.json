@@ -1,0 +1,100 @@
+{
+  "additionalProperties": false,
+  "description": "Top-level job run record (Standards Delta v0 \u00a74.4).\n\n``status`` is typed ``str`` per the Standards Delta (it tracks\n``DispatchJob.status``; not re-typed to the enum to match the spec verbatim).\nThe ``*_runs`` / ``decisions`` / ``effects`` / ``late_results`` lists hold\nthe string ids of the related records.",
+  "properties": {
+    "decisions": {
+      "description": "DispatchDecision.id values",
+      "items": {
+        "type": "string"
+      },
+      "title": "Decisions",
+      "type": "array"
+    },
+    "effects": {
+      "description": "DispatchEffect.id values",
+      "items": {
+        "type": "string"
+      },
+      "title": "Effects",
+      "type": "array"
+    },
+    "ended_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ended At"
+    },
+    "id": {
+      "description": "\"run_<ulid>\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "late_results": {
+      "description": "LateResult.id values",
+      "items": {
+        "type": "string"
+      },
+      "title": "Late Results",
+      "type": "array"
+    },
+    "manifest_id": {
+      "title": "Manifest Id",
+      "type": "string"
+    },
+    "receipt_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Receipt Id"
+    },
+    "route_id": {
+      "title": "Route Id",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "station_runs": {
+      "description": "DispatchStationRun.id values",
+      "items": {
+        "type": "string"
+      },
+      "title": "Station Runs",
+      "type": "array"
+    },
+    "status": {
+      "description": "tracks DispatchJob.status",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "job_id",
+    "manifest_id",
+    "route_id",
+    "started_at",
+    "status"
+  ],
+  "title": "DispatchRun",
+  "type": "object"
+}

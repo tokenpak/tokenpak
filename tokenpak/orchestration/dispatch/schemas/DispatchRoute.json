@@ -1,0 +1,271 @@
+{
+  "$defs": {
+    "LoopOnExhausted": {
+      "description": "StationLoopPolicy.on_exhausted actions (Standards Delta v0 \u00a75.4).",
+      "enum": [
+        "mark_failed",
+        "create_reviewer_note",
+        "block_delivery"
+      ],
+      "title": "LoopOnExhausted",
+      "type": "string"
+    },
+    "LoopStopCondition": {
+      "description": "StationLoopPolicy.stop_when closed enum (Standards Delta v0 \u00a75.4).\n\n``station_goal_satisfied`` was removed per round-6 \u00a74.5 and is deliberately\nabsent.",
+      "enum": [
+        "output_schema_valid AND no_pending_tool_requests",
+        "loop_budget_exhausted",
+        "cancel_requested",
+        "tool_policy_violation",
+        "fatal_error"
+      ],
+      "title": "LoopStopCondition",
+      "type": "string"
+    },
+    "RiskLevel": {
+      "description": "Shared risk level (Standards Delta v0 \u00a74.3 default_risk, \u00a74.6 risk_level).",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "RiskLevel",
+      "type": "string"
+    },
+    "RouteDelivery": {
+      "additionalProperties": false,
+      "description": "Route-level delivery package composition flags (Standards Delta v0 \u00a74.3).",
+      "properties": {
+        "include_files_changed": {
+          "default": true,
+          "title": "Include Files Changed",
+          "type": "boolean"
+        },
+        "include_next_steps": {
+          "default": true,
+          "title": "Include Next Steps",
+          "type": "boolean"
+        },
+        "include_risks": {
+          "default": true,
+          "title": "Include Risks",
+          "type": "boolean"
+        },
+        "include_summary": {
+          "default": true,
+          "title": "Include Summary",
+          "type": "boolean"
+        },
+        "include_tests": {
+          "default": true,
+          "title": "Include Tests",
+          "type": "boolean"
+        }
+      },
+      "title": "RouteDelivery",
+      "type": "object"
+    },
+    "RouteRetryPolicy": {
+      "additionalProperties": false,
+      "description": "Route-level retry policy (Standards Delta v0 \u00a74.3).",
+      "properties": {
+        "escalate_after_failure": {
+          "default": false,
+          "title": "Escalate After Failure",
+          "type": "boolean"
+        },
+        "max_station_retries": {
+          "default": 1,
+          "title": "Max Station Retries",
+          "type": "integer"
+        }
+      },
+      "title": "RouteRetryPolicy",
+      "type": "object"
+    },
+    "RouteStation": {
+      "additionalProperties": false,
+      "description": "A single station definition within a route (Standards Delta v0 \u00a74.3).\n\nEither ``required_role`` (worker stations) or ``system_component``\n(system-component stations) is set; ``required_capabilities`` is\nregistry-bound and validated against the \u00a75.2 capability registry.",
+      "properties": {
+        "gates": {
+          "description": "e.g. [\"acceptance_gate\", \"delivery_gate\"]",
+          "items": {
+            "type": "string"
+          },
+          "title": "Gates",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "loop_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StationLoopPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "overrides worker/system default"
+        },
+        "output_schema": {
+          "description": "e.g. \"station_result.v1\"",
+          "title": "Output Schema",
+          "type": "string"
+        },
+        "prompt_overlay": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. \"overlay.code_builder.v1\"",
+          "title": "Prompt Overlay"
+        },
+        "required_capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Capabilities",
+          "type": "array"
+        },
+        "required_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. \"builder\", \"reviewer\"; null for system_component",
+          "title": "Required Role"
+        },
+        "system_component": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. \"delivery_dock\"; null for worker stations",
+          "title": "System Component"
+        }
+      },
+      "required": [
+        "id",
+        "output_schema"
+      ],
+      "title": "RouteStation",
+      "type": "object"
+    },
+    "RouteTriggers": {
+      "additionalProperties": false,
+      "description": "Route trigger declaration (Standards Delta v0 \u00a74.3).",
+      "properties": {
+        "intents": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Intents",
+          "type": "array"
+        }
+      },
+      "title": "RouteTriggers",
+      "type": "object"
+    },
+    "StationLoopPolicy": {
+      "additionalProperties": false,
+      "description": "Loop budget + stop conditions for a station (Standards Delta v0 \u00a75.4).\n\nPrecedence (resolved by the runner, not this schema):\n``station_override > route_default > worker_default > system_default``.\nSystem default per \u00a75.4 is ``max_iterations: 2, max_tool_calls: 6,\nmax_wall_seconds: 600`` \u2014 used as the field defaults here.",
+      "properties": {
+        "max_iterations": {
+          "default": 2,
+          "title": "Max Iterations",
+          "type": "integer"
+        },
+        "max_tool_calls": {
+          "default": 6,
+          "title": "Max Tool Calls",
+          "type": "integer"
+        },
+        "max_wall_seconds": {
+          "default": 600,
+          "title": "Max Wall Seconds",
+          "type": "integer"
+        },
+        "on_exhausted": {
+          "items": {
+            "$ref": "#/$defs/LoopOnExhausted"
+          },
+          "title": "On Exhausted",
+          "type": "array"
+        },
+        "stop_when": {
+          "items": {
+            "$ref": "#/$defs/LoopStopCondition"
+          },
+          "title": "Stop When",
+          "type": "array"
+        }
+      },
+      "title": "StationLoopPolicy",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A named, versioned workflow route (Standards Delta v0 \u00a74.3).",
+  "properties": {
+    "default_risk": {
+      "$ref": "#/$defs/RiskLevel"
+    },
+    "delivery": {
+      "$ref": "#/$defs/RouteDelivery"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "id": {
+      "description": "\"route.<name>.v<n>\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "retry_policy": {
+      "$ref": "#/$defs/RouteRetryPolicy"
+    },
+    "stations": {
+      "items": {
+        "$ref": "#/$defs/RouteStation"
+      },
+      "title": "Stations",
+      "type": "array"
+    },
+    "triggers": {
+      "$ref": "#/$defs/RouteTriggers"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "description",
+    "default_risk"
+  ],
+  "title": "DispatchRoute",
+  "type": "object"
+}

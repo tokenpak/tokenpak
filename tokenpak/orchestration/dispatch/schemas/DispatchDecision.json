@@ -1,0 +1,238 @@
+{
+  "$defs": {
+    "AutoApplyAfter": {
+      "description": "DispatchDecision default_action.auto_apply_after (Standards Delta v0 \u00a74.6).\n\nv0.1-alpha only ever uses ``never``; ``timeout`` / ``user_preference`` are\nreserved for later versions.",
+      "enum": [
+        "never",
+        "timeout",
+        "user_preference"
+      ],
+      "title": "AutoApplyAfter",
+      "type": "string"
+    },
+    "DecisionDefaultAction": {
+      "additionalProperties": false,
+      "description": "Default action if unresolved (Standards Delta v0 \u00a74.6).\n\nv0.1-alpha always uses ``auto_apply_after = never``.",
+      "properties": {
+        "auto_apply_after": {
+          "$ref": "#/$defs/AutoApplyAfter",
+          "default": "never"
+        },
+        "option_id": {
+          "title": "Option Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "option_id"
+      ],
+      "title": "DecisionDefaultAction",
+      "type": "object"
+    },
+    "DecisionOption": {
+      "additionalProperties": false,
+      "description": "A single selectable option on a decision (Standards Delta v0 \u00a74.6).",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "tradeoffs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tradeoffs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "description"
+      ],
+      "title": "DecisionOption",
+      "type": "object"
+    },
+    "DecisionRecommendation": {
+      "additionalProperties": false,
+      "description": "System recommendation among the options (Standards Delta v0 \u00a74.6).",
+      "properties": {
+        "option_id": {
+          "title": "Option Id",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "option_id",
+        "rationale"
+      ],
+      "title": "DecisionRecommendation",
+      "type": "object"
+    },
+    "DecisionResolution": {
+      "additionalProperties": false,
+      "description": "Resolution state of a decision (Standards Delta v0 \u00a74.6).",
+      "properties": {
+        "resolved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved At"
+        },
+        "resolved_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolvedBy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "selected_option_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Option Id"
+        }
+      },
+      "title": "DecisionResolution",
+      "type": "object"
+    },
+    "DecisionScope": {
+      "description": "DispatchDecision scope (Standards Delta v0 \u00a74.6, v0.1-alpha).",
+      "enum": [
+        "job",
+        "station"
+      ],
+      "title": "DecisionScope",
+      "type": "string"
+    },
+    "DecisionStatus": {
+      "description": "DispatchDecision status (Standards Delta v0 \u00a74.6).",
+      "enum": [
+        "pending",
+        "resolved",
+        "cancelled"
+      ],
+      "title": "DecisionStatus",
+      "type": "string"
+    },
+    "ResolvedBy": {
+      "description": "DispatchDecision resolution.resolved_by (Standards Delta v0 \u00a74.6).",
+      "enum": [
+        "user",
+        "system"
+      ],
+      "title": "ResolvedBy",
+      "type": "string"
+    },
+    "RiskLevel": {
+      "description": "Shared risk level (Standards Delta v0 \u00a74.3 default_risk, \u00a74.6 risk_level).",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "RiskLevel",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A user/system decision surfaced by the Decision Inbox (\u00a74.6).",
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "default_action": {
+      "$ref": "#/$defs/DecisionDefaultAction"
+    },
+    "id": {
+      "description": "\"decision_<ulid>\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "options": {
+      "items": {
+        "$ref": "#/$defs/DecisionOption"
+      },
+      "title": "Options",
+      "type": "array"
+    },
+    "question": {
+      "title": "Question",
+      "type": "string"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "recommendation": {
+      "$ref": "#/$defs/DecisionRecommendation"
+    },
+    "resolution": {
+      "$ref": "#/$defs/DecisionResolution"
+    },
+    "risk_level": {
+      "$ref": "#/$defs/RiskLevel"
+    },
+    "scope": {
+      "$ref": "#/$defs/DecisionScope"
+    },
+    "status": {
+      "$ref": "#/$defs/DecisionStatus"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "job_id",
+    "created_at",
+    "scope",
+    "title",
+    "question",
+    "reason",
+    "risk_level",
+    "recommendation",
+    "default_action",
+    "status"
+  ],
+  "title": "DispatchDecision",
+  "type": "object"
+}

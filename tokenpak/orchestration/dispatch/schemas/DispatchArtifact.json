@@ -1,0 +1,73 @@
+{
+  "additionalProperties": false,
+  "description": "A stored Dispatch artifact in the Run Ledger (SKETCH \u2014 see module docstring).",
+  "properties": {
+    "content_hash": {
+      "title": "Content Hash",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "id": {
+      "description": "\"artifact_<ulid>\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "kind": {
+      "description": "e.g. \"patch\", \"doc\", \"report\"",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    },
+    "size_bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Size Bytes"
+    },
+    "station_run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Station Run Id"
+    },
+    "target": {
+      "description": "storage location under ~/.tpk/dispatch/artifacts/",
+      "title": "Target",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "job_id",
+    "kind",
+    "target",
+    "content_hash",
+    "created_at"
+  ],
+  "title": "DispatchArtifact",
+  "type": "object"
+}

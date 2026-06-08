@@ -1,0 +1,191 @@
+{
+  "$defs": {
+    "ReceiptDecision": {
+      "additionalProperties": false,
+      "description": "Per-decision summary row on a receipt (Standards Delta v0 \u00a74.7).",
+      "properties": {
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_id",
+        "status"
+      ],
+      "title": "ReceiptDecision",
+      "type": "object"
+    },
+    "ReceiptEffect": {
+      "additionalProperties": false,
+      "description": "Per-effect summary row on a receipt (Standards Delta v0 \u00a74.7).",
+      "properties": {
+        "effect_id": {
+          "title": "Effect Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "effect_id",
+        "status",
+        "target"
+      ],
+      "title": "ReceiptEffect",
+      "type": "object"
+    },
+    "ReceiptStation": {
+      "additionalProperties": false,
+      "description": "Per-station summary row on a receipt (Standards Delta v0 \u00a74.7).",
+      "properties": {
+        "result_payload_excerpt": {
+          "default": "",
+          "description": "first 500 chars; full in DispatchStationRun",
+          "title": "Result Payload Excerpt",
+          "type": "string"
+        },
+        "station_run_id": {
+          "title": "Station Run Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "tip_request_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tip Request Ids",
+          "type": "array"
+        },
+        "worker_id": {
+          "title": "Worker Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "station_run_id",
+        "worker_id",
+        "status"
+      ],
+      "title": "ReceiptStation",
+      "type": "object"
+    },
+    "ReceiptTelemetry": {
+      "additionalProperties": false,
+      "description": "Aggregated telemetry block on a receipt (Standards Delta v0 \u00a74.7).",
+      "properties": {
+        "cache_hits": {
+          "default": 0,
+          "title": "Cache Hits",
+          "type": "integer"
+        },
+        "estimated_cost": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimated Cost"
+        },
+        "total_input_tokens": {
+          "default": 0,
+          "title": "Total Input Tokens",
+          "type": "integer"
+        },
+        "total_latency_ms": {
+          "default": 0,
+          "title": "Total Latency Ms",
+          "type": "integer"
+        },
+        "total_output_tokens": {
+          "default": 0,
+          "title": "Total Output Tokens",
+          "type": "integer"
+        }
+      },
+      "title": "ReceiptTelemetry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Delivery receipt summarizing a completed run (Standards Delta v0 \u00a74.7).",
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/ReceiptDecision"
+      },
+      "title": "Decisions",
+      "type": "array"
+    },
+    "effects": {
+      "items": {
+        "$ref": "#/$defs/ReceiptEffect"
+      },
+      "title": "Effects",
+      "type": "array"
+    },
+    "final_status": {
+      "title": "Final Status",
+      "type": "string"
+    },
+    "id": {
+      "description": "\"receipt_<ulid>\"",
+      "title": "Id",
+      "type": "string"
+    },
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "route_id": {
+      "title": "Route Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "stations": {
+      "items": {
+        "$ref": "#/$defs/ReceiptStation"
+      },
+      "title": "Stations",
+      "type": "array"
+    },
+    "telemetry": {
+      "$ref": "#/$defs/ReceiptTelemetry"
+    }
+  },
+  "required": [
+    "id",
+    "job_id",
+    "run_id",
+    "route_id",
+    "final_status",
+    "created_at"
+  ],
+  "title": "DispatchReceipt",
+  "type": "object"
+}

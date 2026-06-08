@@ -1,0 +1,90 @@
+# Dispatch integration fixture — late-result cancellation path (P-FIXTURES-01).
+#
+# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# (see quick_answer.golden.yaml for the element index).
+#
+# Failure path (§5.6): cancellation is requested DURING a station's TIP turn (an
+# adapter with no hard-kill). The station is marked `cancelled`, the post-cancel
+# TIP output is captured as a LateResult with `effects_applied=false` and
+# `recovery_allowed=false`, and the queued reviewer station is also marked
+# cancelled. No late effect is ever applied.
+name: late_result_cancellation
+kind: failure
+scenario: cancellation        # harness branch: drive a cancel-during-turn run
+description: Cancel mid-station captures a LateResult; queued stations cancelled (§5.6).
+
+# (1) Input request text.
+input_request: "implement a code fix in the parser module"
+
+autonomy_mode: auto_dispatch_limited
+
+# (2) Expected DispatchManifest (assertable).
+expected_manifest:
+  detected_intent: code_task
+  route_id: route.code_task.v1
+  goal_contains: "code fix"
+  acceptance_criterion_ids:
+    - ac_code_1
+    - ac_code_2
+
+# (3) Expected DispatchRoute selection.
+expected_route:
+  id: route.code_task.v1
+  selection_status: auto_dispatch
+  precedence_layer: exact_route_trigger_match
+  uses_reviewer: true
+
+# (4) Expected worker/station sequence (build cancelled mid-turn; review queued-cancelled).
+expected_stations:
+  - station_id: build
+    worker_id: worker.builder.default.v1
+    status: cancelled
+  - station_id: review
+    worker_id: worker.reviewer.default.v1
+    status: cancelled
+
+# (5) Mock TIP responses (deterministic). The cancellation arrives during the
+#     worker turn — modeled by the harness's cancel-during-turn worker. The
+#     late TIP payload is captured but never applied. `live: false` keeps CI offline.
+mock_tip:
+  live: false
+  cancel_during_turn: true
+  late_payload:
+    late: "output produced after cancellation"
+  reviewer: null
+
+# (6) There is no Delivery Package on a cancelled line (the line halts before any gate).
+expected_delivery_package:
+  status: null
+  none_expected: true
+
+# (7) Expected DispatchReceipt (shape + telemetry fields).
+expected_receipt:
+  final_status: cancelled
+  station_count: 2
+  decision_count: 0
+  effect_count: 0
+
+# Expected late-result + decisions/gates.
+expected_late_results:
+  count: 1
+  effects_applied: false
+  recovery_allowed: false
+  persisted: true
+expected_decisions:
+  count: 0
+expected_gates:
+  delivery_gate_fired: false
+  reviewer_gate_fired: false
+
+# (8) Pass/fail criteria.
+pass_fail:
+  line_status: cancelled
+  run_status: cancelled
+  asserts:
+    - "Cancellation during the build turn marks the build station `cancelled`."
+    - "Exactly one LateResult is captured with effects_applied=false, recovery_allowed=false."
+    - "The LateResult is persisted in the Run Ledger and references the build station run."
+    - "The queued reviewer station is recorded as `cancelled` (§5.6 step 3)."
+    - "No Delivery Package and no decision fire; no gate runs."
+    - "Receipt final_status == cancelled."

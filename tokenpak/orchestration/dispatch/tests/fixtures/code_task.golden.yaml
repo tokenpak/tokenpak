@@ -1,0 +1,93 @@
+# Dispatch integration fixture — code_task golden path (P-FIXTURES-01).
+#
+# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# (see quick_answer.golden.yaml for the element index).
+#
+# Golden path: a code request routes to the two-station code_task route. A
+# builder station drafts/patches; a reviewer station passes; the Delivery Gate
+# ships. The reviewer costs one extra LLM call (§5.7 cost note present).
+name: code_task_golden
+kind: golden
+description: A code request runs build → reviewer-pass → delivery on code_task.
+
+# (1) Input request text.
+input_request: "implement a code fix in the parser module"
+
+autonomy_mode: auto_dispatch_limited
+
+# (2) Expected DispatchManifest (assertable).
+expected_manifest:
+  detected_intent: code_task
+  route_id: route.code_task.v1
+  goal_contains: "code fix"
+  acceptance_criterion_ids:
+    - ac_code_1
+    - ac_code_2
+  quality_requirements:
+    test_required: true
+    review_required: true
+    docs_required: false
+
+# (3) Expected DispatchRoute selection.
+expected_route:
+  id: route.code_task.v1
+  selection_status: auto_dispatch
+  precedence_layer: exact_route_trigger_match
+  uses_reviewer: true
+
+# (4) Expected worker/station sequence (station_id, terminal status).
+expected_stations:
+  - station_id: build
+    worker_id: worker.builder.default.v1
+    status: completed
+  - station_id: review
+    worker_id: worker.reviewer.default.v1
+    status: completed
+
+# (5) Mock TIP responses (deterministic). `live: false` keeps CI offline.
+mock_tip:
+  live: false
+  worker_turns:
+    - result_payload:
+        summary: "patch drafted for the parser module"
+      output_schema_valid: true
+      tokens_used: 42
+      wall_seconds: 2
+  reviewer:
+    status: pass
+    reason: "all acceptance criteria satisfied"
+
+# (6) Expected DispatchDeliveryPackage (shape + key fields).
+expected_delivery_package:
+  status: delivery_ready
+  gatehouse_passed: true
+  cost_note_present: true       # reviewer ran → §5.7 cost note
+  required_fixes_empty: true
+
+# (7) Expected DispatchReceipt (shape + telemetry fields).
+expected_receipt:
+  final_status: delivered
+  station_count: 2
+  decision_count: 0
+  effect_count: 0
+  telemetry:
+    total_output_tokens: 42
+
+# Expected decisions / gates that must fire.
+expected_decisions:
+  count: 0
+expected_gates:
+  delivery_gate_fired: true
+  reviewer_gate_fired: true
+
+# (8) Pass/fail criteria.
+pass_fail:
+  line_status: delivered
+  run_status: delivered
+  asserts:
+    - "Route auto-selected as route.code_task.v1 via exact_route_trigger_match."
+    - "Build station completes, then reviewer station completes (exactly one review call)."
+    - "Run Ledger persists the run + both station runs (build payload read back equal)."
+    - "DeliveryPackage.status == delivery_ready; reviewer cost note present."
+    - "DispatchReceipt has 2 station rows, 0 decisions, 0 effects."
+    - "No decision fires; both the reviewer gate and the Delivery Gate fire."
