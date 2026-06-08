@@ -193,7 +193,7 @@ jobs:
           fi
           echo "✅  sdist + wheel purity: no _internal/ paths"
       - name: Upload artifacts (rehearsal — never published)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rehearsal-dist-${{ needs.preflight.outputs.rehearsal_tag }}
           path: dist/
