@@ -407,3 +407,48 @@ def test_post_tool_use_hook_hardcap_emits_additional_context(tmp_path):
     spec = payload["hookSpecificOutput"]
     assert spec["hookEventName"] == "PostToolUse"
     assert "hard cap" in spec["additionalContext"].lower()
+
+
+# ──────────────────────────────────────────────────────────────
+# ensure_hooks_feature_enabled — invokes the current Codex feature flag.
+#
+# Codex renamed the lifecycle-hooks feature flag to ``hooks``; the older
+# name is no longer a recognized feature, so enabling it is a silent
+# no-op that leaves hooks inactive. These tests pin the flag the
+# companion passes to ``codex features enable``.
+# ──────────────────────────────────────────────────────────────
+
+
+def test_ensure_hooks_feature_enabled_uses_current_flag(monkeypatch):
+    captured_cmd: "list[str]" = []
+
+    class _Completed:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cmd, *args, **kwargs):
+        captured_cmd.extend(cmd)
+        return _Completed()
+
+    monkeypatch.setattr(codex_hooks.subprocess, "run", fake_run)
+    # Avoid touching the real ~/.codex/config.toml during the warning-suppress step.
+    monkeypatch.setattr(codex_hooks, "_suppress_unstable_warning", lambda: None)
+
+    assert codex_hooks.ensure_hooks_feature_enabled() is True
+    assert captured_cmd[:4] == ["codex", "features", "enable", "hooks"]
+    assert "codex_hooks" not in captured_cmd
+
+
+def test_ensure_hooks_feature_enabled_returns_false_on_nonzero(monkeypatch):
+    class _Completed:
+        returncode = 1
+        stdout = ""
+        stderr = "unknown feature"
+
+    monkeypatch.setattr(
+        codex_hooks.subprocess, "run", lambda *a, **k: _Completed()
+    )
+    monkeypatch.setattr(codex_hooks, "_suppress_unstable_warning", lambda: None)
+
+    assert codex_hooks.ensure_hooks_feature_enabled() is False

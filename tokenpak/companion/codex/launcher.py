@@ -55,7 +55,7 @@ def main(args: list[str] | None = None) -> int:
             print(f"tokenpak: hooks installed ({hooks_path})", file=sys.stderr)
         else:
             print(
-                "tokenpak: codex_hooks feature could not be enabled",
+                "tokenpak: hooks feature could not be enabled",
                 file=sys.stderr,
             )
 

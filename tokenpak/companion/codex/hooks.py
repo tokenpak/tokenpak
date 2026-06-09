@@ -12,7 +12,7 @@ deferred to L5 — see L1 audit delta hooks #10):
 - **PostToolUse** → token-out journal
 - **Stop** → session closeout, journal summary, cost recording
 
-Hooks must be enabled via the ``codex_hooks`` feature flag.
+Hooks must be enabled via the ``hooks`` feature flag.
 
 The event set is held in :data:`_TOKENPAK_HOOK_EVENTS` — a declarative
 module-level table keyed by Codex event name. Adding a new event means
@@ -197,7 +197,7 @@ def _merge_hooks(existing: dict, new: dict) -> dict:
 
 
 def ensure_hooks_feature_enabled() -> bool:
-    """Enable the ``codex_hooks`` feature via ``codex features enable``.
+    """Enable the ``hooks`` feature via ``codex features enable``.
 
     Uses the Codex-native command rather than hand-writing config.toml,
     so we inherit any future config-schema changes for free. Idempotent.
@@ -208,7 +208,7 @@ def ensure_hooks_feature_enabled() -> bool:
     """
     try:
         result = subprocess.run(
-            ["codex", "features", "enable", "codex_hooks"],
+            ["codex", "features", "enable", "hooks"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -218,7 +218,7 @@ def ensure_hooks_feature_enabled() -> bool:
         return False
     if result.returncode != 0:
         print(
-            f"tokenpak: failed to enable codex_hooks feature: {result.stderr.strip()}",
+            f"tokenpak: failed to enable hooks feature: {result.stderr.strip()}",
             file=sys.stderr,
         )
         return False

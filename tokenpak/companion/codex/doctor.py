@@ -50,12 +50,12 @@ def check_hooks_feature() -> "tuple[bool, str]":
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         return False, f"codex features list failed: {exc}"
     for line in result.stdout.splitlines():
-        # Format: "codex_hooks     under development  true"
+        # Format: "hooks     under development  true"
         parts = line.split()
-        if parts and parts[0] == "codex_hooks":
+        if parts and parts[0] == "hooks":
             state = parts[-1].lower()
-            return state == "true", f"codex_hooks={state}"
-    return False, "codex_hooks feature not found in `codex features list`"
+            return state == "true", f"hooks={state}"
+    return False, "hooks feature not found in `codex features list`"
 
 
 def check_mcp_registered() -> "tuple[bool, str]":
@@ -211,7 +211,7 @@ def _parse_initialize_reply(stdout: str) -> "tuple[bool, str]":
 
 CHECKS: list["tuple[str, CheckFn]"] = [
     ("codex binary", check_codex_binary),
-    ("codex_hooks feature", check_hooks_feature),
+    ("hooks feature", check_hooks_feature),
     ("MCP registration", check_mcp_registered),
     ("hooks.json schema", check_hooks_json),
     ("AGENTS.md", check_agents_md),
