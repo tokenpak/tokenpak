@@ -589,11 +589,12 @@ def cmd_setup(args):
 
     config_dir = Path.home() / ".tokenpak"
     config_file = config_dir / "config.yaml"
+    is_tty = sys.stdin.isatty() and sys.stdout.isatty()
 
     # Check for existing config
     if config_file.exists():
         print(f"Configuration already exists at {config_file}")
-        if not sys.stdin.isatty():
+        if not is_tty:
             print("Non-interactive mode: skipping reconfigure.")
             return
         try:
@@ -2525,7 +2526,11 @@ def _build_stub_parsers(sub):
     )
     p_integrate.add_argument(
         "--apply", action="store_true",
-        help="(reserved) auto-write config files — not yet implemented, prints safe instructions instead",
+        help="Auto-write config files for the given client (headless / scripted path)",
+    )
+    p_integrate.add_argument(
+        "--revert", action="store_true",
+        help="Restore the most recent backup for the given client (undoes --apply)",
     )
     p_integrate.add_argument(
         "--tier", choices=["strict", "standard", "auto", "fleet"], default=None,
@@ -4701,6 +4706,13 @@ def _bare_help(name, description, subs, exit_nonzero=False):
 
 
 def main():
+    global _NO_TUI_FLAG
+    # Strip --no-tui from argv before any other parsing so per-subcommand
+    # parsers don't need to know about it.
+    if "--no-tui" in sys.argv:
+        _NO_TUI_FLAG = True
+        sys.argv = [a for a in sys.argv if a != "--no-tui"]
+
     parser = build_parser()
 
     # ── Intercept --version / -V ──────────────────────────────────────────────

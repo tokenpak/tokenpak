@@ -23,9 +23,12 @@ import argparse
 import importlib
 import os
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
+
+from tokenpak._formatting.shell_detect import render_env_var as _env
 
 DEFAULT_PROXY_URL = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
 
@@ -109,6 +112,9 @@ class Integration:
     detector: Callable[[], Optional[str]]
     instructions: Callable[[str], str]  # proxy_url -> multi-line instructions
     applier: Optional[Callable[[str], "ApplyResult"]] = None  # None = print-only
+    backup_locator: Optional[Callable[[], Optional[Path]]] = None  # for --revert
+    preview_fn: Optional[Callable[[str], str]] = None  # human diff preview
+    verify_fn: Optional[Callable[[str], "tuple[bool, str]"]] = None  # post-apply check
     notes: list[str] = field(default_factory=list)
 
 
@@ -125,10 +131,11 @@ class ApplyResult:
 
 def _instr_claude_code(proxy_url: str) -> str:
     return (
-        f"Set before launching Claude Code (or export permanently):\n"
-        f"    export ANTHROPIC_BASE_URL={proxy_url}\n\n"
-        f"Claude Code reads OAuth creds from ~/.claude/.credentials.json — the\n"
-        f"proxy forwards byte-preserved, so subscription billing is untouched.\n\n"
+        f"No API key required — Claude Code reads your OAuth credentials\n"
+        f"from ~/.claude/.credentials.json, and the proxy forwards them\n"
+        f"byte-preserved so your subscription billing is untouched.\n\n"
+        f"Set before launching Claude Code (or persist in your shell rc):\n"
+        f"    {_env('ANTHROPIC_BASE_URL', proxy_url)}\n\n"
         f"Verify:\n"
         f"    tokenpak status   # monitor.db should show rows after your next Claude Code turn"
     )
@@ -179,10 +186,10 @@ def _instr_aider(proxy_url: str) -> str:
     return (
         f"Point Aider at tokenpak via env vars:\n\n"
         f"  # Anthropic models\n"
-        f"  export ANTHROPIC_API_BASE={proxy_url}\n"
+        f"  {_env('ANTHROPIC_API_BASE', proxy_url)}\n"
         f"  aider --model anthropic/claude-sonnet-4-6\n\n"
         f"  # OpenAI models\n"
-        f"  export OPENAI_API_BASE={proxy_url}/v1\n"
+        f"  {_env('OPENAI_API_BASE', proxy_url + '/v1')}\n"
         f"  aider --model gpt-4o"
     )
 
@@ -193,7 +200,7 @@ def _instr_openai_sdk(proxy_url: str) -> str:
         f"    from openai import OpenAI\n"
         f"    client = OpenAI(base_url=\"{proxy_url}/v1\", api_key=\"<your key>\")\n\n"
         f"Or env var (picked up automatically):\n"
-        f"    export OPENAI_BASE_URL={proxy_url}/v1"
+        f"    {_env('OPENAI_BASE_URL', proxy_url + '/v1')}"
     )
 
 
@@ -203,7 +210,7 @@ def _instr_anthropic_sdk(proxy_url: str) -> str:
         f"    from anthropic import Anthropic\n"
         f"    client = Anthropic(base_url=\"{proxy_url}\", api_key=\"<your key>\")\n\n"
         f"Or env var:\n"
-        f"    export ANTHROPIC_BASE_URL={proxy_url}"
+        f"    {_env('ANTHROPIC_BASE_URL', proxy_url)}"
     )
 
 
@@ -223,7 +230,7 @@ def _instr_codex(proxy_url: str) -> str:
     return (
         f"Codex CLI reads OpenAI creds from ~/.codex/auth.json.\n"
         f"Point it at tokenpak with:\n\n"
-        f"    export OPENAI_BASE_URL={proxy_url}/v1\n"
+        f"    {_env('OPENAI_BASE_URL', proxy_url + '/v1')}\n"
         f"    codex exec \"your prompt\"\n\n"
         f"tokenpak's Codex adapter handles the OAuth credential injection;\n"
         f"see project_tokenpak_codex_three_paths memory for path choice."
@@ -1084,6 +1091,9 @@ INTEGRATIONS: list[Integration] = [
         detector=_detect_claude_cli,
         instructions=_instr_claude_code,
         applier=_apply_claude_code,
+        backup_locator=_bak_claude_code,
+        preview_fn=_preview_claude_code,
+        verify_fn=_verify_claude_code,
     ),
     Integration(
         key="cursor",
@@ -1092,6 +1102,9 @@ INTEGRATIONS: list[Integration] = [
         detector=_detect_cursor_app,
         instructions=_instr_cursor,
         applier=_apply_cursor,
+        backup_locator=_bak_cursor,
+        preview_fn=_preview_cursor,
+        verify_fn=_verify_cursor,
     ),
     Integration(
         key="cline",
@@ -1108,6 +1121,9 @@ INTEGRATIONS: list[Integration] = [
         detector=lambda: _detect_vscode_extension("continue.continue"),
         instructions=_instr_continue,
         applier=_apply_continue,
+        backup_locator=_bak_continue,
+        preview_fn=_preview_continue,
+        verify_fn=_verify_continue,
     ),
     Integration(
         key="aider",
@@ -1116,6 +1132,9 @@ INTEGRATIONS: list[Integration] = [
         detector=_detect_aider,
         instructions=_instr_aider,
         applier=_apply_aider,
+        backup_locator=_bak_aider,
+        preview_fn=_preview_aider,
+        verify_fn=_verify_aider,
     ),
     Integration(
         key="codex",
@@ -1239,8 +1258,31 @@ def run_integrate(args: argparse.Namespace) -> int:
     """CLI handler for `tokenpak integrate`."""
     proxy_url = getattr(args, "proxy_url", None) or DEFAULT_PROXY_URL
     apply_mode = bool(getattr(args, "apply", False))
+    revert_mode = bool(getattr(args, "revert", False))
     client = getattr(args, "client", None)
     show_all = getattr(args, "all", False)
+    no_tui = _is_no_tui()
+
+    # --revert requires a specific client.
+    if revert_mode:
+        if not client:
+            print("integrate: --revert requires a specific client (e.g. `tokenpak integrate claude-code --revert`).")
+            print()
+            print(_render_listing(proxy_url))
+            return 2
+        integration = _find(client)
+        if integration is None:
+            known = ", ".join(i.key for i in INTEGRATIONS)
+            print(f"integrate: unknown client '{client}'. Known clients: {known}")
+            return 2
+        result = _revert_integration(integration)
+        print(_render_apply(integration, result))
+        if result.ok and integration.verify_fn:
+            ok, msg = integration.verify_fn(proxy_url)
+            badge = "✅" if ok else "✖"
+            print(f"  Verify     {badge} {msg}")
+        print()
+        return 0 if result.ok else 1
 
     # --apply without a specific client is a no-op (ambiguous) — treat as list.
     if apply_mode and not client and not show_all:
@@ -1313,5 +1355,25 @@ def run_integrate(args: argparse.Namespace) -> int:
             return _apply_tier_and_render(integration.key, tier, backup=False)
         return 0
 
+    # Default path — no flags.
+    # TTY + not --no-tui → guided interactive form.
+    # Non-TTY OR --no-tui → print-only (existing behavior).
+    if _is_interactive() and not no_tui:
+        return _run_guided_form(integration, proxy_url)
+
     print(_render_one(integration, proxy_url))
     return 0
+
+
+def _is_no_tui() -> bool:
+    """Return True when --no-tui was stripped from argv."""
+    try:
+        from tokenpak._cli_core import _no_tui
+        return _no_tui()
+    except Exception:
+        return False
+
+
+def _is_interactive() -> bool:
+    """Return True when both stdin and stdout are TTYs (guided form is possible)."""
+    return sys.stdin.isatty() and sys.stdout.isatty()

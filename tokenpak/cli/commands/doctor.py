@@ -46,6 +46,26 @@ def _proxy_get(path: str, port: int | None = None, timeout: int = 3) -> dict | N
         return None
 
 
+def verify_integration_target(key: str, proxy_url: str) -> tuple[bool, str]:
+    """Lightweight post-apply check for a named integration target.
+
+    Called from ``tokenpak integrate`` guided form after --apply succeeds.
+    Returns (ok, human_message). Does NOT run the full doctor suite.
+    Unknown keys return (True, "no verify available") rather than raising.
+    """
+    from tokenpak.cli.commands.integrate import _find as _integrate_find
+
+    integration = _integrate_find(key)
+    if integration is None:
+        return (True, f"no verify available for unknown key {key!r}")
+    if integration.verify_fn is None:
+        return (True, "no verify available — run tokenpak status to confirm")
+    try:
+        return integration.verify_fn(proxy_url)
+    except Exception as exc:
+        return (False, f"verify raised: {exc}")
+
+
 def run_doctor(
     fix: bool = False,
     output_json: bool = False,
