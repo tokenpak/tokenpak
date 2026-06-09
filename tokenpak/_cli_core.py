@@ -3971,6 +3971,69 @@ def cmd_version(args):
         print(f"\n  Lock file not found at {_LOCK_FILE}")
 
 
+def _tokenpak_is_user_install() -> bool:
+    """True when the running tokenpak package lives in the per-user site (``~/.local``)."""
+    try:
+        import site
+
+        import tokenpak as _tp
+
+        base = (site.getuserbase() or "").replace(os.sep, "/")
+        loc = (os.path.dirname(os.path.abspath(_tp.__file__)) or "").replace(os.sep, "/")
+        return bool(base) and loc.startswith(base)
+    except Exception:
+        return False
+
+
+def _pip_upgrade_tokenpak(verbose: bool = True) -> Tuple[bool, str, str]:
+    """Upgrade the running ``tokenpak`` package, tolerant of PEP 668.
+
+    Installs into whichever interpreter is currently executing (``sys.executable``).
+    On an externally-managed interpreter (e.g. a distro system Python — PEP 668) a
+    plain ``pip install`` is refused; we retry into the per-user site with
+    ``--break-system-packages``, which writes only to the user site (``~/.local``)
+    and never touches system/distro-managed packages. pipx-managed installs are
+    detected and reported so the caller can advise ``pipx upgrade`` instead of
+    running pip inside the pipx venv.
+
+    Returns ``(ok, method, detail)`` where ``method`` is ``pip`` / ``pip-bsp`` /
+    ``pipx`` and ``detail`` carries trimmed stderr on failure.
+    """
+    import subprocess as _sp
+
+    # pipx-managed: running pip inside the pipx venv is the wrong tool.
+    if "/pipx/venvs/" in (sys.prefix or "").replace(os.sep, "/"):
+        return False, "pipx", ""
+
+    in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
+    # Match where the package currently lives so we upgrade it in place.
+    scope = [] if in_venv else (["--user"] if _tokenpak_is_user_install() else [])
+
+    def _run(extra):
+        return _sp.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", *extra, "tokenpak"],
+            capture_output=True,
+            text=True,
+        )
+
+    result = _run(scope)
+    if result.returncode == 0:
+        return True, "pip", ""
+
+    blob = ((result.stderr or "") + (result.stdout or "")).lower()
+    if "externally-managed-environment" in blob or "externally managed" in blob:
+        if verbose:
+            print(
+                "  ⚠ Externally-managed environment (PEP 668); retrying into the "
+                "user site with --break-system-packages (writes only to ~/.local)…"
+            )
+        result = _run(scope + ["--break-system-packages"])
+        if result.returncode == 0:
+            return True, "pip-bsp", ""
+
+    return False, "pip", (result.stderr or result.stdout or "")[:400]
+
+
 def cmd_update(args):
     """Update TokenPak proxy and CLI to latest."""
     import subprocess as _sp
@@ -4018,6 +4081,10 @@ def cmd_update(args):
 
     if dry_run:
         print("\nWould run: pip install --upgrade tokenpak")
+        print(
+            "  (retries into the user site with --break-system-packages on "
+            "externally-managed / PEP 668 environments)"
+        )
         print("Would restart proxy if running.")
         return
 
@@ -4026,15 +4093,24 @@ def cmd_update(args):
     proxy_running = "error" not in proxy_info
 
     print("\nUpdating TokenPak...")
-    result = _sp.run(
-        [sys.executable, "-m", "pip", "install", "--upgrade", "tokenpak"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
-        print("  ✓ tokenpak updated")
+    ok, method, detail = _pip_upgrade_tokenpak()
+    if ok:
+        if method == "pip-bsp":
+            print("  ✓ tokenpak updated (user site, --break-system-packages)")
+        else:
+            print("  ✓ tokenpak updated")
+    elif method == "pipx":
+        print("  ✗ tokenpak is managed by pipx — upgrade with:\n      pipx upgrade tokenpak")
+        return
     else:
-        print(f"  ✗ pip install failed:\n{result.stderr[:400]}")
+        print(f"  ✗ pip install failed:\n{detail}")
+        print(
+            "\n  Manual upgrade options:\n"
+            "    • inside a virtualenv:  pip install --upgrade tokenpak\n"
+            f"    • user site (PEP 668):  {sys.executable} -m pip install "
+            "--user --upgrade --break-system-packages tokenpak\n"
+            "    • pipx install:         pipx upgrade tokenpak"
+        )
         return
 
     # Restart proxy if it was running
