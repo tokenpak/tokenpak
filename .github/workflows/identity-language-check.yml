@@ -202,6 +202,65 @@ jobs:
             esac
           }
 
+          # OpenClaw is a first-class PUBLIC TokenPak integration surface:
+          # `tokenpak openclaw` is a real public CLI subcommand, `openclaw`
+          # is a real provider id, and the package ships an importable SDK
+          # module, a creds provider, and an agent adapter for it. On those
+          # integration source paths the lowercase token legitimately appears
+          # as non-renamable functional surface:
+          #   - config-discovery directories (`~/.openclaw/`,
+          #     `~/.openclaw-governor/`, the `.openclaw*` discovery glob)
+          #   - the `openclaw:<...>` secret-ref scheme prefix
+          #   - the `openclaw-<...>` credential-id prefix
+          #   - "openclaw-shaped" data-shape prose
+          # These are WHAT THE CODE INTEGRATES WITH and cannot be renamed
+          # without breaking the integration. This classifier scopes the
+          # extra openclaw masks (below) to those paths ONLY, mirroring how
+          # `fleet` masking is scoped to the public fleet feature surface.
+          # A bare `openclaw` on a NON-integration path is still caught,
+          # because the extra masks are applied only here.
+          #
+          # Scope note: this covers the importable integration MODULES (the
+          # CLI surface + SDK + creds provider + agent adapter + their unit
+          # tests) — the files a cross-cutting change typically touches. The
+          # installable hook bundle under tokenpak/integrations/openclaw/** is
+          # intentionally NOT included: those files carry their own, separate
+          # public-language debt (e.g. internal task-id references) that a
+          # dedicated cleanup must address; folding them in here would either
+          # leave them failing anyway or require a far broader openclaw mask.
+          is_openclaw_integration_path() {
+            case "$1" in
+              tokenpak/_cli_core.py) return 0 ;;
+              tokenpak/sdk/openclaw*.py) return 0 ;;
+              tokenpak/creds/providers/openclaw*.py) return 0 ;;
+              tokenpak/agent/adapters/openclaw*.py) return 0 ;;
+              tokenpak/tests/test_sdk_openclaw.py|tokenpak/tests/test_creds_openclaw.py) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          # The installable OpenClaw hook bundle under
+          # tokenpak/integrations/openclaw/** IS the public OpenClaw adapter
+          # shipped to users. On those paths every lowercase `openclaw` token
+          # is functional/product surface that must remain verbatim: the
+          # integration path itself, the `openclaw-adapter` hook directory,
+          # the `openclaw-gateway` systemd unit, the `~/.openclaw/...`
+          # config-discovery dirs, the `User-Agent: openclaw*` match, the
+          # external `openclaw hooks` / `openclaw doctor` CLI verbs, and the
+          # openclaw.ai / openclaw.md documentation references. The extra
+          # masks below are SCOPED to this exact hook surface (mirroring
+          # is_openclaw_integration_path for the importable module surface)
+          # and mask ONLY those functional openclaw forms. OAS-/agent/
+          # /home/sue//Std/fleet patterns are NOT masked here and remain
+          # enforced; a bare `openclaw` on any path OUTSIDE this hook bundle
+          # is still caught.
+          is_openclaw_integration_hook_path() {
+            case "$1" in
+              tokenpak/integrations/openclaw/*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
           content_for_pattern() {
             local pat="$1" file="$2"
             # Order matters here. Tier 2 snapshot files get checked FIRST
@@ -312,18 +371,35 @@ jobs:
               # references are real, non-renamable API/wire/CLI symbols: the SDK
               # module import paths, the x-openclaw-* request headers, the
               # `openclaw` CLI subcommand literal, the `openclaw:main` caller
-              # form, and the `openclaw.json` config filename. Mask ONLY those
-              # exact strings so editing a file that contains them does not trip
-              # the \bopenclaw\b rule.
+              # form, and the `openclaw.json` config filename. These exact
+              # strings are masked everywhere (any changed file) so editing a
+              # file that contains them does not trip the \bopenclaw\b rule.
+              #
+              # On the public OpenClaw INTEGRATION module paths (the CLI
+              # surface, SDK module, creds provider, agent adapter, and their
+              # unit tests — see is_openclaw_integration_path) a few MORE forms
+              # are legitimate,
+              # non-renamable functional surface and are additionally masked:
+              #   - config-discovery dirs: `~/.openclaw/`,
+              #     `~/.openclaw-governor/`, and the `.openclaw*` glob
+              #   - the `openclaw:<...>` secret-ref scheme prefix
+              #   - the `openclaw-<...>` credential-id prefix
+              #   - "openclaw-shaped" data-shape prose
+              # These extra masks are SCOPED to integration paths only.
               #
               # Public-facing identity/workflow language stays forbidden. This
-              # is NOT a blanket "openclaw allowed" exemption and is NOT scoped
-              # to any one file: any other bare "openclaw" (prose, comments,
-              # new identifiers) in a changed file is still caught, because only
-              # these exact module/header/CLI literals are masked. Human-facing
-              # prose uses the CamelCase "OpenClaw" brand, which is not matched
-              # by the lowercase \bopenclaw\b rule and needs no mask.
-              sed -E \
+              # is NOT a blanket "openclaw allowed" exemption: outside the
+              # integration paths only the exact module/header/CLI literals are
+              # masked, so any other bare "openclaw" (prose, comments, new
+              # identifiers) in a non-integration changed file is still caught.
+              # Even on integration paths, ONLY the functional forms above are
+              # masked — other forbidden patterns (agent names like Suki, Sue,
+              # Cali; internal IDs; /home/sue/ paths; .claude/projects; Std
+              # numbers) are checked through their own (unmasked) content and
+              # remain enforced there too. Human-facing prose uses the
+              # CamelCase "OpenClaw" brand, which the lowercase \bopenclaw\b
+              # rule does not match and which needs no mask.
+              masked=$(sed -E \
                 -e 's/tokenpak\.sdk\.openclaw/tokenpak.sdk.__FUNC_OPENCLAW_MODULE__/g' \
                 -e 's/tokenpak\.creds\.providers\.openclaw/tokenpak.creds.providers.__FUNC_OPENCLAW_MODULE__/g' \
                 -e 's/x-openclaw-session/x-__FUNC_OPENCLAW_HEADER__-session/g' \
@@ -331,7 +407,37 @@ jobs:
                 -e 's/"openclaw"/"__FUNC_OPENCLAW_LITERAL__"/g' \
                 -e 's/openclaw:main/__FUNC_OPENCLAW_CALLER__:main/g' \
                 -e 's/openclaw\.json/__FUNC_OPENCLAW_CONFIG__.json/g' \
-                "$file"
+                "$file")
+              if is_openclaw_integration_path "$file"; then
+                # Order matters: mask the more-specific `.openclaw-governor`
+                # before the generic `.openclaw` / `.openclaw*` forms.
+                printf '%s\n' "$masked" | sed -E \
+                  -e 's/\.openclaw-governor/.__OCINT_GOVERNOR_DIR__/g' \
+                  -e 's/\.openclaw\*/.__OCINT_CONFIG_DIR__*/g' \
+                  -e 's/\.openclaw\b/.__OCINT_CONFIG_DIR__/g' \
+                  -e 's/openclaw-shaped/__OCINT_SHAPE_PROSE__-shaped/g' \
+                  -e 's/openclaw-\{/__OCINT_ID_PREFIX__-{/g' \
+                  -e 's/openclaw:/__OCINT_SECRETREF_SCHEME__:/g'
+              elif is_openclaw_integration_hook_path "$file"; then
+                # Installable OpenClaw hook bundle. Mask ONLY the functional
+                # openclaw product/runtime/config identifiers shipped in the
+                # adapter. Order: specific compounds first, then the path
+                # component, then dir/domain/doc/UA/CLI forms. Nothing else
+                # (OAS-/agent/path/Std/fleet) is masked here, so a real leak
+                # in these files is still caught.
+                printf '%s\n' "$masked" | sed -E \
+                  -e 's/openclaw-adapter/__OCHOOK_ADAPTER__/g' \
+                  -e 's/openclaw-gateway/__OCHOOK_GATEWAY__/g' \
+                  -e 's#integrations/openclaw#integrations/__OCHOOK_PATH__#g' \
+                  -e 's/\.openclaw-governor/.__OCHOOK_GOVERNOR_DIR__/g' \
+                  -e 's/\.openclaw\b/.__OCHOOK_CONFIG_DIR__/g' \
+                  -e 's/openclaw\.ai/__OCHOOK_DOMAIN__.ai/g' \
+                  -e 's/openclaw\.md/__OCHOOK_DOC__.md/g' \
+                  -e 's/openclaw\*/__OCHOOK_UA__*/g' \
+                  -e 's/openclaw (hooks|doctor)/__OCHOOK_CLI__ \1/g'
+              else
+                printf '%s\n' "$masked"
+              fi
             elif [ "$pat" = '\.claude/projects' ]; then
               # The Claude Code transcript source adapter legitimately reads the
               # user's local Claude Code transcript directory
