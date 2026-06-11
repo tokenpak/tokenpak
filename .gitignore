@@ -58,6 +58,7 @@ docs/_build/
 
 # Local state
 .tokenpak/
+.tpk/
 *.state.json
 elo_ratings.json
 

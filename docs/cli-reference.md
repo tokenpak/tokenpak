@@ -290,6 +290,14 @@ View and edit config
   - `--json` — Output as JSON
 - `init`
   - `--force` — Overwrite existing config
+  - `--with-env-stub` — Also drop a placeholders-only .env.example under the TokenPak home
+- `doctor`
+  - `--json` — Output as JSON
+  - `--quiet` — Print only the worst finding
+  - `--verbose`, `-v` — Include per-check detail
+- `env`
+  - `--json` — Output as JSON
+  - `--no-mask` — Show low-class values unmasked (secret-class values are still masked)
 - `path`
 - `migrate`
   - `--config-json` — Path to legacy config.json (default: ~/.tokenpak/config.json) (default: ~/.tokenpak/config.json)
