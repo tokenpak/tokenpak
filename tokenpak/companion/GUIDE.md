@@ -57,6 +57,58 @@ TOKENPAK_COMPANION_HOOKS=0 tokenpak claude
 
 ---
 
+## Permission tiers
+
+TokenPak manages client permissions through one tier abstraction that fans
+out per client. Two deliberately separate concepts — do not conflate them:
+
+- **Persistent trust level** — the tier written into the client's own
+  config. It changes how the client behaves on *every* launch, however it
+  is started.
+- **Runtime unattended bypass** — launcher *fleet mode*, a TokenPak-owned
+  boolean (`~/.config/tokenpak/permissions.toml`) consumed only by
+  `tokenpak claude` / `tokenpak codex`, which inject the client's bypass
+  flag into argv at launch. Client config files are never modified by
+  fleet mode, and launching a client directly is unaffected.
+
+| Tier | Claude Code (`settings.json`) | Codex (`config.toml`) | Use case |
+|---|---|---|---|
+| `strict` | `permissions.defaultMode = "default"` | `approval_policy = "on-request"`, `sandbox_mode = "read-only"` | Exploring, untrusted code |
+| `standard` *(default)* | `permissions.defaultMode = "acceptEdits"` | `approval_policy = "on-request"`, `sandbox_mode = "workspace-write"` | Day-to-day interactive |
+| `auto` | `permissions.defaultMode = "bypassPermissions"` | `approval_policy = "never"`, `sandbox_mode = "workspace-write"` | Trusted solo work, no prompts |
+| `fleet` | persistent tier unchanged | persistent tier unchanged | Unattended runs via `tokenpak claude` / `tokenpak codex` only |
+
+### Commands
+
+```bash
+tokenpak permissions show                       # current tiers + fleet mode
+tokenpak permissions set auto                   # both clients
+tokenpak permissions set strict --client codex  # one client
+tokenpak permissions set fleet                  # launcher fleet mode (opt-in, confirmation required)
+tokenpak permissions reset                      # scoped reset + fleet off
+tokenpak integrate claude-code --apply --tier auto   # tier at integrate time
+```
+
+Notes:
+
+- Every write is **additive with a backup first** (`settings.json.bak` /
+  `config.toml.bak`). `permissions.allow` / `deny` / `ask` arrays, env
+  blocks, profiles, MCP config and comments are preserved verbatim.
+- `reset` is **scoped**: it removes only the TokenPak-managed keys and
+  disables fleet mode. It never restores from the `.bak` (that would
+  clobber unrelated edits made since apply); the `.bak` stays on disk for
+  a manual full revert.
+- Fleet launches print a mandatory stderr banner
+  (`tokenpak: fleet mode — bypass flags injected (...)`) and `tokenpak
+  doctor` always shows a dedicated `TokenPak launcher fleet mode:` row.
+  The per-client persistent-tier rows only ever read
+  `strict` / `standard` / `auto` / `custom` — never `fleet`.
+- The env var `TOKENPAK_CODEX_BYPASS_APPROVALS_AND_SANDBOX` remains the
+  Codex-side back-compat alias of fleet mode for older automation
+  scripts; new setups should use `tokenpak permissions set fleet`.
+
+---
+
 ## Memory sources — bring your own knowledge base
 
 The companion can surface lessons from your own Markdown notes, not just its

@@ -288,6 +288,7 @@ _COMMAND_GROUPS = {
         ("goals", "Track savings goals"),
         ("config", "View and edit config"),
         ("explain", "Explain workflow profiles"),
+        ("permissions", "Permission tiers (strict/standard/auto) + launcher fleet mode"),
     ],
     "Versioning": [
         ("version", "Show current version"),
@@ -2526,12 +2527,75 @@ def _build_stub_parsers(sub):
         "--apply", action="store_true",
         help="(reserved) auto-write config files — not yet implemented, prints safe instructions instead",
     )
+    p_integrate.add_argument(
+        "--tier", choices=["strict", "standard", "auto", "fleet"], default=None,
+        help="Permission tier to apply with --apply (claude-code / codex only; "
+             "default: standard). 'fleet' is launcher-scoped and never persists "
+             "into client config — see `tokenpak permissions --help`.",
+    )
+    p_integrate.add_argument(
+        "--yes", action="store_true",
+        help="Confirm dangerous choices non-interactively (required for --tier fleet without a TTY)",
+    )
 
     def _integrate_dispatch(args):
         from tokenpak.cli.commands.integrate import run_integrate
         return run_integrate(args)
 
     p_integrate.set_defaults(func=_integrate_dispatch)
+
+    # ── `permissions` — persistent tiers + launcher fleet mode ───────────────
+    p_permissions = sub.add_parser(
+        "permissions",
+        help="View or set permission tiers (strict/standard/auto) and launcher fleet mode",
+        description=(
+            "Manage the TokenPak permission tier system.\n\n"
+            "Persistent tiers (strict/standard/auto) are written into the client's\n"
+            "own config (Claude Code settings.json / Codex config.toml). Fleet mode\n"
+            "is launcher-scoped only: `tokenpak claude` / `tokenpak codex` inject\n"
+            "bypass flags at launch and print a banner — client configs are never\n"
+            "modified by fleet mode.\n\n"
+            "Examples:\n"
+            "  tokenpak permissions show                      # current tiers + fleet mode\n"
+            "  tokenpak permissions set auto                  # both clients\n"
+            "  tokenpak permissions set strict --client codex # one client\n"
+            "  tokenpak permissions set fleet                 # launcher fleet mode (opt-in)\n"
+            "  tokenpak permissions reset                     # scoped reset + fleet off"
+        ),
+    )
+    perm_sub = p_permissions.add_subparsers(dest="permissions_cmd")
+    perm_sub.add_parser(
+        "show", help="Show per-client persistent tier + launcher fleet status"
+    )
+    pp_set = perm_sub.add_parser(
+        "set", help="Set a permission tier (strict|standard|auto) or enable fleet mode"
+    )
+    pp_set.add_argument(
+        "tier", choices=["strict", "standard", "auto", "fleet"],
+        help="Tier to apply ('fleet' sets launcher state only)",
+    )
+    pp_set.add_argument(
+        "--client", choices=["claude-code", "codex", "both"], default="both",
+        help="Which client to configure (default: both)",
+    )
+    pp_set.add_argument(
+        "--yes", action="store_true",
+        help="Skip the fleet-mode confirmation prompt (explicit opt-in)",
+    )
+    pp_reset = perm_sub.add_parser(
+        "reset",
+        help="Scoped reset: remove only TokenPak-managed tier keys + disable fleet mode",
+    )
+    pp_reset.add_argument(
+        "--client", choices=["claude-code", "codex", "both"], default="both",
+        help="Which client to reset (default: both)",
+    )
+
+    def _permissions_dispatch(args):
+        from tokenpak.cli.commands.permissions import run_permissions
+        return run_permissions(args)
+
+    p_permissions.set_defaults(func=_permissions_dispatch)
 
     # ── OpenClaw adapter sync subcommand ─────────────────────────
     p_openclaw = sub.add_parser(
@@ -4704,7 +4768,7 @@ def main():
     # For 'claude' subcommand, manually split argv so *all* arguments after
     # tokenpak's own flags pass through verbatim to the claude binary.
     # parse_args()/parse_known_args() would mishandle flags like
-    # --dangerously-skip-permissions or split --model <value> pairs.
+    # permission-bypass flags or split --model <value> pairs.
     if raw_cmd == "claude":
         claude_idx = sys.argv.index("claude")
         claude_tail = sys.argv[claude_idx + 1:]

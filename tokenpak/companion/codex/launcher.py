@@ -16,6 +16,75 @@ import sys
 
 from ..config import CompanionConfig
 
+_TEAL = "\033[38;2;0;180;170m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
+_CLEAR_LINE = "\033[2K"
+_TOKENPAK_CHATGPT_BASE_URL = "http://127.0.0.1:8766/v1"
+
+_BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox"
+_BYPASS_ENV_VAR = "TOKENPAK_CODEX_BYPASS_APPROVALS_AND_SANDBOX"
+_TRUTHY = {"1", "true", "yes"}
+
+
+def _bypass_env_enabled(env: dict[str, str] | None = None) -> bool:
+    """Return True if the bypass env var is set to a truthy value (case-insensitive)."""
+    src = env if env is not None else os.environ
+    raw = src.get(_BYPASS_ENV_VAR, "")
+    return raw.strip().lower() in _TRUTHY
+
+
+def _fleet_state_enabled() -> bool:
+    """True when TokenPak launcher fleet mode is enabled. Never raises.
+
+    Fleet mode is the runtime unattended-bypass knob stored in
+    TokenPak-owned state (~/.config/tokenpak/permissions.toml, set via
+    `tokenpak permissions set fleet`). It is launcher-scoped only and
+    never persists into ~/.codex/config.toml — the persistent trust level
+    (tier) lives there and is managed by `tokenpak permissions`.
+    """
+    try:
+        from tokenpak.cli.commands.permissions import fleet_mode_enabled
+
+        return fleet_mode_enabled()
+    except Exception:
+        return False
+
+
+def _maybe_inject_bypass_flag(
+    args: list[str], env: dict[str, str] | None = None, fleet: bool = False
+) -> list[str]:
+    """Return a new arg list with the Codex bypass flag injected when opted in.
+
+    Two opt-in surfaces, both launcher-scoped:
+
+    - ``fleet=True`` — TokenPak launcher fleet mode (canonical path; the
+      caller reads it from TokenPak-owned state via
+      :func:`_fleet_state_enabled`).
+    - the env var ``TOKENPAK_CODEX_BYPASS_APPROVALS_AND_SANDBOX``
+      (accepts ``1`` / ``true`` / ``yes``) — the Codex-side back-compat
+      alias of fleet mode, kept for automation scripts that predate the
+      permission-tier system. Same effect, same banner.
+
+    The flag is a no-op if the user already passed it on the command line
+    (no duplication). Never mutates the input list.
+    """
+    if not (fleet or _bypass_env_enabled(env)):
+        return list(args)
+    if _BYPASS_FLAG in args:
+        return list(args)
+    return [_BYPASS_FLAG, *args]
+
+
+def _fleet_banner(env: dict[str, str] | None = None, fleet: bool = False) -> str | None:
+    """Mandatory stderr banner text for fleet-mode launches (None when off).
+
+    Canonical user-visible guardrail — do not remove or soften it.
+    """
+    if fleet or _bypass_env_enabled(env):
+        return f"tokenpak: fleet mode — bypass flags injected ({_BYPASS_FLAG})"
+    return None
+
 
 def main(args: list[str] | None = None) -> int:
     """Entry point for ``tokenpak codex``."""
@@ -101,7 +170,12 @@ def main(args: list[str] | None = None) -> int:
     if str(config.journal_dir) != default_journal_dir:
         env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(config.journal_dir)
 
-    codex_args = ["codex", *args]
+    fleet = _fleet_state_enabled()
+    forwarded = _maybe_inject_bypass_flag(args, env, fleet=fleet)
+    banner = _fleet_banner(env, fleet=fleet)
+    if banner:
+        print(banner, file=sys.stderr)
+    codex_args = ["codex", *forwarded]
     os.execvpe("codex", codex_args, env)
 
     print("tokenpak: failed to launch codex", file=sys.stderr)

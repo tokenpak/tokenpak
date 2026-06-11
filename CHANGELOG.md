@@ -33,6 +33,12 @@ changes to existing behavior, no breaking changes.
 - Companion guide: a "Memory sources — bring your own knowledge base" section
   documenting the env var, the library API, and the MCP surface.
 
+### Added
+
+- Permission tier system for `tokenpak integrate` (strict/standard/auto/fleet)
+  with a new `tokenpak permissions` verb, doctor rows, and launcher fleet
+  mode — see `tokenpak permissions --help`.
+
 ### Internal
 
 - Regenerated the public-API snapshot. Beyond the companion additions above,

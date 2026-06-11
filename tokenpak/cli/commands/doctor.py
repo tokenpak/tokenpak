@@ -907,6 +907,37 @@ def run_doctor(
     else:
         _record("required_dirs", "pass", "Required dirs       all present")
 
+    # === Permission tiers (persistent tier vs launcher fleet mode) ==============
+    # Three-row display. The persistent-tier rows can only ever read
+    # strict/standard/auto/custom — never "fleet" (fleet is the separate
+    # launcher boolean row). External modification of a managed key is an
+    # error: doctor exits non-zero with a guidance line.
+    try:
+        from tokenpak.cli.commands.permissions import doctor_rows as _perm_rows
+
+        _tier_rows, _tier_drift = _perm_rows()
+        _drift_guidance = (
+            "\n         → A client config was modified outside TokenPak. Run "
+            "`tokenpak permissions set <tier>` to re-apply or "
+            "`tokenpak permissions reset` to clear the managed keys."
+        )
+        for _row in _tier_rows:
+            _row_drift = _row.startswith(
+                ("Claude Code persistent tier", "Codex persistent tier")
+            ) and "custom" in _row
+            _record(
+                "permission_tier",
+                "fail" if _row_drift else "pass",
+                _row + (_drift_guidance if _row_drift else ""),
+            )
+    except Exception as _pt_e:  # pragma: no cover — display must never crash doctor
+        _record(
+            "permission_tier",
+            "warn",
+            f"Permission tiers    could not read tier state: {type(_pt_e).__name__}",
+            detail=str(_pt_e),
+        )
+
     # === Claude Code integration checks (--claude-code) =========================
     if claude_code:
         if not output_json:
@@ -1053,10 +1084,11 @@ def run_doctor(
                 detail="TMUX env var not set; no concurrent-access advisory needed.",
             )
 
-        # === 8-point Claude Code operational health checks ======================
+        # === Claude Code operational health checks ==============================
         if not output_json:
             print()
             print("── Claude Code operational checks ─────")
+        from .doctor_claude_code import NUM_CHECKS as _CC_NUM_CHECKS
         from .doctor_claude_code import run_claude_code_checks
         cc_fail_count, cc_results = run_claude_code_checks(output_json=output_json, verbose=verbose)
         for result in cc_results:
@@ -1081,7 +1113,7 @@ def run_doctor(
                 })
         if not output_json:
             print()
-            print(f"{cc_fail_count} of 8 checks failed.")
+            print(f"{cc_fail_count} of {_CC_NUM_CHECKS} checks failed.")
 
     # === JSON output ============================================================
     if output_json:

@@ -303,6 +303,33 @@ Explain workflow profiles
 
 - `--profile` — Profile name (safe|balanced|aggressive|agentic); omit to show all
 
+### `tokenpak permissions`
+
+Manage the TokenPak permission tier system.
+
+Persistent tiers (strict/standard/auto) are written into the client's
+own config (Claude Code settings.json / Codex config.toml). Fleet mode
+is launcher-scoped only: `tokenpak claude` / `tokenpak codex` inject
+bypass flags at launch and print a banner — client configs are never
+modified by fleet mode.
+
+Examples:
+  tokenpak permissions show                      # current tiers + fleet mode
+  tokenpak permissions set auto                  # both clients
+  tokenpak permissions set strict --client codex # one client
+  tokenpak permissions set fleet                 # launcher fleet mode (opt-in)
+  tokenpak permissions reset                     # scoped reset + fleet off
+
+**Subcommands:**
+
+- `show`
+- `set`
+  - `TIER` — Tier to apply ('fleet' sets launcher state only) — choices: `strict`, `standard`, `auto`, `fleet`
+  - `--client` — Which client to configure (default: both) (default: both) — choices: `claude-code`, `codex`, `both`
+  - `--yes` — Skip the fleet-mode confirmation prompt (explicit opt-in)
+- `reset`
+  - `--client` — Which client to reset (default: both) (default: both) — choices: `claude-code`, `codex`, `both`
+
 ---
 
 ## Group: Versioning
@@ -1058,7 +1085,10 @@ Examples:
 - `CLIENT` — Client key: claude-code | cursor | cline | continue | aider | codex | openai-sdk | anthropic-sdk | litellm
 - `--all` — Show instructions for every supported client
 - `--proxy-url` — Override the printed proxy URL (default: $TOKENPAK_PROXY_URL or http://localhost:8766)
-- `--apply` — (reserved) auto-write config files — not yet implemented, prints safe instructions instead
+- `--apply` — Auto-write config files for the given client (headless / scripted path)
+- `--revert` — Restore the most recent backup for the given client (undoes --apply)
+- `--tier` — Permission tier to apply with --apply (claude-code / codex only; default: standard). 'fleet' is launcher-scoped and never persists into client config — see `tokenpak permissions --help`. — choices: `strict`, `standard`, `auto`, `fleet`
+- `--yes` — Confirm dangerous choices non-interactively (required for --tier fleet without a TTY)
 
 ### `tokenpak last`
 

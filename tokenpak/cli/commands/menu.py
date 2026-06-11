@@ -352,6 +352,13 @@ _SUBCOMMAND_COMMANDS: dict[str, list[tuple[str, str, dict]]] = {
     "fleet": [
         ("", "Show fleet status", {}),
     ],
+    "permissions": [
+        ("show",         "View current tiers",            {}),
+        ("set strict",   "Set strict tier",               {}),
+        ("set standard", "Set standard tier (default)",   {}),
+        ("set auto",     "Set auto tier",                 {}),
+        ("reset",        "Reset managed keys + fleet off", {}),
+    ],
 }
 
 
@@ -424,6 +431,7 @@ _HOME_ITEMS = [
     ("check_health", "Proxy status"),
     ("view_spend",   "Spend & savings"),
     ("configure",    "Configure"),
+    ("permissions",  "Permission tier"),
     ("companion",    "Companion"),
     ("diagnose",     "Troubleshoot"),
     ("browse_all",   "Browse all commands"),
@@ -435,6 +443,7 @@ _SEARCH_ALIASES: dict[str, list[str]] = {
     "check_health": ["status", "health", "ping", "alive", "proxy status"],
     "view_spend":   ["cost", "spend", "savings", "budget", "money", "price", "usage"],
     "configure":    ["config", "settings", "setup", "edit", "route", "recipe", "budget"],
+    "permissions":  ["permission", "tier", "fleet", "strict", "standard", "auto", "approval", "sandbox", "bypass"],
     "companion":    ["claude", "codex", "session", "pak", "capsule", "journal", "mcp", "companion"],
     "diagnose":     ["doctor", "diag", "fix", "repair", "debug", "troubleshoot", "health check"],
     "browse_all":   ["all", "commands", "search", "find", "list"],
@@ -577,6 +586,67 @@ def _section_permissions(hdr: str) -> None:
         _dispatch("permissions", choice)
 
 
+def _permission_tier_subtitle() -> str:
+    """Live one-line summary of the three tier rows (persistent + launcher).
+
+    Persistent-tier values are restricted to strict/standard/auto/custom;
+    launcher fleet mode is the separate enabled/disabled element. The
+    persistent rows never read "fleet".
+    """
+    try:
+        from tokenpak.cli.commands.permissions import doctor_rows
+
+        rows, _drift = doctor_rows()
+        # Compact: collapse the aligned rows into a single subtitle line.
+        return "   ".join(" ".join(r.split()) for r in rows)
+    except Exception:
+        return "Persistent tier per client + launcher fleet mode."
+
+
+def _section_permissions(hdr: str) -> None:
+    """Permission tier section — persistent tiers + launcher fleet mode.
+
+    Runs `tokenpak permissions ...` under the hood. Fleet is a launcher-
+    scoped opt-in (confirmation required); it never persists into client
+    config files.
+    """
+    c = supports_color()
+    while True:
+        choice = pick(
+            paint("Permission tier", Color.PASTEL_YELLOW, c),
+            [
+                ("show",         "View current tiers"),
+                ("set strict",   "Strict — prompts for everything"),
+                ("set standard", "Standard — accept edits (default)"),
+                ("set auto",     "Auto — no prompts (trusted)"),
+                ("set fleet",    "Fleet — launcher bypass (unattended)"),
+                ("reset",        "Reset managed keys + fleet off"),
+            ],
+            header=hdr,
+            subtitle=_permission_tier_subtitle(),
+            back_label="Back",
+        )
+        if choice is None or choice == _BACK_SENTINEL:
+            return
+        if choice == "set fleet":
+            confirm_opts = [("yes", "Yes, enable fleet mode"), ("no", "No, go back")]
+            ans = pick(
+                "Enable launcher fleet mode?",
+                confirm_opts,
+                header=hdr,
+                subtitle=(
+                    "tokenpak claude / tokenpak codex will inject permission-bypass "
+                    "flags (stderr banner on every launch). Client configs are NOT "
+                    "modified."
+                ),
+            )
+            if ans != "yes":
+                continue
+            choice = "set fleet --yes"
+        _exec("permissions", choice)
+        _wait()
+
+
 def _section_companion(hdr: str) -> None:
     c = supports_color()
     while True:
@@ -632,6 +702,7 @@ _POLISHED_LABELS: dict[str, str] = {
     "alerts":       "Manage alert channels",
     "goals":        "Track savings goals",
     "config":       "View & edit config",
+    "permissions":  "Permission tiers",
     "explain":      "Explain workflow profiles",
     "version":      "Show version",
     "update":       "Update tokenpak",
@@ -676,7 +747,7 @@ _POLISHED_LABELS: dict[str, str] = {
 # Commands shown in the default "Common" view
 _COMMON_COMMANDS = {
     "start", "stop", "restart", "demo", "cost", "status", "logs",
-    "index", "search", "route", "recipe", "budget", "config", "explain",
+    "index", "search", "route", "recipe", "budget", "config", "explain", "permissions",
     "version", "update", "doctor", "diagnose", "dashboard", "timeline",
     "models", "forecast", "claude", "codex", "test", "prove",
     "benchmark", "calibrate", "alerts", "template", "goals",
@@ -747,6 +818,8 @@ def _handle_home_item(item: str, hdr: str) -> None:
         _section_spend(hdr)
     elif item == "configure":
         _section_configure(hdr)
+    elif item == "permissions":
+        _section_permissions(hdr)
     elif item == "companion":
         _section_companion(hdr)
     elif item == "diagnose":
