@@ -1,11 +1,13 @@
-# TokenPak — Cut your LLM token spend with deterministic context compression, zero config
+# TokenPak — Cut your LLM token spend — zero config
 
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-green.svg)](LICENSE)
 <!-- CI badge: pending repo transfer to tokenpak/tokenpak — add after transfer is confirmed -->
 
-TokenPak is a local proxy that compresses your LLM context before it hits the API — fewer tokens, lower cost, no code changes, no cloud, no credentials stored.
+> **The open logistics layer for AI context.**
+
+TokenPak starts as a local proxy that **packs AI requests** before they ship — reducing wasted context and giving teams receipts for what changed. Fewer tokens, lower cost. No code changes, no cloud, no credentials stored.
 
 ---
 
