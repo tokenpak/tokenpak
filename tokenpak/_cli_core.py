@@ -21,6 +21,74 @@ from typing import Optional, Tuple
 from tokenpak._formatting import OutputFormatter, OutputMode, resolve_mode
 from tokenpak._formatting import symbols as FS
 
+# ── --no-tui global escape ────────────────────
+# Set true when --no-tui is present anywhere on the command line. Stripped
+# from sys.argv early in main() so per-subcommand parsers don't need to
+# know about it. Honored at every TTY entry point: bare `tokenpak`, `tokenpak
+# setup`, and `tokenpak integrate <X>` without `--apply`.
+_NO_TUI_FLAG = False
+
+
+def _no_tui() -> bool:
+    return _NO_TUI_FLAG
+
+
+def _interactive_menu_allowed() -> bool:
+    """Whether bare ``tokenpak`` may launch the interactive menu (spec F1/F2).
+
+    The menu runs ONLY when both streams are a TTY, ``--no-tui`` is absent,
+    ``TOKENPAK_NONINTERACTIVE`` is unset, CI is not detected, and ``TERM`` is
+    not ``dumb``. Every other case falls through to deterministic, exit-0
+    non-interactive output.
+    """
+    if _no_tui():
+        return False
+    if os.environ.get("TOKENPAK_NONINTERACTIVE"):
+        return False
+    if os.environ.get("CI"):
+        return False
+    if os.environ.get("TERM", "") == "dumb":
+        return False
+    return bool(sys.stdin.isatty() and sys.stdout.isatty())
+
+
+def _emit_bare_json() -> None:
+    """Emit deterministic, schema-versioned bare-invocation JSON (spec F3).
+
+    Cheap and stable: cached/unknown status only (no slow probe), a sorted
+    command catalog, and stable field names. Never blocks; never fabricates a
+    savings figure (unknown -> null).
+    """
+    import json as _json
+
+    try:
+        from tokenpak.cli.commands import menu_status
+
+        status = menu_status.json_snapshot()
+    except Exception:
+        status = {
+            "schema_version": 1,
+            "proxy": "unknown",
+            "cost_today": None,
+            "saved_today": None,
+        }
+    try:
+        from tokenpak import __version__ as _ver
+    except Exception:
+        _ver = None
+    try:
+        commands = sorted(_core_command_names())
+    except Exception:
+        commands = []
+    payload = {
+        "schema_version": 1,
+        "tokenpak_version": _ver,
+        "status": status,
+        "commands": commands,
+    }
+    print(_json.dumps(payload, indent=2, sort_keys=True))
+
+
 # ── Monitor DB Access ────────────────────────────────────────────────────────
 
 
@@ -4519,9 +4587,18 @@ def main():
         print(f"tokenpak {_ver}")
         sys.exit(0)
 
+    # ── Intercept bare `tokenpak --json`: deterministic machine-readable output ─
+    # Cheap, schema-versioned status + command catalog; no slow probe (spec F3).
+    if len(sys.argv) == 2 and sys.argv[1] == "--json":
+        _emit_bare_json()
+        sys.exit(0)
+
     # ── Intercept bare invocation: launch interactive menu on TTY ──────────────
+    # The menu runs only when fully interactive (TTY both ends, no --no-tui, not
+    # CI, TOKENPAK_NONINTERACTIVE unset, TERM != dumb; spec F1/F2). Every other
+    # case prints deterministic non-interactive output and exits 0.
     if len(sys.argv) == 1:
-        if sys.stdin.isatty() and sys.stdout.isatty():
+        if _interactive_menu_allowed():
             try:
                 from tokenpak.cli.commands.menu import run_menu
                 run_menu()
