@@ -23,7 +23,6 @@ import pytest
 
 from tokenpak.cli.commands import doctor as doc
 
-
 # ---------------------------------------------------------------------------
 # build_lifecycle_summary — pure string builder, all states (AC-L4-2, AC-L4-4)
 # ---------------------------------------------------------------------------
@@ -224,8 +223,8 @@ def test_update_state_available_from_cache(monkeypatch):
 
 
 def test_update_state_current_from_cache(monkeypatch):
-    from tokenpak import _cli_core
     from tokenpak import __version__ as cur
+    from tokenpak import _cli_core
 
     monkeypatch.setattr(_cli_core, "_update_nudge_opted_out", lambda: False)
     monkeypatch.setattr(_cli_core, "_read_update_cache", lambda: (1.0, cur))

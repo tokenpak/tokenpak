@@ -411,6 +411,7 @@ Run diagnostics
 - `--verbose`, `-v` — Show extra detail for each check
 - `--claude-code` — Run Claude Code integration checks (ENABLE_TOOL_SEARCH, mode, IDE detection)
 - `--conformance` — Run TIP self-conformance checks (alias for `tokenpak tip conformance`)
+- `--lifecycle` — Show only the compact lifecycle summary (installed/setup/routed/proxy/update)
 
 ### `tokenpak diagnose`
 
