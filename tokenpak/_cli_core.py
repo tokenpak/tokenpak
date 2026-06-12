@@ -293,6 +293,7 @@ _COMMAND_GROUPS = {
     "Versioning": [
         ("version", "Show current version"),
         ("update", "Update tokenpak"),
+        ("uninstall", "Un-route (--soft) or purge state + remove package (--hard)"),
     ],
     "Operations": [
         ("benchmark", "Run benchmarks"),
@@ -3052,6 +3053,7 @@ def build_parser():
     _build_user_template_parser(sub)
     _build_version_parser(sub)
     _build_update_parser(sub)
+    _build_uninstall_parser(sub)
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
     _build_compress_parser(sub)
@@ -4302,6 +4304,20 @@ def cmd_update(args):
     print("\n✓ Update complete.")
 
 
+def cmd_uninstall(args):
+    """Un-route (``--soft``) or purge + offer package removal (``--hard``)."""
+    from .cli.commands.uninstall import run_uninstall
+
+    return run_uninstall(
+        soft=getattr(args, "soft", False),
+        hard=getattr(args, "hard", False),
+        dry_run=getattr(args, "dry_run", False),
+        yes=getattr(args, "yes", False),
+        keep_data=getattr(args, "keep_data", False),
+        output_json=getattr(args, "json", False),
+    )
+
+
 def cmd_config_sync(args):
     """Pull latest config from canonical source (git/vault)."""
     import subprocess as _sp
@@ -4577,6 +4593,46 @@ def _build_update_parser(sub):
         help="Show what would change without applying",
     )
     p.set_defaults(func=cmd_update)
+
+
+def _build_uninstall_parser(sub):
+    p = sub.add_parser(
+        "uninstall",
+        help="Un-route (--soft) or purge state + remove package (--hard)",
+    )
+    p.add_argument(
+        "--soft",
+        action="store_true",
+        help="Un-route only (reversible via `tokenpak setup`); keep config/state/package",
+    )
+    p.add_argument(
+        "--hard",
+        action="store_true",
+        help="Soft + purge state (keeps journal/budget/capsules) + offer package removal",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="Show the exact operations that would run, change nothing",
+    )
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation (required for --hard in non-interactive use)",
+    )
+    p.add_argument(
+        "--keep-data",
+        action="store_true",
+        dest="keep_data",
+        help="Under --hard, also retain all ~/.tpk user data (config + dbs)",
+    )
+    p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable receipt",
+    )
+    p.set_defaults(func=cmd_uninstall)
 
 
 def _build_config_mgmt_parser(sub):
