@@ -27,7 +27,6 @@ services:
 
     volumes:
       # Config file (optional — uses defaults if not present)
-      # Copy config/tokenpak.config.json.example → config/tokenpak.config.json and edit
       - ./config/config.yaml:/home/tokenpak/.tokenpak/config.yaml:ro
 
       # Persistent logs (survives container restarts)
