@@ -2078,6 +2078,7 @@ def cmd_doctor(args):
         output_json=getattr(args, "json_output", False) is True,
         verbose=getattr(args, "verbose", False),
         claude_code=getattr(args, "claude_code", False),
+        lifecycle=getattr(args, "lifecycle", False),
     )
     # rc: 0=all pass/warnings only, 2=errors  (1 mapped to 0 for CLI compat)
     # Translate: 0/1→no exit, 2→exit(1) to preserve legacy callers expecting exit(1) on fail
@@ -2948,6 +2949,12 @@ def build_parser():
         dest="conformance",
         action="store_true",
         help="Run TIP self-conformance checks (alias for `tokenpak tip conformance`)",
+    )
+    p_doctor.add_argument(
+        "--lifecycle",
+        dest="lifecycle",
+        action="store_true",
+        help="Show only the compact lifecycle summary (installed/setup/routed/proxy/update)",
     )
     p_doctor.set_defaults(func=cmd_doctor)
 
