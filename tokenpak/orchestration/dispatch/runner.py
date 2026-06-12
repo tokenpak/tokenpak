@@ -60,10 +60,12 @@ from .models.enums import (
 )
 from .models.late_result import LateResult
 from .models.manifest import DispatchManifest
+from .models.receipt import DispatchReceipt
 from .models.route import DispatchRoute, RouteStation
 from .models.run import DispatchRun
 from .models.station_run import DispatchStationRun
 from .models.worker import DispatchWorker
+from .receipt_builder import build_and_write_receipt
 from .registry.routes import is_worker_station
 from .registry.workers import (
     DispatchWorkerRegistry,
@@ -121,6 +123,7 @@ class FulfillmentResult:
     late_results: list[LateResult] = field(default_factory=list)
     effect_ids: list[str] = field(default_factory=list)
     reviewer_result: Optional[ReviewerStationResult] = None
+    receipt: Optional[DispatchReceipt] = None
     reason: str = ""
 
 
@@ -595,6 +598,16 @@ class FulfillmentLine:
         }
         line_status, run_status = status_map[package.status]
         run = self._finalize_run(run, status=run_status, decision=package.decision)
+
+        receipt = None
+        if line_status in (LineStatus.DELIVERED, LineStatus.DELIVERY_READY_WITH_WARNING):
+            receipt = build_and_write_receipt(
+                run=run,
+                ledger=self._ledger,
+                final_status=run_status,
+                clock=self._clock,
+            )
+
         return FulfillmentResult(
             status=line_status,
             run=run,
@@ -604,6 +617,7 @@ class FulfillmentLine:
             late_results=late_results,
             effect_ids=effect_ids,
             reviewer_result=reviewer_result,
+            receipt=receipt,
             reason=package.summary,
         )
 

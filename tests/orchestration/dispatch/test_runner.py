@@ -736,6 +736,82 @@ def test_spend_guard_reason_constant_threaded():
 
 
 # ---------------------------------------------------------------------------
+# Receipt wiring (follow-up #2 — parked-followups-2026-06-08)
+# ---------------------------------------------------------------------------
+
+
+def _quick_answer_intake():
+    fd = FrontDock()
+    return fd.intake(
+        "explain the run ledger",
+        autonomy_mode=AutonomyMode.AUTO_DISPATCH_LIMITED,
+        now=_NOW,
+    )
+
+
+def test_delivered_run_produces_receipt(ledger):
+    """A delivered run must have a receipt persisted and linked (follow-up #2 wire-up)."""
+
+    intake = _quick_answer_intake()
+    runtime = DispatchRuntime()
+    outcome = runtime.select_route(intake, now=_NOW)
+    assert outcome.route is not None
+
+    line = FulfillmentLine(
+        worker_llm=FakeWorkerLLM(
+            [WorkerTurn(result_payload={"answer": "SQLite via _paths"}, output_schema_valid=True, tokens_used=10)]
+        ),
+        context_provider=LocalContextProvider(),
+        ledger=ledger,
+        worker_registry=default_worker_registry(),
+        clock=lambda: _NOW,
+    )
+    result = line.run(
+        route=outcome.route,
+        manifest=intake.manifest,
+        autonomy_mode=AutonomyMode.AUTO_DISPATCH_LIMITED,
+    )
+
+    assert result.status is LineStatus.DELIVERED
+    # Receipt must be on the result and linked to the run.
+    assert result.receipt is not None
+    assert result.receipt.final_status == "delivered"
+    assert result.receipt.run_id == result.run.id
+    assert result.receipt.job_id == intake.manifest.job_id
+    assert len(result.receipt.stations) == 1
+    # run.receipt_id must be set and match.
+    persisted_run = ledger.read_run(result.run.id)
+    assert persisted_run.receipt_id == result.receipt.id
+    # Ledger read-back must return the same receipt.
+    from_ledger = ledger.read_receipt(result.receipt.id)
+    assert from_ledger is not None
+    assert from_ledger.id == result.receipt.id
+
+
+def test_non_delivered_run_produces_no_receipt(ledger):
+    """A failed or blocked run must NOT produce a receipt."""
+
+    intake = _code_task_intake()
+    route = _select_code_task(intake)
+
+    line = FulfillmentLine(
+        worker_llm=FakeWorkerLLM([WorkerTurn(output_schema_valid=False, tokens_used=1)]),
+        context_provider=LocalContextProvider(),
+        ledger=ledger,
+        worker_registry=default_worker_registry(),
+        reviewer_llm=FakeReviewerLLM("pass"),
+        clock=lambda: _NOW,
+    )
+    result = line.run(
+        route=route,
+        manifest=intake.manifest,
+        autonomy_mode=AutonomyMode.AUTO_DISPATCH_LIMITED,
+    )
+    assert result.status is LineStatus.FAILED
+    assert result.receipt is None
+
+
+# ---------------------------------------------------------------------------
 # Tool authorization through the loop (§5.3)
 # ---------------------------------------------------------------------------
 

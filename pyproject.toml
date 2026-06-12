@@ -214,6 +214,10 @@ tokenpak = [
     "dashboard/templates/**/*",
     "telemetry/dashboard/static/**/*",
     "telemetry/dashboard/templates/**/*",
+    "orchestration/dispatch/registry/*.yaml",
+    "orchestration/dispatch/registry/routes/*.yaml",
+    "orchestration/dispatch/registry/overlays/*.yaml",
+    "orchestration/dispatch/schemas/*.json",
 ]
 
 [tool.setuptools.dynamic]
