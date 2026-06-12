@@ -1,0 +1,7 @@
+# Packaging hygiene: keep the OSS sdist from shipping the top-level dev
+# `tests/` tree. Those files are not part of the public API surface and
+# may carry development-only references. The wheel already excludes
+# tests/ via [tool.setuptools.packages.find] (include = ["tokenpak*"]);
+# this prune brings the sdist in line with that intent
+# ([tool.pytest.ini_options] markers note "excluded from OSS sdist").
+prune tests
