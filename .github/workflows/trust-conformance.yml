@@ -1,0 +1,43 @@
+name: Trust Conformance
+
+# Licensing, security-contact, contribution, and public-claim conformance gate.
+# Consolidates the project's release-readiness trust assertions into one check
+# so published artifacts cannot silently drift from the project's standards.
+#
+# ENFORCING: the gate exits non-zero on any ERROR finding, so trust drift
+# (a missing NOTICE / hero / DCO / LICENSE / security contact, or a retired or
+# forbidden public claim) fails the build and blocks the merge. The target tree
+# was confirmed at the conformant baseline before this was enabled.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  trust-conformance:
+    name: Licensing, security-contact & public-claim conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run trust-conformance gate (enforcing)
+        run: |
+          set -euo pipefail
+          # --mode enforcing exits non-zero on any ERROR finding, so trust
+          # drift fails this step (and the build) instead of merely warning.
+          python -m scripts.release_gate.trust_conformance \
+            --scope public --mode enforcing --json | tee trust-conformance.json
+          echo "Trust-conformance: clean."
