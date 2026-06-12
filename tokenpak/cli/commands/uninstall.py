@@ -30,7 +30,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 # ANSI markers, gated on a TTY so piped/JSON output stays clean.
 _GREEN = "\033[92m"
@@ -647,8 +647,8 @@ def run_uninstall(
 
 def _silenced(fn: Callable[[], "tuple[str, str]"]) -> "tuple[str, str]":
     """Run *fn* with stdout redirected to /dev/null (keeps --json clean)."""
-    import io
     import contextlib
+    import io
 
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):

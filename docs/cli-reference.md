@@ -357,6 +357,19 @@ Update tokenpak
 - `--core-only` — Update core only, skip config merge
 - `--dry-run` — Show what would change without applying
 
+### `tokenpak uninstall`
+
+Un-route (--soft) or purge state + remove package (--hard)
+
+**Flags:**
+
+- `--soft` — Un-route only (reversible via `tokenpak setup`); keep config/state/package
+- `--hard` — Soft + purge state (keeps journal/budget/capsules) + offer package removal
+- `--dry-run` — Show the exact operations that would run, change nothing
+- `--yes` — Skip confirmation (required for --hard in non-interactive use)
+- `--keep-data` — Under --hard, also retain all ~/.tpk user data (config + dbs)
+- `--json` — Emit a machine-readable receipt
+
 ---
 
 ## Group: Operations
