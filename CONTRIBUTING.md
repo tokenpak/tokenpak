@@ -272,6 +272,8 @@ type: brief description
 Longer explanation if needed.
 
 Fixes #123
+
+Signed-off-by: Your Name <you@example.com>
 ```
 
 Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`
@@ -280,6 +282,20 @@ Examples:
 - `feat: add Google Gemini failover support`
 - `fix: handle empty response in SSE stream`
 - `docs: update compression modes documentation`
+
+---
+
+## Developer Certificate of Origin (DCO)
+
+All contributions must be signed off under the [Developer Certificate of Origin](https://developercertificate.org/). The sign-off certifies that you wrote the contribution, or otherwise have the right to submit it under the project's license.
+
+Add the sign-off automatically by committing with `-s`:
+
+```bash
+git commit -s -m "fix: handle empty response in SSE stream"
+```
+
+This appends a `Signed-off-by: Your Name <you@example.com>` trailer using your configured `user.name` and `user.email`. Every commit in your PR must carry it.
 
 ---
 
