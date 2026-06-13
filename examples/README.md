@@ -7,7 +7,7 @@ Use them to understand compression, caching, metrics, and proxy cost behavior.
 ## Quick start
 
 ```bash
-cd /home/trix/Projects/tokenpak
+cd /path/to/tokenpak
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
