@@ -269,6 +269,13 @@ This release ships no runtime, CLI, or public-API behavior change. It is a packa
 
 ## [Unreleased] — install footprint extras split
 
+### Added
+
+- TokenPak Dispatch (v0.1-alpha, **preview**) — scoped, station-based,
+  resumable work packages with a Decision Inbox and delivery receipts.
+  Available on the main branch only; **not yet included in a released
+  `pip install tokenpak` package**. See `tokenpak dispatch --help`.
+
 ### Breaking — install footprint: heavy extras are now opt-in
 
 **Background:** `pip install tokenpak` previously pulled ~5 GB of CUDA/ML wheels (torch, nvidia/\*, transformers, sentence-transformers, scipy, tree-sitter-languages, pandas, litellm, llmlingua) as hard runtime dependencies. This made first-run installs impractical on machines without CUDA or a fast connection.

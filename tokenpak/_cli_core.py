@@ -242,7 +242,7 @@ _COMMAND_GROUPS = {
         ("fleet", "Fleet status"),
         ("aggregate", "Aggregate ledger"),
         ("requests", "Live request explorer"),
-        ("dispatch", "Workflow control: run, decide, deliver"),
+        ("dispatch", "Workflow control (v0.1-alpha preview): run, decide, deliver"),
     ],
     "Companion": [
         ("claude", "Launch with Claude Code"),

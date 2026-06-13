@@ -62,7 +62,8 @@ def build_dispatch_parser(sub: Any) -> None:
         description=(
             "TokenPak Dispatch — scoped, station-based, resumable, gated work "
             "packages with a Decision Inbox and delivery receipts (OSS, "
-            "v0.1-alpha; CLI-first)."
+            "v0.1-alpha preview — not yet in a released pip package; available "
+            "on the project main branch; CLI-first)."
         ),
     )
     dsub = p.add_subparsers(dest="dispatch_action", required=False)
