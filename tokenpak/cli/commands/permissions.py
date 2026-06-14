@@ -57,6 +57,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+try:
+    import tomllib  # py311+
+except ModuleNotFoundError:  # pragma: no cover
+    import tomli as tomllib  # type: ignore[no-redef]
+
 # ---------------------------------------------------------------------------
 # Canonical tier tables
 # ---------------------------------------------------------------------------
@@ -147,8 +152,6 @@ def _read_state() -> dict:
     if not p.exists():
         return {}
     try:
-        import tomllib
-
         return tomllib.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return {}
@@ -407,8 +410,6 @@ def _read_codex_config() -> dict:
     if not p.exists():
         return {}
     try:
-        import tomllib
-
         return tomllib.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return {}
@@ -512,8 +513,6 @@ def apply_codex_tier(tier: str, backup: bool = True) -> TierApplyResult:
 
         # Parse-validate before committing; a malformed result must never
         # land on disk.
-        import tomllib
-
         try:
             tomllib.loads(new_text)
         except Exception as exc:
