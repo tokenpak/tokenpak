@@ -58,7 +58,6 @@ echo ""
 # Use Python API to compress (simulating what tokenpak pack would do)
 python3 - << 'PYEOF'
 import sys
-sys.path.insert(0, '/home/cali/tokenpak')
 from tokenpak import HeuristicEngine
 
 engine = HeuristicEngine()
@@ -89,7 +88,7 @@ echo "# Verbose output to see per-file compression:"
 echo "  tokenpak index ./src --verbose"
 echo ""
 echo "# Check version:"
-python3 -c "import sys; sys.path.insert(0, '/home/cali/tokenpak'); import tokenpak; print(f'TokenPak version: {tokenpak.__version__}')"
+python3 -c "import tokenpak; print(f'TokenPak version: {tokenpak.__version__}')"
 
 echo ""
 echo "✅ CLI usage examples complete!"
