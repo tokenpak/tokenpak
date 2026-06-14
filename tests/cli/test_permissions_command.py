@@ -128,7 +128,10 @@ def test_set_tier_codex_mapping(tmp_home, tier, approval, sandbox):
     _write_codex_config(tmp_home, SAMPLE_CODEX)
     result = perms.apply_codex_tier(tier)
     assert result.ok, result.error
-    import tomllib
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
 
     text = (tmp_home / ".codex" / "config.toml").read_text()
     cfg = tomllib.loads(text)
@@ -262,7 +265,10 @@ def test_reset_codex_scoped_preserves_profiles_and_comments(tmp_home):
     rc = perms.run_permissions(_ns(permissions_cmd="reset", client="codex"))
     assert rc == 0
     text = (tmp_home / ".codex" / "config.toml").read_text()
-    import tomllib
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
 
     cfg = tomllib.loads(text)
     assert "approval_policy" not in cfg
