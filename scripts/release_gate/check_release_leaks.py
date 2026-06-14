@@ -170,6 +170,31 @@ def is_fleet_public_path(path: str) -> bool:
     )
 
 
+def is_perm_tier_cli_path(path: str) -> bool:
+    """Public permission-tier / CLI permission surface (v1.9.0 onboarding).
+
+    On these files ``fleet`` is exclusively the launcher **permission tier**
+    ``strict|standard|auto|fleet`` (selected via ``--tier fleet`` /
+    ``tokenpak permissions set fleet``) and its user-facing "fleet mode"
+    unattended-run state — the same legitimate public surface the delta gate
+    (identity-language-check.yml) already permits for this feature. Path-scoped
+    to ONLY these CLI surfaces, and masks ONLY the ``fleet`` pattern here; every
+    other leak class (agent names, internal paths, hostnames, IDs, ``openclaw``)
+    is still scanned in these files. Verified: all current ``fleet`` matches in
+    these files are the public permission-tier usage; zero are internal-fleet
+    ("fleet worker/governor/agents/orchestration") leaks."""
+    return path in (
+        "tokenpak/cli/commands/permissions.py",
+        "tokenpak/cli/commands/integrate.py",
+        "tokenpak/cli/commands/menu.py",
+        "tokenpak/cli/commands/doctor.py",
+        "tokenpak/cli/commands/doctor_claude_code.py",
+        "tokenpak/companion/launcher.py",
+        "tokenpak/companion/codex/launcher.py",
+        "tokenpak/_cli_core.py",
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Masking (verbatim semantics from identity-language-check.yml
 # ``content_for_pattern``). Masks substitute legitimate public-surface forms
@@ -251,6 +276,8 @@ def mask_content(pattern: str, path: str, text: str) -> str:
         return _mask_snapshot(text)
     if pattern == FLEET and is_fleet_public_path(path):
         return re.sub(r"\bfleet\b", "__PUBLIC_FLEET_FEATURE__", text)
+    if pattern == FLEET and is_perm_tier_cli_path(path):
+        return re.sub(r"\bfleet\b", "__PUBLIC_PERMTIER_FLEET__", text)
     if pattern == FLEET:
         return _mask_fleet_functional(text)
     if is_release_gate_impl_path(path):

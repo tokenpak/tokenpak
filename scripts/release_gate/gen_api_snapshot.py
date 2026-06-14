@@ -144,7 +144,7 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
     try:
         pkg = importlib.import_module(package_name)
     except Exception as e:
-        return [{"module": package_name, "name": _format_import_error(e, name)}]
+        return [{"module": package_name, "name": _format_import_error(e, package_name)}]
 
     def harvest(mod_name: str, mod) -> None:
         explicit_all = getattr(mod, "__all__", None)
@@ -185,6 +185,17 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
         if any(p.startswith("_") for p in parts):
             continue
         if "tests" in parts:
+            continue
+        # Dispatch is excluded from the released wheel (preview / main-only),
+        # mirroring pyproject ``packages.find`` exclude of
+        # ``tokenpak.orchestration.dispatch*``. The public-API snapshot records
+        # the RELEASED package surface, so it likewise excludes the dispatch
+        # subsystem (``orchestration.dispatch*``) and its CLI module
+        # (``cli.commands.dispatch_cmd``) — it must not record preview/source-only
+        # dispatch code as public released API.
+        if name == "tokenpak.cli.commands.dispatch_cmd" or name.startswith(
+            "tokenpak.orchestration.dispatch"
+        ):
             continue
         try:
             mod = importlib.import_module(name)

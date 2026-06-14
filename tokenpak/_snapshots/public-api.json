@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-06-07T03:35:28Z",
-  "package_version": "1.8.0",
+  "generated_at": "2026-06-14T16:37:25Z",
+  "package_version": "1.9.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -660,6 +660,54 @@
       "name": "run_set"
     },
     {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "Check"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "cmd_config_doctor"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "cmd_config_env"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "env_stub_text"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "environ_tokenpak_keys"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "known_env_keys"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "mask_value"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "render_doctor"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "run_doctor"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "run_env_show"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "secret_class"
+    },
+    {
+      "module": "tokenpak.cli.commands.config_env",
+      "name": "write_env_stub"
+    },
+    {
       "module": "tokenpak.cli.commands.cost",
       "name": "SEP"
     },
@@ -745,11 +793,19 @@
     },
     {
       "module": "tokenpak.cli.commands.doctor",
+      "name": "CANONICAL_PROXY_URL"
+    },
+    {
+      "module": "tokenpak.cli.commands.doctor",
       "name": "Colors"
     },
     {
       "module": "tokenpak.cli.commands.doctor",
       "name": "DEFAULT_FLEET_CONFIG"
+    },
+    {
+      "module": "tokenpak.cli.commands.doctor",
+      "name": "build_lifecycle_summary"
     },
     {
       "module": "tokenpak.cli.commands.doctor",
@@ -766,6 +822,10 @@
     {
       "module": "tokenpak.cli.commands.doctor",
       "name": "run_stream_check"
+    },
+    {
+      "module": "tokenpak.cli.commands.doctor",
+      "name": "verify_integration_target"
     },
     {
       "module": "tokenpak.cli.commands.doctor_claude_code",
@@ -981,7 +1041,15 @@
     },
     {
       "module": "tokenpak.cli.commands.menu",
+      "name": "AltScreenSession"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu",
       "name": "Color"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu",
+      "name": "Lifecycle"
     },
     {
       "module": "tokenpak.cli.commands.menu",
@@ -990,6 +1058,14 @@
     {
       "module": "tokenpak.cli.commands.menu",
       "name": "getch"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu",
+      "name": "lifecycle_for"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu",
+      "name": "next_chain"
     },
     {
       "module": "tokenpak.cli.commands.menu",
@@ -1005,11 +1081,67 @@
     },
     {
       "module": "tokenpak.cli.commands.menu",
+      "name": "receipt_card"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu",
+      "name": "render_plain_list"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu",
       "name": "run_menu"
     },
     {
       "module": "tokenpak.cli.commands.menu",
       "name": "supports_color"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_lifecycle",
+      "name": "DEFAULT_LIFECYCLE"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_lifecycle",
+      "name": "LIFECYCLE"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_lifecycle",
+      "name": "Lifecycle"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_lifecycle",
+      "name": "lifecycle_for"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_lifecycle",
+      "name": "next_chain"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_lifecycle",
+      "name": "receipt_card"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_status",
+      "name": "ProxyStatus"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_status",
+      "name": "STATUS_SCHEMA_VERSION"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_status",
+      "name": "StatusCache"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_status",
+      "name": "json_snapshot"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_status",
+      "name": "reset_cache"
+    },
+    {
+      "module": "tokenpak.cli.commands.menu_status",
+      "name": "snapshot"
     },
     {
       "module": "tokenpak.cli.commands.metrics",
@@ -1098,6 +1230,106 @@
     {
       "module": "tokenpak.cli.commands.pakplan",
       "name": "cmd_pakplan_report"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "ALL_TIERS"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "CLAUDE_MODE_TO_TIER"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "CLAUDE_TIER_TO_MODE"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "CLIENTS"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "CODEX_SETTINGS_TO_TIER"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "CODEX_TIER_TO_SETTINGS"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "DEFAULT_TIER"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "PERSISTENT_TIERS"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "TIER_DESCRIPTIONS"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "TierApplyResult"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "applied_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "apply_claude_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "apply_codex_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "apply_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "doctor_rows"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "fleet_mode_enabled"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "get_last_set_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "read_claude_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "read_codex_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "reset_claude_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "reset_codex_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "reset_tier"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "resolved_settings_line"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "run_permissions"
+    },
+    {
+      "module": "tokenpak.cli.commands.permissions",
+      "name": "set_fleet_mode"
     },
     {
       "module": "tokenpak.cli.commands.preview",
@@ -1294,6 +1526,10 @@
     {
       "module": "tokenpak.cli.commands.trigger",
       "name": "trigger_group"
+    },
+    {
+      "module": "tokenpak.cli.commands.uninstall",
+      "name": "run_uninstall"
     },
     {
       "module": "tokenpak.cli.commands.validate_config",
@@ -3742,6 +3978,42 @@
     {
       "module": "tokenpak.compression.wire",
       "name": "pack"
+    },
+    {
+      "module": "tokenpak.config.load_order",
+      "name": "LAYER_DESCRIPTIONS"
+    },
+    {
+      "module": "tokenpak.config.load_order",
+      "name": "Layer"
+    },
+    {
+      "module": "tokenpak.config.load_order",
+      "name": "LoadOrderResolver"
+    },
+    {
+      "module": "tokenpak.config.load_order",
+      "name": "OPENCLAW_FALLBACK_FLAG"
+    },
+    {
+      "module": "tokenpak.config.load_order",
+      "name": "Resolution"
+    },
+    {
+      "module": "tokenpak.config.load_order",
+      "name": "coerce"
+    },
+    {
+      "module": "tokenpak.config.load_order",
+      "name": "describe"
+    },
+    {
+      "module": "tokenpak.config.load_order",
+      "name": "parse_dotenv"
+    },
+    {
+      "module": "tokenpak.config.load_order",
+      "name": "precedence"
     },
     {
       "module": "tokenpak.core",
@@ -9834,10 +10106,6 @@
     {
       "module": "tokenpak.proxy.server_extra.websocket_proxy",
       "name": "WebSocketConnectionStats"
-    },
-    {
-      "module": "tokenpak.proxy.server_extra.websocket_proxy",
-      "name": "WebSocketServerProtocol"
     },
     {
       "module": "tokenpak.proxy.server_extra.websocket_proxy",
@@ -16922,10 +17190,6 @@
     {
       "module": "tokenpak.vault.retrieval.vector_local",
       "name": "SentenceTransformer"
-    },
-    {
-      "module": "tokenpak.vault.retrieval.vector_local",
-      "name": "faiss"
     },
     {
       "module": "tokenpak.vault.scoring",
