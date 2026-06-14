@@ -6,7 +6,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.9.0] — TODO-RELEASE-DATE
+## [1.9.0] — 2026-06-14
 
 Minor release: a guided **onboarding & lifecycle** pass on the CLI. Additive
 to existing behavior; no breaking changes to current workflows.
