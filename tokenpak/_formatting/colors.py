@@ -13,13 +13,16 @@ class Color:
     GREEN = "\033[32m"
     YELLOW = "\033[33m"
     RED = "\033[31m"
+    # DIM (faint SGR) is a barred text-effect — do NOT use it in any
+    # interactive-menu frame; muted text uses the LIGHT_GRAY foreground instead.
+    # Retained only for the legacy OutputFormatter "muted" role + its tests.
     DIM = "\033[2m"
     WHITE = "\033[38;2;248;250;252m"        # #F8FAFC primary text
-    # Brand palette (24-bit truecolor)
-    TEAL = "\033[38;2;20;184;166m"          # #14B8A6 primary accent
-    PASTEL_YELLOW = "\033[38;2;244;231;161m"  # #F4E7A1 secondary accent (sparse)
-    LIGHT_GRAY = "\033[38;2;148;163;184m"   # #94A3B8 muted text
-    # State colors
+    # Brand palette (24-bit truecolor) — canonical brand tokens.
+    TEAL = "\033[38;2;0;195;137m"           # tp-accent  #00C389 — identity / selection
+    PASTEL_YELLOW = "\033[38;2;237;224;133m"  # tp-signal-value #EDE085 (provisional) — savings only
+    LIGHT_GRAY = "\033[38;2;107;114;128m"   # tp-mute    #6B7280 — secondary / muted text
+    # State colors (not brand tokens — left as-is)
     SUCCESS = "\033[38;2;45;212;191m"       # #2DD4BF
     WARNING = "\033[38;2;250;204;21m"       # #FACC15
     ERROR = "\033[38;2;248;113;113m"        # #F87171

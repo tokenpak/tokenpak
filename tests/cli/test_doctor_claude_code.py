@@ -34,6 +34,7 @@ from tokenpak.cli.commands.doctor_claude_code import (
     _check_auth_flow,
     _check_base_url_set,
     _check_install_consistency,
+    _check_permission_tiers,
     _check_plugin_dir,
     _check_proxy_reachable,
     _check_pythonpath_drift,
@@ -535,3 +536,89 @@ def test_check9_plugin_dir_checks_both_candidates(tmp_home, monkeypatch):
     assert result["status"] == "fail"
     assert "tokenpak" in result["message"]
     assert "tokenpak-claude-code" in result["message"] or "tokenpak" in result["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Permission tiers (persistent tier rows + launcher fleet mode row)
+# ---------------------------------------------------------------------------
+
+_FORBIDDEN_TIER_STRINGS = (
+    "Claude Code tier: fleet",
+    "Codex tier: fleet",
+    "persistent tier: fleet",
+)
+
+
+def test_check10_default_pass_three_rows(tmp_home):
+    """Fresh home: defaults shown, exact three-row shape, check passes."""
+    result = _check_permission_tiers()
+    assert result["status"] == "pass"
+    assert "Claude Code persistent tier:  standard" in result["message"]
+    assert "Codex persistent tier:        standard" in result["message"]
+    assert "TokenPak launcher fleet mode: disabled" in result["message"]
+
+
+@pytest.mark.parametrize("tier,mode", [
+    ("strict", "default"),
+    ("standard", "acceptEdits"),
+    ("auto", "bypassPermissions"),
+])
+@pytest.mark.parametrize("fleet", [False, True])
+def test_check10_tier_fleet_permutations(tmp_home, tier, mode, fleet):
+    """All tier × fleet permutations render correct values and never show
+    "fleet" as a persistent-tier value."""
+    from tokenpak.cli.commands import permissions as perms
+
+    (tmp_home / ".claude").mkdir(parents=True, exist_ok=True)
+    (tmp_home / ".claude" / "settings.json").write_text(json.dumps({}))
+    (tmp_home / ".codex").mkdir(parents=True, exist_ok=True)
+    (tmp_home / ".codex" / "config.toml").write_text("")
+    assert perms.apply_claude_tier(tier).ok
+    assert perms.apply_codex_tier(tier).ok
+    if fleet:
+        perms.set_fleet_mode(True, "test")
+
+    result = _check_permission_tiers()
+    assert result["status"] == "pass"
+    msg = result["message"]
+    assert f"Claude Code persistent tier:  {tier}" in msg
+    assert f"Codex persistent tier:        {tier}" in msg
+    expected_fleet = "enabled" if fleet else "disabled"
+    assert f"TokenPak launcher fleet mode: {expected_fleet}" in msg
+    for forbidden in _FORBIDDEN_TIER_STRINGS:
+        assert forbidden not in msg
+
+
+def test_check10_drift_fails_with_guidance(tmp_home):
+    """External hand-edit of a managed key → custom (modified externally),
+    check fails (doctor exits non-zero) with remediation."""
+    from tokenpak.cli.commands import permissions as perms
+
+    (tmp_home / ".claude").mkdir(parents=True, exist_ok=True)
+    (tmp_home / ".claude" / "settings.json").write_text(json.dumps({}))
+    assert perms.apply_claude_tier("standard").ok
+    settings_p = tmp_home / ".claude" / "settings.json"
+    data = json.loads(settings_p.read_text())
+    data["permissions"]["defaultMode"] = "unmanagedValue"
+    settings_p.write_text(json.dumps(data))
+
+    result = _check_permission_tiers()
+    assert result["status"] == "fail"
+    assert "custom" in result["message"]
+    assert "modified externally" in result["message"]
+    assert result["remediation"]
+    for forbidden in _FORBIDDEN_TIER_STRINGS:
+        assert forbidden not in result["message"]
+
+
+def test_check10_fleet_enabled_persistent_rows_unchanged(tmp_home):
+    """Enabling fleet flips only the launcher row, never the tier rows."""
+    from tokenpak.cli.commands import permissions as perms
+
+    before = _check_permission_tiers()["message"]
+    perms.set_fleet_mode(True, "test")
+    after = _check_permission_tiers()["message"]
+    assert "Claude Code persistent tier:  standard" in before
+    assert "Claude Code persistent tier:  standard" in after
+    assert "TokenPak launcher fleet mode: disabled" in before
+    assert "TokenPak launcher fleet mode: enabled" in after

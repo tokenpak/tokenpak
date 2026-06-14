@@ -318,6 +318,22 @@ jobs:
               # multi-instance-fleet capability — NOT internal-execution
               # language — so those specific functional forms are masked; the
               # internal senses listed above remain forbidden.
+              #
+              # Permission-tier public CLI/config surface (the masks at the end
+              # of this sed block): "fleet" is one of the four launcher
+              # permission tiers (strict/standard/auto/fleet), selected via
+              # "--tier fleet" / "tokenpak permissions set fleet". "fleet mode"
+              # is the launcher's user-facing unattended-run opt-in (the
+              # banner-printing bypass state). These are public product surface
+              # — the CLI flag value, the "permissions set fleet" verb form, the
+              # tier-name literal in help/docs/tables, the "fleet mode"
+              # capability phrase, and the launcher state variable named
+              # "fleet" — masked here exactly like the other public
+              # "fleet <noun>" phrases above. The internal-execution senses
+              # ("fleet worker", "fleet governor", "fleet agents",
+              # "agent fleet", "bot fleet", "fleet runtime",
+              # "fleet orchestration") are NOT among these forms and remain
+              # forbidden.
               sed -E \
                 -e 's/tokenpak[[:space:]]+fleet/tokenpak __PUBLIC_FLEET_VERB__/g' \
                 -e 's/--fleet([^a-zA-Z]|$)/--__PUBLIC_FLEET_FLAG__\1/g' \
@@ -348,6 +364,35 @@ jobs:
                 -e 's/fleet([- ])protection/__FUNCTIONAL_FLEET_SCOPE__\1protection/g' \
                 -e 's/fleet caps/__FUNCTIONAL_FLEET_SCOPE__ caps/g' \
                 -e 's#session ?/ ?fleet ?/ ?agent#session/__FUNCTIONAL_FLEET_SCOPE__/agent#g' \
+                -e 's/--tier[[:space:]]+fleet/--tier __PUBLIC_PERMTIER_FLEET__/g' \
+                -e 's/--tier=fleet/--tier=__PUBLIC_PERMTIER_FLEET__/g' \
+                -e 's/permissions[[:space:]]+set[[:space:]]+fleet/permissions set __PUBLIC_PERMTIER_FLEET__/g' \
+                -e 's/"set fleet/"set __PUBLIC_PERMTIER_FLEET__/g' \
+                -e 's/set fleet`/set __PUBLIC_PERMTIER_FLEET__`/g' \
+                -e 's/fleet[[:space:]]+mode/__PUBLIC_PERMTIER_FLEET__ mode/g' \
+                -e 's/fleet-mode/__PUBLIC_PERMTIER_FLEET__-mode/g' \
+                -e 's/fleet[[:space:]]+off/__PUBLIC_PERMTIER_FLEET__ off/g' \
+                -e 's/fleet[[:space:]]+launch[[:space:]]+prints/__PUBLIC_PERMTIER_FLEET__ launch prints/g' \
+                -e 's/fleet[[:space:]]+launches[[:space:]]+—/__PUBLIC_PERMTIER_FLEET__ launches —/g' \
+                -e 's/\(or fleet launcher state\)/(or __PUBLIC_PERMTIER_FLEET__ launcher state)/g' \
+                -e 's/launcher[[:space:]]+fleet[[:space:]]+state/launcher __PUBLIC_PERMTIER_FLEET__ state/g' \
+                -e 's/launcher[[:space:]]+fleet$/launcher __PUBLIC_PERMTIER_FLEET__/g' \
+                -e 's/auto\/fleet/auto\/__PUBLIC_PERMTIER_FLEET__/g' \
+                -e 's/`fleet`/`__PUBLIC_PERMTIER_FLEET__`/g' \
+                -e "s/'fleet'/'__PUBLIC_PERMTIER_FLEET__'/g" \
+                -e 's/``fleet``/``__PUBLIC_PERMTIER_FLEET__``/g' \
+                -e 's/^([[:space:]]+)fleet([[:space:]]+\(persistent)/\1__PUBLIC_PERMTIER_FLEET__\2/g' \
+                -e 's/fleet[[:space:]]+never[[:space:]]+persists/__PUBLIC_PERMTIER_FLEET__ never persists/g' \
+                -e 's/fleet[[:space:]]+is[[:space:]]+(a[[:space:]]+launcher|NOT|the[[:space:]]+separate)/__PUBLIC_PERMTIER_FLEET__ is \1/g' \
+                -e 's/fleet = "enabled"/__PUBLIC_PERMTIER_FLEET__ = "enabled"/g' \
+                -e 's/fleet = _fleet_state_enabled/__PUBLIC_PERMTIER_FLEET__ = _fleet_state_enabled/g' \
+                -e 's/, fleet, ""/, __PUBLIC_PERMTIER_FLEET__, ""/g' \
+                -e 's/if fleet or _bypass/if __PUBLIC_PERMTIER_FLEET__ or _bypass/g' \
+                -e 's/\(fleet or _bypass/(__PUBLIC_PERMTIER_FLEET__ or _bypass/g' \
+                -e 's/if not fleet:/if not __PUBLIC_PERMTIER_FLEET__:/g' \
+                -e 's/fleet is on\./__PUBLIC_PERMTIER_FLEET__ is on./g' \
+                -e 's/#[[:space:]]+fleet[[:space:]]+section[[:space:]]+near/# __PUBLIC_PERMTIER_FLEET__ section near/g' \
+                -e 's/\(fleet → TokenPak/(__PUBLIC_PERMTIER_FLEET__ → TokenPak/g' \
                 "$file"
             elif is_release_gate_impl_path "$file"; then
               # Tier 1 — release-gate implementation/test/workflow surface:

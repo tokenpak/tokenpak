@@ -5,7 +5,15 @@ Task-first design: the home screen shows what users want to *do*, not
 internal categories.  Simple commands execute immediately; complex ones
 open section menus, detail pickers, or input prompts.
 
-Design spec: tokenpak CLI Menu + Branding Spec (v1)
+Rendering substrate (v1.8.0 foundation pass):
+- The whole interactive session is wrapped once in the alternate-screen buffer
+  (:class:`AltScreenSession`), so menu frames never pollute real scrollback (B1).
+- Each leaf command runs through :func:`_dispatch`, which applies the command's
+  lifecycle (``run_and_exit`` / ``run_and_return`` / ``suspend_and_return`` /
+  ``takeover``; spec C) — leaving and re-entering the alt-screen as needed.
+- The status strip reads a cached, non-blocking, *honest* snapshot
+  (:mod:`menu_status`): unknown metrics render as ``—``, never a fabricated
+  ``$0.00`` (truth-over-polish).
 """
 
 from __future__ import annotations
@@ -16,11 +24,37 @@ from typing import Optional
 from tokenpak._formatting.colors import Color, paint, supports_color
 from tokenpak._formatting.picker import (
     _BACK_SENTINEL,
+    AltScreenSession,
     PickerUnavailable,
     getch,
     pick,
     prompt_input,
+    render_plain_list,
 )
+
+from . import menu_status
+from .menu_lifecycle import Lifecycle, lifecycle_for, next_chain, receipt_card
+
+# Section titles are BOLD-neutral: the pale-yellow value color (`tp-signal-value`)
+# is reserved for the savings/value metric only and must not decorate titles.
+_TITLE = Color.BOLD
+
+
+# ---------------------------------------------------------------------------
+# Menu session + exit signalling
+# ---------------------------------------------------------------------------
+
+# Set by run_menu() for the lifetime of one interactive session; lets _dispatch
+# leave/re-enter the alt-screen around a command.
+_SESSION: Optional[AltScreenSession] = None
+
+
+class _ExitMenu(Exception):
+    """Raised to leave the interactive menu, propagating *code* as exit status."""
+
+    def __init__(self, code: int = 0) -> None:
+        self.code = code if isinstance(code, int) else (0 if code is None else 1)
+
 
 # ---------------------------------------------------------------------------
 # Brand header
@@ -40,41 +74,37 @@ def _header() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Live status strip
+# Live status strip — cached, non-blocking, honest (spec D + flag #3)
 # ---------------------------------------------------------------------------
 
 def _status_strip() -> str:
-    """Build live status strip from proxy + local state."""
+    """Build the status strip from the cached honest snapshot.
+
+    Never blocks the redraw on a probe and never fabricates a value: an unknown
+    spend/savings figure renders as ``—`` (not ``$0.00``).
+    """
     c = supports_color()
+    s = menu_status.snapshot()
     parts = []
 
-    # Proxy status
-    proxy_status = "Stopped"
-    proxy_color = Color.LIGHT_GRAY
-    try:
-        import urllib.request
-        resp = urllib.request.urlopen("http://127.0.0.1:8766/health", timeout=1)
-        if resp.status == 200:
-            proxy_status = "Running"
-            proxy_color = Color.SUCCESS
-    except Exception:
-        pass
+    _state_label = {
+        "running": ("Running", Color.SUCCESS),
+        "starting": ("Starting…", Color.WARNING),
+        "stopped": ("Stopped", Color.LIGHT_GRAY),
+        "unknown": ("Unknown", Color.LIGHT_GRAY),
+    }
+    label, color = _state_label.get(s.state, ("Unknown", Color.LIGHT_GRAY))
+    parts.append(paint("Proxy:", Color.LIGHT_GRAY, c) + " " + paint(label, color, c))
 
-    parts.append(paint("Proxy:", Color.LIGHT_GRAY, c) + " " + paint(proxy_status, proxy_color, c))
+    cost_str = f"${s.cost:.2f}" if s.cost is not None else "—"
+    parts.append(paint("Today:", Color.LIGHT_GRAY, c) + " " + paint(cost_str, Color.WHITE, c))
 
-    # Today's spend
-    try:
-        import json as _json
-        import urllib.request
-        resp = urllib.request.urlopen("http://127.0.0.1:8766/stats", timeout=1)
-        data = _json.loads(resp.read())
-        cost = data.get("cost", 0)
-        saved = data.get("cost_saved", 0)
-        parts.append(paint("Today:", Color.LIGHT_GRAY, c) + " " + paint(f"${cost:.2f}", Color.WHITE, c))
-        parts.append(paint("Saved:", Color.LIGHT_GRAY, c) + " " + paint(f"${saved:.2f}", Color.PASTEL_YELLOW, c))
-    except Exception:
-        parts.append(paint("Today:", Color.LIGHT_GRAY, c) + " " + paint("$0.00", Color.WHITE, c))
-        parts.append(paint("Saved:", Color.LIGHT_GRAY, c) + " " + paint("$0.00", Color.LIGHT_GRAY, c))
+    if s.saved is not None:
+        saved_str = f"${s.saved:.2f}"
+        # Pale yellow (tp-signal-value) is reserved for the savings number only.
+        parts.append(paint("Saved:", Color.LIGHT_GRAY, c) + " " + paint(saved_str, Color.PASTEL_YELLOW, c))
+    else:
+        parts.append(paint("Saved:", Color.LIGHT_GRAY, c) + " " + paint("—", Color.LIGHT_GRAY, c))
 
     return "  " + "   ".join(parts)
 
@@ -83,17 +113,23 @@ def _status_strip() -> str:
 # Command execution
 # ---------------------------------------------------------------------------
 
-def _exec(cmd: str, args: str = "") -> None:
-    """Execute a tokenpak command and show output."""
+def _exec(cmd: str, args: str = "", *, clear: bool = True) -> int:
+    """Execute a tokenpak command and show output. Returns its exit code.
+
+    With ``clear=False`` (the lifecycle-dispatch path) the command output
+    appends to the restored normal buffer, preserving the user's scrollback.
+    """
     full = f"tokenpak {cmd}" + (f" {args}" if args else "")
     c = supports_color()
-    sys.stdout.write("\033[2J\033[H")
+    if clear:
+        sys.stdout.write("\033[2J\033[H")
     sys.stdout.write(f"\n  {_header_compact()}\n")
     sys.stdout.write(f"  {paint(full, Color.TEAL, c)}\n")
     sys.stdout.write(f"  {paint(chr(0x2500) * 40, Color.LIGHT_GRAY, c)}\n\n")
     sys.stdout.write("\033[?25h")
     sys.stdout.flush()
 
+    code = 0
     original = sys.argv[:]
     try:
         argv = ["tokenpak", cmd]
@@ -102,14 +138,119 @@ def _exec(cmd: str, args: str = "") -> None:
         sys.argv = argv
         from tokenpak._cli_core import main as cli_main
         cli_main()
-    except SystemExit:
-        pass
+    except SystemExit as _se:
+        code = _se.code if isinstance(_se.code, int) else (0 if _se.code is None else 1)
     except Exception as exc:
         print(f"\n  {paint('Something went wrong', Color.ERROR, c)}\n")
         print(f"  {exc}\n")
         print(f"  {paint('Try: tokenpak doctor', Color.LIGHT_GRAY, c)}")
+        code = 1
     finally:
         sys.argv = original
+    return code
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle dispatch (spec C) + receipts (spec I)
+# ---------------------------------------------------------------------------
+
+def _return_prompt(*, return_only: bool = False) -> bool:
+    """Show the post-command prompt. Returns True to return to the menu.
+
+    ``return_only`` shows only "Press Enter to return" (run_and_return); the
+    full prompt also offers ``q`` to exit (suspend_and_return).
+    """
+    c = supports_color()
+    if return_only:
+        msg = "Press Enter to return to TokenPak menu"
+    else:
+        msg = "Press Enter to return to TokenPak menu, or q to exit"
+    sys.stdout.write(f"\n  {paint(msg, Color.LIGHT_GRAY, c)} ")
+    sys.stdout.flush()
+    try:
+        key = getch()
+    except (PickerUnavailable, KeyboardInterrupt, EOFError):
+        return True
+    if not return_only and key == "quit":
+        return False
+    return True
+
+
+def _render_receipt(cmd: str) -> None:
+    """Render an honest receipt card (spec I) from the live cached snapshot.
+
+    Sourced from ``menu_status.snapshot()`` so values are truthful (never a
+    fabricated ``$0.00``); the proxy state drives the title + Next chain.
+    """
+    c = supports_color()
+    base = (cmd or "").strip().split()[0] if cmd else ""
+    s = menu_status.snapshot()
+    port = menu_status._port()
+
+    if base in ("start", "restart"):
+        if s.state == "running":
+            title, status_val = "Proxy started", paint("Running", Color.SUCCESS, c)
+            nxt = ["Launch Companion", "View savings", "Stop proxy"]
+        elif s.state == "starting":
+            title, status_val = "Proxy starting", paint("Starting…", Color.WARNING, c)
+            nxt = ["Proxy status", "Open doctor"]
+        else:
+            title, status_val = "Proxy not responding", paint("Unknown", Color.LIGHT_GRAY, c)
+            nxt = ["Open doctor", "Run setup"]
+        rows = [("Status", status_val), ("Endpoint", f"127.0.0.1:{port}")]
+    elif base == "stop":
+        title = "Proxy stopped"
+        rows = [("Status", paint("Stopped", Color.LIGHT_GRAY, c))]
+        nxt = ["Start proxy", "Proxy status"]
+    else:
+        title = f"{base} — done"
+        rows = [("Status", paint("Complete", Color.SUCCESS, c))]
+        nxt = ["Proxy status", "Back"]
+
+    card = receipt_card(title, rows, paint=paint, accent=Color.TEAL)
+    sys.stdout.write("\n" + card + "\n")
+    chain = next_chain(nxt)
+    if chain:
+        sys.stdout.write(paint(chain, Color.LIGHT_GRAY, c) + "\n")
+    sys.stdout.flush()
+
+
+def _dispatch(cmd: str, args: str = "") -> None:
+    """Run a leaf command under its lifecycle (spec C). May raise _ExitMenu.
+
+    - run_and_exit / takeover : leave alt-screen, run, EXIT the menu with code.
+    - suspend_and_return      : leave, run, "Enter to return / q to exit", re-enter.
+    - run_and_return          : leave, run, honest receipt, return to the loop.
+    """
+    lc = lifecycle_for(cmd)
+    sess = _SESSION
+
+    if lc in (Lifecycle.RUN_AND_EXIT, Lifecycle.TAKEOVER):
+        if sess:
+            sess.suspend()
+        code = _exec(cmd, args, clear=False)
+        raise _ExitMenu(code)
+
+    if lc == Lifecycle.SUSPEND_AND_RETURN:
+        if sess:
+            sess.suspend()
+        code = _exec(cmd, args, clear=False)
+        if _return_prompt(return_only=False):
+            if sess:
+                sess.resume()
+            return
+        raise _ExitMenu(code)
+
+    # RUN_AND_RETURN — brief action, honest receipt, return (exit status reset
+    # to 0 on return; spec C4 no-haunting).
+    if sess:
+        sess.suspend()
+    _exec(cmd, args, clear=False)
+    _render_receipt(cmd)
+    _return_prompt(return_only=True)
+    if sess:
+        sess.resume()
+    return
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +352,13 @@ _SUBCOMMAND_COMMANDS: dict[str, list[tuple[str, str, dict]]] = {
     "fleet": [
         ("", "Show fleet status", {}),
     ],
+    "permissions": [
+        ("show",         "View current tiers",            {}),
+        ("set strict",   "Set strict tier",               {}),
+        ("set standard", "Set standard tier (default)",   {}),
+        ("set auto",     "Set auto tier",                 {}),
+        ("reset",        "Reset managed keys + fleet off", {}),
+    ],
 }
 
 
@@ -224,7 +372,7 @@ def _exec_interactive(cmd: str, hdr: str) -> None:
         value = prompt_input(cfg["label"], header=hdr, placeholder=cfg.get("placeholder", ""))
         if not value:
             return
-        _exec(cmd, value)
+        _dispatch(cmd, value)
         return
 
     # Check if command needs a subcommand picked
@@ -233,7 +381,7 @@ def _exec_interactive(cmd: str, hdr: str) -> None:
         label = _POLISHED_LABELS.get(cmd, cmd)
         display_options = [(sub_args, display) for sub_args, display, _ in subs]
         choice = pick(
-            paint(label, Color.PASTEL_YELLOW, c),
+            paint(label, _TITLE, c),
             display_options,
             header=hdr,
             back_label="Back",
@@ -257,13 +405,13 @@ def _exec_interactive(cmd: str, hdr: str) -> None:
             )
             if not value:
                 return
-            _exec(cmd, f"{choice} {value}")
+            _dispatch(cmd, f"{choice} {value}")
         else:
-            _exec(cmd, choice)
+            _dispatch(cmd, choice)
         return
 
     # No special handling needed — run directly
-    _exec(cmd)
+    _dispatch(cmd)
 
 
 def _header_compact() -> str:
@@ -271,36 +419,6 @@ def _header_compact() -> str:
     token = paint("token", Color.WHITE + Color.BOLD, c)
     pak = paint("pak", Color.TEAL + Color.BOLD, c)
     return f"\U0001F4E6 {token}{pak}"
-
-
-def _wait() -> None:
-    c = supports_color()
-    sys.stdout.write(f"\n  {paint('Press any key to return...', Color.LIGHT_GRAY, c)}")
-    sys.stdout.flush()
-    try:
-        getch()
-    except (PickerUnavailable, KeyboardInterrupt, EOFError):
-        pass
-
-
-def _result_screen(header: str, title: str, message: str,
-                   next_actions: list[tuple[str, str]]) -> Optional[str]:
-    """Show result with next action suggestions. Returns selected action value or None."""
-    c = supports_color()
-    sys.stdout.write("\033[2J\033[H")
-    sys.stdout.write(f"{header}\n\n")
-    sys.stdout.write(f"  {paint(title, Color.PASTEL_YELLOW, c)}\n\n")
-    sys.stdout.write(f"  {message}\n\n")
-
-    if next_actions:
-        next_actions.append((_BACK_SENTINEL, paint("Back", Color.LIGHT_GRAY, c)))
-        return pick(
-            paint("Next:", Color.LIGHT_GRAY, c),
-            next_actions,
-            header="",
-        )
-    _wait()
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +431,7 @@ _HOME_ITEMS = [
     ("check_health", "Proxy status"),
     ("view_spend",   "Spend & savings"),
     ("configure",    "Configure"),
+    ("permissions",  "Permission tier"),
     ("companion",    "Companion"),
     ("diagnose",     "Troubleshoot"),
     ("browse_all",   "Browse all commands"),
@@ -324,6 +443,7 @@ _SEARCH_ALIASES: dict[str, list[str]] = {
     "check_health": ["status", "health", "ping", "alive", "proxy status"],
     "view_spend":   ["cost", "spend", "savings", "budget", "money", "price", "usage"],
     "configure":    ["config", "settings", "setup", "edit", "route", "recipe", "budget"],
+    "permissions":  ["permission", "tier", "fleet", "strict", "standard", "auto", "approval", "sandbox", "bypass"],
     "companion":    ["claude", "codex", "session", "pak", "capsule", "journal", "mcp", "companion"],
     "diagnose":     ["doctor", "diag", "fix", "repair", "debug", "troubleshoot", "health check"],
     "browse_all":   ["all", "commands", "search", "find", "list"],
@@ -338,7 +458,7 @@ def _section_demo(hdr: str) -> None:
     c = supports_color()
     while True:
         choice = pick(
-            paint("Run demo", Color.PASTEL_YELLOW, c),
+            paint("Run demo", _TITLE, c),
             [
                 ("",                      "Run default demo"),
                 ("--category python",     "Python sample"),
@@ -361,15 +481,14 @@ def _section_demo(hdr: str) -> None:
                        subtitle="This will remove current demo artifacts and recreate defaults.")
             if ans != "yes":
                 continue
-        _exec("demo", choice)
-        _wait()
+        _dispatch("demo", choice)
 
 
 def _section_spend(hdr: str) -> None:
     c = supports_color()
     while True:
         choice = pick(
-            paint("Spend & savings", Color.PASTEL_YELLOW, c),
+            paint("Spend & savings", _TITLE, c),
             [
                 ("",             "Today"),
                 ("--week",       "This week"),
@@ -383,15 +502,14 @@ def _section_spend(hdr: str) -> None:
         )
         if choice is None or choice == _BACK_SENTINEL:
             return
-        _exec("cost", choice)
-        _wait()
+        _dispatch("cost", choice)
 
 
 def _section_configure(hdr: str) -> None:
     c = supports_color()
     while True:
         choice = pick(
-            paint("Configure", Color.PASTEL_YELLOW, c),
+            paint("Configure", _TITLE, c),
             [
                 ("show",     "View current config"),
                 ("validate", "Validate config"),
@@ -405,15 +523,134 @@ def _section_configure(hdr: str) -> None:
         )
         if choice is None or choice == _BACK_SENTINEL:
             return
-        _exec("config", choice)
-        _wait()
+        _dispatch("config", choice)
+
+
+def _permission_tier_subtitle() -> str:
+    """Live one-line summary of the three tier rows (persistent + launcher).
+
+    Persistent-tier values are restricted to strict/standard/auto/custom;
+    launcher fleet mode is the separate enabled/disabled element. The
+    persistent rows never read "fleet".
+    """
+    try:
+        from tokenpak.cli.commands.permissions import doctor_rows
+
+        rows, _drift = doctor_rows()
+        # Compact: collapse the aligned rows into a single subtitle line.
+        return "   ".join(" ".join(r.split()) for r in rows)
+    except Exception:
+        return "Persistent tier per client + launcher fleet mode."
+
+
+def _section_permissions(hdr: str) -> None:
+    """Permission tier section — persistent tiers + launcher fleet mode.
+
+    Runs `tokenpak permissions ...` under the hood. Fleet is a launcher-
+    scoped opt-in (confirmation required); it never persists into client
+    config files.
+    """
+    c = supports_color()
+    while True:
+        choice = pick(
+            paint("Permission tier", _TITLE, c),
+            [
+                ("show",         "View current tiers"),
+                ("set strict",   "Strict — prompts for everything"),
+                ("set standard", "Standard — accept edits (default)"),
+                ("set auto",     "Auto — no prompts (trusted)"),
+                ("set fleet",    "Fleet — launcher bypass (unattended)"),
+                ("reset",        "Reset managed keys + fleet off"),
+            ],
+            header=hdr,
+            subtitle=_permission_tier_subtitle(),
+            back_label="Back",
+        )
+        if choice is None or choice == _BACK_SENTINEL:
+            return
+        if choice == "set fleet":
+            confirm_opts = [("yes", "Yes, enable fleet mode"), ("no", "No, go back")]
+            ans = pick(
+                "Enable launcher fleet mode?",
+                confirm_opts,
+                header=hdr,
+                subtitle=(
+                    "tokenpak claude / tokenpak codex will inject permission-bypass "
+                    "flags (stderr banner on every launch). Client configs are NOT "
+                    "modified."
+                ),
+            )
+            if ans != "yes":
+                continue
+            choice = "set fleet --yes"
+        _dispatch("permissions", choice)
+
+
+def _permission_tier_subtitle() -> str:
+    """Live one-line summary of the three tier rows (persistent + launcher).
+
+    Persistent-tier values are restricted to strict/standard/auto/custom;
+    launcher fleet mode is the separate enabled/disabled element. The
+    persistent rows never read "fleet".
+    """
+    try:
+        from tokenpak.cli.commands.permissions import doctor_rows
+
+        rows, _drift = doctor_rows()
+        # Compact: collapse the aligned rows into a single subtitle line.
+        return "   ".join(" ".join(r.split()) for r in rows)
+    except Exception:
+        return "Persistent tier per client + launcher fleet mode."
+
+
+def _section_permissions(hdr: str) -> None:
+    """Permission tier section — persistent tiers + launcher fleet mode.
+
+    Runs `tokenpak permissions ...` under the hood. Fleet is a launcher-
+    scoped opt-in (confirmation required); it never persists into client
+    config files.
+    """
+    c = supports_color()
+    while True:
+        choice = pick(
+            paint("Permission tier", Color.PASTEL_YELLOW, c),
+            [
+                ("show",         "View current tiers"),
+                ("set strict",   "Strict — prompts for everything"),
+                ("set standard", "Standard — accept edits (default)"),
+                ("set auto",     "Auto — no prompts (trusted)"),
+                ("set fleet",    "Fleet — launcher bypass (unattended)"),
+                ("reset",        "Reset managed keys + fleet off"),
+            ],
+            header=hdr,
+            subtitle=_permission_tier_subtitle(),
+            back_label="Back",
+        )
+        if choice is None or choice == _BACK_SENTINEL:
+            return
+        if choice == "set fleet":
+            confirm_opts = [("yes", "Yes, enable fleet mode"), ("no", "No, go back")]
+            ans = pick(
+                "Enable launcher fleet mode?",
+                confirm_opts,
+                header=hdr,
+                subtitle=(
+                    "tokenpak claude / tokenpak codex will inject permission-bypass "
+                    "flags (stderr banner on every launch). Client configs are NOT "
+                    "modified."
+                ),
+            )
+            if ans != "yes":
+                continue
+            choice = "set fleet --yes"
+        _exec("permissions", choice, clear=False)
 
 
 def _section_companion(hdr: str) -> None:
     c = supports_color()
     while True:
         choice = pick(
-            paint("Companion", Color.PASTEL_YELLOW, c),
+            paint("Companion", _TITLE, c),
             [
                 ("claude",       "Launch Claude companion"),
                 ("codex",        "Launch Codex companion"),
@@ -424,15 +661,14 @@ def _section_companion(hdr: str) -> None:
         )
         if choice is None or choice == _BACK_SENTINEL:
             return
-        _exec(choice)
-        _wait()
+        _dispatch(choice)
 
 
 def _section_diagnose(hdr: str) -> None:
     c = supports_color()
     while True:
         choice = pick(
-            paint("Troubleshoot", Color.PASTEL_YELLOW, c),
+            paint("Troubleshoot", _TITLE, c),
             [
                 ("",              "Run diagnostics"),
                 ("--fix",         "Diagnose and auto-fix"),
@@ -445,8 +681,7 @@ def _section_diagnose(hdr: str) -> None:
         )
         if choice is None or choice == _BACK_SENTINEL:
             return
-        _exec("doctor", choice)
-        _wait()
+        _dispatch("doctor", choice)
 
 
 _POLISHED_LABELS: dict[str, str] = {
@@ -466,6 +701,7 @@ _POLISHED_LABELS: dict[str, str] = {
     "alerts":       "Manage alert channels",
     "goals":        "Track savings goals",
     "config":       "View & edit config",
+    "permissions":  "Permission tiers",
     "explain":      "Explain workflow profiles",
     "version":      "Show version",
     "update":       "Update tokenpak",
@@ -510,7 +746,7 @@ _POLISHED_LABELS: dict[str, str] = {
 # Commands shown in the default "Common" view
 _COMMON_COMMANDS = {
     "start", "stop", "restart", "demo", "cost", "status", "logs",
-    "index", "search", "route", "recipe", "budget", "config", "explain",
+    "index", "search", "route", "recipe", "budget", "config", "explain", "permissions",
     "version", "update", "doctor", "diagnose", "dashboard", "timeline",
     "models", "forecast", "claude", "codex", "test", "prove",
     "benchmark", "calibrate", "alerts", "template", "goals",
@@ -560,7 +796,6 @@ def _section_browse_all(hdr: str) -> None:
             show_all = not show_all
             continue
         _exec_interactive(choice, hdr)
-        _wait()
 
 
 # ---------------------------------------------------------------------------
@@ -573,17 +808,17 @@ _IMMEDIATE = {"start_proxy", "check_health"}
 def _handle_home_item(item: str, hdr: str) -> None:
     """Dispatch a home menu item."""
     if item == "start_proxy":
-        _exec("start")
-        _wait()
+        _dispatch("start")
     elif item == "run_demo":
         _section_demo(hdr)
     elif item == "check_health":
-        _exec("status")
-        _wait()
+        _dispatch("status")
     elif item == "view_spend":
         _section_spend(hdr)
     elif item == "configure":
         _section_configure(hdr)
+    elif item == "permissions":
+        _section_permissions(hdr)
     elif item == "companion":
         _section_companion(hdr)
     elif item == "diagnose":
@@ -598,62 +833,69 @@ def _handle_home_item(item: str, hdr: str) -> None:
 
 def run_menu() -> None:
     """Launch the interactive branded menu."""
+    global _SESSION
     try:
-        hdr = _header()
+        with AltScreenSession() as sess:
+            _SESSION = sess
+            hdr = _header()
 
-        while True:
-            # Build home screen with status strip
-            status = _status_strip()
+            while True:
+                # Build home screen with cached, honest status strip
+                status = _status_strip()
 
-            c = supports_color()
-            home_options = []
-            for val, label in _HOME_ITEMS:
-                home_options.append((val, label))
+                c = supports_color()
+                home_options = []
+                for val, label in _HOME_ITEMS:
+                    home_options.append((val, label))
 
-            # Show CLI command hint on the right for each item
-            _CMD_HINTS = {
-                "start_proxy":  "tokenpak start",
-                "run_demo":     "tokenpak demo",
-                "check_health": "tokenpak status",
-                "view_spend":   "tokenpak cost",
-                "configure":    "tokenpak config",
-                "companion":    "",
-                "diagnose":     "tokenpak doctor",
-                "browse_all":   "",
-            }
-            styled_options = []
-            for val, label in home_options:
-                hint = _CMD_HINTS.get(val, "")
-                if hint:
-                    styled = (
-                        f"{label:<26}"
-                        + paint(hint, Color.LIGHT_GRAY, c)
-                    )
-                else:
-                    styled = label
-                styled_options.append((val, styled))
+                # Show CLI command hint on the right for each item
+                _CMD_HINTS = {
+                    "start_proxy":  "tokenpak start",
+                    "run_demo":     "tokenpak demo",
+                    "check_health": "tokenpak status",
+                    "view_spend":   "tokenpak cost",
+                    "configure":    "tokenpak config",
+                    "permissions":  "tokenpak permissions",
+                    "companion":    "",
+                    "diagnose":     "tokenpak doctor",
+                    "browse_all":   "",
+                }
+                styled_options = []
+                for val, label in home_options:
+                    hint = _CMD_HINTS.get(val, "")
+                    if hint:
+                        styled = (
+                            f"{label:<26}"
+                            + paint(hint, Color.LIGHT_GRAY, c)
+                        )
+                    else:
+                        styled = label
+                    styled_options.append((val, styled))
 
-            choice = pick(
-                "What do you want to do?",
-                styled_options,
-                header=hdr + "\n" + status + "\n",
-                subtitle="Type to search all commands",
-                filterable=True,
-                search_aliases=_SEARCH_ALIASES,
-                footer="Type to search   [enter] select   [q] quit",
-            )
+                choice = pick(
+                    "What do you want to do?",
+                    styled_options,
+                    header=hdr + "\n" + status + "\n",
+                    subtitle="Type to search all commands",
+                    filterable=True,
+                    search_aliases=_SEARCH_ALIASES,
+                    footer="Type to search   [enter] select   [q] quit",
+                )
 
-            if choice is None:
-                break
+                if choice is None:
+                    break
 
-            _handle_home_item(choice, hdr)
+                _handle_home_item(choice, hdr)
 
+    except _ExitMenu as exit_signal:
+        # Alt-screen already restored by suspend()/__exit__. Propagate the
+        # command's exit code so `run_and_exit` honours it (spec C1/C4).
+        raise SystemExit(exit_signal.code)
     except PickerUnavailable:
-        print("Interactive menu requires a terminal.")
-        print("Run `tokenpak help` for a non-interactive command list.")
+        # Tier 3 fallback (spec B3): show the choices, not just an error.
+        print(render_plain_list("What do you want to do?", _HOME_ITEMS))
+        print("\nRun `tokenpak <command>` or `tokenpak help` for the full list.")
     except KeyboardInterrupt:
         pass
     finally:
-        sys.stdout.write("\033[2J\033[H")
-        sys.stdout.write("\033[?25h")
-        sys.stdout.flush()
+        _SESSION = None

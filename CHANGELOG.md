@@ -4,6 +4,76 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [1.9.0] — TODO-RELEASE-DATE
+
+Minor release: a guided **onboarding & lifecycle** pass on the CLI. Additive
+to existing behavior; no breaking changes to current workflows.
+
+### Added — onboarding & lifecycle
+
+- **cli:** `tokenpak uninstall` with `--soft` (remove TokenPak config/state,
+  leave integrations) and `--hard` (full removal of TokenPak-owned state).
+- **cli (doctor):** `tokenpak doctor --lifecycle` summary plus a default
+  route-state line so the proxy/route status is visible at a glance.
+- **cli (permissions):** permission-tier system for `tokenpak integrate`
+  (strict / standard / auto, plus a multi-instance fleet tier) with a new
+  `tokenpak permissions` verb, doctor rows, and an opt-in multi-instance fleet
+  launcher mode — see `tokenpak permissions --help`.
+- **config:** read-only `tokenpak config doctor` diagnostics and a
+  `tokenpak config env` provenance view (loaded env vars + precedence), with a
+  documented config load-order spec.
+- **cli (integrate):** guided cross-shell `tokenpak integrate` flow with
+  `--apply` / `--revert`, shell detection, and a `--no-tui` escape hatch for
+  non-interactive use.
+- **cli (menu):** hardened interactive menu renderer (single alternate-screen
+  session, per-command lifecycle, cached non-blocking status strip; honest
+  unknown metrics render as a dash, never a fabricated `$0.00`).
+
+### Added
+
+- TokenPak Dispatch (v0.1-alpha, **preview**) — scoped, station-based,
+  resumable work packages with a Decision Inbox and delivery receipts.
+  Available on the main branch only; **not yet included in a released
+  `pip install tokenpak` package**. See `tokenpak dispatch --help`.
+
+### Breaking — install footprint: heavy extras are now opt-in
+
+**Background:** `pip install tokenpak` previously pulled ~5 GB of CUDA/ML wheels (torch, nvidia/\*, transformers, sentence-transformers, scipy, tree-sitter-languages, pandas, litellm, llmlingua) as hard runtime dependencies. This made first-run installs impractical on machines without CUDA or a fast connection.
+
+**What changed:** the six heavy packages listed below have been moved from `[project.dependencies]` to named `[project.optional-dependencies]` extras. The runtime behaviour is **unchanged** — every import site was already guarded with `try/except ImportError` before this release. Only the install metadata changed.
+
+**Migration:** if your code uses any of the features below, add the corresponding extra to your install command:
+
+| Feature | Add to install command |
+|---|---|
+| Semantic search / vector embeddings (sentence-transformers) | `pip install tokenpak[retrieval]` |
+| Tree-sitter code parsing | `pip install tokenpak[code-compression]` |
+| A/B testing optimizer (scipy) | `pip install tokenpak[intelligence]` |
+| Pandas data utilities | `pip install tokenpak[data]` |
+| LLMLingua prompt compression | `pip install tokenpak[compression]` |
+| LiteLLM Router integration | `pip install tokenpak[integrations-litellm]` |
+| **Everything (previous default)** | `pip install tokenpak[full]` |
+
+If you previously ran `pip install tokenpak` and relied on retrieval / code-compression / intelligence / compression / integrations-litellm features, you must add the extra to your install. Features that use the guarded import will raise a clear `ImportError` with the correct `pip install` command if the extra is absent.
+
+**Slim install target:** `pip install tokenpak` on a clean machine resolves in under 30 seconds and uses under 200 MB of disk. The `[full]` extra restores the previous behaviour for users who want everything.
+
+### Added — install footprint extras split
+
+- Named extras: `tokenpak[retrieval]`, `tokenpak[code-compression]`, `tokenpak[intelligence]`, `tokenpak[data]`, `tokenpak[compression]`, `tokenpak[integrations-litellm]`, `tokenpak[full]`.
+- CI: slim-install smoke test — installs tokenpak with no extras, asserts venv site-packages < 200 MB, runs `python -c "import tokenpak; from tokenpak.proxy import client"`.
+- CI: full-install matrix — `pip install -e .[full,dev]` + full test suite.
+- `tests/test_dependencies_extras.py` — slim-core invariant gate.
+- `tests/test_extras_import_guard.py` — lightweight post-demotion gate that asserts each heavy package is absent from `[project.dependencies]` and smoke-tests each guarded import path.
+
+### Changed — import error messages
+
+- `tokenpak/integrations/litellm/proxy.py` — error message updated to suggest `pip install tokenpak[integrations-litellm]` instead of bare `pip install litellm`.
+
+---
+
 ## [1.8.0] — 2026-06-06
 
 Minor release: companion **memory-source ingestion** — point the companion at
@@ -267,50 +337,6 @@ This release ships no runtime, CLI, or public-API behavior change. It is a packa
 
 ---
 
-## [Unreleased] — install footprint extras split
-
-### Added
-
-- TokenPak Dispatch (v0.1-alpha, **preview**) — scoped, station-based,
-  resumable work packages with a Decision Inbox and delivery receipts.
-  Available on the main branch only; **not yet included in a released
-  `pip install tokenpak` package**. See `tokenpak dispatch --help`.
-
-### Breaking — install footprint: heavy extras are now opt-in
-
-**Background:** `pip install tokenpak` previously pulled ~5 GB of CUDA/ML wheels (torch, nvidia/\*, transformers, sentence-transformers, scipy, tree-sitter-languages, pandas, litellm, llmlingua) as hard runtime dependencies. This made first-run installs impractical on machines without CUDA or a fast connection.
-
-**What changed:** the six heavy packages listed below have been moved from `[project.dependencies]` to named `[project.optional-dependencies]` extras. The runtime behaviour is **unchanged** — every import site was already guarded with `try/except ImportError` before this release. Only the install metadata changed.
-
-**Migration:** if your code uses any of the features below, add the corresponding extra to your install command:
-
-| Feature | Add to install command |
-|---|---|
-| Semantic search / vector embeddings (sentence-transformers) | `pip install tokenpak[retrieval]` |
-| Tree-sitter code parsing | `pip install tokenpak[code-compression]` |
-| A/B testing optimizer (scipy) | `pip install tokenpak[intelligence]` |
-| Pandas data utilities | `pip install tokenpak[data]` |
-| LLMLingua prompt compression | `pip install tokenpak[compression]` |
-| LiteLLM Router integration | `pip install tokenpak[integrations-litellm]` |
-| **Everything (previous default)** | `pip install tokenpak[full]` |
-
-If you previously ran `pip install tokenpak` and relied on retrieval / code-compression / intelligence / compression / integrations-litellm features, you must add the extra to your install. Features that use the guarded import will raise a clear `ImportError` with the correct `pip install` command if the extra is absent.
-
-**Slim install target:** `pip install tokenpak` on a clean machine resolves in under 30 seconds and uses under 200 MB of disk. The `[full]` extra restores the previous behaviour for users who want everything.
-
-### Added — install footprint extras split
-
-- Named extras: `tokenpak[retrieval]`, `tokenpak[code-compression]`, `tokenpak[intelligence]`, `tokenpak[data]`, `tokenpak[compression]`, `tokenpak[integrations-litellm]`, `tokenpak[full]`.
-- CI: slim-install smoke test — installs tokenpak with no extras, asserts venv site-packages < 200 MB, runs `python -c "import tokenpak; from tokenpak.proxy import client"`.
-- CI: full-install matrix — `pip install -e .[full,dev]` + full test suite.
-- `tests/test_dependencies_extras.py` — slim-core invariant gate.
-- `tests/test_extras_import_guard.py` — lightweight post-demotion gate that asserts each heavy package is absent from `[project.dependencies]` and smoke-tests each guarded import path.
-
-### Changed — import error messages
-
-- `tokenpak/integrations/litellm/proxy.py` — error message updated to suggest `pip install tokenpak[integrations-litellm]` instead of bare `pip install litellm`.
-
----
 
 ## [v1.5.2] — 2026-05-08
 

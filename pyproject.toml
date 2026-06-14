@@ -66,6 +66,9 @@ dependencies = [
     "watchdog>=3.0.0",
     "cryptography>=41.0.0",
     "urllib3>=2.0.0",
+    # TOML reader for permission-tier / creds config on Python < 3.11
+    # (stdlib `tomllib` lands in 3.11; `tomli` is the tiny backport).
+    "tomli>=2.0.1; python_version < '3.11'",
 ]
 
 [project.license]
@@ -193,6 +196,9 @@ where = [
 ]
 include = [
     "tokenpak*",
+]
+exclude = [
+    "tokenpak.orchestration.dispatch*",
 ]
 
 [tool.setuptools.package-data]

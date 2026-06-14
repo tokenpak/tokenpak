@@ -34,6 +34,53 @@ from pathlib import Path
 
 from .config import CompanionConfig
 
+# ---------------------------------------------------------------------------
+# Fleet mode (runtime unattended bypass)
+#
+# Launcher-scoped permission bypass driven by TokenPak-owned state
+# (~/.config/tokenpak/permissions.toml, written by `tokenpak permissions
+# set fleet`). DISTINCT from the bare-mode injection in main(): bare mode
+# strips the companion layers because an external gateway owns them and
+# always bypasses; fleet mode is the user-facing unattended-run opt-in and
+# leaves every other companion layer active. Neither path ever writes the
+# flag into ~/.claude/settings.json — the persistent trust level (tier)
+# lives there and is managed solely by `tokenpak permissions` /
+# `tokenpak integrate`.
+# ---------------------------------------------------------------------------
+
+_FLEET_BYPASS_FLAG = "--dangerously-skip-permissions"
+
+
+def _fleet_mode_enabled() -> bool:
+    """True when launcher fleet mode is enabled. Never raises."""
+    try:
+        from tokenpak.cli.commands.permissions import fleet_mode_enabled
+
+        return fleet_mode_enabled()
+    except Exception:
+        return False
+
+
+def _apply_fleet_mode(claude_args: list[str], fleet: bool, stream=None) -> list[str]:
+    """Inject the bypass flag + print the mandatory banner when fleet is on.
+
+    Returns a new list (never mutates the input). The stderr banner is the
+    canonical user-visible guardrail for fleet launches — do not remove or
+    soften it. No duplicate flag is added when one is already present
+    (e.g. bare mode or a user-passed flag).
+    """
+    out = list(claude_args)
+    if not fleet:
+        return out
+    if _FLEET_BYPASS_FLAG not in out:
+        out.append(_FLEET_BYPASS_FLAG)
+    print(
+        f"tokenpak: fleet mode — bypass flags injected ({_FLEET_BYPASS_FLAG})",
+        file=stream if stream is not None else sys.stderr,
+    )
+    return out
+
+
 # System prompt fragment injected via --append-system-prompt-file
 _SYSTEM_PROMPT = """\
 ## tokenpak companion
@@ -138,12 +185,18 @@ def main(args: list[str] | None = None) -> int:
     # Pass through any user-provided args
     claude_args.extend(args)
 
-    # Set terminal tab title immediately so the 📦 is visible even before
-    # Claude Code finishes initialising and sets its own title.
-    sys.stderr.write("\033]0;📦 tokenpak claude\007")
-    sys.stderr.flush()
+    # Fleet mode (runtime unattended bypass) — launcher state only; see the
+    # fleet section near the top of this module for the bare-mode contrast.
+    claude_args = _apply_fleet_mode(claude_args, _fleet_mode_enabled())
 
-    # Exec into claude — replaces this process
+    # Exec into claude — replaces this process. The session title is owned by
+    # Claude Code natively: the branded launch name is passed via ``--name``
+    # (see _prefix_session_name) — Claude Code uses it for the title bar,
+    # session picker, and terminal title — and the UserPromptSubmit hook
+    # renames it to a prompt-derived title after the first turn via the
+    # native ``sessionTitle`` field. We never emit OSC-0 escapes manually;
+    # Claude Code repaints the title on its own render loop and would clobber
+    # them (this was the root cause of the abandoned OSC-0 tab-title attempt).
     os.execvpe("claude", claude_args, env)
 
     # Only reached if exec fails

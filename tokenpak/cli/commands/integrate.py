@@ -23,9 +23,12 @@ import argparse
 import importlib
 import os
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
+
+from tokenpak._formatting.shell_detect import render_env_var as _env
 
 DEFAULT_PROXY_URL = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
 
@@ -109,6 +112,9 @@ class Integration:
     detector: Callable[[], Optional[str]]
     instructions: Callable[[str], str]  # proxy_url -> multi-line instructions
     applier: Optional[Callable[[str], "ApplyResult"]] = None  # None = print-only
+    backup_locator: Optional[Callable[[], Optional[Path]]] = None  # for --revert
+    preview_fn: Optional[Callable[[str], str]] = None  # human diff preview
+    verify_fn: Optional[Callable[[str], "tuple[bool, str]"]] = None  # post-apply check
     notes: list[str] = field(default_factory=list)
 
 
@@ -125,10 +131,11 @@ class ApplyResult:
 
 def _instr_claude_code(proxy_url: str) -> str:
     return (
-        f"Set before launching Claude Code (or export permanently):\n"
-        f"    export ANTHROPIC_BASE_URL={proxy_url}\n\n"
-        f"Claude Code reads OAuth creds from ~/.claude/.credentials.json — the\n"
-        f"proxy forwards byte-preserved, so subscription billing is untouched.\n\n"
+        f"No API key required — Claude Code reads your OAuth credentials\n"
+        f"from ~/.claude/.credentials.json, and the proxy forwards them\n"
+        f"byte-preserved so your subscription billing is untouched.\n\n"
+        f"Set before launching Claude Code (or persist in your shell rc):\n"
+        f"    {_env('ANTHROPIC_BASE_URL', proxy_url)}\n\n"
         f"Verify:\n"
         f"    tokenpak status   # monitor.db should show rows after your next Claude Code turn"
     )
@@ -179,10 +186,10 @@ def _instr_aider(proxy_url: str) -> str:
     return (
         f"Point Aider at tokenpak via env vars:\n\n"
         f"  # Anthropic models\n"
-        f"  export ANTHROPIC_API_BASE={proxy_url}\n"
+        f"  {_env('ANTHROPIC_API_BASE', proxy_url)}\n"
         f"  aider --model anthropic/claude-sonnet-4-6\n\n"
         f"  # OpenAI models\n"
-        f"  export OPENAI_API_BASE={proxy_url}/v1\n"
+        f"  {_env('OPENAI_API_BASE', proxy_url + '/v1')}\n"
         f"  aider --model gpt-4o"
     )
 
@@ -193,7 +200,7 @@ def _instr_openai_sdk(proxy_url: str) -> str:
         f"    from openai import OpenAI\n"
         f"    client = OpenAI(base_url=\"{proxy_url}/v1\", api_key=\"<your key>\")\n\n"
         f"Or env var (picked up automatically):\n"
-        f"    export OPENAI_BASE_URL={proxy_url}/v1"
+        f"    {_env('OPENAI_BASE_URL', proxy_url + '/v1')}"
     )
 
 
@@ -203,7 +210,7 @@ def _instr_anthropic_sdk(proxy_url: str) -> str:
         f"    from anthropic import Anthropic\n"
         f"    client = Anthropic(base_url=\"{proxy_url}\", api_key=\"<your key>\")\n\n"
         f"Or env var:\n"
-        f"    export ANTHROPIC_BASE_URL={proxy_url}"
+        f"    {_env('ANTHROPIC_BASE_URL', proxy_url)}"
     )
 
 
@@ -223,7 +230,7 @@ def _instr_codex(proxy_url: str) -> str:
     return (
         f"Codex CLI reads OpenAI creds from ~/.codex/auth.json.\n"
         f"Point it at tokenpak with:\n\n"
-        f"    export OPENAI_BASE_URL={proxy_url}/v1\n"
+        f"    {_env('OPENAI_BASE_URL', proxy_url + '/v1')}\n"
         f"    codex exec \"your prompt\"\n\n"
         f"tokenpak's Codex adapter handles the OAuth credential injection;\n"
         f"see project_tokenpak_codex_three_paths memory for path choice."
@@ -660,6 +667,421 @@ def _apply_continue(proxy_url: str) -> ApplyResult:
         )
 
 
+# ---------------------------------------------------------------------------
+# Backup locators — return existing .bak path for --revert, or None.
+# Convention: all appliers write <original_path>.bak (e.g. settings.json.bak).
+# ---------------------------------------------------------------------------
+
+
+def _bak_claude_code() -> Optional[Path]:
+    try:
+        from tokenpak.cli.commands.install import _settings_path
+        bak = _settings_path().with_suffix(".json.bak")
+        return bak if bak.exists() else None
+    except Exception:
+        return None
+
+
+def _bak_cursor() -> Optional[Path]:
+    p = _cursor_settings_path()
+    if p is None:
+        return None
+    bak = p.with_suffix(".json.bak")
+    return bak if bak.exists() else None
+
+
+def _bak_aider() -> Optional[Path]:
+    bak = Path.home() / ".aider.conf.yml.bak"
+    return bak if bak.exists() else None
+
+
+def _bak_continue() -> Optional[Path]:
+    bak = Path.home() / ".continue" / "config.json.bak"
+    return bak if bak.exists() else None
+
+
+# ---------------------------------------------------------------------------
+# Preview functions — human-readable diff of intended change (for guided form)
+# ---------------------------------------------------------------------------
+
+
+def _preview_claude_code(proxy_url: str) -> str:
+    try:
+        from tokenpak.cli.commands.install import _read_settings, _settings_path
+        settings = _read_settings()
+        current = settings.get("env", {}).get("ANTHROPIC_BASE_URL", "(unset)")
+        return (
+            f"  File:  {_settings_path()}\n"
+            f"  env.ANTHROPIC_BASE_URL: {current!r} → {proxy_url!r}"
+        )
+    except Exception:
+        return f"  Will set env.ANTHROPIC_BASE_URL={proxy_url} in Claude Code settings.json"
+
+
+def _preview_cursor(proxy_url: str) -> str:
+    p = _cursor_settings_path()
+    if p is None:
+        return "  Cursor settings not found — will create a new settings.json"
+    try:
+        import json as _json
+        config = _json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+        current = config.get("cursor.general.anthropicBaseUrl", "(unset)")
+        return (
+            f"  File:  {p}\n"
+            f"  cursor.general.anthropicBaseUrl: {current!r} → {proxy_url!r}"
+        )
+    except Exception:
+        return f"  Will update cursor.general.anthropicBaseUrl in {p}"
+
+
+def _preview_aider(proxy_url: str) -> str:
+    conf = Path.home() / ".aider.conf.yml"
+    if not conf.exists():
+        return f"  Will create {conf} with anthropic-api-base: {proxy_url}"
+    try:
+        for line in conf.read_text(encoding="utf-8").splitlines():
+            if line.strip().startswith("anthropic-api-base:"):
+                current = line.split(":", 1)[1].strip()
+                return f"  File:  {conf}\n  anthropic-api-base: {current!r} → {proxy_url!r}"
+        return f"  File:  {conf}\n  Will add anthropic-api-base: {proxy_url}"
+    except Exception:
+        return f"  Will update anthropic-api-base in {conf}"
+
+
+def _preview_continue(proxy_url: str) -> str:
+    config_json = Path.home() / ".continue" / "config.json"
+    if not config_json.exists():
+        return f"  Will create {config_json} with tokenpak-* model entries"
+    return (
+        f"  File:  {config_json}\n"
+        f"  Will add/update tokenpak-sonnet, tokenpak-opus, tokenpak-gpt4o entries"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Verify functions — post-apply quick check (returns (ok, message))
+# ---------------------------------------------------------------------------
+
+
+def _verify_claude_code(proxy_url: str) -> tuple[bool, str]:
+    try:
+        from tokenpak.cli.commands.install import _read_settings
+        settings = _read_settings()
+        got = settings.get("env", {}).get("ANTHROPIC_BASE_URL", "")
+        if got == proxy_url:
+            return (True, f"ANTHROPIC_BASE_URL={got} — proxy route active")
+        return (False, f"ANTHROPIC_BASE_URL={got!r} (expected {proxy_url!r})")
+    except Exception as exc:
+        return (False, f"verify read failed: {exc}")
+
+
+def _verify_cursor(proxy_url: str) -> tuple[bool, str]:
+    p = _cursor_settings_path()
+    if p is None or not p.exists():
+        return (False, "Cursor settings.json not found after apply")
+    try:
+        import json as _json
+        config = _json.loads(p.read_text(encoding="utf-8"))
+        got = config.get("cursor.general.anthropicBaseUrl", "")
+        if got == proxy_url:
+            return (True, f"cursor.general.anthropicBaseUrl={got} — proxy route active")
+        return (False, f"cursor.general.anthropicBaseUrl={got!r} (expected {proxy_url!r})")
+    except Exception as exc:
+        return (False, f"verify read failed: {exc}")
+
+
+def _verify_aider(proxy_url: str) -> tuple[bool, str]:
+    conf = Path.home() / ".aider.conf.yml"
+    if not conf.exists():
+        return (False, ".aider.conf.yml not found after apply")
+    try:
+        for line in conf.read_text(encoding="utf-8").splitlines():
+            if line.strip().startswith("anthropic-api-base:"):
+                got = line.split(":", 1)[1].strip()
+                if got == proxy_url:
+                    return (True, f"anthropic-api-base={got} — proxy route active")
+                return (False, f"anthropic-api-base={got!r} (expected {proxy_url!r})")
+        return (False, "anthropic-api-base key not found in .aider.conf.yml")
+    except Exception as exc:
+        return (False, f"verify read failed: {exc}")
+
+
+def _verify_continue(proxy_url: str) -> tuple[bool, str]:
+    config_json = Path.home() / ".continue" / "config.json"
+    if not config_json.exists():
+        return (False, "Continue config.json not found after apply")
+    try:
+        import json as _json
+        config = _json.loads(config_json.read_text(encoding="utf-8"))
+        tp_models = [
+            m for m in config.get("models", [])
+            if isinstance(m, dict) and str(m.get("title", "")).startswith("tokenpak-")
+        ]
+        if tp_models:
+            return (True, f"{len(tp_models)} tokenpak-* model entries present — proxy route active")
+        return (False, "No tokenpak-* model entries found in config.json")
+    except Exception as exc:
+        return (False, f"verify read failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Revert — restore most recent backup atomically (write-temp + rename)
+# ---------------------------------------------------------------------------
+
+
+def _revert_integration(integration: Integration) -> ApplyResult:
+    """Restore the most recent .bak for the given integration target."""
+    if integration.backup_locator is None:
+        return ApplyResult(
+            ok=False,
+            summary=f"--revert not supported for {integration.label} (no backup convention).",
+            error="no_backup_locator",
+        )
+    bak = integration.backup_locator()
+    if bak is None:
+        return ApplyResult(
+            ok=True,
+            summary=f"Nothing to revert — no backup found for {integration.label}.",
+        )
+    # Target: strip trailing .bak from the backup filename
+    # e.g. settings.json.bak → settings.json  (.stem of a path whose suffix is .bak)
+    target = bak.parent / bak.stem
+    try:
+        tmp = target.with_name(target.name + ".revert_tmp")
+        shutil.copy2(bak, tmp)
+        os.replace(tmp, target)
+        return ApplyResult(
+            ok=True,
+            summary=f"Reverted {target} from {bak.name}.",
+            changes=[f"restored {target} from {bak}"],
+            backup_path=str(bak),
+        )
+    except Exception as exc:
+        return ApplyResult(
+            ok=False,
+            summary=f"Revert failed for {integration.label}.",
+            error=str(exc),
+            backup_path=str(bak),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Guided interactive form (TTY + no --apply + no --no-tui)
+# ---------------------------------------------------------------------------
+
+# Keys whose applier is None or whose config is not directly writable.
+_PRINT_ONLY_KEYS: frozenset[str] = frozenset(
+    {"cline", "codex", "openai-sdk", "anthropic-sdk", "litellm"}
+)
+
+
+def _tty_confirm(prompt: str, default: bool = True) -> bool:
+    """Readline-style [Y/n] prompt. Returns default on empty input."""
+    hint = "[Y/n]" if default else "[y/N]"
+    sys.stdout.write(f"\n  {prompt} {hint}: ")
+    sys.stdout.flush()
+    try:
+        line = sys.stdin.readline().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    if not line:
+        return default
+    return line in ("y", "yes")
+
+
+def _run_guided_form(integration: Integration, proxy_url: str) -> int:
+    """Interactive guided integration form (TTY path, no --apply, no --no-tui)."""
+    print()
+    print(f"  TOKENPAK integrate — {integration.label}  (guided)")
+    print("  " + "─" * 42)
+
+    try:
+        loc = integration.detector()
+    except Exception:
+        loc = None
+    if loc:
+        print(f"  Detected   {loc}")
+    else:
+        print("  Detected   (not installed on this host — instructions still apply)")
+
+    is_print_only = integration.key in _PRINT_ONLY_KEYS or integration.applier is None
+
+    if is_print_only:
+        print()
+        print(f"  ⚠  {integration.label} needs a manual step (auto-apply not available).")
+        print()
+        for ln in integration.instructions(proxy_url).splitlines():
+            print("  " + ln)
+        print()
+        print("  Tip: run  tokenpak status  after following the steps above.")
+        return 0
+
+    # Preview intended change
+    if integration.preview_fn:
+        print()
+        print("  Intended change:")
+        for ln in integration.preview_fn(proxy_url).splitlines():
+            print(ln)
+
+    if not _tty_confirm(f"Apply configuration for {integration.label}?"):
+        print("  Cancelled — no changes made.")
+        return 0
+
+    # Apply
+    try:
+        result = integration.applier(proxy_url)  # type: ignore[misc]
+    except Exception as exc:  # pragma: no cover
+        result = ApplyResult(ok=False, summary="applier raised unexpectedly", error=str(exc))
+
+    print(_render_apply(integration, result))
+    if not result.ok:
+        return 1
+
+    # Post-apply verify
+    if integration.verify_fn:
+        ok, msg = integration.verify_fn(proxy_url)
+        badge = "✅" if ok else "✖"
+        print(f"  Verify     {badge} {msg}")
+    else:
+        print("  Verify     run  tokenpak status  to confirm proxy traffic is flowing")
+
+    if result.backup_path:
+        print()
+        print(f"  To revert:  tokenpak integrate {integration.key} --revert")
+
+    print()
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Permission tiers (claude-code / codex only)
+#
+# Persistent trust level (strict/standard/auto → client config) vs runtime
+# unattended bypass (fleet → TokenPak launcher state only). See
+# tokenpak/cli/commands/permissions.py for the canonical mapping + write
+# discipline. Tier handling only engages when the invoking argparse
+# namespace carries a ``tier`` attribute — the real CLI parser always sets
+# it; legacy programmatic callers without the attribute keep the exact
+# pre-tier behavior.
+# ---------------------------------------------------------------------------
+
+_TIER_CLIENTS: frozenset[str] = frozenset({"claude-code", "codex"})
+
+
+def _prompt_tier() -> Optional[str]:
+    """Interactive tier picker (TTY path). Returns None on cancel."""
+    from tokenpak.cli.commands.permissions import (
+        ALL_TIERS,
+        DEFAULT_TIER,
+        TIER_DESCRIPTIONS,
+    )
+
+    print()
+    print("  Permission tier:")
+    for i, t in enumerate(ALL_TIERS, 1):
+        marker = " (default)" if t == DEFAULT_TIER else ""
+        print(f"    {i}. {t:<8}{marker} — {TIER_DESCRIPTIONS[t]}")
+    sys.stdout.write(f"  Choose [1-{len(ALL_TIERS)}] (Enter = {DEFAULT_TIER}): ")
+    sys.stdout.flush()
+    try:
+        line = sys.stdin.readline().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    if not line:
+        return DEFAULT_TIER
+    if line in ALL_TIERS:
+        return line
+    if line.isdigit() and 1 <= int(line) <= len(ALL_TIERS):
+        return ALL_TIERS[int(line) - 1]
+    print(f"  Unrecognized choice {line!r} — cancelled, no tier applied.")
+    return None
+
+
+def _resolve_apply_tier(args: argparse.Namespace) -> Optional[str]:
+    """Resolve the tier for an --apply run. Returns None when aborted.
+
+    Flag wins; otherwise prompt on a TTY; otherwise silently default to
+    ``standard``. ``fleet`` always requires explicit confirmation (TTY
+    prompt or --yes) and prints a warning first.
+    """
+    tier = getattr(args, "tier", None)
+    interactive = _is_interactive() and not _is_no_tui()
+    if tier is None:
+        if interactive:
+            tier = _prompt_tier()
+            if tier is None:
+                return None
+        else:
+            tier = "standard"
+    if tier == "fleet":
+        from tokenpak.cli.commands.permissions import _FLEET_WARNING
+
+        print()
+        print(f"  ⚠  {_FLEET_WARNING}")
+        if getattr(args, "yes", False):
+            return "fleet"
+        if interactive:
+            if _tty_confirm("Enable fleet mode (launcher bypass flags)?", default=False):
+                return "fleet"
+            print("  Cancelled — fleet mode unchanged.")
+            return None
+        print(
+            "integrate: --tier fleet requires --yes in non-interactive mode "
+            "(explicit opt-in)."
+        )
+        return None
+    return tier
+
+
+def _render_tier_result(client_key: str, title: str, result) -> str:
+    """Compact display block for a tier apply outcome."""
+    lines: list[str] = [""]
+    lines.append(f"  Permission tier — {client_key}  ({title})")
+    lines.append("  " + "─" * 40)
+    badge = "✅ Applied" if result.ok else "✖ Failed"
+    lines.append(f"  {badge}: {result.summary}")
+    for c in result.changes:
+        lines.append(f"    • {c}")
+    if result.backup_path:
+        lines.append(f"  Backup    {result.backup_path}")
+    if result.rollback_cmd:
+        lines.append(f"  Rollback  {result.rollback_cmd}")
+    if result.error:
+        lines.append(f"  Error     {result.error}")
+    return "\n".join(lines)
+
+
+def _apply_tier_and_render(client_key: str, tier: str, backup: bool) -> int:
+    """Apply tier (or fleet launcher state) for one client + print outcome."""
+    from tokenpak.cli.commands import permissions as _perms
+
+    if tier == "fleet":
+        # Fleet never persists into client config. The persistent tier is
+        # left exactly as-is when one is already applied; on a fresh config
+        # the default tier is applied so the client has a defined baseline.
+        applied = _perms.applied_tier(client_key)
+        if applied is None:
+            result = _perms.apply_tier(client_key, _perms.DEFAULT_TIER, backup=backup)
+            print(_render_tier_result(client_key, f"persistent: {_perms.DEFAULT_TIER}", result))
+            if not result.ok:
+                return 1
+        else:
+            print(f"\n  Persistent tier unchanged ({applied}) — fleet never persists.")
+        _perms.set_fleet_mode(
+            True, f"tokenpak integrate {client_key} --apply --tier fleet"
+        )
+        print("  ✅ Launcher fleet mode: enabled (TokenPak-owned state only).")
+        print(
+            "     `tokenpak claude` / `tokenpak codex` will inject bypass flags "
+            "and print a banner."
+        )
+        return 0
+
+    result = _perms.apply_tier(client_key, tier, backup=backup)
+    print(_render_tier_result(client_key, f"tier: {tier}", result))
+    return 0 if result.ok else 1
+
+
 # Dynamic registry — add a new client by appending one Integration here.
 INTEGRATIONS: list[Integration] = [
     Integration(
@@ -669,6 +1091,9 @@ INTEGRATIONS: list[Integration] = [
         detector=_detect_claude_cli,
         instructions=_instr_claude_code,
         applier=_apply_claude_code,
+        backup_locator=_bak_claude_code,
+        preview_fn=_preview_claude_code,
+        verify_fn=_verify_claude_code,
     ),
     Integration(
         key="cursor",
@@ -677,6 +1102,9 @@ INTEGRATIONS: list[Integration] = [
         detector=_detect_cursor_app,
         instructions=_instr_cursor,
         applier=_apply_cursor,
+        backup_locator=_bak_cursor,
+        preview_fn=_preview_cursor,
+        verify_fn=_verify_cursor,
     ),
     Integration(
         key="cline",
@@ -693,6 +1121,9 @@ INTEGRATIONS: list[Integration] = [
         detector=lambda: _detect_vscode_extension("continue.continue"),
         instructions=_instr_continue,
         applier=_apply_continue,
+        backup_locator=_bak_continue,
+        preview_fn=_preview_continue,
+        verify_fn=_verify_continue,
     ),
     Integration(
         key="aider",
@@ -701,6 +1132,9 @@ INTEGRATIONS: list[Integration] = [
         detector=_detect_aider,
         instructions=_instr_aider,
         applier=_apply_aider,
+        backup_locator=_bak_aider,
+        preview_fn=_preview_aider,
+        verify_fn=_verify_aider,
     ),
     Integration(
         key="codex",
@@ -824,8 +1258,31 @@ def run_integrate(args: argparse.Namespace) -> int:
     """CLI handler for `tokenpak integrate`."""
     proxy_url = getattr(args, "proxy_url", None) or DEFAULT_PROXY_URL
     apply_mode = bool(getattr(args, "apply", False))
+    revert_mode = bool(getattr(args, "revert", False))
     client = getattr(args, "client", None)
     show_all = getattr(args, "all", False)
+    no_tui = _is_no_tui()
+
+    # --revert requires a specific client.
+    if revert_mode:
+        if not client:
+            print("integrate: --revert requires a specific client (e.g. `tokenpak integrate claude-code --revert`).")
+            print()
+            print(_render_listing(proxy_url))
+            return 2
+        integration = _find(client)
+        if integration is None:
+            known = ", ".join(i.key for i in INTEGRATIONS)
+            print(f"integrate: unknown client '{client}'. Known clients: {known}")
+            return 2
+        result = _revert_integration(integration)
+        print(_render_apply(integration, result))
+        if result.ok and integration.verify_fn:
+            ok, msg = integration.verify_fn(proxy_url)
+            badge = "✅" if ok else "✖"
+            print(f"  Verify     {badge} {msg}")
+        print()
+        return 0 if result.ok else 1
 
     # --apply without a specific client is a no-op (ambiguous) — treat as list.
     if apply_mode and not client and not show_all:
@@ -853,7 +1310,23 @@ def run_integrate(args: argparse.Namespace) -> int:
         return 2
 
     if apply_mode:
+        # Permission-tier handling (claude-code / codex only; engaged only
+        # when the namespace carries a `tier` attribute — see the tier
+        # section above for the back-compat contract).
+        tier_engaged = integration.key in _TIER_CLIENTS and hasattr(args, "tier")
+        tier: Optional[str] = None
+        if tier_engaged:
+            tier = _resolve_apply_tier(args)
+            if tier is None:
+                return 1
+
         if integration.applier is None:
+            if tier_engaged and tier is not None:
+                # No base-config applier (codex): apply the tier, then print
+                # the manual base-URL instructions.
+                rc = _apply_tier_and_render(integration.key, tier, backup=True)
+                print(_render_one(integration, proxy_url))
+                return rc
             # Graceful fallback — print instructions + a note that auto-apply
             # isn't available for this client yet.
             print(_render_one(integration, proxy_url))
@@ -873,7 +1346,34 @@ def run_integrate(args: argparse.Namespace) -> int:
                 ok=False, summary="applier raised unexpectedly", error=str(exc),
             )
         print(_render_apply(integration, result))
-        return 0 if result.ok else 1
+        if not result.ok:
+            return 1
+        if tier_engaged and tier is not None:
+            # The base applier already backed up the pre-apply file state;
+            # a second backup here would overwrite that .bak with a
+            # post-apply copy, so the tier write reuses the existing one.
+            return _apply_tier_and_render(integration.key, tier, backup=False)
+        return 0
+
+    # Default path — no flags.
+    # TTY + not --no-tui → guided interactive form.
+    # Non-TTY OR --no-tui → print-only (existing behavior).
+    if _is_interactive() and not no_tui:
+        return _run_guided_form(integration, proxy_url)
 
     print(_render_one(integration, proxy_url))
     return 0
+
+
+def _is_no_tui() -> bool:
+    """Return True when --no-tui was stripped from argv."""
+    try:
+        from tokenpak._cli_core import _no_tui
+        return _no_tui()
+    except Exception:
+        return False
+
+
+def _is_interactive() -> bool:
+    """Return True when both stdin and stdout are TTYs (guided form is possible)."""
+    return sys.stdin.isatty() and sys.stdout.isatty()

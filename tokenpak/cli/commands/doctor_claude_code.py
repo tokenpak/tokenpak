@@ -1,6 +1,6 @@
 """doctor_claude_code — Claude Code health checks for tokenpak doctor --claude-code.
 
-9 health checks:
+10 health checks:
   1. ANTHROPIC_BASE_URL is set (env + ~/.claude/settings.json)
   2. Proxy reachable at configured URL (GET /health)
   3. Auth flow works (POST /v1/messages/count_tokens, expect 200)
@@ -10,6 +10,7 @@
   7. No PYTHONPATH drift (proxy proc environ vs canonical from systemd unit)
   8. Per-host install consistency (tokenpak.env, systemd unit, settings.json same URL)
   9. Plugin directory exists at ~/.claude/plugins/tokenpak or ~/.claude/plugins/tokenpak-claude-code
+  10. Permission tiers (persistent tier per client + launcher fleet mode)
 
 Each check runs independently.  A failure in one does not block the rest.
 Exit: non-zero if any check fails.
@@ -33,7 +34,7 @@ from typing import TypedDict
 DEFAULT_PROXY_URL = "http://127.0.0.1:8766"
 SYSTEMD_UNIT_NAME = "tokenpak-proxy.service"
 REMEDIATION = "Run `tokenpak install --claude-code` to fix this"
-NUM_CHECKS = 9
+NUM_CHECKS = 10
 
 # Plugin directory candidate names under ~/.claude/plugins/
 _PLUGIN_DIR_NAMES = ("tokenpak", "tokenpak-claude-code")
@@ -656,6 +657,40 @@ def _check_plugin_dir() -> CheckResult:
     )
 
 
+def _check_permission_tiers() -> CheckResult:
+    """Check 10: permission tier display (persistent tier vs launcher fleet mode).
+
+    Renders the canonical three-row block. The persistent-tier rows are
+    restricted to strict/standard/auto/custom and NEVER show "fleet" —
+    fleet mode is only ever the separate boolean launcher row. A managed
+    key modified outside TokenPak reads "custom (... modified externally)"
+    and fails the check.
+    """
+    from tokenpak.cli.commands.permissions import doctor_rows
+
+    rows, drift = doctor_rows()
+    block = "\n         ".join(rows)
+    if drift:
+        return CheckResult(
+            check="permission_tiers",
+            status="fail",
+            message=f"Check 10 Permission tiers\n         {block}",
+            detail="managed tier key modified outside TokenPak",
+            remediation=(
+                "Run `tokenpak permissions set <tier>` to re-apply a known tier, "
+                "or `tokenpak permissions reset` to clear the managed keys "
+                "(scoped — leaves all other settings untouched)."
+            ),
+        )
+    return CheckResult(
+        check="permission_tiers",
+        status="pass",
+        message=f"Check 10 Permission tiers\n         {block}",
+        detail="persistent tiers + launcher fleet mode consistent",
+        remediation="",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -664,7 +699,7 @@ def run_claude_code_checks(
     output_json: bool = False,
     verbose: bool = False,
 ) -> tuple[int, list[CheckResult]]:
-    """Run all 9 Claude Code health checks.
+    """Run all Claude Code health checks (NUM_CHECKS total).
 
     Returns:
         (fail_count, checks) — fail_count is the number of failed checks.
@@ -679,6 +714,7 @@ def run_claude_code_checks(
         _check_pythonpath_drift,
         _check_install_consistency,
         _check_plugin_dir,
+        _check_permission_tiers,
     ]
 
     results: list[CheckResult] = []

@@ -290,6 +290,14 @@ View and edit config
   - `--json` — Output as JSON
 - `init`
   - `--force` — Overwrite existing config
+  - `--with-env-stub` — Also drop a placeholders-only .env.example under the TokenPak home
+- `doctor`
+  - `--json` — Output as JSON
+  - `--quiet` — Print only the worst finding
+  - `--verbose`, `-v` — Include per-check detail
+- `env`
+  - `--json` — Output as JSON
+  - `--no-mask` — Show low-class values unmasked (secret-class values are still masked)
 - `path`
 - `migrate`
   - `--config-json` — Path to legacy config.json (default: ~/.tokenpak/config.json) (default: ~/.tokenpak/config.json)
@@ -302,6 +310,33 @@ Explain workflow profiles
 **Flags:**
 
 - `--profile` — Profile name (safe|balanced|aggressive|agentic); omit to show all
+
+### `tokenpak permissions`
+
+Manage the TokenPak permission tier system.
+
+Persistent tiers (strict/standard/auto) are written into the client's
+own config (Claude Code settings.json / Codex config.toml). Fleet mode
+is launcher-scoped only: `tokenpak claude` / `tokenpak codex` inject
+bypass flags at launch and print a banner — client configs are never
+modified by fleet mode.
+
+Examples:
+  tokenpak permissions show                      # current tiers + fleet mode
+  tokenpak permissions set auto                  # both clients
+  tokenpak permissions set strict --client codex # one client
+  tokenpak permissions set fleet                 # launcher fleet mode (opt-in)
+  tokenpak permissions reset                     # scoped reset + fleet off
+
+**Subcommands:**
+
+- `show`
+- `set`
+  - `TIER` — Tier to apply ('fleet' sets launcher state only) — choices: `strict`, `standard`, `auto`, `fleet`
+  - `--client` — Which client to configure (default: both) (default: both) — choices: `claude-code`, `codex`, `both`
+  - `--yes` — Skip the fleet-mode confirmation prompt (explicit opt-in)
+- `reset`
+  - `--client` — Which client to reset (default: both) (default: both) — choices: `claude-code`, `codex`, `both`
 
 ---
 
@@ -321,6 +356,19 @@ Update tokenpak
 - `--force` — Force update even if already up to date
 - `--core-only` — Update core only, skip config merge
 - `--dry-run` — Show what would change without applying
+
+### `tokenpak uninstall`
+
+Un-route (--soft) or purge state + remove package (--hard)
+
+**Flags:**
+
+- `--soft` — Un-route only (reversible via `tokenpak setup`); keep config/state/package
+- `--hard` — Soft + purge state (keeps journal/budget/capsules) + offer package removal
+- `--dry-run` — Show the exact operations that would run, change nothing
+- `--yes` — Skip confirmation (required for --hard in non-interactive use)
+- `--keep-data` — Under --hard, also retain all ~/.tpk user data (config + dbs)
+- `--json` — Emit a machine-readable receipt
 
 ---
 
@@ -363,6 +411,7 @@ Run diagnostics
 - `--verbose`, `-v` — Show extra detail for each check
 - `--claude-code` — Run Claude Code integration checks (ENABLE_TOOL_SEARCH, mode, IDE detection)
 - `--conformance` — Run TIP self-conformance checks (alias for `tokenpak tip conformance`)
+- `--lifecycle` — Show only the compact lifecycle summary (installed/setup/routed/proxy/update)
 
 ### `tokenpak diagnose`
 
@@ -1058,7 +1107,10 @@ Examples:
 - `CLIENT` — Client key: claude-code | cursor | cline | continue | aider | codex | openai-sdk | anthropic-sdk | litellm
 - `--all` — Show instructions for every supported client
 - `--proxy-url` — Override the printed proxy URL (default: $TOKENPAK_PROXY_URL or http://localhost:8766)
-- `--apply` — (reserved) auto-write config files — not yet implemented, prints safe instructions instead
+- `--apply` — Auto-write config files for the given client (headless / scripted path)
+- `--revert` — Restore the most recent backup for the given client (undoes --apply)
+- `--tier` — Permission tier to apply with --apply (claude-code / codex only; default: standard). 'fleet' is launcher-scoped and never persists into client config — see `tokenpak permissions --help`. — choices: `strict`, `standard`, `auto`, `fleet`
+- `--yes` — Confirm dangerous choices non-interactively (required for --tier fleet without a TTY)
 
 ### `tokenpak last`
 
