@@ -344,6 +344,29 @@ _COMMAND_GROUPS = {
 # All known command names (for typo detection)
 _ALL_COMMANDS = [cmd for group in _COMMAND_GROUPS.values() for cmd, _ in group]
 
+# Argparse/stub commands advertised in help/registry but not grouped above.
+# Kept in sync with the inline typo-detection set in main(); the union of the
+# two is the authoritative built-in verb catalog (see _core_command_names).
+_EXTRA_KNOWN_COMMANDS = {
+    "help", "start", "stop", "restart", "logs", "version", "update", "config",
+    "setup", "compare", "leaderboard", "report", "check-alerts", "alerts",
+    "watch", "integrate", "openclaw", "savings", "recommendations", "usage",
+    "preview", "aggregate", "requests", "validate-config", "vault",
+    "vault-health", "compress", "optimize", "last", "prune", "retrieval",
+    "menu", "license", "plan", "activate", "deactivate", "init", "monitor",
+    "tip", "features", "pakplan", "home",
+}
+
+
+def _core_command_names() -> set:
+    """Return the authoritative set of all built-in CLI verb names.
+
+    The union of the grouped commands (:data:`_ALL_COMMANDS`) and the
+    argparse/stub commands (:data:`_EXTRA_KNOWN_COMMANDS`). Used by the bare
+    ``--json`` catalog and the interactive menu's lifecycle-overlay validation.
+    """
+    return set(_ALL_COMMANDS) | set(_EXTRA_KNOWN_COMMANDS)
+
 
 def _suggest_command(unknown: str) -> Optional[str]:
     """Return the closest known command name, or None if no good match."""
@@ -4148,6 +4171,55 @@ def _tokenpak_is_user_install() -> bool:
         return bool(base) and loc.startswith(base)
     except Exception:
         return False
+
+
+# ── Update check (cached PyPI version; consumed by `doctor` + update nudge) ────
+
+_UPDATE_NUDGE_OPTOUT_ENV = "TOKENPAK_NO_UPDATE_CHECK"
+
+
+def _update_nudge_opted_out() -> bool:
+    """True when ``TOKENPAK_NO_UPDATE_CHECK`` is set to a truthy value."""
+    return os.environ.get(_UPDATE_NUDGE_OPTOUT_ENV, "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _update_cache_path() -> "Path":
+    """Path to the cached update-check result under the resolved TokenPak home."""
+    from tokenpak import _paths
+
+    return _paths.home() / "update_check.json"
+
+
+def _read_update_cache() -> Tuple[float, Optional[str]]:
+    """Return ``(checked_at_epoch, cached_latest_version)``.
+
+    Reads the cached result only — never issues a network probe. Returns
+    ``(0.0, None)`` on any failure (no cache yet, unreadable, malformed).
+    """
+    try:
+        data = json.loads(_update_cache_path().read_text())
+        return float(data.get("checked_at", 0.0)), data.get("latest")
+    except Exception:
+        return 0.0, None
+
+
+def _fetch_latest_pypi_version(timeout: float = 5.0) -> str:
+    """Return the latest ``tokenpak`` version from PyPI.
+
+    Raises on any network/parse error — callers decide how to handle failure.
+    Not used by ``doctor`` (which reads the cache only); kept so the launcher
+    update nudge and tests have a single canonical probe.
+    """
+    import urllib.request as _ur
+
+    with _ur.urlopen("https://pypi.org/pypi/tokenpak/json", timeout=timeout) as resp:
+        data = json.loads(resp.read())
+        return data["info"]["version"]
 
 
 def _pip_upgrade_tokenpak(verbose: bool = True) -> Tuple[bool, str, str]:
