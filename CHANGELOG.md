@@ -18,8 +18,9 @@ to existing behavior; no breaking changes to current workflows.
 - **cli (doctor):** `tokenpak doctor --lifecycle` summary plus a default
   route-state line so the proxy/route status is visible at a glance.
 - **cli (permissions):** permission-tier system for `tokenpak integrate`
-  (strict / standard / auto / fleet) with a new `tokenpak permissions` verb,
-  doctor rows, and launcher fleet mode — see `tokenpak permissions --help`.
+  (strict / standard / auto, plus a multi-instance fleet tier) with a new
+  `tokenpak permissions` verb, doctor rows, and an opt-in multi-instance fleet
+  launcher mode — see `tokenpak permissions --help`.
 - **config:** read-only `tokenpak config doctor` diagnostics and a
   `tokenpak config env` provenance view (loaded env vars + precedence), with a
   documented config load-order spec.

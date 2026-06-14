@@ -643,8 +643,7 @@ def _section_permissions(hdr: str) -> None:
             if ans != "yes":
                 continue
             choice = "set fleet --yes"
-        _exec("permissions", choice)
-        _wait()
+        _exec("permissions", choice, clear=False)
 
 
 def _section_companion(hdr: str) -> None:
