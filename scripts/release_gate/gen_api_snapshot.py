@@ -45,6 +45,16 @@ os.environ.setdefault("TOKENPAK_SNAPSHOT_GEN", "1")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = REPO_ROOT / "tokenpak" / "_snapshots" / "public-api.json"
 
+# Third-party library re-exports that are NOT TokenPak public API. Their capture
+# by the package walk is environment-dependent (present only when an optional
+# extra is installed, e.g. faiss via [retrieval]), which makes the snapshot
+# non-deterministic ("phantom" add/remove noise). Exclude them explicitly so the
+# snapshot deterministically reflects the TokenPak-owned released surface.
+_THIRD_PARTY_REEXPORTS: set[tuple[str, str]] = {
+    ("tokenpak.vault.retrieval.vector_local", "faiss"),
+    ("tokenpak.proxy.server_extra.websocket_proxy", "WebSocketServerProtocol"),
+}
+
 
 _ABS_PATH_PAREN_RE = None  # lazily compiled
 _SIDECAR_RE = None  # lazily compiled
@@ -153,6 +163,8 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
                 if not isinstance(attr, str) or attr.startswith("_"):
                     continue
                 key = (mod_name, attr)
+                if key in _THIRD_PARTY_REEXPORTS:
+                    continue
                 if key in seen:
                     continue
                 seen.add(key)
@@ -168,6 +180,8 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
             if not _is_package_owned(value, package_name):
                 continue
             key = (mod_name, attr)
+            if key in _THIRD_PARTY_REEXPORTS:
+                continue
             if key in seen:
                 continue
             seen.add(key)
