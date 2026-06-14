@@ -6303,6 +6303,13 @@ def _build_dispatch_parser(sub):
     Implementation lives in :mod:`tokenpak.cli.commands.dispatch_cmd`; lazy
     import keeps ``tokenpak --help`` fast.
     """
+    # Dispatch runtime is excluded from the released wheel (preview / main-only).
+    # Register the command group only when the orchestration package is present
+    # in this build; in the slim released package it is cleanly absent.
+    import importlib.util
+
+    if importlib.util.find_spec("tokenpak.orchestration.dispatch") is None:
+        return
     from tokenpak.cli.commands.dispatch_cmd import build_dispatch_parser
 
     build_dispatch_parser(sub)

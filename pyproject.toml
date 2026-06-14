@@ -194,6 +194,9 @@ where = [
 include = [
     "tokenpak*",
 ]
+exclude = [
+    "tokenpak.orchestration.dispatch*",
+]
 
 [tool.setuptools.package-data]
 tokenpak = [
