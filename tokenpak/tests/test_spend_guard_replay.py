@@ -54,14 +54,18 @@ class TestPositiveIntentReplay:
         assert out.body == original  # byte-identical
         assert out.audit_event == "replay"
 
-    def test_replay_returns_original_headers(self, store):
+    def test_replay_returns_redacted_headers(self, store):
+        # Credential headers are dropped at store time; replay carries only
+        # non-credential headers. Auth is re-applied from the live approving
+        # request by the proxy (server.py replay-merge), not from storage.
         hdrs = {"X-Api-Key": "key123", "anthropic-version": "2023-06-01"}
         p = _make_pending(store, headers=hdrs)
         out = resolve_pending(
             store=store, pending=p, intent=Intent.POSITIVE, tip=None,
             cfg=SpendGuardConfig(), builders=_BUILDERS,
         )
-        assert out.headers == hdrs
+        assert out.headers == {"anthropic-version": "2023-06-01"}
+        assert "X-Api-Key" not in out.headers
 
     def test_replay_includes_target_url(self, store):
         p = _make_pending(store, target_url="https://example.com/v1/messages")

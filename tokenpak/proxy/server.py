@@ -964,9 +964,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     if _sg_outcome.body is not None:
                         body = _sg_outcome.body
                     if _sg_outcome.headers:
-                        # Merge replayed headers (but don't drop incoming
-                        # auth — the replay headers ARE the original auth).
-                        for _hk, _hv in _sg_outcome.headers.items():
+                        # Re-apply only the held request's NON-credential
+                        # headers (content-type, api-version, etc.). Credential
+                        # headers are never persisted to disk; the held
+                        # request replays with the live approving request's own
+                        # auth, already on self.headers — so we must not let a
+                        # stale/absent stored value clobber it.
+                        try:
+                            from tokenpak.proxy.spend_guard.pending import (
+                                redact_headers as _sg_redact,
+                            )
+                            _replay_hdrs = _sg_redact(_sg_outcome.headers)
+                        except Exception:
+                            _replay_hdrs = {}
+                        for _hk, _hv in _replay_hdrs.items():
                             try:
                                 self.headers[_hk] = _hv  # type: ignore[index]
                             except Exception:

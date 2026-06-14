@@ -27,17 +27,58 @@ from typing import Optional
 
 from .contracts import PendingRequest
 
+# Credential-bearing request headers are NEVER persisted to spend_guard.db.
+# The held request is replayed with the live approving request's own auth
+# (the proxy re-applies it — see proxy/server.py replay-merge), so dropping
+# these from storage is safe and keeps raw credentials off disk, matching
+# the proxy's "zero disk writes" passthrough contract for credentials.
+_SENSITIVE_HEADERS = frozenset({
+    "authorization",
+    "proxy-authorization",
+    "x-api-key",
+    "api-key",
+    "openai-api-key",
+    "anthropic-api-key",
+    "x-goog-api-key",
+    "cookie",
+    "set-cookie",
+})
+
+
+def redact_headers(headers: dict) -> dict:
+    """Return a copy of ``headers`` with credential-bearing headers removed.
+
+    Case-insensitive on the header name. Used at store time (so creds never
+    reach disk) and defensively at replay time.
+    """
+    if not headers:
+        return {}
+    return {
+        k: v for k, v in headers.items()
+        if str(k).lower() not in _SENSITIVE_HEADERS
+    }
+
 
 def _db_path(audit_db_path: str) -> Path:
-    """Expand and ensure parent dir exists."""
+    """Expand and ensure parent dir exists (owner-only)."""
     p = Path(os.path.expanduser(audit_db_path))
     p.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(p.parent, 0o700)
+    except OSError:
+        pass
     return p
 
 
 def _connect(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path), timeout=5.0)
     conn.row_factory = sqlite3.Row
+    # The db holds request metadata — keep it owner-only (0600), like
+    # credentials.toml. Best-effort; never fail a connect over perms.
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     return conn
 
 
@@ -68,7 +109,39 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pending_hash ON pending_requests(request_hash, status)"
     )
+    # One-time migration: redact credential headers from any rows written by
+    # an older build that persisted raw headers (raw credential-on-disk
+    # exposure). Gated by PRAGMA user_version so it runs exactly once per db;
+    # no rows are deleted, so held requests stay replayable.
+    if conn.execute("PRAGMA user_version").fetchone()[0] < 1:
+        _redact_existing_rows(conn)
+        conn.execute("PRAGMA user_version = 1")
     conn.commit()
+
+
+def _redact_existing_rows(conn: sqlite3.Connection) -> None:
+    """Rewrite ``raw_request_headers`` in place, dropping credential headers.
+
+    No rows are deleted — held requests stay replayable (replay uses the live
+    approving request's auth, not the persisted copy).
+    """
+    rows = conn.execute(
+        "SELECT pending_id, raw_request_headers FROM pending_requests"
+    ).fetchall()
+    for row in rows:
+        try:
+            hdrs = json.loads(row["raw_request_headers"] or "{}")
+        except (ValueError, TypeError):
+            hdrs = {}
+        if not isinstance(hdrs, dict):
+            hdrs = {}
+        redacted = redact_headers(hdrs)
+        if redacted != hdrs:
+            conn.execute(
+                "UPDATE pending_requests SET raw_request_headers = ? "
+                "WHERE pending_id = ?",
+                (json.dumps(redacted, default=str), row["pending_id"]),
+            )
 
 
 def hash_request(body: bytes, model: str) -> str:
@@ -114,7 +187,9 @@ class PendingStore:
         expires_at = now + ttl_seconds
         request_hash = hash_request(body, model)
         blob = gzip.compress(body, compresslevel=3)
-        headers_json = json.dumps(headers, default=str)
+        # Credential headers never touch disk — replay re-applies live auth.
+        safe_headers = redact_headers(headers)
+        headers_json = json.dumps(safe_headers, default=str)
 
         conn = _connect(self.path)
         try:
@@ -149,7 +224,7 @@ class PendingStore:
             projected_tokens=projected_tokens,
             projected_cost_usd=projected_cost_usd,
             raw_request_blob=body,           # uncompressed for caller convenience
-            raw_request_headers=headers,
+            raw_request_headers=safe_headers,
             target_url=target_url,
             status="pending",
         )
