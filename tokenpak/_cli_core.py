@@ -93,41 +93,21 @@ def _emit_bare_json() -> None:
 
 
 def _get_monitor_db_path() -> Optional[Path]:
-    """Return path to proxy monitor.db, checking TOKENPAK_DB env var first.
+    """Return the canonical proxy monitor.db path.
 
-    Resolution order:
-    1. $TOKENPAK_DB env var
-    2. ~/tokenpak/monitor.db  (standard proxy install location)
-    3. ~/.tokenpak/monitor.db (legacy / symlink location)
-    Returns None if no DB with actual data is found.
+    D5 (feed normalization): delegate to ``tokenpak._paths.monitor_db()`` so
+    this legacy-core reader, the CLI ``status`` reader, ``doctor``, and the
+    proxy writer all resolve the SAME DB through one candidate chain
+    (``$TOKENPAK_DB`` -> ``~/.tpk`` -> ``~/.tokenpak`` -> ``~/tokenpak``).
+    The previous hand-rolled list omitted ``~/.tpk`` (the canonical TPK home),
+    which is the latent split-brain this removes. Returns None when no valid
+    monitor DB exists.
     """
-    import sqlite3
-
-    candidates: list[Path] = []
-
-    env_db = os.environ.get("TOKENPAK_DB")
-    if env_db:
-        candidates.append(Path(env_db).expanduser())
-
-    candidates.extend([
-        Path.home() / "tokenpak" / "monitor.db",
-        Path.home() / ".tokenpak" / "monitor.db",
-    ])
-
-    for p in candidates:
-        if p.exists() and not p.is_symlink() or (p.is_symlink() and p.resolve().exists()):
-            try:
-                conn = sqlite3.connect(str(p.resolve()), timeout=2)
-                cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) FROM requests")
-                count = cur.fetchone()[0]
-                conn.close()
-                if count > 0:
-                    return p.resolve()
-            except Exception:
-                pass
-
-    return None
+    try:
+        from tokenpak import _paths
+        return _paths.monitor_db(mode="read")
+    except Exception:
+        return None
 
 
 def _monitor_db_cost(period: str = "daily") -> float:

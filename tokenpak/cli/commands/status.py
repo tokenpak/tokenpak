@@ -101,15 +101,24 @@ def _fetch(url: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
 
 
 def _get_db_path() -> str:
-    """Resolve the monitor DB path."""
-    # Check env var first, then common locations
-    for candidate in [
-        os.environ.get("TOKENPAK_DB", ""),
-        os.path.expanduser("~/tokenpak/monitor.db"),
-        os.path.expanduser("~/.tokenpak/data/monitor.db"),
-    ]:
-        if candidate and Path(candidate).exists():
-            return candidate
+    """Resolve the monitor DB path via the canonical resolver.
+
+    D5 (feed normalization): delegate to ``tokenpak._paths.monitor_db()`` so
+    ``status``, ``_cli_core``, ``doctor``, and the proxy writer all resolve the
+    SAME DB through one candidate chain
+    (``$TOKENPAK_DB`` -> ``~/.tpk`` -> ``~/.tokenpak`` -> ``~/tokenpak``).
+    The previous hand-rolled list omitted ``~/.tpk`` (the canonical TPK home),
+    so the dashboard could read a different DB than the proxy writes once
+    ``~/.tpk/monitor.db`` exists — the latent split-brain this fixes.
+    Falls back to the legacy default only if no valid DB is found.
+    """
+    try:
+        from tokenpak import _paths
+        resolved = _paths.monitor_db(mode="read")
+        if resolved is not None:
+            return str(resolved)
+    except Exception:
+        pass
     return DB_DEFAULT
 
 

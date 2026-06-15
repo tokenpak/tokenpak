@@ -1720,6 +1720,28 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # Persist to monitor.db so `tokenpak status`, dashboards, and
                 # cross-session reporting see this request. Async write queue
                 # keeps this call <0.1ms. Fail-open.
+                # Resolve the session id from request headers so monitor.db rows
+                # are attributable per session (powers /stats/session). Pass an
+                # empty model so the resolver returns "" (not the model-name
+                # fallback) when no session header is present — never pollute
+                # session attribution with model names.
+                try:
+                    from tokenpak.proxy.request_pipeline import (
+                        _resolve_agent_id as _rai_mon,
+                    )
+                    from tokenpak.proxy.request_pipeline import (
+                        _resolve_cycle_id as _rci_mon,
+                    )
+                    from tokenpak.proxy.request_pipeline import (
+                        _resolve_session_id as _rsi_mon,
+                    )
+                    _mon_session_id = _rsi_mon(self.headers, "")
+                    _mon_agent_id = _rai_mon(self.headers)
+                    _mon_cycle_id = _rci_mon(self.headers)
+                except Exception:
+                    _mon_session_id = ""
+                    _mon_agent_id = ""
+                    _mon_cycle_id = ""
                 if ps.monitor is not None:
                     try:
                         ps.monitor.log(
@@ -1749,6 +1771,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             would_have_saved=int(saved),
                             cache_origin=_cache_origin,
                             user_id=getattr(self, "_tokenpak_user_id", "") or "",
+                            session_id=_mon_session_id,
+                            agent_id=_mon_agent_id,
+                            cycle_id=_mon_cycle_id,
                         )
                     except Exception:
                         pass  # DB errors must never break the request

@@ -651,6 +651,41 @@ def _resolve_session_id(headers: Any, model: str) -> str:
     return model
 
 
+def _resolve_agent_id(headers: Any) -> str:
+    """Resolve the agent id from the ``X-Tokenpak-Agent`` header.
+
+    Case-insensitive lookup, lower-cased value — matches the spend_guard
+    rolling-caps attribution convention (``spend_guard/orchestrator.py``) so
+    the persisted monitor.db ``agent_id`` and the live cap accounting agree.
+    Returns ``""`` (the unknown-attribution sentinel, classified ``unknown``
+    downstream) when no caller set the header. Never fabricated.
+    """
+    try:
+        for hk, hv in (headers.items() if hasattr(headers, "items") else []):
+            if str(hk).lower() == "x-tokenpak-agent":
+                return str(hv).strip().lower()
+    except Exception:
+        pass
+    return ""
+
+
+def _resolve_cycle_id(headers: Any) -> str:
+    """Resolve the cycle id from the ``X-Tokenpak-Cycle`` header.
+
+    No caller stamps this header today; it is resolved here so
+    a future worker that sets it is captured with no code change. Until then
+    the ``""`` sentinel is written and classified ``unknown`` —
+    never fabricated.
+    """
+    try:
+        for hk, hv in (headers.items() if hasattr(headers, "items") else []):
+            if str(hk).lower() == "x-tokenpak-cycle":
+                return str(hv).strip()
+    except Exception:
+        pass
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # Budget controller — enforce per-bucket token limits
 # Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 2070–2082)

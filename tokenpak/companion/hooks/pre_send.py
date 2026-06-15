@@ -117,6 +117,13 @@ def main() -> int:
     if not session_id:
         session_id = f"anon-{os.getpid()}-{int(time.time())}"
     _journal_write(session_id, tokens_est, cost_est)
+    # Record the pre-send cost estimate into companion_costs so per-session
+    # daily spend is actually tracked (this table is the basis for the budget
+    # gate above and for `tokenpak status` companion cost). Historically these
+    # rows landed with session_id='' because no live writer was wired after a
+    # refactor; this carries the real session_id. Best-effort, never fails the
+    # hook. Recorded AFTER the gate read above, so no double-count this cycle.
+    _record_cost(session_id, tokens_est, cost_est)
 
     # Cost estimate to stderr (visible in TUI)
     if tokens_est > 0 and os.environ.get("TOKENPAK_COMPANION_SHOW_COST", "1") != "0":
@@ -221,6 +228,48 @@ def _journal_write(session_id: str, tokens_est: int, cost_est: float) -> None:
             (session_id, time.time(), "auto",
              f"pre-send: ~{tokens_est:,} tokens, est ${cost_est:.4f}",
              json.dumps({"tokens_est": tokens_est, "cost_est": cost_est})),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass  # never fail the hook
+
+
+def _record_cost(session_id: str, tokens_est: int, cost_est: float) -> None:
+    """Best-effort pre-send cost row — never fails the hook.
+
+    Mirrors ``tokenpak.companion.budget.tracker.BudgetTracker.record`` schema
+    but inlined (no heavy import) to preserve the hook's hot-path discipline.
+    Output tokens are unknown pre-send, so only input is recorded; the proxy
+    telemetry DB remains the source of truth for actual billed spend.
+    """
+    import datetime
+    db_path = Path(os.environ.get(
+        "TOKENPAK_COMPANION_JOURNAL_DIR",
+        str(Path.home() / ".tokenpak" / "companion"),
+    )) / "budget.db"
+    try:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS companion_costs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp REAL NOT NULL,
+                date TEXT NOT NULL,
+                session_id TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                input_tokens INTEGER NOT NULL DEFAULT 0,
+                cached_tokens INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0,
+                estimated_cost REAL NOT NULL DEFAULT 0.0
+            )
+        """)
+        conn.execute(
+            "INSERT INTO companion_costs "
+            "(timestamp, date, session_id, model, input_tokens, cached_tokens, "
+            "output_tokens, estimated_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (time.time(), datetime.date.today().isoformat(), session_id, "",
+             int(max(0, tokens_est)), 0, 0, round(float(max(0.0, cost_est)), 6)),
         )
         conn.commit()
         conn.close()

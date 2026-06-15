@@ -504,7 +504,15 @@ def run_doctor(
         )
 
     # === Check 2: DB path and row count =========================================
-    db_path = tokenpak_dir / "monitor.db"
+    # D5 (feed normalization): resolve via the canonical candidate chain
+    # (_paths.monitor_db) instead of home()/monitor.db, so doctor reads the SAME
+    # DB as status, _cli_core, and the proxy writer. home() alone bypasses the
+    # chain — once ~/.tpk/ exists without a monitor.db, home() points there and
+    # doctor would report "not found" while the proxy writes ~/.tokenpak/ or
+    # ~/tokenpak/ (the latent split-brain). Falls back to home()/monitor.db only
+    # if the resolver finds nothing (preserves the prior "not found" path).
+    _resolved_db = _paths.monitor_db(mode="read")
+    db_path = _resolved_db if _resolved_db is not None else (tokenpak_dir / "monitor.db")
     if db_path.exists():
         try:
             conn = sqlite3.connect(str(db_path))
