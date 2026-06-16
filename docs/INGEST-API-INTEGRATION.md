@@ -205,7 +205,7 @@ This is included in health/stats responses for monitoring.
 Run the full test suite:
 
 ```bash
-cd /home/trix/Projects/tokenpak
+cd /path/to/tokenpak
 python3 -m pytest tests/test_ingest_tokenpak.proxy.py -v
 ```
 
