@@ -4,7 +4,7 @@
   "description": "Corpus-aware context packing, skills, and safety hooks for tokenpak users. Adds five MCP tools, five workflow skills, and four protective hooks to Claude Code.",
   "author": "tokenpak",
   "repository": "https://github.com/tokenpak/registry",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "claude-code": ">=1.0.0"
   },
