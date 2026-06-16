@@ -199,7 +199,7 @@ pytest --cov=autogen_tokenpak --cov-report=term-missing tests/
 
 ## License
 
-MIT
+Apache-2.0
 
 ## Support
 

@@ -143,7 +143,7 @@ Relative compression for conversation history (measure your own with `tokenpak s
 
 ## License
 
-MIT
+Apache-2.0
 
 ## References
 

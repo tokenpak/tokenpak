@@ -36,12 +36,12 @@
 | `version` | ✅ | `0.1.0` |
 | `description` | ✅ | "TokenPak adapters for vector databases — Pinecone, Weaviate, Qdrant, Chroma" |
 | `readme` | ✅ | `README.md` (present) |
-| `license` | ✅ | MIT |
+| `license` | ✅ | Apache-2.0 |
 | `requires-python` | ✅ | `>=3.10` |
 | `authors` | ✅ | TokenPak Team |
 | `dependencies` | ✅ | `tokenpak-sdk>=0.1.0` |
 | `keywords` | ✅ | 8 keywords listed (tokenpak, pinecone, weaviate, qdrant, chroma, vectordb, rag, compression) |
-| `classifiers` | ✅ | 8 classifiers (Python 3.10-3.13, MIT, Developers, AI) |
+| `classifiers` | ✅ | 8 classifiers (Python 3.10-3.13, Apache, Developers, AI) |
 | `optional-dependencies` | ✅ | 5 groups (pinecone, weaviate, qdrant, chroma, all, dev) |
 | `project.urls` | ✅ | Homepage, Documentation, Repository |
 | `build-system` | ✅ | setuptools with `build_meta` backend |
@@ -93,7 +93,7 @@ Total: 98 passed in 0.20s (0 failures, 0 skipped)
 | Package name valid | ✅ | `tokenpak-vectordb` (lowercase, hyphens) |
 | Version SemVer | ✅ | 0.1.0 (major.minor.patch) |
 | Long description | ✅ | 4.9 KB README with examples |
-| License specified | ✅ | MIT |
+| License specified | ✅ | Apache-2.0 |
 | Authors present | ✅ | TokenPak Team |
 | Python version specified | ✅ | 3.10+ |
 | Dependencies pinned to minimum | ✅ | >=X.Y.Z format |

@@ -78,4 +78,4 @@ Learn more: https://github.com/tokenpak/tokenpak
 
 ## License
 
-MIT
+Apache-2.0

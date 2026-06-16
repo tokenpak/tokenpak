@@ -162,4 +162,4 @@ Relative savings on RAG pipelines (measure your own with `tokenpak savings`):
 
 ## License
 
-MIT
+Apache-2.0

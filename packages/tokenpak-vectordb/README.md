@@ -173,4 +173,4 @@ response = llm.complete(prompt)
 
 ## License
 
-MIT
+Apache-2.0

@@ -96,4 +96,4 @@ Each task also records a `TokenPakCompressionReport` with per-task budgets, toke
 
 ## License
 
-MIT
+Apache-2.0

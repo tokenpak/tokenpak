@@ -264,4 +264,4 @@ Compressibility varies by content type:
 
 ## License
 
-MIT
+Apache-2.0
