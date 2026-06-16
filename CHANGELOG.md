@@ -6,6 +6,28 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.9.1] — 2026-06-16
+
+Patch release: privacy/security hardening, honest telemetry, license alignment,
+and a dispatch reliability fix. Additive; no breaking changes.
+
+### Security & privacy
+- **spend-guard:** credential headers (authorization, api-key, cookie, …) are
+  never persisted to disk in the spend-guard pending/replay path.
+
+### Added — telemetry
+- **telemetry:** honest platform-origin attribution + a coverage metric surfaced
+  in `tokenpak doctor`; session/agent/cycle ids threaded into the monitor.db
+  write path for accurate per-source accounting.
+
+### Fixed — dispatch
+- **dispatch:** delivered dispatch runs now persist a receipt (receipt builder
+  wired into the fulfillment flow); dispatch registry/schema files ship in the wheel.
+
+### Docs
+- **license:** package READMEs + PYPI_READINESS corrected from `MIT` to
+  `Apache-2.0` to match the canonical Apache-2.0 LICENSE.
+
 ## [1.9.0] — 2026-06-14
 
 Minor release: a guided **onboarding & lifecycle** pass on the CLI. Additive
