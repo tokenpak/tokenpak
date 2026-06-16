@@ -83,8 +83,8 @@ def _db_writer_worker():
                             compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens,
                             would_have_saved,cache_origin,user_id,
                             cache_creation_ephemeral_1h_tokens,cache_creation_ephemeral_5m_tokens,ttl_attribution,
-                            session_id,agent_id,cycle_id)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            session_id,agent_id,cycle_id,attribution_source)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         insert_params,
                     )
                     conn.commit()
@@ -153,7 +153,8 @@ class Monitor:
                 user_id TEXT DEFAULT '',
                 session_id TEXT DEFAULT '',
                 agent_id TEXT DEFAULT '',
-                cycle_id TEXT DEFAULT ''
+                cycle_id TEXT DEFAULT '',
+                attribution_source TEXT DEFAULT ''
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ts ON requests(timestamp)")
@@ -240,6 +241,10 @@ class Monitor:
         for _alter in (
             "ALTER TABLE requests ADD COLUMN agent_id TEXT DEFAULT ''",
             "ALTER TABLE requests ADD COLUMN cycle_id TEXT DEFAULT ''",
+            # attribution_source <- platform-origin extractor (Path C). Non-empty
+            # only when origin is genuinely known; '' sentinel otherwise (never
+            # fabricated). Idempotent — may pre-exist from a peer migration.
+            "ALTER TABLE requests ADD COLUMN attribution_source TEXT DEFAULT ''",
         ):
             try:
                 conn.execute(_alter)
@@ -309,6 +314,7 @@ class Monitor:
         session_id="",
         agent_id="",
         cycle_id="",
+        attribution_source="",
     ):
         # ``session_id`` is the resolved Claude Code / TokenPak session id
         # (``_resolve_session_id``). Empty string when no session header was
@@ -346,6 +352,7 @@ class Monitor:
             session_id or "",
             agent_id or "",
             cycle_id or "",
+            attribution_source or "",
         )
         _queued = False
         try:
@@ -359,8 +366,8 @@ class Monitor:
                 "compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens, "
                 "would_have_saved, cache_origin, user_id, "
                 "cache_creation_ephemeral_1h_tokens, cache_creation_ephemeral_5m_tokens, ttl_attribution, "
-                "session_id, agent_id, cycle_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "session_id, agent_id, cycle_id, attribution_source) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 insert_params,
             )
             _conn.commit()

@@ -1742,6 +1742,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     _mon_session_id = ""
                     _mon_agent_id = ""
                     _mon_cycle_id = ""
+                # Honest platform-origin attribution (Path C): non-empty ONLY when
+                # the origin is genuinely known (a recognized active-session file
+                # or platform User-Agent). '' sentinel otherwise — never
+                # fabricated, never attributed to the proxy itself. Read-only.
+                try:
+                    from tokenpak.services.routing_service.platform_bridge import (
+                        _openclaw_extract as _oce_mon,
+                    )
+                    _mon_origin = _oce_mon(self.headers, b"")
+                    _mon_attribution_source = (
+                        _mon_origin.attribution_source if _mon_origin is not None else ""
+                    ) or ""
+                except Exception:
+                    _mon_attribution_source = ""
                 if ps.monitor is not None:
                     try:
                         ps.monitor.log(
@@ -1774,6 +1788,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             session_id=_mon_session_id,
                             agent_id=_mon_agent_id,
                             cycle_id=_mon_cycle_id,
+                            attribution_source=_mon_attribution_source,
                         )
                     except Exception:
                         pass  # DB errors must never break the request

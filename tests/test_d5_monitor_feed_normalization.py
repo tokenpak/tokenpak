@@ -144,3 +144,96 @@ def test_readers_delegate_to_canonical_resolver(tmp_path, monkeypatch):
     canon = os.path.realpath(str(_paths.monitor_db(mode="read")))
     assert os.path.realpath(_get_db_path()) == canon
     assert os.path.realpath(str(_get_monitor_db_path())) == canon
+
+
+# --------------------------------------------------------------------------
+# AT-C — honest platform-origin attribution (attribution_source)
+# --------------------------------------------------------------------------
+
+def _attr_rows(db_path):
+    try:
+        _monitor_mod._DB_WRITE_QUEUE.join()
+    except Exception:
+        pass
+    conn = sqlite3.connect(str(db_path))
+    try:
+        return conn.execute(
+            "SELECT attribution_source FROM requests ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+def test_schema_has_attribution_source_column(tmp_path):
+    db = tmp_path / "monitor.db"
+    Monitor(str(db))
+    cols = [r[1] for r in sqlite3.connect(str(db)).execute("PRAGMA table_info(requests)")]
+    assert "attribution_source" in cols
+
+
+def test_log_persists_known_attribution_source(tmp_path):
+    db = tmp_path / "monitor.db"
+    m = Monitor(str(db))
+    m.log(
+        model="claude-opus-4-8", input_tokens=10, output_tokens=2, cost=0.0,
+        latency_ms=5, status_code=200, endpoint="http://x",
+        attribution_source="openclaw_active_session_file",
+    )
+    rows = _attr_rows(db)
+    assert rows and rows[-1][0] == "openclaw_active_session_file"
+
+
+def test_attribution_source_empty_sentinel_when_unknown(tmp_path):
+    db = tmp_path / "monitor.db"
+    m = Monitor(str(db))
+    m.log(
+        model="claude-haiku-4-5", input_tokens=1, output_tokens=1, cost=0.0,
+        latency_ms=1, status_code=200, endpoint="http://y",
+    )
+    rows = _attr_rows(db)
+    # '' sentinel (never NULL, never fabricated) so 'non-empty == known origin'
+    assert rows and rows[-1][0] == ""
+
+
+def test_path_c_mapping_unknown_origin_is_empty_not_fabricated():
+    """Wiring rule: extractor None -> '' (honest unknown); openclaw -> a
+    non-empty, evidence-graded source, NEVER the proxy's own name."""
+    from tokenpak.services.routing_service.platform_bridge import _openclaw_extract
+
+    origin = _openclaw_extract({"User-Agent": "claude-code/2.1.0"}, b"")
+    mapped = (origin.attribution_source if origin is not None else "") or ""
+    assert mapped == ""
+
+    oc = _openclaw_extract({"User-Agent": "openclaw/2026.4.28-1"}, b"")
+    assert oc is not None
+    mapped_oc = (oc.attribution_source if oc is not None else "") or ""
+    assert mapped_oc != ""
+    assert "tokenpak" not in mapped_oc.lower()
+
+
+# --------------------------------------------------------------------------
+# AT-D — attribution coverage metric (% known origin)
+# --------------------------------------------------------------------------
+
+def test_attribution_coverage_metric(tmp_path):
+    """Coverage = % of requests rows with a non-empty (known) origin."""
+    from tokenpak.cli.commands.doctor import attribution_coverage
+
+    db = tmp_path / "monitor.db"
+    m = Monitor(str(db))
+    for src in ("openclaw_active_session_file", "anonymous_user_agent_only",
+                "openclaw_active_session_file"):
+        m.log(model="claude-opus-4-8", input_tokens=1, output_tokens=1, cost=0.0,
+              latency_ms=1, status_code=200, endpoint="http://x",
+              attribution_source=src)
+    m.log(model="claude-opus-4-8", input_tokens=1, output_tokens=1, cost=0.0,
+          latency_ms=1, status_code=200, endpoint="http://y")  # unknown -> ''
+    _drain(db)
+    known, total, pct = attribution_coverage(str(db))
+    assert (known, total) == (3, 4)
+    assert pct == pytest.approx(75.0)
+
+
+def test_attribution_coverage_graceful_when_absent(tmp_path):
+    from tokenpak.cli.commands.doctor import attribution_coverage
+    assert attribution_coverage(str(tmp_path / "missing.db")) == (0, 0, None)

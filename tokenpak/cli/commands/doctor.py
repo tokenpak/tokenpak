@@ -296,6 +296,37 @@ def verify_integration_target(key: str, proxy_url: str) -> tuple[bool, str]:
         return (False, f"verify raised: {exc}")
 
 
+def attribution_coverage(db_path) -> "tuple[int, int, float | None]":
+    """Return ``(known, total, pct)`` attribution coverage over the requests
+    ledger — the share of rows whose origin is genuinely known (non-empty
+    ``attribution_source``). Internal gate measure only; NOT a public number.
+    Degrades to ``(0, 0, None)`` when the db / table / column is absent."""
+    import sqlite3 as _sq
+
+    try:
+        conn = _sq.connect(str(db_path), timeout=2.0)
+    except Exception:
+        return (0, 0, None)
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(requests)")]
+        if "attribution_source" not in cols:
+            return (0, 0, None)
+        total = conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0] or 0
+        known = conn.execute(
+            "SELECT COUNT(*) FROM requests "
+            "WHERE attribution_source IS NOT NULL AND attribution_source != ''"
+        ).fetchone()[0] or 0
+        pct = (100.0 * known / total) if total else None
+        return (known, total, pct)
+    except Exception:
+        return (0, 0, None)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def run_doctor(
     fix: bool = False,
     output_json: bool = False,
@@ -441,6 +472,24 @@ def run_doctor(
             f"{requests_total} reqs, {latency_str}",
             detail=f"compilation_mode={mode} requests={requests_total} p95={p95} p99={p99} outlier={outlier}",
         )
+
+        # Attribution coverage — % of ledger rows with a genuinely known origin
+        # (non-empty attribution_source). Internal gate measure; NOT a public
+        # number. Informational only — does not fail/penalize the doctor exit.
+        try:
+            _mon_db = _paths.monitor_db("read")
+        except Exception:
+            _mon_db = None
+        if _mon_db is not None:
+            _cov_known, _cov_total, _cov_pct = attribution_coverage(_mon_db)
+            if _cov_total > 0 and _cov_pct is not None:
+                _record(
+                    "attribution_coverage",
+                    "pass",
+                    f"Attribution         {_cov_pct:.0f}% known origin "
+                    f"({_cov_known}/{_cov_total} reqs)",
+                    detail=f"non-empty attribution_source on {_cov_known}/{_cov_total} requests rows",
+                )
     else:
         # Fall back to TCP check
         try:
