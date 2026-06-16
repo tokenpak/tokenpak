@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-06-14T16:53:33Z",
+  "generated_at": "2026-06-16T16:23:40Z",
   "package_version": "1.9.0",
   "symbols": [
     {
@@ -802,6 +802,10 @@
     {
       "module": "tokenpak.cli.commands.doctor",
       "name": "DEFAULT_FLEET_CONFIG"
+    },
+    {
+      "module": "tokenpak.cli.commands.doctor",
+      "name": "attribution_coverage"
     },
     {
       "module": "tokenpak.cli.commands.doctor",
@@ -10454,6 +10458,10 @@
     {
       "module": "tokenpak.proxy.spend_guard.pending",
       "name": "hash_request"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.pending",
+      "name": "redact_headers"
     },
     {
       "module": "tokenpak.proxy.spend_guard.policy",
