@@ -128,6 +128,32 @@ def print_intermediate_help() -> None:
     print("Run `tokenpak help <command>` for details on any command.")
 
 
+def _discover_plugin_command_names(known: set) -> list[str]:
+    """Return verbs registered under the ``tokenpak.commands`` entry-point group.
+
+    Excludes any name already known to the core CLI (built-ins win) and honors
+    the ``TOKENPAK_ENABLE_PLUGINS=0`` opt-out. Never raises — a broken plugin
+    environment must not break help rendering.
+    """
+    import os
+
+    val = os.environ.get("TOKENPAK_ENABLE_PLUGINS")
+    if val is not None and val.strip().lower() in ("0", "false", "no", "off"):
+        return []
+    try:
+        from importlib.metadata import entry_points
+
+        eps = entry_points()
+        if hasattr(eps, "select"):
+            command_eps = eps.select(group="tokenpak.commands")
+        else:  # pragma: no cover - legacy importlib.metadata
+            command_eps = eps.get("tokenpak.commands", [])
+        names = {ep.name for ep in command_eps if ep.name not in known}
+        return sorted(names)
+    except Exception:
+        return []
+
+
 def print_full_help(tier: Optional[str] = None) -> None:
     """Print all commands."""
     commands = _load_registry()
@@ -144,6 +170,14 @@ def print_full_help(tier: Optional[str] = None) -> None:
             aliases = cmd.get("aliases", [])
             alias_str = f"  (alias: {', '.join(aliases)})" if aliases else ""
             print(f"    {name:<16} {desc}{alias_str}")
+        print()
+
+    known = {c.get("command") for c in commands}
+    plugin_names = _discover_plugin_command_names(known)
+    if plugin_names:
+        print("  Pro / plugins:")
+        for name in plugin_names:
+            print(f"    {name:<16} Provided by an installed plugin")
         print()
 
     print("Run `tokenpak help <command>` for details.")

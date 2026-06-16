@@ -341,11 +341,106 @@ _EXTRA_KNOWN_COMMANDS = {
 def _core_command_names() -> set:
     """Return the authoritative set of all built-in CLI verb names.
 
-    The union of the grouped commands (:data:`_ALL_COMMANDS`) and the
-    argparse/stub commands (:data:`_EXTRA_KNOWN_COMMANDS`). Used by the bare
-    ``--json`` catalog and the interactive menu's lifecycle-overlay validation.
+    This is the union of the grouped commands and the argparse/stub commands.
+    Plugin discovery excludes every name in this set so a plugin can never
+    shadow a built-in verb.
     """
     return set(_ALL_COMMANDS) | set(_EXTRA_KNOWN_COMMANDS)
+
+
+# ── Plugin command discovery (tokenpak.commands entry-point group) ────────────
+#
+# Installed plugins (e.g. the premium tier) register additional CLI verbs under
+# the ``tokenpak.commands`` setuptools entry-point group. Each entry point
+# resolves to a callable that takes the remaining argv list and returns an int
+# exit code; that callable is the plugin's own gated wrapper, so entitlement
+# enforcement lives entirely inside the plugin — the core CLI only routes to it.
+#
+# Built-in verbs always win on a name collision: a plugin can never shadow a
+# command that ships in the core CLI. Discovery is lazy (only walked when an
+# unknown verb is seen or full help is rendered) and cached for the process.
+#
+# Discovery is on by default. Set ``TOKENPAK_ENABLE_PLUGINS=0`` to disable it
+# (e.g. for a fully hermetic core-only invocation).
+
+_plugin_commands_cache: Optional[dict] = None
+
+
+def _plugins_enabled() -> bool:
+    """Return False only when discovery is explicitly disabled via env."""
+    val = os.environ.get("TOKENPAK_ENABLE_PLUGINS")
+    if val is None:
+        return True
+    return val.strip().lower() not in ("0", "false", "no", "off")
+
+
+def _discover_plugin_commands(force: bool = False) -> dict:
+    """Discover CLI verbs registered under the ``tokenpak.commands`` group.
+
+    Returns a mapping of ``verb name -> entry point``, excluding any verb whose
+    name collides with a built-in command (built-ins always win). The result is
+    cached for the lifetime of the process. Returns an empty dict when discovery
+    is disabled or no plugins are installed. Never raises — a broken plugin
+    environment must not break the core CLI.
+    """
+    global _plugin_commands_cache
+    if _plugin_commands_cache is not None and not force:
+        return _plugin_commands_cache
+
+    discovered: dict = {}
+    if not _plugins_enabled():
+        _plugin_commands_cache = discovered
+        return discovered
+
+    core_names = _core_command_names()
+    try:
+        from importlib.metadata import entry_points
+
+        eps = entry_points()
+        # Python 3.12+ exposes .select(); older returns a dict-like mapping.
+        if hasattr(eps, "select"):
+            command_eps = eps.select(group="tokenpak.commands")
+        else:  # pragma: no cover - legacy importlib.metadata
+            command_eps = eps.get("tokenpak.commands", [])
+
+        for ep in command_eps:
+            # Built-in verbs win on collision: never let a plugin shadow core.
+            if ep.name in core_names or ep.name in discovered:
+                continue
+            discovered[ep.name] = ep
+    except Exception:
+        # Any failure to read entry points leaves the core CLI fully functional.
+        discovered = {}
+
+    _plugin_commands_cache = discovered
+    return discovered
+
+
+def _dispatch_plugin_command(verb: str, argv: list) -> int:
+    """Invoke a discovered plugin verb's callable with the remaining argv.
+
+    ``argv`` is everything after the verb itself. The loaded callable is the
+    plugin's own gated wrapper: an unentitled invocation returns the plugin's
+    upgrade stub exit code, while an entitled one runs the real command. The
+    core CLI does not inspect or alter that gating — it only routes.
+
+    Returns the plugin callable's int exit code (defaulting to 0 when the
+    callable returns ``None``), or a non-zero code if the plugin fails to load.
+    """
+    plugins = _discover_plugin_commands()
+    ep = plugins.get(verb)
+    if ep is None:
+        return 1
+    try:
+        func = ep.load()
+    except Exception as exc:  # pragma: no cover - defensive
+        print(
+            f"❌ Failed to load plugin command '{verb}': {exc}",
+            file=sys.stderr,
+        )
+        return 3
+    rc = func(argv)
+    return rc if isinstance(rc, int) else 0
 
 
 def _suggest_command(unknown: str) -> Optional[str]:
@@ -436,6 +531,12 @@ def _print_full_help():
             print(f"  {group_name}:")
             for cmd, desc in commands:
                 print(f"    {cmd:<14} {desc}")
+            print()
+        _plugin_cmds = _discover_plugin_commands()
+        if _plugin_cmds:
+            print("  Pro / plugins:")
+            for name in sorted(_plugin_cmds):
+                print(f"    {name:<14} Provided by an installed plugin")
             print()
         print("Run `tokenpak <command> --help` for command details.")
 
@@ -4867,53 +4968,24 @@ def main():
 
     # ── Intercept unknown commands for typo suggestions ───────────────────────
     raw_cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    known_cmds = set(_ALL_COMMANDS) | {
-        # also include argparse-registered commands not in groups
-        "help",
-        "start",
-        "stop",
-        "restart",
-        "logs",
-        "version",
-        "update",
-        "config",
-        "setup",
-        "compare",
-        "leaderboard",
-        "report",
-        "check-alerts",
-        "alerts",
-        "watch",
-        "integrate",
-        "openclaw",
-        "savings",
-        "recommendations",
-        "usage",
-        "preview",
-        "aggregate",
-        "requests",
-        "validate-config",
-        "vault",
-        "vault-health",
-        "compress",
-        "optimize",
-        "last",
-        "prune",
-        "retrieval",
-        "menu",
-        # Stub commands (advertised in help/registry, not yet implemented)
-        "license",
-        "plan",
-        "activate",
-        "deactivate",
-        "init",
-        "monitor",
-        # Beta 1 verb families (TIP, features, PAKPlan preview, home)
-        "tip",
-        "features",
-        "pakplan",
-        "home",
-    }
+    # Authoritative built-in verb set (grouped + argparse/stub commands). Plugin
+    # verbs are dispatched only when raw_cmd is NOT in this set, so built-ins
+    # always win on a name collision.
+    known_cmds = _core_command_names()
+    # ── Plugin verbs (tokenpak.commands entry-point group) ────────────────────
+    # A verb that is not a built-in but is registered by an installed plugin is
+    # routed straight to the plugin's own (already gated) callable. Built-ins win
+    # on collision because this branch only runs for verbs not in known_cmds, and
+    # discovery itself excludes any name that shadows a core command. Everything
+    # after the verb is forwarded verbatim so the plugin owns its own flags
+    # (including its own --help). Entitlement gating is the plugin's job.
+    if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
+        _plugin_cmds = _discover_plugin_commands()
+        if raw_cmd in _plugin_cmds:
+            _verb_idx = sys.argv.index(raw_cmd)
+            _rc = _dispatch_plugin_command(raw_cmd, sys.argv[_verb_idx + 1:])
+            sys.exit(_rc)
+
     # If user asks --help on an unrecognised command, just show that command's usage + exit 0
     if (
         raw_cmd
