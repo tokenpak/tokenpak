@@ -1,77 +1,55 @@
-# TokenPak Beta 1 — Known Limitations
+# TokenPak — Known Limitations & When NOT to Use
 
-Honest list of what's not yet at production quality. Read this before
-making decisions based on Beta 1 behavior.
+An honest list of what isn't yet at production quality in the open-source release, and where TokenPak is *not* the right fit today. Current as of **v1.9.1** (the released version on PyPI). Each entry names a **retirement condition** — the concrete signal that removes it.
 
-## Activation does not unlock Pro yet
+## Activation does not unlock Pro features yet
 
-`tokenpak activate <key>` validates the *shape* of a license key and
-stores it, but the real ed25519 signature verifier ships separately
-(via the Pro daemon `tokenpak-paid` package). Until that daemon is
-running on your machine with a production public key embedded,
-`activate` stores plausibly-shaped keys with status
-`pending_validation` and **does not unlock Pro features**. Entitlements
-remain Free.
+- **What this affects:** `tokenpak activate <key>` and any Pro-gated feature.
+- **Intentional vs. bug:** intentional fail-safe.
+- **Current behavior:** `activate` validates the *shape* of a license key and stores it with status `pending_validation`; cryptographic signature verification ships with the separate Pro package, so until that runs with a production key, Pro features stay locked and entitlements remain Free. The CLI never claims Pro access on a key it cannot verify.
+- **Workaround:** none needed for open-source use — every OSS feature works without activation.
+- **Retirement condition:** the Pro signature verifier ships with a production key and `activate` reports a verified entitlement.
 
-This is intentional fail-safe behavior. The CLI never claims Pro
-access on a key it cannot verify.
+## Spend Guard is warn-only in the open-source build
 
-## External public beta is blocked
+- **What this affects:** budget / spend caps in the open-source proxy.
+- **Intentional vs. bug:** intentional (tier boundary).
+- **Current behavior:** the open-source Spend Guard surfaces warnings and reports on spend; the hard-stop "actually block the request" enforcement path is a Pro feature.
+- **Workaround:** use the warnings and reports to monitor spend; set conservative caps and act on the surfaced signals.
+- **Retirement condition:** hard-stop enforcement becomes available in the open-source build, or is documented as permanently Pro-only.
 
-The current state is **internal smoke beta only**. External public
-beta is gated by:
+## `tokenpak setup` has rough edges — prefer `tokenpak home init`
 
-1. PR #162 / release-gate recovery (target 2026-05-22).
-2. Explicit Kevin sign-off on the v1.6.0 MINOR version bump (no
-   pre-authorization per `feedback_initiative_completion_versioning`).
-3. Production ed25519 public-key rotation in the Pro daemon
-   (currently a placeholder).
-4. Final Packet J polish + integration smoke pass on the release artifact.
+- **What this affects:** first-run setup.
+- **Intentional vs. bug:** known rough edge (convergence in progress).
+- **Current behavior:** the `setup` flow has more than one code path and can behave inconsistently in some edge cases.
+- **Workaround:** use `tokenpak home init` — the cleaner path for establishing the canonical home directory.
+- **Retirement condition:** the setup flow converges to a single implementation and `setup` is the recommended entry point.
 
-If you received a link to this codebase from outside the internal
-tester pool, the public announcement hasn't happened and you should
-not redistribute.
+## Some `doctor` messages still print the legacy path string
 
-## Pro production key is a placeholder
+- **What this affects:** cosmetic diagnostic output in `tokenpak doctor`.
+- **Intentional vs. bug:** cosmetic bug (display only).
+- **Current behavior:** several diagnostic messages still print the legacy `~/.tokenpak/` path even when the canonical `~/.tpk/` home is in use. Actual path *resolution* honors the canonical home — only the printed strings lag.
+- **Workaround:** trust `tokenpak home path` for the active home; a legacy string in a message does not change behavior.
+- **Retirement condition:** the diagnostic strings are migrated to the canonical home path.
 
-The Pro daemon (`tokenpak-paid`) `license_verifier.py` ships with an
-all-zeros placeholder public key. The daemon honestly reports this
-via `/v1/health` (`license_key_is_placeholder: true`) and refuses to
-treat *any* license as cryptographically verified while the
-placeholder is in place. Real production keypair generation +
-embedding is tracked as a follow-up packet.
+## Pro Cloud, marketplace, and additional-language SDKs are not shipped
 
-## Spend Guard is warn-only in OSS
+- **What this affects:** expectations about roadmap surface.
+- **Intentional vs. bug:** intentional (roadmap, not current scope).
+- **Current behavior:** these are roadmap items, not present in the current release.
+- **Workaround:** use the shipped Python package and local proxy.
+- **Retirement condition:** each ships and is documented as available.
 
-Beta 1 OSS Spend Guard surfaces warnings and reports. Hard-stop
-enforcement (the "actually block the request" path) is Pro Local
-only.
+## When NOT to use TokenPak
 
-## Setup command is two implementations
+TokenPak earns trust by being honest about non-fit. It is **not** the right choice today when:
 
-`tokenpak setup` has two divergent implementations under the hood
-(`cmd_setup` vs `run_setup_cmd`). Convergence is deferred to
-post-staging polish to avoid parser-rename collisions during Beta 1.
-For Beta 1 use `tokenpak home init` instead — it's the cleaner path
-for the canonical home-directory boundary.
-
-## Doctor still references legacy paths in some checks
-
-Several diagnostic messages still print `~/.tokenpak/` even when the
-canonical `~/.tpk/` is in use. The actual *resolution* honors the canonical home layout
-(via `tokenpak._paths`); the cosmetic strings will migrate in a
-follow-on polish pass.
-
-## TokenPak Meeting is parked
-
-The TokenPak Meeting initiative was parked 2026-05-15 and is not
-part of Beta 1. Any references you find to it in code or vault
-material are out of scope.
-
-## Pro Cloud, marketplace, multi-language SDKs
-
-These are roadmap items, not Beta 1 surface. Don't claim or assume
-them.
+- **There is nothing to measure or reuse** — a pure byte-pass path (no repeated context to pack, no eligible savings) won't show savings; TokenPak reports "unknown" rather than a fabricated percentage.
+- **You need hard spend enforcement in the open-source build** — the OSS Spend Guard warns but does not block; if you require a hard stop, that is a Pro feature today.
+- **You need at-rest encryption of local stores** — the open-source build does not encrypt local cache or telemetry at rest, and plugins run in-process (it is not a sandbox).
+- **You want a managed cloud service** — TokenPak runs locally on your machine, loopback-only; there is no hosted offering in this release.
 
 ## Reporting issues
 
@@ -79,6 +57,6 @@ Please include:
 
 1. `tokenpak --version`
 2. Platform (`uname -a` on Linux/macOS)
-3. The command + full output
+3. The command and its full output
 4. `tokenpak home path` (shows which home is active)
 5. `tokenpak doctor --conformance --json` (if conformance-related)
