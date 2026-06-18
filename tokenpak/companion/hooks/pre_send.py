@@ -60,6 +60,14 @@ def main() -> int:
     if os.environ.get("TOKENPAK_COMPANION_ENABLED", "1").lower() in ("0", "false", "no"):
         return 0
 
+    # Session-binding keystone: persist the live session id so the
+    # (separate-process) companion MCP server can bind to it. The MCP server
+    # never sees the hook payload, so this run-dir marker is the only bridge.
+    # Only the real session id is bound — the anon-{pid} journal fallback below
+    # is NOT a handoff identity. Best-effort; never fails the hook.
+    if session_id:
+        _write_session_marker(session_id)
+
     # Token estimation: transcript size + prompt text, both // 4 (instant).
     # Cron/one-shot `--print` invocations have no transcript on the first hook
     # fire — fall back to the prompt text so we still journal the cycle.
@@ -136,6 +144,23 @@ def main() -> int:
         print("  ".join(parts), file=sys.stderr)
 
     return 0
+
+
+def _write_session_marker(session_id: str) -> None:
+    """Persist the live session id to the run-dir marker so the companion MCP
+    server (a separate process) can bind ``state.session_id`` to it. Atomic
+    write via tmp+replace. Best-effort; never fails the hook."""
+    try:
+        run_dir = Path(os.environ.get(
+            "TOKENPAK_COMPANION_JOURNAL_DIR",
+            str(Path.home() / ".tokenpak" / "companion"),
+        )) / "run"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        tmp = run_dir / "current-session.tmp"
+        tmp.write_text(session_id.strip(), encoding="utf-8")
+        tmp.replace(run_dir / "current-session")
+    except Exception:
+        pass  # never fail the hook
 
 
 def _get_daily_total() -> float:

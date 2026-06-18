@@ -25,6 +25,7 @@ Error shape:
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 import time
@@ -392,6 +393,100 @@ def _get_journal_store() -> Any:
     return JournalStore(db_path=_companion_dir() / "journal.db")
 
 
+# ---------------------------------------------------------------------------
+# Cross-tool handoff bridge.
+#
+# A per-tool session id is not retrievable by the other tool, so a journal
+# entry alone cannot bridge two different clients (e.g. Claude Code ↔ Codex).
+# The authoritative bridge is a shared handoff namespace under the companion
+# run dir: ``current.json`` (latest pointer) + ``events.jsonl`` (append log).
+# The reader pulls the latest without knowing the writer's session id. A
+# readable current-session capsule is written alongside as the lossy
+# summary/export layer (NOT the authority).
+# ---------------------------------------------------------------------------
+
+# Reserved capsule aliases that resolve to the newest real capsule by mtime,
+# rather than a frozen on-disk symlink (which can silently go stale).
+_CAPSULE_LATEST_ALIASES = {"active", "latest", "current"}
+
+
+def _is_handoff(entry_type: str, content: str) -> bool:
+    """A journal entry is a handoff if explicitly typed ``handoff`` or if it
+    carries a HANDOFF_MARKER line. Content-sniffing keeps the model-facing
+    journal_write tool unchanged (it always sends entry_type=user)."""
+    if (entry_type or "").strip().lower() == "handoff":
+        return True
+    return "HANDOFF_MARKER" in (content or "")
+
+
+def _extract_field(content: str, field: str) -> str:
+    """Pull a ``FIELD: value`` line out of free-form handoff content."""
+    needle = field + ":"
+    for line in (content or "").splitlines():
+        s = line.strip()
+        if s.upper().startswith(needle):
+            return s[len(needle):].strip()
+    return ""
+
+
+def _record_handoff(session_id: str, content: str) -> dict[str, Any]:
+    """Write the authoritative shared handoff record and a readable
+    current-session capsule. Returns the handoff record dict.
+
+    Layout (under the companion run dir):
+        run/handoff/current.json   — latest pointer (atomic tmp+replace)
+        run/handoff/events.jsonl   — append-only event log
+        capsules/<session_id>.md   — readable summary (newest → resolves `active`)
+    """
+    import hashlib
+
+    cdir = _companion_dir()
+    marker = _extract_field(content, "HANDOFF_MARKER") or ""
+    secret = _extract_field(content, "SECRET_DECISION") or ""
+    source_tool = os.environ.get("TOKENPAK_TOOL", "") or "unknown"
+    now = time.time()
+    iso = _dt.datetime.fromtimestamp(now, _dt.timezone.utc).isoformat()
+    basis = marker or content
+    handoff_id = hashlib.sha256(basis.encode("utf-8", "ignore")).hexdigest()[:16]
+
+    record = {
+        "handoff_id": handoff_id,
+        "session_id": session_id,
+        "source_tool": source_tool,
+        "updated_at": iso,
+        "marker": marker,
+        "secret_decision": secret,
+        "summary": content[:2000],
+        "payload_ref": f"journal:{session_id}",
+    }
+
+    hdir = cdir / "run" / "handoff"
+    hdir.mkdir(parents=True, exist_ok=True)
+    # current.json — atomic write
+    tmp = hdir / "current.json.tmp"
+    tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(hdir / "current.json")
+    # events.jsonl — append log
+    with (hdir / "events.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    # Readable current-session capsule (newest mtime → resolves `active`)
+    capdir = cdir / "capsules"
+    capdir.mkdir(parents=True, exist_ok=True)
+    cap_body = (
+        f"# Handoff capsule — session {session_id}\n\n"
+        f"- updated_at: {iso}\n"
+        f"- source_tool: {source_tool}\n"
+        f"- handoff_id: {handoff_id}\n\n"
+        f"## Marker\n{marker or '(none)'}\n\n"
+        f"## Secret decision\n{secret or '(none)'}\n\n"
+        f"## Summary\n{content[:4000]}\n"
+    )
+    (capdir / f"{session_id}.md").write_text(cap_body, encoding="utf-8")
+
+    return record
+
+
 def _handle_budget_get(handler: Any, qs: dict[str, list[str]]) -> None:
     """Return current session + daily cost snapshot."""
     try:
@@ -484,6 +579,15 @@ def _handle_journal_post(handler: Any, session_id: str, body: dict[str, Any]) ->
     entry_type = str(body.get("entry_type", "user")).strip() or "user"
     try:
         store = _get_journal_store()
+        # Register the session row on first write so the sessions table is
+        # populated and the journal session listing is meaningful. add_entry
+        # alone never created a session row, which is why the table could be
+        # empty despite entries existing.
+        try:
+            if store.get_session(session_id) is None:
+                store.start_session(session_id, project_dir=os.getcwd())
+        except Exception:
+            pass  # registration is best-effort; never block the entry write
         store.add_entry(
             session_id=session_id,
             entry_type=entry_type,
@@ -492,7 +596,19 @@ def _handle_journal_post(handler: Any, session_id: str, body: dict[str, Any]) ->
     except Exception as exc:
         _send_error(handler, 500, "journal_write_failed", str(exc))
         return
-    _send_json(handler, 200, {"status": "ok", "session_id": session_id, "entry_type": entry_type})
+    # Mirror handoff facts to the authoritative shared namespace + a readable
+    # current-session capsule so a different client can retrieve the latest
+    # handoff without knowing the writer's per-tool session id.
+    handoff = None
+    if _is_handoff(entry_type, content):
+        try:
+            handoff = _record_handoff(session_id, content)
+        except Exception:
+            handoff = None  # mirroring is best-effort; the entry already landed
+    out = {"status": "ok", "session_id": session_id, "entry_type": entry_type}
+    if handoff:
+        out["handoff"] = handoff
+    _send_json(handler, 200, out)
 
 
 # ---------------------------------------------------------------------------
@@ -617,10 +733,23 @@ def _handle_capsule_get(handler: Any, session_id: str, qs: dict[str, list[str]])
         _send_error(handler, 500, "capsule_module_unavailable", str(exc))
         return
     match = None
-    for p in capsule_dir.glob("*.md"):
-        if session_id in p.stem:
-            match = p
-            break
+    if session_id.strip().lower() in _CAPSULE_LATEST_ALIASES:
+        # Reserved aliases resolve to the NEWEST real capsule by mtime, not an
+        # on-disk alias file (a frozen symlink keeps its target's mtime and can
+        # silently serve a stale handoff). Skip the alias files themselves so
+        # we never resolve back to a stale target.
+        candidates = sorted(
+            (p for p in capsule_dir.glob("*.md")
+             if p.name not in ("active.md", "latest.md", "current.md")),
+            key=lambda x: x.stat().st_mtime,
+            reverse=True,
+        )
+        match = candidates[0] if candidates else None
+    else:
+        for p in capsule_dir.glob("*.md"):
+            if session_id in p.stem:
+                match = p
+                break
     if match is None:
         _send_error(handler, 404, "capsule_not_found", session_id)
         return

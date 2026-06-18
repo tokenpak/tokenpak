@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import sys
 
-from .tools import TOOLS, CompanionState
+from .tools import TOOLS, CompanionState, current_session_id
 
 
 def _send(obj: dict) -> None:
@@ -62,6 +62,15 @@ def _handle_tools_call(req_id: int | str, params: dict, state: CompanionState) -
     tool_name = params.get("name", "")
     args = params.get("arguments", {})
     state.call_count += 1
+
+    # Bind the live session id from the pre_send hook marker before each
+    # dispatch. The hook (a separate process) writes the marker; this is how
+    # the long-lived MCP server learns the active session for journal_write,
+    # journal_read, and session_info. Refreshed per call so /clear (new
+    # session id) is picked up without restarting the server.
+    _sid = current_session_id()
+    if _sid:
+        state.session_id = _sid
 
     # Find the tool
     tool = None

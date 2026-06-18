@@ -12,6 +12,7 @@ goes through CompanionState methods so it's centralized and testable.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -22,6 +23,24 @@ from ..config import CompanionConfig
 # Matches pre_send.py's fallback (sonnet input rate). Kept local rather than
 # imported so tools.py has no cross-module coupling with the hook.
 _COMPANION_DEFAULT_INPUT_RATE_USD_PER_MTOK = 3.0
+
+
+def current_session_id() -> str:
+    """Read the live session id from the run-dir marker written by the
+    pre_send hook (session binding). The MCP server is a separate process
+    from the hook, so this file is the only channel by which it learns the
+    active session id. Returns "" if no marker exists yet."""
+    try:
+        run_dir = Path(os.environ.get(
+            "TOKENPAK_COMPANION_JOURNAL_DIR",
+            str(Path.home() / ".tokenpak" / "companion"),
+        )) / "run"
+        marker = run_dir / "current-session"
+        if marker.exists():
+            return marker.read_text(encoding="utf-8").strip()
+    except Exception:
+        pass
+    return ""
 
 
 @dataclass
