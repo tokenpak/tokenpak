@@ -303,6 +303,20 @@ def cmd_pak_export(args: Any) -> int:
     )
 
 
+def _within_dir(base: Path, rel: str) -> bool:
+    """True iff ``base / rel`` stays inside ``base`` after resolution.
+
+    Pak anchor paths are untrusted input. An absolute ``rel`` (``/etc/x``)
+    or one that climbs out (``../x``) must never write outside the chosen
+    export directory. Reject absolute paths pre-join, then resolve and
+    confirm containment (``is_relative_to`` is available on the 3.10 floor).
+    """
+    if Path(rel).is_absolute():
+        return False
+    base_resolved = base.resolve()
+    return (base_resolved / rel).resolve().is_relative_to(base_resolved)
+
+
 def _export_file_pak(path: str, out_dir: Path) -> int:
     """Write a file-form Pak's anchors back to ``out_dir``.
 
@@ -330,6 +344,15 @@ def _export_file_pak(path: str, out_dir: Path) -> int:
         content = anchor.get("content")
         encoding = anchor.get("encoding", "utf-8")
         if not rel or content is None:
+            skipped += 1
+            continue
+        # A1 (codex-review-1): contain writes within out_dir — reject an
+        # absolute or ``..``-traversing anchor path before it can escape.
+        if not _within_dir(out_dir, rel):
+            print(
+                f"⚠️  Skipped unsafe anchor path (escapes export dir): {rel}",
+                file=sys.stderr,
+            )
             skipped += 1
             continue
         target = out_dir / rel
@@ -381,6 +404,11 @@ def cmd_pak_create(args: Any) -> int:
     anchors: list[dict] = []
     skipped: list[dict] = []
     for path in sorted(src.rglob("*")):
+        # A2 (codex-review-1): never follow symlinks — a link to e.g.
+        # /etc/hostname would otherwise be read as a file and its target
+        # content embedded into the Pak. Skip before the is_file() probe.
+        if path.is_symlink():
+            continue
         if not path.is_file():
             continue
         if any(part.startswith(".") for part in path.relative_to(src).parts):
@@ -521,7 +549,16 @@ def cmd_pak_import(args: Any) -> int:
 
     shutil.copyfile(src, target)
     print(f"✅ Imported Pak {pak_id} → {target}")
-    print(f"   checksum verified: {actual[:24]}…")
+    # A5 (codex-review-1): only claim "verified" when there was a declared
+    # checksum to verify against (a mismatch already returned above). With no
+    # declared checksum nothing was verified — say so rather than imply trust.
+    if declared:
+        print(f"   checksum verified: {actual[:24]}…")
+    else:
+        print(
+            "   checksum computed (Pak carries no declared checksum to "
+            f"verify against): {actual[:24]}…"
+        )
     print(f"   inspect with: tokenpak pak inspect {target}")
     return 0
 
