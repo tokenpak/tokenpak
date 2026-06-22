@@ -16,6 +16,7 @@ Uses unittest.mock to simulate the HTTP request handler.
 """
 
 import json
+import os
 import time
 import unittest
 from io import BytesIO
@@ -53,7 +54,7 @@ class MockRequestHandler:
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # CORS default-deny — mirrors app_endpoints._send_json (no wildcard).
         self.end_headers()
         self.wfile.write(body)
         return body
@@ -595,12 +596,12 @@ class TestResponseStructure(unittest.TestCase):
         self.assertIn("Content-Length", handler.sent_headers)
         self.assertGreater(int(handler.sent_headers["Content-Length"]), 0)
 
-    def test_responses_have_cors_header(self):
-        """Verify responses include CORS header."""
+    def test_responses_no_wildcard_cors_by_default(self):
+        """Responses must NOT carry a wildcard CORS header by default (R3-1)."""
         handler = MockRequestHandler("/stats")
         response = {"test": "data"}
         handler._send_json(response)
-        self.assertEqual(
+        self.assertNotEqual(
             handler.sent_headers.get("Access-Control-Allow-Origin"),
             "*"
         )
@@ -613,6 +614,64 @@ class TestResponseStructure(unittest.TestCase):
         # Should not raise JSON decode error
         parsed = json.loads(body.decode())
         self.assertIsInstance(parsed, dict)
+
+
+class TestCORSContentRoutes(unittest.TestCase):
+    """Security regression (R3-1): the real app_endpoints._send_json must not
+    expose proxy-owned content (vault search/block) to cross-origin browser JS.
+
+    Default-deny CORS; never wildcard; exact-origin allowlist opt-in only.
+    """
+
+    def _send(self, origin=None, env=None):
+        from tokenpak.proxy import app_endpoints
+
+        handler = MockRequestHandler("/tpk/v1/vault/block/abc")
+        if origin is not None:
+            handler.headers["Origin"] = origin
+        with patch.dict("os.environ", env or {}, clear=False):
+            if env is None or "TOKENPAK_PROXY_CORS_ORIGINS" not in env:
+                os.environ.pop("TOKENPAK_PROXY_CORS_ORIGINS", None)
+            app_endpoints._send_json(handler, 200, {"content": "secret vault row"})
+        return handler.sent_headers
+
+    def test_default_emits_no_acao(self):
+        """No allowlist configured → no Access-Control-Allow-Origin at all."""
+        headers = self._send(origin="https://example.invalid")
+        self.assertIsNone(headers.get("Access-Control-Allow-Origin"))
+
+    def test_default_never_wildcard(self):
+        """The wildcard must never appear on a content route."""
+        headers = self._send(origin="https://example.invalid")
+        self.assertNotEqual(headers.get("Access-Control-Allow-Origin"), "*")
+
+    def test_allowlisted_origin_echoed_exactly(self):
+        """Configured + matching Origin → echo that exact origin (not *), with Vary."""
+        headers = self._send(
+            origin="https://dash.local",
+            env={"TOKENPAK_PROXY_CORS_ORIGINS": "https://dash.local,https://ops.local"},
+        )
+        self.assertEqual(
+            headers.get("Access-Control-Allow-Origin"), "https://dash.local"
+        )
+        self.assertNotEqual(headers.get("Access-Control-Allow-Origin"), "*")
+        self.assertEqual(headers.get("Vary"), "Origin")
+
+    def test_non_allowlisted_origin_denied(self):
+        """Configured allowlist + foreign Origin → no ACAO emitted."""
+        headers = self._send(
+            origin="https://evil.invalid",
+            env={"TOKENPAK_PROXY_CORS_ORIGINS": "https://dash.local"},
+        )
+        self.assertIsNone(headers.get("Access-Control-Allow-Origin"))
+
+    def test_allowlist_set_but_no_origin_header(self):
+        """Configured allowlist but request has no Origin → no ACAO emitted."""
+        headers = self._send(
+            origin=None,
+            env={"TOKENPAK_PROXY_CORS_ORIGINS": "https://dash.local"},
+        )
+        self.assertIsNone(headers.get("Access-Control-Allow-Origin"))
 
 
 if __name__ == "__main__":

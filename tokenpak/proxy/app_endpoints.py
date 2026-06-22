@@ -15,7 +15,12 @@ Architectural contract (per Kevin's 2026-04-17 design call):
 Authentication (localhost-only by default):
     - Requests must arrive from 127.0.0.1 / ::1 unless ``TOKENPAK_PROXY_KEY``
       is set, in which case an ``X-TPK-Key`` header must match.
-    - No CORS / cross-origin story today; GTM is single-host dev use.
+    - CORS is default-deny: no ``Access-Control-Allow-Origin`` header is
+      emitted unless ``TOKENPAK_PROXY_CORS_ORIGINS`` (a comma-separated list
+      of exact origins) is configured, in which case a matching request
+      ``Origin`` is echoed back verbatim — never ``*``. This keeps browser
+      JS served from another origin (DNS-rebinding / localhost-fetch) from
+      reading proxy-owned content such as ``/tpk/v1/vault/*``.
 
 Error shape:
     {"error": "<code>", "detail": "<human message>"}
@@ -64,6 +69,28 @@ def _is_authorized(handler: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _cors_allow_origin(handler: Any) -> Optional[str]:
+    """Return the request ``Origin`` iff it is in the configured allowlist.
+
+    Default-deny: with no ``TOKENPAK_PROXY_CORS_ORIGINS`` set, returns ``None``
+    and no ``Access-Control-Allow-Origin`` header is emitted, so browsers
+    enforce same-origin and cross-origin JS cannot read proxy-owned content
+    (the ``/tpk/v1/vault/*`` routes return full indexed content). When the env
+    var holds a comma-separated list of exact origins, an exact match is
+    echoed back; anything else (no/unknown ``Origin``) yields ``None``. The
+    wildcard ``*`` is never returned for these content-bearing routes.
+    """
+    allowlist = os.environ.get("TOKENPAK_PROXY_CORS_ORIGINS", "")
+    if not allowlist.strip():
+        return None
+    headers = getattr(handler, "headers", None)
+    origin = headers.get("Origin", "").strip() if headers is not None else ""
+    if not origin:
+        return None
+    allowed = {o.strip() for o in allowlist.split(",") if o.strip()}
+    return origin if origin in allowed else None
+
+
 def _send_json(handler: Any, status: int, payload: dict[str, Any]) -> None:
     # allow_nan=False → strict JSON; NaN/Infinity raise ValueError. Callers
     # must sanitize unbounded floats before passing to this helper.
@@ -71,7 +98,12 @@ def _send_json(handler: Any, status: int, payload: dict[str, Any]) -> None:
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    # CORS default-deny — never wildcard on these content-bearing routes.
+    # Opt in to an exact-origin allowlist via TOKENPAK_PROXY_CORS_ORIGINS.
+    allow_origin = _cors_allow_origin(handler)
+    if allow_origin is not None:
+        handler.send_header("Access-Control-Allow-Origin", allow_origin)
+        handler.send_header("Vary", "Origin")
     handler.end_headers()
     handler.wfile.write(body)
 
