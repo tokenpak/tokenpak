@@ -6,6 +6,25 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.9.3] — 2026-06-22
+
+Security patch: path-safety hardening for `pak` install and a default-deny CORS
+policy on the proxy's content routes. Additive; one behavior change noted below.
+
+### Security
+- **pak install:** added a path-traversal guard (archive entries are resolved and
+  confirmed within the target directory), symlinked entries are skipped during
+  extraction, and checksum-verified messaging is now honest about what was checked.
+- **proxy CORS:** the `/tpk/v1/*` JSON routes no longer emit
+  `Access-Control-Allow-Origin: *`. CORS is now **default-deny** with an
+  exact-origin allowlist.
+
+### Changed
+- **proxy CORS (behavior change):** a browser app fetching `/tpk/v1/*` from a
+  different origin must now set `TOKENPAK_PROXY_CORS_ORIGINS` (comma-separated
+  exact origins). A matching request `Origin` is echoed back with `Vary: Origin`,
+  never `*`. CLI / SDK / MCP clients are unaffected — CORS applies to browsers only.
+
 ## [1.9.1] — 2026-06-16
 
 Patch release: privacy/security hardening, honest telemetry, license alignment,
