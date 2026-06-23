@@ -74,6 +74,7 @@ Check proxy health
 - `--full` — Expanded view with all details
 - `--by-source` — Breakdown by request source (Claude Code, Codex, API, etc.)
 - `--by-provider` — Breakdown by provider (Anthropic, OpenAI, Google, etc.)
+- `--tip-cache` — Show compact TIP cache attribution only
 - `--minimal` — One-line savings summary
 - `--json` — Full JSON data dump
 - `--no-meme` — Suppress tagline
