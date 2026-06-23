@@ -134,6 +134,44 @@ jobs:
         if: matrix.shape == 'dev' && matrix.python-version == '3.12'
         run: python -m tokenpak.cli --help
 
+  chaos-tests:
+    name: Chaos tests release gate
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run make test-chaos
+        run: |
+          mkdir -p "release-readiness/${{ github.ref_name }}/test-chaos"
+          set +e
+          make PYTEST="python3 -m pytest" test-chaos 2>&1 | tee "release-readiness/${{ github.ref_name }}/test-chaos/test-chaos.log"
+          CHAOS_RC=${PIPESTATUS[0]}
+          set -e
+          exit "$CHAOS_RC"
+        env:
+          TOKENPAK_TEST_MODE: "1"
+
+      - name: Upload chaos release-readiness artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-readiness-${{ github.ref_name }}-test-chaos
+          path: |
+            release-readiness/${{ github.ref_name }}/test-chaos/
+            tests/chaos/output/*.json
+          if-no-files-found: ignore
+
   release-gate-snapshots:
     # Std 30 §7 + §13.3 (R7 + R11): snapshot checks before any build/release.
     name: Release-gate snapshot validation
@@ -239,7 +277,7 @@ jobs:
   build:
     name: Build Distribution
     runs-on: ubuntu-latest
-    needs: [test, release-gate-snapshots, leak-scan]
+    needs: [test, chaos-tests, release-gate-snapshots, leak-scan]
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4

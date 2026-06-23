@@ -59,6 +59,9 @@ test-cov:  ## Run tests with coverage report
 		--cov-report=html:htmlcov
 	@echo "Coverage report: htmlcov/index.html"
 
+test-chaos:  ## Run chaos & resilience tests (fault injection / failure-recovery)
+	$(PYTEST) tests/chaos/ -m chaos -q --tb=short
+
 benchmark-headline:  ## Run headline 30-50% claim benchmark (standard 21 §9.8 blocking)
 	$(PYTEST) tests/benchmarks/test_headline_claim.py -v -s
 

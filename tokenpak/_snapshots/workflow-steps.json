@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-06-07T21:07:28Z",
+  "generated_at": "2026-06-23T17:06:14Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"
@@ -371,6 +371,36 @@
       "job": "build",
       "id": "",
       "name": "Verify package"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "chaos-tests",
+      "id": "",
+      "name": ""
+    },
+    {
+      "workflow": "release.yml",
+      "job": "chaos-tests",
+      "id": "",
+      "name": "Install dev dependencies"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "chaos-tests",
+      "id": "",
+      "name": "Run make test-chaos"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "chaos-tests",
+      "id": "",
+      "name": "Set up Python 3.12"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "chaos-tests",
+      "id": "",
+      "name": "Upload chaos release-readiness artifact"
     },
     {
       "workflow": "release.yml",
