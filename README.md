@@ -44,7 +44,9 @@ tokenpak demo
 └──────────────────────────────────────────────────────┘
 ```
 
-> Illustrative fixture — token counts vary by workload. Measure your own with `tokenpak savings`; receipt-backed ranges publish once the benchmark lane lands.
+> Illustrative fixture — token counts vary by route and workload. Measure your
+> own with `tokenpak savings`; inspect provider-cache vs. TokenPak attribution
+> with `tokenpak status --tip-cache`.
 
 ---
 
@@ -74,7 +76,13 @@ shared secret to require `Authorization: Bearer <token>` on remote requests
 
 ## What's included (Free)
 
-- **Context compression** — deterministic token reduction on real agent workloads, <50ms latency. Measure your own savings with `tokenpak savings` (reproduce the headline benchmark with `make benchmark-headline`)
+- **Context compression** — deterministic token reduction on real agent
+  workloads, <50ms latency. Savings are route-specific: direct API, CLI, and
+  uncached repeated-agent loops are the best fit, while Claude Code/TUI routes
+  may show lower incremental savings when the provider cache already handled
+  repeated context. Measure your own savings with `tokenpak savings`; inspect
+  attribution with `tokenpak status --tip-cache` (reproduce the headline
+  benchmark with `make benchmark-headline`).
 - **Client integration** — one command wires Claude Code, Cursor, Aider, and 6 other clients
 - **Model routing** — send requests to the right model automatically, with fallback rules
 - **Cost tracking** — per model, per session, per agent; local SQLite, zero cloud

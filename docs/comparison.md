@@ -16,7 +16,7 @@ Competitors compared: [Helicone](https://helicone.ai), [LangSmith](https://smith
 |---|---|---|---|---|---|---|---|
 | **Local-first** (proxy on your machine) | ✅ Yes | ✅ Yes (Docker) | ❌ No (enterprise BYOC only) | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No (cloud-only) |
 | **Open source** | ✅ Apache-2.0 | ✅ MIT core | ❌ No | ✅ MIT | ✅ Gateway OSS | ✅ MIT | ❌ No |
-| **Compression / token reduction** | ✅ Yes — deterministic, client-side | ✅ Yes (claimed up to 5×) | ❌ No | ❌ No | ❌ No (caching pass-through only) | ❌ No | ❌ No |
+| **Compression / token reduction** | ✅ Yes — deterministic, route-specific, client-side | ✅ Yes (claimed up to 5×) | ❌ No | ❌ No | ❌ No (caching pass-through only) | ❌ No | ❌ No |
 | **Multi-provider routing** | ✅ Yes (smart routing) | ✅ Yes (100+ providers) | ❌ No (observability only) | ✅ Yes (100+ providers) | ✅ Yes (200+ providers) | ❌ No | ✅ Yes (290+ models) |
 | **Cost tracking** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Budget enforcement** (hard 429 on overage) | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes |
@@ -43,6 +43,13 @@ This matters for three reasons:
 ### 2. Deterministic compression with reproducible benchmarks
 
 TokenPak's compression is deterministic: the same input produces the same compressed output every time. This means you can benchmark it in CI and trust the numbers. The [headline benchmark](BENCHMARKS.md) ships in the CI pipeline and runs on every commit — no black-box "up to 5×" marketing claims.
+
+Savings are route-specific. Direct API, CLI, and uncached repeated-agent loops
+are the best fit for context compression. Claude Code/TUI routes can show lower
+incremental savings when the provider cache already handled repeated context.
+`tokenpak status` and `tokenpak status --tip-cache` split provider/client cache
+from TokenPak compression and TokenPak managed-cache savings, so observed
+platform-cache hits are not credited to TokenPak.
 
 The compaction algorithm operates on the raw token stream before the request leaves your machine. It does not depend on semantic similarity lookups, embeddings, or an external service. It works offline.
 
