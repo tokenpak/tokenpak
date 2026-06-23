@@ -3459,6 +3459,7 @@ def cmd_status(args):
     no_meme = getattr(args, "no_meme", False)
     by_source = getattr(args, "by_source", False)
     by_provider = getattr(args, "by_provider", False)
+    tip_cache = getattr(args, "tip_cache", False)
 
     # --raw dispatches to legacy (raw JSON mode)
     if getattr(args, "raw", False):
@@ -3474,6 +3475,7 @@ def cmd_status(args):
             full=is_full,
             by_source=by_source,
             by_provider=by_provider,
+            tip_cache=tip_cache,
             as_json=is_json,
             no_meme=no_meme,
             days=getattr(args, "days", 0),
@@ -3795,6 +3797,7 @@ def _build_status_parser(sub):
     p_status.add_argument("--full", action="store_true", help="Expanded view with all details")
     p_status.add_argument("--by-source", dest="by_source", action="store_true", help="Breakdown by request source (Claude Code, Codex, API, etc.)")
     p_status.add_argument("--by-provider", dest="by_provider", action="store_true", help="Breakdown by provider (Anthropic, OpenAI, Google, etc.)")
+    p_status.add_argument("--tip-cache", dest="tip_cache", action="store_true", help="Show compact TIP cache attribution only")
     p_status.add_argument("--minimal", action="store_true", help="One-line savings summary")
     p_status.add_argument("--json", dest="as_json", action="store_true", help="Full JSON data dump")
     p_status.add_argument("--no-meme", dest="no_meme", action="store_true", help="Suppress tagline")

@@ -4,11 +4,12 @@ Default output leads with dollar savings (v3 layout).
 Use ``--full`` for legacy technical output.
 
 Modes:
-    tokenpak status            → savings-first (new default)
-    tokenpak status --full     → current technical output (backward compatible)
-    tokenpak status --minimal  → one-liner for scripts
-    tokenpak status --json     → machine-readable JSON
-    tokenpak status --no-meme  → suppress tagline
+    tokenpak status             → savings-first (new default)
+    tokenpak status --full      → current technical output (backward compatible)
+    tokenpak status --minimal   → one-liner for scripts
+    tokenpak status --tip-cache → compact TIP cache attribution surface
+    tokenpak status --json      → machine-readable JSON
+    tokenpak status --no-meme   → suppress tagline
 """
 
 from __future__ import annotations
@@ -487,6 +488,371 @@ def _parse_since(since: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# TIP cache attribution helpers
+# ---------------------------------------------------------------------------
+
+
+def _tip_window_label(days: int = 0, hours: int = 0) -> str:
+    """Human-readable window label for status output."""
+    parts = []
+    if days > 0:
+        parts.append(f"{days}d")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    return f"last {' '.join(parts)}" if parts else "all time"
+
+
+def _window_seconds(days: int = 0, hours: int = 0) -> Optional[int]:
+    """Return the requested window in seconds, or None for all time."""
+    total_hours = days * 24 + hours
+    if total_hours <= 0:
+        return None
+    return total_hours * 3600
+
+
+def _db_period_filter(days: int = 0, hours: int = 0) -> tuple[str, list[str]]:
+    """SQLite WHERE fragment for monitor.db request timestamps."""
+    seconds = _window_seconds(days, hours)
+    if seconds is None:
+        return "", []
+    total_hours = max(1, seconds // 3600)
+    return "WHERE timestamp >= datetime('now', ?)", [f"-{total_hours} hours"]
+
+
+def _empty_tip_attribution(reason: str, db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Return an unavailable TIP attribution payload."""
+    return {
+        "available": False,
+        "reason": reason,
+        "source": "unavailable",
+        "db_path": db_path or _get_db_path(),
+        "window": "all time",
+        "requests": 0,
+        "unknown_cache_tokens": 0,
+        "lines": {
+            "platform_cache": {"tokens": None, "usd": None, "status": "unavailable"},
+            "tokenpak_compression": {"tokens": None, "usd": None, "status": "unavailable"},
+            "tokenpak_managed_cache": {"tokens": None, "usd": None, "status": "unavailable"},
+            "companion_enrichment": {"tokens": None, "usd": None, "status": "unavailable"},
+        },
+    }
+
+
+def _line(tokens: int, usd: float) -> Dict[str, Any]:
+    """Build a display line with honest observed/not-observed state."""
+    tokens_i = max(0, int(tokens or 0))
+    usd_f = max(0.0, float(usd or 0.0))
+    return {
+        "tokens": tokens_i,
+        "usd": round(usd_f, 6),
+        "status": "observed" if tokens_i > 0 or usd_f > 0 else "not_observed",
+    }
+
+
+def _cache_savings_usd(model: str, tokens: int) -> float:
+    """Estimate provider cache discount savings for a model/token count."""
+    rates = get_rates(model)
+    input_rate = float(rates.get("input", 0.0) or 0.0)
+    cached_rate = float(rates.get("cached", 0.0) or 0.0)
+    return (max(0, int(tokens or 0)) / 1_000_000) * max(0.0, input_rate - cached_rate)
+
+
+def _compression_savings_usd(model: str, tokens: int) -> float:
+    """Estimate compression savings for tokens that TokenPak did not send."""
+    rates = get_rates(model)
+    input_rate = float(rates.get("input", 0.0) or 0.0)
+    return (max(0, int(tokens or 0)) / 1_000_000) * input_rate
+
+
+def _query_rollup_daily_tip_attribution(
+    conn: sqlite3.Connection,
+    days: int = 0,
+    hours: int = 0,
+) -> Optional[Dict[str, Any]]:
+    """Use an FTA-06-style rollup_daily table when it exposes TIP lanes.
+
+    The table shape is intentionally detected at runtime because FTA rollup
+    migrations may add fields over time. If the expected attribution columns are
+    absent, callers fall back to raw monitor.db + companion journal aggregation.
+    """
+    table = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='rollup_daily'"
+    ).fetchone()
+    if not table:
+        return None
+
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(rollup_daily)").fetchall()}
+    lane_cols = {
+        "platform_cache": ("platform_cache_tokens", "platform_cache_savings_usd"),
+        "tokenpak_compression": ("tokenpak_compression_tokens", "tokenpak_compression_savings_usd"),
+        "tokenpak_managed_cache": ("tokenpak_managed_cache_tokens", "tokenpak_managed_cache_savings_usd"),
+        "companion_enrichment": ("companion_enrichment_tokens", "companion_enrichment_savings_usd"),
+    }
+    if not any(t in cols or u in cols for t, u in lane_cols.values()):
+        return None
+
+    date_col = "date" if "date" in cols else "day" if "day" in cols else None
+    where = ""
+    params: list[str] = []
+    if date_col and _window_seconds(days, hours) is not None:
+        total_hours = max(1, (days * 24) + hours)
+        where = f"WHERE {date_col} >= datetime('now', ?)"
+        params = [f"-{total_hours} hours"]
+
+    select_parts = ["COALESCE(SUM(requests), 0)" if "requests" in cols else "0"]
+    for tokens_col, usd_col in lane_cols.values():
+        select_parts.append(
+            f"COALESCE(SUM({tokens_col}), 0)" if tokens_col in cols else "0"
+        )
+        select_parts.append(f"COALESCE(SUM({usd_col}), 0.0)" if usd_col in cols else "0.0")
+
+    row = conn.execute(
+        f"SELECT {', '.join(select_parts)} FROM rollup_daily {where}",
+        params,
+    ).fetchone()
+    if row is None:
+        return None
+
+    values = list(row)
+    requests = int(values.pop(0) or 0)
+    lines: Dict[str, Any] = {}
+    for lane in lane_cols:
+        tokens = int(values.pop(0) or 0)
+        usd = float(values.pop(0) or 0.0)
+        lines[lane] = _line(tokens, usd)
+
+    return {
+        "available": True,
+        "source": "rollup_daily",
+        "window": _tip_window_label(days, hours),
+        "requests": requests,
+        "unknown_cache_tokens": 0,
+        "lines": lines,
+    }
+
+
+def _query_companion_enrichment(days: int = 0, hours: int = 0) -> tuple[int, float]:
+    """Aggregate companion-side prompt savings from the local journal."""
+    journal_path = Path(os.path.expanduser("~/.tokenpak/companion/journal.db"))
+    if not journal_path.exists():
+        return 0, 0.0
+
+    seconds = _window_seconds(days, hours)
+    where = "WHERE entry_type = 'companion_savings'"
+    params: list[Any] = []
+    if seconds is not None:
+        where += " AND timestamp >= ?"
+        params.append(time.time() - seconds)
+
+    tokens = 0
+    usd = 0.0
+    conn = sqlite3.connect(str(journal_path))
+    try:
+        for (metadata_json,) in conn.execute(
+            f"SELECT metadata_json FROM entries {where}",
+            params,
+        ).fetchall():
+            try:
+                meta = json.loads(metadata_json or "{}")
+                tokens += max(0, int(meta.get("tokens_avoided", 0) or 0))
+                usd += max(0.0, float(meta.get("cost_avoided_usd", 0.0) or 0.0))
+            except Exception:
+                continue
+    except sqlite3.Error:
+        return 0, 0.0
+    finally:
+        conn.close()
+    return tokens, usd
+
+
+def _query_tip_cache_attribution(
+    db_path: Optional[str] = None,
+    days: int = 0,
+    hours: int = 0,
+) -> Dict[str, Any]:
+    """Aggregate four distinct TIP/status savings lanes.
+
+    Lanes:
+    - platform_cache: observed provider/client cache, not TokenPak credit
+    - tokenpak_compression: TokenPak-compressed tokens avoided
+    - tokenpak_managed_cache: cache reads where TokenPak placed cache markers
+    - companion_enrichment: prompt-side companion savings before the wire
+    """
+    conn = _connect_db(db_path)
+    if conn is None:
+        result = _empty_tip_attribution("monitor_db_not_found", db_path)
+        result["window"] = _tip_window_label(days, hours)
+        comp_tokens, comp_usd = _query_companion_enrichment(days=days, hours=hours)
+        result["lines"]["companion_enrichment"] = _line(comp_tokens, comp_usd)
+        if comp_tokens or comp_usd:
+            result["available"] = True
+            result["source"] = "companion_journal"
+        return result
+
+    try:
+        rollup = _query_rollup_daily_tip_attribution(conn, days=days, hours=hours)
+        if rollup is not None:
+            comp_tokens, comp_usd = _query_companion_enrichment(days=days, hours=hours)
+            # The companion journal is local-entrypoint state; prefer explicit
+            # journal rows when present so rollup gaps don't hide prompt-side value.
+            if comp_tokens or comp_usd:
+                rollup["lines"]["companion_enrichment"] = _line(comp_tokens, comp_usd)
+            conn.close()
+            return rollup
+
+        col_names = {r[1] for r in conn.execute("PRAGMA table_info(requests)").fetchall()}
+        if "requests" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}:
+            conn.close()
+            return _empty_tip_attribution("requests_table_missing", db_path)
+
+        has_origin = "cache_origin" in col_names
+        origin_expr = "COALESCE(cache_origin, 'unknown')" if has_origin else "'unknown'"
+        compressed_expr = "COALESCE(SUM(compressed_tokens), 0)" if "compressed_tokens" in col_names else "0"
+        cache_read_col = "cache_read_tokens" if "cache_read_tokens" in col_names else None
+        model_expr = "COALESCE(model, 'unknown')" if "model" in col_names else "'unknown'"
+        where, params = _db_period_filter(days, hours)
+
+        if cache_read_col:
+            client_expr = f"COALESCE(SUM(CASE WHEN {origin_expr} = 'client' THEN {cache_read_col} ELSE 0 END), 0)"
+            proxy_expr = f"COALESCE(SUM(CASE WHEN {origin_expr} = 'proxy' THEN {cache_read_col} ELSE 0 END), 0)"
+            unknown_expr = f"COALESCE(SUM(CASE WHEN {origin_expr} = 'unknown' THEN {cache_read_col} ELSE 0 END), 0)"
+        else:
+            client_expr = proxy_expr = unknown_expr = "0"
+
+        rows = conn.execute(
+            f"""
+            SELECT
+                {model_expr} AS model,
+                COUNT(*) AS requests,
+                {client_expr} AS platform_cache_tokens,
+                {proxy_expr} AS tokenpak_managed_cache_tokens,
+                {unknown_expr} AS unknown_cache_tokens,
+                {compressed_expr} AS tokenpak_compression_tokens
+            FROM requests
+            {where}
+            GROUP BY model
+            """,
+            params,
+        ).fetchall()
+    except Exception as exc:
+        conn.close()
+        result = _empty_tip_attribution(str(exc), db_path)
+        result["window"] = _tip_window_label(days, hours)
+        return result
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    requests = 0
+    platform_tokens = 0
+    platform_usd = 0.0
+    compression_tokens = 0
+    compression_usd = 0.0
+    managed_cache_tokens = 0
+    managed_cache_usd = 0.0
+    unknown_cache_tokens = 0
+
+    for row in rows:
+        model = row["model"] or "unknown"
+        reqs = int(row["requests"] or 0)
+        client_tokens = int(row["platform_cache_tokens"] or 0)
+        proxy_tokens = int(row["tokenpak_managed_cache_tokens"] or 0)
+        unknown_tokens = int(row["unknown_cache_tokens"] or 0)
+        comp_tokens = int(row["tokenpak_compression_tokens"] or 0)
+
+        requests += reqs
+        platform_tokens += client_tokens
+        managed_cache_tokens += proxy_tokens
+        compression_tokens += comp_tokens
+        unknown_cache_tokens += unknown_tokens
+
+        platform_usd += _cache_savings_usd(model, client_tokens)
+        managed_cache_usd += _cache_savings_usd(model, proxy_tokens)
+        compression_usd += _compression_savings_usd(model, comp_tokens)
+
+    companion_tokens, companion_usd = _query_companion_enrichment(days=days, hours=hours)
+
+    return {
+        "available": True,
+        "source": "monitor_db+companion_journal",
+        "window": _tip_window_label(days, hours),
+        "requests": requests,
+        "unknown_cache_tokens": unknown_cache_tokens,
+        "lines": {
+            "platform_cache": _line(platform_tokens, platform_usd),
+            "tokenpak_compression": _line(compression_tokens, compression_usd),
+            "tokenpak_managed_cache": _line(managed_cache_tokens, managed_cache_usd),
+            "companion_enrichment": _line(companion_tokens, companion_usd),
+        },
+    }
+
+
+def _fmt_tip_line(label: str, line: Dict[str, Any], note: str) -> str:
+    """Format one TIP attribution line."""
+    status = line.get("status", "unavailable")
+    if status == "unavailable":
+        value = "unavailable"
+        tokens = "not observed"
+    elif status == "not_observed":
+        value = "not observed"
+        tokens = "0 tokens"
+    else:
+        value = _fmt_cost(float(line.get("usd") or 0.0))
+        tokens = f"{_fmt_num(int(line.get('tokens') or 0))} tokens"
+    return f"     {label:<24} {value:>12}   {tokens:<16} {note}"
+
+
+def _print_tip_cache_attribution(
+    attribution: Dict[str, Any],
+    compact: bool = False,
+) -> None:
+    """Render the four-lane TIP cache attribution panel."""
+    title = "TIP cache attribution" if compact else "TIP cache / savings attribution"
+    if compact:
+        print(f"\n  TOKENPAK {_get_version()}  |  {title}")
+        print(SEP)
+    print()
+    print(f"  🔎 {title} ({attribution.get('window', 'all time')})")
+
+    lines = attribution.get("lines", {})
+    print(_fmt_tip_line(
+        "Platform cache",
+        lines.get("platform_cache", {}),
+        "provider/client cache; observed, not TokenPak credit",
+    ))
+    print(_fmt_tip_line(
+        "TokenPak compression",
+        lines.get("tokenpak_compression", {}),
+        "compressed tokens avoided before provider",
+    ))
+    print(_fmt_tip_line(
+        "TokenPak managed-cache",
+        lines.get("tokenpak_managed_cache", {}),
+        "cache hits from TokenPak-owned markers",
+    ))
+    print(_fmt_tip_line(
+        "Companion enrichment",
+        lines.get("companion_enrichment", {}),
+        "prompt-side capsule/vault context avoided",
+    ))
+
+    unknown = int(attribution.get("unknown_cache_tokens", 0) or 0)
+    if unknown > 0:
+        print(
+            f"     Unattributed cache       {'not claimed':>12}   "
+            f"{_fmt_num(unknown)} tokens     cache_origin=unknown"
+        )
+    source = attribution.get("source", "unavailable")
+    requests = int(attribution.get("requests", 0) or 0)
+    reason = attribution.get("reason")
+    print(f"     Source                  {source:>12}   {requests:,} requests")
+    if reason and source == "unavailable":
+        print(f"     Status                  {'unavailable':>12}   {reason}")
+
+
+# ---------------------------------------------------------------------------
 # Savings-first default output (v3 layout)
 # ---------------------------------------------------------------------------
 
@@ -498,6 +864,7 @@ def run(
     full: bool = False,
     by_source: bool = False,
     by_provider: bool = False,
+    tip_cache: bool = False,
     as_json: bool = False,
     no_meme: bool = False,
     db_path: Optional[str] = None,
@@ -512,6 +879,7 @@ def run(
       --full         Expanded default view with all sections
       --by-source    Breakdown by request source (Claude Code, Codex, API, etc.)
       --by-provider  Breakdown by provider (Anthropic, OpenAI, etc.)
+      --tip-cache    Compact TIP cache attribution surface
       --minimal      One-line summary
       --json         Machine-readable JSON dump
       --days N       Filter to last N days
@@ -524,13 +892,16 @@ def run(
         since_days = _parse_since(since) if since else (days if days > 0 else 7)
         return run_fleet(since_days=since_days, as_json=as_json, db_path=db_path)
     if as_json:
-        return _run_json(proxy_base=proxy_base, db_path=db_path)
+        return _run_json(proxy_base=proxy_base, db_path=db_path, days=days, hours=hours)
     if minimal:
         return _run_minimal(proxy_base=proxy_base, db_path=db_path, no_meme=no_meme)
     if by_source:
         return _run_by_source(proxy_base=proxy_base, db_path=db_path)
     if by_provider:
         return _run_by_provider(proxy_base=proxy_base, db_path=db_path)
+    if tip_cache:
+        attribution = _query_tip_cache_attribution(db_path=db_path, days=days, hours=hours)
+        return _print_tip_cache_attribution(attribution, compact=True)
 
     # --- Fetch live proxy data (primary source for current session) ---
     health = _fetch(f"{proxy_base}/health")
@@ -709,6 +1080,9 @@ def run(
         print(f"         Proxy cache          {_fmt_cost(proxy_cache_usd):>10}   {_fmt_num(cache_proxy_tok)} tokens")
     if injected_tok > 0:
         print(f"     Vault injected         {_fmt_num(injected_tok):>10}   across {injection_hits} requests")
+
+    tip_attribution = _query_tip_cache_attribution(db_path=db_path, days=days, hours=hours)
+    _print_tip_cache_attribution(tip_attribution, compact=False)
 
     # --- 2. TRAFFIC ---
     print()
@@ -1021,6 +1395,8 @@ def _run_minimal(
 def _run_json(
     proxy_base: str = PROXY_DEFAULT,
     db_path: Optional[str] = None,
+    days: int = 0,
+    hours: int = 0,
 ) -> None:
     """Dump all status data as JSON."""
     health = _fetch(f"{proxy_base}/health")
@@ -1030,6 +1406,7 @@ def _run_json(
     savings_24h = _calculate_fleet_savings(db_path=db_path, period="24h")
     savings_1h = _calculate_fleet_savings(db_path=db_path, period="1h")
     savings_all = _calculate_fleet_savings(db_path=db_path, period=None)
+    tip_cache = _query_tip_cache_attribution(db_path=db_path, days=days, hours=hours)
 
     output = {
         "version": _get_version(),
@@ -1044,6 +1421,7 @@ def _run_json(
             "last_1h": savings_1h if not savings_1h.get("error") else None,
             "all_time": savings_all if not savings_all.get("error") else None,
         },
+        "tip_cache": tip_cache,
         "meme_lines": MEME_LINES,
     }
     print(json.dumps(output, indent=2, default=str))
@@ -1196,6 +1574,7 @@ if HAS_CLICK:
     @click.option("--full", is_flag=True, help="Show full technical output (legacy format)")
     @click.option("--raw", is_flag=True, help="Dump raw JSON (with --full)")
     @click.option("--minimal", is_flag=True, help="One-line savings summary")
+    @click.option("--tip-cache", is_flag=True, help="Show compact TIP cache attribution only")
     @click.option("--json", "as_json", is_flag=True, help="Full JSON data dump")
     @click.option("--no-meme", is_flag=True, help="Suppress tagline")
     @click.option("--db", "db_path", default=None, help="Monitor DB path override")
@@ -1208,6 +1587,7 @@ if HAS_CLICK:
         full: bool,
         raw: bool,
         minimal: bool,
+        tip_cache: bool,
         as_json: bool,
         no_meme: bool,
         db_path: Optional[str],
@@ -1232,6 +1612,7 @@ if HAS_CLICK:
           tokenpak status --days 1 --hours 6  # last 30 hours
           tokenpak status --full              # legacy technical output
           tokenpak status --minimal           # one-liner for scripts
+          tokenpak status --tip-cache         # compact TIP attribution
           tokenpak status --json              # machine-readable
           tokenpak status --fleet             # fleet rollup (last 7d)
           tokenpak status --fleet --since 7d  # fleet rollup (last 7d)
@@ -1242,6 +1623,7 @@ if HAS_CLICK:
             raw=raw,
             minimal=minimal,
             full=full,
+            tip_cache=tip_cache,
             as_json=as_json,
             no_meme=no_meme,
             db_path=db_path,
