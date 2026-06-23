@@ -278,15 +278,20 @@ jobs:
     name: Build Distribution
     runs-on: ubuntu-latest
     needs: [test, chaos-tests, release-gate-snapshots, leak-scan]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Std 12 §3.3 dispatch guard: build runs ONLY on a real tag-push event. The
+    # `github.event_name == 'push'` term rejects a dispatch-at-tag, which would
+    # otherwise (re)create a GitHub Release + artifacts for an already-promoted
+    # tag with no tag-push event and no second human gate. Parity with publish.
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
 
       # Tag-source ancestry validation: refuse to build a release from a v-tag
-      # that is not reachable from origin/main. The job-level `if` already
-      # restricts to refs/tags/v*, so rehearsal-* tags never reach here; the
-      # step-level `if` additionally skips workflow_dispatch preflight (allowed
-      # on any branch by contract). Enforces the staging -> public promotion path.
+      # that is not reachable from origin/main. The job-level `if` restricts to
+      # a real tag PUSH of refs/tags/v* (Std 12 §3.3), so rehearsal-* tags never
+      # reach here, a branch dispatch never reaches this job, and a
+      # dispatch-at-tag is skipped as well — this step now only ever runs on a
+      # genuine tag push, holding it to the staging -> public promotion path.
       - name: Validate tag source on origin/main
         run: |
           set -euo pipefail
@@ -375,7 +380,11 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Std 12 §3.3 dispatch guard (parity with build/publish): only a real
+    # tag-push event may create the GitHub Release. A dispatch-at-tag is
+    # rejected by `github.event_name == 'push'`, so it cannot spoof or overwrite
+    # a Release for an already-promoted tag.
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
 

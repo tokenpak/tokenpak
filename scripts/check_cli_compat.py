@@ -16,6 +16,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -36,20 +37,41 @@ STABLE_COMMANDS = [
 
 
 def get_current_commands() -> list[str]:
-    """Extract command names from tokenpak/cli.py."""
-    cli_path = REPO_ROOT / "tokenpak" / "cli.py"
-    if not cli_path.exists():
-        print(f"⚠️  CLI not found at {cli_path} — skipping check")
-        return STABLE_COMMANDS  # assume all present if file missing
+    """Return the live top-level CLI command names by introspecting the parser.
 
-    content = cli_path.read_text()
-    # Heuristic: find argparse subparser add_parser("command") calls
-    import re
-    # Match: add_parser("cmd") or add_parser('cmd')
-    found = re.findall(r'add_parser\(["\'](\w[\w-]*)["\']', content)
-    # Also match cmd_xxx function names as fallback
-    cmd_funcs = re.findall(r'def cmd_(\w+)\s*\(', content)
-    return list(set(found) | set(cmd_funcs))
+    H3 hardening (L11b release-gate integrity): the previous implementation
+    regex-scanned a hard-coded ``tokenpak/cli.py`` path. That module does not
+    exist — the CLI is built by ``tokenpak._cli_core.build_parser()`` — so the
+    old code fell into the ``file missing -> return STABLE_COMMANDS`` branch on
+    *every* run and could never detect a breaking rename (fail-open). We now
+    import the canonical parser builder and walk its registered subcommands. A
+    missing module, an unimportable CLI, or a parser with no subcommands is a
+    HARD FAILURE (the gate cannot do its job), not a silent pass.
+    """
+    try:
+        from tokenpak._cli_core import build_parser
+    except Exception as e:  # ImportError or any import-time failure
+        print(f"❌ CLI compat gate cannot import tokenpak._cli_core.build_parser: {e}")
+        print("   The gate cannot verify CLI commands — failing CLOSED (was fail-open / H3).")
+        sys.exit(1)
+
+    try:
+        parser = build_parser()
+    except Exception as e:
+        print(f"❌ CLI compat gate could not build the CLI parser: {e}")
+        print("   The gate cannot verify CLI commands — failing CLOSED (was fail-open / H3).")
+        sys.exit(1)
+
+    commands: set[str] = set()
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            commands.update(action.choices.keys())
+
+    if not commands:
+        print("❌ CLI compat gate found no subcommands on the parser — failing CLOSED (H3).")
+        sys.exit(1)
+
+    return sorted(commands)
 
 
 def check_cli_compat():
