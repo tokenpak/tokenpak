@@ -1,4 +1,4 @@
-
+# ruff: noqa: I001
 import pytest
 
 # tokenpak.extraction is a namespace package in the slim OSS install — the
@@ -8,7 +8,6 @@ import pytest
 # so the release test gate stays green.
 try:
     from tokenpak.extraction import EntityExtractor, EntityType
-
     from tokenpak.vault.blocks import BlockStore
     from tokenpak.vault.indexer import VaultIndexer
 except ImportError as _exc:

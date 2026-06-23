@@ -42,6 +42,16 @@
       "related": ["start", "logs", "doctor"]
     },
     {
+      "command": "upgrade",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Open the TokenPak Pro upgrade page",
+      "aliases": [],
+      "usage": "/tokenpak upgrade [--print-url]",
+      "detail": "Opens the public Pro upgrade page in your default browser. Use --print-url for non-interactive scripts.",
+      "related": ["license", "plan", "activate"]
+    },
+    {
       "command": "logs",
       "tier": "oss",
       "category": "Control",

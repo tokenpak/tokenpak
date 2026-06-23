@@ -10,6 +10,7 @@ import json
 from typing import Any
 
 from tokenpak import licensing as _lic
+from tokenpak.cli.commands.upgrade import DEFAULT_UPGRADE_URL
 
 
 def _render_summary(s: dict[str, Any]) -> str:
@@ -36,7 +37,7 @@ def _render_summary(s: dict[str, Any]) -> str:
     lines.append("")
     if s["tier"] == _lic.TIER_FREE:
         lines.append("  You are on the Free tier. All Free-tier features are available.")
-        lines.append("  Upgrade path: https://tokenpak.ai/pricing   (coming soon)")
+        lines.append(f"  Upgrade path: {DEFAULT_UPGRADE_URL}")
         lines.append("")
     elif s["status"] == "pending_validation":
         lines.append(

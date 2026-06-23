@@ -25,6 +25,7 @@ _ESSENTIAL_COMMANDS = {
     "start": "Start the proxy",
     "stop": "Stop the proxy",
     "status": "Health, stats, and savings summary",
+    "upgrade": "Open the TokenPak Pro upgrade page",
     "cost": "API spend and token usage",
     "savings": "What TokenPak saved you",
     "doctor": "Run diagnostics and health checks",

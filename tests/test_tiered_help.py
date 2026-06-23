@@ -43,12 +43,12 @@ class TestEssentialHelp:
         assert "--all" in text
 
     def test_essential_commands_count(self):
-        """Essential commands list should have exactly 8 commands."""
-        assert len(_ESSENTIAL_COMMANDS) == 8, "Expected exactly 8 essential commands"
+        """Essential commands list should have exactly 9 commands."""
+        assert len(_ESSENTIAL_COMMANDS) == 9, "Expected exactly 9 essential commands"
 
     def test_essential_commands_are(self):
-        """Verify the correct 8 essential commands are defined."""
-        expected = {"setup", "start", "stop", "status", "cost", "savings", "doctor", "dashboard"}
+        """Verify the correct 9 essential commands are defined."""
+        expected = {"setup", "start", "stop", "status", "cost", "savings", "doctor", "dashboard", "upgrade"}
         actual = set(_ESSENTIAL_COMMANDS.keys())
         assert actual == expected, f"Essential commands mismatch. Expected {expected}, got {actual}"
 

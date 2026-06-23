@@ -6,6 +6,16 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **cli:** `tokenpak upgrade` opens the public Pro upgrade page, supports
+  `--print-url` for non-interactive use, and honors `TOKENPAK_UPGRADE_URL`.
+
+### Changed
+
+- **license/status:** Free-tier upgrade guidance now points to
+  `https://tokenpak.ai/pro`.
+
 ## [1.9.3] — 2026-06-22
 
 Security patch: path-safety hardening for `pak` install and a default-deny CORS

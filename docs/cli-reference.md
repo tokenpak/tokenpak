@@ -82,6 +82,14 @@ Check proxy health
 - `--fleet` — Fleet rollup view — reads rollup_daily
 - `--since` — With --fleet: window in days, e.g. '7d' (default: 7d)
 
+### `tokenpak upgrade`
+
+Open the canonical TokenPak Pro upgrade page in your default browser. Target URL is https://tokenpak.ai/pro (override with TOKENPAK_UPGRADE_URL).
+
+**Flags:**
+
+- `--print-url` — Print the upgrade URL to stdout instead of opening a browser
+
 ### `tokenpak logs`
 
 Show recent logs

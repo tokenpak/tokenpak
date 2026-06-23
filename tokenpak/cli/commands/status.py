@@ -37,6 +37,13 @@ except ImportError:
     def get_rates(model: Optional[str] = None) -> dict:
         return {"input": 3.0, "cached": 0.30, "output": 15.0}
 
+try:
+    from tokenpak import licensing as _lic
+    from tokenpak.cli.commands.upgrade import DEFAULT_UPGRADE_URL
+except ImportError:
+    _lic = None
+    DEFAULT_UPGRADE_URL = "https://tokenpak.ai/pro"
+
 
 # ---------------------------------------------------------------------------
 # Meme lines — 28 curated by Kevin, random pick per invocation
@@ -78,6 +85,28 @@ MEME_LINES = [
 # ---------------------------------------------------------------------------
 
 SEP = "────────────────────────────────────────"
+
+
+def _free_tier_upgrade_hint() -> Optional[str]:
+    """Return an upgrade hint for Free-tier installs, fail-open on license errors."""
+    if _lic is None:
+        return None
+    try:
+        summary = _lic.summary_for_cli()
+    except Exception:
+        return None
+    if summary.get("tier") != getattr(_lic, "TIER_FREE", "free"):
+        return None
+    return f"  Upgrade to Pro: {DEFAULT_UPGRADE_URL}  (or run `tokenpak upgrade`)"
+
+
+def _print_free_tier_upgrade_hint() -> None:
+    hint = _free_tier_upgrade_hint()
+    if hint:
+        print()
+        print(hint)
+
+
 SEP_INNER = "─────────────────────────────────"
 PROXY_DEFAULT = "http://127.0.0.1:8766"
 DB_DEFAULT = os.environ.get(
@@ -546,6 +575,7 @@ def run(
                 print("  Start the proxy with `tokenpak serve`.\n")
             else:
                 print(f"\n  {savings_all['error']}\n")
+            _print_free_tier_upgrade_hint()
             return
         t = savings_all["totals"]
         total_reqs = t["requests"]
@@ -777,6 +807,8 @@ def run(
         print(f"  ⚠️  {errors} error(s) — run `tokenpak doctor`")
     else:
         print("  ✅ Healthy")
+
+    _print_free_tier_upgrade_hint()
 
     # === MEME LINE ===
     if not no_meme:
