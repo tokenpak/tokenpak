@@ -7058,6 +7058,15 @@ def _build_demo_parser(sub):
     )
     rsub2 = p_recipe.add_subparsers(dest="recipe_cmd", required=False)
 
+    # recipe list
+    p_rlist = rsub2.add_parser("list", help="List baked-in OSS compression recipes")
+    p_rlist.add_argument(
+        "--category",
+        default=None,
+        help="Filter by category (general, python, javascript, markdown, config, common_patterns)",
+    )
+    p_rlist.set_defaults(func=cmd_recipe_list)
+
     # recipe create
     p_rcreate = rsub2.add_parser("create", help="Scaffold a new custom recipe YAML file")
     p_rcreate.add_argument("name", help="Recipe name (e.g. my-legal-cleanup)")
@@ -7126,7 +7135,7 @@ def _build_demo_parser(sub):
     p_rbench.set_defaults(func=cmd_recipe_benchmark)
     p_recipe.set_defaults(func=_bare_help(
         "recipe", "Custom recipe development tooling",
-        ["create", "validate", "test", "benchmark"],
+        ["list", "create", "validate", "test", "benchmark"],
     ))
 
     # ── Demo ───────────────────────────────────────────────────────────────────
@@ -7309,6 +7318,33 @@ def _run_compression_demo():
     print()
 
 
+def _print_oss_recipe_catalog(engine, category: str | None = None) -> None:
+    """Print the baked-in OSS recipe catalog, optionally filtered by category."""
+    summary = engine.summary()
+    print("TokenPak — Baked-in Compression Recipes")
+    print("=" * 50)
+    print(f"Total recipes: {summary['total']}")
+    print()
+
+    categories = [category] if category else engine.categories()
+
+    for cat in categories:
+        recipes = engine.by_category(cat)
+        if not recipes:
+            print(f"  [no recipes in category '{cat}']")
+            continue
+        print(f"  ── {cat} ({len(recipes)}) ──")
+        for r in recipes:
+            hint = f"~{int(r.compression_hint*100)}%" if r.compression_hint > 0 else "   "
+            print(f"    {r.name:<45}  {hint}  {r.description[:60]}")
+        print()
+
+    print(
+        "Use `tokenpak demo --recipe <name>` for details, "
+        "or `tokenpak demo --file <path>` to see applicable recipes."
+    )
+
+
 def cmd_demo(args):
     """Show OSS compression recipes and demonstrate recipe selection."""
     from tokenpak.compression.recipes import get_oss_engine
@@ -7381,29 +7417,18 @@ def cmd_demo(args):
         return
 
     # ── List all (optionally filtered by category)
-    summary = engine.summary()
-    print("TokenPak — Baked-in Compression Recipes")
-    print("=" * 50)
-    print(f"Total recipes: {summary['total']}")
-    print()
-
-    categories = [args.category] if args.category else engine.categories()
-
-    for cat in categories:
-        recipes = engine.by_category(cat)
-        if not recipes:
-            print(f"  [no recipes in category '{cat}']")
-            continue
-        print(f"  ── {cat} ({len(recipes)}) ──")
-        for r in recipes:
-            hint = f"~{int(r.compression_hint*100)}%" if r.compression_hint > 0 else "   "
-            print(f"    {r.name:<45}  {hint}  {r.description[:60]}")
-        print()
-
-    print("Use --recipe <name> for details, --file <path> to see applicable recipes.")
+    _print_oss_recipe_catalog(engine, category=args.category)
 
 
 # ── Recipe SDK CLI commands ────────────────────────────────────────────────────
+
+
+def cmd_recipe_list(args):
+    """List baked-in OSS compression recipes."""
+    from tokenpak.compression.recipes import get_oss_engine
+
+    engine = get_oss_engine()
+    _print_oss_recipe_catalog(engine, category=args.category)
 
 
 def cmd_recipe_create(args):

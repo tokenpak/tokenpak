@@ -182,6 +182,8 @@ Manage compression recipes
 
 **Subcommands:**
 
+- `list`
+  - `--category` — Filter by category (general, python, javascript, markdown, config, common_patterns)
 - `create`
   - `NAME` — Recipe name (e.g. my-legal-cleanup)
   - `--output-dir` — Directory to write the recipe file (default: current dir) (default: .)
