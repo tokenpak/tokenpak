@@ -15,6 +15,23 @@ from tokenpak.cli.commands.help import (
 )
 
 
+class TestQuickHelp:
+    """Test top-level beginner help output."""
+
+    def test_top_level_help_shows_setup(self):
+        """tokenpak --help should surface setup in the beginner quick start."""
+        result = subprocess.run(
+            ["python3", "-m", "tokenpak.cli", "--help"],
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).parent.parent),
+        )
+
+        assert result.returncode == 0
+        assert "Quick Start:" in result.stdout
+        assert "  setup        Guided first-run setup" in result.stdout
+
+
 class TestEssentialHelp:
     """Test default help output shows only essential commands."""
 

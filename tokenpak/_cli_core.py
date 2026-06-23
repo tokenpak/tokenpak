@@ -242,11 +242,12 @@ def _proxy_get(path: str, port: Optional[int] = None) -> "dict | None":
 _FIRST_RUN_FLAG = Path.home() / ".tokenpak" / ".seen_intro"
 
 # Commands shown in quick --help (beginner view)
-_QUICK_COMMANDS = ["start", "demo", "cost", "status"]
+_QUICK_COMMANDS = ["setup", "start", "demo", "cost", "status"]
 
 # All commands grouped for `tokenpak help`
 _COMMAND_GROUPS = {
     "Getting Started": [
+        ("setup", "Guided first-run setup"),
         ("start", "Start the proxy"),
         ("stop", "Stop the proxy"),
         ("restart", "Restart the proxy"),
@@ -471,6 +472,7 @@ def _print_quick_help():
         "TokenPak — LLM Proxy with Prompt Packing\n"
         "\n"
         "Quick Start:\n"
+        "  setup        Guided first-run setup\n"
         "  start        Start the proxy (localhost:8766)\n"
         "  stop         Stop the running proxy\n"
         "  restart      Restart the proxy\n"

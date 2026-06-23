@@ -7,6 +7,10 @@ _To update: edit `tokenpak/cli.py` then run `python scripts/generate-cli-docs.py
 
 ## Group: Getting Started
 
+### `tokenpak setup`
+
+Guided first-run setup
+
 ### `tokenpak start`
 
 Start the TokenPak proxy server, which routes LLM API requests through
@@ -1245,10 +1249,6 @@ Show compression savings summary.
 **Flags:**
 
 - `--days` — Rolling window in days (default: 30)
-
-### `tokenpak setup`
-
-Interactive wizard for first-time TokenPak configuration.
 
 ### `tokenpak telemetry`
 
