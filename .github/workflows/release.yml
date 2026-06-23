@@ -164,7 +164,7 @@ jobs:
 
       - name: Upload chaos release-readiness artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-readiness-${{ github.ref_name }}-test-chaos
           path: |
@@ -357,13 +357,13 @@ jobs:
           cat SHA256SUMS
 
       - name: Upload dist artifact (wheels + sdist only)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
 
       - name: Upload checksums artifact (SHA256SUMS only)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: checksums
           path: SHA256SUMS
