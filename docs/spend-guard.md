@@ -261,7 +261,7 @@ Your reply isn't matching the strict-whole-string vocab. Check `~/tokenpak/token
 Check `tokenpak status` and `sqlite3 ~/.tokenpak/spend_guard.db "SELECT COUNT(*) FROM spend_guard_audit"`. If zero rows: confirm `spend_guard.enabled=true` (`TOKENPAK_SPEND_GUARD_ENABLED=0` in env disables it), and that you restarted the proxy after upgrading. The proxy holds modules in memory — only restarts pick up code changes.
 
 **"How do I know what session_id the proxy assigned me?"**
-The proxy resolves session via the `X-Claude-Code-Session-Id` header (Claude Code), `X-TokenPak-Session` (OpenClaw cycles), or falls back to the model name. To force a specific session id: send `X-TokenPak-Session: my-explicit-id` on every request.
+The proxy resolves session via the `X-Claude-Code-Session-Id` header (Claude Code), `X-TokenPak-Session` (configured clients), or falls back to the model name. To force a specific session id: send `X-TokenPak-Session: my-explicit-id` on every request.
 
 **"My request is blocked because of session-cumulative — but my session has been quiet."**
 The session window reads from `~/.tokenpak/monitor.db`, which is the proxy's wire-side cost log (every completed request). If you ran an expensive cycle in the last hour under the same session id, that counts toward the cumulative. Either wait out the window, set a different session id, or temporarily raise `session_block_cost_usd`.

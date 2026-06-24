@@ -61,7 +61,7 @@ List recorded sessions with optional filters.
  "id": "sess_abc123",
  "timestamp": "2026-03-05T14:23:11Z",
  "model": "claude-3-5-sonnet-20241022",
- "agent": "cali",
+ "agent": "agent-alpha",
  "tokens_in": 4231,
  "tokens_in_compressed": 2847,
  "tokens_out": 612,
@@ -109,7 +109,7 @@ Team-wide aggregated stats. Requires admin token.
  },
  "by_agent": [
  {
- "agent": "cali",
+ "agent": "agent-alpha",
  "requests": 542,
  "cost_usd": 19.40,
  "tokens_saved": 1320000
@@ -127,7 +127,7 @@ Per-agent detail. Requires admin token.
 **Response:**
 ```json
 {
- "agent": "cali",
+ "agent": "agent-alpha",
  "requests_today": 14,
  "cost_today_usd": 0.42,
  "requests_month": 542,

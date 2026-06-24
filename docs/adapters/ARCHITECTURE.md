@@ -11,7 +11,7 @@ TokenPak ships with two complementary adapter systems:
 | System | Location | Purpose |
 |--------|----------|---------|
 | **SDK Adapters** | `tokenpak/adapters/` | Route SDK/framework calls through proxy |
-| **Platform Adapters** | `tokenpak/agent/adapters/` | Detect calling platform (OpenClaw, Claude CLI, etc.) |
+| **Platform Adapters** | `tokenpak/agent/adapters/` | Detect calling platform (Claude CLI, SDK clients, etc.) |
 | **Telemetry Adapters** | `tokenpak/telemetry/adapters/` | Parse provider payloads into canonical usage types |
 
 This document describes the **SDK Adapters** layer — the unified interface for sending requests through the TokenPak proxy from any SDK or framework.
@@ -213,7 +213,7 @@ To add a new adapter (e.g. `CursorAdapter`):
 
 ### Platform Adapters (`tokenpak/agent/adapters/`)
 
-Detect **which client platform** is calling the proxy (OpenClaw, Claude CLI, Generic).
+Detect **which client platform** is calling the proxy (Claude CLI, SDK clients, Generic).
 Used internally by the proxy pipeline for routing hints. Not for external SDK use.
 
 ### Telemetry Adapters (`tokenpak/telemetry/adapters/`)

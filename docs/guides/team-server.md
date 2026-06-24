@@ -144,7 +144,7 @@ Each team member/agent points their LLM client at the team server:
 export ANTHROPIC_BASE_URL=http://team-server:8766
 
 # Register this agent (optional, enables per-agent tracking)
-tokenpak agent register "cali" --server http://team-server:8766
+tokenpak agent register "agent-alpha" --server http://team-server:8766
 ```
 
 ---
@@ -212,7 +212,7 @@ Team telemetry is available via REST:
 curl -H "X-Admin-Token: your-token" http://team-server:8766/v1/telemetry/team
 
 # Per-agent detail
-curl -H "X-Admin-Token: your-token" http://team-server:8766/v1/telemetry/agents/cali
+curl -H "X-Admin-Token: your-token" http://team-server:8766/v1/telemetry/agents/agent-alpha
 ```
 
 See [API Reference](../api-reference.md) for full details.

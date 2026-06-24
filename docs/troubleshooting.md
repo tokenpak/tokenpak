@@ -1060,14 +1060,15 @@ python3 -c "from tokenpak.agent.semantic.term_card_resolver import TermCardResol
 
 ### 20.4 Case sensitivity collision in queue directories
 
-**Symptoms:** Tasks in lowercase queue dirs (`~/vault/Agents/trix/queue/`) never execute; active tasks are in uppercase dirs.
+**Symptoms:** Tasks in lowercase queue dirs (`~/project/agents/agent-a/queue/`) never execute; active tasks are in uppercase dirs.
 
 **Fix:**
 ```bash
 # Identify orphaned tasks first
-find ~/vault/Agents/{trix,cali}/queue -name "*.md" 2>/dev/null
-# Then remove orphaned lowercase dirs
-rm -rf ~/vault/Agents/trix/queue ~/vault/Agents/cali/queue
+find ~/project/agents/*/queue -name "*.md" 2>/dev/null
+# Then archive each confirmed orphaned lowercase queue directory
+mkdir -p ~/project/queue-archive
+mv ~/project/agents/agent-a/queue ~/project/queue-archive/agent-a-queue
 ```
 
 ---

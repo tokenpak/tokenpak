@@ -37,8 +37,8 @@ tokenpak cost --by-model
 
 # By agent (if agents are registered)
 tokenpak cost --by-agent
-# cali        $0.024   14 requests
-# trix        $0.018    9 requests
+# agent-alpha $0.024   14 requests
+# agent-beta  $0.018    9 requests
 ```
 
 ### Export
@@ -128,10 +128,10 @@ The dashboard and export API support rich filtering:
 
 ```bash
 # Via CLI
-tokenpak cost --since 2026-01-01 --model claude-3-5-sonnet --agent cali
+tokenpak cost --since 2026-01-01 --model claude-3-5-sonnet --agent agent-alpha
 
 # Via dashboard URL
-http://localhost:8766/dashboard?model=gpt-4o&agent=trix&since=2026-03-01
+http://localhost:8766/dashboard?model=gpt-4o&agent=agent-beta&since=2026-03-01
 ```
 
 Filter parameters:
@@ -141,7 +141,7 @@ Filter parameters:
 | `since` | `2026-01-01` | Start date |
 | `until` | `2026-03-31` | End date |
 | `model` | `gpt-4o-mini` | Filter by model |
-| `agent` | `cali` | Filter by agent name |
+| `agent` | `agent-alpha` | Filter by agent name |
 | `min_cost` | `0.01` | Minimum request cost |
 | `compressed_only` | `true` | Only show compressed requests |
 

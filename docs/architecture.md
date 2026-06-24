@@ -169,7 +169,7 @@ Companies have:
 
 | Component | Purpose | License | Why this one |
 |---|---|---|---|
-| **QMD** | Text retrieval (BM25 + vectors + reranking) | MIT | Best local hybrid search, OpenClaw-native |
+| **QMD** | Text retrieval (BM25 + vectors + reranking) | MIT | Best local hybrid search, local-runtime native |
 | **LLMLingua-2** | Token-level compression | MIT | SOTA 2-20x compression, <5% quality loss |
 | **SelectiveContext** | Sentence-level filtering | MIT | Preserves readability |
 | **Whisper** | Audio transcription | MIT | Industry standard, local |
@@ -302,7 +302,7 @@ TokenPak CLI
     │
     └── tokenpak serve --port 8766
         │
-        ├── Full pipeline mode (OpenClaw, SDK clients)
+        ├── Full pipeline mode (managed CLI clients, SDK clients)
         │   ├── Intercepts LLM requests
         │   ├── Injects relevant context from index
         │   ├── Compacts conversation history
