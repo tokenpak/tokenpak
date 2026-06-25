@@ -2451,7 +2451,7 @@ def _build_creds_parser(sub):
         description=(
             "Inspect, manage, and dry-run-route credentials tokenpak can see from\n"
             "all registered providers (Codex CLI, Claude CLI, env vars,\n"
-            "~/.tokenpak/credentials.toml, OpenClaw agent profiles).\n\n"
+            "~/.tokenpak/credentials.toml, and external client profiles).\n\n"
             "Proxy fast-path integration still deferred — `creds route` is a\n"
             "dry-run (what would I pick) with no side effects.\n\n"
             "Examples:\n"
