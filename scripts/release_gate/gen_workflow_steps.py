@@ -89,24 +89,65 @@ def extract_steps(workflow: dict, workflow_filename: str) -> list[dict[str, str]
     return steps
 
 
+def extract_job_guards(workflow: dict, workflow_filename: str) -> list[dict[str, str]]:
+    """Capture each job's job-level ``if:`` guard (Std 12 §3.3 dispatch ratchet).
+
+    The step ratchet above only captures step names/ids, so a regression that
+    *weakens a job guard* — e.g. dropping the ``github.event_name == 'push'``
+    term from the ``build`` / ``release`` jobs back to a ref-only condition,
+    which would re-open the dispatch-at-tag GitHub-Release spoofing hole — would
+    pass ``workflow-steps-check`` silently. Capturing the normalized ``if:``
+    string for every guarded job closes that blind spot: the regression changes
+    the captured string and trips the snapshot check. Requires a structured YAML
+    parse; ``pyyaml`` is a core runtime dependency so this is always available
+    wherever the snapshot is generated or checked.
+    """
+    guards = []
+    jobs = workflow.get("jobs", {}) or {}
+    for job_name, job in jobs.items():
+        if not isinstance(job, dict):
+            continue
+        cond = job.get("if")
+        if cond is None:
+            continue
+        guards.append(
+            {
+                "workflow": workflow_filename,
+                "job": job_name,
+                "if": str(cond).strip(),
+            }
+        )
+    return guards
+
+
 def build_snapshot() -> dict:
     workflows_dir = REPO_ROOT / ".github" / "workflows"
     all_steps = []
+    all_guards = []
     for glob in GUARDED_GLOBS:
         for wf_path in sorted(workflows_dir.glob(glob)):
             data = load_yaml_safe(wf_path)
             if data is None:
                 steps = extract_steps_regex(wf_path)
+                # Job-level guard capture needs a structured parse. pyyaml is a
+                # core runtime dependency, so this fallback is effectively dead;
+                # if it is ever hit, the guard ratchet degrades to empty rather
+                # than emitting environment-dependent partial data.
+                guards = []
             else:
                 steps = extract_steps(data, wf_path.name)
+                guards = extract_job_guards(data, wf_path.name)
             all_steps.extend(steps)
+            all_guards.extend(guards)
     # Sort by (workflow, job, id, name) for deterministic diff
     all_steps.sort(key=lambda s: (s["workflow"], s["job"], s["id"], s["name"]))
+    all_guards.sort(key=lambda g: (g["workflow"], g["job"], g["if"]))
     return {
-        "version": "1.0",
+        "version": "1.1",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "guarded_globs": GUARDED_GLOBS,
         "steps": all_steps,
+        "job_guards": all_guards,
     }
 
 
@@ -135,17 +176,36 @@ def main() -> int:
         new_steps = {(s["workflow"], s["job"], s["id"], s["name"]) for s in snapshot["steps"]}
         added = sorted(new_steps - on_disk_steps)
         removed = sorted(on_disk_steps - new_steps)
-        if added or removed:
+
+        # Std 12 §3.3 dispatch-guard ratchet: a changed job `if:` shows up as a
+        # removed old guard tuple + an added new one, so a ref-only regression
+        # on build/release trips this check.
+        on_disk_guards = {
+            (g["workflow"], g["job"], g["if"]) for g in on_disk.get("job_guards", [])
+        }
+        new_guards = {(g["workflow"], g["job"], g["if"]) for g in snapshot["job_guards"]}
+        guard_added = sorted(new_guards - on_disk_guards)
+        guard_removed = sorted(on_disk_guards - new_guards)
+
+        if added or removed or guard_added or guard_removed:
             print("workflow-steps snapshot drift detected:", file=sys.stderr)
             for w, j, i, n in added:
                 print(f"  + [{w}][{j}] id={i} name={n}", file=sys.stderr)
             for w, j, i, n in removed:
                 print(f"  - [{w}][{j}] id={i} name={n}", file=sys.stderr)
+            for w, j, cond in guard_added:
+                print(f"  + guard [{w}][{j}] if={cond}", file=sys.stderr)
+            for w, j, cond in guard_removed:
+                print(f"  - guard [{w}][{j}] if={cond}", file=sys.stderr)
             print(
-                "\nIf intentional: run `make workflow-steps-snapshot` and commit; removals require",
+                "\nIf intentional: run `make workflow-steps-snapshot` and commit; step removals require",
                 file=sys.stderr,
             )
-            print("`removes-ci-step: <step.id>` in PR body per Std 21 §12.", file=sys.stderr)
+            print(
+                "`removes-ci-step: <step.id>` in PR body per Std 21 §12, and a weakened release",
+                file=sys.stderr,
+            )
+            print("dispatch guard must cite Std 12 §3.3 review.", file=sys.stderr)
             return 1
         print("workflow-steps snapshot matches on-disk", file=sys.stderr)
         return 0

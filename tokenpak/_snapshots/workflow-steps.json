@@ -1,6 +1,6 @@
 {
-  "version": "1.0",
-  "generated_at": "2026-06-23T17:06:14Z",
+  "version": "1.1",
+  "generated_at": "2026-06-27T07:06:26Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"
@@ -563,6 +563,23 @@
       "job": "test",
       "id": "pytest",
       "name": "Run tests with collection-error visibility"
+    }
+  ],
+  "job_guards": [
+    {
+      "workflow": "release.yml",
+      "job": "build",
+      "if": "${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "publish",
+      "if": "${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, 'rc') && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') }}"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "release",
+      "if": "${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}"
     }
   ]
 }
