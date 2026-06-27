@@ -282,16 +282,6 @@
       "related": ["cost", "budget", "metrics"]
     },
     {
-      "command": "metrics",
-      "tier": "pro",
-      "category": "Visibility",
-      "description": "Show detailed performance metrics",
-      "aliases": [],
-      "usage": "/tokenpak metrics [--json] [--period DAY|WEEK|MONTH]",
-      "detail": "Latency percentiles, cache hit rates, compression ratios, model usage distribution.",
-      "related": ["stats", "cost", "savings"]
-    },
-    {
       "command": "dashboard",
       "tier": "pro",
       "category": "Visibility",
@@ -320,16 +310,6 @@
       "usage": "/tokenpak diff <session_id>",
       "detail": "Side-by-side comparison of original and compressed context for a given session.",
       "related": ["replay", "compression"]
-    },
-    {
-      "command": "compression",
-      "tier": "pro",
-      "category": "Optimization",
-      "description": "Configure and inspect compression settings",
-      "aliases": [],
-      "usage": "/tokenpak compression [status|set|reset]",
-      "detail": "View active compression algorithms, configure aggressiveness, and inspect per-model settings.",
-      "related": ["recipe", "optimize", "diff"]
     },
     {
       "command": "trigger",
@@ -422,26 +402,6 @@
       "related": ["macro", "trigger", "workflow"]
     },
     {
-      "command": "workflow",
-      "tier": "team",
-      "category": "Automation",
-      "description": "Manage multi-step automation workflows",
-      "aliases": [],
-      "usage": "/tokenpak workflow [list|run|status] <name>",
-      "detail": "Define and execute DAG-based workflows across multiple models and compression steps.",
-      "related": ["macro", "trigger", "handoff"]
-    },
-    {
-      "command": "handoff",
-      "tier": "team",
-      "category": "Automation",
-      "description": "Manage agent handoff protocols",
-      "aliases": [],
-      "usage": "/tokenpak handoff [status|configure]",
-      "detail": "Configures handoff behavior when an agent transfers context to another agent or model.",
-      "related": ["workflow", "agent"]
-    },
-    {
       "command": "prune",
       "tier": "team",
       "category": "Infrastructure",
@@ -450,46 +410,6 @@
       "usage": "/tokenpak prune [--older-than DAYS] [--dry-run]",
       "detail": "Removes stale sessions, expired cache entries, and old replay data.",
       "related": ["retain", "fingerprint"]
-    },
-    {
-      "command": "retain",
-      "tier": "team",
-      "category": "Infrastructure",
-      "description": "Configure retention policies",
-      "aliases": [],
-      "usage": "/tokenpak retain [set|show] [--days N]",
-      "detail": "Set data retention policies for sessions, logs, and cache entries.",
-      "related": ["prune"]
-    },
-    {
-      "command": "policy",
-      "tier": "team",
-      "category": "Infrastructure",
-      "description": "Manage routing and access policies",
-      "aliases": [],
-      "usage": "/tokenpak policy [list|apply|remove] <name>",
-      "detail": "Define team-wide routing policies, model allowlists, and budget enforcement rules.",
-      "related": ["route", "budget", "compliance"]
-    },
-    {
-      "command": "sla",
-      "tier": "team",
-      "category": "Infrastructure",
-      "description": "Configure SLA targets and alerting",
-      "aliases": [],
-      "usage": "/tokenpak sla [set|status|test]",
-      "detail": "Set latency and availability targets. Alerts fire when SLAs are breached.",
-      "related": ["metrics", "status", "workflow"]
-    },
-    {
-      "command": "maintenance",
-      "tier": "team",
-      "category": "Infrastructure",
-      "description": "Run maintenance tasks (vacuum, reindex)",
-      "aliases": [],
-      "usage": "/tokenpak maintenance [vacuum|reindex|all]",
-      "detail": "Runs database vacuum, re-indexes vault blocks, and clears expired cache entries.",
-      "related": ["prune", "doctor"]
     },
     {
       "command": "compliance",
@@ -550,6 +470,96 @@
       "usage": "/tokenpak goals [list|add|edit|delete|detail|export]",
       "detail": "Define token or cost savings targets and monitor progress with pace tracking (ahead/on-track/behind). Supports goal history and comparison.",
       "related": ["savings", "budget", "report"]
+    },
+    {
+      "command": "pak",
+      "tier": "oss",
+      "category": "Optimization",
+      "description": "Inspect, export, and import Pak context files",
+      "aliases": [],
+      "usage": "/tokenpak pak [create|inspect|export|import|status]",
+      "detail": "Manage portable Pak context files: create, inspect, export, import, and check status (MultiPak Phase 1).",
+      "related": ["pakplan", "optimize", "index"]
+    },
+    {
+      "command": "pakplan",
+      "tier": "oss",
+      "category": "Optimization",
+      "description": "Inspect the recall foundation; preview, explain, report",
+      "aliases": [],
+      "usage": "/tokenpak pakplan [preview|explain|report]",
+      "detail": "Preview, explain, and report on the recall foundation that drives Pak context selection.",
+      "related": ["pak", "index", "optimize"]
+    },
+    {
+      "command": "tip",
+      "tier": "oss",
+      "category": "Configuration",
+      "description": "TokenPak Integration Protocol — validate, inspect, conformance",
+      "aliases": [],
+      "usage": "/tokenpak tip [validate|inspect|conformance|doctor|observe|sources|scaffold-adapter]",
+      "detail": "Work with the TokenPak Integration Protocol (TIP): validate and inspect adapters, run conformance checks, and scaffold new integrations.",
+      "related": ["config", "doctor"]
+    },
+    {
+      "command": "creds",
+      "tier": "oss",
+      "category": "Configuration",
+      "description": "Discover credentials across platforms and run diagnostics",
+      "aliases": [],
+      "usage": "/tokenpak creds",
+      "detail": "Discover API credentials across installed tools and platforms, and diagnose credential issues.",
+      "related": ["config", "doctor", "setup"]
+    },
+    {
+      "command": "claude",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Launch Claude Code with the companion active",
+      "aliases": [],
+      "usage": "/tokenpak claude",
+      "detail": "Launch Claude Code with the TokenPak companion active so requests route through the proxy.",
+      "related": ["codex", "start", "status"]
+    },
+    {
+      "command": "codex",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Launch Codex with the companion active",
+      "aliases": [],
+      "usage": "/tokenpak codex",
+      "detail": "Launch Codex with the TokenPak companion active so requests route through the proxy.",
+      "related": ["claude", "start", "status"]
+    },
+    {
+      "command": "prove",
+      "tier": "oss",
+      "category": "Visibility",
+      "description": "A/B value proof: direct API vs TokenPak",
+      "aliases": [],
+      "usage": "/tokenpak prove [create|run|show|list|providers]",
+      "detail": "Run A/B value proofs comparing direct API calls against TokenPak to quantify savings.",
+      "related": ["savings", "cost"]
+    },
+    {
+      "command": "init",
+      "tier": "oss",
+      "category": "Configuration",
+      "description": "Guided first-run setup (API key, port, vault path)",
+      "aliases": [],
+      "usage": "/tokenpak init",
+      "detail": "Guided first-run setup that configures your API key, proxy port, and vault path.",
+      "related": ["setup", "config"]
+    },
+    {
+      "command": "setup",
+      "tier": "oss",
+      "category": "Configuration",
+      "description": "Interactive first-time configuration wizard",
+      "aliases": [],
+      "usage": "/tokenpak setup",
+      "detail": "Interactive wizard for first-time configuration of TokenPak.",
+      "related": ["init", "config"]
     }
   ]
 }

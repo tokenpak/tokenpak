@@ -350,6 +350,26 @@ def _core_command_names() -> set:
     return set(_ALL_COMMANDS) | set(_EXTRA_KNOWN_COMMANDS)
 
 
+def registered_command_names(parser=None) -> set:
+    """Enumerate every verb the built CLI parser will actually accept.
+
+    This is the authoritative *invokable* command set, read live from the
+    argparse sub-parsers rather than any hand-maintained list. The help
+    catalog (and the count it advertises) is validated against this so it can
+    never drift back into advertising commands the parser won't dispatch — see
+    ``tests/test_help_parser_parity.py``.
+    """
+    import argparse
+
+    if parser is None:
+        parser = build_parser()
+    names: set = set()
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            names.update(action.choices.keys())
+    return names
+
+
 # ── Plugin command discovery (tokenpak.commands entry-point group) ────────────
 #
 # Installed plugins (e.g. the premium tier) register additional CLI verbs under
