@@ -1,0 +1,45 @@
+name: License check
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  license-policy:
+    name: No superseded first-party license declarations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute changed files
+        id: changed
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          git diff --name-only --diff-filter=AM "$base" "$head" \
+            | grep -vE "^(tests/|packages/tests/|sdk/tests/|sdk/dist/)" \
+            > changed-files.txt || true
+          echo "Changed files:"
+          sed 's/^/  /' changed-files.txt
+
+      - name: Scan changed files
+        run: |
+          if [ ! -s changed-files.txt ]; then
+            echo "No relevant files changed; skipping."
+            exit 0
+          fi
+          python3 scripts/release_gate/license_policy_scan.py \
+            --ledger decisions/ledger/license.md \
+            --paths-from changed-files.txt \
+            --root . \
+            --annotation error
