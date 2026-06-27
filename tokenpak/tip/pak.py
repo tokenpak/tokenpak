@@ -8,9 +8,9 @@ that the MultiPak Pro daemon (closed-source) consumes.
 
 The schema follows the MultiPak Pro architecture (taxonomy) and
 the PRD. It must land in OSS before any Pro implementation can rely on
-it (inviolable layering rule).
+it.
 
-**Subtype taxonomy** (ratified via Decision #2=A):
+**Subtype taxonomy**:
 
 - ``vault``: long-term durable Pak from project files (authority: file_source).
 - ``interaction``: from AI sessions (user prompts, LLM responses, tool outputs).
@@ -59,7 +59,7 @@ _LEGACY_SUBTYPE_ALIASES: Mapping[str, str] = {
 class PakSubtype(str, Enum):
     """Canonical Pak subtype taxonomy.
 
-    The 5 values are the ratified canonical taxonomy. Receivers parsing a
+    The 5 values are the canonical taxonomy. Receivers parsing a
     Pak with an unknown subtype string MUST fall back gracefully (per the
     capability-codes rule); never raise on an unrecognized value.
     Use :func:`PakSubtype.parse` to normalize legacy/aliased values.
@@ -78,8 +78,8 @@ class PakSubtype(str, Enum):
         Unknown values raise ``ValueError`` only after the alias table is
         consulted; new subtypes added in future minor revisions of TIP-1.x
         SHOULD be added to this enum and the registry catalog in lockstep
-        (per ``feedback_always_dynamic.md`` — no hardcoded enumeration in
-        consumer code paths).
+        (no hardcoded enumeration in consumer code paths; discovery stays
+        dynamic via the registry catalog).
         """
         normalized = value.strip().lower()
         if normalized in _LEGACY_SUBTYPE_ALIASES:
@@ -156,7 +156,7 @@ class PakPrivacyClass(str, Enum):
     """Privacy classification. v1 admits ``local_only`` only.
 
     Additional classes (``team_local`` for Pro Team LAN sharing) require
-    their own Class B amendment.
+    their own compatibility review.
     """
 
     LOCAL_ONLY = "local_only"
@@ -329,8 +329,8 @@ class Pak:
 
 
 # ---------------------------------------------------------------------------
-# Default-retention discovery (per `feedback_always_dynamic.md` — no hardcoded
-# subtype enumeration in consumer paths; consumers ask the contract).
+# Default-retention discovery (no hardcoded subtype enumeration in consumer
+# paths; consumers ask the contract).
 # ---------------------------------------------------------------------------
 
 
