@@ -2,7 +2,7 @@
 """tokenpak/core.py — Vault index builder (proxy-compatible format).
 
 Provides index_directory() for the rebuild-vault-index.sh script.
-Output format: ~/vault/.tokenpak/index.json + blocks/*.txt
+Output format: ~/.tokenpak/index.json + blocks/*.txt
 Compatible with proxy.py VaultIndex reader.
 """
 
@@ -91,10 +91,14 @@ _SKIP_DIRS = {
     ".cargo",
 }
 
-# Path patterns that indicate protected/sensitive content
+# Path patterns that indicate protected/sensitive content. Numbered
+# top-level vault sections (``NN_<name>/``) are kept verbatim so the index
+# builder never compresses or rewrites their contents; the
+# credentials/secrets/private subtrees are protected the same way. The
+# section prefix is matched structurally — no specific folder name is
+# encoded here.
 _PROTECTED_PATTERNS = [
-    r"^00_kevin/",
-    r"^03_agent_packs/",
+    r"^\d{2}_[^/]+/",
     r"^agents/",
     r"/credentials/",
     r"/secrets/",
