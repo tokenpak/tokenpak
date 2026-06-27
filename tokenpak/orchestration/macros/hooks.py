@@ -12,6 +12,7 @@ Zero-token activation: triggers fire only when events occur.
 
 import fnmatch
 import json
+import shlex
 import subprocess
 import threading
 import uuid
@@ -270,10 +271,14 @@ class TriggerRegistry:
 
             if not dry_run:
                 try:
-                    # Substitute event data in action
-                    action = trigger.action
-                    action = action.replace("$EVENT_DATA", event_data)
-                    action = action.replace("$EVENT_TYPE", event_type)
+                    # Parse first, then substitute event values as argv data.
+                    # This keeps trigger actions useful without shell-interpreting event payloads.
+                    action_argv = [
+                        arg.replace("$EVENT_DATA", event_data).replace("$EVENT_TYPE", event_type)
+                        for arg in shlex.split(trigger.action)
+                    ]
+                    if not action_argv:
+                        raise ValueError("Trigger action is empty")
 
                     # Build environment
                     run_env = dict(**dict(import_os_env()))
@@ -283,8 +288,8 @@ class TriggerRegistry:
                         run_env.update(env)
 
                     result = subprocess.run(
-                        action,
-                        shell=True,
+                        action_argv,
+                        shell=False,
                         capture_output=True,
                         text=True,
                         timeout=300,  # 5 minute timeout

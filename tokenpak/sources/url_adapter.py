@@ -5,7 +5,9 @@ Respects robots.txt before fetching. No third-party deps (stdlib only).
 """
 
 import html
+import ipaddress
 import re
+import socket
 import urllib.parse
 import urllib.request
 import urllib.robotparser
@@ -25,6 +27,7 @@ _STRIP_TAGS_WITH_CONTENT = re.compile(
 _STRIP_TAGS = re.compile(r"<[^>]+>")
 # Collapse whitespace
 _COLLAPSE_WS = re.compile(r"\s{2,}")
+_METADATA_IPS = {ipaddress.ip_address("169.254.169.254")}
 
 
 def _strip_html(raw_html: str) -> str:
@@ -64,6 +67,62 @@ def _check_robots(url: str) -> bool:
         return True  # Fail-open
 
 
+def _is_blocked_address(address: str) -> bool:
+    """Return True for local/private addresses that must never be fetched."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    return (
+        ip in _METADATA_IPS
+        or ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _validate_url_safe(url: str) -> None:
+    """Fail closed for schemes and address ranges that can SSRF local services."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise SourceFetchError(f"Unsupported URL scheme: {parsed.scheme or '<missing>'}")
+    if not parsed.hostname:
+        raise SourceFetchError("URL host is required")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise SourceFetchError("Invalid URL port") from exc
+
+    host = parsed.hostname
+    if host.lower() == "localhost" or _is_blocked_address(host):
+        raise SourceFetchError(f"Blocked local or private URL host: {host}")
+
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError:
+        return
+    for info in infos:
+        resolved = info[4][0]
+        if _is_blocked_address(resolved):
+            raise SourceFetchError(f"Blocked local or private URL host: {host}")
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Validate redirect targets before urllib follows them."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_url_safe(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _urlopen_checked(req: urllib.request.Request, timeout: int):
+    opener = urllib.request.build_opener(_SafeRedirectHandler)
+    return opener.open(req, timeout=timeout)
+
+
 class URLAdapter(SourceAdapter):
     """Fetch and index web pages by URL."""
 
@@ -81,6 +140,7 @@ class URLAdapter(SourceAdapter):
             (content, Provenance)
         """
         url = source_id
+        _validate_url_safe(url)
 
         if not _check_robots(url):
             raise SourceFetchError(f"robots.txt disallows fetching: {url}")
@@ -90,7 +150,7 @@ class URLAdapter(SourceAdapter):
                 url,
                 headers={"User-Agent": "TokenPak/1.0 (context indexer)"},
             )
-            with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
+            with _urlopen_checked(req, timeout=_HTTP_TIMEOUT) as resp:
                 raw_bytes = resp.read()
                 etag = resp.headers.get("ETag", "")
                 content_type = resp.headers.get("Content-Type", "")
@@ -133,12 +193,16 @@ class URLAdapter(SourceAdapter):
         """
         url = source_id
         try:
+            _validate_url_safe(url)
+        except SourceFetchError:
+            return False
+        try:
             req = urllib.request.Request(
                 url,
                 method="HEAD",
                 headers={"User-Agent": "TokenPak/1.0"},
             )
-            with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
+            with _urlopen_checked(req, timeout=_HTTP_TIMEOUT) as resp:
                 etag = resp.headers.get("ETag", "").strip('"')
             if etag:
                 return etag != cached_version
