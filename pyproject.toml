@@ -13,10 +13,10 @@ description = "Cut LLM costs with deterministic context compression, smart routi
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    { name = "Kevin Yang", email = "hello@tokenpak.ai" },
+    { name = "TokenPak", email = "hello@tokenpak.ai" },
 ]
 maintainers = [
-    { name = "Kevin Yang", email = "hello@tokenpak.ai" },
+    { name = "TokenPak", email = "hello@tokenpak.ai" },
 ]
 keywords = [
     "llm",
