@@ -24,5 +24,15 @@ from tokenpak.telemetry.query_models import (  # noqa: F401
     SavingsReport,
 )
 
-# Also expose the Phase 5B sub-modules
-from . import api, audit, timeline  # noqa: F401
+# Also expose the Phase 5B sub-modules. ``audit`` and ``timeline`` are
+# dependency-light. ``api`` exposes FastAPI HTTP endpoints and therefore
+# requires FastAPI — an optional serve/dashboard extra. The core CLI value
+# commands (``cost``/``savings``) only need the query_dsl functions re-exported
+# above, so a missing FastAPI must not break importing this package or the
+# receipt-backed savings summary. Keep the API sub-module optional.
+from . import audit, timeline  # noqa: F401
+
+try:
+    from . import api  # noqa: F401  (requires FastAPI; optional serve extra)
+except ImportError:  # pragma: no cover - exercised via the FastAPI-absent test
+    api = None  # type: ignore[assignment]
