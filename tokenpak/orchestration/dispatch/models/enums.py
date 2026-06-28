@@ -1,7 +1,6 @@
 """Enumerations for TokenPak Dispatch record schemas.
 
-Every enum here is transcribed verbatim from Standards Delta v0
-(``01_PROJECTS/tokenpak/dispatch-2026-05-19/standards-delta-v0.md``) §4/§5/§6.
+Every enum here is transcribed verbatim from Standards Delta v0, §4/§5/§6.
 The enum *values* are the authoritative strings; member names are sanitized
 upper-case forms. Do NOT add, drop, or rename members without a corresponding
 Standards Delta amendment — these are contract enums, not implementation
