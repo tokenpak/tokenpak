@@ -4119,7 +4119,10 @@ def _build_user_template_parser(sub):
 
 # ── Version Control Commands ──────────────────────────────────────────────────
 
-PROXY_VERSION = "1.1.0"
+# The proxy ships from the same wheel as the CLI, so the "expected" proxy version
+# always equals the installed package version. Deriving it from ``tokenpak.__version__``
+# (instead of a hardcoded literal) keeps ``tokenpak version`` honest across releases.
+from tokenpak import __version__ as PROXY_VERSION
 _LOCK_FILE = Path.home() / "vault" / "System" / "tokenpak.lock.json"
 _TOKENPAK_CFG = Path.home() / ".tokenpak" / "config.json"
 _PROXY_URL = "http://localhost:8766"
@@ -4134,11 +4137,11 @@ def _compute_config_hash(cfg: dict) -> str:
 
 
 def _get_proxy_version() -> dict:
-    """Query proxy /version endpoint. Returns dict or raises."""
+    """Query the proxy ``/health`` endpoint (which carries ``version``). Returns dict or raises."""
     import urllib.request as _ur
 
     try:
-        with _ur.urlopen(f"{_PROXY_URL}/version", timeout=3) as resp:
+        with _ur.urlopen(f"{_PROXY_URL}/health", timeout=3) as resp:
             return json.loads(resp.read())
     except Exception as e:
         return {"error": str(e)}
