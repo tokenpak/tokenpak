@@ -13,9 +13,6 @@
  *
  * Never throws — all error paths fall through to console.warn so the host
  * gateway is unaffected by file-system failures.
- *
- * Source of truth: ~/vault/01_PROJECTS/tokenpak/initiatives/
- *   2026-04-28-openclaw-adapter-session-binding/03-SPEC.md §Component 1.
  */
 
 const fs = require("node:fs");
