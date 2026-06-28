@@ -4120,9 +4120,20 @@ def _build_user_template_parser(sub):
 # ── Version Control Commands ──────────────────────────────────────────────────
 
 # The proxy ships from the same wheel as the CLI, so the "expected" proxy version
-# always equals the installed package version. Deriving it from ``tokenpak.__version__``
-# (instead of a hardcoded literal) keeps ``tokenpak version`` honest across releases.
-from tokenpak import __version__ as PROXY_VERSION
+# always equals the installed package version. Derive it from ``tokenpak.__version__``
+# (instead of a hardcoded literal) so ``tokenpak version`` stays honest across releases.
+# Guard the import: when this module is imported *during* ``tokenpak`` package
+# initialization, ``__version__`` may not be bound yet, so fall back to the installed
+# package metadata to avoid a circular-import failure.
+try:
+    from tokenpak import __version__ as PROXY_VERSION
+except ImportError:  # pragma: no cover - circular import during package init
+    try:
+        from importlib.metadata import version as _pkg_version
+
+        PROXY_VERSION = _pkg_version("tokenpak")
+    except Exception:
+        PROXY_VERSION = "unknown"
 _LOCK_FILE = Path.home() / "vault" / "System" / "tokenpak.lock.json"
 _TOKENPAK_CFG = Path.home() / ".tokenpak" / "config.json"
 _PROXY_URL = "http://localhost:8766"
