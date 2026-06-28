@@ -89,6 +89,7 @@ jobs:
             'TIP-[0-9][0-9]'
             '\.claude/projects'
             '/home/sue/'
+            '~/vault/[0-9][0-9]_'
             'trixxie168'
             '\bStd 2[0-9]\b'
             '\bStd 3[0-9]\b'
