@@ -76,6 +76,8 @@ shared secret to require `Authorization: Bearer <token>` on remote requests
 
 ## What's included (Free)
 
+> **Dispatch (v0.1-alpha preview):** turn a request into a scoped, resumable, reviewable workflow from the CLI. It is a source/`main`-branch preview and is not yet part of a released `pip install tokenpak`; see the [Dispatch guide](docs/guides/dispatch.md).
+
 - **Context compression** — deterministic token reduction on real agent
   workloads, <50ms latency. Savings are route-specific: direct API, CLI, and
   uncached repeated-agent loops are the best fit, while Claude Code/TUI routes

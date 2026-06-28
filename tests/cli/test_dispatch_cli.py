@@ -450,6 +450,49 @@ def test_receipt_missing(home):
     assert json.loads(out)["error"] == "no_receipt"
 
 
+# Preview-honesty: receipt / delivery / inspect must explain *why* a receipt is
+# absent in the v0.1-alpha preview (station execution is not CLI-wired), so an
+# empty receipt does not read as a defect. Narrow preview-honesty contract — it
+# does NOT imply station execution is wired.
+_PREVIEW_NOTE_MARK = "no receipt is produced in this build"
+
+
+def test_receipt_missing_explains_preview_boundary(home):
+    _, _, p = _do_run("write a python function")
+    rc, out = _capture(
+        cmd_dispatch_receipt,
+        argparse.Namespace(job_id=p["job_id"], as_json=True),
+    )
+    assert rc == 1
+    payload = json.loads(out)
+    assert payload["error"] == "no_receipt"
+    assert _PREVIEW_NOTE_MARK in payload["detail"]
+
+
+def test_delivery_undelivered_carries_preview_note(home):
+    _, _, p = _do_run("write a python function")
+    rc, out = _capture(
+        cmd_dispatch_delivery,
+        argparse.Namespace(job_id=p["job_id"], as_json=True),
+    )
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["delivered"] is False
+    assert _PREVIEW_NOTE_MARK in payload["note"]
+
+
+def test_inspect_no_receipt_carries_preview_note(home):
+    _, _, p = _do_run("write a python function")
+    rc, out = _capture(
+        cmd_dispatch_inspect,
+        argparse.Namespace(job_id=p["job_id"], late=False, as_json=True),
+    )
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["receipts"] == []
+    assert _PREVIEW_NOTE_MARK in payload["note"]
+
+
 def _seed_receipt(home, *, excerpt: str):
     """Persist a job + receipt whose excerpt carries internal-name leakage."""
     from tokenpak.orchestration.dispatch.ledger.db import RunLedger

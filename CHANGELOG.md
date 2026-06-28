@@ -6,6 +6,26 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-06-28
+
+### Added
+- **TokenPak Dispatch graduates from preview to a released feature.** The `tokenpak dispatch`
+  command (intake/routing, Decision Inbox, run-ledger lifecycle, observability) now ships in the
+  released `pip install tokenpak` package — the Dispatch engine, its registry/schema data, and the
+  user guide are included in the wheel. Delivery/receipt remain an explicit post-alpha preview
+  (no live station execution wired yet).
+
+### Fixed
+- Importing the package no longer requires FastAPI: `tokenpak savings` (and other core value
+  commands) work on a base install without the optional serve/dashboard extra.
+- The CLI proxy-version probe now derives the expected version from the package version and reads
+  `/health`, instead of a hard-coded value.
+
+### Packaging
+- Release wheels now include `budget_config.yaml` and `term_cards.json`; a build-time assertion
+  verifies the Dispatch registry/schema data ships.
+
+
 ### Added
 
 - **cli:** `tokenpak upgrade` opens the public Pro upgrade page, supports
@@ -54,7 +74,7 @@ and a dispatch reliability fix. Additive; no breaking changes.
   wired into the fulfillment flow); dispatch registry/schema files ship in the wheel.
 
 ### Docs
-- **license:** package READMEs + PYPI_READINESS corrected from `MIT` to
+- **license:** package READMEs + PYPI_READINESS were previously corrected from `MIT` to
   `Apache-2.0` to match the canonical Apache-2.0 LICENSE.
 
 ## [1.9.0] — 2026-06-14

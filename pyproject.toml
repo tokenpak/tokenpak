@@ -198,12 +198,16 @@ include = [
     "tokenpak*",
 ]
 exclude = [
-    "tokenpak.orchestration.dispatch*",
+    "tokenpak.tests*",
+    "tokenpak.sdk.*.tests*",
+    "*.tests*",
 ]
 
 [tool.setuptools.package-data]
 tokenpak = [
     "py.typed",
+    "budget_config.yaml",
+    "term_cards.json",
     "recipes_oss/*.yaml",
     "routing/model_tiers.json",
     "config/schema.json",

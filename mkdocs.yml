@@ -69,6 +69,7 @@ nav:
     - Telemetry & Dashboard: guides/telemetry.md
     - Dashboard — Per-Mode Views: guides/dashboard-per-mode.md
     - Team Server: guides/team-server.md
+    - Dispatch (v0.1-alpha preview): guides/dispatch.md
   - CLI Reference: cli-reference.md
   - Python SDK Reference: API_REFERENCE.md
   - REST API Reference: REST_API.md
