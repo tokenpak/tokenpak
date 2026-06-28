@@ -98,6 +98,7 @@ PATTERNS: list[str] = [
     r"TIP-[0-9][0-9]",
     CLAUDE_PROJECTS,
     r"/home/sue/",
+    r"~/vault/[0-9][0-9]_",
     r"trixxie168",
     r"\bStd 2[0-9]\b",
     r"\bStd 3[0-9]\b",

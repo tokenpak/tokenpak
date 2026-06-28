@@ -82,6 +82,52 @@ def test_internal_task_id_leak_fails(tmp_path):
     assert res.returncode == 1, "internal task-ID leak must fail the gate"
 
 
+def test_internal_vault_path_leak_fails(tmp_path):
+    # Internal vault paths (~/vault/<NN>_<FOLDER>) must not leak into shipped
+    # docstrings/comments — the class scrubbed from the package in a recent
+    # public-identity hygiene pass.
+    _write(
+        tmp_path,
+        "tokenpak/proxy/notes.py",
+        "# spec lives at ~/vault/01_PROJECTS/tokenpak/initiatives/x.md\nX = 1\n",
+    )
+    res = _run_tree(tmp_path)
+    assert res.returncode == 1, "internal vault-path leak must fail the gate"
+    assert "tokenpak/proxy/notes.py" in res.stdout
+
+
+def test_internal_vault_path_various_numbered_folders_fail(tmp_path):
+    # Any two-digit numbered top-level vault folder is internal: 00_kevin,
+    # 06_RUNTIME, 03_AGENT_PACKS, ... — all caught by the single path pattern.
+    for i, ref in enumerate(
+        ("~/vault/00_kevin/y.md", "~/vault/06_RUNTIME/scripts/z.sh")
+    ):
+        _write(tmp_path, f"tokenpak/core/v{i}.py", f"# see {ref}\n")
+    res = _run_tree(tmp_path)
+    assert res.returncode == 1, "all numbered vault folders must fail the gate"
+
+
+def test_vault_path_no_false_positive_on_user_surfaces(tmp_path):
+    # The pattern is deliberately narrow — it requires the ~/vault/<NN>_ shape.
+    # Legitimate surfaces must NOT trip it:
+    #   * ~/vault/.tokenpak  -> a dotfile dir, not a numbered folder
+    #   * bare ~/vault       -> a generic path with no numbered folder
+    #   * bare 01_PROJECTS / 03_AGENT_PACKS (no ~/vault/ prefix) -> keeps the
+    #     lesson_ingest vault-schema feature clean WITHOUT needing an allowlist.
+    _write(
+        tmp_path,
+        "tokenpak/companion/memory/lesson_ingest.py",
+        "# data dir: ~/vault/.tokenpak\n"
+        "VAULT = '~/vault'\n"
+        "PACKS = '03_AGENT_PACKS'  # vault-schema folder name (feature)\n"
+        "SUB = '01_PROJECTS'\n",
+    )
+    res = _run_tree(tmp_path)
+    assert res.returncode == 0, (
+        f"narrow vault pattern must not false-positive:\n{res.stdout}"
+    )
+
+
 def test_allowlisted_openclaw_path_passes(tmp_path):
     # `openclaw` is the legitimate, non-renamable provider/module name in the
     # OpenClaw integration subsystem.
