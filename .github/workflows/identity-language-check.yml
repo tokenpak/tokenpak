@@ -91,8 +91,9 @@ jobs:
             '/home/sue/'
             '~/vault/[0-9][0-9]_'
             'trixxie168'
-            '\bStd 2[0-9]\b'
-            '\bStd 3[0-9]\b'
+            '\bStd [0-9]{2}\b'
+            '§[0-9]'
+            'Standards Delta'
             'Suki: auto-commit'
           )
 
@@ -286,13 +287,15 @@ jobs:
               #     `tokenpak.creds.providers.openclaw`,
               #     `tokenpak.sdk.openclaw`, or bare provider-name strings)
               #
-              # Other patterns (agent names Sue/Cali/Trix/Suki/Aya/Dee/ReiPo,
-              # internal task IDs, /home/sue/ paths, .claude/projects,
-              # other Std numbers, "Suki: auto-commit", etc.) remain
-              # enforced even in snapshot files.
+              # Std NN / §N here are release-gate governance metadata about the
+              # snapshot (e.g. "Std 30 §13.1 R9" CI step names) — inherently a
+              # standards-section citation, so mask ALL of them. Other patterns
+              # (agent names Sue/Cali/Trix/Suki/Aya/Dee/ReiPo, internal task IDs,
+              # /home/sue/ paths, .claude/projects, "Suki: auto-commit", etc.)
+              # remain enforced even in snapshot files.
               sed -E \
-                -e 's/\bStd 21\b/Std __PUBLIC_RELGATE_REF_21__/g' \
-                -e 's/\bStd 30\b/Std __PUBLIC_RELGATE_REF_30__/g' \
+                -e 's/\bStd ([0-9]{2})\b/Std __PUBLIC_RELGATE_STD_\1__/g' \
+                -e 's/§([0-9])/§__PUBLIC_RELGATE_SEC__\1/g' \
                 -e 's/\bopenclaw\b/__GENERATED_SYMBOL_OPENCLAW__/g' \
                 -e 's/\bfleet\b/__GENERATED_SYMBOL_FLEET__/g' \
                 "$file"
@@ -397,14 +400,15 @@ jobs:
                 "$file"
             elif is_release_gate_impl_path "$file"; then
               # Tier 1 — release-gate implementation/test/workflow surface:
-              # mask the specific Std 21 / Std 30 references the code
-              # legitimately implements. All other patterns (agent names,
-              # internal IDs, paths, etc.) and all other Std numbers remain
-              # enforced. openclaw is NOT masked here — Tier 1 files should
-              # not reference openclaw.
+              # these files implement the release-gate standards and cite them by
+              # number, so mask ALL Std NN + §N standards-section citations. A
+              # §N/Std NN here is inherently a reference to the standard being
+              # implemented, never an agent name / private path / task-ID — all
+              # those patterns are NOT masked here and remain fully enforced.
+              # openclaw is NOT masked here — Tier 1 files should not reference it.
               sed -E \
-                -e 's/\bStd 21\b/Std __PUBLIC_RELGATE_REF_21__/g' \
-                -e 's/\bStd 30\b/Std __PUBLIC_RELGATE_REF_30__/g' \
+                -e 's/\bStd ([0-9]{2})\b/Std __PUBLIC_RELGATE_STD_\1__/g' \
+                -e 's/§([0-9])/§__PUBLIC_RELGATE_SEC__\1/g' \
                 "$file"
             elif [ "$pat" = '\bopenclaw\b' ] && is_openclaw_public_path "$file"; then
               # Path-scoped allowlist (see is_openclaw_public_path): the
@@ -494,6 +498,17 @@ jobs:
               # .claude/projects reference is still caught.
               sed -E \
                 -e 's#~/\.claude/projects#~/__FUNC_CLAUDE_TRANSCRIPT_DIR__#g' \
+                "$file"
+            elif [ "$pat" = '§[0-9]' ]; then
+              # Legal license-section allowlist: "Apache-2.0 §N" is a reference to
+              # a section of the Apache-2.0 license (the trademark notice cites §6),
+              # not an internal standards citation. Mask that EXACT literal so the
+              # §[0-9] rule does not flag it on non-release-gate paths (the README
+              # and generated METADATA/PKG-INFO carry it). Every other §N is still
+              # caught. (Release-gate impl/snapshot paths are handled by the
+              # branches above, which mask all §N there.)
+              sed -E \
+                -e 's/Apache-2\.0 §[0-9]+(\.[0-9]+)*/Apache-2.0 __LEGAL_SECTION__/g' \
                 "$file"
             else
               cat "$file"

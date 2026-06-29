@@ -71,6 +71,22 @@ from dataclasses import dataclass
 FLEET = r"\bfleet\b"
 OPENCLAW = r"\bopenclaw\b"
 CLAUDE_PROJECTS = r"\.claude/projects"
+# Internal standards-citation forms. The internal style is "Std NN" (any
+# two-digit standard number — supersedes the older Std 2x/3x-only rules so
+# Std 00-19 and Std 40-99 are also caught), "§N" section markers (no space —
+# the internal form is uniformly §-attached, e.g. ``§4.1``; the no-space shape
+# structurally avoids legal space-form citations like ``§ 512``), and the
+# "Standards Delta" working-document name (exact phrase; no hyphen/case variant
+# occurs in the tree). The legitimate legal license-section citation
+# ``Apache-2.0 §N`` is allowlisted in ``mask_content`` (an EXACT-literal legal
+# allowlist, NOT a broad ``§`` exemption).
+STD_NUM = r"\bStd [0-9]{2}\b"
+SECTION = r"§[0-9]"
+STANDARDS_DELTA = r"Standards Delta"
+# Exact legal license-section citation that must remain public (trademark notice
+# ``Apache-2.0 §6 grants no trademark rights`` in the README/long-description).
+# Matches the full section number so ``§10``/``§6.1`` mask cleanly, not partially.
+APACHE_LEGAL_SECTION = r"Apache-2\.0 §[0-9]+(?:\.[0-9]+)*"
 
 PATTERNS: list[str] = [
     r"\bSue\b",
@@ -100,8 +116,9 @@ PATTERNS: list[str] = [
     r"/home/sue/",
     r"~/vault/[0-9][0-9]_",
     r"trixxie168",
-    r"\bStd 2[0-9]\b",
-    r"\bStd 3[0-9]\b",
+    STD_NUM,
+    SECTION,
+    STANDARDS_DELTA,
     r"Suki: auto-commit",
 ]
 
@@ -204,18 +221,29 @@ def is_perm_tier_cli_path(path: str) -> bool:
 # ──────────────────────────────────────────────────────────────────────────
 
 
+def _mask_relgate_standards(text: str) -> str:
+    """Mask EVERY standards-section citation (``Std NN`` + ``§N``) on a path.
+
+    Used on the release-gate implementation + snapshot surfaces only. These files
+    implement the release-gate standards and cite them by number; a ``§N`` /
+    ``Std NN`` here is inherently a reference to the standard being implemented,
+    never an agent name / private path / task-ID (those patterns are NOT touched
+    here and remain fully enforced). Substitutions keep the line count stable.
+    """
+    text = re.sub(r"\bStd ([0-9]{2})\b", r"Std __RELGATE_STD_\1__", text)
+    text = re.sub(r"§([0-9])", r"§__RELGATE_SEC__\1", text)
+    return text
+
+
 def _mask_snapshot(text: str) -> str:
-    text = re.sub(r"\bStd 21\b", "Std __RELGATE_REF_21__", text)
-    text = re.sub(r"\bStd 30\b", "Std __RELGATE_REF_30__", text)
+    text = _mask_relgate_standards(text)
     text = re.sub(r"\bopenclaw\b", "__GEN_SYM_OPENCLAW__", text)
     text = re.sub(r"\bfleet\b", "__GEN_SYM_FLEET__", text)
     return text
 
 
 def _mask_relgate_impl(text: str) -> str:
-    text = re.sub(r"\bStd 21\b", "Std __RELGATE_REF_21__", text)
-    text = re.sub(r"\bStd 30\b", "Std __RELGATE_REF_30__", text)
-    return text
+    return _mask_relgate_standards(text)
 
 
 def _mask_openclaw_functional(text: str) -> str:
@@ -273,6 +301,14 @@ def _mask_fleet_functional(text: str) -> str:
 def mask_content(pattern: str, path: str, text: str) -> str:
     """Return ``text`` with the legitimate public-surface forms masked for this
     (pattern, path) pair. Dispatch order mirrors the delta gate exactly."""
+    if pattern == SECTION:
+        # Legal license-section allowlist: ``Apache-2.0 §N`` is a reference to a
+        # section of the Apache-2.0 license (the trademark notice cites §6), not
+        # an internal standards citation. Mask the exact literal so the
+        # ``§[0-9]`` rule does not flag it, on ANY path (it appears in the README
+        # and the generated METADATA / PKG-INFO). EXACT-literal legal allowlist —
+        # every other ``§N`` is still caught.
+        text = re.sub(APACHE_LEGAL_SECTION, "Apache-2.0 __LEGAL_SECTION__", text)
     if is_release_gate_snapshot_path(path):
         return _mask_snapshot(text)
     if pattern == FLEET and is_fleet_public_path(path):
