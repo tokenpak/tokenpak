@@ -10,6 +10,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   integration:
     name: Integration Tests (Python ${{ matrix.python-version }})
@@ -51,9 +55,10 @@ jobs:
         uses: codecov/codecov-action@v6
         if: matrix.python-version == '3.12'
         with:
-          file: coverage-integration.xml
+          files: coverage-integration.xml
           flags: integration
           fail_ci_if_error: false
+          use_oidc: true
 
   chaos:
     name: Chaos Tests (Python ${{ matrix.python-version }})
@@ -88,9 +93,10 @@ jobs:
         uses: codecov/codecov-action@v6
         if: matrix.python-version == '3.12'
         with:
-          file: coverage-chaos.xml
+          files: coverage-chaos.xml
           flags: chaos
           fail_ci_if_error: false
+          use_oidc: true
 
   breaking-change-detection:
     name: Breaking Change Detection
@@ -178,6 +184,7 @@ jobs:
       - name: Upload combined coverage
         uses: codecov/codecov-action@v6
         with:
-          file: coverage-combined.xml
+          files: coverage-combined.xml
           flags: combined
           fail_ci_if_error: false
+          use_oidc: true
