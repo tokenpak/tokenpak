@@ -71,6 +71,7 @@ from dataclasses import dataclass
 FLEET = r"\bfleet\b"
 OPENCLAW = r"\bopenclaw\b"
 CLAUDE_PROJECTS = r"\.claude/projects"
+SECTION = r"§[0-9]"
 
 PATTERNS: list[str] = [
     r"\bSue\b",
@@ -100,8 +101,18 @@ PATTERNS: list[str] = [
     r"/home/sue/",
     r"~/vault/[0-9][0-9]_",
     r"trixxie168",
-    r"\bStd 2[0-9]\b",
-    r"\bStd 3[0-9]\b",
+    # Internal standard / section / artifact citations. Widened 2026-06-28
+    # (leak-gate Std/§ scanner extension) from the old range-limited
+    # ``Std 2[0-9]`` / ``Std 3[0-9]`` to catch ALL ``Std NN`` (00-99), the
+    # no-space ``§N`` section form, and the ``Standards Delta`` artifact name —
+    # the internal citation forms that shipped in the v1.10.0 wheel. The
+    # ``[ ]`` in the Standards-Delta pattern (vs a literal space) keeps this
+    # register file self-immune. Legitimate release-gate citations are masked
+    # per the explicit per-surface cite-lists below; every other Std NN / §N /
+    # Standards Delta still trips. Mirror: identity-language-check.yml.
+    r"\bStd [0-9]{2}\b",
+    SECTION,
+    r"Standards[ ]Delta",
     r"Suki: auto-commit",
 ]
 
@@ -202,20 +213,90 @@ def is_perm_tier_cli_path(path: str) -> bool:
 # so the forbidden-pattern grep does not match them. Substitutions never add
 # or remove newlines, so line numbers are preserved.
 # ──────────────────────────────────────────────────────────────────────────
+#
+# Release-gate citation allowlists (Std 30 amendment — Class D).
+# ----------------------------------------------------------------------
+# The widened Std/§ register (above) would otherwise forbid the release-gate
+# implementation + generated-snapshot surfaces from naming the very standards
+# they implement / record. These EXPLICIT per-surface cite-lists mask exactly
+# the enumerated citations — and ONLY those: any Std NN / §N on the same path
+# that is NOT enumerated here still trips the gate (no blanket path mask; this
+# preserves the deliberately-narrow scope of the Std-21/30-only mask it
+# replaces, per the trust-gate review). Derived by measurement against the
+# v1.10.0 tree. CHANGING A CITE-LIST IS A RELEASE-GATE MASKING-POLICY CHANGE
+# == Std 30 amendment == Kevin gate. Kept in semantic sync with the sed mirror
+# in identity-language-check.yml (SYNC OBLIGATION).
+RELGATE_IMPL_STD_CITES = ("02", "10", "12", "21", "30")
+RELGATE_IMPL_SECTION_CITES = (
+    "3", "3.3", "4", "5", "6", "7", "8", "9.8",
+    "11", "12", "13", "13.1", "13.2", "13.3", "13.4", "14", "14.1",
+)
+RELGATE_SNAPSHOT_STD_CITES = ("21", "30")
+RELGATE_SNAPSHOT_SECTION_CITES = ("7", "13.3")
+
+# A cited "§<sec>" is complete (and masked) when followed by a non-section
+# character, a sentence-ending period, or end-of-line; NOT when a digit or a
+# ".<digit>" sub-section follows. Expressed identically in the YAML sed mirror.
+_SECTION_BOUNDARY = r"(\.?[^0-9.]|\.$|$)"
+
+
+def _mask_cited_standards(
+    text: str,
+    std_cites: tuple[str, ...],
+    section_cites: tuple[str, ...],
+    tag: str,
+) -> str:
+    """Mask the enumerated Std NN / §N citations for a release-gate surface.
+
+    Only the listed citations are neutralized; any other Std/§ on the path is
+    left intact so it still trips the forbidden-pattern scan.
+    """
+    for std in std_cites:
+        text = re.sub(rf"\bStd {re.escape(std)}\b", f"Std __{tag}_STD_{std}__", text)
+    for sec in section_cites:
+        repl = f"__{tag}_SEC_{sec.replace('.', '_')}__"
+        text = re.sub(rf"§{re.escape(sec)}{_SECTION_BOUNDARY}", repl + r"\1", text)
+    return text
 
 
 def _mask_snapshot(text: str) -> str:
-    text = re.sub(r"\bStd 21\b", "Std __RELGATE_REF_21__", text)
-    text = re.sub(r"\bStd 30\b", "Std __RELGATE_REF_30__", text)
+    text = _mask_cited_standards(
+        text, RELGATE_SNAPSHOT_STD_CITES, RELGATE_SNAPSHOT_SECTION_CITES, "RELGATE_SNAP"
+    )
     text = re.sub(r"\bopenclaw\b", "__GEN_SYM_OPENCLAW__", text)
     text = re.sub(r"\bfleet\b", "__GEN_SYM_FLEET__", text)
     return text
 
 
 def _mask_relgate_impl(text: str) -> str:
-    text = re.sub(r"\bStd 21\b", "Std __RELGATE_REF_21__", text)
-    text = re.sub(r"\bStd 30\b", "Std __RELGATE_REF_30__", text)
-    return text
+    return _mask_cited_standards(
+        text, RELGATE_IMPL_STD_CITES, RELGATE_IMPL_SECTION_CITES, "RELGATE_IMPL"
+    )
+
+
+# Exact Apache-2.0 license-section citation. The README/package-metadata
+# trademark notice cites the license section with a no-space "§6"
+# ("Apache-2.0 §6 grants no trademark rights"), which is preserved legal text,
+# NOT an internal section reference — and the no-space §[0-9] pattern would
+# otherwise false-positive on it (the earlier FP validation only covered the
+# SPACE-form legal citation "§ 512"). Surfaced by the package-wide scrub
+# (2026-06-28).
+#
+# Scope ruling (2026-06-28): Apache-2.0 ONLY. The broader generic
+# "<license-id> §N" SPDX carve-out is deliberately NOT used here; widening to
+# other SPDX identifiers is a separate masking-policy decision that requires
+# explicit Suki/Kevin approval with evidence. Matches the full section number so
+# "§10" / "§6.1" mask cleanly. Mirror: identity-language-check.yml.
+APACHE_LEGAL_SECTION = r"Apache-2\.0 §[0-9]+(?:\.[0-9]+)*"
+
+
+def _mask_license_citations(text: str) -> str:
+    """Mask the exact ``Apache-2.0 §N`` legal/trademark citation on ANY path.
+
+    Only ``Apache-2.0 §N`` is neutralized; a bare internal ``§N`` (or any other
+    license-id prefix) is left intact and still trips the §[0-9] rule.
+    """
+    return re.sub(APACHE_LEGAL_SECTION, "Apache-2.0 __LICENSE_SEC__", text)
 
 
 def _mask_openclaw_functional(text: str) -> str:
@@ -273,6 +354,11 @@ def _mask_fleet_functional(text: str) -> str:
 def mask_content(pattern: str, path: str, text: str) -> str:
     """Return ``text`` with the legitimate public-surface forms masked for this
     (pattern, path) pair. Dispatch order mirrors the delta gate exactly."""
+    if pattern == SECTION:
+        # License-section legal citations ("Apache-2.0 §6") are preserved legal
+        # text on ANY path and must never trip the §N rule. Pre-mask them, then
+        # apply the normal path-scoped masking on the result.
+        text = _mask_license_citations(text)
     if is_release_gate_snapshot_path(path):
         return _mask_snapshot(text)
     if pattern == FLEET and is_fleet_public_path(path):
