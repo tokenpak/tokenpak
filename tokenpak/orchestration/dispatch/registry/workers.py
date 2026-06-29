@@ -1,4 +1,4 @@
-"""DispatchWorker registry + prompt-overlay loader (Standards Delta v0 §5.1 + §16).
+"""DispatchWorker registry + prompt-overlay loader.
 
 This module turns the packaged worker/overlay YAML profiles into validated,
 registry-bound runtime records and provides the additive prompt-composition and
@@ -9,9 +9,9 @@ Three contracts live here:
 * **Worker registry** — :class:`DispatchWorkerRegistry` discovers worker YAML
   profiles (``worker.*.v<n>.yaml``) and parses each into a
   :class:`~tokenpak.orchestration.dispatch.models.worker.DispatchWorker`. Because
-  every capability string is validated against the §5.2 capability registry by
+  every capability string is validated against the capability registry by
   the model's field validator, a profile that declares an unknown capability is
-  rejected **fail-loud at load time** (§5.2 governance rule), not skipped.
+  rejected **fail-loud at load time**, not skipped.
 
 * **Overlay loader** — :class:`OverlayLoader` reads prompt overlays
   (``overlay.*.v<n>.yaml``) from the user overlay directory
@@ -22,8 +22,8 @@ Three contracts live here:
 * **Additive composition + capability intersection** — :func:`compose_prompt`
   concatenates ``worker.system_directives`` then ``overlay.instructions``; the
   base directives are always preserved in full (overlays are additive and can
-  never remove a base directive — §16). :func:`bind_overlay` /
-  :func:`assert_route_binding` enforce the §16 route-binding rule: an overlay's
+  never remove a base directive). :func:`bind_overlay` /
+  :func:`assert_route_binding` enforce the route-binding rule: an overlay's
   ``required_capabilities`` (and any station-required capabilities) must ALL be
   present on the worker, otherwise dispatch fails loud.
 
@@ -87,7 +87,7 @@ class OverlayError(ValueError):
 
 
 class RouteBindError(ValueError):
-    """Raised when an overlay/station cannot bind to a worker (§16).
+    """Raised when an overlay/station cannot bind to a worker.
 
     Carries the missing capabilities so the dispatcher can report exactly which
     required capability the worker lacks.
@@ -107,11 +107,11 @@ class RouteBindError(ValueError):
 
 
 class PromptOverlay(DispatchBaseModel):
-    """A prompt overlay record (Standards Delta v0 §16).
+    """A prompt overlay record.
 
     Overlays are *additive deltas* to a base worker prompt, never full
     replacements: ``mode`` is fixed to ``"additive"``. ``required_capabilities``
-    is registry-bound (validated against the §5.2 capability registry) and is
+    is registry-bound (validated against the capability registry) and is
     intersected against the bound worker's capabilities at route-binding time.
     """
 
@@ -124,7 +124,7 @@ class PromptOverlay(DispatchBaseModel):
         description="additive directives appended after the base worker prompt",
     )
     required_capabilities: list[str] = Field(
-        default_factory=list, description="registry-bound; see §5.2"
+        default_factory=list, description="registry-bound"
     )
 
     @field_validator("required_capabilities")
@@ -285,7 +285,7 @@ class OverlayLoader:
 
 
 def compose_prompt(worker: DispatchWorker, overlay: PromptOverlay | None = None) -> list[str]:
-    """Concatenate the base worker prompt with an overlay's instructions (§16).
+    """Concatenate the base worker prompt with an overlay's instructions.
 
     Returns ``worker.system_directives`` followed by ``overlay.instructions``.
     The base directives are returned in full and first: overlays are **additive**
@@ -314,7 +314,7 @@ def assert_route_binding(
     overlay: PromptOverlay | None = None,
     station_required_capabilities: Iterable[str] | None = None,
 ) -> None:
-    """Enforce the §16 capability-intersection route-binding rule (fail-loud).
+    """Enforce the capability-intersection route-binding rule (fail-loud).
 
     Route binding requires that EVERY capability demanded by the overlay and by
     the station be present on the worker. If any are missing, dispatch is failed

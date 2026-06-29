@@ -1,15 +1,15 @@
 # Dispatch integration fixture — blocked-reviewer failure path (P-FIXTURES-01).
 #
-# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# Fixture acceptance contract — all 8 required elements
 # (see quick_answer.golden.yaml for the element index).
 #
 # Failure path: a code_task build completes, but the reviewer returns `fail`.
-# Per the §5.7 handoff table the Delivery Gate BLOCKS: the package is `blocked`,
+# Per the handoff table the Delivery Gate BLOCKS: the package is `blocked`,
 # carries the reviewer's required_fixes, and there is NO automatic repair loop
 # (v0.1-alpha).
 name: blocked_reviewer
 kind: failure
-description: A reviewer `fail` blocks delivery with required_fixes, no repair loop (§5.7).
+description: A reviewer `fail` blocks delivery with required_fixes, no repair loop.
 
 # (1) Input request text.
 input_request: "implement the new endpoint feature"

@@ -1,9 +1,9 @@
-"""TokenPak Dispatch record models (Standards Delta v0 §4–§5).
+"""TokenPak Dispatch record models.
 
 This package authors the twelve v0.1-alpha Dispatch records as Pydantic v2
-models. Ten are transcribed verbatim from the Standards Delta (§4.1–§4.9,
-§5.1); ``DispatchArtifact`` and ``DispatchPolicy`` are faithful sketches (the
-Standards Delta lists them without a full field schema — see their module
+models. Ten are transcribed verbatim from the canonical record schemas;
+``DispatchArtifact`` and ``DispatchPolicy`` are faithful sketches (the canonical
+schema lists them without a full field schema — see their module
 docstrings).
 
 :data:`DISPATCH_RECORD_MODELS` is the canonical name→model registry. On import
@@ -15,7 +15,7 @@ internal execution records, NOT Paks).
 from __future__ import annotations
 
 # Pydantic is the contract layer for every Dispatch record model. Guard the
-# import at this package boundary (Std 02 §9) so a slim install — one that
+# import at this package boundary so a slim install — one that
 # lacks the opt-in ``dispatch`` extra — fails with an actionable install hint
 # rather than a raw ImportError from deep inside the submodule import chain.
 try:
@@ -73,8 +73,8 @@ class PakSuffixCollisionError(RuntimeError):
     """Raised at import if a Dispatch record name ends with ``Pak``."""
 
 
-# Canonical registry of the twelve v0.1-alpha Dispatch records (Standards Delta
-# v0 §2 record vocabulary). Order follows the §4 record list.
+# Canonical registry of the twelve v0.1-alpha Dispatch records (the record
+# vocabulary). Order follows the canonical record list.
 DISPATCH_RECORD_MODELS: dict[str, type[BaseModel]] = {
     "DispatchJob": DispatchJob,
     "DispatchManifest": DispatchManifest,

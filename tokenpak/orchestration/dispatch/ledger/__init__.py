@@ -1,15 +1,15 @@
 """TokenPak Dispatch Run Ledger (P-LEDGER-01).
 
 The Run Ledger is the durable SQLite store for the ten Dispatch execution
-record classes produced during a run (Standards Delta v0 §4–§5). It lives under
+record classes produced during a run. It lives under
 the canonical TokenPak home — ``~/.tpk/dispatch/runs.db``, resolved via
 :func:`tokenpak._paths.under` — and never writes into the project repo.
 
 Public surface:
 
 * :class:`RunLedger` — open the ledger, write/read each record class, and drive
-  the DispatchEffect ``planned → applied/failed`` lifecycle (§4.8) plus the
-  ``select_dangling_planned_effects`` resume-reconciliation query (§5.5).
+  the DispatchEffect ``planned → applied/failed`` lifecycle plus the
+  ``select_dangling_planned_effects`` resume-reconciliation query.
 * :func:`ledger_db_path` — the resolved on-disk path of the ledger DB.
 * :data:`SCHEMA_VERSION`, :func:`migrate` — the versioned, idempotent schema
   migration ladder.

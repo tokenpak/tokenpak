@@ -1,4 +1,4 @@
-"""DispatchStationRun record (Standards Delta v0 §4.5)."""
+"""DispatchStationRun record."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .enums import StationRunStatus
 
 
 class DispatchStationRun(DispatchBaseModel):
-    """Per-station execution record within a run (Standards Delta v0 §4.5).
+    """Per-station execution record within a run.
 
     ``status`` uses the exact 9-member :class:`StationRunStatus` enum required
     by the P-SCHEMA-01 acceptance criteria. ``result_payload`` is the

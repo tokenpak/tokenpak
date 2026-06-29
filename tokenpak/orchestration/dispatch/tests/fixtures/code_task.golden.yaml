@@ -1,11 +1,11 @@
 # Dispatch integration fixture — code_task golden path (P-FIXTURES-01).
 #
-# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# Fixture acceptance contract — all 8 required elements
 # (see quick_answer.golden.yaml for the element index).
 #
 # Golden path: a code request routes to the two-station code_task route. A
 # builder station drafts/patches; a reviewer station passes; the Delivery Gate
-# ships. The reviewer costs one extra LLM call (§5.7 cost note present).
+# ships. The reviewer costs one extra LLM call (cost note present).
 name: code_task_golden
 kind: golden
 description: A code request runs build → reviewer-pass → delivery on code_task.
@@ -61,7 +61,7 @@ mock_tip:
 expected_delivery_package:
   status: delivery_ready
   gatehouse_passed: true
-  cost_note_present: true       # reviewer ran → §5.7 cost note
+  cost_note_present: true       # reviewer ran → cost note
   required_fixes_empty: true
 
 # (7) Expected DispatchReceipt (shape + telemetry fields).

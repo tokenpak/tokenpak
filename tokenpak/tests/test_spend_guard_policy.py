@@ -36,13 +36,13 @@ def _est(**kw) -> RiskEstimate:
 
 
 # ---------------------------------------------------------------------------
-# Default config — Standard 29 §5 (2026-05-11 recalibration)
+# Default config — 2026-05-11 recalibration
 # ---------------------------------------------------------------------------
 
 class TestConfigDefaults:
     """The v1.5.2 default profile is denominated in context-window %.
 
-    Dollar bands stay reachable as opt-in profile overrides (Standard 29 §5.1)
+    Dollar bands stay reachable as opt-in profile overrides
     but the default for any new install is the % basis, applied universally
     to every agent.
     """
@@ -78,7 +78,7 @@ class TestConfigDefaults:
 
 
 # ---------------------------------------------------------------------------
-# Context-window-% basis — canonical defense (Standard 29 §5)
+# Context-window-% basis — canonical defense
 # ---------------------------------------------------------------------------
 
 class TestContextWindowPercentBasis:
@@ -279,7 +279,7 @@ class TestSoftBlockBypassable:
 # ---------------------------------------------------------------------------
 
 class TestDollarPlaneOptIn:
-    """Standard 29 §5.1: dollar bands stay reachable as an opt-in profile
+    """Dollar bands stay reachable as an opt-in profile
     override but default to disabled. Setting any legacy field engages
     the plane and emits a DeprecationWarning.
     """

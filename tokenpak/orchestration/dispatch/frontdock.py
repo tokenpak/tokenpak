@@ -1,6 +1,6 @@
 """FrontDock intake module — turns a raw request into scoped Dispatch records.
 
-The Front Dock is the first thing a request hits (Standards Delta v0 §13 item 3).
+The Front Dock is the first thing a request hits.
 It is **not a worker**: it does not execute the work, call a builder/reviewer
 station, or mutate the workspace. It is a single deterministic-first intake module
 that reads a raw request and produces:
@@ -12,10 +12,10 @@ that reads a raw request and produces:
   — a scoped work contract sketch (status ``draft`` / ``needs_decision``);
 * an *optional* blocking
   :class:`~tokenpak.orchestration.dispatch.models.decision.DispatchDecision` —
-  created when, and only when, ``missing_info`` contains a **high-risk** item
-  (§4.6). The Front Dock never silently assumes for those.
+  created when, and only when, ``missing_info`` contains a **high-risk** item.
+  The Front Dock never silently assumes for those.
 
-Design contracts (Standards Delta v0 §5.8, §13):
+Design contracts:
 
 * **Deterministic path works with NO LLM.** Intent detection runs a fixed
   keyword/heuristic battery first; when that resolves a confident intent, no LLM
@@ -28,12 +28,12 @@ Design contracts (Standards Delta v0 §5.8, §13):
   SDK.** Passing ``None`` for the client is legal: the deterministic path is fully
   functional without an LLM, and an ambiguous request with no client falls back
   to the ``unknown`` intent (never a provider call).
-* **Front Dock Rule (§13 item 3).** Ask only for information that *materially
+* **Front Dock Rule.** Ask only for information that *materially
   changes the outcome*. Low-value gaps are recorded as assumptions, not surfaced
   as blocking questions. Only high-risk missing information triggers a blocking
   :class:`DispatchDecision`.
 
-User-facing terminology is plain ``Worker`` / ``Route`` / ``Station`` (§11): this
+User-facing terminology is plain ``Worker`` / ``Route`` / ``Station``: this
 module emits route hints like ``route.code_task.v1`` and never the string
 "Fleet Worker".
 """
@@ -71,7 +71,7 @@ from .models.manifest import DispatchManifest
 # Intent + route vocabulary (v0.1-alpha)
 # ---------------------------------------------------------------------------
 
-# v0.1-alpha intents (Standards Delta v0 §13 routes: quick_answer / code_task /
+# v0.1-alpha intents (routes: quick_answer / code_task /
 # doc_task, plus the open-world ``unknown``). These are the only strings the
 # Front Dock will ever place in ``DispatchJob.detected_intent``.
 INTENT_CODE_TASK = "code_task"
@@ -83,7 +83,7 @@ KNOWN_INTENTS: frozenset[str] = frozenset(
     {INTENT_CODE_TASK, INTENT_DOC_TASK, INTENT_QUICK_ANSWER, INTENT_UNKNOWN}
 )
 
-# Intent → route hint (Standards Delta v0 §4.3 id form "route.<name>.v<n>"). The
+# Intent → route hint (id form "route.<name>.v<n>"). The
 # ``unknown`` intent has no route hint (None) — routing is deferred to a decision
 # or an explicit ``--route`` override downstream.
 INTENT_TO_ROUTE_HINT: dict[str, str | None] = {
@@ -93,7 +93,7 @@ INTENT_TO_ROUTE_HINT: dict[str, str | None] = {
     INTENT_UNKNOWN: None,
 }
 
-# Deterministic keyword sets per intent (Standards Delta v0 §5.8 step 4: "intent
+# Deterministic keyword sets per intent (the "intent
 # classification match (deterministic keyword set)"). Matched as whole words,
 # case-insensitively. Order of evaluation is fixed (see _INTENT_PRECEDENCE) so the
 # rule path is fully deterministic.
@@ -161,11 +161,11 @@ _WORD_RE = re.compile(r"[a-z0-9_]+")
 # Risk-flag registry (PAKPlan-style, simple registered set for alpha)
 # ---------------------------------------------------------------------------
 
-# Standards Delta v0 §4.1: ``risk_flags`` is "registry-bound (PAKPlan risk_flag
+# ``risk_flags`` is "registry-bound (PAKPlan risk_flag
 # registry)". The full PAKPlan registry is a later concern; for v0.1-alpha a
 # simple registered set is sufficient (this module's docstring + the packet say
 # so). Each flag maps to a severity; HIGH/CRITICAL flags are the ones that make a
-# corresponding missing-info gap *material* enough to block (§13 Front Dock Rule).
+# corresponding missing-info gap *material* enough to block (Front Dock Rule).
 RISK_FLAG_REGISTRY: dict[str, RiskLevel] = {
     # High-stakes surfaces — a gap here materially changes the outcome.
     "touches_secrets": RiskLevel.CRITICAL,
@@ -257,7 +257,7 @@ class TipClient(Protocol):
     concrete binding is the TIP client (wired by P-RUNTIME-01 / P-EXEC-01); in
     tests it is a deterministic mock. **No real provider SDK is imported or called
     by this module** — all LLM access goes through this contract, which itself
-    goes through TIP (and therefore Spend Guard, §8) at runtime.
+    goes through TIP (and therefore Spend Guard) at runtime.
 
     A conforming client implements at least :meth:`classify_intent`; the optional
     :meth:`complete` method is reserved for future judgment calls (assumption
@@ -398,7 +398,7 @@ _INTENT_DEFAULT_ASSUMPTIONS: dict[str, tuple[str, ...]] = {
 
 
 class FrontDockResult:
-    """The Front Dock's output bundle (§13 item 3).
+    """The Front Dock's output bundle.
 
     Carries the intake :class:`DispatchJob`, the draft
     :class:`DispatchManifest`, and an optional blocking
@@ -570,7 +570,7 @@ class FrontDock:
         * ``blocking_gaps`` — the subset of gaps that are *material* (tied to a
           HIGH/CRITICAL risk flag); these and only these drive a blocking decision.
 
-        Front Dock Rule (§13 item 3): only material gaps are surfaced as blocking
+        Front Dock Rule: only material gaps are surfaced as blocking
         questions. Non-material gaps become assumptions instead of questions.
         """
 
@@ -597,7 +597,7 @@ class FrontDock:
 
         # 2) Risk-flag-driven material gaps. A HIGH/CRITICAL risk flag detected in
         #    the request is a gap that materially changes the outcome — the Front
-        #    Dock asks (never silently assumes) for these (§4.6 + Front Dock Rule).
+        #    Dock asks (never silently assumes) for these (Front Dock Rule).
         for flag in risk_flags:
             level = risk_flag_level(flag)
             if level in _BLOCKING_RISK_LEVELS:
@@ -689,7 +689,7 @@ class FrontDock:
         blocking_gaps: list[tuple[str, RiskLevel]],
         created_at: datetime,
     ) -> DispatchDecision:
-        """Build the blocking :class:`DispatchDecision` for high-risk missing info (§4.6).
+        """Build the blocking :class:`DispatchDecision` for high-risk missing info.
 
         The decision is ``pending`` with ``auto_apply_after = never`` — the Front
         Dock NEVER silently assumes for high-risk gaps. Its risk level is the most
@@ -716,8 +716,7 @@ class FrontDock:
             question=question,
             reason=(
                 "Front Dock Rule: high-risk missing information must be resolved "
-                "before dispatch; the Front Dock does not silently assume "
-                "(Standards Delta v0 §4.6, §13)."
+                "before dispatch; the Front Dock does not silently assume."
             ),
             risk_level=highest,
             options=[
@@ -763,7 +762,7 @@ class FrontDock:
     def _derive_id(prefix: str, created_at: datetime) -> str:
         """Derive a stable-ish record id ("<prefix>_<utc-compact>").
 
-        The Standards Delta id form is ``<prefix>_<ulid>``; ULID minting is a Run
+        The canonical id form is ``<prefix>_<ulid>``; ULID minting is a Run
         Ledger concern (P-LEDGER-01). For intake-only output a deterministic
         timestamp-derived id is sufficient and keeps this module dependency-free.
         Callers that need real ULIDs pass ``job_id`` / ``manifest_id`` explicitly.

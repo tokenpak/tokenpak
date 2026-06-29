@@ -1,4 +1,4 @@
-"""JSON Schema exports for the Dispatch records (Standards Delta v0 §4–§5).
+"""JSON Schema exports for the Dispatch records.
 
 Each of the twelve records in
 :data:`tokenpak.orchestration.dispatch.models.DISPATCH_RECORD_MODELS` has a

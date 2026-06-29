@@ -1,11 +1,11 @@
-# Default builder worker profile (Standards Delta v0 §5.1).
+# Default builder worker profile.
 #
 # One generic builder covering drafting + patch generation for v0.1-alpha;
-# route-specific behaviour is layered on via additive prompt overlays (§16),
+# route-specific behaviour is layered on via additive prompt overlays,
 # not via separate worker profiles. Split into code/doc builders later only if
 # review pass-rate suffers in beta evaluation.
 #
-# `capabilities` is registry-bound: every entry MUST be in the §5.2 capability
+# `capabilities` is registry-bound: every entry MUST be in the capability
 # registry or the registry loader rejects this profile fail-loud at load time.
 id: worker.builder.default.v1
 kind: tip_worker_profile

@@ -1,4 +1,4 @@
-"""StationRunner — bounded per-station loop execution (Standards Delta v0 §5.4–§5.8).
+"""StationRunner — bounded per-station loop execution.
 
 The :class:`StationRunner` executes a single route station. It wires together the
 foundation pieces P-EXEC-01 orchestrates:
@@ -7,7 +7,7 @@ foundation pieces P-EXEC-01 orchestrates:
   the FulfillmentLine runner and handed in already-bound;
 * the **context cargo** assembled by a
   :class:`~tokenpak.orchestration.dispatch.context.provider.ContextProvider`
-  (the §5.9 ``build_context`` call);
+  (the ``build_context`` call);
 * the **tool registry** authorization layer
   (:func:`~tokenpak.orchestration.dispatch.tools.authorize_tool_call`), enforced
   at invocation time on every tool the worker requests;
@@ -19,16 +19,16 @@ boundary (mirroring the FrontDock ``TipClient`` / Reviewer ``ReviewerLLM``
 pattern): **no provider SDK is imported here**, and tests inject a deterministic
 mock. The runner runs a **bounded loop** per a resolved
 :class:`~tokenpak.orchestration.dispatch.models.common.StationLoopPolicy`
-(precedence resolved by :mod:`.loop_policy`), stopping on the EXACT §5.4
+(precedence resolved by :mod:`.loop_policy`), stopping on the EXACT
 ``stop_when`` set.
 
-Spend Guard inheritance (§8): the per-station token budget flows through TIP. The
+Spend Guard inheritance: the per-station token budget flows through TIP. The
 runner models the live Spend-Guard cap as an injected callable
 (:class:`SpendGuard`) so it is deterministic in tests; a hard-stop mid-station
 surfaces as a ``station_failure`` with ``reason=spend_guard_exceeded`` (the
-FulfillmentLine runner turns that into a :class:`DispatchDecision`, §8).
+FulfillmentLine runner turns that into a :class:`DispatchDecision`).
 
-Cancellation (§5.6): a cancel token checked before each iteration propagates as
+Cancellation: a cancel token checked before each iteration propagates as
 the ``cancel_requested`` stop condition; a TIP result that arrives *after* a
 cancel is captured as a :class:`LateResult` with ``effects_applied=false`` and no
 effects are applied.
@@ -74,8 +74,8 @@ from .tools import (
 # ``station_output_schema`` check keys its validators off.
 STATION_RESULT_SCHEMA_VERSION = "station_result.v1"
 
-# Reason string for a Spend-Guard hard stop (Standards Delta v0 §8). The
-# FulfillmentLine runner matches on this exact string to raise the §8 decision.
+# Reason string for a Spend-Guard hard stop. The
+# FulfillmentLine runner matches on this exact string to raise the decision.
 SPEND_GUARD_EXCEEDED_REASON = "spend_guard_exceeded"
 
 
@@ -90,7 +90,7 @@ class WorkerToolRequest:
 
     ``tool`` is the registry tool name; ``args`` is an opaque argument mapping
     the runner passes to the tool callable. The runner authorizes the call
-    against the autonomy × tool matrix (§5.3) *before* invoking it; an
+    against the autonomy × tool matrix *before* invoking it; an
     authorization failure ends the loop with ``tool_policy_violation``.
     """
 
@@ -112,7 +112,7 @@ class WorkerTurn:
       ``fatal_error``.
 
     ``tokens_used`` is the iteration's token spend, debited against the Spend
-    Guard cap (§8). It defaults to 0 so a pure no-op turn is free.
+    Guard cap. It defaults to 0 so a pure no-op turn is free.
     """
 
     tool_requests: tuple[WorkerToolRequest, ...] = ()
@@ -125,7 +125,7 @@ class WorkerTurn:
 
 @runtime_checkable
 class WorkerLLM(Protocol):
-    """Injected TIP worker boundary — routes through TIP at runtime (§5.1, §8).
+    """Injected TIP worker boundary — routes through TIP at runtime.
 
     Mirrors the FrontDock ``TipClient`` / Reviewer ``ReviewerLLM`` contracts: in
     production this is the TIP worker invocation (Spend Guard enforced); in tests
@@ -148,7 +148,7 @@ class WorkerLLM(Protocol):
 
 
 # A Spend-Guard cap source: returns the remaining token budget for the station.
-# A return value <= 0 means the cap is exhausted (hard stop, §8). Modeled as a
+# A return value <= 0 means the cap is exhausted (hard stop). Modeled as a
 # callable so it is deterministic in tests and the live cap can flow from TIP.
 SpendGuard = Callable[[], int]
 
@@ -158,7 +158,7 @@ def unlimited_spend_guard() -> int:
 
     Default when the runner is constructed without a Spend Guard: the per-station
     token budget is not enforced locally (TIP enforces it at runtime). Tests
-    inject a binding cap to exercise the §8 hard-stop path.
+    inject a binding cap to exercise the hard-stop path.
     """
 
     return 1 << 62
@@ -166,7 +166,7 @@ def unlimited_spend_guard() -> int:
 
 @runtime_checkable
 class CancelToken(Protocol):
-    """Cancellation signal checked before each loop iteration (§5.6)."""
+    """Cancellation signal checked before each loop iteration."""
 
     def is_cancelled(self) -> bool:
         """Return True once cancellation has been requested for this job."""
@@ -178,7 +178,7 @@ class FlagCancelToken:
 
     The FulfillmentLine runner / CLI set :attr:`cancelled` when
     ``tokenpak dispatch cancel`` runs; the station runner checks it before each
-    iteration (§5.6).
+    iteration.
     """
 
     def __init__(self, cancelled: bool = False) -> None:
@@ -197,7 +197,7 @@ class FlagCancelToken:
 class StationRunOutcome:
     """The result of running one station (returned by :meth:`StationRunner.run`).
 
-    Carries the committed :class:`DispatchStationRun`, the §5.4 stop condition
+    Carries the committed :class:`DispatchStationRun`, the stop condition
     that ended the loop, any :class:`LateResult` captured on a post-cancel TIP
     result, the ids of effects recorded during the run, and a failure reason
     (set only on a failed run — e.g. :data:`SPEND_GUARD_EXCEEDED_REASON`).
@@ -224,7 +224,7 @@ class StationRunOutcome:
 
 
 class StationRunner:
-    """Runs one route station's bounded loop (Standards Delta v0 §5.4–§5.8).
+    """Runs one route station's bounded loop.
 
     Construct with the injected :class:`WorkerLLM` (the TIP boundary), a
     :class:`ContextProvider`, a :class:`RunLedger`, and optional Spend Guard /
@@ -236,7 +236,7 @@ class StationRunner:
     writes the ``completed`` record exactly once, atomically, after the loop
     produced a valid payload; a failed / cancelled run writes its terminal record
     once the loop ends. Effects recorded mid-loop (via tool callables) are written
-    through the ledger's §4.8 lifecycle as they happen, independent of the
+    through the ledger's effect lifecycle as they happen, independent of the
     station-run commit.
     """
 
@@ -280,8 +280,8 @@ class StationRunner:
     ) -> StationRunOutcome:
         """Execute one station's bounded loop and commit its terminal record.
 
-        Steps: resolve the effective loop policy (§5.4 precedence) → build the
-        context bundle (§5.9) → compose the worker+overlay prompt (§16) → run the
+        Steps: resolve the effective loop policy (precedence) → build the
+        context bundle → compose the worker+overlay prompt → run the
         bounded loop (worker turn → tool authorization+invocation → stop-condition
         check) → write the terminal :class:`DispatchStationRun` (``completed``
         only after a schema-valid payload exists — criterion 4).
@@ -299,7 +299,7 @@ class StationRunner:
         prompt = compose_prompt(worker, overlay)
 
         # Cancellation can already be requested before the station even starts:
-        # mark the station cancelled (a queued station that never ran), §5.6.
+        # mark the station cancelled (a queued station that never ran).
         if self._cancel.is_cancelled():
             return self._commit_terminal(
                 sr_id=sr_id,
@@ -364,7 +364,7 @@ class StationRunner:
         failure_reason: Optional[str] = None
 
         while True:
-            # --- cancellation check, BEFORE the (paid) worker turn (§5.6) ----
+            # --- cancellation check, BEFORE the (paid) worker turn ----
             if self._cancel.is_cancelled():
                 outcome = LoopOutcome(
                     stop_condition=LoopStopCondition.CANCEL_REQUESTED,
@@ -374,7 +374,7 @@ class StationRunner:
                 status = StationRunStatus.CANCELLED
                 break
 
-            # --- Spend Guard check, BEFORE the worker turn (§8) --------------
+            # --- Spend Guard check, BEFORE the worker turn --------------
             if self._spend_guard() <= 0:
                 failure_reason = SPEND_GUARD_EXCEEDED_REASON
                 outcome = LoopOutcome(
@@ -396,15 +396,15 @@ class StationRunner:
             tip_request_ids.append(f"tip_{run_id}_{sr_id}_{iteration}")
             wall_seconds += max(0, turn.wall_seconds)
 
-            # Spend debit for this turn flows through the injected Spend Guard
-            # (§8): the guard owns the running token total and reports the
+            # Spend debit for this turn flows through the injected Spend Guard:
+            # the guard owns the running token total and reports the
             # remaining cap, which the NEXT iteration's pre-turn check reads. The
             # turn reports its spend (``turn.tokens_used``) for that bookkeeping;
             # the runner does not enforce the cap itself — TIP / the guard does.
 
             # --- if the turn arrived after a cancel, capture a LateResult ----
             # (defensive: covers an adapter that does not support hard-kill, so
-            #  the turn completed even though cancellation was requested — §5.6.)
+            #  the turn completed even though cancellation was requested.)
             if self._cancel.is_cancelled():
                 late_result = self._capture_late_result(
                     job_id=manifest.job_id, station_run_id=sr_id, turn=turn
@@ -427,7 +427,7 @@ class StationRunner:
                 status = StationRunStatus.FAILED
                 break
 
-            # --- authorize + invoke any requested tool calls (§5.3) ----------
+            # --- authorize + invoke any requested tool calls ----------
             tool_violation = False
             for request in turn.tool_requests:
                 try:
@@ -459,7 +459,7 @@ class StationRunner:
             if turn.output_schema_valid and turn.result_payload is not None:
                 result_payload = dict(turn.result_payload)
 
-            # --- evaluate the §5.4 stop conditions ---------------------------
+            # --- evaluate the stop conditions ---------------------------
             state = LoopState(
                 iteration_count=iteration,
                 tool_call_count=tool_calls,
@@ -475,7 +475,7 @@ class StationRunner:
                 if outcome.stop_condition is LoopStopCondition.OUTPUT_SCHEMA_VALID_AND_NO_PENDING_TOOL_REQUESTS:
                     status = StationRunStatus.COMPLETED
                 elif outcome.exhausted:
-                    # Budget exhausted: §5.4 on_exhausted → mark_failed (the
+                    # Budget exhausted: on_exhausted → mark_failed (the
                     # create_reviewer_note / block_delivery actions are downstream
                     # Gatehouse concerns, surfaced by the failed status).
                     status = StationRunStatus.FAILED
@@ -535,7 +535,7 @@ class StationRunner:
         For a ``completed`` status the record carries the schema-valid
         ``result_payload``; the commit happens here, AFTER the payload is known
         (acceptance criterion 4). For any non-completed terminal status the
-        payload is ``None`` (the §4.5 schema permits a null payload on a failed /
+        payload is ``None`` (the schema permits a null payload on a failed /
         cancelled run).
         """
 
@@ -570,7 +570,7 @@ class StationRunner:
             failure_reason=failure_reason if status is StationRunStatus.FAILED else None,
         )
 
-    # -- late result capture (§5.6) -----------------------------------------
+    # -- late result capture -----------------------------------------
 
     def _capture_late_result(
         self,
@@ -581,7 +581,7 @@ class StationRunner:
     ) -> LateResult:
         """Capture a post-cancel TIP result as a LateResult (effects_applied=False).
 
-        Per §5.6 step 5: a TIP output that arrives after cancellation is recorded
+        A TIP output that arrives after cancellation is recorded
         as a :class:`LateResult` with ``effects_applied=false`` and NO effects are
         applied. ``recovery_allowed`` is False (v0.1-alpha is inspect-only).
         """

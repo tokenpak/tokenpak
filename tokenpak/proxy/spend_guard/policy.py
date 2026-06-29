@@ -12,7 +12,7 @@ the projected request against the configured policy bands:
 - ``hard_block`` — cannot be released; even ``[TIP: bypass=on]`` /
   ``[TIP: allow=once]`` does NOT cross it.
 
-**Canonical default basis (Standard 29 §5 (2026-05-11 rev 2)):**
+**Canonical default basis (2026-05-11 rev 2):**
 context-window utilisation percent against the selected model's max
 context window — applied universally to every agent profile.
 
@@ -129,7 +129,7 @@ class SpendGuardConfig:
     :func:`load_config` (``tip_spend_guard:`` is accepted as an alias).
     Env-var overrides take precedence.
 
-    **Defaults (Standard 29 §5 (2026-05-11 rev 2)):**
+    **Defaults (2026-05-11 rev 2):**
 
     - ``default_basis = "context_window_percent"`` — block is denominated
       in context-window utilisation %, not dollars.
@@ -151,7 +151,7 @@ class SpendGuardConfig:
 
     enabled: bool = True
 
-    # ── Context-window-percent basis (canonical default per Standard 29 §5) ──
+    # ── Context-window-percent basis (canonical default) ──
     # Identifies which dimension the policy denominates default blocks in.
     # ``"context_window_percent"`` (default) → use the new % basis.
     # ``"dollar"`` → use the legacy dollar-band basis (opt-in only).
@@ -191,11 +191,11 @@ class SpendGuardConfig:
     # ── Dollar bands (opt-in, disabled by default) ──
     # Each defaults to ``0.0`` (disabled). Setting any of these to a
     # positive value engages the dollar plane for that band; setting one
-    # also emits a DeprecationWarning at config-load time (per Standard 29
-    # §5.1 deprecation notice).
+    # also emits a DeprecationWarning at config-load time (deprecation
+    # notice for the legacy dollar plane).
     block_cost_usd: float = 0.0
     hard_block_cost_usd: float = 0.0
-    # Session-cumulative defense (legacy; Standard 29 §5 v1.5.1). Catches the
+    # Session-cumulative defense (legacy; v1.5.1). Catches the
     # death-by-1000-cuts pattern: when running spend on a session in the
     # last ``session_window_seconds`` plus this projected request would
     # exceed ``session_block_cost_usd``, the request is blocked. Default
@@ -249,7 +249,7 @@ def load_config(raw_config: Optional[dict] = None) -> SpendGuardConfig:
     config is read fresh from ``tokenpak.proxy.config``. Env vars override
     file config.
 
-    **Backward compatibility (Standard 29 §5.1):** explicit configuration of any
+    **Backward compatibility:** explicit configuration of any
     legacy dollar-denominated field (``block_cost_usd``, ``hard_block_cost_usd``,
     ``session_block_cost_usd``, ``default_dollar_cap``) — whether via YAML or
     ``TOKENPAK_SPEND_GUARD_*`` env vars — engages the dollar plane for that
@@ -480,7 +480,7 @@ def load_config(raw_config: Optional[dict] = None) -> SpendGuardConfig:
 
     # Backward-compat: any explicit legacy-dollar-field setting engages the
     # dollar plane for that profile and emits a DeprecationWarning. The
-    # values still work — Standard 29 §5.1 keeps the dollar plane reachable as
+    # values still work — the dollar plane remains reachable as
     # an opt-in profile override.
     if legacy_dollar_set_via:
         cfg.dollar_cap_enabled_by_default = True
@@ -491,7 +491,7 @@ def load_config(raw_config: Optional[dict] = None) -> SpendGuardConfig:
         warnings.warn(
             "TIP Spend Guard: legacy dollar-denominated configuration is "
             "deprecated. The canonical default basis is context-window % "
-            "(default 90% block / 100% hard stop) per Standard 29 §5. The "
+            "(default 90% block / 100% hard stop). The "
             f"following dollar field(s) remain reachable as opt-in: {fields_str}. "
             "Migrate to default_context_window_percent / "
             "hard_stop_context_window_percent where possible.",
@@ -526,7 +526,7 @@ def decide(
 
     Order of checks (most specific first):
 
-    1. **Context-window-% hard stop** (canonical, Standard 29 §5) — projected
+    1. **Context-window-% hard stop** (canonical) — projected
        input tokens ≥ ``hard_stop_context_window_percent`` × max-context.
        NOT bypassable. Fires regardless of any ``[TIP: ...]`` directive.
     2. Legacy hard-block bands (dollar + token-fallback) — when the dollar
@@ -535,7 +535,7 @@ def decide(
     3. TIP-declared ceiling, when present and inside the hard-stop band.
        ``[TIP: allow=once max=$X]`` lets the request through provided the
        projected request fits the declared dimensions.
-    4. **Context-window-% soft block** (canonical, Standard 29 §5) — projected
+    4. **Context-window-% soft block** (canonical) — projected
        input tokens ≥ ``default_context_window_percent`` × max-context.
        Bypassable by Yes/``[TIP: allow=once]``.
     5. Legacy block band — dollar (when engaged) + token-fallback (when
@@ -546,7 +546,7 @@ def decide(
     8. ``allow`` — default.
 
     The canonical default basis is context-window utilisation %. Dollar
-    bands stay reachable as an opt-in profile override per Standard 29 §5.1.
+    bands stay reachable as an opt-in profile override.
     """
     if cfg is None:
         cfg = load_config()
@@ -663,7 +663,7 @@ def decide(
             risk=estimate,
         )
 
-    # 4. Context-window-% soft block (canonical, Standard 29 §5).
+    # 4. Context-window-% soft block (canonical).
     if pct_block_tokens is not None and input_tokens >= pct_block_tokens:
         return PreflightDecision(
             decision="block",

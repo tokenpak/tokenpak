@@ -143,7 +143,7 @@ class PakRetention(str, Enum):
 
 
 class PakSourceType(str, Enum):
-    """How the Pak was originally produced (PRD §18)."""
+    """How the Pak was originally produced."""
 
     LLM_RESPONSE = "llm_response"
     FILE = "file"

@@ -1,10 +1,10 @@
-"""DispatchPolicy record (Standards Delta v0 §2/§4 record list — SKETCH).
+"""DispatchPolicy record (SKETCH).
 
-``DispatchPolicy`` appears in the §2 record vocabulary and §4 record list but
-has no full field schema in the Standards Delta ("sketch needed"). This is a
+``DispatchPolicy`` appears in the record vocabulary and record list but
+has no full field schema yet ("sketch needed"). This is a
 faithful **sketch**: a named, reusable policy bundle composed of the same
-permission / path / quality primitives the DispatchManifest already defines
-(§4.2), so a manifest can reference a named policy instead of inlining one.
+permission / path / quality primitives the DispatchManifest already defines,
+so a manifest can reference a named policy instead of inlining one.
 Expand via a later packet once the policy contract is specified.
 """
 

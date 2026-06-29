@@ -1,31 +1,31 @@
-"""StationLoopPolicy precedence resolution + stop-condition logic (§5.4).
+"""StationLoopPolicy precedence resolution + stop-condition logic.
 
 The station runner runs a **bounded loop** per a resolved
 :class:`~tokenpak.orchestration.dispatch.models.common.StationLoopPolicy`. This
-module owns the two parts of the §5.4 contract that are pure policy (no I/O, no
+module owns the two parts of the loop-policy contract that are pure policy (no I/O, no
 worker call):
 
 * **Precedence resolution** — :func:`resolve_loop_policy` collapses the four
-  policy sources into a single effective policy following the §5.4 precedence
+  policy sources into a single effective policy following the precedence
   ``station_override > route_default > worker_default > system_default``. The
   station override (``RouteStation.loop_policy``) wins; absent that, a route
-  default (``route_defaults[intent]`` wall-seconds, §5.4 "Route defaults"); absent
+  default (``route_defaults[intent]`` wall-seconds, "Route defaults"); absent
   that, the worker default (``DispatchWorker.default_loop_policy``); absent that,
-  the §5.4 system default (``StationLoopPolicy()`` field defaults).
+  the system default (``StationLoopPolicy()`` field defaults).
 
 * **Stop-condition evaluation** — :func:`evaluate_stop` maps the loop's live
-  state onto the §5.4 closed ``stop_when`` enum. The set is EXACT (the round-6
-  §4.5 removal of ``station_goal_satisfied`` is honored — there is no such member
+  state onto the closed ``stop_when`` enum. The set is EXACT (the round-6
+  removal of ``station_goal_satisfied`` is honored — there is no such member
   in :class:`LoopStopCondition` and this module never invents one). The returned
   :class:`LoopOutcome` carries the stop condition plus whether the loop produced
-  a schema-valid output (the §5.4 ``on_exhausted`` actions are applied by the
+  a schema-valid output (the ``on_exhausted`` actions are applied by the
   station runner, not here).
 
-System default (§5.4): ``max_iterations: 2, max_tool_calls: 6,
+System default: ``max_iterations: 2, max_tool_calls: 6,
 max_wall_seconds: 600`` — these are the :class:`StationLoopPolicy` field
 defaults, so :func:`system_default_loop_policy` simply constructs one.
 
-Route defaults (§5.4, round-6 §4.6) are *wall-second* overrides keyed by route
+Route defaults (round-6) are *wall-second* overrides keyed by route
 intent: ``quick_answer: 120``, ``doc_task: 900``, ``code_task: 1800``. They are
 alpha placeholders (recalibrate before beta from Run Ledger data) and only
 override ``max_wall_seconds`` — the iteration / tool-call budgets fall through to
@@ -41,11 +41,11 @@ from .models.common import StationLoopPolicy, WorkerLoopDefault
 from .models.enums import LoopStopCondition
 
 # ---------------------------------------------------------------------------
-# Route wall-second defaults (Standards Delta v0 §5.4, round-6 §4.6)
+# Route wall-second defaults (round-6)
 # ---------------------------------------------------------------------------
 #
 # status: alpha_placeholder; recalibrate_before: v0.1-beta. These are GUT-FEEL
-# wall-second budgets keyed by route intent, transcribed verbatim from §5.4.
+# wall-second budgets keyed by route intent, transcribed verbatim from the loop-policy spec.
 # They override ONLY max_wall_seconds; iteration / tool-call budgets fall through
 # to the worker/system default. Do not treat any number here as tuned.
 ROUTE_WALL_SECOND_DEFAULTS: dict[str, int] = {
@@ -61,7 +61,7 @@ ROUTE_DEFAULTS_METADATA: dict[str, str] = {
 
 
 def system_default_loop_policy() -> StationLoopPolicy:
-    """Return the §5.4 system-default loop policy (2 / 6 / 600).
+    """Return the system-default loop policy (2 / 6 / 600).
 
     These are the :class:`StationLoopPolicy` field defaults, so constructing one
     with no arguments yields the system default. Centralised here so the runner
@@ -78,7 +78,7 @@ def resolve_loop_policy(
     route_intent: Optional[str] = None,
     route_wall_seconds: Optional[Mapping[str, int]] = None,
 ) -> StationLoopPolicy:
-    """Collapse the four policy sources into one effective policy (§5.4 precedence).
+    """Collapse the four policy sources into one effective policy (precedence order).
 
     Precedence (highest first): ``station_override`` > route default >
     ``worker_default`` > system default.
@@ -92,7 +92,7 @@ def resolve_loop_policy(
       default for ``route_intent`` when present, else the worker default, else
       the system default.
     * ``stop_when`` / ``on_exhausted`` always come from the system default's full
-      closed sets (§5.4): the worker default only specifies the three budget
+      closed sets: the worker default only specifies the three budget
       integers, and a route wall-second override does not change the stop set.
     """
 
@@ -154,11 +154,11 @@ class LoopState:
 
 @dataclass(frozen=True)
 class LoopOutcome:
-    """The resolved §5.4 stop condition for a loop, or ``None`` to keep looping.
+    """The resolved stop condition for a loop, or ``None`` to keep looping.
 
     ``stop_condition`` is ``None`` while the loop should continue, otherwise the
     exact :class:`LoopStopCondition` that fired. ``exhausted`` is True only for
-    the ``loop_budget_exhausted`` condition (it drives the §5.4 ``on_exhausted``
+    the ``loop_budget_exhausted`` condition (it drives the ``on_exhausted``
     actions in the station runner). ``produced_valid_output`` mirrors the loop
     state's ``output_schema_valid`` for the runner's convenience.
     """
@@ -173,12 +173,12 @@ class LoopOutcome:
 
 
 def evaluate_stop(state: LoopState, policy: StationLoopPolicy) -> LoopOutcome:
-    """Map loop ``state`` onto the §5.4 closed ``stop_when`` enum.
+    """Map loop ``state`` onto the closed ``stop_when`` enum.
 
     Evaluation order is the contract — the highest-severity reasons win so the
     runner records the most specific stop cause:
 
-    1. ``cancel_requested`` — cancellation propagates immediately (§5.6).
+    1. ``cancel_requested`` — cancellation propagates immediately.
     2. ``fatal_error`` — an unrecoverable error this iteration.
     3. ``tool_policy_violation`` — a denied/over-budget tool call.
     4. ``output_schema_valid AND no_pending_tool_requests`` — the success exit.
@@ -186,10 +186,10 @@ def evaluate_stop(state: LoopState, policy: StationLoopPolicy) -> LoopOutcome:
 
     Returns a :class:`LoopOutcome` whose ``stop_condition`` is ``None`` only when
     none of the closed conditions hold (the loop should run another iteration).
-    The §4.5-removed ``station_goal_satisfied`` is never produced.
+    The previously-removed ``station_goal_satisfied`` is never produced.
     """
 
-    # 1. Cancellation (§5.6) — propagates before anything else.
+    # 1. Cancellation — propagates before anything else.
     if state.cancel_requested:
         return LoopOutcome(
             stop_condition=LoopStopCondition.CANCEL_REQUESTED,

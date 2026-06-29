@@ -1,7 +1,6 @@
 """``run_command`` tool — category-gated subprocess with effect record.
 
-Implements the ``run_command`` acceptance criteria from P-TOOLS-01 (Standards
-Delta v0 §5.3 + §4.8):
+Implements the ``run_command`` acceptance criteria from P-TOOLS-01:
 
 1. Validate the command ``category`` against the ``allowed_categories``
    allowlist.
@@ -17,7 +16,7 @@ to ``failed``) is reserved for the cases where the command could not run to
 completion: a timeout (returned with ``timed_out=True`` and captured partial
 output) or an OS-level launch error (re-raised). The mutating-command effect is created
 ``planned`` before launch so an interrupted run leaves a ``planned`` record
-without ``finalized_at`` for resume reconciliation (§5.5, handled in P-EXEC-01).
+without ``finalized_at`` for resume reconciliation (handled in P-EXEC-01).
 """
 
 from __future__ import annotations
@@ -47,7 +46,7 @@ from ._matrix import (
     authorize_tool_call,
 )
 
-# System-default station timeout (Standards Delta v0 §5.4 max_wall_seconds).
+# System-default station timeout (max_wall_seconds).
 _DEFAULT_TIMEOUT_SECONDS = StationLoopPolicy().max_wall_seconds
 
 
@@ -77,7 +76,7 @@ def _coerce_category(category: CommandCategory | str) -> CommandCategory:
 
 
 def validate_command_category(category: CommandCategory | str) -> CommandCategory:
-    """Validate a command category against the §5.3 allow/forbid sets.
+    """Validate a command category against the allow/forbid sets.
 
     Raises :class:`CommandCategoryError` when the category is explicitly
     forbidden or is simply not on the two-entry allowlist. Returns the coerced
@@ -109,13 +108,13 @@ def run_command(
     """Run an allowlisted command, recording a mutating effect when applicable.
 
     ``command`` is an argv list (no shell). ``timeout_seconds`` defaults to the
-    §5.4 system default (``max_wall_seconds``). A non-mutating category
+    system default (``max_wall_seconds``). A non-mutating category
     (``read_only_inspection``) records no effect (``effect is None``); a mutating
     category (``tests``) records a ``command_output`` effect, ``planned`` before
     launch and ``applied`` after completion.
     """
 
-    # 1. Matrix gate (Standards Delta v0 §5.3).
+    # 1. Matrix gate.
     authorize_tool_call(ToolName.RUN_COMMAND, autonomy_mode, approval_granted=approval_granted)
 
     # 1b. + 2. Category allowlist / forbidden-list enforcement.
@@ -126,7 +125,7 @@ def run_command(
     mutating = CATEGORY_MUTATES_WORKSPACE[cat]
     when = now or datetime.now(timezone.utc)
 
-    # 3. Create the planned effect for mutating commands only (§5.3).
+    # 3. Create the planned effect for mutating commands only.
     effect: DispatchEffect | None = None
     if mutating:
         effect = DispatchEffect(

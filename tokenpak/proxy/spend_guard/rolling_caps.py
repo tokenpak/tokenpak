@@ -243,7 +243,7 @@ def check_rolling_caps(
     Returns None when:
         - Rolling caps are disabled
         - Usage is below all configured caps (with projected_add included)
-        - Any computation error (fail-open per Standard 29 §9.8)
+        - Any computation error (fail-open)
     """
     if not config.enabled:
         return None

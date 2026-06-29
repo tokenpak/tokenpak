@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Cached, non-blocking, honest status source for the interactive menu.
 
-Cumulative-spec section D (status strip) + design-pass §4.4 honesty fix.
+Cumulative-spec section D (status strip) + design-pass honesty fix.
 
 Why this module exists
 ----------------------

@@ -91,7 +91,7 @@ def _dollar_plane_cfg() -> SpendGuardConfig:
     """Reconstruct the v1.5.1 dollar-plane default profile for tests that
     exercise the LEGACY session-cumulative defense.
 
-    Under v1.5.2 defaults (Standard 29 §5, Kevin DECISION 2026-05-11 rev 2),
+    Under v1.5.2 defaults (Kevin DECISION 2026-05-11 rev 2),
     the dollar plane is opt-in only. These tests explicitly engage it to
     keep regression coverage on the legacy band.
     """
@@ -207,7 +207,7 @@ class TestSpikeReplayContextWindowPercent:
     at 90% catches the spike pattern without any session-cumulative
     bookkeeping.
 
-    Acceptance from the 2026-05-11 task packet §4:
+    Acceptance from the 2026-05-11 task packet:
     > Regression: ``test_spend_guard_spike_replay.py`` must continue to
     > flag the 2026-05-07 09:28-10:56 trace under the new 90% default —
     > verify each large-context request in the spike pattern crosses the

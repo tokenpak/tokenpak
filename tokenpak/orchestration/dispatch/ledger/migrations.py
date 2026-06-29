@@ -6,7 +6,7 @@ order, each guarded so a re-run is a no-op. Schema version is tracked via
 SQLite's ``PRAGMA user_version`` (a single integer stored in the database
 header — no bookkeeping table required).
 
-Every Dispatch record class (Standards Delta v0 §4–§5) gets one table. Each
+Every Dispatch record class gets one table. Each
 table stores the record's identity / index columns as typed SQLite columns plus
 a ``payload`` ``TEXT`` column holding the full ``model.model_dump_json()`` blob
 (acceptance criterion 8). The Run Ledger stores Dispatch **execution records

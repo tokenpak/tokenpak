@@ -1,4 +1,4 @@
-"""FulfillmentLine runner — sequential station execution (Standards Delta v0 §5).
+"""FulfillmentLine runner — sequential station execution.
 
 The :class:`FulfillmentLine` is the top-level execution engine P-EXEC-01 ships. It
 takes a *selected, bound* route (from :class:`DispatchRuntime.select_route`) and
@@ -9,27 +9,27 @@ propagates.
 **Sequential execution only.** Stations run strictly in declaration order; the
 output of each station is available to the next. There is **no parallel
 execution** and **no branch primitive** in v0.1-alpha — these are a deliberate
-omission (Standards Delta v0 §13 "Explicitly NOT v0.1-alpha": parallel
-fulfillment, branch decisions). A FulfillmentLine is a *line*, not a graph; the
+omission (parallel fulfillment and branch decisions are explicitly NOT in
+v0.1-alpha). A FulfillmentLine is a *line*, not a graph; the
 runner asserts this by walking ``route.stations`` in order with no fan-out.
 
 What the FulfillmentLine wires together:
 
 * the **StationRunner** for each worker station (worker + overlay + context cargo
   + tool registry + bounded loop, :mod:`.station_runner`);
-* the **Reviewer Station** for a station whose role is ``reviewer`` (§5.7),
+* the **Reviewer Station** for a station whose role is ``reviewer``,
   invoked through the injected :class:`ReviewerLLM` boundary;
-* the **Gatehouse** Delivery Gate (§5.7) — reviewer ``pass`` continues,
+* the **Gatehouse** Delivery Gate — reviewer ``pass`` continues,
   ``warning`` auto-creates a :class:`DispatchDecision`, ``fail`` blocks delivery;
 * the **Run Ledger** — the :class:`DispatchRun` record is written at start and
   updated as stations complete; each :class:`DispatchStationRun` is committed by
   its StationRunner only after schema-valid output (criterion 4);
-* **Spend Guard inheritance** (§8) — a station that fails with
+* **Spend Guard inheritance** — a station that fails with
   ``reason=spend_guard_exceeded`` halts the line and surfaces a
   :class:`DispatchDecision` (raise budget / change route / cancel);
-* **Resume** (§5.5) — :meth:`FulfillmentLine.resume` reconciles an interrupted
+* **Resume** — :meth:`FulfillmentLine.resume` reconciles an interrupted
   run via :func:`reconcile_run` before continuing;
-* **Cancellation** (§5.6) — a cancel token marks queued stations ``cancelled``
+* **Cancellation** — a cancel token marks queued stations ``cancelled``
   and captures a late TIP result as a :class:`LateResult`.
 """
 
@@ -106,7 +106,7 @@ class LineStatus(str, Enum):
 
 @dataclass
 class FulfillmentResult:
-    """The result of running a FulfillmentLine (Standards Delta v0 §5).
+    """The result of running a FulfillmentLine.
 
     Carries the line status, the persisted :class:`DispatchRun`, the per-station
     :class:`DispatchStationRun` records produced, any :class:`DispatchDecision`
@@ -128,7 +128,7 @@ class FulfillmentResult:
 
 
 class FulfillmentLine:
-    """Sequential station-execution engine (Standards Delta v0 §5).
+    """Sequential station-execution engine.
 
     Construct with the foundation seams — a :class:`WorkerLLM` (the TIP worker
     boundary), a context provider, a :class:`RunLedger`, a worker registry, and
@@ -138,8 +138,8 @@ class FulfillmentLine:
 
     **Sequential, no parallel, no branches.** :meth:`_walk_stations` iterates
     ``route.stations`` in order. There is no fan-out, no concurrent station, and
-    no conditional branch primitive — that is the deliberate v0.1-alpha omission
-    (§13). A later version may add a branch model; this runner does not.
+    no conditional branch primitive — that is the deliberate v0.1-alpha omission.
+    A later version may add a branch model; this runner does not.
     """
 
     def __init__(
@@ -224,13 +224,13 @@ class FulfillmentLine:
         route_intent: Optional[str] = None,
         approval_granted: bool = False,
     ) -> FulfillmentResult:
-        """Resume an interrupted run (Standards Delta v0 §5.5).
+        """Resume an interrupted run.
 
         Reconciles the last station via :func:`reconcile_run`, persists the
         station-status transition, and — depending on the reconciliation verdict —
         continues with the next station, reruns the interrupted station, or
         surfaces a :class:`DispatchDecision` (drift / unknown state). Multi-effect
-        auto-rollback is never performed (§4.8/§5.5 step 5).
+        auto-rollback is never performed.
         """
 
         mode = autonomy_mode if isinstance(autonomy_mode, AutonomyMode) else AutonomyMode(autonomy_mode)
@@ -337,7 +337,7 @@ class FulfillmentLine:
                 )
                 if review_run is not None:
                     station_runs.append(review_run)
-                # Reviewer ran → evaluate the Delivery Gate now (§5.7).
+                # Reviewer ran → evaluate the Delivery Gate now.
                 package = self._gatehouse.evaluate_delivery(
                     job_id=manifest.job_id,
                     manifest=manifest,
@@ -384,7 +384,7 @@ class FulfillmentLine:
                     reason="Cancellation propagated mid-station; late result captured.",
                 )
 
-            # Spend Guard hard stop (§8): surface a decision, halt the line.
+            # Spend Guard hard stop: surface a decision, halt the line.
             if outcome.failure_reason == SPEND_GUARD_EXCEEDED_REASON:
                 decision = self._build_spend_guard_decision(run, station)
                 self._ledger.write_decision(decision)
@@ -396,7 +396,7 @@ class FulfillmentLine:
                     decision=decision,
                     late_results=late_results,
                     effect_ids=effect_ids,
-                    reason="Spend Guard hard-stopped a station (§8).",
+                    reason="Spend Guard hard-stopped a station.",
                 )
 
             # Any other station failure halts the line (no automatic repair loop).
@@ -448,7 +448,7 @@ class FulfillmentLine:
 
         worker = self._resolve_worker(station)
         overlay = self._resolve_overlay(station)
-        # §16 capability intersection: the worker must satisfy the overlay's and
+        # Capability intersection: the worker must satisfy the overlay's and
         # the station's required capabilities or the binding fails loud. The
         # route was already bound by select_route, but re-asserting here keeps the
         # station runner's contract local and explicit.
@@ -519,7 +519,7 @@ class FulfillmentLine:
         station: RouteStation,
         build_station_run: Optional[DispatchStationRun],
     ) -> tuple[ReviewerStationResult, Optional[DispatchStationRun]]:
-        """Run the Reviewer Station (§5.7) and commit its station-run record.
+        """Run the Reviewer Station and commit its station-run record.
 
         Requires a reviewer client to have been injected; raises if absent (a
         route with a reviewer station cannot run without one). Builds the
@@ -703,7 +703,7 @@ class FulfillmentLine:
     def _mark_remaining_cancelled(
         self, run: DispatchRun, remaining: list[RouteStation]
     ) -> None:
-        """Mark every not-yet-run station ``cancelled`` (§5.6 step 3).
+        """Mark every not-yet-run station ``cancelled``.
 
         Each queued station gets a ``cancelled`` :class:`DispatchStationRun` so
         the Run Ledger records exactly which stations never ran.
@@ -745,7 +745,7 @@ class FulfillmentLine:
     def _build_spend_guard_decision(
         self, run: DispatchRun, station: RouteStation
     ) -> DispatchDecision:
-        """Build the §8 Spend-Guard decision (raise budget / change route / cancel)."""
+        """Build the Spend-Guard decision (raise budget / change route / cancel)."""
 
         return DispatchDecision(
             id=f"decision_{run.id}_spend_guard",
@@ -759,7 +759,7 @@ class FulfillmentLine:
                 "the job?"
             ),
             reason=(
-                "Standards Delta v0 §8: a station hit the Spend Guard cap hard "
+                "A station hit the Spend Guard cap hard "
                 "stop (reason=spend_guard_exceeded). Dispatch surfaces a decision "
                 "rather than bypassing Spend Guard."
             ),

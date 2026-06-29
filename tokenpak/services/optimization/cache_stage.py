@@ -8,8 +8,7 @@ and miss-reason telemetry.
 NOTE ON LAYERING: This module is in ``tokenpak.services.optimization`` (Level 3).
 It imports ``SemanticCache`` from ``tokenpak.cache`` (Level 0/1) directly,
 without going through ``tokenpak.proxy.middleware.semantic_cache_middleware``
-(Level 4), maintaining the downward-only dependency rule from
-``01-architecture-standard.md §2``.
+(Level 4), maintaining the downward-only dependency rule.
 
 NOTE ON WIRE FORMAT: ``SemanticCache.store()`` is wire-format-migration compliant — it stores
 raw bytes + content_type + wire_format. The stage serializes ``response: dict``
@@ -262,7 +261,7 @@ class SemanticCacheStage:
 
         Uses tokenpak.cache.semantic_cache.SemanticCache (Level 0) directly —
         avoids importing from proxy.middleware (Level 4) which would violate
-        the downward-only dependency rule (01-architecture-standard.md §2).
+        the downward-only dependency rule.
         """
         from tokenpak.cache.semantic_cache import SemanticCache, SemanticCacheConfig
 

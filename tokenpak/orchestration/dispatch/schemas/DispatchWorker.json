@@ -1,7 +1,7 @@
 {
   "$defs": {
     "ModifyFilesPolicy": {
-      "description": "DispatchWorker permission_profile.modify_files (Standards Delta v0 \u00a75.1).",
+      "description": "DispatchWorker permission_profile.modify_files.",
       "enum": [
         "always",
         "policy_controlled",
@@ -11,7 +11,7 @@
       "type": "string"
     },
     "RunCommandsPolicy": {
-      "description": "DispatchWorker permission_profile.run_commands (Standards Delta v0 \u00a75.1).",
+      "description": "DispatchWorker permission_profile.run_commands.",
       "enum": [
         "always",
         "policy_controlled",
@@ -22,7 +22,7 @@
     },
     "WorkerLoopDefault": {
       "additionalProperties": false,
-      "description": "DispatchWorker.default_loop_policy \u2014 the \u00a75.1 three-field budget.\n\nDistinct from :class:`StationLoopPolicy`: \u00a75.1 specifies only the three\ninteger budget fields for a worker default; stop conditions live on the\nstation-level policy.",
+      "description": "DispatchWorker.default_loop_policy \u2014 the three-field budget.\n\nDistinct from :class:`StationLoopPolicy`: this specifies only the three\ninteger budget fields for a worker default; stop conditions live on the\nstation-level policy.",
       "properties": {
         "max_iterations": {
           "title": "Max Iterations",
@@ -47,7 +47,7 @@
     },
     "WorkerPermissionProfile": {
       "additionalProperties": false,
-      "description": "DispatchWorker.permission_profile (Standards Delta v0 \u00a75.1).\n\n``install_dependencies`` is always ``False`` in v0.1-alpha (external side\neffects are forbidden \u2014 \u00a75.5).",
+      "description": "DispatchWorker.permission_profile.\n\n``install_dependencies`` is always ``False`` in v0.1-alpha (external side\neffects are forbidden).",
       "properties": {
         "install_dependencies": {
           "default": false,
@@ -74,10 +74,10 @@
     }
   },
   "additionalProperties": false,
-  "description": "A registry-loaded TIP worker profile (Standards Delta v0 \u00a75.1).\n\n``capabilities`` is registry-bound: the loader rejects any string not in\nthe \u00a75.2 capability registry at construction time (fail-loud, per \u00a75.2\ngovernance rule). ``kind`` is the fixed literal ``\"tip_worker_profile\"``.",
+  "description": "A registry-loaded TIP worker profile.\n\n``capabilities`` is registry-bound: the loader rejects any string not in\nthe capability registry at construction time (fail-loud, per the registry\ngovernance rule). ``kind`` is the fixed literal ``\"tip_worker_profile\"``.",
   "properties": {
     "allowed_tools": {
-      "description": "registry-bound; see \u00a75.3",
+      "description": "registry-bound",
       "items": {
         "type": "string"
       },
@@ -85,7 +85,7 @@
       "type": "array"
     },
     "capabilities": {
-      "description": "registry-bound; see \u00a75.2",
+      "description": "registry-bound",
       "items": {
         "type": "string"
       },

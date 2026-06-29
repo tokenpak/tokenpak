@@ -1,12 +1,12 @@
 """``apply_patch`` tool — path-policy-checked file write with effect record.
 
-Implements the ``apply_patch`` acceptance criteria from P-TOOLS-01 (Standards
-Delta v0 §5.3 + §4.8 effect-record protocol):
+Implements the ``apply_patch`` acceptance criteria from P-TOOLS-01 (the
+effect-record protocol):
 
 1. Validate ``target`` against ``DispatchManifest.path_policy`` — it must match
    an ``allowed_paths`` glob **and** must not match a ``denied_paths`` glob (the
    four mandatory denied globs are always present, injected by the schema).
-2. Create a ``DispatchEffect(status="planned")`` **before** the write (§4.8).
+2. Create a ``DispatchEffect(status="planned")`` **before** the write.
 3. Write the file content via a standard filesystem call.
 4. Compute the ``after_hash`` of the resulting file.
 5. Transition the effect to ``status="applied", finalized_at=<now>``.
@@ -164,7 +164,7 @@ def apply_patch(
     by returning the failed record; success returns the applied record.
     """
 
-    # 1. Invocation-time matrix gate (Standards Delta v0 §5.3).
+    # 1. Invocation-time matrix gate.
     authorize_tool_call(ToolName.APPLY_PATCH, autonomy_mode, approval_granted=approval_granted)
 
     # 1b. Path policy (requires_path_policy_check=True for apply_patch).
@@ -186,7 +186,7 @@ def apply_patch(
 
     when = now or datetime.now(timezone.utc)
 
-    # 2. Create the planned effect record BEFORE the write (§4.8).
+    # 2. Create the planned effect record BEFORE the write.
     effect = DispatchEffect(
         id=effect_id or f"effect_{uuid4().hex}",
         job_id=job_id,

@@ -2,10 +2,9 @@
 
 Observe-only scaffolding for the optimization pipeline described in the
 optimization-layer design (Phase 3 Component B, Phase 4
-Milestone 2). Pipeline composition lives under ``services/`` per
-``01-architecture-standard.md §1.3`` design invariant 1 ("services/ is
-the only place the compression → security → cache → routing → telemetry
-→ dispatch sequence exists"); ``proxy/server.py`` invokes
+Milestone 2). Pipeline composition lives under ``services/``, the
+only place the compression → security → cache → routing → telemetry
+→ dispatch sequence exists; ``proxy/server.py`` invokes
 ``run_observe_only`` over the byte-preserved request.
 
 Public surface:

@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "A TIP result that arrived after cancellation (Standards Delta v0 \u00a74.9).\n\n``effects_applied`` is always ``False`` in v0.1-alpha (late effects are\nnever applied \u2014 \u00a75.6); ``recovery_allowed`` gates the inspect-only path\n(recovery itself is deferred to beta).",
+  "description": "A TIP result that arrived after cancellation.\n\n``effects_applied`` is always ``False`` in v0.1-alpha (late effects are\nnever applied); ``recovery_allowed`` gates the inspect-only path\n(recovery itself is deferred to beta).",
   "properties": {
     "effects_applied": {
       "default": false,

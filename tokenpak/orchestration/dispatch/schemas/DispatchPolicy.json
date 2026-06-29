@@ -1,7 +1,7 @@
 {
   "$defs": {
     "AutonomyMode": {
-      "description": "DispatchJob / DispatchManifest autonomy mode (Standards Delta v0 \u00a74.1).",
+      "description": "DispatchJob / DispatchManifest autonomy mode.",
       "enum": [
         "advisory",
         "draft",
@@ -13,7 +13,7 @@
     },
     "PathPolicy": {
       "additionalProperties": false,
-      "description": "DispatchManifest.path_policy \u2014 consumed by the apply_patch tool (\u00a74.2).\n\n``denied_paths`` is guaranteed to always contain the four mandatory globs\n(``.env``, ``.git/**``, ``secrets/**``, ``license/**``); any missing\nmandatory entry is injected at validation time so the safety invariant\nholds regardless of caller input.",
+      "description": "DispatchManifest.path_policy \u2014 consumed by the apply_patch tool.\n\n``denied_paths`` is guaranteed to always contain the four mandatory globs\n(``.env``, ``.git/**``, ``secrets/**``, ``license/**``); any missing\nmandatory entry is injected at validation time so the safety invariant\nholds regardless of caller input.",
       "properties": {
         "allow_delete_files": {
           "default": false,
@@ -45,7 +45,7 @@
     },
     "QualityRequirements": {
       "additionalProperties": false,
-      "description": "DispatchManifest.quality_requirements block (Standards Delta v0 \u00a74.2).",
+      "description": "DispatchManifest.quality_requirements block.",
       "properties": {
         "docs_required": {
           "title": "Docs Required",

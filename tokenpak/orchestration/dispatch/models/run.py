@@ -1,4 +1,4 @@
-"""DispatchRun record (Standards Delta v0 §4.4)."""
+"""DispatchRun record."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from .common import DispatchBaseModel
 
 
 class DispatchRun(DispatchBaseModel):
-    """Top-level job run record (Standards Delta v0 §4.4).
+    """Top-level job run record.
 
-    ``status`` is typed ``str`` per the Standards Delta (it tracks
+    ``status`` is typed ``str`` (it tracks
     ``DispatchJob.status``; not re-typed to the enum to match the spec verbatim).
     The ``*_runs`` / ``decisions`` / ``effects`` / ``late_results`` lists hold
     the string ids of the related records.

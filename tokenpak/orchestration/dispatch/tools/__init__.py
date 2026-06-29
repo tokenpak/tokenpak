@@ -1,7 +1,7 @@
 """TokenPak Dispatch tools — registry, autonomy matrix, and effect-bearing tools.
 
-This package is the **Tool Registry** authored by P-TOOLS-01 (Standards Delta v0
-§5.3). It exposes the five v0.1-alpha Dispatch tools and the policy layer that
+This package is the **Tool Registry** authored by P-TOOLS-01. It exposes the
+five v0.1-alpha Dispatch tools and the policy layer that
 governs them:
 
 * :data:`TOOL_REGISTRY` — name → :class:`ToolSpec` for all five tools, each

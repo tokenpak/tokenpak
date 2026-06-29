@@ -1,11 +1,11 @@
-# Default reviewer worker profile (Standards Delta v0 §5.1).
+# Default reviewer worker profile.
 #
 # Single-shot semantic reviewer: reads the build/draft output plus the manifest
 # acceptance criteria and emits a structured review verdict. It does not mutate
 # the workspace, so its permission profile denies file modification and command
 # execution.
 #
-# `capabilities` is registry-bound: every entry MUST be in the §5.2 capability
+# `capabilities` is registry-bound: every entry MUST be in the capability
 # registry or the registry loader rejects this profile fail-loud at load time.
 id: worker.reviewer.default.v1
 kind: tip_worker_profile

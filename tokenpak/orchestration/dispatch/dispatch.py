@@ -1,10 +1,10 @@
-"""Dispatch runtime — deterministic route selection (Standards Delta v0 §5.8).
+"""Dispatch runtime — deterministic route selection.
 
 This is the runtime entry that wires FrontDock output → a *selected route*. It
 does **not** execute stations (that is P-EXEC-01's job): it answers the single
 question "given an intake bundle, which route runs, and may it auto-dispatch?".
 
-The decision is layered, and the order is the contract (Standards Delta v0 §5.8):
+The decision is layered, and the order is the contract:
 
     1. explicit user route   (--route flag / explicit_route arg)
     2. project rule          (.tpk/dispatch/project_rules.yaml, if present)
@@ -15,13 +15,13 @@ The decision is layered, and the order is the contract (Standards Delta v0 §5.8
 
 Two cross-cutting rules sit on top of the precedence walk:
 
-* **Dynamic capability binding (§11).** A route is only *selectable* if every
+* **Dynamic capability binding.** A route is only *selectable* if every
   worker station can be staffed from the live worker registry by capability
   intersection (``routes.bind_route``). A route that names a role/capability no
   worker can satisfy is not a candidate — it scores the
   ``forbidden_action_required`` penalty and is skipped, never silently chosen.
 
-* **Confidence thresholds (§5.8).** The chosen route carries a numeric
+* **Confidence thresholds.** The chosen route carries a numeric
   confidence. ``>= 60`` ⇒ auto-dispatch *if autonomy permits*; ``40–59`` ⇒
   create a :class:`DispatchDecision` (ask the user); ``< 40`` ⇒ refuse. An
   explicit user route is the one path that bypasses scoring entirely (the user
@@ -67,16 +67,16 @@ from .registry.routes import (
 from .registry.workers import DispatchWorkerRegistry, default_worker_registry
 
 # ---------------------------------------------------------------------------
-# Alpha scoring constants (Standards Delta v0 §5.8)
+# Alpha scoring constants
 # ---------------------------------------------------------------------------
 #
 # status: alpha_placeholder
 # recalibrate_before: v0.1-beta
 #
 # These weights + thresholds are GUT-FEEL ALPHA PLACEHOLDERS, transcribed
-# verbatim from Standards Delta v0 §5.8. They MUST be replaced before v0.1-beta
+# verbatim from the dispatch scoring spec. They MUST be replaced before v0.1-beta
 # with data-driven values from real Run Ledger data (routes chosen / overridden
-# / failed / user corrections / decision frequency / delivery acceptance — §5.8
+# / failed / user corrections / decision frequency / delivery acceptance — the
 # "Beta recalibration inputs"). Do not treat any number here as tuned.
 
 # Machine-readable provenance marker so tooling / tests can assert the alpha
@@ -86,7 +86,7 @@ DISPATCH_SCORING_METADATA: dict[str, str] = {
     "recalibrate_before": "v0.1-beta",
 }
 
-# Score weights (§5.8 ``dispatch_scoring.weights``, verbatim).
+# Score weights (``dispatch_scoring.weights``, verbatim).
 SCORE_EXPLICIT_ROUTE_REQUESTED = 100  # status: alpha_placeholder
 SCORE_EXACT_ROUTE_TRIGGER_MATCH = 40  # status: alpha_placeholder
 SCORE_INTENT_MATCH = 25  # status: alpha_placeholder
@@ -98,13 +98,13 @@ SCORE_RISK_MISMATCH = -25  # status: alpha_placeholder
 SCORE_MISSING_REQUIRED_INFO = -40  # status: alpha_placeholder
 SCORE_FORBIDDEN_ACTION_REQUIRED = -100  # status: alpha_placeholder
 
-# Confidence thresholds (§5.8 ``dispatch_scoring.thresholds``, verbatim).
+# Confidence thresholds (``dispatch_scoring.thresholds``, verbatim).
 THRESHOLD_AUTO_DISPATCH = 60  # >= 60 → auto-dispatch if autonomy permits
 THRESHOLD_DECISION_FLOOR = 40  # 40..59 → DispatchDecision; < 40 → refuse
 
 
-# Autonomy modes under which a >=60 route may actually auto-dispatch (§5.8 +
-# §14.2). ``advisory`` / ``draft`` never auto-dispatch even at high confidence —
+# Autonomy modes under which a >=60 route may actually auto-dispatch.
+# ``advisory`` / ``draft`` never auto-dispatch even at high confidence —
 # they only ever draft / propose.
 _AUTO_DISPATCH_MODES: frozenset[AutonomyMode] = frozenset(
     {AutonomyMode.DISPATCH_WITH_APPROVAL, AutonomyMode.AUTO_DISPATCH_LIMITED}
@@ -118,7 +118,7 @@ _AUTO_DISPATCH_MODES: frozenset[AutonomyMode] = frozenset(
 
 @dataclass(frozen=True)
 class RouteSuggestion:
-    """Schema-bound LLM route suggestion (Standards Delta v0 §5.8 step 5 input).
+    """Schema-bound LLM route suggestion (advisory tie-break input).
 
     The LLM may *suggest* a route; it never dispatches. This is the strict,
     validated shape a suggestion must take: ``route_id`` + ``confidence`` +
@@ -185,7 +185,7 @@ class RouteSuggestClient(Protocol):
     """LLM boundary for route suggestion — routes through TIP at runtime.
 
     Mirrors / extends the FrontDock :class:`TipClient` Protocol: the production
-    binding is the TIP client (Spend Guard enforced, §8); in tests it is a
+    binding is the TIP client (Spend Guard enforced); in tests it is a
     deterministic mock. **No provider SDK is imported or called by this module.**
     A client returns a raw payload that :meth:`RouteSuggestion.from_payload`
     validates; the LLM only ever *suggests*.
@@ -243,13 +243,13 @@ class RouteSuggester:
 
 
 # ---------------------------------------------------------------------------
-# Project rules (§5.8 step 2)
+# Project rules
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class ProjectRules:
-    """Project-level route overrides (Standards Delta v0 §5.8 step 2).
+    """Project-level route overrides.
 
     A thin, in-memory representation of ``.tpk/dispatch/project_rules.yaml``.
     v0.1-alpha supports the one rule the precedence contract names: a
@@ -272,7 +272,7 @@ class ProjectRules:
 
 
 # ---------------------------------------------------------------------------
-# Scoring (§5.8 step 5)
+# Scoring
 # ---------------------------------------------------------------------------
 
 
@@ -287,7 +287,7 @@ class RouteScore:
 
     @property
     def confidence(self) -> int:
-        """Confidence is the score clamped to [0, 100] (§5.8 threshold domain)."""
+        """Confidence is the score clamped to [0, 100] (threshold domain)."""
 
         return max(0, min(100, self.score))
 
@@ -300,10 +300,10 @@ def score_route(
     suggestion: Optional[RouteSuggestion] = None,
     has_material_missing_info: bool = False,
 ) -> RouteScore:
-    """Score one candidate ``route`` for ``job`` (Standards Delta v0 §5.8 weights).
+    """Score one candidate ``route`` for ``job`` (scoring weights).
 
     ALPHA PLACEHOLDER scoring (status: alpha_placeholder; recalibrate_before:
-    v0.1-beta). Applies the §5.8 weight table:
+    v0.1-beta). Applies the weight table:
 
     * +exact_route_trigger_match when the route declares the job's intent;
     * +intent_match when the job's intent maps to this route family;
@@ -316,7 +316,7 @@ def score_route(
       Penalizing the soft probes would refuse every ordinary task, so only the
       material signal counts here);
     * -forbidden_action_required when the route cannot be staffed from the live
-      worker registry (capability mismatch — the strongest negative, §11);
+      worker registry (capability mismatch — the strongest negative);
     * a small +file_context_hint / +ordering_hint when an LLM suggestion both
       names this route and corroborates it (advisory only).
     """
@@ -325,7 +325,7 @@ def score_route(
     bindable = route_is_bindable(route, worker_registry)
 
     # An unstaffable route is effectively requiring a forbidden action: it cannot
-    # do the work. This dominates the score so it can never be auto-chosen (§11).
+    # do the work. This dominates the score so it can never be auto-chosen.
     if not bindable:
         components.append(("forbidden_action_required", SCORE_FORBIDDEN_ACTION_REQUIRED))
 
@@ -406,7 +406,7 @@ def _risk_compatible(job_risk: RiskLevel, route_risk: RiskLevel) -> bool:
 
 @dataclass(frozen=True)
 class SelectionOutcome:
-    """The result of route selection (Standards Delta v0 §5.8).
+    """The result of route selection.
 
     Exactly one of ``route`` (a selected, bound route) or ``decision`` (a
     DispatchDecision asking the user) is set, per ``status``:
@@ -422,7 +422,7 @@ class SelectionOutcome:
     status: str  # "auto_dispatch" | "needs_approval" | "decision" | "refused"
     route: Optional[DispatchRoute]
     confidence: int
-    precedence_layer: str  # which §5.8 step decided
+    precedence_layer: str  # which precedence step decided
     decision: Optional[DispatchDecision] = None
     bindings: Mapping[str, list] = field(default_factory=dict)
     reasons: tuple[str, ...] = ()
@@ -447,7 +447,7 @@ class SelectionOutcome:
 
 
 class DispatchRuntime:
-    """Wires FrontDock output → a selected route (Standards Delta v0 §5.8).
+    """Wires FrontDock output → a selected route.
 
     Does NOT execute stations (P-EXEC-01). Construct with a route registry +
     worker registry (defaults load the packaged profiles) and an optional
@@ -485,7 +485,7 @@ class DispatchRuntime:
         project_rules: Optional[ProjectRules] = None,
         now: Optional[datetime] = None,
     ) -> SelectionOutcome:
-        """Select a route for an intake bundle using the §5.8 precedence order.
+        """Select a route for an intake bundle using the precedence order.
 
         Walks the precedence layers in order and returns the first decisive
         outcome:
@@ -497,7 +497,7 @@ class DispatchRuntime:
         5. registry tie-break → alpha scoring across all candidates;
         6. else → DispatchDecision.
 
-        Confidence thresholds (§5.8) gate the deterministic-scoring outcomes:
+        Confidence thresholds gate the deterministic-scoring outcomes:
         ``>=60`` auto-dispatch (autonomy permitting) / ``40-59`` decision /
         ``<40`` refuse.
         """
@@ -506,7 +506,7 @@ class DispatchRuntime:
         created_at = now or datetime.now(timezone.utc)
         # FrontDock surfaces *material* missing info as a blocking decision; the
         # soft probe gaps it already downgraded to assumptions do NOT count as
-        # material (penalizing those would refuse every ordinary task — §5.8).
+        # material (penalizing those would refuse every ordinary task).
         material_missing = intake.is_blocked
 
         # Layer 1 — explicit user route (highest precedence; user named it).
@@ -666,7 +666,7 @@ class DispatchRuntime:
         layer: str,
         scores: tuple[RouteScore, ...] = (),
     ) -> SelectionOutcome:
-        """Apply the §5.8 confidence thresholds to a scored route."""
+        """Apply the confidence thresholds to a scored route."""
 
         confidence = score.confidence
         reasons = tuple(f"{name}: {weight:+d}" for name, weight in score.components)
@@ -719,7 +719,7 @@ class DispatchRuntime:
         reasons: tuple[str, ...],
         scores: tuple[RouteScore, ...] = (),
     ) -> SelectionOutcome:
-        """A selected, bound route: auto-dispatch iff autonomy permits (§5.8)."""
+        """A selected, bound route: auto-dispatch iff autonomy permits."""
 
         if job.autonomy_mode in _AUTO_DISPATCH_MODES:
             status = "auto_dispatch"
@@ -768,7 +768,7 @@ class DispatchRuntime:
         recommended_route_id: Optional[str] = None,
         scores: tuple[RouteScore, ...] = (),
     ) -> SelectionOutcome:
-        """Build a DispatchDecision asking the user which route to run (§5.8 step 6)."""
+        """Build a DispatchDecision asking the user which route to run."""
 
         options = self._route_options()
         recommended = recommended_route_id or (options[0].id if options else "no_route")
@@ -783,7 +783,7 @@ class DispatchRuntime:
                 f"confidence. {reason} Choose a route to run, or cancel."
             ),
             reason=(
-                "Standards Delta v0 §5.8 precedence did not yield a confident "
+                "Deterministic precedence did not yield a confident "
                 f"auto-dispatch (deciding layer: {layer})."
             ),
             risk_level=RiskLevel.MEDIUM,
@@ -851,7 +851,7 @@ class DispatchRuntime:
 
         A bare name with no ``route.`` prefix is resolved to the highest packaged
         ``route.<name>.v1`` form so ``--route=code_task`` works as the CLI signature
-        promises (Standards Delta v0 §14.1). A value already shaped like a full id
+        promises. A value already shaped like a full id
         is returned unchanged.
         """
 

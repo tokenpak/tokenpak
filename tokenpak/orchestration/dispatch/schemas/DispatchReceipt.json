@@ -2,7 +2,7 @@
   "$defs": {
     "ReceiptDecision": {
       "additionalProperties": false,
-      "description": "Per-decision summary row on a receipt (Standards Delta v0 \u00a74.7).",
+      "description": "Per-decision summary row on a receipt.",
       "properties": {
         "decision_id": {
           "title": "Decision Id",
@@ -22,7 +22,7 @@
     },
     "ReceiptEffect": {
       "additionalProperties": false,
-      "description": "Per-effect summary row on a receipt (Standards Delta v0 \u00a74.7).",
+      "description": "Per-effect summary row on a receipt.",
       "properties": {
         "effect_id": {
           "title": "Effect Id",
@@ -47,7 +47,7 @@
     },
     "ReceiptStation": {
       "additionalProperties": false,
-      "description": "Per-station summary row on a receipt (Standards Delta v0 \u00a74.7).",
+      "description": "Per-station summary row on a receipt.",
       "properties": {
         "result_payload_excerpt": {
           "default": "",
@@ -85,7 +85,7 @@
     },
     "ReceiptTelemetry": {
       "additionalProperties": false,
-      "description": "Aggregated telemetry block on a receipt (Standards Delta v0 \u00a74.7).",
+      "description": "Aggregated telemetry block on a receipt.",
       "properties": {
         "cache_hits": {
           "default": 0,
@@ -125,7 +125,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Delivery receipt summarizing a completed run (Standards Delta v0 \u00a74.7).",
+  "description": "Delivery receipt summarizing a completed run.",
   "properties": {
     "created_at": {
       "format": "date-time",

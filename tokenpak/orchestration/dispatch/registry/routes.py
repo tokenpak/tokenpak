@@ -1,4 +1,4 @@
-"""DispatchRoute registry + loader (Standards Delta v0 §4.3 + §11 + §16).
+"""DispatchRoute registry + loader.
 
 This module turns the packaged route YAML profiles into validated,
 registry-bound :class:`~tokenpak.orchestration.dispatch.models.route.DispatchRoute`
@@ -11,14 +11,14 @@ Two contracts live here, mirroring :mod:`tokenpak.orchestration.dispatch.registr
 * **Route registry** — :class:`DispatchRouteRegistry` discovers route YAML
   profiles (``route.*.v<n>.yaml``) and parses each into a ``DispatchRoute``.
   Because every station ``required_capabilities`` string is validated against
-  the §5.2 capability registry by the model's field validator, a route profile
-  that declares an unknown capability is rejected **fail-loud at load time**
-  (§5.2 governance rule), not skipped.
+  the capability registry by the model's field validator, a route profile
+  that declares an unknown capability is rejected **fail-loud at load time**,
+  not skipped.
 
 * **Dynamic worker binding** — :func:`resolve_station_workers` resolves a
   worker station (``required_role`` + ``required_capabilities``) against a
   :class:`~tokenpak.orchestration.dispatch.registry.workers.DispatchWorkerRegistry`
-  by **capability intersection**, NOT by hardcoded worker id (§11). A station
+  by **capability intersection**, NOT by hardcoded worker id. A station
   binds to exactly those registry workers that declare the station's role and
   possess every required capability; :func:`bind_route` walks all worker
   stations of a route and fails loud (:class:`RouteResolutionError`) if any
@@ -78,7 +78,7 @@ class RouteProfileError(ValueError):
 
 
 class RouteResolutionError(ValueError):
-    """Raised when a route's worker station cannot bind to any worker (§11).
+    """Raised when a route's worker station cannot bind to any worker.
 
     Carries the offending route + station ids and the reason (no worker with the
     required role, or none with the full required-capability set) so the
@@ -114,7 +114,7 @@ def is_worker_station(station: RouteStation) -> bool:
 
     A station is either a worker station (``required_role`` set) or a
     system-component station (``system_component`` set, e.g. ``delivery_dock``);
-    only worker stations bind to the worker registry (Standards Delta v0 §4.3).
+    only worker stations bind to the worker registry.
     """
 
     return station.required_role is not None
@@ -126,7 +126,7 @@ class DispatchRouteRegistry:
     Routes are discovered by glob (``route.*.yaml``), so dropping a new profile
     file into the routes directory registers it with no code change. Each profile
     is parsed into a :class:`DispatchRoute`; the model's station field validator
-    rejects unknown capability strings at load time (fail-loud, §5.2), and the
+    rejects unknown capability strings at load time (fail-loud), and the
     registry re-raises that as :class:`RouteProfileError` with the offending file
     path attached.
     """
@@ -193,7 +193,7 @@ class DispatchRouteRegistry:
         """Return every route declaring ``intent`` in its triggers (sorted by id).
 
         This is the exact-route_trigger lookup used by the dispatch precedence
-        layer (Standards Delta v0 §5.8 step 3).
+        layer.
         """
 
         return [r for r in self.all() if intent in r.triggers.intents]
@@ -203,11 +203,11 @@ def resolve_station_workers(
     station: RouteStation,
     worker_registry: DispatchWorkerRegistry,
 ) -> list[DispatchWorker]:
-    """Resolve the workers eligible for a worker ``station`` (Standards Delta v0 §11).
+    """Resolve the workers eligible for a worker ``station``.
 
     Dynamic capability binding: a worker is eligible iff it declares the
     station's ``required_role`` AND possesses **every** capability in the
-    station's ``required_capabilities`` (capability intersection — §16). Workers
+    station's ``required_capabilities`` (capability intersection). Workers
     are resolved from the live ``worker_registry`` by capability intersection,
     never by a hardcoded worker id.
 
@@ -234,7 +234,7 @@ def bind_route(
     route: DispatchRoute,
     worker_registry: DispatchWorkerRegistry,
 ) -> dict[str, list[DispatchWorker]]:
-    """Bind every worker station of ``route`` to its eligible workers (§11).
+    """Bind every worker station of ``route`` to its eligible workers.
 
     Walks the route's worker stations (skipping system-component stations) and
     resolves each against ``worker_registry`` by capability intersection. Returns
@@ -271,7 +271,7 @@ def route_is_bindable(
     """Return ``True`` iff every worker station of ``route`` has an eligible worker.
 
     Non-raising counterpart to :func:`bind_route` — used by the scorer to apply
-    the §5.8 ``forbidden_action_required`` / capability-mismatch penalty without
+    the ``forbidden_action_required`` / capability-mismatch penalty without
     aborting the precedence walk.
     """
 

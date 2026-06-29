@@ -1,9 +1,9 @@
 # Dispatch integration fixture — late-result cancellation path (P-FIXTURES-01).
 #
-# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# Fixture acceptance contract — all 8 required elements
 # (see quick_answer.golden.yaml for the element index).
 #
-# Failure path (§5.6): cancellation is requested DURING a station's TIP turn (an
+# Failure path: cancellation is requested DURING a station's TIP turn (an
 # adapter with no hard-kill). The station is marked `cancelled`, the post-cancel
 # TIP output is captured as a LateResult with `effects_applied=false` and
 # `recovery_allowed=false`, and the queued reviewer station is also marked
@@ -11,7 +11,7 @@
 name: late_result_cancellation
 kind: failure
 scenario: cancellation        # harness branch: drive a cancel-during-turn run
-description: Cancel mid-station captures a LateResult; queued stations cancelled (§5.6).
+description: Cancel mid-station captures a LateResult; queued stations cancelled.
 
 # (1) Input request text.
 input_request: "implement a code fix in the parser module"
@@ -85,6 +85,6 @@ pass_fail:
     - "Cancellation during the build turn marks the build station `cancelled`."
     - "Exactly one LateResult is captured with effects_applied=false, recovery_allowed=false."
     - "The LateResult is persisted in the Run Ledger and references the build station run."
-    - "The queued reviewer station is recorded as `cancelled` (§5.6 step 3)."
+    - "The queued reviewer station is recorded as `cancelled`."
     - "No Delivery Package and no decision fire; no gate runs."
     - "Receipt final_status == cancelled."

@@ -1,7 +1,7 @@
 {
   "$defs": {
     "EffectStatus": {
-      "description": "DispatchEffect status (Standards Delta v0 \u00a74.8).",
+      "description": "DispatchEffect status.",
       "enum": [
         "planned",
         "applied",
@@ -14,7 +14,7 @@
       "type": "string"
     },
     "EffectTargetType": {
-      "description": "DispatchEffect target_type (Standards Delta v0 \u00a74.8).",
+      "description": "DispatchEffect target_type.",
       "enum": [
         "file",
         "command_output",
@@ -24,7 +24,7 @@
       "type": "string"
     },
     "RollbackBehavior": {
-      "description": "DispatchEffect rollback_behavior (Standards Delta v0 \u00a74.8).",
+      "description": "DispatchEffect rollback_behavior.",
       "enum": [
         "delete_file_if_after_hash_matches",
         "restore_before_content_if_current_hash_matches_after_hash",
@@ -36,7 +36,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "A single workspace-mutating effect record (Standards Delta v0 \u00a74.8).\n\nCovers the three file-state cases from \u00a74.8:\n\n* **create** \u2014 ``before_exists=False``, ``before_hash=None``,\n  ``after_hash`` set, ``rollback_behavior=delete_file_if_after_hash_matches``.\n* **modify** \u2014 ``before_exists=True`` with both ``before_hash`` and\n  ``after_hash`` set,\n  ``rollback_behavior=restore_before_content_if_current_hash_matches_after_hash``.\n* **delete** \u2014 ``before_exists=True``, ``before_hash`` set,\n  ``after_hash=None``, ``rollback_behavior=restore_before_content``.\n\nEffect-record protocol (\u00a74.8): every effect-bearing tool call creates a\n``planned`` record BEFORE execution and transitions to ``applied`` AFTER\nsuccess. A ``planned`` record without ``finalized_at`` signals an\ninterrupted effect for resume reconciliation (\u00a75.5).",
+  "description": "A single workspace-mutating effect record.\n\nCovers the three file-state cases:\n\n* **create** \u2014 ``before_exists=False``, ``before_hash=None``,\n  ``after_hash`` set, ``rollback_behavior=delete_file_if_after_hash_matches``.\n* **modify** \u2014 ``before_exists=True`` with both ``before_hash`` and\n  ``after_hash`` set,\n  ``rollback_behavior=restore_before_content_if_current_hash_matches_after_hash``.\n* **delete** \u2014 ``before_exists=True``, ``before_hash`` set,\n  ``after_hash=None``, ``rollback_behavior=restore_before_content``.\n\nEffect-record protocol: every effect-bearing tool call creates a\n``planned`` record BEFORE execution and transitions to ``applied`` AFTER\nsuccess. A ``planned`` record without ``finalized_at`` signals an\ninterrupted effect for resume reconciliation.",
   "properties": {
     "after_hash": {
       "anyOf": [

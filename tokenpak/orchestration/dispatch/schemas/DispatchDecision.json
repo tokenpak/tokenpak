@@ -1,7 +1,7 @@
 {
   "$defs": {
     "AutoApplyAfter": {
-      "description": "DispatchDecision default_action.auto_apply_after (Standards Delta v0 \u00a74.6).\n\nv0.1-alpha only ever uses ``never``; ``timeout`` / ``user_preference`` are\nreserved for later versions.",
+      "description": "DispatchDecision default_action.auto_apply_after.\n\nv0.1-alpha only ever uses ``never``; ``timeout`` / ``user_preference`` are\nreserved for later versions.",
       "enum": [
         "never",
         "timeout",
@@ -12,7 +12,7 @@
     },
     "DecisionDefaultAction": {
       "additionalProperties": false,
-      "description": "Default action if unresolved (Standards Delta v0 \u00a74.6).\n\nv0.1-alpha always uses ``auto_apply_after = never``.",
+      "description": "Default action if unresolved.\n\nv0.1-alpha always uses ``auto_apply_after = never``.",
       "properties": {
         "auto_apply_after": {
           "$ref": "#/$defs/AutoApplyAfter",
@@ -31,7 +31,7 @@
     },
     "DecisionOption": {
       "additionalProperties": false,
-      "description": "A single selectable option on a decision (Standards Delta v0 \u00a74.6).",
+      "description": "A single selectable option on a decision.",
       "properties": {
         "description": {
           "title": "Description",
@@ -63,7 +63,7 @@
     },
     "DecisionRecommendation": {
       "additionalProperties": false,
-      "description": "System recommendation among the options (Standards Delta v0 \u00a74.6).",
+      "description": "System recommendation among the options.",
       "properties": {
         "option_id": {
           "title": "Option Id",
@@ -83,7 +83,7 @@
     },
     "DecisionResolution": {
       "additionalProperties": false,
-      "description": "Resolution state of a decision (Standards Delta v0 \u00a74.6).",
+      "description": "Resolution state of a decision.",
       "properties": {
         "resolved_at": {
           "anyOf": [
@@ -126,7 +126,7 @@
       "type": "object"
     },
     "DecisionScope": {
-      "description": "DispatchDecision scope (Standards Delta v0 \u00a74.6, v0.1-alpha).",
+      "description": "DispatchDecision scope (v0.1-alpha).",
       "enum": [
         "job",
         "station"
@@ -135,7 +135,7 @@
       "type": "string"
     },
     "DecisionStatus": {
-      "description": "DispatchDecision status (Standards Delta v0 \u00a74.6).",
+      "description": "DispatchDecision status.",
       "enum": [
         "pending",
         "resolved",
@@ -145,7 +145,7 @@
       "type": "string"
     },
     "ResolvedBy": {
-      "description": "DispatchDecision resolution.resolved_by (Standards Delta v0 \u00a74.6).",
+      "description": "DispatchDecision resolution.resolved_by.",
       "enum": [
         "user",
         "system"
@@ -154,7 +154,7 @@
       "type": "string"
     },
     "RiskLevel": {
-      "description": "Shared risk level (Standards Delta v0 \u00a74.3 default_risk, \u00a74.6 risk_level).",
+      "description": "Shared risk level (used as default_risk and risk_level).",
       "enum": [
         "low",
         "medium",
@@ -166,7 +166,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "A user/system decision surfaced by the Decision Inbox (\u00a74.6).",
+  "description": "A user/system decision surfaced by the Decision Inbox.",
   "properties": {
     "created_at": {
       "format": "date-time",

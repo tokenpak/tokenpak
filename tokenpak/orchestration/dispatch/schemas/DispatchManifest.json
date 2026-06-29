@@ -2,7 +2,7 @@
   "$defs": {
     "AcceptanceCriterion": {
       "additionalProperties": false,
-      "description": "Supporting sketch \u2014 referenced by DispatchManifest / Reviewer I/O.\n\nThe Standards Delta references ``AcceptanceCriterion`` as a type but does\nnot specify its fields; this minimal shape is the supporting sketch.",
+      "description": "Supporting sketch \u2014 referenced by DispatchManifest / Reviewer I/O.\n\nThe design references ``AcceptanceCriterion`` as a type but does\nnot specify its fields; this minimal shape is the supporting sketch.",
       "properties": {
         "description": {
           "title": "Description",
@@ -21,7 +21,7 @@
       "type": "object"
     },
     "AutonomyMode": {
-      "description": "DispatchJob / DispatchManifest autonomy mode (Standards Delta v0 \u00a74.1).",
+      "description": "DispatchJob / DispatchManifest autonomy mode.",
       "enum": [
         "advisory",
         "draft",
@@ -73,7 +73,7 @@
     },
     "ManifestPermissions": {
       "additionalProperties": false,
-      "description": "DispatchManifest.permissions block (Standards Delta v0 \u00a74.2).",
+      "description": "DispatchManifest.permissions block.",
       "properties": {
         "allowed_actions": {
           "items": {
@@ -107,7 +107,7 @@
       "type": "object"
     },
     "ManifestStatus": {
-      "description": "DispatchManifest lifecycle status (Standards Delta v0 \u00a74.2).",
+      "description": "DispatchManifest lifecycle status.",
       "enum": [
         "draft",
         "needs_decision",
@@ -119,7 +119,7 @@
     },
     "PathPolicy": {
       "additionalProperties": false,
-      "description": "DispatchManifest.path_policy \u2014 consumed by the apply_patch tool (\u00a74.2).\n\n``denied_paths`` is guaranteed to always contain the four mandatory globs\n(``.env``, ``.git/**``, ``secrets/**``, ``license/**``); any missing\nmandatory entry is injected at validation time so the safety invariant\nholds regardless of caller input.",
+      "description": "DispatchManifest.path_policy \u2014 consumed by the apply_patch tool.\n\n``denied_paths`` is guaranteed to always contain the four mandatory globs\n(``.env``, ``.git/**``, ``secrets/**``, ``license/**``); any missing\nmandatory entry is injected at validation time so the safety invariant\nholds regardless of caller input.",
       "properties": {
         "allow_delete_files": {
           "default": false,
@@ -151,7 +151,7 @@
     },
     "QualityRequirements": {
       "additionalProperties": false,
-      "description": "DispatchManifest.quality_requirements block (Standards Delta v0 \u00a74.2).",
+      "description": "DispatchManifest.quality_requirements block.",
       "properties": {
         "docs_required": {
           "title": "Docs Required",
@@ -181,7 +181,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Scoped work contract derived from a DispatchJob (Standards Delta v0 \u00a74.2).\n\n``path_policy`` is consumed by the ``apply_patch`` tool (round-6 \u00a74.2) and\nalways carries the four mandatory denied globs (see :class:`PathPolicy`).",
+  "description": "Scoped work contract derived from a DispatchJob.\n\n``path_policy`` is consumed by the ``apply_patch`` tool and\nalways carries the four mandatory denied globs (see :class:`PathPolicy`).",
   "properties": {
     "acceptance_criteria": {
       "items": {

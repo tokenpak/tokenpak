@@ -4,7 +4,7 @@ Settings UI persistence layer. Reads the env file, validates
 incoming values, and writes atomically (tmp + os.replace) with a timestamped
 backup before every write.
 
-§5.2-exception: direct env-file write is a local-only administrative operation
+Exception note: direct env-file write is a local-only administrative operation
 (no proxy request, no pipeline involvement). Calling proxy.client is not
 applicable here.
 

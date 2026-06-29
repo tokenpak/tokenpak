@@ -1,4 +1,4 @@
-"""TokenPak Dispatch — OSS workflow-control layer (Standards Delta v0).
+"""TokenPak Dispatch — OSS workflow-control layer.
 
 This package hosts the Dispatch record schemas (Pydantic v2 models + JSON
 Schema exports), the capability registry, and the dispatch runtime that
@@ -10,7 +10,7 @@ route-selection runtime (:class:`~tokenpak.orchestration.dispatch.dispatch.Dispa
 P-RUNTIME-01) wires FrontDock output → a selected route; station *execution*
 lands in P-EXEC-01.
 
-Technical namespace (Standards Delta v0 §2): module ``tokenpak/orchestration/
+Technical namespace: module ``tokenpak/orchestration/
 dispatch/``, CLI verb ``tokenpak dispatch``, MCP prefix ``dispatch.*``,
 on-disk root ``~/.tpk/dispatch/`` (pending a path-config amendment). Dispatch
 records are internal execution records, NOT Paks.

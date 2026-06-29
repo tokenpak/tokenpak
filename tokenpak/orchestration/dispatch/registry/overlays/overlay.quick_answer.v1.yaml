@@ -1,10 +1,10 @@
-# quick_answer prompt overlay (Standards Delta v0 §16).
+# quick_answer prompt overlay.
 #
 # Additive delta to the base builder prompt for the quick_answer route. The
 # overlay EXTENDS the base worker's system_directives; it never removes a base
 # directive (mode: additive). `required_capabilities` must be a subset of the
 # bound worker's capabilities AND of the station's required_capabilities for the
-# route to bind (capability intersection — §16 route-binding rule).
+# route to bind (capability intersection — route-binding rule).
 id: overlay.quick_answer.v1
 applies_to_role: builder
 mode: additive

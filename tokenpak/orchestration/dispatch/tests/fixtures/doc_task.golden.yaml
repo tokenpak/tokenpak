@@ -1,6 +1,6 @@
 # Dispatch integration fixture — doc_task golden path (P-FIXTURES-01).
 #
-# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# Fixture acceptance contract — all 8 required elements
 # (see quick_answer.golden.yaml for the element index).
 #
 # Golden path: a documentation request routes to the two-station doc_task route.

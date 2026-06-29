@@ -1,11 +1,11 @@
-"""DispatchArtifact record (Standards Delta v0 §2/§4 record list — SKETCH).
+"""DispatchArtifact record (record list — SKETCH).
 
-The Standards Delta enumerates ``DispatchArtifact`` in the §2 record vocabulary
-and §4 record list but does NOT provide a full field schema for it (the §4
+The design enumerates ``DispatchArtifact`` in the record vocabulary
+and record list but does NOT provide a full field schema for it (the
 note for the record list reads "sketch needed"). This module is therefore a
 faithful **sketch**, not a transcription: fields follow the artifact semantics
-established elsewhere in the delta — the ``write_artifact`` tool writes to
-``~/.tpk/dispatch/artifacts/`` (§5.3) and §5.7 passes ``artifacts`` into the
+established elsewhere in the design — the ``write_artifact`` tool writes to
+``~/.tpk/dispatch/artifacts/`` and passes ``artifacts`` into the
 Reviewer Station. A later packet may expand this once the artifact contract is
 fully specified; the field set here is intentionally minimal and additive-safe.
 """

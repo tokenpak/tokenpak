@@ -1,9 +1,9 @@
 # Dispatch integration fixture — effect-rollback failure path (P-FIXTURES-01).
 #
-# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# Fixture acceptance contract — all 8 required elements
 # (see quick_answer.golden.yaml for the element index).
 #
-# Failure path (§5.5 case 3 + §4.8 / §5.5 step 5): a run is interrupted with an
+# Failure path: a run is interrupted with an
 # applied file effect, then the workspace DRIFTS (the file was hand-edited after
 # the effect was recorded). On resume, effect reconciliation detects the drift
 # and CANNOT cleanly roll back automatically — it surfaces a DECISION_REQUIRED
@@ -17,7 +17,7 @@
 name: effect_rollback_failure
 kind: failure
 scenario: resume_drift        # harness branch: seed a drifted applied effect, then resume
-description: Resume drift can't auto-rollback → DECISION_REQUIRED with a rollback option (§5.5).
+description: Resume drift can't auto-rollback → DECISION_REQUIRED with a rollback option.
 
 # (1) Input request text.
 input_request: "implement a code fix in the parser module"
@@ -77,7 +77,7 @@ expected_decisions:
     - rollback_single_clean_effect    # offered (single clean effect) but never auto-applied
     - rerun_from_clean_state
     - cancel_job
-  auto_rollback_applied: false        # §4.8/§5.5 step 5: automatic rollback is DISABLED
+  auto_rollback_applied: false        # automatic rollback is DISABLED
   persisted: true
 expected_gates:
   delivery_gate_fired: false

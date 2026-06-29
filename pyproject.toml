@@ -50,7 +50,7 @@ classifiers = [
     "Topic :: Utilities",
     "Typing :: Typed",
 ]
-# Slim core dependencies — Standard 02 §9 / Constitution 00 compliance.
+# Slim core dependencies — keep the runtime footprint minimal.
 # Anything that drags in torch / nvidia-* / scipy / pandas / a multi-hundred-MB
 # transitive belongs in [project.optional-dependencies] below, not here.
 # See proposals/2026-05-01-tokenpak-install-footprint-extras-split.md.
@@ -93,7 +93,7 @@ intelligence = [
     # scipy is the only intelligence-tier dep currently imported (guarded in
     # tokenpak/intelligence/ab_optimizer.py). scikit-learn / sympy were
     # candidates in the proposal but no source file imports them today, so
-    # adding them would violate Standard 02 §9 ("New runtime deps require a
+    # adding them would violate the slim-core-deps policy ("New runtime deps require a
     # PR note explaining what they do, why stdlib won't work, and what
     # happens when they're missing"). Add them here when a real consumer
     # lands.

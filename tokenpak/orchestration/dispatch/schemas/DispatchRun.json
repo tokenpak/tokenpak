@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "Top-level job run record (Standards Delta v0 \u00a74.4).\n\n``status`` is typed ``str`` per the Standards Delta (it tracks\n``DispatchJob.status``; not re-typed to the enum to match the spec verbatim).\nThe ``*_runs`` / ``decisions`` / ``effects`` / ``late_results`` lists hold\nthe string ids of the related records.",
+  "description": "Top-level job run record.\n\n``status`` is typed ``str`` (it tracks\n``DispatchJob.status``; not re-typed to the enum to match the spec verbatim).\nThe ``*_runs`` / ``decisions`` / ``effects`` / ``late_results`` lists hold\nthe string ids of the related records.",
   "properties": {
     "decisions": {
       "description": "DispatchDecision.id values",

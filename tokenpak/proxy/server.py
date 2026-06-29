@@ -1070,9 +1070,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             input_tokens = _estimate_tokens_from_body(body)
 
             # Observe-only optimization pipeline.
-            # Pipeline composition lives in services/optimization/ per
-            # 01-architecture-standard.md §1.3 invariant 1 (services/ owns
-            # all pipeline composition). proxy/server.py only invokes it
+            # Pipeline composition lives in services/optimization/, which
+            # owns all pipeline composition (a design invariant).
+            # proxy/server.py only invokes it
             # over the byte-preserved request. Gated on
             # TOKENPAK_OPTIMIZATION_PIPELINE (default off); runs before
             # any body-mutating stage and never returns a different body

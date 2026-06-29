@@ -1,4 +1,4 @@
-"""ContextProvider interface + Local/Paid implementations (Standards Delta v0 §5.9).
+"""ContextProvider interface + Local/Paid implementations.
 
 The Dispatch ``ContextProvider`` is the seam between *how context is assembled*
 and *what consumes it* (a station run). v0.1-alpha ships exactly one working
@@ -6,19 +6,19 @@ provider — :class:`LocalContextProvider` — plus a deliberately-inert
 :class:`PaidContextProvider` stub so the Pro-tier boundary is visible
 from day one and Pro activation is a constructor swap, not a rewrite.
 
-Contract (Standards Delta v0 §5.9)::
+Contract::
 
     class ContextProvider(Protocol):
         def build_context(self, manifest, station) -> ContextBundle: ...
 
-Naming note (scope deviation, flagged for review): §5.9 types ``station`` as
+Naming note (scope deviation, flagged for review): the contract types ``station`` as
 ``DispatchStation``. No such record exists in the merged schema layer — the
 station definition that actually carries declared files / role / overlay is
 :class:`tokenpak.orchestration.dispatch.models.route.RouteStation`. This module
 therefore types ``build_context``'s ``station`` parameter against
 ``RouteStation``, which is the real merged contract.
 
-:class:`LocalContextProvider` guarantees (Standards Delta v0 §5.9):
+:class:`LocalContextProvider` guarantees:
 
 * deterministic given the same inputs (same repo tree + same manifest/station +
   same attachments → byte-identical :class:`ContextBundle`);
@@ -36,11 +36,11 @@ deterministic):
 5. ``repo_scan`` — a simple, gitignore-aware repo scan (lowest precedence;
    only fills remaining budget).
 
-Budgets (Standards Delta v0 §5.9 filters): a per-station **size budget**
+Budgets (filters): a per-station **size budget**
 (bytes) and a per-station **token budget**. The token budget *inherits the
 Spend Guard cap* — in v0.1-alpha it is an injected config value
 (:class:`ContextBudget`) with a sane default; the runtime wires the live cap
-from Spend Guard through TIP (Standards Delta v0 §8). Both budgets are enforced
+from Spend Guard through TIP. Both budgets are enforced
 greedily in source-precedence order: once adding a file would exceed either
 budget the file is **skipped** (not partially included) and recorded in
 :attr:`ContextBundle.skipped`, so the bundle always reports exactly what was
@@ -68,11 +68,11 @@ from ..models.manifest import DispatchManifest
 from ..models.route import RouteStation
 
 # ---------------------------------------------------------------------------
-# Budget defaults (Standards Delta v0 §5.9)
+# Budget defaults
 # ---------------------------------------------------------------------------
 
 # Sane per-station defaults. The token budget is the value that, at runtime,
-# the Spend Guard cap overrides (Standards Delta v0 §8). These are deliberately
+# the Spend Guard cap overrides. These are deliberately
 # conservative placeholders, NOT a Spend Guard policy: this module never reads
 # or enforces Spend Guard itself.
 DEFAULT_SIZE_BUDGET_BYTES: int = 256 * 1024  # 256 KiB of assembled file content
@@ -80,7 +80,7 @@ DEFAULT_TOKEN_BUDGET: int = 64_000  # inherits the live Spend Guard cap at runti
 
 # Deterministic, network-free token estimate. ~4 chars/token is the standard
 # rough heuristic; a fixed divisor keeps the estimate reproducible (no
-# tokenizer download, no LLM, no network — Standards Delta v0 §5.9 guarantee).
+# tokenizer download, no LLM, no network — local provider guarantee).
 _CHARS_PER_TOKEN: int = 4
 
 
@@ -88,8 +88,8 @@ def estimate_tokens(text: str) -> int:
     """Deterministic, offline token estimate for ``text`` (~4 chars/token).
 
     Ceiling division so any non-empty text costs at least one token. This is a
-    reproducible heuristic, not a real tokenizer — Standards Delta v0 §5.9
-    forbids network/LLM calls in the local provider.
+    reproducible heuristic, not a real tokenizer — the local provider
+    forbids network/LLM calls.
     """
 
     if not text:
@@ -104,7 +104,7 @@ def estimate_tokens(text: str) -> int:
 
 
 class ContextSource(str, Enum):
-    """Where a context file came from (fixed precedence order, §5.9 inputs).
+    """Where a context file came from (fixed precedence order).
 
     Precedence is the declaration order here: ``EXPLICIT`` wins over
     ``REPO_SCAN`` on duplicate paths, and the runner adds sources in this order
@@ -153,7 +153,7 @@ class ContextFile(DispatchBaseModel):
 
 
 class SkippedItem(DispatchBaseModel):
-    """A candidate that was NOT included, with the reason it was dropped (§5.9).
+    """A candidate that was NOT included, with the reason it was dropped.
 
     Budget enforcement records every skipped file here so the bundle is a
     complete account of what was considered.
@@ -168,10 +168,10 @@ class SkippedItem(DispatchBaseModel):
 
 
 class ContextBudget(DispatchBaseModel):
-    """Per-station size + token budget for context assembly (§5.9 filters).
+    """Per-station size + token budget for context assembly (filters).
 
-    ``token_budget`` inherits the Spend Guard cap at runtime
-    (Standards Delta v0 §8); the default here is a placeholder the runtime
+    ``token_budget`` inherits the Spend Guard cap at runtime;
+    the default here is a placeholder the runtime
     overrides with the live cap. Both budgets are hard ceilings: a file that
     would push a running total over either ceiling is skipped, not truncated.
     """
@@ -181,7 +181,7 @@ class ContextBudget(DispatchBaseModel):
 
 
 class ContextBundle(DispatchBaseModel):
-    """Assembled context returned by :meth:`ContextProvider.build_context` (§5.9).
+    """Assembled context returned by :meth:`ContextProvider.build_context`.
 
     Carries the resolved files (with paths + contents), the running totals
     (:attr:`total_size_bytes`, :attr:`token_estimate`), a per-source breakdown
@@ -352,7 +352,7 @@ class GitignoreFilter:
 
 @runtime_checkable
 class ContextProvider(Protocol):
-    """Dispatch context-assembly interface (Standards Delta v0 §5.9).
+    """Dispatch context-assembly interface.
 
     A provider turns a manifest + station into a :class:`ContextBundle`. The
     OSS implementation is :class:`LocalContextProvider`; the Pro implementation
@@ -375,7 +375,7 @@ class ContextProvider(Protocol):
 
 
 class LocalContextProvider:
-    """Deterministic, offline OSS context provider (Standards Delta v0 §5.9).
+    """Deterministic, offline OSS context provider.
 
     Construction:
 
@@ -383,7 +383,7 @@ class LocalContextProvider:
       every file path is resolved/relativized against. ``None`` disables the
       repo scan and disables resolving relative declared paths.
     * ``budget`` — per-station :class:`ContextBudget`. The ``token_budget``
-      inherits the Spend Guard cap at runtime (Standards Delta v0 §8); pass the
+      inherits the Spend Guard cap at runtime; pass the
       live cap here. Defaults to the conservative module placeholders.
     * ``explicit_files`` — extra explicit files (highest precedence) beyond
       anything the manifest declares. Paths may be absolute or repo-relative.
@@ -427,7 +427,7 @@ class LocalContextProvider:
         manifest: DispatchManifest,
         station: RouteStation,
     ) -> ContextBundle:
-        """Assemble the :class:`ContextBundle` for ``station`` (§5.9)."""
+        """Assemble the :class:`ContextBundle` for ``station``."""
 
         gitignore = (
             GitignoreFilter.from_root(self._repo_root)
@@ -476,7 +476,7 @@ class LocalContextProvider:
                 continue
 
             # gitignore filter applies to ALL sources (a declared file that is
-            # gitignored is excluded — §5.9 "gitignore-aware path filtering").
+            # gitignored is excluded — "gitignore-aware path filtering").
             if gitignore.is_ignored(rel_posix, is_dir=False):
                 seen.add(rel_posix)
                 skipped.append(
@@ -497,7 +497,7 @@ class LocalContextProvider:
             token_estimate = estimate_tokens(content)
 
             # Budget enforcement: skip (not truncate) if adding this file would
-            # exceed either ceiling. Record the reason. (§5.9 budgets)
+            # exceed either ceiling. Record the reason.
             if total_bytes + size_bytes > self._budget.size_budget_bytes:
                 seen.add(rel_posix)
                 truncated = True
@@ -570,7 +570,7 @@ class LocalContextProvider:
 
     @staticmethod
     def _station_files(station: RouteStation) -> list[str]:
-        """Files declared by a Route/Station config (§5.9 input 2).
+        """Files declared by a Route/Station config.
 
         ``RouteStation`` in the merged schema does not yet carry an explicit
         ``files`` list; this reads any path-like entries a future station gains
@@ -592,7 +592,7 @@ class LocalContextProvider:
         return [(rel, source) for rel in rels]
 
     def _scan_repo(self, gitignore: GitignoreFilter) -> list[str]:
-        """Simple deterministic repo scan (§5.9 input 3): sorted, gitignore-aware.
+        """Simple deterministic repo scan: sorted, gitignore-aware.
 
         No semantic ranking. Walks ``repo_root`` depth-first in sorted order,
         prunes ignored directories early, and returns repo-relative POSIX paths
@@ -662,7 +662,7 @@ class LocalContextProvider:
 
 
 class PaidContextProvider:
-    """Pro context provider — NOT implemented in v0.1-alpha (Standards Delta v0 §5.9).
+    """Pro context provider — NOT implemented in v0.1-alpha.
 
     Exists from day one so the OSS/Pro boundary is visible and
     Phase D activation is a constructor swap, not a rewrite. The real
@@ -676,7 +676,7 @@ class PaidContextProvider:
     """
 
     _MESSAGE = (
-        "PaidContextProvider is a Pro-tier stub (Standards Delta v0 §5.9): it "
+        "PaidContextProvider is a Pro-tier stub: it "
         "delegates to the tokenpak-paid Context Package Builder and is not "
         "available in OSS v0.1-alpha. Use LocalContextProvider."
     )

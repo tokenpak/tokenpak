@@ -1,6 +1,6 @@
 # Dispatch integration fixture — quick_answer golden path (P-FIXTURES-01).
 #
-# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements:
+# Fixture acceptance contract — all 8 required elements:
 #   1. input_request                — the raw request text
 #   2. expected_manifest            — assertable DispatchManifest fields
 #   3. expected_route               — DispatchRoute selection
@@ -12,7 +12,7 @@
 #
 # Golden path: a bare question routes to the single-station quick_answer route.
 # One builder station answers; no reviewer (a direct answer needs no semantic
-# review — §5.7 cost note). The Delivery Gate is a structural pass-through.
+# review — cost note). The Delivery Gate is a structural pass-through.
 name: quick_answer_golden
 kind: golden
 description: A direct question is answered by the one-station quick_answer route.
@@ -65,7 +65,7 @@ mock_tip:
 expected_delivery_package:
   status: delivery_ready
   gatehouse_passed: true
-  cost_note_present: false      # no reviewer → no §5.7 cost note
+  cost_note_present: false      # no reviewer → no cost note
   required_fixes_empty: true
 
 # (7) Expected DispatchReceipt (shape + telemetry fields).

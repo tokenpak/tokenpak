@@ -1,4 +1,4 @@
-"""DispatchWorker record (Standards Delta v0 §5.1)."""
+"""DispatchWorker record."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ from .enums import ModifyFilesPolicy, RunCommandsPolicy
 
 
 class WorkerPermissionProfile(DispatchBaseModel):
-    """DispatchWorker.permission_profile (Standards Delta v0 §5.1).
+    """DispatchWorker.permission_profile.
 
     ``install_dependencies`` is always ``False`` in v0.1-alpha (external side
-    effects are forbidden — §5.5).
+    effects are forbidden).
     """
 
     read_files: bool = True
@@ -26,10 +26,10 @@ class WorkerPermissionProfile(DispatchBaseModel):
 
 
 class DispatchWorker(DispatchBaseModel):
-    """A registry-loaded TIP worker profile (Standards Delta v0 §5.1).
+    """A registry-loaded TIP worker profile.
 
     ``capabilities`` is registry-bound: the loader rejects any string not in
-    the §5.2 capability registry at construction time (fail-loud, per §5.2
+    the capability registry at construction time (fail-loud, per the registry
     governance rule). ``kind`` is the fixed literal ``"tip_worker_profile"``.
     """
 
@@ -38,7 +38,7 @@ class DispatchWorker(DispatchBaseModel):
 
     roles: list[str] = Field(default_factory=list, description='e.g. ["builder"]')
     capabilities: list[str] = Field(
-        default_factory=list, description="registry-bound; see §5.2"
+        default_factory=list, description="registry-bound"
     )
 
     system_directives: list[str] = Field(
@@ -46,7 +46,7 @@ class DispatchWorker(DispatchBaseModel):
     )
 
     allowed_tools: list[str] = Field(
-        default_factory=list, description="registry-bound; see §5.3"
+        default_factory=list, description="registry-bound"
     )
     input_schema: str = Field(description='e.g. "station_input.v1"')
     output_schema: str = Field(description='e.g. "station_result.v1"')

@@ -1,4 +1,4 @@
-"""DispatchReceipt builder — assemble a §4.7 receipt from a finished run.
+"""DispatchReceipt builder — assemble a receipt from a finished run.
 
 The :class:`~tokenpak.orchestration.dispatch.runner.FulfillmentLine` finalizes a
 :class:`~tokenpak.orchestration.dispatch.models.run.DispatchRun` but does **not**
@@ -7,7 +7,7 @@ itself emit a :class:`~tokenpak.orchestration.dispatch.models.receipt.DispatchRe
 persisted receipt, and nothing in the runtime writes one. This module closes
 that gap: :func:`build_receipt` walks a finished run's station-run / decision /
 effect records (read back from the :class:`~tokenpak.orchestration.dispatch.ledger.db.RunLedger`)
-and assembles the receipt, aggregating per-station telemetry into the §4.7
+and assembles the receipt, aggregating per-station telemetry into the
 :class:`~tokenpak.orchestration.dispatch.models.receipt.ReceiptTelemetry` block.
 
 The receipt is a pure projection of records already persisted by the runner; it
@@ -20,7 +20,7 @@ Telemetry note (v0.1-alpha): the per-station token spend is not yet threaded
 back from TIP into the persisted :class:`DispatchStationRun` records, so token
 totals here are aggregated from whatever the caller supplies via
 ``token_overrides`` (the deterministic fixtures pass the mocked turn spend). When
-the proxy attribution columns (Standards Delta v0 §7) are wired through, this
+the proxy attribution columns are wired through, this
 builder reads them directly and the override seam is removed. Until then the
 override keeps the receipt's telemetry block assertable without fabricating
 numbers the runtime cannot yet observe.
@@ -42,13 +42,13 @@ from .models.receipt import (
 )
 from .models.run import DispatchRun
 
-# First-N characters of a station's result payload kept on the receipt (§4.7:
-# "first 500 chars; full in DispatchStationRun").
+# First-N characters of a station's result payload kept on the receipt
+# ("first 500 chars; full in DispatchStationRun").
 _EXCERPT_LIMIT = 500
 
 
 def _excerpt(payload: Optional[dict]) -> str:
-    """Return a <=500-char string excerpt of a station's result payload (§4.7)."""
+    """Return a <=500-char string excerpt of a station's result payload."""
 
     if not payload:
         return ""
@@ -65,7 +65,7 @@ def build_receipt(
     token_overrides: Optional[Mapping[str, int]] = None,
     clock: Optional[Callable[[], datetime]] = None,
 ) -> DispatchReceipt:
-    """Assemble a :class:`DispatchReceipt` for a finished ``run`` (§4.7).
+    """Assemble a :class:`DispatchReceipt` for a finished ``run``.
 
     Reads the run's station runs, decisions, and effects back from ``ledger`` and
     projects them onto the receipt's station / decision / effect rows. Per-station
@@ -140,7 +140,7 @@ def build_and_write_receipt(
     token_overrides: Optional[Mapping[str, int]] = None,
     clock: Optional[Callable[[], datetime]] = None,
 ) -> DispatchReceipt:
-    """Build a receipt, persist it, and link its id onto the run (§4.4 ``receipt_id``).
+    """Build a receipt, persist it, and link its id onto the run (``receipt_id``).
 
     Writes the receipt to the Run Ledger and updates the run's ``receipt_id`` so
     the ``tokenpak dispatch receipt`` reader (which queries ``dispatch_receipts``

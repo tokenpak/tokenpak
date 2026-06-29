@@ -1,12 +1,12 @@
-"""Reviewer Station — semantic review via a single TIP LLM call (§5.7).
+"""Reviewer Station — semantic review via a single TIP LLM call.
 
 The Reviewer Station validates **substance**: does the build/draft station's
 output actually satisfy the manifest's acceptance criteria and constraints? It
 is the counterpart to the deterministic Gatehouse (:mod:`..gatehouse`), which
-validates **structure**. Two distinct contracts (Standards Delta v0 §5.6–§5.8).
+validates **structure**. Two distinct contracts.
 
 I/O contracts (:class:`ReviewerStationInput` / :class:`ReviewerStationResult`)
-are transcribed verbatim from Standards Delta v0 §5.7. The result's
+are the Reviewer Station's fixed contracts. The result's
 ``delivery_recommendation`` is **derived** from ``status`` (never authored
 independently) via the single source-of-truth map :data:`STATUS_TO_DELIVERY`.
 
@@ -39,10 +39,10 @@ from ..models.enums import (
 )
 
 # ---------------------------------------------------------------------------
-# Status → delivery-recommendation derivation (single source of truth, §5.7)
+# Status → delivery-recommendation derivation (single source of truth)
 # ---------------------------------------------------------------------------
 
-# Standards Delta v0 §5.7: delivery_recommendation.status is DERIVED from
+# delivery_recommendation.status is DERIVED from
 # ReviewerStationResult.status. This map is the ONLY place the derivation lives;
 # both the result model and the Gatehouse handoff read from it so the two can
 # never drift ("always dynamic": one source of truth, no duplicated table).
@@ -54,20 +54,20 @@ STATUS_TO_DELIVERY: dict[ReviewerStatus, DeliveryRecommendationStatus] = {
 
 
 def derive_delivery_status(status: ReviewerStatus) -> DeliveryRecommendationStatus:
-    """Derive ``delivery_recommendation.status`` from the reviewer ``status`` (§5.7)."""
+    """Derive ``delivery_recommendation.status`` from the reviewer ``status``."""
 
     return STATUS_TO_DELIVERY[status]
 
 
 # ---------------------------------------------------------------------------
-# Reviewer Station I/O (Standards Delta v0 §5.7, transcribed verbatim)
+# Reviewer Station I/O
 # ---------------------------------------------------------------------------
 
 
 class ReviewerStationInput(DispatchBaseModel):
-    """Input to the Reviewer Station (Standards Delta v0 §5.7).
+    """Input to the Reviewer Station.
 
-    ``artifacts`` carries :class:`DispatchArtifact` records (the §5.7 schema
+    ``artifacts`` carries :class:`DispatchArtifact` records (the schema
     names the field type ``Artifact``; the foundation's artifact record is
     ``DispatchArtifact``). ``effect_records`` carries the build station's
     :class:`DispatchEffect` records.
@@ -86,7 +86,7 @@ class ReviewerStationInput(DispatchBaseModel):
 
 
 class CriterionResult(DispatchBaseModel):
-    """Per-acceptance-criterion review verdict (Standards Delta v0 §5.7)."""
+    """Per-acceptance-criterion review verdict."""
 
     criterion_id: str
     status: CriterionStatus
@@ -94,7 +94,7 @@ class CriterionResult(DispatchBaseModel):
 
 
 class RequiredFix(DispatchBaseModel):
-    """A fix the build must make before delivery (Standards Delta v0 §5.7)."""
+    """A fix the build must make before delivery."""
 
     severity: FixSeverity
     description: str
@@ -102,7 +102,7 @@ class RequiredFix(DispatchBaseModel):
 
 
 class ReviewerRiskFlag(DispatchBaseModel):
-    """A risk surfaced by the reviewer (Standards Delta v0 §5.7).
+    """A risk surfaced by the reviewer.
 
     ``id`` is registry-bound to the PAKPlan risk_flag registry (kept as a free
     string at v0.1-alpha; the registry itself is a separate concern).
@@ -114,14 +114,14 @@ class ReviewerRiskFlag(DispatchBaseModel):
 
 
 class DeliveryRecommendation(DispatchBaseModel):
-    """Delivery recommendation — DERIVED from status (Standards Delta v0 §5.7)."""
+    """Delivery recommendation — DERIVED from status."""
 
     status: DeliveryRecommendationStatus
     reason: str = ""
 
 
 class ReviewerStationResult(DispatchBaseModel):
-    """Output of the Reviewer Station (Standards Delta v0 §5.7).
+    """Output of the Reviewer Station.
 
     ``delivery_recommendation.status`` is **derived** from ``status`` and the
     model enforces that invariant at validation time: a result whose
@@ -141,8 +141,8 @@ class ReviewerStationResult(DispatchBaseModel):
         expected = STATUS_TO_DELIVERY[self.status]
         if self.delivery_recommendation.status is not expected:
             raise ValueError(
-                "delivery_recommendation.status must be DERIVED from status "
-                f"(Standards Delta v0 §5.7): status={self.status.value!r} requires "
+                "delivery_recommendation.status must be DERIVED from status: "
+                f"status={self.status.value!r} requires "
                 f"{expected.value!r}, got "
                 f"{self.delivery_recommendation.status.value!r}."
             )
@@ -208,7 +208,7 @@ REVIEW_PROMPT_TEMPLATE_ID = "dispatch.reviewer.review.v1"
 
 
 class ReviewerStation:
-    """Semantic-review station: one TIP LLM call per review (Standards Delta v0 §5.7).
+    """Semantic-review station: one TIP LLM call per review.
 
     Construct with an injected :class:`ReviewerLLM`; call :meth:`review` with a
     :class:`ReviewerStationInput`. The station builds the review prompt, makes
@@ -274,7 +274,7 @@ class ReviewerStation:
         """
 
         prompt = self.build_prompt(payload)
-        raw = self._client(prompt)  # exactly one LLM call per review (§5.7)
+        raw = self._client(prompt)  # exactly one LLM call per review
         parsed = self._coerce_to_mapping(raw)
         result = self._validate(parsed)
         # Defensive re-assertion of the derived invariant (the model validator
@@ -284,7 +284,7 @@ class ReviewerStation:
         if result.delivery_recommendation.status is not expected:  # pragma: no cover
             raise ReviewerOutputError(
                 "reviewer output violated the derived delivery_recommendation "
-                "invariant after validation (Standards Delta v0 §5.7)."
+                "invariant after validation."
             )
         return result
 
@@ -316,7 +316,7 @@ class ReviewerStation:
             return ReviewerStationResult.model_validate(parsed)
         except ValidationError as exc:
             raise ReviewerOutputError(
-                f"reviewer output failed schema validation (§5.7): {exc}"
+                f"reviewer output failed schema validation: {exc}"
             ) from exc
 
 

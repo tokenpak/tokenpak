@@ -1,7 +1,7 @@
 """Routing service — platform origin extraction and session mapping.
 
-Sub-module of ``tokenpak/services/`` (per ``01-architecture-standard.md §1``,
-the shared execution backbone at Level 3).
+Sub-module of ``tokenpak/services/`` (the shared execution backbone at
+Level 3).
 
 Exposes:
     * :class:`PlatformOrigin` — dataclass returned by extractors.

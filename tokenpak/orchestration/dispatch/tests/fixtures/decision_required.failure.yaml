@@ -1,16 +1,16 @@
 # Dispatch integration fixture — decision-required failure path (P-FIXTURES-01).
 #
-# Standards Delta v0 §15 fixture acceptance contract — all 8 required elements
+# Fixture acceptance contract — all 8 required elements
 # (see quick_answer.golden.yaml for the element index).
 #
 # Failure path: a code_task build completes, but the reviewer returns `warning`.
-# Per the §5.7 handoff table the Gatehouse auto-creates an accept/reject
+# Per the handoff table the Gatehouse auto-creates an accept/reject
 # DispatchDecision and the line halts with DECISION_REQUIRED — the package is
 # `decision_required`, not delivered. The decision is persisted and linked to the
 # run.
 name: decision_required
 kind: failure
-description: A reviewer `warning` auto-creates an accept/reject decision (§5.7).
+description: A reviewer `warning` auto-creates an accept/reject decision.
 
 # (1) Input request text.
 input_request: "refactor the parser function and add a test"

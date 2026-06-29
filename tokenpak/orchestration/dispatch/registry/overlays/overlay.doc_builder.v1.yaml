@@ -1,10 +1,10 @@
-# doc_builder prompt overlay (Standards Delta v0 §16).
+# doc_builder prompt overlay.
 #
 # Additive delta to the base builder prompt for the doc_task route. The overlay
 # EXTENDS the base worker's system_directives; it never removes a base directive
 # (mode: additive). `required_capabilities` must be a subset of the bound
 # worker's capabilities AND of the station's required_capabilities for the route
-# to bind (capability intersection — §16 route-binding rule).
+# to bind (capability intersection — route-binding rule).
 id: overlay.doc_builder.v1
 applies_to_role: builder
 mode: additive

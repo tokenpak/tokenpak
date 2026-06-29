@@ -1,4 +1,4 @@
-"""DispatchRoute record (Standards Delta v0 §4.3)."""
+"""DispatchRoute record."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ from .enums import RiskLevel
 
 
 class RouteStation(DispatchBaseModel):
-    """A single station definition within a route (Standards Delta v0 §4.3).
+    """A single station definition within a route.
 
     Either ``required_role`` (worker stations) or ``system_component``
     (system-component stations) is set; ``required_capabilities`` is
-    registry-bound and validated against the §5.2 capability registry.
+    registry-bound and validated against the capability registry.
     """
 
     id: str
@@ -42,20 +42,20 @@ class RouteStation(DispatchBaseModel):
 
 
 class RouteTriggers(DispatchBaseModel):
-    """Route trigger declaration (Standards Delta v0 §4.3)."""
+    """Route trigger declaration."""
 
     intents: list[str] = Field(default_factory=list)
 
 
 class RouteRetryPolicy(DispatchBaseModel):
-    """Route-level retry policy (Standards Delta v0 §4.3)."""
+    """Route-level retry policy."""
 
     max_station_retries: int = 1
     escalate_after_failure: bool = False
 
 
 class RouteDelivery(DispatchBaseModel):
-    """Route-level delivery package composition flags (Standards Delta v0 §4.3)."""
+    """Route-level delivery package composition flags."""
 
     include_summary: bool = True
     include_files_changed: bool = True
@@ -65,7 +65,7 @@ class RouteDelivery(DispatchBaseModel):
 
 
 class DispatchRoute(DispatchBaseModel):
-    """A named, versioned workflow route (Standards Delta v0 §4.3)."""
+    """A named, versioned workflow route."""
 
     id: str = Field(description='"route.<name>.v<n>"')
     name: str

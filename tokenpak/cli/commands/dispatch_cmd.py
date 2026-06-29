@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """``tokenpak dispatch`` CLI — Decision Inbox + dispatch verbs (P-CLI-01).
 
-TokenPak Dispatch (Standards Delta v0) is an OSS workflow-control layer that
+TokenPak Dispatch is an OSS workflow-control layer that
 turns ad-hoc requests into scoped, station-based, resumable, gated, auditable
 work packages. This module is the **CLI-first** control surface for v0.1-alpha
-(§14.3: MCP is post-alpha; the CLI ships first).
+(MCP is post-alpha; the CLI ships first).
 
-Command group (Standards Delta v0 §14.1)::
+Command group::
 
     tokenpak dispatch run "request text" [--route --autonomy --ci --dry-run --confirm --json]
     tokenpak dispatch status   <job_id>      [--json]
@@ -33,12 +33,12 @@ Design notes:
   in the Decision Inbox when approval/clarification is required).
 * The **Decision Inbox MVP** is the ``decisions`` / ``approve`` / ``reject``
   verbs over ``DispatchDecision`` records. Cards render human-readable with a
-  ``--json`` fallback for scripting (§13 item 17).
+  ``--json`` fallback for scripting.
 * User-facing output uses plain **Worker / Route / Station** terminology. The
-  legacy worker-alias bigram is excluded by the §11 verification gate.
+  legacy worker-alias bigram is excluded by the verification gate.
 * Receipt + Delivery output is run through the public-safe sanitizer
   (:func:`tokenpak.orchestration.dispatch.public_safe.sanitize_public_text`)
-  before display — these surfaces are public-export-eligible (§10).
+  before display — these surfaces are public-export-eligible.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def build_dispatch_parser(sub: Any) -> None:
     p_run.add_argument(
         "--autonomy", dest="autonomy", default=None,
         choices=["advisory", "draft", "dispatch_with_approval", "auto_dispatch_limited"],
-        help="Autonomy mode override (default depends on caller — §14.2)",
+        help="Autonomy mode override (default depends on caller)",
     )
     p_run.add_argument(
         "--ci", dest="ci", action="store_true",
@@ -302,7 +302,7 @@ def _needs_runtime(fn):
 
 
 def _default_autonomy(args: Any) -> str:
-    """Resolve the default autonomy mode for the caller (Standards Delta v0 §14.2).
+    """Resolve the default autonomy mode for the caller.
 
     Precedence: explicit ``--autonomy`` > ``--dry-run`` (draft) > ``--ci``
     (auto_dispatch_limited) > bare CLI default (dispatch_with_approval).
@@ -636,7 +636,7 @@ def cmd_dispatch_resume(args: Any) -> int:
 
 def _set_control_state(args: Any, control_state: str, *, verb: str) -> int:
     """Record a CLI control state (paused/active) WITHOUT mutating the job's
-    canonical ``status`` enum (§6 has no ``paused`` member). The flag lives in a
+    canonical ``status`` enum (which has no ``paused`` member). The flag lives in a
     sidecar control table so the canonical DispatchJob payload stays valid.
     """
     as_json = getattr(args, "as_json", False)
@@ -688,7 +688,7 @@ def cmd_dispatch_cancel(args: Any) -> int:
         "status": "cancelled",
         "note": (
             "New stations are prevented from starting. Late TIP output is "
-            "captured as a LateResult and never applied (§5.6). No token refund."
+            "captured as a LateResult and never applied. No token refund."
         ),
     }
 
@@ -986,7 +986,7 @@ def _update_job_status_row(ledger, job_id: str, status: str) -> None:
             )
 
 
-# -- CLI control-state sidecar (pause/resume; not part of the §6 enum) -------
+# -- CLI control-state sidecar (pause/resume; not part of the status enum) ---
 
 _CONTROL_TABLE_DDL = (
     "CREATE TABLE IF NOT EXISTS dispatch_job_control ("

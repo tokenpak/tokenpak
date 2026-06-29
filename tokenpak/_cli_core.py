@@ -6469,7 +6469,7 @@ def _build_pakplan_parser(sub):
 def _build_dispatch_parser(sub):
     """Register the ``tokenpak dispatch`` command group (Dispatch v0.1-alpha).
 
-    TokenPak Dispatch is the OSS workflow-control layer (Standards Delta v0):
+    TokenPak Dispatch is the OSS workflow-control layer:
     Decision Inbox + ``run|status|inspect|decisions|approve|reject|pause|resume|
     cancel|discard-late|delivery|receipt`` verbs over the Run Ledger.
     Implementation lives in :mod:`tokenpak.cli.commands.dispatch_cmd`; lazy

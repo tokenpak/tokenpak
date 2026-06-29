@@ -1,13 +1,13 @@
-"""Dispatch capability registry (Standards Delta v0 §5.2).
+"""Dispatch capability registry.
 
 The capability enum is the single source of truth for the strings that may
 appear in ``DispatchWorker.capabilities`` and ``DispatchRoute.stations[].
-required_capabilities``. Per the §5.2 governance rule, the worker registry
+required_capabilities``. Per the governance rule, the worker registry
 loader MUST reject unknown capability strings **at load time** (fail-loud, not
 skip-silently); :func:`validate_capabilities` implements that contract.
 
-Adding a capability requires a one-line Standards Delta update + maintainer
-review; do not extend ``DISPATCH_CAPABILITIES`` without that change landing first.
+Adding a capability is a governed change (maintainer review required); do not
+extend ``DISPATCH_CAPABILITIES`` without that change landing first.
 
 Note: ``registry`` is a PEP 420 namespace package (no ``__init__.py``) so this
 module stays strictly within the P-SCHEMA-01 ``expected_files_changed`` scope,
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-# v0.1-alpha capability enum — Standards Delta v0 §5.2 (11 entries, verbatim).
+# v0.1-alpha capability enum (11 entries).
 DISPATCH_CAPABILITIES: frozenset[str] = frozenset(
     {
         "answer_generation",
@@ -48,7 +48,7 @@ class UnknownCapabilityError(ValueError):
         known = ", ".join(sorted(DISPATCH_CAPABILITIES))
         super().__init__(
             "unknown Dispatch capability string(s): "
-            f"{self.unknown!r}. Known capabilities (Standards Delta v0 §5.2): {known}."
+            f"{self.unknown!r}. Known capabilities: {known}."
         )
 
 
@@ -65,7 +65,7 @@ def validate_capabilities(capabilities: Iterable[str]) -> list[str]:
     known. Raises :class:`UnknownCapabilityError` listing *all* offending
     strings when any entry is not in :data:`DISPATCH_CAPABILITIES`.
 
-    This is the load-time rejection mandated by Standards Delta v0 §5.2.
+    This is the load-time rejection the capability registry contract mandates.
     """
 
     caps = list(capabilities)

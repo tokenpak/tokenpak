@@ -1,11 +1,10 @@
 """Enumerations for TokenPak Dispatch record schemas.
 
-Every enum here is transcribed verbatim from Standards Delta v0, §4/§5/§6.
-The enum *values* are the authoritative strings; member names are sanitized
-upper-case forms. Do NOT add, drop, or rename members without a corresponding
-Standards Delta amendment — these are contract enums, not implementation
-conveniences (Std 41 §1.2 applies to task packets; Dispatch records carry
-their own execution-tier state space per Standards Delta v0 §6).
+The enum *values* are the authoritative contract strings; member names are
+sanitized upper-case forms. Do NOT add, drop, or rename members without a
+corresponding contract amendment — these are contract enums, not implementation
+conveniences (the task-packet status enum does not apply here; Dispatch records
+carry their own execution-tier state space).
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ from enum import Enum
 
 
 class AutonomyMode(str, Enum):
-    """DispatchJob / DispatchManifest autonomy mode (Standards Delta v0 §4.1)."""
+    """DispatchJob / DispatchManifest autonomy mode."""
 
     ADVISORY = "advisory"
     DRAFT = "draft"
@@ -23,11 +22,11 @@ class AutonomyMode(str, Enum):
 
 
 class DispatchJobStatus(str, Enum):
-    """DispatchJob execution-tier state machine (Standards Delta v0 §4.1 + §6).
+    """DispatchJob execution-tier state machine.
 
-    Terminal states per §6: ``delivered``, ``cancelled``, ``failed``,
-    ``withdrawn``. These do NOT map onto the Std 41 task-packet status enum;
-    the crosswalk in §6 applies only when ``source_task_packet_id`` is set.
+    Terminal states: ``delivered``, ``cancelled``, ``failed``,
+    ``withdrawn``. These do NOT map onto the task-packet status enum;
+    the crosswalk applies only when ``source_task_packet_id`` is set.
     """
 
     DRAFT = "draft"
@@ -45,7 +44,7 @@ class DispatchJobStatus(str, Enum):
 
 
 class ManifestStatus(str, Enum):
-    """DispatchManifest lifecycle status (Standards Delta v0 §4.2)."""
+    """DispatchManifest lifecycle status."""
 
     DRAFT = "draft"
     NEEDS_DECISION = "needs_decision"
@@ -54,7 +53,7 @@ class ManifestStatus(str, Enum):
 
 
 class RiskLevel(str, Enum):
-    """Shared risk level (Standards Delta v0 §4.3 default_risk, §4.6 risk_level)."""
+    """Shared risk level (used as default_risk and risk_level)."""
 
     LOW = "low"
     MEDIUM = "medium"
@@ -63,10 +62,10 @@ class RiskLevel(str, Enum):
 
 
 class StationRunStatus(str, Enum):
-    """DispatchStationRun status (Standards Delta v0 §4.5).
+    """DispatchStationRun status.
 
     Exact 9-member enum; required by P-SCHEMA-01 acceptance criteria to match
-    the Standards Delta §4.5 list verbatim.
+    the canonical list verbatim.
     """
 
     QUEUED = "queued"
@@ -81,14 +80,14 @@ class StationRunStatus(str, Enum):
 
 
 class DecisionScope(str, Enum):
-    """DispatchDecision scope (Standards Delta v0 §4.6, v0.1-alpha)."""
+    """DispatchDecision scope (v0.1-alpha)."""
 
     JOB = "job"
     STATION = "station"
 
 
 class DecisionStatus(str, Enum):
-    """DispatchDecision status (Standards Delta v0 §4.6)."""
+    """DispatchDecision status."""
 
     PENDING = "pending"
     RESOLVED = "resolved"
@@ -96,7 +95,7 @@ class DecisionStatus(str, Enum):
 
 
 class AutoApplyAfter(str, Enum):
-    """DispatchDecision default_action.auto_apply_after (Standards Delta v0 §4.6).
+    """DispatchDecision default_action.auto_apply_after.
 
     v0.1-alpha only ever uses ``never``; ``timeout`` / ``user_preference`` are
     reserved for later versions.
@@ -108,14 +107,14 @@ class AutoApplyAfter(str, Enum):
 
 
 class ResolvedBy(str, Enum):
-    """DispatchDecision resolution.resolved_by (Standards Delta v0 §4.6)."""
+    """DispatchDecision resolution.resolved_by."""
 
     USER = "user"
     SYSTEM = "system"
 
 
 class EffectTargetType(str, Enum):
-    """DispatchEffect target_type (Standards Delta v0 §4.8)."""
+    """DispatchEffect target_type."""
 
     FILE = "file"
     COMMAND_OUTPUT = "command_output"
@@ -123,7 +122,7 @@ class EffectTargetType(str, Enum):
 
 
 class RollbackBehavior(str, Enum):
-    """DispatchEffect rollback_behavior (Standards Delta v0 §4.8)."""
+    """DispatchEffect rollback_behavior."""
 
     DELETE_FILE_IF_AFTER_HASH_MATCHES = "delete_file_if_after_hash_matches"
     RESTORE_BEFORE_CONTENT_IF_CURRENT_HASH_MATCHES_AFTER_HASH = (
@@ -134,7 +133,7 @@ class RollbackBehavior(str, Enum):
 
 
 class EffectStatus(str, Enum):
-    """DispatchEffect status (Standards Delta v0 §4.8)."""
+    """DispatchEffect status."""
 
     PLANNED = "planned"
     APPLIED = "applied"
@@ -145,7 +144,7 @@ class EffectStatus(str, Enum):
 
 
 class ModifyFilesPolicy(str, Enum):
-    """DispatchWorker permission_profile.modify_files (Standards Delta v0 §5.1)."""
+    """DispatchWorker permission_profile.modify_files."""
 
     ALWAYS = "always"
     POLICY_CONTROLLED = "policy_controlled"
@@ -153,7 +152,7 @@ class ModifyFilesPolicy(str, Enum):
 
 
 class RunCommandsPolicy(str, Enum):
-    """DispatchWorker permission_profile.run_commands (Standards Delta v0 §5.1)."""
+    """DispatchWorker permission_profile.run_commands."""
 
     ALWAYS = "always"
     POLICY_CONTROLLED = "policy_controlled"
@@ -161,9 +160,9 @@ class RunCommandsPolicy(str, Enum):
 
 
 class LoopStopCondition(str, Enum):
-    """StationLoopPolicy.stop_when closed enum (Standards Delta v0 §5.4).
+    """StationLoopPolicy.stop_when closed enum.
 
-    ``station_goal_satisfied`` was removed per round-6 §4.5 and is deliberately
+    ``station_goal_satisfied`` was removed and is deliberately
     absent.
     """
 
@@ -177,7 +176,7 @@ class LoopStopCondition(str, Enum):
 
 
 class LoopOnExhausted(str, Enum):
-    """StationLoopPolicy.on_exhausted actions (Standards Delta v0 §5.4)."""
+    """StationLoopPolicy.on_exhausted actions."""
 
     MARK_FAILED = "mark_failed"
     CREATE_REVIEWER_NOTE = "create_reviewer_note"
@@ -185,14 +184,14 @@ class LoopOnExhausted(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Reviewer Station I/O enums (Standards Delta v0 §5.7)
+# Reviewer Station I/O enums
 # ---------------------------------------------------------------------------
 
 
 class ReviewerStatus(str, Enum):
-    """ReviewerStationResult.status (Standards Delta v0 §5.7).
+    """ReviewerStationResult.status.
 
-    The top-level semantic verdict. The Reviewer→Gatehouse handoff table (§5.7)
+    The top-level semantic verdict. The Reviewer→Gatehouse handoff table
     keys entirely off this value; ``delivery_recommendation.status`` is DERIVED
     from it.
     """
@@ -203,7 +202,7 @@ class ReviewerStatus(str, Enum):
 
 
 class CriterionStatus(str, Enum):
-    """ReviewerStationResult.criteria_results[].status (Standards Delta v0 §5.7)."""
+    """ReviewerStationResult.criteria_results[].status."""
 
     PASS = "pass"
     FAIL = "fail"
@@ -211,7 +210,7 @@ class CriterionStatus(str, Enum):
 
 
 class FixSeverity(str, Enum):
-    """ReviewerStationResult.required_fixes[].severity (Standards Delta v0 §5.7)."""
+    """ReviewerStationResult.required_fixes[].severity."""
 
     LOW = "low"
     MEDIUM = "medium"
@@ -219,7 +218,7 @@ class FixSeverity(str, Enum):
 
 
 class SuggestedStation(str, Enum):
-    """ReviewerStationResult.required_fixes[].suggested_station (§5.7).
+    """ReviewerStationResult.required_fixes[].suggested_station.
 
     Which station should address the fix: a build re-run, a doc re-run, or a
     user decision.
@@ -231,7 +230,7 @@ class SuggestedStation(str, Enum):
 
 
 class DeliveryRecommendationStatus(str, Enum):
-    """ReviewerStationResult.delivery_recommendation.status (§5.7).
+    """ReviewerStationResult.delivery_recommendation.status.
 
     DERIVED from :class:`ReviewerStatus` (never authored independently):
     ``pass`` → ``ready``, ``warning`` → ``ready_with_warning``, ``fail`` →

@@ -11,11 +11,10 @@ and the forward-only migration runner. No capture, no recall behavior,
 no ranking, no CLI. See ``schema.py`` for the DDL and ``migrations.py``
 for the runner contract.
 
-References:
-    - Standard 32 — MultiPak Pro Architecture, §5 / §6 / §9 / §13
-      (Decision #9 — recall storage foundation is OSS Phase 1).
-    - Standard 25 — Pro Tier Architecture, §1.1
-      (TIP capabilities must land in OSS before the Pro daemon can use them).
+Notes:
+    - Recall storage foundation is OSS Phase 1 (MultiPak Pro architecture).
+    - TIP capabilities must land in OSS before the Pro daemon can use them
+      (Pro tier architecture).
 """
 
 from __future__ import annotations

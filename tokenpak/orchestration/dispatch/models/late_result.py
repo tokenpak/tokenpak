@@ -1,4 +1,4 @@
-"""LateResult record (Standards Delta v0 §4.9)."""
+"""LateResult record."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from .common import DispatchBaseModel
 
 
 class LateResult(DispatchBaseModel):
-    """A TIP result that arrived after cancellation (Standards Delta v0 §4.9).
+    """A TIP result that arrived after cancellation.
 
     ``effects_applied`` is always ``False`` in v0.1-alpha (late effects are
-    never applied — §5.6); ``recovery_allowed`` gates the inspect-only path
+    never applied); ``recovery_allowed`` gates the inspect-only path
     (recovery itself is deferred to beta).
     """
 

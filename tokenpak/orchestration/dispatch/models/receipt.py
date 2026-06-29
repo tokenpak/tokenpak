@@ -1,4 +1,4 @@
-"""DispatchReceipt record (Standards Delta v0 §4.7)."""
+"""DispatchReceipt record."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from .common import DispatchBaseModel
 
 
 class ReceiptStation(DispatchBaseModel):
-    """Per-station summary row on a receipt (Standards Delta v0 §4.7)."""
+    """Per-station summary row on a receipt."""
 
     station_run_id: str
     worker_id: str
@@ -22,14 +22,14 @@ class ReceiptStation(DispatchBaseModel):
 
 
 class ReceiptDecision(DispatchBaseModel):
-    """Per-decision summary row on a receipt (Standards Delta v0 §4.7)."""
+    """Per-decision summary row on a receipt."""
 
     decision_id: str
     status: str
 
 
 class ReceiptEffect(DispatchBaseModel):
-    """Per-effect summary row on a receipt (Standards Delta v0 §4.7)."""
+    """Per-effect summary row on a receipt."""
 
     effect_id: str
     status: str
@@ -37,7 +37,7 @@ class ReceiptEffect(DispatchBaseModel):
 
 
 class ReceiptTelemetry(DispatchBaseModel):
-    """Aggregated telemetry block on a receipt (Standards Delta v0 §4.7)."""
+    """Aggregated telemetry block on a receipt."""
 
     total_input_tokens: int = 0
     total_output_tokens: int = 0
@@ -47,7 +47,7 @@ class ReceiptTelemetry(DispatchBaseModel):
 
 
 class DispatchReceipt(DispatchBaseModel):
-    """Delivery receipt summarizing a completed run (Standards Delta v0 §4.7)."""
+    """Delivery receipt summarizing a completed run."""
 
     id: str = Field(description='"receipt_<ulid>"')
     job_id: str

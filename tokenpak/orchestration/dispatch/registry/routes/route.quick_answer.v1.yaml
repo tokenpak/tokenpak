@@ -1,13 +1,13 @@
-# quick_answer route (Standards Delta v0 §4.3 + §13 routes + §16).
+# quick_answer route.
 #
 # Single-station answer-only route: one builder station carrying the
 # quick_answer overlay. No file changes, no reviewer (a direct answer needs no
-# semantic-review station — see the §5.7 cost note: a Reviewer Station costs one
+# semantic-review station — a Reviewer Station costs one
 # extra LLM call, unjustified for a bare answer).
 #
 # Stations bind dynamically by `required_role` + `required_capabilities` against
-# the worker registry (§11) — NOT by hardcoded worker id. `required_capabilities`
-# is registry-bound: every entry MUST be in the §5.2 capability registry or the
+# the worker registry — NOT by hardcoded worker id. `required_capabilities`
+# is registry-bound: every entry MUST be in the capability registry or the
 # route registry rejects this profile fail-loud at load time.
 id: route.quick_answer.v1
 name: Quick Answer

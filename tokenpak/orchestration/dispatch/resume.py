@@ -1,8 +1,7 @@
-"""Resume contract — effect reconciliation for an interrupted run (§5.5).
+"""Resume contract — effect reconciliation for an interrupted run.
 
 When a run is resumed, the FulfillmentLine runner asks :func:`reconcile_run` what
-to do about the *last* station of the run. The four cases are transcribed
-verbatim from Standards Delta v0 §5.5:
+to do about the *last* station of the run. The four cases are:
 
 1. **last station completed** → continue with the next station.
 2. **last station running, NO effects** → mark ``failed_interrupted``; rerun the
@@ -17,7 +16,7 @@ verbatim from Standards Delta v0 §5.5:
    effect WAS applied (promote to applied, reconcile). Matches ``before_hash`` →
    NOT applied (safe to rerun). Neither → user decision required.
 
-**Multi-effect auto-rollback is DISABLED in v0.1-alpha** (§4.8 / §5.5 step 5):
+**Multi-effect auto-rollback is DISABLED in v0.1-alpha**:
 the reconciler NEVER auto-rolls-back more than one effect — a drift across >1
 effect always surfaces a :class:`DispatchDecision`, never a silent rollback. The
 single-clean-effect rollback is offered only as a decision *option*, not applied
@@ -77,7 +76,7 @@ def hash_workspace_file(workspace_root: Path | str, target: str) -> Optional[str
 
 
 class ResumeAction(str, Enum):
-    """What the runner should do for the resumed run (the §5.5 case outcome)."""
+    """What the runner should do for the resumed run (the resume case outcome)."""
 
     CONTINUE_NEXT_STATION = "continue_next_station"  # case 1, or case 3 all-match
     RERUN_STATION = "rerun_station"  # case 2, or case 4 matches-before
@@ -87,7 +86,7 @@ class ResumeAction(str, Enum):
 
 @dataclass
 class EffectReconciliation:
-    """Per-effect reconciliation finding (which §5.5 branch the effect matched)."""
+    """Per-effect reconciliation finding (which reconciliation branch the effect matched)."""
 
     effect_id: str
     target: str
@@ -96,7 +95,7 @@ class EffectReconciliation:
 
 @dataclass
 class ResumeOutcome:
-    """The reconciliation verdict for a resumed run (§5.5).
+    """The reconciliation verdict for a resumed run.
 
     ``action`` is the runner's directive; ``station_status_transition`` is the
     new status the runner must persist on the interrupted station (None when the
@@ -127,7 +126,7 @@ def reconcile_run(
     workspace_root: Path | str,
     now: Optional[datetime] = None,
 ) -> ResumeOutcome:
-    """Reconcile the last station of a resumed run (Standards Delta v0 §5.5).
+    """Reconcile the last station of a resumed run.
 
     ``station_runs`` is the run's station runs in execution order (the ledger's
     :meth:`RunLedger.read_station_runs_for_run`); ``effects_for_last_station`` is
@@ -158,7 +157,7 @@ def reconcile_run(
             reason="Last station completed; continue with the next station.",
         )
 
-    # The §5.5 cases below all key off a station left in ``running`` (interrupted
+    # The cases below all key off a station left in ``running`` (interrupted
     # mid-execution). A station already in another terminal/needs-recovery state
     # is handled as that state's natural resume (rerun a failed/cancelled station,
     # continue past a skipped one). Only ``running`` triggers reconciliation.
@@ -192,7 +191,7 @@ def reconcile_run(
         )
 
     # --- Case 4 takes precedence when planned (un-finalized) effects exist --
-    # (§5.5 step 4: "effect started but never finalized"). A run can carry both,
+    # ("effect started but never finalized"). A run can carry both,
     # but an un-finalized planned effect is the more urgent, less-certain state.
     if planned:
         return _reconcile_planned(
@@ -218,7 +217,7 @@ def _reconcile_applied(
     workspace_root: Path | str,
     created_at: datetime,
 ) -> ResumeOutcome:
-    """§5.5 case 3: compare each applied effect's after_hash to current state."""
+    """Case 3: compare each applied effect's after_hash to current state."""
 
     reconciliations: list[EffectReconciliation] = []
     drifted: list[DispatchEffect] = []
@@ -246,9 +245,9 @@ def _reconcile_applied(
             ),
         )
 
-    # Drift detected → DispatchDecision (§5.5 case 3 a/b/c/d). The rollback option
+    # Drift detected → DispatchDecision (case 3 a/b/c/d). The rollback option
     # (b) is offered ONLY when exactly one effect drifted and it is cleanly
-    # revertible; multi-effect auto-rollback is DISABLED (§4.8/§5.5 step 5) so it
+    # revertible; multi-effect auto-rollback is DISABLED so it
     # is never an *applied* action — only a decision option, and only for a single
     # clean effect.
     single_clean = len(drifted) == 1 and drifted[0].rollback_available
@@ -277,7 +276,7 @@ def _reconcile_planned(
     workspace_root: Path | str,
     created_at: datetime,
 ) -> ResumeOutcome:
-    """§5.5 case 4: a planned effect that was never finalized.
+    """Case 4: a planned effect that was never finalized.
 
     For each planned effect: current == after_hash → it WAS applied (promote);
     current == before_hash → NOT applied (safe to rerun); neither → unknown.
@@ -361,7 +360,7 @@ def _build_drift_decision(
     single_clean_rollback: bool,
     created_at: datetime,
 ) -> DispatchDecision:
-    """Build the §5.5 case-3 drift decision (accept / rollback? / rerun / cancel)."""
+    """Build the case-3 drift decision (accept / rollback? / rerun / cancel)."""
 
     options = [
         DecisionOption(
@@ -372,7 +371,7 @@ def _build_drift_decision(
         ),
     ]
     if single_clean_rollback:
-        # Option (b) is offered ONLY for a single clean effect (§5.5). Even then
+        # Option (b) is offered ONLY for a single clean effect. Even then
         # it is a user-selectable option, never auto-applied — multi-effect
         # auto-rollback is disabled.
         options.append(
@@ -420,9 +419,9 @@ def _build_drift_decision(
             "how to reconcile." + rollback_note
         ),
         reason=(
-            "Resume reconciliation (Standards Delta v0 §5.5) found drift between "
+            "Resume reconciliation found drift between "
             f"{len(drifted)} applied effect(s) and the current workspace. "
-            "Automatic multi-effect rollback is disabled (§4.8/§5.5 step 5)."
+            "Automatic multi-effect rollback is disabled."
         ),
         risk_level=RiskLevel.HIGH,
         options=options,
@@ -444,7 +443,7 @@ def _build_planned_unknown_decision(
     planned: list[DispatchEffect],
     created_at: datetime,
 ) -> DispatchDecision:
-    """Build the §5.5 case-4 partial/unknown-state decision."""
+    """Build the case-4 partial/unknown-state decision."""
 
     return DispatchDecision(
         id=f"decision_{last.id}_resume_planned_unknown",
@@ -458,7 +457,7 @@ def _build_planned_unknown_decision(
             "proceed."
         ),
         reason=(
-            "Resume reconciliation (Standards Delta v0 §5.5 case 4) found a "
+            "Resume reconciliation found a "
             f"planned-but-unfinalized effect among {len(planned)} effect(s) in a "
             "partial/unknown state; a user decision is required."
         ),

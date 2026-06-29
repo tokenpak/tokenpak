@@ -1,4 +1,4 @@
-"""DispatchEffect record (Standards Delta v0 §4.8)."""
+"""DispatchEffect record."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from .enums import EffectStatus, EffectTargetType, RollbackBehavior
 
 
 class DispatchEffect(DispatchBaseModel):
-    """A single workspace-mutating effect record (Standards Delta v0 §4.8).
+    """A single workspace-mutating effect record.
 
-    Covers the three file-state cases from §4.8:
+    Covers the three file-state cases:
 
     * **create** — ``before_exists=False``, ``before_hash=None``,
       ``after_hash`` set, ``rollback_behavior=delete_file_if_after_hash_matches``.
@@ -23,10 +23,10 @@ class DispatchEffect(DispatchBaseModel):
     * **delete** — ``before_exists=True``, ``before_hash`` set,
       ``after_hash=None``, ``rollback_behavior=restore_before_content``.
 
-    Effect-record protocol (§4.8): every effect-bearing tool call creates a
+    Effect-record protocol: every effect-bearing tool call creates a
     ``planned`` record BEFORE execution and transitions to ``applied`` AFTER
     success. A ``planned`` record without ``finalized_at`` signals an
-    interrupted effect for resume reconciliation (§5.5).
+    interrupted effect for resume reconciliation.
     """
 
     id: str = Field(description='"effect_<ulid>"')

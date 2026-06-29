@@ -1,7 +1,7 @@
 {
   "$defs": {
     "StationRunStatus": {
-      "description": "DispatchStationRun status (Standards Delta v0 \u00a74.5).\n\nExact 9-member enum; required by P-SCHEMA-01 acceptance criteria to match\nthe Standards Delta \u00a74.5 list verbatim.",
+      "description": "DispatchStationRun status.\n\nExact 9-member enum; required by P-SCHEMA-01 acceptance criteria to match\nthe canonical list verbatim.",
       "enum": [
         "queued",
         "context_ready",
@@ -18,7 +18,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Per-station execution record within a run (Standards Delta v0 \u00a74.5).\n\n``status`` uses the exact 9-member :class:`StationRunStatus` enum required\nby the P-SCHEMA-01 acceptance criteria. ``result_payload`` is the\nschema-valid station output, or ``None`` if the station failed.",
+  "description": "Per-station execution record within a run.\n\n``status`` uses the exact 9-member :class:`StationRunStatus` enum required\nby the P-SCHEMA-01 acceptance criteria. ``result_payload`` is the\nschema-valid station output, or ``None`` if the station failed.",
   "properties": {
     "attempt_number": {
       "default": 1,

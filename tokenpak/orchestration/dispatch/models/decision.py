@@ -1,4 +1,4 @@
-"""DispatchDecision record (Standards Delta v0 §4.6)."""
+"""DispatchDecision record."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .enums import AutoApplyAfter, DecisionScope, DecisionStatus, ResolvedBy, Ri
 
 
 class DecisionOption(DispatchBaseModel):
-    """A single selectable option on a decision (Standards Delta v0 §4.6)."""
+    """A single selectable option on a decision."""
 
     id: str
     label: str
@@ -20,14 +20,14 @@ class DecisionOption(DispatchBaseModel):
 
 
 class DecisionRecommendation(DispatchBaseModel):
-    """System recommendation among the options (Standards Delta v0 §4.6)."""
+    """System recommendation among the options."""
 
     option_id: str
     rationale: str
 
 
 class DecisionDefaultAction(DispatchBaseModel):
-    """Default action if unresolved (Standards Delta v0 §4.6).
+    """Default action if unresolved.
 
     v0.1-alpha always uses ``auto_apply_after = never``.
     """
@@ -37,7 +37,7 @@ class DecisionDefaultAction(DispatchBaseModel):
 
 
 class DecisionResolution(DispatchBaseModel):
-    """Resolution state of a decision (Standards Delta v0 §4.6)."""
+    """Resolution state of a decision."""
 
     selected_option_id: str | None = None
     resolved_by: ResolvedBy | None = None
@@ -45,7 +45,7 @@ class DecisionResolution(DispatchBaseModel):
 
 
 class DispatchDecision(DispatchBaseModel):
-    """A user/system decision surfaced by the Decision Inbox (§4.6)."""
+    """A user/system decision surfaced by the Decision Inbox."""
 
     id: str = Field(description='"decision_<ulid>"')
     job_id: str

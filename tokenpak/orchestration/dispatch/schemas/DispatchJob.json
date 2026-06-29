@@ -1,7 +1,7 @@
 {
   "$defs": {
     "AutonomyMode": {
-      "description": "DispatchJob / DispatchManifest autonomy mode (Standards Delta v0 \u00a74.1).",
+      "description": "DispatchJob / DispatchManifest autonomy mode.",
       "enum": [
         "advisory",
         "draft",
@@ -12,7 +12,7 @@
       "type": "string"
     },
     "DispatchJobStatus": {
-      "description": "DispatchJob execution-tier state machine (Standards Delta v0 \u00a74.1 + \u00a76).\n\nTerminal states per \u00a76: ``delivered``, ``cancelled``, ``failed``,\n``withdrawn``. These do NOT map onto the Std 41 task-packet status enum;\nthe crosswalk in \u00a76 applies only when ``source_task_packet_id`` is set.",
+      "description": "DispatchJob execution-tier state machine.\n\nTerminal states: ``delivered``, ``cancelled``, ``failed``,\n``withdrawn``. These do NOT map onto the task-packet status enum;\nthe crosswalk applies only when ``source_task_packet_id`` is set.",
       "enum": [
         "draft",
         "manifest_ready",
@@ -32,7 +32,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Top-level intake record for a dispatched request (Standards Delta v0 \u00a74.1).\n\n``status`` is the Dispatch execution-tier state machine (\u00a76), independent of\nthe Std 41 task-packet enum. ``source_task_packet_id`` is the Std 41\ncrosswalk hook: ``None`` means the job is standalone (not task-packet-linked).",
+  "description": "Top-level intake record for a dispatched request.\n\n``status`` is the Dispatch execution-tier state machine, independent of\nthe task-packet enum. ``source_task_packet_id`` is the task-packet\ncrosswalk hook: ``None`` means the job is standalone (not task-packet-linked).",
   "properties": {
     "assumptions": {
       "items": {
@@ -100,7 +100,7 @@
         }
       ],
       "default": null,
-      "description": "Std 41 crosswalk hook; null = standalone job.",
+      "description": "task-packet crosswalk hook; null = standalone job.",
       "title": "Source Task Packet Id"
     },
     "status": {

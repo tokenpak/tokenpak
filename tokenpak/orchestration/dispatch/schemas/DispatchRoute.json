@@ -1,7 +1,7 @@
 {
   "$defs": {
     "LoopOnExhausted": {
-      "description": "StationLoopPolicy.on_exhausted actions (Standards Delta v0 \u00a75.4).",
+      "description": "StationLoopPolicy.on_exhausted actions.",
       "enum": [
         "mark_failed",
         "create_reviewer_note",
@@ -11,7 +11,7 @@
       "type": "string"
     },
     "LoopStopCondition": {
-      "description": "StationLoopPolicy.stop_when closed enum (Standards Delta v0 \u00a75.4).\n\n``station_goal_satisfied`` was removed per round-6 \u00a74.5 and is deliberately\nabsent.",
+      "description": "StationLoopPolicy.stop_when closed enum.\n\n``station_goal_satisfied`` was removed and is deliberately\nabsent.",
       "enum": [
         "output_schema_valid AND no_pending_tool_requests",
         "loop_budget_exhausted",
@@ -23,7 +23,7 @@
       "type": "string"
     },
     "RiskLevel": {
-      "description": "Shared risk level (Standards Delta v0 \u00a74.3 default_risk, \u00a74.6 risk_level).",
+      "description": "Shared risk level (used as default_risk and risk_level).",
       "enum": [
         "low",
         "medium",
@@ -35,7 +35,7 @@
     },
     "RouteDelivery": {
       "additionalProperties": false,
-      "description": "Route-level delivery package composition flags (Standards Delta v0 \u00a74.3).",
+      "description": "Route-level delivery package composition flags.",
       "properties": {
         "include_files_changed": {
           "default": true,
@@ -68,7 +68,7 @@
     },
     "RouteRetryPolicy": {
       "additionalProperties": false,
-      "description": "Route-level retry policy (Standards Delta v0 \u00a74.3).",
+      "description": "Route-level retry policy.",
       "properties": {
         "escalate_after_failure": {
           "default": false,
@@ -86,7 +86,7 @@
     },
     "RouteStation": {
       "additionalProperties": false,
-      "description": "A single station definition within a route (Standards Delta v0 \u00a74.3).\n\nEither ``required_role`` (worker stations) or ``system_component``\n(system-component stations) is set; ``required_capabilities`` is\nregistry-bound and validated against the \u00a75.2 capability registry.",
+      "description": "A single station definition within a route.\n\nEither ``required_role`` (worker stations) or ``system_component``\n(system-component stations) is set; ``required_capabilities`` is\nregistry-bound and validated against the capability registry.",
       "properties": {
         "gates": {
           "description": "e.g. [\"acceptance_gate\", \"delivery_gate\"]",
@@ -173,7 +173,7 @@
     },
     "RouteTriggers": {
       "additionalProperties": false,
-      "description": "Route trigger declaration (Standards Delta v0 \u00a74.3).",
+      "description": "Route trigger declaration.",
       "properties": {
         "intents": {
           "items": {
@@ -188,7 +188,7 @@
     },
     "StationLoopPolicy": {
       "additionalProperties": false,
-      "description": "Loop budget + stop conditions for a station (Standards Delta v0 \u00a75.4).\n\nPrecedence (resolved by the runner, not this schema):\n``station_override > route_default > worker_default > system_default``.\nSystem default per \u00a75.4 is ``max_iterations: 2, max_tool_calls: 6,\nmax_wall_seconds: 600`` \u2014 used as the field defaults here.",
+      "description": "Loop budget + stop conditions for a station.\n\nPrecedence (resolved by the runner, not this schema):\n``station_override > route_default > worker_default > system_default``.\nSystem default is ``max_iterations: 2, max_tool_calls: 6,\nmax_wall_seconds: 600`` \u2014 used as the field defaults here.",
       "properties": {
         "max_iterations": {
           "default": 2,
@@ -225,7 +225,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "A named, versioned workflow route (Standards Delta v0 \u00a74.3).",
+  "description": "A named, versioned workflow route.",
   "properties": {
     "default_risk": {
       "$ref": "#/$defs/RiskLevel"

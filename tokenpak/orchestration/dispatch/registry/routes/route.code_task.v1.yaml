@@ -1,13 +1,13 @@
-# code_task route (Standards Delta v0 §4.3 + §13 routes + §16).
+# code_task route.
 #
 # Two-station route: a builder station (code_builder overlay) drafts/patches the
 # change, then a reviewer station semantically reviews it against the manifest
-# acceptance criteria (§5.7). The reviewer costs one extra LLM call but makes the
-# code_task route more trustworthy than single-shot execution (§5.7 cost note).
+# acceptance criteria. The reviewer costs one extra LLM call but makes the
+# code_task route more trustworthy than single-shot execution.
 #
 # Stations bind dynamically by `required_role` + `required_capabilities` against
-# the worker registry (§11) — NOT by hardcoded worker id. `required_capabilities`
-# is registry-bound: every entry MUST be in the §5.2 capability registry or the
+# the worker registry — NOT by hardcoded worker id. `required_capabilities`
+# is registry-bound: every entry MUST be in the capability registry or the
 # route registry rejects this profile fail-loud at load time.
 id: route.code_task.v1
 name: Code Task

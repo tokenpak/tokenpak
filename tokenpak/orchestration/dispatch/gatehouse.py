@@ -1,4 +1,4 @@
-"""Deterministic Gatehouse — structural validation only (Standards Delta v0 §5.7).
+"""Deterministic Gatehouse — structural validation only.
 
 The Gatehouse validates **structure**, never **substance**. It runs a fixed set
 of deterministic checks (NO LLM call, NO network, no provider) over a dispatch
@@ -14,7 +14,7 @@ criteria exist, station outputs are schema-valid, permission constraints hold,
 the delivery package carries its required pieces). A green Gatehouse means
 "structurally shippable", not "correct".
 
-Reviewer → Gatehouse handoff (Standards Delta v0 §5.7 table):
+Reviewer → Gatehouse handoff (handoff table):
 
 * Reviewer ``pass`` → Delivery Gate proceeds; package shipped.
 * Reviewer ``warning`` → Gatehouse creates a :class:`DispatchDecision`
@@ -59,14 +59,14 @@ from .stations.reviewer import (
     ReviewerStatus,
 )
 
-# Cost note (Standards Delta v0 §5.7): emitted on any delivery package whose
+# Cost note: emitted on any delivery package whose
 # route used a Reviewer Station. Single source of truth — both the package
 # builder and tests read this constant.
 REVIEWER_COST_NOTE = (
     "This route uses a Reviewer Station; +1 LLM call vs single-shot execution."
 )
 
-# The §5.7 handoff outcomes, expressed as the delivery-package status values the
+# The handoff outcomes, expressed as the delivery-package status values the
 # Gatehouse can emit. Kept distinct from the reviewer's own
 # ``delivery_recommendation`` enum because the Gatehouse adds the decision-gated
 # outcomes (warning still pending a decision, and the user-accept/reject splits).
@@ -119,12 +119,12 @@ class GatehouseReport(DispatchBaseModel):
 
 
 class DeliveryPackage(DispatchBaseModel):
-    """The Gatehouse's Delivery Gate verdict + assembled package (§5.7).
+    """The Gatehouse's Delivery Gate verdict + assembled package.
 
     Carries the deterministic :class:`GatehouseReport`, the delivery status, the
     reviewer-derived ``required_fixes`` (populated when blocked on a reviewer
     ``fail``), the optional :class:`DispatchDecision` (created on a reviewer
-    ``warning``), and — whenever the route used a Reviewer Station — the §5.7
+    ``warning``), and — whenever the route used a Reviewer Station — the
     cost note. The Gatehouse never asserts semantic correctness here; ``status``
     reflects structure + the reviewer's own verdict, nothing more.
     """
@@ -145,13 +145,13 @@ class DeliveryPackage(DispatchBaseModel):
 
 
 class Gatehouse:
-    """Deterministic structural validator + Delivery Gate (Standards Delta v0 §5.7).
+    """Deterministic structural validator + Delivery Gate.
 
     No LLM, no network, no semantic correctness claims. Each ``check_*`` method
     is a pure deterministic predicate returning a :class:`GatehouseCheckResult`.
     :meth:`run_checks` runs the full battery; :meth:`evaluate_delivery` combines
     the structural report with a :class:`ReviewerStationResult` to produce a
-    :class:`DeliveryPackage` per the §5.7 handoff table.
+    :class:`DeliveryPackage` per the handoff table.
     """
 
     # ---- individual deterministic checks ----------------------------------
@@ -424,11 +424,11 @@ class Gatehouse:
     ) -> DeliveryPackage:
         """Combine structural checks + the reviewer verdict into a DeliveryPackage.
 
-        Per the §5.7 handoff table. ``warning_decision_resolution`` carries the
+        Per the handoff table. ``warning_decision_resolution`` carries the
         user's accept(``True``)/reject(``False``) answer to a reviewer-``warning``
         decision; ``None`` means unresolved (a :class:`DispatchDecision` is
         created and the package is ``decision_required``). ``route_uses_reviewer``
-        controls whether the §5.7 cost note is attached (default ``True`` because
+        controls whether the cost note is attached (default ``True`` because
         this gate is only meaningful when a Reviewer Station ran).
         """
 
@@ -528,7 +528,7 @@ class Gatehouse:
         reviewer_result: ReviewerStationResult,
         now: datetime | None = None,
     ) -> DispatchDecision:
-        """Create the accept/reject DispatchDecision for a reviewer ``warning`` (§5.7)."""
+        """Create the accept/reject DispatchDecision for a reviewer ``warning``."""
 
         created_at = now or datetime.now(timezone.utc)
         reason = (

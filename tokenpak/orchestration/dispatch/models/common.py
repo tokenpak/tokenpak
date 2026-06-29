@@ -1,7 +1,7 @@
 """Shared / nested models for Dispatch records.
 
 These are the supporting structures referenced by the twelve top-level
-Dispatch records (Standards Delta v0 §4–§5). Where the Standards Delta names a
+Dispatch records. Where the design names a
 type but does not fully specify its fields (``AcceptanceCriterion``,
 ``Constraint``, ``Deliverable``), a minimal faithful shape is provided and
 marked as a supporting sketch — these are NOT among the twelve canonical
@@ -24,7 +24,7 @@ from .enums import (
     LoopStopCondition,
 )
 
-# Standards Delta v0 §4.2: denied_paths ALWAYS includes these four globs.
+# denied_paths ALWAYS includes these four globs.
 MANDATORY_DENIED_PATHS: tuple[str, ...] = (
     ".env",
     ".git/**",
@@ -40,14 +40,14 @@ class DispatchBaseModel(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Manifest sub-structures (Standards Delta v0 §4.2)
+# Manifest sub-structures
 # ---------------------------------------------------------------------------
 
 
 class AcceptanceCriterion(DispatchBaseModel):
     """Supporting sketch — referenced by DispatchManifest / Reviewer I/O.
 
-    The Standards Delta references ``AcceptanceCriterion`` as a type but does
+    The design references ``AcceptanceCriterion`` as a type but does
     not specify its fields; this minimal shape is the supporting sketch.
     """
 
@@ -70,7 +70,7 @@ class Deliverable(DispatchBaseModel):
 
 
 class PathPolicy(DispatchBaseModel):
-    """DispatchManifest.path_policy — consumed by the apply_patch tool (§4.2).
+    """DispatchManifest.path_policy — consumed by the apply_patch tool.
 
     ``denied_paths`` is guaranteed to always contain the four mandatory globs
     (``.env``, ``.git/**``, ``secrets/**``, ``license/**``); any missing
@@ -96,7 +96,7 @@ class PathPolicy(DispatchBaseModel):
 
 
 class ManifestPermissions(DispatchBaseModel):
-    """DispatchManifest.permissions block (Standards Delta v0 §4.2)."""
+    """DispatchManifest.permissions block."""
 
     autonomy_mode: AutonomyMode
     allowed_actions: list[str] = Field(default_factory=list)
@@ -105,7 +105,7 @@ class ManifestPermissions(DispatchBaseModel):
 
 
 class QualityRequirements(DispatchBaseModel):
-    """DispatchManifest.quality_requirements block (Standards Delta v0 §4.2)."""
+    """DispatchManifest.quality_requirements block."""
 
     test_required: bool
     review_required: bool
@@ -114,16 +114,16 @@ class QualityRequirements(DispatchBaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Station loop policy (Standards Delta v0 §5.4)
+# Station loop policy
 # ---------------------------------------------------------------------------
 
 
 class StationLoopPolicy(DispatchBaseModel):
-    """Loop budget + stop conditions for a station (Standards Delta v0 §5.4).
+    """Loop budget + stop conditions for a station.
 
     Precedence (resolved by the runner, not this schema):
     ``station_override > route_default > worker_default > system_default``.
-    System default per §5.4 is ``max_iterations: 2, max_tool_calls: 6,
+    System default is ``max_iterations: 2, max_tool_calls: 6,
     max_wall_seconds: 600`` — used as the field defaults here.
     """
 
@@ -139,14 +139,14 @@ class StationLoopPolicy(DispatchBaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Worker loop default + permission profile (Standards Delta v0 §5.1)
+# Worker loop default + permission profile
 # ---------------------------------------------------------------------------
 
 
 class WorkerLoopDefault(DispatchBaseModel):
-    """DispatchWorker.default_loop_policy — the §5.1 three-field budget.
+    """DispatchWorker.default_loop_policy — the three-field budget.
 
-    Distinct from :class:`StationLoopPolicy`: §5.1 specifies only the three
+    Distinct from :class:`StationLoopPolicy`: this specifies only the three
     integer budget fields for a worker default; stop conditions live on the
     station-level policy.
     """
@@ -157,7 +157,7 @@ class WorkerLoopDefault(DispatchBaseModel):
 
 
 def _validate_capability_list(value: list[str]) -> list[str]:
-    """Shared registry-bound capability validator (Standards Delta v0 §5.2)."""
+    """Shared registry-bound capability validator."""
 
     return validate_capabilities(value)
 
