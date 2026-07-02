@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import gzip
 import json
+import tempfile
 import threading
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -565,13 +566,109 @@ class TestForwardRequest(unittest.IsolatedAsyncioTestCase):
 
         request = await self._make_request()
 
-        with patch("tokenpak.proxy.server_async._should_intercept", return_value=False):
+        with tempfile.TemporaryDirectory() as tmpdir, \
+             patch.dict("os.environ", {"TOKENPAK_UPSTREAM_RECOVERY_DIR": tmpdir}), \
+             patch("tokenpak.proxy.server_async._should_intercept", return_value=False), \
+             patch("tokenpak.proxy.server_async.asyncio.sleep", new_callable=AsyncMock):
             from tokenpak.proxy.server_async import _forward_request
             response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
 
         self.assertEqual(response.status_code, 502)
         data = json.loads(response.body)
-        self.assertEqual(data["error"]["type"], "proxy_error")
+        self.assertEqual(data["error"]["type"], "upstream_terminal_failure")
+        self.assertEqual(data["error"]["recovery_status"], "terminally_failed")
+        self.assertEqual(async_client.request.await_count, 3)
+
+    async def test_non_streaming_retry_succeeds_before_response_bytes_are_sent(self):
+        import httpx
+
+        from tokenpak.proxy import server_async as module
+
+        ps = self._make_ps()
+        module._proxy_server_ref = ps
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b'{"ok": true}'
+        mock_response.headers = {"content-type": "application/json"}
+
+        async_client = AsyncMock()
+        async_client.request = AsyncMock(
+            side_effect=[httpx.ReadError("dropped before response"), mock_response]
+        )
+        module._async_client = async_client
+
+        request = await self._make_request()
+
+        with patch("tokenpak.proxy.server_async._should_intercept", return_value=False), \
+             patch("tokenpak.proxy.server_async.asyncio.sleep", new_callable=AsyncMock) as sleep_mock:
+            from tokenpak.proxy.server_async import _forward_request
+            response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.body, b'{"ok": true}')
+        self.assertEqual(async_client.request.await_count, 2)
+        sleep_mock.assert_awaited_once()
+
+    async def test_non_streaming_429_honors_retry_after(self):
+        from tokenpak.proxy import server_async as module
+
+        ps = self._make_ps()
+        module._proxy_server_ref = ps
+
+        rate_limited = MagicMock()
+        rate_limited.status_code = 429
+        rate_limited.content = b'{"error": "rate limited"}'
+        rate_limited.headers = {"retry-after": "2.5", "content-type": "application/json"}
+        ok_response = MagicMock()
+        ok_response.status_code = 200
+        ok_response.content = b'{"ok": true}'
+        ok_response.headers = {"content-type": "application/json"}
+
+        async_client = AsyncMock()
+        async_client.request = AsyncMock(side_effect=[rate_limited, ok_response])
+        module._async_client = async_client
+
+        request = await self._make_request()
+
+        with patch("tokenpak.proxy.server_async._should_intercept", return_value=False), \
+             patch("tokenpak.proxy.server_async.asyncio.sleep", new_callable=AsyncMock) as sleep_mock:
+            from tokenpak.proxy.server_async import _forward_request
+            response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(async_client.request.await_count, 2)
+        sleep_mock.assert_awaited_once_with(2.5)
+
+    async def test_deterministic_mode_never_retries(self):
+        import httpx
+
+        from tokenpak.proxy import server_async as module
+
+        ps = self._make_ps()
+        module._proxy_server_ref = ps
+
+        async_client = AsyncMock()
+        async_client.request = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        module._async_client = async_client
+
+        body = json.dumps(
+            {"messages": [{"role": "user", "content": "[TIP: deterministic=on] run eval"}]}
+        ).encode()
+        request = await self._make_request(body=body, headers={"content-type": "application/json"})
+
+        with tempfile.TemporaryDirectory() as tmpdir, \
+             patch.dict("os.environ", {"TOKENPAK_UPSTREAM_RECOVERY_DIR": tmpdir}), \
+             patch("tokenpak.proxy.server_async._should_intercept", return_value=False), \
+             patch("tokenpak.proxy.server_async.asyncio.sleep", new_callable=AsyncMock) as sleep_mock:
+            from tokenpak.proxy.server_async import _forward_request
+            response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
+
+        self.assertEqual(response.status_code, 502)
+        data = json.loads(response.body)
+        self.assertEqual(data["error"]["type"], "upstream_terminal_failure")
+        self.assertEqual(async_client.request.await_count, 1)
+        sleep_mock.assert_not_awaited()
 
     async def test_gzip_response_decoded(self):
         from tokenpak.proxy import server_async as module
@@ -848,6 +945,150 @@ class TestForwardRequestStreaming(unittest.IsolatedAsyncioTestCase):
             response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
 
         self.assertIsInstance(response, StreamingResponse)
+        chunks = [chunk async for chunk in response.body_iterator]
+        self.assertIn(sse_chunk, chunks)
+
+    async def test_streaming_pre_open_drop_retries_safely(self):
+        import httpx
+        from starlette.responses import StreamingResponse
+
+        from tokenpak.proxy import server_async as module
+
+        ps = self._make_ps()
+        module._proxy_server_ref = ps
+
+        sse_chunk = b"data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":5}}\n\n"
+
+        class FailingUpstreamCM:
+            async def __aenter__(self):
+                raise httpx.ReadError("dropped before headers")
+
+            async def __aexit__(self, *args):
+                return False
+
+        class SuccessUpstreamCM:
+            status_code = 200
+            headers = {"content-type": "text/event-stream"}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def aiter_bytes(self, chunk_size=4096):
+                yield sse_chunk
+
+        async_client = AsyncMock()
+        async_client.stream = Mock(side_effect=[FailingUpstreamCM(), SuccessUpstreamCM()])
+        module._async_client = async_client
+
+        streaming_body = json.dumps({
+            "model": "claude",
+            "stream": True,
+            "messages": [{"role": "user", "content": "hi"}]
+        }).encode()
+        request = await self._make_request(body=streaming_body)
+
+        with patch("tokenpak.proxy.server_async._should_intercept", return_value=True), \
+             patch("tokenpak.proxy.server_async._is_messages_endpoint", return_value=True), \
+             patch("tokenpak.proxy.server_async._record_telemetry"), \
+             patch("tokenpak.proxy.server_async.asyncio.sleep", new_callable=AsyncMock), \
+             patch("tokenpak.proxy.router.ProviderRouter") as MockRouter:
+            route = MagicMock()
+            route.model = "claude"
+            MockRouter.return_value.route.return_value = route
+            from tokenpak.proxy.server_async import _forward_request
+            response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
+
+        self.assertIsInstance(response, StreamingResponse)
+        chunks = [chunk async for chunk in response.body_iterator]
+        self.assertIn(sse_chunk, chunks)
+        self.assertEqual(async_client.stream.call_count, 2)
+
+    async def test_streaming_midstream_drop_returns_terminal_recovery_event(self):
+        import httpx
+
+        from tokenpak.proxy import server_async as module
+
+        ps = self._make_ps()
+        module._proxy_server_ref = ps
+
+        class DroppingUpstreamCM:
+            status_code = 200
+            headers = {"content-type": "text/event-stream"}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def aiter_bytes(self, chunk_size=4096):
+                yield b'data: {"type":"message_delta"}\n\n'
+                raise httpx.ReadError("dropped mid-stream")
+
+        async_client = AsyncMock()
+        async_client.stream = Mock(return_value=DroppingUpstreamCM())
+        module._async_client = async_client
+
+        streaming_body = json.dumps({
+            "model": "claude",
+            "stream": True,
+            "messages": [{"role": "user", "content": "hi"}]
+        }).encode()
+        request = await self._make_request(
+            body=streaming_body,
+            headers={"x-request-id": "req-async", "x-tip-plan-id": "tip-async"},
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir, \
+             patch.dict("os.environ", {"TOKENPAK_UPSTREAM_RECOVERY_DIR": tmpdir}), \
+             patch("tokenpak.proxy.server_async._should_intercept", return_value=True), \
+             patch("tokenpak.proxy.server_async._is_messages_endpoint", return_value=True), \
+             patch("tokenpak.proxy.server_async._record_telemetry"), \
+             patch("tokenpak.proxy.router.ProviderRouter") as MockRouter:
+            route = MagicMock()
+            route.model = "claude"
+            MockRouter.return_value.route.return_value = route
+            from tokenpak.proxy.server_async import _forward_request
+            response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
+            body = b"".join([chunk async for chunk in response.body_iterator])
+
+        self.assertIn(b"upstream_stream_terminal_failure", body)
+        self.assertIn(b"terminally_failed", body)
+        self.assertIn(b"req-async", body)
+        self.assertIn(b"tip-async", body)
+
+    async def test_async_upstream_concurrency_queues_and_bounds(self):
+        from tokenpak.proxy import server_async as module
+
+        old_limit = module.ASYNC_UPSTREAM_CONCURRENCY
+        module.ASYNC_UPSTREAM_CONCURRENCY = 1
+        module._async_upstream_semaphores.clear()
+        module._async_upstream_inflight.clear()
+        try:
+            sem = await module._get_async_upstream_semaphore("openai", "session-a")
+            await sem.acquire()
+            events: list[object] = []
+
+            async def waiter() -> None:
+                events.append("waiting")
+                acquired = await asyncio.wait_for(sem.acquire(), timeout=0.5)
+                events.append(acquired)
+                if acquired:
+                    sem.release()
+
+            task = asyncio.create_task(waiter())
+            await asyncio.sleep(0.05)
+            self.assertEqual(events, ["waiting"])
+            sem.release()
+            await task
+            self.assertEqual(events, ["waiting", True])
+        finally:
+            module.ASYNC_UPSTREAM_CONCURRENCY = old_limit
+            module._async_upstream_semaphores.clear()
+            module._async_upstream_inflight.clear()
 
 
 # ===========================================================================
