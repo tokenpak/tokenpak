@@ -365,7 +365,7 @@ def test_pool_metrics_reuse_rate_formula():
 def test_pool_metrics_to_dict_keys():
     m = PoolMetrics(total_requests=5, reused_connections=3, new_connections=2, errors=0)
     d = m.to_dict()
-    assert set(d.keys()) == {"total_requests", "reused_connections", "new_connections", "errors", "reuse_rate"}
+    assert set(d.keys()) == {"total_requests", "reused_connections", "new_connections", "errors", "evicted_clients", "reuse_rate"}
 
 
 # ---------------------------------------------------------------------------

@@ -44,6 +44,16 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
+from .circuit_breaker import provider_from_url
+from .upstream_retry import (
+    UpstreamRetryPolicy,
+    UpstreamTruncatedJSONError,
+    build_terminal_recovery_payload,
+    extract_tip_plan_id,
+    persist_failed_request_metadata,
+    response_has_truncated_json,
+)
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -53,6 +63,10 @@ MAX_CONCURRENCY = int(os.environ.get("TOKENPAK_CONCURRENCY", "200"))
 HTTPX_POOL_SIZE = int(os.environ.get("TOKENPAK_HTTPX_POOL_SIZE", "100"))
 HTTPX_TIMEOUT = float(os.environ.get("TOKENPAK_HTTPX_TIMEOUT", "300"))
 INTERCEPT_HOSTS = {"api.anthropic.com", "api.openai.com"}
+ASYNC_UPSTREAM_CONCURRENCY = int(os.environ.get("TOKENPAK_UPSTREAM_CONCURRENCY", "3"))
+ASYNC_UPSTREAM_ACQUIRE_TIMEOUT = float(
+    os.environ.get("TOKENPAK_UPSTREAM_ACQUIRE_TIMEOUT", "30")
+)
 
 # ---------------------------------------------------------------------------
 # Module-level shared state (set by ProxyServer before uvicorn starts)
@@ -79,6 +93,54 @@ def _client() -> httpx.AsyncClient:
     if _async_client is None:
         raise RuntimeError("AsyncProxyApp: httpx client not ready")
     return _async_client
+
+
+# ---------------------------------------------------------------------------
+# Async upstream concurrency limiter
+# ---------------------------------------------------------------------------
+
+_async_upstream_semaphores: Dict[tuple[str, str], asyncio.BoundedSemaphore] = {}
+_async_upstream_inflight: Dict[tuple[str, str], int] = {}
+_async_upstream_sem_lock = asyncio.Lock()
+
+
+async def _get_async_upstream_semaphore(
+    provider: str, session_key: Optional[str] = None
+) -> asyncio.BoundedSemaphore:
+    key = (provider or "_unknown", session_key or "_shared")
+    async with _async_upstream_sem_lock:
+        sem = _async_upstream_semaphores.get(key)
+        if sem is None:
+            sem = asyncio.BoundedSemaphore(ASYNC_UPSTREAM_CONCURRENCY)
+            _async_upstream_semaphores[key] = sem
+            _async_upstream_inflight[key] = 0
+        return sem
+
+
+async def _async_upstream_inflight_delta(
+    provider: str, delta: int, session_key: Optional[str] = None
+) -> int:
+    key = (provider or "_unknown", session_key or "_shared")
+    async with _async_upstream_sem_lock:
+        count = max(0, _async_upstream_inflight.get(key, 0) + delta)
+        if delta < 0 and count == 0:
+            _async_upstream_inflight.pop(key, None)
+            _async_upstream_semaphores.pop(key, None)
+        else:
+            _async_upstream_inflight[key] = count
+        return count
+
+
+async def _close_async_response(resp: object) -> None:
+    close = getattr(resp, "aclose", None)
+    if close is not None:
+        result = close()
+        if asyncio.iscoroutine(result):
+            await result
+        return
+    close = getattr(resp, "close", None)
+    if close is not None:
+        close()
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +330,12 @@ async def _forward_request(request: Request, target_url: str) -> Response:
 
     # Read body
     body = await request.body()
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())[:8]
+    retry_policy = UpstreamRetryPolicy.from_env(
+        body=body,
+        headers=dict(request.headers),
+    )
+    tip_plan_id = extract_tip_plan_id(dict(request.headers), body, request_id)
 
     # Check request size against thresholds (monitoring)
     try:
@@ -361,52 +429,113 @@ async def _forward_request(request: Request, target_url: str) -> Response:
 
     output_tokens = 0
     client = _client()
+    stream_response_owns_slot = False
+    slot_acquired = False
+    sem_provider = provider_from_url(target_url)
+    session_key = (
+        request.headers.get("x-tokenpak-session-id")
+        or request.headers.get("x-session-id")
+        or request.headers.get("x-correlation-id")
+    )
+    if not session_key and request.client is not None:
+        session_key = f"{request.client.host}:{request.client.port}"
+
+    upstream_sem = await _get_async_upstream_semaphore(sem_provider, session_key)
+    try:
+        await asyncio.wait_for(
+            upstream_sem.acquire(),
+            timeout=ASYNC_UPSTREAM_ACQUIRE_TIMEOUT,
+        )
+        slot_acquired = True
+        await _async_upstream_inflight_delta(sem_provider, +1, session_key)
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            {
+                "error": {
+                    "type": "upstream_concurrency_exhausted",
+                    "message": (
+                        f"Too many concurrent requests to '{sem_provider}' "
+                        f"(>{ASYNC_UPSTREAM_CONCURRENCY} in flight). Retry shortly."
+                    ),
+                    "hint": (
+                        "Raise TOKENPAK_UPSTREAM_CONCURRENCY or reduce the "
+                        "number of concurrent companion sessions."
+                    ),
+                }
+            },
+            status_code=503,
+            headers={"Retry-After": "5"},
+        )
 
     try:
         if is_streaming:
             # ── SSE streaming path ────────────────────────────────────────
-            sse_buffer = bytearray()
-            upstream_req = client.build_request(
-                request.method, target_url, content=body, headers=fwd_headers
-            )
+            stream_cm = None
+            upstream = None
 
-            async def sse_stream_generator():
-                nonlocal output_tokens, cache_read_tokens, cache_creation_tokens
+            for attempt in range(retry_policy.max_attempts):
                 try:
-                    async with client.stream(
+                    stream_cm = client.stream(
                         request.method,
                         target_url,
                         content=body,
                         headers=fwd_headers,
                         timeout=HTTPX_TIMEOUT,
-                    ) as resp:
-                        async for chunk in resp.aiter_bytes(chunk_size=4096):
-                            if chunk:
-                                sse_buffer.extend(chunk)
-                                yield chunk
-                    # Parse SSE usage after stream complete
-                    if should_log and is_messages and sse_buffer:
-                        usage = _parse_sse_tokens(bytes(sse_buffer))
-                        output_tokens = usage["output_tokens"]
-                        cache_read_tokens = usage["cache_read_input_tokens"]
-                        cache_creation_tokens = usage["cache_creation_input_tokens"]
-                except Exception as e:
-                    yield b""
+                    )
+                    upstream = await stream_cm.__aenter__()
+                    retry_decision = retry_policy.retry_for_response(
+                        upstream.status_code,
+                        upstream.headers,
+                        attempt,
+                        stream_started=False,
+                    )
+                    if retry_decision.should_retry:
+                        try:
+                            async for _ in upstream.aiter_bytes(chunk_size=4096):
+                                pass
+                        finally:
+                            await stream_cm.__aexit__(None, None, None)
+                        await asyncio.sleep(retry_decision.delay_seconds)
+                        stream_cm = None
+                        upstream = None
+                        continue
+                    break
+                except retry_policy.retryable_exceptions as stream_exc:
+                    if stream_cm is not None:
+                        try:
+                            await stream_cm.__aexit__(
+                                type(stream_exc),
+                                stream_exc,
+                                stream_exc.__traceback__,
+                            )
+                        except Exception:
+                            pass
+                    retry_decision = retry_policy.retry_for_exception(
+                        stream_exc,
+                        attempt,
+                        stream_started=False,
+                    )
+                    if not retry_decision.should_retry:
+                        raise
+                    await asyncio.sleep(retry_decision.delay_seconds)
+                    stream_cm = None
+                    upstream = None
+                    continue
 
-            # We need response headers from upstream — do a peek
-            async with client.stream(
-                request.method, target_url, content=body, headers=fwd_headers, timeout=HTTPX_TIMEOUT
-            ) as upstream:
-                resp_headers = {
-                    k: v
-                    for k, v in upstream.headers.items()
-                    if k.lower()
-                    not in ("content-length", "transfer-encoding", "connection", "keep-alive")
-                }
+            if stream_cm is None or upstream is None:
+                raise httpx.ReadError("Upstream stream did not open")
 
-                async def _inner_stream():
-                    nonlocal output_tokens, cache_read_tokens, cache_creation_tokens
-                    _buf = bytearray()
+            resp_headers = {
+                k: v
+                for k, v in upstream.headers.items()
+                if k.lower()
+                not in ("content-length", "transfer-encoding", "connection", "keep-alive")
+            }
+
+            async def _inner_stream():
+                nonlocal output_tokens, cache_read_tokens, cache_creation_tokens
+                _buf = bytearray()
+                try:
                     async for chunk in upstream.aiter_bytes(chunk_size=4096):
                         if chunk:
                             _buf.extend(chunk)
@@ -430,27 +559,108 @@ async def _forward_request(request: Request, target_url: str) -> Response:
                         cache_creation_tokens,
                         latency_ms,
                     )
+                except retry_policy.retryable_exceptions as stream_exc:
+                    with ps._session_lock:
+                        ps.session["errors"] += 1
+                    record_path = persist_failed_request_metadata(
+                        request_id=request_id,
+                        tip_plan_id=tip_plan_id,
+                        target_url=target_url,
+                        method=request.method,
+                        headers=fwd_headers,
+                        body=body,
+                        stream_started=True,
+                        recovery_status="terminally_failed",
+                        error_type=type(stream_exc).__name__,
+                        error_message=str(stream_exc),
+                    )
+                    payload = build_terminal_recovery_payload(
+                        request_id=request_id,
+                        tip_plan_id=tip_plan_id,
+                        error_type="upstream_stream_terminal_failure",
+                        message=str(stream_exc),
+                        stream_started=True,
+                        recovery_record=str(record_path) if record_path else None,
+                    )
+                    yield (
+                        b"\n\nevent: error\ndata: "
+                        + json.dumps(payload, sort_keys=True).encode()
+                        + b"\n\n"
+                    )
+                finally:
+                    try:
+                        await stream_cm.__aexit__(None, None, None)
+                    finally:
+                        upstream_sem.release()
+                        await _async_upstream_inflight_delta(
+                            sem_provider,
+                            -1,
+                            session_key,
+                        )
 
-                response = StreamingResponse(
-                    _inner_stream(),
-                    status_code=upstream.status_code,
-                    headers=resp_headers,
-                    media_type="text/event-stream",
-                )
-                response.headers["X-Accel-Buffering"] = "no"
-                response.headers["Cache-Control"] = "no-cache"
-                response.headers["Access-Control-Allow-Origin"] = "*"
-                return response
+            response = StreamingResponse(
+                _inner_stream(),
+                status_code=upstream.status_code,
+                headers=resp_headers,
+                media_type="text/event-stream",
+            )
+            response.headers["X-Accel-Buffering"] = "no"
+            response.headers["Cache-Control"] = "no-cache"
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            stream_response_owns_slot = True
+            return response
 
         else:
             # ── Non-streaming path ────────────────────────────────────────
-            resp = await client.request(
-                request.method,
-                target_url,
-                content=body,
-                headers=fwd_headers,
-                timeout=HTTPX_TIMEOUT,
-            )
+            resp = None
+            for attempt in range(retry_policy.max_attempts):
+                try:
+                    resp = await client.request(
+                        request.method,
+                        target_url,
+                        content=body,
+                        headers=fwd_headers,
+                        timeout=HTTPX_TIMEOUT,
+                    )
+                    retry_decision = retry_policy.retry_for_response(
+                        resp.status_code,
+                        resp.headers,
+                        attempt,
+                        stream_started=False,
+                    )
+                    if retry_decision.should_retry:
+                        await _close_async_response(resp)
+                        await asyncio.sleep(retry_decision.delay_seconds)
+                        continue
+                    if response_has_truncated_json(
+                        resp.status_code,
+                        resp.headers,
+                        resp.content,
+                    ):
+                        retry_decision = retry_policy.retry_for_truncated_json(
+                            attempt,
+                            stream_started=False,
+                        )
+                        if retry_decision.should_retry:
+                            await _close_async_response(resp)
+                            await asyncio.sleep(retry_decision.delay_seconds)
+                            continue
+                        raise UpstreamTruncatedJSONError(
+                            "Upstream returned truncated JSON before response bytes were sent"
+                        )
+                    break
+                except retry_policy.retryable_exceptions as nonstream_exc:
+                    retry_decision = retry_policy.retry_for_exception(
+                        nonstream_exc,
+                        attempt,
+                        stream_started=False,
+                    )
+                    if not retry_decision.should_retry:
+                        raise
+                    await asyncio.sleep(retry_decision.delay_seconds)
+                    continue
+
+            assert resp is not None
             resp_body = resp.content
 
             if should_log and is_messages:
@@ -499,6 +709,29 @@ async def _forward_request(request: Request, target_url: str) -> Response:
         with ps._session_lock:
             ps.session["errors"] += 1
         exc_type = type(exc).__name__
+        if retry_policy.is_retryable_exception(exc) or isinstance(exc, UpstreamTruncatedJSONError):
+            record_path = persist_failed_request_metadata(
+                request_id=request_id,
+                tip_plan_id=tip_plan_id,
+                target_url=target_url,
+                method=request.method,
+                headers=fwd_headers,
+                body=body,
+                stream_started=False,
+                recovery_status="terminally_failed",
+                error_type=exc_type,
+                error_message=str(exc),
+            )
+            payload = build_terminal_recovery_payload(
+                request_id=request_id,
+                tip_plan_id=tip_plan_id,
+                error_type="upstream_terminal_failure",
+                message=str(exc),
+                stream_started=False,
+                recovery_record=str(record_path) if record_path else None,
+            )
+            payload["error"]["detail"] = f"{exc_type}: {exc}"
+            return JSONResponse(payload, status_code=502)
         return JSONResponse(
             {
                 "error": {
@@ -510,6 +743,10 @@ async def _forward_request(request: Request, target_url: str) -> Response:
             },
             status_code=502,
         )
+    finally:
+        if slot_acquired and not stream_response_owns_slot:
+            upstream_sem.release()
+            await _async_upstream_inflight_delta(sem_provider, -1, session_key)
 
 
 def _record_telemetry(

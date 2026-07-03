@@ -39,8 +39,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional
 from urllib.parse import urlparse
 
-import httpx
-
 from tokenpak import __version__ as _tokenpak_version
 from tokenpak.cache.telemetry import CacheMetrics
 from tokenpak.cache.telemetry import get_collector as _get_cache_collector
@@ -87,33 +85,22 @@ from .router import INTERCEPT_HOSTS, ProviderRouter, estimate_cost
 from .startup import format_startup_report, run_startup_checks
 from .stats import CompressionStats
 from .streaming import extract_sse_tokens
-
-# ---------------------------------------------------------------------------
-# Upstream retry configuration — transparent retry on transient 5xx and
-# protocol errors so the Claude CLI never sees the mid-stream disconnects
-# Anthropic currently produces at ~15% on large requests.
-# ---------------------------------------------------------------------------
-MAX_UPSTREAM_RETRIES: int = int(os.environ.get("TOKENPAK_UPSTREAM_RETRIES", "3"))
-
-_RETRYABLE_UPSTREAM_EXCEPTIONS: tuple = (
-    httpx.RemoteProtocolError,
-    httpx.LocalProtocolError,
-    httpx.ReadError,
-    httpx.WriteError,
-    httpx.ConnectError,
-    httpx.ConnectTimeout,
-    httpx.ReadTimeout,
+from .upstream_retry import (
+    UpstreamRetryPolicy,
+    UpstreamTruncatedJSONError,
+    build_terminal_recovery_payload,
+    extract_tip_plan_id,
+    persist_failed_request_metadata,
+    response_has_truncated_json,
 )
 
-
-def _is_retryable_upstream_status(status_code: int) -> bool:
-    return status_code in (502, 503, 504)
-
-
-def _upstream_retry_backoff(attempt: int) -> float:
-    # 0.2s, 0.6s, 1.8s — bounded
-    return min(2.5, 0.2 * (3 ** attempt))
-
+# ---------------------------------------------------------------------------
+# Upstream retry configuration.
+#
+# Retry behavior is factored into UpstreamRetryPolicy so the streaming and
+# non-streaming paths share the same transient-error, deterministic-mode, and
+# Retry-After rules.
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Per-(provider, session) outbound concurrency limiter.
@@ -878,6 +865,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         content_length = int(self.headers.get("Content-Length", 0))
         body: Optional[bytes] = self.rfile.read(content_length) if content_length > 0 else None
+        _original_body = body
+        _retry_policy = UpstreamRetryPolicy.from_env(
+            body=body,
+            headers=dict(self.headers),
+        )
+        _tip_plan_id = extract_tip_plan_id(dict(self.headers), body, _req_id)
 
         model = "unknown"
         input_tokens = 0
@@ -1466,15 +1459,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # string` JSON parse errors in the client's SSE reader).
                 sse_buffer = b""
                 _stream_wrote_to_client = False
-                for _ustream_attempt in range(MAX_UPSTREAM_RETRIES):
+                for _ustream_attempt in range(_retry_policy.max_attempts):
                     _stream_retry = False
                     try:
                         with pool.stream(method, target_url, content=body, headers=fwd_headers, session_key=_session_key) as resp:
-                            if (
-                                _is_retryable_upstream_status(resp.status_code)
-                                and not _stream_wrote_to_client
-                                and _ustream_attempt < MAX_UPSTREAM_RETRIES - 1
-                            ):
+                            _retry_decision = _retry_policy.retry_for_response(
+                                resp.status_code,
+                                resp.headers,
+                                _ustream_attempt,
+                                stream_started=_stream_wrote_to_client,
+                            )
+                            if _retry_decision.should_retry:
                                 # Drain body to release the pooled connection, then retry
                                 for _ in resp.iter_bytes(chunk_size=4096):
                                     pass
@@ -1529,17 +1524,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                         break
                                     if should_log and is_messages:
                                         sse_buffer += chunk
-                    except _RETRYABLE_UPSTREAM_EXCEPTIONS:
+                    except _retry_policy.retryable_exceptions as _stream_exc:
                         # Once we've committed to writing to the client, can't retry —
                         # the CLI's SSE parser would see a truncated-then-restarted stream.
-                        if _stream_wrote_to_client:
-                            raise
-                        if _ustream_attempt >= MAX_UPSTREAM_RETRIES - 1:
+                        _retry_decision = _retry_policy.retry_for_exception(
+                            _stream_exc,
+                            _ustream_attempt,
+                            stream_started=_stream_wrote_to_client,
+                        )
+                        if not _retry_decision.should_retry:
                             raise
                         _stream_retry = True
 
                     if _stream_retry:
-                        time.sleep(_upstream_retry_backoff(_ustream_attempt))
+                        time.sleep(_retry_decision.delay_seconds)
                         continue
                     break
 
@@ -1557,24 +1555,51 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # Server disconnected, 502/503/504). Safe because the client
                 # has not yet received any bytes at this point.
                 resp = None
-                for _ustream_attempt in range(MAX_UPSTREAM_RETRIES):
+                for _ustream_attempt in range(_retry_policy.max_attempts):
                     try:
                         resp = pool.request(method, target_url, content=body, headers=fwd_headers, session_key=_session_key)
-                        if (
-                            _is_retryable_upstream_status(resp.status_code)
-                            and _ustream_attempt < MAX_UPSTREAM_RETRIES - 1
-                        ):
+                        _retry_decision = _retry_policy.retry_for_response(
+                            resp.status_code,
+                            resp.headers,
+                            _ustream_attempt,
+                            stream_started=False,
+                        )
+                        if _retry_decision.should_retry:
                             try:
                                 resp.close()
                             except Exception:
                                 pass
-                            time.sleep(_upstream_retry_backoff(_ustream_attempt))
+                            time.sleep(_retry_decision.delay_seconds)
                             continue
+                        if response_has_truncated_json(
+                            resp.status_code,
+                            resp.headers,
+                            resp.content,
+                        ):
+                            _retry_decision = _retry_policy.retry_for_truncated_json(
+                                _ustream_attempt,
+                                stream_started=False,
+                            )
+                            if _retry_decision.should_retry:
+                                try:
+                                    resp.close()
+                                except Exception:
+                                    pass
+                                time.sleep(_retry_decision.delay_seconds)
+                                continue
+                            raise UpstreamTruncatedJSONError(
+                                "Upstream returned truncated JSON before response bytes were sent"
+                            )
                         break
-                    except _RETRYABLE_UPSTREAM_EXCEPTIONS:
-                        if _ustream_attempt >= MAX_UPSTREAM_RETRIES - 1:
+                    except _retry_policy.retryable_exceptions as _nonstream_exc:
+                        _retry_decision = _retry_policy.retry_for_exception(
+                            _nonstream_exc,
+                            _ustream_attempt,
+                            stream_started=False,
+                        )
+                        if not _retry_decision.should_retry:
                             raise
-                        time.sleep(_upstream_retry_backoff(_ustream_attempt))
+                        time.sleep(_retry_decision.delay_seconds)
                         continue
                 assert resp is not None
 
@@ -1971,6 +1996,25 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass  # logging must never break the proxy
             # Build an actionable error message depending on the exception type
+            _is_retry_boundary_error = (
+                _retry_policy.is_retryable_exception(exc)
+                or isinstance(exc, UpstreamTruncatedJSONError)
+                or (_client_headers_sent and is_streaming)
+            )
+            _recovery_record_path = None
+            if _is_retry_boundary_error:
+                _recovery_record_path = persist_failed_request_metadata(
+                    request_id=_req_id,
+                    tip_plan_id=_tip_plan_id,
+                    target_url=target_url,
+                    method=method,
+                    headers=fwd_headers if "fwd_headers" in locals() else dict(self.headers),
+                    body=body if body is not None else _original_body,
+                    stream_started=bool(_client_headers_sent),
+                    recovery_status="terminally_failed",
+                    error_type=exc_type,
+                    error_message=exc_msg,
+                )
             if "timeout" in exc_type.lower() or isinstance(exc, TimeoutError):
                 user_detail = (
                     "The upstream LLM provider did not respond in time. "
@@ -2014,18 +2058,28 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             # parser surfaces it as "Unterminated string". Extra
                             # blank lines between frames are legal per the SSE spec
                             # and harmless when the upstream cut off cleanly.
+                            _terminal_payload = build_terminal_recovery_payload(
+                                request_id=_req_id,
+                                tip_plan_id=_tip_plan_id,
+                                error_type="upstream_stream_terminal_failure",
+                                message=(
+                                    "Upstream connection dropped mid-stream "
+                                    f"({exc_type}). The stream was not replayed "
+                                    "because client-visible output had already started."
+                                ),
+                                stream_started=True,
+                                recovery_record=(
+                                    str(_recovery_record_path)
+                                    if _recovery_record_path is not None
+                                    else None
+                                ),
+                            )
                             _sse_err = (
                                 "\n\n"
                                 "event: error\n"
                                 "data: " + json.dumps({
                                     "type": "error",
-                                    "error": {
-                                        "type": "overloaded_error",
-                                        "message": (
-                                            f"Upstream connection dropped mid-stream "
-                                            f"({exc_type}). Retry the request."
-                                        ),
-                                    },
+                                    **_terminal_payload,
                                 }) + "\n\n"
                             ).encode("utf-8")
                             self.wfile.write(_sse_err)
@@ -2035,14 +2089,37 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # Non-streaming: headers+partial body already flushed; nothing
                     # safe to append. Just let the connection close.
                 else:
-                    err = json.dumps({
-                        "error": {
-                            "type": "proxy_error",
-                            "message": user_detail,
-                            "detail": exc_msg,
-                            "hint": "Run `tokenpak doctor` for diagnostics or `tokenpak status` for recent errors.",
+                    if _is_retry_boundary_error:
+                        err_payload = build_terminal_recovery_payload(
+                            request_id=_req_id,
+                            tip_plan_id=_tip_plan_id,
+                            error_type="upstream_terminal_failure",
+                            message=user_detail,
+                            stream_started=False,
+                            recovery_record=(
+                                str(_recovery_record_path)
+                                if _recovery_record_path is not None
+                                else None
+                            ),
+                        )
+                        err_payload["error"]["detail"] = exc_msg
+                        err_payload["error"]["hint"] = (
+                            "Retry later or use a future explicit recovery command; "
+                            "TokenPak did not hide a replay."
+                        )
+                    else:
+                        err_payload = {
+                            "error": {
+                                "type": "proxy_error",
+                                "message": user_detail,
+                                "detail": exc_msg,
+                                "hint": (
+                                    "Run `tokenpak doctor` for diagnostics or "
+                                    "`tokenpak status` for recent errors."
+                                ),
+                            }
                         }
-                    }).encode()
+                    err = json.dumps(err_payload).encode()
                     self.send_response(502)
                     self.send_header("Content-Type", "application/json")
                     self.send_header("Content-Length", str(len(err)))
