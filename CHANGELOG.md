@@ -6,6 +6,20 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.10.1] — 2026-07-03
+
+### Fixed
+- **Proxy upstream transport reliability.** Transient upstream failures (connection resets,
+  server disconnects, retryable 5xx honoring `Retry-After`) are now retried with a bounded,
+  policy-driven recovery before any bytes reach the client — and never after streaming output
+  has started. Failed-request recovery metadata is persisted with credentials redacted.
+- **Connection pool no longer hands retries a dead connection.** A pooled client that raises a
+  transport error is evicted (identity-checked) so the retry gets a fresh connection; evicted,
+  idle-reaped, and LRU-displaced clients are retired and closed after a grace period instead of
+  being closed while requests are still in flight on them. New pool metrics `evicted_clients`
+  and `retired_pending_close`; pool timeouts are env-tunable via `TOKENPAK_POOL_CONNECT_TIMEOUT`
+  and `TOKENPAK_POOL_READ_TIMEOUT`.
+
 ## [1.10.0] — 2026-06-28
 
 ### Added
