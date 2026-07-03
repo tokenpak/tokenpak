@@ -309,17 +309,16 @@ class ConnectionPool:
         now = time.monotonic() if hasattr(time, "monotonic") else time.time()
         key = (netloc, session_key)
         with self._session_lock:
-            # Reap idle clients
+            # Reap idle clients. Retire instead of closing inline: last_used
+            # is a checkout stamp, so a client mid-way through a long stream
+            # can look idle — closing it here corrupts the live request.
             idle_cutoff = now - cfg.session_client_idle_seconds
             stale_keys = [
                 k for k, (_, last) in self._session_clients.items() if last < idle_cutoff
             ]
             for k in stale_keys:
                 client, _ = self._session_clients.pop(k)
-                try:
-                    client.close()
-                except Exception:
-                    pass
+                self._retire(client)
 
             entry = self._session_clients.get(key)
             if entry is not None:
@@ -327,20 +326,32 @@ class ConnectionPool:
                 self._session_clients[key] = (client, now)
                 return client
 
-            # Enforce cap — LRU-evict oldest
+            # Enforce cap — LRU-evict oldest (retired, same mid-flight hazard)
             while len(self._session_clients) >= cfg.session_client_max:
                 oldest_key = min(
                     self._session_clients.items(), key=lambda kv: kv[1][1]
                 )[0]
                 client, _ = self._session_clients.pop(oldest_key)
-                try:
-                    client.close()
-                except Exception:
-                    pass
+                self._retire(client)
 
             client = self._make_client()
             self._session_clients[key] = (client, now)
             return client
+
+    def _touch_session(self, netloc: str, session_key: str) -> None:
+        """Re-stamp a session client's last_used after a request completes,
+        so long-running streams don't age it into the idle reaper's window."""
+        key = (netloc, session_key)
+        now = time.monotonic()
+        with self._session_lock:
+            entry = self._session_clients.get(key)
+            if entry is not None:
+                self._session_clients[key] = (entry[0], now)
+
+    def _retire(self, client: httpx.Client) -> None:
+        """Queue *client* to be closed after the in-flight grace period."""
+        with self._retired_lock:
+            self._retired_clients.append((client, time.monotonic()))
 
     def _evict_client(
         self, netloc: str, session_key: Optional[str], client: httpx.Client
@@ -371,8 +382,7 @@ class ConnectionPool:
                     self._clients.pop(netloc)
                     evicted = True
         if evicted:
-            with self._retired_lock:
-                self._retired_clients.append((client, time.monotonic()))
+            self._retire(client)
             with self._metrics_lock:
                 self._metrics.evicted_clients += 1
         self._reap_retired()
@@ -460,6 +470,8 @@ class ConnectionPool:
                     self._metrics.reused_connections += 1
                 else:
                     self._metrics.new_connections += 1
+            if session_key:
+                self._touch_session(netloc, session_key)
             return response
         except Exception as exc:
             with self._metrics_lock:
@@ -513,6 +525,11 @@ class ConnectionPool:
             self._metrics,
             self._metrics_lock,
             on_transport_error=lambda: self._evict_client(netloc, session_key, client),
+            on_complete=(
+                (lambda: self._touch_session(netloc, session_key))
+                if session_key
+                else None
+            ),
         )
 
     # ------------------------------------------------------------------
@@ -607,12 +624,14 @@ class _StreamingContext:
         metrics: PoolMetrics,
         lock: threading.Lock,
         on_transport_error: Optional[Callable[[], Any]] = None,
+        on_complete: Optional[Callable[[], Any]] = None,
     ) -> None:
         self._ctx = client.stream(method, url, content=content, headers=headers)
         self._metrics = metrics
         self._lock = lock
         self._response: Optional[httpx.Response] = None
         self._on_transport_error = on_transport_error
+        self._on_complete = on_complete
         self._error_recorded = False
 
     def __enter__(self) -> httpx.Response:
@@ -638,6 +657,11 @@ class _StreamingContext:
         finally:
             if exc is not None:
                 self._record_error(exc)
+            if self._on_complete is not None:
+                try:
+                    self._on_complete()
+                except Exception:
+                    pass
 
     def _record_error(self, exc: BaseException) -> None:
         """Count an upstream error once and evict the client if it looks dead.

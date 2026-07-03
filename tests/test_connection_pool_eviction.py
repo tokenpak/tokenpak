@@ -268,6 +268,60 @@ def test_streaming_downstream_error_does_not_evict():
 
 
 # ---------------------------------------------------------------------------
+# Session reaper / LRU disposal safety
+# ---------------------------------------------------------------------------
+
+def test_idle_reap_retires_instead_of_closing():
+    """An idle-looking session client may be mid-way through a long stream
+    (last_used is a checkout stamp) — the reaper must retire, not close."""
+    transport = _FlakyTransport(fail_times=0)
+    pool = _pool_with_transport(
+        transport, session_client_idle_seconds=0.0, retire_close_grace_seconds=3600.0
+    )
+    first = pool._get_session_client(NETLOC, "sess-old")
+
+    # Any later checkout triggers the idle reap of sess-old.
+    pool._get_session_client(NETLOC, "sess-new")
+
+    assert (NETLOC, "sess-old") not in pool._session_clients
+    assert first.is_closed is False, "reaped client must stay open for in-flights"
+    assert pool.metrics()["retired_pending_close"] >= 1
+    pool.close()
+    assert first.is_closed is True
+
+
+def test_lru_eviction_retires_instead_of_closing():
+    transport = _FlakyTransport(fail_times=0)
+    pool = _pool_with_transport(
+        transport, session_client_max=1, retire_close_grace_seconds=3600.0
+    )
+    first = pool._get_session_client(NETLOC, "sess-a")
+    pool._get_session_client(NETLOC, "sess-b")  # cap 1 → LRU-evicts sess-a
+
+    assert (NETLOC, "sess-a") not in pool._session_clients
+    assert first.is_closed is False
+    pool.close()
+    assert first.is_closed is True
+
+
+def test_request_completion_restamps_session_last_used():
+    transport = _FlakyTransport(fail_times=0)
+    pool = _pool_with_transport(transport)
+    client = pool._get_session_client(NETLOC, "sess-1")
+    key = (NETLOC, "sess-1")
+    pool._session_clients[key] = (client, 0.0)  # artificially ancient
+
+    pool.request("POST", URL, content=b"{}", session_key="sess-1")
+    assert pool._session_clients[key][1] > 0.0
+
+    pool._session_clients[key] = (client, 0.0)
+    with pool.stream("POST", URL, content=b"{}", session_key="sess-1") as resp:
+        resp.read()
+    assert pool._session_clients[key][1] > 0.0, "stream exit must re-stamp"
+    pool.close()
+
+
+# ---------------------------------------------------------------------------
 # Config / metrics surface
 # ---------------------------------------------------------------------------
 
