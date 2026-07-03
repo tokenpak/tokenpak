@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-06-18T00:45:53Z",
-  "package_version": "1.9.2",
+  "generated_at": "2026-07-03T15:37:26Z",
+  "package_version": "1.10.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -2334,6 +2334,14 @@
     {
       "module": "tokenpak.companion.recall.migrations",
       "name": "current_version"
+    },
+    {
+      "module": "tokenpak.companion.recall.ranking",
+      "name": "RankedPak"
+    },
+    {
+      "module": "tokenpak.companion.recall.ranking",
+      "name": "rank_paks"
     },
     {
       "module": "tokenpak.companion.recall.schema",
@@ -11473,7 +11481,7 @@
     },
     {
       "module": "tokenpak.sdk.crewai.examples.basic_usage",
-      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'crewai_tokenpak'>"
+      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'tokenpak.agent.agentic.handoff'>"
     },
     {
       "module": "tokenpak.sdk.crewai.handoff",
