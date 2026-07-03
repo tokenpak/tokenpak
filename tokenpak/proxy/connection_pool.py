@@ -25,6 +25,16 @@ Env vars (all optional)
     Seconds before idle keep-alive connections are evicted (default: ``30``).
 ``TOKENPAK_HTTP2``
     Set to ``0`` to disable HTTP/2 (default: ``1`` — enabled).
+``TOKENPAK_POOL_CONNECT_TIMEOUT``
+    Seconds to wait for a new TCP connection (default: ``10``).
+``TOKENPAK_POOL_READ_TIMEOUT``
+    Seconds to wait for upstream response bytes (default: ``300``).
+``TOKENPAK_POOL_EVICT_ON_TRANSPORT_ERROR``
+    Set to ``0`` to keep a client pooled after a transport error
+    (default: ``1`` — evict so retries get a fresh connection).
+``TOKENPAK_POOL_RETIRE_CLOSE_GRACE_SECS``
+    Seconds an evicted client is kept open for in-flight requests before
+    being closed (default: ``900``).
 
 Performance impact
 ------------------
@@ -45,7 +55,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -65,6 +75,22 @@ def _http2_available() -> bool:
 
 
 _H2_AVAILABLE: bool = _http2_available()
+
+
+# ---------------------------------------------------------------------------
+# Transport-error classification for client eviction
+# ---------------------------------------------------------------------------
+
+# PoolTimeout means the local pool was saturated, not that a connection is
+# broken — evicting the whole client would discard healthy connections.
+_EVICT_EXCLUDED_ERRORS: tuple = (httpx.PoolTimeout,)
+
+
+def _is_evictable_transport_error(exc: BaseException) -> bool:
+    """True when *exc* suggests the client's pooled connection(s) may be dead."""
+    return isinstance(exc, httpx.TransportError) and not isinstance(
+        exc, _EVICT_EXCLUDED_ERRORS
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +117,13 @@ class PoolConfig:
         Seconds to wait for a response (default: 300 — LLM responses can be slow).
     http2 : bool
         Enable HTTP/2 when ``h2`` is installed (default: True).
+    evict_on_transport_error : bool
+        Evict a client from the pool when a request on it raises a transport
+        error, so retries get a fresh client/connection instead of the same
+        dead one (default: True).
+    retire_close_grace_seconds : float
+        How long an evicted client is retained (unclosed) so requests still
+        in flight on it can finish before ``close()`` (default: 900).
     """
 
     max_connections: int = 20
@@ -99,6 +132,8 @@ class PoolConfig:
     connect_timeout: float = 10.0
     read_timeout: float = 300.0
     http2: bool = True
+    evict_on_transport_error: bool = True
+    retire_close_grace_seconds: float = 900.0
     # Per-session upstream client pool — used when the caller passes a
     # session_key to stream()/request(). Each unique session_key gets its
     # own httpx.Client (and thus its own HTTP/2 connection to upstream),
@@ -116,7 +151,15 @@ class PoolConfig:
             max_connections=int(os.environ.get("TOKENPAK_POOL_MAX_CONNECTIONS", "20")),
             max_keepalive_connections=int(os.environ.get("TOKENPAK_POOL_MAX_KEEPALIVE", "10")),
             keepalive_expiry=float(os.environ.get("TOKENPAK_POOL_KEEPALIVE_EXPIRY", "30")),
+            connect_timeout=float(os.environ.get("TOKENPAK_POOL_CONNECT_TIMEOUT", "10")),
+            read_timeout=float(os.environ.get("TOKENPAK_POOL_READ_TIMEOUT", "300")),
             http2=os.environ.get("TOKENPAK_HTTP2", "1") != "0",
+            evict_on_transport_error=(
+                os.environ.get("TOKENPAK_POOL_EVICT_ON_TRANSPORT_ERROR", "1") != "0"
+            ),
+            retire_close_grace_seconds=float(
+                os.environ.get("TOKENPAK_POOL_RETIRE_CLOSE_GRACE_SECS", "900")
+            ),
             session_client_max=int(os.environ.get("TOKENPAK_SESSION_CLIENTS_MAX", "32")),
             session_client_idle_seconds=float(
                 os.environ.get("TOKENPAK_SESSION_CLIENT_IDLE_SECS", "300")
@@ -137,6 +180,7 @@ class PoolMetrics:
     reused_connections: int = 0
     new_connections: int = 0
     errors: int = 0
+    evicted_clients: int = 0
 
     @property
     def reuse_rate(self) -> float:
@@ -151,6 +195,7 @@ class PoolMetrics:
             "reused_connections": self.reused_connections,
             "new_connections": self.new_connections,
             "errors": self.errors,
+            "evicted_clients": self.evicted_clients,
             "reuse_rate": self.reuse_rate,
         }
 
@@ -197,6 +242,11 @@ class ConnectionPool:
         # off the main pool lock's critical path.
         self._session_clients: Dict[tuple, tuple] = {}
         self._session_lock = threading.Lock()
+        # Clients evicted after a transport error. They are not closed
+        # immediately — other threads may still be mid-request on them —
+        # but retired here and closed once the grace period has passed.
+        self._retired_clients: List[Tuple[httpx.Client, float]] = []
+        self._retired_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Client management
@@ -292,6 +342,60 @@ class ConnectionPool:
             self._session_clients[key] = (client, now)
             return client
 
+    def _evict_client(
+        self, netloc: str, session_key: Optional[str], client: httpx.Client
+    ) -> bool:
+        """
+        Remove *client* from the pool after a transport error so the next
+        checkout builds a fresh client (and therefore fresh connections).
+
+        Identity-checked: if the pool already holds a replacement client for
+        the slot, nothing is evicted — a burst of failures on one dead client
+        evicts it exactly once. The evicted client is retired, not closed,
+        so requests still in flight on it can finish; retired clients are
+        closed by :meth:`_reap_retired` after the grace period.
+        """
+        if not self._config.evict_on_transport_error:
+            return False
+        evicted = False
+        if session_key:
+            key = (netloc, session_key)
+            with self._session_lock:
+                entry = self._session_clients.get(key)
+                if entry is not None and entry[0] is client:
+                    self._session_clients.pop(key)
+                    evicted = True
+        else:
+            with self._lock:
+                if self._clients.get(netloc) is client:
+                    self._clients.pop(netloc)
+                    evicted = True
+        if evicted:
+            with self._retired_lock:
+                self._retired_clients.append((client, time.monotonic()))
+            with self._metrics_lock:
+                self._metrics.evicted_clients += 1
+        self._reap_retired()
+        return evicted
+
+    def _reap_retired(self, force: bool = False) -> None:
+        """Close retired clients whose in-flight grace period has passed."""
+        cutoff = time.monotonic() - self._config.retire_close_grace_seconds
+        to_close: List[httpx.Client] = []
+        with self._retired_lock:
+            keep: List[Tuple[httpx.Client, float]] = []
+            for client, retired_at in self._retired_clients:
+                if force or retired_at <= cutoff:
+                    to_close.append(client)
+                else:
+                    keep.append((client, retired_at))
+            self._retired_clients = keep
+        for client in to_close:
+            try:
+                client.close()
+            except Exception:
+                pass
+
     # ------------------------------------------------------------------
     # Public request interface
     # ------------------------------------------------------------------
@@ -357,10 +461,12 @@ class ConnectionPool:
                 else:
                     self._metrics.new_connections += 1
             return response
-        except Exception:
+        except Exception as exc:
             with self._metrics_lock:
                 self._metrics.errors += 1
                 self._metrics.new_connections += 1
+            if _is_evictable_transport_error(exc):
+                self._evict_client(netloc, session_key, client)
             raise
 
     def stream(
@@ -399,7 +505,14 @@ class ConnectionPool:
             self._metrics.total_requests += 1
 
         return _StreamingContext(
-            client, method, url, content, headers, self._metrics, self._metrics_lock
+            client,
+            method,
+            url,
+            content,
+            headers,
+            self._metrics,
+            self._metrics_lock,
+            on_transport_error=lambda: self._evict_client(netloc, session_key, client),
         )
 
     # ------------------------------------------------------------------
@@ -420,7 +533,10 @@ class ConnectionPool:
     def metrics(self) -> dict:
         """Return a copy of the current pool metrics."""
         with self._metrics_lock:
-            return self._metrics.to_dict()
+            data = self._metrics.to_dict()
+        with self._retired_lock:
+            data["retired_pending_close"] = len(self._retired_clients)
+        return data
 
     def reset_metrics(self) -> None:
         """Reset all pool counters to zero."""
@@ -447,6 +563,7 @@ class ConnectionPool:
                 except Exception:
                     pass
             self._session_clients.clear()
+        self._reap_retired(force=True)
 
     def session_client_snapshot(self) -> Dict[str, Any]:
         """Return a diagnostic snapshot of the per-session client pool."""
@@ -489,14 +606,21 @@ class _StreamingContext:
         headers: Optional[dict],
         metrics: PoolMetrics,
         lock: threading.Lock,
+        on_transport_error: Optional[Callable[[], Any]] = None,
     ) -> None:
         self._ctx = client.stream(method, url, content=content, headers=headers)
         self._metrics = metrics
         self._lock = lock
         self._response: Optional[httpx.Response] = None
+        self._on_transport_error = on_transport_error
+        self._error_recorded = False
 
     def __enter__(self) -> httpx.Response:
-        self._response = self._ctx.__enter__()
+        try:
+            self._response = self._ctx.__enter__()
+        except Exception as exc:
+            self._record_error(exc)
+            raise
         with self._lock:
             proto = self._response.http_version
             if (
@@ -508,8 +632,30 @@ class _StreamingContext:
                 self._metrics.new_connections += 1
         return self._response
 
-    def __exit__(self, *args) -> None:
-        self._ctx.__exit__(*args)
+    def __exit__(self, exc_type, exc, tb) -> None:
+        try:
+            self._ctx.__exit__(exc_type, exc, tb)
+        finally:
+            if exc is not None:
+                self._record_error(exc)
+
+    def _record_error(self, exc: BaseException) -> None:
+        """Count an upstream error once and evict the client if it looks dead.
+
+        Only ``httpx.HTTPError`` counts — the streaming ``with`` body also
+        writes to the downstream client socket, and a downstream disconnect
+        (e.g. ``BrokenPipeError``) says nothing about upstream health.
+        """
+        if not isinstance(exc, httpx.HTTPError) or self._error_recorded:
+            return
+        self._error_recorded = True
+        with self._lock:
+            self._metrics.errors += 1
+        if self._on_transport_error is not None and _is_evictable_transport_error(exc):
+            try:
+                self._on_transport_error()
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------
