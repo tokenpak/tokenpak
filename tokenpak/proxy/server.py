@@ -102,6 +102,16 @@ from .upstream_retry import (
 # Retry-After rules.
 # ---------------------------------------------------------------------------
 
+# Deprecated compatibility alias — import compatibility only. Retry behavior
+# is governed by UpstreamRetryPolicy, which reads TOKENPAK_UPSTREAM_RETRIES
+# itself (the supported operator control); mutating this constant has no
+# effect. It mirrors the policy's parse of TOKENPAK_UPSTREAM_RETRIES at
+# import time and will be removed in a future minor release.
+try:
+    MAX_UPSTREAM_RETRIES: int = max(1, int(os.environ.get("TOKENPAK_UPSTREAM_RETRIES", "3")))
+except ValueError:
+    MAX_UPSTREAM_RETRIES = 3
+
 # ---------------------------------------------------------------------------
 # Per-(provider, session) outbound concurrency limiter.
 #

@@ -237,3 +237,17 @@ def test_high_concurrency_sends_queue_and_bound_correctly(monkeypatch) -> None:
     sem.release()
     thread.join(timeout=1)
     assert events == ["waiting", True]
+
+
+def test_max_upstream_retries_compat_alias() -> None:
+    """The deprecated server-module alias stays importable and sane.
+
+    MAX_UPSTREAM_RETRIES is retained for import compatibility only; it is
+    non-authoritative (retry behavior comes from UpstreamRetryPolicy's own
+    read of TOKENPAK_UPSTREAM_RETRIES). This pin keeps the alias from being
+    dropped again outside an explicit major/minor API decision.
+    """
+    from tokenpak.proxy.server import MAX_UPSTREAM_RETRIES
+
+    assert isinstance(MAX_UPSTREAM_RETRIES, int)
+    assert MAX_UPSTREAM_RETRIES >= 1

@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-07-03T15:37:26Z",
-  "package_version": "1.10.0",
+  "generated_at": "2026-07-04T05:17:54Z",
+  "package_version": "1.10.2",
   "symbols": [
     {
       "module": "tokenpak",
@@ -2334,14 +2334,6 @@
     {
       "module": "tokenpak.companion.recall.migrations",
       "name": "current_version"
-    },
-    {
-      "module": "tokenpak.companion.recall.ranking",
-      "name": "RankedPak"
-    },
-    {
-      "module": "tokenpak.companion.recall.ranking",
-      "name": "rank_paks"
     },
     {
       "module": "tokenpak.companion.recall.schema",
@@ -9961,7 +9953,19 @@
     },
     {
       "module": "tokenpak.proxy.server",
+      "name": "UpstreamRetryPolicy"
+    },
+    {
+      "module": "tokenpak.proxy.server",
+      "name": "UpstreamTruncatedJSONError"
+    },
+    {
+      "module": "tokenpak.proxy.server",
       "name": "auto_detect_upstream"
+    },
+    {
+      "module": "tokenpak.proxy.server",
+      "name": "build_terminal_recovery_payload"
     },
     {
       "module": "tokenpak.proxy.server",
@@ -9974,6 +9978,10 @@
     {
       "module": "tokenpak.proxy.server",
       "name": "extract_sse_tokens"
+    },
+    {
+      "module": "tokenpak.proxy.server",
+      "name": "extract_tip_plan_id"
     },
     {
       "module": "tokenpak.proxy.server",
@@ -10021,11 +10029,19 @@
     },
     {
       "module": "tokenpak.proxy.server",
+      "name": "persist_failed_request_metadata"
+    },
+    {
+      "module": "tokenpak.proxy.server",
       "name": "provider_from_url"
     },
     {
       "module": "tokenpak.proxy.server",
       "name": "render_footer_oneline"
+    },
+    {
+      "module": "tokenpak.proxy.server",
+      "name": "response_has_truncated_json"
     },
     {
       "module": "tokenpak.proxy.server",
@@ -10038,6 +10054,14 @@
     {
       "module": "tokenpak.proxy.server",
       "name": "validate_auth"
+    },
+    {
+      "module": "tokenpak.proxy.server_async",
+      "name": "ASYNC_UPSTREAM_ACQUIRE_TIMEOUT"
+    },
+    {
+      "module": "tokenpak.proxy.server_async",
+      "name": "ASYNC_UPSTREAM_CONCURRENCY"
     },
     {
       "module": "tokenpak.proxy.server_async",
@@ -10065,7 +10089,23 @@
     },
     {
       "module": "tokenpak.proxy.server_async",
+      "name": "UpstreamRetryPolicy"
+    },
+    {
+      "module": "tokenpak.proxy.server_async",
+      "name": "UpstreamTruncatedJSONError"
+    },
+    {
+      "module": "tokenpak.proxy.server_async",
+      "name": "build_terminal_recovery_payload"
+    },
+    {
+      "module": "tokenpak.proxy.server_async",
       "name": "create_async_app"
+    },
+    {
+      "module": "tokenpak.proxy.server_async",
+      "name": "extract_tip_plan_id"
     },
     {
       "module": "tokenpak.proxy.server_async",
@@ -10126,6 +10166,18 @@
     {
       "module": "tokenpak.proxy.server_async",
       "name": "lifespan"
+    },
+    {
+      "module": "tokenpak.proxy.server_async",
+      "name": "persist_failed_request_metadata"
+    },
+    {
+      "module": "tokenpak.proxy.server_async",
+      "name": "provider_from_url"
+    },
+    {
+      "module": "tokenpak.proxy.server_async",
+      "name": "response_has_truncated_json"
     },
     {
       "module": "tokenpak.proxy.server_async",
@@ -10718,6 +10770,58 @@
     {
       "module": "tokenpak.proxy.tracing",
       "name": "TraceStorage"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "NON_RETRYABLE_UPSTREAM_STATUSES"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "RETRYABLE_UPSTREAM_EXCEPTIONS"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "RETRYABLE_UPSTREAM_STATUSES"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "RateLimitBackoff"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "RetryDecision"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "UpstreamRetryPolicy"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "UpstreamTruncatedJSONError"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "build_terminal_recovery_payload"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "extract_tip_plan_id"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "local_json_body_is_valid"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "persist_failed_request_metadata"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "request_is_deterministic"
+    },
+    {
+      "module": "tokenpak.proxy.upstream_retry",
+      "name": "response_has_truncated_json"
     },
     {
       "module": "tokenpak.proxy.vault_bridge",
@@ -11481,7 +11585,7 @@
     },
     {
       "module": "tokenpak.sdk.crewai.examples.basic_usage",
-      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'tokenpak.agent.agentic.handoff'>"
+      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'crewai_tokenpak'>"
     },
     {
       "module": "tokenpak.sdk.crewai.handoff",

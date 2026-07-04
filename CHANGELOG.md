@@ -6,7 +6,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.10.1] — 2026-07-03
+## [1.10.2] — 2026-07-03
+
+> **Release note:** version **1.10.1 was never released.** Its release pipeline runs stopped
+> fail-closed at the public-API snapshot gate (no build, GitHub Release, or PyPI artifact was
+> produced) and the `v1.10.1` tag was retired. 1.10.2 carries the intended 1.10.1 changes
+> below, plus the corrected public-API snapshot.
 
 ### Fixed
 - **Proxy upstream transport reliability.** Transient upstream failures (connection resets,
@@ -19,6 +24,21 @@ This project follows [Semantic Versioning](https://semver.org/).
   being closed while requests are still in flight on them. New pool metrics `evicted_clients`
   and `retired_pending_close`; pool timeouts are env-tunable via `TOKENPAK_POOL_CONNECT_TIMEOUT`
   and `TOKENPAK_POOL_READ_TIMEOUT`.
+
+### Deprecated
+- `tokenpak.proxy.server.MAX_UPSTREAM_RETRIES` is retained as a compatibility alias so existing
+  imports continue to work, but it is now non-authoritative and deprecated (planned for removal
+  in a future minor release): retry behavior is governed by `UpstreamRetryPolicy`, and
+  `TOKENPAK_UPSTREAM_RETRIES` remains the supported operator control. Operator-facing behavior
+  is unchanged.
+
+### Release integrity
+- **Public-API snapshot regenerated in the canonical release environment.** The previous snapshot
+  had been regenerated against a stale installed package instead of the source tree, which is what
+  stopped the 1.10.1 release runs at the snapshot gate. The snapshot now records the bounded-retry
+  public surface (`tokenpak.proxy.upstream_retry`, re-exported by `tokenpak.proxy.server` and
+  `tokenpak.proxy.server_async`) and drops two symbol records that were never part of the released
+  package, plus a host-specific import-error record.
 
 ## [1.10.0] — 2026-06-28
 
