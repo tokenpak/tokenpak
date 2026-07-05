@@ -151,23 +151,28 @@ def test_format_miss_reason_summary_empty():
 
 
 def test_db_insert_and_query_cache_miss():
-    db = TelemetryDB(":memory:")
-    records = [
-        CacheMissRecord("req-1", reason="route_not_cacheable", route_class="code_edit").to_row(),
-        CacheMissRecord("req-2", reason="route_not_cacheable", route_class="code_edit").to_row(),
-        CacheMissRecord("req-3", reason="flag_off").to_row(),
-    ]
-    for row in records:
-        db.insert_cache_miss(row)
+    # Close the in-memory DB deterministically (context manager) so its named
+    # shared-cache database is dropped at test end and cannot leak into a later
+    # TelemetryDB(":memory:") whose object id() happens to collide with this one.
+    with TelemetryDB(":memory:") as db:
+        records = [
+            CacheMissRecord("req-1", reason="route_not_cacheable", route_class="code_edit").to_row(),
+            CacheMissRecord("req-2", reason="route_not_cacheable", route_class="code_edit").to_row(),
+            CacheMissRecord("req-3", reason="flag_off").to_row(),
+        ]
+        for row in records:
+            db.insert_cache_miss(row)
 
-    summary = db.query_cache_miss_summary(days=7)
-    by_reason = {r["reason"]: r for r in summary}
+        summary = db.query_cache_miss_summary(days=7)
+        by_reason = {r["reason"]: r for r in summary}
 
-    assert by_reason["route_not_cacheable"]["count"] == 2
-    assert by_reason["flag_off"]["count"] == 1
+        assert by_reason["route_not_cacheable"]["count"] == 2
+        assert by_reason["flag_off"]["count"] == 1
 
 
 def test_db_cache_miss_summary_empty():
-    db = TelemetryDB(":memory:")
-    result = db.query_cache_miss_summary(days=7)
+    # A freshly-created, isolated telemetry DB has no cache-miss rows. Use the
+    # context manager so the named :memory: database is torn down after the test.
+    with TelemetryDB(":memory:") as db:
+        result = db.query_cache_miss_summary(days=7)
     assert result == []

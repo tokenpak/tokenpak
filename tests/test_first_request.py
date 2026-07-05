@@ -86,6 +86,9 @@ class TestProxyStartup:
 
     @pytest.mark.slow
     @pytest.mark.integration
+    # Polls /health for up to ~30s by design; give it headroom above the global
+    # 30s pytest-timeout so it is not killed mid-run in the dev/full test shapes.
+    @pytest.mark.timeout(60)
     def test_health_check_timeout_30_seconds(self, proxy_process, proxy_url):
         """Health check with 30 second timeout (requires live proxy)."""
         timeout = 30

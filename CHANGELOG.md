@@ -6,6 +6,19 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.10.4] — 2026-07-05
+
+> **Release note:** version **1.10.3 was tagged but never published to PyPI.** Its release run
+> stopped fail-closed at the test gate (a release-only `pytest-timeout` enforcement issue in the
+> dev/full test shapes — no build, GitHub Release, or PyPI artifact was produced) and PyPI remained
+> at 1.10.2. 1.10.4 carries the intended 1.10.3 changes (below), plus the release-test fix.
+
+### Fixed
+- **Release test-gate stability.** A health-check integration test that polls `/health` for up to
+  ~30 seconds by design is given a per-test timeout above the global 30-second cap, so it is no
+  longer killed under the enforced `pytest-timeout` in the dev/full test shapes. Release-mechanics
+  only — no runtime behavior change.
+
 ## [1.10.3] — 2026-07-05
 
 > Patch release: a curated set of concurrency, durability, and telemetry-truth fixes for the
