@@ -5,14 +5,22 @@ Does setup (rate snapshot, MCP registration, hooks install, AGENTS.md,
 skills) and either exec-replaces into ``codex`` (default) or exits
 after install (``--install-only``).
 
+Before exec-ing a real launch it preflights Codex's own local SQLite
+databases (``state_5.sqlite`` / ``logs_2.sqlite``) so a shared ``~/.codex``
+that is locked by another (or a suspended) Codex process surfaces an
+actionable wait/retry instead of Codex dying on a raw "database is
+locked" error. ``--install-only`` skips the preflight — it never exec-s.
+
 Companion features work without the launcher if the user manually
 configures MCP, hooks, and AGENTS.md — the launcher is convenience.
 """
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
+import time
 
 from ..config import CompanionConfig
 
@@ -84,6 +92,159 @@ def _fleet_banner(env: dict[str, str] | None = None, fleet: bool = False) -> str
     if fleet or _bypass_env_enabled(env):
         return f"tokenpak: fleet mode — bypass flags injected ({_BYPASS_FLAG})"
     return None
+
+
+# ── Codex local-database lock preflight ─────────────────────────────
+# Bounded total wait for a *live* holder to release before we give up and
+# print remediation. A stopped/suspended holder never releases, so it is
+# short-circuited without consuming this budget.
+_LOCK_WAIT_TIMEOUT_S = 30.0
+# How often we re-probe the databases while waiting.
+_LOCK_POLL_INTERVAL_S = 0.5
+_ESC = "\x1b"
+
+
+def _stdin_is_tty() -> bool:
+    try:
+        return sys.stdin.isatty()
+    except Exception:
+        return False
+
+
+def _drain_esc_pressed() -> bool:
+    """Best-effort, non-blocking check for a pending Esc keypress.
+
+    Returns True if Esc (``0x1b``) is waiting on stdin.  Never blocks and
+    never raises: on any platform/terminal where raw keys are unreadable
+    we report "not pressed" and rely on the bounded timeout instead.
+    """
+    try:
+        import select
+        import termios
+        import tty
+    except ImportError:  # non-POSIX — try the Windows console API.
+        try:
+            import msvcrt
+        except ImportError:  # pragma: no cover - no raw-key source
+            return False
+        pressed = False
+        while msvcrt.kbhit():  # pragma: no cover - needs a Windows console
+            if msvcrt.getwch() == _ESC:
+                pressed = True
+        return pressed
+
+    if not _stdin_is_tty():
+        return False
+    fd = sys.stdin.fileno()
+    try:
+        old = termios.tcgetattr(fd)
+    except termios.error:
+        return False
+    try:
+        tty.setcbreak(fd)
+        pressed = False
+        while select.select([sys.stdin], [], [], 0)[0]:
+            ch = sys.stdin.read(1)
+            if not ch:
+                break
+            if ch == _ESC:
+                pressed = True
+        return pressed
+    finally:
+        with contextlib.suppress(termios.error):
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def _preflight_state_lock(
+    *,
+    prober=None,
+    interactive: bool | None = None,
+    timeout_s: float = _LOCK_WAIT_TIMEOUT_S,
+    poll_interval_s: float = _LOCK_POLL_INTERVAL_S,
+    esc_pressed=None,
+    sleep=None,
+    monotonic=None,
+) -> "int | None":
+    """Preflight Codex-owned SQLite databases before exec.
+
+    Returns ``None`` when it is safe to launch — the home is clear, or a
+    contended lock cleared within the bounded wait.  Returns an ``int``
+    exit code when the caller should abort instead of exec-ing into a
+    contended home:
+
+    * a suspended/stopped holder (which never releases) short-circuits to
+      direct remediation without waiting;
+    * a live holder is waited on up to ``timeout_s`` — in a TTY the user
+      may press Esc to cancel promptly, non-interactive callers get
+      concise retry lines and a bounded timeout;
+    * either way, exhausting the wait prints the same actionable
+      remediation guidance rather than letting Codex fail on a raw lock.
+
+    The seams (``prober``/``esc_pressed``/``sleep``/``monotonic``/
+    ``interactive``) are injectable so the wait loop is testable without a
+    real TTY, real clock, or real key input.
+    """
+    from . import state_lock
+
+    prober = prober or state_lock.probe
+    esc_pressed = esc_pressed or _drain_esc_pressed
+    sleep = sleep or time.sleep
+    monotonic = monotonic or time.monotonic
+    if interactive is None:
+        interactive = _stdin_is_tty()
+
+    status = prober()
+    if not status.locked:
+        return None
+
+    # A stopped/suspended holder never releases the lock — waiting is
+    # futile, so surface direct remediation immediately.
+    if status.stopped_pids:
+        print(state_lock.remediation_hint(status), file=sys.stderr)
+        return 1
+
+    if interactive:
+        print(
+            "tokenpak: SQLite database is busy. Waiting to connect... "
+            "Press Esc to cancel.",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            "tokenpak: Codex local database is busy; waiting up to "
+            f"{int(timeout_s)}s for the holder to release "
+            "(set a fresh CODEX_HOME to skip)...",
+            file=sys.stderr,
+        )
+
+    deadline = monotonic() + timeout_s
+    while monotonic() < deadline:
+        if interactive and esc_pressed():
+            print(
+                "tokenpak: cancelled while waiting for the Codex database lock.",
+                file=sys.stderr,
+            )
+            print(state_lock.remediation_hint(status), file=sys.stderr)
+            return 130
+        sleep(poll_interval_s)
+        status = prober()
+        if not status.locked:
+            return None
+        if status.stopped_pids:
+            print(state_lock.remediation_hint(status), file=sys.stderr)
+            return 1
+        if not interactive:
+            print(
+                "tokenpak: still waiting for the Codex database lock...",
+                file=sys.stderr,
+            )
+
+    print(
+        f"tokenpak: Codex database still locked after {int(timeout_s)}s.",
+        file=sys.stderr,
+    )
+    print(state_lock.remediation_hint(status), file=sys.stderr)
+    return 1
 
 
 def main(args: list[str] | None = None) -> int:
@@ -158,6 +319,15 @@ def main(args: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 0
+
+    # ── Step 5.5: Preflight Codex local-database lock ────────
+    # Only for real launches (install-only returned above): a shared
+    # ~/.codex whose state/log SQLite is held by another — or a suspended
+    # — Codex process would otherwise fail Codex on a raw "database is
+    # locked" error at startup.
+    lock_exit = _preflight_state_lock()
+    if lock_exit is not None:
+        return lock_exit
 
     # ── Step 6: Exec into codex ──────────────────────────────
     if config.budget_daily_usd > 0:

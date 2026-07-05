@@ -74,9 +74,9 @@ class Milestone:
 
 def _get_conn(db_path: Optional[str]) -> sqlite3.Connection:
     if db_path is None:
-        from pathlib import Path as _Path
+        from tokenpak.core.paths import get_db_path
 
-        db_path = str(_Path(__file__).parent.parent.parent / "telemetry.db")
+        db_path = str(get_db_path("telemetry.db"))
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")

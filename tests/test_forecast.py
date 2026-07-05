@@ -78,9 +78,9 @@ class TestBurnRateCalculation:
         today = date.today()
         ts = datetime.combine(today, datetime.min.time())
 
-        tracker.record_spend(6.0, model="claude-sonnet", timestamp=ts)
-        tracker.record_spend(2.0, model="claude-opus", timestamp=ts)
-        tracker.record_spend(2.0, model="claude-haiku", timestamp=ts)
+        tracker.record_spend(6.0, request_id="bd-1", model="claude-sonnet", timestamp=ts)
+        tracker.record_spend(2.0, request_id="bd-2", model="claude-opus", timestamp=ts)
+        tracker.record_spend(2.0, request_id="bd-3", model="claude-haiku", timestamp=ts)
 
         analysis = get_burn_rate(tracker, window_days=7)
 

@@ -327,6 +327,106 @@ def attribution_coverage(db_path) -> "tuple[int, int, float | None]":
             pass
 
 
+def companion_hook_integrity() -> "list[tuple[str, str, str]]":
+    """Inspect installed companion hook configs for silent-failure hazards.
+
+    Returns ``(status, message, detail)`` tuples for _record(). Two hazards
+    are checked across Claude Code (``~/.claude/settings.json``) and Codex
+    (``~/.codex/hooks.json``) hook configs:
+
+    - The bash hook variants shell out to the ``sqlite3`` CLI for their
+      journal/budget writes and silently no-op when the binary is missing —
+      evidence loss with no error surfaced anywhere. WARN when bash hooks
+      are installed but the CLI is absent.
+    - Hook commands referencing script paths that no longer exist (e.g. a
+      relocated or partially removed install) fail on every prompt. WARN
+      listing the missing paths.
+    """
+    import shutil as _shutil
+
+    results: "list[tuple[str, str, str]]" = []
+    hook_cmds: "list[str]" = []
+
+    def _collect(hook_config) -> None:
+        if not isinstance(hook_config, dict):
+            return
+        for groups in hook_config.values():
+            if not isinstance(groups, list):
+                continue
+            for group in groups:
+                if not isinstance(group, dict):
+                    continue
+                for h in group.get("hooks", []) or []:
+                    if isinstance(h, dict):
+                        cmd = str(h.get("command", "") or "")
+                        if "tokenpak" in cmd.lower():
+                            hook_cmds.append(cmd)
+
+    for cfg_path in (
+        _claude_settings_path(),
+        Path.home() / ".codex" / "hooks.json",
+    ):
+        try:
+            if not cfg_path.exists():
+                continue
+            data = json.loads(cfg_path.read_text())
+        except Exception:
+            continue
+        if isinstance(data, dict):
+            _collect(data.get("hooks", {}))
+
+    if not hook_cmds:
+        results.append((
+            "pass",
+            "Companion hooks     not installed (no hook commands found)",
+            "",
+        ))
+        return results
+
+    missing: "list[str]" = []
+    uses_bash_scripts = False
+    for cmd in hook_cmds:
+        for token in cmd.split():
+            if token.endswith((".sh", ".py")) and ("/" in token or "\\" in token):
+                if token.endswith(".sh"):
+                    uses_bash_scripts = True
+                if not Path(token).exists():
+                    missing.append(token)
+
+    healthy = True
+    if missing:
+        healthy = False
+        results.append((
+            "warn",
+            f"Companion hooks     {len(missing)} installed hook script path(s) missing",
+            "Missing: " + ", ".join(sorted(set(missing)))
+            + " — these hooks fail on every prompt. Re-run the companion "
+            "launcher (or reinstall) to repair the hook config.",
+        ))
+
+    if uses_bash_scripts and _shutil.which("sqlite3") is None:
+        healthy = False
+        results.append((
+            "warn",
+            "Companion hooks     sqlite3 CLI not found — bash hooks silently "
+            "skip journal/budget writes",
+            "The installed bash hook variants depend on the sqlite3 "
+            "command-line tool for journal and budget writes and no-op "
+            "without it. Install it (e.g. apt install sqlite3 / brew "
+            "install sqlite) or switch to the python hook variant.",
+        ))
+
+    if healthy:
+        results.append((
+            "pass",
+            f"Companion hooks     {len(hook_cmds)} hook command(s) installed — "
+            "scripts present"
+            + (", sqlite3 CLI available" if uses_bash_scripts else ""),
+            "",
+        ))
+    return results
+
+
 def run_doctor(
     fix: bool = False,
     output_json: bool = False,
@@ -1280,6 +1380,21 @@ def run_doctor(
                     print(f"  ✓ Created {d}")
     else:
         _record("required_dirs", "pass", "Required dirs       all present")
+
+    # === Companion hook integrity (script paths + sqlite3 CLI) ==================
+    # The bash hook variants no-op silently without the sqlite3 CLI, and a
+    # hook command pointing at a missing script fails on every prompt —
+    # both are invisible without a doctor check.
+    try:
+        for _ch_status, _ch_msg, _ch_detail in companion_hook_integrity():
+            _record("companion_hooks", _ch_status, _ch_msg, detail=_ch_detail)
+    except Exception as _ch_e:  # pragma: no cover — must never crash doctor
+        _record(
+            "companion_hooks",
+            "warn",
+            f"Companion hooks     could not inspect hook configs: {type(_ch_e).__name__}",
+            detail=str(_ch_e),
+        )
 
     # === Permission tiers (persistent tier vs launcher fleet mode) ==============
     # Three-row display. The persistent-tier rows can only ever read

@@ -111,11 +111,16 @@ def build_sql_where(
     return ("WHERE " + " AND ".join(conditions), params) if conditions else ("", params)
 
 
-DEFAULT_DB_PATH = Path(__file__).parent.parent.parent / "telemetry.db"
+def _default_db_path() -> Path:
+    # Single-resolver rule: resolve at call time (not import time) so env
+    # changes are honored, and never fall back to a repo-root telemetry.db.
+    from tokenpak.core.paths import get_db_path
+
+    return get_db_path("telemetry.db")
 
 
 def _get_conn(db_path=None):
-    conn = sqlite3.connect(str(db_path or DEFAULT_DB_PATH))
+    conn = sqlite3.connect(str(db_path or _default_db_path()))
     conn.row_factory = sqlite3.Row
     return conn
 

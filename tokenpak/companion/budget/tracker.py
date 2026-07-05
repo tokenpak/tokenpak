@@ -13,11 +13,14 @@ for actual billing.
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from tokenpak.models import get_rates as _registry_get_rates
+
+from .. import _sqlite as _db
 
 
 @dataclass
@@ -43,26 +46,31 @@ class BudgetTracker:
         self._daily_budget = daily_budget
         self._session_cost = 0.0
         self._session_requests = 0
+        self._write_lock = threading.RLock()
+        self._write_conn: sqlite3.Connection | None = None
         self._init_db()
 
     def _init_db(self) -> None:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS companion_costs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp REAL NOT NULL,
-                date TEXT NOT NULL,
-                session_id TEXT NOT NULL DEFAULT '',
-                model TEXT NOT NULL DEFAULT '',
-                input_tokens INTEGER NOT NULL DEFAULT 0,
-                cached_tokens INTEGER NOT NULL DEFAULT 0,
-                output_tokens INTEGER NOT NULL DEFAULT 0,
-                estimated_cost REAL NOT NULL DEFAULT 0.0
-            )
-        """)
+        conn = self._connect()
+        # Canonical schema lives in companion._sqlite — shared with the
+        # pre-send hook so there is exactly one DDL for companion_costs.
+        _db.ensure_costs_schema(conn)
         conn.commit()
         conn.close()
+
+    def _connect(self) -> sqlite3.Connection:
+        """Open the budget DB via the shared companion connection factory
+        (busy_timeout is applied before the WAL switch there, so concurrent
+        first-openers wait for the conversion instead of failing)."""
+        return _db.connect(
+            self._db_path, check_same_thread=False, foreign_keys=True
+        )
+
+    def _writer(self) -> sqlite3.Connection:
+        if self._write_conn is None:
+            self._write_conn = self._connect()
+        return self._write_conn
 
     def estimate(
         self,
@@ -110,37 +118,43 @@ class BudgetTracker:
             + cached_tokens * rates["cached"] / 1_000_000
             + output_tokens * rates["output"] / 1_000_000
         )
-        self._session_cost += cost
-        self._session_requests += 1
 
         now = time.time()
         import datetime
         date_str = datetime.date.today().isoformat()
 
-        conn = sqlite3.connect(str(self._db_path))
-        conn.execute(
-            """INSERT INTO companion_costs
-               (timestamp, date, session_id, model, input_tokens, cached_tokens,
-                output_tokens, estimated_cost)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (now, date_str, session_id, model, input_tokens, cached_tokens,
-             output_tokens, round(cost, 6)),
-        )
-        conn.commit()
-        conn.close()
+        with self._write_lock:
+            self._session_cost += cost
+            self._session_requests += 1
+            conn = self._writer()
+            # kind='actual': this plane reports completed-request usage. The
+            # daily gate prefers these rows over the pre-send 'estimate' rows
+            # for the same session so a message is never counted twice.
+            conn.execute(
+                """INSERT INTO companion_costs
+                   (timestamp, date, session_id, model, input_tokens, cached_tokens,
+                    output_tokens, estimated_cost, kind)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'actual')""",
+                (now, date_str, session_id, model, input_tokens, cached_tokens,
+                 output_tokens, round(cost, 6)),
+            )
+            conn.commit()
 
     def _get_daily_total(self) -> float:
-        """Query today's total from the DB (excludes current session in-memory cost)."""
+        """Query today's truthful total from the DB.
+
+        Per (session, day): sums actual rows when present, otherwise takes
+        the latest estimate — each message is counted exactly once instead
+        of summing estimate + actual, or summing a cumulative pre-send
+        estimate series (see companion._sqlite.DAILY_SPEND_SQL).
+        """
         import datetime
         today = datetime.date.today().isoformat()
         try:
-            conn = sqlite3.connect(str(self._db_path))
-            row = conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost), 0) FROM companion_costs WHERE date = ?",
-                (today,),
-            ).fetchone()
+            conn = self._connect()
+            row = conn.execute(_db.DAILY_SPEND_SQL, (today,)).fetchone()
             conn.close()
-            return row[0] if row else 0.0
+            return float(row[0] or 0.0) if row else 0.0
         except Exception:
             return 0.0
 

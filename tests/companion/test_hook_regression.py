@@ -307,20 +307,13 @@ def test_budget_block_seeded_daily_total_exceeds(tmp_path):
 # Failure Mode 3: Journal write drops entries under concurrent access
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Known concurrent write data-loss bug: SQLite journal store does not enable "
-        "WAL mode, causing SQLITE_BUSY under concurrent multi-process writes, resulting "
-        "in silent session data loss. Tracked for fix in journal store layer."
-    ),
-)
 def test_concurrent_journal_writes_no_data_loss(tmp_path):
     """5 concurrent hook invocations must all write their journal entries.
 
     Regression: SQLite WAL mode was not enabled, causing SQLITE_BUSY errors
     under concurrent writers that were swallowed by the try/except in
-    _journal_write, resulting in silent data loss.
+    _journal_write, resulting in silent data loss. Fixed by the shared
+    companion connection factory (WAL + busy_timeout); this test now gates.
     """
     n_workers = 5
     transcript_path = tmp_path / "shared_session.jsonl"
@@ -360,32 +353,30 @@ def test_concurrent_journal_writes_no_data_loss(tmp_path):
     )
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Known concurrent write data-loss bug: SQLite journal store does not enable "
-        "WAL mode, causing SQLITE_BUSY under concurrent multi-process writes to the "
-        "same session_id. Tracked for fix in journal store layer. Test remains to "
-        "detect regression once fixed (xpass = bug resolved)."
-    ),
-)
 def test_concurrent_journal_writes_correct_entry_count(tmp_path):
-    """N concurrent writes to the same session must produce exactly N entries.
+    """N concurrent DISTINCT writes to the same session produce exactly N rows.
 
     This tests that concurrent writes to a single session_id don't collide
-    and silently lose rows.
+    and silently lose rows. Each worker submits a prompt of a different
+    length so the journal entries are distinct events: journal entries now
+    carry a content-hash dedupe key, so IDENTICAL events deliberately
+    collapse to one row (that behavior is covered separately in
+    test_store_concurrency.py) while distinct concurrent events must all
+    survive.
     """
     n_writes = 6
     transcript_path = tmp_path / "session.jsonl"
     _make_transcript(transcript_path, size_bytes=8000)
     session_id = "concurrent-single-session"
 
-    def run_worker(_: int) -> subprocess.CompletedProcess:
+    def run_worker(i: int) -> subprocess.CompletedProcess:
         return _run_hook(
             {
                 "session_id": session_id,
                 "transcript_path": str(transcript_path),
-                "prompt": "concurrent single session write",
+                # Distinct length per worker (i*8 chars) → distinct token
+                # estimate → distinct journal entry content per worker.
+                "prompt": "concurrent single session write " + ("x" * (i * 8)),
             },
             tmp_path=tmp_path,
             extra_env={"TOKENPAK_COMPANION_BUDGET": "0"},
@@ -409,14 +400,6 @@ def test_concurrent_journal_writes_correct_entry_count(tmp_path):
     )
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Known concurrent write data-loss bug: SQLite journal store does not enable "
-        "WAL mode, causing SQLITE_BUSY (OperationalError: database is locked) under "
-        "concurrent thread writes. Tracked for fix in journal store layer."
-    ),
-)
 def test_concurrent_journal_store_direct_no_data_loss(tmp_path):
     """JournalStore.add_entry survives N concurrent writes from threads.
 

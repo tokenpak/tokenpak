@@ -134,6 +134,10 @@ dev = [
     "pytest-cov>=4.1.0",
     "pytest-benchmark>=4.0.0",
     "pytest-mock>=3.12.0",
+    # pytest-timeout makes the `timeout = 30` pyproject option + per-test timeout
+    # marks actually enforce in CI (a hung subprocess fails fast instead of
+    # stalling the job to the runner limit).
+    "pytest-timeout>=2.1.0",
     "black>=24.0.0",
     "ruff>=0.2.0",
     # Subsystem test deps: the dispatch test suite imports pydantic/jsonschema.

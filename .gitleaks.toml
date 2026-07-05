@@ -1,0 +1,24 @@
+# gitleaks configuration.
+#
+# This EXTENDS the default gitleaks ruleset (useDefault = true) — it does NOT
+# replace or weaken it. Every built-in secret rule stays active everywhere.
+#
+# The only customization is a single, narrowly-scoped allowlist for the CI
+# gate-inventory manifest. `.github/gate-inventory.yml` records, for each
+# `.github/workflows/*.yml` file, its sha256 content digest (a change-control
+# fingerprint). gitleaks' `generic-api-key` heuristic false-positives on a digest
+# whose manifest key contains a secret keyword (e.g. `secret-scan.yml: <sha256>`).
+#
+# This is not a coverage hole: `.github/workflows/gate-inventory-check.yml`
+# structurally enforces that every manifest value equals `sha256sum` of the named
+# workflow, so a real credential cannot masquerade as an entry there (it would
+# fail that gate). Scope is this one file only.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "CI gate-inventory manifest holds only sha256 workflow digests (integrity-enforced by gate-inventory-check.yml); exclude it from secret scanning to avoid generic-api-key false positives on the digests."
+paths = [
+  '''(^|/)\.github/gate-inventory\.yml$''',
+]

@@ -1,8 +1,8 @@
 # TokenPak
 
-> **Zero-token operations. Maximum context efficiency.**
+> **Local proxy. Measured context efficiency.**
 
-TokenPak is an open-source LLM proxy that compresses context, routes requests intelligently, and tracks costs — all without touching your prompts or credentials.
+TokenPak is an open-source LLM proxy that compresses context, routes requests intelligently, and tracks costs locally before forwarding requests to your configured provider.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -15,8 +15,8 @@ LLM APIs charge per token. Most conversations are bloated with repetitive contex
 
 | Metric | Value |
 |--------|-------|
-| Average token reduction | **measure with `tokenpak savings`** |
-| Zero-token operations | **80%+** |
+| Average token reduction | **measure on your workload with `tokenpak savings`** |
+| Local operations | **status, search, cost, and route checks read local state** |
 | Cold start overhead | **< 100ms** |
 | Indexing throughput | **2,700+ files/sec** |
 
@@ -24,17 +24,17 @@ LLM APIs charge per token. Most conversations are bloated with repetitive contex
 
 ## Core Principles
 
-=== "Zero Data"
- We never see your prompts, code, or responses. Everything happens locally.
+=== "Local Data"
+ Prompts are handled by your local proxy, then forwarded only to your configured provider.
 
 === "Zero Credentials"
- Pure passthrough proxy — your API keys go directly to providers, never stored by TokenPak.
+ Pure passthrough proxy — your API keys go directly to providers and are not stored by TokenPak.
 
 === "Zero Lock-in"
  Downgrade anytime. Keep all your data. No vendor dependencies.
 
 === "Zero Tokens for Ops"
- Status, search, cost reports — all free. CLI-first, deterministic.
+ Status, search, and cost reports read local state instead of calling the LLM.
 
 ---
 
@@ -136,8 +136,8 @@ tokenpak savings # Token savings
 
 # Compression
 tokenpak compress # Dry-run compression
-tokenpak demo # Live demo
-tokenpak trace # Debug pipeline
+tokenpak demo # Offline fixture demo
+tokenpak debug list # View recent request traces
 
 # Vault
 tokenpak index # Index directory
@@ -190,8 +190,8 @@ pytest
 
 | Metric | Value |
 |--------|-------|
-| Average token reduction | **measure with `tokenpak savings`** |
-| Zero-token operations | **80%+** |
+| Average token reduction | **measure on your workload with `tokenpak savings`** |
+| Local operations | **status, search, cost, and route checks read local state** |
 | Indexing throughput | **2,700+ files/sec** |
 | Search latency | **~23ms** |
 | Cold start overhead | **< 100ms** |

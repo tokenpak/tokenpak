@@ -7,9 +7,10 @@ This module is internal.  Import :class:`TelemetryDB` from
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 _DDL = """
 PRAGMA journal_mode=WAL;
@@ -194,13 +195,59 @@ class TelemetryDBBase:
 
     def __init__(self, path: Union[str, Path] = ":memory:") -> None:
         self._path = str(path)
-        self._conn: sqlite3.Connection = sqlite3.connect(self._path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
+        # Thread-safety: a single sqlite3 connection shared across a thread
+        # pool has one implicit transaction, so concurrent writers interleave
+        # half-written batches into each other's commits. Instead each thread
+        # gets its own connection via a thread-local factory (the ``_conn``
+        # property). Plain ``:memory:`` paths are mapped to a named
+        # shared-cache URI so every per-thread connection sees the same
+        # database; ``_keeper`` holds that database alive for the object's
+        # lifetime.
+        self._local = threading.local()
+        self._all_conns: list[sqlite3.Connection] = []
+        self._conns_lock = threading.Lock()
+        self._mem_uri: Optional[str] = (
+            f"file:tokenpak_telemetry_base_{id(self)}?mode=memory&cache=shared"
+            if self._path == ":memory:"
+            else None
+        )
+        self._keeper = self._connect()
+        self._local.conn = self._keeper
         self._apply_ddl()
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
+
+    def _connect(self) -> sqlite3.Connection:
+        """Open a new connection to the underlying database.
+
+        ``check_same_thread=False`` is set only so :meth:`close` can close
+        every thread's connection; each connection is otherwise used by a
+        single thread via the thread-local ``_conn`` property.
+        """
+        if self._mem_uri is not None:
+            conn = sqlite3.connect(self._mem_uri, uri=True, check_same_thread=False)
+        else:
+            conn = sqlite3.connect(self._path, check_same_thread=False, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        # Generous busy timeout + NORMAL sync (safe under WAL): concurrent
+        # writers queue instead of failing, and commits avoid a full fsync
+        # per transaction. Mirrors the hardened registry connection setup.
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        with self._conns_lock:
+            self._all_conns.append(conn)
+        return conn
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        """Return the calling thread's connection, creating it on demand."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = self._connect()
+            self._local.conn = conn
+        return conn
 
     def _apply_ddl(self) -> None:
         """Create tables and indexes if they don't already exist."""
@@ -303,8 +350,15 @@ class TelemetryDBBase:
             _add_col(_tbl, "avg_cost", "REAL NOT NULL DEFAULT 0")
 
     def close(self) -> None:
-        """Close the underlying database connection."""
-        self._conn.close()
+        """Close every connection this store has opened (all threads)."""
+        with self._conns_lock:
+            conns, self._all_conns = self._all_conns, []
+        for conn in conns:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        self._local.conn = None
 
     def __enter__(self) -> "TelemetryDBBase":
         return self

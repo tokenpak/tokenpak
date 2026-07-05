@@ -14,10 +14,15 @@ TIP-header handling, and audit logging.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from typing import Optional
 
 from .block_response import (
     block as build_block,
+)
+from .block_response import (
+    block_store_unavailable as build_block_store_unavailable,
 )
 from .block_response import (
     cancelled as build_cancelled,
@@ -40,6 +45,33 @@ from .pending import PendingStore, hash_request
 from .policy import SpendGuardConfig, decide, load_config
 
 _log = logging.getLogger(__name__)
+
+# Pending-row reconciliation: crashed/abandoned sessions leave rows in
+# status='pending' forever unless someone sweeps them. The sweep piggybacks
+# on evaluate() — it runs on the first evaluation in a process ("init") and
+# at most once per interval thereafter, so the hot path pays one timestamp
+# comparison in the common case.
+_EXPIRE_SWEEP_INTERVAL_SEC = 300.0
+_EXPIRE_SWEEP_LOCK = threading.Lock()
+_LAST_EXPIRE_SWEEP = 0.0
+
+
+def _maybe_expire_pending(store: "PendingStore") -> None:
+    """Best-effort TTL sweep of stale pending rows, rate-limited per process."""
+    global _LAST_EXPIRE_SWEEP
+    now = time.time()
+    if now - _LAST_EXPIRE_SWEEP < _EXPIRE_SWEEP_INTERVAL_SEC:
+        return
+    with _EXPIRE_SWEEP_LOCK:
+        if now - _LAST_EXPIRE_SWEEP < _EXPIRE_SWEEP_INTERVAL_SEC:
+            return
+        _LAST_EXPIRE_SWEEP = now
+    try:
+        expired = store.expire_old()
+        if expired:
+            _log.info("spend_guard: expired %d stale pending request(s)", expired)
+    except Exception as e:
+        _log.debug("spend_guard: pending expiry sweep failed: %s", e)
 
 
 # Provider hostnames keyed off the target_url for audit/store metadata.
@@ -66,8 +98,12 @@ def evaluate(
 ) -> GuardOutcome:
     """Run the full pre-send pipeline.
 
-    Returns a :class:`GuardOutcome` the proxy hook will interpret. Fails
-    open (returns ``forward``) on any internal error.
+    Returns a :class:`GuardOutcome` the proxy hook will interpret.
+    Failure posture: unmeasurable rolling usage and pending-store write
+    failures fail CLOSED (block); anything that still raises out of here
+    is converted to a fail-closed 402 by the public ``evaluate`` wrapper
+    in ``__init__.py``. Only the estimator keeps an explicit passthrough
+    (a request we cannot price is forwarded rather than broken).
     """
     cfg = config or load_config()
 
@@ -108,6 +144,8 @@ def evaluate(
     # Pending check + intent parse. Lazy import for the same
     # reason — the earlier stage can land before the intent parser exists.
     store = PendingStore(cfg.audit_db_path)
+    # Reconcile stale pending rows (first call in the process + periodic).
+    _maybe_expire_pending(store)
     existing_pending = store.get_by_session(session_id)
     if existing_pending is not None:
         try:
@@ -174,11 +212,31 @@ def evaluate(
     # would be exceeded by this request's projected cost, return a
     # block (respect TIP bypass directives). Per-session caps continue
     # to evaluate downstream — rolling caps SUPPLEMENT them.
+    #
+    # Admission accounting: when the cap check passes, the request's
+    # projected spend is registered as in-flight (process-local counter)
+    # so concurrent requests can't all pass against the same frozen
+    # usage snapshot. The ticket rides on the forward outcome and is
+    # settled by the proxy once the actual cost is recorded; any
+    # non-forward exit below cancels it immediately.
+    admission_ticket: Optional[str] = None
+
+    def _cancel_admission() -> None:
+        nonlocal admission_ticket
+        if admission_ticket:
+            try:
+                from .rolling_caps import settle_pending_spend
+                settle_pending_spend(admission_ticket)
+            except Exception:
+                pass
+            admission_ticket = None
+
     try:
         from .block_response import build_rolling_cap_block
         from .rolling_caps import (
             RollingCapsConfig,
-            check_rolling_caps,
+            admit_pending_spend,
+            check_rolling_caps_and_admit,
             record_session_agent,
         )
         # Agent attribution — case-insensitive header lookup.
@@ -204,7 +262,7 @@ def evaluate(
             # from est.cache_hit_ratio applied to projected_input_tokens
             # as a conservative estimate.
             projected_cache_read = int(est.projected_input_tokens * float(getattr(est, "cache_hit_ratio", 0.0) or 0.0))
-            breach = check_rolling_caps(
+            breach, admission_ticket = check_rolling_caps_and_admit(
                 agent_id=agent_id,
                 projected_cost_usd=float(est.projected_cost_usd),
                 projected_input_tokens=int(est.projected_input_tokens),
@@ -234,11 +292,27 @@ def evaluate(
                     _audit(cfg, "rolling_cap_tip_bypass", session_id,
                            decision_str="allow",
                            projected_cost=est.projected_cost_usd, tip=tip_directive)
+                    # TIP-authorized forward still spends — track it so
+                    # concurrent checks see the in-flight cost.
+                    admission_ticket = admit_pending_spend(
+                        agent_id,
+                        float(est.projected_cost_usd),
+                        int(est.projected_input_tokens) + int(est.projected_output_tokens),
+                        projected_cache_read,
+                    )
     except ImportError:
         # rolling_caps module not yet installed — skip silently
         pass
     except Exception as e:
-        _log.debug("spend_guard: rolling-cap check failed (passthrough): %s", e)
+        # The rolling-caps engine itself fails closed on unmeasurable
+        # usage, so reaching here means a genuine bug in the cap wiring.
+        # Surface it loudly; the request proceeds to the per-session
+        # policy checks below (which still gate it).
+        _log.warning(
+            "spend_guard: rolling-cap check failed unexpectedly "
+            "(%s: %s) — continuing with per-session checks only",
+            type(e).__name__, e,
+        )
 
     # Session-cumulative running cost — read from monitor.db.
     session_running = 0.0
@@ -271,6 +345,7 @@ def evaluate(
 
     # ── [TIP: estimate=on] short-circuit (only when allowed by policy)
     if tip_directive is not None and tip_directive.estimate_only and decision.decision != "hard_block":
+        _cancel_admission()  # nothing forwards, nothing spends
         _audit(cfg, "estimate", session_id, decision_str="estimate", tip=tip_directive,
                projected_cost=est.projected_cost_usd)
         return GuardOutcome(
@@ -291,10 +366,12 @@ def evaluate(
             _audit(cfg, "tip_bypass", session_id, decision_str="allow",
                    projected_cost=est.projected_cost_usd, tip=tip_directive)
         kind = "forward_modified" if forward_body is not body else "forward"
-        return GuardOutcome(kind=kind, body=forward_body, decision=decision)
+        return GuardOutcome(kind=kind, body=forward_body, decision=decision,
+                            admission_ticket=admission_ticket)
 
     # ── Hard-block → return immediately, no pending stored
     if decision.decision == "hard_block":
+        _cancel_admission()
         _audit(cfg, "hard_block", session_id, decision_str="hard_block",
                projected_cost=est.projected_cost_usd, tip=tip_directive)
         return GuardOutcome(
@@ -306,17 +383,39 @@ def evaluate(
         )
 
     # ── Block → store pending, return block JSON
-    pending = store.store(
-        session_id=session_id,
-        body=body,                 # store original (pre-TIP-strip) bytes
-        headers=headers,
-        target_url=target_url,
-        provider=_provider_from_url(target_url),
-        model=model,
-        projected_tokens=est.projected_input_tokens + est.projected_output_tokens,
-        projected_cost_usd=est.projected_cost_usd,
-        ttl_seconds=cfg.pending_ttl_seconds,
-    )
+    _cancel_admission()  # blocked requests never reach the provider
+    try:
+        pending = store.store(
+            session_id=session_id,
+            body=body,                 # store original (pre-TIP-strip) bytes
+            headers=headers,
+            target_url=target_url,
+            provider=_provider_from_url(target_url),
+            model=model,
+            projected_tokens=est.projected_input_tokens + est.projected_output_tokens,
+            projected_cost_usd=est.projected_cost_usd,
+            ttl_seconds=cfg.pending_ttl_seconds,
+        )
+    except Exception as e:
+        # The policy already decided BLOCK. A pending-store failure must
+        # never downgrade that into a forward (which is what raising into
+        # a permissive outer handler would do) — synthesize the block
+        # without a pending row instead. Reply-to-approve is unavailable
+        # for this request; the response says so.
+        _log.warning(
+            "spend_guard: pending-store write failed (%s: %s) — "
+            "returning fail-closed block without a pending row",
+            type(e).__name__, e,
+        )
+        _audit(cfg, "block", session_id, decision_str="block_store_unavailable",
+               projected_cost=est.projected_cost_usd, tip=tip_directive)
+        return GuardOutcome(
+            kind="block",
+            response_body=build_block_store_unavailable(decision),
+            http_status=402,
+            decision=decision,
+            audit_event="block",
+        )
     _audit(cfg, "block", session_id, decision_str="block",
            pending_id=pending.pending_id, projected_cost=est.projected_cost_usd,
            tip=tip_directive)

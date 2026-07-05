@@ -82,5 +82,5 @@ and it does not require raw-prompt storage to produce useful output.
 
 - Engine: `tokenpak/telemetry/recommendations.py`
 - CLI command: `tokenpak/cli/commands/recommendations.py`
-- Architecture layer: telemetry (Level 2 per Standard 01 §2). The engine is read-only;
+- Architecture layer: telemetry (Level 2 per the architecture standard). The engine is read-only;
   it is invoked by an entrypoint (CLI) and never by `services/` or `proxy/`.

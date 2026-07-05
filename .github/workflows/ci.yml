@@ -207,7 +207,7 @@ jobs:
           path: reports/test-results-phase2-py${{ matrix.python-version }}.xml
           retention-days: 30
 
-  # Standard 21 §9.8 — process-enforced blocking.
+  # Branching policy process-enforced blocking.
   # Do NOT merge a PR to main if this job is red.
   # This job pins the 30-50% token reduction claim from the README.
   # Run locally: make benchmark-headline

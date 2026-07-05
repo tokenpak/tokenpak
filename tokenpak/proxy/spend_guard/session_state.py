@@ -48,6 +48,15 @@ def session_cumulative_cost(
     threshold mid-spike.
     """
     if not session_id:
+        # Header-less traffic resolves to the '' session key on BOTH the
+        # check side and the monitor-row write side. Session-cumulative
+        # caps are skipped for it — summing every anonymous request into
+        # one pseudo-session would over-block, and a model-name
+        # pseudo-session (the old fallback) is worse than none.
+        _log.debug(
+            "spend_guard.session_state: empty session key — "
+            "skipping session-cumulative check"
+        )
         return 0.0
     p = Path(os.path.expanduser(monitor_db_path)) if monitor_db_path else _path()
     if not p.exists():

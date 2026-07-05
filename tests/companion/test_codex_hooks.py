@@ -41,6 +41,7 @@ _CODEX_BASH_HOOK = str(_CODEX_DIR / "hooks_pre_send.sh")
 _SESSION_START_HOOK = str(_CODEX_DIR / "hooks_session_start.sh")
 _PRE_TOOL_USE_HOOK = str(_CODEX_DIR / "hooks_pre_tool_use.sh")
 _POST_TOOL_USE_HOOK = str(_CODEX_DIR / "hooks_post_tool_use.sh")
+_STOP_HOOK = str(_CODEX_DIR / "hooks_stop.sh")
 _FIXTURES = _REPO_ROOT / "tests" / "fixtures" / "codex"
 
 _SIX_FIELD_INPUT = {
@@ -284,6 +285,13 @@ def test_session_start_hook_emits_banner_on_resume(tmp_path):
     assert "resume" in result.stderr.lower()
 
 
+def test_session_start_hook_is_quiet_on_clear(tmp_path):
+    result = _run_script(_SESSION_START_HOOK, "hook_session_start_clear.json", tmp_path)
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+    assert result.stderr.strip() == ""
+
+
 @_requires_sqlite3
 def test_session_start_hook_surfaces_prior_capsule(tmp_path):
     """If a prior session for this cwd has capsule_path, emit it via JSON."""
@@ -301,6 +309,24 @@ def test_session_start_hook_surfaces_prior_capsule(tmp_path):
     payload = json.loads(result.stdout.strip())
     assert "/tmp/cap.json" in payload["systemMessage"]
     assert payload["continue"] is True
+
+
+@_requires_sqlite3
+def test_session_start_hook_does_not_surface_prior_capsule_on_clear(tmp_path):
+    """`/clear` must not inject hook output that can disrupt the TUI redraw."""
+    db = _seed_journal_db(tmp_path)
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "INSERT INTO sessions (session_id, started_at, project_dir, capsule_path) "
+        "VALUES (?, ?, ?, ?)",
+        ("prior-session", 1.0, "/tmp/tp-l2a-fixture", "/tmp/cap.json"),
+    )
+    conn.commit()
+    conn.close()
+    result = _run_script(_SESSION_START_HOOK, "hook_session_start_clear.json", tmp_path)
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+    assert result.stderr.strip() == ""
 
 
 @_requires_sqlite3
@@ -407,6 +433,35 @@ def test_post_tool_use_hook_hardcap_emits_additional_context(tmp_path):
     spec = payload["hookSpecificOutput"]
     assert spec["hookEventName"] == "PostToolUse"
     assert "hard cap" in spec["additionalContext"].lower()
+
+
+# ──────────────────────────────────────────────────────────────
+# Stop hook timeout regression.
+# ──────────────────────────────────────────────────────────────
+
+
+def test_stop_hook_bounds_slow_sqlite(tmp_path):
+    """Stop must exit 0 even when sqlite is slow or wedged."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_sqlite = fake_bin / "sqlite3"
+    fake_sqlite.write_text("#!/usr/bin/env bash\nsleep 20\n")
+    fake_sqlite.chmod(0o755)
+    (tmp_path / "journal.db").touch()
+    (tmp_path / "budget.db").touch()
+
+    result = _run_script(
+        _STOP_HOOK,
+        "hook_stop_basic.json",
+        tmp_path,
+        extra_env={
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "TOKENPAK_COMPANION_SQLITE_TIMEOUT_SECONDS": "1",
+        },
+    )
+
+    assert result.returncode == 0
+    assert "session closeout" in result.stderr
 
 
 # ──────────────────────────────────────────────────────────────

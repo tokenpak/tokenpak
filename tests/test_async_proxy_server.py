@@ -239,30 +239,96 @@ def test_async_health_overhead_under_10ms(async_proxy):
 # Test 11 — Backpressure middleware (503 at capacity)
 # ---------------------------------------------------------------------------
 
-def test_async_backpressure_503(async_proxy):
+def test_async_backpressure_503():
     """
-    When concurrency limit is exceeded, the middleware returns 503.
-    We test this by temporarily monkey-patching the semaphore value.
+    Saturate the concurrency gate and assert the documented backpressure
+    behavior: with max_concurrency in-flight requests active, the next
+    non-management request receives 503 {"error": {"type": "overloaded"}}
+    with a Retry-After header; management endpoints (/health) bypass the
+    gate; once capacity frees up, requests succeed again.
+
+    The middleware is exercised directly over ASGI (no port, no uvicorn) so
+    saturation is deterministic: one in-flight request parks inside the
+    handler on an asyncio.Event while the gate is probed.
     """
-    from tokenpak.proxy.server_async import create_async_app
+    import asyncio
 
-    # Create a test app with max_concurrency=1
-    app = create_async_app(async_proxy)
+    import httpx
+    from starlette.applications import Starlette
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
 
-    # Use Starlette's test client for direct ASGI testing (no port needed)
-    from starlette.testclient import TestClient
+    from tokenpak.proxy.server_async import ConcurrencyLimiterMiddleware
 
-    # Create a fresh app with very low concurrency to trigger 503
-    tight_app = create_async_app(async_proxy)
+    async def scenario():
+        entered = asyncio.Event()
+        release = asyncio.Event()
 
-    # Replace the middleware's semaphore with a depleted one
-    for middleware in tight_app.middleware_stack.__class__.__mro__:
-        pass  # just importing
+        async def slow_endpoint(request):
+            entered.set()
+            await release.wait()
+            return JSONResponse({"ok": True})
 
-    with TestClient(tight_app, raise_server_exceptions=False) as client:
-        # Normal request should succeed
-        resp = client.get("/health")
-        assert resp.status_code == 200
+        async def health(request):
+            return JSONResponse({"status": "ok"})
+
+        app = Starlette(
+            routes=[
+                Route("/v1/slow", slow_endpoint, methods=["GET"]),
+                Route("/health", health, methods=["GET"]),
+            ]
+        )
+        app.add_middleware(ConcurrencyLimiterMiddleware, max_concurrency=1)
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as client:
+            # Occupy the single concurrency slot.
+            in_flight = asyncio.create_task(client.get("/v1/slow"))
+            await asyncio.wait_for(entered.wait(), timeout=5)
+
+            # Gate saturated: next proxied request must be rejected with 503.
+            rejected = await client.get("/v1/slow")
+            assert rejected.status_code == 503, (
+                f"expected 503 at capacity, got {rejected.status_code}"
+            )
+            payload = rejected.json()
+            assert payload["error"]["type"] == "overloaded"
+            assert rejected.headers.get("retry-after") == "1"
+
+            # Management endpoints bypass the limiter even at capacity.
+            health_resp = await client.get("/health")
+            assert health_resp.status_code == 200
+
+            # Drain: the parked request completes and capacity is restored.
+            release.set()
+            completed = await asyncio.wait_for(in_flight, timeout=5)
+            assert completed.status_code == 200
+            after = await client.get("/v1/slow")
+            assert after.status_code == 200
+
+    asyncio.run(scenario())
+
+
+def test_async_backpressure_middleware_installed_in_app():
+    """create_async_app must actually wire the backpressure middleware.
+
+    Guards the integration half of the 503-at-capacity contract: the gate
+    exists AND the app factory installs it (a regression that dropped the
+    add_middleware call would keep the unit test above green).
+    """
+    import tokenpak.proxy.server_async as server_async
+
+    saved_ref = server_async._proxy_server_ref
+    try:
+        app = server_async.create_async_app(object())
+        assert any(
+            m.cls is server_async.ConcurrencyLimiterMiddleware
+            for m in app.user_middleware
+        ), "ConcurrencyLimiterMiddleware not installed by create_async_app"
+    finally:
+        server_async._proxy_server_ref = saved_ref
 
 
 # ---------------------------------------------------------------------------

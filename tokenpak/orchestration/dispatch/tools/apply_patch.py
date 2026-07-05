@@ -6,11 +6,18 @@ effect-record protocol):
 1. Validate ``target`` against ``DispatchManifest.path_policy`` — it must match
    an ``allowed_paths`` glob **and** must not match a ``denied_paths`` glob (the
    four mandatory denied globs are always present, injected by the schema).
-2. Create a ``DispatchEffect(status="planned")`` **before** the write.
-3. Write the file content via a standard filesystem call.
+2. Create a ``DispatchEffect(status="planned")`` **before** the write — and,
+   when a Run Ledger is supplied, persist it durably
+   (``RunLedger.record_planned_effect``) so an interruption mid-write leaves a
+   reconcilable planned record.
+3. Write the file content **atomically** (same-directory temp file +
+   ``os.replace``): a crash mid-write leaves the target as either its exact
+   before-image or its exact after-image, never a truncated/partial file.
 4. Compute the ``after_hash`` of the resulting file.
-5. Transition the effect to ``status="applied", finalized_at=<now>``.
-6. On error, transition the effect to ``status="failed"`` and re-raise.
+5. Transition the effect to ``status="applied", finalized_at=<now>`` (persisted
+   via ``RunLedger.mark_effect_applied`` when a ledger is supplied).
+6. On error, transition the effect to ``status="failed"``
+   (``RunLedger.mark_effect_failed``) and re-raise.
 
 Glob matching is segment-aware (``**`` spans path segments, ``*`` does not span
 ``/``), so ``.git/**`` / ``secrets/**`` deny the whole subtree while ``*.py``
@@ -21,10 +28,12 @@ OSS module and we avoid adding a glob library to the runtime closure.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from tokenpak.orchestration.dispatch.models.common import PathPolicy
@@ -37,6 +46,9 @@ from tokenpak.orchestration.dispatch.models.enums import (
 )
 
 from ._matrix import ToolName, authorize_tool_call
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from tokenpak.orchestration.dispatch.ledger.db import RunLedger
 
 
 class PathPolicyViolation(RuntimeError):
@@ -139,6 +151,34 @@ def _sha256(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
+def _atomic_write_bytes(target: Path, data: bytes) -> None:
+    """Write ``data`` to ``target`` atomically (crash-safe).
+
+    Same-directory temp file + ``os.replace``: POSIX ``os.replace`` is atomic
+    when source and destination share a filesystem, which placing the temp file
+    in the target's parent directory guarantees. A crash at ANY point leaves the
+    target as either its exact before-image (replace never happened) or its
+    exact after-image (replace completed) — never a truncated partial write.
+    Mirrors the atomic-publish pattern used for the vault index artifacts.
+    """
+
+    tmp = target.parent / f"{target.name}.tmp.{os.getpid()}.{uuid4().hex[:8]}"
+    try:
+        with open(tmp, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, target)
+    finally:
+        # Best-effort cleanup when the write or the swap failed: the temp file
+        # is ours alone (pid+random suffix), so removing it never races another
+        # writer. After a successful replace it no longer exists.
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def apply_patch(
     *,
     relative_path: str,
@@ -152,16 +192,26 @@ def apply_patch(
     approval_granted: bool = False,
     now: datetime | None = None,
     encoding: str = "utf-8",
+    ledger: "RunLedger | None" = None,
 ) -> ApplyPatchResult:
     """Apply a file write through the path policy + effect-record protocol.
 
     ``relative_path`` is interpreted relative to ``workspace_root`` and is the
     string matched against ``path_policy``. The effect record is created
     ``planned`` before the write and transitioned to ``applied`` on success
-    (returned in :class:`ApplyPatchResult`) or ``failed`` on error. For
-    v0.1-alpha there is no Run Ledger yet (P-LEDGER-01), so a *failed*
-    transition is surfaced by re-raising the underlying exception rather than
-    by returning the failed record; success returns the applied record.
+    (returned in :class:`ApplyPatchResult`) or ``failed`` on error (surfaced by
+    re-raising the underlying exception).
+
+    When ``ledger`` is supplied the full effect lifecycle is **persisted
+    durably**: the ``planned`` record is written to the Run Ledger BEFORE the
+    file write (the write-ahead marker resume reconciliation depends on), and
+    the ``applied``/``failed`` transition is written after. Without a ledger the
+    lifecycle exists only on the returned in-memory record — callers executing
+    real station work should always pass the run's ledger.
+
+    The file write itself is atomic (same-directory temp file + ``os.replace``),
+    so an interrupted call leaves the target matching either ``before_hash`` or
+    ``after_hash`` — never a partial file that matches neither.
     """
 
     # 1. Invocation-time matrix gate.
@@ -186,7 +236,9 @@ def apply_patch(
 
     when = now or datetime.now(timezone.utc)
 
-    # 2. Create the planned effect record BEFORE the write.
+    # 2. Create the planned effect record BEFORE the write — and persist it
+    #    durably when a ledger is available (the write-ahead marker that makes
+    #    an interrupted write reconcilable on resume).
     effect = DispatchEffect(
         id=effect_id or f"effect_{uuid4().hex}",
         job_id=job_id,
@@ -203,33 +255,47 @@ def apply_patch(
         created_at=when,
         finalized_at=None,
     )
+    if ledger is not None:
+        ledger.record_planned_effect(effect)
 
     try:
-        # 3. Write the content.
+        # 3. Write the content ATOMICALLY (temp file + rename): a crash
+        #    mid-write leaves the target as before-image or after-image only.
         data = content.encode(encoding)
         abs_path.parent.mkdir(parents=True, exist_ok=True)
-        abs_path.write_bytes(data)
+        _atomic_write_bytes(abs_path, data)
         # 4. Compute after_hash.
         after_hash = _sha256(data)
     except Exception:
         # 6. Transition to failed and re-raise.
+        failed_at = datetime.now(timezone.utc)
         effect = effect.model_copy(
             update={
                 "status": EffectStatus.FAILED,
-                "finalized_at": datetime.now(timezone.utc),
+                "finalized_at": failed_at,
             }
         )
+        if ledger is not None:
+            ledger.mark_effect_failed(effect.id, finalized_at=failed_at)
         raise
 
-    # 5. Transition to applied.
+    # 5. Transition to applied (persisted when a ledger is available).
+    applied_at = datetime.now(timezone.utc)
     effect = effect.model_copy(
         update={
             "status": EffectStatus.APPLIED,
             "after_hash": after_hash,
             "rollback_available": True,
-            "finalized_at": datetime.now(timezone.utc),
+            "finalized_at": applied_at,
         }
     )
+    if ledger is not None:
+        ledger.mark_effect_applied(
+            effect.id,
+            finalized_at=applied_at,
+            after_hash=after_hash,
+            rollback_available=True,
+        )
 
     return ApplyPatchResult(
         effect=effect,

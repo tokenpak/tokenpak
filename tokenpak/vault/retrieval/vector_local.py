@@ -6,9 +6,13 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+import os
+import uuid
 import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+from tokenpak.vault._atomic import _atomic_write
 
 from .base import RetrievalQuery, RetrievalResult, Retriever, RetrieverType
 
@@ -258,24 +262,36 @@ class LocalVectorRetriever(Retriever):
         return [(int(i), float(sims[i])) for i in top_indices]
 
     def save(self) -> None:
-        """Persist embeddings to disk."""
+        """Persist embeddings to disk.
+
+        All artefacts are published atomically (same-directory tmp +
+        ``os.replace``; see ``tokenpak/vault/_atomic.py``) so a concurrent
+        ``load()`` never observes a torn file.
+        """
         if self._index_path is None or self._embeddings is None:
             return
         import json
 
         self._index_path.mkdir(parents=True, exist_ok=True)
-        np.save(str(self._index_path / "embeddings.npy"), self._embeddings)
-        (self._index_path / "doc_ids.txt").write_text(
-            "\n".join(self._doc_ids), encoding="utf-8"
+        # np.save writes the file itself, so apply the tmp+replace pattern
+        # around it manually. The tmp name must keep the .npy suffix or
+        # np.save would append one and the replace source would not exist.
+        emb_target = self._index_path / "embeddings.npy"
+        emb_tmp = (
+            self._index_path
+            / f"embeddings.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}.npy"
+        )
+        np.save(str(emb_tmp), self._embeddings)
+        os.replace(emb_tmp, emb_target)
+        _atomic_write(
+            self._index_path / "doc_ids.txt", "\n".join(self._doc_ids)
         )
         # Escape newlines in content for single-line storage
         escaped = [c.replace("\\", "\\\\").replace("\n", "\\n") for c in self._contents]
-        (self._index_path / "contents.txt").write_text(
-            "\n".join(escaped), encoding="utf-8"
+        _atomic_write(
+            self._index_path / "contents.txt", "\n".join(escaped)
         )
-        (self._index_path / "meta.json").write_text(
-            json.dumps(self._meta), encoding="utf-8"
-        )
+        _atomic_write(self._index_path / "meta.json", json.dumps(self._meta))
 
     def load(self) -> bool:
         """Load embeddings from disk. Returns True on success."""

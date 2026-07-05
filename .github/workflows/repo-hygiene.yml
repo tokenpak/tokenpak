@@ -72,10 +72,10 @@ jobs:
           fi
           echo "✅ No internal hostnames found"
 
-      - name: Check for apex-host schema $id URLs (§11.7 drift gate)
+      - name: Check for apex-host schema $id URLs
         run: |
           echo "Scanning tracked source for apex-host \$id URLs..."
-          # §11.7 of 01-architecture-standard.md mandates the canonical
+          # The architecture standard mandates the canonical
           # `$id` URL form
           #   https://docs.tokenpak.ai/schemas/<group>/<name>-v<MAJOR>.json
           # Any tracked file still referencing an apex-host
@@ -89,7 +89,7 @@ jobs:
           # shell flips the sense.
           if git grep -nE 'https?://tokenpak\.ai/(schema|schemas)' -- \
                ':!CHANGELOG*' ':!**/proposals/**' ':!standards/**'; then
-            echo "::error::Apex-host \$id URL drift detected — see 01-architecture-standard.md §11.7."
+            echo "::error::Apex-host \$id URL drift detected — use the docs-hosted schema URL form."
             echo "Replace with: https://docs.tokenpak.ai/schemas/<group>/<name>-v<MAJOR>.json"
             exit 1
           fi

@@ -41,13 +41,23 @@ Usage::
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import threading
 import time
+import uuid
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Iterator, List, Optional
+
+try:  # POSIX-only inter-process file locking
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    # On Windows there is no fcntl; cross-process saves fall back to
+    # lock-free behaviour (unique tmp names still prevent torn files,
+    # but concurrent writers may lose each other's keys).
+    fcntl = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +97,16 @@ class CacheStore:
         # In-memory store: key → {"value": ..., "expires_at": float | None}
         self._data: dict[str, dict] = {}
         self._loaded = False
+        # Keys deleted locally since the last successful save; consulted by
+        # the read-modify-write merge in _save() so a delete in this process
+        # is not resurrected from another process's on-disk write.
+        self._deleted: set[str] = set()
+        # clear() requests a full on-disk reset (skip the merge once).
+        self._reset_pending = False
+        # Failed save cycles are surfaced here (and logged) instead of being
+        # silently swallowed: each failure means an update may be lost.
+        self.save_errors: int = 0
+        self.last_save_error: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -143,6 +163,7 @@ class CacheStore:
         with self._lock:
             existed = key in self._data
             self._data.pop(key, None)
+            self._deleted.add(key)
         if existed:
             self._save()
         return existed
@@ -152,6 +173,8 @@ class CacheStore:
         self._ensure_loaded()
         with self._lock:
             self._data.clear()
+            self._deleted.clear()
+            self._reset_pending = True
         self._save()
 
     def has(self, key: str) -> bool:
@@ -206,26 +229,116 @@ class CacheStore:
             logger.warning("[CacheStore] Failed to load %s: %s", self._path, exc)
             self._data = {}
 
-    def _save(self) -> None:
-        """Persist in-memory data to disk, pruning expired entries first."""
-        now = time.time()
-        with self._lock:
-            # Prune expired entries before writing
-            clean = {
-                k: v
-                for k, v in self._data.items()
-                if v.get("expires_at") is None or v["expires_at"] > now
-            }
-            self._data = clean
-            payload = clean
+    @contextlib.contextmanager
+    def _process_lock(self) -> Iterator[None]:
+        """Exclusive inter-process lock around the save read-modify-write.
 
+        Uses ``fcntl.flock`` on a sidecar ``<path>.lock`` file so two
+        processes sharing one store path serialise their whole-file
+        read-merge-write cycles instead of overwriting each other
+        (last-writer-wins key loss).
+
+        POSIX-only: on Windows (no fcntl) this degrades to a no-op — saves
+        are still torn-file-safe thanks to unique tmp names + os.replace,
+        but concurrent processes may lose each other's keys.
+        """
+        if fcntl is None:  # pragma: no cover - Windows fallback, lock-free
+            yield
+            return
+        lock_path = self._path.with_name(self._path.name + ".lock")
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+    def _save(self) -> None:
+        """Persist in-memory data to disk, pruning expired entries first.
+
+        Concurrency contract:
+
+        - The write is atomic: a per-writer unique tmp file in the target
+          directory is populated, fsynced, then ``os.replace``d in, so a
+          concurrent reader sees either the old or the new file — never a
+          partial one, and never a missing one (the old fixed ``.tmp`` name
+          let two processes replace each other's tmp out from underneath,
+          losing whole updates to a swallowed FileNotFoundError).
+        - Cross-process key loss is prevented by an fcntl.flock-guarded
+          read-modify-write: under the lock the current on-disk state is
+          re-read and merged beneath this process's entries (locally
+          deleted keys stay deleted), so two processes writing disjoint
+          keys both survive. Per-key conflicts remain last-writer-wins.
+        - Failures are counted in ``save_errors`` and logged as lost
+          updates rather than silently swallowed.
+        """
+        now = time.time()
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self._path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-            tmp.replace(self._path)
+            with self._process_lock():
+                with self._lock:
+                    if self._reset_pending:
+                        disk: dict[str, dict] = {}
+                    else:
+                        disk = self._read_disk_for_merge()
+                        for key in self._deleted:
+                            disk.pop(key, None)
+                    merged = dict(disk)
+                    merged.update(self._data)
+                    # Prune expired entries before writing
+                    clean = {
+                        k: v
+                        for k, v in merged.items()
+                        if v.get("expires_at") is None or v["expires_at"] > now
+                    }
+                    self._data = clean
+                    payload = json.dumps(clean, indent=2)
+
+                    tmp = self._path.with_name(
+                        f"{self._path.name}.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}"
+                    )
+                    fh = open(tmp, "w", encoding="utf-8")
+                    try:
+                        fh.write(payload)
+                        fh.flush()
+                        os.fsync(fh.fileno())
+                    finally:
+                        fh.close()
+                    os.replace(tmp, self._path)
+                    # Persisted: deletions are now on disk and the reset (if
+                    # any) has been applied.
+                    self._deleted.clear()
+                    self._reset_pending = False
         except OSError as exc:
-            logger.error("[CacheStore] Failed to save %s: %s", self._path, exc)
+            with self._lock:
+                self.save_errors += 1
+                self.last_save_error = str(exc)
+            logger.error(
+                "[CacheStore] Failed to save %s (update may be lost; save_errors=%d): %s",
+                self._path,
+                self.save_errors,
+                exc,
+            )
+
+    def _read_disk_for_merge(self) -> dict[str, dict]:
+        """Best-effort fresh read of the on-disk store for the save merge."""
+        try:
+            parsed = json.loads(self._path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning(
+                "[CacheStore] Could not merge on-disk state from %s: %s",
+                self._path,
+                exc,
+            )
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
+        return {k: v for k, v in parsed.items() if isinstance(v, dict)}
 
     # ------------------------------------------------------------------
     # Dunder helpers

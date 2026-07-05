@@ -21,13 +21,13 @@ This installs the core library with heuristic-based compression.
 TokenPak has optional extras for advanced features:
 
 ```bash
-# Install with ML-based compression support
-pip install tokenpak[ml]
+# Install with LLMLingua compression support
+pip install tokenpak[compression]
 
-# Install with all features (recommended)
-pip install tokenpak[ml,tiktoken]
+# Install with all optional feature bundles
+pip install tokenpak[full]
 
-# Or install each extra separately
+# Install exact OpenAI-compatible token counts
 pip install tokenpak tiktoken
 ```
 
@@ -44,8 +44,8 @@ source ~/my_tokenpak_env/bin/activate # Linux/macOS
 # or
 ~/my_tokenpak_env\Scripts\activate # Windows
 
-# Install TokenPak
-pip install tokenpak[ml,tiktoken]
+# Install TokenPak with optional feature bundles
+pip install tokenpak[full]
 
 # Deactivate when done
 deactivate
@@ -61,8 +61,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv ~/my_tokenpak_env
 source ~/my_tokenpak_env/bin/activate
 
-# Install TokenPak
-pip install tokenpak[ml,tiktoken]
+# Install TokenPak with optional feature bundles
+pip install tokenpak[full]
 ```
 
 ## Verify Your Installation
@@ -106,9 +106,9 @@ pip install --upgrade tokenpak
 
 ### Issue: "tiktoken not found" or encoding errors
 
-**Solution:** Install the tiktoken extra:
+**Solution:** Install TokenPak with tiktoken:
 ```bash
-pip install tokenpak[tiktoken]
+pip install tokenpak tiktoken
 ```
 
 ### Issue: "Permission denied" when installing

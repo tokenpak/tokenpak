@@ -38,7 +38,7 @@ Token counting uses:
 Install tiktoken for precise counts:
 
 ```bash
-pip install tokenpak[tiktoken]
+pip install tokenpak tiktoken
 ```
 
 The heuristic is conservative — it slightly over-estimates, so the compression threshold check errs on the side of compressing when near the boundary.

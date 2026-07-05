@@ -30,7 +30,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Callable, Mapping, Optional
-from uuid import uuid4
 
 from .ledger.db import RunLedger
 from .models.receipt import (
@@ -54,6 +53,20 @@ def _excerpt(payload: Optional[dict]) -> str:
         return ""
     text = str(payload)
     return text[:_EXCERPT_LIMIT]
+
+
+def receipt_id_for_run(run_id: str) -> str:
+    """Derive the deterministic receipt id for *run_id* (1:1 run→receipt).
+
+    A receipt is a pure projection of its run, so its identity is a function of
+    the run's identity — NOT a fresh random id per build. Building the receipt
+    twice therefore produces the same id, and the ledger's id-keyed upsert
+    (``INSERT OR REPLACE``) dedupes the rebuild into the same row instead of
+    accumulating orphaned receipts and repointing the run.
+    """
+
+    suffix = run_id[len("run_"):] if run_id.startswith("run_") else run_id
+    return f"receipt_{suffix}"
 
 
 def build_receipt(
@@ -118,7 +131,7 @@ def build_receipt(
             )
 
     return DispatchReceipt(
-        id=receipt_id or f"receipt_{uuid4().hex}",
+        id=receipt_id or receipt_id_for_run(run.id),
         job_id=run.job_id,
         run_id=run.id,
         route_id=run.route_id,
@@ -161,4 +174,4 @@ def build_and_write_receipt(
     return receipt
 
 
-__all__ = ["build_receipt", "build_and_write_receipt"]
+__all__ = ["build_receipt", "build_and_write_receipt", "receipt_id_for_run"]

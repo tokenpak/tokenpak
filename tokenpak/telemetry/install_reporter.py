@@ -87,7 +87,9 @@ def _get_requests_24h() -> int:
     """Count proxy requests recorded in the local telemetry DB in the last 24h."""
     try:
         import sqlite3
-        db_path = Path(os.path.expanduser("~/.tokenpak/telemetry.db"))
+
+        from tokenpak.core.paths import get_db_path
+        db_path = get_db_path("telemetry.db")
         if not db_path.exists():
             return 0
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).timestamp()
@@ -104,7 +106,9 @@ def _get_models_24h() -> list[str]:
     """Return distinct model names used in the last 24h."""
     try:
         import sqlite3
-        db_path = Path(os.path.expanduser("~/.tokenpak/telemetry.db"))
+
+        from tokenpak.core.paths import get_db_path
+        db_path = get_db_path("telemetry.db")
         if not db_path.exists():
             return []
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).timestamp()

@@ -584,7 +584,7 @@ TokenPak Dispatch — scoped, station-based, resumable, gated work packages with
   - `--route` — Force an explicit Route (e.g. code_task); overrides auto-routing
   - `--autonomy` — Autonomy mode override (default depends on caller) — choices: `advisory`, `draft`, `dispatch_with_approval`, `auto_dispatch_limited`
   - `--ci` — CI/automation caller; default autonomy = auto_dispatch_limited
-  - `--dry-run` — Draft only; default autonomy = draft
+  - `--dry-run` — Draft only; default autonomy = draft. Performs intake + route selection without persisting anything (no ledger writes)
   - `--confirm` — Treat an approval-gated route as approved (record the bound route)
   - `--json` — Emit machine-readable JSON instead of human-readable output
 - `status`

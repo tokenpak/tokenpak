@@ -86,6 +86,41 @@ def hard_block(decision: PreflightDecision) -> bytes:
     return json.dumps(payload).encode()
 
 
+def block_store_unavailable(decision: PreflightDecision) -> bytes:
+    """Block response for when the policy decided BLOCK but the pending
+    store could not persist the held request (guard state DB unwritable).
+
+    The request is still blocked — a store failure must never downgrade a
+    block into a forward — but reply-to-approve is unavailable because no
+    pending row exists to replay.
+    """
+    risk = decision.risk
+    payload = {
+        "error": {
+            "type": ERR_BLOCKED,
+            "message": (
+                "TIP Spend Guard blocked this request before provider send, "
+                "but could not persist it for later approval (the guard "
+                "state store is unavailable). Reply-to-approve is not "
+                "possible for this request. Repair the guard state store, "
+                "or prepend '[TIP: allow=once]' to bypass once."
+            ),
+            "reason": decision.reason,
+            "threshold_hit": decision.threshold_hit,
+            "projected_input_tokens": risk.projected_input_tokens if risk else None,
+            "projected_output_tokens": risk.projected_output_tokens if risk else None,
+            "projected_cost_usd": risk.projected_cost_usd if risk else None,
+            "cache_hit_ratio": risk.cache_hit_ratio if risk else None,
+            "model": risk.model if risk else None,
+            "pending_id": None,
+            "approval_prompt": None,
+            "retryable": False,
+            "recovery_status": "operator_action_required",
+        }
+    }
+    return json.dumps(payload).encode()
+
+
 def pending_waiting(pending: PendingRequest) -> bytes:
     """Subsequent request from a session that already has a pending block."""
     payload = {
@@ -166,8 +201,15 @@ def build_rolling_cap_block(breach) -> bytes:
     compatibility.
     """
     is_fleet = str(breach.cap_dimension).startswith("per_fleet")
+    is_unmeasurable = str(breach.cap_dimension) == "rolling_cap_unmeasurable"
     scope = "fleet" if is_fleet else "agent"
-    if is_fleet:
+    if is_unmeasurable:
+        attribution = (
+            "rolling usage could not be measured: the usage database exists "
+            "but is unreadable (locked, corrupt, or permission-denied). "
+            "Blocking before provider send because caps cannot be verified."
+        )
+    elif is_fleet:
         attribution = (
             f"triggered_by={breach.agent_id} (this caller tripped the cap; it is "
             f"NOT necessarily the biggest spender). fleet_used={breach.used:.4g}, "
@@ -181,13 +223,22 @@ def build_rolling_cap_block(breach) -> bytes:
             f"{breach.cap:.4g} (this IS {breach.agent_id}'s rolling usage), "
             f"would_add={breach.projected_add:.4g}, window={breach.window_seconds}s."
         )
-    message = (
-        f"TIP Spend Guard rolling cap exceeded: {breach.cap_dimension} [{scope}]. "
-        f"{attribution} "
-        "Reply 'yes' or prepend '[TIP: allow=once]' to bypass; "
-        "wait ~30 min for usage to age out, or operator may raise "
-        "the cap in spend_guard.rolling_caps."
-    )
+    if is_unmeasurable:
+        message = (
+            "TIP Spend Guard blocked this request: rolling_cap_unmeasurable. "
+            f"{attribution} "
+            "Operator action required: repair (or remove) the usage database "
+            "so rolling usage can be measured again. Prepend "
+            "'[TIP: allow=once]' only as an explicit operator-approved bypass."
+        )
+    else:
+        message = (
+            f"TIP Spend Guard rolling cap exceeded: {breach.cap_dimension} [{scope}]. "
+            f"{attribution} "
+            "Reply 'yes' or prepend '[TIP: allow=once]' to bypass; "
+            "wait ~30 min for usage to age out, or operator may raise "
+            "the cap in spend_guard.rolling_caps."
+        )
     payload = {
         "error": {
             "type": ERR_ROLLING_CAP_BLOCKED,

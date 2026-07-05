@@ -54,8 +54,8 @@ sudo ufw allow out 443/tcp
 pip install tokenpak
 
 # With optional extras
-pip install tokenpak[tiktoken] # accurate token counting (recommended)
-pip install tokenpak[ml] # ML-powered compression via LLMLingua
+pip install tokenpak tiktoken # accurate OpenAI-compatible token counting
+pip install tokenpak[compression] # LLMLingua compression engine
 ```
 
 ### Option 2: From Source
@@ -534,7 +534,7 @@ Best for: Solo developer, personal use, testing.
 
 ```bash
 # Install
-pip install tokenpak[tiktoken]
+pip install tokenpak tiktoken
 
 # Set API keys in shell profile
 echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc

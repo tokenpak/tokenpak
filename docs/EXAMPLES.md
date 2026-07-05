@@ -370,7 +370,7 @@ echo '{"model":"claude-haiku-4-5","messages":[{"role":"user","content":"hi"}],"m
 | Check health | `curl http://localhost:8766/health` |
 | View stats | `curl http://localhost:8766/stats` |
 | See last request | `curl http://localhost:8766/recent` |
-| Rebuild vault index | `bash ~/vault/06_RUNTIME/scripts/rebuild-vault-index.sh` |
+| Rebuild vault index | `tokenpak index --reindex-all` |
 | Hybrid mode | `TOKENPAK_MODE=hybrid tokenpak serve` |
 | Aggressive mode | `TOKENPAK_MODE=aggressive tokenpak serve` |
 | WebSocket port | `TOKENPAK_WS_PORT=8767 tokenpak serve` (default: PROXY_PORT+1) |

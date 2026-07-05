@@ -1,12 +1,10 @@
-"""Tests for tokenpak.agentic.locks"""
+"""Tests for tokenpak.orchestration.locks"""
 
-import pytest
-
-pytest.importorskip("tokenpak.agentic.locks", reason="module not available in current build")
 import time
 
 import pytest
-from tokenpak.agentic.locks import FileLockManager, LockConflictError
+
+from tokenpak.orchestration.locks import FileLockManager, LockConflictError
 
 
 @pytest.fixture
@@ -124,13 +122,13 @@ def test_renew_extends_expiry(mgr, tmp_path):
 
 
 def test_renew_no_lock_raises(mgr, tmp_path):
-    from tokenpak.agentic.locks import LockExpiredError
+    from tokenpak.orchestration.locks import LockExpiredError
     with pytest.raises(LockExpiredError):
         mgr.renew(tmp_path / "nonexistent.txt")
 
 
 def test_renew_conflict_raises(tmp_path):
-    from tokenpak.agentic.locks import LockConflictError
+    from tokenpak.orchestration.locks import LockConflictError
     mgr_a = FileLockManager(agent_id="agent-a", lock_dir=tmp_path / "locks", timeout_s=60)
     mgr_b = FileLockManager(agent_id="agent-b", lock_dir=tmp_path / "locks", timeout_s=60)
     target = tmp_path / "file.txt"
@@ -140,7 +138,7 @@ def test_renew_conflict_raises(tmp_path):
 
 
 def test_renew_expired_raises(tmp_path):
-    from tokenpak.agentic.locks import LockExpiredError
+    from tokenpak.orchestration.locks import LockExpiredError
     mgr = FileLockManager(agent_id="agent-a", lock_dir=tmp_path / "locks", timeout_s=0)
     target = tmp_path / "file.txt"
     mgr.claim(target, timeout_s=0)

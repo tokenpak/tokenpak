@@ -1,14 +1,17 @@
 """Atomic file-write helper for vault index artefacts.
 
-Used by ``VaultHealth.repair`` to publish ``index.json`` and ``blocks/*.txt``
+Used to publish ``index.json``, ``blocks/*.txt`` and related read-back state
 so concurrent readers (e.g. ``VaultIndex._load`` in the proxy process)
 never observe a half-written file. POSIX ``os.replace`` is atomic when the
 source and destination share a filesystem; placing the tmp file in the
 target's parent directory guarantees that.
 
-Phase 1A of the live-index freshness loop (P1-VAULT-INDEX-ATOMIC-WRITE-
-HARDENING-2026-05-22). Phase 1B will extend usage to
-``tokenpak/compression/core.py``; Phase 1C may tighten ``_save_bm25_cache``.
+Callers include ``VaultHealth.repair``, ``vault/blocks.py`` (block/slice
+store flush), ``vault/indexer.py`` (stats snapshot),
+``vault/sources/claude_transcript.py`` (block + index publish),
+``vault/retrieval/vector_local.py`` (embedding index artefacts),
+``vault/retrieval/vault_index.py`` (BM25 cache), and
+``compression/core.py`` (block + index publish).
 """
 
 from __future__ import annotations

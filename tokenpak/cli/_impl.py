@@ -121,14 +121,42 @@ def _fmt_tokens(n: int) -> str:
     return str(n)
 
 
-def _saved_pct(estimated_cost: float, would_have_saved: int) -> str:
-    """Compute saved_pct; returns 'TBD' when cost=0 but savings exist (unknown model pricing)."""
+def _would_have_saved_usd(model: Optional[str], would_have_saved_tokens: int) -> float:
+    """Convert the ``would_have_saved`` column to USD via model rates.
+
+    The column stores TOKENS (input tokens avoided before send, written by
+    the proxy as ``input_tokens - sent_input_tokens``) — NOT micro-dollars.
+    Value them at the model's registry input rate; fall back to a
+    sonnet-class default rate when the registry is unavailable.
+    """
+    if would_have_saved_tokens <= 0:
+        return 0.0
+    try:
+        from tokenpak.models import get_rates
+
+        rate_per_mtok = get_rates(model or None).get("input", 3.0)
+    except Exception:
+        rate_per_mtok = 3.0
+    return would_have_saved_tokens * rate_per_mtok / 1_000_000
+
+
+def _saved_pct(
+    estimated_cost: float,
+    would_have_saved: int,
+    model: Optional[str] = None,
+) -> str:
+    """Compute saved_pct; returns 'TBD' when cost=0 but savings exist (unknown model pricing).
+
+    ``would_have_saved`` is in TOKENS and is converted to USD via the
+    model's registry input rate before being compared with the actual cost.
+    """
     if estimated_cost == 0.0 and would_have_saved > 0:
         return "TBD"
-    total = estimated_cost + would_have_saved / 100_000  # would_have_saved in micro-dollars
+    saved_usd = _would_have_saved_usd(model, would_have_saved)
+    total = estimated_cost + saved_usd
     if total <= 0:
         return "n/a"
-    pct = (would_have_saved / 100_000) / total * 100
+    pct = saved_usd / total * 100
     return f"{pct:.1f}%"
 
 
@@ -200,8 +228,8 @@ def _print_fleet_table(
         cr = r.get("cache_read_tokens", 0)
         cc = r.get("cache_creation_tokens", 0)
         cost = float(r.get("estimated_cost", 0.0))
-        saved = int(r.get("would_have_saved", 0))
-        pct = _saved_pct(cost, saved)
+        saved = int(r.get("would_have_saved", 0))  # tokens avoided, not dollars
+        pct = _saved_pct(cost, saved, model=r.get("model"))
 
         print(fmt.format(
             agent, host, model,
@@ -232,7 +260,7 @@ def _print_fleet_json(
     }
     for r in rows:
         cost = float(r.get("estimated_cost", 0.0))
-        saved = int(r.get("would_have_saved", 0))
+        saved = int(r.get("would_have_saved", 0))  # tokens avoided, not dollars
         output["rows"].append({
             "date": r.get("date"),
             "agent_id": r.get("agent_id"),
@@ -245,6 +273,10 @@ def _print_fleet_json(
             "cache_creation_tokens": r.get("cache_creation_tokens", 0),
             "estimated_cost": cost,
             "would_have_saved": saved,
-            "saved_pct": _saved_pct(cost, saved),
+            "would_have_saved_unit": "tokens",
+            "would_have_saved_usd": round(
+                _would_have_saved_usd(r.get("model"), saved), 6
+            ),
+            "saved_pct": _saved_pct(cost, saved, model=r.get("model")),
         })
     print(json.dumps(output, indent=2, default=str))

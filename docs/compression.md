@@ -141,7 +141,7 @@ ML-powered token-level compression using the [LLMLingua-2](https://github.com/mi
 Install:
 
 ```bash
-pip install tokenpak[ml]
+pip install tokenpak[compression]
 ```
 
 LLMLingua activates automatically when installed. It runs locally — no API calls.

@@ -112,6 +112,31 @@ def _send_error(handler: Any, status: int, code: str, detail: str = "") -> None:
     _send_json(handler, status, {"error": code, "detail": detail})
 
 
+def _vault_info_lightweight() -> dict[str, Any]:
+    """Return vault availability without loading every indexed block body."""
+    try:
+        from tokenpak.proxy.config import VAULT_INDEX_PATH
+
+        index_path = Path(VAULT_INDEX_PATH) / "index.json"
+        if not index_path.exists():
+            return {"available": False, "blocks": 0}
+        data = json.loads(index_path.read_text())
+        raw_blocks = data.get("blocks", {})
+        if isinstance(raw_blocks, dict):
+            blocks = len(raw_blocks)
+        elif isinstance(raw_blocks, list):
+            blocks = len(raw_blocks)
+        else:
+            blocks = 0
+        return {"available": blocks > 0, "blocks": blocks}
+    except Exception as exc:
+        return {
+            "available": False,
+            "blocks": 0,
+            "error": type(exc).__name__,
+        }
+
+
 # ---------------------------------------------------------------------------
 # Endpoint dispatch
 # ---------------------------------------------------------------------------
@@ -281,18 +306,7 @@ def _handle_health(handler: Any) -> None:
         if start:
             uptime = time.time() - start
 
-    vault_info: dict[str, Any] = {"available": False, "blocks": 0}
-    try:
-        from tokenpak.proxy.vault_bridge import get_vault_index
-        vi = get_vault_index()
-        if vi is not None and getattr(vi, "available", False):
-            vault_info = {
-                "available": True,
-                "blocks": len(getattr(vi, "blocks", {}) or {}),
-                "ready": bool(getattr(vi, "is_ready", lambda: True)()),
-            }
-    except Exception as exc:
-        vault_info["error"] = str(exc)
+    vault_info = _vault_info_lightweight()
 
     _send_json(handler, 200, {
         "version": _version,
@@ -919,17 +933,7 @@ def _handle_session_info_get(handler: Any) -> None:
             "cost_saved_usd": round(float(sess.get("cost_saved", 0.0) or 0.0), 6),
             "errors": int(sess.get("errors", 0) or 0),
         }
-    vault_info: dict[str, Any] = {"available": False, "blocks": 0}
-    try:
-        from tokenpak.proxy.vault_bridge import get_vault_index
-        vi = get_vault_index()
-        if vi is not None and getattr(vi, "available", False):
-            vault_info = {
-                "available": True,
-                "blocks": len(getattr(vi, "blocks", {}) or {}),
-            }
-    except Exception:
-        pass
+    vault_info = _vault_info_lightweight()
     compilation_mode = os.environ.get("TOKENPAK_MODE", "hybrid")
     profile = os.environ.get("TOKENPAK_PROFILE", "balanced")
     cache_ttl = os.environ.get("TOKENPAK_CACHE_TTL", "5m").strip() or "5m"

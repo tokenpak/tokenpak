@@ -347,6 +347,8 @@ def _write_settings(config: CompanionConfig) -> str:
             settings = json.loads(user_settings_path.read_text())
         except Exception:
             settings = {}
+    if not config.hooks_enabled:
+        settings.pop("hooks", None)
 
     # Ensure permissions.allow includes the companion's MCP glob
     permissions = settings.setdefault("permissions", {})

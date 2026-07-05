@@ -37,6 +37,24 @@ from tokenpak.proxy.forecast_endpoint import (  # noqa: E402
 # Fixtures
 # ---------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def _clear_forecast_latency_buffer():
+    """Isolate from the module-global rolling latency buffer.
+
+    ``estimate_ttfb_ms`` prefers the process-wide ``_forecast_latencies``
+    deque over DB history and the formula. Any earlier test in the session
+    that drives real requests through the proxy appends observed latencies
+    there (server-side per-request hook), which silently flips these tests
+    onto the buffer path. Clear it on both sides so each test starts from
+    the documented empty-buffer behavior.
+    """
+    from tokenpak.proxy import forecast_endpoint
+
+    forecast_endpoint._forecast_latencies.clear()
+    yield
+    forecast_endpoint._forecast_latencies.clear()
+
+
 @pytest.fixture()
 def empty_db(tmp_path):
     """Provide a path to an empty (no tables) SQLite DB."""

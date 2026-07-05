@@ -27,14 +27,19 @@ def test_record_spend_returns_record(tracker):
     assert rec.model == "claude-sonnet"
 
 
-def test_record_spend_auto_request_id(tracker):
-    rec = tracker.record_spend(0.01)
-    assert rec.request_id.startswith("req-")
+def test_record_spend_rejects_empty_request_id(tracker):
+    # Fabricated ids collide for same-timestamp requests and, combined with
+    # the request_id uniqueness key, would silently overwrite other rows.
+    with pytest.raises(ValueError):
+        tracker.record_spend(0.01)
+    with pytest.raises(ValueError):
+        tracker.record_spend(0.01, request_id="")
+    assert tracker.list_spend(limit=10) == []
 
 
 def test_record_spend_accumulates(tracker):
-    tracker.record_spend(1.00)
-    tracker.record_spend(2.50)
+    tracker.record_spend(1.00, request_id="acc-1")
+    tracker.record_spend(2.50, request_id="acc-2")
     assert abs(tracker.total_spent("daily") - 3.50) < 0.0001
 
 
@@ -49,8 +54,8 @@ def test_total_spent_empty(tracker):
 
 
 def test_total_spent_all(tracker):
-    tracker.record_spend(5.0)
-    tracker.record_spend(3.0)
+    tracker.record_spend(5.0, request_id="all-1")
+    tracker.record_spend(3.0, request_id="all-2")
     assert tracker.total_spent("all") == 8.0
 
 
@@ -59,7 +64,7 @@ def test_total_spent_all(tracker):
 # ---------------------------------------------------------------------------
 
 def test_get_status_daily_under_limit(tracker):
-    tracker.record_spend(5.0)
+    tracker.record_spend(5.0, request_id="st-1")
     status = tracker.get_status("daily")
     assert status is not None
     assert status.period == "daily"
@@ -70,7 +75,7 @@ def test_get_status_daily_under_limit(tracker):
 
 
 def test_get_status_daily_alert_triggered(tracker):
-    tracker.record_spend(9.0)
+    tracker.record_spend(9.0, request_id="st-2")
     status = tracker.get_status("daily")
     assert status.alert_triggered is True
     assert status.percent_used == pytest.approx(90.0, abs=0.1)
@@ -79,13 +84,13 @@ def test_get_status_daily_alert_triggered(tracker):
 def test_get_status_no_limit():
     cfg = BudgetConfig()  # no limits
     t = BudgetTracker(config=cfg, db_path=":memory:")
-    t.record_spend(5.0)
+    t.record_spend(5.0, request_id="st-3")
     assert t.get_status("daily") is None
     assert t.get_status("monthly") is None
 
 
 def test_get_status_monthly(tracker):
-    tracker.record_spend(50.0)
+    tracker.record_spend(50.0, request_id="st-4")
     status = tracker.get_status("monthly")
     assert status is not None
     assert abs(status.spent_usd - 50.0) < 0.001
@@ -96,17 +101,17 @@ def test_get_status_monthly(tracker):
 # ---------------------------------------------------------------------------
 
 def test_budget_not_exceeded(tracker):
-    tracker.record_spend(5.0)
+    tracker.record_spend(5.0, request_id="ex-1")
     assert tracker.is_budget_exceeded() is False
 
 
 def test_budget_exceeded_daily(tracker):
-    tracker.record_spend(10.01)
+    tracker.record_spend(10.01, request_id="ex-2")
     assert tracker.is_budget_exceeded() is True
 
 
 def test_budget_exceeded_monthly(tracker):
-    tracker.record_spend(100.01)
+    tracker.record_spend(100.01, request_id="ex-3")
     assert tracker.is_budget_exceeded() is True
 
 
@@ -135,9 +140,9 @@ def test_list_spend_model_filter(tracker):
 # ---------------------------------------------------------------------------
 
 def test_by_model_summary(tracker):
-    tracker.record_spend(1.0, model="m1", tokens_input=100, tokens_output=50)
-    tracker.record_spend(2.0, model="m1", tokens_input=200, tokens_output=100)
-    tracker.record_spend(3.0, model="m2", tokens_input=300)
+    tracker.record_spend(1.0, request_id="bm-1", model="m1", tokens_input=100, tokens_output=50)
+    tracker.record_spend(2.0, request_id="bm-2", model="m1", tokens_input=200, tokens_output=100)
+    tracker.record_spend(3.0, request_id="bm-3", model="m2", tokens_input=300)
     summary = tracker.by_model_summary()
     assert len(summary) == 2
     m1 = next(r for r in summary if r["model"] == "m1")
@@ -203,7 +208,7 @@ def test_config_round_trip():
 # ---------------------------------------------------------------------------
 
 def test_budget_status_to_dict(tracker):
-    tracker.record_spend(3.0)
+    tracker.record_spend(3.0, request_id="td-1")
     status = tracker.get_status("daily")
     d = status.to_dict()
     assert d["period"] == "daily"

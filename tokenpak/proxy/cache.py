@@ -103,8 +103,6 @@ class CacheEntry:
         if self.ttl_seconds is None:
             return False
         elapsed = time.monotonic() - self.created_at
-        import sys
-        print(f"DEBUG is_expired: ttl={self.ttl_seconds}, elapsed={elapsed:.4f}, result={elapsed > self.ttl_seconds}", file=sys.stderr)
         return elapsed > self.ttl_seconds
 
 

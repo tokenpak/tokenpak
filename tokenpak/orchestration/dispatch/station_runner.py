@@ -231,13 +231,16 @@ class StationRunner:
     cancel token. Call :meth:`run` with the run id, the manifest, the route
     station, the bound worker (+ overlay), and the autonomy mode.
 
-    The station-run record is committed to the ledger **only after** its
+    Ledger protocol: a **RUNNING intent row** (same id as the terminal record,
+    attempt number set) is persisted before any station work begins, so an
+    interruption at any point leaves a durable marker for resume reconciliation.
+    The *terminal* station-run record is then committed **only after** its
     schema-valid output is written (acceptance criterion 4): a successful run
-    writes the ``completed`` record exactly once, atomically, after the loop
-    produced a valid payload; a failed / cancelled run writes its terminal record
-    once the loop ends. Effects recorded mid-loop (via tool callables) are written
-    through the ledger's effect lifecycle as they happen, independent of the
-    station-run commit.
+    rewrites the row to ``completed`` exactly once, atomically, after the loop
+    produced a valid payload; a failed / cancelled run rewrites it to its
+    terminal state once the loop ends. Effects recorded mid-loop (via tool
+    callables) are written through the ledger's effect lifecycle as they happen,
+    independent of the station-run commits.
     """
 
     def __init__(
@@ -317,6 +320,24 @@ class StationRunner:
                 attempt_number=attempt_number,
                 tip_request_ids=[],
             )
+
+        # Write-ahead intent row: persist a RUNNING station-run record BEFORE any
+        # station work begins (context build, worker turns, tool effects). This is
+        # what makes crash recovery reachable — resume reconciliation keys its
+        # interrupted-station cases off ``status == running``, so a crash at any
+        # point mid-station must leave a durable RUNNING row (with the attempt
+        # number set) rather than nothing. The terminal commit at the end of the
+        # loop rewrites this same row (same id) to its terminal state. Resume
+        # semantics are versioned; this intent row is the first durable piece of
+        # that contract.
+        self._commit_running_intent(
+            sr_id=sr_id,
+            run_id=run_id,
+            station=station,
+            worker=worker,
+            overlay=overlay,
+            attempt_number=attempt_number,
+        )
 
         context = self._context.build_context(manifest, station)
 
@@ -506,6 +527,46 @@ class StationRunner:
 
     # NOTE: _commit_terminal threads ``failure_reason`` through explicitly (no
     # module-level mutable state) so the sequential runner stays re-entrant.
+
+    # -- write-ahead intent row (crash-recovery contract) ---------------------
+
+    def _commit_running_intent(
+        self,
+        *,
+        sr_id: str,
+        run_id: str,
+        station: RouteStation,
+        worker: DispatchWorker,
+        overlay: Optional[PromptOverlay],
+        attempt_number: int,
+    ) -> None:
+        """Persist the RUNNING station-run row before station work begins.
+
+        The row carries the attempt number and a placeholder context-bundle id
+        (the bundle is not built yet); the terminal commit rewrites the same row
+        with the real values. If the process dies between this write and the
+        terminal commit, resume reconciliation finds the RUNNING row and
+        classifies the interruption (rerun / reconcile effects / decision)
+        instead of blindly re-running on top of unknown workspace state.
+        """
+
+        running = DispatchStationRun(
+            id=sr_id,
+            run_id=run_id,
+            station_id=station.id,
+            worker_id=worker.id,
+            prompt_overlay_id=overlay.id if overlay is not None else None,
+            context_bundle_id="(pending: station running)",
+            tip_request_ids=[],
+            status=StationRunStatus.RUNNING,
+            iteration_count=0,
+            tool_call_count=0,
+            wall_seconds=0,
+            result_payload=None,
+            result_schema_version=STATION_RESULT_SCHEMA_VERSION,
+            attempt_number=attempt_number,
+        )
+        self._ledger.write_station_run(running)
 
     # -- record commit (criterion 4: commit only after valid output) ---------
 

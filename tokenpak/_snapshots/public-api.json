@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-07-04T05:17:54Z",
-  "package_version": "1.10.2",
+  "generated_at": "2026-07-05T07:40:47Z",
+  "package_version": "1.10.3",
   "symbols": [
     {
       "module": "tokenpak",
@@ -814,6 +814,10 @@
     {
       "module": "tokenpak.cli.commands.doctor",
       "name": "build_lifecycle_summary"
+    },
+    {
+      "module": "tokenpak.cli.commands.doctor",
+      "name": "companion_hook_integrity"
     },
     {
       "module": "tokenpak.cli.commands.doctor",
@@ -4614,6 +4618,10 @@
     {
       "module": "tokenpak.core.registry",
       "name": "BlockRegistry"
+    },
+    {
+      "module": "tokenpak.core.registry",
+      "name": "LEGACY_CWD_DB_PATH"
     },
     {
       "module": "tokenpak.core.registry",
@@ -9400,6 +9408,10 @@
       "name": "get_current_schema_version"
     },
     {
+      "module": "tokenpak.proxy.monitor",
+      "name": "get_dropped_row_count"
+    },
+    {
       "module": "tokenpak.proxy.network_utils",
       "name": "get_local_ip"
     },
@@ -10429,6 +10441,10 @@
     },
     {
       "module": "tokenpak.proxy.spend_guard.block_response",
+      "name": "block_store_unavailable"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.block_response",
       "name": "build_rolling_cap_block"
     },
     {
@@ -10509,6 +10525,10 @@
     },
     {
       "module": "tokenpak.proxy.spend_guard.orchestrator",
+      "name": "build_block_store_unavailable"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.orchestrator",
       "name": "build_cancelled"
     },
     {
@@ -10564,6 +10584,10 @@
       "name": "redact_headers"
     },
     {
+      "module": "tokenpak.proxy.spend_guard.pending",
+      "name": "reset_schema_cache_for_testing"
+    },
+    {
       "module": "tokenpak.proxy.spend_guard.policy",
       "name": "DEFAULT_BASIS_CONTEXT_WINDOW_PERCENT"
     },
@@ -10609,6 +10633,10 @@
     },
     {
       "module": "tokenpak.proxy.spend_guard.rolling_caps",
+      "name": "CAP_DIMENSION_UNMEASURABLE"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.rolling_caps",
       "name": "CapBreach"
     },
     {
@@ -10617,7 +10645,15 @@
     },
     {
       "module": "tokenpak.proxy.spend_guard.rolling_caps",
+      "name": "admit_pending_spend"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.rolling_caps",
       "name": "check_rolling_caps"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.rolling_caps",
+      "name": "check_rolling_caps_and_admit"
     },
     {
       "module": "tokenpak.proxy.spend_guard.rolling_caps",
@@ -10630,6 +10666,10 @@
     {
       "module": "tokenpak.proxy.spend_guard.rolling_caps",
       "name": "reset_caches_for_testing"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.rolling_caps",
+      "name": "settle_pending_spend"
     },
     {
       "module": "tokenpak.proxy.spend_guard.session_state",
@@ -13769,31 +13809,7 @@
     },
     {
       "module": "tokenpak.telemetry.integrity",
-      "name": "anomalies"
-    },
-    {
-      "module": "tokenpak.telemetry.integrity",
-      "name": "reconciliation"
-    },
-    {
-      "module": "tokenpak.telemetry.integrity",
       "name": "validation"
-    },
-    {
-      "module": "tokenpak.telemetry.integrity.anomalies",
-      "name": "Anomaly"
-    },
-    {
-      "module": "tokenpak.telemetry.integrity.anomalies",
-      "name": "AnomalyDetector"
-    },
-    {
-      "module": "tokenpak.telemetry.integrity.reconciliation",
-      "name": "ReconciliationManager"
-    },
-    {
-      "module": "tokenpak.telemetry.integrity.reconciliation",
-      "name": "ReconciliationRecord"
     },
     {
       "module": "tokenpak.telemetry.integrity.validation",
@@ -13993,10 +14009,6 @@
     },
     {
       "module": "tokenpak.telemetry.monitoring",
-      "name": "Monitor"
-    },
-    {
-      "module": "tokenpak.telemetry.monitoring",
       "name": "RequestLogRecord"
     },
     {
@@ -14030,10 +14042,6 @@
     {
       "module": "tokenpak.telemetry.monitoring",
       "name": "metrics"
-    },
-    {
-      "module": "tokenpak.telemetry.monitoring",
-      "name": "monitor"
     },
     {
       "module": "tokenpak.telemetry.monitoring",
@@ -14098,26 +14106,6 @@
     {
       "module": "tokenpak.telemetry.monitoring.metrics",
       "name": "ProxyMetricsCollector"
-    },
-    {
-      "module": "tokenpak.telemetry.monitoring.monitor",
-      "name": "BUDGET_ALERT_THRESHOLD_PCT"
-    },
-    {
-      "module": "tokenpak.telemetry.monitoring.monitor",
-      "name": "BUDGET_DAILY_LIMIT_USD"
-    },
-    {
-      "module": "tokenpak.telemetry.monitoring.monitor",
-      "name": "LAST_REQUEST"
-    },
-    {
-      "module": "tokenpak.telemetry.monitoring.monitor",
-      "name": "Monitor"
-    },
-    {
-      "module": "tokenpak.telemetry.monitoring.monitor",
-      "name": "update_last_request"
     },
     {
       "module": "tokenpak.telemetry.monitoring.provider_health",
@@ -14253,15 +14241,7 @@
     },
     {
       "module": "tokenpak.telemetry.operational",
-      "name": "health"
-    },
-    {
-      "module": "tokenpak.telemetry.operational",
       "name": "metrics"
-    },
-    {
-      "module": "tokenpak.telemetry.operational",
-      "name": "pruning"
     },
     {
       "module": "tokenpak.telemetry.operational",
@@ -14277,55 +14257,7 @@
     },
     {
       "module": "tokenpak.telemetry.operational.api",
-      "name": "CONFIG_PATH"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "DB_PATH"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "HealthChecker"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "METRICS"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "Permission"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "PruneJob"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
       "name": "RBAC_DB_PATH"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "admin_config"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "admin_prune"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "admin_stats"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "admin_vacuum"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "health"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "health_checker"
     },
     {
       "module": "tokenpak.telemetry.operational.api",
@@ -14333,19 +14265,7 @@
     },
     {
       "module": "tokenpak.telemetry.operational.api",
-      "name": "load_retention_config"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "metrics"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
       "name": "not_found"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "prune_job"
     },
     {
       "module": "tokenpak.telemetry.operational.api",
@@ -14353,27 +14273,7 @@
     },
     {
       "module": "tokenpak.telemetry.operational.api",
-      "name": "require_auth"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "require_permission"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
-      "name": "retention_config"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.api",
       "name": "server_error"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.health",
-      "name": "HealthChecker"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.health",
-      "name": "HealthStatus"
     },
     {
       "module": "tokenpak.telemetry.operational.metrics",
@@ -14390,22 +14290,6 @@
     {
       "module": "tokenpak.telemetry.operational.metrics",
       "name": "MetricsCollector"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.pruning",
-      "name": "PruneJob"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.pruning",
-      "name": "PruneResult"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.pruning",
-      "name": "RetentionConfig"
-    },
-    {
-      "module": "tokenpak.telemetry.operational.pruning",
-      "name": "load_retention_config"
     },
     {
       "module": "tokenpak.telemetry.operational.rbac_auth",
@@ -16682,26 +16566,6 @@
     {
       "module": "tokenpak.vault.doctor_check",
       "name": "summarize"
-    },
-    {
-      "module": "tokenpak.vault.health",
-      "name": "DEFAULT_STALE_SECONDS"
-    },
-    {
-      "module": "tokenpak.vault.health",
-      "name": "HealthCheckResult"
-    },
-    {
-      "module": "tokenpak.vault.health",
-      "name": "IndexStatus"
-    },
-    {
-      "module": "tokenpak.vault.health",
-      "name": "RepairResult"
-    },
-    {
-      "module": "tokenpak.vault.health",
-      "name": "VaultHealth"
     },
     {
       "module": "tokenpak.vault.indexer",

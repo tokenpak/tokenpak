@@ -108,6 +108,14 @@ CREATE TABLE IF NOT EXISTS tp_spend (
 CREATE INDEX IF NOT EXISTS idx_spend_ts ON tp_spend(timestamp);
 """
 
+# Uniqueness key: without it, duplicate rows for the same request silently
+# inflate spend totals and move budget enforcement. Applied as an additive
+# migration; pre-existing duplicate rows are deduped (newest row wins) in
+# the same transaction before the unique index is created.
+_UNIQUE_INDEX_DDL = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_spend_request_id ON tp_spend(request_id)"
+)
+
 
 # ---------------------------------------------------------------------------
 # BudgetTracker
@@ -150,6 +158,33 @@ class BudgetTracker:
         conn = self._conn()
         conn.executescript(_DDL)
         conn.commit()
+        self._ensure_unique_request_id(conn)
+
+    @staticmethod
+    def _ensure_unique_request_id(conn: sqlite3.Connection) -> None:
+        """Create the UNIQUE(request_id) index, deduping legacy rows first.
+
+        Databases written before the uniqueness key existed may contain
+        duplicate request_ids; the unique index cannot be created over them.
+        Dedupe (keep the newest row per request_id, i.e. max rowid) and
+        create the index inside one transaction so a crash mid-migration
+        leaves the database unchanged.
+        """
+        try:
+            conn.execute(_UNIQUE_INDEX_DDL)
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            conn.execute(
+                """
+                DELETE FROM tp_spend
+                WHERE rowid NOT IN (
+                    SELECT MAX(rowid) FROM tp_spend GROUP BY request_id
+                )
+                """
+            )
+            conn.execute(_UNIQUE_INDEX_DDL)
+            conn.commit()
 
     # -----------------------------------------------------------------------
     # Write
@@ -166,9 +201,21 @@ class BudgetTracker:
         agent: str = "",
         timestamp: Optional[datetime] = None,
     ) -> SpendRecord:
-        """Record spend for a completed request."""
+        """Record spend for a completed request.
+
+        ``request_id`` is required and must be non-empty: fabricated
+        (timestamp-derived) ids collide for same-timestamp requests, and a
+        collision under the upsert would silently overwrite another
+        request's spend. Re-recording the same ``request_id`` replaces the
+        previous row (idempotent upsert) instead of duplicating spend.
+        """
+        if not request_id:
+            raise ValueError(
+                "record_spend requires a non-empty request_id; refusing to "
+                "fabricate one (fabricated ids collide and corrupt budget totals)"
+            )
         ts = timestamp or datetime.now()
-        rid = request_id or f"req-{ts.strftime('%Y%m%d%H%M%S%f')}"
+        rid = request_id
         record = SpendRecord(
             request_id=rid,
             timestamp=ts,
@@ -182,7 +229,7 @@ class BudgetTracker:
             conn = self._conn()
             conn.execute(
                 """
-                INSERT INTO tp_spend
+                INSERT OR REPLACE INTO tp_spend
                     (request_id, timestamp, model, cost_usd, tokens_input, tokens_output, agent)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,

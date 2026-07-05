@@ -31,9 +31,9 @@ Competitors compared: [Helicone](https://helicone.ai), [LangSmith](https://smith
 
 ## Where TokenPak Wins
 
-### 1. Local-first / zero data leaving your machine
+### 1. Local-first / no second cloud intermediary
 
-TokenPak runs as a local proxy process. Your prompts are compressed on your hardware before they reach any upstream API. Nothing goes through a third-party cloud intermediary — no Helicone servers, no SaaS dashboards, no vendor retention.
+TokenPak runs as a local proxy process. Your prompts are compressed on your hardware before they reach your configured upstream API. No prompt content goes through TokenPak's cloud or a third-party observability intermediary.
 
 This matters for three reasons:
 - **Privacy.** Regulated industries (healthcare, finance, legal) often cannot route prompts through a third-party cloud.
@@ -75,7 +75,7 @@ TokenPak supports multi-provider routing, but if you need instant access to 200+
 
 | If you need… | Consider… |
 |---|---|
-| Token savings + zero data leaving your machine | **TokenPak** |
+| Token savings without a second cloud intermediary | **TokenPak** |
 | LangChain tracing + evaluation | LangSmith |
 | Maximum provider breadth (200+ models) | LiteLLM or Portkey |
 | Instant access to many models, no infra | OpenRouter |

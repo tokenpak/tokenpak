@@ -1,0 +1,8 @@
+{
+  "session_id": "fixture-session-start-clear",
+  "transcript_path": "/tmp/tp-l2a-fixture/transcript.jsonl",
+  "cwd": "/tmp/tp-l2a-fixture",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-5-codex",
+  "source": "clear"
+}

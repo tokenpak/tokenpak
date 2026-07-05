@@ -22,13 +22,9 @@ pytest marks used:
 
 from __future__ import annotations
 
-import json
 import os
 import socket
-import stat
 import time
-from pathlib import Path
-from typing import Any, Dict
 from unittest.mock import patch
 
 import pytest
@@ -89,8 +85,9 @@ class TestProxyLifecycle:
         config_dir.mkdir()
         (config_dir / "config.yaml").write_text("{invalid yaml: [unclosed bracket")
 
-        # Startup checks should complete without raising
-        with patch("tokenpak.proxy.startup.Path.home", return_value=tmp_path):
+        # Startup checks should complete without raising. Startup resolves its
+        # home via tokenpak._paths, so point TOKENPAK_HOME at the corrupt config dir.
+        with patch.dict(os.environ, {"TOKENPAK_HOME": str(config_dir)}):
             ok, warnings = run_startup_checks(port=_next_port())
             # Should return structured result, not crash
             assert isinstance(ok, bool)
@@ -156,74 +153,14 @@ class TestProxyLifecycle:
 
 
 # ===========================================================================
-# TestConfigFileChaos
+# (Removed) TestConfigFileChaos
+#
+# The former TestConfigFileChaos class self-tested helpers defined inside the
+# test file (`load_config_with_fallback`) and stdlib behavior (`json.loads`
+# raising on corrupt/truncated/empty input) without importing any TokenPak
+# code. Real config-failure coverage lives in the config_loader / doctor test
+# suites which exercise the actual product loaders.
 # ===========================================================================
-
-
-@pytest.mark.chaos
-class TestConfigFileChaos:
-    """Chaos tests for config file failure modes."""
-
-    def test_config_file_corrupted_json_handled(self, tmp_path):
-        """Corrupted JSON in config returns None, signalling caller to reset."""
-        corrupt = tmp_path / "openclaw.json"
-        corrupt.write_text('{"providers": {invalid json here')
-
-        try:
-            data = json.loads(corrupt.read_text())
-            assert False, "Should have raised JSONDecodeError"
-        except json.JSONDecodeError as exc:
-            # Application code should catch this and use defaults
-            assert exc is not None
-
-    def test_config_file_missing_returns_empty_defaults(self, tmp_path):
-        """Missing config file is handled gracefully with default empty config."""
-        missing = tmp_path / "nonexistent.json"
-
-        def load_config_with_fallback(path: Path) -> Dict[str, Any]:
-            try:
-                return json.loads(path.read_text())
-            except (FileNotFoundError, json.JSONDecodeError):
-                return {"providers": {}, "auth_profiles": {}}
-
-        config = load_config_with_fallback(missing)
-        assert config == {"providers": {}, "auth_profiles": {}}
-
-    def test_config_file_empty_treated_as_corrupt(self, tmp_path):
-        """Empty config file treated as corruption, fallback to defaults."""
-        empty = tmp_path / "config.json"
-        empty.write_text("")
-
-        def load_config_with_fallback(path: Path) -> Dict[str, Any]:
-            try:
-                return json.loads(path.read_text())
-            except (FileNotFoundError, json.JSONDecodeError, ValueError):
-                return {"providers": {}, "auth_profiles": {}}
-
-        config = load_config_with_fallback(empty)
-        assert config == {"providers": {}, "auth_profiles": {}}
-
-    def test_config_file_valid_json_loads_correctly(self, tmp_path):
-        """Valid JSON config loads without error."""
-        good = tmp_path / "config.json"
-        payload = {"providers": {"anthropic": {"base_url": "https://api.anthropic.com"}}}
-        good.write_text(json.dumps(payload))
-
-        loaded = json.loads(good.read_text())
-        assert loaded["providers"]["anthropic"]["base_url"] == "https://api.anthropic.com"
-
-    def test_partial_write_recovery(self, tmp_path):
-        """Config written partially (truncated) is detectable as corrupt."""
-        partial = tmp_path / "config.json"
-        full_json = json.dumps({"providers": {"a": "b"}, "auth_profiles": {}})
-        # Write only first half (simulates partial write / crash during write)
-        partial.write_text(full_json[: len(full_json) // 2])
-
-        try:
-            json.loads(partial.read_text())
-            assert False, "Partial JSON should fail to parse"
-        except json.JSONDecodeError:
-            pass  # Expected — caller should fall back to defaults
 
 
 # ===========================================================================
@@ -341,27 +278,6 @@ class TestDiskChaos:
             events2 = tracker.get_recent()
             assert isinstance(events2, list)
 
-    def test_config_write_failure_reported_not_silenced(self, tmp_path):
-        """Failed config write raises or returns error, not silently succeeds."""
-        read_only_dir = tmp_path / "readonly"
-        read_only_dir.mkdir()
-        os.chmod(read_only_dir, stat.S_IRUSR | stat.S_IXUSR)
-
-        config_file = read_only_dir / "config.json"
-
-        write_failed = False
-        try:
-            config_file.write_text('{"test": true}')
-        except (PermissionError, OSError):
-            write_failed = True
-
-        # On Linux, writing to read-only dir should fail
-        if os.getuid() != 0:  # skip if running as root
-            assert write_failed, "Expected write to fail on read-only directory"
-
-        # Restore permissions for cleanup
-        os.chmod(read_only_dir, stat.S_IRWXU)
-
     def test_telemetry_degraded_on_write_failure(self):
         """Telemetry system enters degraded mode when writes fail."""
         from tokenpak.proxy.degradation import DegradationEventType, DegradationTracker
@@ -374,21 +290,6 @@ class TestDiskChaos:
         assert len(events) >= 1
         config_events = [e for e in events if e["event_type"] == DegradationEventType.CONFIG_FALLBACK]
         assert len(config_events) >= 1
-
-    def test_index_file_missing_degrades_gracefully(self, tmp_path):
-        """Missing vault index file is handled; proxy doesn't crash."""
-        index_path = tmp_path / "index.json"
-        # index_path does NOT exist
-
-        def load_index(path: Path) -> Dict[str, Any]:
-            try:
-                return json.loads(path.read_text())
-            except FileNotFoundError:
-                return {"blocks": [], "degraded": True}
-
-        result = load_index(index_path)
-        assert result["degraded"] is True
-        assert result["blocks"] == []
 
 
 # ===========================================================================
@@ -438,36 +339,6 @@ class TestMemoryPressure:
             f"FailoverEventLog exceeded maxlen=100 bound: {len(events)} events"
         )
 
-    def test_cooldown_state_does_not_grow_unbounded(self):
-        """Expired cooldowns are pruned — state dict doesn't grow forever."""
-        import threading as _threading
-
-        class _BoundedCooldownState:
-            """Minimal inline cooldown state for chaos test."""
-            def __init__(self):
-                self._lock = _threading.Lock()
-                self._cooldowns: Dict[str, float] = {}
-
-            def set_cooldown(self, provider: str, duration_seconds: float):
-                with self._lock:
-                    self._cooldowns[provider] = time.time() + duration_seconds
-
-            def clear_expired(self):
-                with self._lock:
-                    now = time.time()
-                    expired = [p for p, exp in self._cooldowns.items() if now >= exp]
-                    for p in expired:
-                        del self._cooldowns[p]
-
-        state = _BoundedCooldownState()
-        # Add many short-lived cooldowns
-        for i in range(100):
-            state.set_cooldown(f"provider-{i}", duration_seconds=0.01)
-
-        time.sleep(0.05)
-        state.clear_expired()
-
-        with state._lock:
-            remaining = len(state._cooldowns)
-
-        assert remaining == 0, f"Expected 0 remaining after expiry sweep, got {remaining}"
+    # (Removed) test_cooldown_state_does_not_grow_unbounded: it defined a
+    # `_BoundedCooldownState` class inside the test body and then verified
+    # that class's own prune logic — testing the test, not TokenPak.

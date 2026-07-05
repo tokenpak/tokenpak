@@ -24,7 +24,7 @@ import sqlite3
 
 # Current target schema version. Bump this and append a migration function to
 # ``_MIGRATIONS`` when the schema changes; never edit a landed migration.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def get_current_schema_version(conn: sqlite3.Connection) -> int:
@@ -189,9 +189,38 @@ def _migrate_v0_to_v1(conn: sqlite3.Connection) -> None:
         conn.execute(stmt)
 
 
+# ---------------------------------------------------------------------------
+# Migration v1 -> v2: run-lease sidecar table (single-runner mutual exclusion).
+# ---------------------------------------------------------------------------
+#
+# ``dispatch_run_leases`` is deliberately a SIDECAR table (not columns on
+# ``dispatch_runs``): the run writer uses ``INSERT OR REPLACE``, which rewrites
+# the whole row, so lease state kept on ``dispatch_runs`` would be silently
+# wiped by every run update. The lease row is claimed with a single atomic
+# statement before a runner walks a run's stations, and deleted on release.
+
+_V2_TABLES: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS dispatch_run_leases (
+        run_id TEXT PRIMARY KEY,
+        owner TEXT NOT NULL,
+        acquired_at TEXT NOT NULL
+    )
+    """,
+)
+
+
+def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    """Create the run-lease sidecar table (idempotent)."""
+
+    for stmt in _V2_TABLES:
+        conn.execute(stmt)
+
+
 # Ordered migration ladder: (target_version, migration_fn). Append-only.
 _MIGRATIONS: tuple[tuple[int, "object"], ...] = (
     (1, _migrate_v0_to_v1),
+    (2, _migrate_v1_to_v2),
 )
 
 

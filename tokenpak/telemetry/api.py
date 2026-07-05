@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import asdict
-from pathlib import Path
 
 try:
     from fastapi import APIRouter, Query
@@ -25,8 +23,12 @@ from tokenpak.telemetry.query_dsl import (
 
 
 def _get_db_path():
-    p = os.environ.get("TOKENPAK_DB_PATH")
-    return Path(p) if p else Path(__file__).parent.parent.parent / "telemetry.db"
+    # Single-resolver rule: every telemetry.db open routes through
+    # tokenpak.core.paths.get_db_path (which also honors the deprecated
+    # TOKENPAK_DB_PATH alias). No repo-root fallback here.
+    from tokenpak.core.paths import get_db_path
+
+    return get_db_path("telemetry.db")
 
 
 def _to_json(obj):

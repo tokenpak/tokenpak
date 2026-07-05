@@ -13,10 +13,13 @@ entries:  timestamped notes within a session (auto or manual)
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
+
+from .. import _sqlite as _db
 
 
 @dataclass
@@ -51,40 +54,29 @@ class JournalStore:
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
+        self._write_lock = threading.RLock()
+        self._write_conn: sqlite3.Connection | None = None
         self._init_db()
 
     def _init_db(self) -> None:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                session_id TEXT PRIMARY KEY,
-                started_at REAL NOT NULL,
-                ended_at REAL,
-                project_dir TEXT NOT NULL DEFAULT '',
-                model TEXT NOT NULL DEFAULT '',
-                total_requests INTEGER NOT NULL DEFAULT 0,
-                total_cost_usd REAL NOT NULL DEFAULT 0.0,
-                total_input_tokens INTEGER NOT NULL DEFAULT 0,
-                total_output_tokens INTEGER NOT NULL DEFAULT 0,
-                capsule_path TEXT
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                timestamp REAL NOT NULL,
-                entry_type TEXT NOT NULL,
-                content TEXT NOT NULL DEFAULT '',
-                metadata_json TEXT NOT NULL DEFAULT '{}',
-                FOREIGN KEY (session_id) REFERENCES sessions(session_id)
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_session ON entries(session_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_ts ON entries(timestamp)")
+        conn = self._connect()
+        # Canonical schema lives in companion._sqlite — shared with the
+        # pre-send hook so there is exactly one DDL for these tables.
+        _db.ensure_journal_schema(conn)
         conn.commit()
         conn.close()
+
+    def _connect(self) -> sqlite3.Connection:
+        """Open the journal DB via the shared companion connection factory
+        (busy_timeout is applied before the WAL switch there, so concurrent
+        first-openers wait for the conversion instead of failing)."""
+        return _db.connect(self._db_path, check_same_thread=False)
+
+    def _writer(self) -> sqlite3.Connection:
+        if self._write_conn is None:
+            self._write_conn = self._connect()
+        return self._write_conn
 
     def start_session(
         self,
@@ -92,26 +84,39 @@ class JournalStore:
         project_dir: str = "",
         model: str = "",
     ) -> None:
-        """Record a new session start."""
-        conn = sqlite3.connect(str(self._db_path))
-        conn.execute(
-            """INSERT OR REPLACE INTO sessions
-               (session_id, started_at, project_dir, model)
-               VALUES (?, ?, ?, ?)""",
-            (session_id, time.time(), project_dir, model),
-        )
-        conn.commit()
-        conn.close()
+        """Record a new session start.
+
+        Re-entry safe: a duplicate start event (resume, retried hook) must
+        not wipe accumulated totals, so this is INSERT-or-keep rather than
+        INSERT OR REPLACE. Only the descriptive fields refresh, and only
+        when the caller actually provided them.
+        """
+        with self._write_lock:
+            conn = self._writer()
+            conn.execute(
+                """INSERT OR IGNORE INTO sessions
+                   (session_id, started_at, project_dir, model)
+                   VALUES (?, ?, ?, ?)""",
+                (session_id, time.time(), project_dir, model),
+            )
+            conn.execute(
+                """UPDATE sessions
+                   SET project_dir = COALESCE(NULLIF(?, ''), project_dir),
+                       model = COALESCE(NULLIF(?, ''), model)
+                   WHERE session_id = ?""",
+                (project_dir, model, session_id),
+            )
+            conn.commit()
 
     def end_session(self, session_id: str) -> None:
         """Record session end and update totals."""
-        conn = sqlite3.connect(str(self._db_path))
-        conn.execute(
-            "UPDATE sessions SET ended_at = ? WHERE session_id = ?",
-            (time.time(), session_id),
-        )
-        conn.commit()
-        conn.close()
+        with self._write_lock:
+            conn = self._writer()
+            conn.execute(
+                "UPDATE sessions SET ended_at = ? WHERE session_id = ?",
+                (time.time(), session_id),
+            )
+            conn.commit()
 
     def add_entry(
         self,
@@ -120,21 +125,28 @@ class JournalStore:
         content: str,
         metadata: Optional[dict[str, Any]] = None,
     ) -> None:
-        """Append a journal entry to a session."""
+        """Append a journal entry to a session.
+
+        Idempotent per event: rows carry a content hash under a UNIQUE
+        index, so a duplicate delivery of the same (type, content,
+        metadata) event within a session collapses to one row.
+        """
         import json
-        conn = sqlite3.connect(str(self._db_path))
-        conn.execute(
-            """INSERT INTO entries (session_id, timestamp, entry_type, content, metadata_json)
-               VALUES (?, ?, ?, ?, ?)""",
-            (session_id, time.time(), entry_type, content,
-             json.dumps(metadata or {}, default=str)),
-        )
-        conn.commit()
-        conn.close()
+        metadata_json = json.dumps(metadata or {}, default=str)
+        with self._write_lock:
+            conn = self._writer()
+            conn.execute(
+                """INSERT OR IGNORE INTO entries
+                   (session_id, timestamp, entry_type, content, metadata_json, content_hash)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (session_id, time.time(), entry_type, content, metadata_json,
+                 _db.entry_content_hash(entry_type, content, metadata_json)),
+            )
+            conn.commit()
 
     def get_session(self, session_id: str) -> Optional[SessionRecord]:
         """Retrieve a session record."""
-        conn = sqlite3.connect(str(self._db_path))
+        conn = self._connect()
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
@@ -167,7 +179,7 @@ class JournalStore:
     ) -> list[JournalEntry]:
         """Retrieve journal entries for a session."""
         import json
-        conn = sqlite3.connect(str(self._db_path))
+        conn = self._connect()
         conn.row_factory = sqlite3.Row
         if entry_type:
             rows = conn.execute(
@@ -229,7 +241,7 @@ class JournalStore:
         Reads from entries table; no caching — caller decides frequency.
         """
         import json
-        conn = sqlite3.connect(str(self._db_path))
+        conn = self._connect()
         try:
             rows = conn.execute(
                 "SELECT metadata_json FROM entries "
@@ -263,7 +275,7 @@ class JournalStore:
 
     def recent_sessions(self, limit: int = 10) -> list[SessionRecord]:
         """List recent sessions, newest first."""
-        conn = sqlite3.connect(str(self._db_path))
+        conn = self._connect()
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT * FROM sessions ORDER BY started_at DESC LIMIT ?", (limit,)

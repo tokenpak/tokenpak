@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """End-to-end verification for ``tokenpak codex`` installation.
 
-Run via ``tokenpak codex doctor``. Exits 0 only if every check passes,
-so it's safe to wire into CI or health checks.
+Run via ``tokenpak codex doctor``. Exits non-zero only if a check
+FAILs; WARN rows are advisory (e.g. a migration orphan) and never affect
+the exit code, so it's still safe to wire into CI or health checks.
 
-Each check is a callable returning ``(ok: bool, detail: str)``. The
-module stays self-contained — no cross-cutting framework — so adding a
-check is "define function, append to CHECKS list".
+Each check is a callable returning ``(ok: bool, detail: str)`` for the
+binary PASS/FAIL contract, or ``(_WARN, detail)`` to surface an advisory
+WARN row.  The module stays self-contained — no cross-cutting framework —
+so adding a check is "define function, append to CHECKS list".
 """
 
 from __future__ import annotations
@@ -24,7 +26,24 @@ from .rates_snapshot import DEFAULT_SNAPSHOT_PATH
 from .rates_snapshot import count as rates_count
 from .skills_installer import bundled_skill_names
 
-CheckFn = Callable[[], "tuple[bool, str]"]
+CheckFn = Callable[[], "tuple[bool | str, str]"]
+
+# Sentinel a check returns (in the ``ok`` slot) to render an advisory
+# WARN row.  Underscore-private so it stays out of the released public-API
+# snapshot; ``run`` normalizes it to the "WARN" status.
+_WARN = "WARN"
+
+
+def _status_of(raw: "bool | str") -> str:
+    """Map a check's raw ``ok`` return into ``PASS`` / ``WARN`` / ``FAIL``.
+
+    Checks may return ``True``/``False`` (the original binary contract) or
+    the :data:`_WARN` sentinel to surface an advisory row that prints but
+    does not fail the exit code.
+    """
+    if raw == _WARN:
+        return "WARN"
+    return "PASS" if raw else "FAIL"
 
 
 # ── Individual checks ────────────────────────────────────────────────
@@ -116,14 +135,36 @@ def check_agents_md() -> "tuple[bool, str]":
 
 
 def check_skills_installed() -> "tuple[bool, str]":
-    target = Path.home() / ".codex" / "skills"
+    # Canonical user-scope skill-discovery path Codex actually scans:
+    # ``$HOME/.agents/skills`` — not the pre-L3 ``~/.codex/skills`` location.
+    target = Path.home() / ".agents" / "skills"
     if not target.exists():
         return False, f"{target} missing"
     bundled = bundled_skill_names()
     missing = [name for name in bundled if not (target / name).exists()]
     if missing:
-        return False, f"missing skills: {missing}"
-    return True, f"{len(bundled)} skills present"
+        return False, f"missing skills at {target}: {missing}"
+    return True, f"{len(bundled)} skills present at {target}"
+
+
+def _check_skills_legacy_orphans() -> "tuple[bool | str, str]":
+    """WARN when pre-L3 installs left skill trees at ``~/.codex/skills``.
+
+    Doctor flags the orphan rather than auto-migrating: a user may have
+    customized a skill in place, and a silent overwrite would clobber the
+    edit.  Advisory only — a stale legacy copy shadows nothing once the
+    launcher installs into the canonical ``~/.agents/skills`` path, it
+    just wastes space and can confuse manual inspection.
+    """
+    from .skills_installer import _orphaned_legacy_skills
+
+    orphans = _orphaned_legacy_skills()
+    if not orphans:
+        return True, "no legacy ~/.codex/skills orphans"
+    return _WARN, (
+        f"legacy skills at ~/.codex/skills: {orphans} — remove them or run "
+        "`tokenpak codex --install-only` then delete the old copies"
+    )
 
 
 def check_databases() -> "tuple[bool, str]":
@@ -216,6 +257,7 @@ CHECKS: list["tuple[str, CheckFn]"] = [
     ("hooks.json schema", check_hooks_json),
     ("AGENTS.md", check_agents_md),
     ("skills installed", check_skills_installed),
+    ("skills legacy orphans", _check_skills_legacy_orphans),
     ("storage dbs", check_databases),
     ("rates snapshot", check_rates_snapshot),
     ("MCP import", check_mcp_import),
@@ -231,27 +273,33 @@ def run(refresh_rates: bool = False) -> int:
         path = refresh()
         print(f"refreshed rates snapshot: {path}")
 
-    results: list["tuple[str, bool, str]"] = []
+    results: list["tuple[str, str, str]"] = []
     for name, fn in CHECKS:
         try:
-            ok, detail = fn()
+            raw, detail = fn()
         except Exception as exc:
-            ok, detail = False, f"check raised: {exc.__class__.__name__}: {exc}"
-        results.append((name, ok, detail))
+            raw, detail = False, f"check raised: {exc.__class__.__name__}: {exc}"
+        results.append((name, _status_of(raw), detail))
 
     name_width = max(len(n) for n, _, _ in results)
-    all_ok = True
-    for name, ok, detail in results:
-        tag = "PASS" if ok else "FAIL"
-        print(f"  [{tag}] {name.ljust(name_width)}  {detail}")
-        all_ok = all_ok and ok
+    any_fail = False
+    for name, status, detail in results:
+        print(f"  [{status}] {name.ljust(name_width)}  {detail}")
+        if status == "FAIL":
+            any_fail = True
 
-    passed = sum(1 for _, ok, _ in results if ok)
+    passed = sum(1 for _, s, _ in results if s == "PASS")
+    warned = sum(1 for _, s, _ in results if s == "WARN")
+    failed = sum(1 for _, s, _ in results if s == "FAIL")
     total = len(results)
-    summary = f"{passed}/{total} checks passed"
+    parts = [f"{passed}/{total} checks passed"]
+    if warned:
+        parts.append(f"{warned} warning{'s' if warned != 1 else ''}")
+    if failed:
+        parts.append(f"{failed} failed")
     print()
-    print(summary if all_ok else f"{summary} — some checks failed")
-    return 0 if all_ok else 1
+    print(", ".join(parts))
+    return 1 if any_fail else 0
 
 
 def main(argv: list[str] | None = None) -> int:

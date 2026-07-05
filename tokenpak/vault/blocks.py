@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from tokenpak.vault._atomic import _atomic_write
+
 
 @dataclass
 class BlockRecord:
@@ -126,11 +128,11 @@ class BlockStore:
     # ------------------------------------------------------------------
 
     def flush(self) -> None:
-        """Write blocks to the JSON store file."""
+        """Write blocks to the JSON store file (atomic; see vault/_atomic.py)."""
         path = Path(self._path).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {bid: block.to_dict() for bid, block in self._blocks.items()}
-        path.write_text(json.dumps(data, indent=2))
+        _atomic_write(path, json.dumps(data, indent=2))
 
     def _load(self) -> None:
         path = Path(self._path).expanduser()
@@ -264,14 +266,14 @@ class SliceStore:
     # ------------------------------------------------------------------
 
     def flush(self) -> None:
-        """Write slices to the JSON store file."""
+        """Write slices to the JSON store file (atomic; see vault/_atomic.py)."""
         import json
         from dataclasses import asdict
 
         path = Path(self._path).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {sid: asdict(r) for sid, r in self._slices.items()}
-        path.write_text(json.dumps(data, indent=2))
+        _atomic_write(path, json.dumps(data, indent=2))
 
     def _load(self) -> None:
         import json

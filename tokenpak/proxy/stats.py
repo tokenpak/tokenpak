@@ -410,6 +410,7 @@ def build_stats_response(
 # ---------------------------------------------------------------------------
 # CompressionStats — compression telemetry tracker used by tests
 # ---------------------------------------------------------------------------
+import collections as _collections
 import pathlib as _pathlib
 import threading as _threading
 
@@ -429,8 +430,12 @@ class CompressionStats:
         self._lock = _threading.Lock()
         self._requests_total = 0
         self._requests_errors = 0
-        self._ratios: list = []
-        self._latencies: list = []
+        # Bounded to the rolling window: these previously grew one entry per
+        # request for the life of the process (unbounded RSS growth on a
+        # long-running proxy). Totals are tracked separately above; the
+        # per-request samples only feed rolling averages.
+        self._ratios: _collections.deque = _collections.deque(maxlen=ROLLING_WINDOW)
+        self._latencies: _collections.deque = _collections.deque(maxlen=ROLLING_WINDOW)
 
     def record_compression(
         self,

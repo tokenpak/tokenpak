@@ -1,6 +1,6 @@
 # Release-gate helper scripts
 
-These scripts implement the binding contract of **Standard 30 — Release-Gate Trust Contract** (ratified 2026-05-09). Authoritative spec: `~/vault/01_PROJECTS/tokenpak/standards/30-release-gate-trust-contract.md`.
+These scripts implement the binding release-gate contract. The public map below lists each helper and the Make target that enforces it.
 
 ## Scripts
 

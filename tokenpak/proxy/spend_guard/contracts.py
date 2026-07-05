@@ -133,6 +133,10 @@ class GuardOutcome:
     decision: Optional[PreflightDecision] = None
     pending_id: Optional[str] = None
     audit_event: Optional[str] = None         # event_type for audit row
+    # In-flight admission ticket (rolling-cap accounting). Present only on
+    # forward outcomes that were admitted past the rolling caps; the proxy
+    # settles it once the request's actual cost is recorded (or it fails).
+    admission_ticket: Optional[str] = None
 
     @classmethod
     def passthrough(cls, body: bytes) -> "GuardOutcome":

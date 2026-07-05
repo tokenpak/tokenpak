@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import logging
 import socket
-from pathlib import Path
 from typing import List, Tuple
+
+from tokenpak import _paths  # scoped-home path resolver (honors TOKENPAK_HOME)
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ def run_startup_checks(port: int) -> Tuple[bool, List[str]]:
     # ------------------------------------------------------------------ #
     # 4. ~/.tokenpak directory                                             #
     # ------------------------------------------------------------------ #
-    tokenpak_dir = Path.home() / ".tokenpak"
+    tokenpak_dir = _paths.home()
     if not tokenpak_dir.exists():
         try:
             tokenpak_dir.mkdir(parents=True, exist_ok=True)

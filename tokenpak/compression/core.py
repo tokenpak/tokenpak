@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+from tokenpak.vault._atomic import _atomic_write
+
 # Precomputation pipeline (lazy import to avoid circular deps)
 try:
     from .precompute import recompute_all as _recompute_all
@@ -289,9 +291,9 @@ def index_directory(
                 stats["indexed"] += 1
                 continue
 
-            # Write block content file
+            # Write block content file (atomic; see tokenpak/vault/_atomic.py)
             try:
-                block_file.write_text(content, encoding="utf-8")
+                _atomic_write(block_file, content)
             except OSError:
                 stats["errors"] += 1
                 continue
@@ -338,7 +340,8 @@ def index_directory(
         },
         "blocks": new_blocks,
     }
-    index_file.write_text(json.dumps(index_data, indent=2), encoding="utf-8")
+    # Atomic publish: concurrent readers must never observe a torn index.json.
+    _atomic_write(index_file, json.dumps(index_data, indent=2))
 
     if verbose:
         print(f"\n✅ Index written: {index_file}")

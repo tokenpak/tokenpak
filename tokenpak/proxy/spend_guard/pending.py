@@ -9,8 +9,10 @@ or expires after ``pending_ttl_seconds``.
 
 DB layout follows the ``monitor.db`` / ``budget.db`` convention:
 - One file at ``~/.tokenpak/spend_guard.db`` (configurable).
-- Lazy CREATE TABLE IF NOT EXISTS.
-- Per-call ``sqlite3.connect`` — no pool. WAL not enabled (writes are infrequent).
+- Lazy CREATE TABLE IF NOT EXISTS (ensured once per process per path).
+- Per-call ``sqlite3.connect`` — no pool. WAL + busy_timeout are enabled so
+  concurrent readers/writers (exactly the runaway-event case) do not hit
+  'database is locked' errors that would escape into the proxy hot path.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ import json
 import os
 import secrets
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -73,6 +76,13 @@ def _db_path(audit_db_path: str) -> Path:
 def _connect(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path), timeout=5.0)
     conn.row_factory = sqlite3.Row
+    # Wait out short lock contention instead of raising 'database is locked'
+    # (the sqlite3 ``timeout`` arg covers most cases; the PRAGMA makes the
+    # behavior explicit and applies to statements issued via executescript).
+    try:
+        conn.execute("PRAGMA busy_timeout = 5000")
+    except sqlite3.Error:
+        pass
     # The db holds request metadata — keep it owner-only (0600), like
     # credentials.toml. Best-effort; never fail a connect over perms.
     try:
@@ -80,6 +90,36 @@ def _connect(path: Path) -> sqlite3.Connection:
     except OSError:
         pass
     return conn
+
+
+# Schema is ensured once per process per DB path — re-running the full
+# CREATE TABLE / index / migration block on every call (including reads)
+# serializes writers behind schema DDL exactly when the store is busiest.
+_SCHEMA_READY_LOCK = threading.Lock()
+_SCHEMA_READY: set[str] = set()
+
+
+def _ensure_schema_once(conn: sqlite3.Connection, path: Path) -> None:
+    key = str(path)
+    if key in _SCHEMA_READY:
+        return
+    with _SCHEMA_READY_LOCK:
+        if key in _SCHEMA_READY:
+            return
+        # WAL lets concurrent readers proceed while one writer commits —
+        # persistent per-database, so setting it at first touch is enough.
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.Error:
+            pass
+        _ensure_schema(conn)
+        _SCHEMA_READY.add(key)
+
+
+def reset_schema_cache_for_testing() -> None:
+    """Test-only — forget which DB paths already had schema setup."""
+    with _SCHEMA_READY_LOCK:
+        _SCHEMA_READY.clear()
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
@@ -193,7 +233,7 @@ class PendingStore:
 
         conn = _connect(self.path)
         try:
-            _ensure_schema(conn)
+            _ensure_schema_once(conn, self.path)
             # NB: expired rows are filtered out at SELECT time
             # (``expires_at > now`` predicate). Explicit cleanup is via
             # :meth:`expire_old` — keep store() free of side effects so
@@ -234,7 +274,7 @@ class PendingStore:
         """Most recent pending request for the given session, or None."""
         conn = _connect(self.path)
         try:
-            _ensure_schema(conn)
+            _ensure_schema_once(conn, self.path)
             row = conn.execute(
                 """SELECT * FROM pending_requests
                    WHERE session_id = ? AND status = 'pending' AND expires_at > ?
@@ -248,7 +288,7 @@ class PendingStore:
     def get_by_id(self, pending_id: str) -> Optional[PendingRequest]:
         conn = _connect(self.path)
         try:
-            _ensure_schema(conn)
+            _ensure_schema_once(conn, self.path)
             row = conn.execute(
                 "SELECT * FROM pending_requests WHERE pending_id = ?",
                 (pending_id,),
@@ -267,7 +307,7 @@ class PendingStore:
         """
         conn = _connect(self.path)
         try:
-            _ensure_schema(conn)
+            _ensure_schema_once(conn, self.path)
             row = conn.execute(
                 """SELECT * FROM pending_requests
                    WHERE request_hash = ? AND created_at > ?
@@ -282,31 +322,35 @@ class PendingStore:
     def consume(self, pending_id: str) -> Optional[PendingRequest]:
         """Return the pending request and mark it consumed.
 
-        Atomic: only succeeds once. Subsequent calls return None.
+        Atomic: only succeeds once. The UPDATE is conditioned on
+        ``status='pending'`` and gated on rowcount, so of N concurrent
+        callers exactly one wins the transition and gets the row back;
+        the rest (and all subsequent calls) return None. This is what
+        prevents a held request from being replayed to the provider twice.
         """
         conn = _connect(self.path)
         try:
-            _ensure_schema(conn)
-            row = conn.execute(
-                "SELECT * FROM pending_requests "
+            _ensure_schema_once(conn, self.path)
+            cur = conn.execute(
+                "UPDATE pending_requests SET status='consumed' "
                 "WHERE pending_id = ? AND status = 'pending'",
-                (pending_id,),
-            ).fetchone()
-            if not row:
-                return None
-            conn.execute(
-                "UPDATE pending_requests SET status='consumed' WHERE pending_id = ?",
                 (pending_id,),
             )
             conn.commit()
+            if cur.rowcount != 1:
+                return None
+            row = conn.execute(
+                "SELECT * FROM pending_requests WHERE pending_id = ?",
+                (pending_id,),
+            ).fetchone()
         finally:
             conn.close()
-        return _row_to_pending(row)
+        return _row_to_pending(row) if row else None
 
     def discard(self, pending_id: str) -> bool:
         conn = _connect(self.path)
         try:
-            _ensure_schema(conn)
+            _ensure_schema_once(conn, self.path)
             cur = conn.execute(
                 "UPDATE pending_requests SET status='discarded' "
                 "WHERE pending_id = ? AND status = 'pending'",
@@ -321,7 +365,7 @@ class PendingStore:
         """Mark all pending rows past their expires_at as expired. Returns count."""
         conn = _connect(self.path)
         try:
-            _ensure_schema(conn)
+            _ensure_schema_once(conn, self.path)
             cur = conn.execute(
                 "UPDATE pending_requests SET status='expired' "
                 "WHERE status='pending' AND expires_at < ?",

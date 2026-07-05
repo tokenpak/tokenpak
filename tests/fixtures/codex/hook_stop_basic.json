@@ -1,0 +1,9 @@
+{
+  "session_id": "fixture-stop-basic",
+  "transcript_path": "",
+  "cwd": "/tmp/tp-stop-fixture",
+  "hook_event_name": "Stop",
+  "model": "gpt-5-codex",
+  "stop_hook_active": true,
+  "last_assistant_message": "done"
+}

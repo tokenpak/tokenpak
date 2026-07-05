@@ -25,6 +25,51 @@ else
     MODEL=$(echo "$INPUT" | sed -n 's/.*"model"\s*:\s*"\([^"]*\)".*/\1/p')
 fi
 
+# Session-binding marker (atomic tmp+mv): the companion MCP server — a
+# separate long-lived process — binds its active session id from this
+# run-dir file. Without it, a stale marker from an earlier session causes
+# cross-session misattribution of journal/budget writes. Mirrors
+# companion/hooks/pre_send.py:_write_session_marker; must run BEFORE any
+# early exit.
+if [ -n "$SESSION_ID" ]; then
+    RUN_DIR="${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}/run"
+    _TP_CUR=""
+    if [ -f "$RUN_DIR/current-session" ]; then
+        IFS= read -r _TP_CUR < "$RUN_DIR/current-session" 2>/dev/null
+    fi
+    # Hot-path guard: rewrite only on session change (builtin read, no spawns).
+    if [ "$_TP_CUR" != "$SESSION_ID" ]; then
+        mkdir -p "$RUN_DIR" 2>/dev/null
+        if printf '%s' "$SESSION_ID" > "$RUN_DIR/current-session.$$.tmp" 2>/dev/null; then
+            mv -f "$RUN_DIR/current-session.$$.tmp" "$RUN_DIR/current-session" 2>/dev/null \
+                || rm -f "$RUN_DIR/current-session.$$.tmp" 2>/dev/null
+        fi
+    fi
+fi
+
+# Dedupe key — sha256(entry_type US content US metadata_json), matching the
+# canonical hash computed by the python journal writers (companion/_sqlite.py).
+# Empty output (no sha tool available) degrades to a NULL hash: the row is
+# still written, just without dedupe protection.
+_tp_entry_hash() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        printf '%s\037%s\037%s' "$1" "$2" "$3" | sha256sum 2>/dev/null | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        printf '%s\037%s\037%s' "$1" "$2" "$3" | shasum -a 256 2>/dev/null | awk '{print $1}'
+    fi
+}
+
+# Best-effort additive schema upgrade so INSERT OR IGNORE can carry the
+# content_hash dedupe key on databases created before the column existed.
+# The ALTER fails harmlessly once the column is present; nothing is ever
+# rewritten or deleted.
+_tp_ensure_dedupe_schema() {
+    sqlite3 -cmd ".timeout 5000" "$1" \
+        "ALTER TABLE entries ADD COLUMN content_hash TEXT;" >/dev/null 2>&1
+    sqlite3 -cmd ".timeout 5000" "$1" \
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_dedupe ON entries(session_id, entry_type, content_hash) WHERE content_hash IS NOT NULL;" >/dev/null 2>&1
+}
+
 TOKENS=0
 if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
     FILE_SIZE=$(stat -c%s "$TRANSCRIPT" 2>/dev/null || stat -f%z "$TRANSCRIPT" 2>/dev/null || echo 0)
@@ -67,9 +112,23 @@ if [ "$BUDGET" != "0" ] && [ -n "$BUDGET" ]; then
     TODAY=$(date +%Y-%m-%d)
     DAILY_TOTAL="0.0"
 
+    # Truthful daily spend: per (session, day) sum actual rows when any
+    # exist (rows with a model are actuals), otherwise take the largest
+    # estimate — counts each message once instead of summing the cumulative
+    # pre-send estimate series plus actuals. Mirrors the python readers
+    # (companion/_sqlite.py DAILY_SPEND_SQL) without referencing the 'kind'
+    # column so it also works on not-yet-migrated databases.
     if [ -f "$BUDGET_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
-        DAILY_TOTAL=$(sqlite3 "$BUDGET_DB" \
-            "SELECT COALESCE(SUM(estimated_cost), 0) FROM companion_costs WHERE date = '$TODAY';" 2>/dev/null || echo "0.0")
+        DAILY_TOTAL=$(sqlite3 -cmd ".timeout 5000" "$BUDGET_DB" \
+            "SELECT COALESCE(SUM(session_spend), 0) FROM (
+                 SELECT CASE
+                     WHEN SUM(CASE WHEN model != '' THEN 1 ELSE 0 END) > 0
+                     THEN SUM(CASE WHEN model != '' THEN estimated_cost ELSE 0 END)
+                     ELSE MAX(estimated_cost)
+                 END AS session_spend
+                 FROM companion_costs WHERE date = '$TODAY' GROUP BY session_id
+             );" 2>/dev/null || echo "0.0")
+        [ -z "$DAILY_TOTAL" ] && DAILY_TOTAL="0.0"
     fi
 
     BUDGET_MICRO=$(echo "$BUDGET * 1000000" | bc 2>/dev/null | cut -d. -f1 || echo 0)
@@ -103,9 +162,14 @@ if [ -n "$SESSION_ID" ]; then
     JOURNAL_DB="$JOURNAL_DIR/journal.db"
     if [ -f "$JOURNAL_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
         TIMESTAMP=$(date +%s)
-        sqlite3 "$JOURNAL_DB" \
-            "INSERT OR IGNORE INTO entries (session_id, timestamp, entry_type, content, metadata_json)
-             VALUES ('$SESSION_ID', $TIMESTAMP, 'auto', 'prompt submitted (~${TOKENS_FMT} tokens, est \$$COST_DOLLARS, model: ${MODEL:-unknown})', '{}');" 2>/dev/null &
+        ENTRY_CONTENT="prompt submitted (~${TOKENS_FMT} tokens, est \$$COST_DOLLARS, model: ${MODEL:-unknown})"
+        ENTRY_HASH=$(_tp_entry_hash 'auto' "$ENTRY_CONTENT" '{}')
+        {
+            _tp_ensure_dedupe_schema "$JOURNAL_DB"
+            sqlite3 -cmd ".timeout 5000" "$JOURNAL_DB" \
+                "INSERT OR IGNORE INTO entries (session_id, timestamp, entry_type, content, metadata_json, content_hash)
+                 VALUES ('$SESSION_ID', $TIMESTAMP, 'auto', '$ENTRY_CONTENT', '{}', NULLIF('$ENTRY_HASH', ''));" 2>/dev/null
+        } &
     fi
 fi
 

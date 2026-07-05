@@ -10,6 +10,7 @@ Hardened for stability:
 
 import atexit
 import hashlib
+import logging
 import sqlite3
 import threading
 import time
@@ -21,9 +22,47 @@ from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional
 if TYPE_CHECKING:
     pass
 
+logger = logging.getLogger(__name__)
+
 # Global registry of all instances for cleanup
 _REGISTRIES: List["BlockRegistry"] = []
 _CLEANUP_REGISTERED = False
+
+# Historical default: relative to the *current working directory*, so the
+# proxy and the CLI could silently end up using different registry files
+# depending on where they were launched from. Kept only as (a) the sentinel
+# value CLI arg defaults still pass in, and (b) the legacy fallback location.
+LEGACY_CWD_DB_PATH = ".tokenpak/registry.db"
+
+
+def _default_registry_db_path() -> str:
+    """Resolve the default registry DB path, anchored to the home config dir.
+
+    Resolution:
+      1. ``<tokenpak home>/registry.db`` (via ``tokenpak._paths.home()``,
+         which honors ``TOKENPAK_HOME``) when it exists — or when no legacy
+         CWD-relative file exists either (fresh install).
+      2. Legacy CWD-relative ``.tokenpak/registry.db`` as a *fallback read*
+         when it exists and the canonical file does not; a WARN naming both
+         paths is logged so operators can migrate.
+    """
+    from tokenpak import _paths
+
+    canonical = _paths.home() / "registry.db"
+    legacy = Path(LEGACY_CWD_DB_PATH)
+    if not canonical.exists() and legacy.exists():
+        logger.warning(
+            "using legacy CWD-relative registry DB %s; the canonical location "
+            "is %s — move the file there to make it independent of the "
+            "working directory",
+            legacy.resolve(),
+            canonical,
+        )
+        return str(legacy)
+    # Create the home dir with the resolver's canonical permissions (0700)
+    # rather than letting the caller's generic mkdir do it.
+    _paths.ensure_home()
+    return str(canonical)
 
 
 def _cleanup_all_registries() -> None:
@@ -76,9 +115,15 @@ class BlockRegistry:
     - Error recovery in transactions
     """
 
-    def __init__(self, db_path: str = ".tokenpak/registry.db"):
+    def __init__(self, db_path: Optional[str] = None):
         global _CLEANUP_REGISTERED
 
+        # None and the historical CWD-relative literal (which CLI arg
+        # defaults still pass through) both mean "use the default": resolve
+        # it against the home config dir so proxy and CLI agree on one file
+        # regardless of working directory.
+        if db_path is None or db_path == LEGACY_CWD_DB_PATH:
+            db_path = _default_registry_db_path()
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()

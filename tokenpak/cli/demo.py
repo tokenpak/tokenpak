@@ -25,7 +25,9 @@ from tokenpak.telemetry.storage import TelemetryDB
 
 def get_demo_db_path() -> str:
     """Return path to telemetry database (creates parent dir if needed)."""
-    db_path = Path.home() / ".tokenpak" / "telemetry.db"
+    from tokenpak.core.paths import get_db_path
+
+    db_path = get_db_path("telemetry.db")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return str(db_path)
 

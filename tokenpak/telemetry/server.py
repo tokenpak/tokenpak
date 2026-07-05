@@ -745,7 +745,11 @@ def create_app(
             if os.path.exists(backfill_script):
                 try:
                     # Ensure backfill writes into the SAME DB the server is using
-                    db_path = getattr(_storage, "_path", None) or os.environ.get("TOKENPAK_DB_PATH")
+                    from tokenpak.core.paths import get_db_path as _get_db_path
+
+                    db_path = getattr(_storage, "_path", None) or str(
+                        _get_db_path("telemetry.db")
+                    )
                     args = [sys.executable, backfill_script]
                     if db_path:
                         args += ["--db", os.path.expanduser(str(db_path))]

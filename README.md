@@ -31,7 +31,7 @@ tokenpak demo
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  TokenPak — Live Compression Demo (illustrative)     │
+│  TokenPak — Offline Fixture Demo (illustrative)      │
 ├──────────────────────────────────────────────────────┤
 │  Scenario              DevOps agent (config + logs)  │
 │  Savings drivers                      dedup + alias  │

@@ -46,6 +46,72 @@ def pytest_addoption(parser):
     )
 
 
+# ---------------------------------------------------------------------------
+# User-home isolation — applied at conftest IMPORT time, not in a fixture.
+#
+# Without this, any code path that resolves ``Path.home()`` /
+# ``os.path.expanduser("~")`` (monitor.db, retry_events.jsonl, companion
+# journal.db, lock registries, ...) silently pollutes the real
+# ``~/.tokenpak`` / ``~/.tpk`` of whoever runs the suite.
+#
+# Why import time and not a session fixture: pytest imports test modules —
+# and, transitively, product modules — during COLLECTION, which happens
+# before any session fixture runs. Modules that bake ``Path.home()`` into
+# module-level constants (e.g. codex skills_installer targets,
+# orchestration retry paths) would capture the REAL home while tests later
+# compare against the redirected one. Setting the env here, before any
+# collection import, keeps import-time constants and runtime resolution
+# consistent.
+#
+# Scope and limits:
+#   - HOME (+ USERPROFILE) only. ``TOKENPAK_HOME`` is deliberately NOT set:
+#     several suites monkeypatch ``Path.home()`` and rely on the documented
+#     env-var-absent resolution order.
+#   - Tests that monkeypatch HOME / ``Path.home()`` themselves still win:
+#     per-test patches override this process-scoped value.
+# ---------------------------------------------------------------------------
+import atexit as _atexit
+import os as _os
+import shutil as _shutil
+import tempfile as _tempfile
+from pathlib import Path as _Path
+
+_REAL_HOME = _Path(_os.path.expanduser("~"))
+# Prefer tmpfs (/dev/shm) for the fake home when available: SQLite state
+# files created there (monitor.db schema migration alone issues ~20
+# ALTER TABLE fsyncs) stay in memory, so a loaded host disk cannot push
+# per-test setup past the global 30s timeout. Fall back to system tmp.
+_shm = _Path("/dev/shm")
+if _shm.is_dir() and _os.access(_shm, _os.W_OK):
+    _FAKE_HOME = _Path(_tempfile.mkdtemp(prefix="tokenpak-test-home-", dir=_shm))
+else:
+    _FAKE_HOME = _Path(_tempfile.mkdtemp(prefix="tokenpak-test-home-"))
+_atexit.register(_shutil.rmtree, _FAKE_HOME, ignore_errors=True)
+_os.environ["HOME"] = str(_FAKE_HOME)
+# Windows equivalent — harmless elsewhere.
+_os.environ["USERPROFILE"] = str(_FAKE_HOME)
+# Keep read-mostly tool/model caches warm: libraries honouring XDG
+# (huggingface, torch, ...) would otherwise re-download into the fake
+# home. Only set when the runner has not chosen its own location.
+if "XDG_CACHE_HOME" not in _os.environ and (_REAL_HOME / ".cache").is_dir():
+    _os.environ["XDG_CACHE_HOME"] = str(_REAL_HOME / ".cache")
+
+# Preserve user-site packages for subprocess children. Redirecting HOME hides
+# the real ``~/.local``, so a ``pip install --user``-installed dependency (e.g.
+# watchdog) becomes unimportable in HOME-redirected subprocesses — which can
+# hang hook/CLI subprocess tests. Point PYTHONUSERBASE at the real home's
+# ``.local`` (mirrors the XDG_CACHE_HOME carve-out above) so user-site stays on
+# ``sys.path`` for children while ~/.tokenpak state remains isolated.
+if "PYTHONUSERBASE" not in _os.environ and (_REAL_HOME / ".local").is_dir():
+    _os.environ["PYTHONUSERBASE"] = str(_REAL_HOME / ".local")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_user_home():
+    """Expose the import-time fake home (see module-level block above)."""
+    yield _FAKE_HOME
+
+
 def _taxonomy_marker_for_path(nodeid: str) -> str:
     """Return the expected taxonomy marker name for a given test nodeid path."""
     for prefix, marker in TAXONOMY_DIR_RULES:

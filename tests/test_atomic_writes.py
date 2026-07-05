@@ -180,3 +180,55 @@ def test_atomic_write_negative_control(tmp_path: Path) -> None:
         "writer; the harness would not catch a regression to the old "
         "write_text path"
     )
+
+
+# ---------------- converted-site coverage ----------------
+
+
+def test_atomic_blockstore_flush_race(tmp_path: Path) -> None:
+    """Same writer/reader race, driven through a converted production site.
+
+    ``BlockStore.flush`` used to publish its JSON store via a plain
+    ``write_text`` (open-truncate-write), so a concurrent reader could
+    observe a torn file. After routing it through ``_atomic_write``, every
+    observation must be complete, parseable JSON containing one of the two
+    alternating payloads.
+    """
+    from tokenpak.vault.blocks import BlockRecord, BlockStore
+
+    store_path = tmp_path / "blocks.json"
+    store = BlockStore(str(store_path))
+    payload_a = "A" * 4096
+    payload_b = "B" * 4096
+
+    def writer_func(target: Path, content: str) -> None:
+        store.save(
+            BlockRecord(
+                block_id="race-block",
+                path="src/example.py",
+                content_hash="deadbeef",
+                file_type="text",
+                raw_tokens=1024,
+                compressed_tokens=512,
+                compressed_content=content,
+            )
+        )  # save() flushes to disk when the store is file-backed
+
+    observations = _run_race(
+        writer_func, store_path, payload_a, payload_b, iterations=400
+    )
+    assert observations, "reader recorded no observations"
+
+    seen_values: set[str] = set()
+    for kind, payload in observations:
+        assert kind == "ok", f"reader hit non-ok branch: {kind}={payload!r}"
+        parsed = json.loads(payload)  # torn write -> JSONDecodeError
+        content = parsed["race-block"]["compressed_content"]
+        assert content in {payload_a, payload_b}, (
+            f"partial content observed: len={len(content)}"
+        )
+        seen_values.add(content[:1])
+
+    assert seen_values == {"A", "B"}, (
+        f"expected reader to observe both A and B, got {seen_values}"
+    )

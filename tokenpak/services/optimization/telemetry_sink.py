@@ -15,7 +15,6 @@ Feature flag: ``TOKENPAK_ATTRIBUTION_V2`` gates savings/miss persistence.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Any, Optional
 
 from .attribution_stage import get_attributions, is_attribution_v2_enabled
@@ -23,7 +22,12 @@ from .context import OptimizationContext
 
 _log = logging.getLogger(__name__)
 
-_DEFAULT_DB_PATH = Path.home() / ".tokenpak" / "telemetry.db"
+
+def _default_db_path():
+    """Resolve telemetry.db via the single resolver (honors env overrides)."""
+    from tokenpak.core.paths import get_db_path
+
+    return get_db_path("telemetry.db")
 
 
 class TelemetrySink:
@@ -35,8 +39,8 @@ class TelemetrySink:
     Parameters
     ----------
     db_path:
-        Path to the TelemetryDB SQLite file.  Defaults to
-        ``~/.tokenpak/telemetry.db``.
+        Path to the TelemetryDB SQLite file.  Defaults to the location
+        resolved by ``tokenpak.core.paths.get_db_path("telemetry.db")``.
     env:
         Optional env dict override for feature flag checks (used in tests).
     """
@@ -46,7 +50,7 @@ class TelemetrySink:
         db_path: Optional[Any] = None,
         env: Optional[dict] = None,
     ) -> None:
-        self._db_path = db_path or _DEFAULT_DB_PATH
+        self._db_path = db_path or _default_db_path()
         self._env = env
         self._db: Optional[Any] = None
 

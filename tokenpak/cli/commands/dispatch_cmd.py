@@ -104,7 +104,10 @@ def build_dispatch_parser(sub: Any) -> None:
     )
     p_run.add_argument(
         "--dry-run", dest="dry_run", action="store_true",
-        help="Draft only; default autonomy = draft",
+        help=(
+            "Draft only; default autonomy = draft. Performs intake + route "
+            "selection without persisting anything (no ledger writes)"
+        ),
     )
     p_run.add_argument(
         "--confirm", dest="confirm", action="store_true",
@@ -323,23 +326,29 @@ def cmd_dispatch_run(args: Any) -> int:
 
     as_json = getattr(args, "as_json", False)
     autonomy = _default_autonomy(args)
+    dry_run = bool(getattr(args, "dry_run", False))
 
     intake = FrontDock().intake(args.request, autonomy_mode=autonomy)
     runtime = DispatchRuntime()
     outcome = runtime.select_route(intake, explicit_route=getattr(args, "route", None))
 
-    ledger = _ledger()
-    try:
-        ledger.write_job(intake.job)
-        ledger.write_manifest(intake.manifest)
-        if outcome.route is not None:
-            ledger.write_route(outcome.route)
-        # Decisions come from FrontDock (blocking gap) and/or route selection.
-        decisions = [d for d in (intake.decision, outcome.decision) if d is not None]
-        for decision in decisions:
-            ledger.write_decision(decision)
-    finally:
-        ledger.close()
+    # Decisions come from FrontDock (blocking gap) and/or route selection.
+    decisions = [d for d in (intake.decision, outcome.decision) if d is not None]
+
+    # A dry run is WRITE-FREE: intake + route selection happen in memory only.
+    # The ledger is not even opened (opening creates the DB file and applies
+    # migrations), so a dry run leaves the on-disk ledger byte-identical.
+    if not dry_run:
+        ledger = _ledger()
+        try:
+            ledger.write_job(intake.job)
+            ledger.write_manifest(intake.manifest)
+            if outcome.route is not None:
+                ledger.write_route(outcome.route)
+            for decision in decisions:
+                ledger.write_decision(decision)
+        finally:
+            ledger.close()
 
     payload = {
         "job_id": intake.job.id,
@@ -356,11 +365,19 @@ def cmd_dispatch_run(args: Any) -> int:
         "missing_info": list(intake.job.missing_info),
         "risk_flags": list(intake.job.risk_flags),
         "confirm": bool(getattr(args, "confirm", False)),
+        "dry_run": dry_run,
     }
+    if dry_run:
+        payload["note"] = (
+            "Dry run: nothing was persisted (no job, manifest, route, or "
+            "decision records were written)."
+        )
 
     def render(p: dict) -> int:
         print("Dispatch run")
         print("────────────")
+        if p.get("dry_run"):
+            print("  (dry run — nothing persisted)")
         print(f"  Job        : {p['job_id']}")
         print(f"  Intent     : {p['detected_intent']}")
         print(f"  Autonomy   : {p['autonomy_mode']}")

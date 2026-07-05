@@ -297,6 +297,17 @@ class CostEngine:
         ON tp_pricing(version);
     """
 
+    # Uniqueness key: without it, concurrent COUNT-then-seed races (the
+    # in-process lock does not cover other processes) insert the full seed
+    # set twice, and pricing lookups return arbitrary duplicate rows.
+    # Applied as an additive migration; pre-existing duplicate rows are
+    # deduped (newest row wins) in the same transaction before the unique
+    # index is created.
+    _UNIQUE_INDEX_DDL = (
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_tp_pricing_unique "
+        "ON tp_pricing(version, provider, model)"
+    )
+
     # Fallback rates for unknown models
     _FALLBACK_INPUT_RATE = 3.00  # USD/1K (sonnet-tier estimate)
     _FALLBACK_OUTPUT_RATE = 15.00
@@ -325,18 +336,48 @@ class CostEngine:
                 if stmt:
                     conn.execute(stmt)
             conn.commit()
+            self._ensure_unique_pricing_key(conn)
 
-            # Seed if table is empty
+            # Seed if table is empty. The COUNT check is only an
+            # optimization: _seed uses INSERT OR IGNORE against the
+            # UNIQUE(version, provider, model) key, so a concurrent
+            # process that races past the COUNT cannot double-seed.
             count = conn.execute("SELECT COUNT(*) FROM tp_pricing").fetchone()[0]
             if count == 0:
                 self._seed(conn)
             conn.close()
 
+    @staticmethod
+    def _ensure_unique_pricing_key(conn: sqlite3.Connection) -> None:
+        """Create the UNIQUE(version, provider, model) index.
+
+        Databases seeded before the uniqueness key existed may contain
+        duplicate pricing rows; dedupe (keep the newest row per key, i.e.
+        max rowid) and create the index inside one transaction so a crash
+        mid-migration leaves the database unchanged.
+        """
+        try:
+            conn.execute(CostEngine._UNIQUE_INDEX_DDL)
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            conn.execute(
+                """
+                DELETE FROM tp_pricing
+                WHERE rowid NOT IN (
+                    SELECT MAX(rowid) FROM tp_pricing
+                    GROUP BY version, provider, model
+                )
+                """
+            )
+            conn.execute(CostEngine._UNIQUE_INDEX_DDL)
+            conn.commit()
+
     def _seed(self, conn: sqlite3.Connection) -> None:
-        """Insert default pricing rows."""
+        """Insert default pricing rows (idempotent via the uniqueness key)."""
         for row in SEED_PRICING:
             conn.execute(
-                """INSERT INTO tp_pricing
+                """INSERT OR IGNORE INTO tp_pricing
                    (version, effective_date, provider, model, input_rate, output_rate, source)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (

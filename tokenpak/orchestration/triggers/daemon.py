@@ -10,7 +10,6 @@ import sqlite3
 import subprocess
 import threading
 import time
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from .matcher import match_event
@@ -171,7 +170,9 @@ class TriggerDaemon:
 
     def _check_cost_threshold(self, triggers: List[Trigger]) -> None:
         """Read daily cost from telemetry.db and fire cost threshold triggers."""
-        db_path = Path.home() / ".tokenpak" / "telemetry.db"
+        from tokenpak.core.paths import get_db_path
+
+        db_path = get_db_path("telemetry.db")
         if not db_path.exists():
             return
         try:

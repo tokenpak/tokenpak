@@ -6,6 +6,31 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.10.3] — 2026-07-05
+
+> Patch release: a curated set of concurrency, durability, and telemetry-truth fixes for the
+> SQLite-backed stores and the proxy connection lifecycle. No new capabilities or CLI surface.
+
+### Fixed
+- **Concurrency and crash-durability across the SQLite-backed stores.** The companion
+  journal/budget store, the dispatch effect ledger, the telemetry store, the spend-guard pending
+  store, and the monitor write path now use atomic writes, single-owner database resolvers, and
+  uniqueness keys that hold under concurrent access and across crash/restart. Dedupe keys prevent
+  double-counting and cost accounting reflects actual spend.
+- **Telemetry/monitor windowing and write-truth.** `get_stats` now windows on the parsed
+  timestamp, so an N-hour window is a real N-hour window (previously a same-date row could be
+  counted regardless of the hour). Monitor write failures surface as dropped-row diagnostics
+  instead of being lost silently.
+- **Proxy connection lifecycle and breaker accounting.** Session-client leases are released
+  exactly once — a streaming-request construction failure no longer double-releases and
+  prematurely closes a client another in-flight request still holds — and breaker/concurrency-gate
+  accounting races are closed.
+- **Queued telemetry flushed on shutdown.** Request rows still queued for the monitor's background
+  writer are drained to disk on a clean shutdown instead of being dropped when the writer thread
+  exits.
+- **Runtime state scoped under `TOKENPAK_HOME`.** Monitor database resolution honors
+  `TOKENPAK_HOME` so runtime state stays within the configured home directory.
+
 ## [1.10.2] — 2026-07-03
 
 > **Release note:** version **1.10.1 was never released.** Its release pipeline runs stopped

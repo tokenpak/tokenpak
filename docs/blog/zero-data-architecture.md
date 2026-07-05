@@ -1,6 +1,6 @@
 # Why Zero Data Architecture
 
-*The case for keeping your prompts off other people's servers.*
+*The case for keeping your prompts out of extra cloud intermediaries.*
 
 ---
 
@@ -8,7 +8,7 @@ There's a design choice most LLM tooling makes silently: your prompts pass throu
 
 TokenPak makes the opposite choice. We never see your prompts.
 
-This post explains what "zero data architecture" means, why it matters, and how we built a fully-featured compression proxy without ever needing to touch your content.
+This post explains what TokenPak means by "zero data architecture," why it matters, and how we built a fully-featured compression proxy without TokenPak's servers touching your content.
 
 ---
 
@@ -32,7 +32,7 @@ TokenPak is a local proxy. It runs on your machine, between your LLM client and 
 2. TokenPak compresses the prompt locally, using CPU-only algorithms and declarative YAML rules
 3. The compressed request is forwarded to your provider with your credentials
 4. The response comes back through the proxy (to record token counts locally)
-5. Nothing leaves your machine except the request you explicitly made
+5. No prompt content is sent to TokenPak's servers; only your configured provider receives the request you explicitly made
 
 There's no TokenPak API call. No relay server. No content logged to a remote database. The compression runs in the same Python process as the proxy, on your hardware.
 
@@ -77,7 +77,7 @@ Zero data architecture isn't just about privacy. It's about resilience.
 
 A local proxy has no rate limits (from us). No outages (from us). No pricing changes (from us). It works on an air-gapped machine. It works on a plane. It works after TokenPak stops existing.
 
-80%+ of TokenPak operations — status checks, vault searches, cost reports, route listings — cost zero tokens because they query a local SQLite database directly. They don't touch the LLM API at all. This isn't a side effect; it's a design principle. Operations that don't need the LLM shouldn't use it.
+Many TokenPak operations — status checks, vault searches, cost reports, route listings — cost zero tokens because they query local state directly. They don't touch the LLM API at all. This isn't a side effect; it's a design principle. Operations that don't need the LLM shouldn't use it.
 
 The result: a tool that gets cheaper to run the more you use it (compression savings compound over time), that you can audit completely (every recipe is a readable YAML file), and that you own outright (downgrade or fork at any time).
 

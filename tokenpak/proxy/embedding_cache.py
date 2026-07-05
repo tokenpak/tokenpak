@@ -4,7 +4,10 @@ Embedding cache backed by SQLite in WAL mode.
 Key:    SHA256(model + str(dimensions) + input_text)
 TTL:    TOKENPAK_EMBEDDING_CACHE_TTL_DAYS  (default 7)
 MaxMB:  TOKENPAK_EMBEDDING_CACHE_MAX_MB   (default 100)
-Evict:  LRU — oldest rows deleted when DB exceeds max_mb
+Evict:  oldest rows deleted when the *logical* content size exceeds max_mb.
+        The DB file size (page_count) is deliberately NOT the signal: SQLite
+        never shrinks page_count on DELETE, so a file-size loop would empty
+        the whole cache on every put once the file had ever crossed the cap.
 Bypass: get(..., no_cache=True) always returns None
 """
 
@@ -29,6 +32,10 @@ CREATE TABLE IF NOT EXISTS cache (
 """
 
 _CREATE_IDX = "CREATE INDEX IF NOT EXISTS idx_created ON cache (created_at)"
+
+# Rough per-row cost of the non-embedding columns (key hash, model name,
+# ints, index entry). Only used to budget logical size for eviction.
+_ROW_OVERHEAD_BYTES = 256
 
 
 def _cache_key(model: str, dims: int, text: str) -> str:
@@ -137,27 +144,54 @@ class EmbeddingCache:
             con.close()
 
     def _evict(self) -> None:
-        """Delete oldest rows until the DB file is under max_mb."""
+        """Delete oldest rows until the logical cache size is under max_mb.
+
+        Sizing: SQLite's ``page_count`` never shrinks on DELETE (freed pages
+        are recycled, not returned to the OS, absent VACUUM/auto_vacuum), so
+        the DB *file* size is a one-way ratchet and must not drive eviction —
+        once the file crossed max_mb, a file-size loop could only terminate
+        at row count zero, wiping the entire cache on every subsequent put.
+        Track the logical content size (embedding bytes + per-row overhead)
+        instead.
+
+        Concurrency: the measure-and-delete pass runs in one IMMEDIATE
+        transaction so concurrent ``put()`` calls serialise against the purge
+        (WAL mode + busy timeout) instead of racing it. Eviction is
+        best-effort maintenance — if the write lock cannot be acquired the
+        pass is skipped rather than failing the caller's put.
+        """
         max_bytes = self.max_mb * 1024 * 1024
         con = _connect(self.db_path)
         try:
-            while True:
-                row = con.execute(
-                    "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()"
+            try:
+                con.execute("BEGIN IMMEDIATE")
+                total_bytes, count = con.execute(
+                    "SELECT COALESCE(SUM(LENGTH(embedding)), 0) + COUNT(*) * ?,"
+                    " COUNT(*) FROM cache",
+                    (_ROW_OVERHEAD_BYTES,),
                 ).fetchone()
-                if row is None:
-                    break
-                db_bytes = row[0]
-                if db_bytes <= max_bytes:
-                    break
-                # Delete the single oldest row.
-                con.execute(
-                    "DELETE FROM cache WHERE key = (SELECT key FROM cache ORDER BY created_at ASC LIMIT 1)"
-                )
+                if count == 0 or total_bytes <= max_bytes:
+                    con.commit()
+                    return
+                excess = total_bytes - max_bytes
+                # Oldest first; rowid breaks created_at ties in insertion
+                # order so the newest rows always survive.
+                rows = con.execute(
+                    "SELECT key, LENGTH(embedding) + ? FROM cache"
+                    " ORDER BY created_at ASC, rowid ASC",
+                    (_ROW_OVERHEAD_BYTES,),
+                ).fetchall()
+                freed = 0
+                doomed = []
+                for key, row_bytes in rows:
+                    if freed >= excess:
+                        break
+                    doomed.append((key,))
+                    freed += row_bytes
+                con.executemany("DELETE FROM cache WHERE key = ?", doomed)
                 con.commit()
-                # If the table is now empty there is nothing left to evict.
-                count = con.execute("SELECT COUNT(*) FROM cache").fetchone()[0]
-                if count == 0:
-                    break
+            except sqlite3.OperationalError:
+                # Lock contention past the busy timeout: skip this pass.
+                con.rollback()
         finally:
             con.close()

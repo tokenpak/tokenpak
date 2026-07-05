@@ -21,11 +21,18 @@ class ServerConfig(BaseModel):
     cors_origins: List[str] = ["*"]
 
 
+def _default_storage_path() -> str:
+    """Default telemetry DB path via the single resolver."""
+    from tokenpak.core.paths import get_db_path
+
+    return str(get_db_path("telemetry.db"))
+
+
 class StorageConfig(BaseModel):
     """Storage configuration."""
 
     type: str = "sqlite"
-    path: str = "~/.tokenpak/telemetry.db"
+    path: str = Field(default_factory=_default_storage_path)
 
 
 class RetentionConfig(BaseModel):

@@ -40,11 +40,40 @@ RESPONSE_TOKENS=$((RESPONSE_BYTES / 4))
 JOURNAL_DIR="${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}"
 JOURNAL_DB="$JOURNAL_DIR/journal.db"
 
+# Dedupe key — sha256(entry_type US content US metadata_json), matching the
+# canonical hash computed by the python journal writers (companion/_sqlite.py).
+# Empty output (no sha tool available) degrades to a NULL hash: the row is
+# still written, just without dedupe protection.
+_tp_entry_hash() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        printf '%s\037%s\037%s' "$1" "$2" "$3" | sha256sum 2>/dev/null | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        printf '%s\037%s\037%s' "$1" "$2" "$3" | shasum -a 256 2>/dev/null | awk '{print $1}'
+    fi
+}
+
+# Best-effort additive schema upgrade so INSERT OR IGNORE can carry the
+# content_hash dedupe key on databases created before the column existed.
+# The ALTER fails harmlessly once the column is present; nothing is ever
+# rewritten or deleted.
+_tp_ensure_dedupe_schema() {
+    sqlite3 -cmd ".timeout 5000" "$1" \
+        "ALTER TABLE entries ADD COLUMN content_hash TEXT;" >/dev/null 2>&1
+    sqlite3 -cmd ".timeout 5000" "$1" \
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_dedupe ON entries(session_id, entry_type, content_hash) WHERE content_hash IS NOT NULL;" >/dev/null 2>&1
+}
+
+# tool_use_id is part of the entry content, so the dedupe key is unique per
+# tool use: retried deliveries of the same event collapse while distinct
+# tool calls are all kept.
 if [ -n "$SESSION_ID" ] && [ -f "$JOURNAL_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
     TIMESTAMP=$(date +%s)
-    sqlite3 "$JOURNAL_DB" \
-        "INSERT OR IGNORE INTO entries (session_id, timestamp, entry_type, content, metadata_json)
-         VALUES ('$SESSION_ID', $TIMESTAMP, 'auto', 'post_tool: ${TOOL_NAME:-unknown} (~${RESPONSE_TOKENS} tokens out, turn=${TURN_ID:-?}, use_id=${TOOL_USE_ID:-?})', '{}');" 2>/dev/null
+    ENTRY_CONTENT="post_tool: ${TOOL_NAME:-unknown} (~${RESPONSE_TOKENS} tokens out, turn=${TURN_ID:-?}, use_id=${TOOL_USE_ID:-?})"
+    ENTRY_HASH=$(_tp_entry_hash 'auto' "$ENTRY_CONTENT" '{}')
+    _tp_ensure_dedupe_schema "$JOURNAL_DB"
+    sqlite3 -cmd ".timeout 5000" "$JOURNAL_DB" \
+        "INSERT OR IGNORE INTO entries (session_id, timestamp, entry_type, content, metadata_json, content_hash)
+         VALUES ('$SESSION_ID', $TIMESTAMP, 'auto', '$ENTRY_CONTENT', '{}', NULLIF('$ENTRY_HASH', ''));" 2>/dev/null
 fi
 
 # Optional hard-cap note: if a hard-cap env is set and this tool's

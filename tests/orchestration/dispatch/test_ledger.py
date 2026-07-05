@@ -234,7 +234,7 @@ def test_open_creates_db_and_parent(home):
 
 
 def test_fresh_ledger_is_at_current_schema_version(ledger):
-    assert ledger.schema_version == SCHEMA_VERSION == 1
+    assert ledger.schema_version == SCHEMA_VERSION == 2
 
 
 def test_migration_creates_all_ten_tables(ledger):
@@ -277,12 +277,13 @@ def test_migration_from_empty_v0(home):
     try:
         assert get_current_schema_version(conn) == 0
         migrate(conn)
-        assert get_current_schema_version(conn) == 1
-        # tables now exist
+        assert get_current_schema_version(conn) == SCHEMA_VERSION
+        # tables now exist (v1 record tables + the v2 lease sidecar)
         rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='dispatch_runs'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN "
+            "('dispatch_runs', 'dispatch_run_leases')"
         ).fetchall()
-        assert rows
+        assert len(rows) == 2
     finally:
         conn.close()
 

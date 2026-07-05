@@ -124,14 +124,7 @@ class TestQuerySummary:
 
     def test_month_includes_all_rows(self, cost_mod):
         result = cost_mod.query_summary("month")
-        # Fixture: 3 rows dated today + 1 dated yesterday. On a month boundary
-        # (today is the 1st) yesterday falls in the previous month, so the
-        # "month" window correctly contains 3 rows, not 4. Derive the expected
-        # count from actual month membership so the test is boundary-safe.
-        this_month = date.today().strftime("%Y-%m")
-        yest_month = (date.today() - timedelta(days=1)).strftime("%Y-%m")
-        expected = 3 + (1 if yest_month == this_month else 0)
-        assert result["requests"] == expected
+        assert result["requests"] == 4
 
     def test_empty_db_returns_zeros(self, tmp_path):
         import tokenpak.cli.commands.cost as cost

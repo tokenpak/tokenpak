@@ -1,0 +1,58 @@
+name: Gate inventory check
+# Change-control for the CI gate surface: any change under .github/workflows/**
+# must ship WITH a matching .github/gate-inventory.yml update in the same PR,
+# and the PR body must state the gate delta (added/removed/modified gates).
+# Motivation: a 2026-07 trunk re-anchor silently dropped five CI gates and no
+# merge-time machinery noticed the removal itself. This job makes silent gate
+# drops mechanically impossible: workflow-file drift vs the committed manifest
+# fails the check until the manifest (and therefore the visible diff) says so.
+
+on:
+  pull_request:
+    paths:
+      - ".github/**"
+
+permissions:
+  contents: read
+
+jobs:
+  gate-inventory:
+    name: Gate inventory matches workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify manifest coverage and checksums
+        run: |
+          set -euo pipefail
+          MANIFEST=.github/gate-inventory.yml
+          if [[ ! -f "$MANIFEST" ]]; then
+            echo "::error::$MANIFEST is missing — the CI gate surface must be inventoried (gate change-control)."
+            exit 1
+          fi
+          fail=0
+          # 1) Every workflow file must be listed with a matching sha256.
+          for f in .github/workflows/*.yml; do
+            name=$(basename "$f")
+            want=$(grep -E "^  ${name}: " "$MANIFEST" | awk '{print $2}' || true)
+            have=$(sha256sum "$f" | awk '{print $1}')
+            if [[ -z "$want" ]]; then
+              echo "::error::workflow $name is NOT in $MANIFEST — add it and state the gate delta in the PR body."
+              fail=1
+            elif [[ "$want" != "$have" ]]; then
+              echo "::error::workflow $name changed but $MANIFEST was not updated (sha mismatch) — update the manifest and state the delta in the PR body."
+              fail=1
+            fi
+          done
+          # 2) Every listed workflow must still exist (deletions must be stated too).
+          grep -E '^  [A-Za-z0-9._-]+\.yml: ' "$MANIFEST" | awk -F': ' '{print $1}' | tr -d ' ' | while read -r listed; do
+            if [[ ! -f ".github/workflows/$listed" ]]; then
+              echo "::error::$listed is listed in $MANIFEST but the workflow file is gone — record the removal (delete its manifest line) and state the delta in the PR body."
+              exit 9
+            fi
+          done || fail=1
+          if [[ $fail -ne 0 ]]; then
+            echo "::error::Gate-inventory change-control failed. Same-PR manifest update + PR-body delta statement required."
+            exit 1
+          fi
+          echo "Gate inventory matches the workflow surface."

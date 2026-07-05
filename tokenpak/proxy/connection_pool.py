@@ -247,6 +247,20 @@ class ConnectionPool:
         # but retired here and closed once the grace period has passed.
         self._retired_clients: List[Tuple[httpx.Client, float]] = []
         self._retired_lock = threading.Lock()
+        # In-use lease counts per session client (identity-keyed, guarded by
+        # _session_lock). last_used is only a checkout stamp, so a client
+        # mid-way through a long stream (per-chunk read timeout is 300s — a
+        # legal stream can far exceed the idle window) looks idle to the
+        # reaper. The lease count makes in-use clients visible: the reaper
+        # and the LRU cap evict only clients with zero active leases.
+        # Entries are removed when the count returns to zero, so the dict
+        # stays bounded by live concurrency.
+        self._session_client_refs: Dict[httpx.Client, int] = {}
+        # Overflow clients handed out when the pool is at cap and every
+        # pooled client is in use. Never stored in _session_clients; closed
+        # on release (create-and-close-after-use) instead of closing a live
+        # pooled client.
+        self._overflow_clients: set = set()
 
     # ------------------------------------------------------------------
     # Client management
@@ -296,7 +310,9 @@ class ConnectionPool:
                 self._clients[netloc] = self._make_client()
             return self._clients[netloc]
 
-    def _get_session_client(self, netloc: str, session_key: str) -> httpx.Client:
+    def _get_session_client(
+        self, netloc: str, session_key: str, checkout: bool = False
+    ) -> httpx.Client:
         """
         Return a dedicated ``httpx.Client`` for ``(netloc, session_key)``.
 
@@ -304,6 +320,19 @@ class ConnectionPool:
         two concurrent sessions get two independent concurrency slots at the
         provider instead of sharing one multiplexed connection. Idle clients
         are reaped; pool is capped at ``session_client_max`` (LRU-evicted).
+
+        Reap/LRU eviction only touches clients with zero active leases —
+        a client that is currently checked out (mid-request or mid-stream)
+        is never evicted from under its request.
+
+        When ``checkout=True`` (used by :meth:`request` / :meth:`stream`),
+        the returned client is leased: its in-use count is incremented under
+        the same lock, and the caller MUST pair the call with
+        :meth:`_release_session_client` on every exit path. If the pool is
+        at cap and every pooled client is leased, a temporary overflow
+        client is returned instead of evicting a live one; it is closed on
+        release. Plain (non-checkout) calls preserve the legacy peek
+        behavior for existing callers and tests.
         """
         cfg = self._config
         now = time.monotonic() if hasattr(time, "monotonic") else time.time()
@@ -312,9 +341,13 @@ class ConnectionPool:
             # Reap idle clients. Retire instead of closing inline: last_used
             # is a checkout stamp, so a client mid-way through a long stream
             # can look idle — closing it here corrupts the live request.
+            # Leased clients are skipped outright: "idle" plus an active
+            # lease means a long-running request, not reclaimable garbage.
             idle_cutoff = now - cfg.session_client_idle_seconds
             stale_keys = [
-                k for k, (_, last) in self._session_clients.items() if last < idle_cutoff
+                k
+                for k, (c, last) in self._session_clients.items()
+                if last < idle_cutoff and self._session_client_refs.get(c, 0) <= 0
             ]
             for k in stale_keys:
                 client, _ = self._session_clients.pop(k)
@@ -324,19 +357,76 @@ class ConnectionPool:
             if entry is not None:
                 client, _ = entry
                 self._session_clients[key] = (client, now)
+                if checkout:
+                    self._lease_locked(client)
                 return client
 
-            # Enforce cap — LRU-evict oldest (retired, same mid-flight hazard)
+            # Enforce cap — LRU-evict the oldest UNLEASED entry (retired,
+            # same mid-flight hazard). Leased entries are never evicted.
             while len(self._session_clients) >= cfg.session_client_max:
-                oldest_key = min(
-                    self._session_clients.items(), key=lambda kv: kv[1][1]
-                )[0]
+                evictable = [
+                    (k, e)
+                    for k, e in self._session_clients.items()
+                    if self._session_client_refs.get(e[0], 0) <= 0
+                ]
+                if not evictable:
+                    if checkout:
+                        # Every pooled client is mid-request. Hand out a
+                        # temporary overflow client rather than closing a
+                        # live one; _release_session_client closes it.
+                        client = self._make_client()
+                        self._overflow_clients.add(client)
+                        self._lease_locked(client)
+                        return client
+                    # Legacy peek caller at cap with everything leased:
+                    # fall back to retiring the LRU entry (grace-close
+                    # still protects any in-flight request on it).
+                    evictable = list(self._session_clients.items())
+                oldest_key = min(evictable, key=lambda kv: kv[1][1])[0]
                 client, _ = self._session_clients.pop(oldest_key)
                 self._retire(client)
 
             client = self._make_client()
             self._session_clients[key] = (client, now)
+            if checkout:
+                self._lease_locked(client)
             return client
+
+    def _lease_locked(self, client: httpx.Client) -> None:
+        """Increment *client*'s in-use lease count. Caller holds _session_lock."""
+        self._session_client_refs[client] = self._session_client_refs.get(client, 0) + 1
+
+    def _release_session_client(
+        self, netloc: str, session_key: str, client: httpx.Client
+    ) -> None:
+        """
+        Release a lease taken by ``_get_session_client(..., checkout=True)``.
+
+        Re-stamps ``last_used`` on release, so a client that just finished a
+        long stream is measured idle from stream END — not from checkout.
+        Overflow clients (handed out when the pool was at cap with every
+        client leased) are closed here once their last lease is gone;
+        evicted/retired clients are left to the retire/grace machinery.
+        """
+        key = (netloc, session_key)
+        close_now = False
+        with self._session_lock:
+            refs = self._session_client_refs.get(client, 0) - 1
+            if refs > 0:
+                self._session_client_refs[client] = refs
+            else:
+                self._session_client_refs.pop(client, None)
+            entry = self._session_clients.get(key)
+            if entry is not None and entry[0] is client:
+                self._session_clients[key] = (client, time.monotonic())
+            elif refs <= 0 and client in self._overflow_clients:
+                self._overflow_clients.discard(client)
+                close_now = True
+        if close_now:
+            try:
+                client.close()
+            except Exception:
+                pass
 
     def _touch_session(self, netloc: str, session_key: str) -> None:
         """Re-stamp a session client's last_used after a request completes,
@@ -444,7 +534,7 @@ class ConnectionPool:
         parsed = httpx.URL(url)
         netloc = parsed.host
         client = (
-            self._get_session_client(netloc, session_key)
+            self._get_session_client(netloc, session_key, checkout=True)
             if session_key
             else self._get_client(netloc)
         )
@@ -470,8 +560,6 @@ class ConnectionPool:
                     self._metrics.reused_connections += 1
                 else:
                     self._metrics.new_connections += 1
-            if session_key:
-                self._touch_session(netloc, session_key)
             return response
         except Exception as exc:
             with self._metrics_lock:
@@ -480,6 +568,13 @@ class ConnectionPool:
             if _is_evictable_transport_error(exc):
                 self._evict_client(netloc, session_key, client)
             raise
+        finally:
+            # Release the lease on every exit path. The response body is
+            # already fully read by client.request(), so the client is no
+            # longer needed for this request. Release also re-stamps
+            # last_used (subsumes the success-path _touch_session call).
+            if session_key:
+                self._release_session_client(netloc, session_key, client)
 
     def stream(
         self,
@@ -507,30 +602,42 @@ class ConnectionPool:
         """
         parsed = httpx.URL(url)
         netloc = parsed.host
-        client = (
-            self._get_session_client(netloc, session_key)
-            if session_key
-            else self._get_client(netloc)
-        )
+        if session_key:
+            client = self._get_session_client(netloc, session_key, checkout=True)
+
+            def on_release() -> None:
+                self._release_session_client(netloc, session_key, client)
+        else:
+            client = self._get_client(netloc)
+            on_release = None
 
         with self._metrics_lock:
             self._metrics.total_requests += 1
 
-        return _StreamingContext(
-            client,
-            method,
-            url,
-            content,
-            headers,
-            self._metrics,
-            self._metrics_lock,
-            on_transport_error=lambda: self._evict_client(netloc, session_key, client),
-            on_complete=(
-                (lambda: self._touch_session(netloc, session_key))
-                if session_key
-                else None
-            ),
-        )
+        try:
+            return _StreamingContext(
+                client,
+                method,
+                url,
+                content,
+                headers,
+                self._metrics,
+                self._metrics_lock,
+                on_transport_error=lambda: self._evict_client(netloc, session_key, client),
+                on_complete=(
+                    (lambda: self._touch_session(netloc, session_key))
+                    if session_key
+                    else None
+                ),
+                on_release=on_release,
+            )
+        except Exception:
+            # Do NOT release here: _StreamingContext.__init__ already releases
+            # the lease (idempotently, via _release()) on its only raising path —
+            # the client.stream() construction — before re-raising. A second
+            # on_release() would double-decrement the session-client refcount and
+            # could close a client another concurrent stream still holds.
+            raise
 
     # ------------------------------------------------------------------
     # Introspection
@@ -580,6 +687,13 @@ class ConnectionPool:
                 except Exception:
                     pass
             self._session_clients.clear()
+            for client in self._overflow_clients:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            self._overflow_clients.clear()
+            self._session_client_refs.clear()
         self._reap_retired(force=True)
 
     def session_client_snapshot(self) -> Dict[str, Any]:
@@ -589,6 +703,12 @@ class ConnectionPool:
                 "count": len(self._session_clients),
                 "cap": self._config.session_client_max,
                 "idle_secs": self._config.session_client_idle_seconds,
+                "in_use": sum(
+                    1
+                    for c, _ in self._session_clients.values()
+                    if self._session_client_refs.get(c, 0) > 0
+                ),
+                "overflow_active": len(self._overflow_clients),
                 "keys": [f"{netloc}::{sk}" for (netloc, sk) in self._session_clients],
             }
 
@@ -625,8 +745,15 @@ class _StreamingContext:
         lock: threading.Lock,
         on_transport_error: Optional[Callable[[], Any]] = None,
         on_complete: Optional[Callable[[], Any]] = None,
+        on_release: Optional[Callable[[], Any]] = None,
     ) -> None:
-        self._ctx = client.stream(method, url, content=content, headers=headers)
+        self._on_release = on_release
+        self._released = False
+        try:
+            self._ctx = client.stream(method, url, content=content, headers=headers)
+        except Exception:
+            self._release()
+            raise
         self._metrics = metrics
         self._lock = lock
         self._response: Optional[httpx.Response] = None
@@ -634,11 +761,25 @@ class _StreamingContext:
         self._on_complete = on_complete
         self._error_recorded = False
 
+    def _release(self) -> None:
+        """Release the session-client lease exactly once."""
+        if self._released:
+            return
+        self._released = True
+        if self._on_release is not None:
+            try:
+                self._on_release()
+            except Exception:
+                pass
+
     def __enter__(self) -> httpx.Response:
         try:
             self._response = self._ctx.__enter__()
         except Exception as exc:
             self._record_error(exc)
+            # __exit__ is never called when __enter__ raises — release here
+            # so the lease doesn't leak (and the reaper can reclaim later).
+            self._release()
             raise
         with self._lock:
             proto = self._response.http_version
@@ -662,6 +803,7 @@ class _StreamingContext:
                     self._on_complete()
                 except Exception:
                     pass
+            self._release()
 
     def _record_error(self, exc: BaseException) -> None:
         """Count an upstream error once and evict the client if it looks dead.

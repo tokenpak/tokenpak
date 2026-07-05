@@ -7,8 +7,11 @@ Performance critical: this runs on EVERY prompt. Must complete in < 100ms.
 Design choices for speed:
     - No tiktoken (char//4 heuristic is within 3% per stress test)
     - No transcript parsing (os.path.getsize is instant)
-    - No heavy imports (only stdlib: json, sys, os, sqlite3, pathlib)
-    - Journal write is best-effort, non-blocking
+    - No heavy imports (stdlib + companion._sqlite, which is itself
+      stdlib-only shared SQLite plumbing; the parent packages are already
+      imported by the ``-m`` invocation)
+    - Journal write is best-effort, non-blocking; dropped writes are
+      counted in run/dropped-writes.log instead of vanishing silently
     - Budget check uses direct SQLite query, no ORM
 
 Pipeline: read stdin → file-size token estimate → budget check → stderr output
@@ -27,13 +30,15 @@ Usage in settings.json::
 
 from __future__ import annotations
 
-# Minimal imports — stdlib only for speed
+# Minimal imports — stdlib only for speed (companion._sqlite is stdlib-only
+# shared plumbing: connection pragmas + the canonical journal/budget DDL)
 import json
 import os
-import sqlite3
 import sys
 import time
 from pathlib import Path
+
+from tokenpak.companion import _sqlite as _db
 
 # Model costs (USD per 1M tokens) — inlined to avoid importing tracker module
 _COSTS = {
@@ -156,7 +161,9 @@ def _write_session_marker(session_id: str) -> None:
             str(Path.home() / ".tokenpak" / "companion"),
         )) / "run"
         run_dir.mkdir(parents=True, exist_ok=True)
-        tmp = run_dir / "current-session.tmp"
+        # pid-unique temp name so two concurrent hook processes can't
+        # interleave writes to the same temp file before the atomic rename.
+        tmp = run_dir / f"current-session.{os.getpid()}.tmp"
         tmp.write_text(session_id.strip(), encoding="utf-8")
         tmp.replace(run_dir / "current-session")
     except Exception:
@@ -164,7 +171,13 @@ def _write_session_marker(session_id: str) -> None:
 
 
 def _get_daily_total() -> float:
-    """Quick SQLite query for today's total cost."""
+    """Quick SQLite query for today's truthful spend.
+
+    Per (session, day): sums actual rows when present, otherwise takes the
+    latest estimate (companion._sqlite.DAILY_SPEND_SQL) — the gate reads
+    true marginal spend, never estimate + actual for the same traffic and
+    never a summed series of cumulative transcript estimates.
+    """
     import datetime
     db_path = Path(os.environ.get(
         "TOKENPAK_COMPANION_JOURNAL_DIR",
@@ -173,14 +186,14 @@ def _get_daily_total() -> float:
     try:
         if not db_path.exists():
             return 0.0
-        conn = sqlite3.connect(str(db_path))
+        conn = _db.connect(db_path)
+        # Additive migration so the kind-aware query works on databases
+        # created before the 'kind' column existed.
+        _db.ensure_costs_schema(conn)
         today = datetime.date.today().isoformat()
-        row = conn.execute(
-            "SELECT COALESCE(SUM(estimated_cost), 0) FROM companion_costs WHERE date = ?",
-            (today,),
-        ).fetchone()
+        row = conn.execute(_db.DAILY_SPEND_SQL, (today,)).fetchone()
         conn.close()
-        return row[0] if row else 0.0
+        return float(row[0] or 0.0) if row else 0.0
     except Exception:
         return 0.0
 
@@ -192,8 +205,8 @@ def _journal_savings(
 
     Writes entry_type='companion_savings' with metadata {tool, tokens_avoided,
     cost_avoided_usd} so ``tokenpak status`` Prompt-side plane reports it.
-    Kept inline (no import of journal.store) to preserve the ultra-lean
-    hot-path discipline of the hook.
+    Uses the canonical journal schema from companion._sqlite (shared with
+    JournalStore) — the hook must never carry a divergent DDL copy.
     """
     db_path = Path(os.environ.get(
         "TOKENPAK_COMPANION_JOURNAL_DIR",
@@ -201,72 +214,77 @@ def _journal_savings(
     )) / "journal.db"
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(db_path))
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                timestamp REAL NOT NULL,
-                entry_type TEXT NOT NULL,
-                content TEXT NOT NULL DEFAULT '',
-                metadata_json TEXT NOT NULL DEFAULT '{}'
-            )
-        """)
+        conn = _db.connect(db_path)
+        _db.ensure_journal_schema(conn)
         meta = {
             "tool": tool,
             "tokens_avoided": int(max(0, tokens_avoided)),
             "cost_avoided_usd": float(max(0.0, cost_avoided_usd)),
         }
+        content = (
+            f"{tool}: -{meta['tokens_avoided']:,} tokens "
+            f"(~${meta['cost_avoided_usd']:.4f})"
+        )
+        metadata_json = json.dumps(meta)
         conn.execute(
-            "INSERT INTO entries (session_id, timestamp, entry_type, content, metadata_json) VALUES (?, ?, ?, ?, ?)",
-            (session_id, time.time(), "companion_savings",
-             f"{tool}: -{meta['tokens_avoided']:,} tokens (~${meta['cost_avoided_usd']:.4f})",
-             json.dumps(meta)),
+            "INSERT OR IGNORE INTO entries "
+            "(session_id, timestamp, entry_type, content, metadata_json, content_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (session_id, time.time(), "companion_savings", content, metadata_json,
+             _db.entry_content_hash("companion_savings", content, metadata_json)),
         )
         conn.commit()
         conn.close()
-    except Exception:
-        pass  # never fail the hook
+    except Exception as exc:
+        _db.note_dropped_write(db_path, "journal_savings", exc)  # never fails the hook
 
 
 def _journal_write(session_id: str, tokens_est: int, cost_est: float) -> None:
-    """Best-effort journal entry — never fails the hook."""
+    """Best-effort journal entry — never fails the hook.
+
+    Uses the canonical journal schema from companion._sqlite (shared with
+    JournalStore); the hook historically carried a divergent copy of the
+    entries DDL and whichever process ran first won the schema race.
+    Duplicate deliveries of the same event collapse via the content-hash
+    UNIQUE index; dropped writes are logged instead of silently passed.
+    """
     db_path = Path(os.environ.get(
         "TOKENPAK_COMPANION_JOURNAL_DIR",
         str(Path.home() / ".tokenpak" / "companion"),
     )) / "journal.db"
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(db_path))
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                timestamp REAL NOT NULL,
-                entry_type TEXT NOT NULL,
-                content TEXT NOT NULL DEFAULT '',
-                metadata_json TEXT NOT NULL DEFAULT '{}'
-            )
-        """)
+        conn = _db.connect(db_path)
+        _db.ensure_journal_schema(conn)
+        content = f"pre-send: ~{tokens_est:,} tokens, est ${cost_est:.4f}"
+        metadata_json = json.dumps({"tokens_est": tokens_est, "cost_est": cost_est})
         conn.execute(
-            "INSERT INTO entries (session_id, timestamp, entry_type, content, metadata_json) VALUES (?, ?, ?, ?, ?)",
-            (session_id, time.time(), "auto",
-             f"pre-send: ~{tokens_est:,} tokens, est ${cost_est:.4f}",
-             json.dumps({"tokens_est": tokens_est, "cost_est": cost_est})),
+            "INSERT OR IGNORE INTO entries "
+            "(session_id, timestamp, entry_type, content, metadata_json, content_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (session_id, time.time(), "auto", content, metadata_json,
+             _db.entry_content_hash("auto", content, metadata_json)),
         )
         conn.commit()
         conn.close()
-    except Exception:
-        pass  # never fail the hook
+    except Exception as exc:
+        _db.note_dropped_write(db_path, "journal_entry", exc)  # never fails the hook
 
 
 def _record_cost(session_id: str, tokens_est: int, cost_est: float) -> None:
     """Best-effort pre-send cost row — never fails the hook.
 
-    Mirrors ``tokenpak.companion.budget.tracker.BudgetTracker.record`` schema
-    but inlined (no heavy import) to preserve the hook's hot-path discipline.
-    Output tokens are unknown pre-send, so only input is recorded; the proxy
-    telemetry DB remains the source of truth for actual billed spend.
+    Upserts ONE 'estimate' row per (session, day), refreshed in place to
+    the latest full-transcript estimate. The pre-send token estimate is
+    cumulative (whole transcript // 4), so inserting a row per prompt made
+    a session's rows grow monotonically and the daily gate summed the
+    series — wildly over-counting daily spend. One refreshed row per
+    session is equivalent to recording per-turn deltas against a
+    high-water mark: the day's total equals the sum of true marginal
+    estimates and never exceeds the final transcript estimate.
+
+    Output tokens are unknown pre-send, so only input is recorded; the
+    recording planes contribute 'actual' rows, which the gate prefers.
     """
     import datetime
     db_path = Path(os.environ.get(
@@ -275,31 +293,17 @@ def _record_cost(session_id: str, tokens_est: int, cost_est: float) -> None:
     )) / "budget.db"
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(db_path))
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS companion_costs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp REAL NOT NULL,
-                date TEXT NOT NULL,
-                session_id TEXT NOT NULL DEFAULT '',
-                model TEXT NOT NULL DEFAULT '',
-                input_tokens INTEGER NOT NULL DEFAULT 0,
-                cached_tokens INTEGER NOT NULL DEFAULT 0,
-                output_tokens INTEGER NOT NULL DEFAULT 0,
-                estimated_cost REAL NOT NULL DEFAULT 0.0
-            )
-        """)
+        conn = _db.connect(db_path)
+        _db.ensure_costs_schema(conn)
         conn.execute(
-            "INSERT INTO companion_costs "
-            "(timestamp, date, session_id, model, input_tokens, cached_tokens, "
-            "output_tokens, estimated_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (time.time(), datetime.date.today().isoformat(), session_id, "",
-             int(max(0, tokens_est)), 0, 0, round(float(max(0.0, cost_est)), 6)),
+            _db.COSTS_ESTIMATE_UPSERT_SQL,
+            (time.time(), datetime.date.today().isoformat(), session_id,
+             int(max(0, tokens_est)), round(float(max(0.0, cost_est)), 6)),
         )
         conn.commit()
         conn.close()
-    except Exception:
-        pass  # never fail the hook
+    except Exception as exc:
+        _db.note_dropped_write(db_path, "cost_estimate", exc)  # never fails the hook
 
 
 if __name__ == "__main__":

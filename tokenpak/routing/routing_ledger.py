@@ -5,6 +5,7 @@ Logs every LLM transaction to SQLite with WAL mode for concurrent access.
 No agentic action — observe only.
 """
 
+import logging
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -13,21 +14,68 @@ from typing import List, Optional
 
 from tokenpak.compression.complexity import score_complexity
 
+logger = logging.getLogger(__name__)
+
+# Historical default: relative to the *current working directory*, so the
+# proxy and the CLI could silently end up using different ledger files
+# depending on where they were launched from. Kept only as (a) the sentinel
+# value callers' signature defaults still pass in, and (b) the legacy
+# fallback location.
 DEFAULT_LEDGER_PATH = ".tokenpak/routing_ledger.db"
 
 # WAL checkpoint interval (pages)
 _WAL_AUTOCHECKPOINT = 1000
 
 
+def _default_ledger_db_path() -> str:
+    """Resolve the default ledger DB path, anchored to the home config dir.
+
+    Resolution:
+      1. ``<tokenpak home>/routing_ledger.db`` (via ``tokenpak._paths.home()``,
+         which honors ``TOKENPAK_HOME``) when it exists — or when no legacy
+         CWD-relative file exists either (fresh install).
+      2. Legacy CWD-relative ``.tokenpak/routing_ledger.db`` as a *fallback
+         read* when it exists and the canonical file does not; a WARN naming
+         both paths is logged so operators can migrate.
+    """
+    from tokenpak import _paths
+
+    canonical = _paths.home() / "routing_ledger.db"
+    legacy = Path(DEFAULT_LEDGER_PATH)
+    if not canonical.exists() and legacy.exists():
+        logger.warning(
+            "using legacy CWD-relative routing ledger %s; the canonical "
+            "location is %s — move the file there to make it independent of "
+            "the working directory",
+            legacy.resolve(),
+            canonical,
+        )
+        return str(legacy)
+    _paths.ensure_home()
+    return str(canonical)
+
+
 class RoutingLedger:
     """
     Thread-safe SQLite ledger for LLM transaction logging.
     Uses WAL mode for concurrent readers + single writer.
+
+    Write operations never propagate ``sqlite3.OperationalError`` (e.g.
+    "database is locked") to callers: the error is counted and logged and a
+    sentinel value is returned instead, so a busy ledger cannot crash the
+    request path it is observing.
     """
 
-    def __init__(self, db_path: str = DEFAULT_LEDGER_PATH):
+    def __init__(self, db_path: Optional[str] = None):
+        # None and the historical CWD-relative literal (which callers'
+        # signature defaults still pass through) both mean "use the
+        # default": resolve it against the home config dir so proxy and CLI
+        # agree on one file regardless of working directory.
+        if db_path is None or db_path == DEFAULT_LEDGER_PATH:
+            db_path = _default_ledger_db_path()
         self.db_path = db_path
         self._lock = threading.Lock()
+        self._write_errors = 0
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
@@ -98,7 +146,9 @@ class RoutingLedger:
             routing_action:   One of passthrough / downgrade / upgrade.
 
         Returns:
-            Row ID of inserted transaction.
+            Row ID of inserted transaction, or ``-1`` if the write failed
+            (e.g. the database was locked). Write failures are counted and
+            logged but never raised to the caller.
         """
         complexity_score, task_type = score_complexity(query, context_blocks)
         context_weight = self._compute_context_weight(context_tokens, response_tokens)
@@ -108,34 +158,43 @@ class RoutingLedger:
         query_preview = query[:200] if query else ""
 
         with self._lock:
-            conn = self._connect()
-            cur = conn.execute(
-                """
-                INSERT INTO transactions
-                    (timestamp, model_used, task_type, complexity_score,
-                     context_tokens, context_weight, response_tokens,
-                     accepted, rejection_reason, latency_ms,
-                     query_preview, routing_action)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    ts,
-                    model,
-                    task_type.value,
-                    complexity_score,
-                    context_tokens,
-                    context_weight,
-                    response_tokens,
-                    accepted_int,
-                    rejection_reason,
-                    latency_ms,
-                    query_preview,
-                    routing_action,
-                ),
-            )
-            row_id = cur.lastrowid
-            conn.commit()
-            conn.close()
+            try:
+                conn = self._connect()
+                cur = conn.execute(
+                    """
+                    INSERT INTO transactions
+                        (timestamp, model_used, task_type, complexity_score,
+                         context_tokens, context_weight, response_tokens,
+                         accepted, rejection_reason, latency_ms,
+                         query_preview, routing_action)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        ts,
+                        model,
+                        task_type.value,
+                        complexity_score,
+                        context_tokens,
+                        context_weight,
+                        response_tokens,
+                        accepted_int,
+                        rejection_reason,
+                        latency_ms,
+                        query_preview,
+                        routing_action,
+                    ),
+                )
+                row_id = cur.lastrowid
+                conn.commit()
+                conn.close()
+            except sqlite3.OperationalError as exc:
+                self._write_errors += 1
+                logger.warning(
+                    "routing ledger write failed (%d total): %s",
+                    self._write_errors,
+                    exc,
+                )
+                return -1
         assert row_id is not None
         return row_id
 
@@ -149,22 +208,33 @@ class RoutingLedger:
         Update the acceptance status of an existing transaction.
         Used when feedback arrives after the initial log.
 
-        Returns True if the row was found and updated.
+        Returns True if the row was found and updated. Returns False on a
+        write failure (e.g. the database was locked); write failures are
+        counted and logged but never raised to the caller.
         """
         accepted_int = 1 if accepted else 0
         with self._lock:
-            conn = self._connect()
-            cur = conn.execute(
-                """
-                UPDATE transactions
-                SET accepted = ?, rejection_reason = ?
-                WHERE id = ?
-            """,
-                (accepted_int, rejection_reason, transaction_id),
-            )
-            updated = cur.rowcount > 0
-            conn.commit()
-            conn.close()
+            try:
+                conn = self._connect()
+                cur = conn.execute(
+                    """
+                    UPDATE transactions
+                    SET accepted = ?, rejection_reason = ?
+                    WHERE id = ?
+                """,
+                    (accepted_int, rejection_reason, transaction_id),
+                )
+                updated = cur.rowcount > 0
+                conn.commit()
+                conn.close()
+            except sqlite3.OperationalError as exc:
+                self._write_errors += 1
+                logger.warning(
+                    "routing ledger write failed (%d total): %s",
+                    self._write_errors,
+                    exc,
+                )
+                return False
         return updated
 
     # ------------------------------------------------------------------

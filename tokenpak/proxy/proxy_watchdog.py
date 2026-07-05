@@ -18,12 +18,16 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
+from tokenpak import _paths  # scoped-home path resolver (honors TOKENPAK_HOME)
+
 # Configuration
 PROXY_PORT = int(os.environ.get("TOKENPAK_PORT", "8766"))
-PROXY_PID_FILE = Path.home() / ".tokenpak" / "proxy.pid"
-WATCHDOG_LOG = Path.home() / ".tokenpak" / "watchdog.log"
-COOLDOWNS_FILE = Path.home() / ".tokenpak" / "cooldowns.json"
-AUTH_PROFILES_FILE = Path.home() / ".tokenpak" / "auth-profiles.json"
+# Runtime-state paths resolve under TOKENPAK_HOME (falls back to ~/.tokenpak when
+# unset), so a scoped-home proxy cannot clobber the default home's state.
+PROXY_PID_FILE = _paths.under("proxy.pid")
+WATCHDOG_LOG = _paths.under("watchdog.log")
+COOLDOWNS_FILE = _paths.under("cooldowns.json")
+AUTH_PROFILES_FILE = _paths.under("auth-profiles.json")
 HEALTH_CHECK_INTERVAL = 30  # seconds
 STATS_INTERVAL = 3600  # 1 hour
 MAX_RESTART_ATTEMPTS = 5

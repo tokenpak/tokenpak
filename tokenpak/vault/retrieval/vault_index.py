@@ -25,6 +25,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from tokenpak.vault._atomic import _atomic_write
+
 try:
     from tokenpak.telemetry.tokens import count_tokens
 except ImportError:
@@ -189,9 +191,10 @@ class VaultIndex:
                 "doc_count": self._doc_count,
                 "inverted": {term: sorted(block_ids) for term, block_ids in self._inverted.items()},
             }
-            tmp = cache_path.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(payload, separators=(",", ":")))
-            tmp.replace(cache_path)
+            # Atomic publish with a per-writer unique tmp name; the old fixed
+            # ".json.tmp" name collided when two processes saved concurrently
+            # (one writer's replace could ship the other's half-written tmp).
+            _atomic_write(cache_path, json.dumps(payload, separators=(",", ":")))
             print(f"  💾 BM25 cache saved ({cache_path.stat().st_size // 1024 // 1024}MB)")
         except Exception as e:
             print(f"  ⚠️ BM25 cache save failed: {e}")

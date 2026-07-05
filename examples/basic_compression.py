@@ -15,13 +15,13 @@ Usage:
 
 import argparse
 import sys
-from pathlib import Path
 
 try:
-    from tokenpak import HeuristicEngine
     from tokenpak.engines.base import CompactionHints
+
+    from tokenpak import HeuristicEngine
 except ImportError:
-    print("Error: TokenPak not installed. Run: pip install tokenpak[ml,tiktoken]")
+    print("Error: TokenPak not installed. Run: pip install tokenpak")
     sys.exit(1)
 
 
@@ -65,27 +65,27 @@ def main():
         text = """
         TokenPak is a context compression library designed for LLM agents.
         It reduces token usage while preserving semantic meaning.
-        
+
         The library works with any LLM provider: OpenAI, Anthropic, Google,
         local models, and more. It uses heuristic-based compression to identify
         and preserve important information while removing redundancy.
-        
+
         Key features include:
         - Deterministic compression (same input = same output)
         - Budget-aware (respects your token limits)
         - Provider-agnostic (works with any LLM)
         - Fast heuristic engine (no ML overhead)
-        - Optional ML-based compression for higher quality
-        
+        - Optional LLMLingua compression engine for advanced use
+
         Common use cases:
         - Chat history compression for long conversations
         - Document retrieval augmentation
         - Multi-turn dialogue context management
         - Batch processing with fixed token budgets
         - RAG (Retrieval-Augmented Generation) systems
-        
+
         Installation is simple: pip install tokenpak
-        
+
         The API is straightforward: create an engine, define your budget,
         and compress your text. The compressed output is deterministic,
         making it safe for reproducible LLM workflows.
@@ -93,7 +93,7 @@ def main():
         print("📖 Using sample text (5x repetition for demonstration)")
 
     # Initialize compression engine
-    print(f"⚙️  Initializing HeuristicEngine...")
+    print("⚙️  Initializing HeuristicEngine...")
     engine = HeuristicEngine()
 
     # Define compression hints

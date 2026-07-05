@@ -20,6 +20,7 @@ INGEST_ENTRIES_DIR = Path.home() / "vault" / ".tokenpak" / "entries"
 from tokenpak.compression.extraction import EntityExtractor
 from tokenpak.compression.processors import get_processor
 from tokenpak.telemetry.tokens import count_tokens
+from tokenpak.vault._atomic import _atomic_write
 from tokenpak.vault.ingest.schema_converter import convert_document
 from tokenpak.vault.walker import detect_file_type, walk_directory
 
@@ -253,7 +254,9 @@ def _ingest_write_entry(entry: Dict[str, Any]) -> str:
     # Create entries directory
     INGEST_ENTRIES_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Append to JSONL file
+    # Append to JSONL file. Append-mode (O_APPEND) + fsync is the correct
+    # durability strategy for a grow-only log; an atomic tmp+replace rewrite
+    # would truncate history and does NOT apply here.
     entries_file = INGEST_ENTRIES_DIR / f"{date_str}.jsonl"
     with open(entries_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
@@ -289,7 +292,8 @@ def sync_to_vault() -> None:
                 "injection_hits": SESSION["injection_hits"],
                 "uptime_hours": round((time.time() - SESSION["start_time"]) / 3600, 2),
             }
-            vault_path.write_text(json.dumps(stats, indent=2))
+            # Atomic publish: readers must never observe a torn stats file.
+            _atomic_write(vault_path, json.dumps(stats, indent=2))
         except Exception:
             pass
 
