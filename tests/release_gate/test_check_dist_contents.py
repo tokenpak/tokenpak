@@ -27,6 +27,7 @@ SHIPPED_NAMES = {
     "tokenpak/__init__.py",
     "tokenpak/budget_config.yaml",
     "tokenpak/term_cards.json",
+    "tokenpak/core/registry/commands.json",
     "tokenpak/orchestration/dispatch/registry/worker.builder.default.v1.yaml",
     "tokenpak/orchestration/dispatch/registry/worker.reviewer.default.v1.yaml",
     "tokenpak/orchestration/dispatch/registry/routes/route.code_task.v1.yaml",

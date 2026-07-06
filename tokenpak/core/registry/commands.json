@@ -7,7 +7,7 @@
       "category": "Control",
       "description": "Start the proxy (localhost:8766)",
       "aliases": [],
-      "usage": "/tokenpak serve [--port PORT]",
+      "usage": "/tokenpak start [--port PORT] [--workers N]",
       "detail": "Starts the TokenPak proxy server. Listens on localhost:8766 by default. All LLM requests routed through this port will be compressed and cached.",
       "related": ["stop", "restart", "status"]
     },
@@ -253,7 +253,7 @@
     },
     {
       "command": "benchmark",
-      "tier": "pro",
+      "tier": "oss",
       "category": "Optimization",
       "description": "Run compression benchmarks",
       "aliases": [],
@@ -273,7 +273,7 @@
     },
     {
       "command": "savings",
-      "tier": "pro",
+      "tier": "oss",
       "category": "Visibility",
       "description": "Show token and cost savings breakdown",
       "aliases": [],
@@ -283,7 +283,7 @@
     },
     {
       "command": "dashboard",
-      "tier": "pro",
+      "tier": "oss",
       "category": "Visibility",
       "description": "Real-time health dashboard (TUI)",
       "aliases": [],
@@ -293,7 +293,7 @@
     },
     {
       "command": "debug",
-      "tier": "pro",
+      "tier": "oss",
       "category": "Visibility",
       "description": "Toggle verbose debug logging",
       "aliases": [],
@@ -333,7 +333,7 @@
     },
     {
       "command": "replay",
-      "tier": "pro",
+      "tier": "oss",
       "category": "Visibility",
       "description": "Inspect and re-run captured sessions",
       "aliases": [],
@@ -363,7 +363,7 @@
     },
     {
       "command": "serve",
-      "tier": "team",
+      "tier": "oss",
       "category": "Infrastructure",
       "description": "Start proxy/telemetry server (low-level)",
       "aliases": [],

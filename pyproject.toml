@@ -216,6 +216,7 @@ tokenpak = [
     "routing/model_tiers.json",
     "config/schema.json",
     "state_schema.json",
+    "core/registry/*.json",
     "models/data/*.json",
     "telemetry/data/*.json",
     "tip/schemas/*.json",

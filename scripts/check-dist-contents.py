@@ -22,6 +22,9 @@ GENERATED_BUILD_DIRS = (
 REQUIRED_PACKAGE_DATA = {
     "tokenpak/budget_config.yaml",
     "tokenpak/term_cards.json",
+    # CLI command registry: help.py silently degrades to an empty command list
+    # ("all 0 commands") on any wheel that omits this file.
+    "tokenpak/core/registry/commands.json",
 }
 # Dispatch v0.1-alpha registry/schema package data declared in pyproject.toml
 # [tool.setuptools.package-data]. The registry/routes/overlays directories are
