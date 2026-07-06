@@ -29,4 +29,4 @@ Welcome to the TokenPak docs. Start here, then dive into specifics.
 
 ## Full Index
 
-See [INDEX.md](INDEX.md) for the complete documentation index.
+See [index.md](index.md) for the complete documentation index.
