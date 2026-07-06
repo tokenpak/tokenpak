@@ -86,31 +86,31 @@ function extractMetrics(promMetrics, healthData) {
     const metrics = { ...metricsState };
 
     // Total compression events (count of compression_events_total)
-    if (promMetrics.tokenpak_compression_events_total) {
-        metrics.totalEvents = promMetrics.tokenpak_compression_events_total
+    if (promMetrics["tokenpak_compression_events_total"]) {
+        metrics.totalEvents = promMetrics["tokenpak_compression_events_total"]
             .reduce((sum, m) => sum + m.value, 0);
     }
 
     // Average compression ratio
-    if (promMetrics.tokenpak_compression_ratio_avg) {
-        const ratioSum = promMetrics.tokenpak_compression_ratio_avg
+    if (promMetrics["tokenpak_compression_ratio_avg"]) {
+        const ratioSum = promMetrics["tokenpak_compression_ratio_avg"]
             .reduce((sum, m) => sum + m.value, 0);
-        metrics.avgRatio = promMetrics.tokenpak_compression_ratio_avg.length > 0
-            ? (ratioSum / promMetrics.tokenpak_compression_ratio_avg.length * 100)
+        metrics.avgRatio = promMetrics["tokenpak_compression_ratio_avg"].length > 0
+            ? (ratioSum / promMetrics["tokenpak_compression_ratio_avg"].length * 100)
             : 0;
     }
 
     // Tokens saved (sum of reduction)
-    if (promMetrics.tokenpak_tokens_saved_total) {
-        metrics.tokensSaved = promMetrics.tokenpak_tokens_saved_total
+    if (promMetrics["tokenpak_tokens_saved_total"]) {
+        metrics.tokensSaved = promMetrics["tokenpak_tokens_saved_total"]
             .reduce((sum, m) => sum + m.value, 0);
     }
 
     // Compression latency percentiles
-    if (promMetrics.tokenpak_compression_latency_ms) {
-        const p50 = promMetrics.tokenpak_compression_latency_ms
+    if (promMetrics["tokenpak_compression_latency_ms"]) {
+        const p50 = promMetrics["tokenpak_compression_latency_ms"]
             .find(m => m.labels.quantile === '0.5');
-        const p95 = promMetrics.tokenpak_compression_latency_ms
+        const p95 = promMetrics["tokenpak_compression_latency_ms"]
             .find(m => m.labels.quantile === '0.95');
 
         if (p50) metrics.latencyP50 = Math.round(p50.value);
@@ -118,10 +118,10 @@ function extractMetrics(promMetrics, healthData) {
     }
 
     // Document types stats
-    if (promMetrics.tokenpak_document_type_compression) {
+    if (promMetrics["tokenpak_document_type_compression"]) {
         const docTypes = {};
 
-        for (const m of promMetrics.tokenpak_document_type_compression) {
+        for (const m of promMetrics["tokenpak_document_type_compression"]) {
             const docType = m.labels.type || 'unknown';
             if (!docTypes[docType]) {
                 docTypes[docType] = { frequency: 0, ratioSum: 0, tokensSaved: 0 };
@@ -131,8 +131,8 @@ function extractMetrics(promMetrics, healthData) {
         }
 
         // Add tokens saved per type
-        if (promMetrics.tokenpak_document_type_tokens_saved) {
-            for (const m of promMetrics.tokenpak_document_type_tokens_saved) {
+        if (promMetrics["tokenpak_document_type_tokens_saved"]) {
+            for (const m of promMetrics["tokenpak_document_type_tokens_saved"]) {
                 const docType = m.labels.type || 'unknown';
                 if (docTypes[docType]) {
                     docTypes[docType].tokensSaved += m.value;

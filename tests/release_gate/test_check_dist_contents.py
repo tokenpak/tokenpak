@@ -32,6 +32,15 @@ SHIPPED_NAMES = {
     "tokenpak/orchestration/dispatch/registry/routes/route.code_task.v1.yaml",
     "tokenpak/orchestration/dispatch/registry/overlays/overlay.code_builder.v1.yaml",
     "tokenpak/orchestration/dispatch/schemas/DispatchManifest.json",
+    "tokenpak/companion/GUIDE.md",
+    "tokenpak/companion/hooks/pre_send.sh",
+    "tokenpak/companion/hooks/session_start_name.sh",
+    "tokenpak/companion/codex/hooks_session_start.sh",
+    "tokenpak/companion/codex/hooks_pre_send.sh",
+    "tokenpak/companion/codex/hooks_pre_tool_use.sh",
+    "tokenpak/companion/codex/hooks_post_tool_use.sh",
+    "tokenpak/companion/codex/hooks_stop.sh",
+    "tokenpak/companion/codex/skills/example-skill/SKILL.md",
 }
 
 
@@ -107,6 +116,73 @@ def test_routes_only_does_not_satisfy_registry_glob():
     with pytest.raises(AssertionError) as excinfo:
         cdc._assert_required_dispatch_data(names, "sdist")
     assert "tokenpak/orchestration/dispatch/registry/*.yaml" in str(excinfo.value)
+
+
+# --- companion runtime data: hook scripts + skills must ship ----------------
+
+
+def test_matches_glob_supports_wildcard_directory_segment():
+    assert cdc._matches_glob(
+        "tokenpak/companion/codex/skills/example-skill/SKILL.md",
+        "tokenpak/companion/codex/skills/*/SKILL.md",
+    )
+    # The wildcard segment is exactly one directory level.
+    assert not cdc._matches_glob(
+        "tokenpak/companion/codex/skills/nested/deeper/SKILL.md",
+        "tokenpak/companion/codex/skills/*/SKILL.md",
+    )
+
+
+def test_companion_data_present_passes_for_wheel_and_sdist():
+    cdc._assert_required_companion_data(SHIPPED_NAMES, "wheel")
+    cdc._assert_required_companion_data(SHIPPED_NAMES, "sdist")
+
+
+@pytest.mark.parametrize(
+    "hook_script",
+    [
+        "tokenpak/companion/codex/hooks_session_start.sh",
+        "tokenpak/companion/codex/hooks_pre_send.sh",
+        "tokenpak/companion/codex/hooks_pre_tool_use.sh",
+        "tokenpak/companion/codex/hooks_post_tool_use.sh",
+        "tokenpak/companion/codex/hooks_stop.sh",
+    ],
+)
+def test_missing_codex_hook_script_fails(hook_script):
+    # Each of the five Codex hook entrypoints is individually required: a
+    # wheel missing any one of them makes that hook exit 127 on clean
+    # installs, so the gate must name the exact missing file.
+    with pytest.raises(AssertionError) as excinfo:
+        cdc._assert_required_companion_data(SHIPPED_NAMES - {hook_script}, "wheel")
+    assert hook_script in str(excinfo.value)
+
+
+@pytest.mark.parametrize("glob", cdc.REQUIRED_COMPANION_DATA_GLOBS)
+def test_missing_companion_glob_fails(glob):
+    # Dropping every file a declared companion glob matches must fail the
+    # gate. For the codex/*.sh glob the exact-file check reports the missing
+    # hook scripts by name; for the others the glob-liveness check names the
+    # dead glob.
+    names = {n for n in SHIPPED_NAMES if not cdc._matches_glob(n, glob)}
+    with pytest.raises(AssertionError) as excinfo:
+        cdc._assert_required_companion_data(names, "sdist")
+    msg = str(excinfo.value)
+    assert glob in msg or "companion runtime files" in msg
+
+
+def test_companion_required_files_cover_all_five_hooks():
+    hooks = {
+        n
+        for n in cdc.REQUIRED_COMPANION_FILES
+        if n.startswith("tokenpak/companion/codex/hooks_")
+    }
+    assert hooks == {
+        "tokenpak/companion/codex/hooks_session_start.sh",
+        "tokenpak/companion/codex/hooks_pre_send.sh",
+        "tokenpak/companion/codex/hooks_pre_tool_use.sh",
+        "tokenpak/companion/codex/hooks_post_tool_use.sh",
+        "tokenpak/companion/codex/hooks_stop.sh",
+    }
 
 
 # --- existing generic-data assertion still behaves -------------------------

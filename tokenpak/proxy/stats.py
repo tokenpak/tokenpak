@@ -411,10 +411,17 @@ def build_stats_response(
 # CompressionStats — compression telemetry tracker used by tests
 # ---------------------------------------------------------------------------
 import collections as _collections
+import json as _json
+import os as _os
 import pathlib as _pathlib
+import sys as _sys
 import threading as _threading
 
-DEFAULT_LOG_PATH = _pathlib.Path.home() / ".tokenpak" / "compression.log"
+# Canonical compression-events sink. The proxy, the telemetry demo writer,
+# and the dashboard/analytics readers all use compression_events.jsonl;
+# the previous default (compression.log) was never written or read by
+# anything.
+DEFAULT_LOG_PATH = _pathlib.Path.home() / ".tokenpak" / "compression_events.jsonl"
 MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB
 ROLLING_WINDOW = 1000  # last N events for rolling stats
 
@@ -425,8 +432,8 @@ _compression_lock = _threading.Lock()
 class CompressionStats:
     """Thread-safe compression telemetry collector."""
 
-    def __init__(self, log_path: _pathlib.Path = DEFAULT_LOG_PATH) -> None:
-        self.log_path = log_path
+    def __init__(self, log_path: "str | _pathlib.Path" = DEFAULT_LOG_PATH) -> None:
+        self.log_path = _pathlib.Path(log_path)
         self._lock = _threading.Lock()
         self._requests_total = 0
         self._requests_errors = 0
@@ -461,6 +468,31 @@ class CompressionStats:
                 "status": status,
             }
         return event
+
+    def flush_shutdown_record(self, record: dict) -> bool:
+        """Append a shutdown summary record to the events JSONL file.
+
+        Called by the proxy's graceful-shutdown path so session totals
+        survive across restarts. Synchronous and durable before return
+        (flush + fsync). Write failures are tolerated: they are counted
+        as a dropped write on stderr and ``False`` is returned instead of
+        raising, so a bad telemetry path can never break shutdown.
+        """
+        line = _json.dumps(record, default=str)
+        try:
+            with self._lock:
+                self.log_path.parent.mkdir(parents=True, exist_ok=True)
+                with self.log_path.open("a", encoding="utf-8") as fh:
+                    fh.write(line + "\n")
+                    fh.flush()
+                    _os.fsync(fh.fileno())
+            return True
+        except OSError as exc:
+            print(
+                f"[TokenPak] telemetry write dropped (shutdown_record): {exc}",
+                file=_sys.stderr,
+            )
+            return False
 
     def get_stats(self) -> dict:
         with self._lock:

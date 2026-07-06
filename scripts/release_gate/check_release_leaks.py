@@ -348,6 +348,43 @@ def _mask_fleet_functional(text: str) -> str:
     text = re.sub(r"fleet([- ])protection", r"__FUNC_FLEET_SCOPE__\1protection", text)
     text = re.sub(r"fleet caps", "__FUNC_FLEET_SCOPE__ caps", text)
     text = re.sub(r"session ?/ ?fleet ?/ ?agent", "session/__FUNC_FLEET_SCOPE__/agent", text)
+    text = re.sub(r"--tier\s+fleet", "--tier __PUBLIC_PERMTIER_FLEET__", text)
+    text = re.sub(r"--tier=fleet", "--tier=__PUBLIC_PERMTIER_FLEET__", text)
+    text = re.sub(r"permissions\s+set\s+fleet", "permissions set __PUBLIC_PERMTIER_FLEET__", text)
+    text = re.sub(r'"set fleet', '"set __PUBLIC_PERMTIER_FLEET__', text)
+    text = re.sub(r"set fleet`", "set __PUBLIC_PERMTIER_FLEET__`", text)
+    text = re.sub(r"fleet\s+mode", "__PUBLIC_PERMTIER_FLEET__ mode", text)
+    text = re.sub(r"fleet-mode", "__PUBLIC_PERMTIER_FLEET__-mode", text)
+    text = re.sub(r"fleet\s+off", "__PUBLIC_PERMTIER_FLEET__ off", text)
+    text = re.sub(r"fleet\s+launch\s+prints", "__PUBLIC_PERMTIER_FLEET__ launch prints", text)
+    text = re.sub(r"fleet\s+launches\s+—", "__PUBLIC_PERMTIER_FLEET__ launches —", text)
+    text = re.sub(
+        r"\(or fleet launcher state\)",
+        "(or __PUBLIC_PERMTIER_FLEET__ launcher state)",
+        text,
+    )
+    text = re.sub(r"launcher\s+fleet\s+state", "launcher __PUBLIC_PERMTIER_FLEET__ state", text)
+    text = re.sub(r"launcher\s+fleet$", "launcher __PUBLIC_PERMTIER_FLEET__", text)
+    text = re.sub(r"auto/fleet", "auto/__PUBLIC_PERMTIER_FLEET__", text)
+    text = re.sub(r"`fleet`", "`__PUBLIC_PERMTIER_FLEET__`", text)
+    text = re.sub(r"'fleet'", "'__PUBLIC_PERMTIER_FLEET__'", text)
+    text = re.sub(r"``fleet``", "``__PUBLIC_PERMTIER_FLEET__``", text)
+    text = re.sub(r"^(\s+)fleet(\s+\(persistent)", r"\1__PUBLIC_PERMTIER_FLEET__\2", text, flags=re.M)
+    text = re.sub(r"fleet\s+never\s+persists", "__PUBLIC_PERMTIER_FLEET__ never persists", text)
+    text = re.sub(
+        r"fleet\s+is\s+(a\s+launcher|NOT|the\s+separate)",
+        r"__PUBLIC_PERMTIER_FLEET__ is \1",
+        text,
+    )
+    text = re.sub(r'fleet = "enabled"', '__PUBLIC_PERMTIER_FLEET__ = "enabled"', text)
+    text = re.sub(r"fleet = _fleet_state_enabled", "__PUBLIC_PERMTIER_FLEET__ = _fleet_state_enabled", text)
+    text = re.sub(r", fleet, \"\"", r", __PUBLIC_PERMTIER_FLEET__, \"\"", text)
+    text = re.sub(r"if fleet or _bypass", "if __PUBLIC_PERMTIER_FLEET__ or _bypass", text)
+    text = re.sub(r"\(fleet or _bypass", "(__PUBLIC_PERMTIER_FLEET__ or _bypass", text)
+    text = re.sub(r"if not fleet:", "if not __PUBLIC_PERMTIER_FLEET__:", text)
+    text = re.sub(r"fleet is on\.", "__PUBLIC_PERMTIER_FLEET__ is on.", text)
+    text = re.sub(r"#\s+fleet\s+section\s+near", "# __PUBLIC_PERMTIER_FLEET__ section near", text)
+    text = re.sub(r"\(fleet → TokenPak", "(__PUBLIC_PERMTIER_FLEET__ → TokenPak", text)
     return text
 
 

@@ -179,9 +179,13 @@ def build_forecast_response(
     """
     from tokenpak.proxy.router import estimate_cost
 
-    model = body.get("model") or "claude-sonnet-4-6"
+    # Never invent a model id: if the request carries no usable model,
+    # forecast with an empty model. estimate_cost() falls back to
+    # default-class rates without attributing the cost to a real model
+    # name, and history lookups simply find no rows.
+    model = body.get("model")
     if not isinstance(model, str):
-        model = "claude-sonnet-4-6"
+        model = ""
 
     input_tokens = count_request_tokens(body)
 

@@ -9,6 +9,22 @@ tokenpak serve          # start the proxy + dashboard
 open http://localhost:8766/dashboard
 ```
 
+Remote dashboard access defaults to an SSH local tunnel. Run this from the
+machine where you want the browser to open:
+
+```bash
+tokenpak dashboard connect dashboard.example.internal --remote-port 8766 --local-port auto --open
+```
+
+TokenPak starts an SSH forward to the remote loopback dashboard, stores the
+control socket and PID under `~/.tpk/tunnels/`, waits for
+`http://127.0.0.1:<local>/health` to return OK, then opens
+`http://127.0.0.1:<local>/dashboard`. Use
+`tokenpak dashboard disconnect dashboard.example.internal` to close the tunnel.
+
+Use `tokenpak dashboard --public` only as an advanced non-tunneled exposure
+mode when you explicitly intend the dashboard URL to be reachable without SSH.
+
 Or jump straight to a specific mode:
 
 ```

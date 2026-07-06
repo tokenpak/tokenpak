@@ -95,3 +95,62 @@ def test_streaming_handler_partial_final_line_flushed_by_get_buffer():
     assert b"[DONE]" in buf
     usage = handler.extract_usage()
     assert usage["output_tokens"] == 7
+
+
+# ---------------------------------------------------------------------------
+# stop_reason extraction (response-path observation, read-only)
+# ---------------------------------------------------------------------------
+
+def test_extract_sse_stop_reason_from_message_delta():
+    from tokenpak.proxy.streaming import _extract_sse_stop_reason
+
+    sse = (
+        _make_sse_event("message_start", {"message": {"usage": {"input_tokens": 3}}})
+        + _make_sse_event(
+            "message_delta",
+            {"delta": {"stop_reason": "end_turn", "stop_sequence": None},
+             "usage": {"output_tokens": 9}},
+        )
+        + _make_sse_event("message_stop", {})
+        + b"data: [DONE]\n\n"
+    )
+    assert _extract_sse_stop_reason(sse) == "end_turn"
+
+
+def test_extract_sse_stop_reason_refusal_distinguishable():
+    """A refusal streamed over HTTP 200 must surface its stop_reason."""
+    from tokenpak.proxy.streaming import _extract_sse_stop_reason
+
+    sse = _make_sse_event(
+        "message_delta",
+        {"delta": {"stop_reason": "refusal", "stop_sequence": None},
+         "usage": {"output_tokens": 1}},
+    )
+    assert _extract_sse_stop_reason(sse) == "refusal"
+
+
+def test_extract_sse_stop_reason_absent_or_malformed_is_empty():
+    from tokenpak.proxy.streaming import _extract_sse_stop_reason
+
+    # No message_delta at all (e.g. errored/truncated stream).
+    sse = _make_sse_event("message_start", {"message": {}})
+    assert _extract_sse_stop_reason(sse) == ""
+    # message_delta without a stop_reason.
+    sse = _make_sse_event("message_delta", {"usage": {"output_tokens": 2}})
+    assert _extract_sse_stop_reason(sse) == ""
+    # Garbage bytes never raise.
+    assert _extract_sse_stop_reason(b"data: {not json\n\n") == ""
+    assert _extract_sse_stop_reason(b"") == ""
+
+
+def test_extract_response_stop_reason_non_streaming():
+    from tokenpak.proxy.server import _extract_response_stop_reason
+
+    ok = json.dumps({"stop_reason": "end_turn", "usage": {"output_tokens": 4}})
+    assert _extract_response_stop_reason(ok.encode()) == "end_turn"
+    refusal = json.dumps({"stop_reason": "refusal", "usage": {"output_tokens": 0}})
+    assert _extract_response_stop_reason(refusal.encode()) == "refusal"
+    # Absent / null / unparseable -> '' (never fabricated).
+    assert _extract_response_stop_reason(b'{"usage": {"output_tokens": 4}}') == ""
+    assert _extract_response_stop_reason(b'{"stop_reason": null}') == ""
+    assert _extract_response_stop_reason(b"not json") == ""

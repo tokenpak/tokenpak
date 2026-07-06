@@ -23,6 +23,7 @@ Layout:
         requests.jsonl          request log
         telemetry.db            telemetry store
         monitor.db              request ledger
+        tunnels/                dashboard SSH tunnel state (control sockets, pids)
         companion/              companion subsystem state
         pro/                    Pro daemon coordination (sock-info, state)
 
@@ -56,6 +57,7 @@ _STD_33_SUBDIRS: frozenset[str] = frozenset(
         # tmp/, overlays/). Added per the canonical layout amendment of
         # 2026-05-20.
         "dispatch",
+        "tunnels",
     }
 )
 

@@ -364,9 +364,10 @@ def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
     output_tokens = stats.get("output_tokens", 0)
     cost_with = stats.get("cost", 0.0)
 
-    # Estimate cost without tokenpak from raw input tokens
-    default_model = "claude-sonnet-4-6"
-    _rates = get_rates(default_model)
+    # Estimate cost without tokenpak from raw input tokens.
+    # No model is known at this aggregate level: use default-class rates
+    # (get_rates(None)) rather than naming a specific model id.
+    _rates = get_rates(None)
     in_rate = _rates.get("input", 3.0)
     out_rate = _rates.get("output", 15.0)
     cost_without = (input_tokens * in_rate + output_tokens * out_rate) / 1_000_000

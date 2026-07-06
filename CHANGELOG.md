@@ -6,6 +6,42 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-07-06
+
+> Minor release: the batch reviewed and merged under the 2026-07-06 non-author review gate —
+> two new dashboard capabilities plus five correctness and packaging fixes.
+
+### Added
+- **Dashboard v2 JSON foundation.** `tokenpak dashboard --json` now emits a versioned
+  `dashboard.v2.0` snapshot with measured/not-measured semantics and source labeling, backed by
+  the new `tokenpak.platform` capability-detection package. Legacy TUI and fleet-wide views are
+  adapted to the new contract.
+- **Dashboard SSH tunnel launcher.** New `tokenpak dashboard connect` / `disconnect` subcommands
+  establish and tear down an SSH-tunneled dashboard session (ControlMaster-based, with liveness
+  and health probing); `--public` is repositioned as the advanced non-tunneled mode.
+
+### Fixed
+- **Wheel ships companion runtime files.** Companion shell hooks, codex skills, and the companion
+  guide are now included in built distributions; on clean installs the codex hooks no longer fail
+  with exit 127. The distribution-contents gate now asserts these files in every built wheel and
+  sdist.
+- **Context-window table corrected and consolidated.** Stale 200K entries for 1M-window models
+  were corrected against provider-published metadata, current models were added, and the table now
+  lives in the models registry as the single source (spend-guard thresholds key off real windows;
+  unknown-model conservative fallback unchanged).
+- **No fabricated model attribution.** Logging and forecast paths no longer default a missing
+  model id to a real model name; unknown stays unknown and cost is never attributed to a
+  fabricated id.
+- **Shutdown telemetry record persisted.** Proxy shutdown now writes its summary record to the
+  telemetry events file instead of silently dropping it on a missing method.
+- **Response stop reason captured.** The proxy records `stop_reason` for non-streaming and
+  streaming responses, so refusals returned as HTTP 200 are distinguishable from successful
+  completions in monitoring data. Forwarded bytes remain untouched.
+
+### CI
+- `actions/checkout` bumped v4 → v7 across workflows (gate-inventory manifest refreshed).
+
+
 ## [1.10.4] — 2026-07-05
 
 > **Release note:** version **1.10.3 was tagged but never published to PyPI.** Its release run

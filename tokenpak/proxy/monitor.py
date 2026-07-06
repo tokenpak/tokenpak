@@ -105,6 +105,7 @@ _REQUEST_INSERT_COLUMNS = (
     "agent_id",
     "cycle_id",
     "attribution_source",
+    "stop_reason",
 )
 
 
@@ -406,6 +407,14 @@ class Monitor:
             "ALTER TABLE requests ADD COLUMN attribution_source TEXT DEFAULT ''",
         ):
             _apply_schema_migration(conn, _alter)
+        # Provider execution truth: stop_reason observed on the response path
+        # (non-streaming JSON `stop_reason`; SSE `message_delta.delta.stop_reason`).
+        # Makes a refusal returned as HTTP 200 distinguishable from a successful
+        # completion on receipt rows. '' sentinel = not observed (legacy rows,
+        # errored/truncated streams) - never fabricated. Idempotent.
+        _apply_schema_migration(
+            conn, "ALTER TABLE requests ADD COLUMN stop_reason TEXT DEFAULT ''"
+        )
         conn.commit()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (
@@ -501,6 +510,7 @@ class Monitor:
         agent_id="",
         cycle_id="",
         attribution_source="",
+        stop_reason="",
     ):
         # ``session_id`` is the resolved Claude Code / TokenPak session id
         # (``_resolve_session_id``). Empty string when no session header was
@@ -539,6 +549,7 @@ class Monitor:
             agent_id or "",
             cycle_id or "",
             attribution_source or "",
+            stop_reason or "",
         )
         _queued = False
         try:

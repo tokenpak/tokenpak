@@ -13,6 +13,7 @@ Covers:
 
 from __future__ import annotations
 
+import inspect
 import sqlite3
 import threading
 import time as _time
@@ -136,7 +137,7 @@ def test_write_row_retries_transient_lock_then_succeeds(tmp_path, monkeypatch):
     params = (
         datetime.now().isoformat(), "claude-sonnet-4-6", "chat", 1, 1, 0.0,
         1, 200, "test", "", 0, 0, 0, "", 0, 0, 0, "proxy", "", 0, 0, None,
-        "", "", "", "",
+        "", "", "", "", "",
     )
     before = monitor_module.get_dropped_row_count()
     monitor_module._write_row(str(db), params)
@@ -163,7 +164,9 @@ def test_write_row_raises_after_retries_exhausted(tmp_path, monkeypatch):
     monkeypatch.setattr(monitor_module, "_DB_WRITE_RETRY_BACKOFF_S", 0.001)
 
     with pytest.raises(sqlite3.OperationalError):
-        monitor_module._write_row(str(db), ("x",) * 26)
+        monitor_module._write_row(
+            str(db), ("x",) * len(monitor_module._REQUEST_INSERT_COLUMNS)
+        )
     assert locked.attempts == monitor_module._DB_WRITE_RETRY_ATTEMPTS
 
 
@@ -182,7 +185,9 @@ def test_write_row_does_not_retry_non_transient_errors(tmp_path, monkeypatch):
     monkeypatch.setattr(monitor_module, "_get_db_connection", lambda p: broken)
 
     with pytest.raises(sqlite3.OperationalError):
-        monitor_module._write_row(str(db), ("x",) * 26)
+        monitor_module._write_row(
+            str(db), ("x",) * len(monitor_module._REQUEST_INSERT_COLUMNS)
+        )
     assert broken.attempts == 1
 
 
@@ -604,3 +609,151 @@ def test_savings_report_empty_db_keeps_contract(tmp_path):
     assert report["total_cost_saved_usd"] == 0.0
     assert report["savings_by_model"] == {}
     assert report["savings_by_date_7d"] == []
+
+
+# ---------------------------------------------------------------------------
+# D - stop_reason capture (response-path execution truth)
+# ---------------------------------------------------------------------------
+
+
+def _fetch_stop_reasons(db_path):
+    conn = sqlite3.connect(str(db_path))
+    try:
+        return [
+            row[0]
+            for row in conn.execute(
+                "SELECT stop_reason FROM requests ORDER BY id"
+            ).fetchall()
+        ]
+    finally:
+        conn.close()
+
+
+def _create_requests_table_for_insert(db_path):
+    cols = ", ".join(
+        f"{name} TEXT" for name in monitor_module._REQUEST_INSERT_COLUMNS
+    )
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(f"CREATE TABLE requests (id INTEGER PRIMARY KEY, {cols})")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _request_insert_params(*, stop_reason=""):
+    return (
+        datetime.now().isoformat(),
+        "claude-sonnet-4-6",
+        "chat",
+        10,
+        5,
+        0.0,
+        1,
+        200,
+        "test",
+        "",
+        0,
+        0,
+        0,
+        "",
+        0,
+        0,
+        0,
+        "proxy",
+        "",
+        0,
+        0,
+        None,
+        "",
+        "",
+        "",
+        "",
+        stop_reason,
+    )
+
+
+def test_log_persists_stop_reason(tmp_path):
+    """A refusal returned as HTTP 200 must be distinguishable from success."""
+    db = tmp_path / "monitor.db"
+    _create_requests_table_for_insert(db)
+    monitor_module._write_row(str(db), _request_insert_params(stop_reason="end_turn"))
+    monitor_module._write_row(str(db), _request_insert_params(stop_reason="refusal"))
+    assert _fetch_stop_reasons(db) == ["end_turn", "refusal"]
+
+
+def test_log_without_stop_reason_keeps_legacy_contract(tmp_path):
+    """Legacy call sites that don't pass stop_reason keep the '' sentinel."""
+    signature = inspect.signature(Monitor.log)
+    assert signature.parameters["stop_reason"].default == ""
+
+    db = tmp_path / "monitor.db"
+    _create_requests_table_for_insert(db)
+    monitor_module._write_row(str(db), _request_insert_params(stop_reason=""))
+    monitor_module._write_row(str(db), _request_insert_params(stop_reason=""))
+    assert _fetch_stop_reasons(db) == ["", ""]
+
+
+def test_existing_db_gains_stop_reason_column(tmp_path):
+    """Additive migration: a pre-existing requests table gains stop_reason."""
+    db = tmp_path / "monitor.db"
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        """
+        CREATE TABLE requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            model TEXT NOT NULL,
+            request_type TEXT,
+            input_tokens INTEGER,
+            output_tokens INTEGER,
+            estimated_cost REAL,
+            latency_ms INTEGER,
+            status_code INTEGER,
+            endpoint TEXT,
+            compilation_mode TEXT,
+            protected_tokens INTEGER,
+            compressed_tokens INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO requests (timestamp, model, input_tokens, output_tokens,"
+        " estimated_cost, status_code) VALUES (?, ?, 1, 1, 0.0, 200)",
+        (datetime.now().isoformat(), "claude-sonnet-4-6"),
+    )
+    conn.commit()
+    conn.close()
+
+    conn = sqlite3.connect(str(db))
+    try:
+        monitor_module._apply_schema_migration(
+            conn, "ALTER TABLE requests ADD COLUMN stop_reason TEXT DEFAULT ''"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    conn = sqlite3.connect(str(db))
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(requests)")}
+        assert "stop_reason" in cols
+        # Legacy row survives the migration and reads back the '' default.
+        assert conn.execute(
+            "SELECT COALESCE(stop_reason, '') FROM requests"
+        ).fetchone()[0] == ""
+    finally:
+        conn.close()
+    # The migrated column is writable on the pre-existing table.
+    conn = sqlite3.connect(str(db))
+    try:
+        conn.execute(
+            "INSERT INTO requests (timestamp, model, input_tokens, output_tokens,"
+            " estimated_cost, status_code, stop_reason)"
+            " VALUES (?, ?, 1, 1, 0.0, 200, ?)",
+            (datetime.now().isoformat(), "claude-sonnet-4-6", "max_tokens"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    assert _fetch_stop_reasons(db)[-1] == "max_tokens"

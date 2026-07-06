@@ -88,6 +88,7 @@ class VaultIndex:
         self._last_loaded = 0
         self._last_mtime = 0
         self._lock = threading.Lock()
+        self._reload_lock = threading.Lock()
         # BM25 precomputed
         self._df: Dict[str, int] = {}
         self._block_tfs: Dict[str, Dict[str, int]] = {}
@@ -118,8 +119,21 @@ class VaultIndex:
         except OSError:
             return
 
-        self._load(index_path, mtime)
-        self._last_loaded = now
+        with self._reload_lock:
+            now = __import__("time").time()
+            if now - self._last_loaded < VAULT_INDEX_RELOAD_INTERVAL:
+                return
+
+            try:
+                mtime = index_path.stat().st_mtime
+                if mtime == self._last_mtime and self.blocks:
+                    self._last_loaded = now
+                    return
+            except OSError:
+                return
+
+            self._load(index_path, mtime)
+            self._last_loaded = now
 
     def _load(self, index_path: Path, mtime: float):
         """Load index + block contents, precompute BM25 stats."""

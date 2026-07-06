@@ -85,7 +85,7 @@ from .route_policy import get_policy
 from .router import INTERCEPT_HOSTS, ProviderRouter, estimate_cost
 from .startup import format_startup_report, run_startup_checks
 from .stats import CompressionStats
-from .streaming import extract_sse_tokens
+from .streaming import _extract_sse_stop_reason, extract_sse_tokens
 from .upstream_retry import (
     UpstreamRetryPolicy,
     UpstreamTruncatedJSONError,
@@ -975,6 +975,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # when the upstream response includes ``usage.cache_creation`` breakdown).
         cache_creation_1h_tokens = 0
         cache_creation_5m_tokens = 0
+        # Provider stop_reason observed on the response path (read-only parse of
+        # a response copy; forwarded bytes are never modified). '' = not observed.
+        stop_reason = ""
 
         trace: Optional[PipelineTrace] = None
         if should_log and is_messages:
@@ -1042,7 +1045,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _sg_session = _resolve_session_id(self.headers, "")
                 _sg_outcome = _sg_evaluate(
                     body,
-                    _sg_model or "claude-sonnet-4-6",  # safe default rate
+                    # Empty when the body carries no model. Pricing falls
+                    # back to default-class rates (tokenpak.models.get_rates)
+                    # without inventing a model id, and the context-window
+                    # lookup falls back to cfg.block_tokens — so guard rows
+                    # never record a fabricated model name.
+                    _sg_model,
                     _sg_session,
                     dict(self.headers),
                 )
@@ -1661,6 +1669,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
                 if should_log and is_messages and sse_buffer:
                     sse_usage = extract_sse_tokens(sse_buffer)
+                    # stop_reason from message_delta (read-only on the buffered
+                    # copy - forwarded stream bytes already went out unmodified).
+                    stop_reason = _extract_sse_stop_reason(sse_buffer)
                     output_tokens = sse_usage.get("output_tokens", 0)
                     cache_read_tokens = sse_usage.get("cache_read_input_tokens", 0)
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
@@ -1772,6 +1783,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         except Exception:
                             pass
                     output_tokens = _extract_response_tokens(body_for_metrics)
+                    # stop_reason from the response JSON copy (read-only -
+                    # the client already received the original bytes above).
+                    stop_reason = _extract_response_stop_reason(body_for_metrics)
                     try:
                         usage = json.loads(body_for_metrics).get("usage", {})
                         cache_read_tokens = usage.get("cache_read_input_tokens", 0)
@@ -1953,6 +1967,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             agent_id=_mon_agent_id,
                             cycle_id=_mon_cycle_id,
                             attribution_source=_mon_attribution_source,
+                            stop_reason=stop_reason,
                         )
                     except Exception:
                         pass  # DB errors must never break the request
@@ -2468,7 +2483,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             result = execute_via_claude_code(
                 openclaw_session=oc_session,
                 messages=body_data.get("messages", []),
-                model=body_data.get("model", "claude-sonnet-4-6"),
+                # Empty when the request carries no model: the CLI backend
+                # then runs with its own configured default, and the
+                # response/receipt reports the model as unknown rather
+                # than a fabricated id.
+                model=body_data.get("model") or "",
                 system=body_data.get("system", ""),
                 max_tokens=body_data.get("max_tokens", 4096),
                 workspace=oc_workspace,
@@ -2509,7 +2528,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
           3. message_delta — contains stop_reason + usage.output_tokens
         """
         msg_id = result.get("id", "msg_unknown")
-        model = result.get("model", "claude-sonnet-4-6")
+        # Never invent a model id — echo whatever the backend reported,
+        # empty if unknown, so downstream logging/cost attribution cannot
+        # key on a fabricated model name.
+        model = result.get("model") or ""
         usage = result.get("usage", {})
         content = result.get("content", [])
         text = ""
@@ -2759,6 +2781,21 @@ def _extract_response_tokens(body: bytes) -> int:
         )
     except Exception:
         return 0
+
+
+def _extract_response_stop_reason(body: bytes) -> str:
+    """Read ``stop_reason`` from a non-streaming response JSON copy.
+
+    Read-only observation for telemetry (the original response bytes are
+    forwarded unmodified). Returns '' when absent or unparseable - never
+    fabricated. Distinguishes refusals returned as HTTP 200 (e.g.
+    ``stop_reason: "refusal"``) from successful completions on receipt rows.
+    """
+    try:
+        value = json.loads(body).get("stop_reason")
+        return str(value) if value else ""
+    except Exception:
+        return ""
 
 
 # ---------------------------------------------------------------------------

@@ -226,6 +226,10 @@ tokenpak = [
     "orchestration/dispatch/registry/routes/*.yaml",
     "orchestration/dispatch/registry/overlays/*.yaml",
     "orchestration/dispatch/schemas/*.json",
+    "companion/GUIDE.md",
+    "companion/hooks/*.sh",
+    "companion/codex/*.sh",
+    "companion/codex/skills/*/SKILL.md",
 ]
 
 [tool.setuptools.dynamic]

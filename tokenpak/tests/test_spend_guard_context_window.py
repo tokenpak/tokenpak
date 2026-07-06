@@ -27,13 +27,32 @@ from tokenpak.proxy.spend_guard._context_window import known_models
 
 
 class TestKnownContextWindows:
-    """The published frontier models we ship lookups for."""
+    """The published frontier models we ship lookups for. Values mirror
+    the provider's published Models API ``max_input_tokens``."""
 
-    def test_claude_opus_4_7_is_200k(self):
-        assert get_model_max_context("claude-opus-4-7") == 200_000
+    def test_claude_fable_5_is_1m(self):
+        assert get_model_max_context("claude-fable-5") == 1_000_000
 
-    def test_claude_sonnet_4_6_is_200k(self):
-        assert get_model_max_context("claude-sonnet-4-6") == 200_000
+    def test_claude_opus_4_8_is_1m(self):
+        assert get_model_max_context("claude-opus-4-8") == 1_000_000
+
+    def test_claude_opus_4_7_is_1m(self):
+        assert get_model_max_context("claude-opus-4-7") == 1_000_000
+
+    def test_claude_opus_4_6_is_1m(self):
+        assert get_model_max_context("claude-opus-4-6") == 1_000_000
+
+    def test_claude_opus_4_5_is_200k(self):
+        assert get_model_max_context("claude-opus-4-5") == 200_000
+
+    def test_claude_sonnet_5_is_1m(self):
+        assert get_model_max_context("claude-sonnet-5") == 1_000_000
+
+    def test_claude_sonnet_4_6_is_1m(self):
+        assert get_model_max_context("claude-sonnet-4-6") == 1_000_000
+
+    def test_claude_sonnet_4_5_is_200k(self):
+        assert get_model_max_context("claude-sonnet-4-5") == 200_000
 
     def test_claude_haiku_4_5_is_200k(self):
         assert get_model_max_context("claude-haiku-4-5") == 200_000
@@ -59,22 +78,53 @@ class TestModelIdNormalization:
     matches the same way the proxy sees model ids."""
 
     def test_uppercase_input(self):
-        assert get_model_max_context("Claude-Opus-4-7") == 200_000
+        assert get_model_max_context("Claude-Opus-4-7") == 1_000_000
 
     def test_provider_prefix_is_stripped(self):
-        assert get_model_max_context("anthropic/claude-opus-4-7") == 200_000
+        assert get_model_max_context("anthropic/claude-opus-4-7") == 1_000_000
         assert get_model_max_context("openai/gpt-4o") == 128_000
 
     def test_date_suffix_is_stripped(self):
-        assert get_model_max_context("claude-opus-4-7-20261015") == 200_000
+        assert get_model_max_context("claude-opus-4-7-20261015") == 1_000_000
 
     def test_longest_prefix_match(self):
         # A future variant like "claude-opus-4-7-canary" should still
-        # resolve to the base family's 200K window.
-        assert get_model_max_context("claude-opus-4-7-canary") == 200_000
+        # resolve to the base family's window.
+        assert get_model_max_context("claude-opus-4-7-canary") == 1_000_000
+
+    def test_longest_prefix_prefers_most_specific_entry(self):
+        # "claude-opus-4-8-canary" must resolve via the 1M "claude-opus-4-8"
+        # entry, not the shorter 200K "claude-opus-4" entry.
+        assert get_model_max_context("claude-opus-4-8-canary") == 1_000_000
+        # And a bare dated Opus 4 stays on the 200K base entry.
+        assert get_model_max_context("claude-opus-4-20250514") == 200_000
 
     def test_whitespace_is_trimmed(self):
         assert get_model_max_context("  gpt-4o  ") == 128_000
+
+
+class TestLongContextTierSuffix:
+    """A trailing ``[1m]`` marker selects the provider's 1M-input-token
+    long-context tier of the base model."""
+
+    def test_1m_suffix_on_1m_base_stays_1m(self):
+        assert get_model_max_context("claude-fable-5[1m]") == 1_000_000
+        assert get_model_max_context("claude-opus-4-8[1m]") == 1_000_000
+
+    def test_1m_suffix_raises_200k_base_to_1m(self):
+        assert get_model_max_context("claude-sonnet-4-5[1m]") == 1_000_000
+        assert get_model_max_context("claude-sonnet-4[1m]") == 1_000_000
+
+    def test_1m_suffix_on_unknown_base_returns_none(self):
+        # The base model must still be known — the marker never invents
+        # a window for an unknown model (fallback behavior preserved).
+        assert get_model_max_context("unknown-frontier-model[1m]") is None
+
+    def test_bare_1m_marker_returns_none(self):
+        assert get_model_max_context("[1m]") is None
+
+    def test_1m_suffix_is_case_insensitive(self):
+        assert get_model_max_context("Claude-Sonnet-4-5[1M]") == 1_000_000
 
 
 class TestUnknownContext:
@@ -108,6 +158,37 @@ class TestKnownModelsList:
         assert len(models) > 0
         assert models == sorted(models)
         assert "claude-opus-4-7" in models
+        assert "claude-fable-5" in models
+        assert "claude-sonnet-5" in models
+
+
+class TestRegistrySourcing:
+    """The window table lives in the tokenpak.models registry — the
+    spend-guard module is a thin compatibility accessor over it."""
+
+    def test_accessor_delegates_to_registry(self):
+        from tokenpak.models import get_registry
+
+        reg = get_registry()
+        for model in ("claude-opus-4-8", "gpt-4.1", "gemini-1.5-pro", "nope"):
+            assert get_model_max_context(model) == reg.get_max_context(model)
+
+    def test_known_models_matches_registry_keys(self):
+        from tokenpak.models import get_registry
+
+        assert known_models() == get_registry().context_window_models()
+
+    def test_model_info_carries_max_input_tokens(self):
+        from tokenpak.models import get_registry
+
+        info = get_registry().resolve("claude-opus-4-6")
+        assert info.max_input_tokens == 1_000_000
+
+    def test_unknown_model_info_has_no_max_input_tokens(self):
+        from tokenpak.models import get_registry
+
+        info = get_registry().resolve("totally-unknown-model-xyz")
+        assert info.max_input_tokens is None
 
 
 class TestDeriveBlockThreshold:
@@ -175,8 +256,9 @@ class TestSelectedModelChangesThreshold:
     """Switching the selected model changes the derived block threshold."""
 
     @pytest.mark.parametrize("model_id, expected_ctx, expected_block", [
-        ("claude-opus-4-7", 200_000, 160_000),
-        ("claude-sonnet-4-6", 200_000, 160_000),
+        ("claude-opus-4-7", 1_000_000, 800_000),
+        ("claude-sonnet-4-6", 1_000_000, 800_000),
+        ("claude-haiku-4-5", 200_000, 160_000),
         ("gpt-4o", 128_000, 102_400),
         ("gpt-4.1", 1_047_576, 838_060),
         ("o1", 200_000, 160_000),

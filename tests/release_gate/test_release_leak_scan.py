@@ -124,6 +124,28 @@ def test_bare_fleet_outside_allowlist_fails(tmp_path):
     assert res.returncode == 1, "internal-sense fleet outside allowlist must fail"
 
 
+def test_companion_guide_permission_tier_fleet_passes(tmp_path):
+    _write(
+        tmp_path,
+        "tokenpak/companion/GUIDE.md",
+        "\n".join(
+            [
+                "Runtime unattended bypass uses launcher *fleet mode*.",
+                "Client config files are never modified by fleet mode.",
+                "| `fleet` | persistent tier unchanged |",
+                "tokenpak permissions show  # current tiers + fleet mode",
+                "tokenpak permissions set fleet  # launcher fleet mode",
+                "tokenpak permissions reset  # scoped reset + fleet off",
+                "Fleet launches print a mandatory stderr banner.",
+                "The env var remains the back-compat alias of fleet mode.",
+                "",
+            ]
+        ),
+    )
+    res = _run_tree(tmp_path)
+    assert res.returncode == 0, f"companion guide permission-tier fleet usage must pass:\n{res.stdout}"
+
+
 def test_top_level_tests_dir_excluded(tmp_path):
     # Mirrors the delta gate: top-level tests/ is a dev surface, not scanned.
     _write(tmp_path, "tests/test_thing.py", "# authored by Sue, see TSR-01\n")

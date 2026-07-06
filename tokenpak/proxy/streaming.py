@@ -116,6 +116,44 @@ def extract_sse_tokens(sse_bytes: bytes) -> Dict[str, int]:
     return result
 
 
+def _extract_sse_stop_reason(sse_bytes: bytes) -> str:
+    """
+    Extract the final ``stop_reason`` from raw SSE stream bytes.
+
+    Anthropic streams carry the stop reason in the ``message_delta`` event
+    (``delta.stop_reason``). This is a read-only observation on the buffered
+    stream copy - the forwarded bytes are never modified. Returns the last
+    non-empty stop_reason seen (streams emit exactly one in practice), or
+    ``""`` when the stream contains none (e.g. errored / truncated streams,
+    non-Anthropic providers).
+    """
+    stop_reason = ""
+    try:
+        text = sse_bytes.decode("utf-8", errors="replace")
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line.startswith("data: "):
+                continue
+            data_str = line[6:]
+            if data_str == "[DONE]":
+                continue
+            try:
+                event = json.loads(data_str)
+            except json.JSONDecodeError:
+                continue
+            if event.get("type") != "message_delta":
+                continue
+            delta = event.get("delta")
+            if isinstance(delta, dict):
+                value = delta.get("stop_reason")
+                if value:
+                    stop_reason = str(value)
+    except Exception:
+        # Fail-open: stop_reason observation must never break stream handling.
+        return stop_reason
+    return stop_reason
+
+
 # Legacy name used by runtime/proxy.py
 _extract_sse_tokens = extract_sse_tokens
 

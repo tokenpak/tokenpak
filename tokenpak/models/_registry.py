@@ -25,6 +25,11 @@ _SEED_CATALOG_PATH = Path(__file__).parent / "data" / "seed_catalog.json"
 # Strip trailing date suffixes like -20261015 or -20241022
 _DATE_SUFFIX_RE = re.compile(r"-\d{8}$")
 
+# Long-context tier marker, e.g. "claude-fable-5[1m]" — the provider's
+# 1M-input-token tier of the base model.
+_LONG_CONTEXT_SUFFIX = "[1m]"
+_LONG_CONTEXT_TOKENS = 1_000_000
+
 
 @dataclass(frozen=True)
 class ModelInfo:
@@ -40,6 +45,10 @@ class ModelInfo:
     translations: dict[str, str] = field(default_factory=dict)
     aliases: list[str] = field(default_factory=list)
     source: str = "seed"  # "seed", "discovered", "inferred"
+    # Max input-context window in tokens (provider Models API
+    # ``max_input_tokens``). None when unknown — consumers must fall back
+    # to their configured static threshold rather than inventing a value.
+    max_input_tokens: int | None = None
 
 
 # Singleton default for completely unknown models
@@ -63,6 +72,7 @@ class ModelRegistry:
         self._aliases: dict[str, str] = {}  # alias -> canonical model_id
         self._families: list[FamilyRule] = get_sorted_families()
         self._shadow_targets: dict[str, dict[str, str]] = {}
+        self._context_windows: dict[str, int] = {}
         self._provider_cache_multipliers: dict[str, dict[str, float]] = {}
         self._lock = threading.RLock()
         self._loaded = False
@@ -89,6 +99,12 @@ class ModelRegistry:
         # Shadow targets
         self._shadow_targets = raw.get("shadow_targets", {})
 
+        # Max input-context windows (tokens), keyed by dateless model id
+        self._context_windows = {
+            str(mid).lower(): int(tokens)
+            for mid, tokens in raw.get("context_windows", {}).items()
+        }
+
         # Models
         models_raw = raw.get("models", {})
         for model_id, data in models_raw.items():
@@ -103,6 +119,7 @@ class ModelRegistry:
                 translations=data.get("translations", {}),
                 aliases=data.get("aliases", []),
                 source="seed",
+                max_input_tokens=self._lookup_context_window(model_id.lower()),
             )
             self._models[model_id] = info
             for alias in info.aliases:
@@ -196,6 +213,83 @@ class ModelRegistry:
             cache_write_per_mtok=3.75,
             source="inferred",
         )
+
+    def _lookup_context_window(self, model: str) -> int | None:
+        """Match a normalized (lowercase, trimmed) model id against the
+        context-window table. Returns None when unknown."""
+        windows = self._context_windows
+
+        # 1. Exact match.
+        if model in windows:
+            return windows[model]
+
+        # 2. Strip provider prefix ("anthropic/claude-…") and retry.
+        if "/" in model:
+            suffix = model.split("/", 1)[1]
+            if suffix in windows:
+                return windows[suffix]
+            model = suffix
+
+        # 3. Strip trailing 8-digit date suffix and retry.
+        stripped = _DATE_SUFFIX_RE.sub("", model)
+        if stripped != model and stripped in windows:
+            return windows[stripped]
+
+        # 4. Longest-prefix match.
+        best_key: str | None = None
+        best_len = 0
+        for key in windows:
+            if (model.startswith(key) or stripped.startswith(key)) and len(key) > best_len:
+                best_key = key
+                best_len = len(key)
+        if best_key is not None:
+            return windows[best_key]
+
+        return None
+
+    def get_max_context(self, model: str | None) -> int | None:
+        """Resolve the max input-context window in tokens for a model id.
+
+        Values come from the seed catalog's ``context_windows`` section
+        (verified against the provider's published Models API
+        ``max_input_tokens``). Returns ``None`` when the model is unknown —
+        the caller is responsible for falling back to its configured static
+        threshold rather than silently assuming a default.
+
+        A trailing ``[1m]`` marker selects the provider's 1M-input-token
+        long-context tier of the base model: the base model must still be
+        known (unknown bases stay ``None``), and the result is floored at
+        1,000,000 tokens.
+        """
+        self._ensure_loaded()
+
+        if not model:
+            return None
+
+        m = model.lower().strip()
+        if not m:
+            return None
+
+        long_context = m.endswith(_LONG_CONTEXT_SUFFIX)
+        if long_context:
+            m = m[: -len(_LONG_CONTEXT_SUFFIX)].strip()
+            if not m:
+                return None
+
+        with self._lock:
+            base = self._lookup_context_window(m)
+
+        if base is None:
+            return None
+        if long_context:
+            return max(base, _LONG_CONTEXT_TOKENS)
+        return base
+
+    def context_window_models(self) -> list[str]:
+        """Return the context-window table's model-id keys (sorted)."""
+        self._ensure_loaded()
+        with self._lock:
+            return sorted(self._context_windows.keys())
 
     def detect_provider(self, model: str) -> str:
         """Detect provider from model name using prefix matching."""
@@ -303,6 +397,7 @@ class ModelRegistry:
             self._models.clear()
             self._aliases.clear()
             self._shadow_targets.clear()
+            self._context_windows.clear()
             self._provider_cache_multipliers.clear()
             self._load_seed_catalog(path)
 

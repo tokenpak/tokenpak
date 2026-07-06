@@ -252,11 +252,20 @@ class TestBuildForecastResponse:
         result = build_forecast_response(body, empty_db)
         assert result["input_tokens"] == 0
 
-    def test_default_model_when_missing(self, empty_db):
+    def test_missing_model_reported_as_empty_not_fabricated(self, empty_db):
+        """A body without a model must not have one invented for it."""
         body = {"messages": [{"role": "user", "content": "hi"}]}
         result = build_forecast_response(body, empty_db)
         assert isinstance(result["model"], str)
-        assert len(result["model"]) > 0
+        assert result["model"] == ""
+        # Cost is still estimated (default-class rates), just not
+        # attributed to a real model name.
+        assert result["estimated_cost_usd"] > 0
+
+    def test_non_string_model_reported_as_empty(self, empty_db):
+        body = {"model": 42, "messages": [{"role": "user", "content": "hi"}]}
+        result = build_forecast_response(body, empty_db)
+        assert result["model"] == ""
 
     def test_opus_costs_more_than_haiku(self, empty_db):
         msg = [{"role": "user", "content": "Hello world, tell me everything you know."}]

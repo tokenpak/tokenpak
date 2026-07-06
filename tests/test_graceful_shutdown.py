@@ -20,36 +20,6 @@ import urllib.request
 
 import pytest
 
-# TSR-05x missing-method skip reason (grep-able)
-# ─────────────────────────────────────────────
-# `TestTelemetryFlush` exercises `CompressionStats.flush_shutdown_record()`,
-# but that method is **not defined** on `tokenpak/proxy/stats.py:CompressionStats`.
-# Verified: `grep -n "def flush_shutdown_record" tokenpak/proxy/stats.py` → 0 hits.
-#
-# Production calls it (`tokenpak/proxy/server.py:2697`:
-#     `self.compression_stats.flush_shutdown_record(shutdown_record)`)
-# but the call is wrapped in a `try/except` that gracefully degrades to:
-#     "TokenPak: shutdown step 3/5 — telemetry flush error (non-fatal):
-#      'CompressionStats' object has no attribute 'flush_shutdown_record'"
-#
-# So production has accepted the missing method as a non-fatal known issue;
-# the test asserts the missing method's intended effect (writing a shutdown
-# JSONL record). Adding `flush_shutdown_record` to `CompressionStats` is a
-# **production behavior change** (telemetry would start writing shutdown
-# records on every stop) — TSR-04 (missing exports/methods) territory, not
-# TSR-05 (real test bugs). Same Path B pattern as TSR-05m / TSR-05p / TSR-05q.
-#
-# The 23 live tests in this file (graceful-shutdown signal, 503 rejection,
-# in-flight completion, ProxyServer/GracefulShutdown lifecycle) remain
-# meaningful guards.
-SKIP_FLUSH_SHUTDOWN_RECORD_NOT_IMPLEMENTED = (
-    "Test exercises `CompressionStats.flush_shutdown_record()`, which is "
-    "not defined on the class. Production calls the method but wraps the "
-    "call in try/except (logged as 'non-fatal'). Adding the method is "
-    "production behavior change — see TSR-04 (missing methods)."
-)
-
-
 from tokenpak.proxy.server import GracefulShutdown, ProxyServer
 
 # ---------------------------------------------------------------------------
@@ -277,7 +247,6 @@ class TestInFlightCompletion:
 
 # ── Criterion: Telemetry flushed to disk ────────────────────────────────────
 
-@pytest.mark.skip(reason=SKIP_FLUSH_SHUTDOWN_RECORD_NOT_IMPLEMENTED)
 class TestTelemetryFlush:
     """Shutdown writes a flush record to the telemetry JSONL file."""
 
@@ -307,6 +276,25 @@ class TestTelemetryFlush:
         assert parsed["event"] == "shutdown"
         assert parsed["session_requests"] == 42
         assert parsed["session_tokens_saved"] == 1234
+
+    def test_flush_shutdown_record_creates_parent_dirs(self, tmp_path):
+        log_path = tmp_path / "nested" / "dir" / "events.jsonl"
+
+        from tokenpak.proxy.stats import CompressionStats
+        stats = CompressionStats(log_path=log_path)
+
+        assert stats.flush_shutdown_record({"event": "shutdown"}) is True
+        assert log_path.exists()
+        assert json.loads(log_path.read_text())["event"] == "shutdown"
+
+    def test_flush_shutdown_record_write_failure_is_tolerated(self, tmp_path, capsys):
+        """A bad telemetry path must not raise out of the shutdown path."""
+        from tokenpak.proxy.stats import CompressionStats
+        # Point log_path at an existing directory to force an OSError on open.
+        stats = CompressionStats(log_path=str(tmp_path))
+
+        assert stats.flush_shutdown_record({"event": "shutdown"}) is False
+        assert "telemetry write dropped" in capsys.readouterr().err
 
     @pytest.mark.needs_proxy
     def test_proxy_stop_flushes_to_disk(self, tmp_path):

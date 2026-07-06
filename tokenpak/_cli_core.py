@@ -2081,6 +2081,11 @@ def cmd_dashboard(args):
 
     from .telemetry.token_manager import load_or_create_token, regenerate_token
 
+    if getattr(args, "dashboard_action", None) in {"connect", "disconnect"}:
+        from .cli.commands.dashboard_tunnel import cmd_dashboard_tunnel
+
+        return cmd_dashboard_tunnel(args)
+
     # --show-token: display current token
     if getattr(args, "show_token", False):
         try:
@@ -2099,7 +2104,7 @@ def cmd_dashboard(args):
         print("Old token is now invalid.")
         return
 
-    # --public: show public URL with token
+    # --public: advanced public URL with token
     if getattr(args, "public", False):
         from tokenpak.core.config_loader import get as _cfg  # noqa: F401
 
@@ -2111,11 +2116,12 @@ def cmd_dashboard(args):
         except Exception:
             ip = "localhost"
         url = f"http://{ip}:{port}/dashboard?token={token}"
-        print("\n✅ TokenPak Dashboard (Public)")
+        print("\n✅ TokenPak Dashboard (Advanced Public Mode)")
         print("─────────────────────────────────")
         print(f"URL:   {url}")
         print(f"Token: {token}")
         print("\n⚠️  Share this URL only with trusted users.")
+        print("Default remote access: tokenpak dashboard connect <host>")
         print("Regenerate token: tokenpak dashboard --new-token\n")
         webbrowser.open(url)
         return
@@ -3103,7 +3109,7 @@ def build_parser():
     p_dashboard.add_argument(
         "--public",
         action="store_true",
-        help="Show public URL with token (accessible from any machine)",
+        help="Advanced: show public URL with token for non-tunneled access",
     )
     p_dashboard.add_argument(
         "--show-token",
@@ -3113,6 +3119,71 @@ def build_parser():
     )
     p_dashboard.add_argument(
         "--new-token", dest="new_token", action="store_true", help="Regenerate dashboard token"
+    )
+    p_dashboard_sub = p_dashboard.add_subparsers(dest="dashboard_action", metavar="<action>")
+    p_dashboard_connect = p_dashboard_sub.add_parser(
+        "connect",
+        help="Open a remote dashboard through an SSH local tunnel",
+        description="Open a remote dashboard through an SSH local tunnel.",
+    )
+    p_dashboard_connect.add_argument("host", help="SSH host or user@host to connect to")
+    p_dashboard_connect.add_argument(
+        "--remote-port",
+        type=int,
+        default=8766,
+        help="Remote dashboard port",
+    )
+    p_dashboard_connect.add_argument(
+        "--local-port",
+        default="auto",
+        help="Local listener port, or 'auto' to start at 8766 and choose the next free port",
+    )
+    p_dashboard_connect.add_argument(
+        "--ssh-user",
+        default=None,
+        help="SSH username when HOST does not include user@",
+    )
+    p_dashboard_connect.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        default=True,
+        help="Open the dashboard URL in the default browser",
+    )
+    p_dashboard_connect.add_argument(
+        "--no-open",
+        dest="open_browser",
+        action="store_false",
+        help="Print the dashboard URL without opening a browser",
+    )
+    p_dashboard_connect.add_argument(
+        "--health-timeout",
+        type=float,
+        default=20.0,
+        help="Seconds to wait for /health to report OK",
+    )
+    p_dashboard_connect.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Output connection result as JSON",
+    )
+    p_dashboard_disconnect = p_dashboard_sub.add_parser(
+        "disconnect",
+        help="Close a dashboard SSH local tunnel",
+        description="Close a dashboard SSH local tunnel.",
+    )
+    p_dashboard_disconnect.add_argument("host", help="SSH host or user@host to disconnect")
+    p_dashboard_disconnect.add_argument(
+        "--ssh-user",
+        default=None,
+        help="SSH username when HOST does not include user@",
+    )
+    p_dashboard_disconnect.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Output disconnect result as JSON",
     )
 
     p_dashboard.set_defaults(func=cmd_dashboard)

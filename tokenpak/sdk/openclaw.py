@@ -109,7 +109,7 @@ def _get_claude_session(openclaw_session: str) -> tuple[str, bool]:
 def execute_via_claude_code(
     openclaw_session: str,
     messages: list[dict[str, Any]],
-    model: str = "claude-sonnet-4-6",
+    model: str = "",
     system: str = "",
     max_tokens: int = 4096,
     workspace: str = "",
@@ -121,7 +121,9 @@ def execute_via_claude_code(
     Args:
         openclaw_session: OpenClaw's session/conversation ID.
         messages: Anthropic-format messages array.
-        model: Model to use.
+        model: Model to use. Empty means "let the CLI use its configured
+            default" — the response then reports the model as empty/unknown
+            rather than inventing a model id.
         system: System prompt (if any).
         max_tokens: Max output tokens.
 
@@ -155,7 +157,8 @@ def execute_via_claude_code(
             "TOKENPAK_CLAUDE_BIN to its absolute path"
         )
     cmd = [claude_bin]
-    cmd.extend(["--model", model])
+    if model:
+        cmd.extend(["--model", model])
 
     if is_new:
         cmd.extend(["--session-id", claude_session])

@@ -20,11 +20,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from tokenpak import _paths
+
 # Default env-file location (loaded by systemd EnvironmentFile=).
 ENV_FILE_PATH = Path.home() / ".config" / "tokenpak.env"
 
 # Settings the proxy's SIGHUP handler can pick up without a full restart.
 _SIGHUP_RELOADABLE = frozenset({"TOKENPAK_MODE"})
+
+
+def _proxy_pid_path() -> Path:
+    return _paths.under("proxy.pid")
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +244,7 @@ def _try_sighup_proxy(updates: dict[str, str]) -> None:
     """Send SIGHUP to the proxy if at least one updated key is hot-reloadable."""
     if not any(k in _SIGHUP_RELOADABLE for k in updates):
         return
-    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+    pid_path = _proxy_pid_path()
     if not pid_path.exists():
         return
     try:
@@ -310,7 +316,7 @@ def load_settings_context(path: Path | None = None) -> dict[str, Any]:
 
 
 def _get_proxy_pid() -> int | None:
-    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+    pid_path = _proxy_pid_path()
     if not pid_path.exists():
         return None
     try:
