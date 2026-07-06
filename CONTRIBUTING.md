@@ -11,6 +11,13 @@ Thank you for your interest in contributing! TokenPak is a small, focused projec
 - 💬 **Ask a question** — Use [GitHub Discussions](https://github.com/tokenpak/tokenpak/discussions), not issues
 - 📝 **Improve docs** — PRs for typos, outdated examples, and clarifications always welcome
 - 🔧 **Submit code** — See PR workflow below
+- 🔒 **Report a security vulnerability** — see below; **never** in a public issue, discussion, or PR
+
+---
+
+## Security Issues
+
+Do **not** report security vulnerabilities through public issues, discussions, or pull requests. Use [GitHub private vulnerability reporting](https://github.com/tokenpak/tokenpak/security/advisories/new) or email **security@tokenpak.ai** — full details in [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -256,7 +263,7 @@ black --check .
 
 ## Submitting Changes
 
-1. **Branch from `master`**: `git checkout -b fix/your-fix`
+1. **Branch from `main`**: `git checkout -b fix/your-fix`
 2. **Make focused changes** — one PR per concern
 3. **Write tests** for new behavior when practical
 4. **Run the full test suite** and confirm it passes
