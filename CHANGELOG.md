@@ -6,6 +6,19 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.11.1] — 2026-07-06
+
+> Patch release: ship the CLI command registry in built distributions so a clean
+> wheel install renders the full command list.
+
+### Fixed
+- **Command registry ships in wheels.** `tokenpak/core/registry/commands.json` is now
+  declared as package data, so a clean `pip install` renders the full command list
+  (`tokenpak help` / `help --all`) instead of reporting `0 commands`. The
+  distribution-contents gate now asserts the registry file in every built wheel and
+  sdist, and the registry's tier labels and the `start` usage string were corrected to
+  match the shipped open-source CLI verbs.
+
 ## [1.11.0] — 2026-07-06
 
 > Minor release: the batch reviewed and merged under the 2026-07-06 non-author review gate —
