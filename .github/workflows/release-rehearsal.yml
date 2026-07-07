@@ -135,9 +135,15 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install (dev shape)
+        # Mirror release.yml: public-api.json captures the complete public
+        # surface, so snapshot validation must install the same canonical
+        # non-agent-framework extras. A dev-only install leaves optional
+        # public modules as IMPORT_ERROR sentinels and creates phantom
+        # public-API snapshot drift.
         run: |
           python -m pip install --upgrade pip
-          pip install ".[dev]"
+          pip install -e ".[dev,full,serve,telemetry,tokens,otel]"
+          pip install python-multipart
       - name: api-snapshot-check (Std 30 §7 R7)
         run: make api-snapshot-check
       - name: workflow-steps-check (Std 30 §13.3 R11)
