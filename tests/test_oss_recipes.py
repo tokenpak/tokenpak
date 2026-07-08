@@ -70,6 +70,59 @@ def test_summary_total(engine):
     assert s["total"] == 50
 
 
+def _write_user_recipe(path: Path, *, name: str, ext: str = ".user") -> None:
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "name": name,
+                "category": "user",
+                "description": f"User recipe {name}",
+                "pattern": {"match": "extension", "extensions": [ext]},
+                "action": {
+                    "compression_hint": 0.42,
+                    "operations": [
+                        {"type": "remove_lines_matching", "pattern": "^DEBUG"}
+                    ],
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_default_engine_loads_tokenpak_home_recipes(tmp_path, monkeypatch):
+    monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path))
+    user_dir = tmp_path / "recipes"
+    user_dir.mkdir()
+    _write_user_recipe(user_dir / "zz-user-local.yaml", name="zz-user-local", ext=".zz")
+
+    eng = CompressionRecipeEngine()
+
+    assert "zz-user-local" in eng.list_recipes()
+    assert len(eng.list_recipes()) == 51
+    assert "zz-user-local" in [r.name for r in eng.recipes_for_file("sample.zz")]
+
+
+def test_user_recipes_shadow_packaged_names(tmp_path, monkeypatch):
+    monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path))
+    user_dir = tmp_path / "recipes"
+    user_dir.mkdir()
+    _write_user_recipe(
+        user_dir / "py-docstring-to-signature.yaml",
+        name="py-docstring-to-signature",
+        ext=".zz",
+    )
+
+    eng = CompressionRecipeEngine()
+    recipe = eng.get_recipe("py-docstring-to-signature")
+
+    assert recipe is not None
+    assert recipe.category == "user"
+    assert recipe.matches(filename="sample.zz")
+    assert not recipe.matches(filename="models.py")
+
+
 # ─── Category count tests ─────────────────────────────────────────────────────
 
 def test_category_general_count(engine):

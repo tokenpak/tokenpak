@@ -25,6 +25,7 @@ import contextlib
 import os
 import shutil
 import tempfile
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -45,6 +46,7 @@ _BACKUP_PREFIX = ".tokenpak-backup-"
 # scans stays free of TokenPak bookkeeping and an uninstall leaves it
 # genuinely empty.
 _LOCK_SUFFIX = ".tokenpak-install.lock"
+_THREAD_LOCK = threading.RLock()
 
 
 def bundled_skill_names() -> list[str]:
@@ -114,17 +116,18 @@ def _sweep_stale_temp(target: Path) -> None:
     entry that cannot be removed is skipped rather than aborting a normal
     launch over a harmless leftover.
     """
-    try:
-        entries = list(target.iterdir())
-    except OSError:
-        return
-    for entry in entries:
-        if entry.name.startswith(_STAGE_PREFIX) or entry.name.startswith(_BACKUP_PREFIX):
-            with contextlib.suppress(OSError):
-                if entry.is_dir():
-                    shutil.rmtree(entry)
-                else:
-                    entry.unlink()
+    for root in (target, target.parent):
+        try:
+            entries = list(root.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.name.startswith(_STAGE_PREFIX) or entry.name.startswith(_BACKUP_PREFIX):
+                with contextlib.suppress(OSError):
+                    if entry.is_dir():
+                        shutil.rmtree(entry)
+                    else:
+                        entry.unlink()
 
 
 def _publish_skill(src: Path, dst: Path, target: Path) -> Path:
@@ -138,8 +141,8 @@ def _publish_skill(src: Path, dst: Path, target: Path) -> Path:
     rename syscalls.  On a failed swap the prior ``dst`` is restored so a
     launch never strands the user with a missing skill.
     """
-    stage = Path(tempfile.mkdtemp(prefix=f"{_STAGE_PREFIX}{dst.name}-", dir=target))
-    backup = target / f"{_BACKUP_PREFIX}{dst.name}-{os.getpid()}"
+    stage = Path(tempfile.mkdtemp(prefix=f"{_STAGE_PREFIX}{dst.name}-", dir=target.parent))
+    backup = target.parent / f"{_BACKUP_PREFIX}{dst.name}-{os.getpid()}"
     try:
         # Full copy into the staged sibling while it is invisible as dst.
         shutil.copytree(src, stage, dirs_exist_ok=True)
@@ -183,12 +186,13 @@ def install_skills(target_dir: Path | None = None) -> list[Path]:
     target.mkdir(parents=True, exist_ok=True)
 
     installed: list[Path] = []
-    with _install_lock(target):
-        _sweep_stale_temp(target)
-        for name in bundled_skill_names():
-            src = _BUNDLED_SKILLS / name
-            dst = target / name
-            installed.append(_publish_skill(src, dst, target))
+    with _THREAD_LOCK:
+        with _install_lock(target):
+            _sweep_stale_temp(target)
+            for name in bundled_skill_names():
+                src = _BUNDLED_SKILLS / name
+                dst = target / name
+                installed.append(_publish_skill(src, dst, target))
     return installed
 
 

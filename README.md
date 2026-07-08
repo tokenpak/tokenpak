@@ -1,4 +1,4 @@
-# TokenPak — Cut your LLM token spend — zero config
+# TokenPak — Cut your LLM token spend — guided setup
 
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
@@ -74,6 +74,27 @@ shared secret to require `Authorization: Bearer <token>` on remote requests
 
 ---
 
+## Runnable examples
+
+The PyPI wheel keeps the install slim and does not bundle the repository's
+top-level examples. To run them after a normal package install, clone or
+download the source tree for the example files:
+
+```bash
+git clone https://github.com/tokenpak/tokenpak.git
+cd tokenpak
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -U tokenpak
+python examples/basic_compression.py
+```
+
+`examples/basic_compression.py` is local-first and does not require provider
+credentials. See [examples/README.md](examples/README.md) for the full examples
+index and developer editable-install path.
+
+---
+
 ## What's included (Free)
 
 > **Dispatch (v0.1-alpha preview):** turn a request into a scoped, resumable, reviewable workflow from the CLI. It is a source/`main`-branch preview and is not yet part of a released `pip install tokenpak`; see the [Dispatch guide](docs/guides/dispatch.md).
@@ -107,7 +128,7 @@ TokenPak's core is Apache-2.0 open source; TokenPak Pro and hosted services are 
 
 ## Support
 
-- **Docs:** [docs/quickstart.md](docs/quickstart.md) · [API reference](docs/api-tpk-v1.md)
+- **Docs:** [docs/quickstart.md](docs/quickstart.md) · [API reference](docs/api-tpk-v1.md) · [examples/README.md](examples/README.md)
 - **Issues:** [github.com/tokenpak/tokenpak/issues](https://github.com/tokenpak/tokenpak/issues)
 - **Discussions:** [github.com/tokenpak/tokenpak/discussions](https://github.com/tokenpak/tokenpak/discussions)
 - **Email:** hello@tokenpak.ai

@@ -6,13 +6,33 @@ Use them to understand compression, caching, metrics, and proxy cost behavior.
 
 ## Quick start
 
+For users who installed TokenPak from PyPI, the top-level repository examples
+are intentionally delivered through the public source tree, not bundled inside
+the PyPI wheel. Clone or download the repository for the example files, then
+install the package normally in an isolated environment:
+
 ```bash
-cd /path/to/tokenpak
+git clone https://github.com/tokenpak/tokenpak.git
+cd tokenpak
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+python -m pip install -U tokenpak
 python examples/basic_compression.py
 ```
+
+`basic_compression.py` is deterministic and runs without provider credentials.
+
+For source contributors who want imports to resolve to the checked-out code
+instead of the installed package:
+
+```bash
+python -m pip install -e .
+python examples/basic_compression.py
+```
+
+You can also download the source archive from
+`https://github.com/tokenpak/tokenpak/archive/refs/heads/main.zip` and run the
+same commands from the extracted directory.
 
 ## Examples at a glance
 

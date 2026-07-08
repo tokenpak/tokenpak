@@ -243,20 +243,20 @@ All tests must pass before submitting a PR.
 
 We use:
 
-- **Black** for formatting
+- **Ruff format** for formatting
 - **Ruff** for linting
 - **Type hints** on all public functions
 - **Google-style docstrings** for classes and public methods
 
 ```bash
 # Format
-black tokenpak/
+ruff format tokenpak/
 
 # Lint
 ruff check tokenpak/
 
 # Check formatting without writing
-black --check .
+ruff format --check .
 ```
 
 ---

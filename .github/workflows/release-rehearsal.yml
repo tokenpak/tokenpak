@@ -134,10 +134,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install (dev shape)
+      - name: Install (all extras for canonical snapshot reproduction)
         run: |
           python -m pip install --upgrade pip
-          pip install ".[dev]"
+          pip install ".[dev,full,serve,telemetry,tokens,otel]"
+          # python-multipart is required by FastAPI Form/UploadFile imports in
+          # vault/ingest/api and similar surfaces; without it the canonical
+          # snapshot generation raises IMPORT_ERROR on those modules and the
+          # api-snapshot-check fires phantom-removal noise. It is not yet an
+          # advertised optional extra, so install it explicitly here.
+          pip install python-multipart
       - name: api-snapshot-check (Std 30 §7 R7)
         run: make api-snapshot-check
       - name: workflow-steps-check (Std 30 §13.3 R11)

@@ -1,6 +1,6 @@
 {
   "version": "1.1",
-  "generated_at": "2026-06-27T07:06:26Z",
+  "generated_at": "2026-07-08T14:14:24Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"
@@ -250,13 +250,13 @@
       "workflow": "release-rehearsal.yml",
       "job": "release-gate-snapshots",
       "id": "",
-      "name": "Install (dev shape)"
+      "name": "Install (all extras for canonical snapshot reproduction)"
     },
     {
       "workflow": "release-rehearsal.yml",
       "job": "release-gate-snapshots",
       "id": "",
-      "name": "Install (dev shape)"
+      "name": "Install (all extras for canonical snapshot reproduction)"
     },
     {
       "workflow": "release-rehearsal.yml",
@@ -401,6 +401,12 @@
       "job": "chaos-tests",
       "id": "",
       "name": "Upload chaos release-readiness artifact"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "chaos-tests",
+      "id": "artifact_ref",
+      "name": "Sanitize ref name for artifact labels"
     },
     {
       "workflow": "release.yml",

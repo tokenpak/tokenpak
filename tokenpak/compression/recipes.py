@@ -12,6 +12,8 @@ from typing import Any, Mapping
 
 import yaml
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 
@@ -206,6 +208,12 @@ class RecipeEngine:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _OSS_RECIPES_DIR = Path(__file__).parent.parent / "recipes_oss"
+_USER_RECIPES_SUBDIR = "recipes"
+
+
+def _user_recipes_dir() -> Path:
+    """Return the user recipe overlay directory under the resolved TokenPak home."""
+    return _paths.home() / _USER_RECIPES_SUBDIR
 
 
 @dataclass(frozen=True)
@@ -286,7 +294,12 @@ class CompressionRecipeEngine:
         self._recipes: dict[str, CompressionRecipe] = {}
         self._loaded = False
 
-    def load_from_dir(self, path: str | Path | None = None) -> None:
+    def load_from_dir(
+        self,
+        path: str | Path | None = None,
+        *,
+        override_existing: bool = False,
+    ) -> None:
         """Load all YAML recipe files from *path* (defaults to bundled OSS dir)."""
         root = Path(path) if path is not None else _OSS_RECIPES_DIR
         if not root.exists() or not root.is_dir():
@@ -305,7 +318,7 @@ class CompressionRecipeEngine:
             except (ValueError, TypeError) as exc:
                 logger.error("Failed to load recipe %s: %s", recipe_file, exc)
                 continue
-            if recipe.name in self._recipes:
+            if recipe.name in self._recipes and not override_existing:
                 logger.warning("Duplicate recipe name %r — skipping %s", recipe.name, recipe_file)
                 continue
             self._recipes[recipe.name] = recipe
@@ -314,9 +327,16 @@ class CompressionRecipeEngine:
         self._loaded = True
         logger.info("Loaded %d compression recipes from %s", loaded, root)
 
+    def load_defaults(self) -> None:
+        """Load packaged OSS recipes plus the optional user overlay directory."""
+        self.load_from_dir(_OSS_RECIPES_DIR)
+        user_dir = _user_recipes_dir()
+        if user_dir.exists():
+            self.load_from_dir(user_dir, override_existing=True)
+
     def _ensure_loaded(self) -> None:
         if not self._loaded:
-            self.load_from_dir()
+            self.load_defaults()
 
     def get_recipe(self, name: str) -> CompressionRecipe | None:
         self._ensure_loaded()
@@ -366,7 +386,7 @@ def get_oss_engine() -> CompressionRecipeEngine:
     global _oss_engine
     if _oss_engine is None:
         _oss_engine = CompressionRecipeEngine()
-        _oss_engine.load_from_dir()
+        _oss_engine.load_defaults()
     return _oss_engine
 
 

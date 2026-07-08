@@ -156,7 +156,7 @@ never fatal.
 
 ## MCP Tools Reference
 
-When the companion is active, Claude Code gains seven MCP tools served by
+When the companion is active, Claude Code gains nine MCP tools served by
 `tokenpak.companion.mcp.server`.  The server runs as a stdio MCP process.
 
 | Tool | Description |
@@ -168,6 +168,11 @@ When the companion is active, Claude Code gains seven MCP tools served by
 | `journal_read` | Read journal entries for the current or a named session. Omit `session_id` to list recent sessions with stats. |
 | `journal_write` | Save a note, decision, or milestone to the current session journal for recall in future sessions. |
 | `session_info` | Return companion version, session ID, call count, config summary, and session cost/request counts. |
+| `vault_search` | Search indexed vault blocks with BM25 and return block IDs, relevance scores, paths, and token metadata. |
+| `vault_retrieve` | Fetch full vault block content and metadata by exact `block_id` or by path substring. |
+
+`vault_search` and `vault_retrieve` are relevance-ranked BM25 search/retrieval
+over indexed vault blocks. They are not structured Pak or MultiPak recall.
 
 ### Tool parameters
 
@@ -196,6 +201,23 @@ Valid `entry_type` values: `auto`, `user`, `milestone`, `cost`.
 ```json
 { "content": "Decided to use sqlite for the budget store." }
 ```
+
+**`vault_search`**
+```json
+{ "query": "cache policy", "limit": 5 }
+```
+Returns matching block IDs with relevance scores, source paths, token counts,
+and short snippets. `limit` defaults to 5 and is capped at 20.
+
+**`vault_retrieve`**
+```json
+{ "block_id": "docs/cache-policy" }
+```
+```json
+{ "path": "cache-policy.md" }
+```
+Returns one block's `content` plus metadata such as `block_id`, `path`,
+`source_path`, `tokens`, and `resolution`.
 
 ---
 

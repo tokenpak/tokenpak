@@ -6,6 +6,30 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.11.2] — 2026-07-08
+
+> Patch release: tighten the runnable examples guidance, repair user recipe
+> overlay loading, and keep release validation stable for the packaged branch.
+
+### Fixed
+- **Runnable examples path clarified.** README and examples documentation now
+  explain that top-level example files are delivered through the public source
+  tree rather than bundled inside the PyPI wheel, with clone/archive paths and a
+  credential-free `examples/basic_compression.py` smoke path.
+- **User recipe overlays load from the TokenPak home.** The compression recipe
+  engine now loads optional user recipes from the resolved TokenPak home
+  `recipes/` directory and allows those recipes to intentionally shadow bundled
+  defaults.
+- **Companion guide tool reference corrected.** The companion guide now matches
+  the shipped MCP tool registry and documents vault search/retrieval as indexed
+  vault block lookup rather than structured Pak recall.
+
+### CI
+- **Release validation branch checks stabilized.** Release workflow artifact
+  labels now tolerate slash-containing branch names, and release rehearsal
+  snapshot validation uses the same canonical install shape as the release
+  workflow.
+
 ## [1.11.1] — 2026-07-06
 
 > Patch release: ship the CLI command registry in built distributions so a clean
