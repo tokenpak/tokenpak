@@ -8,6 +8,7 @@ test pins the canonical target and the defensive dual-path uninstall.
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -162,6 +163,8 @@ def test_install_leaves_no_temp_or_backup_dirs(monkeypatch, tmp_path: Path):
 
 
 def test_install_sweeps_stale_stage_and_backup(monkeypatch, tmp_path: Path):
+    import os
+
     monkeypatch.setattr(si, "_BUNDLED_SKILLS", _bundled_dir_with(tmp_path, ["a"]))
     target = tmp_path / "agents" / "skills"
     target.mkdir(parents=True)
@@ -170,11 +173,42 @@ def test_install_sweeps_stale_stage_and_backup(monkeypatch, tmp_path: Path):
     (stale_stage / "junk").write_text("x")
     stale_backup = target / f"{si._BACKUP_PREFIX}a-4242"
     stale_backup.mkdir()
+    # Leftovers from a *crashed prior* install are old; age them past the
+    # reclamation gate so a normal launch sweeps them.
+    old = time.time() - (si._RECLAIM_MIN_AGE_S + 60)
+    for stale in (stale_stage, stale_backup):
+        os.utime(stale, (old, old))
 
     si.install_skills(target_dir=target)
 
     assert not stale_stage.exists(), "stale stage dir was not swept"
     assert not stale_backup.exists(), "stale backup dir was not swept"
+    assert (target / "a" / "SKILL.md").exists()
+
+
+def test_recent_retired_generation_is_not_reclaimed_but_aged_one_is(
+    monkeypatch, tmp_path: Path
+):
+    """The age gate keeps a freshly-retired generation (a reader may still
+    hold it) and reclaims one older than the threshold."""
+    import os
+
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", _bundled_dir_with(tmp_path, ["a"]))
+    target = tmp_path / "agents" / "skills"
+    target.mkdir(parents=True)
+
+    young = target / f"{si._BACKUP_PREFIX}a-young"
+    young.mkdir()
+    (young / "SKILL.md").write_text("# a\n")
+    aged = target / f"{si._BACKUP_PREFIX}a-aged"
+    aged.mkdir()
+    old = time.time() - (si._RECLAIM_MIN_AGE_S + 60)
+    os.utime(aged, (old, old))
+
+    si.install_skills(target_dir=target)
+
+    assert young.exists(), "a recently-retired generation must be retained"
+    assert not aged.exists(), "an aged retired generation must be reclaimed"
     assert (target / "a" / "SKILL.md").exists()
 
 

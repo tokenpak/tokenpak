@@ -6,6 +6,24 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.11.3] — 2026-07-08
+
+> **Release note:** version **1.11.2 was tagged but never published to PyPI.**
+> Its release run stopped fail-closed at the test gate on a concurrency safety
+> check for the Codex skills installer — no build, GitHub Release, or PyPI
+> artifact was produced and the last published release remained 1.11.1. 1.11.3
+> carries the intended 1.11.2 changes (below), plus the installer fix.
+
+### Fixed
+- **Codex skills installer never exposes an empty skill directory under
+  concurrent installs.** A replaced skill is now retired as a timestamped
+  generation and reclaimed only once it is old enough that no reader can still
+  be enumerating it, instead of being deleted the instant it is superseded.
+  Because `os.replace` only rebinds a name, a reader (Codex scanning the skills
+  directory) that opened the old directory just before the swap could otherwise
+  observe it emptied mid-scan; retaining the prior generation until it ages out
+  closes that window.
+
 ## [1.11.2] — 2026-07-08
 
 > Patch release: tighten the runnable examples guidance, repair user recipe
