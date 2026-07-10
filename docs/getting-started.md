@@ -185,6 +185,7 @@ tokenpak budget alert --at 80% # warn at 80%
 ## Next Steps
 
 - [Onboarding Guide](onboarding.md) — Day 3 through Day 30: savings reports, custom recipes, budgets, production deployment
+- [Companion & MCP Setup](companion-mcp.md) — run Claude Code / Codex with the companion (budget, journal, vault tools) and the first-run MCP cold-start fix
 - [Proxy Setup](guides/proxy-setup.md) — advanced proxy configuration, SSL, multi-provider
 - [CLI Reference](cli-reference.md) — full command reference
 - [Recipe Development](guides/recipes.md) — custom compression recipes

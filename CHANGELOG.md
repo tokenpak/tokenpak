@@ -6,6 +6,39 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-07-10
+
+### Added
+- **Codex receipt-only launch mode.** `--receipt-only` (requiring
+  `--receipt-out` and `--run-id`, mutually exclusive with `--budget` and
+  `--install-only`) lets a launch emit accounting receipts without installing
+  the TokenPak mechanism, and launches without a request body now produce
+  **no-body accounting receipts** so accounting stays truthful instead of
+  silently dropping those events.
+- **Canonical staging-to-public promotion tooling.**
+  `scripts/promote-staging-to-public.sh` and
+  `scripts/promotion-drift-report.sh` codify the promotion train between the
+  staging and public repositories, with a path hold-list at
+  `.github/public-promotion-hold.txt`.
+
+### Fixed
+- **The no-picker menu fallback is interactive.** On terminals without the
+  arrow-key picker (Windows consoles without a `termios` backend, pipes, dumb
+  terminals), `tokenpak` with no arguments now prompts for a numbered
+  selection instead of printing an inoperable menu and returning to the shell.
+- **Trigger and macro command actions no longer run through the host shell.**
+  Config- and user-provided command strings are shlex-parsed into an argv
+  vector and executed with `shell=False`; shell metacharacters are passed
+  literally rather than interpreted, closing a quoting/injection hazard. An
+  explicit `shell:` prefix remains available for trusted commands and emits a
+  warning, bare TokenPak subcommands are resolved against the live CLI
+  registry, and command failures and timeouts are handled structurally so
+  trigger daemons and CLI callers never crash.
+
+### Docs
+- Add a value-proof guide for `tokenpak prove` and remove stale lifetime
+  savings examples from current docs.
+
 ## [1.11.3] — 2026-07-08
 
 > **Release note:** version **1.11.2 was tagged but never published to PyPI.**

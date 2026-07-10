@@ -15,7 +15,9 @@ def _run_tokenpak(*args: str) -> subprocess.CompletedProcess[str]:
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
-        timeout=20,
+        # 60s (not 20s): the command completes in ~3s unloaded, but cold-start
+        # import cost under host load can push a 20s budget over the edge.
+        timeout=60,
     )
 
 

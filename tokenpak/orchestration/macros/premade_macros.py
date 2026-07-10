@@ -8,7 +8,6 @@ Available macros:
 """
 
 import json
-import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -133,25 +132,16 @@ class PremadeMacroRunner:
         }
 
     def _run_step(self, step: Dict[str, Any]) -> Dict[str, Any]:
-        """Run a single macro step."""
-        try:
-            result = subprocess.run(
-                step["cmd"],
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            return {
-                "name": step["name"],
-                "label": step["label"],
-                "cmd": step["cmd"],
-                "output": result.stdout.strip(),
-                "error": result.stderr.strip(),
-                "success": result.returncode == 0,
-                "returncode": result.returncode,
-            }
-        except subprocess.TimeoutExpired:
+        """Run a single macro step.
+
+        Premade steps are fixed ``tokenpak ...`` invocations with no user input, so
+        they run through the governed command-action model as an argv vector with
+        ``shell=False`` (no implicit host-shell dependence; portable on Windows).
+        """
+        from tokenpak.orchestration.commands import parse_trigger_action, run_command_action
+
+        result = run_command_action(parse_trigger_action(step["cmd"], warn=False), timeout=60)
+        if result.timed_out:
             return {
                 "name": step["name"],
                 "label": step["label"],
@@ -161,6 +151,15 @@ class PremadeMacroRunner:
                 "success": False,
                 "returncode": -1,
             }
+        return {
+            "name": step["name"],
+            "label": step["label"],
+            "cmd": step["cmd"],
+            "output": result.stdout.strip(),
+            "error": result.stderr.strip(),
+            "success": result.returncode == 0,
+            "returncode": result.returncode,
+        }
 
     def format_output(self, result: Dict[str, Any]) -> str:
         """Format macro results for human-readable display."""

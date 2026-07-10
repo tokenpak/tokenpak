@@ -333,7 +333,14 @@ def _check_auth_flow() -> CheckResult:
 
 
 def _check_active_profile() -> CheckResult:
-    """Check 4: Active profile is one of claude-code-* or override is set."""
+    """Check 4: Active profile is one of the recognized proxy presets."""
+    # Canonical preset names recognized by the proxy and written by the
+    # installer (e.g. balanced, aggressive). Imported from the single source
+    # of truth so this check never drifts from what the proxy accepts.
+    from tokenpak.proxy.config import _PROFILE_PRESETS
+
+    valid_profiles = set(_PROFILE_PRESETS)
+
     profile = os.environ.get("TOKENPAK_PROFILE", "").strip()
     override = os.environ.get("TOKENPAK_PROFILE_OVERRIDE", "").strip()
     # Also check the stats endpoint for active_profile
@@ -348,33 +355,34 @@ def _check_active_profile() -> CheckResult:
             proxy_profile = stats_data.get("session", {}).get("active_profile", "")
         except Exception:
             pass
-    is_cc_profile = (
-        profile.startswith("claude-code-")
-        or override.startswith("claude-code-")
-        or proxy_profile.startswith("claude-code-")
+    is_valid_profile = (
+        profile in valid_profiles
+        or override in valid_profiles
+        or proxy_profile in valid_profiles
     )
-    if is_cc_profile:
+    if is_valid_profile:
         active = profile or proxy_profile or override
         return CheckResult(
             check="active_profile",
             status="pass",
-            message=f"Check 4  Active profile       {active} — is claude-code-*",
+            message=f"Check 4  Active profile       {active} — recognized preset",
             detail=f"TOKENPAK_PROFILE={profile} proxy_profile={proxy_profile} override={override}",
             remediation="",
         )
-    # Not a claude-code profile — this is a warning not a hard fail per the spec
+    # Not a recognized preset — this is a warning not a hard fail per the spec
     # ("make check 4 a best-effort check that warns instead of fails when profile isn't visible")
     profile_display = profile or proxy_profile or "(not detected)"
+    valid_display = ", ".join(sorted(valid_profiles))
     return CheckResult(
         check="active_profile",
         status="fail",
         message=(
-            f"Check 4  Active profile       {profile_display} — expected claude-code-* profile\n"
-            "                              Set TOKENPAK_PROFILE=claude-code-cli or run with --mode=cli"
+            f"Check 4  Active profile       {profile_display} — expected a recognized preset\n"
+            "                              Set TOKENPAK_PROFILE=balanced (or another recognized preset)"
         ),
         detail=(
             f"TOKENPAK_PROFILE={profile!r} proxy_profile={proxy_profile!r} "
-            f"override={override!r}  — none starts with 'claude-code-'"
+            f"override={override!r}  — none is one of: {valid_display}"
         ),
         remediation=REMEDIATION,
     )

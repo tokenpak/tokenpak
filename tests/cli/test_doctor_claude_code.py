@@ -8,7 +8,7 @@ Coverage:
   1. Check 1 fails when ANTHROPIC_BASE_URL is not set
   2. Check 2 fails when proxy is unreachable
   3. Check 3 fails when count_tokens returns non-200
-  4. Check 4 fails when active profile is not claude-code-*
+  4. Check 4 fails when active profile is not a recognized proxy preset
   5. Check 5 fails when round-trip returns non-200
   6. Check 6 passes (skip) when no traffic and no DB
   7. Check 7 fails on PYTHONPATH drift (2026-04-08 incident pattern)
@@ -60,7 +60,7 @@ def tmp_home(tmp_path, monkeypatch):
 def healthy_env(tmp_home, monkeypatch):
     """Set up a minimal environment that satisfies all 9 checks (mocked network)."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
-    monkeypatch.setenv("TOKENPAK_PROFILE", "claude-code-cli")
+    monkeypatch.setenv("TOKENPAK_PROFILE", "balanced")
     yield tmp_home
 
 
@@ -72,7 +72,7 @@ def healthy_env(tmp_home, monkeypatch):
 def test_healthy_install_all_9_pass(tmp_home, monkeypatch):
     """All 9 checks pass when network is mocked healthy and env is correct."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
-    monkeypatch.setenv("TOKENPAK_PROFILE", "claude-code-cli")
+    monkeypatch.setenv("TOKENPAK_PROFILE", "balanced")
 
     # Proxy PID file
     pid = 99999
@@ -103,7 +103,7 @@ def test_healthy_install_all_9_pass(tmp_home, monkeypatch):
         if "/health" in url:
             return 200, json.dumps({"compilation_mode": "hybrid"}).encode()
         if "/stats" in url:
-            return 200, json.dumps({"session": {"active_profile": "claude-code-cli"}}).encode()
+            return 200, json.dumps({"session": {"active_profile": "balanced"}}).encode()
         if "/v1/sessions" in url:
             return 200, json.dumps({"sessions": [], "total": 5}).encode()
         return 200, b"{}"
@@ -241,27 +241,30 @@ def test_check3_auth_flow_passes(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_check4_profile_not_claude_code(monkeypatch):
-    """Check 4 fails when TOKENPAK_PROFILE is not claude-code-*."""
-    monkeypatch.setenv("TOKENPAK_PROFILE", "balanced")
+def test_check4_profile_not_recognized(monkeypatch):
+    """Check 4 fails when TOKENPAK_PROFILE is not a recognized proxy preset."""
+    # The proxy only recognizes the preset names in proxy.config._PROFILE_PRESETS
+    # (safe/balanced/aggressive/agentic); anything else is ignored by the proxy,
+    # so doctor must flag it rather than demand a name the proxy rejects.
+    monkeypatch.setenv("TOKENPAK_PROFILE", "claude-code-cli")
     monkeypatch.delenv("TOKENPAK_PROFILE_OVERRIDE", raising=False)
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
 
-    # Stats returns a non-claude-code profile
-    stats_body = json.dumps({"session": {"active_profile": "balanced"}}).encode()
+    # Stats returns the same unrecognized profile
+    stats_body = json.dumps({"session": {"active_profile": "claude-code-cli"}}).encode()
     with mock.patch(
         "tokenpak.cli.commands.doctor_claude_code._http_get", return_value=(200, stats_body)
     ):
         result = _check_active_profile()
 
     assert result["status"] == "fail"
-    assert "claude-code" in result["message"]
+    assert "recognized preset" in result["message"]
     assert result["remediation"]
 
 
 def test_check4_profile_via_env(monkeypatch):
-    """Check 4 passes when TOKENPAK_PROFILE starts with claude-code-."""
-    monkeypatch.setenv("TOKENPAK_PROFILE", "claude-code-cli")
+    """Check 4 passes when TOKENPAK_PROFILE is a recognized preset (e.g. balanced)."""
+    monkeypatch.setenv("TOKENPAK_PROFILE", "balanced")
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
 
     with mock.patch(
@@ -270,7 +273,7 @@ def test_check4_profile_via_env(monkeypatch):
         result = _check_active_profile()
 
     assert result["status"] == "pass"
-    assert "claude-code" in result["message"]
+    assert "balanced" in result["message"]
 
 
 # ---------------------------------------------------------------------------
@@ -470,7 +473,7 @@ def test_check8_consistency_ok(tmp_home, monkeypatch):
 def test_run_returns_9_results(monkeypatch):
     """run_claude_code_checks always returns exactly NUM_CHECKS (9) results."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
-    monkeypatch.setenv("TOKENPAK_PROFILE", "claude-code-cli")
+    monkeypatch.setenv("TOKENPAK_PROFILE", "balanced")
 
     with (
         mock.patch("tokenpak.cli.commands.doctor_claude_code._http_get", return_value=(0, b"")),

@@ -33,7 +33,7 @@ KEYS_PER_PROC = 25
 def _writer_proc(path: str, prefix: str, barrier) -> None:
     """Write KEYS_PER_PROC distinct keys through a fresh CacheStore."""
     store = CacheStore(path=path)
-    barrier.wait(timeout=20)  # maximize overlap between the two writers
+    barrier.wait(timeout=60)  # maximize overlap between the two writers
     for i in range(KEYS_PER_PROC):
         store.set(f"{prefix}_{i}", {"n": i, "who": prefix})
     if store.save_errors:
@@ -41,10 +41,22 @@ def _writer_proc(path: str, prefix: str, barrier) -> None:
         sys.exit(3)
 
 
+# Override the global 30s pytest-timeout: spawning two clean interpreters
+# (spawn start method) plus the barrier-synchronised write overlap can exceed
+# 30s on a heavily loaded host, even though the work itself is fast. The join
+# timeouts below (60s) bound the real hang; this mark keeps pytest-timeout from
+# killing the test first.
+@pytest.mark.timeout(120)
 @pytest.mark.skipif(sys.platform == "win32", reason="fcntl lock is POSIX-only")
 def test_two_process_concurrent_writes_no_key_loss(tmp_path: Path) -> None:
     path = tmp_path / "store.json"
-    ctx = multiprocessing.get_context()
+    # Use an explicit SPAWN context: the default FORK start method is unsafe
+    # when the test process is multi-threaded (host load can leave a forked
+    # child hung with exitcode None at join, and CPython emits a
+    # fork-in-multithreaded DeprecationWarning). Spawn starts a clean
+    # interpreter; the sync primitives below are passed as Process args so
+    # they are inherited correctly under spawn.
+    ctx = multiprocessing.get_context("spawn")
     barrier = ctx.Barrier(2)
 
     procs = [
@@ -54,7 +66,7 @@ def test_two_process_concurrent_writes_no_key_loss(tmp_path: Path) -> None:
     for p in procs:
         p.start()
     for p in procs:
-        p.join(timeout=25)
+        p.join(timeout=60)
         assert p.exitcode == 0, f"writer process failed (exitcode={p.exitcode})"
 
     # The final file must be complete, parseable JSON …

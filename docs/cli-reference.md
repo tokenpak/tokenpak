@@ -680,6 +680,9 @@ Examples:
 
 - `--budget` — Daily spend cap in USD; sets TOKENPAK_COMPANION_BUDGET env var
 - `--install-only` — Run setup (MCP, hooks, AGENTS.md, skills) and exit without launching codex
+- `--receipt-only` — Launch vanilla Codex and write a no-body receipt without installing or activating companion setup
+- `--receipt-out` — Write a no-body accounting receipt for this Codex process
+- `--run-id` — Stable run identifier to include in the accounting receipt
 - `ARGS` — Arguments forwarded verbatim to codex (or `doctor` / `uninstall`)
 
 ### `tokenpak creds`
@@ -964,11 +967,11 @@ Replay captured sessions
 
 ### `tokenpak audit`
 
-Audit log management
+Audit log surface (Pro/Enterprise)
 
 ### `tokenpak compliance`
 
-Compliance reports
+Compliance report surface (Pro/Enterprise)
 
 ### `tokenpak validate`
 

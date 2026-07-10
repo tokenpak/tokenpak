@@ -21,7 +21,7 @@ Check your actual savings:
 
 ```bash
 tokenpak cost --week
-tokenpak savings --lifetime
+tokenpak savings
 ```
 
 ### Does TokenPak change my responses?

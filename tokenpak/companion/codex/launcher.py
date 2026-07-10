@@ -19,10 +19,19 @@ from __future__ import annotations
 
 import contextlib
 import os
+import subprocess
 import sys
 import time
 
 from ..config import CompanionConfig
+from .accounting import (
+    build_receipt,
+    empty_usage,
+    merge_usage,
+    usage_from_json_line,
+    utc_now,
+    write_receipt,
+)
 
 _TEAL = "\033[38;2;0;180;170m"
 _DIM = "\033[2m"
@@ -247,14 +256,184 @@ def _preflight_state_lock(
     return 1
 
 
-def main(args: list[str] | None = None) -> int:
+def _run_codex_process(
+    codex_args: list[str], env: dict[str, str]
+) -> tuple[int, dict[str, int | None]]:
+    """Run Codex for explicit receipt mode, teeing JSONL while extracting usage."""
+    usage = empty_usage()
+    if "--json" not in codex_args:
+        completed = subprocess.run(codex_args, env=env)
+        return completed.returncode, usage
+
+    proc = subprocess.Popen(
+        codex_args,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=None,
+        text=True,
+        bufsize=1,
+    )
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        usage = merge_usage(usage, usage_from_json_line(line))
+    return proc.wait(), usage
+
+
+def _vanilla_receipt_env() -> dict[str, str]:
+    """Return a child environment with TokenPak companion state stripped."""
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("TOKENPAK_")
+    }
+
+
+def _receipt_only_setup_metadata() -> dict[str, object]:
+    return {
+        "mode": "receipt_only",
+        "setup_completed": False,
+        "receipt_wrapper_active": True,
+        "tokenpak_mechanism_active": False,
+        "profile": None,
+        "budget_daily_usd": None,
+        "rates_snapshot_refreshed": False,
+        "mcp_registered": False,
+        "hooks_enabled": False,
+        "hooks_installed": False,
+        "agents_md_installed": False,
+        "skills_installed_count": 0,
+    }
+
+
+def _write_accounting_receipt(
+    *,
+    receipt_out: str,
+    run_id: str,
+    codex_args: list[str],
+    setup: dict[str, object],
+    started_at: str,
+    start_monotonic: float,
+    exit_code: int,
+    status: str,
+    usage: dict[str, int | None] | None = None,
+    missing_evidence: list[str] | None = None,
+) -> None:
+    ended_at = utc_now()
+    duration_ms = max(0, round((time.monotonic() - start_monotonic) * 1000))
+    receipt = build_receipt(
+        run_id=run_id,
+        codex_args=codex_args,
+        cwd=os.getcwd(),
+        started_at=started_at,
+        ended_at=ended_at,
+        duration_ms=duration_ms,
+        exit_code=exit_code,
+        status=status,
+        setup=setup,
+        usage=usage,
+        missing_evidence=missing_evidence,
+    )
+    write_receipt(receipt_out, receipt)
+    print(f"tokenpak: accounting receipt written ({receipt_out})", file=sys.stderr)
+
+
+def main(
+    args: list[str] | None = None,
+    *,
+    receipt_out: str | None = None,
+    run_id: str | None = None,
+) -> int:
     """Entry point for ``tokenpak codex``."""
     args = list(args if args is not None else sys.argv[1:])
 
     install_only = False
+    receipt_only = False
     if "--install-only" in args:
         install_only = True
         args = [a for a in args if a != "--install-only"]
+    if "--receipt-only" in args:
+        receipt_only = True
+        args = [a for a in args if a != "--receipt-only"]
+
+    if receipt_only:
+        if not (receipt_out and run_id):
+            print(
+                "tokenpak: --receipt-only requires --receipt-out and --run-id",
+                file=sys.stderr,
+            )
+            return 2
+        if install_only:
+            print(
+                "tokenpak: --receipt-only cannot be combined with --install-only",
+                file=sys.stderr,
+            )
+            return 2
+        setup = _receipt_only_setup_metadata()
+        lock_exit = _preflight_state_lock()
+        if lock_exit is not None:
+            started_at = utc_now()
+            start_monotonic = time.monotonic()
+            try:
+                _write_accounting_receipt(
+                    receipt_out=receipt_out,
+                    run_id=run_id,
+                    codex_args=args,
+                    setup=setup,
+                    started_at=started_at,
+                    start_monotonic=start_monotonic,
+                    exit_code=lock_exit,
+                    status="blocked",
+                    missing_evidence=[
+                        "codex_process_not_launched_preflight_block"
+                    ],
+                )
+            except OSError as exc:
+                print(
+                    f"tokenpak: failed to write accounting receipt: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
+            return lock_exit
+
+        env = _vanilla_receipt_env()
+        env["TOKENPAK_CODEX_RECEIPT_OUT"] = receipt_out
+        env["TOKENPAK_CODEX_RUN_ID"] = run_id
+        codex_args = ["codex", *args]
+        started_at = utc_now()
+        start_monotonic = time.monotonic()
+        usage = empty_usage()
+        status = "failed"
+        try:
+            exit_code, usage = _run_codex_process(codex_args, env)
+            status = "completed" if exit_code == 0 else "failed"
+        except KeyboardInterrupt:
+            exit_code = 130
+            status = "interrupted"
+        except OSError as exc:
+            exit_code = 1
+            status = "launch_failed"
+            print(f"tokenpak: failed to launch codex: {exc}", file=sys.stderr)
+        try:
+            _write_accounting_receipt(
+                receipt_out=receipt_out,
+                run_id=run_id,
+                codex_args=args,
+                setup=setup,
+                started_at=started_at,
+                start_monotonic=start_monotonic,
+                exit_code=exit_code,
+                status=status,
+                usage=usage,
+            )
+        except OSError as exc:
+            print(
+                f"tokenpak: failed to write accounting receipt: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+        return exit_code
 
     config = CompanionConfig.from_env()
     config.profile_overrides()
@@ -271,17 +450,20 @@ def main(args: list[str] | None = None) -> int:
     from .mcp_config import get_env_vars, register
 
     env_vars = get_env_vars(config)
-    if register(env_vars=env_vars):
+    mcp_registered = register(env_vars=env_vars)
+    if mcp_registered:
         print("tokenpak: MCP server registered", file=sys.stderr)
     else:
         print("tokenpak: MCP registration failed (continuing)", file=sys.stderr)
 
     # ── Step 2: Install hooks ────────────────────────────────
+    hooks_installed = False
     if config.hooks_enabled:
         from .hooks import ensure_hooks_feature_enabled, install_hooks
 
         if ensure_hooks_feature_enabled():
             hooks_path = install_hooks(target="global")
+            hooks_installed = True
             print(f"tokenpak: hooks installed ({hooks_path})", file=sys.stderr)
         else:
             print(
@@ -302,6 +484,18 @@ def main(args: list[str] | None = None) -> int:
     if installed:
         print(f"tokenpak: {len(installed)} skills installed", file=sys.stderr)
 
+    setup = {
+        "setup_completed": True,
+        "profile": config.profile,
+        "budget_daily_usd": config.budget_daily_usd,
+        "rates_snapshot_refreshed": True,
+        "mcp_registered": bool(mcp_registered),
+        "hooks_enabled": bool(config.hooks_enabled),
+        "hooks_installed": hooks_installed,
+        "agents_md_installed": True,
+        "skills_installed_count": len(installed),
+    }
+
     # ── Step 5: Banner ───────────────────────────────────────
     budget_phrase = (
         f"budget ${config.budget_daily_usd:.2f}/day"
@@ -314,6 +508,27 @@ def main(args: list[str] | None = None) -> int:
     )
 
     if install_only:
+        if receipt_out and run_id:
+            started_at = utc_now()
+            start_monotonic = time.monotonic()
+            try:
+                _write_accounting_receipt(
+                    receipt_out=receipt_out,
+                    run_id=run_id,
+                    codex_args=[],
+                    setup=setup,
+                    started_at=started_at,
+                    start_monotonic=start_monotonic,
+                    exit_code=0,
+                    status="setup_only",
+                    missing_evidence=["codex_process_not_launched_install_only"],
+                )
+            except OSError as exc:
+                print(
+                    f"tokenpak: failed to write accounting receipt: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
         print(
             "tokenpak: setup complete — run `tokenpak codex doctor` to verify",
             file=sys.stderr,
@@ -327,6 +542,27 @@ def main(args: list[str] | None = None) -> int:
     # locked" error at startup.
     lock_exit = _preflight_state_lock()
     if lock_exit is not None:
+        if receipt_out and run_id:
+            started_at = utc_now()
+            start_monotonic = time.monotonic()
+            try:
+                _write_accounting_receipt(
+                    receipt_out=receipt_out,
+                    run_id=run_id,
+                    codex_args=args,
+                    setup=setup,
+                    started_at=started_at,
+                    start_monotonic=start_monotonic,
+                    exit_code=lock_exit,
+                    status="blocked",
+                    missing_evidence=["codex_process_not_launched_preflight_block"],
+                )
+            except OSError as exc:
+                print(
+                    f"tokenpak: failed to write accounting receipt: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
         return lock_exit
 
     # ── Step 6: Exec into codex ──────────────────────────────
@@ -339,6 +575,9 @@ def main(args: list[str] | None = None) -> int:
     default_journal_dir = str(config.journal_dir.__class__.home() / ".tokenpak" / "companion")
     if str(config.journal_dir) != default_journal_dir:
         env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(config.journal_dir)
+    if receipt_out and run_id:
+        env["TOKENPAK_CODEX_RECEIPT_OUT"] = receipt_out
+        env["TOKENPAK_CODEX_RUN_ID"] = run_id
 
     fleet = _fleet_state_enabled()
     forwarded = _maybe_inject_bypass_flag(args, env, fleet=fleet)
@@ -346,6 +585,41 @@ def main(args: list[str] | None = None) -> int:
     if banner:
         print(banner, file=sys.stderr)
     codex_args = ["codex", *forwarded]
+    if receipt_out and run_id:
+        started_at = utc_now()
+        start_monotonic = time.monotonic()
+        usage = empty_usage()
+        status = "failed"
+        try:
+            exit_code, usage = _run_codex_process(codex_args, env)
+            status = "completed" if exit_code == 0 else "failed"
+        except KeyboardInterrupt:
+            exit_code = 130
+            status = "interrupted"
+        except OSError as exc:
+            exit_code = 1
+            status = "launch_failed"
+            print(f"tokenpak: failed to launch codex: {exc}", file=sys.stderr)
+        try:
+            _write_accounting_receipt(
+                receipt_out=receipt_out,
+                run_id=run_id,
+                codex_args=forwarded,
+                setup=setup,
+                started_at=started_at,
+                start_monotonic=start_monotonic,
+                exit_code=exit_code,
+                status=status,
+                usage=usage,
+            )
+        except OSError as exc:
+            print(
+                f"tokenpak: failed to write accounting receipt: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+        return exit_code
+
     os.execvpe("codex", codex_args, env)
 
     print("tokenpak: failed to launch codex", file=sys.stderr)

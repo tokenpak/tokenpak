@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import re
 import sqlite3
-import subprocess
 import threading
 import time
 from typing import Dict, List, Optional
@@ -26,19 +25,17 @@ def _parse_interval_seconds(interval: str) -> int:
 
 
 def _run_action(trigger: Trigger, store: TriggerStore) -> None:
-    """Execute trigger action and log result."""
-    cmd = trigger.action
-    # If action looks like a tokenpak sub-command, prefix with 'tokenpak'
-    if not cmd.startswith("/") and not cmd.startswith("./") and not cmd.startswith("~"):
-        cmd = f"tokenpak {cmd}"
-    try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-        output = (result.stdout + result.stderr).strip()
-        store.log_fire(trigger, result.returncode, output)
-    except subprocess.TimeoutExpired:
-        store.log_fire(trigger, -1, "timeout")
-    except Exception as exc:
-        store.log_fire(trigger, -2, str(exc))
+    """Execute trigger action and log result.
+
+    Actions run through the governed command-action model (``shell=False`` by
+    default; a leading TokenPak subcommand is prefixed with ``tokenpak``). Only an
+    action explicitly marked with the ``shell:`` prefix uses the host shell, so
+    config payloads are not implicitly shell-interpreted.
+    """
+    from tokenpak.orchestration.commands import run_trigger_action
+
+    result = run_trigger_action(trigger.action, timeout=30)
+    store.log_fire(trigger, result.returncode, result.output)
 
 
 class TriggerDaemon:

@@ -8,6 +8,7 @@ _apply_budget, _shadow_validate.
 """
 
 import json
+import logging
 import threading
 import time
 from typing import Any, Dict, Optional, Tuple
@@ -17,6 +18,14 @@ from .config import (
     VALIDATION_GATE_BUDGET_CAP,
     VALIDATION_GATE_ENABLED,
 )
+
+logger = logging.getLogger(__name__)
+
+# Sentinel stored in a lazy-singleton slot when construction has been attempted
+# and failed. Distinct from ``None`` (never attempted) so the failed init is
+# NOT retried on every request — the proxy degrades gracefully but the failure
+# is logged exactly once.
+_INIT_FAILED = object()
 
 # ---------------------------------------------------------------------------
 # Router wiring — DeterministicRouter integration (feature-flagged)
@@ -425,7 +434,14 @@ def _get_route_engine():
 
                     _ROUTE_ENGINE_INSTANCE = RouteEngine()
                 except Exception:
-                    pass
+                    logger.warning(
+                        "RouteEngine init failed; route rules disabled for this "
+                        "process (failure logged once, not retried).",
+                        exc_info=True,
+                    )
+                    _ROUTE_ENGINE_INSTANCE = _INIT_FAILED
+    if _ROUTE_ENGINE_INSTANCE is _INIT_FAILED:
+        return None
     return _ROUTE_ENGINE_INSTANCE
 
 
@@ -474,7 +490,15 @@ def _get_precond_gates():
 
                     _PRECOND_GATES_INSTANCE = PreconditionGates()
                 except Exception:
-                    pass
+                    logger.warning(
+                        "PreconditionGates init failed; precondition gating "
+                        "disabled for this process (failure logged once, not "
+                        "retried).",
+                        exc_info=True,
+                    )
+                    _PRECOND_GATES_INSTANCE = _INIT_FAILED
+    if _PRECOND_GATES_INSTANCE is _INIT_FAILED:
+        return None
     return _PRECOND_GATES_INSTANCE
 
 
@@ -496,7 +520,15 @@ def _get_budget_controller():
 
                     _BUDGET_CTRL_INSTANCE = BudgetController()
                 except Exception:
-                    pass
+                    logger.warning(
+                        "BudgetController init failed; spend/budget enforcement "
+                        "disabled for this process (failure logged once, not "
+                        "retried).",
+                        exc_info=True,
+                    )
+                    _BUDGET_CTRL_INSTANCE = _INIT_FAILED
+    if _BUDGET_CTRL_INSTANCE is _INIT_FAILED:
+        return None
     return _BUDGET_CTRL_INSTANCE
 
 

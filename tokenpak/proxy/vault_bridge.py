@@ -7,6 +7,7 @@ Extracted from runtime/proxy.py (L1177-1498) as part of TPK-RESTRUCTURE-004.
 import json
 import logging
 import math
+import os
 import re
 import threading
 import time
@@ -41,10 +42,18 @@ TERM_RESOLVER_MAX_BYTES: int = _cfg(
     "features.term_resolver_max_bytes", 512, "TOKENPAK_TERM_RESOLVER_MAX_BYTES", int
 )
 
-# Capsule builder feature flags
-ENABLE_CAPSULE_BUILDER: bool = _cfg(
-    "features.capsule_builder", False, "TOKENPAK_CAPSULE_BUILDER_ENABLED", bool
-)
+# Capsule builder feature flags.
+# Prefer the canonical TOKENPAK_CAPSULE_BUILDER name; fall back to the legacy
+# TOKENPAK_CAPSULE_BUILDER_ENABLED name for one release. Both use the shared
+# truthy semantics ({"1","true","yes","on"}, case-insensitive).
+if os.environ.get("TOKENPAK_CAPSULE_BUILDER") is not None:
+    from tokenpak.core.config_loader import _bool_env as _bool_env_cb
+
+    ENABLE_CAPSULE_BUILDER: bool = _bool_env_cb(os.environ["TOKENPAK_CAPSULE_BUILDER"])
+else:
+    ENABLE_CAPSULE_BUILDER = _cfg(
+        "features.capsule_builder", False, "TOKENPAK_CAPSULE_BUILDER_ENABLED", bool
+    )
 CAPSULE_MIN_CHARS: int = _cfg(
     "features.capsule_min_chars", 400, "TOKENPAK_CAPSULE_MIN_CHARS", int
 )

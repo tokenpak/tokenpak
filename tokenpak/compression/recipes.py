@@ -211,7 +211,7 @@ _OSS_RECIPES_DIR = Path(__file__).parent.parent / "recipes_oss"
 _USER_RECIPES_SUBDIR = "recipes"
 
 
-def _user_recipes_dir() -> Path:
+def user_recipes_dir() -> Path:
     """Return the user recipe overlay directory under the resolved TokenPak home."""
     return _paths.home() / _USER_RECIPES_SUBDIR
 
@@ -330,7 +330,7 @@ class CompressionRecipeEngine:
     def load_defaults(self) -> None:
         """Load packaged OSS recipes plus the optional user overlay directory."""
         self.load_from_dir(_OSS_RECIPES_DIR)
-        user_dir = _user_recipes_dir()
+        user_dir = user_recipes_dir()
         if user_dir.exists():
             self.load_from_dir(user_dir, override_existing=True)
 

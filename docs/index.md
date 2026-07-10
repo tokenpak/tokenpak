@@ -92,7 +92,7 @@ Then point your LLM client at `http://localhost:8766`. That's it. See [Getting S
 | [REST API Reference](REST_API.md) | REST endpoints |
 | [Embedding API Reference](embedding-api-reference.md) | Embedding proxy: providers, failover, env vars |
 | [Python SDK Reference](API_REFERENCE.md) | Python API for programmatic use |
-| [Runnable Examples](https://github.com/tokenpak/tokenpak/tree/main/examples) | Clone/download path for examples used with a package install |
+| [Runnable Examples](../examples/README.md) | Clone/download path for examples used with a package install |
 | [FAQ](faq.md) | Common questions and troubleshooting |
 
 ---

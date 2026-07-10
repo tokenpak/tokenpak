@@ -56,8 +56,8 @@ tokenpak cost --month --export json > costs-march.json
 tokenpak savings
 # This month: saved 142,000 tokens (~$0.71) via compression
 
-tokenpak savings --lifetime
-# Lifetime: saved 2.1M tokens (~$10.50) across 847 requests
+tokenpak savings
+# Saved 2.1M tokens (~$10.50) across 847 requests
 ```
 
 ---

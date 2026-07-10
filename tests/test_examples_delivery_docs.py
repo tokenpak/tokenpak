@@ -7,7 +7,6 @@ EXAMPLES_README = ROOT / "examples" / "README.md"
 
 CLONE_URL = "https://github.com/tokenpak/tokenpak.git"
 ARCHIVE_URL = "https://github.com/tokenpak/tokenpak/archive/refs/heads/main.zip"
-EXAMPLES_SOURCE_URL = "https://github.com/tokenpak/tokenpak/tree/main/examples"
 RUN_COMMAND = "python examples/basic_compression.py"
 PIP_INSTALL_COMMAND = "python -m pip install -U tokenpak"
 
@@ -33,6 +32,6 @@ def test_public_entrypoints_link_to_examples_delivery_path() -> None:
     docs_index = _read(DOCS_INDEX)
 
     assert "[examples/README.md](examples/README.md)" in readme
-    assert f"[Runnable Examples]({EXAMPLES_SOURCE_URL})" in docs_index
+    assert "[Runnable Examples](../examples/README.md)" in docs_index
     assert CLONE_URL in readme
     assert RUN_COMMAND in readme

@@ -4,9 +4,12 @@
 # ---------------------------------------------------------------------------
 # Profile presets (duplicated here to avoid importing proxy.py at module load)
 # ---------------------------------------------------------------------------
+# Kept in sync with the authoritative table in tokenpak.proxy.config._PROFILE_PRESETS.
+# test_local_presets_match_source() below guards against drift between the two.
 _PROFILE_PRESETS = {
     "safe": {
-        "TOKENPAK_MODE": "strict",
+        "TOKENPAK_MODE": "safe",
+        "TOKENPAK_STABLE_CACHE_CONTROL_AUTO": "true",
         "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "8000",
         "TOKENPAK_SKELETON_ENABLED": "false",
         "TOKENPAK_CAPSULE_BUILDER": "false",
@@ -16,7 +19,7 @@ _PROFILE_PRESETS = {
     },
     "balanced": {
         "TOKENPAK_MODE": "hybrid",
-        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "1500",
         "TOKENPAK_SKELETON_ENABLED": "true",
         "TOKENPAK_CAPSULE_BUILDER": "false",
         "TOKENPAK_SHADOW_ENABLED": "true",
@@ -27,7 +30,7 @@ _PROFILE_PRESETS = {
         "TOKENPAK_MODE": "aggressive",
         "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "2000",
         "TOKENPAK_SKELETON_ENABLED": "true",
-        "TOKENPAK_CAPSULE_BUILDER": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "1",
         "TOKENPAK_SHADOW_ENABLED": "true",
         "TOKENPAK_BUDGET_CONTROLLER": "true",
         "TOKENPAK_TRACE": "true",
@@ -74,9 +77,9 @@ def _simulate_profile_injection(profile_name: str, env_overrides: dict | None = 
 # ---------------------------------------------------------------------------
 
 class TestProfileResolution:
-    def test_safe_profile_sets_strict_mode(self):
+    def test_safe_profile_sets_safe_mode(self):
         env = _simulate_profile_injection("safe")
-        assert env["TOKENPAK_MODE"] == "strict"
+        assert env["TOKENPAK_MODE"] == "safe"
 
     def test_safe_profile_high_threshold(self):
         env = _simulate_profile_injection("safe")
@@ -100,7 +103,8 @@ class TestProfileResolution:
 
     def test_aggressive_profile_enables_capsule(self):
         env = _simulate_profile_injection("aggressive")
-        assert env["TOKENPAK_CAPSULE_BUILDER"] == "true"
+        # Preset writes "1" so every downstream truthy gate agrees it is ON.
+        assert env["TOKENPAK_CAPSULE_BUILDER"] == "1"
 
     def test_balanced_profile_hybrid_mode(self):
         env = _simulate_profile_injection("balanced")
@@ -108,7 +112,7 @@ class TestProfileResolution:
 
     def test_balanced_profile_mid_threshold(self):
         env = _simulate_profile_injection("balanced")
-        assert int(env["TOKENPAK_COMPACT_THRESHOLD_TOKENS"]) == 4500
+        assert int(env["TOKENPAK_COMPACT_THRESHOLD_TOKENS"]) == 1500
 
     def test_agentic_profile_preserves_schemas(self):
         """Agentic profile disables capsule builder to protect tool schemas."""
@@ -155,3 +159,82 @@ class TestProfileResolution:
         for profile, flags in _PROFILE_PRESETS.items():
             missing = ALL_PROFILE_KEYS - set(flags.keys())
             assert not missing, f"Profile {profile!r} missing keys: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Single-source-of-truth guards — the local copy above must never drift from
+# the authoritative table in tokenpak.proxy.config.
+# ---------------------------------------------------------------------------
+
+class TestPresetSourceOfTruth:
+    def test_local_presets_match_source(self):
+        from tokenpak.proxy.config import _PROFILE_PRESETS as SOURCE
+
+        assert _PROFILE_PRESETS == SOURCE, (
+            "Local preset copy has drifted from tokenpak.proxy.config._PROFILE_PRESETS"
+        )
+
+    def test_explain_uses_source_presets(self):
+        # `tokenpak explain` must render the authoritative table, not a private copy.
+        import io
+        from contextlib import redirect_stdout
+        from types import SimpleNamespace
+
+        from tokenpak._cli_core import cmd_explain
+        from tokenpak.proxy.config import _PROFILE_PRESETS as SOURCE
+
+        for name in ("balanced", "safe"):
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                cmd_explain(SimpleNamespace(profile=name))
+            out = buf.getvalue()
+            for key, value in SOURCE[name].items():
+                assert f"{key:<40} = {value}" in out, (
+                    f"explain --profile {name} missing {key}={value}"
+                )
+
+    def test_aggressive_capsule_gates_all_agree(self, monkeypatch):
+        # Under the aggressive preset every request-path capsule-builder gate
+        # must agree ON. These are function-level gates (no module reload).
+        for var in ("TOKENPAK_CAPSULE_BUILDER", "TOKENPAK_CAPSULE_BUILDER_ENABLED"):
+            monkeypatch.delenv(var, raising=False)
+
+        from tokenpak.proxy.config import _PROFILE_PRESETS as SOURCE
+
+        # Apply the preset value the same way proxy startup does.
+        monkeypatch.setenv(
+            "TOKENPAK_CAPSULE_BUILDER", SOURCE["aggressive"]["TOKENPAK_CAPSULE_BUILDER"]
+        )
+
+        import tokenpak.core.config as core_config
+        import tokenpak.proxy.capsule_builder as capsule_builder
+        import tokenpak.proxy.capsule_integration as capsule_integration
+
+        capsule_integration.clear_cache()
+        try:
+            gates = {
+                "core.config": core_config.get_capsule_builder_enabled(),
+                "capsule_integration": capsule_integration._is_capsule_enabled(),
+                "capsule_builder": capsule_builder.make_capsule_builder()._enabled,
+            }
+            assert all(gates.values()), f"Capsule gates disagree: {gates}"
+        finally:
+            capsule_integration.clear_cache()
+
+    def test_string_true_and_one_both_enable_capsule(self, monkeypatch):
+        # Both "1" and "true" must be treated as ON at every request-path gate —
+        # the original bug was that some gates only accepted exactly "1".
+        import tokenpak.core.config as core_config
+        import tokenpak.proxy.capsule_builder as capsule_builder
+        import tokenpak.proxy.capsule_integration as capsule_integration
+
+        monkeypatch.delenv("TOKENPAK_CAPSULE_BUILDER_ENABLED", raising=False)
+        for value in ("1", "true", "TRUE", "yes", "on"):
+            monkeypatch.setenv("TOKENPAK_CAPSULE_BUILDER", value)
+            capsule_integration.clear_cache()
+            try:
+                assert core_config.get_capsule_builder_enabled() is True, value
+                assert capsule_integration._is_capsule_enabled() is True, value
+                assert capsule_builder.make_capsule_builder()._enabled is True, value
+            finally:
+                capsule_integration.clear_cache()

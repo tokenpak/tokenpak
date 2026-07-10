@@ -116,7 +116,9 @@ def get_capsule_builder_enabled() -> bool:
     """
     env_val = os.environ.get("TOKENPAK_CAPSULE_BUILDER")
     if env_val is not None:
-        return env_val not in ("0", "false", "False", "no")
+        from tokenpak.core.config_loader import _bool_env
+
+        return _bool_env(env_val)
     data = _load()
     capsule_cfg = data.get("capsule_builder", {})
     if isinstance(capsule_cfg, dict):

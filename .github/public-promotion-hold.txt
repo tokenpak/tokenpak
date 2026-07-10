@@ -1,0 +1,12 @@
+# Paths excluded from the staging -> public promotion train.
+#
+# One glob pattern per line (bash [[ path == pattern ]] semantics; matched
+# against the repo-relative path). Lines starting with '#' and blank lines are
+# ignored. Read by scripts/promote-staging-to-public.sh and
+# scripts/promotion-drift-report.sh.
+#
+# Everything merged to staging is public-safe by construction (required
+# identity-language + secret-scan merge gates), so this list should normally
+# be EMPTY. Add a path here only with a recorded decision explaining why the
+# content must not reach the public mirror yet, and remove it when the hold
+# lifts.

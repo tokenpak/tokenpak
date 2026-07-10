@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """TokenPak — Universal Content Compiler for LLMs.
 
-Public API surface for TokenPak v1.5.1.dev0.
+Public API surface for TokenPak.
 Formalizes importable classes for agent integrations, deployment, and testing.
 
 Quick start:
@@ -17,7 +17,7 @@ Sub-package imports:
 
 from __future__ import annotations
 
-__version__ = "1.11.3"
+__version__ = "1.12.0"
 __author__ = "TokenPak Contributors"
 __license__ = "Apache-2.0"
 __description__ = "Deterministic compression for multi-agent AI workflows"

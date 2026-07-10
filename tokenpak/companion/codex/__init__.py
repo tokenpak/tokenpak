@@ -10,11 +10,16 @@ hooks, AGENTS.md for durable behavior, and skills for reusable workflows.
 __all__ = ["launch"]
 
 
-def launch(args: "list[str] | None" = None) -> int:
+def launch(
+    args: "list[str] | None" = None,
+    *,
+    receipt_out: "str | None" = None,
+    run_id: "str | None" = None,
+) -> int:
     """Launch Codex with the companion active.
 
     Entry point for ``tokenpak codex [args]``.
     """
     from .launcher import main as _main
 
-    return _main(args)
+    return _main(args, receipt_out=receipt_out, run_id=run_id)

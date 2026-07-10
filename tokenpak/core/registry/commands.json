@@ -415,20 +415,20 @@
       "command": "compliance",
       "tier": "enterprise",
       "category": "Governance",
-      "description": "Generate compliance reports",
+      "description": "Generate compliance reports (Pro/Enterprise)",
       "aliases": [],
       "usage": "/tokenpak compliance [report|export] [--format JSON|CSV|PDF]",
-      "detail": "Generates SOC2/GDPR-ready compliance reports covering data flow, access logs, and retention.",
+      "detail": "Pro/Enterprise report surface. For OSS trust review, start with docs/guides/enterprise/compliance-mapping.md and docs/guides/enterprise/security-architecture.md; the OSS package does not unlock compliance reports without the Pro/Enterprise surface.",
       "related": ["audit", "policy"]
     },
     {
       "command": "audit",
       "tier": "enterprise",
       "category": "Governance",
-      "description": "Enterprise audit log management",
+      "description": "Enterprise audit log management (Pro/Enterprise)",
       "aliases": [],
       "usage": "/tokenpak audit [list|export|purge] [--since DATE]",
-      "detail": "Tamper-evident audit trail of all proxy requests, config changes, and user actions.",
+      "detail": "Pro/Enterprise audit-log surface. For the current trust model and deployment controls, start with docs/guides/enterprise/security-architecture.md.",
       "related": ["compliance", "policy"]
     },
     {

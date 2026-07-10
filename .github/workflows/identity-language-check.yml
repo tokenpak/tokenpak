@@ -582,3 +582,46 @@ jobs:
             exit 1
           fi
           echo "Identity / language check OK."
+
+  branch-name-identity:
+    # The content scan above only inspects CHANGED FILE contents, so an
+    # internal agent-named branch (e.g. "feat/foo-cali-2026") could still
+    # land its name on the public repo surface via the PR/branch ref. This
+    # job closes that gap by scanning the PR head branch name (and the base
+    # ref name) for internal agent identifiers, and FAILS the check if any
+    # is present. It is intentionally blocking, mirroring the content scan.
+    name: No internal identity in branch name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan PR head / base branch names for forbidden identifiers
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          # Case-insensitive agent-name identifiers. The names are matched
+          # only when delimited by a non-alphanumeric character (branch
+          # separators like - _ / . or the string start/end) so real words
+          # that merely CONTAIN a name do not false-positive:
+          #   - "feat/matrix-thing"  -> "trix" is inside "matrix"        (OK)
+          #   - "feat/canonicality"  -> "cali" is inside "canonicality"  (OK)
+          #   - "feature/reipoint"   -> "reipo" is inside "reipoint"     (OK)
+          # while true tokens are caught:
+          #   - "feat/foo-cali-2026" -> delimited "cali"                 (FAIL)
+          #   - "trix/bar"           -> leading "trix"                   (FAIL)
+          pattern='(^|[^a-z0-9])(sue|suki|cali|trix|aya|dee|reipo)([^a-z0-9]|$)'
+          fail=0
+          for ref in "$HEAD_REF" "$BASE_REF"; do
+            [ -n "$ref" ] || continue
+            if printf '%s' "$ref" | grep -iqE "$pattern"; then
+              echo "::error::Branch name '$ref' contains a forbidden internal identifier."
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo
+            echo "The PR head or base branch name contains internal identity language."
+            echo "Rename the branch (see CONTRIBUTING.md → Public language rules) and re-open the PR."
+            exit 1
+          fi
+          echo "Branch name identity check OK."

@@ -449,6 +449,27 @@ _SEARCH_ALIASES: dict[str, list[str]] = {
     "browse_all":   ["all", "commands", "search", "find", "list"],
 }
 
+# Tier-3 fallback dispatch table (spec B3): map each home-menu item to the
+# single canonical CLI command it represents, so a terminal without the
+# arrow-key picker (Windows, pipe, dumb term) can still select by number or
+# name and run the *real* command path. Pure sub-menu items with no single
+# command (``companion`` fans out to ``claude`` / ``codex``) are intentionally
+# absent — selecting one prints a launcher hint instead of dispatching.
+_HOME_FALLBACK_CMDS: dict[str, str] = {
+    "start_proxy":  "start",
+    "run_demo":     "demo",
+    "check_health": "status",
+    "view_spend":   "cost",
+    "configure":    "config",
+    "permissions":  "permissions show",
+    "diagnose":     "doctor",
+    "browse_all":   "help",
+}
+
+# Canonical command names a user may type directly at the fallback prompt but
+# that are not 1:1 home items (the Companion item launches one of these two).
+_FALLBACK_DIRECT_CMDS: frozenset[str] = frozenset({"claude", "codex"})
+
 
 # ---------------------------------------------------------------------------
 # Section menus
@@ -828,6 +849,98 @@ def _handle_home_item(item: str, hdr: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Tier-3 interactive fallback (spec B3) — for terminals without the picker
+# ---------------------------------------------------------------------------
+
+def _resolve_fallback_command(text: str) -> Optional[str]:
+    """Resolve a typed fallback selection to a canonical CLI command.
+
+    Accepts a home-list number (``"1"``..), a home-item value, a canonical
+    command name, or a search alias. Returns the command string to run, the
+    sentinel ``"companion"`` for the launcher sub-menu (the caller shows a
+    hint), or ``None`` when the input matches nothing.
+    """
+    # A launcher command (claude / codex) typed directly.
+    if text in _FALLBACK_DIRECT_CMDS:
+        return text
+
+    # List number -> home-item value.
+    numbered = {str(i): val for i, (val, _label) in enumerate(_HOME_ITEMS, start=1)}
+    val = numbered.get(text)
+
+    if val is None:
+        # Home value, canonical command name, or a search alias.
+        for v, _label in _HOME_ITEMS:
+            if (
+                text == v
+                or text == _HOME_FALLBACK_CMDS.get(v)
+                or text in _SEARCH_ALIASES.get(v, ())
+            ):
+                val = v
+                break
+
+    if val is None:
+        return None
+    if val == "companion":
+        return "companion"  # caller renders the launcher hint
+    return _HOME_FALLBACK_CMDS.get(val)
+
+
+def _run_plain_fallback() -> None:
+    """Tier-3 fallback when the arrow-key picker is unavailable.
+
+    Always renders the same plain numbered list. When stdin AND stdout are an
+    interactive TTY it then prompts for a selection and dispatches through the
+    real command path (``_exec``); on a non-interactive stream (pipe / CI /
+    redirect) it prints the list once and returns without blocking on input —
+    preserving the historical display-only behaviour.
+    """
+    listing = render_plain_list("What do you want to do?", _HOME_ITEMS)
+    tail = "\nRun `tokenpak <command>` or `tokenpak help` for the full list."
+
+    # Non-interactive stream: display-only, never block waiting for input.
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print(listing)
+        print(tail)
+        return
+
+    print(listing)
+    print(tail)
+    prompt = "\n  Select an option (number or name, q to quit) > "
+    while True:
+        try:
+            raw = input(prompt).strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if not raw:
+            continue
+        low = raw.lower()
+        if low in ("q", "quit", "exit"):
+            return
+
+        command = _resolve_fallback_command(low)
+        if command is None:
+            print(
+                f"  Unknown option: {raw!r}. "
+                f"Enter 1-{len(_HOME_ITEMS)}, a command name, or q to quit."
+            )
+            continue
+        if command == "companion":
+            print("  Companion launches an AI coding tool with tokenpak active.")
+            print("  Type `claude` or `codex` to launch one.")
+            continue
+
+        cmd, _, rest = command.partition(" ")
+        try:
+            _exec(cmd, rest, clear=False)
+        except KeyboardInterrupt:
+            # Ctrl-C out of a running command exits the fallback cleanly.
+            print()
+            return
+
+
+# ---------------------------------------------------------------------------
 # Main menu
 # ---------------------------------------------------------------------------
 
@@ -892,9 +1005,9 @@ def run_menu() -> None:
         # command's exit code so `run_and_exit` honours it (spec C1/C4).
         raise SystemExit(exit_signal.code)
     except PickerUnavailable:
-        # Tier 3 fallback (spec B3): show the choices, not just an error.
-        print(render_plain_list("What do you want to do?", _HOME_ITEMS))
-        print("\nRun `tokenpak <command>` or `tokenpak help` for the full list.")
+        # Tier 3 fallback (spec B3): show the choices and — on an interactive
+        # TTY without the picker — let the user select by number or name.
+        _run_plain_fallback()
     except KeyboardInterrupt:
         pass
     finally:

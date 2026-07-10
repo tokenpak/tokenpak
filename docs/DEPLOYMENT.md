@@ -349,7 +349,7 @@ tokenpak status --full
 # Cost tracking
 tokenpak cost --today
 tokenpak cost --week
-tokenpak savings --lifetime
+tokenpak savings
 
 # Dashboard
 # http://localhost:8766/dashboard (runs alongside the proxy)

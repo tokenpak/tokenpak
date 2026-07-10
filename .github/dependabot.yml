@@ -25,3 +25,16 @@ updates:
       - "ci"
     commit-message:
       prefix: "ci"
+
+  # JavaScript SDK (committed npm package with lockfile)
+  - package-ecosystem: "npm"
+    directory: "/sdk"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps"

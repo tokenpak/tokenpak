@@ -141,6 +141,25 @@ def test_apply_on_print_only_target_graceful(capsys):
     assert len(out) > 10
 
 
+def test_codex_print_only_instructions_are_public_safe(capsys):
+    """Codex setup text must not expose internal memory or vault routing notes."""
+    integ = next(i for i in INTEGRATIONS if i.key == "codex")
+
+    with patch("tokenpak.cli.commands.integrate._find", return_value=integ):
+        rc = run_integrate(_make_args(client="codex"))
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "OPENAI_BASE_URL" in out
+    assert "codex exec" in out
+    assert "TokenPak does not edit your Codex config or print credentials" in out
+    instructions = integ.instructions(PROXY)
+    assert "project_" + "tokenpak" not in instructions
+    assert "memory" not in instructions.lower()
+    assert "vault" not in instructions.lower()
+    assert "/home/" not in instructions
+
+
 def test_apply_on_sdk_target_graceful(capsys):
     """--apply on an SDK target → graceful fallback with note about SDK."""
     integ = next(i for i in INTEGRATIONS if i.key == "openai-sdk")

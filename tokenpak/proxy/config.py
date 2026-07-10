@@ -65,7 +65,7 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
         "TOKENPAK_MODE": "aggressive",
         "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "2000",
         "TOKENPAK_SKELETON_ENABLED": "true",
-        "TOKENPAK_CAPSULE_BUILDER": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "1",
         "TOKENPAK_SHADOW_ENABLED": "true",
         "TOKENPAK_BUDGET_CONTROLLER": "true",
         "TOKENPAK_TRACE": "true",

@@ -51,6 +51,18 @@ tokenpak status # live snapshot: requests, cache hit rate, models used
 
 That's it. Every request is now routed through tokenpak.
 
+### Editions, security, and compliance
+
+The OSS package is the Apache-2.0 local proxy and CLI. Run
+`tokenpak upgrade --print-url` to print the current Pro page, and see
+[multipak.md](./multipak.md) for the shipped OSS/Pro boundary.
+
+For trust review, start with
+[security architecture](./guides/enterprise/security-architecture.md) and
+[compliance mapping](./guides/enterprise/compliance-mapping.md). Those docs map
+deployment controls and report surfaces; they do not change the beta support
+model or imply hosted processing by the OSS package.
+
 ---
 
 ## SDK Path: Protocol-First

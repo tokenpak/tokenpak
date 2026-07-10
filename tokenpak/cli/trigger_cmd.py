@@ -17,7 +17,6 @@ Events supported:
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 
 import click
@@ -216,6 +215,10 @@ def test_cmd(event: str, dry_run: bool, output_json: bool) -> None:
 
     By default this is a dry-run (no actions executed). Pass --execute to run them.
     """
+    # Governed execution: shell=False by default; only ``shell:``-prefixed actions
+    # reach the host shell, so trigger payloads are not implicitly shell-interpreted.
+    from tokenpak.orchestration.commands import run_trigger_action
+
     store = _store()
     triggers = store.list()
 
@@ -232,15 +235,10 @@ def test_cmd(event: str, dry_run: bool, output_json: bool) -> None:
                 dry_run=dry_run,
             )
             if not dry_run:
-                cmd = _build_cmd(t.action)
-                try:
-                    r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-                    entry["exit_code"] = r.returncode
-                    entry["output"] = (r.stdout + r.stderr).strip()
-                    store.log_fire(t, r.returncode, entry["output"])
-                except Exception as exc:
-                    entry["exit_code"] = -1
-                    entry["output"] = str(exc)
+                r = run_trigger_action(t.action, timeout=30)
+                entry["exit_code"] = r.returncode
+                entry["output"] = r.output
+                store.log_fire(t, r.returncode, r.output)
             results.append(entry)
         click.echo(json.dumps(results, indent=2))
         return
@@ -258,16 +256,11 @@ def test_cmd(event: str, dry_run: bool, output_json: bool) -> None:
         click.echo(f"\n  [{t.id}] {t.event}")
         click.echo(f"    Action: {t.action}")
         if not dry_run:
-            cmd = _build_cmd(t.action)
-            try:
-                r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-                out = (r.stdout + r.stderr).strip()
-                store.log_fire(t, r.returncode, out)
-                click.echo(f"    Exit:   {r.returncode}")
-                if out:
-                    click.echo(f"    Output: {out[:200]}")
-            except Exception as exc:
-                click.echo(f"    Error:  {exc}")
+            r = run_trigger_action(t.action, timeout=30)
+            store.log_fire(t, r.returncode, r.output)
+            click.echo(f"    Exit:   {r.returncode}")
+            if r.output:
+                click.echo(f"    Output: {r.output[:200]}")
 
 
 # ---------------------------------------------------------------------------

@@ -389,6 +389,7 @@ You've completed the onboarding journey. Here's what's next:
 
 | Goal | Where to look |
 |------|---------------|
+| Run Claude Code / Codex with the companion (MCP tools) | [Companion & MCP Setup](companion-mcp.md) |
 | Advanced proxy config (SSL, multi-provider) | [Proxy Setup](guides/proxy-setup.md) |
 | Build a custom compression recipe | [Recipe Development](guides/recipes.md) |
 | Deep dive on compression algorithms | [Compression](compression.md) |

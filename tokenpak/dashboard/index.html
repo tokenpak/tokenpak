@@ -245,7 +245,7 @@
         <div class="shared-header" aria-label="Shared dashboard header">
             <div class="card">
                 <div class="card-title">Active Profile</div>
-                <div class="card-value" id="active-profile" style="font-size: 1.25rem;">claude-code-cli</div>
+                <div class="card-value" id="active-profile" style="font-size: 1.25rem;">balanced</div>
             </div>
             <div class="card">
                 <div class="card-title">Total Cost Today</div>
@@ -400,7 +400,11 @@
         }
 
         function updateSharedHeader(stats, activeMode) {
-            document.getElementById('active-profile').textContent = `claude-code-${activeMode}`;
+            // Show the real active profile when the payload carries one;
+            // otherwise keep the server-rendered default rather than
+            // synthesizing a profile name from the consumption mode.
+            const profileEl = document.getElementById('active-profile');
+            profileEl.textContent = stats?.active_profile || profileEl.textContent;
             document.getElementById('mode-total-cost').textContent = formatCost(stats?.total_cost || 0);
             document.getElementById('mode-request-count').textContent = formatNumber(stats?.session_requests || 0);
             const cachePct = Math.min((stats?.uptime_hours || 0) / 24, 1);

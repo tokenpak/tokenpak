@@ -72,7 +72,9 @@ def make_capsule_builder(
     CapsuleBuilder
         An enabled or disabled builder depending on the feature flag.
     """
-    enabled = os.environ.get("TOKENPAK_CAPSULE_BUILDER", "0") == "1"
+    from tokenpak.core.config_loader import _bool_env
+
+    enabled = _bool_env(os.environ.get("TOKENPAK_CAPSULE_BUILDER", "0"))
     return CapsuleBuilder(
         enabled=enabled,
         min_block_chars=min_block_chars,

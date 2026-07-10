@@ -13,8 +13,7 @@ config file without explicit opt-in and per-client write logic.
 Design goals:
     - Zero runtime dependency on the proxy (works before it's started).
     - Detection is best-effort and never fails the command.
-    - Adding a new client = one Integration entry (stay dynamic, per
-      feedback_always_dynamic memory).
+    - Adding a new client = one Integration entry.
 """
 
 from __future__ import annotations
@@ -232,8 +231,7 @@ def _instr_codex(proxy_url: str) -> str:
         f"Point it at tokenpak with:\n\n"
         f"    {_env('OPENAI_BASE_URL', proxy_url + '/v1')}\n"
         f"    codex exec \"your prompt\"\n\n"
-        f"tokenpak's Codex adapter handles the OAuth credential injection;\n"
-        f"see project_tokenpak_codex_three_paths memory for path choice."
+        f"TokenPak does not edit your Codex config or print credentials for this target."
     )
 
 

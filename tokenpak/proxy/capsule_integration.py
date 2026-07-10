@@ -55,7 +55,9 @@ def _is_capsule_enabled() -> bool:
     # Env var takes precedence
     env_val = os.environ.get("TOKENPAK_CAPSULE_BUILDER")
     if env_val is not None:
-        _CAPSULE_BUILDER_ENABLED = env_val == "1"
+        from tokenpak.core.config_loader import _bool_env
+
+        _CAPSULE_BUILDER_ENABLED = _bool_env(env_val)
         return _CAPSULE_BUILDER_ENABLED
 
     # Check config file

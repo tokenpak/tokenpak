@@ -113,6 +113,7 @@ index and developer editable-install path.
 - **Vault indexing + semantic search** — index your codebase; search without an LLM call
 - **MultiPak Pro Phase 1 OSS surface** — read-only Vault Pak adapter, companion journal promotion-candidate marking, `tokenpak pak` CLI, `/pak/v1/*` proxy stubs. Full MultiPak (capture pipeline, recall ranking, Handoff Paks, anchor hydration) requires `tokenpak-paid` (Pro). See [docs/multipak.md](docs/multipak.md).
 - **CLI + proxy server** — `tokenpak serve`, `tokenpak cost`, `tokenpak savings`
+- **Value proof** — `tokenpak prove run` benchmarks direct API vs. TokenPak on your own prompt workload and prints a side-by-side cost/token report. See the [value proof guide](docs/guides/value-proof.md).
 - **A/B testing and replay/debug** — compare compression configs, replay past requests
 - **50 built-in compression recipes** — YAML, customizable
 
