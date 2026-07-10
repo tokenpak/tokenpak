@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-07-06T05:57:18Z",
+  "generated_at": "2026-07-10T20:33:08Z",
   "package_version": "1.12.0",
   "symbols": [
     {
@@ -1892,6 +1892,46 @@
       "name": "launch"
     },
     {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "SCHEMA"
+    },
+    {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "build_receipt"
+    },
+    {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "empty_usage"
+    },
+    {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "merge_usage"
+    },
+    {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "model_from_args"
+    },
+    {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "redact_argv"
+    },
+    {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "usage_from_event"
+    },
+    {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "usage_from_json_line"
+    },
+    {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "utc_now"
+    },
+    {
+      "module": "tokenpak.companion.codex.accounting",
+      "name": "write_receipt"
+    },
+    {
       "module": "tokenpak.companion.codex.agents_md",
       "name": "generate_agents_md"
     },
@@ -1989,7 +2029,31 @@
     },
     {
       "module": "tokenpak.companion.codex.launcher",
+      "name": "build_receipt"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "empty_usage"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
       "name": "main"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "merge_usage"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "usage_from_json_line"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "utc_now"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "write_receipt"
     },
     {
       "module": "tokenpak.companion.codex.mcp_config",
@@ -3706,6 +3770,10 @@
     {
       "module": "tokenpak.compression.recipes",
       "name": "get_oss_engine"
+    },
+    {
+      "module": "tokenpak.compression.recipes",
+      "name": "user_recipes_dir"
     },
     {
       "module": "tokenpak.compression.reference_fetcher",
