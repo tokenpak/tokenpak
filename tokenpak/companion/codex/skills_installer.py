@@ -30,6 +30,7 @@ races a reader and old generations are never retained indefinitely.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import shutil
 import tempfile
@@ -39,10 +40,16 @@ from collections.abc import Iterator
 from pathlib import Path
 
 _BUNDLED_SKILLS = Path(__file__).parent / "skills"
-# Canonical user-scope path per Codex skill-discovery spec.
-_DEFAULT_TARGET = Path.home() / ".agents" / "skills"
-# Pre-L3 install path. Kept for defensive uninstall + doctor orphan reporting.
-_LEGACY_TARGET = Path.home() / ".codex" / "skills"
+
+# Tests may override these, but normal defaults are resolved at call time so a
+# changed HOME cannot leak an import-time path into another launcher session.
+_DEFAULT_TARGET: Path | None = None
+_LEGACY_TARGET: Path | None = None
+
+# The skill payloads live at the documented user discovery root, while every
+# selected CODEX_HOME gets explicit references in its own config.toml.
+_SKILLS_CONFIG_BEGIN = "# >>> tokenpak managed skills >>>"
+_SKILLS_CONFIG_END = "# <<< tokenpak managed skills <<<"
 
 # Transient dirs created during an atomic publish. Hidden + prefixed so
 # they are never mistaken for a skill (which must be a directory holding
@@ -66,6 +73,16 @@ _THREAD_LOCK = threading.RLock()
 _RECLAIM_MIN_AGE_S = 5.0
 
 
+def _default_skills_root() -> Path:
+    """Return Codex's canonical user-scope skills root."""
+    return _DEFAULT_TARGET or (Path.home() / ".agents" / "skills")
+
+
+def _legacy_skills_root() -> Path:
+    """Return the pre-L3 path used only for cleanup and diagnostics."""
+    return _LEGACY_TARGET or (Path.home() / ".codex" / "skills")
+
+
 def bundled_skill_names() -> list[str]:
     """Return the names of all skills shipped with this package.
 
@@ -75,9 +92,7 @@ def bundled_skill_names() -> list[str]:
     if not _BUNDLED_SKILLS.exists():
         return []
     return sorted(
-        p.name
-        for p in _BUNDLED_SKILLS.iterdir()
-        if p.is_dir() and (p / "SKILL.md").exists()
+        p.name for p in _BUNDLED_SKILLS.iterdir() if p.is_dir() and (p / "SKILL.md").exists()
     )
 
 
@@ -149,10 +164,7 @@ def _sweep_stale_temp(target: Path) -> None:
         except OSError:
             continue
         for entry in entries:
-            if not (
-                entry.name.startswith(_STAGE_PREFIX)
-                or entry.name.startswith(_BACKUP_PREFIX)
-            ):
+            if not (entry.name.startswith(_STAGE_PREFIX) or entry.name.startswith(_BACKUP_PREFIX)):
                 continue
             try:
                 age = now - entry.stat().st_mtime
@@ -227,7 +239,7 @@ def install_skills(target_dir: Path | None = None) -> list[Path]:
     sibling then swapped into place — so a reader never observes a
     half-copied or long-missing skill.
     """
-    target = target_dir or _DEFAULT_TARGET
+    target = target_dir or _default_skills_root()
     target.mkdir(parents=True, exist_ok=True)
 
     installed: list[Path] = []
@@ -243,7 +255,7 @@ def install_skills(target_dir: Path | None = None) -> list[Path]:
 
 def list_installed_skills(target_dir: Path | None = None) -> list[str]:
     """Return the bundled skills currently present in the target dir."""
-    target = target_dir or _DEFAULT_TARGET
+    target = target_dir or _default_skills_root()
     return [name for name in bundled_skill_names() if (target / name).exists()]
 
 
@@ -259,7 +271,7 @@ def uninstall_skills(target_dir: Path | None = None) -> list[str]:
     if target_dir is not None:
         targets = [target_dir]
     else:
-        targets = [_DEFAULT_TARGET, _LEGACY_TARGET]
+        targets = [_default_skills_root(), _legacy_skills_root()]
 
     removed: list[str] = []
     for name in bundled_skill_names():
@@ -285,4 +297,127 @@ def _orphaned_legacy_skills() -> list[str]:
     not part of the released public API surface recorded in
     ``_snapshots/public-api.json``.
     """
-    return [name for name in bundled_skill_names() if (_LEGACY_TARGET / name).exists()]
+    legacy = _legacy_skills_root()
+    return [name for name in bundled_skill_names() if (legacy / name).exists()]
+
+
+def _split_managed_skill_config(content: str) -> tuple[str, str | None]:
+    """Return config without our managed block and the prior block, if any.
+
+    A lone marker fails closed instead of risking damage to a user-owned TOML
+    file whose ownership boundary cannot be determined safely.
+    """
+    starts = content.count(_SKILLS_CONFIG_BEGIN)
+    ends = content.count(_SKILLS_CONFIG_END)
+    if starts != ends or starts > 1:
+        raise ValueError("malformed TokenPak skills config markers")
+    if starts == 0:
+        return content, None
+
+    start = content.index(_SKILLS_CONFIG_BEGIN)
+    end = content.index(_SKILLS_CONFIG_END, start) + len(_SKILLS_CONFIG_END)
+    # The installer owns exactly one separator newline before the marker and
+    # one terminator newline after it.  Keeping those bytes inside the managed
+    # region makes install -> uninstall restore user config byte-for-byte.
+    managed_start = start - 1 if start > 0 and content[start - 1] == "\n" else start
+    managed_end = end + 1 if content[end : end + 1] == "\n" else end
+    return content[:managed_start] + content[managed_end:], content[managed_start:managed_end]
+
+
+def _render_skill_config(skills_root: Path) -> str:
+    lines = [_SKILLS_CONFIG_BEGIN]
+    for name in bundled_skill_names():
+        skill_dir = skills_root / name
+        if not (skill_dir / "SKILL.md").is_file():
+            continue
+        lines.extend(
+            (
+                "[[skills.config]]",
+                f"path = {json.dumps(str(skill_dir))}",
+                "enabled = true",
+                "",
+            )
+        )
+    while lines[-1] == "":
+        lines.pop()
+    lines.append(_SKILLS_CONFIG_END)
+    return "\n".join(lines)
+
+
+def _write_private(path: Path, content: str) -> None:
+    """Replace one selected-home config atomically with private permissions."""
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            tmp.unlink()
+
+
+def _configure_skills(
+    config_path: Path,
+    *,
+    skills_root: Path | None = None,
+) -> list[Path]:
+    """Reference installed TokenPak skills from one selected CODEX_HOME.
+
+    Only an explicitly delimited ``[[skills.config]]`` block is owned. User
+    configuration outside that block is preserved byte-for-byte except for a
+    separating newline. The referenced paths are skill directories containing
+    ``SKILL.md``, as required by Codex's config schema.
+    """
+    root = skills_root or _default_skills_root()
+    existing = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    _, prior = _split_managed_skill_config(existing)
+    block = _render_skill_config(root)
+    if prior is not None:
+        managed = (
+            ("\n" if prior.startswith("\n") else "")
+            + block
+            + ("\n" if prior.endswith("\n") else "")
+        )
+        content = existing.replace(prior, managed, 1)
+    else:
+        content = existing + ("\n" if existing else "") + block + "\n"
+    _write_private(config_path, content)
+    return [root / name for name in bundled_skill_names() if (root / name / "SKILL.md").is_file()]
+
+
+def _configured_skill_paths(config_path: Path) -> list[Path]:
+    """Return directory paths from TokenPak's managed config block."""
+    if not config_path.exists():
+        return []
+    _, block = _split_managed_skill_config(config_path.read_text(encoding="utf-8"))
+    if block is None:
+        return []
+    paths: list[Path] = []
+    for line in block.splitlines():
+        key, separator, value = line.partition("=")
+        if not separator or key.strip() != "path":
+            continue
+        try:
+            parsed = json.loads(value.strip())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, str):
+            paths.append(Path(parsed))
+    return paths
+
+
+def _clean_skills_config(config_path: Path) -> bool:
+    """Remove only TokenPak's managed skill references from one config."""
+    if not config_path.exists():
+        return False
+    existing = config_path.read_text(encoding="utf-8")
+    base, block = _split_managed_skill_config(existing)
+    if block is None:
+        return False
+    _write_private(config_path, base)
+    return True

@@ -2,7 +2,7 @@
 """Register / unregister the tokenpak companion MCP server with Codex.
 
 Uses ``codex mcp add`` / ``codex mcp remove`` so the config lives in
-Codex's own config store (~/.codex/config.toml) and is visible to
+Codex's own config store (``$CODEX_HOME/config.toml``) and is visible to
 ``codex mcp list``.
 
 The MCP server binary is the same stdio JSON-RPC server used by Claude Code
@@ -12,8 +12,10 @@ mechanism differs.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -22,12 +24,26 @@ if TYPE_CHECKING:
 SERVER_NAME = "tokenpak-companion"
 
 
+def _codex_env(codex_home: Path | None = None) -> dict[str, str]:
+    """Return an environment scoped to the selected Codex home."""
+    env = os.environ.copy()
+    if codex_home is not None:
+        env["CODEX_HOME"] = str(codex_home)
+    return env
+
+
 def is_registered() -> bool:
+    """Check registration using the active public Codex configuration."""
+    return _is_registered()
+
+
+def _is_registered(codex_home: Path | None = None) -> bool:
     """Check whether the companion MCP server is already registered."""
     try:
         result = subprocess.run(
             ["codex", "mcp", "get", SERVER_NAME],
             capture_output=True,
+            env=_codex_env(codex_home),
             text=True,
             timeout=10,
         )
@@ -39,17 +55,31 @@ def is_registered() -> bool:
 def register(
     env_vars: Optional[dict[str, str]] = None,
 ) -> bool:
+    """Register using the active public Codex configuration."""
+    return _register(env_vars)
+
+
+def _register(
+    env_vars: Optional[dict[str, str]] = None,
+    *,
+    codex_home: Path | None = None,
+) -> bool:
     """Register the companion MCP server via ``codex mcp add``.
 
     Returns True if registration succeeded (or was already registered).
     """
-    if is_registered():
+    if _is_registered(codex_home):
         return True
 
     cmd = [
-        "codex", "mcp", "add", SERVER_NAME,
+        "codex",
+        "mcp",
+        "add",
+        SERVER_NAME,
         "--",
-        sys.executable, "-m", "tokenpak.companion.mcp.server",
+        sys.executable,
+        "-m",
+        "tokenpak.companion.mcp.server",
     ]
 
     # Pass companion env vars to the MCP server process.
@@ -64,6 +94,7 @@ def register(
         result = subprocess.run(
             cmd,
             capture_output=True,
+            env=_codex_env(codex_home),
             text=True,
             timeout=15,
         )
@@ -80,14 +111,20 @@ def register(
 
 
 def unregister() -> bool:
+    """Remove registration using the active public Codex configuration."""
+    return _unregister()
+
+
+def _unregister(codex_home: Path | None = None) -> bool:
     """Remove the companion MCP server registration."""
-    if not is_registered():
+    if not _is_registered(codex_home):
         return True
 
     try:
         result = subprocess.run(
             ["codex", "mcp", "remove", SERVER_NAME],
             capture_output=True,
+            env=_codex_env(codex_home),
             text=True,
             timeout=10,
         )
@@ -104,6 +141,8 @@ def get_env_vars(config: "CompanionConfig") -> dict[str, str]:
         env["TOKENPAK_COMPANION_BUDGET"] = str(config.budget_daily_usd)
     if config.profile != "balanced":
         env["TOKENPAK_COMPANION_PROFILE"] = config.profile
-    if str(config.journal_dir) != str(config.journal_dir.__class__.home() / ".tokenpak" / "companion"):
+    if str(config.journal_dir) != str(
+        config.journal_dir.__class__.home() / ".tokenpak" / "companion"
+    ):
         env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(config.journal_dir)
     return env

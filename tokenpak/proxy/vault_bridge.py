@@ -4,6 +4,9 @@ and startup initialization for vault retrieval, term resolver, and capsule build
 
 Extracted from runtime/proxy.py (L1177-1498) as part of TPK-RESTRUCTURE-004.
 """
+
+import codecs
+import hashlib
 import json
 import logging
 import math
@@ -11,9 +14,16 @@ import os
 import re
 import threading
 import time
+from array import array as _array
+from bisect import bisect_left as _bisect_left
+from collections import Counter as _Counter
+from collections import OrderedDict as _OrderedDict
+from dataclasses import dataclass as _dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
+from tokenpak.vault.walker import MAX_FILE_SIZE as _VAULT_BLOCK_MAX_BYTES
 
 if TYPE_CHECKING:
     from .request import ProxyRequest
@@ -28,6 +38,12 @@ from .config import (
     VAULT_INDEX_PATH,
     VAULT_INDEX_RELOAD_INTERVAL,
     _cfg,
+)
+from .config import (
+    VAULT_CACHE_MAX_BYTES as _VAULT_CACHE_MAX_BYTES,
+)
+from .config import (
+    VAULT_CACHE_PRELOAD as _VAULT_CACHE_PRELOAD,
 )
 from .token_cache import count_tokens
 
@@ -54,9 +70,7 @@ else:
     ENABLE_CAPSULE_BUILDER = _cfg(
         "features.capsule_builder", False, "TOKENPAK_CAPSULE_BUILDER_ENABLED", bool
     )
-CAPSULE_MIN_CHARS: int = _cfg(
-    "features.capsule_min_chars", 400, "TOKENPAK_CAPSULE_MIN_CHARS", int
-)
+CAPSULE_MIN_CHARS: int = _cfg("features.capsule_min_chars", 400, "TOKENPAK_CAPSULE_MIN_CHARS", int)
 CAPSULE_HOT_WINDOW: int = _cfg(
     "features.capsule_hot_window", 12, "TOKENPAK_CAPSULE_HOT_WINDOW", int
 )
@@ -76,6 +90,7 @@ try:
     from tokenpak.vault.query_expansion import (
         tokenize as _qe_tokenize,
     )
+
     _QE_AVAILABLE = True
 except ImportError:
     _QE_AVAILABLE = False
@@ -83,6 +98,78 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # VaultIndex — BM25-searchable read-only index
 # ---------------------------------------------------------------------------
+
+
+@_dataclass(frozen=True)
+class _ContentRecord:
+    """File identity pinned to the BM25 generation built from its content."""
+
+    path: str
+    content_hash: str
+    mtime_ns: Optional[int]
+    ctime_ns: Optional[int]
+    file_size: Optional[int]
+    device: Optional[int]
+    inode: Optional[int]
+    metadata_hash_stale: bool
+    actual_tokens: Optional[int]
+
+
+@_dataclass(frozen=True)
+class _HydratedContent:
+    """A bounded, generation-verified UTF-8 content value."""
+
+    text: str
+    utf8_bytes: int
+    source_bytes: int
+    source_bytes_loaded: int
+    truncated: bool
+
+
+@_dataclass
+class _HydrationFlight:
+    """One physical read shared by concurrent readers of a generation key."""
+
+    event: threading.Event
+    result: Optional[_HydratedContent] = None
+
+
+class _OversizedVaultBlock(Exception):
+    """Raised internally when a block exceeds the canonical walker limit."""
+
+
+@_dataclass(frozen=True)
+class _IndexGeneration:
+    """One atomically published, read-only BM25 generation."""
+
+    generation_id: int
+    blocks: Dict[str, dict]
+    content_records: Dict[str, _ContentRecord]
+    block_ids: Tuple[str, ...]
+    postings: Dict[str, _array]
+    block_dl: _array
+    avg_dl: float
+    doc_count: int
+    index_mtime: float
+    stale_content_hashes: int
+    skipped_blocks: int
+    oversized_blocks: int
+
+
+_CONTENT_GENERATION_MISMATCH = (
+    "[TokenPak: vault block content changed after indexing; reload required]"
+)
+_CONTENT_READ_CHUNK_BYTES = 64 * 1024
+
+
+def _utf8_prefix(text: str, byte_limit: int) -> str:
+    """Return the longest valid UTF-8 prefix whose encoding fits the limit."""
+    if byte_limit <= 0:
+        return ""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= byte_limit:
+        return text
+    return encoded[:byte_limit].decode("utf-8", errors="ignore")
 
 
 class VaultIndex:
@@ -93,22 +180,81 @@ class VaultIndex:
 
     def __init__(self, tokenpak_dir: str):
         self.tokenpak_dir = Path(tokenpak_dir)
-        self.blocks: Dict[str, dict] = {}  # block_id -> {meta + content}
         self._last_loaded = 0
-        self._last_mtime = 0
         self._lock = threading.Lock()
+        self._cache_condition = threading.Condition(self._lock)
         self._reload_lock = threading.Lock()
-        # BM25 precomputed
-        self._df: Dict[str, int] = {}
-        self._block_tfs: Dict[str, Dict[str, int]] = {}
-        self._block_dl: Dict[str, int] = {}  # precomputed doc lengths (sum of tf values)
-        self._avg_dl: float = 0
-        self._doc_count: int = 0
-        self._inverted: Dict[str, set] = {}  # term -> set(block_ids)
+        # Compact BM25 state. Each posting is one packed uint64:
+        # (document_index << 32) | term_frequency. This keeps each term string
+        # once instead of duplicating it in every document TF dict and in a
+        # second set-based inverted index.
+        self._generation = _IndexGeneration(
+            generation_id=0,
+            blocks={},
+            content_records={},
+            block_ids=(),
+            postings={},
+            block_dl=_array("I"),
+            avg_dl=0.0,
+            doc_count=0,
+            index_mtime=0.0,
+            stale_content_hashes=0,
+            skipped_blocks=0,
+            oversized_blocks=0,
+        )
+        # Full block content is loaded only for selected results and retained
+        # in a byte-bounded, generation-keyed LRU.
+        self._content_cache: _OrderedDict[Tuple[int, str], _HydratedContent] = _OrderedDict()
+        self._cache_bytes = 0
+        self._hydration_reserved_bytes = 0
+        self._max_managed_content_bytes = 0
+        self._hydration_flights: Dict[Tuple[int, str], _HydrationFlight] = {}
+        self._max_cache_bytes = max(0, _VAULT_CACHE_MAX_BYTES)
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._cache_evictions = 0
+        self._coalesced_hydrations = 0
+        self._physical_hydration_reads = 0
+        self._hydration_failures = 0
 
     @property
     def available(self) -> bool:
-        return len(self.blocks) > 0
+        return self._snapshot_generation().doc_count > 0
+
+    def _snapshot_generation(self) -> _IndexGeneration:
+        """Return one coherent generation pointer under the publication lock."""
+        with self._lock:
+            return self._generation
+
+    # Compatibility views for existing metrics/debug consumers. Search never
+    # reads these separately; it captures one _IndexGeneration instead.
+    @property
+    def blocks(self) -> Dict[str, dict]:
+        return self._snapshot_generation().blocks
+
+    @property
+    def _block_ids(self) -> Tuple[str, ...]:
+        return self._snapshot_generation().block_ids
+
+    @property
+    def _postings(self) -> Dict[str, _array]:
+        return self._snapshot_generation().postings
+
+    @property
+    def _block_dl(self) -> _array:
+        return self._snapshot_generation().block_dl
+
+    @property
+    def _avg_dl(self) -> float:
+        return self._snapshot_generation().avg_dl
+
+    @property
+    def _doc_count(self) -> int:
+        return self._snapshot_generation().doc_count
+
+    @property
+    def _last_mtime(self) -> float:
+        return self._snapshot_generation().index_mtime
 
     def maybe_reload(self):
         """Reload if index file changed or enough time passed."""
@@ -122,7 +268,8 @@ class VaultIndex:
 
         try:
             mtime = index_path.stat().st_mtime
-            if mtime == self._last_mtime and self.blocks:
+            generation = self._snapshot_generation()
+            if mtime == generation.index_mtime and generation.doc_count:
                 self._last_loaded = now
                 return
         except OSError:
@@ -135,7 +282,8 @@ class VaultIndex:
 
             try:
                 mtime = index_path.stat().st_mtime
-                if mtime == self._last_mtime and self.blocks:
+                generation = self._snapshot_generation()
+                if mtime == generation.index_mtime and generation.doc_count:
                     self._last_loaded = now
                     return
             except OSError:
@@ -144,16 +292,75 @@ class VaultIndex:
             self._load(index_path, mtime)
             self._last_loaded = now
 
-    def _load(self, index_path: Path, mtime: float):
-        """Load index + block contents, precompute BM25 stats."""
+    @staticmethod
+    def _scan_content_file(
+        content_file: Path, expected_hash: Optional[str]
+    ) -> Optional[Tuple[Dict[str, int], int, _ContentRecord]]:
+        """Build BM25 from one stable block without retaining corpus content."""
         try:
-            data = json.loads(index_path.read_text())
+            with content_file.open("rb") as handle:
+                stat_before = os.fstat(handle.fileno())
+                if stat_before.st_size > _VAULT_BLOCK_MAX_BYTES:
+                    raise _OversizedVaultBlock
+                raw_content = handle.read(stat_before.st_size)
+                stat_after = os.fstat(handle.fileno())
+        except OSError:
+            return None
+
+        if (
+            stat_before.st_mtime_ns != stat_after.st_mtime_ns
+            or stat_before.st_ctime_ns != stat_after.st_ctime_ns
+            or stat_before.st_dev != stat_after.st_dev
+            or stat_before.st_ino != stat_after.st_ino
+            or len(raw_content) != stat_before.st_size
+        ):
+            return None
+
+        content = raw_content.decode("utf-8", errors="replace")
+        actual_hash = hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()
+        metadata_hash_stale = expected_hash is not None and expected_hash != actual_hash
+        tf, document_length = _bm25_count_document(content)
+        record = _ContentRecord(
+            path=str(content_file),
+            content_hash=actual_hash,
+            mtime_ns=stat_after.st_mtime_ns,
+            ctime_ns=stat_after.st_ctime_ns,
+            file_size=stat_after.st_size,
+            device=stat_after.st_dev,
+            inode=stat_after.st_ino,
+            metadata_hash_stale=metadata_hash_stale,
+            actual_tokens=count_tokens(content) if metadata_hash_stale else None,
+        )
+        return tf, document_length, record
+
+    def _load(self, index_path: Path, mtime: float):
+        """Load metadata and build compact BM25 postings.
+
+        Block text is consumed one document at a time and is not retained in
+        the index, and selected results are hydrated through the bounded
+        content cache, so steady-state memory does not hold the full block
+        text. Postings, vocabulary, and per-block index metadata still scale
+        with corpus size (block count and distinct terms), so index memory
+        grows with the corpus even though raw block bytes are not retained.
+        """
+        try:
+            data = json.loads(index_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as e:
             print(f"  ⚠️ Vault index load error: {e}")
             return
 
         blocks_dir = self.tokenpak_dir / "blocks"
         new_blocks: Dict[str, dict] = {}
+        content_records: Dict[str, _ContentRecord] = {}
+        block_ids: List[str] = []
+        posting_lists: Dict[str, List[int]] = {}
+        block_dl = _array("I")
+        preload_candidates: List[Tuple[float, str]] = []
+        total_dl = 0
+        total_raw_tokens = 0
+        stale_content_hashes = 0
+        unreadable_blocks = 0
+        oversized_blocks = 0
 
         raw_blocks = data.get("blocks", {})
         if isinstance(raw_blocks, dict):
@@ -162,89 +369,375 @@ class VaultIndex:
             return  # unexpected format
 
         for bid, bdata in items:
-            content = ""
+            if not isinstance(bdata, dict):
+                print(f"  ⚠️ Vault index load error: invalid block metadata for {bid}")
+                return
+
             content_file = blocks_dir / f"{bid}.txt"
-            if content_file.exists():
-                try:
-                    content = content_file.read_text(errors="replace")
-                except OSError:
-                    continue
+            raw_expected_hash = bdata.get("content_hash")
+            expected_hash = (
+                raw_expected_hash
+                if isinstance(raw_expected_hash, str) and raw_expected_hash
+                else None
+            )
+            try:
+                scanned = self._scan_content_file(content_file, expected_hash)
+            except _OversizedVaultBlock:
+                oversized_blocks += 1
+                continue
+            if scanned is None:
+                unreadable_blocks += 1
+                continue
+            tf, dl, content_record = scanned
+            if content_record.metadata_hash_stale:
+                stale_content_hashes += 1
+
+            doc_idx = len(block_ids)
+            block_ids.append(bid)
+            raw_tokens = bdata.get("raw_tokens", 0)
 
             new_blocks[bid] = {
                 "block_id": bid,
                 "source_path": bdata.get("source_path", bid),
                 "risk_class": bdata.get("risk_class", "narrative"),
                 "must_keep": bdata.get("must_keep", False),
-                "raw_tokens": bdata.get("raw_tokens", 0),
+                "raw_tokens": raw_tokens,
                 "source_type": bdata.get("source_type", "filesystem"),
                 "claude_transcript": bdata.get("claude_transcript"),
-                "content": content,
+                "_content_file": str(content_file),
             }
+            if content_record.metadata_hash_stale:
+                new_blocks[bid]["_content_metadata_stale"] = True
+                new_blocks[bid]["_content_tokens_actual"] = content_record.actual_tokens
+            content_records[bid] = content_record
+            total_raw_tokens += raw_tokens
 
-        # Precompute BM25
-        df: Dict[str, int] = {}
-        block_tfs: Dict[str, Dict[str, int]] = {}
-        block_dl: Dict[str, int] = {}  # precomputed doc lengths
-        total_dl = 0
-
-        for bid, block in new_blocks.items():
-            terms = _bm25_tokenize(block["content"])
-            tf: Dict[str, int] = {}
-            for t in terms:
-                tf[t] = tf.get(t, 0) + 1
-            dl = len(terms)
-            block_tfs[bid] = tf
-            block_dl[bid] = dl  # store precomputed length
+            block_dl.append(dl)
             total_dl += dl
-            for t in set(terms):
-                df[t] = df.get(t, 0) + 1
+
+            for term, term_frequency in tf.items():
+                posting = posting_lists.get(term)
+                if posting is None:
+                    posting = []
+                    posting_lists[term] = posting
+                posting.append((doc_idx << 32) | term_frequency)
+
+            if content_record.mtime_ns is not None:
+                preload_candidates.append((content_record.mtime_ns / 1_000_000_000, bid))
 
         doc_count = len(new_blocks)
         avg_dl = total_dl / doc_count if doc_count > 0 else 0
 
-        # Build inverted index: term -> set(block_ids)
-        inverted: Dict[str, set] = {}
-        for bid, tf in block_tfs.items():
-            for term in tf:
-                if term not in inverted:
-                    inverted[term] = set()
-                inverted[term].add(bid)
+        # Python lists make the one-time build substantially faster. Convert
+        # and release them one at a time so the published state is compact and
+        # conversion does not retain a second complete representation.
+        postings: Dict[str, _array] = {}
+        while posting_lists:
+            term, posting = posting_lists.popitem()
+            postings[term] = _array("Q", posting)
 
         # Atomic swap — all heavy work done above, lock held briefly
+        with self._cache_condition:
+            generation_id = self._generation.generation_id + 1
+            new_generation = _IndexGeneration(
+                generation_id=generation_id,
+                blocks=new_blocks,
+                content_records=content_records,
+                block_ids=tuple(block_ids),
+                postings=postings,
+                block_dl=block_dl,
+                avg_dl=avg_dl,
+                doc_count=doc_count,
+                index_mtime=mtime,
+                stale_content_hashes=stale_content_hashes,
+                skipped_blocks=unreadable_blocks + oversized_blocks,
+                oversized_blocks=oversized_blocks,
+            )
+            self._generation = new_generation
+            self._content_cache = _OrderedDict()
+            self._cache_bytes = 0
+            self._cache_hits = 0
+            self._cache_misses = 0
+            self._cache_evictions = 0
+            self._coalesced_hydrations = 0
+            self._physical_hydration_reads = 0
+            self._hydration_failures = 0
+            self._max_managed_content_bytes = self._hydration_reserved_bytes
+            self._cache_condition.notify_all()
+
+        # Warm the new generation through the same bounded admission path as
+        # request-time hydration. Old-generation reads remain separately keyed.
+        if _VAULT_CACHE_PRELOAD > 0 and self._max_cache_bytes > 0:
+            preload_candidates.sort(reverse=True)
+            for _, bid in preload_candidates[:_VAULT_CACHE_PRELOAD]:
+                self._hydrate_content(new_generation, bid)
+
         with self._lock:
-            self.blocks = new_blocks
-            self._df = df
-            self._block_tfs = block_tfs
-            self._block_dl = block_dl
-            self._avg_dl = avg_dl
-            self._doc_count = doc_count
-            self._inverted = inverted
-            self._last_mtime = mtime
+            if self._generation is new_generation:
+                cache_entries = sum(key[0] == generation_id for key in self._content_cache)
+                cache_bytes = self._cache_bytes
+            else:
+                cache_entries = 0
+                cache_bytes = 0
 
         print(
-            f"  📚 Vault index loaded: {doc_count} blocks, {sum(b['raw_tokens'] for b in new_blocks.values()):,} tokens"
+            f"  📚 Vault index loaded: {doc_count} blocks, {total_raw_tokens:,} tokens"
+            f" | content cache: {cache_entries} blocks ({cache_bytes // 1024 // 1024}MB)"
         )
+        if stale_content_hashes:
+            print(
+                "  ⚠️ Vault index metadata had "
+                f"{stale_content_hashes} stale content hash(es); indexed stable block bytes"
+            )
+        if unreadable_blocks:
+            print(f"  ⚠️ Vault index skipped {unreadable_blocks} unreadable or missing block(s)")
+        if oversized_blocks:
+            print(
+                f"  ⚠️ Vault index skipped {oversized_blocks} block(s) over "
+                f"{_VAULT_BLOCK_MAX_BYTES} bytes"
+            )
+
+    @staticmethod
+    def _record_matches_stat(record: _ContentRecord, stat_result: os.stat_result) -> bool:
+        """Return whether an open file still has the pinned generation identity."""
+        return (
+            record.mtime_ns is not None
+            and record.ctime_ns is not None
+            and record.file_size is not None
+            and record.device is not None
+            and record.inode is not None
+            and stat_result.st_mtime_ns == record.mtime_ns
+            and stat_result.st_ctime_ns == record.ctime_ns
+            and stat_result.st_size == record.file_size
+            and stat_result.st_dev == record.device
+            and stat_result.st_ino == record.inode
+        )
+
+    @classmethod
+    def _read_pinned_prefix(
+        cls, record: _ContentRecord, byte_limit: int
+    ) -> Optional[_HydratedContent]:
+        """Read at most ``byte_limit`` bytes and return a valid UTF-8 prefix."""
+        if record.file_size is None or byte_limit < 0:
+            return None
+
+        try:
+            with Path(record.path).open("rb") as handle:
+                stat_before = os.fstat(handle.fileno())
+                if not cls._record_matches_stat(record, stat_before):
+                    return None
+
+                target_bytes = min(byte_limit, record.file_size)
+                bytes_read = 0
+                decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+                pieces: List[str] = []
+                digest = hashlib.sha256()
+                while bytes_read < target_bytes:
+                    raw_chunk = handle.read(
+                        min(_CONTENT_READ_CHUNK_BYTES, target_bytes - bytes_read)
+                    )
+                    if not raw_chunk:
+                        return None
+                    bytes_read += len(raw_chunk)
+                    decoded = decoder.decode(raw_chunk, final=False)
+                    if decoded:
+                        pieces.append(decoded)
+                        digest.update(decoded.encode("utf-8", errors="replace"))
+
+                source_truncated = target_bytes < record.file_size
+                decoded = decoder.decode(b"", final=not source_truncated)
+                if decoded:
+                    pieces.append(decoded)
+                    digest.update(decoded.encode("utf-8", errors="replace"))
+                stat_after = os.fstat(handle.fileno())
+        except OSError:
+            return None
+
+        if not cls._record_matches_stat(record, stat_after):
+            return None
+        content = "".join(pieces)
+        content_size = len(content.encode("utf-8"))
+        truncated = source_truncated
+        if content_size > byte_limit:
+            content = _utf8_prefix(content, byte_limit)
+            content_size = len(content.encode("utf-8"))
+            truncated = True
+        if not truncated and digest.hexdigest() != record.content_hash:
+            return None
+        return _HydratedContent(
+            text=content,
+            utf8_bytes=content_size,
+            source_bytes=record.file_size,
+            source_bytes_loaded=content_size,
+            truncated=truncated,
+        )
+
+    def _evict_for_reservation(self, requested_bytes: int) -> None:
+        """Free LRU bytes for a hydration reservation. Lock must be held."""
+        while (
+            self._content_cache
+            and self._cache_bytes + self._hydration_reserved_bytes + requested_bytes
+            > self._max_cache_bytes
+        ):
+            _, evicted = self._content_cache.popitem(last=False)
+            self._cache_bytes -= evicted.utf8_bytes
+            self._cache_evictions += 1
+
+    def _hydrate_content(
+        self, generation: _IndexGeneration, block_id: str
+    ) -> Optional[_HydratedContent]:
+        """Hydrate one generation key through bounded cache and singleflight."""
+        record = generation.content_records.get(block_id)
+        if record is None:
+            return None
+        source_bytes = record.file_size or 0
+        if self._max_cache_bytes == 0:
+            return _HydratedContent("", 0, source_bytes, 0, source_bytes > 0)
+
+        cache_key = (generation.generation_id, block_id)
+        with self._lock:
+            cached = self._content_cache.pop(cache_key, None)
+            if cached is not None:
+                self._content_cache[cache_key] = cached
+                self._cache_hits += 1
+                return cached
+            self._cache_misses += 1
+            flight = self._hydration_flights.get(cache_key)
+            if flight is None:
+                flight = _HydrationFlight(threading.Event())
+                self._hydration_flights[cache_key] = flight
+                owns_flight = True
+            else:
+                self._coalesced_hydrations += 1
+                owns_flight = False
+
+        if not owns_flight:
+            flight.event.wait()
+            return flight.result
+
+        requested_bytes = min(source_bytes, self._max_cache_bytes)
+        reserved = False
+        result: Optional[_HydratedContent] = None
+        try:
+            with self._cache_condition:
+                while True:
+                    self._evict_for_reservation(requested_bytes)
+                    managed_bytes = (
+                        self._cache_bytes + self._hydration_reserved_bytes + requested_bytes
+                    )
+                    if managed_bytes <= self._max_cache_bytes:
+                        self._hydration_reserved_bytes += requested_bytes
+                        self._max_managed_content_bytes = max(
+                            self._max_managed_content_bytes, managed_bytes
+                        )
+                        reserved = True
+                        break
+                    self._cache_condition.wait()
+                self._physical_hydration_reads += 1
+            result = self._read_pinned_prefix(record, requested_bytes)
+        except Exception:
+            result = None
+        finally:
+            with self._cache_condition:
+                if reserved:
+                    self._hydration_reserved_bytes -= requested_bytes
+                if result is not None and self._generation is generation:
+                    existing = self._content_cache.pop(cache_key, None)
+                    if existing is not None:
+                        self._cache_bytes -= existing.utf8_bytes
+                    self._content_cache[cache_key] = result
+                    self._cache_bytes += result.utf8_bytes
+                elif result is None:
+                    self._hydration_failures += 1
+                flight.result = result
+                if self._hydration_flights.get(cache_key) is flight:
+                    self._hydration_flights.pop(cache_key)
+                flight.event.set()
+                self._cache_condition.notify_all()
+        return result
+
+    @staticmethod
+    def _fit_hydration(hydrated: _HydratedContent, byte_limit: int) -> _HydratedContent:
+        """Clip one hydrated value to a search's remaining aggregate budget."""
+        if hydrated.utf8_bytes <= byte_limit:
+            return hydrated
+        content = _utf8_prefix(hydrated.text, byte_limit)
+        content_size = len(content.encode("utf-8"))
+        return _HydratedContent(
+            text=content,
+            utf8_bytes=content_size,
+            source_bytes=hydrated.source_bytes,
+            source_bytes_loaded=min(hydrated.source_bytes_loaded, content_size),
+            truncated=True,
+        )
+
+    def _get_content(self, block_id: str, *, generation: Optional[_IndexGeneration] = None) -> str:
+        """Compatibility helper returning one globally bounded content string."""
+        if generation is None:
+            generation = self._snapshot_generation()
+        hydrated = self._hydrate_content(generation, block_id)
+        if hydrated is not None:
+            return hydrated.text
+        return _utf8_prefix(_CONTENT_GENERATION_MISMATCH, self._max_cache_bytes)
+
+    @property
+    def cache_stats(self) -> dict:
+        """Return a thread-safe snapshot of bounded content-cache metrics."""
+        with self._lock:
+            accesses = self._cache_hits + self._cache_misses
+            generation = self._generation
+            return {
+                "vault_cache_entries": len(self._content_cache),
+                "vault_cache_memory_mb": round(self._cache_bytes / 1024 / 1024, 2),
+                "vault_cache_max_mb": round(self._max_cache_bytes / 1024 / 1024, 2),
+                "vault_cache_reserved_memory_mb": round(
+                    self._hydration_reserved_bytes / 1024 / 1024, 2
+                ),
+                "vault_cache_active_hydrations": len(self._hydration_flights),
+                "vault_cache_hits": self._cache_hits,
+                "vault_cache_misses": self._cache_misses,
+                "vault_cache_evictions": self._cache_evictions,
+                "vault_cache_coalesced_hydrations": self._coalesced_hydrations,
+                "vault_cache_physical_reads": self._physical_hydration_reads,
+                "vault_cache_hydration_failures": self._hydration_failures,
+                "vault_cache_hit_rate": round(self._cache_hits / accesses if accesses else 0.0, 3),
+                "vault_index_stale_content_hashes": generation.stale_content_hashes,
+                "vault_index_skipped_blocks": generation.skipped_blocks,
+                "vault_index_oversized_blocks": generation.oversized_blocks,
+            }
 
     def search(
         self, query: str, top_k: int = 5, min_score: float = 2.0
     ) -> List[Tuple[dict, float]]:
         """BM25 search across vault blocks. Returns [(block_dict, score), ...]."""
+        return self._search(query, top_k=top_k, min_score=min_score, include_internal=False)
+
+    def _search(
+        self,
+        query: str,
+        top_k: int,
+        min_score: float,
+        *,
+        include_internal: bool,
+    ) -> List[Tuple[dict, float]]:
+        """Search with optional private metadata for the injection compiler."""
         query_terms = _bm25_tokenize_query(query)
-        if not query_terms or not self.blocks:
+        generation = self._snapshot_generation()
+        if not query_terms or generation.doc_count == 0:
             return []
 
-        # Snapshot refs atomically under GIL — no lock held during scoring
-        df = self._df
-        block_tfs = self._block_tfs
-        block_dl = self._block_dl  # precomputed doc lengths — avoids sum(tf.values()) per request
-        avg_dl = self._avg_dl
-        doc_count = self._doc_count
-        blocks = self.blocks
-        inverted = self._inverted
+        # One immutable generation keeps IDs, postings, lengths, and metadata
+        # coherent while reload work builds and publishes its successor.
+        block_ids = generation.block_ids
+        postings = generation.postings
+        block_dl = generation.block_dl
+        avg_dl = generation.avg_dl
+        doc_count = generation.doc_count
+        blocks = generation.blocks
 
         k1 = 1.5
         b_param = 0.75
-        scores: Dict[str, float] = {}
+        scores: Dict[int, float] = {}
 
         # IDF-gated candidate expansion with MAX_CANDIDATES cap:
         # 1. Skip terms appearing in >40% of docs (too common to discriminate).
@@ -257,52 +750,119 @@ class VaultIndex:
         _selective: List[Tuple[str, int]] = []
         _fallback: List[str] = []
         for qt in query_terms:
-            if qt not in inverted:
+            posting = postings.get(qt)
+            if posting is None:
                 continue
-            term_freq = df.get(qt, 0)
+            term_freq = len(posting)
             if doc_count > 0 and term_freq / doc_count > _idf_gate:
                 _fallback.append(qt)
             else:
                 _selective.append((qt, term_freq))
         _selective.sort(key=lambda x: x[1])  # most selective first
 
-        candidates: set = set()
+        candidates: set[int] = set()
         if _selective:
             for qt, _ in _selective:
-                candidates.update(inverted[qt])
+                posting = postings[qt]
+                candidates.update(packed >> 32 for packed in posting)
                 if len(candidates) >= _max_candidates:
                     break  # enough; less selective terms contribute diminishing returns
         if not candidates:
             # All terms are corpus-wide — fall back to common terms (fast path)
             for qt in _fallback:
-                candidates.update(inverted[qt])
+                posting = postings[qt]
+                candidates.update(packed >> 32 for packed in posting)
         if not candidates:
             return []
 
-        for bid in candidates:
-            tf = block_tfs.get(bid, {})
-            dl = block_dl.get(bid, 0)  # O(1) lookup instead of O(terms) sum
-            score = 0.0
-            for qt in query_terms:
-                if qt not in df:
-                    continue
-                idf = math.log((doc_count - df[qt] + 0.5) / (df[qt] + 0.5) + 1)
-                term_freq = tf.get(qt, 0)
-                if term_freq == 0:
-                    continue
-                numerator = term_freq * (k1 + 1)
-                denominator = term_freq + k1 * (1 - b_param + b_param * dl / avg_dl)
-                score += idf * numerator / denominator
-            if score >= min_score:
-                scores[bid] = score
+        # Score directly from compact postings. Query-term duplication is
+        # intentionally preserved because the prior implementation added each
+        # expanded term occurrence independently.
+        for qt in query_terms:
+            posting = postings.get(qt)
+            if posting is None:
+                continue
+            df = len(posting)
+            idf = math.log((doc_count - df + 0.5) / (df + 0.5) + 1)
+            if len(posting) > len(candidates) * 4:
+                # Posting doc IDs are sorted. For a selective candidate set,
+                # binary lookup avoids scanning corpus-wide common terms.
+                for doc_idx in candidates:
+                    position = _bisect_left(posting, doc_idx << 32)
+                    if position >= len(posting):
+                        continue
+                    packed = posting[position]
+                    if packed >> 32 != doc_idx:
+                        continue
+                    term_freq = packed & 0xFFFFFFFF
+                    dl = block_dl[doc_idx]
+                    numerator = term_freq * (k1 + 1)
+                    denominator = term_freq + k1 * (1 - b_param + b_param * dl / avg_dl)
+                    scores[doc_idx] = scores.get(doc_idx, 0.0) + idf * numerator / denominator
+            else:
+                for packed in posting:
+                    doc_idx = packed >> 32
+                    if doc_idx not in candidates:
+                        continue
+                    term_freq = packed & 0xFFFFFFFF
+                    dl = block_dl[doc_idx]
+                    numerator = term_freq * (k1 + 1)
+                    denominator = term_freq + k1 * (1 - b_param + b_param * dl / avg_dl)
+                    scores[doc_idx] = scores.get(doc_idx, 0.0) + idf * numerator / denominator
 
         # Sort deterministically: score desc, then path asc, then block_id asc
         # This ensures byte-identical ordering for cache stability even on score ties
         ranked = sorted(
-            scores.items(),
-            key=lambda x: (-x[1], blocks[x[0]].get("source_path", ""), x[0]),
+            ((doc_idx, score) for doc_idx, score in scores.items() if score >= min_score),
+            key=lambda x: (
+                -x[1],
+                blocks[block_ids[x[0]]].get("source_path", ""),
+                block_ids[x[0]],
+            ),
         )[:top_k]
-        return [(blocks[bid], score) for bid, score in ranked]
+
+        # Preserve the proxy VaultIndex API: search results include content.
+        # Only top-k results are hydrated, and the retained bytes stay bounded.
+        results: List[Tuple[dict, float]] = []
+        remaining_content_bytes = self._max_cache_bytes
+        for doc_idx, score in ranked:
+            bid = block_ids[doc_idx]
+            record = generation.content_records.get(bid)
+            source_bytes = record.file_size if record and record.file_size else 0
+            if remaining_content_bytes > 0:
+                hydrated = self._hydrate_content(generation, bid)
+            else:
+                hydrated = _HydratedContent(
+                    text="",
+                    utf8_bytes=0,
+                    source_bytes=source_bytes,
+                    source_bytes_loaded=0,
+                    truncated=source_bytes > 0,
+                )
+            if hydrated is None:
+                marker = _utf8_prefix(_CONTENT_GENERATION_MISMATCH, remaining_content_bytes)
+                hydrated = _HydratedContent(
+                    text=marker,
+                    utf8_bytes=len(marker.encode("utf-8")),
+                    source_bytes=source_bytes,
+                    source_bytes_loaded=0,
+                    truncated=True,
+                )
+            hydrated = self._fit_hydration(hydrated, remaining_content_bytes)
+            remaining_content_bytes -= hydrated.utf8_bytes
+
+            block = dict(blocks[bid])
+            block.pop("_content_file", None)
+            if not include_internal:
+                block.pop("_content_metadata_stale", None)
+                block.pop("_content_tokens_actual", None)
+            block["content"] = hydrated.text
+            if hydrated.truncated:
+                block["content_truncated"] = True
+                block["content_bytes_total"] = hydrated.source_bytes
+                block["content_bytes_loaded"] = hydrated.source_bytes_loaded
+            results.append((block, score))
+        return results
 
     def compile_injection(
         self, query: str, budget: int = 4000, top_k: int = 5, min_score: float = 2.0
@@ -311,39 +871,65 @@ class VaultIndex:
         Search vault and compile injection text within budget.
         Returns (injection_text, tokens_used, source_refs).
         """
-        results = self.search(query, top_k=top_k, min_score=min_score)
+        results = self._search(
+            query,
+            top_k=top_k,
+            min_score=min_score,
+            include_internal=True,
+        )
         if not results:
             return "", 0, []
 
         injection_parts = []
         tokens_used = 0
         source_refs = []
+        header = "\n\n## Retrieved Context\n"  # fixed header for cache stability
 
         for block, score in results:
             content = block["content"]
-            block_tokens = block["raw_tokens"]
+            if not content and block.get("content_truncated"):
+                continue
+            source_path = block["source_path"]
+            part_prefix = f"--- [{source_path}] (relevance: {score:.1f}) ---\n"
 
             # Budget check
             remaining = budget - tokens_used
             if remaining <= 100:
                 break
 
-            # Truncate if needed
-            if block_tokens > remaining:
-                # Rough char-to-token truncation
-                char_limit = remaining * 4
-                content = content[:char_limit].rsplit("\n", 1)[0]
-                block_tokens = count_tokens(content)
+            complete_parts = injection_parts + [part_prefix + content]
+            complete_tokens = count_tokens(header + "\n\n".join(complete_parts))
+            if complete_tokens <= budget:
+                injection_parts = complete_parts
+                tokens_used = complete_tokens
+                source_refs.append(source_path)
+                continue
 
-            source_path = block["source_path"]
-            injection_parts.append(f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}")
-            tokens_used += block_tokens
+            # The complete next result does not fit. Find the largest content
+            # prefix whose fully rendered injection, including fixed headers
+            # and separators, stays within the hard token budget.
+            low = 0
+            high = len(content)
+            best = 0
+            while low <= high:
+                midpoint = (low + high) // 2
+                candidate_parts = injection_parts + [part_prefix + content[:midpoint]]
+                candidate_tokens = count_tokens(header + "\n\n".join(candidate_parts))
+                if candidate_tokens <= budget:
+                    best = midpoint
+                    low = midpoint + 1
+                else:
+                    high = midpoint - 1
+            if best == 0:
+                break
+            injection_parts.append(part_prefix + content[:best])
+            tokens_used = count_tokens(header + "\n\n".join(injection_parts))
             source_refs.append(source_path)
+            break
 
         if not injection_parts:
             return "", 0, []
 
-        header = "\n\n## Retrieved Context\n"  # fixed header for cache stability
         injection_text = header + "\n\n".join(injection_parts)
         # Recount with header
         tokens_used = count_tokens(injection_text)
@@ -359,6 +945,12 @@ class VaultIndex:
 @lru_cache(maxsize=512)
 def _bm25_tokenize(text: str) -> List[str]:
     return re.findall(r"[a-z0-9_]+", text.lower())
+
+
+def _bm25_count_document(text: str) -> Tuple[Dict[str, int], int]:
+    """Count document terms without retaining the document in the query LRU."""
+    terms = re.findall(r"[a-z0-9_]+", text.lower())
+    return _Counter(terms), len(terms)
 
 
 @lru_cache(maxsize=512)
@@ -439,9 +1031,11 @@ def _init_singletons() -> None:
 
         # Start background auto-reindex timer (rebuilds index from source files)
         if VAULT_AUTO_REINDEX_INTERVAL > 0:
+
             def _vault_auto_reindex_timer() -> None:
                 try:
                     from tokenpak.vault.vault_health import VaultHealth
+
                     # VAULT_INDEX_PATH points to the .tokenpak dir inside vault
                     # VaultHealth expects the vault root (parent of .tokenpak)
                     vault_dir = Path(VAULT_INDEX_PATH).parent
@@ -538,6 +1132,7 @@ def get_capsule_builder() -> Optional[object]:
 # will still see the correct object after first access.
 # ---------------------------------------------------------------------------
 
+
 class _LazyAlias:
     """Descriptor-like proxy that forwards attribute access to the real singleton."""
 
@@ -580,6 +1175,7 @@ def inject_vault_context(
         body_bytes = request.body
     # Lazy imports for proxy-layer dependencies (transferred to subpackages in A2c)
     from tokenpak.proxy.adapters.utils import _detect_adapter, extract_query_signal
+
     try:
         from tokenpak.core.runtime.proxy import SESSION  # type: ignore[import]
     except ImportError:

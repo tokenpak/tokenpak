@@ -2,7 +2,7 @@
 """Generate and install AGENTS.md for durable TokenPak behavior in Codex.
 
 AGENTS.md is Codex's mechanism for persistent behavioral guidance.  It's
-loaded before each session and merged from global (~/.codex/AGENTS.md) to
+loaded before each session and merged from global ($CODEX_HOME/AGENTS.md) to
 project (<repo>/AGENTS.md) scope.
 
 The companion installs a global AGENTS.md with rules for:
@@ -14,6 +14,7 @@ The companion installs a global AGENTS.md with rules for:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 _AGENTS_CONTENT = """\
@@ -80,12 +81,26 @@ def generate_agents_md() -> str:
     return _AGENTS_CONTENT
 
 
+def _selected_codex_home(codex_home: Path | None = None) -> Path:
+    """Resolve the active Codex home at call time."""
+    if codex_home is not None:
+        return Path(codex_home).expanduser()
+    configured = os.environ.get("CODEX_HOME")
+    return Path(configured).expanduser() if configured else Path.home() / ".codex"
+
+
 def install_agents_md(target: str = "global") -> Path:
+    """Write AGENTS.md using the active public Codex configuration."""
+    return _install_agents_md(target)
+
+
+def _install_agents_md(target: str = "global", *, codex_home: Path | None = None) -> Path:
     """Write AGENTS.md to the appropriate Codex config directory.
 
     Args:
-        target: "global" for ~/.codex/AGENTS.md, or a repo path for
+        target: "global" for $CODEX_HOME/AGENTS.md, or a repo path for
                 <repo>/AGENTS.md.
+        codex_home: Internal explicit selected Codex home for a global install.
 
     Returns:
         Path to the written AGENTS.md file.
@@ -95,7 +110,7 @@ def install_agents_md(target: str = "global") -> Path:
     any other content.
     """
     if target == "global":
-        agents_path = Path.home() / ".codex" / "AGENTS.md"
+        agents_path = _selected_codex_home(codex_home) / "AGENTS.md"
     else:
         agents_path = Path(target) / "AGENTS.md"
 

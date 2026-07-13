@@ -19,6 +19,7 @@ import threading
 import time
 from unittest.mock import MagicMock
 
+from tokenpak.proxy.connection_pool import ConnectionPool, PoolConfig
 from tokenpak.proxy.server import ProxyServer
 
 
@@ -129,3 +130,36 @@ def test_stop_twice_is_safe():
 
     assert order.count("drain") == 1
     assert order.count("pool_close") == 2
+
+
+def test_stop_reaches_server_shutdown_when_pool_client_close_hangs():
+    """A wedged transport close cannot consume the server-stop step."""
+    ps = _make_server(shutdown_timeout=0.1)
+    server = MagicMock()
+    ps._server = server
+    ps._flush_telemetry = MagicMock()  # type: ignore[method-assign]
+    ps._connection_pool = ConnectionPool(PoolConfig(http2=False, close_timeout_seconds=0.05))
+    close_started = threading.Event()
+    release_close = threading.Event()
+    close_finished = threading.Event()
+
+    class _BlockingCloseClient:
+        def close(self):
+            close_started.set()
+            release_close.wait()
+            close_finished.set()
+
+    ps._connection_pool._clients["upstream.test"] = _BlockingCloseClient()  # type: ignore[assignment]
+
+    try:
+        started = time.monotonic()
+        ps.stop()
+        elapsed = time.monotonic() - started
+
+        assert close_started.is_set()
+        assert elapsed < 0.5
+        server.shutdown.assert_called_once_with()
+        assert ps._server is None
+    finally:
+        release_close.set()
+        assert close_finished.wait(timeout=1.0)

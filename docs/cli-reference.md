@@ -671,7 +671,7 @@ Examples:
   tokenpak codex
   tokenpak codex --install-only    # set up without launching Codex
   tokenpak codex doctor            # verify installation
-  tokenpak codex uninstall         # reverse installation
+  tokenpak codex uninstall         # clean selected home; preserve shared skills in use
   tokenpak codex --budget 5.00
   tokenpak codex "Fix the login bug"
   tokenpak codex --model o3 -s workspace-write

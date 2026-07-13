@@ -1,15 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Launcher for ``tokenpak codex`` — thin bootstrap for Codex with companion.
 
-Does setup (rate snapshot, MCP registration, hooks install, AGENTS.md,
-skills) and either exec-replaces into ``codex`` (default) or exits
-after install (``--install-only``).
+Selects and safely provisions a Codex home, installs the companion into that
+home, then supervises the Codex child so the validated ``codex.pid`` lifecycle
+sentinel can always be removed after a normal exit. ``--install-only`` performs
+the same selected-home safety preflight and setup without spawning Codex.
 
-Before exec-ing a real launch it preflights Codex's own local SQLite
-databases (``state_5.sqlite`` / ``logs_2.sqlite``) so a shared ``~/.codex``
-that is locked by another (or a suspended) Codex process surfaces an
-actionable wait/retry instead of Codex dying on a raw "database is
-locked" error. ``--install-only`` skips the preflight — it never exec-s.
+Before any selected-home mutation it inspects Codex's local SQLite files using
+read-only kernel metadata. A home attached to another live or suspended Codex
+process surfaces an actionable wait/retry instead of a raw lock failure.
 
 Companion features work without the launcher if the user manually
 configures MCP, hooks, and AGENTS.md — the launcher is convenience.
@@ -18,10 +17,18 @@ configures MCP, hooks, and AGENTS.md — the launcher is convenience.
 from __future__ import annotations
 
 import contextlib
+import errno
+import json
 import os
+import queue
+import signal
 import subprocess
 import sys
+import threading
 import time
+from pathlib import Path
+from typing import TYPE_CHECKING as _TYPE_CHECKING
+from typing import Callable as _Callable
 
 from ..config import CompanionConfig
 from .accounting import (
@@ -33,6 +40,9 @@ from .accounting import (
     write_receipt,
 )
 
+if _TYPE_CHECKING:
+    from .session_home import SessionPaths
+
 _TEAL = "\033[38;2;0;180;170m"
 _DIM = "\033[2m"
 _RESET = "\033[0m"
@@ -42,6 +52,7 @@ _TOKENPAK_CHATGPT_BASE_URL = "http://127.0.0.1:8766/v1"
 _BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox"
 _BYPASS_ENV_VAR = "TOKENPAK_CODEX_BYPASS_APPROVALS_AND_SANDBOX"
 _TRUTHY = {"1", "true", "yes"}
+_STORAGE_PRESSURE_ERRNOS = {errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)}
 
 
 def _bypass_env_enabled(env: dict[str, str] | None = None) -> bool:
@@ -166,6 +177,7 @@ def _drain_esc_pressed() -> bool:
 
 def _preflight_state_lock(
     *,
+    home: Path | str | None = None,
     prober=None,
     interactive: bool | None = None,
     timeout_s: float = _LOCK_WAIT_TIMEOUT_S,
@@ -173,6 +185,7 @@ def _preflight_state_lock(
     esc_pressed=None,
     sleep=None,
     monotonic=None,
+    deadline: float | None = None,
 ) -> "int | None":
     """Preflight Codex-owned SQLite databases before exec.
 
@@ -195,16 +208,78 @@ def _preflight_state_lock(
     """
     from . import state_lock
 
-    prober = prober or state_lock.probe
     esc_pressed = esc_pressed or _drain_esc_pressed
     sleep = sleep or time.sleep
     monotonic = monotonic or time.monotonic
+    deadline = deadline if deadline is not None else monotonic() + timeout_s
     if interactive is None:
         interactive = _stdin_is_tty()
 
-    status = prober()
+    def invoke_probe():
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return state_lock.LockStatus(
+                home=Path(home or os.environ.get("CODEX_HOME") or Path.home() / ".codex"),
+                db_path=Path(home or os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+                / state_lock.STATE_DB_NAME,
+                exists=True,
+                locked=True,
+                detail="holder inspection wall-time limit is incomplete; refusing unsafe access",
+                diagnostics_complete=False,
+                incomplete_reasons=["probe_timeout"],
+            )
+
+        results: "queue.SimpleQueue[tuple[bool, object]]" = queue.SimpleQueue()
+
+        def run_probe() -> None:
+            try:
+                value = (
+                    state_lock.probe(home, deadline=deadline, clock=monotonic)
+                    if prober is None
+                    else prober()
+                )
+                results.put((True, value))
+            except BaseException as exc:  # fail closed; surfaced below
+                results.put((False, exc))
+
+        worker = threading.Thread(
+            target=run_probe,
+            name="tokenpak-codex-lock-probe",
+            daemon=True,
+        )
+        worker.start()
+        worker.join(timeout=max(0.0, remaining))
+        if worker.is_alive():
+            return state_lock.LockStatus(
+                home=Path(home or os.environ.get("CODEX_HOME") or Path.home() / ".codex"),
+                db_path=Path(home or os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+                / state_lock.STATE_DB_NAME,
+                exists=True,
+                locked=True,
+                detail="holder inspection wall-time limit is incomplete; refusing unsafe access",
+                diagnostics_complete=False,
+                incomplete_reasons=["probe_timeout"],
+            )
+        ok, value = results.get()
+        if ok:
+            return value
+        return state_lock.LockStatus(
+            home=Path(home or os.environ.get("CODEX_HOME") or Path.home() / ".codex"),
+            db_path=Path(home or os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+            / state_lock.STATE_DB_NAME,
+            exists=True,
+            locked=True,
+            detail=(f"holder inspection raised {value.__class__.__name__}; refusing unsafe access"),
+            diagnostics_complete=False,
+            incomplete_reasons=["proc_inspection_incomplete"],
+        )
+
+    status = invoke_probe()
     if not status.locked:
         return None
+    if not getattr(status, "diagnostics_complete", True):
+        print(state_lock.remediation_hint(status), file=sys.stderr)
+        return 1
 
     # A stopped/suspended holder never releases the lock — waiting is
     # futile, so surface direct remediation immediately.
@@ -214,19 +289,17 @@ def _preflight_state_lock(
 
     if interactive:
         print(
-            "tokenpak: SQLite database is busy. Waiting to connect... "
-            "Press Esc to cancel.",
+            "tokenpak: SQLite database is busy. Waiting to connect... Press Esc to cancel.",
             file=sys.stderr,
         )
     else:
         print(
             "tokenpak: Codex local database is busy; waiting up to "
             f"{int(timeout_s)}s for the holder to release "
-            "(set a fresh CODEX_HOME to skip)...",
+            "(use TOKENPAK_CODEX_SESSION_MODE=isolated for a fresh home)...",
             file=sys.stderr,
         )
 
-    deadline = monotonic() + timeout_s
     while monotonic() < deadline:
         if interactive and esc_pressed():
             print(
@@ -235,10 +308,15 @@ def _preflight_state_lock(
             )
             print(state_lock.remediation_hint(status), file=sys.stderr)
             return 130
-        sleep(poll_interval_s)
-        status = prober()
+        sleep(min(poll_interval_s, max(0.0, deadline - monotonic())))
+        if monotonic() >= deadline:
+            break
+        status = invoke_probe()
         if not status.locked:
             return None
+        if not getattr(status, "diagnostics_complete", True):
+            print(state_lock.remediation_hint(status), file=sys.stderr)
+            return 1
         if status.stopped_pids:
             print(state_lock.remediation_hint(status), file=sys.stderr)
             return 1
@@ -257,37 +335,206 @@ def _preflight_state_lock(
 
 
 def _run_codex_process(
-    codex_args: list[str], env: dict[str, str]
+    codex_args: list[str],
+    env: dict[str, str],
+    *,
+    on_start: _Callable[[int], None] | None = None,
 ) -> tuple[int, dict[str, int | None]]:
-    """Run Codex for explicit receipt mode, teeing JSONL while extracting usage."""
-    usage = empty_usage()
-    if "--json" not in codex_args:
-        completed = subprocess.run(codex_args, env=env)
-        return completed.returncode, usage
+    """Supervise Codex, optionally teeing JSONL and extracting usage.
 
+    The launcher never signals or terminates the child.  Terminal-generated
+    interrupts reach both foreground processes naturally; the parent keeps
+    waiting until Codex exits so lifecycle cleanup cannot race a live child.
+    """
+    usage = empty_usage()
+    json_mode = "--json" in codex_args
     proc = subprocess.Popen(
         codex_args,
         env=env,
-        stdout=subprocess.PIPE,
+        stdout=subprocess.PIPE if json_mode else None,
         stderr=None,
         text=True,
         bufsize=1,
     )
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        sys.stdout.write(line)
-        sys.stdout.flush()
-        usage = merge_usage(usage, usage_from_json_line(line))
-    return proc.wait(), usage
+    # The terminal delivers Ctrl-C to the whole foreground process group.
+    # Codex may consume SIGINT as an operation cancel and continue running;
+    # the supervisory parent therefore ignores SIGINT after the child has
+    # inherited the caller's original disposition, then trusts the child's
+    # eventual exit status.  This also prevents a PIPE-drain interruption
+    # from deadlocking JSON mode.
+    previous_sigint = None
+    return_code: int | None = None
+    start_error: BaseException | None = None
+    try:
+        try:
+            previous_sigint = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        except (AttributeError, OSError, ValueError):
+            previous_sigint = None
+
+        if on_start is not None:
+            try:
+                on_start(proc.pid)
+            except BaseException as exc:
+                # A very fast command can exit before /proc identity transfer.
+                # In that case the parent-owned lease remains valid until this
+                # function returns, and the real child result wins.
+                poll = getattr(proc, "poll", lambda: None)
+                if poll() is None:
+                    start_error = exc
+                    print(
+                        "tokenpak: PID sentinel transfer failed "
+                        f"({exc}); continuing supervised launch",
+                        file=sys.stderr,
+                    )
+
+        if json_mode:
+            assert proc.stdout is not None
+            forward_output = True
+            while True:
+                try:
+                    line = proc.stdout.readline()
+                except KeyboardInterrupt:
+                    continue
+                except BaseException:
+                    # Closing our read end does not terminate the child.  It
+                    # merely gives a still-writing child normal pipe-closure
+                    # semantics; the finally block below still waits/reaps.
+                    with contextlib.suppress(Exception):
+                        proc.stdout.close()
+                    break
+                if not line:
+                    break
+                if forward_output:
+                    try:
+                        sys.stdout.write(line)
+                        sys.stdout.flush()
+                    except (BrokenPipeError, OSError, UnicodeError, KeyboardInterrupt):
+                        # Continue draining so a downstream `head` cannot
+                        # strand Codex behind a full PIPE while the lifecycle
+                        # lease is released.
+                        forward_output = False
+                try:
+                    usage = merge_usage(usage, usage_from_json_line(line))
+                except (ValueError, TypeError, json.JSONDecodeError):
+                    pass
+
+        while True:
+            try:
+                return_code = proc.wait()
+                break
+            except KeyboardInterrupt:
+                continue
+    finally:
+        # Every path after a successful Popen reaps the child before the
+        # caller's `with lease` can remove codex.pid.
+        if return_code is None:
+            while True:
+                try:
+                    return_code = proc.wait()
+                    break
+                except KeyboardInterrupt:
+                    continue
+        if previous_sigint is not None:
+            with contextlib.suppress(OSError, ValueError):
+                signal.signal(signal.SIGINT, previous_sigint)
+    if start_error is not None:
+        raise start_error
+    assert return_code is not None
+    if return_code < 0:
+        return 128 + abs(return_code), usage
+    return return_code, usage
+
+
+def _print_session_paths(paths: "SessionPaths") -> None:
+    """Print the complete selected-home routing map at startup."""
+    print("tokenpak: Codex session paths", file=sys.stderr)
+    for label, value in paths.report_rows():
+        print(f"  {label}: {value}", file=sys.stderr)
+
+
+def _is_storage_pressure(exc: BaseException) -> bool:
+    """Recognize nested ENOSPC/EDQUOT without retrying unrelated failures."""
+    pending: list[BaseException] = [exc]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, OSError) and current.errno in _STORAGE_PRESSURE_ERRNOS:
+            return True
+        for linked in (current.__cause__, current.__context__):
+            if isinstance(linked, BaseException):
+                pending.append(linked)
+    return False
+
+
+def _run_isolated_retention(
+    session_home,
+    paths: "SessionPaths",
+    *,
+    phase: str,
+    preserve_home: Path | None,
+    remove_all_orphans: bool = False,
+) -> object | None:
+    """Run the receipt-governed engine without masking launch results."""
+    tokenpak_home = session_home._generated_tokenpak_root(paths.home)
+    try:
+        cleanup = session_home.cleanup_isolated_homes(
+            tokenpak_home,
+            preserve_home=preserve_home,
+            remove_all_orphans=remove_all_orphans,
+            orphan_cleanup_reason="storage-pressure" if remove_all_orphans else phase,
+        )
+    except Exception as exc:
+        print(
+            f"tokenpak: isolated-home retention {phase} preserved all homes ({exc})",
+            file=sys.stderr,
+        )
+        return None
+    if cleanup.removed:
+        print(
+            f"tokenpak: isolated-home retention {phase} removed "
+            f"{len(cleanup.removed)} orphan(s)",
+            file=sys.stderr,
+        )
+    if cleanup.errors:
+        print(
+            f"tokenpak: isolated-home retention {phase} preserved uncertain home(s): "
+            + "; ".join(cleanup.errors),
+            file=sys.stderr,
+        )
+    return cleanup
+
+
+@contextlib.contextmanager
+def _lease_with_post_retention(lease, session_home, paths: "SessionPaths"):
+    """Release the exact lease before the final isolated-home sweep."""
+    try:
+        yield lease
+    finally:
+        try:
+            lease.release()
+        except Exception as exc:
+            # A failed exact-owner unlink leaves the sentinel/artifact in
+            # place, which retention treats as protected.  Do not replace an
+            # already-known child result with a cleanup-only exception.
+            print(
+                f"tokenpak: PID sentinel cleanup preserved for inspection ({exc})",
+                file=sys.stderr,
+            )
+        if paths.mode == session_home.MODE_ISOLATED:
+            _run_isolated_retention(
+                session_home,
+                paths,
+                phase="post-session",
+                preserve_home=None,
+            )
 
 
 def _vanilla_receipt_env() -> dict[str, str]:
     """Return a child environment with TokenPak companion state stripped."""
-    return {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith("TOKENPAK_")
-    }
+    return {key: value for key, value in os.environ.items() if not key.startswith("TOKENPAK_")}
 
 
 def _receipt_only_setup_metadata() -> dict[str, object]:
@@ -348,216 +595,79 @@ def main(
     """Entry point for ``tokenpak codex``."""
     args = list(args if args is not None else sys.argv[1:])
 
-    install_only = False
-    receipt_only = False
-    if "--install-only" in args:
-        install_only = True
-        args = [a for a in args if a != "--install-only"]
-    if "--receipt-only" in args:
-        receipt_only = True
-        args = [a for a in args if a != "--receipt-only"]
+    install_only = "--install-only" in args
+    receipt_only = "--receipt-only" in args
+    args = [a for a in args if a not in {"--install-only", "--receipt-only"}]
 
-    if receipt_only:
-        if not (receipt_out and run_id):
-            print(
-                "tokenpak: --receipt-only requires --receipt-out and --run-id",
-                file=sys.stderr,
-            )
-            return 2
-        if install_only:
-            print(
-                "tokenpak: --receipt-only cannot be combined with --install-only",
-                file=sys.stderr,
-            )
-            return 2
-        setup = _receipt_only_setup_metadata()
-        lock_exit = _preflight_state_lock()
-        if lock_exit is not None:
-            started_at = utc_now()
-            start_monotonic = time.monotonic()
-            try:
-                _write_accounting_receipt(
-                    receipt_out=receipt_out,
-                    run_id=run_id,
-                    codex_args=args,
-                    setup=setup,
-                    started_at=started_at,
-                    start_monotonic=start_monotonic,
-                    exit_code=lock_exit,
-                    status="blocked",
-                    missing_evidence=[
-                        "codex_process_not_launched_preflight_block"
-                    ],
-                )
-            except OSError as exc:
-                print(
-                    f"tokenpak: failed to write accounting receipt: {exc}",
-                    file=sys.stderr,
-                )
-                return 1
-            return lock_exit
-
-        env = _vanilla_receipt_env()
-        env["TOKENPAK_CODEX_RECEIPT_OUT"] = receipt_out
-        env["TOKENPAK_CODEX_RUN_ID"] = run_id
-        codex_args = ["codex", *args]
-        started_at = utc_now()
-        start_monotonic = time.monotonic()
-        usage = empty_usage()
-        status = "failed"
-        try:
-            exit_code, usage = _run_codex_process(codex_args, env)
-            status = "completed" if exit_code == 0 else "failed"
-        except KeyboardInterrupt:
-            exit_code = 130
-            status = "interrupted"
-        except OSError as exc:
-            exit_code = 1
-            status = "launch_failed"
-            print(f"tokenpak: failed to launch codex: {exc}", file=sys.stderr)
-        try:
-            _write_accounting_receipt(
-                receipt_out=receipt_out,
-                run_id=run_id,
-                codex_args=args,
-                setup=setup,
-                started_at=started_at,
-                start_monotonic=start_monotonic,
-                exit_code=exit_code,
-                status=status,
-                usage=usage,
-            )
-        except OSError as exc:
-            print(
-                f"tokenpak: failed to write accounting receipt: {exc}",
-                file=sys.stderr,
-            )
-            return 1
-        return exit_code
-
-    config = CompanionConfig.from_env()
-    config.profile_overrides()
-
-    config.journal_dir.mkdir(parents=True, exist_ok=True)
-
-    # ── Step 0: Refresh model-rate snapshot for shell hooks ──
-    from .rates_snapshot import refresh as refresh_rates
-
-    rates_path = refresh_rates()
-    print(f"tokenpak: rates snapshot refreshed ({rates_path})", file=sys.stderr)
-
-    # ── Step 1: Register MCP server ──────────────────────────
-    from .mcp_config import get_env_vars, register
-
-    env_vars = get_env_vars(config)
-    mcp_registered = register(env_vars=env_vars)
-    if mcp_registered:
-        print("tokenpak: MCP server registered", file=sys.stderr)
-    else:
-        print("tokenpak: MCP registration failed (continuing)", file=sys.stderr)
-
-    # ── Step 2: Install hooks ────────────────────────────────
-    hooks_installed = False
-    if config.hooks_enabled:
-        from .hooks import ensure_hooks_feature_enabled, install_hooks
-
-        if ensure_hooks_feature_enabled():
-            hooks_path = install_hooks(target="global")
-            hooks_installed = True
-            print(f"tokenpak: hooks installed ({hooks_path})", file=sys.stderr)
-        else:
-            print(
-                "tokenpak: hooks feature could not be enabled",
-                file=sys.stderr,
-            )
-
-    # ── Step 3: Install AGENTS.md ────────────────────────────
-    from .agents_md import install_agents_md
-
-    agents_path = install_agents_md(target="global")
-    print(f"tokenpak: AGENTS.md installed ({agents_path})", file=sys.stderr)
-
-    # ── Step 4: Install skills ───────────────────────────────
-    from .skills_installer import install_skills
-
-    installed = install_skills()
-    if installed:
-        print(f"tokenpak: {len(installed)} skills installed", file=sys.stderr)
-
-    setup = {
-        "setup_completed": True,
-        "profile": config.profile,
-        "budget_daily_usd": config.budget_daily_usd,
-        "rates_snapshot_refreshed": True,
-        "mcp_registered": bool(mcp_registered),
-        "hooks_enabled": bool(config.hooks_enabled),
-        "hooks_installed": hooks_installed,
-        "agents_md_installed": True,
-        "skills_installed_count": len(installed),
-    }
-
-    # ── Step 5: Banner ───────────────────────────────────────
-    budget_phrase = (
-        f"budget ${config.budget_daily_usd:.2f}/day"
-        if config.budget_daily_usd > 0
-        else "no budget cap"
-    )
-    print(
-        f"tokenpak: companion ready for codex ({config.profile}, {budget_phrase})",
-        file=sys.stderr,
-    )
-
-    if install_only:
-        if receipt_out and run_id:
-            started_at = utc_now()
-            start_monotonic = time.monotonic()
-            try:
-                _write_accounting_receipt(
-                    receipt_out=receipt_out,
-                    run_id=run_id,
-                    codex_args=[],
-                    setup=setup,
-                    started_at=started_at,
-                    start_monotonic=start_monotonic,
-                    exit_code=0,
-                    status="setup_only",
-                    missing_evidence=["codex_process_not_launched_install_only"],
-                )
-            except OSError as exc:
-                print(
-                    f"tokenpak: failed to write accounting receipt: {exc}",
-                    file=sys.stderr,
-                )
-                return 1
+    if receipt_only and not (receipt_out and run_id):
         print(
-            "tokenpak: setup complete — run `tokenpak codex doctor` to verify",
+            "tokenpak: --receipt-only requires --receipt-out and --run-id",
             file=sys.stderr,
         )
-        return 0
+        return 2
+    if receipt_only and install_only:
+        print(
+            "tokenpak: --receipt-only cannot be combined with --install-only",
+            file=sys.stderr,
+        )
+        return 2
 
-    # ── Step 5.5: Preflight Codex local-database lock ────────
-    # Only for real launches (install-only returned above): a shared
-    # ~/.codex whose state/log SQLite is held by another — or a suspended
-    # — Codex process would otherwise fail Codex on a raw "database is
-    # locked" error at startup.
-    lock_exit = _preflight_state_lock()
+    # Resolve and expose every path before any selected-home write.  Unknown
+    # modes fail closed; a typo must never fall back to shared state.
+    from . import session_home
+
+    try:
+        paths = session_home.select_paths(workspace_dir=Path.cwd())
+    except (session_home.InvalidSessionMode, ValueError) as exc:
+        print(f"tokenpak: {exc}", file=sys.stderr)
+        return 2
+    _print_session_paths(paths)
+
+    # This sweep is deliberately before preflight, lease acquisition, and
+    # selected-home creation.  It therefore remains reachable after switching
+    # to shared/workspace mode and can recover receipt-proven quarantines even
+    # when the selected launch later blocks or runs out of storage.
+    _run_isolated_retention(
+        session_home,
+        paths,
+        phase="pre-launch",
+        preserve_home=paths.home,
+    )
+
+    # Kernel-only inspection happens before provisioning, MCP registration,
+    # hooks, AGENTS.md, skills config, or the lifecycle sentinel is written.
+    # Linux can attribute native Codex attachments through procfs before the
+    # TokenPak lifecycle lease exists.  On other platforms, deterministic
+    # workspace homes rely on that exclusive lifecycle lease; shared mode
+    # still fails closed through the diagnostic surface when databases exist.
+    needs_kernel_preflight = paths.mode == session_home.MODE_SHARED or sys.platform.startswith(
+        "linux"
+    )
+    lock_exit = _preflight_state_lock(home=paths.home) if needs_kernel_preflight else None
     if lock_exit is not None:
         if receipt_out and run_id:
-            started_at = utc_now()
-            start_monotonic = time.monotonic()
+            setup = (
+                _receipt_only_setup_metadata()
+                if receipt_only
+                else {
+                    "setup_completed": False,
+                    "session_mode": paths.mode,
+                    "codex_home": str(paths.home),
+                }
+            )
             try:
                 _write_accounting_receipt(
                     receipt_out=receipt_out,
                     run_id=run_id,
                     codex_args=args,
                     setup=setup,
-                    started_at=started_at,
-                    start_monotonic=start_monotonic,
+                    started_at=utc_now(),
+                    start_monotonic=time.monotonic(),
                     exit_code=lock_exit,
                     status="blocked",
                     missing_evidence=["codex_process_not_launched_preflight_block"],
                 )
-            except OSError as exc:
+            except (OSError, RuntimeError) as exc:
                 print(
                     f"tokenpak: failed to write accounting receipt: {exc}",
                     file=sys.stderr,
@@ -565,62 +675,302 @@ def main(
                 return 1
         return lock_exit
 
-    # ── Step 6: Exec into codex ──────────────────────────────
-    if config.budget_daily_usd > 0:
-        os.environ["TOKENPAK_COMPANION_BUDGET"] = str(config.budget_daily_usd)
-
-    env = os.environ.copy()
-    if config.profile != "balanced":
-        env["TOKENPAK_COMPANION_PROFILE"] = config.profile
-    default_journal_dir = str(config.journal_dir.__class__.home() / ".tokenpak" / "companion")
-    if str(config.journal_dir) != default_journal_dir:
-        env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(config.journal_dir)
-    if receipt_out and run_id:
-        env["TOKENPAK_CODEX_RECEIPT_OUT"] = receipt_out
-        env["TOKENPAK_CODEX_RUN_ID"] = run_id
-
-    fleet = _fleet_state_enabled()
-    forwarded = _maybe_inject_bypass_flag(args, env, fleet=fleet)
-    banner = _fleet_banner(env, fleet=fleet)
-    if banner:
-        print(banner, file=sys.stderr)
-    codex_args = ["codex", *forwarded]
-    if receipt_out and run_id:
-        started_at = utc_now()
-        start_monotonic = time.monotonic()
-        usage = empty_usage()
-        status = "failed"
+    try:
         try:
-            exit_code, usage = _run_codex_process(codex_args, env)
-            status = "completed" if exit_code == 0 else "failed"
-        except KeyboardInterrupt:
-            exit_code = 130
-            status = "interrupted"
-        except OSError as exc:
-            exit_code = 1
-            status = "launch_failed"
-            print(f"tokenpak: failed to launch codex: {exc}", file=sys.stderr)
-        try:
-            _write_accounting_receipt(
-                receipt_out=receipt_out,
-                run_id=run_id,
-                codex_args=forwarded,
-                setup=setup,
-                started_at=started_at,
-                start_monotonic=start_monotonic,
-                exit_code=exit_code,
-                status=status,
-                usage=usage,
+            lease = session_home.SessionLease.acquire(paths)
+        except (OSError, RuntimeError) as exc:
+            if not _is_storage_pressure(exc):
+                raise
+            _run_isolated_retention(
+                session_home,
+                paths,
+                phase="storage-pressure",
+                preserve_home=paths.home,
+                remove_all_orphans=True,
             )
-        except OSError as exc:
+            lease = session_home.SessionLease.acquire(paths)
+    except (OSError, RuntimeError) as exc:
+        print(f"tokenpak: selected-home setup refused: {exc}", file=sys.stderr)
+        return 1
+
+    with _lease_with_post_retention(lease, session_home, paths):
+
+        def reusable_home_is_clear() -> bool:
+            if paths.mode == session_home.MODE_ISOLATED:
+                return True
+            if paths.mode == session_home.MODE_WORKSPACE and not sys.platform.startswith("linux"):
+                return True
+            lease.assert_home_binding()
+            return _preflight_state_lock(home=paths.home) is None
+
+        # Close the preflight-to-lease race for reusable homes.  A native
+        # Codex process does not participate in our sentinel guard, so sample
+        # kernel attachment state once more while this launcher owns the
+        # TokenPak lease and before companion setup starts subprocesses.
+        if not reusable_home_is_clear():
+            return 1
+
+        try:
+            try:
+                lease.assert_home_binding()
+                provisioned = session_home.provision(paths, home_fd=lease.home_fd)
+                lease.assert_home_binding()
+            except (OSError, RuntimeError) as exc:
+                if not _is_storage_pressure(exc):
+                    raise
+                _run_isolated_retention(
+                    session_home,
+                    paths,
+                    phase="storage-pressure",
+                    preserve_home=paths.home,
+                    remove_all_orphans=True,
+                )
+                lease.assert_home_binding()
+                provisioned = session_home.provision(paths, home_fd=lease.home_fd)
+                lease.assert_home_binding()
+        except (OSError, RuntimeError) as exc:
+            print(f"tokenpak: selected-home provisioning refused: {exc}", file=sys.stderr)
+            return 1
+
+        if provisioned.seeded:
             print(
-                f"tokenpak: failed to write accounting receipt: {exc}",
+                f"tokenpak: safe config seeded ({', '.join(provisioned.seeded)})",
                 file=sys.stderr,
             )
+        if provisioned.linked_credentials:
+            print(
+                "tokenpak: credential link installed "
+                f"({', '.join(provisioned.linked_credentials)})",
+                file=sys.stderr,
+            )
+
+        if paths.mode == session_home.MODE_ISOLATED:
+            _run_isolated_retention(
+                session_home,
+                paths,
+                phase="post-provision",
+                preserve_home=paths.home,
+            )
+
+        if receipt_only:
+            assert receipt_out is not None and run_id is not None
+            setup = _receipt_only_setup_metadata()
+            setup.update({"session_mode": paths.mode, "codex_home": str(paths.home)})
+            env = paths.environment(_vanilla_receipt_env())
+            env["TOKENPAK_CODEX_RECEIPT_OUT"] = receipt_out
+            env["TOKENPAK_CODEX_RUN_ID"] = run_id
+            codex_args = ["codex", *args]
+            started_at = utc_now()
+            start_monotonic = time.monotonic()
+            try:
+                lease.assert_home_binding()
+                if not reusable_home_is_clear():
+                    return 1
+                lease.begin_transfer()
+                exit_code, usage = _run_codex_process(codex_args, env, on_start=lease.transfer_to)
+                status = (
+                    "completed"
+                    if exit_code == 0
+                    else "interrupted"
+                    if exit_code == 130
+                    else "failed"
+                )
+            except (OSError, RuntimeError) as exc:
+                exit_code = 1
+                usage = empty_usage()
+                status = "launch_failed"
+                print(f"tokenpak: failed to launch codex: {exc}", file=sys.stderr)
+            try:
+                _write_accounting_receipt(
+                    receipt_out=receipt_out,
+                    run_id=run_id,
+                    codex_args=args,
+                    setup=setup,
+                    started_at=started_at,
+                    start_monotonic=start_monotonic,
+                    exit_code=exit_code,
+                    status=status,
+                    usage=usage,
+                )
+            except OSError as exc:
+                print(
+                    f"tokenpak: failed to write accounting receipt: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
+            return exit_code
+
+        config = CompanionConfig.from_env()
+        config.profile_overrides()
+        config.journal_dir.mkdir(parents=True, exist_ok=True)
+
+        from .rates_snapshot import refresh as refresh_rates
+
+        rates_path = refresh_rates()
+        print(f"tokenpak: rates snapshot refreshed ({rates_path})", file=sys.stderr)
+
+        from .mcp_config import _register, get_env_vars
+
+        env_vars = get_env_vars(config)
+        lease.assert_home_binding()
+        if not reusable_home_is_clear():
             return 1
+        mcp_registered = _register(env_vars=env_vars, codex_home=paths.home)
+        lease.assert_home_binding()
+        print(
+            "tokenpak: MCP server registered"
+            if mcp_registered
+            else "tokenpak: MCP registration failed (continuing)",
+            file=sys.stderr,
+        )
+
+        hooks_installed = False
+        if config.hooks_enabled:
+            from .hooks import _ensure_hooks_feature_enabled, _install_hooks
+
+            lease.assert_home_binding()
+            if not reusable_home_is_clear():
+                return 1
+            if _ensure_hooks_feature_enabled(codex_home=paths.home):
+                if not reusable_home_is_clear():
+                    return 1
+                hooks_path = _install_hooks(target="global", codex_home=paths.home)
+                lease.assert_home_binding()
+                hooks_installed = True
+                print(f"tokenpak: hooks installed ({hooks_path})", file=sys.stderr)
+            else:
+                print(
+                    "tokenpak: hooks feature could not be enabled",
+                    file=sys.stderr,
+                )
+
+        from .agents_md import _install_agents_md
+
+        lease.assert_home_binding()
+        if not reusable_home_is_clear():
+            return 1
+        agents_path = _install_agents_md(target="global", codex_home=paths.home)
+        lease.assert_home_binding()
+        print(f"tokenpak: AGENTS.md installed ({agents_path})", file=sys.stderr)
+
+        from .skills_installer import _configure_skills, install_skills
+
+        installed = install_skills(target_dir=paths.skills_root)
+        configured = []
+        if paths.mode != session_home.MODE_SHARED:
+            lease.assert_home_binding()
+            configured = _configure_skills(paths.config, skills_root=paths.skills_root)
+            lease.assert_home_binding()
+        if installed:
+            print(
+                f"tokenpak: {len(installed)} skills installed and "
+                f"{len(configured)} configured ({paths.skills_root})",
+                file=sys.stderr,
+            )
+
+        setup: dict[str, object] = {
+            "setup_completed": True,
+            "profile": config.profile,
+            "budget_daily_usd": config.budget_daily_usd,
+            "session_mode": paths.mode,
+            "codex_home": str(paths.home),
+            "config_path": str(paths.config),
+            "mcp_config_path": str(paths.mcp_config),
+            "hooks_path": str(paths.hooks),
+            "agents_md_path": str(paths.agents),
+            "skills_root": str(paths.skills_root),
+            "pid_sentinel_path": str(paths.pid_sentinel),
+            "rates_snapshot_refreshed": True,
+            "mcp_registered": bool(mcp_registered),
+            "hooks_enabled": bool(config.hooks_enabled),
+            "hooks_installed": hooks_installed,
+            "agents_md_installed": True,
+            "skills_installed_count": len(installed),
+            "skills_configured_count": len(configured),
+        }
+
+        budget_phrase = (
+            f"budget ${config.budget_daily_usd:.2f}/day"
+            if config.budget_daily_usd > 0
+            else "no budget cap"
+        )
+        print(
+            f"tokenpak: companion ready for codex ({config.profile}, {budget_phrase})",
+            file=sys.stderr,
+        )
+
+        if install_only:
+            if receipt_out and run_id:
+                try:
+                    _write_accounting_receipt(
+                        receipt_out=receipt_out,
+                        run_id=run_id,
+                        codex_args=[],
+                        setup=setup,
+                        started_at=utc_now(),
+                        start_monotonic=time.monotonic(),
+                        exit_code=0,
+                        status="setup_only",
+                        missing_evidence=["codex_process_not_launched_install_only"],
+                    )
+                except OSError as exc:
+                    print(
+                        f"tokenpak: failed to write accounting receipt: {exc}",
+                        file=sys.stderr,
+                    )
+                    return 1
+            print(
+                "tokenpak: setup complete — run `tokenpak codex doctor` to verify",
+                file=sys.stderr,
+            )
+            return 0
+
+        env = paths.environment(os.environ.copy())
+        env.update(env_vars)
+        if receipt_out and run_id:
+            env["TOKENPAK_CODEX_RECEIPT_OUT"] = receipt_out
+            env["TOKENPAK_CODEX_RUN_ID"] = run_id
+
+        fleet = _fleet_state_enabled()
+        forwarded = _maybe_inject_bypass_flag(args, env, fleet=fleet)
+        banner = _fleet_banner(env, fleet=fleet)
+        if banner:
+            print(banner, file=sys.stderr)
+        codex_args = ["codex", *forwarded]
+        started_at = utc_now()
+        start_monotonic = time.monotonic()
+        try:
+            lease.assert_home_binding()
+            if not reusable_home_is_clear():
+                return 1
+            lease.begin_transfer()
+            exit_code, usage = _run_codex_process(codex_args, env, on_start=lease.transfer_to)
+            status = (
+                "completed" if exit_code == 0 else "interrupted" if exit_code == 130 else "failed"
+            )
+        except (OSError, RuntimeError) as exc:
+            exit_code = 1
+            usage = empty_usage()
+            status = "launch_failed"
+            print(f"tokenpak: failed to launch codex: {exc}", file=sys.stderr)
+
+        if receipt_out and run_id:
+            try:
+                _write_accounting_receipt(
+                    receipt_out=receipt_out,
+                    run_id=run_id,
+                    codex_args=forwarded,
+                    setup=setup,
+                    started_at=started_at,
+                    start_monotonic=start_monotonic,
+                    exit_code=exit_code,
+                    status=status,
+                    usage=usage,
+                )
+            except OSError as exc:
+                print(
+                    f"tokenpak: failed to write accounting receipt: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
         return exit_code
-
-    os.execvpe("codex", codex_args, env)
-
-    print("tokenpak: failed to launch codex", file=sys.stderr)
-    return 1

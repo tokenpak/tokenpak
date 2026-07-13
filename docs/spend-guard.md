@@ -119,6 +119,19 @@ The default ratio 0.80 is published as `tokenpak.proxy.spend_guard.DEFAULT_BLOCK
 
 HTTP status: **402 Payment Required**. This is **not** a model failure — your client must surface the prompt to the operator (or pre-declare via `[TIP: ...]` if running headless) and **must not auto-retry** the same request body. The proxy enforces anti-loop dedup on the request hash for 30 seconds.
 
+### Guard state unavailable (operator repair)
+
+If Spend Guard cannot read or maintain its local guard state, it still blocks
+before provider send, but no held request exists to release. The response keeps
+`error.type=tokenpak_spend_guard_blocked` for client compatibility and carries
+`reason=spend_guard_state_unavailable`, `pending_id=null`,
+`approval_prompt=null`, `approval_prompt_available=false`, and
+`recovery_status=operator_action_required`.
+
+Do not show a Yes/No approval UI for this state and do not auto-proceed through
+Continuum or another Pro automation path. Repair the local guard state, run
+`tokenpak doctor`, and restart the TokenPak proxy before retrying.
+
 ### Hard-block (terminal)
 
 Same shape but `error.type=tokenpak_spend_guard_hard_blocked`, `retryable: false`, `recovery_status: terminally_blocked`. Even `[TIP: bypass=on]` cannot release this — the hard-block ceiling is immutable.

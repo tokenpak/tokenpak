@@ -2534,7 +2534,7 @@ def _build_codex_parser(sub):
             "  tokenpak codex\n"
             "  tokenpak codex --install-only    # set up without launching Codex\n"
             "  tokenpak codex doctor            # verify installation\n"
-            "  tokenpak codex uninstall         # reverse installation\n"
+            "  tokenpak codex uninstall         # clean selected home; preserve shared skills in use\n"
             "  tokenpak codex --budget 5.00\n"
             '  tokenpak codex "Fix the login bug"\n'
             "  tokenpak codex --model o3 -s workspace-write"

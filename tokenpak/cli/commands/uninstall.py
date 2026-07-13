@@ -197,11 +197,11 @@ def _teardown_codex() -> "tuple[str, str]":
     idempotent. It prints its own report; we capture the return code.
     """
     try:
-        from ...companion.codex.uninstall import run as codex_run
+        from ...companion.codex.uninstall import _run_global as codex_uninstall
     except Exception as exc:
         return _OUTCOME_NOOP, f"codex companion not present ({exc.__class__.__name__})"
     try:
-        rc = codex_run()
+        rc = codex_uninstall()
     except Exception as exc:
         return _OUTCOME_FAIL, f"codex teardown error: {exc}"
     if rc == 0:

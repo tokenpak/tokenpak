@@ -468,23 +468,134 @@ def _is_app_endpoint_path(path: str) -> bool:
 # Threaded HTTP server
 # ---------------------------------------------------------------------------
 
+# The overload-rejection body is built exactly once; the Content-Length header
+# is computed from the actual body bytes so the wire framing is always exact.
+_ADMISSION_REJECT_BODY = b'{"error":"managed_admission_capacity"}'
+_ADMISSION_REJECT_RESPONSE = (
+    b"HTTP/1.1 503 Service Unavailable\r\n"
+    b"Content-Type: application/json\r\n"
+    b"Content-Length: " + str(len(_ADMISSION_REJECT_BODY)).encode("ascii") + b"\r\n"
+    b"Connection: close\r\n"
+    b"\r\n" + _ADMISSION_REJECT_BODY
+)
+
+# Bounds for the pre-worker request-head peek. A model request's header block
+# must fit within _ADMISSION_PEEK_MAX_BYTES and finish arriving within
+# _ADMISSION_PEEK_DEADLINE_S of the first peek; otherwise the request is
+# classified on whatever bytes arrived in time. A marker that does not arrive
+# within the bounds classifies the request as unmarked — the same handling as
+# any request without a marker (no admission lease, normal worker path).
+_ADMISSION_FIRST_PEEK_TIMEOUT_S = 0.25
+_ADMISSION_PEEK_DEADLINE_S = 1.0
+_ADMISSION_PEEK_MAX_BYTES = 8192
+_ADMISSION_PEEK_POLL_S = 0.005
+
+
 class _ThreadedHTTPServer(HTTPServer):
     """HTTP server that dispatches each request to a daemon thread."""
 
     proxy_server: "ProxyServer"  # injected after construction
 
-    def process_request(self, request, client_address):
-        t = threading.Thread(target=self._handle, args=(request, client_address))
-        t.daemon = True
-        t.start()
+    def _peek_request_head(self, request) -> bytes:
+        """Peek the request head without consuming bytes, under explicit bounds.
 
-    def _handle(self, request, client_address):
+        For model-endpoint paths the peek continues until the end of the
+        header block is visible, because a classification marker can arrive in
+        a later TCP segment than the request line. Both an explicit byte bound
+        and an explicit wall-time bound apply, so this never blocks
+        indefinitely. On bound exhaustion the partial head is returned and the
+        caller classifies the request on what actually arrived.
+        """
+        deadline = time.monotonic() + _ADMISSION_PEEK_DEADLINE_S
+        peeked = b""
+        try:
+            request.settimeout(_ADMISSION_FIRST_PEEK_TIMEOUT_S)
+            try:
+                peeked = request.recv(_ADMISSION_PEEK_MAX_BYTES, socket.MSG_PEEK)
+            except (OSError, ValueError):
+                return b""
+            if not peeked:
+                return b""
+            first_line = peeked.split(b"\r\n", 1)[0]
+            parts = first_line.split(b" ", 2)
+            path = parts[1].decode("latin-1", "ignore") if len(parts) > 1 else ""
+            if not path.startswith("/v1/messages"):
+                # Only model-endpoint requests are classified from the full
+                # header block; everything else needs just the request line.
+                return peeked
+            while (
+                b"\r\n\r\n" not in peeked
+                and len(peeked) < _ADMISSION_PEEK_MAX_BYTES
+                and time.monotonic() < deadline
+            ):
+                try:
+                    chunk = request.recv(_ADMISSION_PEEK_MAX_BYTES, socket.MSG_PEEK)
+                except (OSError, ValueError):
+                    break
+                if not chunk:
+                    break  # peer closed — nothing more will arrive
+                if len(chunk) <= len(peeked):
+                    # No new bytes yet — wait a bounded interval before the
+                    # next peek so the loop never busy-spins.
+                    time.sleep(_ADMISSION_PEEK_POLL_S)
+                peeked = chunk
+        finally:
+            try:
+                request.settimeout(None)
+            except (OSError, ValueError):
+                pass
+        return peeked
+
+    def process_request(self, request, client_address):
+        # Keep control-plane endpoints responsive while bounding model traffic.
+        # Admission happens before a worker thread is created, so overload cannot
+        # turn into an unbounded thread/socket population.
+        peeked = self._peek_request_head(request)
+        first_line = peeked.split(b"\r\n", 1)[0]
+        parts = first_line.split(b" ", 2)
+        path = parts[1].decode("latin-1", "ignore") if len(parts) > 1 else ""
+        control = path == "/health" or path.startswith("/health?") or path in {"/status", "/metrics"} or path.startswith("/tpk/v1/") or path.startswith("/pak/v1/")
+        managed = False
+        if not control and path.startswith("/v1/messages"):
+            from tokenpak.proxy.spend_guard.classifier import MANAGED, classify
+            headers = {}
+            for line in peeked.split(b"\r\n")[1:]:
+                if not line:
+                    break
+                key, sep, value = line.partition(b":")
+                if sep:
+                    headers[key.decode("latin-1")] = value.decode("latin-1").strip()
+            managed = classify(headers).request_class == MANAGED
+        admitted = managed and self.proxy_server._admission.acquire(blocking=False)
+        if managed and not admitted:
+            try:
+                request.sendall(_ADMISSION_REJECT_RESPONSE)
+            finally:
+                self.shutdown_request(request)
+            self.proxy_server._admission_rejected += 1
+            return
+        try:
+            t = threading.Thread(target=self._handle, args=(request, client_address, managed))
+            t.daemon = True
+            t.start()
+        except Exception:
+            # Worker creation failed after the admission decision: release the
+            # lease (if one was acquired) and close the accepted socket so
+            # neither leaks. Re-raise so the serving loop records the error.
+            if admitted:
+                self.proxy_server._admission.release()
+            self.shutdown_request(request)
+            raise
+
+    def _handle(self, request, client_address, managed=False):
         try:
             self.finish_request(request, client_address)
         except Exception:
             self.handle_error(request, client_address)
         finally:
             self.shutdown_request(request)
+            if managed:
+                self.proxy_server._admission.release()
 
 
 # ---------------------------------------------------------------------------
@@ -2948,6 +3059,9 @@ class ProxyServer:
         self._last_lock = threading.Lock()
         self._server: Optional[_ThreadedHTTPServer] = None
         self._server_thread: Optional[threading.Thread] = None
+        self._admission_limit = max(1, int(os.environ.get("TOKENPAK_MANAGED_ADMISSION", "16")))
+        self._admission = threading.BoundedSemaphore(self._admission_limit)
+        self._admission_rejected = 0
         # Rolling window of per-request compression ratios (last 100)
         self._compression_ratios: deque = deque(maxlen=100)
         self._compression_lock = threading.Lock()
@@ -3172,6 +3286,11 @@ class ProxyServer:
             "is_degraded": is_degraded,
             "is_shutting_down": is_shutting_down,
             "in_flight_requests": self.shutdown.in_flight_count(),
+            "admission": {
+                "limit": self._admission_limit,
+                "available": self._admission._value,
+                "rejected": self._admission_rejected,
+            },
             "timestamp": datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "connection_pool": {
                 "http2_enabled": self._connection_pool.http2_enabled,

@@ -6,6 +6,13 @@ Each route classification maps to a header-forwarding strategy:
 - ``forward_all``: relay every client header (Claude Code client-auth pass-through)
 - ``allowlist``:   only forward headers on the route's allowlist (OpenClaw)
 - ``sanitize``:    strip known-bad hop-by-hop / dangerous headers (SDK, non-Anthropic)
+
+Whichever strategy builds the upstream header set, headers in the
+TokenPak-internal namespace (``x-tokenpak-*`` / ``x-tpk-*``) are stripped
+before the request leaves the proxy: they are internal plumbing and must
+never reach a provider upstream. The allowlist strategies exclude them by
+construction (no allowlist contains an internal name); the relay and
+sanitize strategies strip them explicitly.
 """
 from __future__ import annotations
 
@@ -75,6 +82,21 @@ BLOCKED_FORWARD_HEADERS: frozenset = frozenset((
 
 
 # ---------------------------------------------------------------------------
+# Internal-namespace strip (final upstream forwarding boundary)
+# ---------------------------------------------------------------------------
+
+def _is_internal_header(name: str) -> bool:
+    """True when *name* is a TokenPak-internal header (never forwarded).
+
+    Delegates to the single canonical namespace predicate so the forwarding
+    boundary and the traffic classifier can never disagree on the strip set.
+    """
+    from tokenpak.proxy.spend_guard.classifier import is_internal_header
+
+    return is_internal_header(name)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -96,16 +118,21 @@ def forward_headers(
 
     Returns:
         A new header dict containing only the headers that should be
-        forwarded to the upstream provider.
+        forwarded to the upstream provider. TokenPak-internal headers
+        (``x-tokenpak-*`` / ``x-tpk-*``) are never included, whichever
+        strategy applies.
     """
     if route == ROUTE_CLAUDE_CODE and client_has_auth:
-        # Client-auth pass-through: forward ALL headers (like a pure relay).
+        # Client-auth pass-through: forward ALL headers (like a pure relay),
+        # except hop-by-hop and TokenPak-internal headers.
         return {
             k: v for k, v in raw_headers.items()
-            if k.lower() not in _HOP_BY_HOP_HEADERS
+            if k.lower() not in _HOP_BY_HOP_HEADERS and not _is_internal_header(k)
         }
 
     if route == ROUTE_CLAUDE_CODE:
+        # Allowlists never contain internal names, so the allowlist filter
+        # already excludes the internal namespace; output is unchanged.
         return {
             k.lower(): v for k, v in raw_headers.items()
             if k.lower() in CLAUDE_CODE_HEADER_ALLOWLIST
@@ -122,8 +149,8 @@ def forward_headers(
 
 
 def sanitize_headers(raw_headers: Dict[str, str]) -> Dict[str, str]:
-    """Strip hop-by-hop and dangerous headers (fallback strategy)."""
+    """Strip hop-by-hop, dangerous, and TokenPak-internal headers (fallback strategy)."""
     return {
         k: v for k, v in raw_headers.items()
-        if k.lower() not in BLOCKED_FORWARD_HEADERS
+        if k.lower() not in BLOCKED_FORWARD_HEADERS and not _is_internal_header(k)
     }

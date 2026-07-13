@@ -72,20 +72,33 @@ def _fail_closed_outcome(exc: Exception) -> "GuardOutcome":
             "message": (
                 "Spend Guard could not verify this request because its local "
                 "guard state is unavailable. The request was blocked before "
-                "provider send."
+                "provider send. No allow/stop prompt is available because no "
+                "pending request could be recorded."
             ),
-            "reason": "spend_guard_internal_error",
+            "reason": "spend_guard_state_unavailable",
+            "failure_kind": "spend_guard_internal_error",
             "threshold_hit": f"internal_error:{type(exc).__name__}",
             "projected_input_tokens": None,
             "projected_output_tokens": None,
             "projected_cost_usd": None,
             "pending_id": None,
-            "approval_prompt": (
-                "Repair Spend Guard state, or explicitly disable Spend Guard "
-                "only as an operator-approved emergency."
-            ),
+            "approval_prompt": None,
+            "approval_prompt_available": False,
+            "auto_proceed_available": False,
+            "continuum_auto_proceed_available": False,
+            "continuum_status": "not_active",
             "retryable": False,
             "recovery_status": "operator_action_required",
+            "recovery_actions": [
+                "run tokenpak doctor",
+                "repair or restore the local Spend Guard state store",
+                "restart the TokenPak proxy after repair",
+            ],
+            "operator_note": (
+                "Disable Spend Guard only as an explicit operator-approved "
+                "emergency; auto-proceed is unsafe while spend cannot be "
+                "verified."
+            ),
         }
     }
     return GuardOutcome(

@@ -33,9 +33,21 @@ def test_internal_guard_error_blocks_before_provider_send(monkeypatch, caplog):
 
     payload = json.loads(outcome.response_body.decode("utf-8"))
     assert payload["error"]["type"] == "tokenpak_spend_guard_blocked"
-    assert payload["error"]["reason"] == "spend_guard_internal_error"
+    assert payload["error"]["reason"] == "spend_guard_state_unavailable"
+    assert payload["error"]["failure_kind"] == "spend_guard_internal_error"
     assert payload["error"]["threshold_hit"] == "internal_error:DatabaseError"
+    assert payload["error"]["pending_id"] is None
+    assert payload["error"]["approval_prompt"] is None
+    assert payload["error"]["approval_prompt_available"] is False
+    assert payload["error"]["auto_proceed_available"] is False
+    assert payload["error"]["continuum_auto_proceed_available"] is False
+    assert payload["error"]["continuum_status"] == "not_active"
     assert payload["error"]["recovery_status"] == "operator_action_required"
+    assert payload["error"]["recovery_actions"] == [
+        "run tokenpak doctor",
+        "repair or restore the local Spend Guard state store",
+        "restart the TokenPak proxy after repair",
+    ]
     assert payload["error"]["retryable"] is False
     assert "file is not a database" not in outcome.response_body.decode("utf-8")
     assert "internal error (fail closed): DatabaseError" in caplog.text

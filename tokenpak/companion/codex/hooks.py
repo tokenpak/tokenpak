@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Generate and install Codex hooks.json for the tokenpak companion.
 
-Codex hooks are configured via ``~/.codex/hooks.json`` (global) or
+Codex hooks are configured via ``$CODEX_HOME/hooks.json`` (global) or
 ``<repo>/.codex/hooks.json`` (project-level).  The companion installs
 five hooks (5 of 6 Codex stable lifecycle events; PermissionRequest is
 deferred to L5 — see L1 audit delta hooks #10):
@@ -25,6 +25,7 @@ inside a function body.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -114,12 +115,32 @@ def generate_hooks_json() -> dict:
     return {"hooks": {event: [group] for event, group in _TOKENPAK_HOOK_EVENTS.items()}}
 
 
+def _selected_codex_home(codex_home: Path | None = None) -> Path:
+    """Resolve the active Codex home at call time."""
+    if codex_home is not None:
+        return Path(codex_home).expanduser()
+    configured = os.environ.get("CODEX_HOME")
+    return Path(configured).expanduser() if configured else Path.home() / ".codex"
+
+
+def _codex_env(codex_home: Path | None = None) -> dict[str, str]:
+    env = os.environ.copy()
+    env["CODEX_HOME"] = str(_selected_codex_home(codex_home))
+    return env
+
+
 def install_hooks(target: str = "global") -> Path:
+    """Write hooks.json using the active public Codex configuration."""
+    return _install_hooks(target)
+
+
+def _install_hooks(target: str = "global", *, codex_home: Path | None = None) -> Path:
     """Write hooks.json to the appropriate Codex config directory.
 
     Args:
-        target: ``"global"`` for ``~/.codex/hooks.json``, or a repo path
+        target: ``"global"`` for ``$CODEX_HOME/hooks.json``, or a repo path
                 for ``<repo>/.codex/hooks.json``.
+        codex_home: Internal explicit selected Codex home for a global install.
 
     Returns:
         Path to the written hooks.json file.
@@ -128,7 +149,7 @@ def install_hooks(target: str = "global") -> Path:
     replaced idempotently.
     """
     if target == "global":
-        hooks_dir = Path.home() / ".codex"
+        hooks_dir = _selected_codex_home(codex_home)
     else:
         hooks_dir = Path(target) / ".codex"
 
@@ -197,6 +218,11 @@ def _merge_hooks(existing: dict, new: dict) -> dict:
 
 
 def ensure_hooks_feature_enabled() -> bool:
+    """Enable hooks using the active public Codex configuration."""
+    return _ensure_hooks_feature_enabled()
+
+
+def _ensure_hooks_feature_enabled(codex_home: Path | None = None) -> bool:
     """Enable the ``hooks`` feature via ``codex features enable``.
 
     Uses the Codex-native command rather than hand-writing config.toml,
@@ -210,6 +236,7 @@ def ensure_hooks_feature_enabled() -> bool:
         result = subprocess.run(
             ["codex", "features", "enable", "hooks"],
             capture_output=True,
+            env=_codex_env(codex_home),
             text=True,
             timeout=10,
         )
@@ -223,17 +250,20 @@ def ensure_hooks_feature_enabled() -> bool:
         )
         return False
 
-    _suppress_unstable_warning()
+    if codex_home is None:
+        _suppress_unstable_warning()
+    else:
+        _suppress_unstable_warning(codex_home)
     return True
 
 
-def _suppress_unstable_warning() -> None:
-    """Add ``suppress_unstable_features_warning = true`` to ~/.codex/config.toml.
+def _suppress_unstable_warning(codex_home: Path | None = None) -> None:
+    """Add the warning suppression to the selected ``config.toml``.
 
     Best-effort: if the file can't be read/written we stay silent rather
     than fail the install. The warning is cosmetic.
     """
-    config_path = Path.home() / ".codex" / "config.toml"
+    config_path = _selected_codex_home(codex_home) / "config.toml"
     try:
         content = config_path.read_text() if config_path.exists() else ""
     except OSError:
