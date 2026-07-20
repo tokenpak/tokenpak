@@ -46,7 +46,7 @@ jobs:
 
       # ── Download baseline from previous run (main branch only) ────────
       - name: Download baseline benchmarks
-        uses: dawidd6/action-download-artifact@09f2f74827fd3a8607589e5ad7f9398816f540fe # v3.1.4
+        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
         if: github.event_name == 'pull_request'
         with:
           name: benchmark-baseline
