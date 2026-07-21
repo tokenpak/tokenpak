@@ -10,7 +10,7 @@
   7. No PYTHONPATH drift (proxy proc environ vs canonical from systemd unit)
   8. Per-host install consistency (tokenpak.env, systemd unit, settings.json same URL)
   9. Plugin directory exists at ~/.claude/plugins/tokenpak or ~/.claude/plugins/tokenpak-claude-code
-  10. Permission tiers (persistent tier per client + launcher fleet mode)
+  10. Permission tiers and per-client launcher defaults
 
 Each check runs independently.  A failure in one does not block the rest.
 Exit: non-zero if any check fails.
@@ -54,11 +54,28 @@ def _claude_settings_path() -> Path:
 
 
 def _proxy_pid_path() -> Path:
-    return Path.home() / ".tokenpak" / "proxy.pid"
+    # Route through the canonical home resolver instead of hardcoding the
+    # legacy ``~/.tokenpak`` directory.
+    try:
+        from tokenpak import _paths
+
+        return _paths.home() / "proxy.pid"
+    except Exception:
+        return Path.home() / ".tpk" / "proxy.pid"
 
 
 def _monitor_db_path() -> Path:
-    return Path.home() / ".tokenpak" / "monitor.db"
+    # Resolve the active monitor.db via the canonical resolver so this check
+    # reports against the same store every other reader uses.
+    try:
+        from tokenpak import _paths
+
+        resolved = _paths.monitor_db(mode="read")
+        if resolved is not None:
+            return resolved
+        return _paths.canonical_home() / "monitor.db"
+    except Exception:
+        return Path.home() / ".tpk" / "monitor.db"
 
 
 class CheckResult(TypedDict):
@@ -666,35 +683,64 @@ def _check_plugin_dir() -> CheckResult:
 
 
 def _check_permission_tiers() -> CheckResult:
-    """Check 10: permission tier display (persistent tier vs launcher fleet mode).
+    """Check 10: persistent tiers and per-client launcher defaults.
 
-    Renders the canonical three-row block. The persistent-tier rows are
-    restricted to strict/standard/auto/custom and NEVER show "fleet" —
-    fleet mode is only ever the separate boolean launcher row. A managed
-    key modified outside TokenPak reads "custom (... modified externally)"
-    and fails the check.
+    Persistent tiers never show launcher modes. Invalid launcher state is
+    ignored at runtime (inherit) and fails this check with safe reset guidance.
     """
     from tokenpak.cli.commands.permissions import doctor_rows
 
     rows, drift = doctor_rows()
     block = "\n         ".join(rows)
     if drift:
+        launcher_drift = any("launcher default" in row and "(" in row for row in rows)
+        detail = (
+            "invalid launcher mode ignored; safe inherit default applied"
+            if launcher_drift
+            else "managed tier key modified outside TokenPak"
+        )
+        remediation = (
+            "Run `tokenpak permissions launcher inherit --client both` to replace "
+            "invalid launcher state with safe inherit defaults."
+            if launcher_drift
+            else (
+                "Run `tokenpak permissions set <tier>` to re-apply a known tier, "
+                "or `tokenpak permissions reset` to clear the managed keys "
+                "(scoped — leaves all other settings untouched)."
+            )
+        )
         return CheckResult(
             check="permission_tiers",
             status="fail",
             message=f"Check 10 Permission tiers\n         {block}",
-            detail="managed tier key modified outside TokenPak",
+            detail=detail,
+            remediation=remediation,
+        )
+    active_modes = [
+        row
+        for row in rows
+        if "launcher default" in row
+        and any(
+            mode in row
+            for mode in ("approval-bypass", "sandbox-bypass", "full-bypass")
+        )
+    ]
+    if active_modes:
+        return CheckResult(
+            check="permission_tiers",
+            status="warn",
+            message=f"Check 10 Permission tiers\n         {block}",
+            detail="launcher bypass mode intentionally active",
             remediation=(
-                "Run `tokenpak permissions set <tier>` to re-apply a known tier, "
-                "or `tokenpak permissions reset` to clear the managed keys "
-                "(scoped — leaves all other settings untouched)."
+                "Review the launch warnings or run `tokenpak permissions launcher "
+                "inherit --client both` to restore inherited client policy."
             ),
         )
     return CheckResult(
         check="permission_tiers",
         status="pass",
         message=f"Check 10 Permission tiers\n         {block}",
-        detail="persistent tiers + launcher fleet mode consistent",
+        detail="persistent tiers + per-client launcher defaults consistent",
         remediation="",
     )
 

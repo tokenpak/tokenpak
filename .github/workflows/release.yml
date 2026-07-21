@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -170,7 +170,7 @@ jobs:
 
       - name: Upload chaos release-readiness artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-readiness-${{ steps.artifact_ref.outputs.safe_ref }}-test-chaos
           path: |
@@ -189,7 +189,7 @@ jobs:
       TOKENPAK_SNAPSHOT_GEN: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install (all extras for canonical snapshot reproduction)
@@ -241,7 +241,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -310,7 +310,7 @@ jobs:
           fi
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -368,13 +368,13 @@ jobs:
           cat SHA256SUMS
 
       - name: Upload dist artifact (wheels + sdist only)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
 
       - name: Upload checksums artifact (SHA256SUMS only)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: checksums
           path: SHA256SUMS

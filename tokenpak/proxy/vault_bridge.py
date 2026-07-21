@@ -6,12 +6,16 @@ Extracted from runtime/proxy.py (L1177-1498) as part of TPK-RESTRUCTURE-004.
 """
 
 import codecs
+import ctypes
+import gc
 import hashlib
 import json
 import logging
 import math
 import os
+import platform
 import re
+import sys
 import threading
 import time
 from array import array as _array
@@ -46,6 +50,8 @@ from .config import (
     VAULT_CACHE_PRELOAD as _VAULT_CACHE_PRELOAD,
 )
 from .token_cache import count_tokens
+
+logger = logging.getLogger(__name__)
 
 # Term resolver feature flags — enabled by default; opt out with TOKENPAK_TERM_RESOLVER_ENABLED=0
 TERM_RESOLVER_ENABLED: bool = _cfg(
@@ -172,6 +178,22 @@ def _utf8_prefix(text: str, byte_limit: int) -> str:
     return encoded[:byte_limit].decode("utf-8", errors="ignore")
 
 
+def _return_released_memory_to_os() -> None:
+    """Best-effort return of post-reload allocator pages to the operating system."""
+    gc.collect()
+    if sys.platform != "linux" or platform.libc_ver()[0].lower() != "glibc":
+        return
+
+    try:
+        libc = ctypes.CDLL(None)
+        malloc_trim = libc.malloc_trim
+        malloc_trim.argtypes = [ctypes.c_size_t]
+        malloc_trim.restype = ctypes.c_int
+        malloc_trim(0)
+    except (AttributeError, OSError, TypeError, ValueError, ctypes.ArgumentError):
+        logger.debug("glibc malloc_trim unavailable after vault reload", exc_info=True)
+
+
 class VaultIndex:
     """
     Read-only BM25-searchable index loaded from .tokenpak/index.json + blocks/.
@@ -289,7 +311,12 @@ class VaultIndex:
             except OSError:
                 return
 
+            previous_generation_id = generation.generation_id
+            del generation
             self._load(index_path, mtime)
+            published_generation_id = self._snapshot_generation().generation_id
+            if published_generation_id > previous_generation_id:
+                _return_released_memory_to_os()
             self._last_loaded = now
 
     @staticmethod

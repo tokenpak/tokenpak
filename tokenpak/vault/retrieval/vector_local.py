@@ -118,7 +118,7 @@ class LocalVectorRetriever(Retriever):
         if not _ST_AVAILABLE:
             warnings.warn(
                 "sentence-transformers not installed. LocalVectorRetriever will return empty results. "
-                "Install with: pip install sentence-transformers",
+                "Install with: pip install tokenpak[retrieval]",
                 ImportWarning,
                 stacklevel=2,
             )

@@ -2,7 +2,7 @@
 
 This guide covers production deployment of the TokenPak LLM proxy — from a single machine to load-balanced multi-instance setups.
 
-> **Quick reference:** For basic local install, see the root [DEPLOYMENT.md](../DEPLOYMENT.md).
+> **Quick reference:** For basic local install, see the [Install Guide](install-guide.md).
 > This guide focuses on hardened, production-grade deployments.
 
 ---

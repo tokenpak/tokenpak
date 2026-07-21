@@ -16,6 +16,7 @@ on:
     paths:
       - 'tokenpak/**'
       - 'tests/**'
+      - '.github/workflows/ci.yml'
       - 'pyproject.toml'
       - 'docs/cli-reference.md'
       - 'scripts/generate-cli-docs.py'
@@ -39,7 +40,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -76,7 +77,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -98,7 +99,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -118,7 +119,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -193,7 +194,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-py${{ matrix.python-version }}
           path: reports/test-results-py${{ matrix.python-version }}.xml
@@ -201,7 +202,7 @@ jobs:
 
       - name: Upload Phase 2 test results
         if: always() && matrix.python-version == '3.11'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-phase2-py${{ matrix.python-version }}
           path: reports/test-results-phase2-py${{ matrix.python-version }}.xml
@@ -219,7 +220,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: 'pip'

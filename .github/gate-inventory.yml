@@ -8,17 +8,18 @@
 #                 Check for internal/sensitive content  [strict, enforce_admins]
 #   public/main:  license-check (ruleset 18198213); force-push+deletion blocked (ruleset 18449162)
 files:
-  benchmarks.yml: d3d1ecb741c1a8fdb168aaca746b32811c0af59f2d9580be9a77603eba5b6303
-  ci.yml: 1b886f07857a3be6ee9d842305a5979588cb20e1c422ba64e087b8555c8314b9
-  determinism.yml: 80eafcd8f0c3bc6f657c77e2d3f77cdde1e0ee9adcfb7ea16c888e2f60543e38
-  forbidden-impl-vocab-check.yml: 4f620ec5241d07d184da7750b4010bddd5d4ea94013ac0e9768f926f3ab560ea
-  gate-inventory-check.yml: faec5160d776bd7d57479ccfc35547d22c1101cc2bfd7ac69aa4ff62ae044787
-  identity-language-check.yml: cb6299369edf70a1eb5f9f3599316c40e34776b992354e12b6fa3625a95b4f15
-  integration.yml: 6d9138e713e04b3d35107e05c7412f704b3097c1f159d5368cab9b5967ade1e1
+  benchmarks.yml: b1d4fd07264302ef61d907f2fe66a4ef4de597266d47073a97d550b75964b132
+  ci.yml: a85d35c93b7c188300145bbcf29f364bf8ab22db51499a04559cab89e9b69b9f
+  determinism.yml: 97a16d25a4fb95f945352d137c86653e171e900f1035d1c827d4769839179f86
+  forbidden-impl-vocab-check.yml: 2930fc58a129bfd430a64d1c313c0ac9ecff571277cef1fb95d25b0bf9a17e29
+  gate-inventory-check.yml: e36cabf116ff2cee774b21268ed98b4455a7cc9bca34b10c06c3454b36f4dbdc
+  identity-language-check.yml: 3192e306dabce4a68818d9bdbe906ef5e93e2574690b9d8178e375057da9652f
+  integration.yml: eea74576da6eb58cbda0c765b2faa88b7b2f5030eb9c813902fd114720c4e683
   license-check.yml: 1b089f06c6d443a69fb226080dd03fc506548434e5ca5b20b3ecd7408ea9a6c3
+  public-baseline-scan.yml: e970cfd1a76817abc5c57165502e89249ddd7db3f85badc3944c56fcba878dea
   public-layout-check.yml: 1849dbab552186abe2a6eec32f86823f308cd690a0cd856b414a726e4edbb29b
-  release-rehearsal.yml: 1f6423e36ccd6287095731fefc72629bc970f51001cb8cfecd5ebbcd62e6024b
-  release.yml: b3af6b1a09c7331beba0ad94ec7ddca11963a71b3a9c3509865da9585c68d5fa
+  release-rehearsal.yml: 609825341cb3418bd0e41b7538d77ce1cd8e2c3167f69ebe8405cade4f26464c
+  release.yml: 352e51e08f9d70e60dd652d0cb697c7ee612380fff779db2ba51545b350558d0
   repo-hygiene.yml: 487c0811904fad3eb2c3c9711037cbc99c8eb1b79154b95be8bd8722d92baab5
-  secret-scan.yml: 4ffbcae7b016cbbfe12e8f318516713f92b673e56972633737899b843743273c
-  trust-conformance.yml: d17ba281c1327388293c02d5773a5eac2e7053e54fe9dd71c497f7556155ebd3
+  secret-scan.yml: 726d0891beba583219b816eab0adb93c19600ed15db7487ce245127772c936ad
+  trust-conformance.yml: 75b3715c615690f435355eefa6bf7392aca55451ec4fa29f65212c41eac0a363

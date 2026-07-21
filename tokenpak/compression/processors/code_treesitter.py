@@ -22,6 +22,13 @@ try:
     _TS_AVAILABLE = True
 except ImportError:
     _TS_AVAILABLE = False
+    warnings.warn(
+        "tree-sitter-languages not installed; structural code compression "
+        "will fall back to the heuristic CodeProcessor. "
+        "Install with: pip install tokenpak[code-compression]",
+        ImportWarning,
+        stacklevel=2,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -317,6 +317,16 @@ View and edit config
 - `migrate`
   - `--config-json` — Path to legacy config.json (default: ~/.tokenpak/config.json) (default: ~/.tokenpak/config.json)
   - `--dry-run` — Print what would change without writing
+- `optimize`
+  - `--plan` — Show the deterministic plan without writing (default)
+  - `--apply` — Atomically apply the recomputed process-local plan
+  - `--status` — Read managed artifacts and drift state without writing
+  - `--rollback` — Restore the exact recorded preimage
+  - `--profile` — Memory budget policy (default: balanced) — choices: `balanced`, `conservative`, `throughput`
+  - `--mode` — Runtime behavior (default: auto) — choices: `auto`, `observe`, `off`
+  - `--expect-hash` — With --apply, refuse unless the recomputed plan has this SHA-256
+  - `--force` — With --rollback, restore the preimage despite external drift
+  - `--json` — Emit machine-readable JSON
 
 ### `tokenpak explain`
 
@@ -331,27 +341,51 @@ Explain workflow profiles
 Manage the TokenPak permission tier system.
 
 Persistent tiers (strict/standard/auto) are written into the client's
-own config (Claude Code settings.json / Codex config.toml). Fleet mode
-is launcher-scoped only: `tokenpak claude` / `tokenpak codex` inject
-bypass flags at launch and print a banner — client configs are never
-modified by fleet mode.
+own config (Claude Code settings.json / Codex config.toml). Launcher
+defaults are TokenPak-scoped only: `tokenpak claude` / `tokenpak codex`
+inject session arguments and print a warning — client configs are never
+modified by launcher defaults.
 
 Examples:
-  tokenpak permissions show                      # current tiers + fleet mode
+  tokenpak permissions show                      # tiers + launcher defaults
   tokenpak permissions set auto                  # both clients
   tokenpak permissions set strict --client codex # one client
-  tokenpak permissions set fleet                 # launcher fleet mode (opt-in)
-  tokenpak permissions reset                     # scoped reset + fleet off
+  tokenpak permissions launcher approval-bypass --client codex
+  tokenpak permissions launcher sandbox-bypass --client codex
+  tokenpak permissions launcher full-bypass --client both
+  tokenpak permissions launcher inherit --client both
+  tokenpak permissions set fleet                 # legacy full-bypass alias
 
 **Subcommands:**
 
 - `show`
+  - `--json` — Output one schema-versioned JSON object
+  - `--quiet` — Suppress normal output; safety warnings still go to stderr
 - `set`
-  - `TIER` — Tier to apply ('fleet' sets launcher state only) — choices: `strict`, `standard`, `auto`, `fleet`
-  - `--client` — Which client to configure (default: both) (default: both) — choices: `claude-code`, `codex`, `both`
-  - `--yes` — Skip the fleet-mode confirmation prompt (explicit opt-in)
+  - `TIER` — Tier to apply ('fleet' is a legacy full-bypass alias and requires --client both) — choices: `strict`, `standard`, `auto`, `fleet`
+  - `--client` — Which client to configure (default: both) — choices: `claude-code`, `codex`, `both`
+  - `--yes` — Confirm the `permissions set fleet` full-bypass alias non-interactively
 - `reset`
-  - `--client` — Which client to reset (default: both) (default: both) — choices: `claude-code`, `codex`, `both`
+  - `--client` — Which client to reset (default: both) — choices: `claude-code`, `codex`, `both`
+- `launcher` — Set session-only permission defaults for `tokenpak claude` and
+`tokenpak codex`. These settings never modify client config files.
+Every bypass mode requires confirmation and prints a warning on each
+affected launch. Managed administrator policy can still constrain or
+reject the client launch.
+
+Modes:
+  inherit          inject nothing; use client and managed policy
+  approval-bypass disable prompts; keep sandbox limits (Codex only)
+  sandbox-bypass  disable sandbox; keep approvals (Codex only)
+  full-bypass     disable local prompts and sandbox/permission checks
+
+Use `launcher <mode> --client <client>` to configure. Choose `inherit`
+to disable a launcher override. Use `permissions show` to inspect.
+  - `LAUNCHER_MODE` — inherit | approval-bypass | sandbox-bypass | full-bypass (partial bypass modes are Codex-only) — choices: `inherit`, `approval-bypass`, `sandbox-bypass`, `full-bypass`
+  - `--client` — Client scope; explicit selection is required for safety — choices: `claude-code`, `codex`, `both`
+  - `--yes` — Confirm a bypass mode non-interactively; warnings still print
+  - `--json` — Output one schema-versioned result object
+  - `--quiet` — Suppress success output; safety warnings still go to stderr
 
 ---
 
@@ -445,6 +479,7 @@ Live dashboard
 
 - `--fleet` — Show fleet-wide summary (TUI)
 - `--json` — Export dashboard as JSON (non-interactive)
+- `--layout` — Select read-only cockpit layout for terminal or JSON output (default: home) — choices: `home`, `dispatch`, `spend`, `debug`, `fleet`
 - `--public` — Advanced: show public URL with token for non-tunneled access
 - `--show-token` — Display current dashboard token
 - `--new-token` — Regenerate dashboard token
@@ -530,6 +565,9 @@ Toggle debug logging
 - `export`
   - `TRACE_ID` — Trace ID to export
   - `--json` — Output as JSON
+- `receipt`
+  - `REQUEST_ID` — Request ID to render a receipt for (omit to print the support-bundle pointer)
+  - `--raw` — Show the receipt without redaction (default: redaction-safe)
 
 ### `tokenpak learn`
 
@@ -638,6 +676,10 @@ TokenPak Dispatch — scoped, station-based, resumable, gated work packages with
 - `receipt`
   - `JOB_ID` — Dispatch job id (job_…)
   - `--json` — Emit machine-readable JSON instead of human-readable output
+- `routes`
+  - `--json` — Emit machine-readable JSON instead of human-readable output
+- `workers`
+  - `--json` — Emit machine-readable JSON instead of human-readable output
 
 ---
 
@@ -745,7 +787,7 @@ Launch an interactive test that auto-detects your available
 platforms, providers, and models, then runs a 5-turn A/B
 comparison (with vs without tokenpak) with live display.
 
-Just run: tokenpak test
+Run: tokenpak test
 
 ### `tokenpak prove`
 
@@ -1143,8 +1185,8 @@ Examples:
 - `--proxy-url` — Override the printed proxy URL (default: $TOKENPAK_PROXY_URL or http://localhost:8766)
 - `--apply` — Auto-write config files for the given client (headless / scripted path)
 - `--revert` — Restore the most recent backup for the given client (undoes --apply)
-- `--tier` — Permission tier to apply with --apply (claude-code / codex only; default: standard). 'fleet' is launcher-scoped and never persists into client config — see `tokenpak permissions --help`. — choices: `strict`, `standard`, `auto`, `fleet`
-- `--yes` — Confirm dangerous choices non-interactively (required for --tier fleet without a TTY)
+- `--tier` — Permission tier to apply with --apply (claude-code / codex only; default: standard). 'fleet' is the legacy full-bypass alias for both TokenPak launchers and never persists into client config. — choices: `strict`, `standard`, `auto`, `fleet`
+- `--yes` — Confirm dangerous choices non-interactively (required for legacy --tier fleet)
 
 ### `tokenpak last`
 

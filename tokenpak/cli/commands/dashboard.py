@@ -37,8 +37,10 @@ except (TypeError, ValueError):
 
 SCHEMA_VERSION = "dashboard.v2.0"
 REFRESH_INTERVAL = 5  # seconds
+LAYOUTS = ("home", "dispatch", "spend", "debug", "fleet")
 
 __all__ = [
+    "LAYOUTS",
     "PROXY_PORT",
     "REFRESH_INTERVAL",
     "collect_fleet_data",
@@ -166,6 +168,60 @@ def _measure(
     return payload
 
 
+def _layout_item(
+    label: str,
+    *,
+    state: str,
+    source: str,
+    value: Any = None,
+    unit: str | None = None,
+    detail: str | None = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {"label": label, "state": state, "value": value, "source": source}
+    if unit:
+        payload["unit"] = unit
+    if detail:
+        payload["detail"] = detail
+    return payload
+
+
+def _measure_item(label: str, measure: Dict[str, Any]) -> Dict[str, Any]:
+    return _layout_item(
+        label,
+        state=str(measure.get("state", "unknown")),
+        value=measure.get("value"),
+        source=str(measure.get("source", "unknown")),
+        unit=measure.get("unit"),
+        detail=measure.get("detail"),
+    )
+
+
+def _source_item(label: str, source: Dict[str, Any]) -> Dict[str, Any]:
+    return _layout_item(
+        label,
+        state=str(source.get("state", "unknown")),
+        value=source.get("ref"),
+        source=str(source.get("kind", "source")),
+        detail=source.get("detail"),
+    )
+
+
+def _layout_section(name: str, title: str, items: list[Dict[str, Any]]) -> Dict[str, Any]:
+    return {"name": name, "title": title, "items": items}
+
+
+def _read_only_commands(layout: str) -> list[Dict[str, Any]]:
+    peers = [name for name in LAYOUTS if name != layout]
+    return [
+        {
+            "label": f"{name.title()} JSON",
+            "command": f"tokenpak dashboard --layout {name} --json",
+            "executes_mutation": False,
+        }
+        for name in peers[:4]
+    ]
+
+
 def _field_measure(
     data: Dict[str, Any] | None,
     keys: tuple[str, ...],
@@ -195,8 +251,201 @@ def _compression_percent(data: Dict[str, Any] | None) -> Dict[str, Any]:
     return _measure(round(value, 1), state="measured", source="proxy_stats", unit="percent")
 
 
-def collect_dashboard_snapshot() -> Dict[str, Any]:
+def _normalize_layout(layout: str | None) -> str:
+    name = (layout or "home").strip().lower()
+    if name not in LAYOUTS:
+        raise ValueError(f"unknown dashboard layout {layout!r}; expected one of {', '.join(LAYOUTS)}")
+    return name
+
+
+def _build_layout_payload(snapshot: Dict[str, Any], layout: str) -> Dict[str, Any]:
+    summary = snapshot["summary"]
+    sources = snapshot["sources"]
+    spend = snapshot["spend"]
+    capabilities = snapshot["capabilities"]
+    dispatch = snapshot["dispatch"]
+    companion = snapshot["companion"]
+
+    if layout == "dispatch":
+        title = "Dispatch Cockpit"
+        sections = [
+            _layout_section(
+                "dispatch_state",
+                "Dispatch State",
+                [
+                    _layout_item(
+                        "Dispatch runtime",
+                        state=dispatch["state"],
+                        source=dispatch["source"],
+                        value="read-only",
+                        detail="Dispatch jobs and receipts are projected when the runtime DB exists.",
+                    ),
+                    _source_item("Dispatch runs DB", sources["dispatch_runs"]),
+                    _layout_item(
+                        "Decision Inbox",
+                        state="not_measured",
+                        source="dispatch_runs",
+                        value=None,
+                        detail="No Decision Inbox read model is exposed in the current source contract.",
+                    ),
+                ],
+            ),
+            _layout_section(
+                "freshness",
+                "Freshness",
+                [
+                    _measure_item("Recent errors", summary["recent_errors"]),
+                    _measure_item("Proxy start time", summary["proxy_start_time"]),
+                ],
+            ),
+        ]
+    elif layout == "spend":
+        title = "Spend Cockpit"
+        sections = [
+            _layout_section(
+                "spend",
+                "Measured Spend",
+                [
+                    _measure_item("Cost", spend["cost_usd"]),
+                    _measure_item("Saved dollars", spend["saved_usd"]),
+                    _measure_item("Saved tokens", spend["saved_tokens"]),
+                    _measure_item("Compression", spend["compression_percent"]),
+                    _measure_item("Compression mode", spend["compression_mode"]),
+                ],
+            ),
+            _layout_section(
+                "traffic",
+                "Traffic",
+                [
+                    _measure_item("Requests", summary["requests"]),
+                    _measure_item("Tokens in", summary["tokens_in"]),
+                    _measure_item("Tokens out", summary["tokens_out"]),
+                ],
+            ),
+        ]
+    elif layout == "debug":
+        title = "Debug Cockpit"
+        sections = [
+            _layout_section(
+                "capabilities",
+                "Capabilities",
+                [
+                    _layout_item(
+                        "Terminal UI",
+                        state=capabilities["terminal_ui"]["state"],
+                        source=capabilities["terminal_ui"]["source"],
+                        value=capabilities["terminal_ui"].get("rich"),
+                        detail=capabilities["terminal_ui"].get("detail"),
+                    ),
+                    _layout_item(
+                        "Process inspection",
+                        state=capabilities["process_inspection"]["state"],
+                        source=capabilities["process_inspection"]["source"],
+                        detail=capabilities["process_inspection"].get("detail"),
+                    ),
+                    _layout_item(
+                        "Service status source",
+                        state=capabilities["service_control"]["state"],
+                        source=capabilities["service_control"]["source"],
+                        detail=capabilities["service_control"].get("detail"),
+                    ),
+                ],
+            ),
+            _layout_section(
+                "sources",
+                "Source Availability",
+                [_source_item(label, source) for label, source in sources.items()],
+            ),
+        ]
+    elif layout == "fleet":
+        title = "Fleet Cockpit"
+        fleet_capability = capabilities["fleet_projection"]
+        sections = [
+            _layout_section(
+                "fleet",
+                "Fleet Projection",
+                [
+                    _layout_item(
+                        "Fleet config",
+                        state=fleet_capability["state"],
+                        source=fleet_capability["source"],
+                        value="opt-in",
+                        detail=fleet_capability.get("detail"),
+                    ),
+                    _source_item("fleet.yaml", sources["fleet_config"]),
+                    _layout_item(
+                        "Default behavior",
+                        state="disabled",
+                        source="dashboard_policy",
+                        value=False,
+                        detail="The local dashboard never assumes fleet mode by default.",
+                    ),
+                ],
+            )
+        ]
+    else:
+        title = "Home Cockpit"
+        sections = [
+            _layout_section(
+                "status",
+                "Status",
+                [
+                    _layout_item(
+                        "Proxy",
+                        state=summary["proxy"]["state"],
+                        source=summary["proxy"]["source"],
+                        value=summary["proxy"]["status"],
+                        detail=f"port {summary['proxy']['port']}",
+                    ),
+                    _measure_item("Requests", summary["requests"]),
+                    _measure_item("Auth profiles", summary["auth_profiles"]),
+                ],
+            ),
+            _layout_section(
+                "value",
+                "Local Value",
+                [
+                    _measure_item("Saved dollars", spend["saved_usd"]),
+                    _measure_item("Saved tokens", spend["saved_tokens"]),
+                    _measure_item("Compression", spend["compression_percent"]),
+                ],
+            ),
+            _layout_section(
+                "state_sources",
+                "State Sources",
+                [
+                    _layout_item(
+                        "Dispatch",
+                        state=dispatch["state"],
+                        source=dispatch["source"],
+                        value="read-only",
+                    ),
+                    _layout_item(
+                        "Companion",
+                        state=companion["state"],
+                        source=companion["source"],
+                        value="read-only",
+                    ),
+                    _source_item("monitor.db", sources["monitor_db"]),
+                ],
+            ),
+        ]
+
+    return {
+        "name": layout,
+        "title": title,
+        "read_only": True,
+        "default": layout == "home",
+        "sections": sections,
+        "warnings": snapshot["warnings"],
+        "next_commands": _read_only_commands(layout),
+        "mutation_controls": [],
+    }
+
+
+def collect_dashboard_snapshot(layout: str = "home") -> Dict[str, Any]:
     """Return the stable read-only ``tokenpak dashboard --json`` contract."""
+    layout = _normalize_layout(layout)
     port = _proxy_port()
     health = _http_get("/health", port=port)
     stats = _http_get("/stats", port=port)
@@ -276,7 +525,7 @@ def collect_dashboard_snapshot() -> Dict[str, Any]:
 
     proxy_start_time = _proxy_start_time()
 
-    return {
+    snapshot = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "capabilities": capabilities,
@@ -364,6 +613,8 @@ def collect_dashboard_snapshot() -> Dict[str, Any]:
         },
         "warnings": warnings,
     }
+    snapshot["layout"] = _build_layout_payload(snapshot, layout)
+    return snapshot
 
 
 def _legacy_value(measure: Dict[str, Any], fallback: Any = "not measured") -> Any:
@@ -621,6 +872,70 @@ def _render_fleet_dashboard(fleet_data: List[Dict[str, Any]]) -> None:
     console.print(t)
 
 
+def _display_value(item: Dict[str, Any]) -> str:
+    value = item.get("value")
+    if value is None:
+        return str(item.get("state", "unknown"))
+    unit = item.get("unit")
+    return f"{value} {unit}" if unit else str(value)
+
+
+def _render_layout_snapshot(snapshot: Dict[str, Any]) -> None:
+    """Print one read-only cockpit layout frame."""
+    layout = snapshot["layout"]
+    try:
+        from rich import box
+        from rich.console import Console
+        from rich.table import Table
+    except ImportError:
+        _render_layout_plain(snapshot)
+        return
+
+    console = Console()
+    console.print(f"[bold cyan]TokenPak {layout['title']}[/bold cyan]")
+    console.print("[dim]read-only dashboard layout[/dim]")
+    console.print()
+
+    for section in layout["sections"]:
+        table = Table(box=box.ROUNDED, expand=True, title=section["title"])
+        table.add_column("Signal", style="bold")
+        table.add_column("State")
+        table.add_column("Value")
+        table.add_column("Source", style="dim")
+        for item in section["items"]:
+            table.add_row(
+                str(item["label"]),
+                str(item["state"]),
+                _display_value(item),
+                str(item["source"]),
+            )
+        console.print(table)
+        console.print()
+
+    if layout["warnings"]:
+        console.print("[yellow]Warnings[/yellow]")
+        for warning in layout["warnings"]:
+            console.print(f"  - {warning}")
+
+
+def _render_layout_plain(snapshot: Dict[str, Any]) -> None:
+    layout = snapshot["layout"]
+    print(f"\nTokenPak {layout['title']}")
+    print("read-only dashboard layout")
+    print("-" * 50)
+    for section in layout["sections"]:
+        print(f"\n{section['title']}")
+        for item in section["items"]:
+            print(
+                f"  {item['label']}: {_display_value(item)} "
+                f"({item['state']}; source={item['source']})"
+            )
+    if layout["warnings"]:
+        print("\nWarnings")
+        for warning in layout["warnings"]:
+            print(f"  - {warning}")
+
+
 def _render_plain(data: Dict[str, Any]) -> None:
     """Fallback plain-text render (no rich)."""
     now_str = datetime.now().strftime("%H:%M:%S")
@@ -641,10 +956,11 @@ def _render_plain(data: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run_dashboard(fleet: bool = False, json_export: bool = False) -> None:
+def run_dashboard(fleet: bool = False, json_export: bool = False, layout: str = "home") -> None:
     """Run the dashboard (interactive TUI or one-shot JSON)."""
+    layout = _normalize_layout(layout)
     if json_export:
-        data = collect_dashboard_snapshot()
+        data = collect_dashboard_snapshot(layout=layout)
         print(json.dumps(data, indent=2, sort_keys=True))
         return
 
@@ -656,6 +972,18 @@ def run_dashboard(fleet: bool = False, json_export: bool = False) -> None:
                 fleet_data = collect_fleet_data()
                 _render_fleet_dashboard(fleet_data)
                 print(f"\n[Refreshing every {REFRESH_INTERVAL}s — Ctrl-C to quit]")
+                time.sleep(REFRESH_INTERVAL)
+        except KeyboardInterrupt:
+            print("\nDashboard closed.")
+        return
+
+    if layout != "home":
+        try:
+            while True:
+                _clear_screen()
+                data = collect_dashboard_snapshot(layout=layout)
+                _render_layout_snapshot(data)
+                print(f"[Refreshing every {REFRESH_INTERVAL}s — press Ctrl-C to quit]")
                 time.sleep(REFRESH_INTERVAL)
         except KeyboardInterrupt:
             print("\nDashboard closed.")
@@ -695,7 +1023,14 @@ try:
         is_flag=True,
         help="Export dashboard data as JSON (non-interactive)",
     )
-    def dashboard_cmd(fleet: bool, json_export: bool) -> None:
+    @click.option(
+        "--layout",
+        type=click.Choice(LAYOUTS),
+        default="home",
+        show_default=True,
+        help="Select the read-only dashboard layout",
+    )
+    def dashboard_cmd(fleet: bool, json_export: bool, layout: str) -> None:
         """Real-time TokenPak health dashboard.
 
         Shows proxy status, request stats, compression savings, and auth profiles.
@@ -705,10 +1040,11 @@ try:
 
         \\b
           tokenpak dashboard            # local TUI
+          tokenpak dashboard --layout spend --json
           tokenpak dashboard --fleet    # fleet-wide summary
           tokenpak dashboard --json     # one-shot JSON export
         """
-        run_dashboard(fleet=fleet, json_export=json_export)
+        run_dashboard(fleet=fleet, json_export=json_export, layout=layout)
 
 except ImportError:
 

@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 
 class TestLiteLLMIntegration:
     """LiteLLM adapter integration tests."""
@@ -121,23 +123,23 @@ class TestLiteLLMFrameworkIntegration:
     def test_litellm_provider_routing_openai(self):
         """Test OpenAI routing through LiteLLM adapter."""
         try:
-            import litellm
+            from litellm import get_llm_provider
         except ImportError:
             pytest.skip("litellm not installed")
 
         # Verify provider detection
-        provider = litellm.get_provider(model="gpt-4")
-        assert provider == "openai" or "openai" in provider.lower()
+        _, provider, _, _ = get_llm_provider(model="gpt-4")
+        assert provider == "openai"
 
     def test_litellm_provider_routing_anthropic(self):
         """Test Anthropic routing through LiteLLM adapter."""
         try:
-            import litellm
+            from litellm import get_llm_provider
         except ImportError:
             pytest.skip("litellm not installed")
 
-        provider = litellm.get_provider(model="claude-3-sonnet-20240229")
-        assert provider == "anthropic" or "anthropic" in provider.lower()
+        _, provider, _, _ = get_llm_provider(model="anthropic/claude-3-sonnet-20240229")
+        assert provider == "anthropic"
 
 
 class TestLiteLLMCaching:

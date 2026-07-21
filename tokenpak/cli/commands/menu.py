@@ -548,11 +548,11 @@ def _section_configure(hdr: str) -> None:
 
 
 def _permission_tier_subtitle() -> str:
-    """Live one-line summary of the three tier rows (persistent + launcher).
+    """Live one-line summary of persistent tiers and launcher defaults.
 
     Persistent-tier values are restricted to strict/standard/auto/custom;
-    launcher fleet mode is the separate enabled/disabled element. The
-    persistent rows never read "fleet".
+    launcher defaults are separate per-client values. Persistent rows never
+    read "fleet" or any launcher mode.
     """
     try:
         from tokenpak.cli.commands.permissions import doctor_rows
@@ -561,87 +561,105 @@ def _permission_tier_subtitle() -> str:
         # Compact: collapse the aligned rows into a single subtitle line.
         return "   ".join(" ".join(r.split()) for r in rows)
     except Exception:
-        return "Persistent tier per client + launcher fleet mode."
+        return "Persistent tier + per-client launcher permission defaults."
 
 
-def _section_permissions(hdr: str) -> None:
-    """Permission tier section — persistent tiers + launcher fleet mode.
+def _launcher_client_choice(hdr: str, *, codex_only: bool = False) -> Optional[str]:
+    """Pick an explicit launcher client scope for a safety-sensitive change."""
+    if codex_only:
+        return "codex"
+    return pick(
+        "Launcher client scope",
+        [
+            ("codex", "Codex only"),
+            ("claude-code", "Claude Code only"),
+            ("both", "Both launchers"),
+        ],
+        header=hdr,
+        subtitle="Launcher defaults never modify the clients' persistent config.",
+        back_label="Back",
+    )
 
-    Runs `tokenpak permissions ...` under the hood. Fleet is a launcher-
-    scoped opt-in (confirmation required); it never persists into client
-    config files.
-    """
+
+def _section_launcher_permissions(hdr: str) -> None:
+    """Interactive per-client launcher-default picker."""
     c = supports_color()
     while True:
         choice = pick(
-            paint("Permission tier", _TITLE, c),
+            paint("Launcher permission defaults", _TITLE, c),
             [
-                ("show",         "View current tiers"),
-                ("set strict",   "Strict — prompts for everything"),
-                ("set standard", "Standard — accept edits (default)"),
-                ("set auto",     "Auto — no prompts (trusted)"),
-                ("set fleet",    "Fleet — launcher bypass (unattended)"),
-                ("reset",        "Reset managed keys + fleet off"),
+                ("show", "View launcher defaults"),
+                ("approval-bypass", "Bypass prompts; keep sandbox limits"),
+                ("sandbox-bypass", "Disable sandbox; keep approvals (Codex only)"),
+                ("full-bypass", "Disable prompts and sandbox (critical risk)"),
+                ("inherit", "Reset launcher defaults to inherit"),
             ],
             header=hdr,
-            subtitle=_permission_tier_subtitle(),
+            subtitle=(
+                "Bypass modes warn on every launch. Managed policy can still "
+                "constrain or reject them."
+            ),
             back_label="Back",
         )
         if choice is None or choice == _BACK_SENTINEL:
             return
-        if choice == "set fleet":
-            confirm_opts = [("yes", "Yes, enable fleet mode"), ("no", "No, go back")]
-            ans = pick(
-                "Enable launcher fleet mode?",
-                confirm_opts,
-                header=hdr,
-                subtitle=(
-                    "tokenpak claude / tokenpak codex will inject permission-bypass "
-                    "flags (stderr banner on every launch). Client configs are NOT "
-                    "modified."
-                ),
+        if choice == "show":
+            _exec("permissions", "show", clear=False)
+            continue
+
+        client = _launcher_client_choice(
+            hdr,
+            codex_only=choice in {"approval-bypass", "sandbox-bypass"},
+        )
+        if client is None or client == _BACK_SENTINEL:
+            continue
+        if choice == "inherit":
+            _exec(
+                "permissions",
+                f"launcher inherit --client {client}",
+                clear=False,
             )
-            if ans != "yes":
-                continue
-            choice = "set fleet --yes"
-        _dispatch("permissions", choice)
+            continue
 
-
-def _permission_tier_subtitle() -> str:
-    """Live one-line summary of the three tier rows (persistent + launcher).
-
-    Persistent-tier values are restricted to strict/standard/auto/custom;
-    launcher fleet mode is the separate enabled/disabled element. The
-    persistent rows never read "fleet".
-    """
-    try:
-        from tokenpak.cli.commands.permissions import doctor_rows
-
-        rows, _drift = doctor_rows()
-        # Compact: collapse the aligned rows into a single subtitle line.
-        return "   ".join(" ".join(r.split()) for r in rows)
-    except Exception:
-        return "Persistent tier per client + launcher fleet mode."
+        risk = {
+            "approval-bypass": (
+                "Commands can run without asking inside the remaining sandbox limits."
+            ),
+            "sandbox-bypass": (
+                "Approved commands can access host files, credentials, and network."
+            ),
+            "full-bypass": (
+                "No approval prompts or local sandbox. External isolation is required."
+            ),
+        }[choice]
+        ans = pick(
+            f"Set {choice} for {client}?",
+            [("yes", "Yes, apply this launcher default"), ("no", "No, go back")],
+            header=hdr,
+            subtitle=risk,
+        )
+        if ans != "yes":
+            continue
+        _exec(
+            "permissions",
+            f"launcher {choice} --client {client} --yes",
+            clear=False,
+        )
 
 
 def _section_permissions(hdr: str) -> None:
-    """Permission tier section — persistent tiers + launcher fleet mode.
-
-    Runs `tokenpak permissions ...` under the hood. Fleet is a launcher-
-    scoped opt-in (confirmation required); it never persists into client
-    config files.
-    """
+    """Permission section — persistent tiers plus launcher-only defaults."""
     c = supports_color()
     while True:
         choice = pick(
             paint("Permission tier", Color.PASTEL_YELLOW, c),
             [
-                ("show",         "View current tiers"),
-                ("set strict",   "Strict — prompts for everything"),
+                ("show", "View current tiers"),
+                ("set strict", "Strict — prompts for everything"),
                 ("set standard", "Standard — accept edits (default)"),
-                ("set auto",     "Auto — no prompts (trusted)"),
-                ("set fleet",    "Fleet — launcher bypass (unattended)"),
-                ("reset",        "Reset managed keys + fleet off"),
+                ("set auto", "Auto — client-specific no-prompt mode"),
+                ("launcher", "Launcher-only bypass defaults"),
+                ("reset", "Reset managed tiers + launcher defaults"),
             ],
             header=hdr,
             subtitle=_permission_tier_subtitle(),
@@ -649,21 +667,9 @@ def _section_permissions(hdr: str) -> None:
         )
         if choice is None or choice == _BACK_SENTINEL:
             return
-        if choice == "set fleet":
-            confirm_opts = [("yes", "Yes, enable fleet mode"), ("no", "No, go back")]
-            ans = pick(
-                "Enable launcher fleet mode?",
-                confirm_opts,
-                header=hdr,
-                subtitle=(
-                    "tokenpak claude / tokenpak codex will inject permission-bypass "
-                    "flags (stderr banner on every launch). Client configs are NOT "
-                    "modified."
-                ),
-            )
-            if ans != "yes":
-                continue
-            choice = "set fleet --yes"
+        if choice == "launcher":
+            _section_launcher_permissions(hdr)
+            continue
         _exec("permissions", choice, clear=False)
 
 

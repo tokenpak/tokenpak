@@ -350,7 +350,7 @@ cat > ~/.tokenpak/config.json << 'EOF'
 }
 EOF
 
-# Or just use env vars (no config file needed)
+# Or use env vars (no config file needed)
 export TOKENPAK_PORT=8766
 export TOKENPAK_MODE=hybrid
 tokenpak serve
@@ -1038,10 +1038,12 @@ az container show --resource-group <rg> --name tokenpak --query "instanceView.ev
 
 ---
 
-# Backup broken package and restore from main repo
-mv ~/vault/Projects/tokenpak/packages/pypi/tokenpak ~/vault/Projects/tokenpak/packages/pypi/tokenpak.broken
-cp -r ~/tokenpak ~/vault/Projects/tokenpak/packages/pypi/tokenpak
-python3 -c "from tokenpak.agent.proxy import server; print('✅ Import works')"
+### 20.2 Broken local installation
+
+**Fix:**
+```bash
+python3 -m pip install --force-reinstall --no-cache-dir tokenpak
+python3 -c "import tokenpak; print('✅ Import works')"
 ```
 
 ---

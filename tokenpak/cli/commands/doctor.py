@@ -1492,11 +1492,10 @@ def run_doctor(
             detail=str(_ch_e),
         )
 
-    # === Permission tiers (persistent tier vs launcher fleet mode) ==============
-    # Three-row display. The persistent-tier rows can only ever read
-    # strict/standard/auto/custom — never "fleet" (fleet is the separate
-    # launcher boolean row). External modification of a managed key is an
-    # error: doctor exits non-zero with a guidance line.
+    # === Permission tiers + launcher defaults ===================================
+    # Persistent-tier rows can only read strict/standard/auto/custom. Launcher
+    # defaults are separate per-client rows; malformed launcher state fails
+    # closed to inherit and is reported as an error with reset guidance.
     try:
         from tokenpak.cli.commands.permissions import doctor_rows as _perm_rows
 
@@ -1506,14 +1505,34 @@ def run_doctor(
             "`tokenpak permissions set <tier>` to re-apply or "
             "`tokenpak permissions reset` to clear the managed keys."
         )
+        _launcher_guidance = (
+            "\n         → Launcher state is invalid and was ignored. Run "
+            "`tokenpak permissions launcher inherit --client both` to restore "
+            "safe inherit defaults."
+        )
         for _row in _tier_rows:
-            _row_drift = _row.startswith(
-                ("Claude Code persistent tier", "Codex persistent tier")
-            ) and "custom" in _row
+            _tier_row_drift = (
+                _row.startswith(("Claude Code persistent tier", "Codex persistent tier"))
+                and "custom" in _row
+            )
+            _launcher_row_drift = "launcher default" in _row and "(" in _row
+            _launcher_active = "launcher default" in _row and any(
+                mode in _row
+                for mode in ("approval-bypass", "sandbox-bypass", "full-bypass")
+            )
+            _guidance = ""
+            if _tier_row_drift:
+                _guidance = _drift_guidance
+            elif _launcher_row_drift:
+                _guidance = _launcher_guidance
             _record(
                 "permission_tier",
-                "fail" if _row_drift else "pass",
-                _row + (_drift_guidance if _row_drift else ""),
+                (
+                    "fail"
+                    if _tier_row_drift or _launcher_row_drift
+                    else "warn" if _launcher_active else "pass"
+                ),
+                _row + _guidance,
             )
     except Exception as _pt_e:  # pragma: no cover — display must never crash doctor
         _record(

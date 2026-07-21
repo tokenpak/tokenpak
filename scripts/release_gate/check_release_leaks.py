@@ -598,7 +598,7 @@ def scan_files(files: list[ScanFile]) -> list[Finding]:
         try:
             with open(sf.abspath, encoding="utf-8") as fh:
                 content = fh.read()
-        except (UnicodeDecodeError, OSError):
+        except UnicodeDecodeError:
             continue
         orig_lines = content.split("\n")
         for pat, rx in compiled:

@@ -53,6 +53,8 @@ _BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox"
 _BYPASS_ENV_VAR = "TOKENPAK_CODEX_BYPASS_APPROVALS_AND_SANDBOX"
 _TRUTHY = {"1", "true", "yes"}
 _STORAGE_PRESSURE_ERRNOS = {errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)}
+_APPROVAL_ARGS = ("--ask-for-approval", "never")
+_SANDBOX_ARGS = ("--sandbox", "danger-full-access")
 
 
 def _bypass_env_enabled(env: dict[str, str] | None = None) -> bool:
@@ -62,19 +64,25 @@ def _bypass_env_enabled(env: dict[str, str] | None = None) -> bool:
     return raw.strip().lower() in _TRUTHY
 
 
-def _fleet_state_enabled() -> bool:
-    """True when TokenPak launcher fleet mode is enabled. Never raises.
+def _launcher_mode_state() -> tuple[str, str | None]:
+    """Return the fail-closed Codex launcher default and any state warning."""
+    try:
+        from tokenpak.cli.commands.permissions import _get_launcher_mode_status
 
-    Fleet mode is the runtime unattended-bypass knob stored in
-    TokenPak-owned state (~/.config/tokenpak/permissions.toml, set via
-    `tokenpak permissions set fleet`). It is launcher-scoped only and
-    never persists into ~/.codex/config.toml — the persistent trust level
-    (tier) lives there and is managed by `tokenpak permissions`.
+        return _get_launcher_mode_status("codex")
+    except Exception as exc:
+        return "inherit", f"could not read launcher permission state ({type(exc).__name__})"
+
+
+def _fleet_state_enabled() -> bool:
+    """Compatibility helper: true when Codex resolves to full-bypass.
+
+    The former global full-bypass boolean is now a compatibility alias for the
+    per-client full-bypass launcher default. It remains launcher-scoped and
+    never persists into ~/.codex/config.toml.
     """
     try:
-        from tokenpak.cli.commands.permissions import fleet_mode_enabled
-
-        return fleet_mode_enabled()
+        return _launcher_mode_state()[0] == "full-bypass"
     except Exception:
         return False
 
@@ -112,6 +120,136 @@ def _fleet_banner(env: dict[str, str] | None = None, fleet: bool = False) -> str
     if fleet or _bypass_env_enabled(env):
         return f"tokenpak: fleet mode — bypass flags injected ({_BYPASS_FLAG})"
     return None
+
+
+def _has_option(args: list[str], long_name: str, short_name: str) -> bool:
+    """Return true when argv contains either spelling of an option."""
+    return any(
+        arg in {long_name, short_name}
+        or arg.startswith(f"{long_name}=")
+        or arg.startswith(f"{short_name}=")
+        for arg in args
+    )
+
+
+def _config_permission_overrides(args: list[str]) -> tuple[bool, bool]:
+    """Return approval/sandbox axes explicitly set through ``-c/--config``."""
+    values: list[str] = []
+    for index, arg in enumerate(args):
+        if arg in {"-c", "--config"}:
+            if index + 1 < len(args):
+                values.append(args[index + 1])
+            continue
+        for prefix in ("-c=", "--config="):
+            if arg.startswith(prefix):
+                values.append(arg[len(prefix) :])
+                break
+
+    approval = False
+    sandbox = False
+    for value in values:
+        key = value.partition("=")[0].strip().strip("\"'")
+        leaf = key.rsplit(".", 1)[-1]
+        if leaf == "approval_policy" or key.startswith("approval_policy."):
+            approval = True
+        elif leaf == "sandbox_mode":
+            sandbox = True
+        elif leaf == "default_permissions":
+            approval = True
+            sandbox = True
+    return approval, sandbox
+
+
+def _apply_launcher_mode(
+    args: list[str],
+    mode: str,
+    env: dict[str, str] | None = None,
+) -> tuple[list[str], tuple[str, ...], str | None, str]:
+    """Apply a stored launcher default without overriding explicit argv.
+
+    Returns ``(argv, resolved_flags, skip_reason, effective_mode)``. The
+    legacy environment variable remains an explicit full-bypass override.
+    """
+    out = list(args)
+    effective_mode = "full-bypass" if _bypass_env_enabled(env) else mode
+    if effective_mode not in {
+        "inherit",
+        "approval-bypass",
+        "sandbox-bypass",
+        "full-bypass",
+    }:
+        effective_mode = "inherit"
+    if effective_mode == "inherit":
+        return out, (), None, effective_mode
+
+    explicit_combined = (
+        _BYPASS_FLAG if _BYPASS_FLAG in out else "--yolo" if "--yolo" in out else None
+    )
+    has_combined = explicit_combined is not None
+    config_approval, config_sandbox = _config_permission_overrides(out)
+    has_approval = _has_option(out, "--ask-for-approval", "-a") or config_approval
+    has_sandbox = _has_option(out, "--sandbox", "-s") or config_sandbox
+
+    if effective_mode == "full-bypass":
+        if has_combined:
+            return out, (explicit_combined,), None, effective_mode
+        if has_approval or has_sandbox:
+            return (
+                out,
+                (),
+                "explicit approval or sandbox arguments take precedence",
+                effective_mode,
+            )
+        return [_BYPASS_FLAG, *out], (_BYPASS_FLAG,), None, effective_mode
+
+    if has_combined:
+        return (
+            out,
+            (),
+            "an explicit full-bypass argument takes precedence",
+            effective_mode,
+        )
+    if effective_mode == "approval-bypass":
+        if has_approval:
+            return out, (), "an explicit approval argument takes precedence", effective_mode
+        return [*_APPROVAL_ARGS, *out], _APPROVAL_ARGS, None, effective_mode
+    if has_sandbox:
+        return out, (), "an explicit sandbox argument takes precedence", effective_mode
+    return [*_SANDBOX_ARGS, *out], _SANDBOX_ARGS, None, effective_mode
+
+
+def _launcher_mode_banner(
+    mode: str,
+    flags: tuple[str, ...],
+    skip_reason: str | None,
+) -> str | None:
+    """Build the mandatory launch-time warning for a non-inherit mode."""
+    if mode == "inherit":
+        return None
+    reset = "tokenpak permissions launcher inherit --client codex"
+    if skip_reason:
+        return (
+            f"tokenpak WARNING: codex launcher default {mode} skipped: {skip_reason}. "
+            f"Reset: `{reset}`."
+        )
+    risk = {
+        "approval-bypass": (
+            "approval prompts are disabled; the configured sandbox still applies "
+            "(danger-full-access would make this effectively full bypass)"
+        ),
+        "sandbox-bypass": (
+            "the sandbox is disabled; approval policy still applies "
+            "(approval_policy=never would make this effectively full bypass)"
+        ),
+        "full-bypass": "approval prompts and the local sandbox are disabled",
+    }[mode]
+    rendered = " ".join(flags)
+    return (
+        f"tokenpak WARNING: codex launcher mode {mode} active; arguments: {rendered}; "
+        f"{risk}. Use only in a trusted, externally isolated environment. "
+        "Managed policy may still constrain or reject this launch. "
+        f"Reset: `{reset}`."
+    )
 
 
 # ── Codex local-database lock preflight ─────────────────────────────
@@ -931,9 +1069,19 @@ def main(
             env["TOKENPAK_CODEX_RECEIPT_OUT"] = receipt_out
             env["TOKENPAK_CODEX_RUN_ID"] = run_id
 
-        fleet = _fleet_state_enabled()
-        forwarded = _maybe_inject_bypass_flag(args, env, fleet=fleet)
-        banner = _fleet_banner(env, fleet=fleet)
+        mode, state_warning = _launcher_mode_state()
+        if state_warning:
+            print(
+                "tokenpak WARNING: invalid launcher permission state: "
+                f"{state_warning}; using inherit.",
+                file=sys.stderr,
+            )
+        forwarded, mode_flags, skip_reason, effective_mode = _apply_launcher_mode(
+            args,
+            mode,
+            env,
+        )
+        banner = _launcher_mode_banner(effective_mode, mode_flags, skip_reason)
         if banner:
             print(banner, file=sys.stderr)
         codex_args = ["codex", *forwarded]

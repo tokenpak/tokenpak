@@ -1,413 +1,783 @@
+"""Adaptive, opt-in memory pressure handling for the proxy process.
+
+The guard is disabled unless ``TOKENPAK_MEMORY_GUARD`` is explicitly enabled
+and both RSS thresholds are supplied.  It never invents a successful memory
+reading: Linux uses ``/proc``; macOS and Windows use ``psutil`` when available;
+other platforms (or missing measurement support) fail closed as unsupported.
+
+The proxy's built-in memory-holding structures are bounded or semantically
+required, so its default pressure action is best-effort Python garbage
+collection plus ``malloc_trim`` where glibc exposes it. Callers may inject
+explicit eviction callbacks for independently synchronized, disposable caches;
+the guard reports exactly which callbacks are wired.
+
+Active environment controls:
+
+``TOKENPAK_MEMORY_GUARD``
+    Explicit boolean; disabled by default.
+``TOKENPAK_MEMORY_TARGET_MB`` / ``TOKENPAK_MEMORY_CEILING_MB``
+    Required positive integers when enabled, with target strictly below ceiling.
+``TOKENPAK_MEMORY_CHECK_SECS``
+    Positive sampling cadence (default 30 seconds).
+``TOKENPAK_MEMORY_COOLDOWN_SECS``
+    Minimum time between same-level actions (default 300 seconds and never less
+    than the sampling cadence).
+``TOKENPAK_MEMORY_SYS_LOW_MB``
+    Optional non-negative host-available-memory trigger; zero disables it.
+
+``calculate_budget`` remains a planning helper only.  Its host-RAM estimate is
+not consumed by the proxy lifecycle and does not activate the guard.
 """
-tokenpak.proxy.memory_guard — Adaptive internal memory pressure management.
 
-Runs a background thread that checks the proxy's RSS and takes graduated action
-to keep memory under a ceiling — WITHOUT destroying hot cache entries.
-
-ADAPTIVE: At startup, reads system RAM from /proc/meminfo and calculates:
-  - budget  = min(total_ram * proxy_share, 2048MB)
-  - target  = budget * 0.75   (start mild eviction — coldest 25%)
-  - ceiling = budget * 0.95   (aggressive eviction — coldest 50%)
-
-On a 4GB machine → target ~1000MB, ceiling ~1264MB
-On an 8GB machine → target ~1536MB, ceiling ~1945MB
-On a 2GB machine → target ~537MB, ceiling ~680MB
-
-Also monitors system-available memory — if other processes are competing,
-the guard becomes more aggressive regardless of own RSS.
-
-Strategy (preserves hot cache):
-  1. gc.collect() + malloc_trim() — reclaim Python/glibc fragmentation
-  2. Evict coldest N% of compact cache (ordered by insertion = access recency)
-  3. Sweep expired semantic cache entries
-  4. Evict coldest N% of token count cache (cheap to recompute on miss)
-
-Environment overrides (all optional — auto-calculated if unset):
-    TOKENPAK_MEMORY_GUARD        — 0 to disable (default: 1)
-    TOKENPAK_MEMORY_TARGET_MB    — override auto-calculated target
-    TOKENPAK_MEMORY_CEILING_MB   — override auto-calculated ceiling
-    TOKENPAK_MEMORY_CHECK_SECS   — check interval (default: 30)
-    TOKENPAK_MEMORY_PROXY_SHARE  — fraction of RAM for proxy (default: 0.35)
-    TOKENPAK_MEMORY_BUDGET_MAX   — max budget cap in MB (default: 2048)
-    TOKENPAK_MEMORY_SYS_LOW_MB   — system-available threshold for forced eviction (default: auto)
-"""
+from __future__ import annotations
 
 import ctypes
 import gc
 import logging
+import math
 import os
+import sys
 import threading
+import time
+from pathlib import Path
+from typing import Any, Callable, Mapping
 
 logger = logging.getLogger("tokenpak.memory_guard")
 
-# ---------------------------------------------------------------------------
-# System introspection
-# ---------------------------------------------------------------------------
+__all__ = [
+    "MemoryGuard",
+    "calculate_budget",
+    "create_memory_guard",
+    "get_available_ram_mb",
+    "get_rss_mb",
+    "get_total_ram_mb",
+    "malloc_trim",
+]
+
+_MIB = 1024 * 1024
+_FALSE_VALUES = {"", "0", "false", "no", "off"}
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_MEMORY_ENV_PREFIX = "TOKENPAK_MEMORY_"
+_MEMORY_ENV_NAMES = frozenset(
+    {
+        "TOKENPAK_MEMORY_GUARD",
+        "TOKENPAK_MEMORY_MODE",
+        "TOKENPAK_MEMORY_TARGET_MB",
+        "TOKENPAK_MEMORY_CEILING_MB",
+        "TOKENPAK_MEMORY_CHECK_SECS",
+        "TOKENPAK_MEMORY_COOLDOWN_SECS",
+        "TOKENPAK_MEMORY_SYS_LOW_MB",
+    }
+)
+_CONFIG_STATUS_LOCK = threading.Lock()
+_LAST_CONFIG_STATUS: dict[str, Any] = {
+    "source": "default",
+    "mode": "off",
+    "plan_sha256": None,
+    "managed_config_path": None,
+    "managed_file_present": False,
+    "managed_file_ignored": False,
+    "triggering_env": [],
+    "warning": None,
+}
+
+
+class MemoryMeasurementUnsupported(RuntimeError):
+    """Raised when trustworthy RSS/available-memory measurement is unavailable."""
+
+
+def _load_psutil() -> Any | None:
+    try:
+        import psutil
+
+        return psutil
+    except (ImportError, OSError):
+        return None
+
+
+def memory_measurement_support() -> dict[str, Any]:
+    """Return a non-secret description of this platform's measurement support."""
+    if sys.platform.startswith("linux"):
+        required = (Path("/proc/meminfo"), Path("/proc/self/status"))
+        missing = [str(path) for path in required if not path.is_file()]
+        return {
+            "supported": not missing,
+            "platform": "linux",
+            "source": "procfs",
+            "reason": (
+                None if not missing else f"missing required procfs files: {', '.join(missing)}"
+            ),
+        }
+
+    if sys.platform == "darwin" or sys.platform.startswith("win"):
+        platform_name = "macos" if sys.platform == "darwin" else "windows"
+        supported = _load_psutil() is not None
+        return {
+            "supported": supported,
+            "platform": platform_name,
+            "source": "psutil" if supported else None,
+            "reason": None if supported else "psutil is required for memory measurement",
+        }
+
+    return {
+        "supported": False,
+        "platform": sys.platform,
+        "source": None,
+        "reason": f"unsupported platform: {sys.platform}",
+    }
+
+
+def _require_measurement_support() -> dict[str, Any]:
+    support = memory_measurement_support()
+    if not support["supported"]:
+        raise MemoryMeasurementUnsupported(str(support["reason"]))
+    return support
+
+
+def _read_proc_kib(path: str, field: str) -> int:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith(field):
+                    parts = line.split()
+                    if len(parts) < 2:
+                        break
+                    value = int(parts[1])
+                    if value < 0:
+                        break
+                    return value
+    except (OSError, ValueError) as exc:
+        raise MemoryMeasurementUnsupported(
+            f"cannot read {field.rstrip(':')} from {path}: {exc}"
+        ) from exc
+    raise MemoryMeasurementUnsupported(f"missing or invalid {field.rstrip(':')} in {path}")
+
 
 def get_total_ram_mb() -> int:
-    """Read total system RAM in MB from /proc/meminfo."""
+    """Return total host RAM in binary MiB without a fabricated fallback."""
+    support = _require_measurement_support()
+    if support["source"] == "procfs":
+        return _read_proc_kib("/proc/meminfo", "MemTotal:") // 1024
+    psutil = _load_psutil()
+    if psutil is None:  # pragma: no cover - support probe already guards this
+        raise MemoryMeasurementUnsupported("psutil became unavailable")
     try:
-        with open("/proc/meminfo") as f:
-            for line in f:
-                if line.startswith("MemTotal:"):
-                    return int(line.split()[1]) // 1024
-    except Exception:
-        pass
-    return 4096  # safe fallback
+        return int(psutil.virtual_memory().total // _MIB)
+    except Exception as exc:
+        raise MemoryMeasurementUnsupported(f"psutil total-memory read failed: {exc}") from exc
 
 
 def get_available_ram_mb() -> int:
-    """Read available system RAM in MB from /proc/meminfo."""
+    """Return host-available RAM in binary MiB without a fabricated fallback."""
+    support = _require_measurement_support()
+    if support["source"] == "procfs":
+        return _read_proc_kib("/proc/meminfo", "MemAvailable:") // 1024
+    psutil = _load_psutil()
+    if psutil is None:  # pragma: no cover - support probe already guards this
+        raise MemoryMeasurementUnsupported("psutil became unavailable")
     try:
-        with open("/proc/meminfo") as f:
-            for line in f:
-                if line.startswith("MemAvailable:"):
-                    return int(line.split()[1]) // 1024
-    except Exception:
-        pass
-    return 2048  # safe fallback
+        return int(psutil.virtual_memory().available // _MIB)
+    except Exception as exc:
+        raise MemoryMeasurementUnsupported(f"psutil available-memory read failed: {exc}") from exc
 
 
 def get_rss_mb() -> int:
-    """Get current process RSS in MB from /proc/self/status."""
+    """Return current-process RSS in binary MiB without a false-green zero."""
+    support = _require_measurement_support()
+    if support["source"] == "procfs":
+        return _read_proc_kib("/proc/self/status", "VmRSS:") // 1024
+    psutil = _load_psutil()
+    if psutil is None:  # pragma: no cover - support probe already guards this
+        raise MemoryMeasurementUnsupported("psutil became unavailable")
     try:
-        with open("/proc/self/status") as f:
-            for line in f:
-                if line.startswith("VmRSS:"):
-                    return int(line.split()[1]) // 1024
-    except Exception:
-        pass
-    return 0
+        return int(psutil.Process().memory_info().rss // _MIB)
+    except Exception as exc:
+        raise MemoryMeasurementUnsupported(f"psutil RSS read failed: {exc}") from exc
 
 
 def malloc_trim() -> bool:
-    """Ask glibc to return freed memory to the OS. Linux-only."""
+    """Ask glibc to return free arenas to the OS; false means unavailable."""
+    if not sys.platform.startswith("linux"):
+        return False
     try:
         libc = ctypes.CDLL("libc.so.6")
-        result = libc.malloc_trim(0)
-        return result == 1
-    except Exception:
+        return libc.malloc_trim(0) == 1
+    except (AttributeError, OSError):
         return False
 
-
-# ---------------------------------------------------------------------------
-# Adaptive budget calculation
-# ---------------------------------------------------------------------------
 
 def calculate_budget(
     proxy_share: float = 0.35,
     budget_max_mb: int = 2048,
     total_ram_mb: int | None = None,
-) -> dict:
-    """
-    Calculate adaptive memory budget based on system RAM.
-
-    Returns:
-        {
-            "total_ram_mb": 3896,
-            "budget_mb": 1363,
-            "target_mb": 1022,
-            "ceiling_mb": 1294,
-            "sys_low_mb": 300,
-        }
-    """
+) -> dict[str, int | str]:
+    """Return a host-RAM planning estimate; the live factory never consumes it."""
+    if not 0 < proxy_share <= 1:
+        raise ValueError("proxy_share must be greater than 0 and at most 1")
+    if budget_max_mb <= 0:
+        raise ValueError("budget_max_mb must be positive")
     if total_ram_mb is None:
         total_ram_mb = get_total_ram_mb()
+    if total_ram_mb <= 0:
+        raise ValueError("total_ram_mb must be positive")
 
     budget = min(int(total_ram_mb * proxy_share), budget_max_mb)
     target = int(budget * 0.75)
     ceiling = int(budget * 0.95)
-    # System-available threshold: if system available drops below this,
-    # trigger eviction regardless of own RSS (other processes competing)
-    sys_low = max(200, int(total_ram_mb * 0.08))
-
     return {
+        "mode": "planning_only",
         "total_ram_mb": total_ram_mb,
         "budget_mb": budget,
         "target_mb": target,
         "ceiling_mb": ceiling,
-        "sys_low_mb": sys_low,
+        "sys_low_mb": max(200, int(total_ram_mb * 0.08)),
     }
 
 
-# ---------------------------------------------------------------------------
-# MemoryGuard
-# ---------------------------------------------------------------------------
-
 class MemoryGuard:
-    """
-    Background memory pressure manager for the TokenPak proxy.
-
-    Adapts thresholds to the host machine's RAM. Monitors both own RSS
-    and system-available memory.
-
-    Levels:
-        GREEN  — RSS < target, sys avail > sys_low → no action
-        YELLOW — RSS >= target OR sys avail < sys_low → gc + trim + evict 25%
-        RED    — RSS >= ceiling → aggressive evict 50% + double gc
-    """
+    """Own one pressure-monitor thread with explicit thresholds and lifecycle."""
 
     def __init__(
         self,
-        target_mb: int | None = None,
-        ceiling_mb: int | None = None,
-        sys_low_mb: int | None = None,
-        check_interval_secs: int = 30,
-        proxy_share: float = 0.35,
-        budget_max_mb: int = 2048,
-        on_evict_compact_cache=None,
-        on_evict_token_cache=None,
-        on_evict_semantic_cache=None,
-    ):
-        # Auto-calculate if not explicitly set
-        budget = calculate_budget(proxy_share=proxy_share, budget_max_mb=budget_max_mb)
+        *,
+        target_mb: int,
+        ceiling_mb: int,
+        sys_low_mb: int = 0,
+        check_interval_secs: float = 30,
+        cooldown_secs: float = 300,
+        action_mode: str = "auto",
+        configuration: Mapping[str, Any] | None = None,
+        on_evict_compact_cache: Callable[[int], int] | None = None,
+        on_evict_token_cache: Callable[[int], int] | None = None,
+        on_evict_semantic_cache: Callable[[], int] | None = None,
+    ) -> None:
+        if action_mode not in {"observe", "auto"}:
+            raise ValueError("action_mode must be 'observe' or 'auto'")
+        if not isinstance(target_mb, int) or isinstance(target_mb, bool) or target_mb <= 0:
+            raise ValueError("target_mb must be positive")
+        if (
+            not isinstance(ceiling_mb, int)
+            or isinstance(ceiling_mb, bool)
+            or ceiling_mb <= target_mb
+        ):
+            raise ValueError("ceiling_mb must be greater than target_mb")
+        if not isinstance(sys_low_mb, int) or isinstance(sys_low_mb, bool) or sys_low_mb < 0:
+            raise ValueError("sys_low_mb must be non-negative")
+        try:
+            check_interval = float(check_interval_secs)
+            cooldown = float(cooldown_secs)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("check interval and cooldown must be numeric") from exc
+        if not math.isfinite(check_interval) or check_interval <= 0:
+            raise ValueError("check_interval_secs must be positive")
+        if not math.isfinite(cooldown) or cooldown < check_interval:
+            raise ValueError("cooldown_secs must be at least check_interval_secs")
 
-        self.total_ram_mb = budget["total_ram_mb"]
-        self.target_mb = target_mb if target_mb is not None else budget["target_mb"]
-        self.ceiling_mb = ceiling_mb if ceiling_mb is not None else budget["ceiling_mb"]
-        self.sys_low_mb = sys_low_mb if sys_low_mb is not None else budget["sys_low_mb"]
-        self.check_interval = check_interval_secs
+        self.target_mb = int(target_mb)
+        self.ceiling_mb = int(ceiling_mb)
+        self.sys_low_mb = int(sys_low_mb)
+        self.check_interval = check_interval
+        self.cooldown_secs = cooldown
+        self.action_mode = action_mode
+        self.configuration = dict(configuration or {})
+        gap = self.ceiling_mb - self.target_mb
+        self.hysteresis_mb = min(64, max(1, gap // 4), max(0, self.target_mb - 1))
 
-        # Callbacks — set by the proxy at startup to wire into its data structures
         self._evict_compact_cache = on_evict_compact_cache
         self._evict_token_cache = on_evict_token_cache
         self._evict_semantic_cache = on_evict_semantic_cache
+        callback_count = sum(
+            callback is not None
+            for callback in (
+                on_evict_compact_cache,
+                on_evict_token_cache,
+                on_evict_semantic_cache,
+            )
+        )
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        self._stats = {
+        self._lifecycle_lock = threading.Lock()
+        self._stop_call_lock = threading.Lock()
+        self._stopping = False
+        self._stats_lock = threading.Lock()
+        self._last_action_monotonic: float | None = None
+        self._last_action_level: str | None = None
+        self._stats: dict[str, Any] = {
+            "state": "created",
             "checks": 0,
+            "measurement_errors": 0,
             "gc_runs": 0,
             "trim_runs": 0,
             "yellow_triggers": 0,
             "red_triggers": 0,
             "sys_low_triggers": 0,
+            "suppressed_actions": 0,
+            "observed_pressure_checks": 0,
             "compact_evictions": 0,
             "token_evictions": 0,
             "semantic_evictions": 0,
             "peak_rss_mb": 0,
-            "last_rss_mb": 0,
-            "last_sys_avail_mb": 0,
-            "last_level": "GREEN",
+            "last_rss_mb": None,
+            "last_sys_avail_mb": None,
+            "last_level": "UNKNOWN",
             "last_reclaimed_mb": 0,
             "total_reclaimed_mb": 0,
+            "pressure_latched": False,
+            "last_error": None,
+            "measurement": memory_measurement_support(),
+            "callback_policy": (
+                "caller_supplied_eviction_callbacks"
+                if callback_count
+                else "gc_trim_only_no_unbounded_disposable_proxy_cache"
+            ),
         }
-        self._lock = threading.Lock()
 
-    def start(self):
-        """Start the background monitoring thread."""
-        if self._thread and self._thread.is_alive():
-            return
-        self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._run_loop, name="tokenpak-memory-guard", daemon=True
-        )
-        self._thread.start()
+    def start(self) -> bool:
+        """Start exactly one monitor thread; return false when already running."""
+        with self._lifecycle_lock:
+            if self._stopping:
+                raise RuntimeError("MemoryGuard stop is still in progress")
+            if self._thread is not None and self._thread.is_alive():
+                return False
+
+            support = memory_measurement_support()
+            with self._stats_lock:
+                self._stats["measurement"] = dict(support)
+            if not support["supported"]:
+                with self._stats_lock:
+                    self._stats["state"] = "unsupported"
+                    self._stats["last_error"] = support["reason"]
+                raise MemoryMeasurementUnsupported(str(support["reason"]))
+
+            try:
+                get_rss_mb()
+                get_available_ram_mb()
+            except MemoryMeasurementUnsupported as exc:
+                with self._stats_lock:
+                    self._stats["state"] = "unsupported"
+                    self._stats["last_error"] = str(exc)
+                    self._stats["measurement"] = {
+                        **support,
+                        "supported": False,
+                        "reason": str(exc),
+                    }
+                raise
+
+            self._stop_event.clear()
+            thread = threading.Thread(
+                target=self._run_loop,
+                name="tokenpak-memory-guard",
+                daemon=True,
+            )
+            self._thread = thread
+            with self._stats_lock:
+                self._stats["state"] = "running"
+                self._stats["last_error"] = None
+            try:
+                thread.start()
+            except Exception:
+                self._thread = None
+                with self._stats_lock:
+                    self._stats["state"] = "start_failed"
+                raise
+
         logger.info(
-            "MemoryGuard started: system=%dMB target=%dMB ceiling=%dMB sys_low=%dMB interval=%ds",
-            self.total_ram_mb, self.target_mb, self.ceiling_mb, self.sys_low_mb, self.check_interval,
+            "MemoryGuard started: target=%dMiB ceiling=%dMiB hysteresis=%dMiB "
+            "sys_low=%dMiB interval=%.3fs cooldown=%.3fs",
+            self.target_mb,
+            self.ceiling_mb,
+            self.hysteresis_mb,
+            self.sys_low_mb,
+            self.check_interval,
+            self.cooldown_secs,
         )
+        return True
 
-    def stop(self):
-        """Stop the background thread."""
-        self._stop_event.set()
-        if self._thread:
-            self._thread.join(timeout=5)
-            self._thread = None
+    def stop(self, timeout: float = 5.0) -> bool:
+        """Stop and join the monitor, retaining ownership if the join times out."""
+        if not math.isfinite(timeout) or timeout < 0:
+            raise ValueError("timeout must be non-negative")
+        with self._stop_call_lock:
+            with self._lifecycle_lock:
+                thread = self._thread
+                if thread is None:
+                    self._stopping = False
+                    with self._stats_lock:
+                        if self._stats["state"] not in {"unsupported", "start_failed"}:
+                            self._stats["state"] = "stopped"
+                    return True
+
+                self._stopping = True
+                self._stop_event.set()
+
+            thread.join(timeout=timeout)
+            with self._lifecycle_lock:
+                if thread.is_alive():
+                    message = f"MemoryGuard thread did not stop within {timeout:.3f}s"
+                    with self._stats_lock:
+                        self._stats["state"] = "stop_timeout"
+                        self._stats["last_error"] = message
+                    # Keep both the owned handle and the stopping state. A later
+                    # stop call must reap it before start can create a successor.
+                    raise RuntimeError(message)
+
+                if self._thread is thread:
+                    self._thread = None
+                self._stopping = False
+                with self._stats_lock:
+                    self._stats["state"] = "stopped"
+                    self._stats["last_error"] = None
+                return True
 
     @property
-    def stats(self) -> dict:
-        with self._lock:
-            s = dict(self._stats)
-        s["config"] = {
-            "total_ram_mb": self.total_ram_mb,
+    def stats(self) -> dict[str, Any]:
+        with self._lifecycle_lock:
+            thread = self._thread
+            thread_alive = bool(thread and thread.is_alive())
+            thread_ident = thread.ident if thread_alive else None
+            stopping = self._stopping
+            with self._stats_lock:
+                snapshot = dict(self._stats)
+        snapshot["thread_alive"] = thread_alive
+        snapshot["thread_ident"] = thread_ident
+        snapshot["stopping"] = stopping
+        snapshot["enabled"] = True
+        snapshot["measurement"] = dict(snapshot["measurement"])
+        snapshot["config"] = {
+            "action_mode": self.action_mode,
             "target_mb": self.target_mb,
             "ceiling_mb": self.ceiling_mb,
+            "hysteresis_mb": self.hysteresis_mb,
             "sys_low_mb": self.sys_low_mb,
             "check_interval_secs": self.check_interval,
+            "cooldown_secs": self.cooldown_secs,
         }
-        return s
+        snapshot["configuration"] = dict(self.configuration)
+        snapshot["callbacks"] = {
+            "compact": self._evict_compact_cache is not None,
+            "token": self._evict_token_cache is not None,
+            "semantic": self._evict_semantic_cache is not None,
+        }
+        return snapshot
 
-    # ------------------------------------------------------------------
-    # Core loop
-    # ------------------------------------------------------------------
-
-    def _run_loop(self):
+    def _run_loop(self) -> None:
         while not self._stop_event.is_set():
             try:
                 self._check()
-            except Exception as e:
-                logger.error("MemoryGuard check error: %s", e)
+            except Exception as exc:
+                with self._stats_lock:
+                    self._stats["measurement_errors"] += 1
+                    self._stats["state"] = "degraded"
+                    self._stats["last_error"] = str(exc)
+                    self._stats["measurement"] = {
+                        **self._stats["measurement"],
+                        "supported": False,
+                        "reason": str(exc),
+                    }
+                logger.error("MemoryGuard check error: %s", exc)
             self._stop_event.wait(self.check_interval)
 
-    def _check(self):
+    def _check(self, *, now: float | None = None) -> None:
         rss = get_rss_mb()
         sys_avail = get_available_ram_mb()
-        with self._lock:
+        sample_time = time.monotonic() if now is None else now
+        support = memory_measurement_support()
+
+        if rss >= self.ceiling_mb:
+            level = "RED"
+            sys_triggered = False
+        elif rss >= self.target_mb or (self.sys_low_mb > 0 and sys_avail < self.sys_low_mb):
+            level = "YELLOW"
+            sys_triggered = self.sys_low_mb > 0 and sys_avail < self.sys_low_mb
+        else:
+            level = "GREEN"
+            sys_triggered = False
+
+        with self._stats_lock:
             self._stats["checks"] += 1
             self._stats["last_rss_mb"] = rss
             self._stats["last_sys_avail_mb"] = sys_avail
-            if rss > self._stats["peak_rss_mb"]:
-                self._stats["peak_rss_mb"] = rss
+            self._stats["peak_rss_mb"] = max(self._stats["peak_rss_mb"], rss)
+            self._stats["measurement"] = dict(support)
+            if self._stats["state"] == "degraded":
+                self._stats["state"] = "running"
+                self._stats["last_error"] = None
 
-        if rss >= self.ceiling_mb:
+            if level == "GREEN":
+                sys_recovered = (
+                    self.sys_low_mb == 0 or sys_avail >= self.sys_low_mb + self.hysteresis_mb
+                )
+                fully_recovered = rss <= self.target_mb - self.hysteresis_mb and sys_recovered
+                if self._stats["pressure_latched"] and not fully_recovered:
+                    self._stats["last_level"] = "RECOVERY"
+                else:
+                    self._stats["last_level"] = "GREEN"
+                if fully_recovered:
+                    self._stats["pressure_latched"] = False
+                return
+
+            escalation = self._last_action_level == "YELLOW" and level == "RED"
+            in_cooldown = (
+                self._last_action_monotonic is not None
+                and sample_time - self._last_action_monotonic < self.cooldown_secs
+            )
+            self._stats["last_level"] = level
+            self._stats["pressure_latched"] = True
+            if self.action_mode == "observe":
+                self._stats["observed_pressure_checks"] += 1
+                return
+            if in_cooldown and not escalation:
+                self._stats["suppressed_actions"] += 1
+                return
+            self._last_action_monotonic = sample_time
+            self._last_action_level = level
+
+        if level == "RED":
             self._action_red(rss, sys_avail)
-        elif rss >= self.target_mb or sys_avail < self.sys_low_mb:
-            sys_triggered = sys_avail < self.sys_low_mb
-            self._action_yellow(rss, sys_avail, sys_triggered=sys_triggered)
         else:
-            with self._lock:
-                self._stats["last_level"] = "GREEN"
+            self._action_yellow(rss, sys_avail, sys_triggered=sys_triggered)
 
-    # ------------------------------------------------------------------
-    # Actions
-    # ------------------------------------------------------------------
-
-    def _action_yellow(self, rss: int, sys_avail: int, sys_triggered: bool = False):
-        """Soft pressure: gc + trim + evict coldest 25% of caches."""
-        reason = f"sys_avail={sys_avail}MB < {self.sys_low_mb}MB" if sys_triggered else f"RSS={rss}MB >= {self.target_mb}MB"
-        logger.info("🟡 MemoryGuard YELLOW: %s", reason)
-        with self._lock:
-            self._stats["last_level"] = "YELLOW"
+    def _action_yellow(self, rss: int, sys_avail: int, *, sys_triggered: bool) -> None:
+        with self._stats_lock:
             self._stats["yellow_triggers"] += 1
             if sys_triggered:
                 self._stats["sys_low_triggers"] += 1
-
-        before = rss
         self._do_gc_trim()
         self._evict_caches(compact_pct=25, token_pct=25)
-        after = get_rss_mb()
+        self._record_reclaimed(rss)
+        logger.info("MemoryGuard YELLOW: rss=%dMiB available=%dMiB", rss, sys_avail)
 
-        reclaimed = max(0, before - after)
-        with self._lock:
-            self._stats["last_reclaimed_mb"] = reclaimed
-            self._stats["total_reclaimed_mb"] += reclaimed
-        logger.info("🟡 YELLOW done: %dMB → %dMB (freed %dMB, sys_avail=%dMB)", before, after, reclaimed, get_available_ram_mb())
-
-    def _action_red(self, rss: int, sys_avail: int):
-        """Hard pressure: aggressive eviction + full gc."""
-        logger.warning("🔴 MemoryGuard RED: RSS=%dMB (ceiling=%dMB), sys_avail=%dMB", rss, self.ceiling_mb, sys_avail)
-        with self._lock:
-            self._stats["last_level"] = "RED"
+    def _action_red(self, rss: int, sys_avail: int) -> None:
+        with self._stats_lock:
             self._stats["red_triggers"] += 1
-
-        before = rss
         self._evict_caches(compact_pct=50, token_pct=75)
         self._do_gc_trim()
-        # Second pass — gc may have freed more cycles
         self._do_gc_trim()
-        after = get_rss_mb()
+        self._record_reclaimed(rss)
+        logger.warning("MemoryGuard RED: rss=%dMiB available=%dMiB", rss, sys_avail)
 
-        reclaimed = max(0, before - after)
-        with self._lock:
+    def _record_reclaimed(self, before_rss: int) -> None:
+        after_rss = get_rss_mb()
+        reclaimed = max(0, before_rss - after_rss)
+        with self._stats_lock:
             self._stats["last_reclaimed_mb"] = reclaimed
             self._stats["total_reclaimed_mb"] += reclaimed
-        logger.warning("🔴 RED done: %dMB → %dMB (freed %dMB)", before, after, reclaimed)
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    def _do_gc_trim(self):
-        """Run garbage collection + malloc trim."""
-        collected = gc.collect()
+    def _do_gc_trim(self) -> None:
+        gc.collect()
         trimmed = malloc_trim()
-        with self._lock:
+        with self._stats_lock:
             self._stats["gc_runs"] += 1
             if trimmed:
                 self._stats["trim_runs"] += 1
-        if collected > 0:
-            logger.debug("gc.collect() freed %d objects", collected)
 
-    def _evict_caches(self, compact_pct: int = 25, token_pct: int = 25):
-        """
-        Evict the coldest N% of cache entries.
-        Preserves the hottest entries (most recently accessed).
-        """
-        # Compact cache — evict oldest N%
-        if self._evict_compact_cache:
+    def _evict_caches(self, *, compact_pct: int, token_pct: int) -> None:
+        callbacks: tuple[tuple[str, Callable[..., int] | None, tuple[Any, ...]], ...] = (
+            ("compact_evictions", self._evict_compact_cache, (compact_pct,)),
+            ("token_evictions", self._evict_token_cache, (token_pct,)),
+            ("semantic_evictions", self._evict_semantic_cache, ()),
+        )
+        for counter, callback, args in callbacks:
+            if callback is None:
+                continue
             try:
-                evicted = self._evict_compact_cache(compact_pct)
-                with self._lock:
-                    self._stats["compact_evictions"] += evicted
-                if evicted > 0:
-                    logger.info("  Compact cache: evicted %d coldest entries (%d%%)", evicted, compact_pct)
-            except Exception as e:
-                logger.error("  Compact cache eviction error: %s", e)
+                evicted = int(callback(*args))
+                if evicted < 0:
+                    raise ValueError("eviction callback returned a negative count")
+                with self._stats_lock:
+                    self._stats[counter] += evicted
+            except Exception as exc:
+                logger.error("MemoryGuard %s callback error: %s", counter, exc)
 
-        # Token count cache — evict oldest N%
-        if self._evict_token_cache:
+
+def _parse_enabled(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in _FALSE_VALUES:
+        return False
+    if normalized in _TRUE_VALUES:
+        return True
+    raise ValueError("TOKENPAK_MEMORY_GUARD must be an explicit boolean")
+
+
+def _required_positive_int(name: str) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        raise ValueError(f"{name} is required when TOKENPAK_MEMORY_GUARD is enabled")
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+def _number_from_env(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be numeric") from exc
+
+
+def _set_configuration_status(**updates: Any) -> None:
+    with _CONFIG_STATUS_LOCK:
+        _LAST_CONFIG_STATUS.clear()
+        _LAST_CONFIG_STATUS.update(
+            {
+                "source": "default",
+                "mode": "off",
+                "plan_sha256": None,
+                "managed_config_path": None,
+                "managed_file_present": False,
+                "managed_file_ignored": False,
+                "triggering_env": [],
+                "warning": None,
+                **updates,
+            }
+        )
+
+
+def memory_guard_configuration_status() -> dict[str, Any]:
+    """Return the startup-time configuration source and fail-safe warning."""
+    with _CONFIG_STATUS_LOCK:
+        snapshot = dict(_LAST_CONFIG_STATUS)
+    snapshot["triggering_env"] = list(snapshot.get("triggering_env", []))
+    return snapshot
+
+
+def _present_memory_env() -> list[str]:
+    return sorted(name for name in os.environ if name.startswith(_MEMORY_ENV_PREFIX))
+
+
+def _validate_memory_env(names: list[str]) -> None:
+    unknown = sorted(set(names) - _MEMORY_ENV_NAMES)
+    if unknown:
+        raise ValueError(f"unknown TOKENPAK_MEMORY_* variable(s): {', '.join(unknown)}")
+    empty = [name for name in names if not os.environ[name].strip()]
+    if empty:
+        raise ValueError(f"empty TOKENPAK_MEMORY_* value(s): {', '.join(empty)}")
+    if "TOKENPAK_MEMORY_GUARD" in names:
+        _parse_enabled(os.environ["TOKENPAK_MEMORY_GUARD"])
+    if "TOKENPAK_MEMORY_MODE" in names:
+        mode = os.environ["TOKENPAK_MEMORY_MODE"].strip().lower()
+        if mode not in {"observe", "auto"}:
+            raise ValueError("TOKENPAK_MEMORY_MODE must be 'observe' or 'auto'")
+
+    for name in ("TOKENPAK_MEMORY_TARGET_MB", "TOKENPAK_MEMORY_CEILING_MB"):
+        if name in names:
             try:
-                evicted = self._evict_token_cache(token_pct)
-                with self._lock:
-                    self._stats["token_evictions"] += evicted
-                if evicted > 0:
-                    logger.info("  Token cache: evicted %d entries (%d%%)", evicted, token_pct)
-            except Exception as e:
-                logger.error("  Token cache eviction error: %s", e)
+                value = int(os.environ[name])
+            except ValueError as exc:
+                raise ValueError(f"{name} must be an integer") from exc
+            if value <= 0:
+                raise ValueError(f"{name} must be positive")
+    if "TOKENPAK_MEMORY_SYS_LOW_MB" in names:
+        try:
+            sys_low = int(os.environ["TOKENPAK_MEMORY_SYS_LOW_MB"])
+        except ValueError as exc:
+            raise ValueError("TOKENPAK_MEMORY_SYS_LOW_MB must be an integer") from exc
+        if sys_low < 0:
+            raise ValueError("TOKENPAK_MEMORY_SYS_LOW_MB must be non-negative")
+    for name in ("TOKENPAK_MEMORY_CHECK_SECS", "TOKENPAK_MEMORY_COOLDOWN_SECS"):
+        if name in names:
+            value = _number_from_env(name, 0)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be positive and finite")
 
-        # Semantic cache — just sweep expired entries
-        if self._evict_semantic_cache:
-            try:
-                evicted = self._evict_semantic_cache()
-                with self._lock:
-                    self._stats["semantic_evictions"] += evicted
-                if evicted > 0:
-                    logger.info("  Semantic cache: swept %d expired entries", evicted)
-            except Exception as e:
-                logger.error("  Semantic cache eviction error: %s", e)
 
-
-# ---------------------------------------------------------------------------
-# Factory — reads env vars, auto-calculates from system RAM if not overridden
-# ---------------------------------------------------------------------------
-
-def create_memory_guard() -> MemoryGuard | None:
-    """
-    Create a MemoryGuard from environment + system detection.
-
-    If TOKENPAK_MEMORY_TARGET_MB / CEILING_MB are set, uses those.
-    Otherwise auto-calculates from system RAM.
-
-    Returns None if disabled.
-    """
-    enabled = os.environ.get("TOKENPAK_MEMORY_GUARD", "1")
-    if enabled.lower() in ("0", "false", "no", "off"):
+def _guard_from_environment(names: list[str], *, managed_path: Path) -> MemoryGuard | None:
+    enabled = _parse_enabled(os.environ.get("TOKENPAK_MEMORY_GUARD", "0"))
+    mode = os.environ.get("TOKENPAK_MEMORY_MODE", "auto").strip().lower()
+    status = {
+        "source": "environment",
+        "mode": mode if enabled else "off",
+        "managed_config_path": str(managed_path),
+        "managed_file_present": managed_path.exists(),
+        "managed_file_ignored": managed_path.exists(),
+        "triggering_env": names,
+    }
+    if not enabled:
+        _set_configuration_status(**status)
         return None
 
-    proxy_share = float(os.environ.get("TOKENPAK_MEMORY_PROXY_SHARE", "0.35"))
-    budget_max = int(os.environ.get("TOKENPAK_MEMORY_BUDGET_MAX", "2048"))
-    interval = int(os.environ.get("TOKENPAK_MEMORY_CHECK_SECS", "30"))
-
-    # Auto-calculate budget
-    budget = calculate_budget(proxy_share=proxy_share, budget_max_mb=budget_max)
-
-    # Allow explicit overrides (env vars trump auto-calc)
-    target_env = os.environ.get("TOKENPAK_MEMORY_TARGET_MB")
-    ceiling_env = os.environ.get("TOKENPAK_MEMORY_CEILING_MB")
-    sys_low_env = os.environ.get("TOKENPAK_MEMORY_SYS_LOW_MB")
-
-    target = int(target_env) if target_env else None
-    ceiling = int(ceiling_env) if ceiling_env else None
-    sys_low = int(sys_low_env) if sys_low_env else None
-
-    guard = MemoryGuard(
+    target = _required_positive_int("TOKENPAK_MEMORY_TARGET_MB")
+    ceiling = _required_positive_int("TOKENPAK_MEMORY_CEILING_MB")
+    interval = _number_from_env("TOKENPAK_MEMORY_CHECK_SECS", 30.0)
+    cooldown = _number_from_env("TOKENPAK_MEMORY_COOLDOWN_SECS", 300.0)
+    sys_low = int(os.environ.get("TOKENPAK_MEMORY_SYS_LOW_MB", "0"))
+    configuration = {**status, "plan_sha256": None, "warning": None}
+    _set_configuration_status(**configuration)
+    return MemoryGuard(
         target_mb=target,
         ceiling_mb=ceiling,
         sys_low_mb=sys_low,
         check_interval_secs=interval,
-        proxy_share=proxy_share,
-        budget_max_mb=budget_max,
+        cooldown_secs=cooldown,
+        action_mode=mode,
+        configuration=configuration,
     )
 
-    logger.info(
-        "MemoryGuard auto-configured: system=%dMB budget=%dMB target=%dMB ceiling=%dMB sys_low=%dMB%s",
-        budget["total_ram_mb"],
-        budget["budget_mb"],
-        guard.target_mb,
-        guard.ceiling_mb,
-        guard.sys_low_mb,
-        " (explicit overrides active)" if (target_env or ceiling_env) else " (auto-calculated)",
+
+def create_memory_guard() -> MemoryGuard | None:
+    """Create a guard from one exclusive source: env, managed plan, or off."""
+    from tokenpak.services.memory_optimization import (
+        CorruptManagedConfigError,
+        load_managed_plan,
+        managed_paths,
     )
 
-    return guard
+    managed_path = managed_paths().config
+    present_env = _present_memory_env()
+    if present_env:
+        _validate_memory_env(present_env)
+        return _guard_from_environment(present_env, managed_path=managed_path)
+
+    if not managed_path.exists():
+        _set_configuration_status(
+            source="default",
+            mode="off",
+            managed_config_path=str(managed_path),
+        )
+        return None
+
+    try:
+        plan, plan_hash = load_managed_plan(managed_path)
+    except CorruptManagedConfigError as exc:
+        warning = f"managed MemoryGuard config ignored: {exc}"
+        logger.warning(warning)
+        _set_configuration_status(
+            source="managed_error",
+            mode="off",
+            managed_config_path=str(managed_path),
+            managed_file_present=True,
+            warning=warning,
+        )
+        return None
+
+    guard_config = plan["memory_guard"]
+    configuration = {
+        "source": "managed",
+        "mode": plan["mode"],
+        "plan_sha256": plan_hash,
+        "managed_config_path": str(managed_path),
+        "managed_file_present": True,
+        "managed_file_ignored": False,
+        "triggering_env": [],
+        "warning": None,
+    }
+    _set_configuration_status(**configuration)
+    if not guard_config["enabled"]:
+        return None
+    return MemoryGuard(
+        target_mb=guard_config["target_mb"],
+        ceiling_mb=guard_config["ceiling_mb"],
+        sys_low_mb=guard_config["sys_low_mb"],
+        check_interval_secs=guard_config["check_interval_secs"],
+        cooldown_secs=guard_config["cooldown_secs"],
+        action_mode=guard_config["mode"],
+        configuration=configuration,
+    )

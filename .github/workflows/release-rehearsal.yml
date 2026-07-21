@@ -69,7 +69,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -131,7 +131,7 @@ jobs:
       TOKENPAK_SNAPSHOT_GEN: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install (all extras for canonical snapshot reproduction)
@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Build sdist + wheel for scanning
@@ -179,7 +179,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install build
@@ -199,7 +199,7 @@ jobs:
           fi
           echo "✅  sdist + wheel purity: no _internal/ paths"
       - name: Upload artifacts (rehearsal — never published)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rehearsal-dist-${{ needs.preflight.outputs.rehearsal_tag }}
           path: dist/

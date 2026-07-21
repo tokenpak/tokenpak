@@ -49,6 +49,7 @@ import json
 import sqlite3
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 # ---------------------------------------------------------------------------
@@ -195,6 +196,22 @@ def build_dispatch_parser(sub: Any) -> None:
     _add_json(p_rcpt)
     p_rcpt.set_defaults(func=cmd_dispatch_receipt)
 
+    # -- routes (read-only discovery) ---------------------------------------
+    p_routes = dsub.add_parser(
+        "routes",
+        help="List available Dispatch routes (read-only discovery)",
+    )
+    _add_json(p_routes)
+    p_routes.set_defaults(func=cmd_dispatch_routes)
+
+    # -- workers (read-only discovery) --------------------------------------
+    p_workers = dsub.add_parser(
+        "workers",
+        help="List available Dispatch workers (read-only discovery)",
+    )
+    _add_json(p_workers)
+    p_workers.set_defaults(func=cmd_dispatch_workers)
+
     p.set_defaults(func=lambda a: (p.print_help() or 0))
 
 
@@ -254,6 +271,12 @@ def _err(msg: str, as_json: bool, *, code: str = "error") -> int:
 
 _DISPATCH_RUNTIME_SENTINEL = "tokenpak.orchestration.dispatch.dispatch"
 
+# The ``[dispatch]`` extra deps declared in pyproject optional-dependencies.
+# The Dispatch record models are pydantic-native and JSON-Schema round-trips use
+# jsonschema; both are kept out of the slim core, so a base install can have the
+# runtime *source* present yet lack these.
+_DISPATCH_DEPS: tuple[str, ...] = ("pydantic", "jsonschema")
+
 _DISPATCH_RUNTIME_UNAVAILABLE_MSG = (
     "Dispatch runtime is source/main-only in TokenPak v0.1-alpha. This build "
     "ships the Dispatch CLI and registry/schema data but not the runtime engine. "
@@ -261,6 +284,69 @@ _DISPATCH_RUNTIME_UNAVAILABLE_MSG = (
     "Dispatch from a source checkout — it does not bundle a packaged runtime. "
     "Run Dispatch from a source/main install to use this verb."
 )
+
+
+def _dispatch_deps_missing_msg(missing: list[str]) -> str:
+    """Build the base-install dependency-gap message (truthful remedy: the extra).
+
+    Distinct from :data:`_DISPATCH_RUNTIME_UNAVAILABLE_MSG`: the runtime engine IS
+    present, so telling the tester to "use a source/main install" would be a false
+    path (they already have one). The real fix is installing the ``[dispatch]``
+    extra, so the message names the missing deps and the exact install command.
+    """
+    names = ", ".join(missing)
+    return (
+        f"Dispatch needs the optional `[dispatch]` dependencies ({names}), which "
+        "are not installed. The Dispatch runtime engine ships in this build, but "
+        "its record models are pydantic-native. Install the extra to run "
+        "Dispatch:\n"
+        "    pip install 'tokenpak[dispatch]'\n"
+        "(This is a base-install dependency gap, not a missing runtime — a "
+        "source/main install still needs the `[dispatch]` extra.)"
+    )
+
+
+def _missing_dispatch_deps() -> list[str]:
+    """Return the ``[dispatch]`` extra deps that are not importable (side-effect free).
+
+    Uses top-level :func:`importlib.util.find_spec` (which does not execute the
+    module), so probing for pydantic/jsonschema never imports them and never
+    triggers the pydantic-native package ``__init__``.
+    """
+    missing: list[str] = []
+    for mod in _DISPATCH_DEPS:
+        try:
+            if importlib.util.find_spec(mod) is None:
+                missing.append(mod)
+        except (ImportError, ValueError):
+            missing.append(mod)
+    return missing
+
+
+def _dispatch_runtime_source_present() -> bool:
+    """Return ``True`` when the Dispatch runtime module *file* ships in this build.
+
+    Detects the runtime file on disk WITHOUT importing it. Importing the runtime —
+    or even ``find_spec`` on the sentinel submodule — executes the
+    ``tokenpak.orchestration.dispatch`` package ``__init__``, which imports the
+    pydantic-native models; in a source install *without* the ``[dispatch]`` deps
+    that import raises and the runtime masquerades as absent. We instead locate the
+    file via the lazily-imported (pydantic-free) ``tokenpak.orchestration`` package
+    path, so "runtime present but deps missing" is distinguishable from "runtime
+    genuinely absent" (the slim wheel, where the file is not shipped at all).
+    """
+    try:
+        spec = importlib.util.find_spec("tokenpak.orchestration")
+    except (ImportError, ValueError):
+        return False
+    locations = getattr(spec, "submodule_search_locations", None) if spec else None
+    if not locations:
+        return False
+    runtime_leaf = _DISPATCH_RUNTIME_SENTINEL.rsplit(".", 1)[-1] + ".py"
+    for base in locations:
+        if (Path(base) / "dispatch" / runtime_leaf).is_file():
+            return True
+    return False
 
 
 def _dispatch_runtime_available() -> bool:
@@ -278,20 +364,42 @@ def _dispatch_runtime_available() -> bool:
 
 
 def _needs_runtime(fn):
-    """Degrade a runtime-touching dispatch verb to an actionable message.
+    """Degrade a runtime-touching dispatch verb to a truthful, actionable message.
 
-    When the Dispatch runtime engine is absent (e.g. the slim released wheel),
-    invoking a runtime verb returns a concise, nonzero "source/main-only" notice
-    instead of raising a raw ``ModuleNotFoundError`` traceback (B1). The message
-    also explains the truthful ``[dispatch]`` extra contract (B2).
+    Three environments are distinguished so a tester is never pointed at a false
+    remedy, and none raise a raw ``ModuleNotFoundError`` traceback:
+
+    * **runtime engine absent** (e.g. the slim released wheel ships CLI + data
+      only): the concise "source/main-only" notice — the runtime file is not in
+      this build.
+    * **runtime present but ``[dispatch]`` deps absent** (a base source install
+      without the extra): a ``pip install 'tokenpak[dispatch]'`` message. Before
+      this fix the pydantic-native package ``__init__`` failed to import and the
+      verb wrongly reported the runtime as source/main-only — pointing a tester
+      who already has a source install at a non-fix.
+    * **fully available**: the wrapped handler runs.
     """
 
     @functools.wraps(fn)
     def _wrapper(args: Any) -> int:
+        as_json = getattr(args, "as_json", False)
+        if not _dispatch_runtime_source_present():
+            return _err(
+                _DISPATCH_RUNTIME_UNAVAILABLE_MSG,
+                as_json,
+                code="dispatch_runtime_unavailable",
+            )
+        missing = _missing_dispatch_deps()
+        if missing:
+            return _err(
+                _dispatch_deps_missing_msg(missing),
+                as_json,
+                code="dispatch_dependencies_missing",
+            )
         if not _dispatch_runtime_available():
             return _err(
                 _DISPATCH_RUNTIME_UNAVAILABLE_MSG,
-                getattr(args, "as_json", False),
+                as_json,
                 code="dispatch_runtime_unavailable",
             )
         return fn(args)
@@ -366,6 +474,7 @@ def cmd_dispatch_run(args: Any) -> int:
         "risk_flags": list(intake.job.risk_flags),
         "confirm": bool(getattr(args, "confirm", False)),
         "dry_run": dry_run,
+        "persisted": not dry_run,
     }
     if dry_run:
         payload["note"] = (
@@ -374,7 +483,7 @@ def cmd_dispatch_run(args: Any) -> int:
         )
 
     def render(p: dict) -> int:
-        print("Dispatch run")
+        print("Dispatch run" + ("  (dry-run — nothing persisted)" if p["dry_run"] else ""))
         print("────────────")
         if p.get("dry_run"):
             print("  (dry run — nothing persisted)")
@@ -400,6 +509,11 @@ def cmd_dispatch_run(args: Any) -> int:
             print("  Missing info:")
             for m in p["missing_info"]:
                 print(f"    - {m}")
+        if p["dry_run"]:
+            print()
+            print("  → Dry-run: draft only. No job, manifest, route, or decision "
+                  "was written to the ledger.")
+            return 0
         if p["selection_status"] == "auto_dispatch":
             print()
             print("  → Route auto-dispatched. Inspect with "
@@ -867,6 +981,138 @@ def cmd_dispatch_delivery(args: Any) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Discovery: routes / workers  (read-only registry enumeration)
+# ---------------------------------------------------------------------------
+
+
+@_needs_runtime
+def cmd_dispatch_routes(args: Any) -> int:
+    """List discoverable Dispatch routes (packaged defaults + user overrides).
+
+    Read-only discovery: enumerates the *merged* route registry (packaged
+    defaults shadowed by any user routes under ``<tokenpak-home>/dispatch/routes/``)
+    so a tester can find legal route ids/names — plus each route's stations —
+    without reading source. Touches no ledger and executes no runtime.
+    """
+    from tokenpak.orchestration.dispatch.registry.routes import (
+        RouteProfileError,
+        merged_route_registry,
+        user_routes_dir,
+    )
+
+    as_json = getattr(args, "as_json", False)
+    try:
+        routes = merged_route_registry().all()
+        overrides_dir = str(user_routes_dir())
+    except (RouteProfileError, OSError) as exc:
+        return _err(
+            f"failed to load route registry: {exc}", as_json,
+            code="route_registry_error",
+        )
+
+    route_rows = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "intents": list(r.triggers.intents),
+            "stations": [
+                {
+                    "id": s.id,
+                    "required_role": s.required_role,
+                    "required_capabilities": list(s.required_capabilities),
+                }
+                for s in r.stations
+            ],
+        }
+        for r in routes
+    ]
+    payload = {
+        "count": len(route_rows),
+        "user_routes_dir": overrides_dir,
+        "routes": route_rows,
+    }
+
+    def render(p: dict) -> int:
+        if not p["routes"]:
+            print("No Dispatch routes registered.")
+        else:
+            print(f"Dispatch routes — {p['count']} registered")
+            print("═" * 50)
+            for r in p["routes"]:
+                print(f"  {r['id']}   {r['name']}")
+                print(f"      intents : {', '.join(r['intents']) or '(none)'}")
+                stations = ", ".join(s["id"] for s in r["stations"]) or "(none)"
+                print(f"      stations: {stations}")
+        print()
+        print(f"  User route overrides: {p['user_routes_dir']}")
+        return 0
+
+    return _emit(payload, as_json, render)
+
+
+@_needs_runtime
+def cmd_dispatch_workers(args: Any) -> int:
+    """List discoverable Dispatch workers + prompt overlays (packaged + user).
+
+    Read-only discovery: enumerates the packaged worker registry (worker ids,
+    roles, capabilities) plus the discoverable prompt overlays (packaged defaults
+    shadowed by user overlays under ``<tokenpak-home>/dispatch/overlays/``) so a
+    tester can find legal worker ids/capabilities without reading source. Touches
+    no ledger and executes no runtime.
+    """
+    from tokenpak.orchestration.dispatch.registry.workers import (
+        WorkerProfileError,
+        default_overlay_loader,
+        default_worker_registry,
+        user_overlay_dir,
+    )
+
+    as_json = getattr(args, "as_json", False)
+    try:
+        workers = default_worker_registry().all()
+        overlay_ids = default_overlay_loader().ids()
+        overrides_dir = str(user_overlay_dir())
+    except (WorkerProfileError, OSError) as exc:
+        return _err(
+            f"failed to load worker registry: {exc}", as_json,
+            code="worker_registry_error",
+        )
+
+    worker_rows = [
+        {
+            "id": w.id,
+            "name": getattr(w, "name", None),
+            "roles": list(w.roles),
+            "capabilities": list(w.capabilities),
+        }
+        for w in workers
+    ]
+    payload = {
+        "count": len(worker_rows),
+        "user_overlay_dir": overrides_dir,
+        "overlays": list(overlay_ids),
+        "workers": worker_rows,
+    }
+
+    def render(p: dict) -> int:
+        if not p["workers"]:
+            print("No Dispatch workers registered.")
+        else:
+            print(f"Dispatch workers — {p['count']} registered")
+            print("═" * 50)
+            for w in p["workers"]:
+                print(f"  {w['id']}")
+                print(f"      roles       : {', '.join(w['roles']) or '(none)'}")
+                print(f"      capabilities: {', '.join(w['capabilities']) or '(none)'}")
+        print()
+        print(f"  Overlays: {', '.join(p['overlays']) or '(none)'}")
+        print(f"  User overlay overrides: {p['user_overlay_dir']}")
+        return 0
+
+    return _emit(payload, as_json, render)
+
+
+# ---------------------------------------------------------------------------
 # Decision card rendering
 # ---------------------------------------------------------------------------
 
@@ -1070,4 +1316,6 @@ __all__ = [
     "cmd_dispatch_discard_late",
     "cmd_dispatch_delivery",
     "cmd_dispatch_receipt",
+    "cmd_dispatch_routes",
+    "cmd_dispatch_workers",
 ]

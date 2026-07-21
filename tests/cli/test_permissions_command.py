@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -200,8 +201,19 @@ def test_set_fleet_requires_explicit_optin_non_tty(tmp_home, capsys):
     )
     assert rc == 1
     assert perms.fleet_mode_enabled() is False
-    out = capsys.readouterr().out
-    assert "--yes" in out
+    assert "--yes" in capsys.readouterr().err
+
+
+def test_legacy_fleet_rejects_narrow_client_scope(tmp_home, capsys):
+    rc = perms.run_permissions(
+        _ns(permissions_cmd="set", tier="fleet", client="codex", yes=True)
+    )
+    assert rc == 2
+    assert perms._get_launcher_mode("codex") == "inherit"
+    assert perms._get_launcher_mode("claude-code") == "inherit"
+    err = capsys.readouterr().err
+    assert "would broaden scope unexpectedly" in err
+    assert "launcher full-bypass --client codex" in err
 
 
 def test_state_file_is_launcher_knob_never_tier_fleet(tmp_home):
@@ -210,6 +222,8 @@ def test_state_file_is_launcher_knob_never_tier_fleet(tmp_home):
     text = (tmp_home / ".config" / "tokenpak" / "permissions.toml").read_text()
     assert 'tier = "fleet"' not in text
     assert "fleet_mode = true" in text
+    assert '"claude-code" = "full-bypass"' in text
+    assert '"codex" = "full-bypass"' in text
     # Recording a non-persistent tier must be refused silently
     perms._record_last_set_tier("codex", "fleet")
     text = (tmp_home / ".config" / "tokenpak" / "permissions.toml").read_text()
@@ -229,6 +243,291 @@ def test_fleet_mode_enabled_never_raises_on_corrupt_state(tmp_home):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("not [ valid toml ===")
     assert perms.fleet_mode_enabled() is False
+
+
+@pytest.mark.parametrize("raw", ['"false"', '"true"', "0", "1"])
+def test_non_boolean_legacy_fleet_value_fails_closed(tmp_home, raw):
+    state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(f"[launcher]\nfleet_mode = {raw}\n")
+    for client in ("claude-code", "codex"):
+        mode, warning = perms._get_launcher_mode_status(client)
+        assert mode == "inherit"
+        assert warning is not None
+        assert "must be true or false" in warning
+    assert perms.fleet_mode_enabled() is False
+
+
+@pytest.mark.parametrize("raw", ["999", '"2"', "true"])
+def test_unknown_or_noninteger_schema_version_fails_closed(tmp_home, raw):
+    state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(
+        f"schema_version = {raw}\n\n"
+        "[launcher]\n"
+        "fleet_mode = false\n\n"
+        "[launcher.modes]\n"
+        'codex = "full-bypass"\n'
+    )
+    mode, warning = perms._get_launcher_mode_status("codex")
+    assert mode == "inherit"
+    assert warning is not None
+    assert "unsupported launcher state schema_version" in warning
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["inherit", "approval-bypass", "sandbox-bypass", "full-bypass"],
+)
+def test_launcher_mode_round_trip_for_codex(tmp_home, mode):
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode=mode,
+            client="codex",
+            yes=True,
+        )
+    )
+    assert rc == 0
+    assert perms._get_launcher_mode("codex") == mode
+    assert perms._get_launcher_mode("claude-code") == "inherit"
+    text = (tmp_home / ".config" / "tokenpak" / "permissions.toml").read_text()
+    assert "schema_version = 2" in text
+    assert "# WARNING: non-inherit values affect only" in text
+    assert f'"codex" = "{mode}"' in text
+
+
+def test_launcher_mode_round_trip_for_claude(tmp_home):
+    mode = "full-bypass"
+    perms._set_launcher_modes({"claude-code": mode}, "test")
+    assert perms._get_launcher_mode("claude-code") == mode
+    assert perms._get_launcher_mode("codex") == "inherit"
+
+
+@pytest.mark.parametrize("mode", ["approval-bypass", "sandbox-bypass"])
+@pytest.mark.parametrize("client", ["claude-code", "both"])
+def test_partial_bypass_rejected_for_claude_atomically(
+    tmp_home, capsys, mode, client
+):
+    perms._set_launcher_modes({"codex": "full-bypass"}, "existing state")
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode=mode,
+            client=client,
+            yes=True,
+        )
+    )
+    assert rc == 2
+    assert perms._get_launcher_mode("codex") == "full-bypass"
+    assert perms._get_launcher_mode("claude-code") == "inherit"
+    captured = capsys.readouterr()
+    assert "only inherit/full-bypass" in captured.err
+    assert "--client codex" in captured.err
+
+
+def test_launcher_bypass_requires_yes_non_tty(tmp_home, capsys):
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode="approval-bypass",
+            client="codex",
+            yes=False,
+        )
+    )
+    assert rc == 1
+    assert perms._get_launcher_mode("codex") == "inherit"
+    captured = capsys.readouterr()
+    assert "configured sandbox still applies" in captured.err
+    assert "--yes" in captured.err
+    assert "administrator policy" in captured.err
+
+
+def test_tokenpak_noninteractive_disables_tty_prompt(
+    tmp_home, monkeypatch, capsys
+):
+    monkeypatch.setenv("TOKENPAK_NONINTERACTIVE", "1")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode="approval-bypass",
+            client="codex",
+            yes=False,
+        )
+    )
+    assert rc == 1
+    assert perms._get_launcher_mode("codex") == "inherit"
+    assert "without --yes" in capsys.readouterr().err
+
+
+def test_launcher_tty_prompt_defaults_to_no(tmp_home, monkeypatch, capsys):
+    monkeypatch.setattr(perms, "_interactive_confirmation_allowed", lambda: True)
+    monkeypatch.setattr(sys.stdin, "readline", lambda: "\n")
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode="full-bypass",
+            client="codex",
+            yes=False,
+        )
+    )
+    assert rc == 0
+    assert perms._get_launcher_mode("codex") == "inherit"
+    captured = capsys.readouterr()
+    assert "[y/N]" in captured.out
+    assert "Cancelled" in captured.out
+
+
+def test_launcher_yes_keeps_warning_visible(tmp_home, capsys):
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode="full-bypass",
+            client="codex",
+            yes=True,
+        )
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "CRITICAL" in captured.err
+    assert "approval prompts or" in captured.err
+    assert "launcher inherit --client codex" in captured.err
+
+
+@pytest.mark.parametrize(
+    "config,mode,needle",
+    [
+        (
+            'approval_policy = "never"\nsandbox_mode = "workspace-write"\n',
+            "sandbox-bypass",
+            "approval_policy=never plus sandbox-bypass",
+        ),
+        (
+            'approval_policy = "on-request"\nsandbox_mode = "danger-full-access"\n',
+            "approval-bypass",
+            "sandbox_mode=danger-full-access plus approval-bypass",
+        ),
+    ],
+)
+def test_launcher_warning_elevates_effective_full_bypass(
+    tmp_home, capsys, config, mode, needle
+):
+    _write_codex_config(tmp_home, config)
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode=mode,
+            client="codex",
+            yes=True,
+        )
+    )
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "CRITICAL EFFECTIVE CONFIG" in err
+    assert needle in err
+
+
+def test_legacy_fleet_state_migrates_without_broadening(tmp_home):
+    state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text("[launcher]\nfleet_mode = true\n")
+    assert perms._get_launcher_mode("claude-code") == "full-bypass"
+    assert perms._get_launcher_mode("codex") == "full-bypass"
+
+    perms._set_launcher_modes({"codex": "approval-bypass"}, "test migration")
+    assert perms._get_launcher_mode("claude-code") == "full-bypass"
+    assert perms._get_launcher_mode("codex") == "approval-bypass"
+    text = state.read_text()
+    assert "fleet_mode = false" in text
+
+
+def test_unknown_launcher_mode_fails_closed_with_warning(tmp_home):
+    state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(
+        "schema_version = 2\n\n"
+        "[launcher]\n"
+        "fleet_mode = false\n\n"
+        "[launcher.modes]\n"
+        'codex = "future-unrestricted"\n'
+        '"claude-code" = "inherit"\n'
+    )
+    mode, warning = perms._get_launcher_mode_status("codex")
+    assert mode == "inherit"
+    assert warning is not None
+    assert "invalid stored mode" in warning
+
+
+@pytest.mark.parametrize("mode", ["approval-bypass", "sandbox-bypass"])
+def test_unsupported_stored_claude_partial_mode_fails_closed(tmp_home, mode):
+    state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(
+        "schema_version = 2\n\n"
+        "[launcher]\n"
+        "fleet_mode = false\n\n"
+        "[launcher.modes]\n"
+        f'"claude-code" = "{mode}"\n'
+        'codex = "inherit"\n'
+    )
+    resolved, warning = perms._get_launcher_mode_status("claude-code")
+    assert resolved == "inherit"
+    assert warning is not None
+    assert "unsupported stored mode" in warning
+
+
+def test_show_invalid_launcher_state_uses_launcher_remediation(tmp_home, capsys):
+    state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(
+        "[launcher]\n"
+        "fleet_mode = false\n\n"
+        "[launcher.modes]\n"
+        'codex = "future-unrestricted"\n'
+    )
+    assert perms.run_permissions(_ns(permissions_cmd="show")) == 0
+    out = capsys.readouterr().out
+    assert "Invalid launcher state was ignored safely" in out
+    assert "launcher inherit --client both" in out
+    assert "client config was modified outside TokenPak" not in out
+
+
+def test_launcher_reset_is_client_scoped_and_preserves_tiers(tmp_home):
+    _write_codex_config(tmp_home, SAMPLE_CODEX)
+    assert perms.apply_codex_tier("auto").ok
+    perms._set_launcher_modes(
+        {"codex": "full-bypass", "claude-code": "full-bypass"},
+        "test",
+    )
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode="inherit",
+            client="codex",
+        )
+    )
+    assert rc == 0
+    assert perms._get_launcher_mode("codex") == "inherit"
+    assert perms._get_launcher_mode("claude-code") == "full-bypass"
+    assert perms.read_codex_tier()[0] == "auto"
+
+
+def test_launcher_modes_never_modify_client_configs(tmp_home):
+    claude_p = _write_claude_settings(tmp_home, SAMPLE_CLAUDE)
+    codex_p = _write_codex_config(tmp_home, SAMPLE_CODEX)
+    before = {
+        claude_p: (claude_p.read_bytes(), claude_p.stat().st_mtime_ns),
+        codex_p: (codex_p.read_bytes(), codex_p.stat().st_mtime_ns),
+    }
+    perms._set_launcher_modes(
+        {"claude-code": "full-bypass", "codex": "sandbox-bypass"},
+        "test",
+    )
+    for path, (content, mtime) in before.items():
+        assert path.read_bytes() == content
+        assert path.stat().st_mtime_ns == mtime
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +609,110 @@ def test_show_default_rows_exact_shape(tmp_home, capsys):
     out = capsys.readouterr().out
     assert "Claude Code persistent tier:  standard" in out
     assert "Codex persistent tier:        standard" in out
-    assert "TokenPak launcher fleet mode: disabled" in out
+    assert "Claude Code launcher default: inherit" in out
+    assert "Codex launcher default:       inherit" in out
+    assert "Legacy full-bypass alias:     disabled" in out
+
+
+def test_show_json_is_one_schema_versioned_object(tmp_home, capsys):
+    rc = perms.run_permissions(
+        _ns(permissions_cmd="show", as_json=True, quiet=False)
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["schema"] == "tokenpak.permissions.v1"
+    assert payload["persistent_tiers"]["codex"]["tier"] == "standard"
+    assert payload["launcher_defaults"]["codex"]["mode"] == "inherit"
+    assert payload["legacy_fleet_alias"]["enabled"] is False
+    assert captured.err == ""
+
+
+def test_cli_main_first_run_json_has_no_welcome_noise(
+    tmp_home, monkeypatch, capsys
+):
+    from tokenpak import _cli_core
+
+    monkeypatch.setattr(
+        _cli_core,
+        "_FIRST_RUN_FLAG",
+        tmp_home / ".tokenpak" / ".seen_intro",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["tokenpak", "permissions", "show", "--json"],
+    )
+    _cli_core.main()
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["schema"] == "tokenpak.permissions.v1"
+    assert "Welcome to TokenPak" not in captured.out
+
+
+def test_show_quiet_suppresses_normal_output(tmp_home, capsys):
+    rc = perms.run_permissions(
+        _ns(permissions_cmd="show", as_json=False, quiet=True)
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_show_quiet_preserves_active_safety_warnings(tmp_home, capsys):
+    perms._set_launcher_modes({"codex": "approval-bypass"}, "test")
+    rc = perms.run_permissions(
+        _ns(permissions_cmd="show", as_json=False, quiet=True)
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "approval prompts will be disabled" in captured.err
+    assert "administrator policy" in captured.err
+
+
+def test_launcher_json_write_is_parseable_and_keeps_stderr_warning(
+    tmp_home, capsys
+):
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode="approval-bypass",
+            client="codex",
+            yes=True,
+            as_json=True,
+            quiet=False,
+        )
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["schema"] == "tokenpak.permissions.v1"
+    assert payload["ok"] is True
+    assert payload["mode"] == "approval-bypass"
+    assert payload["clients"] == ["codex"]
+    assert "tokenpak WARNING" in captured.err
+
+
+def test_launcher_json_without_yes_returns_structured_refusal(tmp_home, capsys):
+    rc = perms.run_permissions(
+        _ns(
+            permissions_cmd="launcher",
+            launcher_mode="full-bypass",
+            client="codex",
+            yes=False,
+            as_json=True,
+            quiet=False,
+        )
+    )
+    assert rc == 1
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["error"] == "explicit --yes required"
+    assert "CRITICAL" in captured.err
+    assert perms._get_launcher_mode("codex") == "inherit"
 
 
 @pytest.mark.parametrize("tier", ["strict", "standard", "auto"])
@@ -329,8 +731,8 @@ def test_show_never_displays_fleet_as_persistent_tier(tmp_home, capsys, tier, fl
         assert forbidden not in out
     assert f"Claude Code persistent tier:  {tier}" in out
     assert f"Codex persistent tier:        {tier}" in out
-    expected_fleet = "enabled" if fleet else "disabled"
-    assert f"TokenPak launcher fleet mode: {expected_fleet}" in out
+    expected_fleet = "enabled (both full-bypass)" if fleet else "disabled"
+    assert f"Legacy full-bypass alias:     {expected_fleet}" in out
 
 
 def test_doctor_rows_exact_shape_and_values(tmp_home):
@@ -338,7 +740,9 @@ def test_doctor_rows_exact_shape_and_values(tmp_home):
     assert rows == [
         "Claude Code persistent tier:  standard",
         "Codex persistent tier:        standard",
-        "TokenPak launcher fleet mode: disabled",
+        "Claude Code launcher default: inherit",
+        "Codex launcher default:       inherit",
+        "Legacy full-bypass alias:     disabled",
     ]
     assert drift is False
 
@@ -404,11 +808,39 @@ def test_menu_has_permission_tier_section(tmp_home):
     assert any(key == "permissions" for key, _ in menu._HOME_ITEMS)
     assert "permissions" in menu._SUBCOMMAND_COMMANDS
     assert callable(menu._section_permissions)
+    assert callable(menu._section_launcher_permissions)
     subtitle = menu._permission_tier_subtitle()
     # Both persistent rows + the launcher row surface in the section
     assert "Claude Code persistent tier: standard" in subtitle
     assert "Codex persistent tier: standard" in subtitle
-    assert "TokenPak launcher fleet mode: disabled" in subtitle
+    assert "Claude Code launcher default: inherit" in subtitle
+    assert "Codex launcher default: inherit" in subtitle
+    assert "Legacy full-bypass alias: disabled" in subtitle
+
+
+def test_cli_parser_exposes_launcher_mode_matrix():
+    from tokenpak._cli_core import build_parser
+
+    args = build_parser().parse_args(
+        [
+            "permissions",
+            "launcher",
+            "sandbox-bypass",
+            "--client",
+            "codex",
+            "--yes",
+            "--json",
+        ]
+    )
+    assert args.permissions_cmd == "launcher"
+    assert args.launcher_mode == "sandbox-bypass"
+    assert args.client == "codex"
+    assert args.yes is True
+    assert args.as_json is True
+
+    show = build_parser().parse_args(["permissions", "show", "--json"])
+    assert show.permissions_cmd == "show"
+    assert show.as_json is True
 
 
 def test_config_writers_never_emit_bypass_flags(tmp_home):

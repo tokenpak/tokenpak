@@ -127,7 +127,7 @@ echo "[gate] public-leak scan over promoted files (delta-style)"
 SCAN_DIR="$(mktemp -d)"
 while IFS=$'\t' read -r status path; do
   [[ "$status" == "D" ]] && continue
-  echo "$path" | grep -qE '^(packages/tests/|tests/|sdk/dist/|scripts/release_gate/check_release_leaks\.py|\.github/workflows/identity-language-check\.yml|\.github/workflows/public-layout-check\.yml|\.pre-commit-config\.yaml)' && continue
+  echo "$path" | grep -qE '^(packages/tests/|tests/|sdk/dist/|scripts/release_check/|scripts/release_gate/(check_release_leaks|public_safety_scan)\.py|\.github/workflows/identity-language-check\.yml|\.github/workflows/public-layout-check\.yml|\.pre-commit-config\.yaml)' && continue
   mkdir -p "$SCAN_DIR/$(dirname "$path")"
   cp "$TRAIN_WT/$path" "$SCAN_DIR/$path"
 done < "$MANIFEST"

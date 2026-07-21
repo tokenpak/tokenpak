@@ -47,6 +47,15 @@ try:
     _CROSS_ENCODER_AVAILABLE = True
 except ImportError:
     _CROSS_ENCODER_AVAILABLE = False
+    import warnings as _warnings
+
+    _warnings.warn(
+        "sentence-transformers not installed; SpanExtractor will use the "
+        "heuristic scorer instead of the cross-encoder reranker. "
+        "Install with: pip install tokenpak[retrieval]",
+        ImportWarning,
+        stacklevel=2,
+    )
 
 
 def _split_sentences(text: str) -> List[str]:

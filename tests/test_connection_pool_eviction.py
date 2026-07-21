@@ -508,6 +508,55 @@ def test_duplicate_cleanup_submission_closes_exactly_once():
     pool.close()
 
 
+def test_stale_closed_read_cannot_resubmit_completed_cleanup():
+    stale_read_observed = threading.Event()
+    close_completed = threading.Event()
+
+    class _InterleavedCloseClient:
+        def __init__(self):
+            self._closed = False
+            self.arm_stale_read = False
+            self.closes = 0
+
+        @property
+        def is_closed(self):
+            observed = self._closed
+            if self.arm_stale_read and not observed:
+                self.arm_stale_read = False
+                stale_read_observed.set()
+                assert close_completed.wait(timeout=1.0), "cleanup worker did not close client"
+
+                deadline = time.monotonic() + 1.0
+                while time.monotonic() < deadline:
+                    with pool._close_cv:
+                        if id(self) not in pool._close_pending:
+                            break
+                    time.sleep(0.001)
+                else:
+                    raise AssertionError("cleanup worker did not retire pending entry")
+            return observed
+
+        def close(self):
+            assert stale_read_observed.wait(timeout=1.0), "duplicate submit never observed"
+            self.closes += 1
+            self._closed = True
+            close_completed.set()
+
+    client = _InterleavedCloseClient()
+    pool = ConnectionPool(PoolConfig(http2=False))
+    assert pool._schedule_close(client) is True
+
+    # Force call two to return a stale False from its optimistic pre-lock
+    # property read only after the first cleanup has completed and removed its
+    # pending entry. The authoritative in-lock read must prevent re-enqueue.
+    client.arm_stale_read = True
+    assert pool._schedule_close(client) is True
+
+    _wait_pending(pool)
+    assert client.closes == 1
+    pool.close()
+
+
 def test_health_metrics_recovers_pending_close_after_worker_start_failure(monkeypatch):
     real_start = threading.Thread.start
     failed_once = False

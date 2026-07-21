@@ -98,7 +98,7 @@ class ProxyHandler:
         except ImportError:
             return _json_error(
                 500,
-                "litellm is not installed. Run: pip install litellm",
+                "litellm is not installed. Run: pip install tokenpak[integrations-litellm]",
             )
 
         model = body.get("model") or self.default_model

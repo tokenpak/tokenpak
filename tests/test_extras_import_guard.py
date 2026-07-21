@@ -34,6 +34,7 @@ tomllib = pytest.importorskip("tomllib", reason="tomllib is stdlib in Python 3.1
 
 import types
 import unittest
+import warnings
 from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
@@ -264,6 +265,112 @@ class ExtrasGuardSmokeTest(unittest.TestCase):
                          f"Expected 500 error when litellm is absent, got: {result}")
         self.assertIn("litellm", error_block.get("message", "").lower(),
                       "Error message should mention litellm")
+
+
+# ---------------------------------------------------------------------------
+# Class 3 — recovery-UX message tests
+# ---------------------------------------------------------------------------
+
+class ExtrasRecoveryMessageTest(unittest.TestCase):
+    """Assert every heavy-extra guard names the exact `pip install tokenpak[<extra>]`
+    recovery path when its dependency is absent.
+
+    These pin the recovery-UX contract: each live missing-extra surface
+    must point the user at the canonical tokenpak extra, not a bare upstream
+    `pip install <pkg>`. Mock-based — no extra needs to be uninstalled.
+    """
+
+    def _capture_import_warnings(self, module_name: str, dep_to_block: str):
+        """Reimport `module_name` with `dep_to_block` blocked, returning
+        (module, [warning_message, ...]) for the import-time guard warnings.
+        """
+        for key in list(sys.modules):
+            if key == module_name or key.startswith(module_name + "."):
+                del sys.modules[key]
+        for key in list(sys.modules):
+            if key == dep_to_block or key.startswith(dep_to_block + "."):
+                del sys.modules[key]
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with patch.dict(sys.modules, {dep_to_block: None}):
+                mod = importlib.import_module(module_name)
+        messages = [str(w.message) for w in caught]
+
+        for key in list(sys.modules):
+            if key == module_name or key.startswith(module_name + "."):
+                del sys.modules[key]
+        return mod, messages
+
+    def test_vector_local_warning_names_retrieval_extra(self):
+        """LocalVectorRetriever warns with `pip install tokenpak[retrieval]`."""
+        mod, _ = self._capture_import_warnings(
+            "tokenpak.vault.retrieval.vector_local", "sentence_transformers"
+        )
+        self.assertFalse(mod._ST_AVAILABLE)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            mod.LocalVectorRetriever()
+        joined = " ".join(str(w.message) for w in caught)
+        self.assertIn("pip install tokenpak[retrieval]", joined,
+                      f"vector_local guard must name the retrieval extra; got: {joined!r}")
+
+    def test_span_extractor_warning_names_retrieval_extra(self):
+        """span_extractor warns with `pip install tokenpak[retrieval]` at import."""
+        mod, messages = self._capture_import_warnings(
+            "tokenpak.compression.span_extractor", "sentence_transformers"
+        )
+        self.assertFalse(mod._CROSS_ENCODER_AVAILABLE)
+        joined = " ".join(messages)
+        self.assertIn("pip install tokenpak[retrieval]", joined,
+                      f"span_extractor guard must name the retrieval extra; got: {joined!r}")
+
+    def test_code_treesitter_warning_names_code_compression_extra(self):
+        """code_treesitter warns with `pip install tokenpak[code-compression]` at import."""
+        mod, messages = self._capture_import_warnings(
+            "tokenpak.compression.processors.code_treesitter", "tree_sitter_languages"
+        )
+        self.assertFalse(mod._TS_AVAILABLE)
+        joined = " ".join(messages)
+        self.assertIn("pip install tokenpak[code-compression]", joined,
+                      f"code_treesitter guard must name the code-compression extra; got: {joined!r}")
+
+    def test_llmlingua_runtime_error_names_compression_extra(self):
+        """LLMLinguaEngine.compact raises naming `pip install tokenpak[compression]`."""
+        from tokenpak.compression.engines.llmlingua import LLMLinguaEngine
+
+        with patch.dict(sys.modules, {"llmlingua": None}):
+            engine = LLMLinguaEngine()
+        self.assertFalse(engine._available,
+                         "engine must degrade when llmlingua is absent")
+        with self.assertRaises(RuntimeError) as ctx:
+            engine.compact("hello world")
+        self.assertIn("pip install tokenpak[compression]", str(ctx.exception),
+                      "LLMLingua runtime error must name the compression extra")
+
+    def test_litellm_proxy_error_names_integrations_litellm_extra(self):
+        """ProxyHandler 500 error names `pip install tokenpak[integrations-litellm]`."""
+        import asyncio
+
+        from tokenpak.sdk.integrations.litellm.proxy import ProxyHandler
+
+        handler = ProxyHandler()
+        req_dict = {
+            "model": "gpt-4",
+            "tokenpak": {},
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+
+        loop = asyncio.new_event_loop()
+        try:
+            with patch.dict(sys.modules, {"litellm": None}):
+                result = loop.run_until_complete(handler.handle(req_dict))
+        finally:
+            loop.close()
+
+        message = result.get("error", {}).get("message", "")
+        self.assertIn("pip install tokenpak[integrations-litellm]", message,
+                      f"litellm proxy guard must name the integrations-litellm extra; got: {message!r}")
 
 
 # ---------------------------------------------------------------------------

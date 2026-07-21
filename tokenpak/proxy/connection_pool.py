@@ -668,6 +668,17 @@ class ConnectionPool:
                 self._ensure_cleanup_workers_locked()
                 self._close_cv.notify()
                 return True
+            # The fast-path observation above is not authoritative. A cleanup
+            # worker can close the client and remove it from ``_close_pending``
+            # while this caller is waiting for the condition. Re-check under
+            # the same condition before enqueueing so that interleaving cannot
+            # schedule a second close for an already-closed client.
+            try:
+                if client.is_closed:
+                    self._release_client_slot(client)
+                    return True
+            except Exception:
+                pass
             self._close_pending[client_id] = client
             self._close_pending_since[client_id] = time.monotonic()
             self._close_backlog.append(client)

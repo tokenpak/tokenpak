@@ -1,0 +1,178 @@
+; Architecture-contract gate for the canonical subsystems.
+; Encodes inward-only dependency direction:
+; dependencies flow inward only; same-level subsystems are independent.
+;
+; tokenpak/services/ is a regular package so grimp discovers all
+; of services/* from the tokenpak root — no explicit extra roots needed.
+;
+; ignore_imports below is the declared debt ledger: one exact fully-qualified
+; entry per real import edge on current staging. No wildcards. Every entry has
+; a matching row in docs/import-debt-ledger.md (enforced by
+; tests/lint/test_import_contracts.py). The ledger is monotonically shrinking:
+; removing an edge from the graph removes it here and there; adding a NEW
+; edge is a contract violation and fails the gate.
+;
+; Modules outside the configured tiers (config, models, platform, runtime, ...)
+; are intentionally not layered here.
+
+[importlinter]
+root_packages =
+    tokenpak
+
+[importlinter:contract:architecture-layers]
+name = Dependency direction (levels 0-5)
+type = layers
+layers =
+    tokenpak.cli : tokenpak.sdk : tokenpak.companion : tokenpak.dashboard : tokenpak.alerts
+    tokenpak.proxy : tokenpak.orchestration : tokenpak.plugins
+    tokenpak.services
+    tokenpak.telemetry : tokenpak.routing
+    tokenpak.security : tokenpak.compression : tokenpak.cache : tokenpak.vault : tokenpak.sources : tokenpak.debug
+    tokenpak.core
+ignore_imports =
+    ; Group 1 — core/runtime/proxy.py launcher in Level 0 (IMP-001..IMP-011)
+    tokenpak.core.runtime.proxy -> tokenpak.proxy.circuit_breaker
+    tokenpak.core.runtime.proxy -> tokenpak.proxy.config
+    tokenpak.core.runtime.proxy -> tokenpak.proxy.passthrough
+    tokenpak.core.runtime.proxy -> tokenpak.proxy.server
+    tokenpak.core.runtime.proxy -> tokenpak.proxy.headers
+    tokenpak.core.runtime.proxy -> tokenpak.proxy.vault_bridge
+    tokenpak.core.runtime.proxy -> tokenpak.proxy.adapters.utils
+    tokenpak.core.runtime.proxy -> tokenpak.proxy.request_pipeline
+    tokenpak.core.runtime.proxy -> tokenpak.proxy.monitor
+    tokenpak.core.runtime.proxy -> tokenpak.telemetry.monitoring.server
+    tokenpak.core.registry.claude_code.adapter -> tokenpak.proxy
+    ; Group 2 — orchestration.commands -> _cli_core monolith (IMP-012)
+    tokenpak.orchestration.commands -> tokenpak._cli_core
+    ; Group 3 — proxy hosts entrypoint surfaces (IMP-013..IMP-031)
+    tokenpak.proxy.server -> tokenpak.sdk.registry
+    tokenpak.proxy.server -> tokenpak.sdk.openclaw
+    tokenpak.proxy.server -> tokenpak.cli.goals
+    tokenpak.proxy.app_endpoints -> tokenpak.cli.commands.optimize_prompt
+    tokenpak.proxy.cache_invalidation_alerts -> tokenpak.alerts.channels
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.journal.store
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.journal.pak_aware
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.capsules.builder
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.budget.tracker
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.recall
+    tokenpak.proxy.vault_bridge -> tokenpak.companion.capsules.builder
+    tokenpak.proxy.capsule_integration -> tokenpak.companion.capsules.builder
+    tokenpak.proxy.capsule_builder -> tokenpak.companion.capsules.builder
+    tokenpak.proxy.server -> tokenpak.dashboard.export_api
+    tokenpak.proxy.server -> tokenpak.dashboard.session_filter
+    tokenpak.proxy.server -> tokenpak.dashboard
+    tokenpak.proxy.server_async -> tokenpak.dashboard.session_filter
+    tokenpak.proxy.server_async -> tokenpak.dashboard.export_api
+    tokenpak.proxy.routes -> tokenpak.dashboard
+    ; Group 4 — compression.pipeline -> proxy.* (IMP-032..IMP-037)
+    tokenpak.compression.pipeline -> tokenpak.proxy.token_cache
+    tokenpak.compression.pipeline -> tokenpak.proxy.adapters.utils
+    tokenpak.compression.pipeline -> tokenpak.proxy.config
+    tokenpak.compression.pipeline -> tokenpak.proxy.request
+    tokenpak.compression.pipeline -> tokenpak.proxy.shadow_reader
+    tokenpak.compression.pipeline -> tokenpak.proxy.request_pipeline
+    ; Group 5 — vault upward imports (IMP-038..IMP-047)
+    tokenpak.vault.search -> tokenpak.companion.memory.session_capsules
+    tokenpak.vault.indexer -> tokenpak.proxy.config
+    tokenpak.vault.indexer -> tokenpak.proxy.vault_bridge
+    tokenpak.vault.chunk_shaping -> tokenpak.proxy.config
+    tokenpak.vault.ingest.api -> tokenpak.telemetry.query.api
+    tokenpak.vault.sqlite_backend -> tokenpak.telemetry.tokens
+    tokenpak.vault.watcher -> tokenpak.telemetry.tokens
+    tokenpak.vault.indexer -> tokenpak.telemetry.tokens
+    tokenpak.vault.search -> tokenpak.telemetry.tokens
+    tokenpak.vault.retrieval.vault_index -> tokenpak.telemetry.tokens
+    ; Group 6 — telemetry upward imports (IMP-048..IMP-053)
+    tokenpak.telemetry.pipeline -> tokenpak.proxy.shadow_hook
+    tokenpak.telemetry.pipeline -> tokenpak.proxy.shadow_reader
+    tokenpak.telemetry.model_analytics -> tokenpak.proxy.stats
+    tokenpak.telemetry.monitoring.health -> tokenpak.proxy.stats
+    tokenpak.telemetry.demo -> tokenpak.proxy.stats
+    tokenpak.telemetry.server -> tokenpak.companion.capsules
+    ; Group 7 — routing.fallback -> orchestration.retry (IMP-054)
+    tokenpak.routing.fallback -> tokenpak.orchestration.retry
+
+[importlinter:contract:std01-entrypoint-siblings]
+name = Entrypoint sibling independence (cli/sdk/companion/dashboard/alerts)
+type = independence
+modules =
+    tokenpak.cli
+    tokenpak.sdk
+    tokenpak.companion
+    tokenpak.dashboard
+    tokenpak.alerts
+ignore_imports =
+    ; Group 2b — cli entry modules -> _cli_core monolith; each is a real direct
+    ; edge and the vehicle of every transitive sibling violation (IMP-055..IMP-060)
+    tokenpak.cli.__main__ -> tokenpak._cli_core
+    tokenpak.cli.main -> tokenpak._cli_core
+    tokenpak.cli.commands.doctor -> tokenpak._cli_core
+    tokenpak.cli.commands.integrate -> tokenpak._cli_core
+    tokenpak.cli.commands.menu -> tokenpak._cli_core
+    tokenpak.cli.commands.permissions -> tokenpak._cli_core
+    ; Group 8 — direct entrypoint-sibling edges (IMP-061..IMP-071)
+    tokenpak.cli.commands.pak -> tokenpak.companion.journal.pak_aware
+    tokenpak.cli.commands.pakplan -> tokenpak.companion.recall
+    tokenpak.cli.commands.uninstall -> tokenpak.companion.codex.uninstall
+    tokenpak.cli.commands.doctor -> tokenpak.companion.stream
+    tokenpak.cli.commands.install -> tokenpak.sdk.openclaw
+    tokenpak.cli.commands.alerts -> tokenpak.alerts.channels.slack
+    tokenpak.cli.commands.alerts -> tokenpak.alerts.channels.webhook
+    tokenpak.companion.launcher -> tokenpak.cli.commands.status
+    tokenpak.companion.launcher -> tokenpak.cli.commands.permissions
+    tokenpak.companion.codex.launcher -> tokenpak.cli.commands.permissions
+    tokenpak.sdk.registry -> tokenpak.cli.commands.install
+    ; Ledgered edges reused from the layers contract: these edges complete the
+    ; remaining transitive sibling chains; each already has a ledger row above
+    ; (IMP-012..IMP-028, IMP-038, IMP-053)
+    tokenpak.orchestration.commands -> tokenpak._cli_core
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.journal.store
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.journal.pak_aware
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.capsules.builder
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.budget.tracker
+    tokenpak.proxy.app_endpoints -> tokenpak.companion.recall
+    tokenpak.vault.search -> tokenpak.companion.memory.session_capsules
+    tokenpak.proxy.vault_bridge -> tokenpak.companion.capsules.builder
+    tokenpak.proxy.capsule_integration -> tokenpak.companion.capsules.builder
+    tokenpak.proxy.capsule_builder -> tokenpak.companion.capsules.builder
+    tokenpak.telemetry.server -> tokenpak.companion.capsules
+    tokenpak.proxy.cache_invalidation_alerts -> tokenpak.alerts.channels
+    tokenpak.proxy.server -> tokenpak.cli.goals
+    tokenpak.proxy.app_endpoints -> tokenpak.cli.commands.optimize_prompt
+    tokenpak.proxy.server -> tokenpak.sdk.registry
+    tokenpak.proxy.server -> tokenpak.sdk.openclaw
+    tokenpak.proxy.server -> tokenpak.dashboard.export_api
+    tokenpak.proxy.server -> tokenpak.dashboard.session_filter
+    tokenpak.proxy.server -> tokenpak.dashboard
+
+[importlinter:contract:std01-entrypoint-proxy-path]
+name = Entrypoints use proxy instead of services or pipeline primitives
+type = forbidden
+source_modules =
+    tokenpak.cli
+    tokenpak.sdk
+    tokenpak.companion
+    tokenpak.dashboard
+    tokenpak.alerts
+forbidden_modules =
+    tokenpak.services
+    tokenpak.compression
+    tokenpak.security
+    tokenpak.cache
+    tokenpak.routing
+allow_indirect_imports = true
+ignore_imports =
+    ; Existing direct bypasses are declared debt, not documented exceptions
+    ; (IMP-072..IMP-083). New direct bypasses fail this contract.
+    tokenpak.cli.commands._config_optimize -> tokenpak.services.memory_optimization
+    tokenpak.cli.commands.compress_cmd -> tokenpak.compression.dedup
+    tokenpak.cli.commands.compress_cmd -> tokenpak.compression.engines.heuristic
+    tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.generator
+    tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.privacy
+    tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.sync
+    tokenpak.cli.commands.preview -> tokenpak.compression.core
+    tokenpak.sdk.integrations.claude_code.mcp_server -> tokenpak.compression.budgets.policy
+    tokenpak.sdk.integrations.claude_code.mcp_server -> tokenpak.compression.extraction.extractor
+    tokenpak.sdk.integrations.litellm.formatter -> tokenpak.compression.engines
+    tokenpak.sdk.integrations.litellm.formatter -> tokenpak.compression.engines.base
+    tokenpak.sdk.integrations.litellm.formatter -> tokenpak.compression.wire

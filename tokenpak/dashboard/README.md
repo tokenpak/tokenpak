@@ -24,6 +24,30 @@ Or customize the port if running TokenPak on a different port:
 http://<proxy-host>:<proxy-port>/dashboard
 ```
 
+## Terminal Cockpit Layouts
+
+The CLI dashboard also exposes read-only terminal cockpit layouts over the
+same local state sources:
+
+```
+tokenpak dashboard --layout home
+tokenpak dashboard --layout dispatch
+tokenpak dashboard --layout spend
+tokenpak dashboard --layout debug
+```
+
+Each layout supports stable JSON output:
+
+```
+tokenpak dashboard --layout spend --json
+```
+
+The layouts project existing proxy, monitor, Dispatch, companion, and
+`fleet.yaml` configuration sources when they are present. Missing sources are
+reported as `unknown`, `not_measured`, or `not_configured`; the dashboard does
+not create credentials, edit configuration, start or stop services, or execute
+Dispatch runtime controls.
+
 ## Features
 
 ### Real-Time Metrics

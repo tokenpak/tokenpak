@@ -1,7 +1,7 @@
 {
   "name": "tokenpak",
   "version": "1.0.0",
-  "description": "TokenPak \u2014 deterministic context compression for LLMs",
+  "description": "TokenPak — deterministic context compression for LLMs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -36,13 +36,13 @@
     "url": "https://github.com/tokenpak/tokenpak/issues"
   },
   "dependencies": {
-    "axios": "^1.7.0"
+    "axios": "^1.16.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^22.19.15",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
     "typescript": "^5.9.3"
   },
   "engines": {

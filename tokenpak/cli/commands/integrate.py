@@ -954,8 +954,8 @@ def _run_guided_form(integration: Integration, proxy_url: str) -> int:
 # ---------------------------------------------------------------------------
 # Permission tiers (claude-code / codex only)
 #
-# Persistent trust level (strict/standard/auto → client config) vs runtime
-# unattended bypass (fleet → TokenPak launcher state only). See
+# Persistent trust level (strict/standard/auto → client config) vs per-client
+# launcher defaults. ``fleet`` remains a legacy full-bypass-for-both alias. See
 # tokenpak/cli/commands/permissions.py for the canonical mapping + write
 # discipline. Tier handling only engages when the invoking argparse
 # namespace carries a ``tier`` attribute — the real CLI parser always sets
@@ -999,11 +999,17 @@ def _resolve_apply_tier(args: argparse.Namespace) -> Optional[str]:
     """Resolve the tier for an --apply run. Returns None when aborted.
 
     Flag wins; otherwise prompt on a TTY; otherwise silently default to
-    ``standard``. ``fleet`` always requires explicit confirmation (TTY
-    prompt or --yes) and prints a warning first.
+    ``standard``. The legacy ``fleet`` alias always requires explicit
+    confirmation (TTY prompt or --yes) and prints a warning first.
     """
     tier = getattr(args, "tier", None)
-    interactive = _is_interactive() and not _is_no_tui()
+    interactive = (
+        _is_interactive()
+        and not _is_no_tui()
+        and not os.environ.get("TOKENPAK_NONINTERACTIVE")
+        and not os.environ.get("CI")
+        and os.environ.get("TERM", "") != "dumb"
+    )
     if tier is None:
         if interactive:
             tier = _prompt_tier()
@@ -1012,14 +1018,22 @@ def _resolve_apply_tier(args: argparse.Namespace) -> Optional[str]:
         else:
             tier = "standard"
     if tier == "fleet":
-        from tokenpak.cli.commands.permissions import _FLEET_WARNING
+        from tokenpak.cli.commands.permissions import (
+            _FLEET_WARNING,
+            CLIENTS,
+            _launcher_warning_lines,
+            _print_launcher_warnings,
+        )
 
-        print()
-        print(f"  ⚠  {_FLEET_WARNING}")
+        print(f"tokenpak WARNING: {_FLEET_WARNING}", file=sys.stderr)
+        _print_launcher_warnings(_launcher_warning_lines("full-bypass", list(CLIENTS)))
         if getattr(args, "yes", False):
             return "fleet"
         if interactive:
-            if _tty_confirm("Enable fleet mode (launcher bypass flags)?", default=False):
+            if _tty_confirm(
+                "Set full-bypass for both TokenPak launchers?",
+                default=False,
+            ):
                 return "fleet"
             print("  Cancelled — fleet mode unchanged.")
             return None
@@ -1050,11 +1064,12 @@ def _render_tier_result(client_key: str, title: str, result) -> str:
 
 
 def _apply_tier_and_render(client_key: str, tier: str, backup: bool) -> int:
-    """Apply tier (or fleet launcher state) for one client + print outcome."""
+    """Apply a tier, or the legacy full-bypass launcher alias, and print outcome."""
     from tokenpak.cli.commands import permissions as _perms
 
     if tier == "fleet":
-        # Fleet never persists into client config. The persistent tier is
+        # Fleet never persists into client config. It is a compatibility alias
+        # for full-bypass on both launchers. The persistent tier is
         # left exactly as-is when one is already applied; on a fresh config
         # the default tier is applied so the client has a defined baseline.
         applied = _perms.applied_tier(client_key)
@@ -1065,13 +1080,11 @@ def _apply_tier_and_render(client_key: str, tier: str, backup: bool) -> int:
                 return 1
         else:
             print(f"\n  Persistent tier unchanged ({applied}) — fleet never persists.")
-        _perms.set_fleet_mode(
-            True, f"tokenpak integrate {client_key} --apply --tier fleet"
-        )
-        print("  ✅ Launcher fleet mode: enabled (TokenPak-owned state only).")
+        _perms.set_fleet_mode(True, f"tokenpak integrate {client_key} --apply --tier fleet")
+        print("  ✅ Legacy fleet mode: enabled (full-bypass for both launchers).")
         print(
-            "     `tokenpak claude` / `tokenpak codex` will inject bypass flags "
-            "and print a banner."
+            "     Every affected launch prints a warning. Configure clients "
+            "individually with `tokenpak permissions launcher <mode>`."
         )
         return 0
 

@@ -240,6 +240,7 @@ def _stub_setup(monkeypatch, tmp_path):
         "_configure_skills",
         lambda config_path, skills_root=None: [],
     )
+    monkeypatch.setattr(launcher, "_launcher_mode_state", lambda: ("inherit", None))
 
 
 def test_main_aborts_when_preflight_blocks(monkeypatch, tmp_path):
@@ -763,6 +764,36 @@ def test_launcher_live_child_transfer_temp_is_preserved_during_concurrent_retent
     assert launch_results and launch_results[0][0] == 0
 
 
+def test_main_applies_launcher_default_before_launch(monkeypatch, tmp_path, capsys):
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        launcher,
+        "_launcher_mode_state",
+        lambda: ("sandbox-bypass", None),
+    )
+    captured = {}
+
+    def _fake_run(argv, env, *, on_start=None):
+        captured["argv"] = list(argv)
+        captured["env"] = dict(env)
+        assert on_start is not None
+        on_start(os.getpid())
+        return 0, launcher.empty_usage()
+
+    monkeypatch.setattr(launcher, "_run_codex_process", _fake_run)
+    assert launcher.main(["--foo"]) == 0
+    assert captured["argv"] == [
+        "codex",
+        "--sandbox",
+        "danger-full-access",
+        "--foo",
+    ]
+    stderr = capsys.readouterr().err
+    assert "codex launcher mode sandbox-bypass active" in stderr
+    assert "--sandbox danger-full-access" in stderr
+
+
 # ── explicit no-body accounting receipt mode ───────────────────────────
 
 
@@ -865,7 +896,6 @@ def test_main_receipt_mode_runs_child_and_writes_no_body_receipt(monkeypatch, tm
     _stub_setup(monkeypatch, tmp_path)
     monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     monkeypatch.setattr(launcher, "_fleet_state_enabled", lambda: False)
-
     captured = {}
 
     def _fake_run(argv, env, *, on_start=None):
@@ -927,6 +957,7 @@ def test_receipt_only_mode_skips_companion_setup_and_writes_no_body_receipt(monk
     monkeypatch.setattr(mcp_config, "_register", _setup_must_not_run)
     monkeypatch.setattr(agents_md, "_install_agents_md", _setup_must_not_run)
     monkeypatch.setattr(skills_installer, "install_skills", _setup_must_not_run)
+    monkeypatch.setattr(launcher, "_launcher_mode_state", _setup_must_not_run)
     monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     monkeypatch.setenv("TOKENPAK_COMPANION_PROFILE", "aggressive")
     monkeypatch.setenv("TOKENPAK_MANAGED", "1")

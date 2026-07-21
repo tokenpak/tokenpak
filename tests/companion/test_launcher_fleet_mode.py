@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fleet-mode injection tests for both launchers.
+"""Launcher permission-default and legacy fleet injection tests.
 
-Fleet mode is the launcher-scoped runtime bypass: TokenPak-owned state
-(~/.config/tokenpak/permissions.toml) makes `tokenpak claude` /
-`tokenpak codex` inject the client's bypass flag into argv at exec time,
-with a mandatory stderr banner. Client config files are never involved.
+Per-client TokenPak-owned state makes `tokenpak claude` / `tokenpak codex`
+inject the selected session arguments at exec time, with a mandatory stderr
+warning. Client config files are never involved. Legacy fleet state still
+maps to full-bypass for both clients.
 
 Covers:
   - Claude launcher: flag injection, no duplication (bare-mode coherence),
@@ -41,6 +41,19 @@ def _enable_fleet_state(home: Path) -> None:
     p = home / ".config" / "tokenpak" / "permissions.toml"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("[launcher]\nfleet_mode = true\n")
+
+
+def _write_launcher_modes(home: Path, *, claude: str, codex: str) -> None:
+    p = home / ".config" / "tokenpak" / "permissions.toml"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        "schema_version = 2\n\n"
+        "[launcher]\n"
+        "fleet_mode = false\n\n"
+        "[launcher.modes]\n"
+        f'"claude-code" = "{claude}"\n'
+        f'codex = "{codex}"\n'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +133,10 @@ def test_claude_main_passes_flag_to_exec(tmp_home, monkeypatch, capsys):
         claude_launcher.main([])
     assert captured["prog"] == "claude"
     assert CLAUDE_BYPASS in captured["args"]
-    assert CLAUDE_BANNER in capsys.readouterr().err
+    stderr = capsys.readouterr().err
+    assert "claude-code launcher mode full-bypass active" in stderr
+    assert CLAUDE_BYPASS in stderr
+    assert "Managed policy may still constrain" in stderr
 
 
 def test_claude_main_vanilla_without_fleet(tmp_home, monkeypatch, capsys):
@@ -139,6 +155,39 @@ def test_claude_main_vanilla_without_fleet(tmp_home, monkeypatch, capsys):
         claude_launcher.main([])
     assert CLAUDE_BYPASS not in captured["args"]
     assert "fleet mode" not in capsys.readouterr().err
+
+
+def test_claude_launcher_unsupported_partial_mode_is_ignored():
+    original = ["claude", "--foo"]
+    out, flags, skipped = claude_launcher._apply_launcher_mode(
+        original,
+        "approval-bypass",
+    )
+    assert out == original
+    assert flags == ()
+    assert skipped is None
+    assert original == ["claude", "--foo"]
+
+
+def test_claude_launcher_explicit_permission_mode_wins():
+    args = ["claude", "--permission-mode", "manual"]
+    out, flags, skipped = claude_launcher._apply_launcher_mode(
+        args,
+        "full-bypass",
+    )
+    assert out == args
+    assert flags == ()
+    assert "precedence" in (skipped or "")
+
+
+def test_claude_launcher_state_is_client_scoped(tmp_home):
+    _write_launcher_modes(
+        tmp_home,
+        claude="inherit",
+        codex="full-bypass",
+    )
+    assert claude_launcher._launcher_mode_state()[0] == "inherit"
+    assert codex_launcher._launcher_mode_state()[0] == "full-bypass"
 
 
 # ---------------------------------------------------------------------------
@@ -200,3 +249,98 @@ def test_codex_fleet_state_reader(tmp_home):
     assert codex_launcher._fleet_state_enabled() is False
     _enable_fleet_state(tmp_home)
     assert codex_launcher._fleet_state_enabled() is True
+
+
+@pytest.mark.parametrize(
+    "mode,expected",
+    [
+        ("inherit", []),
+        ("approval-bypass", ["--ask-for-approval", "never"]),
+        ("sandbox-bypass", ["--sandbox", "danger-full-access"]),
+        ("full-bypass", [CODEX_BYPASS]),
+    ],
+)
+def test_codex_launcher_mode_exact_argv(mode, expected):
+    original = ["--foo"]
+    out, flags, skipped, effective = codex_launcher._apply_launcher_mode(
+        original,
+        mode,
+        env={},
+    )
+    assert out == [*expected, "--foo"]
+    assert list(flags) == expected
+    assert skipped is None
+    assert effective == mode
+    assert original == ["--foo"]
+    assert "--full-auto" not in out
+
+
+@pytest.mark.parametrize(
+    "mode,args",
+    [
+        ("approval-bypass", ["--ask-for-approval", "on-request"]),
+        ("approval-bypass", ["-a", "never"]),
+        ("sandbox-bypass", ["--sandbox=workspace-write"]),
+        ("sandbox-bypass", ["-s", "read-only"]),
+        ("full-bypass", ["--sandbox", "workspace-write"]),
+        ("approval-bypass", ["-c", "approval_policy=on-request"]),
+        (
+            "approval-bypass",
+            ["-c", "profiles.review.approval_policy=on-request"],
+        ),
+        ("sandbox-bypass", ["--config=sandbox_mode=workspace-write"]),
+        ("full-bypass", ["-c", "default_permissions=:workspace-write"]),
+        (
+            "approval-bypass",
+            ["-c", "approval_policy.granular.sandbox_approval=true"],
+        ),
+        ("sandbox-bypass", ["--yolo"]),
+    ],
+)
+def test_codex_explicit_permission_args_override_stored_mode(mode, args):
+    out, flags, skipped, effective = codex_launcher._apply_launcher_mode(
+        args,
+        mode,
+        env={},
+    )
+    assert out == args
+    assert flags == ()
+    assert "precedence" in (skipped or "")
+    assert effective == mode
+
+
+def test_codex_explicit_yolo_satisfies_full_bypass_without_duplication():
+    out, flags, skipped, effective = codex_launcher._apply_launcher_mode(
+        ["--yolo", "--foo"],
+        "full-bypass",
+        env={},
+    )
+    assert out == ["--yolo", "--foo"]
+    assert flags == ("--yolo",)
+    assert skipped is None
+    assert effective == "full-bypass"
+
+
+def test_codex_env_alias_remains_full_bypass():
+    out, flags, skipped, effective = codex_launcher._apply_launcher_mode(
+        ["--foo"],
+        "inherit",
+        env={"TOKENPAK_CODEX_BYPASS_APPROVALS_AND_SANDBOX": "true"},
+    )
+    assert out == [CODEX_BYPASS, "--foo"]
+    assert flags == (CODEX_BYPASS,)
+    assert skipped is None
+    assert effective == "full-bypass"
+
+
+def test_codex_launcher_banner_names_risk_flags_and_reset():
+    banner = codex_launcher._launcher_mode_banner(
+        "sandbox-bypass",
+        ("--sandbox", "danger-full-access"),
+        None,
+    )
+    assert banner is not None
+    assert "sandbox-bypass" in banner
+    assert "--sandbox danger-full-access" in banner
+    assert "approval policy still applies" in banner
+    assert "launcher inherit --client codex" in banner

@@ -22,17 +22,25 @@ from typing import Any, Dict, List, Optional
 
 
 def _resolve_db_path(db_path: Optional[str] = None) -> str:
-    """Resolve monitor.db path. Checks env, then common locations."""
+    """Resolve monitor.db path via the canonical resolver.
+
+    Routes through ``tokenpak._paths.monitor_db`` so every reader agrees on the
+    same store (``$TOKENPAK_DB`` -> ``~/.tpk`` -> ``~/.tokenpak`` -> ``~/tokenpak``)
+    instead of hardcoding a divergent legacy default.
+    """
     if db_path:
         return db_path
-    for candidate in [
-        os.environ.get("TOKENPAK_DB", ""),
-        os.path.expanduser("~/tokenpak/monitor.db"),
-        os.path.expanduser("~/.tokenpak/data/monitor.db"),
-    ]:
-        if candidate and Path(candidate).exists():
-            return candidate
-    return os.path.expanduser("~/tokenpak/monitor.db")
+    try:
+        from tokenpak import _paths
+
+        resolved = _paths.monitor_db(mode="read")
+        if resolved is not None:
+            return str(resolved)
+        # No active DB found: return the canonical fresh-install path so
+        # existence checks fail cleanly rather than pointing at a legacy store.
+        return str(_paths.canonical_home() / "monitor.db")
+    except Exception:
+        return os.path.expanduser("~/.tpk/monitor.db")
 
 
 def _open_db(db_path: str) -> Optional[sqlite3.Connection]:

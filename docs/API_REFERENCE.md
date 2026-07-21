@@ -4422,7 +4422,7 @@ Google uses:
 - "systemInstruction" for system prompt
 - Different role names ("model" instead of "assistant")
 
-TODO: Full implementation for multi-provider support.
+Limitation: Multi-provider support is not implemented.
 
 #### `parse_request`
 
@@ -11120,7 +11120,7 @@ def mark_done(self, item: str) -> None
 ```
 
 - **Returns:** `None`
-- **Description:** Move item from open → done (if present), or just append to done.
+- **Description:** Move item from open → done (if present), or append to done.
 
 #### `add_open`
 

@@ -20,10 +20,27 @@ from typing import Any, Dict, List, Optional
 # ---------------------------------------------------------------------------
 
 PROXY_BASE = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
-_MONITOR_DB = os.environ.get(
-    "TOKENPAK_DB",
-    os.path.expanduser("~/.tokenpak/data/monitor.db"),
-)
+
+
+# Resolve the monitor DB via the canonical resolver so this command reads the
+# same store as every other reader. Kept as a
+# module-level constant so tests can patch ``optimize._MONITOR_DB``.
+def _default_monitor_db() -> str:
+    env = os.environ.get("TOKENPAK_DB", "").strip()
+    if env:
+        return env
+    try:
+        from tokenpak import _paths
+
+        resolved = _paths.monitor_db(mode="read")
+        if resolved is not None:
+            return str(resolved)
+        return str(_paths.canonical_home() / "monitor.db")
+    except Exception:
+        return os.path.expanduser("~/.tpk/monitor.db")
+
+
+_MONITOR_DB = _default_monitor_db()
 SEP = "────────────────────────────────────────"
 
 from tokenpak.models import get_cheaper_alternative as _get_cheaper_alternative

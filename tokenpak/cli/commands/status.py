@@ -110,9 +110,12 @@ def _print_free_tier_upgrade_hint() -> None:
 
 SEP_INNER = "─────────────────────────────────"
 PROXY_DEFAULT = "http://127.0.0.1:8766"
+# Canonical fresh-install fallback. Only used when the
+# resolver finds no existing store; the legacy ``~/tokenpak/monitor.db`` literal
+# was removed so this never seeds a divergent pre-dot store.
 DB_DEFAULT = os.environ.get(
     "TOKENPAK_DB",
-    os.path.expanduser("~/tokenpak/monitor.db"),
+    os.path.expanduser("~/.tpk/monitor.db"),
 )
 
 
@@ -1493,6 +1496,22 @@ def run_full(
     print(
         f"{'✅  Health':<28}OK (0 errors)" if errors == 0 else f"{'⚠️  Health':<28}{errors} errors"
     )
+
+    agent_concurrency = health.get("agent_concurrency") or {}
+    if agent_concurrency.get("enabled"):
+        cap = agent_concurrency.get("effective_cap")
+        configured = agent_concurrency.get("max_parallel_subagents")
+        cap_label = f"{cap}" if cap == configured else f"{cap} (serial — degraded, configured {configured})"
+        in_flight = agent_concurrency.get("in_flight", 0)
+        queued = agent_concurrency.get("queued", 0)
+        busy = agent_concurrency.get("rejected_queue_full", 0) + agent_concurrency.get(
+            "rejected_wait_timeout", 0
+        )
+        icon = "⚠️ " if agent_concurrency.get("degraded_serial") else "✅ "
+        print(
+            f"{icon + ' Agent concurrency':<28}cap {cap_label} — {in_flight} in flight, "
+            f"{queued} queued, {busy} busy/refused"
+        )
     print()
 
     # Import estimate_savings if available

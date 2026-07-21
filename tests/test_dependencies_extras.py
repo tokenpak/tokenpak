@@ -136,6 +136,20 @@ def test_each_heavy_dep_lives_in_its_named_extra(extra: str, heavy_pkg: str):
     )
 
 
+@pytest.mark.parametrize("extra", ["serve", "telemetry"])
+def test_dashboard_extras_cover_runtime_imports(extra: str):
+    """Each advertised FastAPI install must be able to create the dashboard."""
+    extras = _load()["project"].get("optional-dependencies", {})
+    names = _dep_names(extras.get(extra, []))
+    required = {"fastapi", "jinja2", "python-multipart"}
+    missing = required - names
+    assert not missing, (
+        f"The `{extra}` extra is missing dashboard runtime dependencies: "
+        f"{sorted(missing)}. A clean `tokenpak[{extra}]` install must render "
+        "Jinja templates and register FastAPI Form routes."
+    )
+
+
 def test_core_imports_under_slim_install():
     """The slim top-level package and canonical proxy surfaces import cleanly.
 

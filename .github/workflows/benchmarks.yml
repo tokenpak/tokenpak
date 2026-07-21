@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -46,7 +46,7 @@ jobs:
 
       # ── Download baseline from previous run (main branch only) ────────
       - name: Download baseline benchmarks
-        uses: dawidd6/action-download-artifact@09f2f74827fd3a8607589e5ad7f9398816f540fe # v3.1.4
+        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
         if: github.event_name == 'pull_request'
         with:
           name: benchmark-baseline
@@ -118,7 +118,7 @@ jobs:
 
       # ── Save artifacts ────────────────────────────────────────────────
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: benchmark-results
@@ -130,7 +130,7 @@ jobs:
 
       # Save as new baseline when merging to main
       - name: Save baseline (main branch only)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         with:
           name: benchmark-baseline

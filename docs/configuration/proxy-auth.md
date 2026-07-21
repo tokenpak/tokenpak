@@ -81,7 +81,7 @@ curl https://your-proxy-host:8766/v1/messages \
   The raw token is never logged, persisted, or copied between requests.
   Schema migration is additive (``ALTER TABLE requests ADD COLUMN user_id
   TEXT DEFAULT ''``), so existing databases upgrade in place — pre-A6 rows
-  just have an empty ``user_id``.
+  have an empty ``user_id``.
 - **Timing-safe comparison** — ``hmac.compare_digest`` is used, not ``==``.
 
 ## Out of scope (today)

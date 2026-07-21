@@ -40,6 +40,9 @@ def test_dashboard_json_contract_reports_unavailable_sources_as_unknown(
     assert payload["spend"]["saved_usd"]["value"] is None
     assert payload["capabilities"]["fleet_projection"]["default_enabled"] is False
     assert payload["debug"]["tokenpak_home"] == str(tmp_path)
+    assert payload["layout"]["name"] == "home"
+    assert payload["layout"]["read_only"] is True
+    assert payload["layout"]["mutation_controls"] == []
 
 
 def test_dashboard_json_contract_preserves_measured_zero(monkeypatch, tmp_path) -> None:
@@ -92,3 +95,28 @@ def test_dashboard_capability_detection_has_cross_platform_fallback(tmp_path) ->
     assert capabilities["terminal_ui"]["state"] == "not_interactive"
     assert capabilities["process_inspection"]["state"] == "unsupported"
     assert capabilities["fleet_projection"]["state"] == "not_configured"
+
+
+def test_dashboard_layout_json_contracts_are_read_only(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path))
+    monkeypatch.setattr(dashboard, "_http_get", lambda *args, **kwargs: None)
+
+    for layout in dashboard.LAYOUTS:
+        payload = dashboard.collect_dashboard_snapshot(layout=layout)
+
+        assert payload["layout"]["name"] == layout
+        assert payload["layout"]["read_only"] is True
+        assert payload["layout"]["mutation_controls"] == []
+        assert payload["layout"]["sections"]
+        assert all(command["executes_mutation"] is False for command in payload["layout"]["next_commands"])
+
+
+def test_dashboard_rejects_unknown_layout(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path))
+
+    try:
+        dashboard.collect_dashboard_snapshot(layout="dispatch-tui")
+    except ValueError as exc:
+        assert "unknown dashboard layout" in str(exc)
+    else:
+        raise AssertionError("unknown layouts must fail closed")

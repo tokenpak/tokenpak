@@ -22,3 +22,8 @@ description = "CI gate-inventory manifest holds only sha256 workflow digests (in
 paths = [
   '''(^|/)\.github/gate-inventory\.yml$''',
 ]
+regexes = [
+  # Public sha256 digest for a locked wheel. Its hexadecimal prefix happens
+  # to match the Square-token heuristic; allow only this exact digest.
+  '''eaaaef47c2406277181d2086484c317bf7fc433e2d5d03ff94f56b0dcec87471''',
+]

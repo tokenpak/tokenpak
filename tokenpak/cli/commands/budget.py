@@ -11,11 +11,26 @@ from typing import Optional
 
 SEP = "────────────────────────────────────────"
 
-# Reuse monitor DB for spend queries
-_MONITOR_DB = os.environ.get(
-    "TOKENPAK_DB",
-    os.path.expanduser("~/.tokenpak/data/monitor.db"),
-)
+# Reuse monitor DB for spend queries.
+# Resolve via the canonical resolver so this command reads the same store as
+# every other reader. Kept as a module-level constant
+# (rather than inlined) so tests can patch ``budget._MONITOR_DB``.
+def _default_monitor_db() -> str:
+    env = os.environ.get("TOKENPAK_DB", "").strip()
+    if env:
+        return env
+    try:
+        from tokenpak import _paths
+
+        resolved = _paths.monitor_db(mode="read")
+        if resolved is not None:
+            return str(resolved)
+        return str(_paths.canonical_home() / "monitor.db")
+    except Exception:
+        return os.path.expanduser("~/.tpk/monitor.db")
+
+
+_MONITOR_DB = _default_monitor_db()
 _BUDGET_CONFIG = Path("~/.tokenpak/budget_config.yaml").expanduser()
 
 

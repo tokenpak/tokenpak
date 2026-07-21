@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-07-10T20:33:08Z",
-  "package_version": "1.12.0",
+  "generated_at": "2026-07-20T20:14:12Z",
+  "package_version": "1.13.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -746,6 +746,10 @@
     {
       "module": "tokenpak.cli.commands.cost",
       "name": "run_cost_cmd"
+    },
+    {
+      "module": "tokenpak.cli.commands.dashboard",
+      "name": "LAYOUTS"
     },
     {
       "module": "tokenpak.cli.commands.dashboard",
@@ -8196,6 +8200,46 @@
       "name": "VoyageEmbeddingAdapter"
     },
     {
+      "module": "tokenpak.proxy.admission",
+      "name": "ADMITTED"
+    },
+    {
+      "module": "tokenpak.proxy.admission",
+      "name": "AgentConcurrencyGate"
+    },
+    {
+      "module": "tokenpak.proxy.admission",
+      "name": "CONFIG_KEY"
+    },
+    {
+      "module": "tokenpak.proxy.admission",
+      "name": "DEFAULT_MAX_PARALLEL"
+    },
+    {
+      "module": "tokenpak.proxy.admission",
+      "name": "DEFAULT_QUEUE_WAIT_S"
+    },
+    {
+      "module": "tokenpak.proxy.admission",
+      "name": "ENV_OVERRIDE"
+    },
+    {
+      "module": "tokenpak.proxy.admission",
+      "name": "QUEUE_FULL"
+    },
+    {
+      "module": "tokenpak.proxy.admission",
+      "name": "WAIT_TIMEOUT"
+    },
+    {
+      "module": "tokenpak.proxy.admission",
+      "name": "build_busy_response"
+    },
+    {
+      "module": "tokenpak.proxy.admission",
+      "name": "resolve_agent_concurrency"
+    },
+    {
       "module": "tokenpak.proxy.api",
       "name": "HealthRoute"
     },
@@ -8898,6 +8942,22 @@
     {
       "module": "tokenpak.proxy.embedding_router",
       "name": "PROVIDER_VOYAGE"
+    },
+    {
+      "module": "tokenpak.proxy.error_response",
+      "name": "STATEFUL_API_UNSUPPORTED"
+    },
+    {
+      "module": "tokenpak.proxy.error_response",
+      "name": "STATEFUL_API_UNSUPPORTED_STATUS"
+    },
+    {
+      "module": "tokenpak.proxy.error_response",
+      "name": "STATEFUL_SURFACES_REGISTRY"
+    },
+    {
+      "module": "tokenpak.proxy.error_response",
+      "name": "build_stateful_api_unsupported_error"
     },
     {
       "module": "tokenpak.proxy.error_response",
@@ -12490,6 +12550,458 @@
     {
       "module": "tokenpak.security.security",
       "name": "secure_write_config"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "AttributionStage"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "CacheMissReason"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "CacheStageTrace"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "DEFAULT_POLICIES"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "EligibilityResult"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "FidelityTier"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "OptimizationContext"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "OptimizationPipeline"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "OptimizationStage"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "OptimizationTrace"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "ProtectedSpan"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "RouteClass"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "RouteClassCompressionStage"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "RoutePolicy"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "SemanticCacheStage"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "SpanType"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "StageRegistry"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "StageTrace"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "TelemetrySink"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "apply_policy"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "build_contract"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "detect_protected_spans"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "get_attributions"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "get_cached_response"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "get_route_policy"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "is_attribution_v2_enabled"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "is_pipeline_enabled"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "is_route_compression_enabled"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "register_route_compression_stage"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "rewrite_outside_spans"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "run_observe_only"
+    },
+    {
+      "module": "tokenpak.services.optimization",
+      "name": "select_recipes"
+    },
+    {
+      "module": "tokenpak.services.optimization.attribution_stage",
+      "name": "AttributionStage"
+    },
+    {
+      "module": "tokenpak.services.optimization.attribution_stage",
+      "name": "get_attributions"
+    },
+    {
+      "module": "tokenpak.services.optimization.attribution_stage",
+      "name": "is_attribution_v2_enabled"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_key",
+      "name": "TYPE_CHECKING"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_key",
+      "name": "extract_query_text"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_key",
+      "name": "is_streaming"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_key",
+      "name": "make_scope_key"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_policy",
+      "name": "CachePolicy"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_policy",
+      "name": "ENV_FLAG"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_policy",
+      "name": "get_cache_policy_for_route"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_policy",
+      "name": "is_cache_stage_enabled"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_stage",
+      "name": "SemanticCacheStage"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_stage",
+      "name": "get_cached_response"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_trace",
+      "name": "CacheMissReason"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_trace",
+      "name": "CacheStageTrace"
+    },
+    {
+      "module": "tokenpak.services.optimization.compression_stage",
+      "name": "ENV_FLAG"
+    },
+    {
+      "module": "tokenpak.services.optimization.compression_stage",
+      "name": "RouteClassCompressionStage"
+    },
+    {
+      "module": "tokenpak.services.optimization.compression_stage",
+      "name": "TIP_COMPRESSION_V1"
+    },
+    {
+      "module": "tokenpak.services.optimization.compression_stage",
+      "name": "is_stage_enabled"
+    },
+    {
+      "module": "tokenpak.services.optimization.compression_stage",
+      "name": "register_with_default_pipeline"
+    },
+    {
+      "module": "tokenpak.services.optimization.context",
+      "name": "OptimizationContext"
+    },
+    {
+      "module": "tokenpak.services.optimization.context",
+      "name": "OptimizationTrace"
+    },
+    {
+      "module": "tokenpak.services.optimization.contract_builder",
+      "name": "build_contract"
+    },
+    {
+      "module": "tokenpak.services.optimization.pipeline",
+      "name": "OptimizationPipeline"
+    },
+    {
+      "module": "tokenpak.services.optimization.pipeline",
+      "name": "reset_default_pipeline"
+    },
+    {
+      "module": "tokenpak.services.optimization.pipeline",
+      "name": "run_observe_only"
+    },
+    {
+      "module": "tokenpak.services.optimization.policies",
+      "name": "ENV_FLAG"
+    },
+    {
+      "module": "tokenpak.services.optimization.policies",
+      "name": "MODE_APPLY"
+    },
+    {
+      "module": "tokenpak.services.optimization.policies",
+      "name": "MODE_OBSERVE"
+    },
+    {
+      "module": "tokenpak.services.optimization.policies",
+      "name": "MODE_OFF"
+    },
+    {
+      "module": "tokenpak.services.optimization.policies",
+      "name": "bypass_reasons"
+    },
+    {
+      "module": "tokenpak.services.optimization.policies",
+      "name": "is_pipeline_enabled"
+    },
+    {
+      "module": "tokenpak.services.optimization.policies",
+      "name": "read_mode"
+    },
+    {
+      "module": "tokenpak.services.optimization.protected_spans",
+      "name": "ALL_SPAN_TYPES"
+    },
+    {
+      "module": "tokenpak.services.optimization.protected_spans",
+      "name": "ProtectedSpan"
+    },
+    {
+      "module": "tokenpak.services.optimization.protected_spans",
+      "name": "SpanType"
+    },
+    {
+      "module": "tokenpak.services.optimization.protected_spans",
+      "name": "detect_protected_spans"
+    },
+    {
+      "module": "tokenpak.services.optimization.protected_spans",
+      "name": "merge_overlapping"
+    },
+    {
+      "module": "tokenpak.services.optimization.protected_spans",
+      "name": "protected_byte_count"
+    },
+    {
+      "module": "tokenpak.services.optimization.protected_spans",
+      "name": "rewrite_outside_spans"
+    },
+    {
+      "module": "tokenpak.services.optimization.protected_spans",
+      "name": "text_is_protected"
+    },
+    {
+      "module": "tokenpak.services.optimization.registry",
+      "name": "OptimizationStage"
+    },
+    {
+      "module": "tokenpak.services.optimization.registry",
+      "name": "StageRegistry"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "ALL_FIDELITY_TIERS"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "ALL_ROUTE_CLASSES"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "CompressionResult"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "DEFAULT_POLICIES"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "FidelityTier"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "RouteClass"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "RoutePolicy"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "apply_policy"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "get_route_policy"
+    },
+    {
+      "module": "tokenpak.services.optimization.route_recipe_policy",
+      "name": "select_recipes"
+    },
+    {
+      "module": "tokenpak.services.optimization.stage",
+      "name": "EligibilityResult"
+    },
+    {
+      "module": "tokenpak.services.optimization.stage",
+      "name": "NoOpStage"
+    },
+    {
+      "module": "tokenpak.services.optimization.stage",
+      "name": "OptimizationStage"
+    },
+    {
+      "module": "tokenpak.services.optimization.stage",
+      "name": "TYPE_CHECKING"
+    },
+    {
+      "module": "tokenpak.services.optimization.telemetry_sink",
+      "name": "TelemetrySink"
+    },
+    {
+      "module": "tokenpak.services.optimization.trace",
+      "name": "OptimizationTrace"
+    },
+    {
+      "module": "tokenpak.services.optimization.trace",
+      "name": "StageTrace"
+    },
+    {
+      "module": "tokenpak.services.providers",
+      "name": "UsageParser"
+    },
+    {
+      "module": "tokenpak.services.providers",
+      "name": "get_usage_parser"
+    },
+    {
+      "module": "tokenpak.services.providers",
+      "name": "list_registered_providers"
+    },
+    {
+      "module": "tokenpak.services.providers",
+      "name": "register_parser"
+    },
+    {
+      "module": "tokenpak.services.providers.anthropic_usage",
+      "name": "PROVIDER_NAME"
+    },
+    {
+      "module": "tokenpak.services.providers.anthropic_usage",
+      "name": "parse_usage"
+    },
+    {
+      "module": "tokenpak.services.providers.anthropic_usage",
+      "name": "register_parser"
+    },
+    {
+      "module": "tokenpak.services.providers.google_usage",
+      "name": "PROVIDER_NAME"
+    },
+    {
+      "module": "tokenpak.services.providers.google_usage",
+      "name": "parse_usage"
+    },
+    {
+      "module": "tokenpak.services.providers.google_usage",
+      "name": "register_parser"
+    },
+    {
+      "module": "tokenpak.services.providers.openai_usage",
+      "name": "PROVIDER_NAME"
+    },
+    {
+      "module": "tokenpak.services.providers.openai_usage",
+      "name": "parse_usage"
+    },
+    {
+      "module": "tokenpak.services.providers.openai_usage",
+      "name": "register_parser"
+    },
+    {
+      "module": "tokenpak.services.routing_service",
+      "name": "ATTRIBUTION_ANONYMOUS_USER_AGENT_ONLY"
+    },
+    {
+      "module": "tokenpak.services.routing_service",
+      "name": "ATTRIBUTION_OPENCLAW_ACTIVE_SESSION_FILE"
+    },
+    {
+      "module": "tokenpak.services.routing_service",
+      "name": "ATTRIBUTION_UNKNOWN"
+    },
+    {
+      "module": "tokenpak.services.routing_service",
+      "name": "PlatformOrigin"
+    },
+    {
+      "module": "tokenpak.services.routing_service.platform_bridge",
+      "name": "ATTRIBUTION_ANONYMOUS_USER_AGENT_ONLY"
+    },
+    {
+      "module": "tokenpak.services.routing_service.platform_bridge",
+      "name": "ATTRIBUTION_OPENCLAW_ACTIVE_SESSION_FILE"
+    },
+    {
+      "module": "tokenpak.services.routing_service.platform_bridge",
+      "name": "ATTRIBUTION_UNKNOWN"
+    },
+    {
+      "module": "tokenpak.services.routing_service.platform_bridge",
+      "name": "PlatformOrigin"
     },
     {
       "module": "tokenpak.sources",

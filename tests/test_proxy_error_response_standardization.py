@@ -15,8 +15,12 @@ import json
 import pytest
 
 from tokenpak.proxy.error_response import (
+    STATEFUL_API_UNSUPPORTED,
+    STATEFUL_API_UNSUPPORTED_STATUS,
+    STATEFUL_SURFACES_REGISTRY,
     _extract_message_from_provider_body,
     _status_to_error_type,
+    build_stateful_api_unsupported_error,
     normalize_upstream_error,
 )
 
@@ -63,6 +67,50 @@ class TestCanonicalEnvelopeStructure:
         out = normalize_upstream_error(500, b"{}", "google")
         parsed = json.loads(out.decode("utf-8"))
         assert isinstance(parsed, dict)
+
+
+# ---------------------------------------------------------------------------
+# Stateful provider API unsupported payload
+# ---------------------------------------------------------------------------
+
+class TestStatefulApiUnsupportedError:
+    """Verify the typed payload for explicitly unsupported provider stateful APIs."""
+
+    def test_error_code_constant_is_stable(self):
+        assert STATEFUL_API_UNSUPPORTED == "stateful_api_unsupported"
+
+    def test_http_status_constant_is_422(self):
+        assert STATEFUL_API_UNSUPPORTED_STATUS == 422
+
+    def test_payload_shape(self):
+        body = build_stateful_api_unsupported_error(
+            "provider-managed conversation memory",
+            "Use local PAK memory or disable provider-managed memory for this request.",
+        )
+        data = _parse(body)
+        assert data == {
+            "tokenpak_error_type": "stateful_api_unsupported",
+            "surface": "provider-managed conversation memory",
+            "support_state": "explicitly_unsupported",
+            "remediation": "Use local PAK memory or disable provider-managed memory for this request.",
+            "registry_link": (
+                f"{STATEFUL_SURFACES_REGISTRY}#provider-managed-conversation-memory"
+            ),
+        }
+
+    def test_custom_registry_link(self):
+        body = build_stateful_api_unsupported_error(
+            "real-time websocket session IDs",
+            "Use standard request/response APIs.",
+            registry_link="tokenpak/registry/schemas/stateful_surfaces.yaml#realtime",
+        )
+        data = _parse(body)
+        assert data["registry_link"] == "tokenpak/registry/schemas/stateful_surfaces.yaml#realtime"
+
+    @pytest.mark.parametrize("surface, remediation", [("", "Use another API."), ("memory", "")])
+    def test_requires_surface_and_remediation(self, surface: str, remediation: str):
+        with pytest.raises(ValueError):
+            build_stateful_api_unsupported_error(surface, remediation)
 
 
 # ---------------------------------------------------------------------------

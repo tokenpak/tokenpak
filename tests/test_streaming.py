@@ -13,6 +13,9 @@ Acceptance criteria coverage:
 
 from __future__ import annotations
 
+import gzip
+import hashlib
+import http.client
 import json
 import socket
 import threading
@@ -293,6 +296,57 @@ def _make_sse_upstream(port: int, sse_body: bytes, content_type: str = "text/eve
     return srv
 
 
+def _make_chunked_upstream(
+    port: int,
+    chunks: list[bytes],
+    upstream_eof: threading.Event,
+    *,
+    inter_chunk_delay: float = 0.0,
+    content_encoding: str | None = None,
+):
+    """Serve entity chunks with real HTTP/1.1 chunk framing on loopback."""
+
+    class _Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            content_length = int(self.headers.get("Content-Length", 0))
+            if content_length:
+                self.rfile.read(content_length)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Transfer-Encoding", "chunked")
+            self.send_header("Connection", "close")
+            if content_encoding:
+                self.send_header("Content-Encoding", content_encoding)
+            self.end_headers()
+
+            for chunk in chunks:
+                self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
+                self.wfile.write(chunk)
+                self.wfile.write(b"\r\n")
+                self.wfile.flush()
+                if inter_chunk_delay:
+                    time.sleep(inter_chunk_delay)
+
+            # Mark upstream completion before the terminal frame. A proxy that
+            # buffers until EOF cannot race this marker and look incremental.
+            upstream_eof.set()
+            self.wfile.write(b"0\r\n\r\n")
+            self.wfile.flush()
+            self.close_connection = True
+
+    srv = HTTPServer(("127.0.0.1", port), _Handler)
+    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread.start()
+    return srv
+
+
 class TestProxyStreamingEndToEnd:
     """Integration tests for the proxy streaming path using a fake upstream."""
 
@@ -368,6 +422,33 @@ class TestProxyStreamingEndToEnd:
         )
         return opener.open(req, timeout=10)
 
+    def _raw_stream_request(self, upstream_port: int):
+        """Send an absolute-form proxy request without response decoding."""
+        target = f"http://127.0.0.1:{upstream_port}/v1/messages"
+        payload = json.dumps({
+            "model": "claude-opus-4-5",
+            "max_tokens": 100,
+            "stream": True,
+            "messages": [{"role": "user", "content": "Hello, streaming test!"}],
+        }).encode()
+        connection = http.client.HTTPConnection(
+            "127.0.0.1",
+            self.proxy_port,
+            timeout=10,
+        )
+        connection.request(
+            "POST",
+            target,
+            body=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(len(payload)),
+                "x-api-key": "sk-ant-test-fake-key-for-testing",
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        return connection, connection.getresponse()
+
     def test_streaming_request_returns_200(self):
         """stream:true request must reach upstream and return 200."""
         resp = self._stream_request()
@@ -414,14 +495,99 @@ class TestProxyStreamingEndToEnd:
         stats = self.proxy.session_stats()
         assert stats["session_requests"] >= 1
 
-    def test_streaming_incremental_chunks_received(self):
-        """
-        Verify chunked delivery: body must arrive before the connection closes.
-        We read in small pieces and assert data flows before timeout.
-        """
-        resp = self._stream_request()
-        first_chunk = resp.read(32)
-        assert len(first_chunk) > 0  # data arrived before full body was read
+    def test_short_sse_is_observed_before_upstream_eof(self, record_property):
+        """A sub-4KiB SSE must not wait for an upstream EOF flush."""
+        upstream_port = _free_port()
+        upstream_eof = threading.Event()
+        chunks = [self.sse_body[i:i + 64] for i in range(0, len(self.sse_body), 64)]
+        assert len(self.sse_body) < 4096
+        assert len(chunks) >= 12
+        assert max(map(len, chunks)) <= 64
+
+        upstream = _make_chunked_upstream(
+            upstream_port,
+            chunks,
+            upstream_eof,
+            inter_chunk_delay=0.025,
+        )
+        connection = None
+        reads = []
+        started = time.monotonic()
+        try:
+            connection, response = self._raw_stream_request(upstream_port)
+            assert response.status == 200
+            while True:
+                chunk = response.read1(64)
+                elapsed_ms = (time.monotonic() - started) * 1000
+                if not chunk:
+                    break
+                reads.append((elapsed_ms, chunk, upstream_eof.is_set()))
+        finally:
+            if connection is not None:
+                connection.close()
+            upstream.shutdown()
+            upstream.server_close()
+
+        read_count = len(reads)
+        pre_eof_read_count = sum(not eof_seen for _, _, eof_seen in reads)
+        first_read_elapsed_ms = reads[0][0] if reads else None
+        last_read_elapsed_ms = reads[-1][0] if reads else None
+        read_span_ms = (
+            last_read_elapsed_ms - first_read_elapsed_ms
+            if first_read_elapsed_ms is not None and last_read_elapsed_ms is not None
+            else 0.0
+        )
+        observed = {
+            "stream_read_count": read_count,
+            "stream_pre_eof_read_count": pre_eof_read_count,
+            "stream_first_read_elapsed_ms": first_read_elapsed_ms,
+            "stream_last_read_elapsed_ms": last_read_elapsed_ms,
+            "stream_read_span_ms": read_span_ms,
+        }
+        for key, value in observed.items():
+            record_property(key, value)
+
+        body = b"".join(chunk for _, chunk, _ in reads)
+        assert body == self.sse_body, observed
+        assert hashlib.sha256(body).digest() == hashlib.sha256(self.sse_body).digest(), observed
+        assert read_count >= 2, observed
+        assert pre_eof_read_count >= 2, observed
+        assert read_span_ms >= 20.0, observed
+
+    def test_raw_stream_body_and_content_encoding_are_preserved(self, record_property):
+        """A large content-coded entity must remain byte-identical."""
+        upstream_port = _free_port()
+        upstream_eof = threading.Event()
+        plain_body = b": " + (b"x" * 8192) + b"\n\n" + self.sse_body
+        wire_body = gzip.compress(plain_body, compresslevel=0, mtime=0)
+        expected_sha256 = hashlib.sha256(wire_body).hexdigest()
+        assert len(wire_body) > 4096
+
+        upstream = _make_chunked_upstream(
+            upstream_port,
+            [wire_body],
+            upstream_eof,
+            content_encoding="gzip",
+        )
+        connection = None
+        try:
+            self.proxy.reset_session()
+            connection, response = self._raw_stream_request(upstream_port)
+            actual_encoding = response.getheader("Content-Encoding")
+            actual_body = response.read()
+        finally:
+            if connection is not None:
+                connection.close()
+            upstream.shutdown()
+            upstream.server_close()
+
+        actual_sha256 = hashlib.sha256(actual_body).hexdigest()
+        record_property("stream_wire_bytes", len(actual_body))
+        record_property("stream_wire_sha256", actual_sha256)
+        assert actual_encoding == "gzip"
+        assert actual_body == wire_body
+        assert actual_sha256 == expected_sha256
+        assert self.proxy.session_stats()["output_tokens"] == 42
 
     def test_streaming_headers_enforced_without_upstream_content_type(self):
         """

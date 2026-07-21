@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "scenario": "claude-code-byte-preserved-64k-v1",
+  "normalization_method": "ratio-of-independent-round-medians-v1",
+  "target": "tokenpak.proxy.pipeline.process_request",
+  "baseline_commit": "cd6e24fee035a1dd2287f0ebdf586e3a9d5d04f8",
+  "max_regression_percent": 5.0,
+  "samples": 51,
+  "warmup_samples": 11,
+  "iterations_per_sample": 10,
+  "measurement_rounds": 5,
+  "payload_bytes": 64161,
+  "raw_p50_ns": 5323364.6,
+  "calibration_p50_ns": 5391166.4,
+  "normalized_p50": 0.9882166392596765,
+  "capture_runs": 5,
+  "normalized_p50_captures": [
+    0.9823031630091423,
+    0.9856680782003701,
+    0.9882166392596765,
+    0.990295062715397,
+    0.9921951333723531
+  ],
+  "recorded_at": "2026-07-20T05:28:14Z",
+  "recorded_python": "3.12",
+  "recorded_machine": "x86_64",
+  "method": "Offline real Claude Code byte-preserved process_request path with deterministic no-result vault retrieval; current-thread CPU p50 normalized by an interleaved frozen JSON/header control of similar cost, using the median of five independent round ratios."
+}

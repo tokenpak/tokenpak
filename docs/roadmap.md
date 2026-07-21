@@ -96,4 +96,4 @@ We follow [Semantic Versioning](https://semver.org/):
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to get involved in development.
+See [CONTRIBUTING.md](https://github.com/tokenpak/tokenpak/blob/main/CONTRIBUTING.md) for how to get involved in development.

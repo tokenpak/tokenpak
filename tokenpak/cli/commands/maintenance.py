@@ -2,30 +2,30 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
 import time
+
+from tokenpak.platform import service
 
 PROXY_SERVICE = "tokenpak-proxy.service"
 
 
 def restart_proxy() -> None:
-    try:
-        subprocess.run(["systemctl", "--user", "restart", PROXY_SERVICE], check=True)
+    result = service.restart_proxy_service(PROXY_SERVICE)
+    if result.ok:
         time.sleep(2)
-        print("✓ Proxy service restarted")
-    except subprocess.CalledProcessError as e:
-        print(f"✖ Restart failed: {e}")
+        print(result.message)
+        return
+    print(result.message)
+    if result.supported:
+        # The platform supports a managed restart but it failed — this is an error.
         sys.exit(1)
+    # Unsupported/degraded platform: actionable guidance already printed, no traceback.
 
 
 def show_logs(n: int = 30) -> None:
-    r = subprocess.run(
-        ["journalctl", "--user", "-u", PROXY_SERVICE, f"-n{n}", "--no-pager"],
-        capture_output=True,
-        text=True,
-    )
-    print(r.stdout or r.stderr)
+    result = service.proxy_logs(PROXY_SERVICE, n=n)
+    print(result.message)
 
 
 try:

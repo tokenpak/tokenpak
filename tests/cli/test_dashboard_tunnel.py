@@ -34,6 +34,16 @@ def test_cli_parser_registers_dashboard_connect_target():
     assert args.open_browser is True
 
 
+def test_cli_parser_registers_dashboard_layout():
+    parser = build_parser()
+
+    args = parser.parse_args(["dashboard", "--layout", "dispatch", "--json"])
+
+    assert args.command == "dashboard"
+    assert args.layout == "dispatch"
+    assert args.json_export is True
+
+
 def test_ssh_command_construction(tmp_path: Path):
     control_socket = tmp_path / "dashboard.sock"
 

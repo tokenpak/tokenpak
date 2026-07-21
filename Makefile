@@ -18,7 +18,7 @@ MKDOCS      := $(VENV_BIN)/mkdocs
 UNAME := $(shell uname -s)
 
 # ── Phony targets ──────────────────────────────────────────────────────────────
-.PHONY: help dev test lint format check build docs clean install hooks benchmark-headline
+.PHONY: help dev test test-release-core lint format check build docs clean install hooks bench benchmark-headline lint-imports
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:  ## Show this help message
@@ -46,6 +46,11 @@ install:  ## Install tokenpak (non-editable, no dev extras)
 test:  ## Run full test suite
 	$(PYTEST) tests/ -q --tb=short
 
+RELEASE_CORE_MARKERS := not integration and not chaos and not slow and not needs_fast_host
+
+test-release-core:  ## Run blocking CI core partition; does not satisfy complete A1
+	$(PYTEST) tests/ -m "$(RELEASE_CORE_MARKERS)" -q --tb=short
+
 test-quick:  ## Run quick audit subset (<30s, no live proxy needed)
 	$(PYTEST) -m quick -q --tb=short
 
@@ -62,8 +67,11 @@ test-cov:  ## Run tests with coverage report
 test-chaos:  ## Run chaos & resilience tests (fault injection / failure-recovery)
 	$(PYTEST) tests/chaos/ -m chaos -q --tb=short
 
-benchmark-headline:  ## Run headline 30-50% claim benchmark (standard 21 §9.8 blocking)
+benchmark-headline:  ## Run the blocking headline 30-50% claim benchmark
 	$(PYTEST) tests/benchmarks/test_headline_claim.py -v -s
+
+bench:  ## Run the blocking Claude Code passthrough p50 regression gate
+	$(VENV_BIN)/python3 scripts/benchmark_claude_passthrough.py
 
 # ── Linting & formatting ───────────────────────────────────────────────────────
 lint:  ## Run ruff linter
@@ -74,6 +82,9 @@ format:  ## Run ruff formatter (auto-fix)
 
 format-check:  ## Check formatting without making changes
 	$(RUFF) format --check tokenpak/ tests/
+
+lint-imports:  ## Run the import-linter architecture-contract gate
+	$(VENV_BIN)/lint-imports
 
 check: lint format-check test  ## Run lint + format check + tests (CI gate)
 
@@ -144,15 +155,21 @@ telemetry-snapshot:  ## Std 30 §7 — regenerate tokenpak/_snapshots/telemetry-
 telemetry-check:  ## Std 30 §7 — fail if telemetry-schema.json drifts
 	$(PYTHON) scripts/release_gate/gen_telemetry_schema.py --check
 
-taxonomy-check:  ## Std 02 §13 + Std 30 §5 (R5) — every test has exactly one taxonomy marker
+taxonomy-check:  ## R5 — every test has exactly one taxonomy marker
 	$(PYTHON) scripts/release_gate/taxonomy_check.py
 
-deps-audit:  ## Std 02 §14 + Std 30 §13.2 (R17) — uv lock --check + pip-audit + yanked-package scan
-	@command -v uv >/dev/null && uv lock --check || echo "uv not installed; skipping uv lock --check (install uv to enable)"
+deps-audit:  ## R17 — uv lock --check + pip-audit (third-party tree) + yanked-package scan
+	@if command -v uv >/dev/null; then uv lock --check; else echo "uv not installed; skipping uv lock --check (install uv to enable)"; fi
 	$(PYTHON) -m pip install --quiet pip-audit
-	$(PYTHON) -m pip_audit --strict --skip-editable
+	$(PYTHON) -m pip_audit --strict .
+# Project mode (`.`) audits the pyproject-declared third-party dependency tree.
+# `--skip-editable` was insufficient: under `--strict`, pip-audit escalates the
+# skip of the editable local `tokenpak` dist to an error in the dev/CI venv
+# (both `pip install -e ".[dev]"`). Project mode audits every third-party
+# dependency at the same --strict severity floor while excluding only the
+# unreleased local package (residual ruling decision 2).
 
-migration-multihop:  ## Std 30 §14.1 (R16) + Std 10 §E9 — run migrations from each of last 6 minor versions
+migration-multihop:  ## R16 — run migrations from each of last 6 minor versions
 	$(PYTHON) scripts/release_gate/migration_multihop.py
 
 release-gate-snapshots: api-snapshot workflow-steps-snapshot telemetry-snapshot  ## Regenerate ALL release-gate snapshots
@@ -165,3 +182,64 @@ release-leak-check:  ## Full-tree public-leak scan of the built sdist + wheel (r
 	$(PYTHON) -m pip install --quiet build
 	$(PYTHON) -m build
 	$(PYTHON) scripts/release_gate/check_release_leaks.py --dist dist/
+
+# Always-on baseline of cheap, deterministic, public-safety gates (maturity /
+# license / leak / help-verbs / tokenpak-literal) that must pass on every
+# release regardless of tier. Deliberately narrow: the A1-A7 / B1 /
+# B3 / C5 / C6 umbrella is owned by separate packets and NOT claimed here.
+.PHONY: release-check-baseline
+release-check-baseline:  ## Five-gate always-on release baseline
+	$(PYTHON) scripts/release_check/release_check.py
+
+# ── Automated Audit + Release Umbrella ───────────────────────────────────────
+# A3 accepted findings are external release-captain receipts. A nonzero mypy
+# result is never downgraded in this public tree: the exact Python/mypy/command,
+# counts, files, and transcript hashes must all match the supplied receipt.
+# A3_PYTHON can pin that audited toolchain independently when the release-core
+# VENV intentionally mirrors CI's narrower development install shape.
+A3_ACCEPTED_FINDING ?=
+A3_RELEASE_VERSION ?=
+A3_PYTHON ?= $(VENV_BIN)/python3
+RELEASE_BASE_REF ?= $(shell git rev-parse -q --verify github/main 2>/dev/null || git rev-parse -q --verify public/main 2>/dev/null)
+
+.PHONY: ci-lint audit-mypy docs-check forbidden-phrases-check telemetry-audit \
+        fresh-install-demo byte-fidelity-check release-docs-pattern-check audit \
+        release-check
+
+ci-lint:  ## A1/B1 — exact Ruff selection used by CI
+	$(RUFF) check tokenpak/ tests/ --select=E,F,W,I --ignore=E501,E701,E702,E402,E741,F841
+
+audit-mypy:  ## A3/B1 — unchanged six-root strict-mypy gate
+	$(A3_PYTHON) scripts/release_audit.py mypy $(if $(A3_ACCEPTED_FINDING),--accepted-finding "$(A3_ACCEPTED_FINDING)") $(if $(A3_RELEASE_VERSION),--release-version "$(A3_RELEASE_VERSION)")
+
+docs-check:  ## C5/B1 — strict links, navigation audit, and generated CLI-doc parity
+	bash scripts/audit-docs.sh --release-gate
+	$(MKDOCS) build --strict
+	PATH="$(abspath $(VENV_BIN)):$$PATH" bash scripts/check-cli-docs.sh
+
+forbidden-phrases-check:  ## B3/B1 — hard marketing-filler and qualifier scan
+	$(VENV_BIN)/python3 scripts/release_audit.py forbidden
+
+telemetry-audit:  ## B1 — code-created fixture and canonical summary SQL
+	$(VENV_BIN)/python3 scripts/release_audit.py telemetry
+
+fresh-install-demo:  ## A5 — clean local-candidate install reaches the offline demo under 60s
+	$(VENV_BIN)/python3 scripts/fresh_install_demo.py --max-seconds 60
+
+byte-fidelity-check:  ## A7 — dedicated byte-preserved pipeline regression suite
+	$(PYTEST) tests/test_pipeline_integration.py -q --tb=short
+
+release-docs-pattern-check:  ## C6 — no forbidden patterns in release-touched docs
+	@test -n "$(RELEASE_BASE_REF)" || { echo "C6 FAIL: public baseline ref is unavailable"; exit 1; }
+	$(VENV_BIN)/python3 scripts/release_audit.py docs-patterns --base-ref "$(RELEASE_BASE_REF)"
+
+audit: ci-lint audit-mypy docs-check forbidden-phrases-check telemetry-audit  ## B1 — full automated audit
+	@echo "B1 audit: PASS — lint, strict mypy/accepted evidence, links, phrases, telemetry SQL"
+
+# One Make DAG deliberately shares audit prerequisites with the named A/B/C
+# gates, so expensive strict-mypy and docs checks run exactly once per command.
+# A1 runs the raw complete suite here. The exact CI core partition remains
+# available as ``test-release-core`` and stays independently required in CI.
+# The repository-wide formatter ratchet is deferred.
+release-check: release-check-baseline test test-quick lint-imports fresh-install-demo bench byte-fidelity-check audit release-docs-pattern-check  ## A1-A7/B1/B3/C5/C6
+	@echo "release-check: PASS — A1-A7/B1/B3/C5/C6 reached terminal success"

@@ -542,7 +542,7 @@ def test_check9_plugin_dir_checks_both_candidates(tmp_home, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Test 10: Permission tiers (persistent tier rows + launcher fleet mode row)
+# Test 10: Permission tiers + per-client launcher defaults
 # ---------------------------------------------------------------------------
 
 _FORBIDDEN_TIER_STRINGS = (
@@ -552,13 +552,15 @@ _FORBIDDEN_TIER_STRINGS = (
 )
 
 
-def test_check10_default_pass_three_rows(tmp_home):
-    """Fresh home: defaults shown, exact three-row shape, check passes."""
+def test_check10_default_pass_with_launcher_rows(tmp_home):
+    """Fresh home: persistent and launcher defaults are explicit and safe."""
     result = _check_permission_tiers()
     assert result["status"] == "pass"
     assert "Claude Code persistent tier:  standard" in result["message"]
     assert "Codex persistent tier:        standard" in result["message"]
-    assert "TokenPak launcher fleet mode: disabled" in result["message"]
+    assert "Claude Code launcher default: inherit" in result["message"]
+    assert "Codex launcher default:       inherit" in result["message"]
+    assert "Legacy full-bypass alias:     disabled" in result["message"]
 
 
 @pytest.mark.parametrize("tier,mode", [
@@ -582,12 +584,15 @@ def test_check10_tier_fleet_permutations(tmp_home, tier, mode, fleet):
         perms.set_fleet_mode(True, "test")
 
     result = _check_permission_tiers()
-    assert result["status"] == "pass"
+    assert result["status"] == ("warn" if fleet else "pass")
     msg = result["message"]
     assert f"Claude Code persistent tier:  {tier}" in msg
     assert f"Codex persistent tier:        {tier}" in msg
-    expected_fleet = "enabled" if fleet else "disabled"
-    assert f"TokenPak launcher fleet mode: {expected_fleet}" in msg
+    expected_mode = "full-bypass" if fleet else "inherit"
+    assert f"Claude Code launcher default: {expected_mode}" in msg
+    assert f"Codex launcher default:       {expected_mode}" in msg
+    expected_fleet = "enabled (both full-bypass)" if fleet else "disabled"
+    assert f"Legacy full-bypass alias:     {expected_fleet}" in msg
     for forbidden in _FORBIDDEN_TIER_STRINGS:
         assert forbidden not in msg
 
@@ -623,5 +628,43 @@ def test_check10_fleet_enabled_persistent_rows_unchanged(tmp_home):
     after = _check_permission_tiers()["message"]
     assert "Claude Code persistent tier:  standard" in before
     assert "Claude Code persistent tier:  standard" in after
-    assert "TokenPak launcher fleet mode: disabled" in before
-    assert "TokenPak launcher fleet mode: enabled" in after
+    assert "Legacy full-bypass alias:     disabled" in before
+    assert "Legacy full-bypass alias:     enabled (both full-bypass)" in after
+
+
+def test_check10_invalid_launcher_mode_fails_closed(tmp_home):
+    state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(
+        "schema_version = 2\n\n"
+        "[launcher]\n"
+        "fleet_mode = false\n\n"
+        "[launcher.modes]\n"
+        '"claude-code" = "inherit"\n'
+        'codex = "future-unrestricted"\n'
+    )
+    result = _check_permission_tiers()
+    assert result["status"] == "fail"
+    assert "Codex launcher default:" in result["message"]
+    assert "using inherit" in result["message"]
+    assert "launcher inherit --client both" in result["remediation"]
+
+
+@pytest.mark.parametrize(
+    "state_text",
+    [
+        "not [ valid toml ===",
+        'schema_version = 2\nlauncher = "wrong-type"\n',
+        "schema_version = 999\n",
+    ],
+)
+def test_check10_malformed_launcher_state_is_launcher_failure(
+    tmp_home, state_text
+):
+    state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(state_text)
+    result = _check_permission_tiers()
+    assert result["status"] == "fail"
+    assert "launcher" in result["detail"]
+    assert "launcher inherit --client both" in result["remediation"]

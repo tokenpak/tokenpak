@@ -35,28 +35,33 @@ from pathlib import Path
 from .config import CompanionConfig
 
 # ---------------------------------------------------------------------------
-# Fleet mode (runtime unattended bypass)
+# Launcher permission defaults (runtime-only)
 #
-# Launcher-scoped permission bypass driven by TokenPak-owned state
-# (~/.config/tokenpak/permissions.toml, written by `tokenpak permissions
-# set fleet`). DISTINCT from the bare-mode injection in main(): bare mode
-# strips the companion layers because an external gateway owns them and
-# always bypasses; fleet mode is the user-facing unattended-run opt-in and
-# leaves every other companion layer active. Neither path ever writes the
-# flag into ~/.claude/settings.json — the persistent trust level (tier)
-# lives there and is managed solely by `tokenpak permissions` /
-# `tokenpak integrate`.
+# Per-client modes are driven by TokenPak-owned state and remain distinct from
+# bare mode: bare strips companion layers because an external gateway owns
+# them and always bypasses. Launcher defaults leave every companion layer
+# active and inject only session arguments. Neither path writes launcher
+# arguments into ~/.claude/settings.json. The compatibility helpers below remain for
+# compatibility with the former global full-bypass alias.
 # ---------------------------------------------------------------------------
 
 _FLEET_BYPASS_FLAG = "--dangerously-skip-permissions"
 
 
-def _fleet_mode_enabled() -> bool:
-    """True when launcher fleet mode is enabled. Never raises."""
+def _launcher_mode_state() -> tuple[str, str | None]:
+    """Return the fail-closed Claude launcher default and any state warning."""
     try:
-        from tokenpak.cli.commands.permissions import fleet_mode_enabled
+        from tokenpak.cli.commands.permissions import _get_launcher_mode_status
 
-        return fleet_mode_enabled()
+        return _get_launcher_mode_status("claude-code")
+    except Exception as exc:
+        return "inherit", f"could not read launcher permission state ({type(exc).__name__})"
+
+
+def _fleet_mode_enabled() -> bool:
+    """Compatibility helper: true when Claude resolves to full-bypass."""
+    try:
+        return _launcher_mode_state()[0] == "full-bypass"
     except Exception:
         return False
 
@@ -79,6 +84,53 @@ def _apply_fleet_mode(claude_args: list[str], fleet: bool, stream=None) -> list[
         file=stream if stream is not None else sys.stderr,
     )
     return out
+
+
+def _has_permission_mode(args: list[str]) -> bool:
+    return any(arg == "--permission-mode" or arg.startswith("--permission-mode=") for arg in args)
+
+
+def _apply_launcher_mode(
+    claude_args: list[str],
+    mode: str,
+) -> tuple[list[str], tuple[str, ...], str | None]:
+    """Apply a Claude launcher default while respecting explicit argv."""
+    out = list(claude_args)
+    if mode != "full-bypass":
+        return out, (), None
+
+    has_full = _FLEET_BYPASS_FLAG in out
+    has_permission_mode = _has_permission_mode(out)
+    if has_full:
+        return out, (_FLEET_BYPASS_FLAG,), None
+    if has_permission_mode:
+        return out, (), "an explicit permission mode takes precedence"
+    out.append(_FLEET_BYPASS_FLAG)
+    return out, (_FLEET_BYPASS_FLAG,), None
+
+
+def _launcher_mode_banner(
+    mode: str,
+    flags: tuple[str, ...],
+    skip_reason: str | None,
+) -> str | None:
+    """Build the mandatory launch-time warning for a non-inherit mode."""
+    if mode != "full-bypass":
+        return None
+    reset = "tokenpak permissions launcher inherit --client claude-code"
+    if skip_reason:
+        return (
+            f"tokenpak WARNING: claude-code launcher default {mode} skipped: "
+            f"{skip_reason}. Reset: `{reset}`."
+        )
+    risk = "all Claude Code permission and safety checks are bypassed"
+    rendered = " ".join(flags)
+    return (
+        f"tokenpak WARNING: claude-code launcher mode {mode} active; arguments: "
+        f"{rendered}; {risk}. Use only in a trusted, externally isolated environment. "
+        "Managed policy may still constrain or reject this launch. "
+        f"Reset: `{reset}`."
+    )
 
 
 # System prompt fragment injected via --append-system-prompt-file
@@ -185,9 +237,25 @@ def main(args: list[str] | None = None) -> int:
     # Pass through any user-provided args
     claude_args.extend(args)
 
-    # Fleet mode (runtime unattended bypass) — launcher state only; see the
-    # fleet section near the top of this module for the bare-mode contrast.
-    claude_args = _apply_fleet_mode(claude_args, _fleet_mode_enabled())
+    # Per-client launcher permission default — state only; see the section
+    # near the top of this module for the bare-mode contrast.
+    launcher_mode, state_warning = _launcher_mode_state()
+    if state_warning:
+        print(
+            f"tokenpak WARNING: invalid launcher permission state: {state_warning}; using inherit.",
+            file=sys.stderr,
+        )
+    claude_args, mode_flags, skip_reason = _apply_launcher_mode(
+        claude_args,
+        launcher_mode,
+    )
+    launcher_banner = _launcher_mode_banner(
+        launcher_mode,
+        mode_flags,
+        skip_reason,
+    )
+    if launcher_banner:
+        print(launcher_banner, file=sys.stderr)
 
     # Exec into claude — replaces this process. The session title is owned by
     # Claude Code natively: the branded launch name is passed via ``--name``
@@ -278,10 +346,9 @@ def _write_settings(config: CompanionConfig) -> str:
     configured: allowed directories, custom permissions, attribution
     defaults, effort level, etc. In particular, workspace-scoped users
     rely on ``permissions.additionalDirectories`` to reach configured
-    workspace directories from their CWD — without it the Claude Code
-    path sandbox blocks every read even with
-    ``--permission-mode bypassPermissions`` (bypass skips prompts, not
-    path checks).
+    workspace directories from their CWD. Preserve those settings for
+    inherited-permission launches and so a later explicit permission mode
+    does not unexpectedly change the user's configured workspace scope.
 
     Load the user's ``~/.claude/settings.json`` as the base and layer the
     companion's MCP permission + pre-send hook on top. Falls back to a

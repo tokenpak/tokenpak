@@ -57,7 +57,7 @@ TOKENPAK_COMPANION_HOOKS=0 tokenpak claude
 
 ---
 
-## Permission tiers
+## Permission tiers and launcher defaults
 
 TokenPak manages client permissions through one tier abstraction that fans
 out per client. Two deliberately separate concepts — do not conflate them:
@@ -65,47 +65,81 @@ out per client. Two deliberately separate concepts — do not conflate them:
 - **Persistent trust level** — the tier written into the client's own
   config. It changes how the client behaves on *every* launch, however it
   is started.
-- **Runtime unattended bypass** — launcher *fleet mode*, a TokenPak-owned
-  boolean (`~/.config/tokenpak/permissions.toml`) consumed only by
-  `tokenpak claude` / `tokenpak codex`, which inject the client's bypass
-  flag into argv at launch. Client config files are never modified by
-  fleet mode, and launching a client directly is unaffected.
+- **Launcher permission default** — a per-client TokenPak-owned mode in
+  `~/.config/tokenpak/permissions.toml`, consumed only by `tokenpak claude`
+  / `tokenpak codex`. Non-inherit modes inject session arguments at launch.
+  They never modify client config, and launching a client directly is
+  unaffected.
 
 | Tier | Claude Code (`settings.json`) | Codex (`config.toml`) | Use case |
 |---|---|---|---|
 | `strict` | `permissions.defaultMode = "default"` | `approval_policy = "on-request"`, `sandbox_mode = "read-only"` | Exploring, untrusted code |
 | `standard` *(default)* | `permissions.defaultMode = "acceptEdits"` | `approval_policy = "on-request"`, `sandbox_mode = "workspace-write"` | Day-to-day interactive |
-| `auto` | `permissions.defaultMode = "bypassPermissions"` | `approval_policy = "never"`, `sandbox_mode = "workspace-write"` | Trusted solo work, no prompts |
-| `fleet` | persistent tier unchanged | persistent tier unchanged | Unattended runs via `tokenpak claude` / `tokenpak codex` only |
+| `auto` | `permissions.defaultMode = "bypassPermissions"` | `approval_policy = "never"`, `sandbox_mode = "workspace-write"` | Isolated Claude environment; trusted Codex workspace |
+
+Launcher defaults form a separate matrix:
+
+| Launcher mode | Claude Code launch argument | Codex launch argument | Effect |
+|---|---|---|---|
+| `inherit` *(default)* | none | none | Use client config and managed policy |
+| `approval-bypass` | unsupported (Claude's bypass mode is a full bypass) | `--ask-for-approval never` | Disable Codex prompts; keep configured sandbox limits |
+| `sandbox-bypass` | unsupported (fails without changing state) | `--sandbox danger-full-access` | Disable Codex sandbox; keep approval policy |
+| `full-bypass` | `--dangerously-skip-permissions` | `--dangerously-bypass-approvals-and-sandbox` | Disable local approvals and sandbox/permission checks |
 
 ### Commands
 
 ```bash
-tokenpak permissions show                       # current tiers + fleet mode
+tokenpak permissions show                       # tiers + launcher defaults
+tokenpak permissions show --json                # one machine-readable object
 tokenpak permissions set auto                   # both clients
 tokenpak permissions set strict --client codex  # one client
-tokenpak permissions set fleet                  # launcher fleet mode (opt-in, confirmation required)
-tokenpak permissions reset                      # scoped reset + fleet off
+tokenpak permissions launcher approval-bypass --client codex
+tokenpak permissions launcher sandbox-bypass --client codex
+tokenpak permissions launcher full-bypass --client both --yes
+tokenpak permissions launcher inherit --client codex
+tokenpak permissions set fleet                  # legacy: full-bypass for both
+tokenpak permissions reset                      # reset tiers + all launcher defaults
 tokenpak integrate claude-code --apply --tier auto   # tier at integrate time
 ```
 
 Notes:
 
-- Every write is **additive with a backup first** (`settings.json.bak` /
-  `config.toml.bak`). `permissions.allow` / `deny` / `ask` arrays, env
-  blocks, profiles, MCP config and comments are preserved verbatim.
-- `reset` is **scoped**: it removes only the TokenPak-managed keys and
-  disables fleet mode. It never restores from the `.bak` (that would
-  clobber unrelated edits made since apply); the `.bak` stays on disk for
-  a manual full revert.
-- Fleet launches print a mandatory stderr banner
-  (`tokenpak: fleet mode — bypass flags injected (...)`) and `tokenpak
-  doctor` always shows a dedicated `TokenPak launcher fleet mode:` row.
-  The per-client persistent-tier rows only ever read
-  `strict` / `standard` / `auto` / `custom` — never `fleet`.
+- Every **client-config tier write** is additive with a backup first
+  (`settings.json.bak` / `config.toml.bak`). `permissions.allow` / `deny` /
+  `ask` arrays, env blocks, profiles, MCP config and comments are preserved.
+  Launcher defaults use a separate atomic TokenPak state file and do not edit
+  either client config.
+- `permissions reset` is **scoped**: it removes only TokenPak-managed tier
+  keys and resets launcher defaults to `inherit`. It never restores from a
+  `.bak` (which could clobber later user edits). `permissions launcher inherit`
+  changes only the selected launcher default and leaves persistent tiers alone.
+- Every non-inherit write requires a default-no confirmation; non-interactive
+  callers must pass `--yes`. `--yes` never suppresses the warning. Every
+  affected launch prints the resolved mode, exact arguments, risk boundary,
+  managed-policy caveat, and reset command to stderr.
+- Explicit permission arguments supplied for one invocation, including Codex
+  `--yolo` and relevant `-c/--config` overrides, take precedence over the
+  stored launcher default, avoiding conflicting duplicate options.
+- Launcher modes compose with persistent client configuration. For example,
+  Codex `auto` (`approval_policy=never`) plus `sandbox-bypass` is effectively
+  full bypass. Configuration and launch warnings call out this cross-product.
+- Claude Code partial launcher modes are intentionally unsupported. Upstream
+  documents `--permission-mode bypassPermissions` as equivalent to
+  `--dangerously-skip-permissions`, so TokenPak exposes it only as
+  `full-bypass`: <https://code.claude.com/docs/en/permission-modes>.
+- Invalid or unsupported stored values fail closed to `inherit` and appear as
+  warnings in `permissions show` and `doctor`.
+- A managed administrator policy, wrapper, container, or host security layer
+  can still constrain or reject a launch. TokenPak launcher defaults cannot
+  override those outer controls.
+- The state file includes warning comments beside `[launcher.modes]` so the
+  risk remains visible during direct configuration review.
+- `permissions set fleet` is a compatibility alias, not a persistent tier.
+  It and `integrate --tier fleet` set `full-bypass` for both launchers.
+  The alias rejects a narrower `--client`; per-client setup should use
+  `permissions launcher <mode>`.
 - The env var `TOKENPAK_CODEX_BYPASS_APPROVALS_AND_SANDBOX` remains the
-  Codex-side back-compat alias of fleet mode for older automation
-  scripts; new setups should use `tokenpak permissions set fleet`.
+  Codex-side full-bypass compatibility override for older automation.
 
 ---
 

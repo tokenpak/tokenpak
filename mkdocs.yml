@@ -7,6 +7,12 @@ repo_url: https://github.com/tokenpak/tokenpak
 repo_name: tokenpak/tokenpak
 edit_uri: edit/main/docs/
 
+# README.md is the GitHub-facing landing page for the docs/ directory; the
+# rendered site uses index.md. Declared here so `mkdocs build --strict`
+# does not warn about the index conflict during strict builds.
+exclude_docs: |
+  README.md
+
 theme:
   name: material
   palette:

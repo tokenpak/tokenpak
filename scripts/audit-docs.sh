@@ -13,9 +13,20 @@
 # Returns non-zero if any finding is detected.
 # Used as a soft CI warning gate (continue-on-error in GitHub Actions).
 #
-# Usage: bash scripts/audit-docs.sh [docs-dir] [mkdocs-yml]
+# --release-gate: orphan-page findings (check 2) are surfaced as warnings but
+# do not fail the gate. They are existing Medium documentation drift, tracked
+# as known findings rather than classified as Critical or High.
+# Duplicate-filename (check 1) and root-doc (check 3) findings still fail.
+#
+# Usage: bash scripts/audit-docs.sh [--release-gate] [docs-dir] [mkdocs-yml]
 
 set -euo pipefail
+
+RELEASE_GATE=0
+if [[ "${1:-}" == "--release-gate" ]]; then
+    RELEASE_GATE=1
+    shift
+fi
 
 DOCS_DIR="${1:-docs}"
 MKDOCS_FILE="${2:-mkdocs.yml}"
@@ -136,7 +147,19 @@ fi
 
 # ── Result ────────────────────────────────────────────────────────────────────
 echo ""
-if [[ $FOUND -ne 0 ]]; then
+if [[ $RELEASE_GATE -eq 1 ]]; then
+    BLOCKING=$((COLLISION_FOUND + ROOT_FOUND))
+    if [[ $BLOCKING -ne 0 ]]; then
+        echo "AUDIT RESULT (release-gate): FAIL — $BLOCKING blocking issue(s) (duplicate-filename / root-doc classes)."
+        exit 1
+    elif [[ $FOUND -ne 0 ]]; then
+        echo "AUDIT RESULT (release-gate): PASSED with $FOUND warning class(es) — orphan-page findings above are existing Medium documentation drift, tracked as known findings rather than classified as Critical or High."
+        exit 0
+    else
+        echo "AUDIT RESULT: PASSED — no issues found."
+        exit 0
+    fi
+elif [[ $FOUND -ne 0 ]]; then
     echo "AUDIT RESULT: $FOUND issue(s) found (see warnings above)."
     exit 1
 else

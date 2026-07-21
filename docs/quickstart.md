@@ -121,7 +121,7 @@ All requests are automatically compressed before reaching Anthropic. No code cha
 ```python
 from openai import OpenAI
 
-# Just change base_url — everything else stays the same
+# Change base_url — everything else stays the same
 client = OpenAI(
  api_key="your-openai-key",
  base_url="http://localhost:8766"

@@ -6,6 +6,104 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.13.0] — 2026-07-20
+
+> Minor release: deterministic memory configuration, Receipt v1 inspection,
+> bounded managed-request admission, safer launch defaults, and a broad
+> proxy/release-tooling reliability pass.
+
+### Added
+- **Deterministic memory optimization.** `tokenpak config optimize` can plan,
+  apply, inspect, and roll back a process-local MemoryGuard configuration
+  derived from physical and cgroup memory limits. Managed state uses canonical
+  hashes, atomic writes, drift detection, and an exact preimage receipt;
+  runtime environment overrides remain authoritative.
+- **Receipt v1 proof objects and debug inspection.** Request accounting can
+  emit structured proof receipts, and `tokenpak debug receipt` can inspect a
+  recorded request without changing request behavior.
+- **Managed-request admission.** Classified background traffic can use a
+  bounded concurrency gate with deterministic queue-full and wait-timeout
+  responses; unclassified traffic retains its existing pass-through behavior.
+- **Per-client launcher permission defaults.** `tokenpak permissions launcher`
+  can persist `inherit`, `approval-bypass`, `sandbox-bypass`, or `full-bypass`
+  for TokenPak-launched Codex sessions, plus the supported Claude Code subset.
+  Bypass modes require explicit confirmation, leave client config files
+  untouched, warn on every affected launch, fail closed on invalid state, and
+  retain `permissions set fleet` as a full-bypass compatibility alias.
+- **Cross-platform process and service helpers.** CLI maintenance and launcher
+  paths share a platform abstraction for process discovery, signaling, and
+  service lifecycle behavior on Linux, macOS, and Windows.
+- **Read-only dashboard layouts.** `tokenpak dashboard --layout ... --json`
+  exposes home, dispatch, spend, debug, and multi-instance views without adding a
+  mutating dashboard control plane.
+- **Typed unsupported-stateful-surface helper.** Callers can build a stable
+  `stateful_api_unsupported` remediation payload. The helper is additive and
+  dormant: no route handler invokes it, and callers remain responsible for the
+  route-appropriate HTTP status.
+
+### Improved
+- **Proxy lifecycle and memory return.** Idle client retirement, cleanup
+  bounds, listener admission, vault-index memory return, and MemoryGuard
+  ownership are coordinated so cleanup remains bounded and in-flight work is
+  not retired prematurely.
+- **Streaming fidelity for short event streams.** Short server-sent-event
+  responses are forwarded incrementally while preserving byte-for-byte
+  pass-through behavior.
+- **Telemetry database canonicalization.** A dry-run-first migration helper
+  identifies legacy database locations, fails closed on incompatible targets,
+  and preserves source data rather than overwriting it.
+- **Dispatch and licensing diagnostics.** Discovery, dry-run ledger, install
+  truth, doctor, and fail-closed licensing paths have expanded regression
+  coverage and more consistent CLI behavior.
+
+### Fixed
+- **Optimization savings use token units.** Receipt fields and legacy fixtures
+  no longer present token counts as currency-shaped values.
+- **Optional dependency declarations match imports.** Dashboard-serving extras
+  now include Jinja2 and python-multipart, and optional compression/import
+  guards report missing capabilities truthfully.
+- **SDK dependency floors are coherent.** The TypeScript SDK keeps compatible
+  Jest/ts-jest tooling and declares the tested axios runtime floor without an
+  unrelated major toolchain upgrade.
+
+### CI
+- GitHub Actions use current checkout, setup-python, upload-artifact, and
+  cross-workflow artifact-download releases with matching gate-inventory
+  hashes.
+- The public-API snapshot now captures the service-layer optimization,
+  provider-usage, and routing symbols exposed by the regularized
+  `tokenpak.services` package. This is additive; no public symbol is removed.
+- The development lock now includes the import-contract checker and its graph
+  engine, keeping local architecture validation reproducible.
+- The release audit now composes the complete test, quick smoke, architecture,
+  clean-wheel demo, passthrough-performance, byte-fidelity, documentation, and
+  public-safety gates with fail-closed evidence handling.
+
+### Docs
+- Add the MemoryGuard optimizer guide and Receipt v1 reference.
+- Refresh generated CLI reference and current-release limitation metadata.
+
+### Upgrade
+
+```bash
+pip install --upgrade tokenpak==1.13.0
+```
+
+No additional steps are required.
+
+### Rollback
+
+If `tokenpak config optimize --apply` was used, restore its recorded preimage
+before downgrading:
+
+```bash
+tokenpak config optimize --rollback
+pip install tokenpak==1.12.0
+```
+
+Otherwise, no TokenPak-home cleanup is required; run only the `pip install`
+command above.
+
 ## [1.12.0] — 2026-07-10
 
 ### Added
@@ -309,7 +407,7 @@ to existing behavior; no breaking changes to current workflows.
 
 **Background:** `pip install tokenpak` previously pulled ~5 GB of CUDA/ML wheels (torch, nvidia/\*, transformers, sentence-transformers, scipy, tree-sitter-languages, pandas, litellm, llmlingua) as hard runtime dependencies. This made first-run installs impractical on machines without CUDA or a fast connection.
 
-**What changed:** the six heavy packages listed below have been moved from `[project.dependencies]` to named `[project.optional-dependencies]` extras. The runtime behaviour is **unchanged** — every import site was already guarded with `try/except ImportError` before this release. Only the install metadata changed.
+**What changed:** the six heavy packages listed below have been moved from `[project.dependencies]` to named `[project.optional-dependencies]` extras. Slim installs no longer install those extras by default; user-invoked guarded paths now name the exact `pip install tokenpak[<extra>]` recovery command when an extra is missing.
 
 **Migration:** if your code uses any of the features below, add the corresponding extra to your install command:
 
@@ -323,21 +421,21 @@ to existing behavior; no breaking changes to current workflows.
 | LiteLLM Router integration | `pip install tokenpak[integrations-litellm]` |
 | **Everything (previous default)** | `pip install tokenpak[full]` |
 
-If you previously ran `pip install tokenpak` and relied on retrieval / code-compression / intelligence / compression / integrations-litellm features, you must add the extra to your install. Features that use the guarded import will raise a clear `ImportError` with the correct `pip install` command if the extra is absent.
+If you previously ran `pip install tokenpak` and relied on retrieval / code-compression / intelligence / compression / integrations-litellm features, you must add the extra to your install. Guarded runtime features raise, warn, or return an error with the correct `pip install` command if the extra is absent.
 
-**Slim install target:** `pip install tokenpak` on a clean machine resolves in under 30 seconds and uses under 200 MB of disk. The `[full]` extra restores the previous behaviour for users who want everything.
+**Slim install target:** `pip install tokenpak` is intended to stay fast and lightweight on a clean reference machine. The current slim-install smoke test verifies that heavy optional packages are absent from core metadata and the installed slim environment; it does not enforce a disk-size ceiling yet. The `[full]` extra restores the previous behaviour for users who want everything.
 
 ### Added — install footprint extras split
 
 - Named extras: `tokenpak[retrieval]`, `tokenpak[code-compression]`, `tokenpak[intelligence]`, `tokenpak[data]`, `tokenpak[compression]`, `tokenpak[integrations-litellm]`, `tokenpak[full]`.
-- CI: slim-install smoke test — installs tokenpak with no extras, asserts venv site-packages < 200 MB, runs `python -c "import tokenpak; from tokenpak.proxy import client"`.
+- CI: slim-install smoke test — installs tokenpak with no extras, verifies heavy optional packages are absent from core metadata and the installed slim environment, and imports `tokenpak`, `tokenpak.proxy`, and `tokenpak.proxy.server`.
 - CI: full-install matrix — `pip install -e .[full,dev]` + full test suite.
 - `tests/test_dependencies_extras.py` — slim-core invariant gate.
 - `tests/test_extras_import_guard.py` — lightweight post-demotion gate that asserts each heavy package is absent from `[project.dependencies]` and smoke-tests each guarded import path.
 
 ### Changed — import error messages
 
-- `tokenpak/integrations/litellm/proxy.py` — error message updated to suggest `pip install tokenpak[integrations-litellm]` instead of bare `pip install litellm`.
+- `tokenpak/sdk/integrations/litellm/proxy.py` — missing-extra error message updated to suggest `pip install tokenpak[integrations-litellm]` instead of bare `pip install litellm`.
 
 ---
 
@@ -603,7 +701,6 @@ This release ships no runtime, CLI, or public-API behavior change. It is a packa
 > v1.5.3 itself is not on PyPI; see v1.5.4 above.
 
 ---
-
 
 ## [v1.5.2] — 2026-05-08
 

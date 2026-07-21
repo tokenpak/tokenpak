@@ -32,6 +32,12 @@ def test_public_entrypoints_link_to_examples_delivery_path() -> None:
     docs_index = _read(DOCS_INDEX)
 
     assert "[examples/README.md](examples/README.md)" in readme
-    assert "[Runnable Examples](../examples/README.md)" in docs_index
+    # docs/index.md must use the absolute GitHub URL: examples/ lives outside
+    # the docs tree, so a relative ../examples/ link is a broken link on the
+    # rendered site and fails the configured strict documentation build.
+    assert (
+        "[Runnable Examples](https://github.com/tokenpak/tokenpak/blob/main/examples/README.md)"
+        in docs_index
+    )
     assert CLONE_URL in readme
     assert RUN_COMMAND in readme
