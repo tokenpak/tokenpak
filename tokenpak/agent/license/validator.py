@@ -45,7 +45,10 @@ TIER_FEATURES: dict[LicenseTier, list[str]] = {
         "seat_management",
         "team_analytics",
     ],
-    LicenseTier.ENTERPRISE: [],
+    LicenseTier.ENTERPRISE: [
+        "audit_log",
+        "sla",
+    ],
 }
 
 

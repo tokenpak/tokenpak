@@ -36,7 +36,10 @@ EXPECTED_TIER_FEATURES = {
         "seat_management",
         "team_analytics",
     ],
-    LicenseTier.ENTERPRISE: [],
+    LicenseTier.ENTERPRISE: [
+        "audit_log",
+        "sla",
+    ],
 }
 
 
@@ -87,8 +90,23 @@ def test_each_feature_is_introduced_by_exactly_one_tier() -> None:
         ("team_analytics", "team"),
         ("compression_advanced", "pro"),
         ("multipak_capture", "pro"),
+        ("audit_log", "enterprise"),
+        ("sla", "enterprise"),
         ("unknown_thing", None),
     ],
 )
 def test_required_tier_for(feature: str, expected_tier: str | None) -> None:
     assert required_tier_for(feature) == expected_tier
+
+
+def test_every_tier_above_free_introduces_at_least_one_feature() -> None:
+    """A paid tier with no features of its own is a gap, not a design.
+
+    An empty list here silently un-gates any command that names one of that
+    tier's features: ``required_tier_for`` returns ``None`` and callers cannot
+    tell "no such feature" from "feature exists but is unassigned".
+    """
+    for tier in LicenseTier.ladder():
+        if tier is LicenseTier.FREE:
+            continue
+        assert TIER_FEATURES[tier], f"{tier.value} tier introduces no features"
