@@ -6,6 +6,50 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-07-24
+
+> Minor release: a canonical, importable map from paid features to the license
+> tier that introduces them, replacing per-consumer assumptions about which tier
+> a feature belongs to.
+
+### Added
+
+- **Canonical license tier and feature map** (`tokenpak.agent.license`). Exposes
+  `LicenseTier`, `TIER_FEATURES`, and `required_tier_for(feature)`. Tiers form an
+  ordered ladder — `free < pro < team < enterprise` — and each feature is
+  introduced by exactly one tier, so `required_tier_for` returns the *lowest*
+  tier that grants it.
+
+  Before this, a consumer with no way to look a feature up had to assume one.
+  The map makes the answer explicit and checkable: `tokenpak_server`,
+  `seat_management`, and `team_analytics` resolve to `team`; the nine Pro
+  features — including `multipak_capture` — resolve to `pro`; `audit_log` and
+  `sla` resolve to `enterprise`.
+
+### Fixed
+
+- **Enterprise tier features are no longer unassigned.** The map initially
+  shipped with an empty enterprise list, leaving `audit_log` and `sla` — both in
+  active use — with no tier anywhere. That is worse than an absent feature:
+  `required_tier_for` returns `None` for both "no such feature" and "feature
+  exists but is unassigned", so a caller cannot tell a typo from a gap. Both are
+  now assigned, and a regression test rejects an empty feature list on any paid
+  tier.
+
+### Upgrade notes
+
+Purely additive; no migration required. Nothing in an existing installation
+changes behaviour, and no previously granted entitlement is altered — the map
+records tier membership, it does not itself gate anything. Consumers that
+hardcoded a tier for these feature names should switch to `required_tier_for`.
+
+**Rollback:** `pip install tokenpak==1.14.0`. The added module is standalone, so
+downgrading only removes it.
+
+**Known issues:** none specific to this release.
+
+**Breaking changes / deprecations:** none.
+
 ## [1.14.0] — 2026-07-21
 
 > Minor release: verified Codex contention recovery with typed diagnostics,
