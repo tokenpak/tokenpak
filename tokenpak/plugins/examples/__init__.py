@@ -1,3 +1,3 @@
 # TokenPak example plugins
 
-__all__ = ['passthrough']
+__all__ = ["passthrough"]

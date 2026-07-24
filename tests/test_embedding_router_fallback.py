@@ -61,6 +61,7 @@ def _router(**env_overrides: str) -> EmbeddingRouter:
 # 1. Priority — all keys set, Voyage wins
 # ---------------------------------------------------------------------------
 
+
 class TestProviderPriorityAllKeysSet(unittest.TestCase):
     """With all five API keys present, Voyage must be the top-priority provider."""
 
@@ -102,6 +103,7 @@ class TestProviderPriorityAllKeysSet(unittest.TestCase):
 # 2. Fallback chain — discovery-time fallback when keys are absent
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackChainDiscovery(unittest.TestCase):
     """When higher-priority keys are absent, the next provider becomes primary."""
 
@@ -137,6 +139,7 @@ class TestFallbackChainDiscovery(unittest.TestCase):
 # 3. No providers available
 # ---------------------------------------------------------------------------
 
+
 class TestNoProvidersError(unittest.TestCase):
     """When no provider keys are set, the router must raise clear errors."""
 
@@ -168,6 +171,7 @@ class TestNoProvidersError(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 4. Rediscovery after auth failure (post-401 proxy pattern)
 # ---------------------------------------------------------------------------
+
 
 class TestRediscoveryAfterAuthFailure(unittest.TestCase):
     """After a 401, the proxy can revoke the env key and call discover_providers()
@@ -216,6 +220,7 @@ class TestRediscoveryAfterAuthFailure(unittest.TestCase):
 # 5. Rate-limit fallback boundary (429 cooldown simulation)
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimitFallbackBoundary(unittest.TestCase):
     """The proxy injects cooldown by removing a provider from available_providers
     after a 429. EmbeddingRouter.resolve_model() must honour that modified list.
@@ -226,8 +231,7 @@ class TestRateLimitFallbackBoundary(unittest.TestCase):
             router = EmbeddingRouter()
             # Simulate: proxy received 429 from Voyage, injects cooldown by removal
             router.available_providers = [
-                a for a in router.available_providers
-                if a.source_format != "voyage-embeddings"
+                a for a in router.available_providers if a.source_format != "voyage-embeddings"
             ]
             model, adapter = router.resolve_model("auto")
         self.assertEqual(adapter.source_format, "openai-embeddings")
@@ -237,8 +241,7 @@ class TestRateLimitFallbackBoundary(unittest.TestCase):
             router = EmbeddingRouter()
             # Keep only Jina to simulate all others on cooldown
             router.available_providers = [
-                a for a in router.available_providers
-                if a.source_format == "jina-embeddings"
+                a for a in router.available_providers if a.source_format == "jina-embeddings"
             ]
             model, adapter = router.resolve_model("auto")
         self.assertEqual(adapter.source_format, "jina-embeddings")
@@ -247,6 +250,7 @@ class TestRateLimitFallbackBoundary(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 6. get_providers_status — structure and cooldown contract
 # ---------------------------------------------------------------------------
+
 
 class TestGetProvidersStatus(unittest.TestCase):
     """get_providers_status() must return the expected dict shape for all providers."""
@@ -288,6 +292,7 @@ class TestGetProvidersStatus(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 7. handle_request — end-to-end routing
 # ---------------------------------------------------------------------------
+
 
 class TestHandleRequestIntegration(unittest.TestCase):
     """handle_request() must produce correct (url, headers, body) for each provider."""
@@ -404,6 +409,7 @@ class TestHandleRequestIntegration(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 8. resolve_model — explicit model name routing
 # ---------------------------------------------------------------------------
+
 
 class TestResolveModelExplicit(unittest.TestCase):
     """Explicit model names must route to the correct adapter."""

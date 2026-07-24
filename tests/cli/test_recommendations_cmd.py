@@ -171,8 +171,14 @@ def test_cmd_window_flag_changes_horizon(tmp_path, capsys):
                 agent_id="agent-trix",
                 status="ok",
             ),
-            Usage(trace_id=tid, input_billed=100, output_billed=50, cache_read=0,
-                  usage_source="provider", total_tokens_billed=150),
+            Usage(
+                trace_id=tid,
+                input_billed=100,
+                output_billed=50,
+                cache_read=0,
+                usage_source="provider",
+                total_tokens_billed=150,
+            ),
             Cost(trace_id=tid, cost_total=0.001),
             [],
         )

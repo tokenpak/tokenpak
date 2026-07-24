@@ -46,6 +46,7 @@ SKIP_CCG02_SCHEMA_REPLACED_BY_CCG06 = (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _fresh_conn(tmp_path, name="test.db"):
     """Return an open connection to a new temp DB file (not :memory: so Monitor
     can reopen it)."""
@@ -116,9 +117,7 @@ class TestEnsureSchemaFreshDB:
         from tokenpak.proxy.db import ensure_schema
 
         conn = _fresh_conn(tmp_path)
-        conn.execute(
-            "CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT)"
-        )
+        conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT)")
         conn.commit()
         ensure_schema(conn)
         conn.commit()
@@ -185,7 +184,9 @@ class TestEnsureSchemaMigrationFromLegacy:
         _create_legacy_requests(conn)
 
         # Confirm session_id absent before migration
-        col_names_before = [row[1] for row in conn.execute("PRAGMA table_info(requests)").fetchall()]
+        col_names_before = [
+            row[1] for row in conn.execute("PRAGMA table_info(requests)").fetchall()
+        ]
         assert "session_id" not in col_names_before
 
         ensure_schema(conn)
@@ -341,9 +342,7 @@ class TestMonitorInitDB:
         conn = sqlite3.connect(db_path)
         tables = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
         assert "mutation_audit" in tables, "Monitor._init_db must create mutation_audit"
@@ -386,6 +385,7 @@ class TestMonitorInitDB:
 
         # Monitor should migrate the existing DB
         from tokenpak.proxy.monitor import Monitor
+
         Monitor(db_path)
 
         conn2 = sqlite3.connect(db_path)
@@ -398,9 +398,7 @@ class TestMonitorInitDB:
         # mutation_audit table present
         tables = {
             row[0]
-            for row in conn2.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn2.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         assert "mutation_audit" in tables
         conn2.close()

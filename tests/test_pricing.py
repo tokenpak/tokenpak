@@ -132,31 +132,40 @@ class TestEstimateSavings:
         assert result["total_tokens_saved"] == 0
 
     def test_compression_savings(self):
-        result = estimate_savings({
-            "tokens_raw": 2_000_000,
-            "tokens_saved": 500_000,
-            "cache_read_tokens": 0,
-        }, model="claude-sonnet-4-6")
+        result = estimate_savings(
+            {
+                "tokens_raw": 2_000_000,
+                "tokens_saved": 500_000,
+                "cache_read_tokens": 0,
+            },
+            model="claude-sonnet-4-6",
+        )
         assert result["compression_tokens_saved"] == 500_000
         # 500K tokens * $3.00/M = $1.50
         assert result["compression_cost_saved"] == pytest.approx(1.50, abs=0.01)
 
     def test_cache_savings(self):
-        result = estimate_savings({
-            "tokens_raw": 1_000_000,
-            "tokens_saved": 0,
-            "cache_read_tokens": 500_000,
-        }, model="claude-sonnet-4-6")
+        result = estimate_savings(
+            {
+                "tokens_raw": 1_000_000,
+                "tokens_saved": 0,
+                "cache_read_tokens": 500_000,
+            },
+            model="claude-sonnet-4-6",
+        )
         # cache saves (input_rate - cached_rate) per token
         expected = (500_000 / 1_000_000) * (3.0 - 0.30)
         assert result["cache_cost_saved"] == pytest.approx(expected, abs=0.01)
 
     def test_reduction_percent_is_bounded_0_to_100(self):
-        result = estimate_savings({
-            "tokens_raw": 1_000_000,
-            "tokens_saved": 900_000,
-            "cache_read_tokens": 90_000,
-        }, model="claude-sonnet-4-6")
+        result = estimate_savings(
+            {
+                "tokens_raw": 1_000_000,
+                "tokens_saved": 900_000,
+                "cache_read_tokens": 90_000,
+            },
+            model="claude-sonnet-4-6",
+        )
         assert 0 <= result["reduction_percent"] <= 100
 
     def test_zero_raw_tokens_no_division_error(self):
@@ -185,7 +194,7 @@ SAMPLE_BY_MODEL = {
         "requests": 700,
         "input_tokens": 7_000_000,
         "output_tokens": 350_000,
-        "cost": 10.0,   # actual cost
+        "cost": 10.0,  # actual cost
         "cache_read_tokens": 35_000_000,
         "cache_creation_tokens": 3_500_000,
     },
@@ -193,7 +202,7 @@ SAMPLE_BY_MODEL = {
         "requests": 300,
         "input_tokens": 3_000_000,
         "output_tokens": 150_000,
-        "cost": 5.0,    # actual cost
+        "cost": 5.0,  # actual cost
         "cache_read_tokens": 15_000_000,
         "cache_creation_tokens": 1_500_000,
     },
@@ -204,9 +213,16 @@ class TestCalculateSavingsFromProxyStats:
     def test_returns_required_keys(self):
         result = calculate_savings_from_proxy_stats(SAMPLE_STATS, SAMPLE_BY_MODEL)
         required = {
-            "cost_without_tokenpak", "cost_with_tokenpak", "total_saved",
-            "cache_saved", "compression_saved", "routing_saved",
-            "total_saved_pct", "cache_hit_rate", "total_requests", "per_model",
+            "cost_without_tokenpak",
+            "cost_with_tokenpak",
+            "total_saved",
+            "cache_saved",
+            "compression_saved",
+            "routing_saved",
+            "total_saved_pct",
+            "cache_hit_rate",
+            "total_requests",
+            "per_model",
         }
         assert required.issubset(result.keys())
 

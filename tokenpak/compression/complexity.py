@@ -213,12 +213,14 @@ _INLINE_CODE = re.compile(r"`[^`]+`")
 # ---------------------------------------------------------------------------
 
 
-def _word_set(text: str) -> set:
+def _word_set(text: str) -> set[str]:
     """Lowercase word tokens from text."""
     return set(re.findall(r"\b\w+\b", text.lower()))
 
 
-def score_complexity(query: str, context_blocks: Optional[List[str]] = None) -> tuple:
+def score_complexity(
+    query: str, context_blocks: Optional[List[str]] = None
+) -> tuple[float, TaskType]:
     """
     Score the complexity of a query + context.
 
@@ -285,7 +287,7 @@ def score_complexity(query: str, context_blocks: Optional[List[str]] = None) -> 
     return round(score, 2), task_type
 
 
-def _classify_task_type(query_lower: str, words: set, context: str) -> TaskType:
+def _classify_task_type(query_lower: str, words: set[str], context: str) -> TaskType:
     """Classify into TaskType based on dominant signal."""
     scores = {
         TaskType.CODING: len(words & _CODING_KEYWORDS),

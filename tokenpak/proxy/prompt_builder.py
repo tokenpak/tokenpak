@@ -78,7 +78,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -109,12 +109,13 @@ def _has_cache_control(blk: dict[str, Any]) -> bool:
     cc = blk.get("cache_control") if isinstance(blk, dict) else None
     return isinstance(cc, dict) and cc.get("type") == "ephemeral"
 
+
 # ---------------------------------------------------------------------------
 # Heuristics for detecting dynamic content in system blocks
 # ---------------------------------------------------------------------------
 
 # Patterns that indicate a block contains dynamic/volatile content
-_VOLATILE_PATTERNS: list[re.Pattern] = [
+_VOLATILE_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"),  # ISO timestamps
     re.compile(r"\btoday is\b", re.IGNORECASE),
     re.compile(r"\bcurrent time\b", re.IGNORECASE),
@@ -200,9 +201,7 @@ def _mark_message_content_cacheable(message: dict[str, Any]) -> tuple[dict[str, 
 
     if isinstance(content, str):
         if content.strip():
-            msg["content"] = [
-                {"type": "text", "text": content, "cache_control": cc}
-            ]
+            msg["content"] = [{"type": "text", "text": content, "cache_control": cc}]
             marked = True
         return msg, marked
 
@@ -242,9 +241,7 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
     system = data.get("system")
     if isinstance(system, str):
         if system.strip():
-            data["system"] = [
-                {"type": "text", "text": system, "cache_control": cc}
-            ]
+            data["system"] = [{"type": "text", "text": system, "cache_control": cc}]
             changed = True
             _stats.record_breakpoint("system_last", True)
         else:
@@ -325,17 +322,17 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
         return body_bytes
 
     # --- Cap total cache_control blocks to Anthropic max (4) ---
-    _all_cc = []
+    _all_cc: list[tuple[str, int, int | None]] = []
     _sys = data.get("system", [])
     if isinstance(_sys, list):
         for _si, _sb in enumerate(_sys):
             if isinstance(_sb, dict) and "cache_control" in _sb:
-                _all_cc.append(("system", _si))
+                _all_cc.append(("system", _si, None))
     _tools = data.get("tools", [])
     if isinstance(_tools, list):
         for _ti, _tb in enumerate(_tools):
             if isinstance(_tb, dict) and "cache_control" in _tb:
-                _all_cc.append(("tools", _ti))
+                _all_cc.append(("tools", _ti, None))
     _msgs = data.get("messages", [])
     if isinstance(_msgs, list):
         for _mi, _mm in enumerate(_msgs):
@@ -351,7 +348,9 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
             elif _loc[0] == "tools":
                 data["tools"][_loc[1]].pop("cache_control", None)
             elif _loc[0] == "messages":
-                data["messages"][_loc[1]]["content"][_loc[2]].pop("cache_control", None)
+                content_index = _loc[2]
+                if content_index is not None:
+                    data["messages"][_loc[1]]["content"][content_index].pop("cache_control", None)
 
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
@@ -568,7 +567,7 @@ class PromptCacheStats:
             else:
                 self.breakpoint_skipped[name] += 1
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, object]:
         with self._lock:
             total = self.cache_markers_applied + self.cache_markers_skipped
             pct = (self.cache_markers_applied / total * 100) if total > 0 else 0
@@ -677,7 +676,7 @@ def build_stable_prefix(system: str, tools: list[dict[str, Any]]) -> str:
 
 def build_volatile_tail(
     user_message: str,
-    retrieved: list,
+    retrieved: Sequence[object],
     max_tokens: int | None = None,
 ) -> str:
     """
@@ -721,7 +720,8 @@ def build_volatile_tail(
     char_budget = max_tokens * 4 if max_tokens is not None else None
 
     for item in retrieved:
-        text = item["text"] if isinstance(item, dict) else str(item)
+        value = item.get("text", "") if isinstance(item, dict) else item
+        text = str(value)
         if char_budget is not None:
             if char_budget <= 0:
                 break

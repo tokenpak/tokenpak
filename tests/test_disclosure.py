@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.ingest.disclosure", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.ingest.disclosure", reason="module not available in current build"
+)
 from tokenpak._internal.ingest.disclosure import (
     LEVEL_FULL_SECTIONS,
     LEVEL_RAW_CHUNKS,
@@ -52,7 +54,9 @@ def test_choose_disclosure_level_defaults_to_summary_map() -> None:
 
 
 def test_choose_disclosure_level_escalates_to_full_for_exact_intent() -> None:
-    level = choose_disclosure_level(intent="quote exact wording", query="cite fallback trigger line")
+    level = choose_disclosure_level(
+        intent="quote exact wording", query="cite fallback trigger line"
+    )
     assert level == LEVEL_FULL_SECTIONS
 
 

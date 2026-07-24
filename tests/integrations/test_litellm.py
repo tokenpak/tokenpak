@@ -25,6 +25,7 @@ pytest.importorskip(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_block(path="docs/intro.md", content="This is the content of the intro.", tokens=10):
     return SimpleNamespace(
         path=path,
@@ -41,6 +42,7 @@ def _make_block(path="docs/intro.md", content="This is the content of the intro.
 # ---------------------------------------------------------------------------
 # formatter.py
 # ---------------------------------------------------------------------------
+
 
 class TestFormatter:
     def test_blocks_to_messages_basic(self):
@@ -115,6 +117,7 @@ class TestFormatter:
 # parser.py
 # ---------------------------------------------------------------------------
 
+
 class TestParser:
     def test_explicit_tokenpak_kwarg(self):
         from tokenpak.integrations.litellm.parser import parse_tokenpak_request
@@ -163,22 +166,27 @@ class TestParser:
 
     def test_extract_budget_default(self):
         from tokenpak.integrations.litellm.parser import extract_budget_from_kwargs
+
         assert extract_budget_from_kwargs({}) == 8000
 
     def test_extract_budget_override(self):
         from tokenpak.integrations.litellm.parser import extract_budget_from_kwargs
+
         assert extract_budget_from_kwargs({"tokenpak_budget": 4000}) == 4000
 
     def test_extract_compaction_default(self):
         from tokenpak.integrations.litellm.parser import extract_compaction_from_kwargs
+
         assert extract_compaction_from_kwargs({}) == "balanced"
 
     def test_extract_compaction_override(self):
         from tokenpak.integrations.litellm.parser import extract_compaction_from_kwargs
+
         assert extract_compaction_from_kwargs({"tokenpak_compaction": "aggressive"}) == "aggressive"
 
     def test_invalid_compaction_falls_back(self):
         from tokenpak.integrations.litellm.parser import extract_compaction_from_kwargs
+
         assert extract_compaction_from_kwargs({"tokenpak_compaction": "unknown"}) == "balanced"
 
 
@@ -186,15 +194,18 @@ class TestParser:
 # middleware.py
 # ---------------------------------------------------------------------------
 
+
 class TestTokenPakMiddleware:
     def test_init_default(self):
         from tokenpak.integrations.litellm.middleware import TokenPakMiddleware
+
         mw = TokenPakMiddleware()
         assert mw.compaction == "balanced"
         assert mw.budget == 8000
 
     def test_invalid_compaction_raises(self):
         from tokenpak.integrations.litellm.middleware import TokenPakMiddleware
+
         with pytest.raises(ValueError):
             TokenPakMiddleware(compaction="invalid")
 
@@ -250,6 +261,7 @@ class TestTokenPakMiddleware:
 # proxy.py
 # ---------------------------------------------------------------------------
 
+
 class TestProxyHandler:
     def test_missing_tokenpak_returns_error(self):
         import asyncio
@@ -274,13 +286,16 @@ class TestProxyHandler:
         sys.modules["litellm"] = None  # type: ignore
 
         from tokenpak.integrations.litellm.proxy import ProxyHandler
+
         handler = ProxyHandler()
 
         async def run():
-            return await handler._process({
-                "model": "gpt-4",
-                "tokenpak": {"version": "1.0", "blocks": []},
-            })
+            return await handler._process(
+                {
+                    "model": "gpt-4",
+                    "tokenpak": {"version": "1.0", "blocks": []},
+                }
+            )
 
         result = asyncio.run(run())
         assert "error" in result

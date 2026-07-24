@@ -19,6 +19,7 @@ from tokenpak.proxy.passthrough import PassthroughConfig
 # Regression tests
 # ---------------------------------------------------------------------------
 
+
 def test_passthrough_config_rejects_overlapping_headers():
     """
     A header listed in both strip_headers and safe_to_log must cause ValueError.

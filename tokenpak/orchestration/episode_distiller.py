@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -60,16 +60,16 @@ class EpisodeRecord:
     tools_used: List[str]
     errors_encountered: List[str]
     fix_applied: Optional[str]
-    outcome: str           # "success" | "failure" | "partial"
-    duration: float        # seconds elapsed
-    tokens_spent: int      # total tokens consumed in this episode
-    timestamp: str         # ISO 8601 UTC
+    outcome: str  # "success" | "failure" | "partial"
+    duration: float  # seconds elapsed
+    tokens_spent: int  # total tokens consumed in this episode
+    timestamp: str  # ISO 8601 UTC
 
     # ------------------------------------------------------------------
     # Serialization
     # ------------------------------------------------------------------
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable dict."""
         return asdict(self)
 
@@ -77,7 +77,9 @@ class EpisodeRecord:
         """Return the record as a JSON string."""
         return json.dumps(self.to_dict(), indent=2)
 
-    def to_sqlite_row(self) -> tuple:
+    def to_sqlite_row(
+        self,
+    ) -> tuple[str, str, str, Optional[str], str, float, int, str]:
         """Return a tuple suitable for SQLite INSERT (matches SQLITE_SCHEMA)."""
         return (
             self.task_id,
@@ -91,7 +93,7 @@ class EpisodeRecord:
         )
 
     @classmethod
-    def from_dict(cls, d: dict) -> "EpisodeRecord":
+    def from_dict(cls, d: dict[str, Any]) -> "EpisodeRecord":
         """Reconstruct from a dict (e.g. JSON-parsed)."""
         return cls(
             task_id=d["task_id"],
@@ -127,7 +129,7 @@ class EpisodeRecord:
 # ---------------------------------------------------------------------------
 
 
-def distill_episode(raw: dict) -> EpisodeRecord:
+def distill_episode(raw: dict[str, Any]) -> EpisodeRecord:
     """Distill a raw episode dict into a structured EpisodeRecord.
 
     Accepts a flexible input dict — fields may arrive under several common
@@ -300,6 +302,4 @@ def _auto_lesson(record: EpisodeRecord) -> str:
             f"Task {record.task_id} failed: {err_summary}. "
             f"Fix attempted: {record.fix_applied or 'none'}."
         )
-    return (
-        f"Task {record.task_id} partially completed using [{tools}]."
-    )
+    return f"Task {record.task_id} partially completed using [{tools}]."

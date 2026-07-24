@@ -12,7 +12,6 @@ Avoids duplicating test_cost_integration.py coverage; focuses on:
   - Negative / clamped token inputs
 """
 
-
 import pytest
 
 from tokenpak.telemetry.cost import (
@@ -251,10 +250,16 @@ class TestCostResultToDict:
     def test_to_dict_has_required_keys(self, result):
         d = result.to_dict()
         expected_keys = {
-            "model", "pricing_version", "raw_input_tokens",
-            "final_input_tokens", "output_tokens",
-            "baseline_cost", "actual_cost",
-            "savings_amount", "savings_pct", "data_source",
+            "model",
+            "pricing_version",
+            "raw_input_tokens",
+            "final_input_tokens",
+            "output_tokens",
+            "baseline_cost",
+            "actual_cost",
+            "savings_amount",
+            "savings_pct",
+            "data_source",
         }
         assert expected_keys.issubset(d.keys())
 
@@ -342,6 +347,7 @@ class TestParseDate:
 
     def test_none_returns_today(self):
         from datetime import datetime, timezone
+
         d = CostEngine._parse_date(None)
         today = datetime.now(timezone.utc).date().isoformat()
         assert d == today
@@ -361,6 +367,7 @@ class TestParseDate:
 
     def test_invalid_ts_returns_today(self):
         from datetime import datetime, timezone
+
         d = CostEngine._parse_date("not-a-date")
         today = datetime.now(timezone.utc).date().isoformat()
         assert d == today

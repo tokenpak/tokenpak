@@ -55,9 +55,7 @@ def _fake_cred(
 def test_flag_off_returns_false_and_no_mutation():
     with _flag_off():
         fwd = {"X-Foo": "bar"}
-        result = creds_injection.maybe_inject(
-            fwd, "https://api.anthropic.com/v1/messages", {}
-        )
+        result = creds_injection.maybe_inject(fwd, "https://api.anthropic.com/v1/messages", {})
     assert result is False
     assert fwd == {"X-Foo": "bar"}
 
@@ -138,14 +136,10 @@ credential = "test-cred"
     cred = _fake_cred("test-cred", platform="anthropic", kind=KIND_API_KEY)
     # ``router.select`` imports ``discover_all`` at module level, so we
     # patch the router-local binding, not the provider-module binding.
-    monkeypatch.setattr(
-        "tokenpak.creds.router.discover_all", lambda: [cred]
-    )
+    monkeypatch.setattr("tokenpak.creds.router.discover_all", lambda: [cred])
     # ``maybe_inject`` re-imports ``resolve_secret`` inside the function,
     # so patching the provider-module binding is fine here.
-    monkeypatch.setattr(
-        "tokenpak.creds.providers.resolve_secret", lambda c: "TOP-SECRET"
-    )
+    monkeypatch.setattr("tokenpak.creds.providers.resolve_secret", lambda c: "TOP-SECRET")
 
     with _flag_on():
         fwd = {"x-api-key": "client-supplied-stale"}
@@ -203,9 +197,7 @@ def test_placeholder_credentials_do_not_block_router(monkeypatch):
         "tokenpak.creds.router.select",
         lambda _ctx: RouteDecision(cred, "test", "platform-default"),
     )
-    monkeypatch.setattr(
-        "tokenpak.creds.providers.resolve_secret", lambda c: "REAL-SECRET"
-    )
+    monkeypatch.setattr("tokenpak.creds.providers.resolve_secret", lambda c: "REAL-SECRET")
 
     with _flag_on():
         fwd = {"x-api-key": "custom-local"}  # the real-world OpenClaw placeholder
@@ -220,9 +212,7 @@ def test_explicit_tag_overrides_client_creds(monkeypatch):
     """An X-Tokenpak-Credential header means 'take over' even with own key."""
     cred = _fake_cred("chosen", platform="anthropic", kind=KIND_API_KEY)
     monkeypatch.setattr("tokenpak.creds.router.discover_all", lambda: [cred])
-    monkeypatch.setattr(
-        "tokenpak.creds.providers.resolve_secret", lambda c: "FROM-ROUTER"
-    )
+    monkeypatch.setattr("tokenpak.creds.providers.resolve_secret", lambda c: "FROM-ROUTER")
 
     with _flag_on():
         fwd = {"x-api-key": "client-own-key"}
@@ -250,9 +240,7 @@ credential = "rule-picked"
 
     cred = _fake_cred("rule-picked", platform="anthropic", kind=KIND_API_KEY)
     monkeypatch.setattr("tokenpak.creds.router.discover_all", lambda: [cred])
-    monkeypatch.setattr(
-        "tokenpak.creds.providers.resolve_secret", lambda c: "PICKED"
-    )
+    monkeypatch.setattr("tokenpak.creds.providers.resolve_secret", lambda c: "PICKED")
 
     with _flag_on():
         # Client has its own key AND sends X-Tokenpak-Caller → router runs.
@@ -273,9 +261,7 @@ def test_unresolvable_secret_fails_open(monkeypatch):
         return RouteDecision(cred, "test", "explicit")
 
     monkeypatch.setattr("tokenpak.creds.router.select", fake_decision)
-    monkeypatch.setattr(
-        "tokenpak.creds.providers.resolve_secret", lambda c: None
-    )
+    monkeypatch.setattr("tokenpak.creds.providers.resolve_secret", lambda c: None)
 
     with _flag_on():
         fwd = {"Authorization": "Bearer orig"}

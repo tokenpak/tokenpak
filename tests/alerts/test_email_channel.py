@@ -3,6 +3,7 @@
 
 All SMTP I/O is mocked — no real mail server is contacted.
 """
+
 from __future__ import annotations
 
 import smtplib
@@ -161,8 +162,9 @@ class TestEmailChannelRetry:
     def test_returns_false_on_permanent_failure(self):
         """Returns False (never raises) after all attempts are exhausted."""
         ch = EmailChannel(smtp_host="bad.host", smtp_port=587, to_addr="x@x.com")
-        with patch("tokenpak.alerts.channels.email.smtplib.SMTP",
-                   side_effect=OSError("no route to host")):
+        with patch(
+            "tokenpak.alerts.channels.email.smtplib.SMTP", side_effect=OSError("no route to host")
+        ):
             with patch("tokenpak.alerts.channels.email.time.sleep"):
                 result = ch.send(event="test", severity="critical", message="permanent fail")
         assert result is False
@@ -197,8 +199,9 @@ class TestEmailChannelRetry:
             sleep_calls.append(secs)
 
         ch = EmailChannel(smtp_host="smtp.example.com", smtp_port=587, to_addr="x@x.com")
-        with patch("tokenpak.alerts.channels.email.smtplib.SMTP",
-                   side_effect=smtplib.SMTPException("err")):
+        with patch(
+            "tokenpak.alerts.channels.email.smtplib.SMTP", side_effect=smtplib.SMTPException("err")
+        ):
             with patch("tokenpak.alerts.channels.email.time.sleep", side_effect=_record_sleep):
                 ch.send(event="test", severity="warning", message="sleep test")
 
@@ -217,14 +220,13 @@ class TestDeliverFunction:
         inst.__enter__ = lambda s: s
         inst.__exit__ = MagicMock(return_value=False)
         with patch("tokenpak.alerts.channels.email.smtplib.SMTP", return_value=inst):
-            result = deliver(
-                "smtp.example.com", 587, "dest@example.com", "evt", "info", "msg"
-            )
+            result = deliver("smtp.example.com", 587, "dest@example.com", "evt", "info", "msg")
         assert result is True
 
     def test_deliver_returns_false_on_failure(self):
-        with patch("tokenpak.alerts.channels.email.smtplib.SMTP",
-                   side_effect=smtplib.SMTPException("fail")):
+        with patch(
+            "tokenpak.alerts.channels.email.smtplib.SMTP", side_effect=smtplib.SMTPException("fail")
+        ):
             with patch("tokenpak.alerts.channels.email.time.sleep"):
                 result = deliver(
                     "smtp.example.com", 587, "dest@example.com", "evt", "warning", "msg"
@@ -237,8 +239,7 @@ class TestDeliverFunction:
         inst.__exit__ = MagicMock(return_value=False)
         with patch("tokenpak.alerts.channels.email.smtplib.SMTP", return_value=inst):
             deliver(
-                "smtp.example.com", 587, "to@x.com", "evt", "info", "msg",
-                from_addr="sender@x.com"
+                "smtp.example.com", 587, "to@x.com", "evt", "info", "msg", from_addr="sender@x.com"
             )
         args = inst.sendmail.call_args[0]
         assert args[0] == "sender@x.com"

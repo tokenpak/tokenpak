@@ -46,31 +46,106 @@ SHELL_PREFIX = "shell:"
 # source is ``known_tokenpak_subcommands()`` below, which reads the argparse
 # registry so newly added CLI verbs are prefixed correctly without touching this
 # list. Snapshot of the top-level verb set as of this writing.
-TOKENPAK_SUBCOMMANDS = frozenset(
+TOKENPAK_SUBCOMMANDS: frozenset[str] = frozenset(
     {
-        "activate", "agent", "aggregate", "alerts", "attribution", "audit",
-        "benchmark", "budget", "calibrate", "check-alerts", "claude", "codex",
-        "compare", "compliance", "compress", "config", "config-check", "cost",
-        "creds", "dashboard", "deactivate", "debug", "demo", "diagnose", "diff",
-        "dispatch", "doctor", "explain", "features", "fingerprint", "fleet",
-        "forecast", "goals", "help", "home", "index", "init", "integrate",
-        "last", "leaderboard", "learn", "license", "lock", "logs", "macro",
-        "menu", "models", "monitor", "openclaw", "optimize", "pak", "pakplan",
-        "permissions", "plan", "preview", "prove", "prune", "recipe",
-        "recommendations", "replay", "report", "requests", "restart",
-        "retrieval", "route", "run", "savings", "search", "serve", "setup",
-        "start", "stats", "status", "stop", "telemetry", "template", "test",
-        "timeline", "tip", "trigger", "uninstall", "update", "upgrade",
-        "usage", "validate", "validate-config", "vault", "vault-health",
-        "version", "watch",
+        "activate",
+        "agent",
+        "aggregate",
+        "alerts",
+        "attribution",
+        "audit",
+        "benchmark",
+        "budget",
+        "calibrate",
+        "check-alerts",
+        "claude",
+        "codex",
+        "compare",
+        "compliance",
+        "compress",
+        "config",
+        "config-check",
+        "cost",
+        "creds",
+        "dashboard",
+        "deactivate",
+        "debug",
+        "demo",
+        "diagnose",
+        "diff",
+        "dispatch",
+        "doctor",
+        "explain",
+        "features",
+        "fingerprint",
+        "fleet",
+        "forecast",
+        "goals",
+        "help",
+        "home",
+        "index",
+        "init",
+        "integrate",
+        "last",
+        "leaderboard",
+        "learn",
+        "license",
+        "lock",
+        "logs",
+        "macro",
+        "menu",
+        "models",
+        "monitor",
+        "openclaw",
+        "optimize",
+        "pak",
+        "pakplan",
+        "permissions",
+        "plan",
+        "preview",
+        "prove",
+        "prune",
+        "recipe",
+        "recommendations",
+        "replay",
+        "report",
+        "requests",
+        "restart",
+        "retrieval",
+        "route",
+        "run",
+        "savings",
+        "search",
+        "serve",
+        "setup",
+        "start",
+        "stats",
+        "status",
+        "stop",
+        "telemetry",
+        "template",
+        "test",
+        "timeline",
+        "tip",
+        "trigger",
+        "uninstall",
+        "update",
+        "upgrade",
+        "usage",
+        "validate",
+        "validate-config",
+        "vault",
+        "vault-health",
+        "version",
+        "watch",
     }
 )
 
 # Cached live subcommand set (resolved on first use).
-_SUBCOMMANDS_CACHE: Optional[frozenset] = None
+_SUBCOMMANDS_CACHE: Optional[frozenset[str]] = None
 
 
-def known_tokenpak_subcommands() -> frozenset:
+def known_tokenpak_subcommands() -> frozenset[str]:
     """Return the current set of top-level TokenPak CLI verbs.
 
     Derived live from the CLI's argparse registry so the prefixing decision in
@@ -95,6 +170,7 @@ def known_tokenpak_subcommands() -> frozenset:
             pass
         _SUBCOMMANDS_CACHE = subcommands
     return _SUBCOMMANDS_CACHE
+
 
 # Characters whose presence in a non-``shell:`` action signals the author may have
 # intended shell behavior (pipes, redirects, command chaining, substitution). In
@@ -167,7 +243,7 @@ class CommandResult:
 def parse_trigger_action(
     action: str,
     *,
-    subcommands: Optional[frozenset] = None,
+    subcommands: Optional[frozenset[str]] = None,
     warn: bool = True,
 ) -> CommandAction:
     """Parse a stored trigger/macro action string into a governed CommandAction.

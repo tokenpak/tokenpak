@@ -41,32 +41,37 @@ class TestEstimateAnthropicShape:
 
     def test_large_user_message_classified_fresh(self):
         big = "x" * 4_000_000  # 1M tokens (4 chars/tok)
-        r = estimate(self._body(messages=[{"role": "user", "content": big}]),
-                     model="claude-opus-4-7")
+        r = estimate(
+            self._body(messages=[{"role": "user", "content": big}]), model="claude-opus-4-7"
+        )
         assert r.request_tokens >= 999_000
         assert r.current_context_tokens == 0
         assert r.projected_input_tokens >= 999_000
 
     def test_cache_control_marks_cached(self):
-        body = json.dumps({
-            "model": "claude-opus-4-7",
-            "max_tokens": 4096,
-            "system": [
-                {"type": "text", "text": "y" * 400_000, "cache_control": {"type": "ephemeral"}},
-            ],
-            "messages": [{"role": "user", "content": "hi"}],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-opus-4-7",
+                "max_tokens": 4096,
+                "system": [
+                    {"type": "text", "text": "y" * 400_000, "cache_control": {"type": "ephemeral"}},
+                ],
+                "messages": [{"role": "user", "content": "hi"}],
+            }
+        ).encode()
         r = estimate(body, model="claude-opus-4-7")
         assert r.current_context_tokens >= 99_000
         assert r.cache_hit_ratio > 0.9
 
     def test_tools_count_as_cached(self):
-        body = json.dumps({
-            "model": "claude-opus-4-7",
-            "max_tokens": 4096,
-            "tools": [{"name": "x", "input_schema": {"type": "object"} } for _ in range(50)],
-            "messages": [{"role": "user", "content": "hi"}],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-opus-4-7",
+                "max_tokens": 4096,
+                "tools": [{"name": "x", "input_schema": {"type": "object"}} for _ in range(50)],
+                "messages": [{"role": "user", "content": "hi"}],
+            }
+        ).encode()
         r = estimate(body, model="claude-opus-4-7")
         assert r.current_context_tokens > 0
 
@@ -74,11 +79,13 @@ class TestEstimateAnthropicShape:
 class TestEstimateUnknownModel:
     def test_unknown_model_falls_back(self):
         # Unknown model shouldn't crash — registry returns sonnet-class defaults.
-        body = json.dumps({
-            "model": "fictional-model-99",
-            "max_tokens": 1000,
-            "messages": [{"role": "user", "content": "hi"}],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "fictional-model-99",
+                "max_tokens": 1000,
+                "messages": [{"role": "user", "content": "hi"}],
+            }
+        ).encode()
         r = estimate(body, model="fictional-model-99")
         assert r.rates["input"] > 0
         assert r.rates["output"] > 0

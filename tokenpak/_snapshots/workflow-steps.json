@@ -1,6 +1,6 @@
 {
   "version": "1.1",
-  "generated_at": "2026-07-08T14:14:24Z",
+  "generated_at": "2026-07-22T21:16:31Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"
@@ -22,31 +22,7 @@
       "workflow": "release-rehearsal.yml",
       "job": "build-artifacts",
       "id": "",
-      "name": ""
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "build-artifacts",
-      "id": "",
-      "name": ""
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "build-artifacts",
-      "id": "",
       "name": "Build sdist + wheel"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "build-artifacts",
-      "id": "",
-      "name": "Build sdist + wheel"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "build-artifacts",
-      "id": "",
-      "name": "Install build"
     },
     {
       "workflow": "release-rehearsal.yml",
@@ -64,25 +40,7 @@
       "workflow": "release-rehearsal.yml",
       "job": "build-artifacts",
       "id": "",
-      "name": "Sdist / wheel purity (Std 30 \u00a713.1 R9)"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "build-artifacts",
-      "id": "",
       "name": "Upload artifacts (rehearsal \u2014 never published)"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "build-artifacts",
-      "id": "",
-      "name": "Upload artifacts (rehearsal \u2014 never published)"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "install-shape-matrix",
-      "id": "",
-      "name": ""
     },
     {
       "workflow": "release-rehearsal.yml",
@@ -100,18 +58,6 @@
       "workflow": "release-rehearsal.yml",
       "job": "install-shape-matrix",
       "id": "",
-      "name": "Gate on collection errors (Std 30 \u00a74)"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "install-shape-matrix",
-      "id": "",
-      "name": "Gate on test failures"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "install-shape-matrix",
-      "id": "",
       "name": "Gate on test failures"
     },
     {
@@ -124,25 +70,7 @@
       "workflow": "release-rehearsal.yml",
       "job": "install-shape-matrix",
       "id": "",
-      "name": "Install (shape=${{ matrix.shape }})"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "install-shape-matrix",
-      "id": "",
       "name": "Set up Python ${{ matrix.python-version }}"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "install-shape-matrix",
-      "id": "",
-      "name": "Set up Python ${{ matrix.python-version }}"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "install-shape-matrix",
-      "id": "pytest",
-      "name": "Pytest with --continue-on-collection-errors (Std 30 \u00a74 R4)"
     },
     {
       "workflow": "release-rehearsal.yml",
@@ -166,31 +94,7 @@
       "workflow": "release-rehearsal.yml",
       "job": "leak-scan",
       "id": "",
-      "name": ""
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "leak-scan",
-      "id": "",
-      "name": ""
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "leak-scan",
-      "id": "",
       "name": "Build sdist + wheel for scanning"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "leak-scan",
-      "id": "",
-      "name": "Build sdist + wheel for scanning"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "leak-scan",
-      "id": "",
-      "name": "Scan shipped artifact for public-leak patterns"
     },
     {
       "workflow": "release-rehearsal.yml",
@@ -206,33 +110,9 @@
     },
     {
       "workflow": "release-rehearsal.yml",
-      "job": "preflight",
-      "id": "tag",
-      "name": "Compute rehearsal tag"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
       "job": "publish-blocked",
       "id": "",
       "name": "Refuse to publish rehearsal tag"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "publish-blocked",
-      "id": "",
-      "name": "Refuse to publish rehearsal tag"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "release-gate-snapshots",
-      "id": "",
-      "name": ""
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "release-gate-snapshots",
-      "id": "",
-      "name": ""
     },
     {
       "workflow": "release-rehearsal.yml",
@@ -256,18 +136,6 @@
       "workflow": "release-rehearsal.yml",
       "job": "release-gate-snapshots",
       "id": "",
-      "name": "Install (all extras for canonical snapshot reproduction)"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "release-gate-snapshots",
-      "id": "",
-      "name": "api-snapshot-check (Std 30 \u00a77 R7)"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "release-gate-snapshots",
-      "id": "",
       "name": "api-snapshot-check (Std 30 \u00a77 R7)"
     },
     {
@@ -280,25 +148,7 @@
       "workflow": "release-rehearsal.yml",
       "job": "release-gate-snapshots",
       "id": "",
-      "name": "taxonomy-check (Std 30 \u00a75 R5)"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "release-gate-snapshots",
-      "id": "",
       "name": "telemetry-check (Std 30 \u00a77 R7)"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "release-gate-snapshots",
-      "id": "",
-      "name": "telemetry-check (Std 30 \u00a77 R7)"
-    },
-    {
-      "workflow": "release-rehearsal.yml",
-      "job": "release-gate-snapshots",
-      "id": "",
-      "name": "workflow-steps-check (Std 30 \u00a713.3 R11)"
     },
     {
       "workflow": "release-rehearsal.yml",

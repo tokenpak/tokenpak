@@ -21,9 +21,7 @@ def test_context_budget_exceeded():
     ctx = TokenPakContext(total_budget=8000, avg_tokens_per_char=1.0)
     ctx.register_agent("analyst", budget=5)
     ctx.add_context("analyst", "abc")
-    success = ctx.add_context(
-        "analyst", "this is way too long text that exceeds budget"
-    )
+    success = ctx.add_context("analyst", "this is way too long text that exceeds budget")
     assert not success
 
 

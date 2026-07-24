@@ -18,6 +18,7 @@ import tokenpak.cli.user_templates as ut
 # Fixture: redirect TEMPLATES_DIR to a tmp directory so tests are isolated
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def isolated_templates(tmp_path: pathlib.Path, monkeypatch):
     """Redirect all template storage to a per-test temp directory."""
@@ -28,6 +29,7 @@ def isolated_templates(tmp_path: pathlib.Path, monkeypatch):
 # ---------------------------------------------------------------------------
 # list_templates
 # ---------------------------------------------------------------------------
+
 
 class TestListTemplates:
     def test_empty_dir_returns_empty_list(self):
@@ -61,6 +63,7 @@ class TestListTemplates:
 # ---------------------------------------------------------------------------
 # add
 # ---------------------------------------------------------------------------
+
 
 class TestAdd:
     def test_add_creates_template(self):
@@ -97,6 +100,7 @@ class TestAdd:
 # show
 # ---------------------------------------------------------------------------
 
+
 class TestShow:
     def test_show_returns_none_when_not_found(self):
         assert ut.show("nonexistent") is None
@@ -119,6 +123,7 @@ class TestShow:
 # ---------------------------------------------------------------------------
 # remove
 # ---------------------------------------------------------------------------
+
 
 class TestRemove:
     def test_remove_existing_returns_true(self):
@@ -143,6 +148,7 @@ class TestRemove:
 # ---------------------------------------------------------------------------
 # use (variable substitution)
 # ---------------------------------------------------------------------------
+
 
 class TestUse:
     def test_use_returns_none_when_not_found(self):
@@ -179,6 +185,7 @@ class TestUse:
 # variables_in
 # ---------------------------------------------------------------------------
 
+
 class TestVariablesIn:
     def test_returns_none_when_not_found(self):
         assert ut.variables_in("missing") is None
@@ -197,6 +204,7 @@ class TestVariablesIn:
 # ---------------------------------------------------------------------------
 # CMD helpers (CLI layer)
 # ---------------------------------------------------------------------------
+
 
 class TestCmdTemplateList:
     def test_prints_no_templates_message(self, capsys):
@@ -230,6 +238,7 @@ class TestCmdTemplateAdd:
     def test_no_content_prints_error(self, capsys, monkeypatch):
         """Empty content (no stdin) → prints error, no template saved."""
         import io
+
         monkeypatch.setattr("sys.stdin", io.StringIO(""))
         args = type("A", (), {"name": "empty", "content": ""})()
         ut.cmd_template_add(args)

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.agentic.memory_promoter", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.agentic.memory_promoter", reason="module not available in current build"
+)
 import time
 
 import pytest
@@ -287,7 +289,9 @@ def test_cleanup_expired_lessons(promoter):
     )
 
     # Make it expired by setting last_seen far in the past
-    promoter.lessons["test-1"].last_seen_at = time.time() - 400  # 400s ago, expired for Tier 1 (5 min TTL)
+    promoter.lessons["test-1"].last_seen_at = (
+        time.time() - 400
+    )  # 400s ago, expired for Tier 1 (5 min TTL)
 
     # Run cleanup
     affected = promoter.cleanup_expired()

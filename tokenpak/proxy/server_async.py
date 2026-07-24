@@ -26,6 +26,43 @@ Env vars (all optional):
 
 from __future__ import annotations
 
+__all__ = (
+    "ASYNC_UPSTREAM_ACQUIRE_TIMEOUT",
+    "ASYNC_UPSTREAM_CONCURRENCY",
+    "ConcurrencyLimiterMiddleware",
+    "HTTPX_POOL_SIZE",
+    "HTTPX_TIMEOUT",
+    "INTERCEPT_HOSTS",
+    "MAX_CONCURRENCY",
+    "PROXY_PORT",
+    "UpstreamRetryPolicy",
+    "UpstreamTruncatedJSONError",
+    "build_terminal_recovery_payload",
+    "create_async_app",
+    "extract_tip_plan_id",
+    "handle_circuit_breakers",
+    "handle_degradation",
+    "handle_export_csv",
+    "handle_health",
+    "handle_not_found",
+    "handle_proxy",
+    "handle_sessions",
+    "handle_stats",
+    "handle_stats_last",
+    "handle_stats_session",
+    "handle_trace_by_id",
+    "handle_trace_last",
+    "handle_traces",
+    "handle_v1_proxy",
+    "lifespan",
+    "persist_failed_request_metadata",
+    "provider_from_url",
+    "response_has_truncated_json",
+    "run_async_proxy",
+    "start_async_proxy_in_thread",
+)
+
+
 import asyncio
 import gzip
 import json
@@ -33,9 +70,10 @@ import os
 import threading
 import time
 import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Protocol
 
 import httpx
 from starlette.applications import Starlette
@@ -43,6 +81,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
+from starlette.types import ASGIApp
 
 from .circuit_breaker import provider_from_url
 from .upstream_retry import (
@@ -54,6 +93,16 @@ from .upstream_retry import (
     response_has_truncated_json,
 )
 
+if TYPE_CHECKING:
+    from .server import PipelineTrace, ProxyServer
+
+
+class _BackgroundTask(Protocol):
+    async def start(self) -> None: ...
+
+    async def stop(self) -> None: ...
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -62,20 +111,18 @@ PROXY_PORT = int(os.environ.get("TOKENPAK_PORT", "8766"))
 MAX_CONCURRENCY = int(os.environ.get("TOKENPAK_CONCURRENCY", "200"))
 HTTPX_POOL_SIZE = int(os.environ.get("TOKENPAK_HTTPX_POOL_SIZE", "100"))
 HTTPX_TIMEOUT = float(os.environ.get("TOKENPAK_HTTPX_TIMEOUT", "300"))
-INTERCEPT_HOSTS = {"api.anthropic.com", "api.openai.com"}
+INTERCEPT_HOSTS = {"api.anthropic.com", "api.openai.com", "chatgpt.com"}
 ASYNC_UPSTREAM_CONCURRENCY = int(os.environ.get("TOKENPAK_UPSTREAM_CONCURRENCY", "3"))
-ASYNC_UPSTREAM_ACQUIRE_TIMEOUT = float(
-    os.environ.get("TOKENPAK_UPSTREAM_ACQUIRE_TIMEOUT", "30")
-)
+ASYNC_UPSTREAM_ACQUIRE_TIMEOUT = float(os.environ.get("TOKENPAK_UPSTREAM_ACQUIRE_TIMEOUT", "30"))
 
 # ---------------------------------------------------------------------------
 # Module-level shared state (set by ProxyServer before uvicorn starts)
 # ---------------------------------------------------------------------------
 
-_proxy_server_ref: Any = None  # ProxyServer instance
+_proxy_server_ref: ProxyServer | None = None
 
 
-def _ps():
+def _ps() -> ProxyServer:
     """Return the ProxyServer instance (set before serving)."""
     if _proxy_server_ref is None:
         raise RuntimeError("AsyncProxyApp: ProxyServer not initialised")
@@ -86,7 +133,7 @@ def _ps():
 # Shared async httpx client (created in lifespan)
 # ---------------------------------------------------------------------------
 
-_async_client: Optional[httpx.AsyncClient] = None
+_async_client: httpx.AsyncClient | None = None
 
 
 def _client() -> httpx.AsyncClient:
@@ -99,13 +146,13 @@ def _client() -> httpx.AsyncClient:
 # Async upstream concurrency limiter
 # ---------------------------------------------------------------------------
 
-_async_upstream_semaphores: Dict[tuple[str, str], asyncio.BoundedSemaphore] = {}
-_async_upstream_inflight: Dict[tuple[str, str], int] = {}
+_async_upstream_semaphores: dict[tuple[str, str], asyncio.BoundedSemaphore] = {}
+_async_upstream_inflight: dict[tuple[str, str], int] = {}
 _async_upstream_sem_lock = asyncio.Lock()
 
 
 async def _get_async_upstream_semaphore(
-    provider: str, session_key: Optional[str] = None
+    provider: str, session_key: str | None = None
 ) -> asyncio.BoundedSemaphore:
     key = (provider or "_unknown", session_key or "_shared")
     async with _async_upstream_sem_lock:
@@ -118,7 +165,7 @@ async def _get_async_upstream_semaphore(
 
 
 async def _async_upstream_inflight_delta(
-    provider: str, delta: int, session_key: Optional[str] = None
+    provider: str, delta: int, session_key: str | None = None
 ) -> int:
     key = (provider or "_unknown", session_key or "_shared")
     async with _async_upstream_sem_lock:
@@ -132,14 +179,19 @@ async def _async_upstream_inflight_delta(
 
 
 async def _close_async_response(resp: object) -> None:
-    close = getattr(resp, "aclose", None)
-    if close is not None:
-        result = close()
-        if asyncio.iscoroutine(result):
-            await result
+    """Close a real httpx response or a response-shaped test double.
+
+    ``httpx.Response`` exposes an async close method.  A few maintained unit
+    tests deliberately use lightweight response doubles whose ``close`` method
+    is synchronous, so the retry path must retain that compatibility without
+    assuming every response-shaped object is awaitable.
+    """
+    if isinstance(resp, httpx.Response):
+        await resp.aclose()
         return
+
     close = getattr(resp, "close", None)
-    if close is not None:
+    if callable(close):
         close()
 
 
@@ -151,12 +203,14 @@ async def _close_async_response(resp: object) -> None:
 class ConcurrencyLimiterMiddleware(BaseHTTPMiddleware):
     """Return HTTP 503 when MAX_CONCURRENCY in-flight requests are active."""
 
-    def __init__(self, app, max_concurrency: int = MAX_CONCURRENCY):
+    def __init__(self, app: ASGIApp, max_concurrency: int = MAX_CONCURRENCY) -> None:
         super().__init__(app)
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._max = max_concurrency
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # Management endpoints bypass the limit so /health always responds
         if request.url.path in ("/health", "/stats", "/stats/last", "/stats/session"):
             return await call_next(request)
@@ -190,7 +244,7 @@ def _should_intercept(url: str) -> bool:
 
 
 def _is_messages_endpoint(url: str) -> bool:
-    return "/messages" in url or "/chat/completions" in url
+    return any(endpoint in url for endpoint in ("/messages", "/chat/completions", "/responses"))
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +256,10 @@ def _estimate_tokens(body: bytes) -> int:
     try:
         data = json.loads(body)
         total = 0
-        for msg in data.get("messages", []):
+        messages = data.get("messages")
+        if not isinstance(messages, list):
+            messages = data.get("input", [])
+        for msg in messages:
             content = msg.get("content", "")
             if isinstance(content, str):
                 total += len(content) // 4
@@ -225,16 +282,17 @@ def _estimate_tokens(body: bytes) -> int:
 def _extract_response_tokens(body: bytes) -> int:
     try:
         usage = json.loads(body).get("usage", {})
-        return (
+        value = (
             usage.get("output_tokens")
             or usage.get("completion_tokens")
             or usage.get("total_tokens", 0)
         )
+        return value if isinstance(value, int) else 0
     except Exception:
         return 0
 
 
-def _parse_sse_tokens(sse_bytes: bytes) -> Dict[str, int]:
+def _parse_sse_tokens(sse_bytes: bytes) -> dict[str, int]:
     result = {"output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
     try:
         for line in sse_bytes.decode("utf-8", errors="replace").split("\n"):
@@ -264,7 +322,7 @@ def _parse_sse_tokens(sse_bytes: bytes) -> Dict[str, int]:
     return result
 
 
-def _build_forward_headers(request: Request, target_url: str) -> Dict[str, str]:
+def _build_forward_headers(request: Request, target_url: str) -> dict[str, str]:
     """Build headers to forward to the upstream provider."""
     from urllib.parse import urlparse
 
@@ -291,7 +349,9 @@ def _build_forward_headers(request: Request, target_url: str) -> Dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-def _run_pipeline_sync(ps, body: bytes, model: str, trace) -> tuple:
+def _run_pipeline_sync(
+    ps: ProxyServer, body: bytes, model: str, trace: PipelineTrace | None
+) -> tuple[bytes, int, int, int]:
     """
     Run the synchronous compression/injection pipeline in a thread.
     Returns (new_body, sent_tokens, raw_tokens, protected_tokens).
@@ -300,8 +360,7 @@ def _run_pipeline_sync(ps, body: bytes, model: str, trace) -> tuple:
         tokens = _estimate_tokens(body)
         return body, tokens, tokens, 0
     try:
-        result = ps.request_hook(body, model, trace)
-        return result
+        return ps.request_hook(body, model, trace)
     except Exception as exc:
         import logging as _logging
 
@@ -345,9 +404,10 @@ async def _forward_request(request: Request, target_url: str) -> Response:
         # Extract session ID from headers if available
         session_id = request.headers.get("X-Session-ID", None)
         size_alert = monitor.check_request_size(len(body), session_id=session_id)
-        if size_alert and ps.telemetry_events:
+        telemetry_events = getattr(ps, "telemetry_events", None)
+        if size_alert and telemetry_events:
             # Log alert to telemetry
-            ps.telemetry_events.append(
+            telemetry_events.append(
                 {
                     "type": "request_size_alert",
                     "timestamp": datetime.now().isoformat(),
@@ -403,10 +463,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
 
         # Google streaming is signalled by URL, not body: path contains
         # streamGenerateContent or query param ?alt=sse.
-        if not is_streaming and (
-            "streamGenerateContent" in target_url
-            or "alt=sse" in target_url
-        ):
+        if not is_streaming and ("streamGenerateContent" in target_url or "alt=sse" in target_url):
             is_streaming = True
 
         # Run pipeline in thread pool (sync code, must not block event loop)
@@ -532,7 +589,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
                 not in ("content-length", "transfer-encoding", "connection", "keep-alive")
             }
 
-            async def _inner_stream():
+            async def _inner_stream() -> AsyncIterator[bytes]:
                 nonlocal output_tokens, cache_read_tokens, cache_creation_tokens
                 _buf = bytearray()
                 try:
@@ -750,8 +807,8 @@ async def _forward_request(request: Request, target_url: str) -> Response:
 
 
 def _record_telemetry(
-    ps,
-    trace,
+    ps: ProxyServer,
+    trace: PipelineTrace | None,
     model: str,
     input_tokens: int,
     sent_input_tokens: int,
@@ -795,8 +852,8 @@ def _record_telemetry(
             try:
                 ps.compression_stats.record_compression(
                     model=model,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
+                    tokens_in=input_tokens,
+                    tokens_out=output_tokens,
                     ratio=ratio,
                     latency_ms=latency_ms,
                     status="ok",
@@ -893,11 +950,7 @@ async def handle_circuit_breakers(request: Request) -> JSONResponse:
 async def handle_sessions(request: Request) -> JSONResponse:
     from tokenpak.dashboard.session_filter import FilterParams
 
-    qs = (
-        str(request.query_string, "utf-8")
-        if isinstance(request.query_string, bytes)
-        else request.query_string
-    )  # type: ignore[attr-defined]
+    qs = request.url.query
     try:
         params = FilterParams.from_query_string(qs)
     except (ValueError, TypeError) as exc:
@@ -954,7 +1007,7 @@ async def handle_v1_proxy(request: Request) -> Response:
     return await _forward_request(request, target_url)
 
 
-async def handle_not_found(request: Request, exc=None) -> JSONResponse:
+async def handle_not_found(request: Request, exc: Exception | None = None) -> JSONResponse:
     return JSONResponse({"error": "not_found", "path": request.url.path}, status_code=404)
 
 
@@ -964,7 +1017,7 @@ async def handle_not_found(request: Request, exc=None) -> JSONResponse:
 
 
 @asynccontextmanager
-async def lifespan(app):
+async def lifespan(app: Starlette) -> AsyncIterator[None]:
     """ASGI lifespan: spin up httpx.AsyncClient on startup, close on shutdown."""
     global _async_client
     limits = httpx.Limits(
@@ -981,8 +1034,8 @@ async def lifespan(app):
 
     # ---- Background tasks: cooldown auto-clear + OAuth auto-refresh --------
     # Controlled by config keys: auth.auto_clear_cooldowns / auth.oauth_auto_refresh
-    _cooldown_clearer = None
-    _oauth_refresher = None
+    _cooldown_clearer: _BackgroundTask | None = None
+    _oauth_refresher: _BackgroundTask | None = None
     try:
         from tokenpak.core.config import get_config
 
@@ -1028,7 +1081,7 @@ async def lifespan(app):
 # ---------------------------------------------------------------------------
 
 
-def create_async_app(proxy_server) -> Starlette:
+def create_async_app(proxy_server: ProxyServer) -> Starlette:
     """
     Create the Starlette ASGI app, wired to the given ProxyServer instance.
 
@@ -1097,7 +1150,7 @@ async def _handle_connect_tunnel(
     await client_writer.drain()
 
     # Bridge bidirectionally until one side closes
-    async def relay(src_reader: asyncio.StreamReader, dst_writer: asyncio.StreamWriter):
+    async def relay(src_reader: asyncio.StreamReader, dst_writer: asyncio.StreamWriter) -> None:
         try:
             while True:
                 data = await src_reader.read(65536)
@@ -1134,15 +1187,15 @@ class _AsyncTCPProxy:
     This preserves CONNECT support while using Starlette for everything else.
     """
 
-    def __init__(self, host: str, port: int, uvicorn_port: int):
+    def __init__(self, host: str, port: int, uvicorn_port: int) -> None:
         self.host = host
         self.port = port
         self.uvicorn_port = uvicorn_port
-        self._server: Optional[asyncio.AbstractServer] = None
+        self._server: asyncio.AbstractServer | None = None
 
     async def _handle_connection(
         self, client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
-    ):
+    ) -> None:
         try:
             # Read the first line to detect CONNECT
             first_line = await asyncio.wait_for(client_reader.readline(), timeout=30)
@@ -1169,7 +1222,7 @@ class _AsyncTCPProxy:
                 uv_writer.write(first_line)
                 await uv_writer.drain()
 
-                async def relay_c_to_uv():
+                async def relay_c_to_uv() -> None:
                     try:
                         while True:
                             data = await client_reader.read(65536)
@@ -1185,7 +1238,7 @@ class _AsyncTCPProxy:
                         except Exception:
                             pass
 
-                async def relay_uv_to_c():
+                async def relay_uv_to_c() -> None:
                     try:
                         while True:
                             data = await uv_reader.read(65536)
@@ -1208,10 +1261,10 @@ class _AsyncTCPProxy:
                 except Exception:
                     pass
 
-    async def start(self):
+    async def start(self) -> None:
         self._server = await asyncio.start_server(self._handle_connection, self.host, self.port)
 
-    async def stop(self):
+    async def stop(self) -> None:
         if self._server:
             self._server.close()
             await self._server.wait_closed()
@@ -1223,10 +1276,10 @@ class _AsyncTCPProxy:
 
 
 async def run_async_proxy(
-    proxy_server,
+    proxy_server: ProxyServer,
     host: str = "127.0.0.1",
     port: int = PROXY_PORT,
-    shutdown_event: Optional[asyncio.Event] = None,
+    shutdown_event: asyncio.Event | None = None,
 ) -> None:
     """
     Run the async proxy: uvicorn (ASGI) on an internal port + asyncio TCP server
@@ -1266,10 +1319,14 @@ async def run_async_proxy(
         timeout_keep_alive=75,
         timeout_graceful_shutdown=int(proxy_server.shutdown_timeout),
     )
-    server = uvicorn.Server(config)
 
-    # Suppress uvicorn's default signal handlers (ProxyServer manages shutdown)
-    server.install_signal_handlers = lambda: None  # type: ignore[attr-defined]
+    class _TokenPakUvicornServer(uvicorn.Server):
+        """Uvicorn server whose lifecycle is governed by ``ProxyServer``."""
+
+        def install_signal_handlers(self) -> None:
+            return
+
+    server = _TokenPakUvicornServer(config)
 
     tasks = [asyncio.create_task(server.serve())]
 
@@ -1301,10 +1358,10 @@ async def run_async_proxy(
 
 
 def start_async_proxy_in_thread(
-    proxy_server,
+    proxy_server: ProxyServer,
     host: str = "127.0.0.1",
     port: int = PROXY_PORT,
-    shutdown_event: Optional[threading.Event] = None,
+    shutdown_event: threading.Event | None = None,
 ) -> threading.Thread:
     """
     Start the async proxy in a daemon thread with its own event loop.
@@ -1313,10 +1370,10 @@ def start_async_proxy_in_thread(
     ``shutdown_event`` is a threading.Event; when set, graceful shutdown begins.
     """
     _loop_ready = threading.Event()
-    _loop: Optional[asyncio.AbstractEventLoop] = None
-    _async_shutdown = None
+    _loop: asyncio.AbstractEventLoop | None = None
+    _async_shutdown: asyncio.Event | None = None
 
-    def _run():
+    def _run() -> None:
         nonlocal _loop, _async_shutdown
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -1328,13 +1385,13 @@ def start_async_proxy_in_thread(
         _loop_ready.set()
 
         # Monitor threading.Event in a background coroutine
-        async def _watch_shutdown():
+        async def _watch_shutdown() -> None:
             while shutdown_event and not shutdown_event.is_set():
                 await asyncio.sleep(0.5)
             if _async_shutdown:
                 _async_shutdown.set()
 
-        async def _main():
+        async def _main() -> None:
             await asyncio.gather(
                 run_async_proxy(proxy_server, host, port, _async_shutdown),
                 _watch_shutdown(),

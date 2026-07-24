@@ -78,6 +78,7 @@ def _get_install_id() -> str:
 def _get_version() -> str:
     try:
         from tokenpak import __version__
+
         return str(__version__)
     except Exception:
         return "unknown"
@@ -89,14 +90,13 @@ def _get_requests_24h() -> int:
         import sqlite3
 
         from tokenpak.core.paths import get_db_path
+
         db_path = get_db_path("telemetry.db")
         if not db_path.exists():
             return 0
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).timestamp()
         with sqlite3.connect(str(db_path)) as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM tp_events WHERE ts >= ?", (cutoff,)
-            ).fetchone()
+            row = conn.execute("SELECT COUNT(*) FROM tp_events WHERE ts >= ?", (cutoff,)).fetchone()
             return int(row[0]) if row else 0
     except Exception:
         return 0
@@ -108,6 +108,7 @@ def _get_models_24h() -> list[str]:
         import sqlite3
 
         from tokenpak.core.paths import get_db_path
+
         db_path = get_db_path("telemetry.db")
         if not db_path.exists():
             return []
@@ -177,6 +178,7 @@ def _flush_buffer(url: str, timeout: int) -> None:
 
 def _http_post(url: str, payload: dict, timeout: int = 10) -> None:
     import urllib.request
+
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url,
@@ -199,6 +201,7 @@ def _heartbeat_loop(url: str, interval: int) -> None:
     while True:
         try:
             from tokenpak.agent.config import get_metrics_enabled
+
             if not get_metrics_enabled():
                 time.sleep(interval)
                 continue
@@ -210,7 +213,9 @@ def _heartbeat_loop(url: str, interval: int) -> None:
         try:
             _flush_buffer(url, timeout=10)
             _http_post(url, payload, timeout=10)
-            logger.debug("install metrics: heartbeat sent (install_id=%s)", payload["install_id"][:8])
+            logger.debug(
+                "install metrics: heartbeat sent (install_id=%s)", payload["install_id"][:8]
+            )
         except Exception as exc:
             logger.debug("install metrics: send failed (%s) — buffered", exc)
             _buffer_payload(payload)

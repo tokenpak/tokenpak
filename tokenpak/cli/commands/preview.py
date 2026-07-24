@@ -87,7 +87,7 @@ def cmd_preview(args):
         print(f"Input:     {result.get('input_tokens', 0):,} tokens")
         print(f"Output:    {result.get('output_tokens', 0):,} tokens")
         print(
-            f"Saved:     {result.get('saved_tokens', 0):,} tokens ({result.get('compression_ratio', 0.0)*100:.1f}%)"
+            f"Saved:     {result.get('saved_tokens', 0):,} tokens ({result.get('compression_ratio', 0.0) * 100:.1f}%)"
         )
         print()
         print("Retained blocks:")
@@ -110,7 +110,7 @@ def cmd_preview(args):
 
         print(f"  Input:          {inp:,} tokens")
         print(f"  → Compressed:   {out:,} tokens")
-        print(f"  Savings:        {saved:,} tokens ({ratio*100:.1f}% reduction)")
+        print(f"  Savings:        {saved:,} tokens ({ratio * 100:.1f}% reduction)")
         print()
 
         retained = result.get("retained_blocks", [])

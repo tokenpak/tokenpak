@@ -20,20 +20,22 @@ traffic, not guaranteeing 100% coverage across every restart edge case. LRU
 cap of 100 sessions prevents unbounded memory growth; oldest session is evicted
 when the cap is reached.
 """
+
 from __future__ import annotations
 
 import collections
 import json
 import sqlite3
 import threading
-from typing import List, NamedTuple, Optional
+from typing import Any, List, NamedTuple, Optional
 
 # ---------------------------------------------------------------------------
 # Event representation
 # ---------------------------------------------------------------------------
 
+
 class CacheInvalidatorEvent(NamedTuple):
-    event_type: str   # tools_changed | system_changed | thinking_mode_changed | ...
+    event_type: str  # tools_changed | system_changed | thinking_mode_changed | ...
     before_value: str  # JSON or summary string
     after_value: str
 
@@ -42,6 +44,7 @@ class CacheInvalidatorEvent(NamedTuple):
 # In-memory LRU session body cache
 # Cap: 100 sessions. Oldest session evicted on overflow.
 # ---------------------------------------------------------------------------
+
 
 class _SessionBodyCache:
     """Thread-safe in-memory LRU cache of last-seen request body per session_id."""
@@ -92,7 +95,8 @@ def _get_session_cache() -> _SessionBodyCache:
 # Comparison helpers
 # ---------------------------------------------------------------------------
 
-def _canonical_tools(tools) -> str:
+
+def _canonical_tools(tools: Any) -> str:
     """Normalize tools array to a canonical JSON string for stable comparison.
 
     Sorts by tool name so insertion-order differences don't produce false positives.
@@ -109,7 +113,7 @@ def _canonical_tools(tools) -> str:
         return json.dumps(tools, sort_keys=True, ensure_ascii=False)
 
 
-def _has_images(messages) -> bool:
+def _has_images(messages: Any) -> bool:
     """Return True if any message content block has type 'image'."""
     if not isinstance(messages, list):
         return False
@@ -127,6 +131,7 @@ def _has_images(messages) -> bool:
 # ---------------------------------------------------------------------------
 # Main detector
 # ---------------------------------------------------------------------------
+
 
 def _detect_cache_invalidators(
     prev_body: bytes,
@@ -198,11 +203,13 @@ def _detect_cache_invalidators(
     prev_has_images = _has_images(prev.get("messages", []))
     curr_has_images = _has_images(curr.get("messages", []))
     if prev_has_images != curr_has_images:
-        events.append(CacheInvalidatorEvent(
-            "image_mode_changed",
-            "has_images" if prev_has_images else "no_images",
-            "has_images" if curr_has_images else "no_images",
-        ))
+        events.append(
+            CacheInvalidatorEvent(
+                "image_mode_changed",
+                "has_images" if prev_has_images else "no_images",
+                "has_images" if curr_has_images else "no_images",
+            )
+        )
 
     return events
 
@@ -211,9 +218,10 @@ def _detect_cache_invalidators(
 # DB write helper
 # ---------------------------------------------------------------------------
 
+
 def _write_cache_invalidator_events(
     db_path: str,
-    request_id,
+    request_id: Any,
     session_id: str,
     events: List[CacheInvalidatorEvent],
 ) -> None:

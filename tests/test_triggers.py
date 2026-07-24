@@ -10,10 +10,11 @@ Tests:
 - Log management
 """
 
-
 import pytest
 
-pytest.importorskip("tokenpak._internal.macros.hooks", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.macros.hooks", reason="module not available in current build"
+)
 import sys
 import tempfile
 from pathlib import Path
@@ -63,10 +64,7 @@ class TestTrigger:
     def test_trigger_creation(self):
         """Should create trigger with all fields."""
         trigger = Trigger(
-            id="test123",
-            event_type="file:changed",
-            pattern="*.py",
-            action="echo hello"
+            id="test123", event_type="file:changed", pattern="*.py", action="echo hello"
         )
         assert trigger.id == "test123"
         assert trigger.event_type == "file:changed"
@@ -76,12 +74,7 @@ class TestTrigger:
 
     def test_file_pattern_matching(self):
         """Should match file paths with glob patterns."""
-        trigger = Trigger(
-            id="t1",
-            event_type="file:changed",
-            pattern="*.py",
-            action="test"
-        )
+        trigger = Trigger(id="t1", event_type="file:changed", pattern="*.py", action="test")
 
         assert trigger.matches("file:changed", "test.py") is True
         assert trigger.matches("file:changed", "src/main.py") is True
@@ -89,12 +82,7 @@ class TestTrigger:
 
     def test_wildcard_pattern(self):
         """Should match any data with * pattern."""
-        trigger = Trigger(
-            id="t1",
-            event_type="git:push",
-            pattern="*",
-            action="test"
-        )
+        trigger = Trigger(id="t1", event_type="git:push", pattern="*", action="test")
 
         assert trigger.matches("git:push", "main") is True
         assert trigger.matches("git:push", "feature/test") is True
@@ -102,23 +90,14 @@ class TestTrigger:
     def test_disabled_trigger_no_match(self):
         """Disabled triggers should not match."""
         trigger = Trigger(
-            id="t1",
-            event_type="file:changed",
-            pattern="*",
-            action="test",
-            enabled=False
+            id="t1", event_type="file:changed", pattern="*", action="test", enabled=False
         )
 
         assert trigger.matches("file:changed", "test.py") is False
 
     def test_wrong_event_type_no_match(self):
         """Should not match different event types."""
-        trigger = Trigger(
-            id="t1",
-            event_type="file:changed",
-            pattern="*",
-            action="test"
-        )
+        trigger = Trigger(id="t1", event_type="file:changed", pattern="*", action="test")
 
         assert trigger.matches("git:push", "test.py") is False
 
@@ -129,7 +108,7 @@ class TestTrigger:
             event_type="file:changed",
             pattern="*.py",
             action="echo test",
-            description="Test trigger"
+            description="Test trigger",
         )
 
         data = trigger.to_dict()
@@ -151,18 +130,13 @@ class TestTriggerRegistry:
         with tempfile.TemporaryDirectory() as tmpdir:
             triggers_path = Path(tmpdir) / "triggers.json"
             log_path = Path(tmpdir) / "log.json"
-            registry = TriggerRegistry(
-                triggers_path=triggers_path,
-                log_path=log_path
-            )
+            registry = TriggerRegistry(triggers_path=triggers_path, log_path=log_path)
             yield registry
 
     def test_add_trigger(self, temp_registry):
         """Should add and persist trigger."""
         trigger = temp_registry.add(
-            event_type="file:changed",
-            pattern="*.py",
-            action="echo modified"
+            event_type="file:changed", pattern="*.py", action="echo modified"
         )
 
         assert trigger.id is not None
@@ -176,16 +150,11 @@ class TestTriggerRegistry:
 
     def test_add_trigger_persists(self, temp_registry):
         """Added triggers should persist to disk."""
-        trigger = temp_registry.add(
-            event_type="git:push",
-            pattern="*",
-            action="tokenpak index ."
-        )
+        trigger = temp_registry.add(event_type="git:push", pattern="*", action="tokenpak index .")
 
         # Create new registry pointing to same files
         new_registry = TriggerRegistry(
-            triggers_path=temp_registry.triggers_path,
-            log_path=temp_registry.log_path
+            triggers_path=temp_registry.triggers_path, log_path=temp_registry.log_path
         )
 
         retrieved = new_registry.get(trigger.id)
@@ -194,11 +163,7 @@ class TestTriggerRegistry:
 
     def test_remove_trigger(self, temp_registry):
         """Should remove trigger."""
-        trigger = temp_registry.add(
-            event_type="file:changed",
-            pattern="*",
-            action="test"
-        )
+        trigger = temp_registry.add(event_type="file:changed", pattern="*", action="test")
 
         assert temp_registry.remove(trigger.id) is True
         assert temp_registry.get(trigger.id) is None
@@ -233,11 +198,7 @@ class TestTriggerRegistry:
 
     def test_fire_triggers(self, temp_registry):
         """Should fire matching triggers and log results."""
-        temp_registry.add(
-            event_type="file:changed",
-            pattern="*.py",
-            action="echo 'file changed'"
-        )
+        temp_registry.add(event_type="file:changed", pattern="*.py", action="echo 'file changed'")
 
         entries = temp_registry.fire("file:changed", "test.py")
 
@@ -247,11 +208,7 @@ class TestTriggerRegistry:
 
     def test_fire_dry_run(self, temp_registry):
         """Dry run should not execute actions."""
-        temp_registry.add(
-            event_type="file:changed",
-            pattern="*",
-            action="echo 'should not run'"
-        )
+        temp_registry.add(event_type="file:changed", pattern="*", action="echo 'should not run'")
 
         entries = temp_registry.fire("file:changed", "test.py", dry_run=True)
 
@@ -269,11 +226,7 @@ class TestTriggerRegistry:
 
     def test_fire_with_substitution(self, temp_registry):
         """Should substitute $EVENT_DATA in action."""
-        temp_registry.add(
-            event_type="file:changed",
-            pattern="*",
-            action="echo $EVENT_DATA"
-        )
+        temp_registry.add(event_type="file:changed", pattern="*", action="echo $EVENT_DATA")
 
         entries = temp_registry.fire("file:changed", "myfile.py")
 
@@ -310,8 +263,9 @@ class TestCLIIntegration:
     def tmp_store(self, tmp_path):
         """Patch the trigger store to use a temp directory."""
         from tokenpak._internal.triggers.store import TriggerStore
+
         store = TriggerStore(config_path=tmp_path / "triggers.yaml")
-        with patch('tokenpak.cli._trigger_store', return_value=store):
+        with patch("tokenpak.cli._trigger_store", return_value=store):
             yield store
 
     def test_add_command(self, tmp_store, capsys):

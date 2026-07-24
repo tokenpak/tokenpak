@@ -30,6 +30,7 @@ from tokenpak.cli.commands import menu as menumod
 # helpers
 # ---------------------------------------------------------------------------
 
+
 def _record_exec(monkeypatch):
     """Replace menu._exec with a recorder; returns the list of (cmd, args)."""
     calls: list[tuple[str, str]] = []
@@ -69,6 +70,7 @@ def _set_tty(monkeypatch, interactive):
 # resolver
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "text,expected",
     [
@@ -78,7 +80,7 @@ def _set_tty(monkeypatch, interactive):
         ("4", "cost"),
         ("5", "config"),
         ("6", "permissions show"),
-        ("7", "companion"),   # sentinel -> caller shows launcher hint
+        ("7", "companion"),  # sentinel -> caller shows launcher hint
         ("8", "doctor"),
         ("9", "help"),
     ],
@@ -90,17 +92,17 @@ def test_resolve_numeric_selection(text, expected):
 @pytest.mark.parametrize(
     "text,expected",
     [
-        ("start", "start"),      # canonical command name
+        ("start", "start"),  # canonical command name
         ("demo", "demo"),
         ("status", "status"),
-        ("health", "status"),    # alias
+        ("health", "status"),  # alias
         ("cost", "cost"),
-        ("spend", "cost"),       # alias
+        ("spend", "cost"),  # alias
         ("config", "config"),
         ("doctor", "doctor"),
-        ("diag", "doctor"),      # alias
+        ("diag", "doctor"),  # alias
         ("help", "help"),
-        ("claude", "claude"),    # direct launcher command
+        ("claude", "claude"),  # direct launcher command
         ("codex", "codex"),
         ("companion", "companion"),
         ("session", "companion"),  # companion alias -> sentinel
@@ -128,6 +130,7 @@ def test_resolve_table_targets_are_real_commands():
 # ---------------------------------------------------------------------------
 # interactive dispatch
 # ---------------------------------------------------------------------------
+
 
 def test_numeric_selection_dispatches_command(monkeypatch):
     _set_tty(monkeypatch, True)
@@ -185,6 +188,7 @@ def test_claude_typed_directly_dispatches(monkeypatch):
 # clean exits
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("word", ["q", "quit", "exit"])
 def test_quit_words_exit_without_dispatch(monkeypatch, word):
     _set_tty(monkeypatch, True)
@@ -225,6 +229,7 @@ def test_ctrl_c_during_command_exits_cleanly(monkeypatch):
 # non-interactive: display-only, never block
 # ---------------------------------------------------------------------------
 
+
 def test_non_interactive_stream_is_display_only(monkeypatch, capsys):
     _set_tty(monkeypatch, False)
     calls = _record_exec(monkeypatch)
@@ -257,6 +262,7 @@ def test_stdout_not_tty_stays_display_only(monkeypatch):
 # ---------------------------------------------------------------------------
 # run_menu routing
 # ---------------------------------------------------------------------------
+
 
 def test_picker_unavailable_routes_to_fallback(monkeypatch):
     routed = {}

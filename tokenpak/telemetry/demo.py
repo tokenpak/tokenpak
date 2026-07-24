@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import random
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 
 from .proxy_collector import TelemetryCollector as ProxyCollector
 
@@ -43,7 +43,7 @@ def print_demo(request_id: Optional[str] = None) -> None:
     print(run_demo(request_id=request_id))
 
 
-def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
+def seed_demo_data(count: int = 500, hours: int = 24) -> dict[str, Any]:
     """Generate realistic demo telemetry events for dashboard population.
 
     Writes `count` compression events spread across `hours` time window to
@@ -170,7 +170,7 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
     }
 
 
-def clear_demo_data() -> dict:
+def clear_demo_data() -> dict[str, Any]:
     """Remove all demo data from telemetry storage.
 
     Reads ~/.tokenpak/compression_events.jsonl, filters out records with

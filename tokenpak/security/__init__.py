@@ -10,6 +10,7 @@ Free-tier subset of the I4 Security/PII/DLP architecture component:
 gitleaks-pattern secret scanner (warn/redact/block modes).
 Full PII/DLP remains Enterprise (I4).
 """
+
 from __future__ import annotations
 
 import json
@@ -91,6 +92,7 @@ def safe_temp_file(
 ) -> "tuple[int, str]":
     """Create a temporary file with mode 600 and return (fd, path)."""
     import tempfile as _tempfile
+
     fd, path = _tempfile.mkstemp(suffix=suffix, prefix=prefix, dir=dir)
     os.chmod(path, _CONFIG_FILE_MODE)
     return fd, path
@@ -128,4 +130,15 @@ def ensure_config_permissions(path: Path) -> bool:
     return True
 
 
-__all__ = ['DLPScanner', 'DLPMatch', 'DLPBlockError', 'secure_write_config', 'sanitize_model_name', 'ensure_config_permissions', 'redact_pii', 'safe_temp_file', 'sanitize_cli_arg', 'dlp']
+__all__ = [
+    "DLPScanner",
+    "DLPMatch",
+    "DLPBlockError",
+    "secure_write_config",
+    "sanitize_model_name",
+    "ensure_config_permissions",
+    "redact_pii",
+    "safe_temp_file",
+    "sanitize_cli_arg",
+    "dlp",
+]

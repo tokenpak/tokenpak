@@ -22,25 +22,66 @@ class Intent(Enum):
 
 
 # Single source of truth for intent vocab — extend here, not in five places.
-_POSITIVE = frozenset({
-    "yes", "y", "yeah", "yep", "yup", "yea",
-    "ok", "okay", "k",
-    "go", "go ahead", "go for it", "send it",
-    "proceed", "continue", "approve", "approved",
-    "sure", "fine", "alright", "all right",
-    "do it", "run it", "ship it", "let's go", "lets go",
-    "confirm", "confirmed",
-})
+_POSITIVE = frozenset(
+    {
+        "yes",
+        "y",
+        "yeah",
+        "yep",
+        "yup",
+        "yea",
+        "ok",
+        "okay",
+        "k",
+        "go",
+        "go ahead",
+        "go for it",
+        "send it",
+        "proceed",
+        "continue",
+        "approve",
+        "approved",
+        "sure",
+        "fine",
+        "alright",
+        "all right",
+        "do it",
+        "run it",
+        "ship it",
+        "let's go",
+        "lets go",
+        "confirm",
+        "confirmed",
+    }
+)
 
-_NEGATIVE = frozenset({
-    "no", "n", "nope", "nah",
-    "stop", "halt", "kill", "kill it", "cancel",
-    "quit", "exit", "abort", "block",
-    "deny", "denied", "reject", "rejected",
-    "don't", "dont", "do not",
-    "nevermind", "never mind",
-    "skip",
-})
+_NEGATIVE = frozenset(
+    {
+        "no",
+        "n",
+        "nope",
+        "nah",
+        "stop",
+        "halt",
+        "kill",
+        "kill it",
+        "cancel",
+        "quit",
+        "exit",
+        "abort",
+        "block",
+        "deny",
+        "denied",
+        "reject",
+        "rejected",
+        "don't",
+        "dont",
+        "do not",
+        "nevermind",
+        "never mind",
+        "skip",
+    }
+)
 
 
 def _last_user_text(body: bytes) -> str:

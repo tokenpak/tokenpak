@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for CompanionConfig — env var loading and profile overrides."""
+
 from __future__ import annotations
 
 import os
@@ -11,6 +12,7 @@ from tokenpak.companion.config import CompanionConfig
 # ---------------------------------------------------------------------------
 # Default values
 # ---------------------------------------------------------------------------
+
 
 def test_default_config_enabled():
     """Default config has companion enabled."""
@@ -57,6 +59,7 @@ def test_default_prune_threshold():
 # ---------------------------------------------------------------------------
 # Env var overrides
 # ---------------------------------------------------------------------------
+
 
 def test_env_disable_companion():
     """TOKENPAK_COMPANION_ENABLED=0 disables the companion."""
@@ -139,6 +142,7 @@ def test_env_prune_threshold():
 # Profile overrides
 # ---------------------------------------------------------------------------
 
+
 def test_profile_lean_lowers_threshold():
     """lean profile sets prune_threshold to 20000."""
     with patch.dict(os.environ, {"TOKENPAK_COMPANION_PROFILE": "lean"}):
@@ -169,6 +173,7 @@ def test_profile_balanced_no_override():
 # ---------------------------------------------------------------------------
 # run_dir property
 # ---------------------------------------------------------------------------
+
 
 def test_run_dir_is_under_home():
     """run_dir is always inside ~/.tokenpak/companion/run."""

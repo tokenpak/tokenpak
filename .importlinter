@@ -41,7 +41,7 @@ ignore_imports =
     tokenpak.core.runtime.proxy -> tokenpak.proxy.request_pipeline
     tokenpak.core.runtime.proxy -> tokenpak.proxy.monitor
     tokenpak.core.runtime.proxy -> tokenpak.telemetry.monitoring.server
-    tokenpak.core.registry.claude_code.adapter -> tokenpak.proxy
+    tokenpak.core.registry.claude_code.adapter -> tokenpak.proxy.request
     ; Group 2 — orchestration.commands -> _cli_core monolith (IMP-012)
     tokenpak.orchestration.commands -> tokenpak._cli_core
     ; Group 3 — proxy hosts entrypoint surfaces (IMP-013..IMP-031)

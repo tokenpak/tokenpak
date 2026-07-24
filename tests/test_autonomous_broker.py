@@ -1,6 +1,5 @@
 """Unit tests for Autonomous Broker (Phase 3.2)."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.broker", reason="module not available in current build")
@@ -22,8 +21,8 @@ from tokenpak.routing_ledger import RoutingLedger
 # ---------------------------------------------------------------------------
 
 _TIERS = {
-    "cheap-model":   1,
-    "mid-model":     2,
+    "cheap-model": 1,
+    "mid-model": 2,
     "premium-model": 3,
 }
 
@@ -35,6 +34,7 @@ def _make_broker(tmpdir, tiers=None, min_samples=5):
     tiers = tiers or _TIERS
     # Write tiers to a temp file
     import json
+
     tiers_path = os.path.join(tmpdir, "model_tiers.json")
     with open(tiers_path, "w") as f:
         json.dump(tiers, f)
@@ -48,8 +48,9 @@ def _make_broker(tmpdir, tiers=None, min_samples=5):
     return broker
 
 
-def _flood_ledger(ledger: RoutingLedger, model: str, task_type: str,
-                  n_accepted: int, n_rejected: int = 0):
+def _flood_ledger(
+    ledger: RoutingLedger, model: str, task_type: str, n_accepted: int, n_rejected: int = 0
+):
     """Log N accepted + M rejected transactions for a (model, task_type)."""
     # Query that produces the right task_type
     query_map = {
@@ -73,10 +74,11 @@ def _flood_ledger(ledger: RoutingLedger, model: str, task_type: str,
 # Model tier helpers
 # ---------------------------------------------------------------------------
 
+
 class TestModelTiers:
     def test_get_tier_known_model(self):
         assert get_tier("cheap-model", _TIERS) == 1
-        assert get_tier("mid-model",   _TIERS) == 2
+        assert get_tier("mid-model", _TIERS) == 2
         assert get_tier("premium-model", _TIERS) == 3
 
     def test_get_tier_unknown_defaults_to_2(self):
@@ -109,6 +111,7 @@ class TestModelTiers:
 # Confidence gate
 # ---------------------------------------------------------------------------
 
+
 class TestConfidenceGate:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -137,6 +140,7 @@ class TestConfidenceGate:
 # Downgrade logic
 # ---------------------------------------------------------------------------
 
+
 class TestDowngrade:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -154,15 +158,14 @@ class TestDowngrade:
 
     def test_no_downgrade_below_threshold(self):
         # cheap-model only 80% acceptance (< 95%)
-        _flood_ledger(self.broker._ledger, "cheap-model", "CODING",
-                      n_accepted=8, n_rejected=2)
+        _flood_ledger(self.broker._ledger, "cheap-model", "CODING", n_accepted=8, n_rejected=2)
         _flood_ledger(self.broker._ledger, "mid-model", "CODING", n_accepted=5)
         decision = self.broker.route("mid-model", "CODING", complexity_score=3.0)
         assert decision.action != "downgrade"
 
     def test_downgrade_badge_contains_model_name(self):
         _flood_ledger(self.broker._ledger, "cheap-model", "CODING", n_accepted=10)
-        _flood_ledger(self.broker._ledger, "mid-model",   "CODING", n_accepted=5)
+        _flood_ledger(self.broker._ledger, "mid-model", "CODING", n_accepted=5)
         decision = self.broker.route("mid-model", "CODING", complexity_score=3.0)
         if decision.action == "downgrade":
             assert "cheap-model" in decision.badge
@@ -170,7 +173,7 @@ class TestDowngrade:
 
     def test_downgrade_logs_routing_action(self):
         _flood_ledger(self.broker._ledger, "cheap-model", "CODING", n_accepted=10)
-        _flood_ledger(self.broker._ledger, "mid-model",   "CODING", n_accepted=5)
+        _flood_ledger(self.broker._ledger, "mid-model", "CODING", n_accepted=5)
         decision = self.broker.route("mid-model", "CODING", complexity_score=3.0)
         # Decision carries the action
         if decision.action == "downgrade":
@@ -180,7 +183,7 @@ class TestDowngrade:
     def test_no_downgrade_when_cheap_has_insufficient_samples(self):
         # cheap-model only 3 samples (< min_samples=5) — not enough data
         _flood_ledger(self.broker._ledger, "cheap-model", "CODING", n_accepted=3)
-        _flood_ledger(self.broker._ledger, "mid-model",   "CODING", n_accepted=5)
+        _flood_ledger(self.broker._ledger, "mid-model", "CODING", n_accepted=5)
         decision = self.broker.route("mid-model", "CODING", complexity_score=3.0)
         assert decision.action != "downgrade"
 
@@ -189,6 +192,7 @@ class TestDowngrade:
 # Upgrade logic
 # ---------------------------------------------------------------------------
 
+
 class TestUpgrade:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -196,8 +200,7 @@ class TestUpgrade:
 
     def test_upgrade_triggers_on_complex_low_acceptance(self):
         # mid-model: 40% acceptance on REASONING (< 50%)
-        _flood_ledger(self.broker._ledger, "mid-model", "REASONING",
-                      n_accepted=2, n_rejected=3)
+        _flood_ledger(self.broker._ledger, "mid-model", "REASONING", n_accepted=2, n_rejected=3)
         # complexity > 7.0 → should upgrade to premium-model
         decision = self.broker.route("mid-model", "REASONING", complexity_score=8.0)
         assert decision.action == "upgrade"
@@ -205,21 +208,18 @@ class TestUpgrade:
 
     def test_no_upgrade_below_complexity_threshold(self):
         # mid-model: 40% acceptance but complexity is low
-        _flood_ledger(self.broker._ledger, "mid-model", "CODING",
-                      n_accepted=2, n_rejected=3)
+        _flood_ledger(self.broker._ledger, "mid-model", "CODING", n_accepted=2, n_rejected=3)
         decision = self.broker.route("mid-model", "CODING", complexity_score=5.0)
         assert decision.action != "upgrade"
 
     def test_no_upgrade_when_acceptance_adequate(self):
         # mid-model: 70% acceptance (> 50%) even though complexity is high
-        _flood_ledger(self.broker._ledger, "mid-model", "REASONING",
-                      n_accepted=7, n_rejected=3)
+        _flood_ledger(self.broker._ledger, "mid-model", "REASONING", n_accepted=7, n_rejected=3)
         decision = self.broker.route("mid-model", "REASONING", complexity_score=9.0)
         assert decision.action != "upgrade"
 
     def test_upgrade_badge_present(self):
-        _flood_ledger(self.broker._ledger, "mid-model", "REASONING",
-                      n_accepted=2, n_rejected=3)
+        _flood_ledger(self.broker._ledger, "mid-model", "REASONING", n_accepted=2, n_rejected=3)
         decision = self.broker.route("mid-model", "REASONING", complexity_score=8.0)
         if decision.action == "upgrade":
             assert "🔵" in decision.badge
@@ -227,8 +227,7 @@ class TestUpgrade:
 
     def test_no_upgrade_from_top_tier(self):
         # premium-model: 40% acceptance, but nothing above it
-        _flood_ledger(self.broker._ledger, "premium-model", "REASONING",
-                      n_accepted=2, n_rejected=3)
+        _flood_ledger(self.broker._ledger, "premium-model", "REASONING", n_accepted=2, n_rejected=3)
         decision = self.broker.route("premium-model", "REASONING", complexity_score=9.0)
         assert decision.action != "upgrade"
 
@@ -236,6 +235,7 @@ class TestUpgrade:
 # ---------------------------------------------------------------------------
 # force_model bypass
 # ---------------------------------------------------------------------------
+
 
 class TestForceModel:
     def setup_method(self):
@@ -245,10 +245,8 @@ class TestForceModel:
     def test_force_model_bypasses_all_routing(self):
         # Even with sufficient data, force_model skips everything
         _flood_ledger(self.broker._ledger, "cheap-model", "CODING", n_accepted=10)
-        _flood_ledger(self.broker._ledger, "mid-model",   "CODING", n_accepted=5)
-        decision = self.broker.route(
-            "mid-model", "CODING", complexity_score=3.0, force_model=True
-        )
+        _flood_ledger(self.broker._ledger, "mid-model", "CODING", n_accepted=5)
+        decision = self.broker.route("mid-model", "CODING", complexity_score=3.0, force_model=True)
         assert decision.action == "passthrough"
         assert decision.selected_model == "mid-model"
         assert "force_model" in decision.reason
@@ -262,6 +260,7 @@ class TestForceModel:
 # Cooldown after rejected downgrade
 # ---------------------------------------------------------------------------
 
+
 class TestCooldown:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -270,7 +269,7 @@ class TestCooldown:
     def test_cooldown_after_rejected_downgrade(self):
         # Set up a downgrade scenario
         _flood_ledger(self.broker._ledger, "cheap-model", "CODING", n_accepted=10)
-        _flood_ledger(self.broker._ledger, "mid-model",   "CODING", n_accepted=5)
+        _flood_ledger(self.broker._ledger, "mid-model", "CODING", n_accepted=5)
 
         # First route → should downgrade
         d1 = self.broker.route("mid-model", "CODING", complexity_score=3.0)
@@ -278,7 +277,10 @@ class TestCooldown:
 
         # Log the downgrade transaction explicitly with routing_action=downgrade
         txn_id = self.broker._ledger.log_transaction(
-            "cheap-model", "write code", [], "response",
+            "cheap-model",
+            "write code",
+            [],
+            "response",
             routing_action="downgrade",
         )
         # Record rejection → triggers cooldown
@@ -291,7 +293,7 @@ class TestCooldown:
     def test_cooldown_expires_after_n_calls(self):
         # Use 50 accepts so 1 rejection still leaves rate > 95% (50/51 ≈ 98%)
         _flood_ledger(self.broker._ledger, "cheap-model", "CODING", n_accepted=50)
-        _flood_ledger(self.broker._ledger, "mid-model",   "CODING", n_accepted=5)
+        _flood_ledger(self.broker._ledger, "mid-model", "CODING", n_accepted=5)
 
         txn_id = self.broker._ledger.log_transaction(
             "cheap-model", "write code", [], "", routing_action="downgrade"
@@ -311,6 +313,7 @@ class TestCooldown:
 # record_outcome + Elo integration
 # ---------------------------------------------------------------------------
 
+
 class TestRecordOutcome:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -322,7 +325,7 @@ class TestRecordOutcome:
         task_type = txn["task_type"]
         before = self.broker._elo.get_elo("mid-model", task_type)
         self.broker.record_outcome(txn_id, accepted=True)
-        after  = self.broker._elo.get_elo("mid-model", task_type)
+        after = self.broker._elo.get_elo("mid-model", task_type)
         assert after > before
 
     def test_record_outcome_rejected_updates_elo(self):
@@ -331,7 +334,7 @@ class TestRecordOutcome:
         task_type = txn["task_type"]
         before = self.broker._elo.get_elo("mid-model", task_type)
         self.broker.record_outcome(txn_id, accepted=False)
-        after  = self.broker._elo.get_elo("mid-model", task_type)
+        after = self.broker._elo.get_elo("mid-model", task_type)
         assert after < before
 
     def test_record_outcome_returns_true_on_success(self):
@@ -348,6 +351,7 @@ class TestRecordOutcome:
 # RoutingDecision fields
 # ---------------------------------------------------------------------------
 
+
 class TestRoutingDecision:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -362,7 +366,7 @@ class TestRoutingDecision:
 
     def test_downgrade_fields_populated(self):
         _flood_ledger(self.broker._ledger, "cheap-model", "CODING", n_accepted=10)
-        _flood_ledger(self.broker._ledger, "mid-model",   "CODING", n_accepted=5)
+        _flood_ledger(self.broker._ledger, "mid-model", "CODING", n_accepted=5)
         d = self.broker.route("mid-model", "CODING", complexity_score=3.0)
         if d.action == "downgrade":
             assert d.original_model != d.selected_model

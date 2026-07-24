@@ -18,7 +18,7 @@ Usage:
 """
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from .span_extractor import SpanExtractor
 
@@ -51,7 +51,7 @@ class EvidenceItem:
             f'score:{self.score:.2f}, text:"{escaped_text}"}}'
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str | float]:
         return {
             "src": self.src,
             "ref": self.ref,
@@ -82,13 +82,13 @@ class EvidencePack:
 
     def __init__(self, use_reranker: bool = False):
         self.extractor = SpanExtractor(use_reranker=use_reranker)
-        self.items: List[EvidenceItem] = []
+        self.items: list[EvidenceItem] = []
 
     # ── Builders ─────────────────────────────────────────────────────────────
 
     def add_from_memory(
         self,
-        memory_chunks: List[dict],
+        memory_chunks: list[dict[str, object]],
         query: str,
         max_items: int = 10,
         max_tokens_each: int = 50,
@@ -99,7 +99,10 @@ class EvidencePack:
         Expected chunk keys: id (or chunk_id), text
         """
         for chunk in memory_chunks[:max_items]:
-            chunk_text = chunk.get("text", "")
+            chunk_text_value = chunk.get("text", "")
+            if not isinstance(chunk_text_value, str):
+                continue
+            chunk_text = chunk_text_value
             if not chunk_text.strip():
                 continue
 

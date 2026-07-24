@@ -11,16 +11,24 @@ Usage:
 
 from __future__ import annotations
 
+__all__ = (
+    "DEFAULT_THRESHOLDS",
+    "Insight",
+    "InsightEngine",
+    "generate_insights",
+)
+
+
 import sqlite3
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Optional, TypedDict
 
 # ---------------------------------------------------------------------------
 # Thresholds (configurable via subclass or constructor kwargs)
 # ---------------------------------------------------------------------------
-DEFAULT_THRESHOLDS = {
+DEFAULT_THRESHOLDS: dict[str, float] = {
     "savings_change_pct_warn": -10.0,  # warn if savings drop > 10%
     "savings_change_pct_good": 5.0,  # celebrate if savings rise > 5%
     "cost_spike_multiplier": 1.5,  # alert if daily cost > 1.5× avg
@@ -37,6 +45,32 @@ DEFAULT_THRESHOLDS = {
 _SEVERITY_ORDER = {"alert": 0, "warning": 1, "success": 2, "info": 3}
 
 
+class PeriodMetrics(TypedDict):
+    total_requests: int
+    total_tokens: int
+    total_cost: float
+    total_savings: float
+    avg_raw_tokens: float
+    avg_final_tokens: float
+
+
+class ModelBreakdown(TypedDict):
+    model: str
+    cost: float
+    requests: int
+
+
+class DailyCost(TypedDict):
+    date: str
+    daily_cost: float
+
+
+class ErrorRate(TypedDict):
+    total: int
+    errors: int
+    rate: float
+
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -51,7 +85,7 @@ class Insight:
     delta: Optional[float] = None  # Change value (e.g. 0.12 = +12%)
     action: Optional[str] = None  # Suggested action
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str | float | None]:
         return {
             "type": self.type,
             "title": self.title,
@@ -82,8 +116,9 @@ class InsightEngine:
         thresholds: Override default thresholds dict.
     """
 
-    def __init__(self, db_path: str = "", thresholds: Optional[dict] = None):
+    def __init__(self, db_path: str = "", thresholds: Optional[dict[str, float]] = None):
         from tokenpak.core.paths import get_db_path
+
         self.db_path = db_path or str(get_db_path("telemetry.db"))
         self.thresholds = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
         self._cache: Optional[List[Insight]] = None
@@ -133,7 +168,7 @@ class InsightEngine:
         insights.sort(key=lambda i: (i.severity_rank, -i.delta_magnitude))
 
         # Cap at max_insights
-        max_i = self.thresholds["max_insights"]
+        max_i = int(self.thresholds["max_insights"])
         result = insights[:max_i]
 
         self._cache = result
@@ -148,7 +183,7 @@ class InsightEngine:
     # ------------------------------------------------------------------
     # Internal: data fetching
     # ------------------------------------------------------------------
-    def _fetch_period(self, conn: sqlite3.Connection, days: int, offset_days: int) -> dict:
+    def _fetch_period(self, conn: sqlite3.Connection, days: int, offset_days: int) -> PeriodMetrics:
         """Aggregate rollup data for a time window."""
         end_date = (datetime.now(timezone.utc) - timedelta(days=offset_days)).date()
         start_date = (datetime.now(timezone.utc) - timedelta(days=offset_days + days)).date()
@@ -169,7 +204,14 @@ class InsightEngine:
         ).fetchone()
 
         return (
-            dict(row)
+            {
+                "total_requests": int(row["total_requests"]),
+                "total_tokens": int(row["total_tokens"]),
+                "total_cost": float(row["total_cost"]),
+                "total_savings": float(row["total_savings"]),
+                "avg_raw_tokens": float(row["avg_raw_tokens"]),
+                "avg_final_tokens": float(row["avg_final_tokens"]),
+            }
             if row
             else {
                 "total_requests": 0,
@@ -181,7 +223,7 @@ class InsightEngine:
             }
         )
 
-    def _fetch_model_breakdown(self, conn: sqlite3.Connection, days: int) -> list:
+    def _fetch_model_breakdown(self, conn: sqlite3.Connection, days: int) -> list[ModelBreakdown]:
         """Per-model cost breakdown for current period."""
         end_date = datetime.now(timezone.utc).date()
         start_date = (datetime.now(timezone.utc) - timedelta(days=days)).date()
@@ -194,9 +236,16 @@ class InsightEngine:
         """,
             (str(start_date), str(end_date)),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [
+            {
+                "model": str(row["model"]),
+                "cost": float(row["cost"]),
+                "requests": int(row["requests"]),
+            }
+            for row in rows
+        ]
 
-    def _fetch_daily_costs(self, conn: sqlite3.Connection, days: int) -> list:
+    def _fetch_daily_costs(self, conn: sqlite3.Connection, days: int) -> list[DailyCost]:
         """Daily total cost for spike detection."""
         end_date = datetime.now(timezone.utc).date()
         start_date = (datetime.now(timezone.utc) - timedelta(days=days)).date()
@@ -209,9 +258,9 @@ class InsightEngine:
         """,
             (str(start_date), str(end_date)),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [{"date": str(row["date"]), "daily_cost": float(row["daily_cost"])} for row in rows]
 
-    def _fetch_error_rate(self, conn: sqlite3.Connection, days: int) -> dict:
+    def _fetch_error_rate(self, conn: sqlite3.Connection, days: int) -> ErrorRate:
         """Compute error rate from tp_events."""
         end_ts = datetime.now(timezone.utc).isoformat()
         start_ts = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
@@ -239,8 +288,8 @@ class InsightEngine:
     # ------------------------------------------------------------------
     # Internal: insight generators
     # ------------------------------------------------------------------
-    def _savings_insights(self, current: dict, previous: dict) -> List[Insight]:
-        insights = []
+    def _savings_insights(self, current: PeriodMetrics, previous: PeriodMetrics) -> List[Insight]:
+        insights: list[Insight] = []
         cur_savings = current["total_savings"]
         prev_savings = previous["total_savings"]
 
@@ -295,7 +344,11 @@ class InsightEngine:
         return insights
 
     def _cost_insights(
-        self, conn: sqlite3.Connection, current: dict, previous: dict, days: int
+        self,
+        conn: sqlite3.Connection,
+        current: PeriodMetrics,
+        previous: PeriodMetrics,
+        days: int,
     ) -> List[Insight]:
         insights: List[Insight] = []
         models = self._fetch_model_breakdown(conn, days)
@@ -369,8 +422,10 @@ class InsightEngine:
 
         return insights
 
-    def _efficiency_insights(self, current: dict, previous: dict) -> List[Insight]:
-        insights = []
+    def _efficiency_insights(
+        self, current: PeriodMetrics, previous: PeriodMetrics
+    ) -> List[Insight]:
+        insights: list[Insight] = []
         avg_raw = current["avg_raw_tokens"]
         avg_final = current["avg_final_tokens"]
 
@@ -429,8 +484,10 @@ class InsightEngine:
 
         return insights
 
-    def _error_insights(self, conn: sqlite3.Connection, current: dict, days: int) -> List[Insight]:
-        insights = []
+    def _error_insights(
+        self, conn: sqlite3.Connection, current: PeriodMetrics, days: int
+    ) -> List[Insight]:
+        insights: list[Insight] = []
         err_data = self._fetch_error_rate(conn, days)
         rate = err_data["rate"]
 
@@ -465,9 +522,9 @@ class InsightEngine:
 
         return insights
 
-    def _decision_support(self, current: dict, previous: dict) -> List[Insight]:
+    def _decision_support(self, current: PeriodMetrics, previous: PeriodMetrics) -> List[Insight]:
         """Actionable suggestions when specific conditions are detected."""
-        insights = []
+        insights: list[Insight] = []
         total_cost = current["total_cost"]
         total_savings = current["total_savings"]
 

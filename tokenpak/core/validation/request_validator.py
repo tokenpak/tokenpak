@@ -41,7 +41,7 @@ try:
     HAS_JSONSCHEMA = True
 except ImportError:
     HAS_JSONSCHEMA = False
-    Draft202012Validator = None  # type: ignore[misc,assignment]
+    Draft202012Validator = None
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +576,11 @@ def get_validation_mode() -> str:
         return env_val
 
     # Fall back to config file
-    file_val = str(config_get("validation.mode", "warn", "TOKENPAK_REQUEST_VALIDATION", str)).lower().strip()
+    file_val = (
+        str(config_get("validation.mode", "warn", "TOKENPAK_REQUEST_VALIDATION", str))
+        .lower()
+        .strip()
+    )
     if file_val in VALIDATION_MODES:
         return file_val
 

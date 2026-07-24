@@ -48,27 +48,27 @@ from tokenpak.compression.pipeline import CompressionPipeline  # noqa: E402
 # ---------------------------------------------------------------------------
 BASELINE_PATH = Path(__file__).parent / "baseline.json"
 REGRESSION_THRESHOLD = 1.50  # TSR-06: 50% slower → fail. Bumped from 1.20.
-                             # Root cause: post-hermetic-fix baselines are sub-10ms;
-                             # at that scale a 20% threshold is 1–2ms — well inside
-                             # the Python-GC + OS-scheduling jitter floor of shared
-                             # CI runners. A 50% threshold catches material engine
-                             # regressions (real slowdowns are 2-5×, not 1.2×) while
-                             # tolerating measurement noise. NOT a coverage relaxation
-                             # for the case the test is designed to detect.
+# Root cause: post-hermetic-fix baselines are sub-10ms;
+# at that scale a 20% threshold is 1–2ms — well inside
+# the Python-GC + OS-scheduling jitter floor of shared
+# CI runners. A 50% threshold catches material engine
+# regressions (real slowdowns are 2-5×, not 1.2×) while
+# tolerating measurement noise. NOT a coverage relaxation
+# for the case the test is designed to detect.
 MIN_LATENCY_FLOOR_MS = 25.0  # bumped from 5.0 after observing 20ms medians on slow
-                             # shared CI runners for the smallest-payload / aggressive
-                             # parametrization. Small payloads complete in 1–5ms of
-                             # actual work, and on a slow runner Python GC + OS
-                             # scheduling jitter can dwarf that to 15–20ms — well
-                             # past a 5ms floor. A 25ms floor still fires on real
-                             # regressions (true slowdowns are 2–5× the baseline,
-                             # which for any sub-5ms baseline means >25ms) while
-                             # tolerating measurement noise on the most jitter-prone
-                             # parametrizations. NOT a coverage relaxation for the
-                             # case the test is designed to detect.
+# shared CI runners for the smallest-payload / aggressive
+# parametrization. Small payloads complete in 1–5ms of
+# actual work, and on a slow runner Python GC + OS
+# scheduling jitter can dwarf that to 15–20ms — well
+# past a 5ms floor. A 25ms floor still fires on real
+# regressions (true slowdowns are 2–5× the baseline,
+# which for any sub-5ms baseline means >25ms) while
+# tolerating measurement noise on the most jitter-prone
+# parametrizations. NOT a coverage relaxation for the
+# case the test is designed to detect.
 WARMUP_RUNS = 5  # TSR-06: bumped from 2 — better cache warmup for stable measurement.
 MEASURE_RUNS = 21  # TSR-06: bumped from 5 — median of 21 is meaningfully more stable
-                   # than median of 5 on noisy small-millisecond measurements.
+# than median of 5 on noisy small-millisecond measurements.
 
 PAYLOAD_SIZES = [100, 500, 1_000, 5_000, 10_000]
 
@@ -276,8 +276,7 @@ def test_compression_benchmark(
     mode_kwargs = MODES[mode_name]
 
     table_path = (
-        hermetic_instruction_table_dir
-        / f"instruction_table_{mode_name}_{target_tokens}.json"
+        hermetic_instruction_table_dir / f"instruction_table_{mode_name}_{target_tokens}.json"
     )
     median_ms, ratio, savings_pct = _run_benchmark(
         mode_name, mode_kwargs, messages, instruction_table_path=str(table_path)

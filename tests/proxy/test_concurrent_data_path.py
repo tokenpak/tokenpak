@@ -103,8 +103,7 @@ def test_same_request_id_twice_produces_two_rows(proxy):
 
     got = proxy.wait_row_count(2)
     assert got == 2, (
-        f"expected 2 ledger rows for a replayed request (current no-dedupe "
-        f"semantics), found {got}"
+        f"expected 2 ledger rows for a replayed request (current no-dedupe semantics), found {got}"
     )
     assert_no_exceptions_in_stderr(proxy)
 

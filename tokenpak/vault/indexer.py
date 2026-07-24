@@ -2,6 +2,27 @@
 
 from __future__ import annotations
 
+__all__ = (
+    "BlockRecord",
+    "BlockStore",
+    "EntityExtractor",
+    "SliceRecord",
+    "SliceStore",
+    "SymbolTable",
+    "VaultIndexer",
+    "convert_document",
+    "count_tokens",
+    "detect_file_type",
+    "get_block_store",
+    "get_processor",
+    "should_slice",
+    "slice_content",
+    "sync_loop",
+    "sync_to_vault",
+    "walk_directory",
+)
+
+
 import hashlib
 import json
 import os
@@ -10,7 +31,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Protocol, cast, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # Vault ingest entries directory (A2b transfer from monolith)
@@ -26,7 +47,18 @@ from tokenpak.vault.walker import detect_file_type, walk_directory
 
 from .blocks import BlockRecord, BlockStore, SliceStore, get_block_store
 from .slicer import SliceRecord, should_slice, slice_content
-from .symbol_extraction import SymbolTable
+from .symbol_extraction import Symbol, SymbolTable
+
+
+class _TextProcessor(Protocol):
+    def process(self, content: str, path: str = "") -> str: ...
+
+
+@runtime_checkable
+class _VaultSyncMonitor(Protocol):
+    def get_stats(self, hours: int = 24) -> dict[str, object]: ...
+
+    def get_by_model(self) -> dict[str, dict[str, object]]: ...
 
 
 class VaultIndexer:
@@ -47,7 +79,7 @@ class VaultIndexer:
         block_store: Optional[BlockStore] = None,
         symbol_table: Optional[SymbolTable] = None,
         slice_store: Optional[SliceStore] = None,
-    ):
+    ) -> None:
         self.blocks = block_store if block_store is not None else get_block_store()
         self.symbols = symbol_table if symbol_table is not None else SymbolTable()
         self.slices = slice_store if slice_store is not None else SliceStore(":memory:")
@@ -81,7 +113,7 @@ class VaultIndexer:
         if processor is None:
             return None
 
-        compressed = processor.process(content, path)
+        compressed = cast(_TextProcessor, processor).process(content, path)
         raw_tokens = count_tokens(content)
         compressed_tokens = count_tokens(compressed)
         block_id = f"{path}#{content_hash[:8]}"
@@ -124,7 +156,7 @@ class VaultIndexer:
         self,
         root: str,
         on_progress: Optional[Callable[[str], None]] = None,
-    ) -> dict:
+    ) -> dict[str, int]:
         """Walk and index all supported files under root.
 
         Returns a summary dict::
@@ -184,24 +216,24 @@ class VaultIndexer:
         """Return all slices for the given source file path, in document order."""
         return self.slices.get_by_path(path)
 
-    def lookup_symbol(self, name: str):
+    def lookup_symbol(self, name: str) -> list[Symbol]:
         """Look up a symbol by exact name."""
         return self.symbols.lookup(name)
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, object]:
         """Return indexer stats."""
         return {
             **self.blocks.stats(),
             "total_symbols": len(self.symbols),
         }
 
-    def stats_by_type(self) -> dict:
+    def stats_by_type(self) -> dict[str, object]:
         """Return indexed file count broken down by file type and extension."""
         from collections import Counter
 
         blocks = self.blocks.all()
-        by_type: Counter = Counter()
-        by_ext: Counter = Counter()
+        by_type: Counter[str] = Counter()
+        by_ext: Counter[str] = Counter()
         for b in blocks:
             by_type[b.file_type] += 1
             ext = Path(b.path).suffix.lower() or "(no ext)"
@@ -236,7 +268,7 @@ def _vault_index_reload_timer() -> None:
 
 def _ingest_write_entry(entry: Dict[str, Any]) -> str:
     """Append a single entry to the JSONL file, return its id."""
-    entry_id = entry.setdefault("id", str(uuid.uuid4()))
+    entry_id = str(entry.setdefault("id", str(uuid.uuid4())))
     date_str = None
 
     # Use timestamp date if provided, else today
@@ -278,19 +310,27 @@ def sync_to_vault() -> None:
     vault_path = Path.home() / "vault" / "System" / "tokenpak-stats.json"
     if vault_path.parent.exists():
         try:
-            from tokenpak.core.runtime.proxy import MONITOR, SESSION  # type: ignore[import]
+            from tokenpak.core.runtime import proxy as runtime_proxy
 
-            stats = MONITOR.get_stats()
-            stats["by_model"] = MONITOR.get_by_model()
+            monitor = getattr(runtime_proxy, "MONITOR", None)
+            if not isinstance(monitor, _VaultSyncMonitor):
+                return
+            session = runtime_proxy.SESSION
+
+            stats = monitor.get_stats()
+            stats["by_model"] = monitor.get_by_model()
             stats["last_sync"] = datetime.now().isoformat()
             stats["compilation_mode"] = COMPILATION_MODE
             stats["active_profile"] = ACTIVE_PROFILE
+            start_time = session.get("start_time")
+            if not isinstance(start_time, (int, float)):
+                start_time = time.time()
             stats["session"] = {
-                "requests": SESSION["requests"],
-                "protected_tokens": SESSION["protected_tokens"],
-                "injected_tokens": SESSION["injected_tokens"],
-                "injection_hits": SESSION["injection_hits"],
-                "uptime_hours": round((time.time() - SESSION["start_time"]) / 3600, 2),
+                "requests": session["requests"],
+                "protected_tokens": session["protected_tokens"],
+                "injected_tokens": session["injected_tokens"],
+                "injection_hits": session["injection_hits"],
+                "uptime_hours": round((time.time() - start_time) / 3600, 2),
             }
             # Atomic publish: readers must never observe a torn stats file.
             _atomic_write(vault_path, json.dumps(stats, indent=2))

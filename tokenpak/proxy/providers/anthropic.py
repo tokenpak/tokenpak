@@ -56,14 +56,16 @@ class AnthropicFormat:
             Parsed request dict
         """
         try:
-            return json.loads(body)
+            parsed: object = json.loads(body)
+            return parsed if isinstance(parsed, dict) else {}
         except (json.JSONDecodeError, UnicodeDecodeError):
             return {}
 
     @staticmethod
     def extract_model(data: Dict[str, Any]) -> str:
         """Extract model name from request."""
-        return data.get("model", "unknown")
+        model = data.get("model", "unknown")
+        return model if isinstance(model, str) else "unknown"
 
     @staticmethod
     def extract_system(data: Dict[str, Any]) -> str:
@@ -129,7 +131,7 @@ class AnthropicFormat:
     @staticmethod
     def is_streaming(data: Dict[str, Any]) -> bool:
         """Check if request is streaming."""
-        return data.get("stream", False)
+        return bool(data.get("stream", False))
 
     @staticmethod
     def build_request(
@@ -138,7 +140,7 @@ class AnthropicFormat:
         system: Optional[str] = None,
         max_tokens: int = 4096,
         stream: bool = True,
-        **kwargs,
+        **kwargs: object,
     ) -> bytes:
         """
         Build an Anthropic API request body.
@@ -154,7 +156,7 @@ class AnthropicFormat:
         Returns:
             Request body as bytes
         """
-        data = {
+        data: Dict[str, object] = {
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
@@ -187,9 +189,9 @@ class AnthropicFormat:
         Returns:
             Modified data dict
         """
-        block = {"type": "text", "text": content}
+        block: Dict[str, object] = {"type": "text", "text": content}
         if cache_control:
-            block["cache_control"] = {"type": "ephemeral"}  # type: ignore[assignment]
+            block["cache_control"] = {"type": "ephemeral"}
 
         system = data.get("system", "")
 
@@ -211,7 +213,8 @@ class AnthropicFormat:
         try:
             data = json.loads(body)
             usage = data.get("usage", {})
-            return usage.get("output_tokens", 0)
+            tokens = usage.get("output_tokens", 0)
+            return tokens if isinstance(tokens, int) else 0
         except (json.JSONDecodeError, UnicodeDecodeError):
             return 0
 

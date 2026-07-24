@@ -21,6 +21,7 @@ from tokenpak.telemetry.replay import ReplayEntry, ReplayStore
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_store_with_entries() -> tuple[ReplayStore, list]:
     """Create an in-memory store populated with two test entries."""
     store = ReplayStore(":memory:")
@@ -30,13 +31,20 @@ def make_store_with_entries() -> tuple[ReplayStore, list]:
         {"role": "assistant", "content": "Done."},
     ]
     e1 = ReplayEntry.new(
-        provider="anthropic", model="claude-3-haiku",
-        input_tokens_raw=1000, input_tokens_sent=700, tokens_saved=300,
-        cost_usd=0.001, messages=msgs,
+        provider="anthropic",
+        model="claude-3-haiku",
+        input_tokens_raw=1000,
+        input_tokens_sent=700,
+        tokens_saved=300,
+        cost_usd=0.001,
+        messages=msgs,
     )
     e2 = ReplayEntry.new(
-        provider="openai", model="gpt-4o",
-        input_tokens_raw=2000, input_tokens_sent=1400, tokens_saved=600,
+        provider="openai",
+        model="gpt-4o",
+        input_tokens_raw=2000,
+        input_tokens_sent=1400,
+        tokens_saved=600,
         cost_usd=0.004,
     )
     store.capture(e1)
@@ -47,6 +55,7 @@ def make_store_with_entries() -> tuple[ReplayStore, list]:
 def make_args(**kwargs):
     """Create a simple namespace object for CLI args."""
     import argparse
+
     ns = argparse.Namespace(**kwargs)
     return ns
 
@@ -54,6 +63,7 @@ def make_args(**kwargs):
 # ---------------------------------------------------------------------------
 # Parser tests
 # ---------------------------------------------------------------------------
+
 
 class TestReplayParser:
     def test_replay_list_parses(self):
@@ -92,7 +102,9 @@ class TestReplayParser:
 
     def test_replay_run_flags(self):
         p = build_parser()
-        args = p.parse_args(["replay", "run", "abc123", "--model", "gpt-4", "--aggressive", "--diff"])
+        args = p.parse_args(
+            ["replay", "run", "abc123", "--model", "gpt-4", "--aggressive", "--diff"]
+        )
         assert args.model == "gpt-4"
         assert args.aggressive is True
         assert args.diff is True
@@ -107,12 +119,16 @@ class TestReplayParser:
 # cmd_replay_list tests
 # ---------------------------------------------------------------------------
 
+
 class TestCmdReplayList:
     def test_list_empty(self, capsys):
         args = make_args(limit=20, provider=None)
-        with patch("tokenpak.cli._replay_store_path", return_value=":memory:"), \
-             patch("tokenpak._cli_core._get_replay_store") as mock_store:
+        with (
+            patch("tokenpak.cli._replay_store_path", return_value=":memory:"),
+            patch("tokenpak._cli_core._get_replay_store") as mock_store,
+        ):
             from tokenpak.telemetry.replay import ReplayStore
+
             mock_store.return_value = ReplayStore(":memory:")
             cmd_replay_list(args)
         out = capsys.readouterr().out
@@ -160,6 +176,7 @@ class TestCmdReplayList:
 # cmd_replay_show tests
 # ---------------------------------------------------------------------------
 
+
 class TestCmdReplayShow:
     def test_show_valid_id(self, capsys):
         store, entries = make_store_with_entries()
@@ -203,11 +220,14 @@ class TestCmdReplayShow:
 # cmd_replay_run tests
 # ---------------------------------------------------------------------------
 
+
 class TestCmdReplayRun:
     def test_run_standard_compression(self, capsys):
         store, entries = make_store_with_entries()
         e = entries[0]
-        args = make_args(id=e.replay_id, model=None, no_compress=False, aggressive=False, diff=False)
+        args = make_args(
+            id=e.replay_id, model=None, no_compress=False, aggressive=False, diff=False
+        )
         with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_run(args)
         out = capsys.readouterr().out
@@ -237,7 +257,9 @@ class TestCmdReplayRun:
     def test_run_with_model_label(self, capsys):
         store, entries = make_store_with_entries()
         e = entries[0]
-        args = make_args(id=e.replay_id, model="claude-3-opus", no_compress=False, aggressive=False, diff=False)
+        args = make_args(
+            id=e.replay_id, model="claude-3-opus", no_compress=False, aggressive=False, diff=False
+        )
         with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_run(args)
         out = capsys.readouterr().out
@@ -262,7 +284,9 @@ class TestCmdReplayRun:
     def test_run_no_content_exits(self):
         store, entries = make_store_with_entries()
         e = entries[1]  # no messages
-        args = make_args(id=e.replay_id, model=None, no_compress=False, aggressive=False, diff=False)
+        args = make_args(
+            id=e.replay_id, model=None, no_compress=False, aggressive=False, diff=False
+        )
         with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             with pytest.raises(SystemExit):
                 cmd_replay_run(args)
@@ -270,6 +294,7 @@ class TestCmdReplayRun:
     def test_run_no_compress_tokens_equal_raw(self, capsys):
         """With --no-compress, result tokens should equal raw token count."""
         from tokenpak.tokens import count_tokens
+
         store, entries = make_store_with_entries()
         e = entries[0]
         args = make_args(id=e.replay_id, model=None, no_compress=True, aggressive=False, diff=False)
@@ -287,6 +312,7 @@ class TestReplayClearCLI:
         from unittest.mock import MagicMock, patch
 
         from tokenpak.cli import cmd_replay_clear
+
         store = ReplayStore(":memory:")
         args = MagicMock()
         with patch("tokenpak._cli_core._get_replay_store", return_value=store):
@@ -299,6 +325,7 @@ class TestReplayClearCLI:
         from unittest.mock import MagicMock, patch
 
         from tokenpak.cli import cmd_replay_clear
+
         store, _ = make_store_with_entries()
         assert store.count() > 0
         args = MagicMock()
@@ -314,6 +341,7 @@ class TestReplayClearCLI:
         from unittest.mock import patch
 
         from tokenpak.cli import _build_replay_parser
+
         store, _ = make_store_with_entries()
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers()

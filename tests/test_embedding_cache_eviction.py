@@ -64,9 +64,7 @@ def test_over_cap_eviction_keeps_newest_rows(tmp_path, monkeypatch) -> None:
     for i in range(8):
         cache.put("model-a", 8, f"text-{i}", payload, tokens=1)
 
-    remaining = [
-        i for i in range(8) if cache.get("model-a", 8, f"text-{i}") is not None
-    ]
+    remaining = [i for i in range(8) if cache.get("model-a", 8, f"text-{i}") is not None]
 
     # Pre-fix behaviour: the file-size ratchet emptied the whole table on
     # every put once the file exceeded max_mb — the cache went permanently

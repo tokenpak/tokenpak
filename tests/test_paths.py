@@ -147,6 +147,4 @@ def test_under_allows_dispatch(fake_home):
 
 
 def test_under_allows_dispatch_multi_segment(fake_home):
-    assert _paths.under("dispatch", "runs.db") == (
-        _paths.resolved_home() / "dispatch" / "runs.db"
-    )
+    assert _paths.under("dispatch", "runs.db") == (_paths.resolved_home() / "dispatch" / "runs.db")

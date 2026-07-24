@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.intelligence.ab_optimizer", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.intelligence.ab_optimizer", reason="module not available in current build"
+)
 import threading
 from pathlib import Path
 
@@ -34,6 +36,7 @@ from tokenpak.intelligence.ab_optimizer import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def tmp_store(tmp_path: Path) -> ABOptimizerStore:
     """Fresh store backed by a temp SQLite file."""
@@ -43,6 +46,7 @@ def tmp_store(tmp_path: Path) -> ABOptimizerStore:
 # ---------------------------------------------------------------------------
 # 1. Statistical significance — _welch_t_pvalue
 # ---------------------------------------------------------------------------
+
 
 class TestWelchTPValue:
     def test_identical_distributions_returns_1(self):
@@ -75,17 +79,20 @@ class TestWelchTPValue:
 # 2. compute_significance
 # ---------------------------------------------------------------------------
 
+
 class TestComputeSignificance:
-    def _make_stats(self, name: str, savings: float, quality: float, latency: float, n: int) -> VariantStats:
+    def _make_stats(
+        self, name: str, savings: float, quality: float, latency: float, n: int
+    ) -> VariantStats:
         """Helper: create VariantStats with consistent data."""
         s = VariantStats(name=name)
         s.samples = n
         s.token_savings_sum = savings * n
-        s.token_savings_sq_sum = (savings ** 2) * n + 0.0001 * n  # small variance
+        s.token_savings_sq_sum = (savings**2) * n + 0.0001 * n  # small variance
         s.quality_sum = quality * n
-        s.quality_sq_sum = (quality ** 2) * n + 0.0001 * n
+        s.quality_sq_sum = (quality**2) * n + 0.0001 * n
         s.latency_sum = latency * n
-        s.latency_sq_sum = (latency ** 2) * n + 1.0 * n  # small variance
+        s.latency_sq_sum = (latency**2) * n + 1.0 * n  # small variance
         return s
 
     def test_insufficient_samples_not_significant(self):
@@ -135,6 +142,7 @@ class TestComputeSignificance:
 # ---------------------------------------------------------------------------
 # 3. ABOptimizerStore — CRUD
 # ---------------------------------------------------------------------------
+
 
 class TestABOptimizerStore:
     def test_create_experiment(self, tmp_store: ABOptimizerStore):
@@ -191,6 +199,7 @@ class TestABOptimizerStore:
 # 4. Record observations + auto-promotion
 # ---------------------------------------------------------------------------
 
+
 class TestRecordObservations:
     def _fill_variant(
         self,
@@ -215,9 +224,7 @@ class TestRecordObservations:
         exp = tmp_store.create_experiment("MinSample")
         # Only 10 observations — below MIN_SAMPLES
         for i in range(10):
-            result = tmp_store.record_observation(
-                exp.id, "control", 0.5, 0.8, 100.0
-            )
+            result = tmp_store.record_observation(exp.id, "control", 0.5, 0.8, 100.0)
         assert result is None
 
     def test_auto_promotion_on_clear_winner(self, tmp_store: ABOptimizerStore):
@@ -258,6 +265,7 @@ class TestRecordObservations:
 # 5. Manual override
 # ---------------------------------------------------------------------------
 
+
 class TestManualOverride:
     def test_force_winner_control(self, tmp_store: ABOptimizerStore):
         exp = tmp_store.create_experiment("ManualWin", control_name="ctrl", treatment_name="trt")
@@ -287,6 +295,7 @@ class TestManualOverride:
 # 6. Concurrent experiment isolation
 # ---------------------------------------------------------------------------
 
+
 class TestConcurrentExperiments:
     def test_two_concurrent_experiments_independent(self, tmp_store: ABOptimizerStore):
         """Two experiments don't interfere with each other."""
@@ -311,8 +320,10 @@ class TestConcurrentExperiments:
 
         t1 = threading.Thread(target=record_a)
         t2 = threading.Thread(target=record_b)
-        t1.start(); t2.start()
-        t1.join(); t2.join()
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
 
         assert not errors, f"Thread errors: {errors}"
         a_final = tmp_store.get_experiment(exp_a.id)
@@ -341,8 +352,10 @@ class TestConcurrentExperiments:
 
         t1 = threading.Thread(target=write_control)
         t2 = threading.Thread(target=write_treatment)
-        t1.start(); t2.start()
-        t1.join(); t2.join()
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
 
         assert not errors
         final = tmp_store.get_experiment(exp.id)
@@ -353,6 +366,7 @@ class TestConcurrentExperiments:
 # ---------------------------------------------------------------------------
 # 7. get_results
 # ---------------------------------------------------------------------------
+
 
 class TestGetResults:
     def test_get_results_structure(self, tmp_store: ABOptimizerStore):
@@ -389,6 +403,7 @@ try:
     from fastapi.testclient import TestClient
     from tokenpak.intelligence.ab_router import ab_router
     from tokenpak.intelligence.auth import LicenseTier
+
     _HAS_FASTAPI_CLIENT = True
 except ImportError:
     _HAS_FASTAPI_CLIENT = False
@@ -422,11 +437,14 @@ class TestABRouterEndpoints:
         return TestClient(app)
 
     def test_create_experiment_201(self, client: TestClient):
-        resp = client.post("/v1/ab/experiments", json={
-            "name": "My Exp",
-            "control_name": "v1",
-            "treatment_name": "v2",
-        })
+        resp = client.post(
+            "/v1/ab/experiments",
+            json={
+                "name": "My Exp",
+                "control_name": "v1",
+                "treatment_name": "v2",
+            },
+        )
         assert resp.status_code == 201
         data = resp.json()
         assert data["name"] == "My Exp"
@@ -456,23 +474,29 @@ class TestABRouterEndpoints:
         # Create
         exp_id = client.post("/v1/ab/experiments", json={"name": "ReportTest"}).json()["id"]
         # Report
-        resp = client.post(f"/v1/ab/experiments/{exp_id}/report", json={
-            "variant": "control",
-            "token_savings": 0.35,
-            "quality_score": 0.88,
-            "latency_ms": 120.5,
-        })
+        resp = client.post(
+            f"/v1/ab/experiments/{exp_id}/report",
+            json={
+                "variant": "control",
+                "token_savings": 0.35,
+                "quality_score": 0.88,
+                "latency_ms": 120.5,
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["recorded"] is True
 
     def test_report_unknown_variant_400(self, client: TestClient):
         exp_id = client.post("/v1/ab/experiments", json={"name": "BadVariant"}).json()["id"]
-        resp = client.post(f"/v1/ab/experiments/{exp_id}/report", json={
-            "variant": "phantom",
-            "token_savings": 0.5,
-            "quality_score": 0.8,
-            "latency_ms": 100.0,
-        })
+        resp = client.post(
+            f"/v1/ab/experiments/{exp_id}/report",
+            json={
+                "variant": "phantom",
+                "token_savings": 0.5,
+                "quality_score": 0.8,
+                "latency_ms": 100.0,
+            },
+        )
         assert resp.status_code == 400
 
     def test_get_results(self, client: TestClient):
@@ -485,9 +509,12 @@ class TestABRouterEndpoints:
 
     def test_promote_winner(self, client: TestClient):
         exp_id = client.post("/v1/ab/experiments", json={"name": "Promote"}).json()["id"]
-        resp = client.post(f"/v1/ab/experiments/{exp_id}/promote", json={
-            "variant": "control",
-        })
+        resp = client.post(
+            f"/v1/ab/experiments/{exp_id}/promote",
+            json={
+                "variant": "control",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["promoted"] is True
@@ -504,6 +531,7 @@ class TestABRouterEndpoints:
     def test_pro_guard_free_tier_rejected(self, tmp_path: Path):
         """Free tier cannot access A/B endpoints."""
         import tokenpak.intelligence.ab_router as ab_mod
+
         if hasattr(ab_mod.ab_router, "_store_instance"):
             del ab_mod.ab_router._store_instance
 

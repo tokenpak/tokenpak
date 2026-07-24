@@ -77,7 +77,7 @@ class ConfigValidator:
         "provider_urls",
     ]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.errors: List[ConfigValidationError] = []
 
     def validate(self, config: Dict[str, Any]) -> List[ConfigValidationError]:
@@ -126,9 +126,9 @@ class ConfigValidator:
                             message="Required field 'api_keys' is missing",
                             suggestion=(
                                 'Add api_keys to config (e.g., {"anthropic": "sk-..."}), '
-                                'set ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY '
-                                'env var, or — if using byte-passthrough — use a placeholder '
-                                'value (the proxy forwards caller-supplied auth verbatim).'
+                                "set ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY "
+                                "env var, or — if using byte-passthrough — use a placeholder "
+                                "value (the proxy forwards caller-supplied auth verbatim)."
                             ),
                         )
                     )

@@ -1,6 +1,5 @@
 """Unit tests for Shadow Mode (Phase 3.1) — complexity, ledger, Elo."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.complexity", reason="module not available in current build")
@@ -17,8 +16,10 @@ from tokenpak.routing_ledger import RoutingLedger
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_ledger(tmpdir):
     return RoutingLedger(os.path.join(tmpdir, "routing_ledger.db"))
+
 
 def make_elo(tmpdir):
     return EloRatings(os.path.join(tmpdir, "elo_ratings.json"))
@@ -27,6 +28,7 @@ def make_elo(tmpdir):
 # ---------------------------------------------------------------------------
 # Complexity scoring
 # ---------------------------------------------------------------------------
+
 
 class TestComplexityScoring:
     def test_simple_query_low_score(self):
@@ -102,6 +104,7 @@ class TestComplexityScoring:
 # RoutingLedger
 # ---------------------------------------------------------------------------
 
+
 class TestRoutingLedger:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -157,9 +160,7 @@ class TestRoutingLedger:
         assert txn["rejection_reason"] == "hallucination"
 
     def test_task_type_auto_scored(self):
-        txn_id = self.ledger.log_transaction(
-            "gpt-4o", "Write unit tests for auth module", [], ""
-        )
+        txn_id = self.ledger.log_transaction("gpt-4o", "Write unit tests for auth module", [], "")
         txn = self.ledger.get_transaction(txn_id)
         assert txn["task_type"] in [tt.value for tt in TaskType]
 
@@ -216,11 +217,13 @@ class TestRoutingLedger:
 
     def test_thread_safe_concurrent_writes(self):
         errors = []
+
         def write_txn():
             try:
                 self.ledger.log_transaction("model-x", "concurrent query", [], "response")
             except Exception as e:
                 errors.append(e)
+
         threads = [threading.Thread(target=write_txn) for _ in range(10)]
         for t in threads:
             t.start()
@@ -234,6 +237,7 @@ class TestRoutingLedger:
 # ---------------------------------------------------------------------------
 # Elo ratings
 # ---------------------------------------------------------------------------
+
 
 class TestEloRatings:
     def setup_method(self):
@@ -326,10 +330,12 @@ class TestEloRatings:
 # ShadowHook integration
 # ---------------------------------------------------------------------------
 
+
 class TestShadowHook:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
         from tokenpak.shadow_hook import ShadowHook
+
         self.hook = ShadowHook(
             ledger_path=os.path.join(self.tmpdir, "routing_ledger.db"),
             enabled=True,
@@ -353,6 +359,7 @@ class TestShadowHook:
 
     def test_disabled_hook_returns_none(self):
         from tokenpak.shadow_hook import ShadowHook
+
         hook = ShadowHook(enabled=False)
         assert hook.record_request("gpt-4o", "q", 0) is None
 

@@ -101,8 +101,7 @@ class ModelRegistry:
 
         # Max input-context windows (tokens), keyed by dateless model id
         self._context_windows = {
-            str(mid).lower(): int(tokens)
-            for mid, tokens in raw.get("context_windows", {}).items()
+            str(mid).lower(): int(tokens) for mid, tokens in raw.get("context_windows", {}).items()
         }
 
         # Models

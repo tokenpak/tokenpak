@@ -1,6 +1,5 @@
 """Tests for provider detection."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.pro.routing.detector", reason="module not available in current build")
@@ -163,9 +162,7 @@ class TestProviderDetection:
 
     def test_multi_strategy_headers_last(self):
         """Test that headers are last priority."""
-        provider, reason = self.detector.detect(
-            headers={"anthropic-version": "2023-06-01"}
-        )
+        provider, reason = self.detector.detect(headers={"anthropic-version": "2023-06-01"})
         assert provider == Provider.ANTHROPIC
         assert "headers" in reason
 

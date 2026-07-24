@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 _log = logging.getLogger("tokenpak.skeleton")
 
@@ -59,6 +59,7 @@ def skeleton_runtime_status() -> Dict[str, Any]:
         "available": skeleton_available(),
         "extractor_missing_observed": _SKELETON_EXTRACTOR_MISSING,
     }
+
 
 # ---------------------------------------------------------------------------
 # Shape Registry
@@ -432,7 +433,7 @@ def _skeletonize_block(content: str, file_ext: str) -> str:
     try:
         from tokenpak.skeleton_extractor import extract_skeleton
 
-        return extract_skeleton(content, lang)
+        return cast(str, extract_skeleton(content, lang))
     except Exception as exc:
         # Fail-safe: return the block unchanged (no corruption), but emit a
         # diagnostic signal so a missing/broken extractor is never swallowed
@@ -448,7 +449,7 @@ def _inject_skeleton_into_blocks(blocks_text: str) -> str:
     if not SKELETON_ENABLED or not blocks_text:
         return blocks_text
 
-    def _replace_fence(m):
+    def _replace_fence(m: re.Match[str]) -> str:
         lang_hint = m.group(1).strip().lower()
         ext_map = {
             "python": ".py",

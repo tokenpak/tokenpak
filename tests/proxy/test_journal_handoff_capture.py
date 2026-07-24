@@ -221,7 +221,8 @@ def test_handoff_journal_post_legacy_db_compat(tmp_path, monkeypatch):
     con = sqlite3.connect(str(tmp_path / "journal.db"))
     sessions = list(con.execute("SELECT session_id FROM sessions"))
     entries = [
-        r[0] for r in con.execute(
+        r[0]
+        for r in con.execute(
             "SELECT content FROM entries WHERE session_id='sess-legacy' ORDER BY id"
         )
     ]

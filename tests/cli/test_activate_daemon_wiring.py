@@ -33,8 +33,7 @@ def isolated_license(tmp_path, monkeypatch):
     """Force the licensing module to read/write under tmp_path."""
     from tokenpak import licensing as _lic
 
-    monkeypatch.setattr(_lic, "_license_path",
-                        lambda: _stored_license_path(tmp_path))
+    monkeypatch.setattr(_lic, "_license_path", lambda: _stored_license_path(tmp_path))
     monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path))
     return tmp_path
 
@@ -277,6 +276,5 @@ def test_manual_local_edit_does_not_unlock_pro(isolated_license, tmp_path):
     # A Pro-gated feature must still report locked because status != active.
     enabled = _lic.is_feature_enabled("A1_workflow_engine")
     assert enabled is False, (
-        "Pro feature unlocked from a forged local license — "
-        "tamper-detection regression"
+        "Pro feature unlocked from a forged local license — tamper-detection regression"
     )

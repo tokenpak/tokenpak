@@ -132,10 +132,12 @@ class TestContextAssembler:
 
     def test_assemble_context_multiple_blocks(self):
         """assemble_context with multiple blocks includes all entries."""
-        result = self.assembler.assemble_context({
-            "SOUL": ("soul text", None),
-            "TOOLS": ("tools text", None),
-        })
+        result = self.assembler.assemble_context(
+            {
+                "SOUL": ("soul text", None),
+                "TOOLS": ("tools text", None),
+            }
+        )
         assert "SOUL=soul text" in result
         assert "TOOLS=tools text" in result
 

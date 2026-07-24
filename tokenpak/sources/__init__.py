@@ -3,7 +3,7 @@
 from .base import Connector, ConnectorConfig
 
 # Connector implementations (loaded conditionally)
-CONNECTORS = {}
+CONNECTORS: dict[str, type[Connector]] = {}
 
 try:
     from .local import LocalConnector
@@ -37,8 +37,20 @@ def get_connector(name: str, config: ConnectorConfig) -> Connector:
     return connector_class(config)
 
 
-def list_connectors() -> list:
+def list_connectors() -> list[str]:
     """List available connectors."""
     return list(CONNECTORS.keys())
 
-__all__ = ['base', 'base_source', 'git_adapter', 'github', 'google_drive', 'local', 'notion', 'notion_adapter', 'obsidian', 'url_adapter']
+
+__all__ = [
+    "base",
+    "base_source",
+    "git_adapter",
+    "github",
+    "google_drive",
+    "local",
+    "notion",
+    "notion_adapter",
+    "obsidian",
+    "url_adapter",
+]

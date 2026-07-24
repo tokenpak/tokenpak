@@ -80,24 +80,28 @@ class SavingsSource:
     UNATTRIBUTED = "unattributed"
     """Token delta observed but source cannot be determined."""
 
-    ALL: frozenset[str] = frozenset({
-        PROVIDER_PROMPT_CACHE,
-        PLATFORM_CACHE,
-        TOKENPAK_SEMANTIC_CACHE,
-        TOKENPAK_CAPSULES,
-        TOKENPAK_COMPRESSION,
-        TOKENPAK_TOOL_SCHEMA_STABILITY,
-        TOKENPAK_RETRIEVAL_PRUNING,
-        UNATTRIBUTED,
-    })
+    ALL: frozenset[str] = frozenset(
+        {
+            PROVIDER_PROMPT_CACHE,
+            PLATFORM_CACHE,
+            TOKENPAK_SEMANTIC_CACHE,
+            TOKENPAK_CAPSULES,
+            TOKENPAK_COMPRESSION,
+            TOKENPAK_TOOL_SCHEMA_STABILITY,
+            TOKENPAK_RETRIEVAL_PRUNING,
+            UNATTRIBUTED,
+        }
+    )
 
-    TOKENPAK_MANAGED: frozenset[str] = frozenset({
-        TOKENPAK_SEMANTIC_CACHE,
-        TOKENPAK_CAPSULES,
-        TOKENPAK_COMPRESSION,
-        TOKENPAK_TOOL_SCHEMA_STABILITY,
-        TOKENPAK_RETRIEVAL_PRUNING,
-    })
+    TOKENPAK_MANAGED: frozenset[str] = frozenset(
+        {
+            TOKENPAK_SEMANTIC_CACHE,
+            TOKENPAK_CAPSULES,
+            TOKENPAK_COMPRESSION,
+            TOKENPAK_TOOL_SCHEMA_STABILITY,
+            TOKENPAK_RETRIEVAL_PRUNING,
+        }
+    )
     """Subset of sources credited to TokenPak (not provider/platform)."""
 
 

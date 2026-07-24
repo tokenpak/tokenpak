@@ -45,9 +45,17 @@ class TestProviderDetectionFromPath:
         result = self.router.route("/v1/chat/completions", {})
         assert result.provider == "openai"
 
-    def test_openai_codex_responses_path(self):
+    def test_openai_responses_without_oauth_stays_openai(self):
         result = self.router.route("/v1/responses", {})
+        assert result.provider == "openai"
+
+    def test_openai_codex_responses_path_with_oauth(self):
+        result = self.router.route(
+            "/v1/responses",
+            {"Authorization": "Bearer oauth-token"},
+        )
         assert result.provider == "openai-codex"
+        assert result.full_url.endswith("/backend-api/codex/responses")
 
     def test_google_generate_content_path(self):
         result = self.router.route("/v1/models/gemini-pro/generateContent", {})

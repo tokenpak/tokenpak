@@ -15,6 +15,7 @@ features`` probe-avoidance behavior — that lives in ``hooks.py`` /
 
 from __future__ import annotations
 
+import builtins
 import errno
 import json
 import os
@@ -33,15 +34,43 @@ from tokenpak.companion.codex import state_lock as sl
 
 
 def _status(locked=False, stopped=None):
+    stopped = stopped or []
+    holders = stopped if stopped else ([123] if locked else [])
     return sl.LockStatus(
         home="/h",
         db_path="/h/state_5.sqlite",
         exists=True,
         locked=locked,
-        holder_pids=[123] if locked else [],
-        stopped_pids=stopped or [],
+        holder_pids=holders,
+        stopped_pids=stopped,
+        running_pids=[123] if locked and not stopped else [],
         detail="lock detail",
     )
+
+
+def _preflight_result(
+    status=launcher.PreflightStatus.HOLDER_TIMEOUT_LAST_VERIFIED_LIVE,
+    *,
+    diagnostics_complete=True,
+    exit_code=1,
+):
+    return launcher._preflight_evaluation(
+        status=status,
+        diagnostics_complete=diagnostics_complete,
+        holder_pids=(123,) if status is not launcher.PreflightStatus.CLEAR else (),
+        holder_state="running" if status is not launcher.PreflightStatus.CLEAR else "none",
+        detail="test preflight result",
+        remediation="test remediation" if exit_code is not None else None,
+        exit_code=exit_code,
+        diagnostic_epoch="test-epoch",
+    )
+
+
+def _allow_temporary_session_prompt(monkeypatch):
+    monkeypatch.setattr(launcher, "_stdin_is_tty", lambda: True)
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("TOKENPAK_NONINTERACTIVE", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
 
 
 class _Clock:
@@ -59,23 +88,27 @@ class _Clock:
 
 
 def test_preflight_clear_home_proceeds():
-    rc = launcher._preflight_state_lock(
+    result = launcher._preflight_state_lock(
         prober=lambda: _status(locked=False),
         interactive=False,
         sleep=lambda s: None,
         monotonic=_Clock(),
     )
-    assert rc is None
+    assert result.is_clear
+    assert result.evidence.status is launcher.PreflightStatus.CLEAR
+    assert result.exit_code is None
 
 
 def test_preflight_stopped_holder_short_circuits(capsys):
-    rc = launcher._preflight_state_lock(
+    result = launcher._preflight_state_lock(
         prober=lambda: _status(locked=True, stopped=[999]),
         interactive=False,
         sleep=lambda s: None,
         monotonic=_Clock(),
     )
-    assert rc == 1
+    assert result.evidence.status is launcher.PreflightStatus.STOPPED_HOLDER
+    assert result.exit_code == 1
+    assert result.fallback_decision.eligible is True
     err = capsys.readouterr().err
     assert "locked" in err.lower()
     # A suspended holder never releases → we do not print the waiting banner.
@@ -85,7 +118,7 @@ def test_preflight_stopped_holder_short_circuits(capsys):
 def test_preflight_live_holder_clears_within_wait():
     clock = _Clock()
     seq = iter([_status(locked=True), _status(locked=True), _status(locked=False)])
-    rc = launcher._preflight_state_lock(
+    result = launcher._preflight_state_lock(
         prober=lambda: next(seq),
         interactive=False,
         timeout_s=30,
@@ -93,12 +126,12 @@ def test_preflight_live_holder_clears_within_wait():
         sleep=clock.tick,
         monotonic=clock,
     )
-    assert rc is None
+    assert result.is_clear
 
 
 def test_preflight_noninteractive_times_out(capsys):
     clock = _Clock()
-    rc = launcher._preflight_state_lock(
+    result = launcher._preflight_state_lock(
         prober=lambda: _status(locked=True),
         interactive=False,
         timeout_s=2.0,
@@ -106,7 +139,9 @@ def test_preflight_noninteractive_times_out(capsys):
         sleep=clock.tick,
         monotonic=clock,
     )
-    assert rc == 1
+    assert result.evidence.status is launcher.PreflightStatus.HOLDER_TIMEOUT_LAST_VERIFIED_LIVE
+    assert result.exit_code == 1
+    assert result.fallback_decision.eligible is True
     err = capsys.readouterr().err
     assert "still locked after" in err
 
@@ -117,21 +152,44 @@ def test_preflight_wall_timeout_bounds_a_stuck_probe(capsys):
         return _status(locked=False)
 
     started = time.monotonic()
-    rc = launcher._preflight_state_lock(
+    result = launcher._preflight_state_lock(
         prober=stuck_probe,
         interactive=False,
         timeout_s=0.05,
     )
     elapsed = time.monotonic() - started
 
-    assert rc == 1
+    assert result.evidence.status is launcher.PreflightStatus.INSPECTION_INCOMPLETE
+    assert result.exit_code == 1
+    assert result.fallback_decision.eligible is False
     assert elapsed < 0.15
     assert "wall-time limit" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(
+    ("failure", "expected_status"),
+    [
+        (PermissionError("denied"), launcher.PreflightStatus.PERMISSION_ERROR),
+        (OSError(errno.ENOSPC, "full"), launcher.PreflightStatus.STORAGE_ERROR),
+        (RuntimeError("unexpected"), launcher.PreflightStatus.UNKNOWN_FAILURE),
+    ],
+)
+def test_preflight_probe_failures_are_typed_and_never_fallback_eligible(failure, expected_status):
+    result = launcher._preflight_state_lock(
+        prober=lambda: (_ for _ in ()).throw(failure),
+        interactive=False,
+        timeout_s=1,
+    )
+
+    assert result.evidence.status is expected_status
+    assert result.evidence.diagnostics_complete is False
+    assert result.fallback_decision.eligible is False
+    assert result.exit_code == 1
+
+
 def test_preflight_tty_esc_cancels(capsys):
     clock = _Clock()
-    rc = launcher._preflight_state_lock(
+    result = launcher._preflight_state_lock(
         prober=lambda: _status(locked=True),
         interactive=True,
         timeout_s=30,
@@ -140,7 +198,9 @@ def test_preflight_tty_esc_cancels(capsys):
         sleep=clock.tick,
         monotonic=clock,
     )
-    assert rc == 130
+    assert result.evidence.status is launcher.PreflightStatus.CANCELLED
+    assert result.exit_code == 130
+    assert result.fallback_decision.eligible is False
     err = capsys.readouterr().err
     assert "Press Esc to cancel" in err
     assert "cancelled" in err.lower()
@@ -149,7 +209,7 @@ def test_preflight_tty_esc_cancels(capsys):
 def test_preflight_stopped_holder_appears_mid_wait():
     clock = _Clock()
     seq = iter([_status(locked=True), _status(locked=True, stopped=[7])])
-    rc = launcher._preflight_state_lock(
+    result = launcher._preflight_state_lock(
         prober=lambda: next(seq),
         interactive=False,
         timeout_s=30,
@@ -157,7 +217,8 @@ def test_preflight_stopped_holder_appears_mid_wait():
         sleep=clock.tick,
         monotonic=clock,
     )
-    assert rc == 1
+    assert result.evidence.status is launcher.PreflightStatus.STOPPED_HOLDER
+    assert result.exit_code == 1
 
 
 def test_preflight_incomplete_result_mid_wait_short_circuits(capsys):
@@ -173,7 +234,7 @@ def test_preflight_incomplete_result_mid_wait_short_circuits(capsys):
     )
     seq = iter([_status(locked=True), incomplete])
 
-    rc = launcher._preflight_state_lock(
+    result = launcher._preflight_state_lock(
         prober=lambda: next(seq),
         interactive=False,
         timeout_s=30,
@@ -182,8 +243,71 @@ def test_preflight_incomplete_result_mid_wait_short_circuits(capsys):
         monotonic=clock,
     )
 
-    assert rc == 1
+    assert result.evidence.status is launcher.PreflightStatus.INSPECTION_INCOMPLETE
+    assert result.exit_code == 1
+    assert result.fallback_decision.eligible is False
     assert "inspection incomplete" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("answer", ["y", "Y", "yes", "YES"])
+def test_temporary_session_prompt_accepts_explicit_yes(monkeypatch, capsys, answer):
+    _allow_temporary_session_prompt(monkeypatch)
+    monkeypatch.setattr(builtins, "input", lambda: answer)
+
+    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.ACCEPTED
+    err = capsys.readouterr().err
+    assert "shared local history" in err
+    assert "temporary session without that prior history" in err
+    assert "[y/N]" in err
+
+
+@pytest.mark.parametrize("answer", ["", "n", "no", "later"])
+def test_temporary_session_prompt_defaults_to_refusal(monkeypatch, answer):
+    _allow_temporary_session_prompt(monkeypatch)
+    monkeypatch.setattr(builtins, "input", lambda: answer)
+
+    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.DECLINED
+
+
+@pytest.mark.parametrize("env_name", ["CI", "TOKENPAK_NONINTERACTIVE"])
+def test_temporary_session_prompt_never_prompts_automation(monkeypatch, env_name):
+    _allow_temporary_session_prompt(monkeypatch)
+    monkeypatch.setenv(env_name, "1")
+    monkeypatch.setattr(
+        builtins,
+        "input",
+        lambda: (_ for _ in ()).throw(AssertionError("automation was prompted")),
+    )
+
+    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.NOT_AVAILABLE
+
+
+def test_temporary_session_prompt_never_prompts_non_tty_or_dumb_term(monkeypatch):
+    _allow_temporary_session_prompt(monkeypatch)
+    monkeypatch.setattr(
+        builtins,
+        "input",
+        lambda: (_ for _ in ()).throw(AssertionError("suppressed launch was prompted")),
+    )
+
+    monkeypatch.setattr(launcher, "_stdin_is_tty", lambda: False)
+    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.NOT_AVAILABLE
+
+    monkeypatch.setattr(launcher, "_stdin_is_tty", lambda: True)
+    monkeypatch.setenv("TERM", "dumb")
+    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.NOT_AVAILABLE
+
+
+def test_temporary_session_prompt_ctrl_c_cancels(monkeypatch, capsys):
+    _allow_temporary_session_prompt(monkeypatch)
+    monkeypatch.setattr(
+        builtins,
+        "input",
+        lambda: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.CANCELLED
+    assert "cancelled" in capsys.readouterr().err
 
 
 # ── main() wires the preflight before exec, and --install-only skips it ─
@@ -211,6 +335,7 @@ def _stub_session_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path / "tokenpak-home"))
     monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "isolated")
     monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.setattr(launcher, "_local_proxy_is_healthy", lambda: False)
     monkeypatch.chdir(tmp_path)
 
 
@@ -247,6 +372,13 @@ def test_main_aborts_when_preflight_blocks(monkeypatch, tmp_path):
     _stub_setup(monkeypatch, tmp_path)
     monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
     monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: 7)
+    monkeypatch.setattr(
+        launcher,
+        "_prompt_for_temporary_session",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("an untyped preflight result must never offer fallback")
+        ),
+    )
 
     def _must_not_run(*_args, **_kwargs):
         raise AssertionError("must not launch when preflight blocks")
@@ -255,6 +387,171 @@ def test_main_aborts_when_preflight_blocks(monkeypatch, tmp_path):
     assert launcher.main([]) == 7
     assert not (tmp_path / "user" / ".codex" / "codex.pid").exists()
     assert not list((tmp_path / "tokenpak-home").rglob("codex.pid"))
+
+
+def test_shared_contention_can_use_temporary_session_for_one_invocation(
+    monkeypatch, tmp_path, capsys
+):
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
+    shared_home = tmp_path / "user" / ".codex"
+    preflight_homes = []
+
+    def block_shared_only(*, home, **_kwargs):
+        preflight_homes.append(Path(home))
+        return _preflight_result() if Path(home) == shared_home else None
+
+    monkeypatch.setattr(launcher, "_preflight_state_lock", block_shared_only)
+    monkeypatch.setattr(
+        launcher,
+        "_prompt_for_temporary_session",
+        lambda: launcher.TemporarySessionChoice.ACCEPTED,
+    )
+    captured = {}
+
+    def fake_run(argv, env, *, on_start=None):
+        captured["argv"] = argv
+        captured["env"] = env
+        assert on_start is not None
+        on_start(os.getpid())
+        return 0, launcher.empty_usage()
+
+    monkeypatch.setattr(launcher, "_run_codex_process", fake_run)
+    monkeypatch.setattr(launcher, "_launcher_mode_state", lambda: ("approval-bypass", None))
+    receipt_path = tmp_path / "fallback-receipt.json"
+
+    assert (
+        launcher.main(
+            [],
+            receipt_out=str(receipt_path),
+            run_id="shared_fallback_receipt",
+        )
+        == 0
+    )
+    assert preflight_homes == [shared_home]
+    assert captured["argv"] == ["codex", "--ask-for-approval", "never"]
+    assert captured["env"]["TOKENPAK_CODEX_SESSION_MODE"] == "isolated"
+    assert captured["env"]["CODEX_HOME"].startswith(
+        str(tmp_path / "tokenpak-home" / "companion" / "codex" / "sessions")
+    )
+    assert os.environ["TOKENPAK_CODEX_SESSION_MODE"] == "shared"
+    assert captured["env"]["TOKENPAK_CODEX_RUN_ID"] == "shared_fallback_receipt"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["tokenpak_setup"]["session_mode"] == "isolated"
+    assert receipt["tokenpak_setup"]["codex_home"] == captured["env"]["CODEX_HOME"]
+    assert receipt["tokenpak_setup"]["fallback_attempted"] is True
+    assert receipt["tokenpak_setup"]["fallback_result"] == "provisioned"
+    assert receipt["tokenpak_setup"]["selected_session_class"] == "temporary"
+    assert receipt["tokenpak_setup"]["continuity_mode"] == "new_temporary_lineage"
+    assert receipt["tokenpak_setup"]["prior_shared_history_attached"] is False
+    assert (
+        receipt["tokenpak_setup"]["original_preflight_result"]["evidence"]["status"]
+        == "holder_timeout_last_verified_live"
+    )
+    assert "this invocation only" in capsys.readouterr().err
+    assert not list((tmp_path / "tokenpak-home").rglob("codex.pid"))
+
+
+def test_shared_contention_decline_preserves_original_exit(monkeypatch, tmp_path):
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
+    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: _preflight_result())
+    monkeypatch.setattr(
+        launcher,
+        "_prompt_for_temporary_session",
+        lambda: launcher.TemporarySessionChoice.DECLINED,
+    )
+
+    assert launcher.main([]) == 1
+    assert not list((tmp_path / "tokenpak-home").rglob("codex.pid"))
+
+
+def test_shared_contention_prompt_cancel_returns_130(monkeypatch, tmp_path):
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
+    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: _preflight_result())
+    monkeypatch.setattr(
+        launcher,
+        "_prompt_for_temporary_session",
+        lambda: launcher.TemporarySessionChoice.CANCELLED,
+    )
+
+    assert launcher.main([]) == 130
+    assert not list((tmp_path / "tokenpak-home").rglob("codex.pid"))
+
+
+def test_temporary_session_selection_failure_preserves_typed_original_receipt(
+    monkeypatch, tmp_path
+):
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
+    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: _preflight_result())
+    monkeypatch.setattr(
+        launcher,
+        "_prompt_for_temporary_session",
+        lambda: launcher.TemporarySessionChoice.ACCEPTED,
+    )
+    original_select_paths = sh.select_paths
+
+    def select_paths(mode=None, **kwargs):
+        if mode == sh.MODE_ISOLATED:
+            raise ValueError("injected temporary selection failure")
+        return original_select_paths(mode=mode, **kwargs)
+
+    monkeypatch.setattr(sh, "select_paths", select_paths)
+    receipt_path = tmp_path / "selection-failure-receipt.json"
+
+    assert (
+        launcher.main(
+            [],
+            receipt_out=str(receipt_path),
+            run_id="temporary_selection_failure",
+        )
+        == 1
+    )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    setup = receipt["tokenpak_setup"]
+    assert setup["fallback_result"] == "selection_failed"
+    assert setup["selected_session_class"] == "shared"
+    assert setup["continuity_mode"] == "shared_lineage_not_replaced"
+    assert setup["original_preflight_result"]["evidence"]["status"] == (
+        "holder_timeout_last_verified_live"
+    )
+
+
+def test_temporary_session_provision_failure_records_both_outcomes(monkeypatch, tmp_path):
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
+    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: _preflight_result())
+    monkeypatch.setattr(
+        launcher,
+        "_prompt_for_temporary_session",
+        lambda: launcher.TemporarySessionChoice.ACCEPTED,
+    )
+    monkeypatch.setattr(
+        sh,
+        "provision",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("injected temporary provisioning failure")
+        ),
+    )
+    receipt_path = tmp_path / "provision-failure-receipt.json"
+
+    assert (
+        launcher.main(
+            [],
+            receipt_out=str(receipt_path),
+            run_id="temporary_provision_failure",
+        )
+        == 1
+    )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    setup = receipt["tokenpak_setup"]
+    assert setup["fallback_result"] == "setup_failed"
+    assert setup["selected_session_class"] == "temporary"
+    assert setup["continuity_mode"] == "new_temporary_lineage"
+    assert setup["prior_shared_history_attached"] is False
+    assert setup["original_preflight_result"]["fallback_decision"]["eligible"] is True
 
 
 def test_shared_mode_real_holder_probe_refuses_before_setup(monkeypatch, tmp_path, capsys):

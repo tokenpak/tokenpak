@@ -307,44 +307,55 @@ class TestStatsCollector:
 
     def test_record_request_increments_total(self):
         sc = self._fresh()
-        sc.record_request(model="anthropic/claude", tokens_in=100, tokens_out=50,
-                          compressed=True, latency_ms=120)
+        sc.record_request(
+            model="anthropic/claude", tokens_in=100, tokens_out=50, compressed=True, latency_ms=120
+        )
         assert sc.snapshot()["requests_total"] == 1
 
     def test_compression_ratio_calculated(self):
         # tokens_in=100 sent, tokens_saved=100 → tokens_before=200, ratio=0.5
         sc = self._fresh()
-        sc.record_request(model="claude", tokens_in=100, tokens_out=50,
-                          compressed=True, tokens_saved=100, latency_ms=50)
+        sc.record_request(
+            model="claude",
+            tokens_in=100,
+            tokens_out=50,
+            compressed=True,
+            tokens_saved=100,
+            latency_ms=50,
+        )
         snap = sc.snapshot()
         # ratio = tokens_after / tokens_before = 100 / 200 = 0.5
         assert snap["compression"]["ratio"] == pytest.approx(0.5)
 
     def test_uncompressed_request_skipped_counter(self):
         sc = self._fresh()
-        sc.record_request(model="claude", tokens_in=100, tokens_out=100,
-                          compressed=False, latency_ms=30)
+        sc.record_request(
+            model="claude", tokens_in=100, tokens_out=100, compressed=False, latency_ms=30
+        )
         assert sc.snapshot()["compression"]["skipped"] == 1
 
     def test_routing_breakdown(self):
         sc = self._fresh()
-        sc.record_request(model="anthropic/claude-3", tokens_in=10, tokens_out=5,
-                          compressed=True, latency_ms=20)
+        sc.record_request(
+            model="anthropic/claude-3", tokens_in=10, tokens_out=5, compressed=True, latency_ms=20
+        )
         routing = sc.snapshot()["routing"]
         assert "anthropic_claude" in routing
         assert routing["anthropic_claude"] == 1
 
     def test_model_normalisation_google(self):
         sc = self._fresh()
-        sc.record_request(model="google/gemini-pro", tokens_in=10, tokens_out=5,
-                          compressed=False, latency_ms=15)
+        sc.record_request(
+            model="google/gemini-pro", tokens_in=10, tokens_out=5, compressed=False, latency_ms=15
+        )
         routing = sc.snapshot()["routing"]
         assert "google_gemini" in routing
 
     def test_model_normalisation_openai(self):
         sc = self._fresh()
-        sc.record_request(model="gpt-4o", tokens_in=10, tokens_out=5,
-                          compressed=False, latency_ms=15)
+        sc.record_request(
+            model="gpt-4o", tokens_in=10, tokens_out=5, compressed=False, latency_ms=15
+        )
         routing = sc.snapshot()["routing"]
         assert "openai" in routing
 
@@ -370,14 +381,16 @@ class TestStatsCollector:
 
     def test_latest_request_latency(self):
         sc = self._fresh()
-        sc.record_request(model="claude", tokens_in=10, tokens_out=5,
-                          compressed=True, latency_ms=99.5)
+        sc.record_request(
+            model="claude", tokens_in=10, tokens_out=5, compressed=True, latency_ms=99.5
+        )
         assert sc.snapshot()["latest_request_ms"] == pytest.approx(99.5)
 
     def test_to_text_returns_string(self):
         sc = self._fresh()
-        sc.record_request(model="claude", tokens_in=100, tokens_out=50,
-                          compressed=True, latency_ms=55)
+        sc.record_request(
+            model="claude", tokens_in=100, tokens_out=50, compressed=True, latency_ms=55
+        )
         text = sc.to_text()
         assert "requests_total=1" in text
         assert "uptime_seconds=" in text

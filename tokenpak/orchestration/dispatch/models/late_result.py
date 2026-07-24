@@ -23,9 +23,7 @@ class LateResult(DispatchBaseModel):
     received_at: datetime
     result_hash: str
     stored_artifact_id: str | None = None
-    effects_applied: bool = Field(
-        default=False, description="always false in v0.1-alpha"
-    )
+    effects_applied: bool = Field(default=False, description="always false in v0.1-alpha")
     recovery_allowed: bool = Field(
         default=False, description="v0.1-alpha: inspect-only; recovery deferred"
     )

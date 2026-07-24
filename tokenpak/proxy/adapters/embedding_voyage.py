@@ -37,7 +37,7 @@ class EmbeddingVoyageAdapter(EmbeddingAdapter):
         Returns:
             (url, headers, body) ready to forward to https://api.voyageai.com/v1/embeddings.
         """
-        payload: Dict = {
+        payload: Dict[str, object] = {
             "model": canonical.model,
             "input": canonical.input,
             # truncate → truncation

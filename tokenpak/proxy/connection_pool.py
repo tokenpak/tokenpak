@@ -59,8 +59,10 @@ import os
 import threading
 import time
 from collections import deque
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
+from types import TracebackType
+from typing import Optional
 
 import httpx
 
@@ -92,7 +94,7 @@ _H2_AVAILABLE: bool = _http2_available()
 
 # PoolTimeout means the local pool was saturated, not that a connection is
 # broken — evicting the whole client would discard healthy connections.
-_EVICT_EXCLUDED_ERRORS: tuple = (httpx.PoolTimeout,)
+_EVICT_EXCLUDED_ERRORS: tuple[type[BaseException], ...] = (httpx.PoolTimeout,)
 
 
 def _is_evictable_transport_error(exc: BaseException) -> bool:
@@ -200,7 +202,7 @@ class PoolMetrics:
             return 0.0
         return round(self.reused_connections / self.total_requests, 4)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, int | float]:
         return {
             "total_requests": self.total_requests,
             "reused_connections": self.reused_connections,
@@ -244,19 +246,19 @@ class ConnectionPool:
 
     def __init__(self, config: Optional[PoolConfig] = None) -> None:
         self._config = config or PoolConfig.from_env()
-        self._clients: Dict[str, httpx.Client] = {}
+        self._clients: dict[str, httpx.Client] = {}
         self._lock = threading.Lock()
         self._metrics = PoolMetrics()
         self._metrics_lock = threading.Lock()
         # Per-session client pool: key = (netloc, session_key), value =
         # (client, last_used_monotonic). Separate lock keeps session lookups
         # off the main pool lock's critical path.
-        self._session_clients: Dict[tuple, tuple] = {}
+        self._session_clients: dict[tuple[str, str], tuple[httpx.Client, float]] = {}
         self._session_lock = threading.Lock()
         # Clients evicted after a transport error. They are not closed
         # immediately — other threads may still be mid-request on them —
         # but retired here and closed once the grace period has passed.
-        self._retired_clients: List[Tuple[httpx.Client, float]] = []
+        self._retired_clients: list[tuple[httpx.Client, float]] = []
         self._retired_lock = threading.Lock()
         # In-use lease counts for every pooled client (identity-keyed, guarded
         # by _session_lock). last_used is only a checkout stamp, so a client
@@ -266,12 +268,12 @@ class ConnectionPool:
         # and the LRU cap evict only clients with zero active leases.
         # Entries are removed when the count returns to zero, so the dict
         # stays bounded by live concurrency.
-        self._session_client_refs: Dict[httpx.Client, int] = {}
+        self._session_client_refs: dict[httpx.Client, int] = {}
         # Overflow clients handed out when the pool is at cap and every
         # pooled client is in use. Never stored in _session_clients; closed
         # on release (create-and-close-after-use) instead of closing a live
         # pooled client.
-        self._overflow_clients: set = set()
+        self._overflow_clients: set[httpx.Client] = set()
         # Client.close() is normally fast, but it is transport code and can
         # wedge. Request handlers therefore enqueue closes onto a small fixed
         # daemon-worker set instead of running them inline. The outstanding
@@ -279,12 +281,12 @@ class ConnectionPool:
         # fails fast instead of creating more clients/FDs. Shutdown may enqueue
         # every already-owned client, but never creates one thread per client.
         self._close_cv = threading.Condition()
-        self._close_backlog: Deque[Any] = deque()
-        self._close_pending: Dict[int, Any] = {}
-        self._close_pending_since: Dict[int, float] = {}
+        self._close_backlog: deque[httpx.Client] = deque()
+        self._close_pending: dict[int, httpx.Client] = {}
+        self._close_pending_since: dict[int, float] = {}
         self._close_in_progress: set[int] = set()
-        self._close_attempts: Dict[int, int] = {}
-        self._close_workers: List[threading.Thread] = []
+        self._close_attempts: dict[int, int] = {}
+        self._close_workers: list[threading.Thread] = []
         self._close_completed = 0
         self._close_failures = 0
         self._cleanup_worker_start_failures = 0
@@ -302,7 +304,7 @@ class ConnectionPool:
         self._client_slot_limit = max(8, self._config.session_client_max * 2)
         self._client_slots = threading.BoundedSemaphore(self._client_slot_limit)
         self._client_slot_lock = threading.Lock()
-        self._client_slot_clients: Dict[int, Any] = {}
+        self._client_slot_clients: dict[int, httpx.Client] = {}
         self._client_slot_rejections = 0
 
     # ------------------------------------------------------------------
@@ -355,7 +357,7 @@ class ConnectionPool:
                 self._client_slot_clients[client_id] = client
         return client
 
-    def _release_client_slot(self, client: Any) -> None:
+    def _release_client_slot(self, client: httpx.Client) -> None:
         """Release a constructed client's permit exactly once after close."""
         with self._client_slot_lock:
             if self._client_slot_clients.pop(id(client), None) is None:
@@ -689,7 +691,7 @@ class ConnectionPool:
     def _close_retired_client_now(self, client: httpx.Client) -> None:
         """Close *client* immediately if it is retired and no longer leased."""
         with self._retired_lock:
-            keep: List[Tuple[httpx.Client, float]] = []
+            keep: list[tuple[httpx.Client, float]] = []
             for retired_client, retired_at in self._retired_clients:
                 if retired_client is client:
                     if not self._schedule_close(client):
@@ -738,7 +740,7 @@ class ConnectionPool:
         with self._session_lock:
             leased = {client for client, refs in self._session_client_refs.items() if refs > 0}
         with self._retired_lock:
-            keep: List[Tuple[httpx.Client, float]] = []
+            keep: list[tuple[httpx.Client, float]] = []
             for client, retired_at in self._retired_clients:
                 if (force or retired_at <= cutoff) and client not in leased:
                     if not self._schedule_close(client, force=force):
@@ -757,7 +759,7 @@ class ConnectionPool:
         url: str,
         *,
         content: Optional[bytes] = None,
-        headers: Optional[dict] = None,
+        headers: Optional[Mapping[str, str]] = None,
         session_key: Optional[str] = None,
     ) -> httpx.Response:
         """
@@ -835,9 +837,9 @@ class ConnectionPool:
         url: str,
         *,
         content: Optional[bytes] = None,
-        headers: Optional[dict] = None,
+        headers: Optional[Mapping[str, str]] = None,
         session_key: Optional[str] = None,
-    ):
+    ) -> _StreamingContext:
         """
         Send a streaming HTTP request via the pool.
 
@@ -902,12 +904,12 @@ class ConnectionPool:
         return self._config.http2 and _H2_AVAILABLE
 
     @property
-    def active_providers(self) -> list:
+    def active_providers(self) -> list[str]:
         """List of netloc strings for which a client has been created."""
         with self._lock:
             return list(self._clients.keys())
 
-    def metrics(self) -> dict:
+    def metrics(self) -> dict[str, int | float | bool]:
         """Return a copy of the current pool metrics."""
         # /health calls this surface, making health polling a safe recovery
         # kick after a transient inability to start cleanup workers.
@@ -977,7 +979,7 @@ class ConnectionPool:
         deadline = started + timeout
         self._closed = True
 
-        clients: List[Any] = []
+        clients: list[httpx.Client] = []
         # Selection, lease visibility, and active retirement are atomic with
         # every checkout path. Active requests/streams are never force-closed;
         # their final release performs the cleanup handoff.
@@ -999,7 +1001,7 @@ class ConnectionPool:
         # Retired clients with no live lease move to cleanup; active ones stay
         # visible until final release. Do not clear positive refcounts.
         with self._retired_lock:
-            keep: List[Tuple[httpx.Client, float]] = []
+            keep: list[tuple[httpx.Client, float]] = []
             for client, retired_at in self._retired_clients:
                 if client in leased:
                     keep.append((client, retired_at))
@@ -1036,7 +1038,7 @@ class ConnectionPool:
                 pending,
             )
 
-    def session_client_snapshot(self) -> Dict[str, Any]:
+    def session_client_snapshot(self) -> dict[str, object]:
         """Return a diagnostic snapshot of the per-session client pool."""
         with self._session_lock:
             return {
@@ -1080,12 +1082,12 @@ class _StreamingContext:
         method: str,
         url: str,
         content: Optional[bytes],
-        headers: Optional[dict],
+        headers: Optional[Mapping[str, str]],
         metrics: PoolMetrics,
         lock: threading.Lock,
-        on_transport_error: Optional[Callable[[], Any]] = None,
-        on_complete: Optional[Callable[[], Any]] = None,
-        on_release: Optional[Callable[[], Any]] = None,
+        on_transport_error: Optional[Callable[[], object]] = None,
+        on_complete: Optional[Callable[[], object]] = None,
+        on_release: Optional[Callable[[], object]] = None,
     ) -> None:
         self._on_release = on_release
         self._released = False
@@ -1132,7 +1134,12 @@ class _StreamingContext:
                 self._metrics.new_connections += 1
         return self._response
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         try:
             self._ctx.__exit__(exc_type, exc, tb)
         finally:

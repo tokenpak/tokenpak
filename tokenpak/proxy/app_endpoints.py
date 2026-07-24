@@ -34,6 +34,7 @@ import datetime as _dt
 import json
 import os
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import parse_qs, urlparse
@@ -61,7 +62,7 @@ def _is_authorized(handler: Any) -> bool:
     key = os.environ.get("TOKENPAK_PROXY_KEY", "").strip()
     if not key:
         return True
-    return handler.headers.get("X-TPK-Key", "") == key
+    return bool(handler.headers.get("X-TPK-Key", "") == key)
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +165,12 @@ def try_handle_get(handler: Any) -> bool:
         return False
 
     if not _is_authorized(handler):
-        _send_error(handler, 401, "unauthorized", "localhost-only; set X-TPK-Key if TOKENPAK_PROXY_KEY is configured")
+        _send_error(
+            handler,
+            401,
+            "unauthorized",
+            "localhost-only; set X-TPK-Key if TOKENPAK_PROXY_KEY is configured",
+        )
         return True
 
     qs = parse_qs(parsed.query or "")
@@ -181,7 +187,7 @@ def try_handle_get(handler: Any) -> bool:
 
     # ── /tpk/v1/vault/block/{block_id} ───────────────────────────────────
     if path.startswith("/tpk/v1/vault/block/"):
-        block_id = path[len("/tpk/v1/vault/block/"):]
+        block_id = path[len("/tpk/v1/vault/block/") :]
         _handle_vault_block(handler, block_id)
         return True
 
@@ -197,7 +203,7 @@ def try_handle_get(handler: Any) -> bool:
 
     # ── /tpk/v1/journal/{session_id} ─────────────────────────────────────
     if path.startswith("/tpk/v1/journal/"):
-        session_id = path[len("/tpk/v1/journal/"):]
+        session_id = path[len("/tpk/v1/journal/") :]
         _handle_journal_get(handler, session_id, qs)
         return True
 
@@ -208,7 +214,7 @@ def try_handle_get(handler: Any) -> bool:
 
     # ── /tpk/v1/capsules/{session_id} ─ load a specific capsule ────────
     if path.startswith("/tpk/v1/capsules/"):
-        session_id = path[len("/tpk/v1/capsules/"):]
+        session_id = path[len("/tpk/v1/capsules/") :]
         _handle_capsule_get(handler, session_id, qs)
         return True
 
@@ -241,7 +247,7 @@ def try_handle_post(handler: Any) -> bool:
 
     # ── POST /tpk/v1/journal/{session_id}/entry ──────────────────────────
     if path.startswith("/tpk/v1/journal/") and path.endswith("/entry"):
-        session_id = path[len("/tpk/v1/journal/"):-len("/entry")]
+        session_id = path[len("/tpk/v1/journal/") : -len("/entry")]
         body = _read_json_body(handler)
         if body is None:
             _send_error(handler, 400, "invalid_json", "request body must be JSON")
@@ -286,7 +292,8 @@ def _read_json_body(handler: Any) -> Optional[dict[str, Any]]:
         raw = handler.rfile.read(length) if length > 0 else b""
         if not raw:
             return {}
-        return json.loads(raw.decode("utf-8"))
+        parsed = json.loads(raw.decode("utf-8"))
+        return parsed if isinstance(parsed, dict) else None
     except Exception:
         return None
 
@@ -298,6 +305,7 @@ def _read_json_body(handler: Any) -> Optional[dict[str, Any]]:
 
 def _handle_health(handler: Any) -> None:
     from tokenpak import __version__ as _version
+
     proxy_server = getattr(handler.server, "proxy_server", None)
     uptime = 0.0
     if proxy_server is not None:
@@ -308,11 +316,15 @@ def _handle_health(handler: Any) -> None:
 
     vault_info = _vault_info_lightweight()
 
-    _send_json(handler, 200, {
-        "version": _version,
-        "uptime_s": round(uptime, 1),
-        "vault": vault_info,
-    })
+    _send_json(
+        handler,
+        200,
+        {
+            "version": _version,
+            "uptime_s": round(uptime, 1),
+            "vault": vault_info,
+        },
+    )
 
 
 def _handle_vault_search(handler: Any, qs: dict[str, list[str]]) -> None:
@@ -328,6 +340,7 @@ def _handle_vault_search(handler: Any, qs: dict[str, list[str]]) -> None:
 
     try:
         from tokenpak.proxy.vault_bridge import get_vault_index
+
         vi = get_vault_index()
     except Exception as exc:
         _send_error(handler, 503, "vault_unavailable", f"index init failed: {exc}")
@@ -342,21 +355,25 @@ def _handle_vault_search(handler: Any, qs: dict[str, list[str]]) -> None:
         _send_error(handler, 500, "search_failed", str(exc))
         return
 
-    out = []
+    out: list[dict[str, object]] = []
     for block, score in results:
         block_id = block.get("block_id") or block.get("id") or ""
-        source = block.get("source_type") or "vault"
-        row = {
+        source = str(block.get("source_type") or "vault")
+        token_value = block.get("tokens") or block.get("raw_tokens") or 0
+        tokens = int(token_value) if isinstance(token_value, (int, float, str)) else 0
+        preview_value = block.get("title") or block.get("summary") or ""
+        preview = str(preview_value)[:200]
+        row: dict[str, object] = {
             "block_id": block_id,
             "path": block.get("path") or block.get("source_path", ""),
             "score": round(float(score), 3),
-            "tokens": int(block.get("tokens", 0) or block.get("raw_tokens", 0) or 0),
-            "preview": (block.get("title") or block.get("summary") or "")[:200],
+            "tokens": tokens,
+            "preview": preview,
             "source": source,
         }
         if source == "claude_transcript":
-            ct = block.get("claude_transcript") or {}
-            if ct:
+            ct = block.get("claude_transcript")
+            if isinstance(ct, Mapping):
                 row["claude_transcript"] = {
                     "project_dir": ct.get("project_dir"),
                     "project_cwd_guess": ct.get("project_cwd_guess"),
@@ -377,6 +394,7 @@ def _handle_vault_block(handler: Any, block_id: str) -> None:
 
     try:
         from tokenpak.proxy.vault_bridge import get_vault_index
+
         vi = get_vault_index()
     except Exception as exc:
         _send_error(handler, 503, "vault_unavailable", f"index init failed: {exc}")
@@ -401,12 +419,16 @@ def _handle_vault_block(handler: Any, block_id: str) -> None:
         except Exception:
             pass
 
-    _send_json(handler, 200, {
-        "block_id": block_id,
-        "path": meta.get("path", ""),
-        "tokens": int(meta.get("tokens", 0) or 0),
-        "content": content,
-    })
+    _send_json(
+        handler,
+        200,
+        {
+            "block_id": block_id,
+            "path": meta.get("path", ""),
+            "tokens": int(meta.get("tokens", 0) or 0),
+            "content": content,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -426,6 +448,7 @@ def _companion_dir() -> Path:
 
 def _get_budget_tracker() -> Any:
     from tokenpak.companion.budget.tracker import BudgetTracker
+
     daily = 0.0
     try:
         daily = float(os.environ.get("TOKENPAK_COMPANION_BUDGET", "0") or 0)
@@ -436,6 +459,7 @@ def _get_budget_tracker() -> Any:
 
 def _get_journal_store() -> Any:
     from tokenpak.companion.journal.store import JournalStore
+
     return JournalStore(db_path=_companion_dir() / "journal.db")
 
 
@@ -471,7 +495,7 @@ def _extract_field(content: str, field: str) -> str:
     for line in (content or "").splitlines():
         s = line.strip()
         if s.upper().startswith(needle):
-            return s[len(needle):].strip()
+            return s[len(needle) :].strip()
     return ""
 
 
@@ -545,20 +569,26 @@ def _handle_budget_get(handler: Any, qs: dict[str, list[str]]) -> None:
     remaining = getattr(est, "budget_remaining_usd", 0.0)
     # Sanitize inf/nan to None so strict JSON accepts them
     import math as _math
+
     try:
-        remaining_val = float(remaining)
-        if not _math.isfinite(remaining_val):
+        parsed_remaining = float(remaining)
+        remaining_val: Optional[float] = parsed_remaining
+        if not _math.isfinite(parsed_remaining):
             remaining_val = None
     except (TypeError, ValueError):
         remaining_val = None
-    _send_json(handler, 200, {
-        "session_cost_usd": round(float(getattr(est, "session_total_usd", 0.0) or 0.0), 6),
-        "daily_cost_usd": round(float(getattr(est, "daily_total_usd", 0.0) or 0.0), 6),
-        "daily_budget_usd": round(daily_budget, 6),
-        "remaining_usd": (round(remaining_val, 6) if remaining_val is not None else None),
-        "session_requests": int(getattr(tracker, "session_requests", 0) or 0),
-        "budget_set": daily_budget > 0,
-    })
+    _send_json(
+        handler,
+        200,
+        {
+            "session_cost_usd": round(float(getattr(est, "session_total_usd", 0.0) or 0.0), 6),
+            "daily_cost_usd": round(float(getattr(est, "daily_total_usd", 0.0) or 0.0), 6),
+            "daily_budget_usd": round(daily_budget, 6),
+            "remaining_usd": (round(remaining_val, 6) if remaining_val is not None else None),
+            "session_requests": int(getattr(tracker, "session_requests", 0) or 0),
+            "budget_set": daily_budget > 0,
+        },
+    )
 
 
 def _handle_journal_sessions(handler: Any, qs: dict[str, list[str]]) -> None:
@@ -575,13 +605,15 @@ def _handle_journal_sessions(handler: Any, qs: dict[str, list[str]]) -> None:
         return
     out = []
     for s in sessions:
-        out.append({
-            "session_id": getattr(s, "session_id", ""),
-            "project_dir": getattr(s, "project_dir", ""),
-            "total_requests": getattr(s, "total_requests", 0),
-            "total_cost_usd": round(getattr(s, "total_cost_usd", 0.0), 6),
-            "entry_count": getattr(s, "entry_count", 0),
-        })
+        out.append(
+            {
+                "session_id": getattr(s, "session_id", ""),
+                "project_dir": getattr(s, "project_dir", ""),
+                "total_requests": getattr(s, "total_requests", 0),
+                "total_cost_usd": round(getattr(s, "total_cost_usd", 0.0), 6),
+                "entry_count": getattr(s, "entry_count", 0),
+            }
+        )
     _send_json(handler, 200, {"sessions": out})
 
 
@@ -601,17 +633,21 @@ def _handle_journal_get(handler: Any, session_id: str, qs: dict[str, list[str]])
     except Exception as exc:
         _send_error(handler, 500, "journal_unavailable", str(exc))
         return
-    _send_json(handler, 200, {
-        "session_id": session_id,
-        "entries": [
-            {
-                "timestamp": getattr(e, "timestamp", 0),
-                "type": getattr(e, "entry_type", ""),
-                "content": getattr(e, "content", ""),
-            }
-            for e in entries
-        ],
-    })
+    _send_json(
+        handler,
+        200,
+        {
+            "session_id": session_id,
+            "entries": [
+                {
+                    "timestamp": getattr(e, "timestamp", 0),
+                    "type": getattr(e, "entry_type", ""),
+                    "content": getattr(e, "content", ""),
+                }
+                for e in entries
+            ],
+        },
+    )
 
 
 def _handle_journal_post(handler: Any, session_id: str, body: dict[str, Any]) -> None:
@@ -651,7 +687,11 @@ def _handle_journal_post(handler: Any, session_id: str, body: dict[str, Any]) ->
             handoff = _record_handoff(session_id, content)
         except Exception:
             handoff = None  # mirroring is best-effort; the entry already landed
-    out = {"status": "ok", "session_id": session_id, "entry_type": entry_type}
+    out: dict[str, Any] = {
+        "status": "ok",
+        "session_id": session_id,
+        "entry_type": entry_type,
+    }
     if handoff:
         out["handoff"] = handoff
     _send_json(handler, 200, out)
@@ -712,14 +752,18 @@ def _handle_compress(handler: Any, body: dict[str, Any]) -> None:
             pass  # never fail the tool call
 
     reduction_pct = round((1 - pruned_tokens_est / original_tokens_est) * 100, 1)
-    _send_json(handler, 200, {
-        "pruned_text": pruned,
-        "original_tokens": original_tokens_est,
-        "pruned_tokens": pruned_tokens_est,
-        "tokens_avoided": tokens_avoided,
-        "cost_avoided_usd": round(cost_avoided, 6),
-        "reduction_pct": reduction_pct,
-    })
+    _send_json(
+        handler,
+        200,
+        {
+            "pruned_text": pruned,
+            "original_tokens": original_tokens_est,
+            "pruned_tokens": pruned_tokens_est,
+            "tokens_avoided": tokens_avoided,
+            "cost_avoided_usd": round(cost_avoided, 6),
+            "reduction_pct": reduction_pct,
+        },
+    )
 
 
 def _handle_optimize(handler: Any, body: dict[str, Any]) -> None:
@@ -731,6 +775,7 @@ def _handle_optimize(handler: Any, body: dict[str, Any]) -> None:
     source = str(body.get("source", "<http>"))
     try:
         from tokenpak.cli.commands.optimize_prompt import analyze
+
         report = analyze(text, source=source)
     except Exception as exc:
         _send_error(handler, 500, "optimize_failed", str(exc))
@@ -754,11 +799,13 @@ def _handle_capsules_list(handler: Any, qs: dict[str, list[str]]) -> None:
     for p in files[:limit]:
         try:
             st = p.stat()
-            items.append({
-                "session_id": p.stem,
-                "size_bytes": st.st_size,
-                "modified": st.st_mtime,
-            })
+            items.append(
+                {
+                    "session_id": p.stem,
+                    "size_bytes": st.st_size,
+                    "modified": st.st_mtime,
+                }
+            )
         except OSError:
             continue
     _send_json(handler, 200, {"capsules": items})
@@ -785,8 +832,11 @@ def _handle_capsule_get(handler: Any, session_id: str, qs: dict[str, list[str]])
         # silently serve a stale handoff). Skip the alias files themselves so
         # we never resolve back to a stale target.
         candidates = sorted(
-            (p for p in capsule_dir.glob("*.md")
-             if p.name not in ("active.md", "latest.md", "current.md")),
+            (
+                p
+                for p in capsule_dir.glob("*.md")
+                if p.name not in ("active.md", "latest.md", "current.md")
+            ),
             key=lambda x: x.stat().st_mtime,
             reverse=True,
         )
@@ -823,12 +873,16 @@ def _handle_capsule_get(handler: Any, session_id: str, qs: dict[str, list[str]])
         except Exception:
             pass
 
-    _send_json(handler, 200, {
-        "session_id": match.stem,
-        "path": str(match),
-        "tokens_est": tokens_est,
-        "content": content or "",
-    })
+    _send_json(
+        handler,
+        200,
+        {
+            "session_id": match.stem,
+            "path": str(match),
+            "tokens_est": tokens_est,
+            "content": content or "",
+        },
+    )
 
 
 def _handle_models_list(handler: Any, qs: dict[str, list[str]]) -> None:
@@ -852,6 +906,7 @@ def _handle_models_list(handler: Any, qs: dict[str, list[str]]) -> None:
 
     try:
         from tokenpak.models import get_registry
+
         reg = get_registry()
         registered = list(reg.all_models())
     except Exception as exc:
@@ -865,6 +920,7 @@ def _handle_models_list(handler: Any, qs: dict[str, list[str]]) -> None:
     if include_observed:
         try:
             import sqlite3 as _sq
+
             db_path = os.environ.get(
                 "TOKENPAK_DB",
                 os.path.expanduser("~/.tokenpak/monitor.db"),
@@ -892,21 +948,23 @@ def _handle_models_list(handler: Any, qs: dict[str, list[str]]) -> None:
 
     all_models = registered + observed_resolved
 
-    out = []
+    out: list[dict[str, Any]] = []
     for m in all_models:
         if filter_provider and (m.provider or "").lower() != filter_provider:
             continue
-        out.append({
-            "id": m.model_id,
-            "provider": m.provider,
-            "tier": m.tier,
-            "input_per_mtok": m.input_per_mtok,
-            "output_per_mtok": m.output_per_mtok,
-            "cache_read_per_mtok": m.cache_read_per_mtok,
-            "cache_write_per_mtok": m.cache_write_per_mtok,
-            "source": m.source,
-            "aliases": list(m.aliases or []),
-        })
+        out.append(
+            {
+                "id": m.model_id,
+                "provider": m.provider,
+                "tier": m.tier,
+                "input_per_mtok": m.input_per_mtok,
+                "output_per_mtok": m.output_per_mtok,
+                "cache_read_per_mtok": m.cache_read_per_mtok,
+                "cache_write_per_mtok": m.cache_write_per_mtok,
+                "source": m.source,
+                "aliases": list(m.aliases or []),
+            }
+        )
 
     # Sort: by source (seed → discovered → inferred/observed), then id desc
     _src_order = {"seed": 0, "discovered": 1, "inferred": 2}
@@ -917,6 +975,7 @@ def _handle_models_list(handler: Any, qs: dict[str, list[str]]) -> None:
 def _handle_session_info_get(handler: Any) -> None:
     """Proxy-side snapshot of process state + vault + active session counters."""
     from tokenpak import __version__ as _version
+
     proxy_server = getattr(handler.server, "proxy_server", None)
     uptime = 0.0
     session_stats: dict[str, Any] = {}
@@ -937,15 +996,19 @@ def _handle_session_info_get(handler: Any) -> None:
     compilation_mode = os.environ.get("TOKENPAK_MODE", "hybrid")
     profile = os.environ.get("TOKENPAK_PROFILE", "balanced")
     cache_ttl = os.environ.get("TOKENPAK_CACHE_TTL", "5m").strip() or "5m"
-    _send_json(handler, 200, {
-        "version": _version,
-        "uptime_s": round(uptime, 1),
-        "mode": compilation_mode,
-        "profile": profile,
-        "cache_ttl": cache_ttl,
-        "session": session_stats,
-        "vault": vault_info,
-    })
+    _send_json(
+        handler,
+        200,
+        {
+            "version": _version,
+            "uptime_s": round(uptime, 1),
+            "mode": compilation_mode,
+            "profile": profile,
+            "cache_ttl": cache_ttl,
+            "session": session_stats,
+            "vault": vault_info,
+        },
+    )
 
 
 def _handle_tokens_estimate(handler: Any, body: dict[str, Any]) -> None:
@@ -967,18 +1030,23 @@ def _handle_tokens_estimate(handler: Any, body: dict[str, Any]) -> None:
     chars = len(text)
     try:
         from tokenpak.telemetry.tokens import count_tokens
+
         CHUNK = 100_000
         if chars <= CHUNK:
             tokens = count_tokens(text)
         else:
-            tokens = sum(count_tokens(text[i:i + CHUNK]) for i in range(0, chars, CHUNK))
+            tokens = sum(count_tokens(text[i : i + CHUNK]) for i in range(0, chars, CHUNK))
     except Exception:
         tokens = max(1, chars // 4)
-    _send_json(handler, 200, {
-        "chars": chars,
-        "tokens": int(tokens),
-        "chars_per_token": round(chars / max(1, tokens), 2),
-    })
+    _send_json(
+        handler,
+        200,
+        {
+            "chars": chars,
+            "tokens": int(tokens),
+            "chars_per_token": round(chars / max(1, tokens), 2),
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1041,7 +1109,7 @@ def _try_handle_pak_get(handler: Any, path: str, parsed: Any) -> bool:
     if path.startswith("/pak/v1/inspect/"):
         from urllib.parse import unquote
 
-        pak_id = unquote(path[len("/pak/v1/inspect/"):])
+        pak_id = unquote(path[len("/pak/v1/inspect/") :])
         _handle_pak_inspect(handler, pak_id)
         return True
 
@@ -1084,7 +1152,7 @@ def _try_handle_pak_post(handler: Any, path: str) -> bool:
         handler,
         404,
         "not_found",
-        f"POST /pak/v1{path[len('/pak/v1'):]} not implemented yet",
+        f"POST /pak/v1{path[len('/pak/v1') :]} not implemented yet",
     )
     return True
 
@@ -1189,8 +1257,7 @@ def _handle_pak_promote_forward(handler: Any) -> None:
                     f"{type(exc).__name__}: {exc}"
                 ),
                 "suggested_action": (
-                    "Retry the request; if the failure persists, restart the "
-                    "tokenpak-paid daemon."
+                    "Retry the request; if the failure persists, restart the tokenpak-paid daemon."
                 ),
             },
         )
@@ -1442,7 +1509,7 @@ def _handle_pak_inspect(handler: Any, pak_id: str) -> None:
         # The vault adapter wraps a vault block by id; for now we fetch
         # the underlying block via the existing vault-bridge helper and
         # convert. Returns 404 when the block isn't indexed.
-        block_id = pak_id[len("vault:"):]
+        block_id = pak_id[len("vault:") :]
         try:
             from tokenpak.proxy.vault_bridge import get_vault_index
 

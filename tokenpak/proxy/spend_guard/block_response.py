@@ -9,10 +9,42 @@ blocks, with the JSON body carrying the recoverable-pause contract.
 
 from __future__ import annotations
 
+__all__ = (
+    "ERR_BLOCKED",
+    "ERR_CANCELLED",
+    "ERR_HARD_BLOCKED",
+    "ERR_PENDING_WAITING",
+    "ERR_REPROMPT",
+    "ERR_ROLLING_CAP_BLOCKED",
+    "HTTP_BLOCK",
+    "HTTP_CANCELLED",
+    "HTTP_ESTIMATE",
+    "HTTP_HARD_BLOCK",
+    "HTTP_PENDING_WAITING",
+    "HTTP_REPROMPT",
+    "INFO_ESTIMATE",
+    "PendingRequest",
+    "PreflightDecision",
+    "RiskEstimate",
+    "block",
+    "block_store_unavailable",
+    "build_rolling_cap_block",
+    "cancelled",
+    "estimate_only",
+    "hard_block",
+    "pending_waiting",
+    "reprompt",
+)
+
+
 import json
 from dataclasses import asdict
+from typing import TYPE_CHECKING
 
 from .contracts import PendingRequest, PreflightDecision, RiskEstimate
+
+if TYPE_CHECKING:
+    from .rolling_caps import CapBreach
 
 # Stable error.type strings — agents key on these. Single source of truth.
 ERR_BLOCKED = "tokenpak_spend_guard_blocked"
@@ -30,7 +62,7 @@ INFO_ESTIMATE = "tokenpak_spend_guard_estimate"
 HTTP_BLOCK = 402
 HTTP_HARD_BLOCK = 402
 HTTP_PENDING_WAITING = 402
-HTTP_CANCELLED = 200      # cancellation is a successful resolution
+HTTP_CANCELLED = 200  # cancellation is a successful resolution
 HTTP_REPROMPT = 402
 HTTP_ESTIMATE = 200
 
@@ -56,7 +88,7 @@ def block(decision: PreflightDecision, pending: PendingRequest) -> bytes:
             "pending_id": pending.pending_id,
             "expires_at": pending.expires_at,
             "approval_prompt": "Proceed? Yes / No",
-            "retryable": True,        # client may retry after approval
+            "retryable": True,  # client may retry after approval
             "recovery_status": "user_action_required",
         }
     }
@@ -182,7 +214,7 @@ def estimate_only(risk: RiskEstimate) -> bytes:
     return json.dumps(payload).encode()
 
 
-def build_rolling_cap_block(breach) -> bytes:
+def build_rolling_cap_block(breach: CapBreach) -> bytes:
     """Build the JSON response body for a rolling-cap block.
 
     `breach` is a :class:`rolling_caps.CapBreach` dataclass instance.
@@ -244,8 +276,8 @@ def build_rolling_cap_block(breach) -> bytes:
             "type": ERR_ROLLING_CAP_BLOCKED,
             "message": message,
             # --- attribution-clear fields ---
-            "scope": scope,                       # "fleet" | "agent"
-            "triggered_by": breach.agent_id,      # the caller that tripped the cap
+            "scope": scope,  # "fleet" | "agent"
+            "triggered_by": breach.agent_id,  # the caller that tripped the cap
             "fleet_used": breach.used if is_fleet else None,
             "fleet_cap": breach.cap if is_fleet else None,
             "window_seconds": breach.window_seconds,

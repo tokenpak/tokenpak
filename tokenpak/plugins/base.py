@@ -1,6 +1,7 @@
 """Base class for TokenPak compressor plugins."""
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class CompressorPlugin(ABC):
@@ -13,7 +14,7 @@ class CompressorPlugin(ABC):
     name: str = ""
 
     @abstractmethod
-    def compress(self, text: str, context: dict) -> dict:
+    def compress(self, text: str, context: dict[str, Any]) -> dict[str, Any]:
         """Compress *text* and return a result dict.
 
         Args:

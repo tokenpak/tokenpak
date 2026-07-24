@@ -12,6 +12,7 @@ The estimator runs on every inbound request, so it must stay sub-millisecond.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from .contracts import RiskEstimate
 
@@ -36,7 +37,7 @@ def _count_text_tokens(text: str) -> int:
     return max(1, len(text) // _CHARS_PER_TOKEN)
 
 
-def _walk_anthropic_body(body_json: dict) -> tuple[int, int, float]:
+def _walk_anthropic_body(body_json: dict[str, Any]) -> tuple[int, int, float]:
     """Walk an Anthropic ``/v1/messages`` body.
 
     Returns ``(current_context_tokens, request_tokens, cache_hit_ratio)``:
@@ -129,6 +130,7 @@ def estimate(
     # Pricing — always dynamic (per ``feedback_always_dynamic``)
     try:
         from tokenpak.models import get_rates
+
         rates = get_rates(model)
     except Exception:
         # Most-expensive frontier-class default if the registry is wedged.
@@ -136,7 +138,7 @@ def estimate(
         rates = {"input": 15.0, "output": 75.0, "cached": 1.50}
 
     # Parse body
-    body_json: dict = {}
+    body_json: dict[str, Any] = {}
     body_text = ""
     try:
         body_text = body.decode("utf-8", errors="replace")

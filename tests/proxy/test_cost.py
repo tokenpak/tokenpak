@@ -20,6 +20,7 @@ import tokenpak.proxy.proxy as cost_mod
 # Regression tests
 # ---------------------------------------------------------------------------
 
+
 def test_cost_tracking_failure_logs_at_error_with_model_and_tokens(caplog):
     """
     Direct integration: when get_cost_tracker().record_request() raises,
@@ -85,10 +86,11 @@ def test_cost_tracking_failure_not_warning_level(caplog):
     finally:
         cost_mod._COST_TRACKING_ENABLED = orig_enabled
 
-    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING
-                       and "cost" in r.getMessage().lower()]
+    warning_records = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "cost" in r.getMessage().lower()
+    ]
     error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert error_records, "Must have at least one ERROR-level record"
-    assert not warning_records, (
-        "Must NOT emit a WARNING for tracker failure (use ERROR instead)"
-    )
+    assert not warning_records, "Must NOT emit a WARNING for tracker failure (use ERROR instead)"

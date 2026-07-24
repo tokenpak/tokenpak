@@ -11,6 +11,7 @@ Configuration (env vars or config file):
 - ``TOKENPAK_SMTP_PASS``: login password (optional)
 - ``TOKENPAK_ALERT_EMAIL_TO``: recipient address
 """
+
 from __future__ import annotations
 
 import logging

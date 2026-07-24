@@ -24,6 +24,7 @@ from tokenpak.monitor.server import (
 
 # ── Stats parsing ────────────────────────────────────────────────
 
+
 class TestFetchStats(unittest.TestCase):
     @patch("tokenpak.monitor.server.urllib.request.urlopen")
     def test_fetch_stats_success(self, mock_open):
@@ -42,6 +43,7 @@ class TestFetchStats(unittest.TestCase):
 
 # ── Error log parsing ────────────────────────────────────────────
 
+
 class TestFetchErrors(unittest.TestCase):
     def _make_log(self, tmpdir, name, entries):
         fpath = os.path.join(tmpdir, name)
@@ -52,27 +54,63 @@ class TestFetchErrors(unittest.TestCase):
 
     def test_basic_error_reading(self):
         with tempfile.TemporaryDirectory() as td:
-            self._make_log(td, "errors-2026-03-24.jsonl", [
-                {"timestamp": "2026-03-24T10:00:00Z", "error_type": "ValueError", "message": "oops", "context": {"model": "haiku"}},
-                {"timestamp": "2026-03-24T10:01:00Z", "error_type": "RateLimitError", "message": "too fast", "context": {"model": "sonnet"}},
-            ])
+            self._make_log(
+                td,
+                "errors-2026-03-24.jsonl",
+                [
+                    {
+                        "timestamp": "2026-03-24T10:00:00Z",
+                        "error_type": "ValueError",
+                        "message": "oops",
+                        "context": {"model": "haiku"},
+                    },
+                    {
+                        "timestamp": "2026-03-24T10:01:00Z",
+                        "error_type": "RateLimitError",
+                        "message": "too fast",
+                        "context": {"model": "sonnet"},
+                    },
+                ],
+            )
             with patch("tokenpak.monitor.server.LOGS_DIR", td):
                 errors = _fetch_errors(limit=100)
             self.assertEqual(len(errors), 2)
 
     def test_model_filter(self):
         with tempfile.TemporaryDirectory() as td:
-            self._make_log(td, "errors-2026-03-24.jsonl", [
-                {"timestamp": "2026-03-24T10:00:00Z", "error_type": "E1", "message": "a", "context": {"model": "haiku"}},
-                {"timestamp": "2026-03-24T10:01:00Z", "error_type": "E2", "message": "b", "context": {"model": "sonnet"}},
-            ])
+            self._make_log(
+                td,
+                "errors-2026-03-24.jsonl",
+                [
+                    {
+                        "timestamp": "2026-03-24T10:00:00Z",
+                        "error_type": "E1",
+                        "message": "a",
+                        "context": {"model": "haiku"},
+                    },
+                    {
+                        "timestamp": "2026-03-24T10:01:00Z",
+                        "error_type": "E2",
+                        "message": "b",
+                        "context": {"model": "sonnet"},
+                    },
+                ],
+            )
             with patch("tokenpak.monitor.server.LOGS_DIR", td):
                 errors = _fetch_errors(model_filter="haiku")
             self.assertEqual(len(errors), 1)
             self.assertEqual(errors[0]["error_type"], "E1")
 
     def test_limit_enforced(self):
-        entries = [{"timestamp": f"2026-03-24T{i:02d}:00:00Z", "error_type": "E", "message": "x", "context": {}} for i in range(20)]
+        entries = [
+            {
+                "timestamp": f"2026-03-24T{i:02d}:00:00Z",
+                "error_type": "E",
+                "message": "x",
+                "context": {},
+            }
+            for i in range(20)
+        ]
         with tempfile.TemporaryDirectory() as td:
             self._make_log(td, "errors-2026-03-24.jsonl", entries)
             with patch("tokenpak.monitor.server.LOGS_DIR", td):
@@ -84,7 +122,17 @@ class TestFetchErrors(unittest.TestCase):
             fpath = os.path.join(td, "errors-2026-03-24.jsonl")
             with open(fpath, "w") as f:
                 f.write("not json\n")
-                f.write(json.dumps({"timestamp": "2026-03-24T00:00:00Z", "error_type": "OK", "message": "fine", "context": {}}) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "timestamp": "2026-03-24T00:00:00Z",
+                            "error_type": "OK",
+                            "message": "fine",
+                            "context": {},
+                        }
+                    )
+                    + "\n"
+                )
             with patch("tokenpak.monitor.server.LOGS_DIR", td):
                 errors = _fetch_errors()
             self.assertEqual(len(errors), 1)
@@ -96,6 +144,7 @@ class TestFetchErrors(unittest.TestCase):
 
 
 # ── Cost calculations ────────────────────────────────────────────
+
 
 class TestCostCalc(unittest.TestCase):
     """Verify cost projection math is correct (tested via JS logic reimplemented in Python)."""
@@ -120,6 +169,7 @@ class TestCostCalc(unittest.TestCase):
 
 
 # ── HTTP server integration ──────────────────────────────────────
+
 
 class TestMonitorServer(unittest.TestCase):
     @classmethod
@@ -159,6 +209,7 @@ class TestMonitorServer(unittest.TestCase):
 
     def test_404_for_unknown_path(self):
         import urllib.error
+
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             self._get("/nonexistent")
         self.assertEqual(ctx.exception.code, 404)
@@ -166,13 +217,20 @@ class TestMonitorServer(unittest.TestCase):
 
 # ── Dashboard HTML exists ────────────────────────────────────────
 
+
 class TestDashboardHTML(unittest.TestCase):
     def test_html_file_exists(self):
         self.assertTrue(DASHBOARD_HTML.exists(), f"dashboard.html not found at {DASHBOARD_HTML}")
 
     def test_html_has_required_elements(self):
         content = DASHBOARD_HTML.read_text()
-        for token in ["TokenPak", "api/stats", "api/errors", "auto-refresh interval", "toggleTheme"]:
+        for token in [
+            "TokenPak",
+            "api/stats",
+            "api/errors",
+            "auto-refresh interval",
+            "toggleTheme",
+        ]:
             self.assertIn(token.lower(), content.lower(), f"Missing token: {token}")
 
 

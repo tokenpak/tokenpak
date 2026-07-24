@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.ingest.schema_converter", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.ingest.schema_converter", reason="module not available in current build"
+)
 from tokenpak._internal.ingest.schema_converter import (
     SCHEMAS,
     convert_document,

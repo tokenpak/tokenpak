@@ -18,9 +18,16 @@ Usage in proxy.py:
 
 import threading
 import time
-from typing import Optional
+from typing import Any, Optional, TypedDict
 
 from tokenpak.routing.routing_ledger import DEFAULT_LEDGER_PATH, RoutingLedger
+
+
+class _PendingShadow(TypedDict):
+    model: str
+    query: str
+    context_tokens: int
+    start_time: float
 
 
 class ShadowHook:
@@ -32,7 +39,7 @@ class ShadowHook:
     def __init__(self, ledger_path: str = DEFAULT_LEDGER_PATH, enabled: bool = True):
         self.enabled = enabled
         self._ledger: Optional[RoutingLedger] = None
-        self._pending: dict = {}  # txn_id → {model, query, context_tokens, start_time}
+        self._pending: dict[int, _PendingShadow] = {}
         self._lock = threading.Lock()
         if enabled:
             try:
@@ -79,7 +86,7 @@ class ShadowHook:
         response_text: str,
         response_tokens: int = 0,
         latency_ms: float = 0.0,
-        context_blocks: Optional[list] = None,
+        context_blocks: Optional[list[str]] = None,
     ) -> Optional[int]:
         """
         Called after the LLM response is received.
@@ -147,7 +154,7 @@ class ShadowHook:
             print(f"[shadow-mode] record_feedback error: {e}", file=sys.stderr)
             return False
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Return ledger stats, or empty dict on failure."""
         if not self.enabled or self._ledger is None:
             return {}

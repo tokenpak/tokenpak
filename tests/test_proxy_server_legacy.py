@@ -56,8 +56,8 @@ from tokenpak.proxy.server import (
 # StageTrace
 # ---------------------------------------------------------------------------
 
-class TestStageTrace:
 
+class TestStageTrace:
     def test_to_dict_has_required_fields(self):
         stage = StageTrace(name="compress", input_tokens=100, output_tokens=80, duration_ms=5.0)
         d = stage.to_dict()
@@ -75,8 +75,8 @@ class TestStageTrace:
 # PipelineTrace
 # ---------------------------------------------------------------------------
 
-class TestPipelineTrace:
 
+class TestPipelineTrace:
     def test_initialization(self):
         trace = PipelineTrace(request_id="abc123", timestamp="12:00:00")
         assert trace.request_id == "abc123"
@@ -97,8 +97,8 @@ class TestPipelineTrace:
 # TraceStorage
 # ---------------------------------------------------------------------------
 
-class TestTraceStorage:
 
+class TestTraceStorage:
     def _trace(self, rid: str = "test") -> PipelineTrace:
         return PipelineTrace(request_id=rid, timestamp="12:00:00")
 
@@ -147,8 +147,8 @@ class TestTraceStorage:
 # GracefulShutdown
 # ---------------------------------------------------------------------------
 
-class TestGracefulShutdown:
 
+class TestGracefulShutdown:
     def test_initial_state(self):
         gs = GracefulShutdown()
         assert not gs.is_shutting_down
@@ -176,8 +176,10 @@ class TestGracefulShutdown:
                 results.append(gs.in_flight_count())
 
         threads = [threading.Thread(target=_worker) for _ in range(3)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
         assert max(results) == 3
 
     def test_wait_for_drain_no_inflight(self):
@@ -198,8 +200,8 @@ class TestGracefulShutdown:
 # _new_session
 # ---------------------------------------------------------------------------
 
-class TestNewSession:
 
+class TestNewSession:
     def test_returns_dict(self):
         s = _new_session()
         assert isinstance(s, dict)
@@ -224,8 +226,8 @@ class TestNewSession:
 # _compute_stable_prefix_hash
 # ---------------------------------------------------------------------------
 
-class TestComputeStablePrefixHash:
 
+class TestComputeStablePrefixHash:
     def test_empty_body_returns_empty(self):
         assert _compute_stable_prefix_hash(None) == ""
         assert _compute_stable_prefix_hash(b"") == ""
@@ -236,11 +238,13 @@ class TestComputeStablePrefixHash:
         assert result == ""
 
     def test_string_system_returns_hash(self):
-        body = json.dumps({
-            "model": "claude-sonnet",
-            "system": "You are a helpful assistant.",
-            "messages": [],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-sonnet",
+                "system": "You are a helpful assistant.",
+                "messages": [],
+            }
+        ).encode()
         result = _compute_stable_prefix_hash(body)
         assert len(result) == 16
         assert all(c in "0123456789abcdef" for c in result)
@@ -260,11 +264,17 @@ class TestComputeStablePrefixHash:
         assert _compute_stable_prefix_hash(b"not json") == ""
 
     def test_list_system_returns_hash(self):
-        body = json.dumps({
-            "system": [
-                {"type": "text", "text": "You are a bot.", "cache_control": {"type": "ephemeral"}},
-            ]
-        }).encode()
+        body = json.dumps(
+            {
+                "system": [
+                    {
+                        "type": "text",
+                        "text": "You are a bot.",
+                        "cache_control": {"type": "ephemeral"},
+                    },
+                ]
+            }
+        ).encode()
         result = _compute_stable_prefix_hash(body)
         assert isinstance(result, str)
 
@@ -273,8 +283,8 @@ class TestComputeStablePrefixHash:
 # _estimate_tokens_from_body
 # ---------------------------------------------------------------------------
 
-class TestEstimateTokensFromBody:
 
+class TestEstimateTokensFromBody:
     def test_returns_int(self):
         body = json.dumps({"messages": [{"role": "user", "content": "hello world"}]}).encode()
         result = _estimate_tokens_from_body(body)
@@ -300,16 +310,14 @@ class TestEstimateTokensFromBody:
 # _extract_response_tokens
 # ---------------------------------------------------------------------------
 
-class TestExtractResponseTokens:
 
+class TestExtractResponseTokens:
     def test_returns_int(self):
         result = _extract_response_tokens(b"{}")
         assert isinstance(result, int)
 
     def test_extracts_output_tokens(self):
-        body = json.dumps({
-            "usage": {"input_tokens": 100, "output_tokens": 42}
-        }).encode()
+        body = json.dumps({"usage": {"input_tokens": 100, "output_tokens": 42}}).encode()
         result = _extract_response_tokens(body)
         assert result == 42
 
@@ -326,8 +334,8 @@ class TestExtractResponseTokens:
 # auto_detect_upstream
 # ---------------------------------------------------------------------------
 
-class TestAutoDetectUpstream:
 
+class TestAutoDetectUpstream:
     def test_anthropic_header_detection(self):
         headers = {"x-api-key": "sk-ant-test123"}
         result = auto_detect_upstream(headers)
@@ -348,8 +356,8 @@ class TestAutoDetectUpstream:
 # ProxyServer initialization
 # ---------------------------------------------------------------------------
 
-class TestProxyServerInit:
 
+class TestProxyServerInit:
     def test_default_init(self):
         ps = ProxyServer(host="127.0.0.1", port=19000)
         assert ps.host == "127.0.0.1"
@@ -377,6 +385,7 @@ class TestProxyServerInit:
 # ProxyServer.health()
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def proxy():
     server = ProxyServer(host="127.0.0.1", port=19100)
@@ -399,7 +408,6 @@ def _get(url: str) -> tuple[int, dict | str]:
 
 
 class TestProxyServerHealth:
-
     def test_health_returns_ok(self, proxy):
         status, data = _get(f"http://127.0.0.1:{proxy.port}/health")
         assert status == 200
@@ -435,7 +443,6 @@ class TestProxyServerHealth:
 
 
 class TestProxyServerStats:
-
     def test_stats_endpoint_200(self, proxy):
         status, data = _get(f"http://127.0.0.1:{proxy.port}/stats")
         assert status == 200
@@ -457,7 +464,6 @@ class TestProxyServerStats:
 
 
 class TestProxyServerEndpoints:
-
     def test_recent_endpoint(self, proxy):
         status, _ = _get(f"http://127.0.0.1:{proxy.port}/traces")
         assert status == 200
@@ -477,17 +483,20 @@ class TestProxyServerEndpoints:
     def test_health_during_load(self, proxy):
         """Health endpoint stays responsive under concurrent requests."""
         results = []
+
         def _check():
             s, _ = _get(f"http://127.0.0.1:{proxy.port}/health")
             results.append(s)
+
         threads = [threading.Thread(target=_check) for _ in range(20)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
         assert all(s == 200 for s in results)
 
 
 class TestProxyServerShutdown:
-
     def test_graceful_shutdown(self):
         """Server can start and stop cleanly."""
         ps = ProxyServer(host="127.0.0.1", port=19200)
@@ -522,8 +531,8 @@ class TestProxyServerShutdown:
 # Additional GET endpoint coverage
 # ---------------------------------------------------------------------------
 
-class TestProxyServerAdditionalEndpoints:
 
+class TestProxyServerAdditionalEndpoints:
     def test_stats_last_endpoint(self, proxy):
         status, _ = _get(f"http://127.0.0.1:{proxy.port}/stats/last")
         assert status == 200
@@ -558,8 +567,8 @@ class TestProxyServerAdditionalEndpoints:
 # ProxyServer method coverage
 # ---------------------------------------------------------------------------
 
-class TestProxyServerMethods:
 
+class TestProxyServerMethods:
     def test_health_compression_ratio_empty(self):
         ps = ProxyServer(host="127.0.0.1", port=19401)
         result = ps.health()
@@ -587,6 +596,7 @@ class TestProxyServerMethods:
         result = ps.stats()
         assert "compilation_mode" in result
 
+
 # ---------------------------------------------------------------------------
 # Proxy forwarding tests (with mocked pool)
 # ---------------------------------------------------------------------------
@@ -594,8 +604,9 @@ class TestProxyServerMethods:
 from unittest.mock import MagicMock
 
 
-def _make_mock_response(status_code: int = 200, body: bytes = b'{"content": "ok"}',
-                        headers: dict | None = None) -> MagicMock:
+def _make_mock_response(
+    status_code: int = 200, body: bytes = b'{"content": "ok"}', headers: dict | None = None
+) -> MagicMock:
     """Build a mock httpx Response object."""
     resp = MagicMock()
     resp.status_code = status_code
@@ -618,7 +629,6 @@ def mocked_proxy():
 
 
 class TestProxyForwarding:
-
     def _post_to_proxy(self, proxy, url: str, body: bytes, headers: dict | None = None) -> tuple:
         """POST a request through the proxy to a mocked upstream."""
         req_headers = {
@@ -660,7 +670,6 @@ class TestProxyForwarding:
 
 
 class TestGracefulShutdownAdvanced:
-
     def test_in_flight_tracking_concurrent(self):
         gs = GracefulShutdown()
         started = threading.Event()
@@ -697,7 +706,6 @@ class TestGracefulShutdownAdvanced:
 
 
 class TestTraceStorageConcurrency:
-
     def test_concurrent_stores(self):
         storage = TraceStorage(max_traces=50)
         errors = []
@@ -709,15 +717,16 @@ class TestTraceStorageConcurrency:
                 errors.append(str(e))
 
         threads = [threading.Thread(target=_store, args=(i,)) for i in range(20)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
         assert len(errors) == 0
         assert len(storage.get_all()) <= 50
 
 
 class TestPipelineTraceMethods:
-
     def test_to_dict_complete(self):
         trace = PipelineTrace(request_id="t1", timestamp="12:00:00")
         d = trace.to_dict()
@@ -741,17 +750,21 @@ from http.server import HTTPServer as _HTTPServer
 
 class _SimpleUpstream(_BaseHandler):
     """Minimal HTTP server to act as mock LLM upstream."""
-    def log_message(self, *args): pass  # suppress output
+
+    def log_message(self, *args):
+        pass  # suppress output
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         self.rfile.read(length)
-        body = json.dumps({
-            "id": "msg-test",
-            "content": [{"type": "text", "text": "hello"}],
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-            "model": "claude-sonnet-4-5",
-        }).encode()
+        body = json.dumps(
+            {
+                "id": "msg-test",
+                "content": [{"type": "text", "text": "hello"}],
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+                "model": "claude-sonnet-4-5",
+            }
+        ).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -791,8 +804,9 @@ def forwarding_proxy(upstream_server):
 class TestProxyForwardingReal:
     """Tests that exercise _proxy_to_inner by making real proxied requests."""
 
-    def _proxy_post(self, proxy_port: int, target_url: str, body: bytes,
-                    headers: dict | None = None) -> tuple[int, bytes]:
+    def _proxy_post(
+        self, proxy_port: int, target_url: str, body: bytes, headers: dict | None = None
+    ) -> tuple[int, bytes]:
         req = urllib.request.Request(
             target_url,
             data=body,
@@ -833,11 +847,13 @@ class TestProxyForwardingReal:
     def test_proxy_with_anthropic_key(self, forwarding_proxy):
         """POST to anthropic-like URL through proxy (triggers should_log path)."""
         proxy, upstream = forwarding_proxy
-        body = json.dumps({
-            "model": "claude-sonnet-4-5",
-            "max_tokens": 10,
-            "messages": [{"role": "user", "content": "hi"}],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 10,
+                "messages": [{"role": "user", "content": "hi"}],
+            }
+        ).encode()
         status, _ = self._proxy_post(
             proxy.port,
             f"{upstream}/v1/messages",
@@ -885,8 +901,8 @@ class TestProxyForwardingReal:
 # Additional endpoint coverage (trace by id, sessions, PUT/DELETE paths)
 # ---------------------------------------------------------------------------
 
-class TestProxyServerEndpointCoverage:
 
+class TestProxyServerEndpointCoverage:
     def test_trace_by_id_not_found(self, proxy):
         status, data = _get(f"http://127.0.0.1:{proxy.port}/trace/nonexistent-xyz")
         assert status == 200
@@ -895,6 +911,7 @@ class TestProxyServerEndpointCoverage:
     def test_trace_by_id_found(self, proxy):
         """Store a trace then retrieve it."""
         from tokenpak.proxy.server import PipelineTrace
+
         trace = PipelineTrace(request_id="test-find-me", timestamp="12:00:00")
         proxy.trace_storage.store(trace)
         status, data = _get(f"http://127.0.0.1:{proxy.port}/trace/test-find-me")
@@ -918,9 +935,7 @@ class TestProxyServerEndpointCoverage:
 
 
 class TestProxyServerVerbCoverage:
-
-    def _request(self, proxy_port: int, method: str, path: str,
-                 body: bytes = b"") -> int:
+    def _request(self, proxy_port: int, method: str, path: str, body: bytes = b"") -> int:
         req = urllib.request.Request(
             f"http://127.0.0.1:{proxy_port}{path}",
             data=body or None,
@@ -957,7 +972,6 @@ class TestProxyServerVerbCoverage:
 
 
 class TestProxyServerAutoDetect:
-
     def test_auto_detect_google_header(self):
         result = auto_detect_upstream({"x-goog-api-key": "test-key"})
         assert isinstance(result, str)
@@ -973,7 +987,6 @@ class TestProxyServerAutoDetect:
 
 
 class TestProxyServerSessionTracking:
-
     def test_session_accumulates_stats(self, forwarding_proxy):
         """Multiple requests through proxy accumulate in session stats."""
         proxy, upstream = forwarding_proxy
@@ -997,7 +1010,6 @@ class TestProxyServerSessionTracking:
 
 
 class TestComputeStablePrefixHashEdge:
-
     def test_empty_system_list(self):
         body = json.dumps({"system": []}).encode()
         result = _compute_stable_prefix_hash(body)
@@ -1021,27 +1033,25 @@ class TestComputeStablePrefixHashEdge:
 
 
 class TestEstimateTokensEdge:
-
     def test_empty_bytes_returns_fallback(self):
         result = _estimate_tokens_from_body(b"")
         assert isinstance(result, int)
 
     def test_with_system_text(self):
-        body = json.dumps({
-            "system": "You are a helpful assistant.",
-            "messages": [{"role": "user", "content": "hi"}],
-        }).encode()
+        body = json.dumps(
+            {
+                "system": "You are a helpful assistant.",
+                "messages": [{"role": "user", "content": "hi"}],
+            }
+        ).encode()
         result = _estimate_tokens_from_body(body)
         assert result >= 0
 
 
 class TestExtractResponseTokensEdge:
-
     def test_completion_tokens_field(self):
         """OpenAI-style completion_tokens field."""
-        body = json.dumps({
-            "usage": {"prompt_tokens": 100, "completion_tokens": 55}
-        }).encode()
+        body = json.dumps({"usage": {"prompt_tokens": 100, "completion_tokens": 55}}).encode()
         result = _extract_response_tokens(body)
         assert result in (0, 55)  # depends on implementation
 
@@ -1060,9 +1070,12 @@ class TestExtractResponseTokensEdge:
 # Streaming SSE path coverage
 # ---------------------------------------------------------------------------
 
+
 class _SSEUpstream(_BaseHandler):
     """Mock upstream that returns SSE streaming responses."""
-    def log_message(self, *args): pass
+
+    def log_message(self, *args):
+        pass
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
@@ -1073,7 +1086,7 @@ class _SSEUpstream(_BaseHandler):
             chunks = [
                 b'data: {"type":"content_block_delta","delta":{"text":"hello"}}\n\n',
                 b'data: {"type":"message_delta","usage":{"output_tokens":5}}\n\n',
-                b'data: [DONE]\n\n',
+                b"data: [DONE]\n\n",
             ]
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -1111,15 +1124,16 @@ def sse_proxy(sse_upstream):
 
 
 class TestProxyStreamingPath:
-
     def test_streaming_request_through_proxy(self, sse_proxy):
         """POST with stream:true through proxy triggers SSE path."""
         proxy, upstream = sse_proxy
-        body = json.dumps({
-            "model": "claude-sonnet-4-5",
-            "stream": True,
-            "messages": [{"role": "user", "content": "hi"}],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-sonnet-4-5",
+                "stream": True,
+                "messages": [{"role": "user", "content": "hi"}],
+            }
+        ).encode()
 
         proxy_handler = urllib.request.ProxyHandler({"http": f"http://127.0.0.1:{proxy.port}"})
         opener = urllib.request.build_opener(proxy_handler)
@@ -1146,10 +1160,12 @@ class TestProxyStreamingPath:
     def test_non_streaming_messages_through_proxy(self, sse_proxy):
         """POST without stream flag goes through non-streaming path."""
         proxy, upstream = sse_proxy
-        body = json.dumps({
-            "model": "claude-sonnet-4-5",
-            "messages": [{"role": "user", "content": "hello"}],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "hello"}],
+            }
+        ).encode()
 
         proxy_handler = urllib.request.ProxyHandler({"http": f"http://127.0.0.1:{proxy.port}"})
         opener = urllib.request.build_opener(proxy_handler)
@@ -1169,6 +1185,7 @@ class TestProxyStreamingPath:
         except Exception:
             pass
 
+
 # ---------------------------------------------------------------------------
 # Raw socket proxy tests (proper HTTP CONNECT / forwarding)
 # ---------------------------------------------------------------------------
@@ -1176,9 +1193,15 @@ class TestProxyStreamingPath:
 import socket as _raw_socket
 
 
-def _send_raw_proxy_request(proxy_port: int, target_host: str, target_port: int,
-                              method: str, path: str, body: bytes,
-                              extra_headers: dict | None = None) -> tuple[int, bytes]:
+def _send_raw_proxy_request(
+    proxy_port: int,
+    target_host: str,
+    target_port: int,
+    method: str,
+    path: str,
+    body: bytes,
+    extra_headers: dict | None = None,
+) -> tuple[int, bytes]:
     """
     Send a direct HTTP proxy request (not CONNECT tunnel).
     This properly triggers _proxy_to_inner in the proxy handler.
@@ -1191,8 +1214,7 @@ def _send_raw_proxy_request(proxy_port: int, target_host: str, target_port: int,
     }
     header_lines = "\r\n".join(f"{k}: {v}" for k, v in headers.items())
     request = (
-        f"{method} http://{target_host}:{target_port}{path} HTTP/1.1\r\n"
-        f"{header_lines}\r\n\r\n"
+        f"{method} http://{target_host}:{target_port}{path} HTTP/1.1\r\n{header_lines}\r\n\r\n"
     ).encode() + body
 
     try:
@@ -1234,6 +1256,7 @@ class TestRawProxyForwarding:
         proxy, upstream = sse_proxy
         # Parse upstream host and port
         from urllib.parse import urlparse as _up
+
         u = _up(upstream)
         body = json.dumps({"messages": [{"role": "user", "content": "test"}]}).encode()
         status, resp_body = _send_raw_proxy_request(
@@ -1244,21 +1267,30 @@ class TestRawProxyForwarding:
     def test_proxy_raw_post_messages(self, sse_proxy):
         proxy, upstream = sse_proxy
         from urllib.parse import urlparse as _up
+
         u = _up(upstream)
-        body = json.dumps({
-            "model": "claude-sonnet-4-5",
-            "messages": [{"role": "user", "content": "hi"}],
-            "max_tokens": 5,
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 5,
+            }
+        ).encode()
         status, resp_body = _send_raw_proxy_request(
-            proxy.port, u.hostname, u.port, "POST", "/v1/messages", body,
-            extra_headers={"x-api-key": "sk-ant-test123"}
+            proxy.port,
+            u.hostname,
+            u.port,
+            "POST",
+            "/v1/messages",
+            body,
+            extra_headers={"x-api-key": "sk-ant-test123"},
         )
         assert status in (200, 400, 401)
 
     def test_proxy_raw_get(self, sse_proxy):
         proxy, upstream = sse_proxy
         from urllib.parse import urlparse as _up
+
         u = _up(upstream)
         status, resp_body = _send_raw_proxy_request(
             proxy.port, u.hostname, u.port, "GET", "/v1/health", b""

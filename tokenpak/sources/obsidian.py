@@ -42,7 +42,7 @@ class ObsidianConnector(LocalConnector):
             config.include_patterns = ["**/*.md"]
 
         super().__init__(config)
-        self._link_cache: dict = {}
+        self._link_cache: dict[str, object] = {}
         self.last_frontmatter_diagnostics = FrontmatterDiagnostics()
 
     def list_files(self, since: Optional[str] = None) -> Iterator[RemoteFile]:
@@ -77,7 +77,7 @@ class ObsidianConnector(LocalConnector):
 
         return "note"
 
-    def extract_links(self, content: str) -> list:
+    def extract_links(self, content: str) -> list[str]:
         """Extract wiki-links from content."""
         # [[link]] and [[link|alias]] patterns
         wiki_links = re.findall(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", content)

@@ -161,7 +161,7 @@ class PricingCatalog:
     # ------------------------------------------------------------------
 
     @classmethod
-    def load(cls, path: Optional[os.PathLike] = None) -> "PricingCatalog":
+    def load(cls, path: Optional[os.PathLike[str]] = None) -> "PricingCatalog":
         """Load and parse the pricing catalog from *path*.
 
         If *path* is ``None`` the bundled ``data/pricing_catalog.json`` is
@@ -212,6 +212,7 @@ class PricingCatalog:
             return
         try:
             from datetime import date as _date
+
             updated_date = _date.fromisoformat(self.updated)
             age_days = (_date.today() - updated_date).days
             if age_days > _STALENESS_DAYS:
@@ -220,7 +221,8 @@ class PricingCatalog:
                     "Cost estimates may be inaccurate. Update "
                     "tokenpak/telemetry/data/pricing_catalog.json and bump "
                     "_meta.updated.",
-                    self.updated, age_days,
+                    self.updated,
+                    age_days,
                 )
         except (ValueError, TypeError):
             pass

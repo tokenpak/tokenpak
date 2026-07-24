@@ -146,8 +146,19 @@ def test_json_row_fields(tmp_path, capsys):
     db_path = _make_db(tmp_path)
     out = _capture(capsys, _args(_db_path=db_path))
     row = json.loads(out)["data"][0]
-    for field in ("trace_id", "ts", "ts_iso", "provider", "model", "agent_id",
-                  "status", "input_tokens", "output_tokens", "total_tokens", "cost_usd"):
+    for field in (
+        "trace_id",
+        "ts",
+        "ts_iso",
+        "provider",
+        "model",
+        "agent_id",
+        "status",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "cost_usd",
+    ):
         assert field in row, f"Missing field: {field}"
 
 

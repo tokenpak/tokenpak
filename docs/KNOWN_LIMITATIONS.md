@@ -1,6 +1,14 @@
 # TokenPak — Known Limitations & When NOT to Use
 
-An honest list of what isn't yet at production quality in the open-source release, and where TokenPak is *not* the right fit today. Current as of **v1.13.0**. Each entry names a **retirement condition** — the concrete signal that removes it.
+An honest list of what isn't yet at production quality in the open-source release, and where TokenPak is *not* the right fit today. Current as of **v1.14.0**. Each entry names a **retirement condition** — the concrete signal that removes it.
+
+## Temporary Codex sessions do not attach prior shared history
+
+- **What this affects:** `tokenpak codex` when another Codex process is verified to hold the shared local history.
+- **Intentional vs. bug:** intentional tactical safety boundary.
+- **Current behavior:** an interactive user may start a temporary session with a new history lineage. It does not attach or replace the prior shared history, and it does not provide broker-managed parallel continuity. Normal later launches return to the shared lineage.
+- **Workaround:** finish the existing shared-history session when continuity is required; choose the temporary session only when a new lineage is acceptable.
+- **Retirement condition:** broker-managed continuity ships with mechanically enforced single-writer ownership, queueing, recovery, and independent concurrency acceptance.
 
 ## Activation does not unlock Pro features yet
 

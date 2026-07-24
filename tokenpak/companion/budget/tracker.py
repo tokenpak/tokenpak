@@ -63,9 +63,7 @@ class BudgetTracker:
         """Open the budget DB via the shared companion connection factory
         (busy_timeout is applied before the WAL switch there, so concurrent
         first-openers wait for the conversion instead of failing)."""
-        return _db.connect(
-            self._db_path, check_same_thread=False, foreign_keys=True
-        )
+        return _db.connect(self._db_path, check_same_thread=False, foreign_keys=True)
 
     def _writer(self) -> sqlite3.Connection:
         if self._write_conn is None:
@@ -82,13 +80,14 @@ class BudgetTracker:
         rates = _resolve_rates(model)
         fresh_input = max(0, input_tokens - cached_tokens)
         cost = (
-            fresh_input * rates["input"] / 1_000_000
-            + cached_tokens * rates["cached"] / 1_000_000
+            fresh_input * rates["input"] / 1_000_000 + cached_tokens * rates["cached"] / 1_000_000
         )
         # DB already contains all recorded costs (including current session).
         # Do NOT add _session_cost — that would double-count.
         daily_total = self._get_daily_total()
-        remaining = max(0.0, self._daily_budget - daily_total) if self._daily_budget > 0 else float("inf")
+        remaining = (
+            max(0.0, self._daily_budget - daily_total) if self._daily_budget > 0 else float("inf")
+        )
 
         return CostEstimate(
             input_tokens=input_tokens,
@@ -121,6 +120,7 @@ class BudgetTracker:
 
         now = time.time()
         import datetime
+
         date_str = datetime.date.today().isoformat()
 
         with self._write_lock:
@@ -135,8 +135,16 @@ class BudgetTracker:
                    (timestamp, date, session_id, model, input_tokens, cached_tokens,
                     output_tokens, estimated_cost, kind)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'actual')""",
-                (now, date_str, session_id, model, input_tokens, cached_tokens,
-                 output_tokens, round(cost, 6)),
+                (
+                    now,
+                    date_str,
+                    session_id,
+                    model,
+                    input_tokens,
+                    cached_tokens,
+                    output_tokens,
+                    round(cost, 6),
+                ),
             )
             conn.commit()
 
@@ -149,6 +157,7 @@ class BudgetTracker:
         estimate series (see companion._sqlite.DAILY_SPEND_SQL).
         """
         import datetime
+
         today = datetime.date.today().isoformat()
         try:
             conn = self._connect()

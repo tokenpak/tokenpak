@@ -250,9 +250,7 @@ def test_migration_creates_all_ten_tables(ledger):
         "dispatch_effects",
         "late_results",
     }
-    rows = ledger._conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table'"
-    ).fetchall()
+    rows = ledger._conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     names = {r["name"] for r in rows}
     assert expected <= names
 
@@ -392,9 +390,7 @@ def test_rollback_on_error_leaves_no_partial_row(ledger):
             "dispatch_jobs",
             {"id": "job_bad", "no_such_column": "x", "payload": "{}"},
         )
-    rows = ledger._conn.execute(
-        "SELECT COUNT(*) AS c FROM dispatch_jobs"
-    ).fetchone()
+    rows = ledger._conn.execute("SELECT COUNT(*) AS c FROM dispatch_jobs").fetchone()
     assert rows["c"] == 0
 
 
@@ -431,9 +427,7 @@ def test_record_planned_effect_rejects_non_planned(ledger):
 
 def test_planned_to_applied_lifecycle(ledger):
     ledger.record_planned_effect(_planned_effect())
-    applied = ledger.mark_effect_applied(
-        "effect_01", finalized_at=_NOW, rollback_available=True
-    )
+    applied = ledger.mark_effect_applied("effect_01", finalized_at=_NOW, rollback_available=True)
     assert applied.status.value == "applied"
     assert applied.finalized_at == _NOW
     assert applied.rollback_available is True
@@ -475,9 +469,7 @@ def test_select_dangling_planned_effects(ledger):
     ledger.write_station_run(_station_run("stationrun_99", "run_99"))
 
     # dangling planned (run_01)
-    ledger.record_planned_effect(
-        _planned_effect("effect_dangling", "stationrun_01")
-    )
+    ledger.record_planned_effect(_planned_effect("effect_dangling", "stationrun_01"))
     # applied (run_01) — must NOT be returned
     ledger.record_planned_effect(_planned_effect("effect_done", "stationrun_02"))
     ledger.mark_effect_applied("effect_done", finalized_at=_NOW)

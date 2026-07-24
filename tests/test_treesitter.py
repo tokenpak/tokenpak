@@ -1,9 +1,10 @@
 """Unit tests for code_treesitter.py (Part D — Tree-sitter Code Processing)."""
 
-
 import pytest
 
-pytest.importorskip("tokenpak.processors.code_treesitter", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.processors.code_treesitter", reason="module not available in current build"
+)
 import warnings
 
 import pytest
@@ -29,6 +30,7 @@ pytestmark = pytest.mark.skipif(
 # Helper: suppress tree_sitter FutureWarning in assertions
 # ---------------------------------------------------------------------------
 
+
 def _extract(source, path):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -38,6 +40,7 @@ def _extract(source, path):
 # ---------------------------------------------------------------------------
 # Language detection
 # ---------------------------------------------------------------------------
+
 
 class TestLanguageDetection:
     def test_py(self):
@@ -109,6 +112,7 @@ def _private_fn():
     return x + y
 '''
 
+
 class TestPythonExtraction:
     def setup_method(self):
         self.result = _extract(_PY_SAMPLE, "registry.py")
@@ -153,7 +157,7 @@ class TestPythonExtraction:
 # JavaScript / TypeScript extraction
 # ---------------------------------------------------------------------------
 
-_JS_SAMPLE = '''\
+_JS_SAMPLE = """\
 import { EventEmitter } from 'events';
 import path from 'path';
 
@@ -188,7 +192,8 @@ function createPool(size) {
 export function exportedFn(x, y) {
   return x * y;
 }
-'''
+"""
+
 
 class TestJavaScriptExtraction:
     def setup_method(self):
@@ -219,7 +224,7 @@ class TestJavaScriptExtraction:
         assert "exportedFn" in self.result
 
 
-_TS_SAMPLE = '''\
+_TS_SAMPLE = """\
 import { Injectable } from '@angular/core';
 
 interface UserService {
@@ -243,7 +248,8 @@ class UserServiceImpl implements UserService {
 export function getService(): UserService {
   return new UserServiceImpl(getDb());
 }
-'''
+"""
+
 
 class TestTypeScriptExtraction:
     def setup_method(self):
@@ -267,7 +273,7 @@ class TestTypeScriptExtraction:
 # Go extraction
 # ---------------------------------------------------------------------------
 
-_GO_SAMPLE = '''\
+_GO_SAMPLE = """\
 package main
 
 import (
@@ -300,7 +306,8 @@ func (r *UserRepository) Delete(id int) error {
 
 const MaxRetries = 3
 var DefaultTimeout = 30
-'''
+"""
+
 
 class TestGoExtraction:
     def setup_method(self):
@@ -337,7 +344,7 @@ class TestGoExtraction:
 # Rust extraction
 # ---------------------------------------------------------------------------
 
-_RS_SAMPLE = '''\
+_RS_SAMPLE = """\
 use std::collections::HashMap;
 use crate::db::Database;
 
@@ -373,7 +380,8 @@ pub fn create_repo(db: Database) -> UserRepository {
 }
 
 const MAX_CACHE_SIZE: usize = 1024;
-'''
+"""
+
 
 class TestRustExtraction:
     def setup_method(self):
@@ -409,6 +417,7 @@ class TestRustExtraction:
 # Fallback on unsupported / parse failure
 # ---------------------------------------------------------------------------
 
+
 class TestFallback:
     def test_unsupported_extension_returns_none(self):
         result = _extract("some content", "file.rb")
@@ -429,6 +438,7 @@ class TestFallback:
     def test_get_processor_no_treesitter_flag(self):
         proc = get_processor("code", no_treesitter=True)
         from tokenpak.processors.code import CodeProcessor
+
         assert isinstance(proc, CodeProcessor)
 
     def test_get_processor_default_uses_treesitter(self):
@@ -580,7 +590,7 @@ def _load_stage_fn(module_name: str, fn_name: str):
 '''
 
 # Go: multiple functions each with 15+ line bodies
-_GO_HEAVY = '''\
+_GO_HEAVY = """\
 package main
 
 import (
@@ -709,10 +719,10 @@ func LoadConfig(path string) (map[string]interface{}, error) {
 	}
 	return cfg, nil
 }
-'''
+"""
 
 # Rust: impl block with multiple methods with substantial bodies
-_RS_HEAVY = '''\
+_RS_HEAVY = """\
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -838,7 +848,7 @@ pub fn create_pool(host: &str, port: u16, db: &str, size: usize) -> Result<Conne
     };
     Ok(ConnectionPool::new(config))
 }
-'''
+"""
 
 
 class TestCompressionRatio:

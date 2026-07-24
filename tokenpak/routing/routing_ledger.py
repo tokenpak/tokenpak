@@ -5,12 +5,14 @@ Logs every LLM transaction to SQLite with WAL mode for concurrent access.
 No agentic action — observe only.
 """
 
+from __future__ import annotations
+
 import logging
 import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from tokenpak.compression.complexity import score_complexity
 
@@ -66,7 +68,7 @@ class RoutingLedger:
     request path it is observing.
     """
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None) -> None:
         # None and the historical CWD-relative literal (which callers'
         # signature defaults still pass through) both mean "use the
         # default": resolve it against the home config dir so proxy and CLI
@@ -83,7 +85,7 @@ class RoutingLedger:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
             conn = self._connect()
@@ -121,7 +123,7 @@ class RoutingLedger:
         self,
         model: str,
         query: str,
-        context_blocks: List[str],
+        context_blocks: list[str],
         response: str,
         accepted: Optional[bool] = None,
         rejection_reason: Optional[str] = None,
@@ -241,14 +243,14 @@ class RoutingLedger:
     # Read
     # ------------------------------------------------------------------
 
-    def get_transaction(self, transaction_id: int) -> Optional[dict]:
+    def get_transaction(self, transaction_id: int) -> Optional[dict[str, object]]:
         """Fetch a single transaction by ID."""
         conn = self._connect()
         row = conn.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
         conn.close()
         return dict(row) if row else None
 
-    def get_recent(self, limit: int = 100) -> List[dict]:
+    def get_recent(self, limit: int = 100) -> list[dict[str, object]]:
         """Return the most recent N transactions."""
         conn = self._connect()
         rows = conn.execute(
@@ -257,7 +259,7 @@ class RoutingLedger:
         conn.close()
         return [dict(r) for r in rows]
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, object]:
         """Return aggregate statistics from the ledger."""
         conn = self._connect()
         row = conn.execute("""
@@ -313,7 +315,7 @@ class RoutingLedger:
         conn.close()
         if not row or row["total"] == 0:
             return 0.0
-        return row["wins"] / row["total"]
+        return float(row["wins"]) / float(row["total"])
 
     def wal_mode_active(self) -> bool:
         """Return True if WAL journal mode is active."""

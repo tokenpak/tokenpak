@@ -141,7 +141,9 @@ class TestGeminiNormalizeResponseBatch(unittest.TestCase):
         return json.loads(self.adapter.normalize_response(200, {}, json.dumps(data).encode()))
 
     def test_batch_response_data_count_matches_embeddings(self):
-        result = self._call({"embeddings": [{"values": [0.1]}, {"values": [0.2]}, {"values": [0.3]}]})
+        result = self._call(
+            {"embeddings": [{"values": [0.1]}, {"values": [0.2]}, {"values": [0.3]}]}
+        )
         self.assertEqual(len(result["data"]), 3)
 
     def test_batch_response_indices_sequential(self):

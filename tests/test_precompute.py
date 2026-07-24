@@ -27,6 +27,7 @@ from tokenpak.precompute import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def tmp_artifacts(tmp_path):
     """Temporary artifacts directory."""
@@ -98,6 +99,7 @@ On track. 4/7 stories completed.
 # Test 1: detect_doc_type
 # ---------------------------------------------------------------------------
 
+
 class TestDetectDocType:
     def test_code_risk_class(self):
         assert detect_doc_type("x = 1", risk_class="code") == DocType.CODE
@@ -118,19 +120,22 @@ class TestDetectDocType:
         assert result == DocType.PROJECT_PLAN
 
     def test_changelog_by_filename(self):
-        result = detect_doc_type("## v1.2\n- Added feature X\n- Fixed bug Y",
-                                  risk_class="narrative", source_path="CHANGELOG.md")
+        result = detect_doc_type(
+            "## v1.2\n- Added feature X\n- Fixed bug Y",
+            risk_class="narrative",
+            source_path="CHANGELOG.md",
+        )
         assert result == DocType.CHANGELOG
 
     def test_narrative_fallback(self):
-        result = detect_doc_type("This is a simple document about things.",
-                                  risk_class="narrative")
+        result = detect_doc_type("This is a simple document about things.", risk_class="narrative")
         assert result == DocType.NARRATIVE
 
 
 # ---------------------------------------------------------------------------
 # Test 2: Artifact generators
 # ---------------------------------------------------------------------------
+
 
 class TestGenerators:
     def test_fact_card_has_content(self):
@@ -144,7 +149,9 @@ class TestGenerators:
     def test_fact_card_extracts_headings(self):
         art = generate_fact_card("blk1", NARRATIVE_CONTENT, DocType.NARRATIVE)
         # Should pick up headings
-        assert "Introduction" in art.content or "Features" in art.content or "TokenPak" in art.content
+        assert (
+            "Introduction" in art.content or "Features" in art.content or "TokenPak" in art.content
+        )
 
     def test_feature_table_parses_markdown_table(self):
         art = generate_feature_table("blk2", COMPARISON_CONTENT, DocType.COMPARISON, "compare.md")
@@ -193,6 +200,7 @@ class TestGenerators:
 # ---------------------------------------------------------------------------
 # Test 3: PrecomputeStore
 # ---------------------------------------------------------------------------
+
 
 class TestPrecomputeStore:
     def test_save_and_load(self, tmp_artifacts):
@@ -251,51 +259,53 @@ class TestPrecomputeStore:
 # Test 4: precompute_for_block + get_precomputed_artifact (integration)
 # ---------------------------------------------------------------------------
 
+
 class TestPrecomputeIntegration:
     def test_precompute_narrative_generates_fact_card(self, tmp_artifacts):
         arts = precompute_for_block(
-            "nav_blk", NARRATIVE_CONTENT, risk_class="narrative",
-            source_path="README.md", artifacts_dir=tmp_artifacts
+            "nav_blk",
+            NARRATIVE_CONTENT,
+            risk_class="narrative",
+            source_path="README.md",
+            artifacts_dir=tmp_artifacts,
         )
         types = [a.artifact_type for a in arts]
         assert "fact_card" in types
 
     def test_precompute_protected_skips(self, tmp_artifacts):
         arts = precompute_for_block(
-            "prot_blk", "secret content", risk_class="protected",
-            artifacts_dir=tmp_artifacts
+            "prot_blk", "secret content", risk_class="protected", artifacts_dir=tmp_artifacts
         )
         assert arts == []
 
     def test_precompute_idempotent(self, tmp_artifacts):
         # First run generates
         arts1 = precompute_for_block(
-            "idem_blk", NARRATIVE_CONTENT, risk_class="narrative",
-            artifacts_dir=tmp_artifacts
+            "idem_blk", NARRATIVE_CONTENT, risk_class="narrative", artifacts_dir=tmp_artifacts
         )
         # Second run skips (artifacts already exist)
         arts2 = precompute_for_block(
-            "idem_blk", NARRATIVE_CONTENT, risk_class="narrative",
-            artifacts_dir=tmp_artifacts
+            "idem_blk", NARRATIVE_CONTENT, risk_class="narrative", artifacts_dir=tmp_artifacts
         )
         assert len(arts1) > 0
         assert len(arts2) == 0  # Already existed
 
     def test_precompute_force_regenerates(self, tmp_artifacts):
         precompute_for_block(
-            "force_blk", NARRATIVE_CONTENT, risk_class="narrative",
-            artifacts_dir=tmp_artifacts
+            "force_blk", NARRATIVE_CONTENT, risk_class="narrative", artifacts_dir=tmp_artifacts
         )
         arts = precompute_for_block(
-            "force_blk", NARRATIVE_CONTENT, risk_class="narrative",
-            artifacts_dir=tmp_artifacts, force=True
+            "force_blk",
+            NARRATIVE_CONTENT,
+            risk_class="narrative",
+            artifacts_dir=tmp_artifacts,
+            force=True,
         )
         assert len(arts) > 0
 
     def test_get_precomputed_artifact_query(self, tmp_artifacts):
         precompute_for_block(
-            "qa_blk", NARRATIVE_CONTENT, risk_class="narrative",
-            artifacts_dir=tmp_artifacts
+            "qa_blk", NARRATIVE_CONTENT, risk_class="narrative", artifacts_dir=tmp_artifacts
         )
         art = get_precomputed_artifact("qa_blk", "query", artifacts_dir=tmp_artifacts)
         assert art is not None
@@ -303,8 +313,11 @@ class TestPrecomputeIntegration:
 
     def test_get_precomputed_artifact_debug(self, tmp_artifacts):
         precompute_for_block(
-            "dbg_blk", ERROR_LOG_CONTENT, risk_class="narrative",
-            source_path="app.log", artifacts_dir=tmp_artifacts
+            "dbg_blk",
+            ERROR_LOG_CONTENT,
+            risk_class="narrative",
+            source_path="app.log",
+            artifacts_dir=tmp_artifacts,
         )
         art = get_precomputed_artifact("dbg_blk", "debug", artifacts_dir=tmp_artifacts)
         assert art is not None
@@ -312,8 +325,11 @@ class TestPrecomputeIntegration:
 
     def test_get_precomputed_artifact_plan(self, tmp_artifacts):
         precompute_for_block(
-            "plan_blk", PLAN_CONTENT, risk_class="narrative",
-            source_path="sprint.md", artifacts_dir=tmp_artifacts
+            "plan_blk",
+            PLAN_CONTENT,
+            risk_class="narrative",
+            source_path="sprint.md",
+            artifacts_dir=tmp_artifacts,
         )
         art = get_precomputed_artifact("plan_blk", "plan", artifacts_dir=tmp_artifacts)
         assert art is not None
@@ -325,17 +341,18 @@ class TestPrecomputeIntegration:
 
     def test_get_precomputed_artifact_unknown_intent_returns_none(self, tmp_artifacts):
         precompute_for_block(
-            "unk_blk", NARRATIVE_CONTENT, risk_class="narrative",
-            artifacts_dir=tmp_artifacts
+            "unk_blk", NARRATIVE_CONTENT, risk_class="narrative", artifacts_dir=tmp_artifacts
         )
-        art = get_precomputed_artifact("unk_blk", "totally_unknown_intent",
-                                        artifacts_dir=tmp_artifacts)
+        art = get_precomputed_artifact(
+            "unk_blk", "totally_unknown_intent", artifacts_dir=tmp_artifacts
+        )
         assert art is None
 
 
 # ---------------------------------------------------------------------------
 # Test 5: recompute_all
 # ---------------------------------------------------------------------------
+
 
 class TestRecomputeAll:
     def test_recompute_all_processes_blocks(self, tmp_path, tmp_artifacts):
@@ -386,6 +403,7 @@ class TestRecomputeAll:
 # Test 6: PrecomputedArtifact serialization
 # ---------------------------------------------------------------------------
 
+
 class TestArtifactSerialization:
     def test_to_dict_and_from_dict_roundtrip(self):
         art = generate_fact_card("serial_blk", NARRATIVE_CONTENT, DocType.NARRATIVE, "README.md")
@@ -400,6 +418,14 @@ class TestArtifactSerialization:
     def test_to_dict_has_required_keys(self):
         art = generate_error_signature("e_blk", ERROR_LOG_CONTENT, DocType.ERROR_LOG)
         d = art.to_dict()
-        for key in ("block_id", "artifact_type", "intent", "content", "doc_type",
-                    "created_at", "token_estimate", "metadata"):
+        for key in (
+            "block_id",
+            "artifact_type",
+            "intent",
+            "content",
+            "doc_type",
+            "created_at",
+            "token_estimate",
+            "metadata",
+        ):
             assert key in d, f"Missing key: {key}"

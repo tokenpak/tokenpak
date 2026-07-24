@@ -153,8 +153,9 @@ def test_original_term_weight_1():
 def test_alias_terms_weight_0_5():
     terms = dict(expand_query(["auth"]))
     # "authentication" is an alias — should have WEIGHT_ALIAS
-    assert terms.get("authentication", 0) == WEIGHT_ALIAS or \
-           terms.get("authentication", 0) > 0  # alias expanded
+    assert (
+        terms.get("authentication", 0) == WEIGHT_ALIAS or terms.get("authentication", 0) > 0
+    )  # alias expanded
 
 
 def test_stem_terms_weight_0_8():
@@ -170,7 +171,9 @@ def test_original_always_highest_weight():
     orig_weight = terms.get("config", 0)
     for name, weight in terms.items():
         if name != "config":
-            assert weight <= orig_weight, f"'{name}' ({weight}) should be <= original ({orig_weight})"
+            assert weight <= orig_weight, (
+                f"'{name}' ({weight}) should be <= original ({orig_weight})"
+            )
 
 
 # ─── tokenize() integration ───────────────────────────────────────────────────
@@ -243,9 +246,9 @@ BENCHMARK_QUERIES = [
     ("param", "parameter"),
     ("func", "function"),
     ("var", "variable"),
-    ("authenticating", "authentication"),   # stemming
-    ("configured", "configuration"),        # stemming
-    ("databases", "database"),              # stemming (plural)
+    ("authenticating", "authentication"),  # stemming
+    ("configured", "configuration"),  # stemming
+    ("databases", "database"),  # stemming (plural)
 ]
 
 
@@ -271,11 +274,7 @@ def test_benchmark_alias_expansion_coverage():
         full_stems = {stem_token(t) for t in full_expanded.keys()}
         stem_bridge = bool(abbrev_stems & full_stems)
 
-        hit = (
-            full_form in expanded_names
-            or abbrev in full_expanded
-            or stem_bridge
-        )
+        hit = full_form in expanded_names or abbrev in full_expanded or stem_bridge
         hits += int(hit)
         results.append((abbrev, full_form, hit, sorted(expanded_names)[:5]))
 

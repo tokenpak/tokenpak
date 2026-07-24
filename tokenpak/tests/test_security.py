@@ -88,25 +88,31 @@ class TestEnsureConfigPermissions:
 
 
 class TestSanitizeModelName:
-    @pytest.mark.parametrize("name", [
-        "gpt-4o",
-        "claude-sonnet-4-6",
-        "google/gemini-2-flash",
-        "model_v1.2",
-        "a",
-    ])
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "gpt-4o",
+            "claude-sonnet-4-6",
+            "google/gemini-2-flash",
+            "model_v1.2",
+            "a",
+        ],
+    )
     def test_valid_names_pass(self, name):
         assert sanitize_model_name(name) == name
 
-    @pytest.mark.parametrize("name", [
-        "../etc/passwd",
-        "model;rm -rf /",
-        "model|cat",
-        "model$(evil)",
-        "model`cmd`",
-        "a" * 257,
-        "",
-    ])
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "../etc/passwd",
+            "model;rm -rf /",
+            "model|cat",
+            "model$(evil)",
+            "model`cmd`",
+            "a" * 257,
+            "",
+        ],
+    )
     def test_invalid_names_raise(self, name):
         with pytest.raises(ValueError):
             sanitize_model_name(name)
@@ -126,25 +132,31 @@ class TestSanitizeModelName:
 
 
 class TestSanitizeCliArg:
-    @pytest.mark.parametrize("value", [
-        "hello",
-        "valid-arg",
-        "some_value123",
-        "/absolute/path",
-    ])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "hello",
+            "valid-arg",
+            "some_value123",
+            "/absolute/path",
+        ],
+    )
     def test_valid_args_pass(self, value):
         assert sanitize_cli_arg(value) == value
 
-    @pytest.mark.parametrize("value", [
-        "../etc/passwd",
-        "value;rm -rf /",
-        "val|cat /etc",
-        "val&&evil",
-        "$(whoami)",
-        "`id`",
-        "<script>alert(1)</script>",
-        "javascript:void(0)",
-    ])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "../etc/passwd",
+            "value;rm -rf /",
+            "val|cat /etc",
+            "val&&evil",
+            "$(whoami)",
+            "`id`",
+            "<script>alert(1)</script>",
+            "javascript:void(0)",
+        ],
+    )
     def test_injection_patterns_raise(self, value):
         with pytest.raises(ValueError):
             sanitize_cli_arg(value)

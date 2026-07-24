@@ -560,7 +560,7 @@ def _apply_operations(text: str, operations: list[dict[str, Any]]) -> tuple[str,
                 result = re.sub(r"'''[\s\S]*?'''", "''''''", result)
             elif mode == "keep_summary":
 
-                def _compress_docstring(m: re.Match) -> str:
+                def _compress_docstring(m: re.Match[str]) -> str:
                     inner = m.group(0)[3:-3].strip()
                     first_line = inner.split("\n")[0].strip()
                     quote = m.group(0)[:3]

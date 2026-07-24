@@ -1,6 +1,5 @@
 """Unit tests for citation_tracker.py (Part A — Citation-Mapped Utility Scoring)."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.citation_tracker", reason="module not available in current build")
@@ -24,6 +23,7 @@ from tokenpak.wire import make_slice_id, pack
 # ---------------------------------------------------------------------------
 # make_slice_id
 # ---------------------------------------------------------------------------
+
 
 class TestMakeSliceId:
     def test_format(self):
@@ -51,17 +51,32 @@ class TestMakeSliceId:
 # wire.pack — slice_id in output
 # ---------------------------------------------------------------------------
 
+
 class TestWirePack:
     def test_slice_id_in_output(self):
-        blocks = [{"ref": "src/auth.py", "type": "CODE", "quality": 0.9,
-                   "tokens": 100, "content": "def login(): pass"}]
+        blocks = [
+            {
+                "ref": "src/auth.py",
+                "type": "CODE",
+                "quality": 0.9,
+                "tokens": 100,
+                "content": "def login(): pass",
+            }
+        ]
         output = pack(blocks, budget=1000)
         assert "[SLICE: s_" in output
 
     def test_respects_existing_slice_id(self):
-        blocks = [{"ref": "src/auth.py", "type": "CODE", "quality": 0.9,
-                   "tokens": 100, "content": "def login(): pass",
-                   "slice_id": "s_custom01"}]
+        blocks = [
+            {
+                "ref": "src/auth.py",
+                "type": "CODE",
+                "quality": 0.9,
+                "tokens": 100,
+                "content": "def login(): pass",
+                "slice_id": "s_custom01",
+            }
+        ]
         output = pack(blocks, budget=1000)
         assert "[SLICE: s_custom01]" in output
 
@@ -71,8 +86,11 @@ class TestWirePack:
             {"ref": "b.py", "type": "CODE", "quality": 1.0, "tokens": 10, "content": "bbb"},
         ]
         output = pack(blocks, budget=1000)
-        slice_ids = [line.split("[SLICE: ")[1].rstrip("]")
-                     for line in output.splitlines() if "[SLICE:" in line]
+        slice_ids = [
+            line.split("[SLICE: ")[1].rstrip("]")
+            for line in output.splitlines()
+            if "[SLICE:" in line
+        ]
         assert len(slice_ids) == 2
         assert slice_ids[0] != slice_ids[1]
 
@@ -80,6 +98,7 @@ class TestWirePack:
 # ---------------------------------------------------------------------------
 # track_citations
 # ---------------------------------------------------------------------------
+
 
 class TestTrackCitations:
     def _make_slice(self, sid, content, ref=""):
@@ -145,6 +164,7 @@ class TestTrackCitations:
 # ---------------------------------------------------------------------------
 # update_utility + get_utility_score + get_utility_weight
 # ---------------------------------------------------------------------------
+
 
 class TestUpdateUtility:
     def setup_method(self):
@@ -212,15 +232,28 @@ class TestUpdateUtility:
 # budget.py integration with utility_weight
 # ---------------------------------------------------------------------------
 
+
 class TestBudgetUtilityIntegration:
     def test_utility_weight_modulates_importance(self):
         from tokenpak.budget import BudgetBlock, quadratic_allocate
 
         # Two identical blocks except utility_weight
-        hot = BudgetBlock(ref="hot", relevance_score=0.5, recency_score=0.5,
-                          quality_score=1.0, type_weight=0.5, utility_weight=2.0)
-        cold = BudgetBlock(ref="cold", relevance_score=0.5, recency_score=0.5,
-                           quality_score=1.0, type_weight=0.5, utility_weight=0.1)
+        hot = BudgetBlock(
+            ref="hot",
+            relevance_score=0.5,
+            recency_score=0.5,
+            quality_score=1.0,
+            type_weight=0.5,
+            utility_weight=2.0,
+        )
+        cold = BudgetBlock(
+            ref="cold",
+            relevance_score=0.5,
+            recency_score=0.5,
+            quality_score=1.0,
+            type_weight=0.5,
+            utility_weight=0.1,
+        )
 
         allocs = quadratic_allocate([hot, cold], total_budget=1000)
         # Hot block should get more tokens
@@ -230,10 +263,22 @@ class TestBudgetUtilityIntegration:
         from tokenpak.budget import BudgetBlock, quadratic_allocate
 
         # Two identical blocks with neutral utility_weight
-        a = BudgetBlock(ref="a", relevance_score=0.5, recency_score=0.5,
-                        quality_score=1.0, type_weight=0.5, utility_weight=1.0)
-        b = BudgetBlock(ref="b", relevance_score=0.5, recency_score=0.5,
-                        quality_score=1.0, type_weight=0.5, utility_weight=1.0)
+        a = BudgetBlock(
+            ref="a",
+            relevance_score=0.5,
+            recency_score=0.5,
+            quality_score=1.0,
+            type_weight=0.5,
+            utility_weight=1.0,
+        )
+        b = BudgetBlock(
+            ref="b",
+            relevance_score=0.5,
+            recency_score=0.5,
+            quality_score=1.0,
+            type_weight=0.5,
+            utility_weight=1.0,
+        )
 
         allocs = quadratic_allocate([a, b], total_budget=1000)
         assert allocs["a"] == allocs["b"]

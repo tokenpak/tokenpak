@@ -4,6 +4,7 @@ Covers: BlockRegistry add/get/list, has_changed, search, get_stats,
         clear, close, batch_transaction, Block dataclass, version bump,
         context manager protocol, duplicate entries, and edge cases.
 """
+
 import threading
 import time
 
@@ -15,9 +16,11 @@ from tokenpak.core.registry import Block, BlockRegistry
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_block(path: str = "test/file.md", content: str = "hello world") -> Block:
     """Create a minimal valid Block for testing."""
     import hashlib
+
     return Block(
         path=path,
         content_hash=hashlib.sha256(content.encode()).hexdigest(),
@@ -45,6 +48,7 @@ def registry(tmp_path):
 # Block dataclass
 # ---------------------------------------------------------------------------
 
+
 def test_block_slice_id_auto_generated():
     """Block auto-generates slice_id when not provided."""
     b = _make_block()
@@ -62,6 +66,7 @@ def test_block_slice_id_custom():
 def test_block_defaults():
     """Block sets sensible defaults for quality_score and importance."""
     import hashlib
+
     b = Block(
         path="a.md",
         content_hash=hashlib.sha256(b"x").hexdigest(),
@@ -78,6 +83,7 @@ def test_block_defaults():
 # ---------------------------------------------------------------------------
 # add_block / get_block round-trip
 # ---------------------------------------------------------------------------
+
 
 def test_add_and_get_block(registry):
     """add_block stores a block; get_block retrieves it by path."""
@@ -121,6 +127,7 @@ def test_add_block_first_version_is_one(registry):
 # ---------------------------------------------------------------------------
 # list_blocks
 # ---------------------------------------------------------------------------
+
 
 def test_list_blocks_empty(registry):
     """list_blocks returns empty list when registry is empty."""
@@ -169,6 +176,7 @@ def test_list_blocks_filtered_by_type(registry):
 # has_changed
 # ---------------------------------------------------------------------------
 
+
 def test_has_changed_new_file(registry):
     """has_changed returns True for a path not yet in the registry."""
     assert registry.has_changed("new/file.md", "any content") is True
@@ -177,6 +185,7 @@ def test_has_changed_new_file(registry):
 def test_has_changed_same_content(registry):
     """has_changed returns False when content matches stored hash."""
     import hashlib
+
     content = "stable content"
     b = Block(
         path="stable.md",
@@ -194,6 +203,7 @@ def test_has_changed_same_content(registry):
 def test_has_changed_different_content(registry):
     """has_changed returns True when content differs from stored hash."""
     import hashlib
+
     content = "original content"
     b = Block(
         path="changing.md",
@@ -211,6 +221,7 @@ def test_has_changed_different_content(registry):
 # ---------------------------------------------------------------------------
 # search
 # ---------------------------------------------------------------------------
+
 
 def test_search_finds_matching_content(registry):
     """search returns blocks whose compressed_content contains query terms."""
@@ -259,6 +270,7 @@ def test_search_path_match(registry):
 # get_stats
 # ---------------------------------------------------------------------------
 
+
 def test_get_stats_empty(registry):
     """get_stats on empty registry returns zeros."""
     stats = registry.get_stats()
@@ -300,6 +312,7 @@ def test_get_stats_with_data(registry):
 # clear
 # ---------------------------------------------------------------------------
 
+
 def test_clear_removes_all_blocks(registry):
     """clear() deletes all blocks from registry."""
     registry.add_block(_make_block("a.md", "aaa"))
@@ -319,6 +332,7 @@ def test_clear_then_add(registry):
 # ---------------------------------------------------------------------------
 # batch_transaction
 # ---------------------------------------------------------------------------
+
 
 def test_batch_transaction_commits_all(registry):
     """batch_transaction commits all operations atomically."""
@@ -353,6 +367,7 @@ def test_batch_transaction_rollback_on_error(registry, tmp_path):
 # close / context manager
 # ---------------------------------------------------------------------------
 
+
 def test_context_manager(tmp_path):
     """BlockRegistry works as a context manager; closes cleanly."""
     db = str(tmp_path / "ctx_test.db")
@@ -381,6 +396,7 @@ def test_closed_registry_raises(tmp_path):
 # ---------------------------------------------------------------------------
 # Thread safety (basic)
 # ---------------------------------------------------------------------------
+
 
 def test_concurrent_adds(tmp_path):
     """Multiple threads can add blocks without corruption."""

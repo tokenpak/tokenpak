@@ -20,6 +20,7 @@ class TestLangChainIntegration:
         """Verify langchain_tokenpak imports without error."""
         try:
             import langchain_tokenpak
+
             assert langchain_tokenpak is not None
         except ImportError as e:
             pytest.skip(f"langchain_tokenpak not installed: {e}")
@@ -71,13 +72,8 @@ class TestLangChainIntegration:
 
         # Mock response from proxy
         mock_response = {
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": "This is a test response."
-                }
-            }],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 8}
+            "choices": [{"message": {"role": "assistant", "content": "This is a test response."}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 8},
         }
 
         # Adapter should preserve format
@@ -122,10 +118,7 @@ class TestLangChainFrameworkIntegration:
         except ImportError:
             pytest.skip("LangChainTokenPakAdapter not found")
 
-        adapter = LangChainTokenPakAdapter(
-            budget=1000,
-            model="gpt-4"
-        )
+        adapter = LangChainTokenPakAdapter(budget=1000, model="gpt-4")
         assert adapter.budget == 1000
         assert adapter.model == "gpt-4"
         assert adapter.tokens_used == 0

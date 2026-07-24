@@ -46,6 +46,7 @@ from tokenpak.intelligence.server import create_app
 # Fixtures
 # ──────────────────────────────────────────────────────────────
 
+
 @pytest.fixture()
 def validator():
     v = APIKeyValidator()
@@ -70,6 +71,7 @@ def client(validator, limiter):
 # ──────────────────────────────────────────────────────────────
 # 1-3 Auth basics
 # ──────────────────────────────────────────────────────────────
+
 
 def test_missing_api_key_returns_401(client):
     resp = client.get("/v1/status")
@@ -108,6 +110,7 @@ def test_valid_enterprise_key_returns_200(client):
 # 6-10 Rate limiting
 # ──────────────────────────────────────────────────────────────
 
+
 def test_rate_limit_enforced_for_pro(validator):
     """Pro tier: 100 req/min — 101st should be 429."""
     limiter = RateLimiter()
@@ -117,7 +120,7 @@ def test_rate_limit_enforced_for_pro(validator):
 
     for i in range(100):
         r = c.get("/v1/status", headers=headers)
-        assert r.status_code == 200, f"Request {i+1} failed unexpectedly"
+        assert r.status_code == 200, f"Request {i + 1} failed unexpectedly"
 
     r = c.get("/v1/status", headers=headers)
     assert r.status_code == 429
@@ -180,6 +183,7 @@ def test_rate_limit_remaining_decrements(validator):
 # 11-13 Input validation
 # ──────────────────────────────────────────────────────────────
 
+
 def test_compress_empty_content_returns_422(client):
     resp = client.post(
         "/v1/compress",
@@ -237,6 +241,7 @@ def test_budget_valid_request(client):
 # 14-16 Health, CORS, Request-ID
 # ──────────────────────────────────────────────────────────────
 
+
 def test_health_no_auth_required(client):
     resp = client.get("/health")
     assert resp.status_code == 200
@@ -281,6 +286,7 @@ def test_request_id_on_every_response(client):
 # 17 PII scrub filter
 # ──────────────────────────────────────────────────────────────
 
+
 def test_pii_scrub_filter_redacts_api_key():
     scrubber = PIIScrubFilter()
     record = logging.LogRecord(
@@ -316,6 +322,7 @@ def test_pii_scrub_filter_redacts_bearer_token():
 # ──────────────────────────────────────────────────────────────
 # 18 Window reset (time-travel)
 # ──────────────────────────────────────────────────────────────
+
 
 def test_rate_limiter_resets_after_window(validator):
     """After the 60-second window rolls over, counter resets."""

@@ -37,7 +37,8 @@ import time
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterator
+from types import TracebackType
+from typing import Callable, Iterator, cast
 
 try:
     import tomllib
@@ -148,9 +149,7 @@ class _RetentionReport:
 
     @property
     def unsafe(self) -> tuple[_IsolatedHomeInfo, ...]:
-        return tuple(
-            home for home in self.homes if home.state in {"unsafe", "creating", "handoff"}
-        )
+        return tuple(home for home in self.homes if home.state in {"unsafe", "creating", "handoff"})
 
     @property
     def over_count(self) -> bool:
@@ -790,7 +789,8 @@ def _portable_process_identity(pid: int) -> tuple[str, int] | None:
         class FILETIME(ctypes.Structure):
             _fields_ = (("low", wintypes.DWORD), ("high", wintypes.DWORD))
 
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        win_dll = cast(Callable[..., ctypes.CDLL], getattr(ctypes, "WinDLL"))
+        kernel32 = win_dll("kernel32", use_last_error=True)
         kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
         kernel32.OpenProcess.restype = wintypes.HANDLE
         kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
@@ -1367,9 +1367,7 @@ def inspect_isolated_homes(
                     homes.append(info)
                     total += info.size_bytes
                     complete = (
-                        complete
-                        and info.size_complete
-                        and info.state not in {"unsafe", "handoff"}
+                        complete and info.size_complete and info.state not in {"unsafe", "handoff"}
                     )
         except OSError:
             complete = False
@@ -1393,10 +1391,13 @@ def _interprocess_file_lock(fd: int, *, deadline: float) -> Iterator[None]:
     except ImportError:  # pragma: no cover - exercised on Windows CI
         import msvcrt
 
+        locking = cast(Callable[[int, int, int], None], getattr(msvcrt, "locking"))
+        lock_nonblocking = cast(int, getattr(msvcrt, "LK_NBLCK"))
+        unlock = cast(int, getattr(msvcrt, "LK_UNLCK"))
         os.lseek(fd, 0, os.SEEK_SET)
         while True:
             try:
-                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                locking(fd, lock_nonblocking, 1)
                 break
             except OSError as exc:
                 if exc.errno not in {errno.EACCES, errno.EAGAIN} or time.monotonic() >= deadline:
@@ -1407,7 +1408,7 @@ def _interprocess_file_lock(fd: int, *, deadline: float) -> Iterator[None]:
         finally:
             os.lseek(fd, 0, os.SEEK_SET)
             with contextlib.suppress(OSError):
-                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                locking(fd, unlock, 1)
         return
 
     while True:
@@ -1820,8 +1821,8 @@ def _recover_quarantines_at(
             _purge_quarantine_at(
                 root_fd,
                 quarantine,
-                expected_device=int(receipt["device"]),
-                expected_inode=int(receipt["inode"]),
+                expected_device=cast(int, receipt["device"]),
+                expected_inode=cast(int, receipt["inode"]),
                 deadline=deadline,
             )
             _append_retention_receipt(
@@ -2247,29 +2248,29 @@ def _recover_sentinel_temps(
         raise HomeInUseError(f"cannot inspect sentinel recovery artifacts: {path.parent}") from exc
     with entries:
         names: list[str] = []
-        for entry_count, entry in enumerate(entries, start=1):
+        for entry_count, candidate_entry in enumerate(entries, start=1):
             if entry_count > _RETENTION_MAX_ENTRIES:
                 raise HomeInUseError("sentinel recovery artifact inventory exceeds limit")
-            if _is_sentinel_temp_candidate(entry.name):
-                names.append(entry.name)
+            if _is_sentinel_temp_candidate(candidate_entry.name):
+                names.append(candidate_entry.name)
     for name in names:
         match = _SENTINEL_TEMP_RE.fullmatch(name)
         if match is None:
             raise HomeInUseError(f"unsafe sentinel recovery artifact: {path.parent / name}")
         if dir_fd is not None:
-            entry = _entry_stat(name, dir_fd)
+            entry_stat = _entry_stat(name, dir_fd)
         else:
             try:
-                entry = (path.parent / name).lstat()
+                entry_stat = (path.parent / name).lstat()
             except FileNotFoundError:
-                entry = None
-        if entry is None:
+                entry_stat = None
+        if entry_stat is None:
             continue
         if (
-            not stat.S_ISREG(entry.st_mode)
-            or entry.st_nlink != 1
-            or stat.S_IMODE(entry.st_mode) != 0o600
-            or (getuid is not None and entry.st_uid != getuid())
+            not stat.S_ISREG(entry_stat.st_mode)
+            or entry_stat.st_nlink != 1
+            or stat.S_IMODE(entry_stat.st_mode) != 0o600
+            or (getuid is not None and entry_stat.st_uid != getuid())
         ):
             raise HomeInUseError(f"unsafe sentinel recovery artifact: {path.parent / name}")
         candidate = read_pid_sentinel(
@@ -2361,6 +2362,8 @@ class SessionLease:
         """Fail if the selected pathname no longer names the pinned home."""
         if self.paths.mode == MODE_SHARED:
             return
+        if self.home_fd is None:
+            raise HomeInUseError("selected CODEX_HOME is missing its pinned directory descriptor")
         try:
             current = os.stat(self.paths.home, follow_symlinks=False)
             pinned = os.fstat(self.home_fd)
@@ -2534,11 +2537,16 @@ class SessionLease:
                 if current != self.sentinel:
                     raise HomeInUseError("PID sentinel ownership changed during launch")
                 revalidated = _proc_identity(pid, self.proc_root)
-                if revalidated != identity or revalidated is None or revalidated[0] in {
-                    "Z",
-                    "X",
-                    "x",
-                }:
+                if (
+                    revalidated != identity
+                    or revalidated is None
+                    or revalidated[0]
+                    in {
+                        "Z",
+                        "X",
+                        "x",
+                    }
+                ):
                     raise HomeInUseError("Codex child PID changed during handoff")
                 try:
                     _write_sentinel_atomic(
@@ -2606,5 +2614,10 @@ class SessionLease:
     def __enter__(self) -> "SessionLease":
         return self
 
-    def __exit__(self, _exc_type, _exc, _tb) -> None:
+    def __exit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _tb: TracebackType | None,
+    ) -> None:
         self.release()

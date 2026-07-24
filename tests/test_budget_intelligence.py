@@ -41,6 +41,7 @@ from tokenpak.cli.commands.budget import (
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_history(n_days: int, daily_cost: float) -> list[dict]:
     """Synthetic daily history with fixed cost per day."""
     today = date.today()
@@ -53,6 +54,7 @@ def _make_history(n_days: int, daily_cost: float) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Burn rate calculation
 # ---------------------------------------------------------------------------
+
 
 def test_burn_rate_daily_avg():
     """Daily avg from 7d history should equal total / days."""
@@ -70,6 +72,7 @@ def test_burn_rate_daily_avg():
 def test_burn_rate_trend_increasing():
     """If last 7d spend is higher than prior 7d, trend should be positive."""
     today = date.today()
+
     # Last 7 days: $2/day; Prior 7 days: $1/day
     def fake_history(days=30):
         rows = []
@@ -104,6 +107,7 @@ def test_burn_rate_trend_decreasing():
 # ---------------------------------------------------------------------------
 # ETA calculation
 # ---------------------------------------------------------------------------
+
 
 def test_eta_calculation_correct():
     """ETA days should equal remaining / daily_avg."""
@@ -145,6 +149,7 @@ def test_eta_zero_burn_rate():
 # Suggestions
 # ---------------------------------------------------------------------------
 
+
 def test_suggestions_generated_for_expensive_model():
     """Expensive model in breakdown should trigger a switch suggestion."""
     burn = {"daily_avg_7d": 0.50, "trend_7d_pct": 5.0}
@@ -178,6 +183,7 @@ def test_suggestions_max_three():
 # print_budget_intelligence — non-Pro gate
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skip(reason=SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS)
 def test_intelligence_gated_non_pro(capsys):
     """Non-Pro license should print an upgrade prompt and not show data."""
@@ -205,7 +211,9 @@ def test_intelligence_json_output(capsys):
         patch("tokenpak.cli.commands.budget._get_spent", return_value=10.0),
         patch("tokenpak.cli.commands.budget._calc_burn_rate", return_value=burn),
         patch("tokenpak.cli.commands.budget._get_model_daily_avg", return_value=[]),
-        patch("tokenpak.cli.commands.budget._generate_suggestions", return_value=["test suggestion"]),
+        patch(
+            "tokenpak.cli.commands.budget._generate_suggestions", return_value=["test suggestion"]
+        ),
     ):
         print_budget_intelligence(raw=True)
     captured = capsys.readouterr()

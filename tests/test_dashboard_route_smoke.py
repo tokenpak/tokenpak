@@ -50,10 +50,12 @@ from starlette.testclient import TestClient  # noqa: E402
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def client():
     """Create a TestClient against create_combined_app() once per test module."""
     from tokenpak.dashboard.app import create_combined_app
+
     app = create_combined_app()
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
@@ -110,6 +112,7 @@ class TestDashboardRouteSmoke:
     def test_ingest_endpoint_still_present(self, client):
         """Regression: /ingest must still be mounted (combined app, not dashboard-only)."""
         import json
+
         payload = json.dumps({"agent_id": "smoke-test", "tokens": 1}).encode()
         resp = client.post(
             "/ingest",

@@ -278,7 +278,13 @@ class CapsuleBuilder:
         except (json.JSONDecodeError, ValueError):
             return body_bytes, {**_empty_stats, "skip_reason": "invalid_json"}
 
-        messages: List[Dict[str, Any]] = data.get("messages") or []
+        messages_value = data.get("messages")
+        if not isinstance(messages_value, list):
+            # OpenAI Responses (including native Codex OAuth) carries its
+            # conversation as ``input``. Keep non-message content items in
+            # place; only message-shaped entries are considered below.
+            messages_value = data.get("input")
+        messages: List[Dict[str, Any]] = messages_value if isinstance(messages_value, list) else []
         if not messages:
             stats = {**_empty_stats, "skip_reason": "no_messages", "duration_ms": 0.0}
             return body_bytes, stats
@@ -290,12 +296,20 @@ class CapsuleBuilder:
         total_chars_out = 0
         blocks_capsulized = 0
         modified = False
+        from tokenpak.proxy.request_pipeline import classify_message_risk
 
         for idx, msg in enumerate(messages):
             if idx >= hot_start:
                 # Inside hot window — never touch
                 continue
             if not isinstance(msg, dict):
+                continue
+
+            # System/developer policy and protected instruction blocks are
+            # never compression candidates, even in aggressive mode.
+            if msg.get("role") in {"system", "developer"}:
+                continue
+            if classify_message_risk(msg) == "protected":
                 continue
 
             content = msg.get("content")

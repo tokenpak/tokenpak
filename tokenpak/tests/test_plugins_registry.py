@@ -14,6 +14,7 @@ from tokenpak.plugins.registry import PluginRegistry
 # Concrete plugin fixtures
 # ---------------------------------------------------------------------------
 
+
 class AlphaPlugin(CompressorPlugin):
     name = "alpha"
 
@@ -46,6 +47,7 @@ class GammaPlugin(CompressorPlugin):
 
 class UnnamedPlugin(CompressorPlugin):
     """Plugin whose name class attribute is empty — falls back to class name."""
+
     name = ""
 
     def compress(self, text: str, context: dict) -> dict:
@@ -55,6 +57,7 @@ class UnnamedPlugin(CompressorPlugin):
 # ---------------------------------------------------------------------------
 # Initialization
 # ---------------------------------------------------------------------------
+
 
 class TestPluginRegistryInit:
     def test_empty_on_init(self):
@@ -80,6 +83,7 @@ class TestPluginRegistryInit:
 # ---------------------------------------------------------------------------
 # register()
 # ---------------------------------------------------------------------------
+
 
 class TestPluginRegistryRegister:
     def test_register_single_plugin(self):
@@ -128,6 +132,7 @@ class TestPluginRegistryRegister:
 # get_plugins() — ordering
 # ---------------------------------------------------------------------------
 
+
 class TestGetPluginsSorting:
     def test_single_plugin_returned(self):
         reg = PluginRegistry()
@@ -138,18 +143,18 @@ class TestGetPluginsSorting:
 
     def test_sorted_highest_priority_first(self):
         reg = PluginRegistry()
-        reg.register(AlphaPlugin)   # priority 10
-        reg.register(BetaPlugin)    # priority 20
-        reg.register(GammaPlugin)   # priority 15
+        reg.register(AlphaPlugin)  # priority 10
+        reg.register(BetaPlugin)  # priority 20
+        reg.register(GammaPlugin)  # priority 15
         result = reg.get_plugins()
         priorities = [p.priority() for p in result]
         assert priorities == sorted(priorities, reverse=True)
 
     def test_sorted_order_is_beta_gamma_alpha(self):
         reg = PluginRegistry()
-        reg.register(AlphaPlugin)   # 10
-        reg.register(BetaPlugin)    # 20
-        reg.register(GammaPlugin)   # 15
+        reg.register(AlphaPlugin)  # 10
+        reg.register(BetaPlugin)  # 20
+        reg.register(GammaPlugin)  # 15
         result = reg.get_plugins()
         assert isinstance(result[0], BetaPlugin)
         assert isinstance(result[1], GammaPlugin)
@@ -166,6 +171,7 @@ class TestGetPluginsSorting:
 # ---------------------------------------------------------------------------
 # _load_plugin_path()
 # ---------------------------------------------------------------------------
+
 
 class TestLoadPluginPath:
     def test_load_valid_path(self):
@@ -212,6 +218,7 @@ class TestLoadPluginPath:
 # _discover_from_env()
 # ---------------------------------------------------------------------------
 
+
 class TestDiscoverFromEnv:
     def test_empty_env_var_noop(self):
         reg = PluginRegistry()
@@ -228,18 +235,20 @@ class TestDiscoverFromEnv:
 
     def test_single_plugin_via_env(self):
         reg = PluginRegistry()
-        with patch.dict(os.environ, {
-            "TOKENPAK_PLUGINS": "tokenpak.plugins.examples.passthrough.PassthroughPlugin"
-        }):
+        with patch.dict(
+            os.environ,
+            {"TOKENPAK_PLUGINS": "tokenpak.plugins.examples.passthrough.PassthroughPlugin"},
+        ):
             reg._discover_from_env()
         assert len(reg.get_plugins()) == 1
 
     def test_multiple_plugins_via_env_comma_separated(self):
         reg = PluginRegistry()
         # Use passthrough twice would collision — only use it once with a mock
-        with patch.dict(os.environ, {
-            "TOKENPAK_PLUGINS": "tokenpak.plugins.examples.passthrough.PassthroughPlugin"
-        }):
+        with patch.dict(
+            os.environ,
+            {"TOKENPAK_PLUGINS": "tokenpak.plugins.examples.passthrough.PassthroughPlugin"},
+        ):
             reg._discover_from_env()
         assert len(reg.get_plugins()) == 1
 
@@ -252,9 +261,10 @@ class TestDiscoverFromEnv:
 
     def test_env_with_spaces_around_entries_handled(self):
         reg = PluginRegistry()
-        with patch.dict(os.environ, {
-            "TOKENPAK_PLUGINS": " tokenpak.plugins.examples.passthrough.PassthroughPlugin "
-        }):
+        with patch.dict(
+            os.environ,
+            {"TOKENPAK_PLUGINS": " tokenpak.plugins.examples.passthrough.PassthroughPlugin "},
+        ):
             reg._discover_from_env()
         assert len(reg.get_plugins()) == 1
 
@@ -263,13 +273,12 @@ class TestDiscoverFromEnv:
 # _discover_from_config() — canonical config.yaml path
 # ---------------------------------------------------------------------------
 
+
 class TestDiscoverFromConfigYaml:
     def test_config_yaml_plugins_loaded(self):
         reg = PluginRegistry()
         with patch("tokenpak.core.config_loader.get") as mock_get:
-            mock_get.return_value = [
-                "tokenpak.plugins.examples.passthrough.PassthroughPlugin"
-            ]
+            mock_get.return_value = ["tokenpak.plugins.examples.passthrough.PassthroughPlugin"]
             reg._discover_from_config()
         assert len(reg.get_plugins()) == 1
 
@@ -293,6 +302,7 @@ class TestDiscoverFromConfigYaml:
 # ---------------------------------------------------------------------------
 # _discover_from_config() — legacy JSON fallback
 # ---------------------------------------------------------------------------
+
 
 class TestDiscoverFromConfigLegacyJson:
     def test_legacy_json_loads_plugins(self, tmp_path, monkeypatch):
@@ -356,11 +366,14 @@ class TestDiscoverFromConfigLegacyJson:
 # discover() — integration of env + config
 # ---------------------------------------------------------------------------
 
+
 class TestDiscover:
     def test_discover_calls_both_sources(self):
         reg = PluginRegistry()
-        with patch.object(reg, "_discover_from_env") as mock_env, \
-             patch.object(reg, "_discover_from_config") as mock_cfg:
+        with (
+            patch.object(reg, "_discover_from_env") as mock_env,
+            patch.object(reg, "_discover_from_config") as mock_cfg,
+        ):
             reg.discover()
         mock_env.assert_called_once()
         mock_cfg.assert_called_once()

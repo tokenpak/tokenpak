@@ -50,7 +50,7 @@ _PRECISION_KEYWORDS: frozenset[str] = frozenset(
         "quote",
         "citation",
         "cite",
-        "line ",       # "line 42", "line number", etc.
+        "line ",  # "line 42", "line number", etc.
         "line\t",
         "lineno",
         "line_number",
@@ -246,7 +246,8 @@ def disclose(
         return content, {"mode": "bypass", "saved_tokens": 0}
 
     if count_tokens_fn is None:
-        def count_tokens_fn(t: str) -> int:  # type: ignore[misc]
+
+        def count_tokens_fn(t: str) -> int:
             return max(1, len(t) // 4)
 
     if assess_intent(request):
@@ -267,8 +268,7 @@ def disclose(
         return content, {"mode": "full", "saved_tokens": 0, "reason": "no_savings"}
 
     logger.debug(
-        "progressive_disclosure: %s → summary_map "
-        "(full=%d tok, summary=%d tok, saved=%d tok)",
+        "progressive_disclosure: %s → summary_map (full=%d tok, summary=%d tok, saved=%d tok)",
         source_path or "unknown",
         full_tokens,
         summary_tokens,

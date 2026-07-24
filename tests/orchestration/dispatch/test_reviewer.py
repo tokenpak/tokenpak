@@ -82,9 +82,7 @@ def _result_payload(status: str) -> dict:
     derived = STATUS_TO_DELIVERY[ReviewerStatus(status)].value
     payload = {
         "status": status,
-        "criteria_results": [
-            {"criterion_id": "ac1", "status": "pass", "notes": "ok"}
-        ],
+        "criteria_results": [{"criterion_id": "ac1", "status": "pass", "notes": "ok"}],
         "required_fixes": [],
         "risk_flags": [],
         "delivery_recommendation": {"status": derived, "reason": f"{status} verdict"},
@@ -254,7 +252,5 @@ def test_for_status_derives_recommendation(status):
         criteria_results=[CriterionResult(criterion_id="ac1", status="pass")],
         reason="r",
     )
-    assert result.delivery_recommendation.status is derive_delivery_status(
-        ReviewerStatus(status)
-    )
+    assert result.delivery_recommendation.status is derive_delivery_status(ReviewerStatus(status))
     assert result.delivery_recommendation.reason == "r"

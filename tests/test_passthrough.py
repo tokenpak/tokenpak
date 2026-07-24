@@ -26,6 +26,7 @@ from tokenpak.proxy.passthrough import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def pt() -> CredentialPassthrough:
     """Default CredentialPassthrough (require_auth=True)."""
@@ -41,6 +42,7 @@ def pt_noauth() -> CredentialPassthrough:
 # ---------------------------------------------------------------------------
 # validate_auth — valid cases
 # ---------------------------------------------------------------------------
+
 
 class TestValidateAuthValid:
     def test_bearer_openai_key(self, pt):
@@ -83,6 +85,7 @@ class TestValidateAuthValid:
 # ---------------------------------------------------------------------------
 # validate_auth — 401 cases (missing / malformed)
 # ---------------------------------------------------------------------------
+
 
 class TestValidateAuthInvalid:
     def test_missing_auth_returns_false(self, pt):
@@ -137,10 +140,13 @@ class TestValidateAuthInvalid:
 # build_forward_headers — auth forwarded unchanged
 # ---------------------------------------------------------------------------
 
+
 class TestBuildForwardHeaders:
     def test_authorization_forwarded_unchanged(self, pt):
         raw_key = "Bearer sk-supersecret-key-12345"
-        hdrs = pt.build_forward_headers({"Authorization": raw_key, "Content-Type": "application/json"})
+        hdrs = pt.build_forward_headers(
+            {"Authorization": raw_key, "Content-Type": "application/json"}
+        )
         assert hdrs.get("Authorization") == raw_key
 
     def test_x_api_key_forwarded_unchanged(self, pt):
@@ -162,17 +168,21 @@ class TestBuildForwardHeaders:
             assert hop not in hdrs, f"Expected {hop} to be stripped"
 
     def test_content_type_forwarded(self, pt):
-        hdrs = pt.build_forward_headers({
-            "Authorization": "Bearer sk-test",
-            "Content-Type": "application/json",
-        })
+        hdrs = pt.build_forward_headers(
+            {
+                "Authorization": "Bearer sk-test",
+                "Content-Type": "application/json",
+            }
+        )
         assert hdrs.get("Content-Type") == "application/json"
 
     def test_anthropic_version_forwarded(self, pt):
-        hdrs = pt.build_forward_headers({
-            "Authorization": "Bearer sk-ant-test",
-            "anthropic-version": "2023-06-01",
-        })
+        hdrs = pt.build_forward_headers(
+            {
+                "Authorization": "Bearer sk-ant-test",
+                "anthropic-version": "2023-06-01",
+            }
+        )
         assert hdrs.get("anthropic-version") == "2023-06-01"
 
     def test_empty_incoming_returns_empty(self, pt):
@@ -189,6 +199,7 @@ class TestBuildForwardHeaders:
 # ---------------------------------------------------------------------------
 # module-level forward_headers shim
 # ---------------------------------------------------------------------------
+
 
 class TestForwardHeadersShim:
     def test_returns_dict(self):
@@ -214,6 +225,7 @@ class TestForwardHeadersShim:
 # mask_for_logging — credentials redacted
 # ---------------------------------------------------------------------------
 
+
 class TestMaskForLogging:
     def test_authorization_redacted(self, pt):
         masked = pt.mask_for_logging({"Authorization": "Bearer sk-supersecret"})
@@ -224,11 +236,13 @@ class TestMaskForLogging:
         assert masked.get("x-api-key") == "[REDACTED]"
 
     def test_safe_headers_pass_through(self, pt):
-        masked = pt.mask_for_logging({
-            "content-type": "application/json",
-            "anthropic-version": "2023-06-01",
-            "Authorization": "Bearer sk-secret",
-        })
+        masked = pt.mask_for_logging(
+            {
+                "content-type": "application/json",
+                "anthropic-version": "2023-06-01",
+                "Authorization": "Bearer sk-secret",
+            }
+        )
         assert masked["content-type"] == "application/json"
         assert masked["anthropic-version"] == "2023-06-01"
         assert masked["Authorization"] == "[REDACTED]"
@@ -237,6 +251,7 @@ class TestMaskForLogging:
 # ---------------------------------------------------------------------------
 # Zero-storage: verify no key values leak into exceptions or return values
 # ---------------------------------------------------------------------------
+
 
 class TestZeroStorageContract:
     def test_validate_auth_error_message_does_not_contain_key_value(self, pt):

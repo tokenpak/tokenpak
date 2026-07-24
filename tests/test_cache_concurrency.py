@@ -231,9 +231,9 @@ class TestCacheConcurrentAccess:
                 for i in range(50):
                     cache.set(f"k{thread_id}_{i}", b"x" * 20000)
                     if i % 5 == 0:
-                        cache.get(f"k{thread_id}_{i-2}")
+                        cache.get(f"k{thread_id}_{i - 2}")
                     if i % 10 == 0:
-                        cache.delete(f"k{thread_id}_{i-5}")
+                        cache.delete(f"k{thread_id}_{i - 5}")
             except Exception as e:
                 errors.append(e)
 

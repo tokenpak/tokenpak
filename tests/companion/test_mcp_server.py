@@ -11,6 +11,7 @@ All tests operate on the serve() function itself (I/O layer) or on _handle() for
 the isError branch, which is unreachable via the handler tests in test_mcp_handlers.py
 because those tests only invoke tools that succeed.
 """
+
 from __future__ import annotations
 
 import io
@@ -26,12 +27,16 @@ import pytest
 try:
     from tokenpak.companion.mcp_server import _handle, serve
 except ImportError as _exc:
-    pytest.skip(f"tokenpak.companion.mcp_server symbols not present in slim OSS install: {_exc}", allow_module_level=True)
+    pytest.skip(
+        f"tokenpak.companion.mcp_server symbols not present in slim OSS install: {_exc}",
+        allow_module_level=True,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _run_serve(lines: list) -> list:
     """Run serve() with StringIO containing *lines* and return parsed responses."""
@@ -49,6 +54,7 @@ def _initialize_msg(req_id: int = 1) -> str:
 # ---------------------------------------------------------------------------
 # AC-1: serve(stdin=None, stdout=None) falls back to sys.stdin / sys.stdout
 # ---------------------------------------------------------------------------
+
 
 class TestServeDefaultsToSysStdinStdout:
     """Lines 157, 159: stdin = sys.stdin / stdout = sys.stdout branches."""
@@ -95,6 +101,7 @@ class TestServeDefaultsToSysStdinStdout:
 # AC-2: Blank lines are silently skipped
 # ---------------------------------------------------------------------------
 
+
 class TestBlankLineSkipped:
     """Line 164: if not line: continue — blank lines must produce no output."""
 
@@ -134,6 +141,7 @@ class TestBlankLineSkipped:
 # AC-3: Malformed JSON → -32700 parse error
 # ---------------------------------------------------------------------------
 
+
 class TestParseError:
     """Lines 167–171: JSONDecodeError handler must emit a -32700 response."""
 
@@ -171,6 +179,7 @@ class TestParseError:
 # ---------------------------------------------------------------------------
 # isError flag (line 140): handler result with "error" key sets isError=True
 # ---------------------------------------------------------------------------
+
 
 class TestIsErrorFlag:
     """Line 140: mcp_result['isError'] = True must be set when handler returns error."""

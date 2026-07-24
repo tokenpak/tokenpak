@@ -131,15 +131,22 @@ class TestHeaderRedaction:
     """
 
     def test_non_credential_headers_preserved(self, store):
-        hdrs = {"Content-Type": "application/json", "X-Custom": "value with spaces",
-                "anthropic-version": "2023-06-01"}
+        hdrs = {
+            "Content-Type": "application/json",
+            "X-Custom": "value with spaces",
+            "anthropic-version": "2023-06-01",
+        }
         p = _store_one(store, headers=hdrs)
         out = store.consume(p.pending_id)
         assert out.raw_request_headers == hdrs
 
     def test_credential_headers_dropped_on_store(self, store):
-        hdrs = {"Authorization": "Bearer CRED-SENTINEL-A", "x-api-key": "CRED-SENTINEL-B",
-                "Cookie": "session=abc", "Content-Type": "application/json"}
+        hdrs = {
+            "Authorization": "Bearer CRED-SENTINEL-A",
+            "x-api-key": "CRED-SENTINEL-B",
+            "Cookie": "session=abc",
+            "Content-Type": "application/json",
+        }
         p = _store_one(store, headers=hdrs)
         # Returned object is already redacted.
         assert p.raw_request_headers == {"Content-Type": "application/json"}
@@ -152,8 +159,13 @@ class TestHeaderRedaction:
 
     def test_raw_secret_absent_from_db_bytes(self, store):
         # The literal secret must not appear anywhere in the db file.
-        _store_one(store, headers={"Authorization": "Bearer LEAK-SENTINEL-AAAA1111",
-                                   "x-api-key": "LEAK-SENTINEL-BBBB2222"})
+        _store_one(
+            store,
+            headers={
+                "Authorization": "Bearer LEAK-SENTINEL-AAAA1111",
+                "x-api-key": "LEAK-SENTINEL-BBBB2222",
+            },
+        )
         raw = Path(store.path).read_bytes()
         assert b"LEAK-SENTINEL-AAAA1111" not in raw
         assert b"LEAK-SENTINEL-BBBB2222" not in raw
@@ -173,6 +185,7 @@ class TestRedactionMigration:
         # without deleting the row.
         import json as _json
         import sqlite3
+
         dbp = tmp_path / "spend_guard.db"
         conn = sqlite3.connect(str(dbp))
         conn.execute(
@@ -188,8 +201,9 @@ class TestRedactionMigration:
                    target_url TEXT NOT NULL DEFAULT '',
                    status TEXT NOT NULL DEFAULT 'pending')"""
         )
-        raw = _json.dumps({"Authorization": "Bearer OLD-LEAK-SENTINEL",
-                           "Content-Type": "application/json"})
+        raw = _json.dumps(
+            {"Authorization": "Bearer OLD-LEAK-SENTINEL", "Content-Type": "application/json"}
+        )
         conn.execute(
             "INSERT INTO pending_requests (pending_id, session_id, created_at, "
             "expires_at, request_hash, raw_request_blob, raw_request_headers, status) "

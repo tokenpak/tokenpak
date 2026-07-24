@@ -48,13 +48,17 @@ def generate_synthetic_transcript(target_tokens: int, path: Path) -> int:
     chars += len(lines[-1])
 
     # Queue operation
-    lines.append(json.dumps({
-        "type": "queue-operation",
-        "operation": "enqueue",
-        "timestamp": "2026-04-14T00:00:01Z",
-        "sessionId": "stress-test-session",
-        "content": "Start the stress test task",
-    }))
+    lines.append(
+        json.dumps(
+            {
+                "type": "queue-operation",
+                "operation": "enqueue",
+                "timestamp": "2026-04-14T00:00:01Z",
+                "sessionId": "stress-test-session",
+                "content": "Start the stress test task",
+            }
+        )
+    )
     chars += len(lines[-1])
 
     while chars < target_chars:
@@ -65,8 +69,8 @@ def generate_synthetic_transcript(target_tokens: int, path: Path) -> int:
             "type": "user",
             "role": "user",
             "content": f"Turn {turn}: Please analyze the authentication middleware in src/auth/middleware.py and identify any security vulnerabilities. "
-                       f"Check for OWASP top 10 issues including SQL injection, XSS, and CSRF. "
-                       f"Also review the session token handling at line {turn * 10}. " * (3 + turn % 5),
+            f"Check for OWASP top 10 issues including SQL injection, XSS, and CSRF. "
+            f"Also review the session token handling at line {turn * 10}. " * (3 + turn % 5),
             "timestamp": f"2026-04-14T00:{turn:02d}:00Z",
         }
         lines.append(json.dumps(user_msg))
@@ -77,8 +81,10 @@ def generate_synthetic_transcript(target_tokens: int, path: Path) -> int:
 
         # Assistant response with tool calls (simulates real Claude Code output)
         tool_output = "def authenticate(request):\n" + "\n".join(
-            [f"    # Step {i}: validate {['token', 'session', 'csrf', 'headers', 'origin'][i % 5]}"
-             for i in range(20 + turn % 30)]
+            [
+                f"    # Step {i}: validate {['token', 'session', 'csrf', 'headers', 'origin'][i % 5]}"
+                for i in range(20 + turn % 30)
+            ]
         )
         assistant_msg = {
             "type": "assistant",
@@ -87,11 +93,11 @@ def generate_synthetic_transcript(target_tokens: int, path: Path) -> int:
                 {
                     "type": "text",
                     "text": f"I'll analyze the middleware. Looking at turn {turn}, I found several issues:\n\n"
-                            f"1. The session token is stored in a cookie without the HttpOnly flag\n"
-                            f"2. CSRF protection is missing on POST endpoints\n"
-                            f"3. The SQL query at line {turn * 10} uses string formatting instead of parameterized queries\n\n"
-                            f"Here's the relevant code:\n```python\n{tool_output}\n```\n\n"
-                            f"Let me fix these issues. " * (2 + turn % 3),
+                    f"1. The session token is stored in a cookie without the HttpOnly flag\n"
+                    f"2. CSRF protection is missing on POST endpoints\n"
+                    f"3. The SQL query at line {turn * 10} uses string formatting instead of parameterized queries\n\n"
+                    f"Here's the relevant code:\n```python\n{tool_output}\n```\n\n"
+                    f"Let me fix these issues. " * (2 + turn % 3),
                 }
             ],
             "timestamp": f"2026-04-14T00:{turn:02d}:30Z",
@@ -136,6 +142,7 @@ def bench_token_counter(transcript_path: str, label: str) -> dict:
     # Tiktoken
     try:
         from tokenpak.tokens import count_tokens
+
         t0 = time.perf_counter()
         # Chunk large texts to avoid LRU cache thrashing
         CHUNK = 100_000
@@ -143,8 +150,7 @@ def bench_token_counter(transcript_path: str, label: str) -> dict:
             tiktoken_count = count_tokens(content)
         else:
             tiktoken_count = sum(
-                count_tokens(content[i:i + CHUNK])
-                for i in range(0, len(content), CHUNK)
+                count_tokens(content[i : i + CHUNK]) for i in range(0, len(content), CHUNK)
             )
         tiktoken_ms = (time.perf_counter() - t0) * 1000
     except Exception as e:
@@ -158,7 +164,9 @@ def bench_token_counter(transcript_path: str, label: str) -> dict:
         "heuristic_ms": round(heuristic_ms, 3),
         "tiktoken_tokens": tiktoken_count,
         "tiktoken_ms": round(tiktoken_ms, 1),
-        "accuracy_pct": round(tiktoken_count / max(heuristic, 1) * 100, 1) if tiktoken_count > 0 else -1,
+        "accuracy_pct": round(tiktoken_count / max(heuristic, 1) * 100, 1)
+        if tiktoken_count > 0
+        else -1,
     }
 
 
@@ -167,16 +175,20 @@ def bench_hook_pipeline(transcript_path: str, label: str) -> dict:
 
     Uses the bash hook (pre_send.sh) for production-realistic timing.
     """
-    hook_input = json.dumps({
-        "session_id": "stress-test",
-        "transcript_path": transcript_path,
-        "cwd": "/tmp",
-        "permission_mode": "default",
-        "hook_event_name": "UserPromptSubmit",
-        "prompt": "continue analyzing the code",
-    })
+    hook_input = json.dumps(
+        {
+            "session_id": "stress-test",
+            "transcript_path": transcript_path,
+            "cwd": "/tmp",
+            "permission_mode": "default",
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "continue analyzing the code",
+        }
+    )
 
-    hook_script = Path(__file__).parent.parent.parent / "tokenpak" / "companion" / "hooks" / "pre_send.sh"
+    hook_script = (
+        Path(__file__).parent.parent.parent / "tokenpak" / "companion" / "hooks" / "pre_send.sh"
+    )
 
     t0 = time.perf_counter()
     result = subprocess.run(
@@ -201,14 +213,33 @@ def bench_hook_pipeline(transcript_path: str, label: str) -> dict:
 
 def bench_mcp_tool_call(transcript_path: str, label: str) -> dict:
     """Benchmark MCP read_transcript tool on a large file."""
-    mcp_input = "\n".join([
-        json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                     "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                                "clientInfo": {"name": "bench", "version": "1.0"}}}),
-        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                     "params": {"name": "estimate_tokens",
-                                "arguments": {"file_path": transcript_path}}}),
-    ])
+    mcp_input = "\n".join(
+        [
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "bench", "version": "1.0"},
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "estimate_tokens",
+                        "arguments": {"file_path": transcript_path},
+                    },
+                }
+            ),
+        ]
+    )
 
     t0 = time.perf_counter()
     result = subprocess.run(
@@ -264,15 +295,21 @@ def main():
         print(f"\n  Benchmarking {label}...")
 
         r1 = bench_transcript_parser(transcript_path, label)
-        print(f"    parser:     {r1['elapsed_ms']:>8.1f}ms  ({r1['messages']} msgs, ~{r1['tokens_est']:,} tokens)")
+        print(
+            f"    parser:     {r1['elapsed_ms']:>8.1f}ms  ({r1['messages']} msgs, ~{r1['tokens_est']:,} tokens)"
+        )
         results.append(r1)
 
         r2 = bench_token_counter(transcript_path, label)
-        print(f"    tiktoken:   {r2['tiktoken_ms']:>8.1f}ms  ({r2['tiktoken_tokens']:,} tokens, {r2['accuracy_pct']}% of heuristic)")
+        print(
+            f"    tiktoken:   {r2['tiktoken_ms']:>8.1f}ms  ({r2['tiktoken_tokens']:,} tokens, {r2['accuracy_pct']}% of heuristic)"
+        )
         results.append(r2)
 
         r3 = bench_hook_pipeline(transcript_path, label)
-        print(f"    hook e2e:   {r3['elapsed_ms']:>8.1f}ms  (exit={r3['exit_code']}, stderr={r3['stderr'][:80]})")
+        print(
+            f"    hook e2e:   {r3['elapsed_ms']:>8.1f}ms  (exit={r3['exit_code']}, stderr={r3['stderr'][:80]})"
+        )
         results.append(r3)
 
         r4 = bench_mcp_tool_call(transcript_path, label)
@@ -288,11 +325,21 @@ def main():
     print(f"\n{'Size':<8} {'Parser':>10} {'Tiktoken':>10} {'Hook E2E':>10} {'MCP Tool':>10}")
     print(f"{'─' * 8} {'─' * 10} {'─' * 10} {'─' * 10} {'─' * 10}")
     for label, _ in SIZES:
-        parser = next((r for r in results if r["test"] == "transcript_parser" and r["label"] == label), {})
-        tiktoken = next((r for r in results if r["test"] == "token_counter" and r["label"] == label), {})
-        hook = next((r for r in results if r["test"] == "hook_pipeline" and r["label"] == label), {})
-        mcp = next((r for r in results if r["test"] == "mcp_estimate_tokens" and r["label"] == label), {})
-        print(f"{label:<8} {parser.get('elapsed_ms', -1):>8.1f}ms {tiktoken.get('tiktoken_ms', -1):>8.1f}ms {hook.get('elapsed_ms', -1):>8.1f}ms {mcp.get('elapsed_ms', -1):>8.1f}ms")
+        parser = next(
+            (r for r in results if r["test"] == "transcript_parser" and r["label"] == label), {}
+        )
+        tiktoken = next(
+            (r for r in results if r["test"] == "token_counter" and r["label"] == label), {}
+        )
+        hook = next(
+            (r for r in results if r["test"] == "hook_pipeline" and r["label"] == label), {}
+        )
+        mcp = next(
+            (r for r in results if r["test"] == "mcp_estimate_tokens" and r["label"] == label), {}
+        )
+        print(
+            f"{label:<8} {parser.get('elapsed_ms', -1):>8.1f}ms {tiktoken.get('tiktoken_ms', -1):>8.1f}ms {hook.get('elapsed_ms', -1):>8.1f}ms {mcp.get('elapsed_ms', -1):>8.1f}ms"
+        )
 
     # Write results JSON
     results_path = Path(__file__).parent / "stress_results.json"
@@ -303,7 +350,9 @@ def main():
     print(f"\n{'=' * 70}")
     print("VERDICT")
     print(f"{'=' * 70}")
-    hook_200k = next((r for r in results if r["test"] == "hook_pipeline" and r["label"] == "200k"), {})
+    hook_200k = next(
+        (r for r in results if r["test"] == "hook_pipeline" and r["label"] == "200k"), {}
+    )
     hook_ms = hook_200k.get("elapsed_ms", 0)
     if hook_ms > 1000:
         print(f"  WARNING: Hook pipeline at 200k tokens takes {hook_ms:.0f}ms (> 1s)")

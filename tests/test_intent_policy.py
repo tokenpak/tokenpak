@@ -8,7 +8,6 @@ Verifies:
   - Action profiles (lightweight, compress, verbose, retrieve, standard)
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.proxy.intent_policy", reason="module not available in current build")
@@ -229,6 +228,7 @@ class TestResolvePolicy:
     def test_resolve_policy_returns_policy_result(self):
         """resolve_policy should return PolicyResult (old API)."""
         from tokenpak.proxy.intent_policy import PolicyResult
+
         result = resolve_policy("status", {}, 1.0)
         assert isinstance(result, PolicyResult)
         assert result.recipe_id == "status-report"

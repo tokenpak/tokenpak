@@ -22,6 +22,7 @@ Writes are additive: the existing cache_invalidator_events table (base cache-inv
 its log-only contract; this module writes a separate cache_invalidations row that
 includes hashes + dollar estimate.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -81,11 +82,13 @@ def _detect_extra_events(
     prev_positions = _cache_control_positions(prev)
     curr_positions = _cache_control_positions(curr)
     if prev_positions != curr_positions:
-        events.append(CacheInvalidatorEvent(
-            "cache_control_position_changed",
-            json.dumps(prev_positions),
-            json.dumps(curr_positions),
-        ))
+        events.append(
+            CacheInvalidatorEvent(
+                "cache_control_position_changed",
+                json.dumps(prev_positions),
+                json.dumps(curr_positions),
+            )
+        )
 
     # mcp_server_added — list of declared mcp_servers names. Only fire when the
     # set GREW (additions invalidate the prefix). Removals are surfaced as
@@ -105,11 +108,13 @@ def _detect_extra_events(
     prev_mcp = set(_mcp_server_names(prev))
     curr_mcp = set(_mcp_server_names(curr))
     if curr_mcp - prev_mcp:  # new server appeared
-        events.append(CacheInvalidatorEvent(
-            "mcp_server_added",
-            json.dumps(sorted(prev_mcp)),
-            json.dumps(sorted(curr_mcp)),
-        ))
+        events.append(
+            CacheInvalidatorEvent(
+                "mcp_server_added",
+                json.dumps(sorted(prev_mcp)),
+                json.dumps(sorted(curr_mcp)),
+            )
+        )
 
     return events
 
@@ -124,6 +129,7 @@ def _estimate_invalidated_tokens(
     Approximation: bytes / 4 ≈ tokens. We use the larger of (prev, curr) for the
     affected region so the estimate is monotone over the change.
     """
+
     def _bytes_of(obj: Any) -> int:
         try:
             return len(json.dumps(obj, ensure_ascii=False))
@@ -158,6 +164,7 @@ def _estimate_lost_savings_usd(
         return 0.0
     try:
         from tokenpak.telemetry.pricing_rates import get_rates
+
         rates = get_rates(model)
         input_rate = float(rates.get("input", 3.0))
         cached_rate = float(rates.get("cached", input_rate * 0.1))
@@ -298,12 +305,14 @@ def detect_and_alert(
     for ev in all_events:
         invalidated_tokens = _estimate_invalidated_tokens(prev, curr, ev.event_type)
         usd = _estimate_lost_savings_usd(invalidated_tokens, model)
-        alerts.append(CacheInvalidationAlert(
-            event_type=ev.event_type,
-            before_hash=_hash_value(ev.before_value),
-            after_hash=_hash_value(ev.after_value),
-            estimated_lost_savings_usd=usd,
-        ))
+        alerts.append(
+            CacheInvalidationAlert(
+                event_type=ev.event_type,
+                before_hash=_hash_value(ev.before_value),
+                after_hash=_hash_value(ev.after_value),
+                estimated_lost_savings_usd=usd,
+            )
+        )
 
     _write_cache_invalidations(db_path, session_id, alerts)
     threshold = _alert_threshold_usd()

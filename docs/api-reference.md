@@ -189,7 +189,7 @@ Proxy health and stats.
  "compression": {
  "enabled": true,
  "mode": "hybrid",
- "threshold_tokens": 4500
+ "threshold_tokens": 1500
  },
  "session": {
  "requests": 23,
@@ -203,41 +203,146 @@ Proxy health and stats.
 
 ### `GET /health`
 
-Structured health check. Returns component status, uptime, version, and actionable suggestions when degraded.
+Returns the proxy's current operational snapshot. The basic response is built
+for each request; it is not served from the legacy route-local cache.
 
-**No authentication required.**
+Loopback clients (`127.0.0.1`, `::1`, and IPv4-mapped loopback) are trusted and
+do not need a proxy-auth credential. Non-loopback access fails closed: set
+`TOKENPAK_PROXY_AUTH_TOKEN` in the proxy environment and send the same value as
+`Authorization: Bearer <token>`. This proxy-auth Bearer is timing-safely
+compared and removed before forwarding; it is distinct from any upstream
+provider credential.
+
+If `TOKENPAK_PROXY_AUTH_TOKEN` is not configured, every non-loopback request is
+rejected with `403` even if it sends an `Authorization` header. When the setting
+is configured, a missing, malformed, or incorrect Bearer value is rejected with
+`401`.
 
 **HTTP status codes:**
-- `200` — healthy or degraded
-- `503` — critical (all providers down)
+- `200` — snapshot returned; inspect `status`, `is_degraded`, and
+  `is_shutting_down`
+- `401` — non-loopback proxy authorization is configured, but the Bearer value
+  is missing, malformed, or incorrect
+- `403` — non-loopback access is attempted without
+  `TOKENPAK_PROXY_AUTH_TOKEN` configured on the proxy
 
 **Response:**
 ```json
 {
- "status": "healthy",
- "uptime": 3600,
- "version": "1.0.0",
- "timestamp": "2026-03-16T19:10:00Z",
- "components": {
- "cache": { "status": "ok", "entries": 42 },
- "provider_connections": {
- "anthropic": { "status": "ok", "circuit_open": false, "failures": 0 },
- "openai": { "status": "ok", "circuit_open": false, "failures": 0 },
- "google": { "status": "ok", "circuit_open": false, "failures": 0 }
+ "status": "ok",
+ "uptime_seconds": 3600,
+ "version": "1.14.0",
+ "requests_total": 42,
+ "requests_errors": 0,
+ "compression_ratio_avg": 0.72,
+ "is_degraded": false,
+ "is_shutting_down": false,
+ "in_flight_requests": 0,
+ "memory_guard": {
+   "enabled": false,
+   "state": "disabled",
+   "thread_alive": false,
+   "callback_policy": "disabled",
+   "configuration": {
+     "source": "default",
+     "mode": "off",
+     "plan_sha256": null,
+     "managed_config_path": "/home/user/.tokenpak/memory-optimization.json",
+     "managed_file_present": false,
+     "managed_file_ignored": false,
+     "triggering_env": [],
+     "warning": null
+   },
+   "callbacks": { "compact": false, "token": false, "semantic": false }
  },
- "config": { "status": "ok" }
+ "admission": { "limit": 16, "available": 16, "rejected": 0 },
+ "agent_concurrency": {
+   "enabled": true,
+   "max_parallel_subagents": 2,
+   "effective_cap": 2,
+   "degraded_serial": false,
+   "in_flight": 0,
+   "queued": 0,
+   "queue_depth_max": 14,
+   "admitted_total": 0,
+   "queued_total": 0,
+   "rejected_queue_full": 0,
+   "rejected_wait_timeout": 0,
+   "source": "config"
  },
- "suggestions": []
+ "timestamp": "2026-07-23T19:10:00Z",
+ "connection_pool": {
+   "http2_enabled": true,
+   "active_providers": [],
+   "total_requests": 0,
+   "reused_connections": 0,
+   "new_connections": 0,
+   "errors": 0,
+   "evicted_clients": 0,
+   "reuse_rate": 0.0,
+   "cleanup_pending_close": 0,
+   "cleanup_queued": 0,
+   "cleanup_in_progress": 0,
+   "cleanup_retrying": 0,
+   "cleanup_failures_total": 0,
+   "cleanup_worker_start_failures_total": 0,
+   "cleanup_completed_total": 0,
+   "cleanup_oldest_pending_seconds": 0.0,
+   "cleanup_workers_alive": 0,
+   "client_slots_used": 0,
+   "client_slots_max": 64,
+   "client_capacity_rejections_total": 0,
+   "cleanup_saturated": false,
+   "retired_pending_close": 0
+ },
+ "circuit_breakers": {
+   "enabled": true,
+   "any_open": false,
+   "providers": {}
+ }
 }
 ```
 
 **`status` values:**
 
-| Value | Meaning | HTTP |
-|-------|---------|------|
-| `healthy` | All components nominal | 200 |
-| `degraded` | One or more providers circuit-open, or error rate >10% | 200 |
-| `critical` | All providers unreachable | 503 |
+| Value | Meaning |
+|-------|---------|
+| `ok` | No tracked degradation or shutdown condition is active |
+| `degraded` | A tracked degradation condition is active |
+| `shutting_down` | Graceful shutdown is in progress |
+
+Add `?deep=true` for additive provider, process-memory, and disk diagnostics.
+On a base installation where the optional process-memory dependency is absent,
+the endpoint still returns JSON and marks that measurement unavailable rather
+than reporting zero. Deep fields are diagnostic additions and are not present
+in the basic response.
+
+Example unavailable probes:
+
+```json
+{
+  "memory": {
+    "rss_mb": null,
+    "available": false,
+    "reason": "optional_dependency_unavailable"
+  },
+  "disk": {
+    "available_gb": null,
+    "available": false,
+    "reason": "probe_failed"
+  }
+}
+```
+
+`memory.reason` is `optional_dependency_unavailable` when `psutil` is not
+installed and `probe_failed` when an installed probe fails. `disk.reason` is
+`probe_failed` when disk inspection fails. Successful probes set `available`
+to `true`, return a measured number, and omit `reason`.
+
+The importable `ProxyRoutesMixin` retains its deprecated v1.13 compatibility
+payload and one-second route-local cache for one deprecation window. The
+running `ProxyServer` does not use that mixin for `GET /health`; its canonical
+response above remains uncached.
 
 ---
 

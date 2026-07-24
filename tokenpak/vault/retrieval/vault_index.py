@@ -14,6 +14,15 @@ _bm25_tokenize(text)
 
 from __future__ import annotations
 
+__all__ = (
+    "VAULT_CACHE_MAX_BYTES",
+    "VAULT_CACHE_PRELOAD",
+    "VAULT_INDEX_RELOAD_INTERVAL",
+    "VaultIndex",
+    "count_tokens",
+)
+
+
 import json
 import math
 import os
@@ -21,20 +30,37 @@ import re
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, TypedDict, cast
 
 from tokenpak.vault._atomic import _atomic_write
 
+
+def _fallback_count_tokens(text: str) -> int:
+    return max(1, len(text) // 4)
+
+
+_count_tokens_impl: Callable[[str], int]
 try:
-    from tokenpak.telemetry.tokens import count_tokens
+    from tokenpak.telemetry.tokens import count_tokens as _cached_count_tokens
+
+    _count_tokens_impl = _cached_count_tokens
 except ImportError:
-    try:
-        from ..tokens import count_tokens  # type: ignore[no-redef]
-    except ImportError:
-        def count_tokens(text: str) -> int:  # type: ignore[misc]
-            return max(1, len(text) // 4)
+    _count_tokens_impl = _fallback_count_tokens
+
+count_tokens: Callable[[str], int] = _count_tokens_impl
+
+
+class VaultBlock(TypedDict):
+    block_id: str
+    source_path: str
+    risk_class: str
+    must_keep: bool
+    raw_tokens: int
+    _content_file: str
+
 
 # Constants (mirror proxy.py defaults; override via env vars)
 VAULT_INDEX_RELOAD_INTERVAL: int = int(os.environ.get("TOKENPAK_VAULT_INDEX_RELOAD_INTERVAL", 300))
@@ -56,19 +82,19 @@ class VaultIndex:
 
     def __init__(self, tokenpak_dir: str):
         self.tokenpak_dir = Path(tokenpak_dir)
-        self.blocks: Dict[str, dict] = {}  # block_id -> {meta only, no content}
-        self._last_loaded = 0
-        self._last_mtime = 0
+        self.blocks: Dict[str, VaultBlock] = {}  # block_id -> {meta only, no content}
+        self._last_loaded: float = 0.0
+        self._last_mtime: float = 0.0
         self._lock = threading.Lock()
         # BM25 precomputed
         self._df: Dict[str, int] = {}
         self._block_tfs: Dict[str, Dict[str, int]] = {}
         self._block_dl: Dict[str, int] = {}  # precomputed doc lengths (sum of tf values)
-        self._avg_dl: float = 0
+        self._avg_dl: float = 0.0
         self._doc_count: int = 0
-        self._inverted: Dict[str, set] = {}  # term -> set(block_ids)
+        self._inverted: Dict[str, set[str]] = {}  # term -> set(block_ids)
         # Tiered memory — LRU content cache (Tier 2)
-        self._content_cache: OrderedDict = OrderedDict()  # block_id -> content str
+        self._content_cache: OrderedDict[str, str] = OrderedDict()
         self._cache_bytes: int = 0
         self._max_cache_bytes: int = VAULT_CACHE_MAX_BYTES
         self._cache_hits: int = 0
@@ -85,7 +111,7 @@ class VaultIndex:
         """Returns True once the vault index has completed its initial load."""
         return self._ready
 
-    def maybe_reload(self):
+    def maybe_reload(self) -> None:
         """Reload if index file changed or enough time passed."""
         now = time.time()
         if now - self._last_loaded < VAULT_INDEX_RELOAD_INTERVAL:
@@ -110,7 +136,7 @@ class VaultIndex:
         """Return path for BM25 precomputed cache file."""
         return index_path.parent / ".bm25_cache.json"
 
-    def _try_load_bm25_cache(self, index_path: Path, mtime: float):
+    def _try_load_bm25_cache(self, index_path: Path, mtime: float) -> bool:
         """
         Try to load precomputed BM25 state from cache file.
         Returns True and populates self if cache is valid (mtime matches).
@@ -125,22 +151,23 @@ class VaultIndex:
                     return False
             except OSError:
                 return False
-            cached = json.loads(cache_path.read_text())
+            cached = cast(dict[str, object], json.loads(cache_path.read_text()))
             if cached.get("mtime") != mtime:
                 return False  # stale — index changed
             # Restore block metadata (no content stored)
-            self.blocks = cached["blocks"]
-            self._df = cached["df"]
-            self._block_tfs = cached["block_tfs"]
-            self._block_dl = cached["block_dl"]
-            self._avg_dl = cached["avg_dl"]
-            self._doc_count = cached["doc_count"]
-            self._inverted = {term: set(block_ids) for term, block_ids in cached["inverted"].items()}
+            self.blocks = cast(Dict[str, VaultBlock], cached["blocks"])
+            self._df = cast(Dict[str, int], cached["df"])
+            self._block_tfs = cast(Dict[str, Dict[str, int]], cached["block_tfs"])
+            self._block_dl = cast(Dict[str, int], cached["block_dl"])
+            self._avg_dl = cast(float, cached["avg_dl"])
+            self._doc_count = cast(int, cached["doc_count"])
+            cached_inverted = cast(Dict[str, List[str]], cached["inverted"])
+            self._inverted = {term: set(block_ids) for term, block_ids in cached_inverted.items()}
             self._last_mtime = mtime
             # Rebuild LRU cache from blocks dir (preload top-N recent)
             blocks_dir = index_path.parent / "blocks"
             preload_n = VAULT_CACHE_PRELOAD
-            new_cache: OrderedDict = OrderedDict()
+            new_cache: OrderedDict[str, str] = OrderedDict()
             new_cache_bytes = 0
             if preload_n > 0:
                 candidates = []
@@ -177,7 +204,7 @@ class VaultIndex:
             print(f"  ⚠️ BM25 cache load failed ({e}), rebuilding...")
             return False
 
-    def _save_bm25_cache(self, index_path: Path, mtime: float):
+    def _save_bm25_cache(self, index_path: Path, mtime: float) -> None:
         """Persist BM25 precomputed state to cache file for fast future loads."""
         cache_path = self._bm25_cache_path(index_path)
         try:
@@ -215,17 +242,17 @@ class VaultIndex:
         rows = conn.execute("SELECT id, content FROM blocks").fetchall()
         conn.close()
 
-        new_blocks: Dict[str, dict] = {}
+        new_blocks: Dict[str, VaultBlock] = {}
         df: Dict[str, int] = {}
         block_tfs: Dict[str, Dict[str, int]] = {}
         block_dl: Dict[str, int] = {}
         total_dl = 0
-        new_cache: OrderedDict = OrderedDict()
+        new_cache: OrderedDict[str, str] = OrderedDict()
         new_cache_bytes = 0
 
         for block_id, content in rows:
-            if content is None:
-                content = ""
+            block_id = str(block_id)
+            content = str(content) if content is not None else ""
             new_blocks[block_id] = {
                 "block_id": block_id,
                 "source_path": block_id,
@@ -252,10 +279,10 @@ class VaultIndex:
                 new_cache_bytes += sz
 
         doc_count = len(new_blocks)
-        avg_dl = total_dl / doc_count if doc_count > 0 else 0
+        avg_dl = total_dl / doc_count if doc_count > 0 else 0.0
 
         # Build inverted index
-        inverted: Dict[str, set] = {}
+        inverted: Dict[str, set[str]] = {}
         for bid, tf in block_tfs.items():
             for term in tf:
                 if term not in inverted:
@@ -282,9 +309,10 @@ class VaultIndex:
             f" | cache: {len(new_cache)} blocks ({new_cache_bytes // 1024 // 1024}MB)"
         )
 
-    def _load(self, index_path: Path, mtime: float):
+    def _load(self, index_path: Path, mtime: float) -> None:
         """Load index + block contents, precompute BM25 stats."""
         import os as _os
+
         db_path = str(self.tokenpak_dir / "blocks.db")
         if _os.environ.get("TOKENPAK_USE_SQLITE_BLOCKS") and _os.path.exists(db_path):
             self._last_mtime = mtime
@@ -302,23 +330,29 @@ class VaultIndex:
             return
 
         blocks_dir = self.tokenpak_dir / "blocks"
-        new_blocks: Dict[str, dict] = {}
+        new_blocks: Dict[str, VaultBlock] = {}
 
         raw_blocks = data.get("blocks", {})
         if isinstance(raw_blocks, dict):
-            items = raw_blocks.items()
+            items = cast(dict[object, object], raw_blocks).items()
         else:
             return  # unexpected format
 
         # Collect mtime for preload scoring
-        preload_candidates: list = []
+        preload_candidates: list[tuple[str, str, float]] = []
 
         # Parallel file reads — 16 workers dramatically reduce cold I/O time
         # (serial reads: ~70s cold; parallel: ~15-20s cold)
         _PARALLEL_READ_WORKERS = 16
 
-        def _read_one_block(bid_bdata):
-            bid, bdata = bid_bdata
+        def _read_one_block(
+            bid_bdata: tuple[object, object],
+        ) -> tuple[str, dict[str, object], str, float] | None:
+            raw_bid, raw_bdata = bid_bdata
+            if not isinstance(raw_bdata, dict):
+                return None
+            bid = str(raw_bid)
+            bdata = cast(dict[str, object], raw_bdata)
             cf = blocks_dir / f"{bid}.txt"
             try:
                 if not cf.exists():
@@ -330,6 +364,7 @@ class VaultIndex:
                 return None
 
         from concurrent.futures import ThreadPoolExecutor as _ThreadPoolExecutor
+
         with _ThreadPoolExecutor(max_workers=_PARALLEL_READ_WORKERS) as _pool:
             _read_results = list(_pool.map(_read_one_block, list(items)))
 
@@ -338,12 +373,19 @@ class VaultIndex:
                 continue
             bid, bdata, content, _mtime = _result
 
+            source_value = bdata.get("source_path", bid)
+            risk_value = bdata.get("risk_class", "narrative")
+            raw_token_value = bdata.get("raw_tokens", 0)
+            raw_tokens = (
+                int(raw_token_value) if isinstance(raw_token_value, (str, int, float)) else 0
+            )
+
             new_blocks[bid] = {
                 "block_id": bid,
-                "source_path": bdata.get("source_path", bid),
-                "risk_class": bdata.get("risk_class", "narrative"),
-                "must_keep": bdata.get("must_keep", False),
-                "raw_tokens": bdata.get("raw_tokens", 0),
+                "source_path": str(source_value),
+                "risk_class": str(risk_value),
+                "must_keep": bool(bdata.get("must_keep", False)),
+                "raw_tokens": raw_tokens,
                 # NOTE: content NOT stored here — fetched on demand via _get_content()
                 "_content_file": str(blocks_dir / f"{bid}.txt"),
             }
@@ -370,10 +412,10 @@ class VaultIndex:
                 df[t] = df.get(t, 0) + 1
 
         doc_count = len(new_blocks)
-        avg_dl = total_dl / doc_count if doc_count > 0 else 0
+        avg_dl = total_dl / doc_count if doc_count > 0 else 0.0
 
         # Build inverted index: term -> set(block_ids)
-        inverted: Dict[str, set] = {}
+        inverted: Dict[str, set[str]] = {}
         for bid, tf in block_tfs.items():
             for term in tf:
                 if term not in inverted:
@@ -381,7 +423,7 @@ class VaultIndex:
                 inverted[term].add(bid)
 
         # Build new LRU cache — preload top-N recently-modified blocks
-        new_cache: OrderedDict = OrderedDict()
+        new_cache: OrderedDict[str, str] = OrderedDict()
         new_cache_bytes = 0
         preload_n = VAULT_CACHE_PRELOAD
         if preload_n > 0:
@@ -418,7 +460,7 @@ class VaultIndex:
         # Persist BM25 state for fast future loads
         self._save_bm25_cache(index_path, mtime)
 
-    def _enforce_cache_limit(self):
+    def _enforce_cache_limit(self) -> None:
         """Evict LRU entries until cache is within byte limit. Must be called with lock held."""
         while self._cache_bytes > self._max_cache_bytes and self._content_cache:
             _bid, evicted = self._content_cache.popitem(last=False)
@@ -459,7 +501,7 @@ class VaultIndex:
         return content
 
     @property
-    def cache_stats(self) -> dict:
+    def cache_stats(self) -> dict[str, int | float]:
         """Return current cache statistics (thread-safe snapshot)."""
         with self._lock:
             return {
@@ -478,7 +520,7 @@ class VaultIndex:
 
     def search(
         self, query: str, top_k: int = 5, min_score: float = 2.0
-    ) -> List[Tuple[dict, float]]:
+    ) -> List[Tuple[VaultBlock, float]]:
         """BM25 search across vault blocks. Returns [(block_dict, score), ...]."""
         query_terms = _bm25_tokenize(query)
         if not query_terms or not self.blocks:
@@ -517,7 +559,7 @@ class VaultIndex:
                 _selective.append((qt, term_freq))
         _selective.sort(key=lambda x: x[1])  # most selective first
 
-        candidates: set = set()
+        candidates: set[str] = set()
         if _selective:
             for qt, _ in _selective:
                 candidates.update(inverted[qt])
@@ -566,9 +608,9 @@ class VaultIndex:
         if not results:
             return "", 0, []
 
-        injection_parts = []
+        injection_parts: List[str] = []
         tokens_used = 0
-        source_refs = []
+        source_refs: List[str] = []
 
         for block, score in results:
             # Fetch content from LRU cache (Tier 2) or disk (Tier 3) — never from block dict

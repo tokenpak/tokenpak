@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 # ---------------------------------------------------------------------------
 # DocCard — compact normalized schema for a single document
@@ -263,7 +263,7 @@ class SchemaConverter:
             return paras[0][: self.max_abstract_chars]
         return None
 
-    def _extract_sentences(self, text: str, triggers: frozenset, limit: int) -> List[str]:
+    def _extract_sentences(self, text: str, triggers: frozenset[str], limit: int) -> List[str]:
         """Extract sentences that contain any trigger phrase."""
         results: List[str] = []
         # Split into rough sentences
@@ -373,7 +373,7 @@ class EvidenceMatrix:
         header = (
             "Source".ljust(20)
             + " | "
-            + " | ".join(f"C{i+1}".center(4) for i in range(len(self.claims)))
+            + " | ".join(f"C{i + 1}".center(4) for i in range(len(self.claims)))
         )
         sep = "-" * len(header)
         lines = [header, sep]
@@ -494,7 +494,7 @@ class ComparisonReport:
         if self.evidence_matrix.claims:
             lines.append("\nClaim legend:")
             for i, c in enumerate(self.evidence_matrix.claims):
-                lines.append(f"  C{i+1}: {c[:100]}")
+                lines.append(f"  C{i + 1}: {c[:100]}")
 
         return "\n".join(lines)
 
@@ -598,7 +598,7 @@ class CrossDocAnalyzer:
 
     def _build_agreement_maps(self, cards: Sequence[DocCard]) -> List[AgreementMap]:
         """Build per-field agreement maps."""
-        fields = {
+        fields: Dict[str, Callable[[DocCard], Any]] = {
             "title": lambda c: c.title,
             "abstract_length": lambda c: len(c.abstract) if c.abstract else 0,
             "num_findings": lambda c: len(c.key_findings),
@@ -712,7 +712,7 @@ class CrossDocAnalyzer:
                 conflicts.append(f"Field '{am.field}' conflicts: {vals_str}")
             elif am.status == "partial":
                 conflicts.append(
-                    f"Field '{am.field}' partial agreement " f"(ratio={am.agreement_ratio:.0%})"
+                    f"Field '{am.field}' partial agreement (ratio={am.agreement_ratio:.0%})"
                 )
 
         # Metric-level conflicts (high CoV)

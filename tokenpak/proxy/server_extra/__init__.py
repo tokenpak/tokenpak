@@ -6,4 +6,4 @@ from .websocket_proxy import (
     decompress_chunk,
 )
 
-__all__ = ['WebSocketConnectionManager', 'compress_chunk', 'decompress_chunk', 'websocket_proxy']
+__all__ = ["WebSocketConnectionManager", "compress_chunk", "decompress_chunk", "websocket_proxy"]

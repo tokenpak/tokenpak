@@ -46,7 +46,8 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from types import TracebackType
+from typing import Any, Literal, Optional
 
 from tokenpak.cache.stable_cache import StableCache
 from tokenpak.cache.volatile_cache import VolatileCache
@@ -153,9 +154,7 @@ class CacheManager:
             self._stable.set(key, value, ttl=ttl)
         else:  # "auto"
             if ttl is not None and ttl < self._threshold:
-                logger.debug(
-                    "[CacheManager] auto → volatile  key=%s ttl=%.1fs", key, ttl
-                )
+                logger.debug("[CacheManager] auto → volatile  key=%s ttl=%.1fs", key, ttl)
                 self._volatile.set(key, value, ttl=ttl)
             else:
                 logger.debug(
@@ -210,7 +209,12 @@ class CacheManager:
     def __enter__(self) -> "CacheManager":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> Literal[False]:
         # No cleanup required; underlying caches own their own resources.
         return False  # don't suppress exceptions
 

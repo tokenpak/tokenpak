@@ -5,6 +5,8 @@ and startup initialization for vault retrieval, term resolver, and capsule build
 Extracted from runtime/proxy.py (L1177-1498) as part of TPK-RESTRUCTURE-004.
 """
 
+from __future__ import annotations
+
 import codecs
 import ctypes
 import gc
@@ -22,14 +24,20 @@ from array import array as _array
 from bisect import bisect_left as _bisect_left
 from collections import Counter as _Counter
 from collections import OrderedDict as _OrderedDict
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass as _dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Generic, Protocol, TypeVar, cast
 
+from tokenpak.core.config_loader import get as _cfg
 from tokenpak.vault.walker import MAX_FILE_SIZE as _VAULT_BLOCK_MAX_BYTES
 
 if TYPE_CHECKING:
+    from tokenpak.companion.capsules.builder import CapsuleBuilder
+    from tokenpak.proxy.adapters.base import FormatAdapter
+    from tokenpak.vault.semantic import TermResolver
+
     from .request import ProxyRequest
 
 from .config import (
@@ -41,7 +49,6 @@ from .config import (
     VAULT_AUTO_REINDEX_INTERVAL,
     VAULT_INDEX_PATH,
     VAULT_INDEX_RELOAD_INTERVAL,
-    _cfg,
 )
 from .config import (
     VAULT_CACHE_MAX_BYTES as _VAULT_CACHE_MAX_BYTES,
@@ -52,6 +59,32 @@ from .config import (
 from .token_cache import count_tokens
 
 logger = logging.getLogger(__name__)
+
+Block = dict[str, object]
+SearchResult = tuple[Block, float]
+
+
+class _VaultIndexBackend(Protocol):
+    @property
+    def available(self) -> bool: ...
+
+    def maybe_reload(self) -> None: ...
+
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        min_score: float = 2.0,
+    ) -> Sequence[tuple[Mapping[str, object], float]]: ...
+
+    def compile_injection(
+        self, query: str, budget: int = 4000, top_k: int = 5, min_score: float = 2.0
+    ) -> tuple[str, int, list[str]]: ...
+
+
+class _SemanticScorer(Protocol):
+    def score(self, query: str, block_ids: list[str]) -> dict[str, float]: ...
+
 
 # Term resolver feature flags — enabled by default; opt out with TOKENPAK_TERM_RESOLVER_ENABLED=0
 TERM_RESOLVER_ENABLED: bool = _cfg(
@@ -112,13 +145,13 @@ class _ContentRecord:
 
     path: str
     content_hash: str
-    mtime_ns: Optional[int]
-    ctime_ns: Optional[int]
-    file_size: Optional[int]
-    device: Optional[int]
-    inode: Optional[int]
+    mtime_ns: int | None
+    ctime_ns: int | None
+    file_size: int | None
+    device: int | None
+    inode: int | None
     metadata_hash_stale: bool
-    actual_tokens: Optional[int]
+    actual_tokens: int | None
 
 
 @_dataclass(frozen=True)
@@ -137,7 +170,7 @@ class _HydrationFlight:
     """One physical read shared by concurrent readers of a generation key."""
 
     event: threading.Event
-    result: Optional[_HydratedContent] = None
+    result: _HydratedContent | None = None
 
 
 class _OversizedVaultBlock(Exception):
@@ -149,11 +182,11 @@ class _IndexGeneration:
     """One atomically published, read-only BM25 generation."""
 
     generation_id: int
-    blocks: Dict[str, dict]
-    content_records: Dict[str, _ContentRecord]
-    block_ids: Tuple[str, ...]
-    postings: Dict[str, _array]
-    block_dl: _array
+    blocks: dict[str, Block]
+    content_records: dict[str, _ContentRecord]
+    block_ids: tuple[str, ...]
+    postings: dict[str, _array[int]]
+    block_dl: _array[int]
     avg_dl: float
     doc_count: int
     index_mtime: float
@@ -200,7 +233,7 @@ class VaultIndex:
     Reloads periodically to pick up git-pulled changes.
     """
 
-    def __init__(self, tokenpak_dir: str):
+    def __init__(self, tokenpak_dir: str) -> None:
         self.tokenpak_dir = Path(tokenpak_dir)
         self._last_loaded = 0
         self._lock = threading.Lock()
@@ -226,11 +259,11 @@ class VaultIndex:
         )
         # Full block content is loaded only for selected results and retained
         # in a byte-bounded, generation-keyed LRU.
-        self._content_cache: _OrderedDict[Tuple[int, str], _HydratedContent] = _OrderedDict()
+        self._content_cache: _OrderedDict[tuple[int, str], _HydratedContent] = _OrderedDict()
         self._cache_bytes = 0
         self._hydration_reserved_bytes = 0
         self._max_managed_content_bytes = 0
-        self._hydration_flights: Dict[Tuple[int, str], _HydrationFlight] = {}
+        self._hydration_flights: dict[tuple[int, str], _HydrationFlight] = {}
         self._max_cache_bytes = max(0, _VAULT_CACHE_MAX_BYTES)
         self._cache_hits = 0
         self._cache_misses = 0
@@ -251,19 +284,19 @@ class VaultIndex:
     # Compatibility views for existing metrics/debug consumers. Search never
     # reads these separately; it captures one _IndexGeneration instead.
     @property
-    def blocks(self) -> Dict[str, dict]:
+    def blocks(self) -> dict[str, Block]:
         return self._snapshot_generation().blocks
 
     @property
-    def _block_ids(self) -> Tuple[str, ...]:
+    def _block_ids(self) -> tuple[str, ...]:
         return self._snapshot_generation().block_ids
 
     @property
-    def _postings(self) -> Dict[str, _array]:
+    def _postings(self) -> dict[str, _array[int]]:
         return self._snapshot_generation().postings
 
     @property
-    def _block_dl(self) -> _array:
+    def _block_dl(self) -> _array[int]:
         return self._snapshot_generation().block_dl
 
     @property
@@ -278,7 +311,7 @@ class VaultIndex:
     def _last_mtime(self) -> float:
         return self._snapshot_generation().index_mtime
 
-    def maybe_reload(self):
+    def maybe_reload(self) -> None:
         """Reload if index file changed or enough time passed."""
         now = __import__("time").time()
         if now - self._last_loaded < VAULT_INDEX_RELOAD_INTERVAL:
@@ -321,8 +354,8 @@ class VaultIndex:
 
     @staticmethod
     def _scan_content_file(
-        content_file: Path, expected_hash: Optional[str]
-    ) -> Optional[Tuple[Dict[str, int], int, _ContentRecord]]:
+        content_file: Path, expected_hash: str | None
+    ) -> tuple[dict[str, int], int, _ContentRecord] | None:
         """Build BM25 from one stable block without retaining corpus content."""
         try:
             with content_file.open("rb") as handle:
@@ -360,7 +393,7 @@ class VaultIndex:
         )
         return tf, document_length, record
 
-    def _load(self, index_path: Path, mtime: float):
+    def _load(self, index_path: Path, mtime: float) -> None:
         """Load metadata and build compact BM25 postings.
 
         Block text is consumed one document at a time and is not retained in
@@ -377,12 +410,12 @@ class VaultIndex:
             return
 
         blocks_dir = self.tokenpak_dir / "blocks"
-        new_blocks: Dict[str, dict] = {}
-        content_records: Dict[str, _ContentRecord] = {}
-        block_ids: List[str] = []
-        posting_lists: Dict[str, List[int]] = {}
+        new_blocks: dict[str, Block] = {}
+        content_records: dict[str, _ContentRecord] = {}
+        block_ids: list[str] = []
+        posting_lists: dict[str, list[int]] = {}
         block_dl = _array("I")
-        preload_candidates: List[Tuple[float, str]] = []
+        preload_candidates: list[tuple[float, str]] = []
         total_dl = 0
         total_raw_tokens = 0
         stale_content_hashes = 0
@@ -396,7 +429,7 @@ class VaultIndex:
             return  # unexpected format
 
         for bid, bdata in items:
-            if not isinstance(bdata, dict):
+            if not isinstance(bid, str) or not isinstance(bdata, dict):
                 print(f"  ⚠️ Vault index load error: invalid block metadata for {bid}")
                 return
 
@@ -421,7 +454,8 @@ class VaultIndex:
 
             doc_idx = len(block_ids)
             block_ids.append(bid)
-            raw_tokens = bdata.get("raw_tokens", 0)
+            raw_tokens_value = bdata.get("raw_tokens", 0)
+            raw_tokens = raw_tokens_value if isinstance(raw_tokens_value, int) else 0
 
             new_blocks[bid] = {
                 "block_id": bid,
@@ -458,7 +492,7 @@ class VaultIndex:
         # Python lists make the one-time build substantially faster. Convert
         # and release them one at a time so the published state is compact and
         # conversion does not retain a second complete representation.
-        postings: Dict[str, _array] = {}
+        postings: dict[str, _array[int]] = {}
         while posting_lists:
             term, posting = posting_lists.popitem()
             postings[term] = _array("Q", posting)
@@ -543,7 +577,7 @@ class VaultIndex:
     @classmethod
     def _read_pinned_prefix(
         cls, record: _ContentRecord, byte_limit: int
-    ) -> Optional[_HydratedContent]:
+    ) -> _HydratedContent | None:
         """Read at most ``byte_limit`` bytes and return a valid UTF-8 prefix."""
         if record.file_size is None or byte_limit < 0:
             return None
@@ -557,7 +591,7 @@ class VaultIndex:
                 target_bytes = min(byte_limit, record.file_size)
                 bytes_read = 0
                 decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-                pieces: List[str] = []
+                pieces: list[str] = []
                 digest = hashlib.sha256()
                 while bytes_read < target_bytes:
                     raw_chunk = handle.read(
@@ -612,7 +646,7 @@ class VaultIndex:
 
     def _hydrate_content(
         self, generation: _IndexGeneration, block_id: str
-    ) -> Optional[_HydratedContent]:
+    ) -> _HydratedContent | None:
         """Hydrate one generation key through bounded cache and singleflight."""
         record = generation.content_records.get(block_id)
         if record is None:
@@ -644,7 +678,7 @@ class VaultIndex:
 
         requested_bytes = min(source_bytes, self._max_cache_bytes)
         reserved = False
-        result: Optional[_HydratedContent] = None
+        result: _HydratedContent | None = None
         try:
             with self._cache_condition:
                 while True:
@@ -698,7 +732,7 @@ class VaultIndex:
             truncated=True,
         )
 
-    def _get_content(self, block_id: str, *, generation: Optional[_IndexGeneration] = None) -> str:
+    def _get_content(self, block_id: str, *, generation: _IndexGeneration | None = None) -> str:
         """Compatibility helper returning one globally bounded content string."""
         if generation is None:
             generation = self._snapshot_generation()
@@ -708,7 +742,7 @@ class VaultIndex:
         return _utf8_prefix(_CONTENT_GENERATION_MISMATCH, self._max_cache_bytes)
 
     @property
-    def cache_stats(self) -> dict:
+    def cache_stats(self) -> dict[str, object]:
         """Return a thread-safe snapshot of bounded content-cache metrics."""
         with self._lock:
             accesses = self._cache_hits + self._cache_misses
@@ -733,9 +767,7 @@ class VaultIndex:
                 "vault_index_oversized_blocks": generation.oversized_blocks,
             }
 
-    def search(
-        self, query: str, top_k: int = 5, min_score: float = 2.0
-    ) -> List[Tuple[dict, float]]:
+    def search(self, query: str, top_k: int = 5, min_score: float = 2.0) -> list[SearchResult]:
         """BM25 search across vault blocks. Returns [(block_dict, score), ...]."""
         return self._search(query, top_k=top_k, min_score=min_score, include_internal=False)
 
@@ -746,7 +778,7 @@ class VaultIndex:
         min_score: float,
         *,
         include_internal: bool,
-    ) -> List[Tuple[dict, float]]:
+    ) -> list[SearchResult]:
         """Search with optional private metadata for the injection compiler."""
         query_terms = _bm25_tokenize_query(query)
         generation = self._snapshot_generation()
@@ -764,7 +796,7 @@ class VaultIndex:
 
         k1 = 1.5
         b_param = 0.75
-        scores: Dict[int, float] = {}
+        scores: dict[int, float] = {}
 
         # IDF-gated candidate expansion with MAX_CANDIDATES cap:
         # 1. Skip terms appearing in >40% of docs (too common to discriminate).
@@ -774,8 +806,8 @@ class VaultIndex:
         # At cap=500, top-5 results are identical to full scan; scoring time drops from 67ms→8ms.
         _idf_gate = 0.40  # skip terms in >40% of corpus for candidate expansion
         _max_candidates = 500
-        _selective: List[Tuple[str, int]] = []
-        _fallback: List[str] = []
+        _selective: list[tuple[str, int]] = []
+        _fallback: list[str] = []
         for qt in query_terms:
             posting = postings.get(qt)
             if posting is None:
@@ -850,7 +882,7 @@ class VaultIndex:
 
         # Preserve the proxy VaultIndex API: search results include content.
         # Only top-k results are hydrated, and the retained bytes stay bounded.
-        results: List[Tuple[dict, float]] = []
+        results: list[SearchResult] = []
         remaining_content_bytes = self._max_cache_bytes
         for doc_idx, score in ranked:
             bid = block_ids[doc_idx]
@@ -893,7 +925,7 @@ class VaultIndex:
 
     def compile_injection(
         self, query: str, budget: int = 4000, top_k: int = 5, min_score: float = 2.0
-    ) -> Tuple[str, int, List[str]]:
+    ) -> tuple[str, int, list[str]]:
         """
         Search vault and compile injection text within budget.
         Returns (injection_text, tokens_used, source_refs).
@@ -907,16 +939,18 @@ class VaultIndex:
         if not results:
             return "", 0, []
 
-        injection_parts = []
+        injection_parts: list[str] = []
         tokens_used = 0
-        source_refs = []
+        source_refs: list[str] = []
         header = "\n\n## Retrieved Context\n"  # fixed header for cache stability
 
         for block, score in results:
-            content = block["content"]
+            content_value = block["content"]
+            content = content_value if isinstance(content_value, str) else ""
             if not content and block.get("content_truncated"):
                 continue
-            source_path = block["source_path"]
+            source_value = block["source_path"]
+            source_path = source_value if isinstance(source_value, str) else ""
             part_prefix = f"--- [{source_path}] (relevance: {score:.1f}) ---\n"
 
             # Budget check
@@ -970,18 +1004,18 @@ class VaultIndex:
 
 
 @lru_cache(maxsize=512)
-def _bm25_tokenize(text: str) -> List[str]:
+def _bm25_tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9_]+", text.lower())
 
 
-def _bm25_count_document(text: str) -> Tuple[Dict[str, int], int]:
+def _bm25_count_document(text: str) -> tuple[dict[str, int], int]:
     """Count document terms without retaining the document in the query LRU."""
     terms = re.findall(r"[a-z0-9_]+", text.lower())
     return _Counter(terms), len(terms)
 
 
 @lru_cache(maxsize=512)
-def _bm25_tokenize_query(query: str) -> List[str]:
+def _bm25_tokenize_query(query: str) -> list[str]:
     """Tokenize a search query with optional expansion (aliases + stems).
 
     Uses query_expansion when QUERY_EXPANSION_ENABLED is True and the module is
@@ -1005,16 +1039,16 @@ def _bm25_tokenize_query(query: str) -> List[str]:
 # get_capsule_builder(), which happens only when the proxy server actually
 # starts handling requests — not during `import`.
 
-_VAULT_INDEX: Optional[object] = None  # type: ignore[assignment]
+_VAULT_INDEX: _VaultIndexBackend | None = None
 _VAULT_INDEX_LOCK = threading.Lock()
 
-_TERM_RESOLVER: Optional[object] = None  # type: ignore[assignment]
-_CAPSULE_BUILDER: Optional[object] = None  # type: ignore[assignment]
+_TERM_RESOLVER: TermResolver | None = None
+_CAPSULE_BUILDER: CapsuleBuilder | None = None
 _SINGLETONS_INITIALIZED = False
 _SINGLETONS_LOCK = threading.Lock()
 
 
-def _build_vault_index() -> object:
+def _build_vault_index() -> _VaultIndexBackend:
     """Create the correct VaultIndex backend (sqlite or json_blocks)."""
     if RETRIEVAL_BACKEND == "sqlite":
         try:
@@ -1022,16 +1056,16 @@ def _build_vault_index() -> object:
                 SQLiteRetrievalBackend as _SQLiteBackend,
             )
 
-            idx = _SQLiteBackend(VAULT_INDEX_PATH)
+            sqlite_index = _SQLiteBackend(VAULT_INDEX_PATH)
             print(f"  📦 Vault retrieval backend: sqlite ({VAULT_INDEX_PATH})")
-            return idx
+            return sqlite_index
         except ImportError as _sqlite_err:
             print(
                 f"  ⚠️  SQLite retrieval backend unavailable ({_sqlite_err}), falling back to json_blocks"
             )
-    idx = VaultIndex(VAULT_INDEX_PATH)
+    json_index = VaultIndex(VAULT_INDEX_PATH)
     print(f"  📦 Vault retrieval backend: json_blocks ({VAULT_INDEX_PATH})")
-    return idx
+    return json_index
 
 
 def _init_singletons() -> None:
@@ -1043,13 +1077,19 @@ def _init_singletons() -> None:
             return
 
         # --- VaultIndex ---
-        _VAULT_INDEX = _build_vault_index()
-        _VAULT_INDEX.maybe_reload()  # type: ignore[union-attr]
-        print(f"  ✅ Vault index loaded: {len(_VAULT_INDEX.blocks)} blocks")  # type: ignore[union-attr]
+        vault_index = _build_vault_index()
+        _VAULT_INDEX = vault_index
+        vault_index.maybe_reload()
+        blocks = getattr(vault_index, "blocks", None)
+        block_count = len(blocks) if isinstance(blocks, dict) else 0
+        if block_count == 0:
+            candidate_count = getattr(vault_index, "block_count", 0)
+            block_count = candidate_count if isinstance(candidate_count, int) else 0
+        print(f"  ✅ Vault index loaded: {block_count} blocks")
 
         # Start background reload timer
         def _vault_index_reload_timer() -> None:
-            _VAULT_INDEX.maybe_reload()  # type: ignore[union-attr]
+            vault_index.maybe_reload()
             t = threading.Timer(VAULT_INDEX_RELOAD_INTERVAL, _vault_index_reload_timer)
             t.daemon = True
             t.start()
@@ -1070,7 +1110,7 @@ def _init_singletons() -> None:
                     result = checker.repair()
                     if result.success and result.log_entry and "Rebuilt" in str(result.log_entry):
                         print(f"  🔄 Auto-reindex: {result.index_entries} blocks", flush=True)
-                        _VAULT_INDEX.maybe_reload()  # type: ignore[union-attr]
+                        vault_index.maybe_reload()
                 except Exception as e:
                     print(f"  ⚠️ Auto-reindex failed: {e}", flush=True)
 
@@ -1085,36 +1125,32 @@ def _init_singletons() -> None:
             print(f"  🔄 Auto-reindex: every {VAULT_AUTO_REINDEX_INTERVAL}s", flush=True)
 
         # --- Term Resolver ---
-        _TERM_RESOLVER_AVAILABLE = False
         try:
-            from tokenpak.vault.semantic import (  # type: ignore[assignment]
+            from tokenpak.vault.semantic import (
                 TermResolver,
                 TermResolverConfig,
             )
-
-            _TERM_RESOLVER_AVAILABLE = True
         except ImportError:
-            TermResolver = None  # type: ignore[assignment,misc]
-            TermResolverConfig = None  # type: ignore[assignment,misc]
-
-        if _TERM_RESOLVER_AVAILABLE and TERM_RESOLVER_ENABLED:
+            pass
+        else:
             try:
-                _config = TermResolverConfig(
-                    top_k=TERM_RESOLVER_TOP_K,
-                    max_bytes_per_card=TERM_RESOLVER_MAX_BYTES,
-                    enabled=True,
-                )
-                _TERM_RESOLVER = TermResolver(config=_config)
-                print(
-                    f"  🔤 Term resolver initialized (top_k={TERM_RESOLVER_TOP_K}, enabled={TERM_RESOLVER_ENABLED})"
-                )
+                if TERM_RESOLVER_ENABLED:
+                    _config = TermResolverConfig(
+                        top_k=TERM_RESOLVER_TOP_K,
+                        max_bytes_per_card=TERM_RESOLVER_MAX_BYTES,
+                        enabled=True,
+                    )
+                    _TERM_RESOLVER = TermResolver(config=_config)
+                    print(
+                        f"  🔤 Term resolver initialized (top_k={TERM_RESOLVER_TOP_K}, enabled={TERM_RESOLVER_ENABLED})"
+                    )
             except Exception as e:
                 print(f"  ⚠️ Failed to initialize term resolver: {e}")
 
         # --- Capsule Builder ---
         try:
             from tokenpak.companion.capsules.builder import (
-                CapsuleBuilder as _CapsuleBuilder,  # type: ignore[assignment]
+                CapsuleBuilder as _CapsuleBuilder,
             )
 
             _CAPSULE_BUILDER = _CapsuleBuilder(
@@ -1131,21 +1167,23 @@ def _init_singletons() -> None:
         _SINGLETONS_INITIALIZED = True
 
 
-def get_vault_index() -> "VaultIndex":
+def get_vault_index() -> _VaultIndexBackend:
     """Return the global VaultIndex, initialising on first call."""
     if not _SINGLETONS_INITIALIZED:
         _init_singletons()
-    return _VAULT_INDEX  # type: ignore[return-value]
+    if _VAULT_INDEX is None:
+        raise RuntimeError("vault index initialization did not produce a backend")
+    return _VAULT_INDEX
 
 
-def get_term_resolver() -> Optional[object]:
+def get_term_resolver() -> TermResolver | None:
     """Return the global TermResolver (may be None), initialising on first call."""
     if not _SINGLETONS_INITIALIZED:
         _init_singletons()
     return _TERM_RESOLVER
 
 
-def get_capsule_builder() -> Optional[object]:
+def get_capsule_builder() -> CapsuleBuilder | None:
     """Return the global CapsuleBuilder (may be None), initialising on first call."""
     if not _SINGLETONS_INITIALIZED:
         _init_singletons()
@@ -1160,29 +1198,32 @@ def get_capsule_builder() -> Optional[object]:
 # ---------------------------------------------------------------------------
 
 
-class _LazyAlias:
+_T = TypeVar("_T")
+
+
+class _LazyAlias(Generic[_T]):
     """Descriptor-like proxy that forwards attribute access to the real singleton."""
 
-    def __init__(self, getter):
+    def __init__(self, getter: Callable[[], _T | None]) -> None:
         self._getter = getter
 
-    def __getattr__(self, name):
-        return getattr(self._getter(), name)
+    def __getattr__(self, name: str) -> object:
+        return cast(object, getattr(self._getter(), name))
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         obj = self._getter()
         return obj is not None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._getter())
 
 
 # For callers using module-level names in the *same* module only.
 # server.py imports these from tokenpak.core.runtime.proxy, not here —
 # so backward-compat aliases are only needed for direct vault_bridge importers.
-VAULT_INDEX = _LazyAlias(get_vault_index)  # type: ignore[assignment]
-TERM_RESOLVER = _LazyAlias(get_term_resolver)  # type: ignore[assignment]
-CAPSULE_BUILDER = _LazyAlias(get_capsule_builder)  # type: ignore[assignment]
+VAULT_INDEX = _LazyAlias(get_vault_index)
+TERM_RESOLVER = _LazyAlias(get_term_resolver)
+CAPSULE_BUILDER = _LazyAlias(get_capsule_builder)
 
 
 # ---------------------------------------------------------------------------
@@ -1191,8 +1232,11 @@ CAPSULE_BUILDER = _LazyAlias(get_capsule_builder)  # type: ignore[assignment]
 
 
 def inject_vault_context(
-    body_bytes: bytes, adapter=None, *, request: "Optional[ProxyRequest]" = None
-) -> "tuple[bytes, int, list[str]]":
+    body_bytes: bytes,
+    adapter: FormatAdapter | None = None,
+    *,
+    request: ProxyRequest | None = None,
+) -> tuple[bytes, int, list[str]]:
     """
     Search vault index for relevant context and inject into the system prompt.
     Optionally resolves glossary terms and injects term cards.
@@ -1204,11 +1248,13 @@ def inject_vault_context(
     from tokenpak.proxy.adapters.utils import _detect_adapter, extract_query_signal
 
     try:
-        from tokenpak.core.runtime.proxy import SESSION  # type: ignore[import]
+        from tokenpak.core.runtime.proxy import SESSION as _runtime_session
+
+        session: dict[str, object] = _runtime_session
     except ImportError:
-        SESSION = {}  # type: ignore[assignment]
-    from tokenpak.vault.chunk_shaping import _inject_skeleton_into_blocks  # type: ignore[import]
-    from tokenpak.vault.search import _compile_from_results, score_and_sort  # type: ignore[import]
+        session = {}
+    from tokenpak.vault.chunk_shaping import _inject_skeleton_into_blocks
+    from tokenpak.vault.search import _compile_from_results, score_and_sort
 
     vault_idx = get_vault_index()
     if not vault_idx.available:
@@ -1248,11 +1294,13 @@ def inject_vault_context(
     _t_resolver_ms = (time.perf_counter() - _t2) * 1000
 
     _t3 = time.perf_counter()
-    semantic_scorer = None
+    semantic_scorer: _SemanticScorer | None = None
     try:
-        from tokenpak.core.runtime.proxy import (
-            SEMANTIC_SCORER as semantic_scorer,  # type: ignore[import]
-        )
+        import tokenpak.core.runtime.proxy as runtime_proxy
+
+        candidate_scorer = getattr(runtime_proxy, "SEMANTIC_SCORER", None)
+        if callable(getattr(candidate_scorer, "score", None)):
+            semantic_scorer = cast(_SemanticScorer, candidate_scorer)
     except Exception:
         pass
 
@@ -1263,10 +1311,17 @@ def inject_vault_context(
                 query, top_k=INJECT_TOP_K * 2, min_score=INJECT_MIN_SCORE
             )
             if bm25_results:
-                block_ids = [b["block_id"] for b, _ in bm25_results]
+                block_ids = [
+                    block_id
+                    for block, _ in bm25_results
+                    if isinstance((block_id := block.get("block_id")), str)
+                ]
                 semantic_scores = semantic_scorer.score(query, block_ids)
+                mutable_results = [(dict(block), score) for block, score in bm25_results]
                 rescored = score_and_sort(
-                    bm25_results, query=query, semantic_scores=semantic_scores
+                    mutable_results,
+                    query=query,
+                    semantic_scores=semantic_scores,
                 )[:INJECT_TOP_K]
                 # Build injection from rescored results
                 injection_text, tokens_used, source_refs = _compile_from_results(
@@ -1319,7 +1374,7 @@ def inject_vault_context(
 
     _total_ms = (time.perf_counter() - _t) * 1000
     # Store sub-step breakdown in SESSION for /stats and trace enrichment
-    SESSION["vault_last_timing_ms"] = {
+    session["vault_last_timing_ms"] = {
         "query_signal": round(_t_query_ms, 1),
         "term_resolver": round(_t_resolver_ms, 1),
         "bm25_search": round(_t_bm25_ms, 1),

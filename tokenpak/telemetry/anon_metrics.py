@@ -65,8 +65,10 @@ class MetricsRecord:
     model: str = ""
 
     # Consumption context (anonymous categorical, no PII)
-    active_profile: str = ""      # loaded profile name (e.g. "balanced", "agentic", "claude-code-cli")
-    consumption_mode: str = ""    # auto-detected mode (cli/tui/tmux/sdk/ide/cron) — may differ from profile
+    active_profile: str = ""  # loaded profile name (e.g. "balanced", "agentic", "claude-code-cli")
+    consumption_mode: str = (
+        ""  # auto-detected mode (cli/tui/tmux/sdk/ide/cron) — may differ from profile
+    )
 
     # Schema version
     schema_version: str = SCHEMA_VERSION
@@ -172,10 +174,7 @@ class MetricsStore:
             """)
             # Restoration migration: add the two new columns to
             # databases that were created against the v1.0 schema.
-            existing = {
-                row[1]
-                for row in conn.execute("PRAGMA table_info(metrics)").fetchall()
-            }
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(metrics)").fetchall()}
             if "active_profile" not in existing:
                 conn.execute(
                     "ALTER TABLE metrics ADD COLUMN active_profile TEXT NOT NULL DEFAULT ''"
@@ -299,6 +298,7 @@ def detect_consumption_mode() -> str:
         if os.environ.get("TMUX"):
             return "tmux"
         import sys
+
         if not sys.stdin.isatty():
             return "sdk"
         return "cli"
@@ -351,6 +351,7 @@ def record_request(
         # Also write to local JSONL file when TOKENPAK_TELEMETRY_MODE=local (default).
         try:
             from tokenpak.telemetry.local_exporter import write_record
+
             write_record(rec.to_upload_dict())
         except Exception:
             pass

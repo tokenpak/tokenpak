@@ -50,16 +50,13 @@ class TestEdgeCaseConcurrency:
                 record_id = temp_db.record(
                     query=f"query_{thread_id}_{i}",
                     decision=f"decision_{thread_id}_{i}",
-                    confidence=0.5 + (i * 0.05)
+                    confidence=0.5 + (i * 0.05),
                 )
                 with lock:
                     inserted_ids.append(record_id)
 
         # Launch concurrent writes
-        threads = [
-            threading.Thread(target=write_worker, args=(i,))
-            for i in range(num_threads)
-        ]
+        threads = [threading.Thread(target=write_worker, args=(i,)) for i in range(num_threads)]
         for t in threads:
             t.start()
         for t in threads:
@@ -86,10 +83,7 @@ class TestEdgeCaseConcurrency:
         def writer():
             try:
                 for i in range(20):
-                    temp_db.record(
-                        query=f"concurrent_query_{i}",
-                        decision=f"decision_{i}"
-                    )
+                    temp_db.record(query=f"concurrent_query_{i}", decision=f"decision_{i}")
                     with lock:
                         results["writes"] += 1
             except Exception as e:
@@ -138,23 +132,23 @@ class TestEdgeCaseEviction:
         # Insert beyond max capacity
         inserted_ids = []
         for i in range(max_records + 50):
-            record_id = temp_db.record(
-                query=f"query_{i}",
-                decision=f"decision_{i}"
-            )
+            record_id = temp_db.record(query=f"query_{i}", decision=f"decision_{i}")
             inserted_ids.append(record_id)
 
         # Manually evict oldest records (simulating capacity limit)
         with sqlite3.connect(temp_db.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 DELETE FROM decisions
                 WHERE rowid IN (
                     SELECT rowid FROM decisions
                     ORDER BY timestamp ASC
                     LIMIT (SELECT COUNT(*) FROM decisions) - ?
                 )
-            """, (max_records,))
+            """,
+                (max_records,),
+            )
             conn.commit()
 
         # Verify count is at max
@@ -200,19 +194,14 @@ class TestEdgeCaseTTL:
         (Simulated by checking timestamp age.)
         """
         # Record a decision
-        record_id = temp_db.record(
-            query="old_query",
-            decision="old_decision",
-            confidence=0.9
-        )
+        record_id = temp_db.record(query="old_query", decision="old_decision", confidence=0.9)
 
         # Manually update timestamp to be 30 days old
         with sqlite3.connect(temp_db.db_path) as conn:
             cursor = conn.cursor()
             old_timestamp = (datetime.utcnow() - timedelta(days=30)).isoformat() + "Z"
             cursor.execute(
-                "UPDATE decisions SET timestamp = ? WHERE id = ?",
-                (old_timestamp, record_id)
+                "UPDATE decisions SET timestamp = ? WHERE id = ?", (old_timestamp, record_id)
             )
             conn.commit()
 
@@ -222,8 +211,7 @@ class TestEdgeCaseTTL:
 
         cutoff = datetime.utcnow() - timedelta(days=ttl_days)
         valid_records = [
-            r for r in all_records
-            if datetime.fromisoformat(r.timestamp.rstrip('Z')) >= cutoff
+            r for r in all_records if datetime.fromisoformat(r.timestamp.rstrip("Z")) >= cutoff
         ]
 
         # Expired record should be filtered out
@@ -233,10 +221,7 @@ class TestEdgeCaseTTL:
         """
         Verify that recent records are returned (not expired).
         """
-        record_id = temp_db.record(
-            query="recent_query",
-            decision="recent_decision"
-        )
+        record_id = temp_db.record(query="recent_query", decision="recent_decision")
 
         # Get all records and filter by TTL
         ttl_days = 7
@@ -244,8 +229,7 @@ class TestEdgeCaseTTL:
 
         cutoff = datetime.utcnow() - timedelta(days=ttl_days)
         valid_records = [
-            r for r in all_records
-            if datetime.fromisoformat(r.timestamp.rstrip('Z')) >= cutoff
+            r for r in all_records if datetime.fromisoformat(r.timestamp.rstrip("Z")) >= cutoff
         ]
 
         # Recent record should be present
@@ -267,20 +251,12 @@ class TestEdgeCaseErrorHandling:
         Verify that confidence values outside [0.0, 1.0] are clamped.
         """
         # Test too high
-        id1 = temp_db.record(
-            query="high_conf",
-            decision="dec",
-            confidence=1.5
-        )
+        id1 = temp_db.record(query="high_conf", decision="dec", confidence=1.5)
         record = temp_db.get(id1)
         assert record.confidence == 1.0
 
         # Test too low
-        id2 = temp_db.record(
-            query="low_conf",
-            decision="dec",
-            confidence=-0.5
-        )
+        id2 = temp_db.record(query="low_conf", decision="dec", confidence=-0.5)
         record = temp_db.get(id2)
         assert record.confidence == 0.0
 
@@ -288,11 +264,7 @@ class TestEdgeCaseErrorHandling:
         """
         Verify that empty string queries are handled gracefully.
         """
-        record_id = temp_db.record(
-            query="",
-            decision="decision_for_empty",
-            confidence=0.5
-        )
+        record_id = temp_db.record(query="", decision="decision_for_empty", confidence=0.5)
 
         # Should be recordable
         assert record_id is not None
@@ -314,10 +286,7 @@ class TestEdgeCaseErrorHandling:
         Verify that special characters in queries are handled correctly.
         """
         special_query = "query with 'quotes\" and \\ slashes & <brackets>"
-        record_id = temp_db.record(
-            query=special_query,
-            decision="decision"
-        )
+        record_id = temp_db.record(query=special_query, decision="decision")
 
         record = temp_db.get(record_id)
         assert record.query == special_query
@@ -332,10 +301,7 @@ class TestEdgeCaseErrorHandling:
         Verify that very long queries are handled without truncation.
         """
         long_query = "x" * 10000
-        record_id = temp_db.record(
-            query=long_query,
-            decision="decision"
-        )
+        record_id = temp_db.record(query=long_query, decision="decision")
 
         record = temp_db.get(record_id)
         assert record.query == long_query
@@ -349,21 +315,13 @@ class TestEdgeCaseUpdateOutcome:
         """
         Verify that recording a successful outcome increases confidence.
         """
-        record_id = temp_db.record(
-            query="test",
-            decision="decision",
-            confidence=0.7
-        )
+        record_id = temp_db.record(query="test", decision="decision", confidence=0.7)
 
         initial = temp_db.get(record_id)
         assert initial.confidence == 0.7
 
         # Record successful outcome
-        temp_db.record_outcome(
-            record_id=record_id,
-            outcome="positive_result",
-            success=True
-        )
+        temp_db.record_outcome(record_id=record_id, outcome="positive_result", success=True)
 
         updated = temp_db.get(record_id)
         # Confidence should increase by 0.05
@@ -374,18 +332,10 @@ class TestEdgeCaseUpdateOutcome:
         """
         Verify that recording a failed outcome decreases confidence.
         """
-        record_id = temp_db.record(
-            query="test",
-            decision="decision",
-            confidence=0.7
-        )
+        record_id = temp_db.record(query="test", decision="decision", confidence=0.7)
 
         # Record failed outcome
-        temp_db.record_outcome(
-            record_id=record_id,
-            outcome="negative_result",
-            success=False
-        )
+        temp_db.record_outcome(record_id=record_id, outcome="negative_result", success=False)
 
         updated = temp_db.get(record_id)
         # Confidence should decrease by 0.1
@@ -516,9 +466,7 @@ class TestEdgeCaseRetrieve:
         # Insert 10 records with same query hash
         for i in range(10):
             temp_db.record(
-                query="same_query",
-                decision=f"decision_{i}",
-                confidence=0.5 + (i * 0.01)
+                query="same_query", decision=f"decision_{i}", confidence=0.5 + (i * 0.01)
             )
 
         # Retrieve with limit

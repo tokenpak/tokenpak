@@ -18,28 +18,30 @@ import sqlite3
 import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 _log = logging.getLogger(__name__)
 
 # Single source of truth for event_type values (used by analytics queries).
-EVENT_TYPES = frozenset({
-    "block",            # initial block stored as pending
-    "hard_block",       # immutable hard ceiling
-    "warn",             # advisory warn band
-    "allow",            # allow path with audit-worthy context (e.g. TIP bypass)
-    "tip_bypass",       # TIP-authorized allow
-    "approve_yes",      # POSITIVE intent → replay
-    "cancel_no",        # NEGATIVE intent
-    "cancel",           # [TIP: cancel] explicit
-    "replay",           # request re-emitted to provider
-    "reprompt",         # AMBIGUOUS intent
-    "estimate",         # [TIP: estimate=on]
-    "expire",           # TTL expired
-    "anti_loop_hit",    # cached block returned without re-estimation
-    "pending_waiting",  # subsequent request while pending exists
-    "replay_race",      # race on double-consume
-})
+EVENT_TYPES = frozenset(
+    {
+        "block",  # initial block stored as pending
+        "hard_block",  # immutable hard ceiling
+        "warn",  # advisory warn band
+        "allow",  # allow path with audit-worthy context (e.g. TIP bypass)
+        "tip_bypass",  # TIP-authorized allow
+        "approve_yes",  # POSITIVE intent → replay
+        "cancel_no",  # NEGATIVE intent
+        "cancel",  # [TIP: cancel] explicit
+        "replay",  # request re-emitted to provider
+        "reprompt",  # AMBIGUOUS intent
+        "estimate",  # [TIP: estimate=on]
+        "expire",  # TTL expired
+        "anti_loop_hit",  # cached block returned without re-estimation
+        "pending_waiting",  # subsequent request while pending exists
+        "replay_race",  # race on double-consume
+    }
+)
 
 
 def _db_path(audit_db_path: str) -> Path:
@@ -68,12 +70,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_audit_session_ts "
-        "ON spend_guard_audit(session_id, ts)"
+        "CREATE INDEX IF NOT EXISTS idx_audit_session_ts ON spend_guard_audit(session_id, ts)"
     )
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_audit_event_ts "
-        "ON spend_guard_audit(event_type, ts)"
+        "CREATE INDEX IF NOT EXISTS idx_audit_event_ts ON spend_guard_audit(event_type, ts)"
     )
     conn.commit()
 
@@ -88,8 +88,8 @@ def write_audit(
     projected_cost: Optional[float] = None,
     projected_tokens: Optional[int] = None,
     request_hash: Optional[str] = None,
-    tip=None,                   # TIPDirective | None
-    extra: Optional[dict] = None,
+    tip: Any = None,  # TIPDirective | None
+    extra: Optional[dict[str, Any]] = None,
 ) -> None:
     """Insert one audit row. Best-effort — never raises into caller."""
     try:
@@ -100,7 +100,9 @@ def write_audit(
             tip_json = ""
             if tip is not None:
                 try:
-                    tip_json = json.dumps({k: v for k, v in asdict(tip).items() if v not in (None, False, "", [])})
+                    tip_json = json.dumps(
+                        {k: v for k, v in asdict(tip).items() if v not in (None, False, "", [])}
+                    )
                 except Exception:
                     tip_json = ""
             extra_json = ""
@@ -141,7 +143,7 @@ def query_recent(
     *,
     session_id: Optional[str] = None,
     limit: int = 100,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Read the most recent audit rows. Used by tests and `tokenpak doctor`."""
     path = _db_path(audit_db_path)
     conn = sqlite3.connect(str(path), timeout=2.0)
@@ -150,8 +152,7 @@ def query_recent(
         _ensure_schema(conn)
         if session_id:
             rows = conn.execute(
-                "SELECT * FROM spend_guard_audit WHERE session_id = ? "
-                "ORDER BY ts DESC LIMIT ?",
+                "SELECT * FROM spend_guard_audit WHERE session_id = ? ORDER BY ts DESC LIMIT ?",
                 (session_id, limit),
             ).fetchall()
         else:

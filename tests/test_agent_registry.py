@@ -2,7 +2,6 @@
 Tests for agent registry + capability matching.
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.agentic.capabilities", reason="module not available in current build")
@@ -27,6 +26,7 @@ from tokenpak.agentic.registry import (
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def temp_registry():
     """Create a registry with a temp file."""
@@ -40,8 +40,8 @@ def populated_registry(temp_registry):
     """Registry with 3 pre-registered agents.
 
     TSR-05g / WS-E (2026-05-08) — fixture name strings restored. The
-    test assertions throughout this file use the agent NAMES "trix",
-    "sue", "cali" (e.g. `assert agent.name == 'sue'`); at some point
+    test assertions throughout this file use the agent NAMES "beta",
+    "alpha", "gamma" (e.g. `assert agent.name == 'alpha'`); at some point
     the fixture's name strings were generalized to "agent-1/2/3" but
     the test assertions weren't updated to match. AgentRegistry.register's
     first positional argument is `name` (see
@@ -54,27 +54,39 @@ def populated_registry(temp_registry):
     names are not subject to `feedback_always_dynamic` (which governs
     production enumerations, not test data).
     """
-    temp_registry.register("trix", "host-1", {
-        "gpu": False,
-        "memory_gb": 4,
-        "specialties": ["code", "execution"],
-        "provider_access": ["anthropic", "openai"],
-        "max_concurrent": 1,
-    })
-    temp_registry.register("sue", "host-2", {
-        "gpu": False,
-        "memory_gb": 8,
-        "specialties": ["orchestration", "qa"],
-        "provider_access": ["anthropic"],
-        "max_concurrent": 2,
-    })
-    temp_registry.register("cali", "host-3", {
-        "gpu": True,
-        "memory_gb": 16,
-        "specialties": ["data", "analysis", "code"],
-        "provider_access": ["anthropic", "openai", "google"],
-        "max_concurrent": 1,
-    })
+    temp_registry.register(
+        "beta",
+        "host-1",
+        {
+            "gpu": False,
+            "memory_gb": 4,
+            "specialties": ["code", "execution"],
+            "provider_access": ["anthropic", "openai"],
+            "max_concurrent": 1,
+        },
+    )
+    temp_registry.register(
+        "alpha",
+        "host-2",
+        {
+            "gpu": False,
+            "memory_gb": 8,
+            "specialties": ["orchestration", "qa"],
+            "provider_access": ["anthropic"],
+            "max_concurrent": 2,
+        },
+    )
+    temp_registry.register(
+        "gamma",
+        "host-3",
+        {
+            "gpu": True,
+            "memory_gb": 16,
+            "specialties": ["data", "analysis", "code"],
+            "provider_access": ["anthropic", "openai", "google"],
+            "max_concurrent": 1,
+        },
+    )
     return temp_registry
 
 
@@ -82,24 +94,25 @@ def populated_registry(temp_registry):
 # AgentInfo Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestAgentInfo:
     def test_to_dict(self):
         info = AgentInfo(
             agent_id="abc123",
-            name="trix",
+            name="beta",
             hostname="host-1",
             capabilities={"gpu": True},
         )
         d = info.to_dict()
         assert d["agent_id"] == "abc123"
-        assert d["name"] == "trix"
+        assert d["name"] == "beta"
         assert d["hostname"] == "host-1"
         assert d["capabilities"]["gpu"] is True
 
     def test_from_dict(self):
         d = {
             "agent_id": "xyz",
-            "name": "sue",
+            "name": "alpha",
             "hostname": "host-2",
             "capabilities": {},
             "registered_at": 1000.0,
@@ -110,7 +123,7 @@ class TestAgentInfo:
         }
         info = AgentInfo.from_dict(d)
         assert info.agent_id == "xyz"
-        assert info.name == "sue"
+        assert info.name == "alpha"
 
     def test_is_stale(self):
         info = AgentInfo(
@@ -138,6 +151,7 @@ class TestAgentInfo:
 # AgentRegistry Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestAgentRegistry:
     def test_register_new_agent(self, temp_registry):
         agent_id = temp_registry.register("agent-1", "host-1", {"gpu": False})
@@ -156,10 +170,10 @@ class TestAgentRegistry:
 
     def test_get_agent(self, temp_registry):
         # TSR-05g — fixture name string aligned with assertion below.
-        agent_id = temp_registry.register("sue", "host-2", {"memory_gb": 8})
+        agent_id = temp_registry.register("alpha", "host-2", {"memory_gb": 8})
         agent = temp_registry.get(agent_id)
         assert agent is not None
-        assert agent.name == "sue"
+        assert agent.name == "alpha"
         assert agent.hostname == "host-2"
         assert agent.capabilities["memory_gb"] == 8
 
@@ -196,7 +210,7 @@ class TestAgentRegistry:
         agents = populated_registry.list_all()
         assert len(agents) == 3
         names = {a.name for a in agents}
-        assert names == {"trix", "sue", "cali"}
+        assert names == {"beta", "alpha", "gamma"}
 
     def test_list_active_excludes_stale(self, temp_registry):
         # Register with short expiry
@@ -227,14 +241,14 @@ class TestAgentRegistry:
         assert remaining[0].name == "fresh"
 
     def test_find_by_name(self, populated_registry):
-        found = populated_registry.find_by_name("trix")
+        found = populated_registry.find_by_name("beta")
         assert len(found) == 1
         assert found[0].hostname == "host-1"
 
     def test_find_by_hostname(self, populated_registry):
         found = populated_registry.find_by_hostname("host-3")
         assert len(found) == 1
-        assert found[0].name == "cali"
+        assert found[0].name == "gamma"
 
     def test_clear(self, populated_registry):
         count = populated_registry.clear()
@@ -250,6 +264,7 @@ class TestAgentRegistry:
 # ─────────────────────────────────────────────────────────────────────────────
 # AgentCapabilities Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestAgentCapabilities:
     def test_default_values(self):
@@ -279,6 +294,7 @@ class TestAgentCapabilities:
 # CapabilityMatcher Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestCapabilityMatcher:
     def test_match_no_requirements(self, populated_registry):
         matcher = CapabilityMatcher(registry=populated_registry)
@@ -289,34 +305,34 @@ class TestCapabilityMatcher:
         matcher = CapabilityMatcher(registry=populated_registry)
         matches = matcher.match(TaskRequirements(requires_gpu=True))
         assert len(matches) == 1
-        assert matches[0].agent.name == "cali"
+        assert matches[0].agent.name == "gamma"
 
     def test_match_min_memory(self, populated_registry):
         matcher = CapabilityMatcher(registry=populated_registry)
         matches = matcher.match(TaskRequirements(min_memory_gb=8))
         assert len(matches) == 2
         names = {m.agent.name for m in matches}
-        assert names == {"sue", "cali"}
+        assert names == {"alpha", "gamma"}
 
     def test_match_required_specialty(self, populated_registry):
         matcher = CapabilityMatcher(registry=populated_registry)
         matches = matcher.match(TaskRequirements(required_specialties=["code"]))
         assert len(matches) == 2
         names = {m.agent.name for m in matches}
-        assert names == {"trix", "cali"}
+        assert names == {"beta", "gamma"}
 
     def test_match_multiple_specialties(self, populated_registry):
         matcher = CapabilityMatcher(registry=populated_registry)
         matches = matcher.match(TaskRequirements(required_specialties=["code", "data"]))
-        # Only cali has both
+        # Only gamma has both
         assert len(matches) == 1
-        assert matches[0].agent.name == "cali"
+        assert matches[0].agent.name == "gamma"
 
     def test_match_required_provider(self, populated_registry):
         matcher = CapabilityMatcher(registry=populated_registry)
         matches = matcher.match(TaskRequirements(required_providers=["google"]))
         assert len(matches) == 1
-        assert matches[0].agent.name == "cali"
+        assert matches[0].agent.name == "gamma"
 
     def test_match_sorted_by_score(self, populated_registry):
         matcher = CapabilityMatcher(registry=populated_registry)
@@ -329,7 +345,7 @@ class TestCapabilityMatcher:
         matcher = CapabilityMatcher(registry=populated_registry)
         best = matcher.find_best(TaskRequirements(requires_gpu=True))
         assert best is not None
-        assert best.name == "cali"
+        assert best.name == "gamma"
 
     def test_find_best_no_match(self, populated_registry):
         matcher = CapabilityMatcher(registry=populated_registry)
@@ -340,14 +356,14 @@ class TestCapabilityMatcher:
         matcher = CapabilityMatcher(registry=populated_registry)
         agents = matcher.find_by_specialty("orchestration")
         assert len(agents) == 1
-        assert agents[0].name == "sue"
+        assert agents[0].name == "alpha"
 
     def test_find_with_provider(self, populated_registry):
         matcher = CapabilityMatcher(registry=populated_registry)
         agents = matcher.find_with_provider("openai")
         assert len(agents) == 2
         names = {a.name for a in agents}
-        assert names == {"trix", "cali"}
+        assert names == {"beta", "gamma"}
 
     def test_match_result_to_dict(self, populated_registry):
         matcher = CapabilityMatcher(registry=populated_registry)
@@ -361,20 +377,21 @@ class TestCapabilityMatcher:
     def test_idle_preference(self, populated_registry):
         # Mark one agent as busy
         agents = populated_registry.list_all()
-        trix = next(a for a in agents if a.name == "trix")
-        populated_registry.heartbeat(trix.agent_id, status="busy", current_task="task-1")
+        beta = next(a for a in agents if a.name == "beta")
+        populated_registry.heartbeat(beta.agent_id, status="busy", current_task="task-1")
 
         matcher = CapabilityMatcher(registry=populated_registry)
         matches = matcher.match(TaskRequirements(required_specialties=["code"]))
 
-        # Cali (idle) should rank higher than trix (busy)
+        # gamma (idle) should rank higher than beta (busy)
         names = [m.agent.name for m in matches]
-        assert names.index("cali") < names.index("trix")
+        assert names.index("gamma") < names.index("beta")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI Integration Tests (smoke tests)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestAgentCLI:
     def test_list_no_agents(self, temp_registry, capsys, monkeypatch):
@@ -434,4 +451,4 @@ class TestAgentCLI:
         captured = capsys.readouterr()
         data = json.loads(captured.out)
         assert len(data) == 1
-        assert data[0]["name"] == "cali"
+        assert data[0]["name"] == "gamma"

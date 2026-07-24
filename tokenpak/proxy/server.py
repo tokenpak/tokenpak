@@ -13,13 +13,65 @@ Env vars (all optional):
     TOKENPAK_PORT          (default 8766)
     TOKENPAK_MODE          (default hybrid) — strict|hybrid|aggressive
     TOKENPAK_COMPACT       (default 1) — master on/off switch
-    TOKENPAK_COMPACT_THRESHOLD_TOKENS (default 4500)
+    TOKENPAK_COMPACT_THRESHOLD_TOKENS (default 1500 in the balanced profile)
     TOKENPAK_DB            (default .tokenpak/monitor.db)
     NOTIFY_SOCKET          systemd sd_notify socket path (set by systemd, not TokenPak)
 
 See tokenpak/proxy/route_policy.py for the per-route behavior matrix.
 """
+
 from __future__ import annotations
+
+__all__ = (
+    "CLAUDE_CODE_HEADER_ALLOWLIST",
+    "CacheMetrics",
+    "CompressionStats",
+    "ConnectionPool",
+    "DegradationEventType",
+    "ExportAPI",
+    "FilterParams",
+    "ForwardProxyHandler",
+    "GracefulShutdown",
+    "INTERCEPT_HOSTS",
+    "LEGACY_HEADER_ALLOWLIST",
+    "MAX_UPSTREAM_RETRIES",
+    "PassthroughConfig",
+    "PipelineTrace",
+    "PoolConfig",
+    "ProviderRouter",
+    "ProxyServer",
+    "RequestStats",
+    "SessionFilter",
+    "StageTrace",
+    "TraceStorage",
+    "UpstreamRetryPolicy",
+    "UpstreamTruncatedJSONError",
+    "auto_detect_upstream",
+    "build_terminal_recovery_payload",
+    "detect_platform",
+    "estimate_cost",
+    "extract_sse_tokens",
+    "extract_tip_plan_id",
+    "format_startup_report",
+    "forward_headers",
+    "get_circuit_breaker_registry",
+    "get_degradation_tracker",
+    "get_policy",
+    "get_rate_limit_registry",
+    "get_stats_footer_enabled",
+    "get_upstream_inflight_snapshot",
+    "log_request",
+    "main",
+    "normalize_upstream_error",
+    "persist_failed_request_metadata",
+    "provider_from_url",
+    "render_footer_oneline",
+    "response_has_truncated_json",
+    "run_startup_checks",
+    "start_proxy",
+    "validate_auth",
+)
+
 
 import gzip
 import json
@@ -31,12 +83,14 @@ import threading
 import time
 import uuid
 from collections import OrderedDict, deque
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional
+from types import FrameType
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 from urllib.parse import urlparse
 
 import httpx
@@ -58,6 +112,7 @@ from tokenpak.telemetry.footer import render_footer_oneline
 from tokenpak.telemetry.monitoring.request_logger import log_request
 from tokenpak.telemetry.monitoring.request_logger import new_request_id as _new_request_id
 
+from .capsule_integration import RequestHook
 from .circuit_breaker import (
     get_circuit_breaker_registry,
     get_rate_limit_registry,
@@ -99,6 +154,35 @@ from .upstream_retry import (
     response_has_truncated_json,
 )
 
+if TYPE_CHECKING:
+    from tokenpak.proxy.admission import AgentConcurrencyGate
+
+
+class _CodexCredentialsCache(TypedDict):
+    mtime: float
+    access_token: str
+    account_id: str
+
+
+class _SessionState(TypedDict):
+    requests: int
+    input_tokens: int
+    sent_input_tokens: int
+    saved_tokens: int
+    protected_tokens: int
+    output_tokens: int
+    cost: float
+    cost_saved: float
+    errors: int
+    start_time: float
+    cache_read_tokens: int
+    cache_creation_tokens: int
+    cache_read_client: int
+    cache_read_proxy: int
+    cache_read_unknown: int
+    ingest_entries: int
+
+
 # ---------------------------------------------------------------------------
 # Upstream retry configuration.
 #
@@ -129,17 +213,15 @@ except ValueError:
 # from blocking session B.
 # ---------------------------------------------------------------------------
 _UPSTREAM_CONCURRENCY: int = int(os.environ.get("TOKENPAK_UPSTREAM_CONCURRENCY", "3"))
-_UPSTREAM_ACQUIRE_TIMEOUT: float = float(
-    os.environ.get("TOKENPAK_UPSTREAM_ACQUIRE_TIMEOUT", "30")
-)
+_UPSTREAM_ACQUIRE_TIMEOUT: float = float(os.environ.get("TOKENPAK_UPSTREAM_ACQUIRE_TIMEOUT", "30"))
 
 import threading as _threading
 
-_upstream_semaphores: Dict[tuple, _threading.BoundedSemaphore] = {}
+_upstream_semaphores: dict[tuple[str, str], _threading.BoundedSemaphore] = {}
 _upstream_sem_lock = _threading.Lock()
-_upstream_inflight: Dict[tuple, int] = {}
+_upstream_inflight: dict[tuple[str, str], int] = {}
 # Last touch (fetch or counter change) per key — drives idle eviction below.
-_upstream_sem_last_activity: Dict[tuple, float] = {}
+_upstream_sem_last_activity: dict[tuple[str, str], float] = {}
 
 # How long a (provider, session) entry must sit at zero in-flight with no
 # activity before its semaphore object may be evicted. Evicting at the moment
@@ -158,7 +240,7 @@ _UPSTREAM_SEM_IDLE_EVICT_SECONDS: float = max(
 
 
 def _get_upstream_semaphore(
-    provider: str, session_key: Optional[str] = None
+    provider: str, session_key: str | None = None
 ) -> _threading.BoundedSemaphore:
     """Return (lazily creating) the per-(provider, session) concurrency semaphore.
 
@@ -193,9 +275,7 @@ def _evict_idle_upstream_entries_locked(now: float) -> None:
         _upstream_semaphores.pop(key, None)
 
 
-def _upstream_inflight_delta(
-    provider: str, delta: int, session_key: Optional[str] = None
-) -> int:
+def _upstream_inflight_delta(provider: str, delta: int, session_key: str | None = None) -> int:
     """Adjust and return the in-flight counter for (provider, session).
 
     The semaphore object is deliberately NOT evicted the moment its counter
@@ -217,7 +297,7 @@ def _upstream_inflight_delta(
         return count
 
 
-def get_upstream_inflight_snapshot() -> Dict[str, int]:
+def get_upstream_inflight_snapshot() -> dict[str, int]:
     """Return a snapshot of current in-flight counts, for /health exposure.
 
     Keyed as ``"<provider>::<session>"`` for JSON-friendliness. The
@@ -226,11 +306,7 @@ def get_upstream_inflight_snapshot() -> Dict[str, int]:
     are omitted — the snapshot reports actual in-flight work.
     """
     with _upstream_sem_lock:
-        return {
-            f"{prov}::{sess}": n
-            for (prov, sess), n in _upstream_inflight.items()
-            if n > 0
-        }
+        return {f"{prov}::{sess}": n for (prov, sess), n in _upstream_inflight.items() if n > 0}
 
 
 # ---------------------------------------------------------------------------
@@ -245,7 +321,7 @@ def get_upstream_inflight_snapshot() -> Dict[str, int]:
 _CB_FAILURE_STATUSES = frozenset({500, 502, 503, 504, 529})
 
 
-def _cb_status_is_provider_failure(status_code: Optional[int]) -> bool:
+def _cb_status_is_provider_failure(status_code: int | None) -> bool:
     """True when a completed exchange's final status is a provider failure."""
     return status_code in _CB_FAILURE_STATUSES
 
@@ -267,11 +343,15 @@ def _is_client_disconnect_error(exc: BaseException) -> bool:
 # ---------------------------------------------------------------------------
 
 _CODEX_AUTH_PATH = os.path.expanduser("~/.codex/auth.json")
-_CODEX_CREDS_CACHE: dict = {"mtime": 0.0, "access_token": "", "account_id": ""}
+_CODEX_CREDS_CACHE: _CodexCredentialsCache = {
+    "mtime": 0.0,
+    "access_token": "",
+    "account_id": "",
+}
 _CODEX_CREDS_LOCK = _threading.Lock()
 
 
-def _load_codex_credentials() -> tuple:
+def _load_codex_credentials() -> tuple[str, str]:
     """Load Codex OAuth token from ~/.codex/auth.json (file-mtime cached)."""
     try:
         st = os.stat(_CODEX_AUTH_PATH)
@@ -280,11 +360,15 @@ def _load_codex_credentials() -> tuple:
     with _CODEX_CREDS_LOCK:
         if st.st_mtime != _CODEX_CREDS_CACHE["mtime"]:
             try:
-                with open(_CODEX_AUTH_PATH, "r") as f:
+                with open(_CODEX_AUTH_PATH) as f:
                     data = json.load(f)
                 tokens = data.get("tokens", {}) if isinstance(data, dict) else {}
-                _CODEX_CREDS_CACHE["access_token"] = tokens.get("access_token", "") or ""
-                _CODEX_CREDS_CACHE["account_id"] = tokens.get("account_id", "") or ""
+                access_token = tokens.get("access_token", "")
+                account_id = tokens.get("account_id", "")
+                _CODEX_CREDS_CACHE["access_token"] = (
+                    access_token if isinstance(access_token, str) else ""
+                )
+                _CODEX_CREDS_CACHE["account_id"] = account_id if isinstance(account_id, str) else ""
                 _CODEX_CREDS_CACHE["mtime"] = st.st_mtime
             except (OSError, ValueError):
                 return "", ""
@@ -301,24 +385,27 @@ _SD_NOTIFY_SOCKET: str = os.environ.get("NOTIFY_SOCKET", "")
 # Pipeline trace types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StageTrace:
     """Trace for a single pipeline stage."""
+
     name: str
     enabled: bool = True
     input_tokens: int = 0
     output_tokens: int = 0
     tokens_delta: int = 0
     duration_ms: float = 0.0
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, object] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+    def to_dict(self) -> dict[str, object]:
+        return cast(dict[str, object], asdict(self))
 
 
 @dataclass
 class PipelineTrace:
     """Complete trace for a single request through the pipeline."""
+
     request_id: str
     timestamp: str
     model: str = ""
@@ -328,22 +415,22 @@ class PipelineTrace:
     cost_saved: float = 0.0
     total_cost: float = 0.0
     duration_ms: float = 0.0
-    stages: List[StageTrace] = field(default_factory=list)
+    stages: list[StageTrace] = field(default_factory=list)
     status: str = "pending"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         d = asdict(self)
         d["stages"] = [s.to_dict() if hasattr(s, "to_dict") else s for s in self.stages]
-        return d
+        return cast(dict[str, object], d)
 
 
 class TraceStorage:
     """Thread-safe storage for recent pipeline traces."""
 
-    def __init__(self, max_traces: int = 10):
-        self._traces: deque = deque(maxlen=max_traces)
+    def __init__(self, max_traces: int = 10) -> None:
+        self._traces: deque[PipelineTrace] = deque(maxlen=max_traces)
         self._lock = threading.Lock()
-        self._by_id: Dict[str, PipelineTrace] = {}
+        self._by_id: dict[str, PipelineTrace] = {}
 
     def store(self, trace: PipelineTrace) -> None:
         with self._lock:
@@ -353,15 +440,15 @@ class TraceStorage:
                 valid_ids = {t.request_id for t in self._traces}
                 self._by_id = {k: v for k, v in self._by_id.items() if k in valid_ids}
 
-    def get_last(self) -> Optional[PipelineTrace]:
+    def get_last(self) -> PipelineTrace | None:
         with self._lock:
             return self._traces[-1] if self._traces else None
 
-    def get_by_id(self, request_id: str) -> Optional[PipelineTrace]:
+    def get_by_id(self, request_id: str) -> PipelineTrace | None:
         with self._lock:
             return self._by_id.get(request_id)
 
-    def get_all(self) -> List[PipelineTrace]:
+    def get_all(self) -> list[PipelineTrace]:
         with self._lock:
             return list(self._traces)
 
@@ -369,6 +456,7 @@ class TraceStorage:
 # ---------------------------------------------------------------------------
 # Graceful shutdown manager
 # ---------------------------------------------------------------------------
+
 
 class GracefulShutdown:
     """
@@ -398,7 +486,7 @@ class GracefulShutdown:
             self._shutting_down = True
 
     @contextmanager
-    def track_request(self) -> Generator[None, None, None]:
+    def track_request(self) -> Iterator[None]:
         """Context manager that increments/decrements the in-flight counter."""
         with self._lock:
             self._in_flight += 1
@@ -428,7 +516,8 @@ class GracefulShutdown:
 # Session state
 # ---------------------------------------------------------------------------
 
-def _new_session() -> Dict[str, Any]:
+
+def _new_session() -> _SessionState:
     return {
         "requests": 0,
         "input_tokens": 0,
@@ -450,6 +539,7 @@ def _new_session() -> Dict[str, Any]:
         "cache_read_client": 0,
         "cache_read_proxy": 0,
         "cache_read_unknown": 0,
+        "ingest_entries": 0,
     }
 
 
@@ -500,7 +590,7 @@ class _ThreadedHTTPServer(HTTPServer):
 
     proxy_server: "ProxyServer"  # injected after construction
 
-    def _peek_request_head(self, request) -> bytes:
+    def _peek_request_head(self, request: socket.socket) -> bytes:
         """Peek the request head without consuming bytes, under explicit bounds.
 
         For model-endpoint paths the peek continues until the end of the
@@ -550,18 +640,31 @@ class _ThreadedHTTPServer(HTTPServer):
                 pass
         return peeked
 
-    def process_request(self, request, client_address):
+    def process_request(
+        self,
+        request: socket.socket | tuple[bytes, socket.socket],
+        client_address: object,
+    ) -> None:
         # Keep control-plane endpoints responsive while bounding model traffic.
         # Admission happens before a worker thread is created, so overload cannot
         # turn into an unbounded thread/socket population.
-        peeked = self._peek_request_head(request)
+        accepted_socket = cast(socket.socket, request)
+        accepted_address = cast(tuple[str, int], client_address)
+        peeked = self._peek_request_head(accepted_socket)
         first_line = peeked.split(b"\r\n", 1)[0]
         parts = first_line.split(b" ", 2)
         path = parts[1].decode("latin-1", "ignore") if len(parts) > 1 else ""
-        control = path == "/health" or path.startswith("/health?") or path in {"/status", "/metrics"} or path.startswith("/tpk/v1/") or path.startswith("/pak/v1/")
+        control = (
+            path == "/health"
+            or path.startswith("/health?")
+            or path in {"/status", "/metrics"}
+            or path.startswith("/tpk/v1/")
+            or path.startswith("/pak/v1/")
+        )
         managed = False
         if not control and path.startswith("/v1/messages"):
             from tokenpak.proxy.spend_guard.classifier import MANAGED, classify
+
             headers = {}
             for line in peeked.split(b"\r\n")[1:]:
                 if not line:
@@ -573,13 +676,16 @@ class _ThreadedHTTPServer(HTTPServer):
         admitted = managed and self.proxy_server._admission.acquire(blocking=False)
         if managed and not admitted:
             try:
-                request.sendall(_ADMISSION_REJECT_RESPONSE)
+                accepted_socket.sendall(_ADMISSION_REJECT_RESPONSE)
             finally:
-                self.shutdown_request(request)
+                self.shutdown_request(accepted_socket)
             self.proxy_server._admission_rejected += 1
             return
         try:
-            t = threading.Thread(target=self._handle, args=(request, client_address, managed))
+            t = threading.Thread(
+                target=self._handle,
+                args=(accepted_socket, accepted_address, managed),
+            )
             t.daemon = True
             t.start()
         except Exception:
@@ -588,16 +694,21 @@ class _ThreadedHTTPServer(HTTPServer):
             # neither leaks. Re-raise so the serving loop records the error.
             if admitted:
                 self.proxy_server._admission.release()
-            self.shutdown_request(request)
+            self.shutdown_request(accepted_socket)
             raise
 
-    def _handle(self, request, client_address, managed=False):
+    def _handle(
+        self,
+        request: socket.socket,
+        client_address: tuple[str, int],
+        managed: bool = False,
+    ) -> None:
         # The listener admission lease above bounds total held managed
         # connections; this per-connection gate (already inside its own
         # worker thread, so blocking it never stalls the accept loop or
         # control-plane traffic) further bounds how many run in parallel,
         # queueing the rest FIFO with a bounded wait.
-        gate = getattr(self.proxy_server, "_agent_gate", None) if managed else None
+        gate = self.proxy_server._agent_gate if managed else None
         gate_admitted = False
         try:
             if gate is not None:
@@ -613,7 +724,7 @@ class _ThreadedHTTPServer(HTTPServer):
             self.handle_error(request, client_address)
         finally:
             self.shutdown_request(request)
-            if gate_admitted:
+            if gate_admitted and gate is not None:
                 gate.release()
             if managed:
                 self.proxy_server._admission.release()
@@ -622,6 +733,7 @@ class _ThreadedHTTPServer(HTTPServer):
 # ---------------------------------------------------------------------------
 # Request handler
 # ---------------------------------------------------------------------------
+
 
 class _ProxyHandler(BaseHTTPRequestHandler):
     """
@@ -634,9 +746,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     @property
     def _ps(self) -> "ProxyServer":
         """Typed accessor for the back-reference to ProxyServer."""
-        return self.server.proxy_server  # type: ignore[attr-defined]
+        return cast(_ThreadedHTTPServer, self.server).proxy_server
 
-    def log_message(self, format, *args):  # silence access log
+    def log_message(self, format: str, *args: object) -> None:  # silence access log
         pass
 
     # ------------------------------------------------------------------
@@ -656,9 +768,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         decision = _check_proxy_auth(client_ip, self.headers)
         # Always initialise the slots so downstream code can rely on them.
         if not hasattr(self, "_tokenpak_user_id"):
-            self._tokenpak_user_id: Optional[str] = None
+            self._tokenpak_user_id: str | None = None
         if not hasattr(self, "_tokenpak_proxy_auth_header"):
-            self._tokenpak_proxy_auth_header: Optional[str] = None
+            self._tokenpak_proxy_auth_header: str | None = None
         if not decision.allowed:
             try:
                 self.send_response(decision.status_code)
@@ -681,7 +793,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     break
         return True
 
-    def send_error(self, code, message=None, explain=None):
+    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
         # Override the stdlib HTML error page. Every client hitting this
         # proxy is expecting an API-style JSON error, and leaking the
         # default HTML to a chat bot or SDK produces garbage output.
@@ -689,14 +801,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             short, long = self.responses.get(code, ("Unknown", "Unknown"))
         except Exception:
             short, long = "Error", ""
-        body = json.dumps({
-            "error": {
-                "type": "proxy_error",
-                "code": code,
-                "message": message or short,
-                "detail": explain or long,
+        body = json.dumps(
+            {
+                "error": {
+                    "type": "proxy_error",
+                    "code": code,
+                    "message": message or short,
+                    "detail": explain or long,
+                }
             }
-        }).encode("utf-8")
+        ).encode("utf-8")
         try:
             self.send_response(code, message or short)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -712,7 +826,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # CONNECT tunnelling (HTTPS MITM passthrough)
     # ------------------------------------------------------------------
 
-    def do_CONNECT(self):
+    def do_CONNECT(self) -> None:
         if not self._enforce_proxy_auth():
             return
         host, _, port_str = self.path.partition(":")
@@ -755,10 +869,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # HTTP verbs
     # ------------------------------------------------------------------
 
-    def do_GET(self):
+    def do_GET(self) -> None:
         if not self._enforce_proxy_auth():
             return
-        ps = self.server.proxy_server
+        ps = self._ps
         path = self.path
 
         # App-level /tpk/v1/* endpoints — proxy-owned resources (vault, budget,
@@ -767,10 +881,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # Registered BEFORE health so shutdown doesn't steal /tpk/v1/health.
         try:
             from tokenpak.proxy.app_endpoints import try_handle_get as _tp_try_get
+
             if _tp_try_get(self):
                 return
         except Exception as _exc:
             import sys as _sys
+
             print(f"[tokenpak] app endpoint dispatch error: {_exc}", file=_sys.stderr)
             if _is_app_endpoint_path(path):
                 self._send_app_endpoint_dispatch_error(_exc)
@@ -780,9 +896,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if path == "/health" or path.startswith("/health?"):
             from urllib.parse import parse_qs
             from urllib.parse import urlparse as _urlparse
+
             parsed_path = _urlparse(path)
-            qs = parse_qs(parsed_path.query)
-            deep = qs.get("deep", ["false"])[0].lower() in ("true", "1", "yes")
+            health_query = parse_qs(parsed_path.query)
+            deep = health_query.get("deep", ["false"])[0].lower() in ("true", "1", "yes")
             self._send_json(ps.health(deep=deep))
             return
 
@@ -796,6 +913,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path == "/metrics":
             from tokenpak.telemetry.monitoring.metrics import ProxyMetricsCollector
+
             collector = ProxyMetricsCollector(proxy_server=ps)
             body = collector.collect().encode("utf-8")
             self.send_response(200)
@@ -828,7 +946,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             route_path = dashboard_request.path
             dashboard_path = route_path[10:]  # Remove '/dashboard' prefix
             if not dashboard_path:
-                dashboard_path = '/'
+                dashboard_path = "/"
 
             # Serve the file
             result = asyncio.run(serve_dashboard_file(dashboard_path))
@@ -847,6 +965,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path == "/degradation":
             from .degradation import get_degradation_tracker
+
             self._send_json(get_degradation_tracker().summary())
             return
         if path == "/circuit-breakers":
@@ -855,16 +974,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _sess_pool_info = ps._connection_pool.session_client_snapshot()
             except Exception:
                 _sess_pool_info = {"count": 0, "cap": 0, "idle_secs": 0.0, "keys": []}
-            self._send_json({
-                "enabled": registry.enabled,
-                "circuit_breakers": registry.all_statuses(),
-                "upstream_concurrency": {
-                    "limit_per_provider": _UPSTREAM_CONCURRENCY,
-                    "acquire_timeout_seconds": _UPSTREAM_ACQUIRE_TIMEOUT,
-                    "in_flight": get_upstream_inflight_snapshot(),
-                },
-                "session_client_pool": _sess_pool_info,
-            })
+            self._send_json(
+                {
+                    "enabled": registry.enabled,
+                    "circuit_breakers": registry.all_statuses(),
+                    "upstream_concurrency": {
+                        "limit_per_provider": _UPSTREAM_CONCURRENCY,
+                        "acquire_timeout_seconds": _UPSTREAM_ACQUIRE_TIMEOUT,
+                        "in_flight": get_upstream_inflight_snapshot(),
+                    },
+                    "session_client_pool": _sess_pool_info,
+                }
+            )
             return
         if path == "/stats":
             self._send_json(ps.stats())
@@ -881,6 +1002,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if path == "/api/goals":
             # Get all goals with progress
             from tokenpak.cli.goals import GoalManager
+
             try:
                 manager = GoalManager()
                 goals = manager.list_goals()
@@ -918,12 +1040,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if path.startswith("/v1/sessions"):
             # Session filter + pagination endpoint
             # GET /v1/sessions?model=&from=&to=&status=&limit=&offset=
-            qs = ""
+            session_query = ""
             if "?" in path:
-                _, qs = path.split("?", 1)
-            ps = self.server.proxy_server
+                _, session_query = path.split("?", 1)
+            ps = self._ps
             try:
-                params = FilterParams.from_query_string(qs)
+                params = FilterParams.from_query_string(session_query)
             except (ValueError, TypeError) as exc:
                 err = json.dumps({"error": "invalid_params", "detail": str(exc)}).encode()
                 self.send_response(400)
@@ -934,29 +1056,44 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.wfile.write(err)
                 return
             sf = ps.session_filter
-            result = sf.query(params)
+            session_result = sf.query(params)
             models = sf.distinct_models()
-            result["models"] = models
-            self._send_json(result)
+            session_result["models"] = models
+            self._send_json(session_result)
+            return
+        if path.startswith("/v1/models"):
+            route = ps.router.route(path, dict(self.headers))
+            if route.auth_type == "oauth":
+                # The OpenAI /v1/models endpoint requires API-platform scope,
+                # which a Codex subscription OAuth session does not carry.
+                # Native Codex already has a bundled model catalog, so report
+                # that this upstream source contributed no additional models
+                # instead of forwarding the bearer to an incompatible API-key
+                # endpoint and surfacing a misleading 403.
+                self._send_json({"models": []})
+                return
+            self._proxy_to(route.full_url, "GET")
             return
         if path.startswith("http"):
             self._proxy_to(path, "GET")
         else:
             self.send_error(404)
 
-    def do_POST(self):
+    def do_POST(self) -> None:
         if not self._enforce_proxy_auth():
             return
-        ps = self.server.proxy_server
+        ps = self._ps
 
         # App-level /tpk/v1/* POST endpoints — reserved for future compress,
         # optimize, budget event, journal write, etc. See app_endpoints.py.
         try:
             from tokenpak.proxy.app_endpoints import try_handle_post as _tp_try_post
+
             if _tp_try_post(self):
                 return
         except Exception as _exc:
             import sys as _sys
+
             print(f"[tokenpak] app endpoint POST dispatch error: {_exc}", file=_sys.stderr)
             if _is_app_endpoint_path(self.path):
                 self._send_app_endpoint_dispatch_error(_exc)
@@ -971,7 +1108,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self._proxy_to(self.path, "POST")
         elif self.path == "/v1/export/csv":
             # CSV export endpoint — reads body, returns downloadable CSV
-            ps = self.server.proxy_server
+            ps = self._ps
             content_length = int(self.headers.get("Content-Length", 0))
             raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
             traces = [t.to_dict() for t in ps.trace_storage.get_all()]
@@ -989,6 +1126,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         elif self.path == "/ingest":
             import json as _json
             import uuid as _uuid
+
             content_length = int(self.headers.get("Content-Length", 0))
             raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
             try:
@@ -1009,11 +1147,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/v1/messages/"):
             # Default passthrough for unrecognised /v1/messages/* subpaths.
             # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
-            ps = self.server.proxy_server
+            ps = self._ps
             route = ps.router.route(self.path, dict(self.headers))
             self._proxy_to(route.full_url, "POST")
         elif self.path.startswith("/v1/"):
-            ps = self.server.proxy_server
+            ps = self._ps
             route = ps.router.route(self.path, dict(self.headers))
             self._proxy_to(route.full_url, "POST")
         elif self.path.startswith("/codex/"):
@@ -1026,10 +1164,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
-    def do_PUT(self):
+    def do_PUT(self) -> None:
         if not self._enforce_proxy_auth():
             return
-        ps = self.server.proxy_server
+        ps = self._ps
         if ps.shutdown.is_shutting_down and self.path.startswith("http"):
             self._send_503_shutdown()
             return
@@ -1038,10 +1176,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
-    def do_DELETE(self):
+    def do_DELETE(self) -> None:
         if not self._enforce_proxy_auth():
             return
-        ps = self.server.proxy_server
+        ps = self._ps
         if ps.shutdown.is_shutting_down and self.path.startswith("http"):
             self._send_503_shutdown()
             return
@@ -1052,15 +1190,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def _send_503_shutdown(self) -> None:
         """Return 503 Service Unavailable during graceful shutdown drain."""
-        body = json.dumps({
-            "error": {
-                "type": "service_unavailable",
-                "message": (
-                    "TokenPak proxy is shutting down. "
-                    "Please retry your request against a new proxy instance."
-                ),
+        body = json.dumps(
+            {
+                "error": {
+                    "type": "service_unavailable",
+                    "message": (
+                        "TokenPak proxy is shutting down. "
+                        "Please retry your request against a new proxy instance."
+                    ),
+                }
             }
-        }).encode()
+        ).encode()
         self.send_response(503)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -1073,7 +1213,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def _proxy_to(self, target_url: str, method: str) -> None:
-        ps = self.server.proxy_server  # type: ignore[attr-defined]
+        ps = self._ps
         with ps.shutdown.track_request():
             self._proxy_to_inner(target_url, method)
 
@@ -1081,14 +1221,47 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         t0 = time.time()
         # Request ID: honour X-Request-ID from client, else generate UUID
         _req_id = _new_request_id(dict(self.headers))
-        ps = self.server.proxy_server  # type: ignore[attr-defined]
+        ps = self._ps
         parsed = urlparse(target_url)
 
         should_log = any(h in target_url for h in INTERCEPT_HOSTS)
-        is_messages = "/messages" in target_url or "/chat/completions" in target_url
+        is_model_request = any(
+            endpoint in target_url for endpoint in ("/messages", "/chat/completions", "/responses")
+        )
 
         content_length = int(self.headers.get("Content-Length", 0))
-        body: Optional[bytes] = self.rfile.read(content_length) if content_length > 0 else None
+        body: bytes | None = self.rfile.read(content_length) if content_length > 0 else None
+        _decoded_request_encoding = False
+        if body:
+            try:
+                body, _decoded_request_encoding = _decode_request_entity(
+                    body,
+                    self.headers.get("Content-Encoding", ""),
+                )
+                if _decoded_request_encoding:
+                    if self.headers.get("Content-Length") is not None:
+                        self.headers.replace_header("Content-Length", str(len(body)))
+                    for header_name in tuple(self.headers.keys()):
+                        if header_name.lower() in {"content-encoding", "content-md5"}:
+                            del self.headers[header_name]
+            except ValueError:
+                err_body = json.dumps(
+                    {
+                        "error": {
+                            "type": "unsupported_request_encoding",
+                            "message": (
+                                "TokenPak could not decode the compressed request body. "
+                                "Reinstall TokenPak or send identity, gzip, or zstd content."
+                            ),
+                        }
+                    }
+                ).encode()
+                self.send_response(415)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err_body)))
+                self.end_headers()
+                self.wfile.write(err_body)
+                return
         _original_body = body
         _retry_policy = UpstreamRetryPolicy.from_env(
             body=body,
@@ -1111,8 +1284,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # a response copy; forwarded bytes are never modified). '' = not observed.
         stop_reason = ""
 
-        trace: Optional[PipelineTrace] = None
-        if should_log and is_messages:
+        trace: PipelineTrace | None = None
+        if should_log and is_model_request:
             trace = PipelineTrace(
                 request_id=str(uuid.uuid4())[:8],
                 timestamp=datetime.now().strftime("%H:%M:%S"),
@@ -1139,8 +1312,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         # Platform adapter detection (feature-flagged via TOKENPAK_PLATFORM_ADAPTERS, default ON)
         _adapters_enabled = os.environ.get("TOKENPAK_PLATFORM_ADAPTERS", "1") != "0"
-        if _adapters_enabled and should_log and is_messages:
+        if _adapters_enabled and should_log and is_model_request:
             import logging as _logging
+
             _platform = detect_platform()
             _logging.debug(
                 "tokenpak.proxy: detected platform=%s for request to %s",
@@ -1156,10 +1330,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # Disabled with: spend_guard.enabled=false in config.yaml
         #            or: TOKENPAK_SPEND_GUARD_ENABLED=0
         _sg_admission_ticket = None  # rolling-cap in-flight spend ticket
-        if should_log and is_messages and body:
+        if should_log and is_model_request and body:
             try:
                 from tokenpak.proxy.request_pipeline import _resolve_session_id
                 from tokenpak.proxy.spend_guard import evaluate as _sg_evaluate
+
                 # Resolve model cheaply from the request body — full route
                 # resolution happens later for the forward path.
                 _sg_model = ""
@@ -1207,12 +1382,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             from tokenpak.proxy.spend_guard.pending import (
                                 redact_headers as _sg_redact,
                             )
+
                             _replay_hdrs = _sg_redact(_sg_outcome.headers)
                         except Exception:
                             _replay_hdrs = {}
                         for _hk, _hv in _replay_hdrs.items():
                             try:
-                                self.headers[_hk] = _hv  # type: ignore[index]
+                                self.headers[_hk] = _hv
                             except Exception:
                                 pass
                 else:
@@ -1231,10 +1407,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         self.wfile.write(_sg_resp)
                     except Exception as _sg_wexc:
                         import logging as _sg_log
+
                         _sg_log.getLogger(__name__).warning(
                             "tokenpak.spend_guard: failed writing %s response "
                             "to client (%s: %s) — request stays blocked",
-                            _sg_outcome.kind, type(_sg_wexc).__name__, _sg_wexc,
+                            _sg_outcome.kind,
+                            type(_sg_wexc).__name__,
+                            _sg_wexc,
                         )
                     return
             except ImportError:
@@ -1246,25 +1425,34 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # handling). Forwarding without the guard is deliberate for
                 # that narrow case — but it must be LOUD, not a debug line.
                 import logging as _sg_log
+
                 _sg_log.getLogger(__name__).warning(
                     "tokenpak.spend_guard: unexpected proxy-hook error — "
                     "forwarding WITHOUT spend-guard evaluation: %s: %s",
-                    type(_sg_exc).__name__, _sg_exc,
+                    type(_sg_exc).__name__,
+                    _sg_exc,
                 )
 
         # ── DLP outbound secret scan ──────────────────────────────────────────
         # Scans the raw request body for secrets before compression/forwarding.
         # Default: TOKENPAK_DLP_ENABLED=1, TOKENPAK_DLP_MODE=warn (log only).
         # Opt-out: TOKENPAK_DLP_ENABLED=0
-        if os.environ.get("TOKENPAK_DLP_ENABLED", "1") != "0" and should_log and is_messages and body:
+        if (
+            os.environ.get("TOKENPAK_DLP_ENABLED", "1") != "0"
+            and should_log
+            and is_model_request
+            and body
+        ):
             try:
                 from tokenpak.security.dlp import DLPScanner
+
                 _dlp = DLPScanner()
                 _dlp_text = body.decode("utf-8", errors="replace")
                 if _dlp.mode == "warn":
                     _dlp_findings = _dlp.scan(_dlp_text)
                     if _dlp_findings:
                         import logging as _dlp_log
+
                         _dlp_log.getLogger(__name__).warning(
                             "tokenpak.dlp: %d secret(s) detected in outbound request: %s"
                             " (set TOKENPAK_DLP_MODE=redact to auto-redact"
@@ -1280,22 +1468,25 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     if not _dlp.block_check(_dlp_text):
                         _dlp_findings = _dlp.scan(_dlp_text)
                         import logging as _dlp_log
+
                         _dlp_log.getLogger(__name__).warning(
                             "tokenpak.dlp: blocking request — %d secret(s) detected: %s",
                             len(_dlp_findings),
                             ", ".join(f.rule_id for f in _dlp_findings),
                         )
-                        _dlp_err = json.dumps({
-                            "error": {
-                                "type": "dlp_block",
-                                "message": (
-                                    f"Request blocked by DLP scanner: "
-                                    f"{len(_dlp_findings)} secret(s) detected in outbound "
-                                    "prompt. Remove secrets before retrying."
-                                ),
-                                "rule_ids": [f.rule_id for f in _dlp_findings],
+                        _dlp_err = json.dumps(
+                            {
+                                "error": {
+                                    "type": "dlp_block",
+                                    "message": (
+                                        f"Request blocked by DLP scanner: "
+                                        f"{len(_dlp_findings)} secret(s) detected in outbound "
+                                        "prompt. Remove secrets before retrying."
+                                    ),
+                                    "rule_ids": [f.rule_id for f in _dlp_findings],
+                                }
                             }
-                        }).encode()
+                        ).encode()
                         self.send_response(403)
                         self.send_header("Content-Type", "application/json")
                         self.send_header("Content-Length", str(len(_dlp_err)))
@@ -1306,13 +1497,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 pass
             except Exception as _dlp_exc:
                 import logging as _dlp_log
+
                 _dlp_log.getLogger(__name__).debug(
                     "tokenpak.dlp: scan error (passthrough): %s: %s",
-                    type(_dlp_exc).__name__, _dlp_exc,
+                    type(_dlp_exc).__name__,
+                    _dlp_exc,
                 )
 
         # Run compression pipeline hook if registered
-        if should_log and is_messages and body:
+        if should_log and is_model_request and body:
             try:
                 route = ps.router.route(target_url, dict(self.headers), body)
                 model = route.model
@@ -1332,6 +1525,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _optimization_trace = None
             try:
                 from tokenpak.services.optimization import run_observe_only as _opt_run
+
                 _body_before_opt = body
                 body, _optimization_trace = _opt_run(
                     request_id=_req_id,
@@ -1348,18 +1542,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # Observe-only mode MUST be byte-identical.
                 if body is not _body_before_opt and body != _body_before_opt:
                     import logging as _opt_log
+
                     _opt_log.getLogger(__name__).error(
                         "optimization.pipeline: observe-only mode mutated body "
                         "(in=%d out=%d) — restoring original",
-                        len(_body_before_opt or b""), len(body or b""),
+                        len(_body_before_opt or b""),
+                        len(body or b""),
                     )
                     body = _body_before_opt
             except Exception as _opt_exc:
                 # Fail-open: optimization scaffolding must never break a request.
                 import logging as _opt_log
+
                 _opt_log.getLogger(__name__).debug(
                     "optimization.pipeline: skipped (%s: %s)",
-                    type(_opt_exc).__name__, _opt_exc,
+                    type(_opt_exc).__name__,
+                    _opt_exc,
                 )
 
             # Cache invalidator detection (log-only).
@@ -1374,6 +1572,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     )
                     from tokenpak.proxy.config import MONITOR_DB as _CI_DB
                     from tokenpak.proxy.request_pipeline import _resolve_session_id
+
                     _ci_session_id = _resolve_session_id(self.headers, model)
                     _ci_cache = _get_session_cache()
                     _ci_prev_body = _ci_cache.get(_ci_session_id)
@@ -1397,6 +1596,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     from tokenpak.proxy.pipeline import process_request as _pipeline_run
                     from tokenpak.proxy.request import ProxyRequest as _PReq
                     from tokenpak.proxy.request_pipeline import _resolve_session_id as _rsi
+
                     _pr = _PReq(
                         method="POST",
                         url=target_url,
@@ -1420,8 +1620,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # Google streaming is signalled by URL, not body: path contains
             # streamGenerateContent or query param ?alt=sse.
             if not is_streaming and (
-                "streamGenerateContent" in target_url
-                or "alt=sse" in target_url
+                "streamGenerateContent" in target_url or "alt=sse" in target_url
             ):
                 is_streaming = True
 
@@ -1434,10 +1633,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # Graceful degradation: compression failed — forward original request unchanged.
                     # The user still gets a response; we log and track the event.
                     import logging as _logging
+
                     _logging.getLogger(__name__).warning(
                         "tokenpak: compression failed (passthrough mode active): %s: %s — "
                         "original request will be forwarded unchanged",
-                        type(hook_err).__name__, hook_err,
+                        type(hook_err).__name__,
+                        hook_err,
                     )
                     print(
                         f"  ⚠ Compression failed ({type(hook_err).__name__}): {hook_err}\n"
@@ -1453,27 +1654,30 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         # ── Circuit breaker check ──────────────────────────────────────────
         # Fast-fail immediately if the target provider's circuit is OPEN.
-        if should_log and is_messages:
+        if should_log and is_model_request:
             _cb_provider = provider_from_url(target_url)
             _cb_registry = get_circuit_breaker_registry()
             if not _cb_registry.allow_request(_cb_provider):
                 import logging as _logging
+
                 _logging.getLogger(__name__).warning(
                     "tokenpak: circuit breaker OPEN for %s — fast-failing request",
                     _cb_provider,
                 )
-                err = json.dumps({
-                    "error": {
-                        "type": "circuit_breaker_open",
-                        "message": (
-                            f"Provider '{_cb_provider}' is currently unavailable. "
-                            "The circuit breaker is open due to recent failures. "
-                            "Request will be retried automatically after a brief cooldown."
-                        ),
-                        "provider": _cb_provider,
-                        "hint": "Check GET /circuit-breakers for current state.",
+                err = json.dumps(
+                    {
+                        "error": {
+                            "type": "circuit_breaker_open",
+                            "message": (
+                                f"Provider '{_cb_provider}' is currently unavailable. "
+                                "The circuit breaker is open due to recent failures. "
+                                "Request will be retried automatically after a brief cooldown."
+                            ),
+                            "provider": _cb_provider,
+                            "hint": "Check GET /circuit-breakers for current state.",
+                        }
                     }
-                }).encode()
+                ).encode()
                 self.send_response(503)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err)))
@@ -1488,25 +1692,28 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # ── Rate-limit circuit breaker check ──────────────────────────────
         # Fast-fail with 503 if the provider's rate-limit circuit is open
         # (too many 429s in the rolling window).
-        if should_log and is_messages and _cb_provider:
+        if should_log and is_model_request and _cb_provider:
             if get_rate_limit_registry().is_open(_cb_provider):
                 import logging as _logging
+
                 _logging.getLogger(__name__).warning(
                     "tokenpak: rate-limit circuit open for %s — returning 503",
                     _cb_provider,
                 )
-                err = json.dumps({
-                    "error": {
-                        "type": "rate_limit_circuit_open",
-                        "message": (
-                            f"Provider '{_cb_provider}' is rate-limiting requests. "
-                            "The rate-limit circuit is open due to repeated 429 responses. "
-                            "Request blocked to prevent further upstream hammering."
-                        ),
-                        "provider": _cb_provider,
-                        "hint": "Check GET /circuit-breakers for current state.",
+                err = json.dumps(
+                    {
+                        "error": {
+                            "type": "rate_limit_circuit_open",
+                            "message": (
+                                f"Provider '{_cb_provider}' is rate-limiting requests. "
+                                "The rate-limit circuit is open due to repeated 429 responses. "
+                                "Request blocked to prevent further upstream hammering."
+                            ),
+                            "provider": _cb_provider,
+                            "hint": "Check GET /circuit-breakers for current state.",
+                        }
                     }
-                }).encode()
+                ).encode()
                 self.send_response(503)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err)))
@@ -1517,17 +1724,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         # Validate credentials for intercepted provider requests
         # Client-supplied key takes precedence over any environment-level key.
-        if should_log and is_messages:
+        if should_log and is_model_request:
             passthrough_cfg = PassthroughConfig(require_auth=True)
             auth_ok, auth_err = validate_auth(dict(self.headers), passthrough_cfg)
             if not auth_ok:
                 import json as _json
-                err_body = _json.dumps({
-                    "error": {
-                        "type": "authentication_error",
-                        "message": auth_err,
+
+                err_body = _json.dumps(
+                    {
+                        "error": {
+                            "type": "authentication_error",
+                            "message": auth_err,
+                        }
                     }
-                }).encode()
+                ).encode()
                 self.send_response(401)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err_body)))
@@ -1541,6 +1751,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     from tokenpak.core.validation.request_validator import (
                         get_request_validator,
                     )
+
                     _rv = get_request_validator()
                     if _rv.mode != "off":
                         try:
@@ -1572,16 +1783,26 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if provider_from_url(target_url) == "anthropic":
             _route = _classify_route(self.path, self.headers)
             _allowlist = (
-                CLAUDE_CODE_HEADER_ALLOWLIST
-                if _route == "claude-code"
-                else LEGACY_HEADER_ALLOWLIST
+                CLAUDE_CODE_HEADER_ALLOWLIST if _route == "claude-code" else LEGACY_HEADER_ALLOWLIST
             )
             fwd_headers = {}
             for _hk, _hv in self.headers.items():
                 if _hk.lower() in _allowlist:
                     fwd_headers[_hk.lower()] = _hv
         else:
-            fwd_headers = forward_headers(dict(self.headers), passthrough_cfg)
+            incoming_headers = dict(self.headers)
+            client_has_auth = any(
+                name.lower() in {"authorization", "x-api-key"} for name in incoming_headers
+            )
+            fwd_headers = forward_headers(
+                incoming_headers,
+                _route,
+                client_has_auth=client_has_auth,
+            )
+        if _decoded_request_encoding:
+            for header_name in tuple(fwd_headers):
+                if header_name.lower() in {"content-encoding", "content-md5"}:
+                    fwd_headers.pop(header_name, None)
         fwd_headers["Host"] = parsed.netloc
         if body is not None:
             fwd_headers["Content-Length"] = str(len(body))
@@ -1602,21 +1823,30 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # no-op; the legacy Codex-auth path below then runs unchanged.
         _router_injected = False
         try:
-            _router_injected = _creds_router_inject(
-                fwd_headers, target_url, dict(self.headers)
-            )
+            _router_injected = _creds_router_inject(fwd_headers, target_url, dict(self.headers))
         except Exception:
             _router_injected = False  # fail-open
 
         # ── Codex OAuth credential injection (legacy default path) ───
-        # OpenAI Codex (Responses API) routes need OAuth token from
-        # ~/.codex/auth.json — similar to how Claude Code uses subscription auth.
+        # Legacy compatibility: inject Codex OAuth only when the client did
+        # not already supply credentials. Native Codex owns and forwards its
+        # authenticated session; TokenPak must not replace or persist it.
         _upstream_provider = provider_from_url(target_url)
-        if not _router_injected and _upstream_provider == "openai" and (
-            "/v1/responses" in target_url
-            or "codex" in target_url.lower()
-            or "codex" in model.lower()
-            or fwd_headers.get("openai-beta", "") == "responses=experimental"
+        _client_supplied_upstream_auth = any(
+            header_name.lower() in {"authorization", "x-api-key"}
+            and bool(str(header_value).strip())
+            for header_name, header_value in fwd_headers.items()
+        )
+        if (
+            not _router_injected
+            and not _client_supplied_upstream_auth
+            and _upstream_provider == "openai"
+            and (
+                "/v1/responses" in target_url
+                or "codex" in target_url.lower()
+                or "codex" in model.lower()
+                or fwd_headers.get("openai-beta", "") == "responses=experimental"
+            )
         ):
             try:
                 _codex_token, _codex_account = _load_codex_credentials()
@@ -1633,10 +1863,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         # The router injected the credential — still set the Codex-specific
         # beta/originator headers so ChatGPT backend routes the request.
-        if _router_injected and _upstream_provider == "openai" and (
-            "/v1/responses" in target_url
-            or "codex" in target_url.lower()
-            or "codex" in model.lower()
+        if (
+            _router_injected
+            and _upstream_provider == "openai"
+            and (
+                "/v1/responses" in target_url
+                or "codex" in target_url.lower()
+                or "codex" in model.lower()
+            )
         ):
             fwd_headers.setdefault("OpenAI-Beta", "responses=experimental")
             fwd_headers.setdefault("originator", "codex_cli_rs")
@@ -1659,7 +1893,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # session header if the client sent one; else fall back to the
         # (ip, port) tuple of the incoming TCP connection, which is unique
         # per TCP connection from each CLI process.
-        _session_key: Optional[str] = None
+        _session_key: str | None = None
         for _h in ("x-tokenpak-session-id", "x-session-id", "x-correlation-id"):
             _val = self.headers.get(_h)
             if _val:
@@ -1682,19 +1916,21 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _upstream_inflight_delta(_sem_provider, +1, _session_key)
         else:
             # Saturated — fail fast rather than piling on upstream
-            err_body = json.dumps({
-                "error": {
-                    "type": "upstream_concurrency_exhausted",
-                    "message": (
-                        f"Too many concurrent requests to '{_sem_provider}' "
-                        f"(>{_UPSTREAM_CONCURRENCY} in flight). Retry shortly."
-                    ),
-                    "hint": (
-                        "Raise TOKENPAK_UPSTREAM_CONCURRENCY or reduce the "
-                        "number of concurrent companion sessions."
-                    ),
+            err_body = json.dumps(
+                {
+                    "error": {
+                        "type": "upstream_concurrency_exhausted",
+                        "message": (
+                            f"Too many concurrent requests to '{_sem_provider}' "
+                            f"(>{_UPSTREAM_CONCURRENCY} in flight). Retry shortly."
+                        ),
+                        "hint": (
+                            "Raise TOKENPAK_UPSTREAM_CONCURRENCY or reduce the "
+                            "number of concurrent companion sessions."
+                        ),
+                    }
                 }
-            }).encode()
+            ).encode()
             self.send_response(503)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(err_body)))
@@ -1704,8 +1940,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
+            pool = self._ps._connection_pool
             _cb_success = False  # track whether request succeeded for circuit breaker
+            _final_upstream_status: int | None = None
+            resp_body = b""
 
             output_tokens = 0
             if is_streaming:
@@ -1721,7 +1959,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 for _ustream_attempt in range(_retry_policy.max_attempts):
                     _stream_retry = False
                     try:
-                        with pool.stream(method, target_url, content=body, headers=fwd_headers, session_key=_session_key) as resp:
+                        with pool.stream(
+                            method,
+                            target_url,
+                            content=body,
+                            headers=fwd_headers,
+                            session_key=_session_key,
+                        ) as resp:
+                            _final_upstream_status = resp.status_code
                             _retry_decision = _retry_policy.retry_for_response(
                                 resp.status_code,
                                 resp.headers,
@@ -1787,7 +2032,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                         self.wfile.flush()
                                     except (BrokenPipeError, ConnectionResetError):
                                         break
-                                    if should_log and is_messages:
+                                    if should_log and is_model_request:
                                         sse_buffer += chunk
                     except _retry_policy.retryable_exceptions as _stream_exc:
                         # Once we've committed to writing to the client, can't retry —
@@ -1806,7 +2051,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         continue
                     break
 
-                if should_log and is_messages and sse_buffer:
+                if should_log and is_model_request and sse_buffer:
                     # Forwarding stays raw so entity bytes and Content-Encoding
                     # remain paired. Decode only this isolated telemetry copy.
                     sse_observation_buffer = sse_buffer
@@ -1827,8 +2072,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     cache_read_tokens = sse_usage.get("cache_read_input_tokens", 0)
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
                     # Per-TTL prompt-cache attribution (additive telemetry).
-                    cache_creation_1h_tokens = sse_usage.get("cache_creation_ephemeral_1h_input_tokens", 0)
-                    cache_creation_5m_tokens = sse_usage.get("cache_creation_ephemeral_5m_input_tokens", 0)
+                    cache_creation_1h_tokens = sse_usage.get(
+                        "cache_creation_ephemeral_1h_input_tokens", 0
+                    )
+                    cache_creation_5m_tokens = sse_usage.get(
+                        "cache_creation_ephemeral_5m_input_tokens", 0
+                    )
             else:
                 # ── Non-streaming path ────────────────────────────────────
                 # Retry on transient upstream failures (RemoteProtocolError,
@@ -1837,7 +2086,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 resp = None
                 for _ustream_attempt in range(_retry_policy.max_attempts):
                     try:
-                        resp = pool.request(method, target_url, content=body, headers=fwd_headers, session_key=_session_key)
+                        resp = pool.request(
+                            method,
+                            target_url,
+                            content=body,
+                            headers=fwd_headers,
+                            session_key=_session_key,
+                        )
                         _retry_decision = _retry_policy.retry_for_response(
                             resp.status_code,
                             resp.headers,
@@ -1882,19 +2137,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         time.sleep(_retry_decision.delay_seconds)
                         continue
                 assert resp is not None
+                _final_upstream_status = resp.status_code
 
                 # Normalize upstream 4xx/5xx to canonical error envelope before
                 # sending headers so we can set the correct Content-Type.
                 resp_body = resp.content
-                try:
-                    from tokenpak.proxy.request import ProxyResponse as _PResp
-                    _upstream_response = _PResp(
-                        status_code=resp.status_code,
-                        headers=dict(resp.headers),
-                        body=resp_body,
-                    )
-                except Exception:
-                    _upstream_response = None  # type: ignore[assignment]
                 _is_upstream_error = resp.status_code >= 400
                 if _is_upstream_error:
                     resp_body = normalize_upstream_error(
@@ -1905,7 +2152,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.send_response(resp.status_code)
                 for h_key, h_val in resp.headers.items():
                     h_lower = h_key.lower()
-                    if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length", "content-encoding"):
+                    if h_lower in (
+                        "connection",
+                        "keep-alive",
+                        "transfer-encoding",
+                        "content-length",
+                        "content-encoding",
+                    ):
                         continue
                     if _is_upstream_error and h_lower == "content-type":
                         continue  # overridden below
@@ -1915,7 +2168,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # Debug header: stable prefix hash for cache determinism verification.
                 # Emitted for all messages requests (not just intercepted hosts)
                 # so integration tests and local stubs can verify determinism.
-                if is_messages:
+                if is_model_request:
                     _ph = _compute_stable_prefix_hash(body)
                     if _ph:
                         self.send_header("X-Tokenpak-Cache-Prefix-Hash", _ph)
@@ -1926,7 +2179,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.wfile.write(resp_body)
                 self.wfile.flush()
 
-                if should_log and is_messages:
+                if should_log and is_model_request:
                     body_for_metrics = resp_body
                     if "gzip" in resp.headers.get("content-encoding", ""):
                         try:
@@ -1944,8 +2197,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         # Per-TTL prompt-cache attribution (additive, read-only).
                         _cc_obj = usage.get("cache_creation")
                         if isinstance(_cc_obj, dict):
-                            cache_creation_1h_tokens = int(_cc_obj.get("ephemeral_1h_input_tokens") or 0)
-                            cache_creation_5m_tokens = int(_cc_obj.get("ephemeral_5m_input_tokens") or 0)
+                            cache_creation_1h_tokens = int(
+                                _cc_obj.get("ephemeral_1h_input_tokens") or 0
+                            )
+                            cache_creation_5m_tokens = int(
+                                _cc_obj.get("ephemeral_5m_input_tokens") or 0
+                            )
                     except Exception:
                         pass
             latency_ms = int((time.time() - t0) * 1000)
@@ -1957,14 +2214,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # status so provider 5xx storms trip the breaker instead of
             # recording an unbroken success streak (and keeping /status
             # green while every request fails).
-            _final_upstream_status = resp.status_code if "resp" in dir() else None  # type: ignore
             _cb_success = not _cb_status_is_provider_failure(_final_upstream_status)
 
             # ── Request logging ───────────────────────────────────────────
             try:
-                _resp_status = resp.status_code if "resp" in dir() else 0  # type: ignore
+                _resp_status = _final_upstream_status or 0
                 _req_body_sz = content_length
-                _resp_body_sz = len(resp_body) if "resp_body" in dir() else 0  # type: ignore
+                _resp_body_sz = len(resp_body)
                 _comp_ratio = None
                 if input_tokens > 0 and sent_input_tokens > 0:
                     _comp_ratio = sent_input_tokens / input_tokens
@@ -1975,7 +2231,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     _provider_name = "openai"
                 elif "googleapis" in target_url:
                     _provider_name = "google"
-                _log_extra: Dict[str, Any] = {}
+                _log_extra: dict[str, object] = {}
                 _uid = getattr(self, "_tokenpak_user_id", None)
                 if _uid:
                     _log_extra["user_id"] = _uid
@@ -1996,7 +2252,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass  # logging must never break the proxy
 
-            if should_log and is_messages and input_tokens > 0:
+            if should_log and is_model_request and input_tokens > 0:
                 if _resp_status != 200:
                     # Non-200 responses generate no tokens; log cost=0 to avoid
                     # phantom cost entries.  Fix per telemetry-gap-2026-03-07.md lines 77-78.
@@ -2007,10 +2263,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     if _resp_status == 429 and _cb_provider:
                         get_rate_limit_registry().record_429(_cb_provider)
                 else:
-                    cost = estimate_cost(model, sent_input_tokens, output_tokens,
-                                         cache_read_tokens, cache_creation_tokens)
-                    cost_without = estimate_cost(model, input_tokens, output_tokens,
-                                                 cache_read_tokens, cache_creation_tokens)
+                    cost = estimate_cost(
+                        model,
+                        sent_input_tokens,
+                        output_tokens,
+                        cache_read_tokens,
+                        cache_creation_tokens,
+                    )
+                    cost_without = estimate_cost(
+                        model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
+                    )
                 saved = max(0, input_tokens - sent_input_tokens)
                 cost_saved = max(0.0, cost_without - cost)
 
@@ -2023,6 +2285,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         from tokenpak.proxy.spend_guard.rolling_caps import (
                             settle_pending_spend as _sg_settle,
                         )
+
                         _sg_settle(_sg_admission_ticket)
                     except Exception:
                         pass
@@ -2044,7 +2307,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["cost_saved"] += cost_saved
                     ps.session["cache_read_tokens"] += cache_read_tokens
                     ps.session["cache_creation_tokens"] += cache_creation_tokens
-                    ps.session[f"cache_read_{_cache_origin}"] += cache_read_tokens
+                    if _cache_origin == "client":
+                        ps.session["cache_read_client"] += cache_read_tokens
+                    else:
+                        ps.session["cache_read_proxy"] += cache_read_tokens
 
                 # Persist to monitor.db so `tokenpak status`, dashboards, and
                 # cross-session reporting see this request. Async write queue
@@ -2064,6 +2330,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     from tokenpak.proxy.request_pipeline import (
                         _resolve_session_id as _rsi_mon,
                     )
+
                     _mon_session_id = _rsi_mon(self.headers, "")
                     _mon_agent_id = _rai_mon(self.headers)
                     _mon_cycle_id = _rci_mon(self.headers)
@@ -2079,7 +2346,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     from tokenpak.services.routing_service.platform_bridge import (
                         _openclaw_extract as _oce_mon,
                     )
-                    _mon_origin = _oce_mon(self.headers, b"")
+
+                    _mon_origin = _oce_mon(dict(self.headers), b"")
                     _mon_attribution_source = (
                         _mon_origin.attribution_source if _mon_origin is not None else ""
                     ) or ""
@@ -2105,10 +2373,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             cache_creation_ephemeral_1h_tokens=cache_creation_1h_tokens,
                             cache_creation_ephemeral_5m_tokens=cache_creation_5m_tokens,
                             ttl_attribution=(
-                                "mixed" if cache_creation_1h_tokens > 0 and cache_creation_5m_tokens > 0
-                                else "1h" if cache_creation_1h_tokens > 0
-                                else "5m" if cache_creation_5m_tokens > 0
-                                else "unknown" if cache_creation_tokens > 0
+                                "mixed"
+                                if cache_creation_1h_tokens > 0 and cache_creation_5m_tokens > 0
+                                else "1h"
+                                if cache_creation_1h_tokens > 0
+                                else "5m"
+                                if cache_creation_5m_tokens > 0
+                                else "unknown"
+                                if cache_creation_tokens > 0
                                 else "none"
                             ),
                             would_have_saved=int(saved),
@@ -2126,24 +2398,25 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # Record cache telemetry
                 try:
                     _stable_tokens = max(0, input_tokens - (input_tokens - sent_input_tokens))
-                    _miss_reason: Optional[str] = None
+                    _miss_reason: str | None = None
                     # Prefix-aware miss attribution. Read-only on the body: the
                     # diagnosis parses for analysis only and never feeds back
                     # into the forwarded bytes, so byte-preserved semantics are
                     # untouched. Only runs when caching is in play (cheap byte
                     # guard) and skips pathologically large bodies. Fail-open.
-                    _has_cc = isinstance(body, (bytes, bytearray)) and b'"cache_control"' in body
-                    if _has_cc and len(body) <= 4_000_000:
+                    _has_cc = body is not None and b'"cache_control"' in body
+                    if body is not None and _has_cc and len(body) <= 4_000_000:
                         try:
                             from tokenpak.proxy.cache_poison import diagnose_cache_miss
                             from tokenpak.proxy.request_pipeline import (
                                 _resolve_session_id as _rsi_miss,
                             )
+
                             _sess_key = _rsi_miss(self.headers, model) or "default"
                             with ps._cache_prefix_lock:
                                 _prior = ps._cache_prefix_state.get(_sess_key)
                             _diag = diagnose_cache_miss(
-                                bytes(body),
+                                body,
                                 prior_prefix_fingerprint=_prior[0] if _prior else None,
                                 prior_prefix_id_hashes=_prior[1] if _prior else None,
                             )
@@ -2164,26 +2437,32 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                     print(f"  ↪ {_diag.debug_line()}")
                         except Exception:
                             _miss_reason = None
-                    _get_cache_collector().record(CacheMetrics(
-                        request_id=trace.request_id if trace else str(uuid.uuid4()),
-                        stable_prefix_tokens=sent_input_tokens,
-                        stable_cached=(cache_read_tokens > 0),
-                        cache_miss_reason=_miss_reason,
-                        volatile_tail_tokens=max(0, input_tokens - sent_input_tokens),
-                        total_input_tokens=input_tokens,
-                        cache_read_tokens=cache_read_tokens,
-                        cache_creation_tokens=cache_creation_tokens,
-                        cache_creation_ephemeral_1h_tokens=cache_creation_1h_tokens,
-                        cache_creation_ephemeral_5m_tokens=cache_creation_5m_tokens,
-                        ttl_attribution=(
-                            "mixed" if cache_creation_1h_tokens > 0 and cache_creation_5m_tokens > 0
-                            else "1h" if cache_creation_1h_tokens > 0
-                            else "5m" if cache_creation_5m_tokens > 0
-                            else "unknown" if cache_creation_tokens > 0
-                            else "none"
-                        ),
-                        output_tokens=output_tokens,
-                    ))
+                    _get_cache_collector().record(
+                        CacheMetrics(
+                            request_id=trace.request_id if trace else str(uuid.uuid4()),
+                            stable_prefix_tokens=sent_input_tokens,
+                            stable_cached=(cache_read_tokens > 0),
+                            cache_miss_reason=_miss_reason,
+                            volatile_tail_tokens=max(0, input_tokens - sent_input_tokens),
+                            total_input_tokens=input_tokens,
+                            cache_read_tokens=cache_read_tokens,
+                            cache_creation_tokens=cache_creation_tokens,
+                            cache_creation_ephemeral_1h_tokens=cache_creation_1h_tokens,
+                            cache_creation_ephemeral_5m_tokens=cache_creation_5m_tokens,
+                            ttl_attribution=(
+                                "mixed"
+                                if cache_creation_1h_tokens > 0 and cache_creation_5m_tokens > 0
+                                else "1h"
+                                if cache_creation_1h_tokens > 0
+                                else "5m"
+                                if cache_creation_5m_tokens > 0
+                                else "unknown"
+                                if cache_creation_tokens > 0
+                                else "none"
+                            ),
+                            output_tokens=output_tokens,
+                        )
+                    )
                 except Exception:
                     pass  # telemetry must never break request handling
 
@@ -2199,6 +2478,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 try:
                     if not is_streaming and "body_for_metrics" in dir():
                         from tokenpak.proxy.capture_intake import maybe_forward_capture
+
                         maybe_forward_capture(self.headers, body_for_metrics, model)
                 except Exception:
                     pass  # capture intake must never break request handling
@@ -2239,7 +2519,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         "output_tokens": output_tokens,
                         "tokens_saved": saved,
                         "cost_saved": round(cost_saved, 6),
-                        "percent_saved": round(saved / input_tokens * 100, 1) if input_tokens else 0.0,
+                        "percent_saved": round(saved / input_tokens * 100, 1)
+                        if input_tokens
+                        else 0.0,
                     }
 
                 # ── Stats footer ──────────────────────────────────────────
@@ -2282,7 +2564,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 ps.session["errors"] += 1
             latency_ms = int((time.time() - t0) * 1000)
             # Record error event in compression telemetry if this was an intercepted request
-            if should_log and is_messages and input_tokens > 0:
+            if should_log and is_model_request and input_tokens > 0:
                 ps.compression_stats.record_compression(
                     model=model,
                     tokens_in=input_tokens,
@@ -2295,7 +2577,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             exc_msg = str(exc)
             # Log the failed request
             try:
-                _err_extra: Dict[str, Any] = {"error": exc_type, "error_message": exc_msg[:200]}
+                _err_extra: dict[str, object] = {
+                    "error": exc_type,
+                    "error_message": exc_msg[:200],
+                }
                 _uid = getattr(self, "_tokenpak_user_id", None)
                 if _uid:
                     _err_extra["user_id"] = _uid
@@ -2394,10 +2679,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             _sse_err = (
                                 "\n\n"
                                 "event: error\n"
-                                "data: " + json.dumps({
-                                    "type": "error",
-                                    **_terminal_payload,
-                                }) + "\n\n"
+                                "data: "
+                                + json.dumps(
+                                    {
+                                        "type": "error",
+                                        **_terminal_payload,
+                                    }
+                                )
+                                + "\n\n"
                             ).encode("utf-8")
                             self.wfile.write(_sse_err)
                             self.wfile.flush()
@@ -2471,7 +2760,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             payload = json.loads(body_bytes.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
             err = json.dumps(
-                {"error": {"type": "invalid_request_error", "message": f"Request body is not valid JSON: {exc}"}}
+                {
+                    "error": {
+                        "type": "invalid_request_error",
+                        "message": f"Request body is not valid JSON: {exc}",
+                    }
+                }
             ).encode()
             self.send_response(400)
             self.send_header("Content-Type", "application/json")
@@ -2482,7 +2776,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
             err = json.dumps(
-                {"error": {"type": "invalid_request_error", "message": "Request body must include a 'messages' array"}}
+                {
+                    "error": {
+                        "type": "invalid_request_error",
+                        "message": "Request body must include a 'messages' array",
+                    }
+                }
             ).encode()
             self.send_response(400)
             self.send_header("Content-Type", "application/json")
@@ -2562,9 +2861,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         from tokenpak.proxy.forecast_endpoint import build_forecast_response
 
         def _send_err(msg: str) -> None:
-            body = json.dumps(
-                {"error": {"type": "invalid_request_error", "message": msg}}
-            ).encode()
+            body = json.dumps({"error": {"type": "invalid_request_error", "message": msg}}).encode()
             self.send_response(400)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -2606,9 +2903,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         OpenClaw always sends), or plain JSON otherwise.
         """
         import logging as _logging
+
         _log = _logging.getLogger(__name__)
         try:
             from tokenpak.sdk.openclaw import execute_via_claude_code
+
             body_data = json.loads(body)
             is_streaming = body_data.get("stream", False)
 
@@ -2627,9 +2926,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     oc_workspace = _wv.strip()
                     break
 
-            _log.info("claude-code backend: session=%s model=%s stream=%s workspace=%s",
-                       oc_session, body_data.get("model", "?"), is_streaming,
-                       oc_workspace or "(default)")
+            _log.info(
+                "claude-code backend: session=%s model=%s stream=%s workspace=%s",
+                oc_session,
+                body_data.get("model", "?"),
+                is_streaming,
+                oc_workspace or "(default)",
+            )
 
             result = execute_via_claude_code(
                 openclaw_session=oc_session,
@@ -2670,7 +2973,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-    def _send_claude_code_sse(self, result: dict) -> None:
+    def _send_claude_code_sse(self, result: Mapping[str, object]) -> None:
         """Convert a complete Anthropic-format response dict to SSE stream.
 
         Emits the three events OpenClaw expects:
@@ -2678,17 +2981,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
           2. content_block_delta — contains the assistant text
           3. message_delta — contains stop_reason + usage.output_tokens
         """
-        msg_id = result.get("id", "msg_unknown")
+        raw_msg_id = result.get("id", "msg_unknown")
+        msg_id = raw_msg_id if isinstance(raw_msg_id, str) else "msg_unknown"
         # Never invent a model id — echo whatever the backend reported,
         # empty if unknown, so downstream logging/cost attribution cannot
         # key on a fabricated model name.
-        model = result.get("model") or ""
-        usage = result.get("usage", {})
-        content = result.get("content", [])
+        raw_model = result.get("model")
+        model = raw_model if isinstance(raw_model, str) else ""
+        raw_usage = result.get("usage", {})
+        usage = raw_usage if isinstance(raw_usage, dict) else {}
+        raw_content = result.get("content", [])
+        content = raw_content if isinstance(raw_content, list) else []
         text = ""
         for block in content:
             if isinstance(block, dict) and block.get("type") == "text":
-                text = block.get("text", "")
+                raw_text = block.get("text", "")
+                text = raw_text if isinstance(raw_text, str) else ""
                 break
 
         self.send_response(200)
@@ -2697,60 +3005,75 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close")
         self.end_headers()
 
-        def _sse(event: str, data: dict) -> None:
+        def _sse(event: str, data: Mapping[str, object]) -> None:
             line = f"event: {event}\ndata: {json.dumps(data)}\n\n"
             self.wfile.write(line.encode())
             self.wfile.flush()
 
         # 1. message_start
-        _sse("message_start", {
-            "type": "message_start",
-            "message": {
-                "id": msg_id,
-                "type": "message",
-                "role": "assistant",
-                "content": [],
-                "model": model,
-                "stop_reason": None,
-                "stop_sequence": None,
-                "usage": {
-                    "input_tokens": usage.get("input_tokens", 0),
-                    "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
-                    "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
-                    "output_tokens": 0,
+        _sse(
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": msg_id,
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [],
+                    "model": model,
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {
+                        "input_tokens": usage.get("input_tokens", 0),
+                        "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
+                        "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+                        "output_tokens": 0,
+                    },
                 },
             },
-        })
+        )
 
         # 2. content_block_start
-        _sse("content_block_start", {
-            "type": "content_block_start",
-            "index": 0,
-            "content_block": {"type": "text", "text": ""},
-        })
+        _sse(
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            },
+        )
 
         # 3. content_block_delta — send text in one chunk
-        _sse("content_block_delta", {
-            "type": "content_block_delta",
-            "index": 0,
-            "delta": {"type": "text_delta", "text": text},
-        })
+        _sse(
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": text},
+            },
+        )
 
         # 4. content_block_stop
-        _sse("content_block_stop", {
-            "type": "content_block_stop",
-            "index": 0,
-        })
+        _sse(
+            "content_block_stop",
+            {
+                "type": "content_block_stop",
+                "index": 0,
+            },
+        )
 
         # 5. message_delta — stop reason + output tokens
-        _sse("message_delta", {
-            "type": "message_delta",
-            "delta": {
-                "stop_reason": result.get("stop_reason", "end_turn"),
-                "stop_sequence": None,
+        _sse(
+            "message_delta",
+            {
+                "type": "message_delta",
+                "delta": {
+                    "stop_reason": result.get("stop_reason", "end_turn"),
+                    "stop_sequence": None,
+                },
+                "usage": {"output_tokens": usage.get("output_tokens", 0)},
             },
-            "usage": {"output_tokens": usage.get("output_tokens", 0)},
-        })
+        )
 
         # 6. message_stop
         _sse("message_stop", {"type": "message_stop"})
@@ -2763,7 +3086,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
-    def _send_json(self, data: dict) -> None:
+    def _send_json(self, data: object) -> None:
         body = json.dumps(data, indent=2).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -2773,10 +3096,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _send_app_endpoint_dispatch_error(self, exc: Exception) -> None:
-        body = json.dumps({
-            "error": "app_endpoint_dispatch_failed",
-            "detail": type(exc).__name__,
-        }).encode()
+        body = json.dumps(
+            {
+                "error": "app_endpoint_dispatch_failed",
+                "detail": type(exc).__name__,
+            }
+        ).encode()
         try:
             self.send_response(500)
             self.send_header("Content-Type", "application/json")
@@ -2796,14 +3121,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         """
         import sqlite3 as _sqlite3
 
-        ps = self.server.proxy_server
-        db_path = (
-            ps.monitor.db_path
-            if getattr(ps, "monitor", None) is not None
-            else str(_paths.under("monitor.db"))
-        )
+        ps = self._ps
+        monitor = ps.monitor
+        db_path = monitor.db_path if monitor is not None else str(_paths.under("monitor.db"))
 
-        sessions: list = []
+        sessions: list[dict[str, object]] = []
         try:
             conn = _sqlite3.connect(str(db_path), timeout=3.0)
             conn.row_factory = _sqlite3.Row
@@ -2842,23 +3164,24 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 else:
                     p50 = 0
 
-                sessions.append({
-                    "session_id": sid,
-                    "input_tokens": row["input_tokens"] or 0,
-                    "output_tokens": row["output_tokens"] or 0,
-                    "cache_read_input_tokens": row["cache_read_input_tokens"] or 0,
-                    "cache_creation_input_tokens": row["cache_creation_input_tokens"] or 0,
-                    "cost": round(row["cost"] or 0.0, 6),
-                    "request_count": row["request_count"] or 0,
-                    "latency_p50": p50,
-                    "platform": row["platform"] or "unknown",
-                })
+                sessions.append(
+                    {
+                        "session_id": sid,
+                        "input_tokens": row["input_tokens"] or 0,
+                        "output_tokens": row["output_tokens"] or 0,
+                        "cache_read_input_tokens": row["cache_read_input_tokens"] or 0,
+                        "cache_creation_input_tokens": row["cache_creation_input_tokens"] or 0,
+                        "cost": round(row["cost"] or 0.0, 6),
+                        "request_count": row["request_count"] or 0,
+                        "latency_p50": p50,
+                        "platform": row["platform"] or "unknown",
+                    }
+                )
             conn.close()
         except Exception as exc:
             import logging as _logging
-            _logging.getLogger(__name__).warning(
-                "metrics/dashboard sessions query failed: %s", exc
-            )
+
+            _logging.getLogger(__name__).warning("metrics/dashboard sessions query failed: %s", exc)
 
         self._send_json({"sessions": sessions})
 
@@ -2867,7 +3190,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 # Token helpers (lightweight, no heavy deps)
 # ---------------------------------------------------------------------------
 
-def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
+
+def _compute_stable_prefix_hash(body: bytes | None) -> str:
     """
     Compute a short SHA-256 hash of the stable system prefix.
 
@@ -2880,6 +3204,7 @@ def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
         return ""
     try:
         import hashlib
+
         data = json.loads(body)
         system = data.get("system")
         if not system:
@@ -2888,6 +3213,7 @@ def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
             stable_text = system.strip()
         elif isinstance(system, list):
             from .prompt_builder import classify_system_blocks
+
             stable_blocks, _ = classify_system_blocks(system)
             stable_text = "\n".join(
                 b.get("text", "")
@@ -2906,7 +3232,9 @@ def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
 def _estimate_tokens_from_body(body: bytes) -> int:
     try:
         data = json.loads(body)
-        messages = data.get("messages", [])
+        messages = data.get("messages")
+        if not isinstance(messages, list):
+            messages = data.get("input", [])
         total = 0
         for msg in messages:
             content = msg.get("content", "")
@@ -2921,15 +3249,58 @@ def _estimate_tokens_from_body(body: bytes) -> int:
         return len(body) // 4
 
 
+def _decode_request_entity(body: bytes, content_encoding: str) -> tuple[bytes, bool]:
+    """Decode a supported HTTP request entity for safe JSON processing.
+
+    Native Codex currently sends Responses API bodies as zstd.  Once decoded,
+    the proxy forwards ordinary JSON and removes Content-Encoding rather than
+    pretending the modified entity is still compressed.  The size cap guards
+    against compressed-body expansion attacks.
+    """
+    encoding = content_encoding.strip().lower()
+    if not body or encoding in {"", "identity"}:
+        return body, False
+
+    try:
+        configured_limit = int(
+            os.environ.get(
+                "TOKENPAK_MAX_DECOMPRESSED_REQUEST_BYTES",
+                str(64 * 1024 * 1024),
+            )
+        )
+    except ValueError:
+        configured_limit = 64 * 1024 * 1024
+    max_output_bytes = max(1, configured_limit)
+    try:
+        if encoding == "gzip":
+            decoded = gzip.decompress(body)
+        elif encoding == "zstd":
+            import zstandard
+
+            decoded = zstandard.ZstdDecompressor().decompress(
+                body,
+                max_output_size=max_output_bytes,
+            )
+        else:
+            raise ValueError("unsupported request content encoding")
+    except Exception as exc:
+        raise ValueError("request body could not be decoded") from exc
+
+    if len(decoded) > max_output_bytes:
+        raise ValueError("decoded request body exceeds configured size limit")
+    return decoded, True
+
+
 def _extract_response_tokens(body: bytes) -> int:
     try:
         data = json.loads(body)
         usage = data.get("usage", {})
-        return (
-            usage.get("output_tokens") or
-            usage.get("completion_tokens") or
-            usage.get("total_tokens", 0)
+        value = (
+            usage.get("output_tokens")
+            or usage.get("completion_tokens")
+            or usage.get("total_tokens", 0)
         )
+        return value if isinstance(value, int) else 0
     except Exception:
         return 0
 
@@ -2944,7 +3315,7 @@ def _extract_response_stop_reason(body: bytes) -> str:
     """
     try:
         value = json.loads(body).get("stop_reason")
-        return str(value) if value else ""
+        return value if isinstance(value, str) else ""
     except Exception:
         return ""
 
@@ -2953,7 +3324,8 @@ def _extract_response_stop_reason(body: bytes) -> str:
 # ProxyServer — public API
 # ---------------------------------------------------------------------------
 
-def auto_detect_upstream(request_headers: dict) -> str:
+
+def auto_detect_upstream(request_headers: Mapping[str, str]) -> str:
     """
     Detect target upstream from request headers.
 
@@ -3031,11 +3403,11 @@ class ProxyServer:
     def __init__(
         self,
         host: str = "127.0.0.1",
-        port: Optional[int] = None,
-        compilation_mode: Optional[str] = None,
-        request_hook: Optional[Callable] = None,
-        shutdown_timeout: Optional[float] = None,
-    ):
+        port: int | None = None,
+        compilation_mode: str | None = None,
+        request_hook: RequestHook | None = None,
+        shutdown_timeout: float | None = None,
+    ) -> None:
         self.host = host
         self.port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
         self.compilation_mode = compilation_mode or os.environ.get("TOKENPAK_MODE", "hybrid")
@@ -3051,7 +3423,7 @@ class ProxyServer:
         self._memory_guard = _create_memory_guard()
         self._memory_guard_configuration = _memory_guard_configuration_status()
         self._stop_lock = threading.Lock()
-        self._signal_stop_thread: Optional[threading.Thread] = None
+        self._signal_stop_thread: threading.Thread | None = None
         self._lifecycle_state = "created"
 
         # Connection pool — shared across all handler threads
@@ -3063,9 +3435,8 @@ class ProxyServer:
         # capsule stage so they still see the (potentially compressed) body.
         try:
             from .capsule_integration import get_capsule_request_hook
-            self.request_hook: Optional[Callable] = get_capsule_request_hook(
-                base_hook=request_hook
-            )
+
+            self.request_hook: RequestHook | None = get_capsule_request_hook(base_hook=request_hook)
         except Exception:  # pragma: no cover — import failure falls back gracefully
             self.request_hook = request_hook
 
@@ -3075,22 +3446,20 @@ class ProxyServer:
         # prefix marker — enabling prompt cache reuse across requests.
         try:
             from .prompt_builder import apply_stable_cache_control
+
             _prior_hook = self.request_hook
 
             def _stable_cache_hook(
                 body: bytes,
                 model: str,
-                trace=None,
-                *,
-                _hook=_prior_hook,
-                _scc=apply_stable_cache_control,
-            ):
-                if _hook is not None:
-                    body, sent, raw, protected = _hook(body, model, trace)
+                trace: PipelineTrace | None = None,
+            ) -> tuple[bytes, int, int, int]:
+                if _prior_hook is not None:
+                    body, sent, raw, protected = _prior_hook(body, model, trace)
                 else:
                     _tok = len(body) // 4
                     body, sent, raw, protected = body, _tok, _tok, 0
-                body = _scc(body)
+                body = apply_stable_cache_control(body)
                 return body, sent, raw, protected
 
             self.request_hook = _stable_cache_hook
@@ -3100,12 +3469,12 @@ class ProxyServer:
         self.router = ProviderRouter()
         self.trace_storage = TraceStorage(max_traces=50)
         self.session_filter = SessionFilter()
-        self.session: Dict[str, Any] = _new_session()
+        self.session: _SessionState = _new_session()
         self._session_lock = threading.Lock()
-        self._last_request: Optional[Dict[str, Any]] = None
+        self._last_request: dict[str, object] | None = None
         self._last_lock = threading.Lock()
-        self._server: Optional[_ThreadedHTTPServer] = None
-        self._server_thread: Optional[threading.Thread] = None
+        self._server: _ThreadedHTTPServer | None = None
+        self._server_thread: threading.Thread | None = None
         self._admission_limit = max(1, int(os.environ.get("TOKENPAK_MANAGED_ADMISSION", "16")))
         self._admission = threading.BoundedSemaphore(self._admission_limit)
         self._admission_rejected = 0
@@ -3115,6 +3484,8 @@ class ProxyServer:
         # (default 2), queueing the rest FIFO. The queue depth is the lease
         # headroom, so total held managed connections never exceed the lease.
         from tokenpak.proxy.admission import AgentConcurrencyGate, resolve_agent_concurrency
+
+        self._agent_gate: AgentConcurrencyGate | None
         _gate_cap, _gate_source = resolve_agent_concurrency()
         if _gate_cap is None:
             self._agent_gate = None  # explicit operator opt-out (env off)
@@ -3126,12 +3497,12 @@ class ProxyServer:
                 source=_gate_source,
             )
         # Rolling window of per-request compression ratios (last 100)
-        self._compression_ratios: deque = deque(maxlen=100)
+        self._compression_ratios: deque[float] = deque(maxlen=100)
         self._compression_lock = threading.Lock()
         # Per-session cached-prefix state for prefix-aware cache-miss
         # attribution (telemetry only). session_id -> (fingerprint, id_hashes).
         # Bounded LRU; never holds raw prompt content (hashes/fingerprints only).
-        self._cache_prefix_state: "OrderedDict[str, tuple]" = OrderedDict()
+        self._cache_prefix_state: OrderedDict[str, tuple[str, frozenset[str]]] = OrderedDict()
         self._cache_prefix_lock = threading.Lock()
         # Compression telemetry — writes events to ~/.tokenpak/compression_events.jsonl
         self.compression_stats = CompressionStats()
@@ -3141,31 +3512,10 @@ class ProxyServer:
         # per-request cost <0.1ms. Fail-open: any DB error never breaks the proxy.
         try:
             from tokenpak.proxy.config import MONITOR_DB
-            self.monitor: Optional[_DbMonitor] = _DbMonitor(MONITOR_DB)
+
+            self.monitor: _DbMonitor | None = _DbMonitor(MONITOR_DB)
         except Exception:
             self.monitor = None
-
-    def _agent_gate_degraded(self) -> bool:
-        """Cheap local degradation probe for the agent gate's dynamic cap.
-
-        True (→ serial mode) when the degradation tracker reports a degraded
-        proxy or any provider circuit breaker is open. Reads only local state;
-        never issues a provider call. Fails open to the configured cap so a
-        probe error cannot wedge admission.
-        """
-        try:
-            if get_degradation_tracker().is_degraded():
-                return True
-        except Exception:
-            pass
-        try:
-            registry = get_circuit_breaker_registry()
-            for status in registry.all_statuses().values():
-                if status.get("state") == "open":
-                    return True
-        except Exception:
-            pass
-        return False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -3304,11 +3654,14 @@ class ProxyServer:
                 self.stop()
             _restore_start_signals()
 
-    def _handle_signal(self, signum: int, frame: Any) -> None:
+    def _handle_signal(self, signum: int, frame: FrameType | None) -> None:
         """Signal handler for SIGTERM/SIGINT — triggers graceful shutdown."""
         sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
-        print(f"\nTokenPak: {sig_name} received — starting graceful shutdown "
-              f"(drain timeout: {self.shutdown_timeout:.0f}s)...", flush=True)
+        print(
+            f"\nTokenPak: {sig_name} received — starting graceful shutdown "
+            f"(drain timeout: {self.shutdown_timeout:.0f}s)...",
+            flush=True,
+        )
         # Run stop() in a background thread so the signal handler returns quickly
         if self._signal_stop_thread is not None and self._signal_stop_thread.is_alive():
             return
@@ -3368,9 +3721,7 @@ class ProxyServer:
                 self._connection_pool.close()
             except Exception:
                 pass
-            self._lifecycle_state = (
-                "stopped" if guard_error is None else "start_cleanup_failed"
-            )
+            self._lifecycle_state = "stopped" if guard_error is None else "start_cleanup_failed"
             if guard_error is not None:
                 raise guard_error
             return
@@ -3444,8 +3795,10 @@ class ProxyServer:
             self._flush_telemetry()
             print("TokenPak: shutdown step 4/6 — telemetry flushed ✓", flush=True)
         except Exception as exc:
-            print(f"TokenPak: shutdown step 4/6 — telemetry flush error (non-fatal): {exc}",
-                  flush=True)
+            print(
+                f"TokenPak: shutdown step 4/6 — telemetry flush error (non-fatal): {exc}",
+                flush=True,
+            )
 
         # ── Step 5: Close HTTP connection pool ────────────────────────────
         print("TokenPak: shutdown step 5/6 — closing connection pool...", flush=True)
@@ -3453,8 +3806,7 @@ class ProxyServer:
             self._connection_pool.close()
             print("TokenPak: shutdown step 5/6 — connection pool closed ✓", flush=True)
         except Exception as exc:
-            print(f"TokenPak: shutdown step 5/6 — pool close error (non-fatal): {exc}",
-                  flush=True)
+            print(f"TokenPak: shutdown step 5/6 — pool close error (non-fatal): {exc}", flush=True)
 
         # ── Step 6: Stop HTTP server and release its listener ──────────────
         print("TokenPak: shutdown step 6/6 — stopping HTTP server...", flush=True)
@@ -3485,8 +3837,7 @@ class ProxyServer:
             self._server = None
             print("TokenPak: shutdown step 6/6 — HTTP server stopped ✓", flush=True)
         else:
-            print(f"TokenPak: shutdown step 6/6 — server stop error: {server_error}",
-                  flush=True)
+            print(f"TokenPak: shutdown step 6/6 — server stop error: {server_error}", flush=True)
             if guard_error is None:
                 guard_error = server_error
 
@@ -3506,7 +3857,7 @@ class ProxyServer:
         # Snapshot under the session lock — requests may still be mutating
         # these counters while the drain window is open.
         with self._session_lock:
-            session = dict(self.session)
+            session = self.session.copy()
         shutdown_record = {
             "event": "shutdown",
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -3564,7 +3915,7 @@ class ProxyServer:
             pass
         return False
 
-    def _memory_guard_snapshot(self) -> dict:
+    def _memory_guard_snapshot(self) -> dict[str, object]:
         """Return lifecycle/config truth without creating or starting a guard."""
         if self._memory_guard is None:
             return {
@@ -3585,7 +3936,7 @@ class ProxyServer:
     # Status endpoints (also used by handler GET routes)
     # ------------------------------------------------------------------
 
-    def health(self, deep: bool = False) -> dict:
+    def health(self, deep: bool = False) -> dict[str, object]:
         with self._session_lock:
             uptime = round(time.time() - self.session["start_time"])
             requests_total = self.session["requests"]
@@ -3607,12 +3958,11 @@ class ProxyServer:
         # Circuit breaker summary
         cb_registry = get_circuit_breaker_registry()
         cb_statuses = cb_registry.all_statuses()
-        cb_any_open = any(
-            s.get("state") in ("open", "half_open")
-            for s in cb_statuses.values()
-        )
-        result = {
-            "status": "shutting_down" if is_shutting_down else ("degraded" if is_degraded else "ok"),
+        cb_any_open = any(s.get("state") in ("open", "half_open") for s in cb_statuses.values())
+        result: dict[str, object] = {
+            "status": "shutting_down"
+            if is_shutting_down
+            else ("degraded" if is_degraded else "ok"),
             "uptime_seconds": uptime,
             "version": _tokenpak_version,
             "requests_total": requests_total,
@@ -3628,9 +3978,7 @@ class ProxyServer:
                 "rejected": self._admission_rejected,
             },
             "agent_concurrency": (
-                self._agent_gate.snapshot()
-                if self._agent_gate is not None
-                else {"enabled": False}
+                self._agent_gate.snapshot() if self._agent_gate is not None else {"enabled": False}
             ),
             "timestamp": datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "connection_pool": {
@@ -3647,36 +3995,52 @@ class ProxyServer:
         if deep:
             import shutil
 
-            import psutil  # optional; fall back gracefully
             # providers: list active providers with their circuit-breaker status
             providers = [
                 {"name": name, "status": info.get("state", "unknown")}
                 for name, info in cb_statuses.items()
             ]
-            # memory usage in MB
+
+            # Deep probes are independent and additive.  Missing optional
+            # dependencies or probe failures stay JSON-serialisable, never
+            # become a fabricated zero, and never suppress the other probes.
+            memory: dict[str, object] = {"rss_mb": None, "available": False}
             try:
-                proc = psutil.Process()
-                mem_mb = round(proc.memory_info().rss / (1024 * 1024), 1)
+                import psutil
+            except ImportError:
+                memory["reason"] = "optional_dependency_unavailable"
             except Exception:
-                mem_mb = None
-            # disk available in GB
+                memory["reason"] = "probe_failed"
+            else:
+                try:
+                    proc = psutil.Process()
+                    memory["rss_mb"] = round(proc.memory_info().rss / (1024 * 1024), 1)
+                    memory["available"] = True
+                except Exception:
+                    memory["reason"] = "probe_failed"
+
+            disk_info: dict[str, object] = {"available_gb": None, "available": False}
             try:
                 disk = shutil.disk_usage("/")
-                disk_available_gb = round(disk.free / (1024 ** 3), 2)
+                disk_info["available_gb"] = round(disk.free / (1024**3), 2)
+                disk_info["available"] = True
             except Exception:
-                disk_available_gb = None
+                disk_info["reason"] = "probe_failed"
+
             result["providers"] = providers
-            result["memory"] = {"rss_mb": mem_mb}
-            result["disk"] = {"available_gb": disk_available_gb}
+            result["memory"] = memory
+            result["disk"] = disk_info
         return result
 
-    def status(self) -> dict:
+    def status(self) -> dict[str, object]:
         """Return a concise operational status snapshot for GET /status."""
         with self._session_lock:
             start_time = self.session["start_time"]
             requests_total = self.session["requests"]
         uptime = round(time.time() - start_time)
-        started_at = datetime.fromtimestamp(start_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        started_at = datetime.fromtimestamp(start_time, tz=timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
 
         # last_request_at: ISO timestamp of most recent proxied request, or None.
         with self._last_lock:
@@ -3692,7 +4056,7 @@ class ProxyServer:
         }
         cb_registry = get_circuit_breaker_registry()
         cb_statuses = cb_registry.all_statuses()
-        providers: dict = {}
+        providers: dict[str, str] = {}
         active_alerts = 0
         for name, env_var in _provider_keys.items():
             has_key = bool(os.environ.get(env_var, "").strip())
@@ -3718,12 +4082,12 @@ class ProxyServer:
             "last_request_at": last_request_at,
         }
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, object]:
         # Copy under the session lock: handler threads mutate these counters
         # concurrently, and returning the live dict let JSON serialization
         # race with (and observe torn) mid-request updates.
         with self._session_lock:
-            s = dict(self.session)
+            s = self.session.copy()
         return {
             "session": s,
             "compilation_mode": self.compilation_mode,
@@ -3735,9 +4099,9 @@ class ProxyServer:
             },
         }
 
-    def session_stats(self) -> dict:
+    def session_stats(self) -> dict[str, object]:
         with self._session_lock:
-            s = dict(self.session)
+            s = self.session.copy()
         uptime = round((time.time() - s["start_time"]) / 3600, 2)
         return {
             "session_requests": s["requests"],
@@ -3751,11 +4115,12 @@ class ProxyServer:
             "errors": s["errors"],
             "avg_savings_pct": (
                 round(s["saved_tokens"] / s["input_tokens"] * 100, 1)
-                if s["input_tokens"] > 0 else 0.0
+                if s["input_tokens"] > 0
+                else 0.0
             ),
         }
 
-    def last_request_stats(self) -> dict:
+    def last_request_stats(self) -> dict[str, object]:
         with self._last_lock:
             if self._last_request is None:
                 return {"error": "no_requests", "message": "No requests captured yet."}
@@ -3772,13 +4137,14 @@ class ProxyServer:
 # Convenience entry point
 # ---------------------------------------------------------------------------
 
+
 def start_proxy(
     host: str = "127.0.0.1",
-    port: Optional[int] = None,
-    compilation_mode: Optional[str] = None,
-    request_hook: Optional[Callable] = None,
+    port: int | None = None,
+    compilation_mode: str | None = None,
+    request_hook: RequestHook | None = None,
     blocking: bool = True,
-    shutdown_timeout: Optional[float] = None,
+    shutdown_timeout: float | None = None,
 ) -> ProxyServer:
     """Create and start a ProxyServer. Returns the server instance."""
     server = ProxyServer(
@@ -3791,6 +4157,7 @@ def start_proxy(
     server.start(blocking=blocking)
     return server
 
+
 # Backward-compat alias
 ForwardProxyHandler = _ProxyHandler
 
@@ -3798,6 +4165,7 @@ ForwardProxyHandler = _ProxyHandler
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def _write_proxy_pid_file() -> Path:
     """Resolve the proxy PID path under TOKENPAK_HOME and write the current PID.
@@ -3828,20 +4196,26 @@ def main() -> None:
         description="TokenPak forward proxy — intercepts and optimises LLM API traffic.",
     )
     parser.add_argument(
-        "--port", type=int, default=None,
+        "--port",
+        type=int,
+        default=None,
         help="Bind port (env: TOKENPAK_PORT, default: 8766)",
     )
     parser.add_argument(
-        "--config", default=None, metavar="PATH",
+        "--config",
+        default=None,
+        metavar="PATH",
         help="Path to config YAML (env: TOKENPAK_CONFIG, default: <TOKENPAK_HOME>/config.yaml, i.e. ~/.tokenpak/config.yaml)",
     )
     parser.add_argument(
-        "--log-level", default=None,
+        "--log-level",
+        default=None,
         choices=["debug", "info", "warning", "error", "critical"],
         help="Python logging level (env: TOKENPAK_LOG_LEVEL, default: warning)",
     )
     parser.add_argument(
-        "--profile", default=None,
+        "--profile",
+        default=None,
         choices=["safe", "balanced", "aggressive", "agentic", "transparent"],
         help="Named workflow profile (env: TOKENPAK_PROFILE, default: balanced)",
     )
@@ -3873,8 +4247,8 @@ def main() -> None:
     profile = os.environ.get("TOKENPAK_PROFILE", "balanced")
 
     _mode_desc = {
-        "strict":     "100% lossless — no compression",
-        "hybrid":     "protected/code strict, narrative compressed",
+        "strict": "100% lossless — no compression",
+        "hybrid": "protected/code strict, narrative compressed",
         "aggressive": "everything except protected gets compressed",
     }
 
@@ -3884,18 +4258,22 @@ def main() -> None:
     _pid_path = _write_proxy_pid_file()
 
     from tokenpak.proxy.config import PROVIDER_DISPLAY as _provider_display
-    print(f"""
+
+    print(
+        f"""
 ╔══════════════════════════════════════════════════════════════════╗
 ║  TokenPak Proxy  v{_tokenpak_version}
 ╠══════════════════════════════════════════════════════════════════╣
 ║  Listening:  http://{host}:{port}
 ║  Profile:    {profile}
-║  Mode:       {mode} — {_mode_desc.get(mode, '?')}
+║  Mode:       {mode} — {_mode_desc.get(mode, "?")}
 ║  Providers:  {_provider_display}
 ║  PID:        {os.getpid()}
 ║  PID file:   {_pid_path}
 ╚══════════════════════════════════════════════════════════════════╝
-""", flush=True)
+""",
+        flush=True,
+    )
 
     ps = ProxyServer(host=host, port=port)
 
@@ -3906,11 +4284,12 @@ def main() -> None:
     # so this is purely supplementary.
     try:
         from tokenpak.models._discovery import auto_start_if_enabled
+
         auto_start_if_enabled()
     except Exception:
         pass  # discovery is optional; never block proxy startup
 
-    def _handle_sighup(signum: int, frame) -> None:  # type: ignore[type-arg]
+    def _handle_sighup(signum: int, frame: FrameType | None) -> None:
         """Hot-reload dynamic config from environment variables (no restart needed)."""
         print("\n[tokenpak] SIGHUP received — reloading config from env", flush=True)
         ps.compilation_mode = os.environ.get("TOKENPAK_MODE", ps.compilation_mode)

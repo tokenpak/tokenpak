@@ -13,6 +13,7 @@ Covers:
 - Integration: circuit breaker → degraded
 - Integration: all circuits open → critical (503)
 """
+
 from __future__ import annotations
 
 import json
@@ -80,9 +81,11 @@ SKIP_HEALTH_SPECULATIVE_SCHEMA = (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_request(path: str, port: int) -> Tuple[int, dict]:
     """Minimal HTTP GET without urllib so we control auth headers."""
     import http.client
+
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     conn.request("GET", path)
     resp = conn.getresponse()
@@ -153,6 +156,7 @@ def proxy_server():
 # ---------------------------------------------------------------------------
 # /health — Schema tests
 # ---------------------------------------------------------------------------
+
 
 class TestHealthSchema:
     """Validate /health response structure."""
@@ -230,6 +234,7 @@ class TestHealthSchema:
 # /health — State transition tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skip(reason=SKIP_HEALTH_SPECULATIVE_SCHEMA)
 class TestHealthStates:
     """Validate healthy/degraded/critical state transitions.
@@ -306,8 +311,9 @@ class TestHealthStates:
         try:
             _, data = _make_request("/health", _HEALTH_TEST_PORT)
             assert len(data["suggestions"]) > 0
-            assert any("unreachable" in s.lower() or "provider" in s.lower()
-                       for s in data["suggestions"])
+            assert any(
+                "unreachable" in s.lower() or "provider" in s.lower() for s in data["suggestions"]
+            )
         finally:
             _reset_circuits()
 
@@ -341,6 +347,7 @@ class TestHealthStates:
 # ---------------------------------------------------------------------------
 # /ready — Readiness probe tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skip(reason=SKIP_READY_ENDPOINT)
 class TestReadiness:

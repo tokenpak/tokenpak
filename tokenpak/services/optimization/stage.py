@@ -41,7 +41,7 @@ class OptimizationStage(Protocol):
     """
 
     name: str
-    required_capabilities: frozenset
+    required_capabilities: frozenset[str]
 
     def eligible(self, ctx: "OptimizationContext") -> EligibilityResult: ...
 
@@ -57,7 +57,7 @@ class NoOpStage:
     """
 
     name: str = "no-op"
-    required_capabilities: frozenset = field(default_factory=frozenset)
+    required_capabilities: frozenset[str] = field(default_factory=frozenset)
 
     def eligible(self, ctx: "OptimizationContext") -> EligibilityResult:
         return EligibilityResult(eligible=False, skip_reason="no-op-default")

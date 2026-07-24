@@ -20,6 +20,7 @@ Sections:
   N. Rate-limit singleton helpers
   O. Concurrent-access tests (edge cases)
 """
+
 from __future__ import annotations
 
 import copy
@@ -52,6 +53,7 @@ from tokenpak.proxy.circuit_breaker import (
 # ===========================================================================
 # A. Regression: reload_config() (TRIX-MTC-07 guard — keep intact)
 # ===========================================================================
+
 
 def test_circuit_breaker_registry_reload_config_propagates():
     """
@@ -131,6 +133,7 @@ def test_circuit_breaker_registry_reload_config_concurrent_no_error():
 # B. CircuitState enum
 # ===========================================================================
 
+
 class TestCircuitState:
     def test_closed_value(self):
         assert CircuitState.CLOSED == "closed"
@@ -153,6 +156,7 @@ class TestCircuitState:
 # C. CircuitBreakerConfig
 # ===========================================================================
 
+
 class TestCircuitBreakerConfig:
     def test_defaults(self):
         cfg = CircuitBreakerConfig()
@@ -174,8 +178,12 @@ class TestCircuitBreakerConfig:
         assert cfg.window_seconds == 120.0
 
     def test_from_env_defaults(self, monkeypatch):
-        for k in ("TOKENPAK_CB_ENABLED", "TOKENPAK_CB_FAILURE_THRESHOLD",
-                  "TOKENPAK_CB_RECOVERY_TIMEOUT", "TOKENPAK_CB_WINDOW_SECONDS"):
+        for k in (
+            "TOKENPAK_CB_ENABLED",
+            "TOKENPAK_CB_FAILURE_THRESHOLD",
+            "TOKENPAK_CB_RECOVERY_TIMEOUT",
+            "TOKENPAK_CB_WINDOW_SECONDS",
+        ):
             monkeypatch.delenv(k, raising=False)
         cfg = CircuitBreakerConfig.from_env()
         assert cfg.enabled is True
@@ -199,7 +207,10 @@ class TestCircuitBreakerConfig:
 # D. CircuitBreaker state machine
 # ===========================================================================
 
-def _make_cb(threshold: int = 3, recovery_timeout: float = 0.1, window: float = 60.0) -> CircuitBreaker:
+
+def _make_cb(
+    threshold: int = 3, recovery_timeout: float = 0.1, window: float = 60.0
+) -> CircuitBreaker:
     cfg = CircuitBreakerConfig(
         enabled=True,
         failure_threshold=threshold,
@@ -424,6 +435,7 @@ class TestCircuitBreakerZeroThreshold:
 # E. CircuitBreakerRegistry
 # ===========================================================================
 
+
 class TestCircuitBreakerRegistryOperations:
     def test_creates_breaker_on_first_access(self):
         reg = CircuitBreakerRegistry(config=CircuitBreakerConfig())
@@ -506,6 +518,7 @@ class TestCircuitBreakerRegistryOperations:
 # F. Singleton helpers
 # ===========================================================================
 
+
 class TestCircuitBreakerSingleton:
     def test_get_circuit_breaker_registry_returns_same_instance(self):
         r1 = get_circuit_breaker_registry()
@@ -528,6 +541,7 @@ class TestCircuitBreakerSingleton:
 # ===========================================================================
 # G. Module-level dict-based functions
 # ===========================================================================
+
 
 @pytest.fixture()
 def isolated_provider_circuits():
@@ -558,15 +572,18 @@ class TestModuleProviderForUrl:
 class TestModuleCircuitCheck:
     def test_check_unknown_provider_returns_false(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_check
+
         assert _circuit_check("nonexistent") is False
 
     def test_check_closed_circuit_returns_false(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_check
+
         isolated_provider_circuits["anthropic"]["open"] = False
         assert _circuit_check("anthropic") is False
 
     def test_check_open_circuit_within_cooldown_returns_true(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_check
+
         isolated_provider_circuits["anthropic"]["open"] = True
         isolated_provider_circuits["anthropic"]["last_failure"] = time.time()
         isolated_provider_circuits["anthropic"]["cooldown"] = 120
@@ -574,6 +591,7 @@ class TestModuleCircuitCheck:
 
     def test_check_auto_closes_after_cooldown(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_check
+
         isolated_provider_circuits["anthropic"]["open"] = True
         isolated_provider_circuits["anthropic"]["last_failure"] = time.time() - 200
         isolated_provider_circuits["anthropic"]["cooldown"] = 60
@@ -583,18 +601,21 @@ class TestModuleCircuitCheck:
 
     def test_check_empty_provider_returns_false(self):
         from tokenpak.proxy.circuit_breaker import _circuit_check
+
         assert _circuit_check("") is False
 
 
 class TestModuleCircuitRecord:
     def test_record_failure_increments_count(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_record_failure
+
         before = isolated_provider_circuits["openai"]["failures"]
         _circuit_record_failure("openai")
         assert isolated_provider_circuits["openai"]["failures"] == before + 1
 
     def test_record_failure_opens_at_threshold(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_record_failure
+
         isolated_provider_circuits["openai"]["failures"] = 0
         isolated_provider_circuits["openai"]["open"] = False
         isolated_provider_circuits["openai"]["threshold"] = 3
@@ -605,10 +626,12 @@ class TestModuleCircuitRecord:
 
     def test_record_failure_unknown_provider_noop(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_record_failure
+
         _circuit_record_failure("nonexistent")  # must not raise
 
     def test_record_success_resets_failures_and_closes(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_record_success
+
         isolated_provider_circuits["google"]["failures"] = 4
         isolated_provider_circuits["google"]["open"] = True
         _circuit_record_success("google")
@@ -617,16 +640,19 @@ class TestModuleCircuitRecord:
 
     def test_record_success_unknown_provider_noop(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_record_success
+
         _circuit_record_success("nonexistent")  # must not raise
 
     def test_record_failure_empty_provider_noop(self, isolated_provider_circuits):
         from tokenpak.proxy.circuit_breaker import _circuit_record_failure
+
         _circuit_record_failure("")  # must not raise
 
 
 # ===========================================================================
 # H. _sanitize_headers
 # ===========================================================================
+
 
 class TestSanitizeHeaders:
     def test_strips_blocked_hop_by_hop_headers(self):
@@ -679,6 +705,7 @@ class TestSanitizeHeaders:
 # ===========================================================================
 # I. _make_structured_error / _enrich_upstream_error
 # ===========================================================================
+
 
 class TestMakeStructuredError:
     def test_returns_correct_shape(self):
@@ -764,6 +791,7 @@ class TestEnrichUpstreamError:
 # J. _rate_limit_check
 # ===========================================================================
 
+
 @pytest.fixture()
 def isolated_rate_buckets():
     """Clear _rate_buckets before and after each test to prevent bleed."""
@@ -775,17 +803,20 @@ def isolated_rate_buckets():
 class TestRateLimitCheck:
     def test_allows_first_request(self, isolated_rate_buckets):
         from tokenpak.proxy.circuit_breaker import _rate_limit_check
+
         assert _rate_limit_check("192.168.1.1") is True
 
     def test_zero_rpm_always_allows(self, isolated_rate_buckets, monkeypatch):
         monkeypatch.setattr(_cb_mod, "_RATE_LIMIT_RPM", 0)
         from tokenpak.proxy.circuit_breaker import _rate_limit_check
+
         for _ in range(200):
             assert _rate_limit_check("10.0.0.1") is True
 
     def test_throttles_after_token_exhaustion(self, isolated_rate_buckets, monkeypatch):
         monkeypatch.setattr(_cb_mod, "_RATE_LIMIT_RPM", 3)
         from tokenpak.proxy.circuit_breaker import _rate_limit_check
+
         ip = "10.0.0.2"
         # First 3 requests — within token budget
         results = [_rate_limit_check(ip) for _ in range(3)]
@@ -796,14 +827,16 @@ class TestRateLimitCheck:
     def test_independent_buckets_per_ip(self, isolated_rate_buckets, monkeypatch):
         monkeypatch.setattr(_cb_mod, "_RATE_LIMIT_RPM", 1)
         from tokenpak.proxy.circuit_breaker import _rate_limit_check
+
         assert _rate_limit_check("10.1.1.1") is True
         assert _rate_limit_check("10.1.1.1") is False  # exhausted
-        assert _rate_limit_check("10.1.1.2") is True   # different IP, fresh bucket
+        assert _rate_limit_check("10.1.1.2") is True  # different IP, fresh bucket
 
 
 # ===========================================================================
 # K. provider_from_url (OOP version)
 # ===========================================================================
+
 
 class TestProviderFromUrl:
     def test_anthropic(self):
@@ -844,6 +877,7 @@ class TestProviderFromUrl:
 # ===========================================================================
 # L. RateLimitCircuitBreaker unit tests
 # ===========================================================================
+
 
 class TestRateLimitCircuitBreakerUnit:
     def test_initial_state_closed(self):
@@ -926,6 +960,7 @@ class TestRateLimitCircuitBreakerUnit:
 # M. RateLimitCircuitBreakerRegistry unit tests
 # ===========================================================================
 
+
 class TestRateLimitCircuitBreakerRegistryUnit:
     def test_creates_breaker_per_provider(self):
         reg = RateLimitCircuitBreakerRegistry(window_sec=60, threshold=5, cooldown_sec=30)
@@ -983,6 +1018,7 @@ class TestRateLimitCircuitBreakerRegistryUnit:
 # N. Rate-limit singleton helpers
 # ===========================================================================
 
+
 class TestRateLimitSingleton:
     def test_get_rate_limit_registry_returns_same_instance(self):
         r1 = get_rate_limit_registry()
@@ -1005,6 +1041,7 @@ class TestRateLimitSingleton:
 # ===========================================================================
 # O. Concurrent-access edge cases
 # ===========================================================================
+
 
 class TestConcurrentAccess:
     def test_circuit_breaker_concurrent_failures_no_data_race(self):

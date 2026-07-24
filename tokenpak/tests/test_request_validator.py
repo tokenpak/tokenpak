@@ -4,6 +4,7 @@ validation/response_schema.py, and validation/validator.py (ResponseValidator).
 Schema modules (request_schema, response_schema) are simple data definitions
 and are consolidated here per task spec guidance.
 """
+
 from __future__ import annotations
 
 import json
@@ -92,7 +93,9 @@ class TestRequestValidationResult:
         assert bool(r) is True
 
     def test_bool_false(self):
-        r = RequestValidationResult(valid=False, provider="openai", errors=[{"field": "x", "error": "bad"}])
+        r = RequestValidationResult(
+            valid=False, provider="openai", errors=[{"field": "x", "error": "bad"}]
+        )
         assert bool(r) is False
 
     def test_repr_valid(self):
@@ -101,7 +104,9 @@ class TestRequestValidationResult:
         assert "anthropic" in repr(r)
 
     def test_repr_invalid(self):
-        r = RequestValidationResult(valid=False, provider="openai", errors=[{"field": "x", "error": "bad"}])
+        r = RequestValidationResult(
+            valid=False, provider="openai", errors=[{"field": "x", "error": "bad"}]
+        )
         assert "valid=False" in repr(r)
         assert "errors=1" in repr(r)
 
@@ -124,7 +129,9 @@ class TestRequestValidationResult:
         assert len(d["warnings"]) == 1
 
     def test_to_error_response_anthropic(self):
-        r = RequestValidationResult(valid=False, provider="anthropic", errors=[{"field": "model", "error": "bad"}])
+        r = RequestValidationResult(
+            valid=False, provider="anthropic", errors=[{"field": "model", "error": "bad"}]
+        )
         payload = r.to_error_response()
         assert payload["error"]["type"] == "validation_error"
         assert "messages" in payload["error"]["hint"]
@@ -366,7 +373,11 @@ class TestRequestValidatorOpenAI:
             body = {**VALID_OPENAI, "messages": [{"role": role}]}
             result = strict_validator.validate(_body(body), "openai")
             # role-only messages may fail other checks; just check role is not the issue
-            role_errors = [e for e in result.errors if "role" in e["field"] and "invalid role" in e.get("error", "")]
+            role_errors = [
+                e
+                for e in result.errors
+                if "role" in e["field"] and "invalid role" in e.get("error", "")
+            ]
             assert not role_errors, f"role '{role}' should not produce a role error"
 
     def test_non_gpt_model_warning(self, strict_validator):
@@ -474,15 +485,21 @@ class TestRequestValidatorValidateBytes:
         assert result.valid
 
     def test_anthropic_endpoint_validates(self, strict_validator):
-        result = strict_validator.validate_bytes(_body(VALID_ANTHROPIC), "/v1/messages", "anthropic")
+        result = strict_validator.validate_bytes(
+            _body(VALID_ANTHROPIC), "/v1/messages", "anthropic"
+        )
         assert result.valid
 
     def test_openai_chat_endpoint_validates(self, strict_validator):
-        result = strict_validator.validate_bytes(_body(VALID_OPENAI), "/v1/chat/completions", "openai")
+        result = strict_validator.validate_bytes(
+            _body(VALID_OPENAI), "/v1/chat/completions", "openai"
+        )
         assert result.valid
 
     def test_responses_endpoint_validates(self, strict_validator):
-        result = strict_validator.validate_bytes(_body(VALID_CODEX), "/v1/responses", "openai-codex")
+        result = strict_validator.validate_bytes(
+            _body(VALID_CODEX), "/v1/responses", "openai-codex"
+        )
         assert result.valid
 
     def test_google_generate_content_endpoint_validates(self, strict_validator):
@@ -620,7 +637,9 @@ class TestValidationResultFromValidator:
         assert "valid=True" in repr(r)
 
     def test_repr_invalid(self):
-        r = ValidationResult(valid=False, errors=[{"field": "x", "reason": "bad"}, {"field": "y", "reason": "bad"}])
+        r = ValidationResult(
+            valid=False, errors=[{"field": "x", "reason": "bad"}, {"field": "y", "reason": "bad"}]
+        )
         assert "valid=False" in repr(r)
         assert "errors=2" in repr(r)
 
@@ -694,7 +713,9 @@ class TestResponseValidatorInvalid:
         result = v.validate(response)
         assert not result.valid
         # ResponseValidator reports missing required fields at "(root)" level
-        assert any("model" in e.get("reason", "") or "model" in e.get("field", "") for e in result.errors)
+        assert any(
+            "model" in e.get("reason", "") or "model" in e.get("field", "") for e in result.errors
+        )
 
     def test_missing_tokens_sent(self):
         v = ResponseValidator(log_errors=False)

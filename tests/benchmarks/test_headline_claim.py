@@ -46,24 +46,16 @@ def _load_messages() -> list[dict]:
 
     for line in text.splitlines():
         stripped = line.strip()
-        if (
-            stripped.startswith("[")
-            and stripped.endswith("]")
-            and stripped[1:-1] in _ROLES
-        ):
+        if stripped.startswith("[") and stripped.endswith("]") and stripped[1:-1] in _ROLES:
             if current_role is not None:
-                messages.append(
-                    {"role": current_role, "content": "\n".join(current_lines).strip()}
-                )
+                messages.append({"role": current_role, "content": "\n".join(current_lines).strip()})
             current_role = stripped[1:-1]
             current_lines = []
         else:
             current_lines.append(line)
 
     if current_role is not None:
-        messages.append(
-            {"role": current_role, "content": "\n".join(current_lines).strip()}
-        )
+        messages.append({"role": current_role, "content": "\n".join(current_lines).strip()})
 
     return messages
 

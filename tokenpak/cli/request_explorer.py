@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 REQUESTS_PATH = Path.home() / ".tokenpak" / "requests.jsonl"
 
@@ -33,25 +33,25 @@ def _parse_iso(ts: str) -> Optional[datetime]:
         return None
 
 
-def _safe_int(value) -> int:
+def _safe_int(value: Any) -> int:
     try:
         return int(value)
     except Exception:
         return 0
 
 
-def _safe_float(value) -> float:
+def _safe_float(value: Any) -> float:
     try:
         return float(value)
     except Exception:
         return 0.0
 
 
-def load_requests(path: Optional[Path] = None, limit: Optional[int] = None) -> list[dict]:
+def load_requests(path: Optional[Path] = None, limit: Optional[int] = None) -> list[dict[str, Any]]:
     p = path or REQUESTS_PATH
     if not p.exists():
         return []
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     for line in p.read_text().splitlines():
         line = line.strip()
         if not line:
@@ -65,14 +65,14 @@ def load_requests(path: Optional[Path] = None, limit: Optional[int] = None) -> l
     return rows
 
 
-def get_request_by_id(request_id: str, path: Optional[Path] = None) -> Optional[dict]:
+def get_request_by_id(request_id: str, path: Optional[Path] = None) -> Optional[dict[str, Any]]:
     for row in load_requests(path=path):
         if row.get("id") == request_id:
             return row
     return None
 
 
-def to_view(row: dict) -> RequestView:
+def to_view(row: dict[str, Any]) -> RequestView:
     return RequestView(
         request_id=str(row.get("id", "")),
         model=str(row.get("model", "")),

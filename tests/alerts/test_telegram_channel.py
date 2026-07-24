@@ -3,6 +3,7 @@
 
 All network I/O is mocked — no real Telegram API calls are made.
 """
+
 from __future__ import annotations
 
 import json
@@ -53,8 +54,10 @@ class TestTelegramChannelHappyPath:
 
     def test_returns_true_on_success(self):
         ch = TelegramChannel(token="fake-token", chat_id="12345")
-        with patch("tokenpak.alerts.channels.telegram.urllib.request.urlopen",
-                   return_value=self._make_response()):
+        with patch(
+            "tokenpak.alerts.channels.telegram.urllib.request.urlopen",
+            return_value=self._make_response(),
+        ):
             result = ch.send(event="cost_spike", severity="warning", message="Costs up 60%")
         assert result is True
 
@@ -154,8 +157,10 @@ class TestTelegramChannelRetry:
     def test_returns_false_on_permanent_failure(self):
         """Returns False (never raises) after all retry attempts are exhausted."""
         ch = TelegramChannel(token="bad-token", chat_id="0")
-        with patch("tokenpak.alerts.channels.telegram.urllib.request.urlopen",
-                   side_effect=urllib.error.URLError("no route")):
+        with patch(
+            "tokenpak.alerts.channels.telegram.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("no route"),
+        ):
             with patch("tokenpak.alerts.channels.telegram.time.sleep"):
                 result = ch.send(event="test", severity="critical", message="down")
         assert result is False
@@ -168,8 +173,10 @@ class TestTelegramChannelRetry:
             sleep_calls.append(secs)
 
         ch = TelegramChannel(token="tok", chat_id="1")
-        with patch("tokenpak.alerts.channels.telegram.urllib.request.urlopen",
-                   side_effect=urllib.error.URLError("err")):
+        with patch(
+            "tokenpak.alerts.channels.telegram.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("err"),
+        ):
             with patch("tokenpak.alerts.channels.telegram.time.sleep", side_effect=_record_sleep):
                 ch.send(event="test", severity="info", message="sleep test")
 
@@ -189,15 +196,16 @@ class TestDeliverFunction:
         resp.__exit__ = MagicMock(return_value=False)
         resp.status = 200
 
-        with patch("tokenpak.alerts.channels.telegram.urllib.request.urlopen",
-                   return_value=resp):
+        with patch("tokenpak.alerts.channels.telegram.urllib.request.urlopen", return_value=resp):
             result = deliver("tok", "123", "evt", "info", "msg")
 
         assert result is True
 
     def test_deliver_returns_false_on_failure(self):
-        with patch("tokenpak.alerts.channels.telegram.urllib.request.urlopen",
-                   side_effect=urllib.error.URLError("fail")):
+        with patch(
+            "tokenpak.alerts.channels.telegram.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("fail"),
+        ):
             with patch("tokenpak.alerts.channels.telegram.time.sleep"):
                 result = deliver("tok", "123", "evt", "warning", "msg")
 

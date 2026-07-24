@@ -37,6 +37,7 @@ def _proxy_pid_path() -> Path:
 # Reading
 # ---------------------------------------------------------------------------
 
+
 def read_env_file(path: Path | None = None) -> dict[str, str]:
     """Parse key=value pairs from a tokenpak.env file.
 
@@ -71,10 +72,16 @@ def get_setting(key: str, default: str = "", path: Path | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 _BOOL_VALUES = frozenset({"0", "1", "true", "false", "yes", "no", "on", "off"})
-_LEGACY_PROFILES = frozenset({
-    "claude-code-cli", "claude-code-tui", "claude-code-tmux",
-    "claude-code-sdk", "claude-code-ide", "claude-code-cron",
-})
+_LEGACY_PROFILES = frozenset(
+    {
+        "claude-code-cli",
+        "claude-code-tui",
+        "claude-code-tmux",
+        "claude-code-sdk",
+        "claude-code-ide",
+        "claude-code-cron",
+    }
+)
 
 
 def _valid_profiles() -> frozenset:
@@ -87,21 +94,25 @@ def _valid_profiles() -> frozenset:
     """
     try:
         from tokenpak.proxy.config import _PROFILE_PRESETS
+
         return frozenset(_PROFILE_PRESETS) | _LEGACY_PROFILES
     except Exception:
         return _LEGACY_PROFILES
 
+
 # Local-admin writes only. Sensitive credentials, provider/remote endpoints,
 # and remote alert destinations must not be created or updated through the
 # dashboard settings route without an explicit architecture exception.
-_FORBIDDEN_SETTINGS_WRITES = frozenset({
-    "ANTHROPIC_API_KEY",
-    "OPENAI_API_KEY",
-    "TOKENPAK_CACHE_ALERT_SLACK_CHANNEL",
-    "TOKENPAK_CACHE_ALERT_WEBHOOK_URL",
-    "TOKENPAK_OLLAMA_UPSTREAM",
-    "TOKENPAK_REMOTE_HOST",
-})
+_FORBIDDEN_SETTINGS_WRITES = frozenset(
+    {
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "TOKENPAK_CACHE_ALERT_SLACK_CHANNEL",
+        "TOKENPAK_CACHE_ALERT_WEBHOOK_URL",
+        "TOKENPAK_OLLAMA_UPSTREAM",
+        "TOKENPAK_REMOTE_HOST",
+    }
+)
 
 
 def _validate_bool(key: str, value: str) -> None:
@@ -137,16 +148,20 @@ def _validate_pct(key: str, value: str) -> None:
 
 
 _VALIDATORS: dict[str, Any] = {
-    "TOKENPAK_ACTIVE_PROFILE": lambda k, v: None if v in _valid_profiles() else (_ for _ in ()).throw(ValueError(f"{k}: unknown profile {v!r}")),
+    "TOKENPAK_ACTIVE_PROFILE": lambda k, v: (
+        None
+        if v in _valid_profiles()
+        else (_ for _ in ()).throw(ValueError(f"{k}: unknown profile {v!r}"))
+    ),
     "TOKENPAK_VAULT_INJECT_ENABLED": _validate_bool,
-    "TOKENPAK_INJECT_BUDGET":        _validate_positive_int,
-    "TOKENPAK_INJECT_TOP_K":         _validate_positive_int,
-    "TOKENPAK_INJECT_MIN_SCORE":     _validate_positive_float,
-    "TOKENPAK_BUDGET_CONTROLLER":    _validate_bool,
-    "TOKENPAK_BUDGET_TOTAL":         _validate_positive_int,
+    "TOKENPAK_INJECT_BUDGET": _validate_positive_int,
+    "TOKENPAK_INJECT_TOP_K": _validate_positive_int,
+    "TOKENPAK_INJECT_MIN_SCORE": _validate_positive_float,
+    "TOKENPAK_BUDGET_CONTROLLER": _validate_bool,
+    "TOKENPAK_BUDGET_TOTAL": _validate_positive_int,
     "TOKENPAK_CACHE_ALERT_WEBHOOK_ENABLED": _validate_bool,
-    "TOKENPAK_CACHE_ALERT_THRESHOLD":       _validate_pct,
-    "TOKENPAK_LOCAL_FIRST_ROUTING":  _validate_bool,
+    "TOKENPAK_CACHE_ALERT_THRESHOLD": _validate_pct,
+    "TOKENPAK_LOCAL_FIRST_ROUTING": _validate_bool,
 }
 
 
@@ -155,7 +170,9 @@ def validate_settings(updates: dict[str, str]) -> list[str]:
     errors: list[str] = []
     for key, value in updates.items():
         if key in _FORBIDDEN_SETTINGS_WRITES:
-            errors.append(f"{key}: dashboard writes are disabled; edit tokenpak.env manually or request a webhook exception")
+            errors.append(
+                f"{key}: dashboard writes are disabled; edit tokenpak.env manually or request a webhook exception"
+            )
             continue
         validator = _VALIDATORS.get(key)
         if validator is None:
@@ -170,6 +187,7 @@ def validate_settings(updates: dict[str, str]) -> list[str]:
 # ---------------------------------------------------------------------------
 # Writing
 # ---------------------------------------------------------------------------
+
 
 def _backup_env_file(p: Path) -> Path | None:
     """Copy current env file to a timestamped .bak path. Returns bak path."""
@@ -273,6 +291,7 @@ def _try_sighup_proxy(updates: dict[str, str]) -> None:
 # Current-state helper for the settings page context
 # ---------------------------------------------------------------------------
 
+
 def load_settings_context(path: Path | None = None) -> dict[str, Any]:
     """Return a dict of current setting values for use in Jinja2 templates."""
     env = read_env_file(path)
@@ -308,19 +327,19 @@ def load_settings_context(path: Path | None = None) -> dict[str, Any]:
         "available_profiles": sorted(_valid_profiles()),
         # Vault injection
         "vault_inject_enabled": _b("TOKENPAK_VAULT_INJECT_ENABLED", "1"),
-        "inject_budget":        _i("TOKENPAK_INJECT_BUDGET", 4000),
-        "inject_top_k":         _i("TOKENPAK_INJECT_TOP_K", 5),
-        "inject_min_score":     _f("TOKENPAK_INJECT_MIN_SCORE", 2.0),
+        "inject_budget": _i("TOKENPAK_INJECT_BUDGET", 4000),
+        "inject_top_k": _i("TOKENPAK_INJECT_TOP_K", 5),
+        "inject_min_score": _f("TOKENPAK_INJECT_MIN_SCORE", 2.0),
         # Budget enforcement
         "budget_controller_enabled": _b("TOKENPAK_BUDGET_CONTROLLER", "1"),
-        "budget_total":              _i("TOKENPAK_BUDGET_TOTAL", 12000),
+        "budget_total": _i("TOKENPAK_BUDGET_TOTAL", 12000),
         # Cache invalidation alerts
         "cache_alert_webhook_enabled": _b("TOKENPAK_CACHE_ALERT_WEBHOOK_ENABLED", "0"),
-        "cache_alert_slack_channel":   _s("TOKENPAK_CACHE_ALERT_SLACK_CHANNEL"),
-        "cache_alert_threshold":       _f("TOKENPAK_CACHE_ALERT_THRESHOLD", 50.0),
+        "cache_alert_slack_channel": _s("TOKENPAK_CACHE_ALERT_SLACK_CHANNEL"),
+        "cache_alert_threshold": _f("TOKENPAK_CACHE_ALERT_THRESHOLD", 50.0),
         # Local-first routing
         "local_first_routing_enabled": _b("TOKENPAK_LOCAL_FIRST_ROUTING", "0"),
-        "ollama_upstream":             _s("TOKENPAK_OLLAMA_UPSTREAM", "http://localhost:11434"),
+        "ollama_upstream": _s("TOKENPAK_OLLAMA_UPSTREAM", "http://localhost:11434"),
         # Compliance routing
         "compliance_provider": _s("TOKENPAK_COMPLIANCE_PROVIDER"),
         # Meta

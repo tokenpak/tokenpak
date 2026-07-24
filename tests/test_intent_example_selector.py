@@ -66,7 +66,9 @@ def test_skips_when_budget_too_tight(tmp_path: Path) -> None:
     _write_example(examples_root, "extraction", "schema-1.md", "field: value\n" * 50)
     cfg = {
         "defaults": {"enabled": True, "max_examples": 2, "min_remaining_tokens": 600},
-        "intents": {"extraction": {"enabled": True, "max_examples": 2, "min_remaining_tokens": 600}},
+        "intents": {
+            "extraction": {"enabled": True, "max_examples": 2, "min_remaining_tokens": 600}
+        },
     }
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")

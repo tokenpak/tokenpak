@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.validation.request_validator", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.validation.request_validator", reason="module not available in current build"
+)
 import json
 
 import pytest
@@ -113,7 +115,9 @@ class TestRequestValidatorTypeErrors:
         body = json.dumps(request).encode("utf-8")
         result = validator.validate(body, provider="openai")
         assert not result.valid
-        assert any("max_tokens" in str(e).lower() or "type" in str(e).lower() for e in result.errors)
+        assert any(
+            "max_tokens" in str(e).lower() or "type" in str(e).lower() for e in result.errors
+        )
 
     def test_temperature_is_string(self):
         """If 'temperature' is a string instead of float, should raise TypeError."""
@@ -126,7 +130,9 @@ class TestRequestValidatorTypeErrors:
         body = json.dumps(request).encode("utf-8")
         result = validator.validate(body, provider="openai")
         assert not result.valid
-        assert any("temperature" in str(e).lower() or "type" in str(e).lower() for e in result.errors)
+        assert any(
+            "temperature" in str(e).lower() or "type" in str(e).lower() for e in result.errors
+        )
 
     def test_temperature_above_max(self):
         """If 'temperature' > 2.0, should raise ValueError."""

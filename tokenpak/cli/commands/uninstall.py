@@ -29,6 +29,7 @@ import signal
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable
 
@@ -334,9 +335,7 @@ def _enumerate_hard_targets(home: Path, keep_data: bool) -> "tuple[list[Path], l
 # ---------------------------------------------------------------------------
 
 
-def _build_plan(
-    *, hard: bool, keep_data: bool, home: Path
-) -> "tuple[list[Op], list[Path]]":
+def _build_plan(*, hard: bool, keep_data: bool, home: Path) -> "tuple[list[Op], list[Path]]":
     """Assemble the ordered operation plan and the retained-path list."""
     ops: list[Op] = []
 
@@ -355,9 +354,7 @@ def _build_plan(
             phase="soft",
         )
     )
-    ops.append(
-        Op(describe="Stop running proxy (if any)", run=_stop_proxy, phase="soft")
-    )
+    ops.append(Op(describe="Stop running proxy (if any)", run=_stop_proxy, phase="soft"))
 
     retained: list[Path] = []
     if hard:
@@ -375,7 +372,7 @@ def _build_plan(
                 ops.append(
                     Op(
                         describe=f"Delete {target}",
-                        run=(lambda t=target: _remove_path(t)),
+                        run=partial(_remove_path, target),
                         phase="hard",
                     )
                 )
@@ -533,9 +530,7 @@ def run_uninstall(
 
     # ── Mode resolution (never guess a destructive default; AC-S1) ──────────
     if hard and soft:
-        _emit_error(
-            "specify only one of --soft / --hard", output_json
-        )
+        _emit_error("specify only one of --soft / --hard", output_json)
         return 2
     if not soft and not hard:
         interactive = sys.stdin.isatty() and sys.stdout.isatty() and not output_json
@@ -627,7 +622,9 @@ def run_uninstall(
         else:
             # Interactive secondary confirm specifically for package removal.
             try:
-                ans = input("Remove the tokenpak package now (pip uninstall)? [y/N] ").strip().lower()
+                ans = (
+                    input("Remove the tokenpak package now (pip uninstall)? [y/N] ").strip().lower()
+                )
             except (EOFError, KeyboardInterrupt):
                 ans = "n"
             if ans == "y":

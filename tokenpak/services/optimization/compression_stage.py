@@ -97,9 +97,7 @@ class RouteClassCompressionStage:
 
         route = ctx.route or RouteClass.UNKNOWN
         if route in ("", RouteClass.UNKNOWN, None):
-            return EligibilityResult(
-                eligible=False, skip_reason="route-unknown"
-            )
+            return EligibilityResult(eligible=False, skip_reason="route-unknown")
 
         contract = ctx.contract
         if contract is not None and hasattr(contract, "capabilities"):
@@ -189,9 +187,7 @@ class RouteClassCompressionStage:
 
     # ---- helpers ---------------------------------------------------------
 
-    def _policy_for(
-        self, ctx: OptimizationContext, route: str
-    ) -> RoutePolicy:
+    def _policy_for(self, ctx: OptimizationContext, route: str) -> RoutePolicy:
         # Allow the contract to override the default policy through extras.
         contract = ctx.contract
         if contract is not None and hasattr(contract, "extras"):
@@ -201,9 +197,7 @@ class RouteClassCompressionStage:
                 return override
         return get_route_policy(route)
 
-    def _record_skip(
-        self, ctx: OptimizationContext, reason: str
-    ) -> None:
+    def _record_skip(self, ctx: OptimizationContext, reason: str) -> None:
         ctx.trace.add_stage(
             StageTrace(
                 name=self.name,
@@ -267,7 +261,8 @@ def register_with_default_pipeline(
         return None
     stage = RouteClassCompressionStage(env=env)
     if pipeline is None:
-        from .pipeline import _get_default_pipeline  # type: ignore[attr-defined]
+        from .pipeline import _get_default_pipeline
+
         pipeline = _get_default_pipeline()
     pipeline.register(stage)
     return stage

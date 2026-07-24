@@ -11,6 +11,7 @@ Covers:
 - Multi-finding text
 - DLPBlockError content
 """
+
 import pytest
 
 from tokenpak.security.dlp import DLPBlockError, DLPScanner
@@ -18,6 +19,7 @@ from tokenpak.security.dlp import DLPBlockError, DLPScanner
 # ---------------------------------------------------------------------------
 # Helper fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def scanner_warn():
@@ -37,6 +39,7 @@ def scanner_block():
 # ---------------------------------------------------------------------------
 # Pattern detection tests (one per rule)
 # ---------------------------------------------------------------------------
+
 
 class TestPatternDetection:
     """Verify each pattern type is detected by scan()."""
@@ -148,6 +151,7 @@ class TestPatternDetection:
 # DLPMatch structure
 # ---------------------------------------------------------------------------
 
+
 class TestDLPMatchStructure:
     def test_finding_has_expected_fields(self, scanner_warn):
         text = "AKIAIOSFODNN7EXAMPLE"
@@ -165,6 +169,7 @@ class TestDLPMatchStructure:
 # ---------------------------------------------------------------------------
 # Warn mode
 # ---------------------------------------------------------------------------
+
 
 class TestWarnMode:
     def test_warn_scan_returns_findings(self, scanner_warn):
@@ -189,6 +194,7 @@ class TestWarnMode:
 # ---------------------------------------------------------------------------
 # Redact mode
 # ---------------------------------------------------------------------------
+
 
 class TestRedactMode:
     def test_redact_replaces_aws_key(self, scanner_redact):
@@ -231,6 +237,7 @@ class TestRedactMode:
 # Block mode
 # ---------------------------------------------------------------------------
 
+
 class TestBlockMode:
     def test_block_check_returns_true_on_clean(self, scanner_block):
         assert scanner_block.block_check("totally clean text") is True
@@ -251,6 +258,7 @@ class TestBlockMode:
 # ---------------------------------------------------------------------------
 # No false positives
 # ---------------------------------------------------------------------------
+
 
 class TestNoFalsePositives:
     def test_email_variable_name_not_flagged(self, scanner_warn):
@@ -278,6 +286,7 @@ class TestNoFalsePositives:
 # ---------------------------------------------------------------------------
 # Mode configuration via env var
 # ---------------------------------------------------------------------------
+
 
 class TestModeConfiguration:
     def test_default_mode_is_warn(self, monkeypatch):

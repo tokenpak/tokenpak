@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from .proxy_collector import RequestStats, SessionStats
 
@@ -55,7 +55,7 @@ class TelemetryStorage:
         if not hasattr(self._local, "conn") or self._local.conn is None:
             self._local.conn = sqlite3.connect(self._path, check_same_thread=False)
             self._local.conn.row_factory = sqlite3.Row
-        return self._local.conn
+        return cast(sqlite3.Connection, self._local.conn)
 
     def _init_db(self) -> None:
         conn = self._conn()
@@ -83,7 +83,7 @@ class TelemetryStorage:
         )
         conn.commit()
 
-    def list_requests(self, limit: int = 100) -> list[dict]:
+    def list_requests(self, limit: int = 100) -> list[dict[str, Any]]:
         """Return recent requests as dicts, most recent first."""
         conn = self._conn()
         rows = conn.execute(

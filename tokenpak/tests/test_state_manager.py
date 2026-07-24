@@ -228,9 +228,7 @@ class TestIntentStateManager:
         """IntentStateManager should create intent-specific state files."""
         with tempfile.TemporaryDirectory() as tmpdir:
             mgr = IntentStateManager("session-1", "debug", base_dir=tmpdir)
-            expected_path = (
-                Path(tmpdir) / "state" / "session_session-1.debug.state.json"
-            )
+            expected_path = Path(tmpdir) / "state" / "session_session-1.debug.state.json"
             assert mgr.state_path == expected_path
 
     def test_init_with_defaults_debug(self):
@@ -424,7 +422,7 @@ class TestEdgeCases:
         """StateManager should handle special characters."""
         with tempfile.TemporaryDirectory() as tmpdir:
             mgr = StateManager("test-1", base_dir=tmpdir)
-            mgr.set_goal("Goal with \\n newline and \"quotes\"")
+            mgr.set_goal('Goal with \\n newline and "quotes"')
             mgr.save()
 
             mgr2 = StateManager("test-1", base_dir=tmpdir)

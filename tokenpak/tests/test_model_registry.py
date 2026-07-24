@@ -292,8 +292,7 @@ class TestThreadSafety:
                 errors.append(e)
 
         threads = [
-            threading.Thread(target=resolve_model, args=(f"claude-opus-{i}",))
-            for i in range(10)
+            threading.Thread(target=resolve_model, args=(f"claude-opus-{i}",)) for i in range(10)
         ]
         for t in threads:
             t.start()

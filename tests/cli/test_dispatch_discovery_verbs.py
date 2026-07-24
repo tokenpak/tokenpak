@@ -107,7 +107,7 @@ def test_routes_discovers_user_override(home):
     assert exc is None, err
     ids = {r["id"] for r in json.loads(out)["routes"]}
     assert "route.user_probe.v1" in ids  # user override discovered
-    assert "route.code_task.v1" in ids   # packaged defaults still present
+    assert "route.code_task.v1" in ids  # packaged defaults still present
 
 
 # ---------------------------------------------------------------------------

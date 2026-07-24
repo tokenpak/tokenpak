@@ -12,7 +12,7 @@ class CostSummary:
     total_cost: float = 0.0
     by_model: dict[str, float] = field(default_factory=dict)
     by_provider: dict[str, float] = field(default_factory=dict)
-    daily: list[dict] = field(default_factory=list)
+    daily: list[dict[str, object]] = field(default_factory=list)
     period_days: int = 30
 
 
@@ -46,10 +46,10 @@ class ModelCompressionBreakdown:
     model: str = ""
     request_count: int = 0
     avg_compression_ratio: float = 0.0  # compressed / raw (lower = more compression)
-    tokens_saved: int = 0               # avg_raw - avg_final, summed over requests
+    tokens_saved: int = 0  # avg_raw - avg_final, summed over requests
     avg_raw_tokens: float = 0.0
     avg_final_tokens: float = 0.0
-    savings_amount: float = 0.0         # USD saved via compression
+    savings_amount: float = 0.0  # USD saved via compression
 
 
 @dataclass

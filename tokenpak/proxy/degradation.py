@@ -74,7 +74,7 @@ class DegradationTracker:
     _DEGRADED_WINDOW_SECONDS = 600  # 10 minutes
 
     def __init__(self) -> None:
-        self._events: deque = deque(maxlen=self._MAX_EVENTS)
+        self._events: deque[DegradationEvent] = deque(maxlen=self._MAX_EVENTS)
         self._lock = threading.Lock()
         # Counters (never reset, lifetime totals)
         self._compression_failures: int = 0
@@ -140,11 +140,9 @@ class DegradationTracker:
             # Exclude startup warnings that were handled gracefully (recovered=True).
             # These are informational; the server is still fully functional.
             degrading_events = [
-                e for e in self._events
-                if not (
-                    e.event_type == DegradationEventType.STARTUP_WARNING
-                    and e.recovered
-                )
+                e
+                for e in self._events
+                if not (e.event_type == DegradationEventType.STARTUP_WARNING and e.recovered)
             ]
             if not degrading_events:
                 return False

@@ -39,6 +39,7 @@ def _est(**kw) -> RiskEstimate:
 # Default config — 2026-05-11 recalibration
 # ---------------------------------------------------------------------------
 
+
 class TestConfigDefaults:
     """The v1.5.2 default profile is denominated in context-window %.
 
@@ -81,6 +82,7 @@ class TestConfigDefaults:
 # Context-window-% basis — canonical defense
 # ---------------------------------------------------------------------------
 
+
 class TestContextWindowPercentBasis:
     """The % basis blocks at 90% and hard-stops at 100% of model max context.
 
@@ -94,16 +96,20 @@ class TestContextWindowPercentBasis:
     def test_200k_model_blocks_at_90_percent(self):
         # 200K context × 90% = 180K. 179K → warn-or-allow; 180K → block.
         d_under = decide(
-            _est(projected_input_tokens=179_000, projected_output_tokens=500,
-                 projected_cost_usd=2.5),
-            self.cfg, model_max_context_tokens=200_000,
+            _est(
+                projected_input_tokens=179_000, projected_output_tokens=500, projected_cost_usd=2.5
+            ),
+            self.cfg,
+            model_max_context_tokens=200_000,
         )
         assert d_under.decision in ("warn", "allow")
 
         d_over = decide(
-            _est(projected_input_tokens=180_500, projected_output_tokens=500,
-                 projected_cost_usd=2.5),
-            self.cfg, model_max_context_tokens=200_000,
+            _est(
+                projected_input_tokens=180_500, projected_output_tokens=500, projected_cost_usd=2.5
+            ),
+            self.cfg,
+            model_max_context_tokens=200_000,
         )
         assert d_over.decision == "block"
         assert d_over.reason == "projected_exceeds_context_window_percent"
@@ -113,9 +119,11 @@ class TestContextWindowPercentBasis:
     def test_200k_model_hard_stops_at_100_percent(self):
         # At 200K projected input → hard stop. No bypass crosses it.
         d = decide(
-            _est(projected_input_tokens=200_000, projected_output_tokens=500,
-                 projected_cost_usd=2.5),
-            self.cfg, model_max_context_tokens=200_000,
+            _est(
+                projected_input_tokens=200_000, projected_output_tokens=500, projected_cost_usd=2.5
+            ),
+            self.cfg,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "hard_block"
         assert d.reason == "projected_exceeds_context_window_hard_stop"
@@ -123,26 +131,34 @@ class TestContextWindowPercentBasis:
 
     def test_1m_model_blocks_at_900k(self):
         d_under = decide(
-            _est(projected_input_tokens=899_000, projected_output_tokens=500,
-                 projected_cost_usd=8.0),
-            self.cfg, model_max_context_tokens=1_000_000,
+            _est(
+                projected_input_tokens=899_000, projected_output_tokens=500, projected_cost_usd=8.0
+            ),
+            self.cfg,
+            model_max_context_tokens=1_000_000,
         )
         # 899K < 900K block; still in warn band by token count (>100K).
         assert d_under.decision in ("warn", "allow")
 
         d_over = decide(
-            _est(projected_input_tokens=900_500, projected_output_tokens=500,
-                 projected_cost_usd=8.0),
-            self.cfg, model_max_context_tokens=1_000_000,
+            _est(
+                projected_input_tokens=900_500, projected_output_tokens=500, projected_cost_usd=8.0
+            ),
+            self.cfg,
+            model_max_context_tokens=1_000_000,
         )
         assert d_over.decision == "block"
         assert d_over.reason == "projected_exceeds_context_window_percent"
 
     def test_2m_model_blocks_at_1_8m(self):
         d = decide(
-            _est(projected_input_tokens=1_800_500, projected_output_tokens=500,
-                 projected_cost_usd=18.0),
-            self.cfg, model_max_context_tokens=2_000_000,
+            _est(
+                projected_input_tokens=1_800_500,
+                projected_output_tokens=500,
+                projected_cost_usd=18.0,
+            ),
+            self.cfg,
+            model_max_context_tokens=2_000_000,
         )
         assert d.decision == "block"
         assert d.reason == "projected_exceeds_context_window_percent"
@@ -152,9 +168,11 @@ class TestContextWindowPercentBasis:
         # No max context → context-window-% disabled; legacy token band
         # (block_tokens=500K) applies.
         d = decide(
-            _est(projected_input_tokens=500_500, projected_output_tokens=500,
-                 projected_cost_usd=8.0),
-            self.cfg, model_max_context_tokens=None,
+            _est(
+                projected_input_tokens=500_500, projected_output_tokens=500, projected_cost_usd=8.0
+            ),
+            self.cfg,
+            model_max_context_tokens=None,
         )
         assert d.decision == "block"
         assert "block_tokens_fallback" in d.threshold_hit
@@ -164,15 +182,23 @@ class TestContextWindowPercentBasis:
 # Universality — the SAME default applies to every agent profile
 # ---------------------------------------------------------------------------
 
+
 class TestUniversalDefault:
     """Per the 2026-05-11 default-basis decision: no per-profile variance
     in the default policy. Every agent profile — named, gig, or unknown
     future — gets the same 90% / 100% defaults.
     """
 
-    PROFILE_NAMES = ("profile-a", "profile-b", "profile-c", "profile-d",
-                     "profile-e", "profile-f", "gig-agent",
-                     "unknown-future-profile")
+    PROFILE_NAMES = (
+        "profile-a",
+        "profile-b",
+        "profile-c",
+        "profile-d",
+        "profile-e",
+        "profile-f",
+        "gig-agent",
+        "unknown-future-profile",
+    )
 
     @pytest.mark.parametrize("profile", PROFILE_NAMES)
     def test_same_block_threshold_across_profiles(self, profile):
@@ -188,19 +214,19 @@ class TestUniversalDefault:
             f"Profile {profile!r}: hard_stop_context_window_percent diverged from 100"
         )
         d = decide(
-            _est(projected_input_tokens=180_500, projected_output_tokens=0,
-                 projected_cost_usd=2.5),
-            cfg, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=180_500, projected_output_tokens=0, projected_cost_usd=2.5),
+            cfg,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "block", (
-            f"Profile {profile!r}: 180.5K @ 200K-context did NOT block under "
-            "the universal default"
+            f"Profile {profile!r}: 180.5K @ 200K-context did NOT block under the universal default"
         )
 
 
 # ---------------------------------------------------------------------------
 # Hard-stop — absolute ceiling, no override crosses
 # ---------------------------------------------------------------------------
+
 
 class TestHardStopAbsolute:
     """100% context-window utilisation is the absolute ceiling. Neither
@@ -212,9 +238,10 @@ class TestHardStopAbsolute:
     def test_tip_allow_once_does_not_cross_hard_stop(self):
         tip = TIPDirective(allow_scope="once", max_cost_usd=999.0)
         d = decide(
-            _est(projected_input_tokens=200_500, projected_output_tokens=0,
-                 projected_cost_usd=2.5),
-            self.cfg, tip=tip, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=200_500, projected_output_tokens=0, projected_cost_usd=2.5),
+            self.cfg,
+            tip=tip,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "hard_block"
         assert d.reason == "projected_exceeds_context_window_hard_stop"
@@ -222,21 +249,26 @@ class TestHardStopAbsolute:
     def test_tip_bypass_does_not_cross_hard_stop(self):
         tip = TIPDirective(bypass=True, max_cost_usd=999.0, max_tokens=10_000_000)
         d = decide(
-            _est(projected_input_tokens=200_500, projected_output_tokens=0,
-                 projected_cost_usd=2.5),
-            self.cfg, tip=tip, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=200_500, projected_output_tokens=0, projected_cost_usd=2.5),
+            self.cfg,
+            tip=tip,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "hard_block"
 
     def test_hard_stop_fires_before_tip_evaluation(self):
         # Even a fully-authorized TIP can't change the outcome — hard-stop
         # is the first check.
-        tip = TIPDirective(allow_scope="session", bypass=True,
-                           max_cost_usd=10_000.0, max_tokens=10_000_000)
+        tip = TIPDirective(
+            allow_scope="session", bypass=True, max_cost_usd=10_000.0, max_tokens=10_000_000
+        )
         d = decide(
-            _est(projected_input_tokens=1_000_001, projected_output_tokens=0,
-                 projected_cost_usd=5.0),
-            self.cfg, tip=tip, model_max_context_tokens=1_000_000,
+            _est(
+                projected_input_tokens=1_000_001, projected_output_tokens=0, projected_cost_usd=5.0
+            ),
+            self.cfg,
+            tip=tip,
+            model_max_context_tokens=1_000_000,
         )
         assert d.decision == "hard_block"
 
@@ -245,18 +277,19 @@ class TestHardStopAbsolute:
 # Soft block IS bypassable
 # ---------------------------------------------------------------------------
 
+
 class TestSoftBlockBypassable:
     cfg = SpendGuardConfig()
 
     def test_tip_allow_once_clears_soft_block(self):
         # 180K @ 200K context = exactly 90% → block. With TIP allow=once
         # under sufficient ceiling, the request clears.
-        tip = TIPDirective(allow_scope="once", max_cost_usd=15.0,
-                           max_tokens=200_000)
+        tip = TIPDirective(allow_scope="once", max_cost_usd=15.0, max_tokens=200_000)
         d = decide(
-            _est(projected_input_tokens=181_000, projected_output_tokens=0,
-                 projected_cost_usd=2.5),
-            self.cfg, tip=tip, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=181_000, projected_output_tokens=0, projected_cost_usd=2.5),
+            self.cfg,
+            tip=tip,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "allow"
         assert d.threshold_hit == "tip_directive"
@@ -266,9 +299,9 @@ class TestSoftBlockBypassable:
         # just confirm a soft-block returns requires_approval=True so the
         # caller knows the Yes path is available.
         d = decide(
-            _est(projected_input_tokens=181_000, projected_output_tokens=0,
-                 projected_cost_usd=2.5),
-            self.cfg, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=181_000, projected_output_tokens=0, projected_cost_usd=2.5),
+            self.cfg,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "block"
         assert d.requires_approval is True
@@ -277,6 +310,7 @@ class TestSoftBlockBypassable:
 # ---------------------------------------------------------------------------
 # Backward-compat — legacy dollar plane remains reachable
 # ---------------------------------------------------------------------------
+
 
 class TestDollarPlaneOptIn:
     """Dollar bands stay reachable as an opt-in profile
@@ -291,9 +325,9 @@ class TestDollarPlaneOptIn:
         # small token count to isolate.
         cfg = SpendGuardConfig()
         d = decide(
-            _est(projected_input_tokens=1000, projected_output_tokens=0,
-                 projected_cost_usd=50.0),
-            cfg, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=1000, projected_output_tokens=0, projected_cost_usd=50.0),
+            cfg,
+            model_max_context_tokens=200_000,
         )
         assert d.decision in ("warn", "allow")  # NOT block on dollar plane
 
@@ -306,15 +340,14 @@ class TestDollarPlaneOptIn:
             assert cfg.dollar_cap_enabled_by_default is True
             # DeprecationWarning was raised
             assert any(
-                issubclass(w.category, DeprecationWarning)
-                and "block_cost_usd" in str(w.message)
+                issubclass(w.category, DeprecationWarning) and "block_cost_usd" in str(w.message)
                 for w in captured
             )
         # Now a $12 request blocks on the dollar plane.
         d = decide(
-            _est(projected_input_tokens=10_000, projected_output_tokens=0,
-                 projected_cost_usd=12.0),
-            cfg, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=10_000, projected_output_tokens=0, projected_cost_usd=12.0),
+            cfg,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "block"
         assert d.reason == "projected_cost_exceeded"
@@ -322,9 +355,7 @@ class TestDollarPlaneOptIn:
     def test_explicit_session_block_engages_plane(self):
         with warnings.catch_warnings(record=True) as captured:
             warnings.simplefilter("always")
-            cfg = load_config(
-                raw_config={"spend_guard": {"session_block_cost_usd": 10.0}}
-            )
+            cfg = load_config(raw_config={"spend_guard": {"session_block_cost_usd": 10.0}})
             assert cfg.session_block_cost_usd == 10.0
             assert any(
                 issubclass(w.category, DeprecationWarning)
@@ -332,9 +363,10 @@ class TestDollarPlaneOptIn:
                 for w in captured
             )
         d = decide(
-            _est(projected_input_tokens=5_000, projected_output_tokens=0,
-                 projected_cost_usd=0.5),
-            cfg, session_running_cost_usd=9.7, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=5_000, projected_output_tokens=0, projected_cost_usd=0.5),
+            cfg,
+            session_running_cost_usd=9.7,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "block"
         assert d.reason == "session_cumulative_cost_exceeded"
@@ -347,8 +379,7 @@ class TestDollarPlaneOptIn:
             assert cfg.block_cost_usd == 3.0
             assert cfg.dollar_cap_enabled_by_default is True
             assert any(
-                issubclass(w.category, DeprecationWarning)
-                and "block_cost_usd" in str(w.message)
+                issubclass(w.category, DeprecationWarning) and "block_cost_usd" in str(w.message)
                 for w in captured
             )
 
@@ -357,40 +388,61 @@ class TestDollarPlaneOptIn:
 # Config validation
 # ---------------------------------------------------------------------------
 
+
 class TestConfigValidation:
     def test_reject_block_pct_above_hard_stop(self):
         with pytest.raises(ValueError) as exc:
-            load_config(raw_config={"spend_guard": {
-                "default_context_window_percent": 95,
-                "hard_stop_context_window_percent": 90,
-            }})
+            load_config(
+                raw_config={
+                    "spend_guard": {
+                        "default_context_window_percent": 95,
+                        "hard_stop_context_window_percent": 90,
+                    }
+                }
+            )
         assert "default_context_window_percent" in str(exc.value)
         assert "hard_stop_context_window_percent" in str(exc.value)
 
     def test_reject_hard_stop_above_hundred(self):
         with pytest.raises(ValueError) as exc:
-            load_config(raw_config={"spend_guard": {
-                "hard_stop_context_window_percent": 110,
-            }})
+            load_config(
+                raw_config={
+                    "spend_guard": {
+                        "hard_stop_context_window_percent": 110,
+                    }
+                }
+            )
         assert "hard_stop_context_window_percent" in str(exc.value)
 
     def test_reject_negative_block_pct(self):
         with pytest.raises(ValueError):
-            load_config(raw_config={"spend_guard": {
-                "default_context_window_percent": -1,
-            }})
+            load_config(
+                raw_config={
+                    "spend_guard": {
+                        "default_context_window_percent": -1,
+                    }
+                }
+            )
 
     def test_reject_non_integer_pct(self):
         with pytest.raises(ValueError):
-            load_config(raw_config={"spend_guard": {
-                "default_context_window_percent": "not-a-number",
-            }})
+            load_config(
+                raw_config={
+                    "spend_guard": {
+                        "default_context_window_percent": "not-a-number",
+                    }
+                }
+            )
 
     def test_valid_config_loads(self):
-        cfg = load_config(raw_config={"spend_guard": {
-            "default_context_window_percent": 85,
-            "hard_stop_context_window_percent": 95,
-        }})
+        cfg = load_config(
+            raw_config={
+                "spend_guard": {
+                    "default_context_window_percent": 85,
+                    "hard_stop_context_window_percent": 95,
+                }
+            }
+        )
         assert cfg.default_context_window_percent == 85
         assert cfg.hard_stop_context_window_percent == 95
 
@@ -399,24 +451,32 @@ class TestConfigValidation:
 # Canonical key alias — tip_spend_guard: (decision-record YAML shape)
 # ---------------------------------------------------------------------------
 
+
 class TestCanonicalKeyAlias:
     def test_tip_spend_guard_key_accepted(self):
-        cfg = load_config(raw_config={"tip_spend_guard": {
-            "default_context_window_percent": 85,
-        }})
+        cfg = load_config(
+            raw_config={
+                "tip_spend_guard": {
+                    "default_context_window_percent": 85,
+                }
+            }
+        )
         assert cfg.default_context_window_percent == 85
 
     def test_tip_spend_guard_wins_over_spend_guard_on_conflict(self):
-        cfg = load_config(raw_config={
-            "spend_guard": {"default_context_window_percent": 80},
-            "tip_spend_guard": {"default_context_window_percent": 75},
-        })
+        cfg = load_config(
+            raw_config={
+                "spend_guard": {"default_context_window_percent": 80},
+                "tip_spend_guard": {"default_context_window_percent": 75},
+            }
+        )
         assert cfg.default_context_window_percent == 75
 
 
 # ---------------------------------------------------------------------------
 # Large-cycle clear-case — ~1047-line composed prompt clears
 # ---------------------------------------------------------------------------
+
 
 class TestLargeCycleClears:
     """A large-but-typical composed cycle prompt (the kind 402'd by the
@@ -432,9 +492,13 @@ class TestLargeCycleClears:
         # around ~50K — well under the 180K block line.
         cfg = SpendGuardConfig()
         d = decide(
-            _est(projected_input_tokens=55_000, projected_output_tokens=8_000,
-                 projected_cost_usd=1.40),
-            cfg, model_max_context_tokens=200_000,
+            _est(
+                projected_input_tokens=55_000,
+                projected_output_tokens=8_000,
+                projected_cost_usd=1.40,
+            ),
+            cfg,
+            model_max_context_tokens=200_000,
         )
         assert d.decision in ("allow", "warn"), (
             f"Large-cycle composed prompt would be blocked under v1.5.2 "
@@ -446,6 +510,7 @@ class TestLargeCycleClears:
 # ---------------------------------------------------------------------------
 # Per-request decisions WITHOUT the % basis (token-band fallback path)
 # ---------------------------------------------------------------------------
+
 
 def _no_pct_cfg() -> SpendGuardConfig:
     """Disable session-cumulative and force the token-band fallback path
@@ -462,16 +527,16 @@ class TestDecideTokenBandFallback:
 
     def test_small_request_allowed(self):
         d = decide(
-            _est(projected_input_tokens=1000, projected_output_tokens=500,
-                 projected_cost_usd=0.05),
+            _est(projected_input_tokens=1000, projected_output_tokens=500, projected_cost_usd=0.05),
             self.cfg,
         )
         assert d.decision == "allow"
 
     def test_warn_band_emits_warn(self):
         d = decide(
-            _est(projected_input_tokens=120_000, projected_output_tokens=4000,
-                 projected_cost_usd=2.5),
+            _est(
+                projected_input_tokens=120_000, projected_output_tokens=4000, projected_cost_usd=2.5
+            ),
             self.cfg,
         )
         assert d.decision == "warn"
@@ -479,8 +544,9 @@ class TestDecideTokenBandFallback:
     def test_block_on_token_threshold_unknown_model(self):
         # 600K tokens, unknown context → token-band fallback fires.
         d = decide(
-            _est(projected_input_tokens=600_000, projected_output_tokens=4000,
-                 projected_cost_usd=8.0),
+            _est(
+                projected_input_tokens=600_000, projected_output_tokens=4000, projected_cost_usd=8.0
+            ),
             self.cfg,
         )
         assert d.decision == "block"
@@ -488,8 +554,11 @@ class TestDecideTokenBandFallback:
 
     def test_hard_block_on_tokens_unknown_model(self):
         d = decide(
-            _est(projected_input_tokens=1_200_000, projected_output_tokens=10_000,
-                 projected_cost_usd=20.0),
+            _est(
+                projected_input_tokens=1_200_000,
+                projected_output_tokens=10_000,
+                projected_cost_usd=20.0,
+            ),
             self.cfg,
         )
         assert d.decision == "hard_block"
@@ -500,19 +569,24 @@ class TestTIPDirectiveWithDollarPlane:
     """TIP directive semantics when the dollar plane is engaged (opt-in)."""
 
     def _dollar_cfg(self) -> SpendGuardConfig:
-        cfg = load_config(raw_config={"spend_guard": {
-            "block_cost_usd": 10.0,
-            "hard_block_cost_usd": 50.0,
-        }})
+        cfg = load_config(
+            raw_config={
+                "spend_guard": {
+                    "block_cost_usd": 10.0,
+                    "hard_block_cost_usd": 50.0,
+                }
+            }
+        )
         return cfg
 
     def test_tip_allow_once_within_dollar_ceiling(self):
         cfg = self._dollar_cfg()
         tip = TIPDirective(allow_scope="once", max_cost_usd=15.0)
         d = decide(
-            _est(projected_input_tokens=10_000, projected_output_tokens=0,
-                 projected_cost_usd=12.0),
-            cfg, tip=tip, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=10_000, projected_output_tokens=0, projected_cost_usd=12.0),
+            cfg,
+            tip=tip,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "allow"
         assert d.threshold_hit == "tip_directive"
@@ -521,9 +595,10 @@ class TestTIPDirectiveWithDollarPlane:
         cfg = self._dollar_cfg()
         tip = TIPDirective(allow_scope="once", max_cost_usd=8.0)
         d = decide(
-            _est(projected_input_tokens=10_000, projected_output_tokens=0,
-                 projected_cost_usd=12.0),
-            cfg, tip=tip, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=10_000, projected_output_tokens=0, projected_cost_usd=12.0),
+            cfg,
+            tip=tip,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "block"
         assert d.reason == "projected_exceeds_tip_ceiling"
@@ -532,9 +607,10 @@ class TestTIPDirectiveWithDollarPlane:
         cfg = self._dollar_cfg()
         tip = TIPDirective(bypass=True, max_cost_usd=999.0)
         d = decide(
-            _est(projected_input_tokens=10_000, projected_output_tokens=0,
-                 projected_cost_usd=80.0),
-            cfg, tip=tip, model_max_context_tokens=200_000,
+            _est(projected_input_tokens=10_000, projected_output_tokens=0, projected_cost_usd=80.0),
+            cfg,
+            tip=tip,
+            model_max_context_tokens=200_000,
         )
         assert d.decision == "hard_block"
 

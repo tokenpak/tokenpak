@@ -49,23 +49,21 @@ def _args(**kwargs) -> argparse.Namespace:
 def _seed_claude(home: Path) -> Path:
     p = home / ".claude" / "settings.json"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({
-        "permissions": {"allow": ["mcp__example__*"], "deny": ["WebFetch"]},
-        "env": {"KEEP": "yes"},
-    }))
+    p.write_text(
+        json.dumps(
+            {
+                "permissions": {"allow": ["mcp__example__*"], "deny": ["WebFetch"]},
+                "env": {"KEEP": "yes"},
+            }
+        )
+    )
     return p
 
 
 def _seed_codex(home: Path) -> Path:
     p = home / ".codex" / "config.toml"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        "# keep this comment\n"
-        'model = "gpt-5"\n'
-        "\n"
-        "[profiles.work]\n"
-        'model = "o4"\n'
-    )
+    p.write_text('# keep this comment\nmodel = "gpt-5"\n\n[profiles.work]\nmodel = "o4"\n')
     return p
 
 
@@ -115,7 +113,11 @@ def test_legacy_namespace_without_tier_attr_writes_no_tier(tmp_home):
     """Callers predating the tier flag keep the exact pre-tier behavior."""
     p = _seed_claude(tmp_home)
     legacy = argparse.Namespace(
-        proxy_url=PROXY, apply=True, revert=False, client="claude-code", all=False,
+        proxy_url=PROXY,
+        apply=True,
+        revert=False,
+        client="claude-code",
+        all=False,
     )
     rc = run_integrate(legacy)
     assert rc == 0
@@ -231,15 +233,19 @@ def test_apply_tier_fleet_codex_no_bypass_leak(tmp_home):
 def test_integrate_tier_preserves_allow_deny_ask(tmp_home):
     p = tmp_home / ".claude" / "settings.json"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({
-        "permissions": {
-            "allow": ["a", "b"],
-            "deny": ["c"],
-            "ask": ["d"],
-            "additionalDirectories": ["/srv/data"],
-        },
-        "hooks": {"SessionStart": []},
-    }))
+    p.write_text(
+        json.dumps(
+            {
+                "permissions": {
+                    "allow": ["a", "b"],
+                    "deny": ["c"],
+                    "ask": ["d"],
+                    "additionalDirectories": ["/srv/data"],
+                },
+                "hooks": {"SessionStart": []},
+            }
+        )
+    )
     rc = run_integrate(_args(tier="auto"))
     assert rc == 0
     data = json.loads(p.read_text())

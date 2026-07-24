@@ -66,6 +66,7 @@ def _internal_names_in(result):
 # Route / strategy matrix — no internal header may survive any of them
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     ("route", "client_has_auth"),
     [
@@ -104,9 +105,7 @@ def test_openclaw_route_output_is_bit_for_bit_unchanged():
     """The OpenClaw allowlist never contained internal names; the no-forward
     rule must therefore not alter that route's output in any way."""
     raw = _request_headers()
-    expected = {
-        k.lower(): v for k, v in raw.items() if k.lower() in OPENCLAW_HEADER_ALLOWLIST
-    }
+    expected = {k.lower(): v for k, v in raw.items() if k.lower() in OPENCLAW_HEADER_ALLOWLIST}
     assert forward_headers(raw, ROUTE_OPENCLAW) == expected
     assert _internal_names_in(expected) == []
 
@@ -114,6 +113,7 @@ def test_openclaw_route_output_is_bit_for_bit_unchanged():
 # ---------------------------------------------------------------------------
 # Allowlist invariants — no allowlist may ever gain an internal name
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     ("allowlist_name", "allowlist"),
@@ -131,6 +131,7 @@ def test_allowlists_contain_no_internal_namespace_names(allowlist_name, allowlis
 # ---------------------------------------------------------------------------
 # Alignment — the forwarding strip set and the classifier helper agree
 # ---------------------------------------------------------------------------
+
 
 def test_forwarding_strip_set_aligns_with_classifier_helper():
     """The strip helper and the forwarding boundary share one namespace

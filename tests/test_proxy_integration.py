@@ -8,7 +8,6 @@ Tests the complete flow:
   4. Dashboard displays progress
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.cost.budget_tracker", reason="module not available in current build")
@@ -106,10 +105,12 @@ class TestProxyIntegration:
 
     def test_weekly_budget_tracking(self):
         """Track weekly spending separately from daily"""
-        tracker = BudgetTracker({
-            "daily_limit": 100.0,
-            "weekly_limit": 500.0,
-        })
+        tracker = BudgetTracker(
+            {
+                "daily_limit": 100.0,
+                "weekly_limit": 500.0,
+            }
+        )
 
         # Simulate weekly spend at 400 (80%)
         alert = tracker.should_alert(400.0, 500.0, "weekly")
@@ -142,10 +143,12 @@ class TestProxyIntegration:
 
     def test_budget_disabled_ignores_alerts(self):
         """When budget disabled, no alerts fire regardless of spending"""
-        tracker = BudgetTracker({
-            "daily_limit": 50.0,
-            "enabled": False,
-        })
+        tracker = BudgetTracker(
+            {
+                "daily_limit": 50.0,
+                "enabled": False,
+            }
+        )
 
         # Even at high spend, no alert
         alert = tracker.should_alert(100.0, 50.0, "daily")
@@ -156,7 +159,7 @@ class TestProxyIntegration:
         try:
             tracker = BudgetTracker({"daily_limit": 100.0})
             # Should not raise even with edge cases
-            tracker.should_alert(float('inf'), 100.0, "daily")
+            tracker.should_alert(float("inf"), 100.0, "daily")
             # Would cap at 100% in display but alert still works
             assert True
         except Exception as e:
@@ -169,6 +172,7 @@ class TestConcurrency:
     def test_alert_history_thread_safe(self):
         """Multiple threads checking budget simultaneously"""
         import threading
+
         tracker = BudgetTracker({"daily_limit": 100.0})
         alerts = []
 

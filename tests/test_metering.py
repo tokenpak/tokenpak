@@ -2,7 +2,6 @@
 Tests for usage metering system.
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.metering", reason="module not available in current build")
@@ -42,7 +41,7 @@ class TestUsageRecord:
             input_tokens=1000,
             output_tokens=200,
             saved_tokens=50,
-            request_type="chat"
+            request_type="chat",
         )
         assert record.model == "claude-sonnet"
         assert record.input_tokens == 1000
@@ -55,7 +54,7 @@ class TestUsageRecord:
             input_tokens=100,
             output_tokens=50,
             saved_tokens=10,
-            request_type="completion"
+            request_type="completion",
         )
         assert record.timestamp is not None
         assert isinstance(record.timestamp, str)
@@ -87,11 +86,12 @@ class TestUsageMeter:
             input_tokens=1000,
             output_tokens=200,
             saved_tokens=50,
-            request_type="chat"
+            request_type="chat",
         )
 
         # Wait a moment for async insert
         import time
+
         time.sleep(0.1)
 
         # Verify data was recorded
@@ -108,10 +108,11 @@ class TestUsageMeter:
                 input_tokens=1000 + (i * 100),
                 output_tokens=200 + (i * 20),
                 saved_tokens=50 + (i * 5),
-                request_type="chat"
+                request_type="chat",
             )
 
         import time
+
         time.sleep(0.2)
 
         with sqlite3.connect(meter.db_path) as conn:
@@ -135,6 +136,7 @@ class TestUsageMeter:
         meter.record("claude-sonnet", 1500, 250, 75, "completion")
 
         import time
+
         time.sleep(0.2)
 
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -154,6 +156,7 @@ class TestUsageMeter:
         meter.record("gpt-4", 1500, 300, 75, "completion")
 
         import time
+
         time.sleep(0.2)
 
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -172,6 +175,7 @@ class TestUsageMeter:
         meter.record("claude-sonnet", 1500, 250, 75, "completion")
 
         import time
+
         time.sleep(0.2)
 
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -182,13 +186,14 @@ class TestUsageMeter:
         assert summary["by_type"]["completion"]["requests"] == 1
         assert summary["by_type"]["completion"]["input_tokens"] == 1500
 
-    @patch('tokenpak.metering.requests.post')
+    @patch("tokenpak.metering.requests.post")
     def test_report_to_server_success(self, mock_post, meter):
         """Test successful report to server."""
         # Record some data
         meter.record("claude-sonnet", 1000, 200, 50, "chat")
 
         import time
+
         time.sleep(0.1)
 
         # Mock server response
@@ -204,7 +209,7 @@ class TestUsageMeter:
         call_args = mock_post.call_args
         assert "localhost:8900/usage" in call_args[0][0]
 
-    @patch('tokenpak.metering.requests.post')
+    @patch("tokenpak.metering.requests.post")
     def test_report_to_server_no_data(self, mock_post, meter):
         """Test report when no unreported data."""
         success = meter.report_to_server("http://localhost:8900")
@@ -212,12 +217,13 @@ class TestUsageMeter:
         assert success is True
         mock_post.assert_not_called()
 
-    @patch('tokenpak.metering.requests.post')
+    @patch("tokenpak.metering.requests.post")
     def test_report_to_server_network_error(self, mock_post, meter):
         """Test handling of network error."""
         meter.record("claude-sonnet", 1000, 200, 50, "chat")
 
         import time
+
         time.sleep(0.1)
 
         # Mock network error
@@ -227,12 +233,13 @@ class TestUsageMeter:
 
         assert success is False
 
-    @patch('tokenpak.metering.requests.post')
+    @patch("tokenpak.metering.requests.post")
     def test_report_marks_as_reported(self, mock_post, meter):
         """Test that successful report marks rows as reported."""
         meter.record("claude-sonnet", 1000, 200, 50, "chat")
 
         import time
+
         time.sleep(0.1)
 
         # Mock successful response
@@ -261,6 +268,7 @@ class TestUsageMeter:
         meter.record("claude-sonnet", 1000, 200, 50, "chat")
 
         import time
+
         time.sleep(0.1)
 
         # Manually insert old data (90+ days ago)
@@ -268,7 +276,7 @@ class TestUsageMeter:
         with sqlite3.connect(meter.db_path) as conn:
             conn.execute(
                 "INSERT INTO usage (key_id, timestamp, model, input_tokens, output_tokens, saved_tokens, request_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                ("test-key-123", old_date, "old-model", 100, 20, 5, "chat")
+                ("test-key-123", old_date, "old-model", 100, 20, 5, "chat"),
             )
             conn.commit()
 
@@ -322,16 +330,10 @@ class TestUsageMeterManager:
         manager = UsageMeterManager()
         key_id = f"manager-test-key-{id(manager)}"  # Unique per manager instance
 
-        manager.record_usage(
-            key_id,
-            "claude-sonnet",
-            1000,
-            200,
-            50,
-            "chat"
-        )
+        manager.record_usage(key_id, "claude-sonnet", 1000, 200, 50, "chat")
 
         import time
+
         time.sleep(0.1)
 
         meter = manager.get_meter(key_id)
@@ -341,7 +343,7 @@ class TestUsageMeterManager:
         assert summary["total_requests"] == 1
         assert summary["total_input_tokens"] == 1000
 
-    @patch('tokenpak.metering.requests.post')
+    @patch("tokenpak.metering.requests.post")
     def test_report_all(self, mock_post):
         """Test reporting all meters."""
         manager = UsageMeterManager()
@@ -350,6 +352,7 @@ class TestUsageMeterManager:
         manager.record_usage("key2", "claude-opus", 2000, 400, 100, "chat")
 
         import time
+
         time.sleep(0.2)
 
         # Mock successful response
@@ -374,15 +377,10 @@ class TestIntegration:
         # i=0: 1000, i=1: 1100, i=2: 1200, ..., i=9: 1900
         # Sum = 1000 + 1100 + 1200 + ... + 1900 = 10 * (1000 + 1900) / 2 = 14500
         for i in range(10):
-            meter.record(
-                "claude-sonnet",
-                1000 + (i * 100),
-                200 + (i * 20),
-                50 + (i * 5),
-                "chat"
-            )
+            meter.record("claude-sonnet", 1000 + (i * 100), 200 + (i * 20), 50 + (i * 5), "chat")
 
         import time
+
         time.sleep(0.3)
 
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -392,7 +390,7 @@ class TestIntegration:
         assert summary["total_input_tokens"] == 14500  # sum of 1000, 1100, ..., 1900
         assert summary["by_model"]["claude-sonnet"]["requests"] == 10
 
-    @patch('tokenpak.metering.requests.post')
+    @patch("tokenpak.metering.requests.post")
     def test_end_to_end_with_report(self, mock_post, meter):
         """Test full flow including reporting."""
         # Record data
@@ -400,6 +398,7 @@ class TestIntegration:
         meter.record("claude-opus", 2000, 300, 100, "chat")
 
         import time
+
         time.sleep(0.2)
 
         # Mock successful response

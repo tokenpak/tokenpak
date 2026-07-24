@@ -26,19 +26,11 @@ def mock_anthropic_response() -> Dict[str, Any]:
         "id": "msg_test_123",
         "type": "message",
         "role": "assistant",
-        "content": [
-            {
-                "type": "text",
-                "text": "This is a test response from Claude."
-            }
-        ],
+        "content": [{"type": "text", "text": "This is a test response from Claude."}],
         "model": "claude-3-sonnet-20240229",
         "stop_reason": "end_turn",
         "stop_sequence": None,
-        "usage": {
-            "input_tokens": 42,
-            "output_tokens": 18
-        }
+        "usage": {"input_tokens": 42, "output_tokens": 18},
     }
 
 
@@ -53,18 +45,11 @@ def mock_openai_response() -> Dict[str, Any]:
         "choices": [
             {
                 "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": "This is a test response from GPT-4."
-                },
-                "finish_reason": "stop"
+                "message": {"role": "assistant", "content": "This is a test response from GPT-4."},
+                "finish_reason": "stop",
             }
         ],
-        "usage": {
-            "prompt_tokens": 35,
-            "completion_tokens": 15,
-            "total_tokens": 50
-        }
+        "usage": {"prompt_tokens": 35, "completion_tokens": 15, "total_tokens": 50},
     }
 
 
@@ -115,7 +100,7 @@ def tokenpak_config(cache_storage, metrics_storage):
         },
         "budget": {
             "mode": "none",  # Disable budget limits for testing
-        }
+        },
     }
 
 
@@ -123,12 +108,14 @@ def tokenpak_config(cache_storage, metrics_storage):
 def adapter_env(mock_api_key):
     """Environment setup for adapter testing."""
     env = os.environ.copy()
-    env.update({
-        "ANTHROPIC_API_KEY": mock_api_key,
-        "OPENAI_API_KEY": mock_api_key,
-        "TOKENPAK_BASE_URL": "http://127.0.0.1:8767",
-        "TOKENPAK_SKIP_GATE": "1",  # Skip validation gate for faster tests
-    })
+    env.update(
+        {
+            "ANTHROPIC_API_KEY": mock_api_key,
+            "OPENAI_API_KEY": mock_api_key,
+            "TOKENPAK_BASE_URL": "http://127.0.0.1:8767",
+            "TOKENPAK_SKIP_GATE": "1",  # Skip validation gate for faster tests
+        }
+    )
     return env
 
 

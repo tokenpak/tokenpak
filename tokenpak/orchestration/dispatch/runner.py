@@ -93,9 +93,7 @@ from .stations.reviewer import (
 # Terminal run statuses. ``DispatchRun.status`` tracks ``DispatchJob.status``;
 # the job state machine defines exactly these four as terminal. A run in one of
 # these states must never be re-walked, re-finalized, or resumed.
-TERMINAL_RUN_STATUSES: frozenset[str] = frozenset(
-    {"delivered", "cancelled", "failed", "withdrawn"}
-)
+TERMINAL_RUN_STATUSES: frozenset[str] = frozenset({"delivered", "cancelled", "failed", "withdrawn"})
 
 
 class RunAlreadyTerminalError(RuntimeError):
@@ -225,7 +223,11 @@ class FulfillmentLine:
         another caller currently holds the run's execution lease.
         """
 
-        mode = autonomy_mode if isinstance(autonomy_mode, AutonomyMode) else AutonomyMode(autonomy_mode)
+        mode = (
+            autonomy_mode
+            if isinstance(autonomy_mode, AutonomyMode)
+            else AutonomyMode(autonomy_mode)
+        )
         rid = run_id or f"run_{uuid4().hex}"
         intent = route_intent if route_intent is not None else _route_intent(route)
 
@@ -287,7 +289,11 @@ class FulfillmentLine:
         and :class:`RunLeaseHeldError` when another caller holds the run lease.
         """
 
-        mode = autonomy_mode if isinstance(autonomy_mode, AutonomyMode) else AutonomyMode(autonomy_mode)
+        mode = (
+            autonomy_mode
+            if isinstance(autonomy_mode, AutonomyMode)
+            else AutonomyMode(autonomy_mode)
+        )
         intent = route_intent if route_intent is not None else _route_intent(route)
 
         run = self._ledger.read_run(run_id)
@@ -463,9 +469,7 @@ class FulfillmentLine:
                 mode=mode,
                 intent=intent,
                 approval_granted=approval_granted,
-                attempt_number=(
-                    first_station_attempt_number if index == start_index else 1
-                ),
+                attempt_number=(first_station_attempt_number if index == start_index else 1),
             )
             station_runs.append(outcome.station_run)
             effect_ids.extend(outcome.effect_ids)
@@ -475,7 +479,7 @@ class FulfillmentLine:
 
             # Cancellation surfaced mid-station (late result captured).
             if outcome.station_run.status is StationRunStatus.CANCELLED:
-                self._mark_remaining_cancelled(run, stations[index + 1:])
+                self._mark_remaining_cancelled(run, stations[index + 1 :])
                 run = self._finalize_run(run, status="cancelled")
                 return FulfillmentResult(
                     status=LineStatus.CANCELLED,
@@ -776,7 +780,10 @@ class FulfillmentLine:
             return 0
         last = station_runs[-1]
         last_index = _station_index(route, last.station_id)
-        if outcome.action in (ResumeAction.CONTINUE_NEXT_STATION, ResumeAction.PROMOTE_AND_CONTINUE):
+        if outcome.action in (
+            ResumeAction.CONTINUE_NEXT_STATION,
+            ResumeAction.PROMOTE_AND_CONTINUE,
+        ):
             return last_index + 1
         # RERUN_STATION → rerun the interrupted station.
         return last_index
@@ -813,9 +820,7 @@ class FulfillmentLine:
 
     # -- cancellation --------------------------------------------------------
 
-    def _mark_remaining_cancelled(
-        self, run: DispatchRun, remaining: list[RouteStation]
-    ) -> None:
+    def _mark_remaining_cancelled(self, run: DispatchRun, remaining: list[RouteStation]) -> None:
         """Mark every not-yet-run station ``cancelled``.
 
         Each queued station gets a ``cancelled`` :class:`DispatchStationRun` so
@@ -958,9 +963,7 @@ def _delivery_fields(
     fields: dict[str, Any] = {}
     delivery = route.delivery
     if delivery.include_summary:
-        fields["summary"] = (
-            f"Ran {len(station_runs)} station(s) on route {route.id}."
-        )
+        fields["summary"] = f"Ran {len(station_runs)} station(s) on route {route.id}."
     if delivery.include_files_changed:
         fields["files_changed"] = _files_changed(station_runs)
     if delivery.include_tests:

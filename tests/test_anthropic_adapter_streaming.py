@@ -18,6 +18,7 @@ from tokenpak.proxy.adapters import AnthropicAdapter
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _body(extra: dict | None = None) -> bytes:
     """Return a minimal valid Anthropic messages request body."""
     payload: dict = {
@@ -33,6 +34,7 @@ def _body(extra: dict | None = None) -> bytes:
 # ---------------------------------------------------------------------------
 # stream: true  →  CanonicalRequest.stream is True
 # ---------------------------------------------------------------------------
+
 
 class TestStreamingFlagEnabled:
     """stream: true in request body must produce canonical.stream == True."""
@@ -61,6 +63,7 @@ class TestStreamingFlagEnabled:
 # ---------------------------------------------------------------------------
 # stream: false / absent  →  CanonicalRequest.stream is False
 # ---------------------------------------------------------------------------
+
 
 class TestStreamingFlagDisabled:
     """stream absent or false must produce canonical.stream == False."""
@@ -93,6 +96,7 @@ class TestStreamingFlagDisabled:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestStreamingEdgeCases:
     """Malformed and boundary inputs behave predictably."""
 
@@ -118,6 +122,7 @@ class TestStreamingEdgeCases:
 # ---------------------------------------------------------------------------
 # SSE format (not applicable for incoming-request header detection)
 # ---------------------------------------------------------------------------
+
 
 class TestSSEFormat:
     """get_sse_format() declares the correct Anthropic SSE format string.

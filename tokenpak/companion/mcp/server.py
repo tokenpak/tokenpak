@@ -27,35 +27,39 @@ def _send(obj: dict) -> None:
 
 
 def _handle_initialize(req_id: int | str, state: CompanionState) -> None:
-    _send({
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "result": {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {}},
-            "serverInfo": {
-                "name": "tokenpak-companion",
-                "version": "0.1.0",
+    _send(
+        {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {
+                    "name": "tokenpak-companion",
+                    "version": "0.1.0",
+                },
             },
-        },
-    })
+        }
+    )
 
 
 def _handle_tools_list(req_id: int | str) -> None:
-    _send({
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "result": {
-            "tools": [
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "inputSchema": t.input_schema,
-                }
-                for t in TOOLS
-            ]
-        },
-    })
+    _send(
+        {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "tools": [
+                    {
+                        "name": t.name,
+                        "description": t.description,
+                        "inputSchema": t.input_schema,
+                    }
+                    for t in TOOLS
+                ]
+            },
+        }
+    )
 
 
 def _handle_tools_call(req_id: int | str, params: dict, state: CompanionState) -> None:
@@ -80,11 +84,13 @@ def _handle_tools_call(req_id: int | str, params: dict, state: CompanionState) -
             break
 
     if tool is None:
-        _send({
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
-        })
+        _send(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
+            }
+        )
         return
 
     try:
@@ -92,13 +98,13 @@ def _handle_tools_call(req_id: int | str, params: dict, state: CompanionState) -
     except Exception as e:
         result_text = json.dumps({"error": str(e)})
 
-    _send({
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "result": {
-            "content": [{"type": "text", "text": result_text}]
-        },
-    })
+    _send(
+        {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {"content": [{"type": "text", "text": result_text}]},
+        }
+    )
 
 
 def main() -> None:
@@ -125,11 +131,13 @@ def main() -> None:
             _handle_tools_call(req_id, req.get("params", {}), state)
         elif req_id is not None:
             # Unknown method with ID — error
-            _send({
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "error": {"code": -32601, "message": f"Method not found: {method}"},
-            })
+            _send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32601, "message": f"Method not found: {method}"},
+                }
+            )
         # Notifications (no id) are silently ignored
 
 

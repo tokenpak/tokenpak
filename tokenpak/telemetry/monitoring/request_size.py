@@ -10,12 +10,21 @@ Thresholds:
   - RED (700 KB): Run /compact NOW to avoid slowdowns
 """
 
+__all__ = (
+    "AlertLevel",
+    "RequestSizeConfig",
+    "RequestSizeMonitor",
+    "SizeAlert",
+    "get_monitor",
+    "reset_monitor",
+)
+
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from threading import Lock
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +60,42 @@ class RequestSizeConfig:
     max_history_size: int = 1000
 
 
+class RequestSizeStats(TypedDict):
+    """Aggregate request-size monitoring counters."""
+
+    enabled: bool
+    thresholds: dict[str, int]
+    alert_counts: dict[str, int]
+    active_sessions: int
+    history_size: int
+
+
+class SizeAlertRecord(TypedDict):
+    """JSON-ready representation of a size alert."""
+
+    timestamp: str
+    level: str
+    size_bytes: int
+    size_kb: float
+    message: str
+    session_id: Optional[str]
+
+
+class RequestSizeSnapshot(TypedDict):
+    """Serializable monitoring snapshot."""
+
+    type: str
+    stats: RequestSizeStats
+    recent_alerts: list[SizeAlertRecord]
+
+
 class RequestSizeMonitor:
     """Thread-safe request size monitor with tiered alerting."""
 
     def __init__(self, config: Optional[RequestSizeConfig] = None):
         self.config = config or RequestSizeConfig()
         self._lock = Lock()
-        self._last_level: Dict[str, AlertLevel] = {}  # session_id -> last alert level
+        self._last_level: Dict[Optional[str], AlertLevel] = {}
         self._alert_history: List[SizeAlert] = []
         self._alert_counts: Dict[AlertLevel, int] = {
             AlertLevel.YELLOW: 0,
@@ -154,7 +192,7 @@ class RequestSizeMonitor:
             if session_id in self._last_level:
                 del self._last_level[session_id]
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> RequestSizeStats:
         """Get monitoring statistics."""
         with self._lock:
             return {
@@ -169,7 +207,7 @@ class RequestSizeMonitor:
                 "history_size": len(self._alert_history),
             }
 
-    def get_alert_history(self, limit: int = 50) -> List[Dict]:
+    def get_alert_history(self, limit: int = 50) -> List[SizeAlertRecord]:
         """Get recent alert history."""
         with self._lock:
             recent = self._alert_history[-limit:]
@@ -185,7 +223,7 @@ class RequestSizeMonitor:
                 for alert in recent
             ]
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> RequestSizeSnapshot:
         """Serialize to dictionary for telemetry/logging."""
         return {
             "type": "request_size_alert",

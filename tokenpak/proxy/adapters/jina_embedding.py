@@ -71,7 +71,7 @@ class JinaEmbeddingAdapter(EmbeddingAdapter):
         Returns:
             (url, headers, body) ready to forward to https://api.jina.ai/v1/embeddings.
         """
-        payload: Dict = {
+        payload: Dict[str, object] = {
             "model": canonical.model,
             "input": canonical.input,
             # encoding_format → embedding_type
@@ -84,9 +84,7 @@ class JinaEmbeddingAdapter(EmbeddingAdapter):
 
         # Map canonical input_type → Jina task LoRA parameter
         if canonical.input_type is not None:
-            payload["task"] = _INPUT_TYPE_TO_TASK.get(
-                canonical.input_type, canonical.input_type
-            )
+            payload["task"] = _INPUT_TYPE_TO_TASK.get(canonical.input_type, canonical.input_type)
         elif canonical.task is not None:
             # task already in Jina format — pass through directly
             payload["task"] = canonical.task

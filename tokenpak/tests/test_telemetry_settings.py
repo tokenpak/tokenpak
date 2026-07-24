@@ -25,6 +25,7 @@ from tokenpak.telemetry.settings import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def cfg_path(tmp_path: pathlib.Path) -> pathlib.Path:
     return tmp_path / "alerts.json"
@@ -39,11 +40,15 @@ def settings(cfg_path: pathlib.Path) -> AlertSettings:
 # AlertSettings.load
 # ---------------------------------------------------------------------------
 
+
 class TestAlertSettingsLoad:
     def test_load_returns_defaults_when_file_missing(self, settings):
         """Non-existent file → returns a copy of DEFAULT_ALERT_CONFIG."""
         result = settings.load()
-        assert result["cost_spike"]["threshold_pct"] == DEFAULT_ALERT_CONFIG["cost_spike"]["threshold_pct"]
+        assert (
+            result["cost_spike"]["threshold_pct"]
+            == DEFAULT_ALERT_CONFIG["cost_spike"]["threshold_pct"]
+        )
         assert result["latency"]["threshold_ms"] == DEFAULT_ALERT_CONFIG["latency"]["threshold_ms"]
 
     def test_load_returns_dict(self, settings):
@@ -82,6 +87,7 @@ class TestAlertSettingsLoad:
 # AlertSettings.save + atomic write
 # ---------------------------------------------------------------------------
 
+
 class TestAlertSettingsSave:
     def test_save_creates_file(self, settings, cfg_path):
         config = settings.load()
@@ -110,6 +116,7 @@ class TestAlertSettingsSave:
 # ---------------------------------------------------------------------------
 # AlertSettings._validate
 # ---------------------------------------------------------------------------
+
 
 class TestAlertSettingsValidate:
     def test_valid_config_passes(self, settings):
@@ -216,6 +223,7 @@ class TestAlertSettingsValidate:
 # _deep_merge helper
 # ---------------------------------------------------------------------------
 
+
 class TestDeepMerge:
     def test_override_wins_for_flat_values(self):
         base = {"a": 1, "b": 2}
@@ -252,6 +260,7 @@ try:
         StorageConfig,
         TelemetryConfig,
     )
+
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False

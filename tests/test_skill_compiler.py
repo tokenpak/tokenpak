@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.agentic.skill_compiler", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.agentic.skill_compiler", reason="module not available in current build"
+)
 
 from tokenpak._internal.agentic.skill_compiler import (
     PROMOTION_MIN_SUCCESSFUL_EPISODES,
@@ -125,7 +127,9 @@ def test_promotion_rules_enforced(skill_env) -> None:
     assert len(store.list_all()) == 1
 
 
-def test_skill_execution_produces_same_outcome_as_original_reasoning(skill_env, tmp_path: Path) -> None:
+def test_skill_execution_produces_same_outcome_as_original_reasoning(
+    skill_env, tmp_path: Path
+) -> None:
     compiler, store, _ = skill_env
     target = tmp_path / "result.txt"
 

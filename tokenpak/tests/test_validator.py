@@ -193,7 +193,9 @@ class TestTokenPakValidator:
         }
         result = validator.validate(pack)
         assert not result.valid
-        assert any("version" in i.field and "Invalid version format" in i.message for i in result.errors)
+        assert any(
+            "version" in i.field and "Invalid version format" in i.message for i in result.errors
+        )
 
     def test_validate_version_unsupported_major(self, validator):
         pack = INVALID_PACK_BAD_VERSION
@@ -260,7 +262,9 @@ class TestTokenPakValidator:
         }
         result = validator.validate(pack)
         assert not result.valid
-        assert any("metadata" in i.field and "Missing required section" in i.message for i in result.errors)
+        assert any(
+            "metadata" in i.field and "Missing required section" in i.message for i in result.errors
+        )
 
     def test_validate_metadata_not_dict(self, validator):
         pack = {
@@ -270,7 +274,9 @@ class TestTokenPakValidator:
         }
         result = validator.validate(pack)
         assert not result.valid
-        assert any("metadata" in i.field and "Must be an object" in i.message for i in result.errors)
+        assert any(
+            "metadata" in i.field and "Must be an object" in i.message for i in result.errors
+        )
 
     def test_validate_task_missing(self, validator):
         pack = {
@@ -309,7 +315,9 @@ class TestTokenPakValidator:
         }
         result = validator.validate(pack)
         assert not result.valid
-        assert any("metadata.tags" in i.field and "Must be an array" in i.message for i in result.errors)
+        assert any(
+            "metadata.tags" in i.field and "Must be an array" in i.message for i in result.errors
+        )
 
     def test_validate_expires_past(self, validator):
         pack = {
@@ -330,7 +338,9 @@ class TestTokenPakValidator:
         }
         result = validator.validate(pack)
         assert not result.valid
-        assert any("blocks" in i.field and "Missing required section" in i.message for i in result.errors)
+        assert any(
+            "blocks" in i.field and "Missing required section" in i.message for i in result.errors
+        )
 
     def test_validate_blocks_not_array(self, validator):
         pack = {
@@ -360,7 +370,9 @@ class TestTokenPakValidator:
         }
         result = validator.validate(pack)
         assert not result.valid
-        assert any("blocks[0]" in i.field and "must be an object" in i.message for i in result.errors)
+        assert any(
+            "blocks[0]" in i.field and "must be an object" in i.message for i in result.errors
+        )
 
     def test_validate_block_type_missing(self, validator):
         pack = {
@@ -376,7 +388,9 @@ class TestTokenPakValidator:
         pack = INVALID_PACK_BAD_BLOCK_TYPE
         result = validator.validate(pack)
         assert not result.valid
-        assert any("blocks[0].type" in i.field and "Unknown block type" in i.message for i in result.errors)
+        assert any(
+            "blocks[0].type" in i.field and "Unknown block type" in i.message for i in result.errors
+        )
 
     def test_validate_block_id_missing(self, validator):
         pack = {
@@ -422,7 +436,10 @@ class TestTokenPakValidator:
         }
         result = validator.validate(pack)
         assert not result.valid
-        assert any("blocks[0].content" in i.field and "Must be a string" in i.message for i in result.errors)
+        assert any(
+            "blocks[0].content" in i.field and "Must be a string" in i.message
+            for i in result.errors
+        )
 
     def test_validate_block_priority_invalid(self, validator):
         pack = {
@@ -596,7 +613,10 @@ class TestTokenPakValidator:
         pack["provenance"] = {"transforms": [{"type": "unknown_transform"}]}
         result = validator.validate(pack)
         # Unknown transform type is a warning, not an error
-        assert any("provenance.transforms[0].type" in i.field and i.level == "warning" for i in result.issues)
+        assert any(
+            "provenance.transforms[0].type" in i.field and i.level == "warning"
+            for i in result.issues
+        )
 
     # ── Policies validation ────
 
@@ -690,7 +710,15 @@ class TestTokenPakValidator:
 
     def test_validate_all_block_types(self, validator):
         """Test that all supported block types are valid."""
-        block_types = ["instructions", "code", "knowledge", "memory", "conversation", "evidence", "system"]
+        block_types = [
+            "instructions",
+            "code",
+            "knowledge",
+            "memory",
+            "conversation",
+            "evidence",
+            "system",
+        ]
         for block_type in block_types:
             pack = {
                 "header": {"version": "1.0", "id": "pak_test", "created": "2026-03-07T00:00:00Z"},

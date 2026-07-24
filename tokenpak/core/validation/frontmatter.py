@@ -11,8 +11,10 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
-class _DuplicateKeyLoader(yaml.SafeLoader):
+class _DuplicateKeyLoader(yaml.SafeLoader):  # type: ignore[misc]
     """YAML loader that records duplicate mapping keys."""
+
+    _duplicate_keys: list[str]
 
 
 @dataclass
@@ -41,7 +43,7 @@ class FrontmatterDiagnostics:
 
 def _construct_mapping(
     loader: _DuplicateKeyLoader, node: yaml.nodes.MappingNode, deep: bool = False
-):
+) -> dict[str, Any]:
     mapping: dict[str, Any] = {}
     duplicates = getattr(loader, "_duplicate_keys", None)
 
@@ -88,7 +90,7 @@ def parse_frontmatter(
     diagnostics = FrontmatterDiagnostics(mode="strict" if strict else "lenient")
 
     loader = _DuplicateKeyLoader(yaml_block)
-    loader._duplicate_keys = []  # type: ignore[attr-defined]
+    loader._duplicate_keys = []
 
     try:
         parsed = loader.get_single_data() or {}

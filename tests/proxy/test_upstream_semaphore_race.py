@@ -121,9 +121,7 @@ def test_inflight_never_exceeds_cap_under_churn(monkeypatch):
     for t in threads:
         t.join(timeout=10)
 
-    assert 0 < max_seen <= cap, (
-        f"in-flight count reached {max_seen}, exceeding the cap of {cap}"
-    )
+    assert 0 < max_seen <= cap, f"in-flight count reached {max_seen}, exceeding the cap of {cap}"
 
 
 def test_snapshot_omits_lingering_zero_count_entries():

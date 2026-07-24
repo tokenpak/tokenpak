@@ -7,7 +7,7 @@ DASHBOARD_DIR = Path(__file__).parent
 CCI09_DASHBOARD_MODES = ("cli", "tui", "tmux", "sdk", "ide", "cron")
 
 
-def get_dashboard_files():
+def get_dashboard_files() -> dict[str, Path]:
     """Return paths to dashboard files."""
     return {
         "index.html": DASHBOARD_DIR / "index.html",
@@ -63,6 +63,30 @@ try:
     from .export_api import ExportAPI
     from .export_csv import CSVExporter, ExportDataType, ExportFormat
     from .session_filter import SessionFilter
-    __all__ = ['get_dashboard_files', 'serve_dashboard_file', 'CCI09_DASHBOARD_MODES', 'ExportAPI', 'CSVExporter', 'ExportDataType', 'ExportFormat', 'SessionFilter', 'account_dashboard', 'app', 'export_api', 'export_csv', 'session_filter']
+
+    __all__ = [
+        "get_dashboard_files",
+        "serve_dashboard_file",
+        "CCI09_DASHBOARD_MODES",
+        "ExportAPI",
+        "CSVExporter",
+        "ExportDataType",
+        "ExportFormat",
+        "SessionFilter",
+        "account_dashboard",
+        "app",
+        "export_api",
+        "export_csv",
+        "session_filter",
+    ]
 except ImportError:
-    __all__ = ["get_dashboard_files", "serve_dashboard_file", "CCI09_DASHBOARD_MODES", 'account_dashboard', 'app', 'export_api', 'export_csv', 'session_filter']
+    __all__ = [
+        "get_dashboard_files",
+        "serve_dashboard_file",
+        "CCI09_DASHBOARD_MODES",
+        "account_dashboard",
+        "app",
+        "export_api",
+        "export_csv",
+        "session_filter",
+    ]

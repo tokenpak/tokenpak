@@ -38,16 +38,16 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional, cast
 
 # Schema version for the machine-readable (``--json``) snapshot. Bump on any
 # field rename/removal so consumers can pin. (spec F3)
 STATUS_SCHEMA_VERSION = 1
 
-_HEALTH_TTL = 1.5      # D2
-_STATS_TTL = 7.0       # D2
-_BACKOFF = 3.0         # D4
-_TIMEOUT = 0.3         # D3 (300ms; hard ceiling < 500ms)
+_HEALTH_TTL = 1.5  # D2
+_STATS_TTL = 7.0  # D2
+_BACKOFF = 3.0  # D4
+_TIMEOUT = 0.3  # D3 (300ms; hard ceiling < 500ms)
 
 
 def _port() -> int:
@@ -67,31 +67,31 @@ def _monotonic() -> float:
 class ProxyStatus:
     """Honest proxy state. ``None`` means *unknown* — never fabricate."""
 
-    state: str                      # "running" | "stopped" | "starting" | "unknown"
-    cost: Optional[float] = None    # today's spend; None when unknown
-    saved: Optional[float] = None   # today's savings; None when unknown
+    state: str  # "running" | "stopped" | "starting" | "unknown"
+    cost: Optional[float] = None  # today's spend; None when unknown
+    saved: Optional[float] = None  # today's savings; None when unknown
 
 
 class StatusCache:
     """Lazy, TTL'd, backoff-protected proxy-status cache (single-writer)."""
 
     def __init__(self) -> None:
-        self._health: Optional[dict] = None
+        self._health: Optional[dict[str, Any]] = None
         self._health_at: float = 0.0
         self._health_state: str = "unknown"
-        self._stats: Optional[dict] = None
+        self._stats: Optional[dict[str, Any]] = None
         self._stats_at: float = 0.0
         self._backoff_until: float = 0.0
 
     # -- internal probes ---------------------------------------------------
-    def _get(self, path: str) -> Optional[dict]:
+    def _get(self, path: str) -> Optional[dict[str, Any]]:
         url = f"http://127.0.0.1:{_port()}{path}"
         try:
             resp = urllib.request.urlopen(url, timeout=_TIMEOUT)  # noqa: S310 (localhost)
             raw = resp.read()
             if resp.status != 200:
                 return None
-            return json.loads(raw.decode() or "{}") if raw else {}
+            return cast(dict[str, Any], json.loads(raw.decode() or "{}")) if raw else {}
         except Exception:  # noqa: BLE001 — re-raised classification happens in caller
             raise
 
@@ -122,7 +122,9 @@ class StatusCache:
         except Exception:  # noqa: BLE001
             self._backoff_until = now + _BACKOFF
             self._health = None
-            self._health_state = self._health_state if self._health_state != "unknown" else "unknown"
+            self._health_state = (
+                self._health_state if self._health_state != "unknown" else "unknown"
+            )
 
     def _refresh_stats(self, now: float) -> None:
         if now < self._backoff_until:
@@ -172,7 +174,7 @@ def snapshot(*, probe: bool = True) -> ProxyStatus:
     return _CACHE.snapshot(probe=probe)
 
 
-def json_snapshot() -> dict:
+def json_snapshot() -> dict[str, Any]:
     """Deterministic, schema-versioned status dict for ``tokenpak --json`` (F3).
 
     Cheap: reads only cached state (no fresh probe is forced), emits stable
@@ -181,9 +183,9 @@ def json_snapshot() -> dict:
     s = snapshot(probe=False)
     return {
         "schema_version": STATUS_SCHEMA_VERSION,
-        "proxy": s.state,                 # running|stopped|starting|unknown
-        "cost_today": s.cost,             # may be null (honesty — D7)
-        "saved_today": s.saved,           # may be null
+        "proxy": s.state,  # running|stopped|starting|unknown
+        "cost_today": s.cost,  # may be null (honesty — D7)
+        "saved_today": s.saved,  # may be null
         "port": _port(),
     }
 

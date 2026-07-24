@@ -201,7 +201,7 @@ def malloc_trim() -> bool:
         return False
     try:
         libc = ctypes.CDLL("libc.so.6")
-        return libc.malloc_trim(0) == 1
+        return bool(libc.malloc_trim(0) == 1)
     except (AttributeError, OSError):
         return False
 
@@ -435,7 +435,7 @@ class MemoryGuard:
         with self._lifecycle_lock:
             thread = self._thread
             thread_alive = bool(thread and thread.is_alive())
-            thread_ident = thread.ident if thread_alive else None
+            thread_ident = thread.ident if thread is not None and thread_alive else None
             stopping = self._stopping
             with self._stats_lock:
                 snapshot = dict(self._stats)
@@ -684,8 +684,8 @@ def _validate_memory_env(names: list[str]) -> None:
             raise ValueError("TOKENPAK_MEMORY_SYS_LOW_MB must be non-negative")
     for name in ("TOKENPAK_MEMORY_CHECK_SECS", "TOKENPAK_MEMORY_COOLDOWN_SECS"):
         if name in names:
-            value = _number_from_env(name, 0)
-            if not math.isfinite(value) or value <= 0:
+            interval = _number_from_env(name, 0)
+            if not math.isfinite(interval) or interval <= 0:
                 raise ValueError(f"{name} must be positive and finite")
 
 

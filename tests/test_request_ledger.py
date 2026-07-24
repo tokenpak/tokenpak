@@ -1,4 +1,3 @@
-
 import pytest
 
 pytest.importorskip("tokenpak.request_ledger", reason="module not available in current build")
@@ -13,7 +12,9 @@ def test_append_request_writes_and_trims(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
     # Write 3 entries, keep MAX_REQUESTS=1000 but we simulate trimming by writing and re-reading
     for i in range(3):
-        append_request({"id": f"r{i}", "timestamp": datetime.now(timezone.utc).isoformat()}, path=path)
+        append_request(
+            {"id": f"r{i}", "timestamp": datetime.now(timezone.utc).isoformat()}, path=path
+        )
 
     lines = path.read_text().splitlines()
     assert len(lines) == 3

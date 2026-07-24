@@ -99,9 +99,7 @@ class EmbeddingRouter:
             )
 
         if requested_model == "auto":
-            model_name, best = _select_auto_model(
-                input_texts or [], self.available_providers
-            )
+            model_name, best = _select_auto_model(input_texts or [], self.available_providers)
             return model_name, best
 
         # Build a minimal probe body for detect()
@@ -122,24 +120,26 @@ class EmbeddingRouter:
             f"Available providers: {[a.source_format for a in self.available_providers]}"
         )
 
-    def get_providers_status(self) -> List[Dict]:
+    def get_providers_status(self) -> List[Dict[str, object]]:
         """Return status of all embedding providers.
 
         Each entry contains: name, available, healthy, default_model, key_set, cooldown_until.
         The EmbeddingRouter has no cooldown mechanism, so healthy mirrors available and
         cooldown_until is always null.
         """
-        result = []
+        result: List[Dict[str, object]] = []
         for adapter in self._all_adapters:
             key_set = adapter.is_available()
-            result.append({
-                "name": adapter.source_format,
-                "available": key_set,
-                "healthy": key_set,
-                "default_model": adapter.get_default_model(),
-                "key_set": key_set,
-                "cooldown_until": None,
-            })
+            result.append(
+                {
+                    "name": adapter.source_format,
+                    "available": key_set,
+                    "healthy": key_set,
+                    "default_model": adapter.get_default_model(),
+                    "key_set": key_set,
+                    "cooldown_until": None,
+                }
+            )
         return result
 
     def handle_request(
@@ -167,8 +167,16 @@ class EmbeddingRouter:
         resolved_model, adapter = self.resolve_model(requested_model, input_texts)
 
         _KNOWN_FIELDS = frozenset(
-            ("model", "input", "dimensions", "encoding_format",
-             "input_type", "task", "truncate", "normalized")
+            (
+                "model",
+                "input",
+                "dimensions",
+                "encoding_format",
+                "input_type",
+                "task",
+                "truncate",
+                "normalized",
+            )
         )
 
         canonical = CanonicalEmbeddingRequest(
@@ -191,8 +199,19 @@ class EmbeddingRouter:
 # ---------------------------------------------------------------------------
 
 _CODE_SIGNALS = (
-    "def ", "class ", "import ", "from ", "#!/",
-    "if [", "function ", "const ", "let ", "{", "}", "=>", "->",
+    "def ",
+    "class ",
+    "import ",
+    "from ",
+    "#!/",
+    "if [",
+    "function ",
+    "const ",
+    "let ",
+    "{",
+    "}",
+    "=>",
+    "->",
 )
 
 
@@ -222,19 +241,15 @@ def _select_auto_model(
         code_count = sum(1 for t in input_texts if _looks_like_code(t))
         ratio = code_count / len(input_texts)
         if ratio > 0.30:
-            logger.debug(
-                "Content routing: %.0f%% code texts → voyage-code-3", ratio * 100
-            )
+            logger.debug("Content routing: %.0f%% code texts → voyage-code-3", ratio * 100)
             return "voyage-code-3", best
-        logger.debug(
-            "Content routing: %.0f%% code texts → voyage-3.5", ratio * 100
-        )
+        logger.debug("Content routing: %.0f%% code texts → voyage-3.5", ratio * 100)
         return "voyage-3.5", best
 
     return best.get_default_model(), best
 
 
-def _normalise_input(raw: object) -> list:
+def _normalise_input(raw: object) -> list[str]:
     """Return ``raw`` as a list of strings regardless of whether it is a str or list."""
     if isinstance(raw, list):
         return [str(item) for item in raw]

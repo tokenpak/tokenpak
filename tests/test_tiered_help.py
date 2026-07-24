@@ -48,12 +48,16 @@ class TestEssentialHelp:
         # All essential commands should be listed as command names (not just in descriptions)
         for cmd in _ESSENTIAL_COMMANDS:
             # Check command is listed with its description
-            assert f"{cmd:<14}" in text or f"  {cmd} " in text, f"Essential command '{cmd}' not in default help"
+            assert f"{cmd:<14}" in text or f"  {cmd} " in text, (
+                f"Essential command '{cmd}' not in default help"
+            )
 
         # Some intermediate commands may appear in descriptions, but not as listed commands
         # We check that only essential commands are shown in the command listing section
         assert "Monitoring:" not in text, "Monitoring section should not appear in default help"
-        assert "Configuration:" not in text, "Configuration section should not appear in default help"
+        assert "Configuration:" not in text, (
+            "Configuration section should not appear in default help"
+        )
 
         # Should guide user to --more and --all
         assert "--more" in text
@@ -65,7 +69,17 @@ class TestEssentialHelp:
 
     def test_essential_commands_are(self):
         """Verify the correct 9 essential commands are defined."""
-        expected = {"setup", "start", "stop", "status", "cost", "savings", "doctor", "dashboard", "upgrade"}
+        expected = {
+            "setup",
+            "start",
+            "stop",
+            "status",
+            "cost",
+            "savings",
+            "doctor",
+            "dashboard",
+            "upgrade",
+        }
         actual = set(_ESSENTIAL_COMMANDS.keys())
         assert actual == expected, f"Essential commands mismatch. Expected {expected}, got {actual}"
 
@@ -82,7 +96,9 @@ class TestIntermediateHelp:
 
         # All essential commands should be listed
         for cmd in _ESSENTIAL_COMMANDS:
-            assert f"{cmd:<14}" in text or f"  {cmd} " in text, f"Essential command '{cmd}' not in --more output"
+            assert f"{cmd:<14}" in text or f"  {cmd} " in text, (
+                f"Essential command '{cmd}' not in --more output"
+            )
 
         # Check for key intermediate commands
         assert "watch" in text, "watch command not in --more output"
@@ -101,9 +117,22 @@ class TestIntermediateHelp:
 
     def test_intermediate_has_expected_commands(self):
         """Verify expected intermediate commands are defined."""
-        expected = {"watch", "logs", "stats", "config", "integrate", "index", "search", "demo", "restart", "version"}
+        expected = {
+            "watch",
+            "logs",
+            "stats",
+            "config",
+            "integrate",
+            "index",
+            "search",
+            "demo",
+            "restart",
+            "version",
+        }
         actual = set(_INTERMEDIATE_COMMANDS.keys())
-        assert expected.issubset(actual), f"Missing intermediate commands. Expected at least {expected}, got {actual}"
+        assert expected.issubset(actual), (
+            f"Missing intermediate commands. Expected at least {expected}, got {actual}"
+        )
 
 
 class TestFullHelp:
@@ -121,8 +150,9 @@ class TestFullHelp:
 
         # At least some essential/key commands should be visible in full help
         # (some like 'setup' may not be in registry)
-        assert any(cmd in text for cmd in ["start", "stop", "status", "cost", "doctor"]), \
+        assert any(cmd in text for cmd in ["start", "stop", "status", "cost", "doctor"]), (
             "At least some key commands should be in --all output"
+        )
 
 
 class TestSpecificCommandHelp:
@@ -351,6 +381,7 @@ class TestAcceptanceCriteria:
         """✅ New test file test_tiered_help.py created."""
         # This test file itself is proof of criterion 8
         import inspect
+
         test_classes = [
             TestEssentialHelp,
             TestIntermediateHelp,

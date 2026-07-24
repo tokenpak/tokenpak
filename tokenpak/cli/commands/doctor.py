@@ -2,6 +2,21 @@
 
 from __future__ import annotations
 
+__all__ = (
+    "CANONICAL_PROXY_URL",
+    "Colors",
+    "DEFAULT_FLEET_CONFIG",
+    "attribution_coverage",
+    "build_lifecycle_summary",
+    "companion_hook_integrity",
+    "load_fleet_config",
+    "run_doctor",
+    "run_fleet_doctor",
+    "run_stream_check",
+    "verify_integration_target",
+)
+
+
 import importlib.util
 import json
 import os
@@ -11,7 +26,9 @@ import sys
 import time
 import urllib.request
 from dataclasses import dataclass
+from os import PathLike
 from pathlib import Path
+from typing import Any, TypedDict, cast
 
 
 class Colors:
@@ -35,16 +52,69 @@ class Colors:
         return f"{Colors.RED}❌{Colors.RESET}  {text}"
 
 
-def _proxy_get(path: str, port: int | None = None, timeout: int = 3) -> dict | None:
+def _proxy_get(path: str, port: int | None = None, timeout: int = 3) -> dict[str, Any] | None:
     """Fetch JSON from running proxy. Returns None if unreachable."""
     port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
     try:
-        resp = urllib.request.urlopen(
-            f"http://127.0.0.1:{port}{path}", timeout=timeout
-        )
-        return json.loads(resp.read())
+        resp = urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=timeout)
+        payload = json.loads(resp.read())
+        if isinstance(payload, dict):
+            return payload
+        return None
     except Exception:
         return None
+
+
+_CANONICAL_HEALTH_FIELDS = {
+    "status",
+    "uptime_seconds",
+    "version",
+    "requests_total",
+    "requests_errors",
+    "compression_ratio_avg",
+    "is_degraded",
+    "is_shutting_down",
+    "in_flight_requests",
+    "memory_guard",
+    "admission",
+    "agent_concurrency",
+    "timestamp",
+    "connection_pool",
+    "circuit_breakers",
+}
+
+
+def _validate_canonical_health(payload: dict[str, Any]) -> tuple[bool, str]:
+    """Validate the stable basic-health envelope before reporting a pass."""
+
+    if set(payload) != _CANONICAL_HEALTH_FIELDS:
+        return False, "top-level health fields do not match the canonical contract"
+    if payload.get("status") not in {"ok", "degraded", "shutting_down"}:
+        return False, "health status is missing or unknown"
+    if not isinstance(payload.get("version"), str) or not payload["version"]:
+        return False, "health version is missing or malformed"
+    if not isinstance(payload.get("timestamp"), str) or not payload["timestamp"]:
+        return False, "health timestamp is missing or malformed"
+    for field in ("uptime_seconds", "requests_total", "requests_errors", "in_flight_requests"):
+        value = payload.get(field)
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+            return False, f"health {field} is missing or malformed"
+    compression = payload.get("compression_ratio_avg")
+    if not isinstance(compression, (int, float)) or isinstance(compression, bool):
+        return False, "health compression_ratio_avg is missing or malformed"
+    for field in ("is_degraded", "is_shutting_down"):
+        if not isinstance(payload.get(field), bool):
+            return False, f"health {field} is missing or malformed"
+    for field in (
+        "memory_guard",
+        "admission",
+        "agent_concurrency",
+        "connection_pool",
+        "circuit_breakers",
+    ):
+        if not isinstance(payload.get(field), dict):
+            return False, f"health {field} is missing or malformed"
+    return True, ""
 
 
 # Canonical proxy URL the routed Claude Code config is expected to point at.
@@ -122,12 +192,7 @@ def _claude_settings_path() -> Path:
 
 def _api_key_setup_detail() -> str:
     """Detailed no-key setup guidance shared by default and verbose output."""
-    try:
-        from tokenpak.cli.commands.setup import env_var_help
-
-        examples = env_var_help("ANTHROPIC_API_KEY", "sk-...")
-    except Exception:
-        examples = "    export ANTHROPIC_API_KEY=sk-..."
+    examples = "    export ANTHROPIC_API_KEY=sk-..."
     if "setx ANTHROPIC_API_KEY" not in examples:
         examples = "\n".join(
             [
@@ -242,8 +307,14 @@ _GLYPH = {"green": "✅", "yellow": "⚠️ ", "red": "❌"}
 
 # stdlib box-drawing (no Rich/new deps) — matches the menu receipt-card charset.
 _BOX = {
-    "tl": "┌", "tr": "┐", "bl": "└", "br": "┘",
-    "h": "─", "v": "│", "ml": "├", "mr": "┤",
+    "tl": "┌",
+    "tr": "┐",
+    "bl": "└",
+    "br": "┘",
+    "h": "─",
+    "v": "│",
+    "ml": "├",
+    "mr": "┤",
 }
 
 
@@ -299,12 +370,14 @@ def build_lifecycle_summary(
 
     # Update — from the cached L1 check only.
     if update_state == "available":
-        rows.append((
-            "Update",
-            "yellow",
-            f"{update_latest} available" if update_latest else "available",
-            "Run: tokenpak update",
-        ))
+        rows.append(
+            (
+                "Update",
+                "yellow",
+                f"{update_latest} available" if update_latest else "available",
+                "Run: tokenpak update",
+            )
+        )
     elif update_state == "current":
         rows.append(("Update", "green", "up to date", ""))
     else:  # unknown
@@ -382,7 +455,9 @@ def verify_integration_target(key: str, proxy_url: str) -> tuple[bool, str]:
         return (False, f"verify raised: {exc}")
 
 
-def attribution_coverage(db_path) -> "tuple[int, int, float | None]":
+def attribution_coverage(
+    db_path: str | PathLike[str],
+) -> tuple[int, int, float | None]:
     """Return ``(known, total, pct)`` attribution coverage over the requests
     ledger — the share of rows whose origin is genuinely known (non-empty
     ``attribution_source``). Internal gate measure only; NOT a public number.
@@ -398,10 +473,13 @@ def attribution_coverage(db_path) -> "tuple[int, int, float | None]":
         if "attribution_source" not in cols:
             return (0, 0, None)
         total = conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0] or 0
-        known = conn.execute(
-            "SELECT COUNT(*) FROM requests "
-            "WHERE attribution_source IS NOT NULL AND attribution_source != ''"
-        ).fetchone()[0] or 0
+        known = (
+            conn.execute(
+                "SELECT COUNT(*) FROM requests "
+                "WHERE attribution_source IS NOT NULL AND attribution_source != ''"
+            ).fetchone()[0]
+            or 0
+        )
         pct = (100.0 * known / total) if total else None
         return (known, total, pct)
     except Exception:
@@ -433,7 +511,7 @@ def companion_hook_integrity() -> "list[tuple[str, str, str]]":
     results: "list[tuple[str, str, str]]" = []
     hook_cmds: "list[str]" = []
 
-    def _collect(hook_config) -> None:
+    def _collect(hook_config: object) -> None:
         if not isinstance(hook_config, dict):
             return
         for groups in hook_config.values():
@@ -462,11 +540,13 @@ def companion_hook_integrity() -> "list[tuple[str, str, str]]":
             _collect(data.get("hooks", {}))
 
     if not hook_cmds:
-        results.append((
-            "pass",
-            "Companion hooks     not installed (no hook commands found)",
-            "",
-        ))
+        results.append(
+            (
+                "pass",
+                "Companion hooks     not installed (no hook commands found)",
+                "",
+            )
+        )
         return results
 
     missing: "list[str]" = []
@@ -482,34 +562,40 @@ def companion_hook_integrity() -> "list[tuple[str, str, str]]":
     healthy = True
     if missing:
         healthy = False
-        results.append((
-            "warn",
-            f"Companion hooks     {len(missing)} installed hook script path(s) missing",
-            "Missing: " + ", ".join(sorted(set(missing)))
-            + " — these hooks fail on every prompt. Re-run the companion "
-            "launcher (or reinstall) to repair the hook config.",
-        ))
+        results.append(
+            (
+                "warn",
+                f"Companion hooks     {len(missing)} installed hook script path(s) missing",
+                "Missing: "
+                + ", ".join(sorted(set(missing)))
+                + " — these hooks fail on every prompt. Re-run the companion "
+                "launcher (or reinstall) to repair the hook config.",
+            )
+        )
 
     if uses_bash_scripts and _shutil.which("sqlite3") is None:
         healthy = False
-        results.append((
-            "warn",
-            "Companion hooks     sqlite3 CLI not found — bash hooks silently "
-            "skip journal/budget writes",
-            "The installed bash hook variants depend on the sqlite3 "
-            "command-line tool for journal and budget writes and no-op "
-            "without it. Install it (e.g. apt install sqlite3 / brew "
-            "install sqlite) or switch to the python hook variant.",
-        ))
+        results.append(
+            (
+                "warn",
+                "Companion hooks     sqlite3 CLI not found — bash hooks silently "
+                "skip journal/budget writes",
+                "The installed bash hook variants depend on the sqlite3 "
+                "command-line tool for journal and budget writes and no-op "
+                "without it. Install it (e.g. apt install sqlite3 / brew "
+                "install sqlite) or switch to the python hook variant.",
+            )
+        )
 
     if healthy:
-        results.append((
-            "pass",
-            f"Companion hooks     {len(hook_cmds)} hook command(s) installed — "
-            "scripts present"
-            + (", sqlite3 CLI available" if uses_bash_scripts else ""),
-            "",
-        ))
+        results.append(
+            (
+                "pass",
+                f"Companion hooks     {len(hook_cmds)} hook command(s) installed — "
+                "scripts present" + (", sqlite3 CLI available" if uses_bash_scripts else ""),
+                "",
+            )
+        )
     return results
 
 
@@ -570,7 +656,7 @@ def run_doctor(
 
     counts = {"pass": 0, "warn": 0, "fail": 0}
     fixes: list[tuple[str, Path]] = []
-    checks: list[dict] = []
+    checks: list[dict[str, str]] = []
 
     def _record(
         name: str,
@@ -579,9 +665,7 @@ def run_doctor(
         detail: str = "",
     ) -> None:
         """Record a check result and optionally print it."""
-        checks.append(
-            {"check": name, "status": status, "message": message, "detail": detail}
-        )
+        checks.append({"check": name, "status": status, "message": message, "detail": detail})
         counts[status] += 1
         if not output_json:
             if status == "pass":
@@ -628,36 +712,36 @@ def run_doctor(
             f"~/.tpk/ boundary    {tokenpak_dir}",
         )
 
-    # === Check 1: Proxy health with latency =====================================
+    # === Check 1: Canonical proxy health ========================================
     proxy_port = int(os.environ.get("TOKENPAK_PORT", "8766"))
     health = _proxy_get("/health", port=proxy_port)
     if health is not None:
-        latency = health.get("latency", {})
-        p50 = latency.get("p50_latency_ms")
-        p95 = latency.get("p95_latency_ms")
-        p99 = latency.get("p99_latency_ms")
-        samples = latency.get("samples", 0)
-        outlier = latency.get("outlier_detected", False)
-        mode = health.get("compilation_mode", "unknown")
-        requests_total = health.get("stats", {}).get("requests", 0)
+        health_valid, health_reason = _validate_canonical_health(health)
+        status = health.get("status", "unknown")
+        requests_total = health.get("requests_total")
+        requests_errors = health.get("requests_errors")
+        is_degraded = health.get("is_degraded")
+        requests_text = str(requests_total) if requests_total is not None else "unavailable"
+        errors_text = str(requests_errors) if requests_errors is not None else "unavailable"
 
-        if p50 is not None:
-            if p95 is not None:
-                latency_str = f"p50={p50:.0f}ms p95={p95:.0f}ms p99={p99:.0f}ms ({samples} samples)"
-            else:
-                latency_str = f"p50={p50:.0f}ms p99={p99:.0f}ms ({samples} samples)"
-            if outlier:
-                latency_str += " ⚠️ outlier detected (API congestion likely, not proxy)"
+        if health_valid:
+            _record(
+                "proxy_health",
+                "pass",
+                f"Proxy reachable     port {proxy_port} — status={status}, "
+                f"{requests_text} reqs, {errors_text} errors",
+                detail=(
+                    f"status={status} requests_total={requests_total} "
+                    f"requests_errors={requests_errors} is_degraded={is_degraded}"
+                ),
+            )
         else:
-            latency_str = "no latency data"
-
-        _record(
-            "proxy_health",
-            "pass",
-            f"Proxy reachable     port {proxy_port} — {mode} mode, "
-            f"{requests_total} reqs, {latency_str}",
-            detail=f"compilation_mode={mode} requests={requests_total} p95={p95} p99={p99} outlier={outlier}",
-        )
+            _record(
+                "proxy_health",
+                "warn",
+                f"Proxy reachable     port {proxy_port} — health payload unavailable",
+                detail=health_reason,
+            )
 
         # Attribution coverage — % of ledger rows with a genuinely known origin
         # (non-empty attribution_source). Internal gate measure; NOT a public
@@ -829,9 +913,7 @@ def run_doctor(
             if has_budget:
                 cur.execute("SELECT COUNT(*) FROM budget_alerts")
                 alert_count = cur.fetchone()[0]
-                cur.execute(
-                    "SELECT COUNT(*) FROM budget_alerts WHERE triggered = 1"
-                )
+                cur.execute("SELECT COUNT(*) FROM budget_alerts WHERE triggered = 1")
                 triggered_count = cur.fetchone()[0]
                 if triggered_count > 0:
                     _record(
@@ -862,38 +944,31 @@ def run_doctor(
                 f"Budget controller   could not check: {exc}",
             )
 
-    # === Check 5: Shadow reader status/failures =================================
-    if health is not None:
-        sr = health.get("shadow_reader", {})
-        sr_enabled = sr.get("enabled", False)
-        sr_failures = sr.get("failures", 0)
-        if sr_enabled:
-            if sr_failures and sr_failures > 0:
-                _record(
-                    "shadow_reader",
-                    "warn",
-                    f"Shadow reader       enabled — {sr_failures} failure(s) recorded",
-                    detail=str(sr),
-                )
-            else:
-                _record(
-                    "shadow_reader",
-                    "pass",
-                    "Shadow reader       enabled — no failures",
-                    detail=str(sr),
-                )
+    # === Check 5: Shadow reader configuration ===================================
+    # Feature-specific state is not part of canonical /health. Inspect the
+    # resolved proxy configuration instead of treating a missing field as a
+    # measured disabled or failure state.
+    try:
+        from tokenpak.proxy.config import SHADOW_ENABLED
+
+        if SHADOW_ENABLED:
+            _record(
+                "shadow_reader",
+                "pass",
+                "Shadow reader       enabled by resolved proxy configuration",
+            )
         else:
             _record(
                 "shadow_reader",
                 "warn",
-                "Shadow reader       disabled (set TOKENPAK_SHADOW_READER=1)",
-                detail=str(sr),
+                "Shadow reader       disabled by resolved proxy configuration",
             )
-    else:
+    except Exception as exc:
         _record(
             "shadow_reader",
             "warn",
-            "Shadow reader       unknown — proxy not reachable",
+            "Shadow reader       configuration unavailable",
+            detail=str(exc),
         )
 
     # === Check 6: Trace enabled =================================================
@@ -914,87 +989,42 @@ def run_doctor(
         )
 
     # === Check 7: Vault index freshness =========================================
-    # Primary: check from health endpoint, secondary: file mtime
-    if health is not None:
-        vi = health.get("vault_index", {})
-        vi_available = vi.get("available", False)
-        vi_blocks = vi.get("blocks", 0)
-        vi_path = vi.get("path", "")
-
-        if vi_available and vi_blocks > 0:
-            # Also check file mtime
-            index_path = tokenpak_dir / "index.json"
-            if index_path.exists():
-                age_hours = (time.time() - os.path.getmtime(index_path)) / 3600
-                if age_hours > 24:
-                    _record(
-                        "vault_index",
-                        "warn",
-                        f"Vault index         {vi_blocks:,} blocks — "
-                        f"stale ({age_hours:.1f}h old, run: tokenpak index)",
-                        detail=f"path={vi_path} blocks={vi_blocks} age_hours={age_hours:.1f}",
-                    )
-                else:
-                    _record(
-                        "vault_index",
-                        "pass",
-                        f"Vault index         {vi_blocks:,} blocks — "
-                        f"fresh ({age_hours:.1f}h old)",
-                        detail=f"path={vi_path} blocks={vi_blocks} age_hours={age_hours:.1f}",
-                    )
+    # Vault state is not part of canonical /health. Read the durable index
+    # directly so absent telemetry cannot become a false zero or disabled state.
+    index_path = tokenpak_dir / "index.json"
+    if index_path.exists():
+        try:
+            data = json.loads(index_path.read_text())
+            block_count = len(data.get("blocks", []))
+            age_hours = (time.time() - os.path.getmtime(index_path)) / 3600
+            if block_count > 0:
+                status = "warn" if age_hours > 24 else "pass"
+                age_note = (
+                    f"stale ({age_hours:.1f}h)" if age_hours > 24 else f"{age_hours:.1f}h old"
+                )
+                _record(
+                    "vault_index",
+                    status,
+                    f"Vault index         {index_path} — {block_count:,} blocks, {age_note}",
+                )
             else:
                 _record(
                     "vault_index",
-                    "pass",
-                    f"Vault index         {vi_blocks:,} blocks — loaded from {vi_path}",
-                    detail=f"path={vi_path} blocks={vi_blocks}",
+                    "warn",
+                    f"Vault index         {index_path} — 0 blocks (run: tokenpak index)",
                 )
-        elif not vi_available:
+        except json.JSONDecodeError:
             _record(
                 "vault_index",
-                "warn",
-                "Vault index         not available — run: tokenpak index <path>",
-            )
-        else:
-            _record(
-                "vault_index",
-                "warn",
-                "Vault index         0 blocks — run: tokenpak index <path>",
+                "fail",
+                f"Vault index         {index_path} — invalid JSON",
             )
     else:
-        # Fallback: check file on disk
-        index_path = tokenpak_dir / "index.json"
-        if index_path.exists():
-            try:
-                data = json.loads(index_path.read_text())
-                block_count = len(data.get("blocks", []))
-                age_hours = (time.time() - os.path.getmtime(index_path)) / 3600
-                if block_count > 0:
-                    status = "warn" if age_hours > 24 else "pass"
-                    age_note = f"stale ({age_hours:.1f}h)" if age_hours > 24 else f"{age_hours:.1f}h old"
-                    _record(
-                        "vault_index",
-                        status,
-                        f"Vault index         {index_path} — {block_count:,} blocks, {age_note}",
-                    )
-                else:
-                    _record(
-                        "vault_index",
-                        "warn",
-                        f"Vault index         {index_path} — 0 blocks (run: tokenpak index)",
-                    )
-            except json.JSONDecodeError:
-                _record(
-                    "vault_index",
-                    "fail",
-                    f"Vault index         {index_path} — invalid JSON",
-                )
-        else:
-            _record(
-                "vault_index",
-                "warn",
-                "Vault index         not found (run: tokenpak index <path>)",
-            )
+        _record(
+            "vault_index",
+            "warn",
+            "Vault index         not found (run: tokenpak index <path>)",
+        )
 
     # === Check 7b: Registered vault paths staleness ============================
     # Reads vault.yaml under the resolved TokenPak home + per-path index
@@ -1017,20 +1047,22 @@ def run_doctor(
             _record(
                 "vault_paths_staleness",
                 "pass",
-                "Vault paths        no registered paths "
-                "(register with: tokenpak vault add <path>)",
+                "Vault paths        no registered paths (register with: tokenpak vault add <path>)",
             )
         else:
             summary = _vds03.summarize(_vds03_findings)
-            for f in _vds03_findings:
+            for finding in _vds03_findings:
                 _record(
-                    f"vault_path:{f.status}",
-                    f.severity,
-                    f"Vault path         {f.message}",
+                    f"vault_path:{finding.status}",
+                    finding.severity,
+                    f"Vault path         {finding.message}",
                     detail=(
-                        f"path={f.path} status={f.status} schedule={f.schedule} "
-                        f"age_seconds={f.age_seconds} threshold_seconds={f.threshold_seconds} "
-                        f"last_indexed={f.last_indexed} last_index_status={f.last_index_status}"
+                        f"path={finding.path} status={finding.status} "
+                        f"schedule={finding.schedule} "
+                        f"age_seconds={finding.age_seconds} "
+                        f"threshold_seconds={finding.threshold_seconds} "
+                        f"last_indexed={finding.last_indexed} "
+                        f"last_index_status={finding.last_index_status}"
                     ),
                 )
             warn_total = sum(
@@ -1073,9 +1105,7 @@ def run_doctor(
             conn = sqlite3.connect(str(db_path))
             cur = conn.cursor()
             cur.execute(
-                "SELECT COUNT(*) FROM ("
-                "  SELECT id FROM requests ORDER BY id DESC LIMIT 100"
-                ")"
+                "SELECT COUNT(*) FROM (  SELECT id FROM requests ORDER BY id DESC LIMIT 100)"
             )
             total_recent = cur.fetchone()[0]
             if total_recent > 0:
@@ -1203,8 +1233,7 @@ def run_doctor(
     anth_oauth2 = os.environ.get("ANTHROPIC_OAUTH_TOKEN2", "")
     if anth_key and (anth_oauth or anth_oauth2):
         env_issues.append(
-            "ANTHROPIC_API_KEY set alongside ANTHROPIC_OAUTH_TOKEN — "
-            "may cause auth conflicts"
+            "ANTHROPIC_API_KEY set alongside ANTHROPIC_OAUTH_TOKEN — may cause auth conflicts"
         )
 
     # Check for conflicting upstream overrides
@@ -1249,8 +1278,8 @@ def run_doctor(
     config_path = tokenpak_dir / "config.json"
     if config_path.exists():
         try:
-            with open(config_path) as f:
-                json.load(f)
+            with open(config_path) as config_file_handle:
+                json.load(config_file_handle)
             _record("config_file", "pass", f"Config file         {config_path} — valid")
         except json.JSONDecodeError:
             _record(
@@ -1349,9 +1378,8 @@ def run_doctor(
     else:
         _record(
             "api_keys",
-            "warn",
-            "API keys            none found — set ANTHROPIC_API_KEY, OPENAI_API_KEY, "
-            "or GOOGLE_API_KEY",
+            "pass",
+            "API keys            none set — optional; authenticated clients may use OAuth/session auth",
             detail=_api_key_setup_detail(),
         )
 
@@ -1390,8 +1418,7 @@ def run_doctor(
                 _record(
                     "failover_config",
                     "pass",
-                    f"Failover config     {failover_cfg_path} — "
-                    f"{len(fo['chain'])} provider(s)",
+                    f"Failover config     {failover_cfg_path} — {len(fo['chain'])} provider(s)",
                 )
             elif fo.get("enabled"):
                 _record(
@@ -1418,6 +1445,7 @@ def run_doctor(
     # Ref: standards/29-spend-guard-agent-contract.md, docs/spend-guard.md
     try:
         from tokenpak.proxy.spend_guard.policy import load_config as _load_sg_cfg
+
         sg = _load_sg_cfg()
         if sg.enabled:
             sg_audit = Path(os.path.expanduser(sg.audit_db_path))
@@ -1517,8 +1545,7 @@ def run_doctor(
             )
             _launcher_row_drift = "launcher default" in _row and "(" in _row
             _launcher_active = "launcher default" in _row and any(
-                mode in _row
-                for mode in ("approval-bypass", "sandbox-bypass", "full-bypass")
+                mode in _row for mode in ("approval-bypass", "sandbox-bypass", "full-bypass")
             )
             _guidance = ""
             if _tier_row_drift:
@@ -1530,7 +1557,9 @@ def run_doctor(
                 (
                     "fail"
                     if _tier_row_drift or _launcher_row_drift
-                    else "warn" if _launcher_active else "pass"
+                    else "warn"
+                    if _launcher_active
+                    else "pass"
                 ),
                 _row + _guidance,
             )
@@ -1694,6 +1723,7 @@ def run_doctor(
             print("── Claude Code operational checks ─────")
         from .doctor_claude_code import NUM_CHECKS as _CC_NUM_CHECKS
         from .doctor_claude_code import run_claude_code_checks
+
         cc_fail_count, cc_results = run_claude_code_checks(output_json=output_json, verbose=verbose)
         for result in cc_results:
             if result["status"] == "pass":
@@ -1709,12 +1739,14 @@ def run_doctor(
                 for line in result["detail"].splitlines():
                     print(f"         {line}")
             if output_json:
-                checks.append({
-                    "check": result["check"],
-                    "status": result["status"],
-                    "message": result["message"],
-                    "detail": result.get("detail", ""),
-                })
+                checks.append(
+                    {
+                        "check": result["check"],
+                        "status": result["status"],
+                        "message": result["message"],
+                        "detail": result.get("detail", ""),
+                    }
+                )
         if not output_json:
             print()
             print(f"{cc_fail_count} of {_CC_NUM_CHECKS} checks failed.")
@@ -1747,8 +1779,8 @@ def run_doctor(
                     print(f"  ✓ Backed up invalid config → {backup}")
                 tokenpak_dir.mkdir(parents=True, exist_ok=True)
                 default_cfg = {"version": "1.0", "port": 8766, "compress": True}
-                with open(fix_path, "w") as f:
-                    json.dump(default_cfg, f, indent=2)
+                with open(fix_path, "w") as default_config_handle:
+                    json.dump(default_cfg, default_config_handle, indent=2)
                 print(f"  ✓ Created {fix_path}")
 
     # Exit code: 2=errors, 1=warnings, 0=all pass
@@ -1779,18 +1811,22 @@ def run_stream_check(output_json: bool = False) -> int:
     print("\nTOKENPAK  |  Doctor — stream guard")
     print("──────────────────────────────\n")
     if passed:
-        print(Colors.ok(
-            f"Stream guard        truncation flagged ({result.get('code')}); "
-            f"provider.error event written"
-        ))
+        print(
+            Colors.ok(
+                f"Stream guard        truncation flagged ({result.get('code')}); "
+                f"provider.error event written"
+            )
+        )
         print("\n──────────────────────────────")
         print("0 errors, 0 warnings.")
         return 0
-    print(Colors.fail(
-        "Stream guard        FAILED to flag truncated stream — "
-        f"flagged={result.get('flagged')} code={result.get('code')} "
-        f"event_written={result.get('event_written')}"
-    ))
+    print(
+        Colors.fail(
+            "Stream guard        FAILED to flag truncated stream — "
+            f"flagged={result.get('flagged')} code={result.get('code')} "
+            f"event_written={result.get('event_written')}"
+        )
+    )
     print("\n──────────────────────────────")
     print("1 error, 0 warnings.")
     return 2
@@ -1801,26 +1837,32 @@ try:
 
     @click.command("doctor")
     @click.option("--fix", is_flag=True, help="Auto-fix issues where possible")
-    @click.option("--fleet", is_flag=True, help="Check all agents listed in fleet.yaml under the resolved TokenPak home")
+    @click.option(
+        "--fleet",
+        is_flag=True,
+        help="Check all agents listed in fleet.yaml under the resolved TokenPak home",
+    )
     @click.option(
         "--deploy", is_flag=True, help="Push latest doctor to all agents (use with --fleet)"
     )
+    @click.option("--verbose", "-v", is_flag=True, help="Show extra detail for each check")
+    @click.option("--json", "output_json", is_flag=True, help="Output results as JSON")
     @click.option(
-        "--verbose", "-v", is_flag=True, help="Show extra detail for each check"
-    )
-    @click.option(
-        "--json", "output_json", is_flag=True, help="Output results as JSON"
-    )
-    @click.option(
-        "--claude-code", "claude_code", is_flag=True,
+        "--claude-code",
+        "claude_code",
+        is_flag=True,
         help="Run Claude Code integration checks (ENABLE_TOOL_SEARCH, mode, IDE detection)",
     )
     @click.option(
-        "--stream", "stream", is_flag=True,
+        "--stream",
+        "stream",
+        is_flag=True,
         help="Exercise the truncated-stream guard via a fake provider that closes mid-chunk",
     )
     @click.option(
-        "--lifecycle", "lifecycle", is_flag=True,
+        "--lifecycle",
+        "lifecycle",
+        is_flag=True,
         help="Show only the compact lifecycle summary (installed/setup/routed/proxy/update)",
     )
     def doctor_cmd(
@@ -1895,24 +1937,52 @@ DEFAULT_FLEET_CONFIG = {
 }
 
 
-def load_fleet_config() -> dict:
+class FleetAgent(TypedDict):
+    name: str
+    host: str
+    user: str
+
+
+class FleetConfig(TypedDict):
+    agents: list[FleetAgent]
+
+
+class RemoteDoctorResult(TypedDict):
+    name: str
+    host: str
+    success: bool
+    output: str
+    errors: int
+    warnings: int
+
+
+class DeployDoctorResult(TypedDict):
+    name: str
+    host: str
+    success: bool
+    output: str
+
+
+def load_fleet_config() -> FleetConfig:
     """Load fleet.yaml; create with defaults if missing."""
     if FLEET_CONFIG_FILE.exists():
         try:
             with open(FLEET_CONFIG_FILE) as f:
                 data = yaml.safe_load(f)
-            if data and "agents" in data:
-                return data
+            if isinstance(data, dict) and isinstance(data.get("agents"), list):
+                return cast(FleetConfig, data)
         except Exception:
             pass
     # Create default
     FLEET_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(FLEET_CONFIG_FILE, "w") as f:
         yaml.safe_dump(DEFAULT_FLEET_CONFIG, f, default_flow_style=False)
-    return DEFAULT_FLEET_CONFIG
+    return cast(FleetConfig, DEFAULT_FLEET_CONFIG)
 
 
-def _run_remote_doctor(agent: dict, fix: bool = False, timeout: int = 30) -> dict:
+def _run_remote_doctor(
+    agent: FleetAgent, fix: bool = False, timeout: int = 30
+) -> RemoteDoctorResult:
     """SSH into an agent and run tokenpak doctor. Returns result dict."""
     name = agent.get("name", "?")
     host = agent.get("host", "")
@@ -1978,7 +2048,7 @@ def _run_remote_doctor(agent: dict, fix: bool = False, timeout: int = 30) -> dic
         }
 
 
-def _deploy_doctor(agent: dict, timeout: int = 30) -> dict:
+def _deploy_doctor(agent: FleetAgent, timeout: int = 30) -> DeployDoctorResult:
     """SCP the latest doctor.py to an agent's tokenpak installation."""
     name = agent.get("name", "?")
     host = agent.get("host", "")
@@ -2038,8 +2108,8 @@ def run_fleet_doctor(fix: bool = False, deploy: bool = False) -> int:
         print("Deploying latest doctor to all agents...")
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as ex:
             deploy_futures = {ex.submit(_deploy_doctor, a): a for a in agents}
-            for fut in concurrent.futures.as_completed(deploy_futures):
-                r = fut.result()
+            for deploy_future in concurrent.futures.as_completed(deploy_futures):
+                r = deploy_future.result()
                 status = (
                     Colors.ok(f"  Deployed to {r['name']} ({r['host']})")
                     if r["success"]
@@ -2052,9 +2122,9 @@ def run_fleet_doctor(fix: bool = False, deploy: bool = False) -> int:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as ex:
         futures = {ex.submit(_run_remote_doctor, a, fix): a for a in agents}
-        results = []
-        for fut in concurrent.futures.as_completed(futures):
-            results.append(fut.result())
+        results: list[RemoteDoctorResult] = []
+        for doctor_future in concurrent.futures.as_completed(futures):
+            results.append(doctor_future.result())
 
     results.sort(key=lambda r: r["name"])
 
@@ -2066,10 +2136,7 @@ def run_fleet_doctor(fix: bool = False, deploy: bool = False) -> int:
     for r in results:
         icon = "✅" if r["errors"] == 0 else "❌"
         warn_note = f", {r['warnings']}w" if r["warnings"] else ""
-        print(
-            f"  {icon}  {r['name']:10s}  ({r['host']})  "
-            f"— {r['errors']} errors{warn_note}"
-        )
+        print(f"  {icon}  {r['name']:10s}  ({r['host']})  — {r['errors']} errors{warn_note}")
         total_errors += r["errors"]
         total_warnings += r["warnings"]
         if r["errors"] > 0:

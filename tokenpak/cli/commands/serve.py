@@ -57,6 +57,7 @@ def _maybe_show_compression_notice(safe: bool) -> None:
     if safe:
         return
     import pathlib
+
     _marker = pathlib.Path.home() / ".tokenpak" / ".compression-default-notice-shown"
     if not _marker.exists():
         print(

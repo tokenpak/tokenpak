@@ -120,7 +120,9 @@ class TestCalculateRequestCost:
     def test_cache_read_is_cheaper_than_input(self):
         """Cache read tokens should cost less than equivalent input tokens."""
         cost_input = calculate_request_cost("claude-sonnet-4-6", input_tokens=100_000)
-        cost_cache = calculate_request_cost("claude-sonnet-4-6", input_tokens=0, cache_read_tokens=100_000)
+        cost_cache = calculate_request_cost(
+            "claude-sonnet-4-6", input_tokens=0, cache_read_tokens=100_000
+        )
         assert cost_cache < cost_input
 
     def test_combined_token_types(self):

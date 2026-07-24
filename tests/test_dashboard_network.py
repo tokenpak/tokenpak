@@ -19,6 +19,7 @@ from tokenpak.network_utils import (
 # get_local_ip
 # ---------------------------------------------------------------------------
 
+
 class TestGetLocalIp:
     def test_returns_string(self):
         """get_local_ip() always returns a non-empty string."""
@@ -57,6 +58,7 @@ class TestGetLocalIp:
 # get_public_ip
 # ---------------------------------------------------------------------------
 
+
 class TestGetPublicIp:
     def test_returns_ip_on_success(self):
         """Parses valid IP from curl output."""
@@ -75,6 +77,7 @@ class TestGetPublicIp:
     def test_returns_none_on_timeout(self):
         """Returns None when subprocess.run raises TimeoutExpired."""
         import subprocess
+
         with patch("tokenpak.network_utils.subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.TimeoutExpired(cmd="curl", timeout=2)
             result = get_public_ip()
@@ -103,6 +106,7 @@ class TestGetPublicIp:
 # ---------------------------------------------------------------------------
 # get_reachable_addresses
 # ---------------------------------------------------------------------------
+
 
 class TestGetReachableAddresses:
     def test_always_includes_localhost(self):
@@ -179,6 +183,7 @@ class TestGetReachableAddresses:
 # ---------------------------------------------------------------------------
 # is_port_accessible
 # ---------------------------------------------------------------------------
+
 
 class TestIsPortAccessible:
     def test_returns_true_on_open_port(self):

@@ -3,7 +3,6 @@
 Tests deduplication logic for removing duplicate/near-duplicate messages.
 """
 
-
 from tokenpak.compression.dedup import (
     count_duplicates,
     dedup_messages,

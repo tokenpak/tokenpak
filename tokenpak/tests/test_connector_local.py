@@ -213,6 +213,7 @@ class TestLocalConnectorDeltaSync:
         # Set modification time to 1 hour ago
         old_ts = time.time() - 3600
         import os
+
         os.utime(str(old), (old_ts, old_ts))
 
         new = tmp_path / "new.md"
@@ -220,6 +221,7 @@ class TestLocalConnectorDeltaSync:
 
         # `since` is 30 minutes ago
         from datetime import datetime, timedelta
+
         since = (datetime.now() - timedelta(minutes=30)).isoformat()
 
         conn = LocalConnector(_make_config(tmp_path))

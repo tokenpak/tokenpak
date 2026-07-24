@@ -177,7 +177,9 @@ class CancelDuringTurnWorker:
     def run_turn(self, *, prompt, context, prior_tool_outputs, iteration):
         self._token.cancelled = True  # cancellation arrives DURING the turn
         self.calls += 1
-        return WorkerTurn(result_payload=dict(self._payload), output_schema_valid=True, tokens_used=5)
+        return WorkerTurn(
+            result_payload=dict(self._payload), output_schema_valid=True, tokens_used=5
+        )
 
 
 class FakeReviewerLLM:
@@ -313,7 +315,9 @@ def _run_standard(fx, ledger):
     reviewer = None
     reviewer_spec = fx["mock_tip"].get("reviewer")
     if reviewer_spec is not None:
-        reviewer = FakeReviewerLLM(reviewer_spec["status"], reason=reviewer_spec.get("reason", "ok"))
+        reviewer = FakeReviewerLLM(
+            reviewer_spec["status"], reason=reviewer_spec.get("reason", "ok")
+        )
 
     worker = FakeWorkerLLM(worker_turns)
     line = FulfillmentLine(
@@ -606,10 +610,10 @@ def test_dispatch_fixture(fixture_path, ledger, tmp_path, request):
     )
 
     # §15 acceptance surfaces.
-    _assert_stations(fx, result, ledger)        # (4) + Run Ledger writes
-    _assert_delivery_package(fx, result)        # (6) Delivery Package shape
+    _assert_stations(fx, result, ledger)  # (4) + Run Ledger writes
+    _assert_delivery_package(fx, result)  # (6) Delivery Package shape
     _assert_decisions_and_gates(fx, result, reviewer, ledger)  # decisions/gates fire
-    _assert_late_results(fx, result, ledger)    # §5.6 late-result handling
+    _assert_late_results(fx, result, ledger)  # §5.6 late-result handling
     _assert_receipt(fx, result, ledger, overrides)  # (7) Receipt shape
 
 
@@ -633,18 +637,20 @@ def test_seven_fixtures_present():
 # The 8 required elements of the §15 fixture acceptance contract. Every fixture
 # MUST carry each one (kickoff §13 item 1: "all 8 required elements").
 _REQUIRED_ELEMENTS = {
-    "input_request": ("input_request",),          # 1. Input request text
+    "input_request": ("input_request",),  # 1. Input request text
     "expected_manifest": ("expected_manifest",),  # 2. Expected DispatchManifest
-    "expected_route": ("expected_route",),        # 3. Expected DispatchRoute selection
+    "expected_route": ("expected_route",),  # 3. Expected DispatchRoute selection
     "expected_stations": ("expected_stations",),  # 4. Expected worker/station sequence
-    "mock_tip": ("mock_tip",),                    # 5. Mock TIP responses (+ live flag)
+    "mock_tip": ("mock_tip",),  # 5. Mock TIP responses (+ live flag)
     "expected_delivery_package": ("expected_delivery_package",),  # 6. Delivery Package
-    "expected_receipt": ("expected_receipt",),    # 7. Expected DispatchReceipt
-    "pass_fail": ("pass_fail",),                  # 8. Pass/fail criteria
+    "expected_receipt": ("expected_receipt",),  # 7. Expected DispatchReceipt
+    "pass_fail": ("pass_fail",),  # 8. Pass/fail criteria
 }
 
 
-@pytest.mark.parametrize("fixture_path", _fixture_files(), ids=lambda p: p.name.replace(".yaml", ""))
+@pytest.mark.parametrize(
+    "fixture_path", _fixture_files(), ids=lambda p: p.name.replace(".yaml", "")
+)
 def test_fixture_has_all_eight_required_elements(fixture_path):
     """§15 acceptance contract: every fixture carries all 8 required elements."""
 
@@ -661,6 +667,5 @@ def test_fixture_coverage_table_matches_fixture_set():
     on_disk = {f.name for f in _fixture_files()}
     documented = set(FIXTURE_COVERAGE)
     assert documented == on_disk, (
-        f"coverage table out of sync: missing={on_disk - documented}, "
-        f"extra={documented - on_disk}"
+        f"coverage table out of sync: missing={on_disk - documented}, extra={documented - on_disk}"
     )

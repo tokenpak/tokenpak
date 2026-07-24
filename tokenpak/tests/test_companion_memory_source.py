@@ -65,9 +65,7 @@ class TestFromEnvMemoryDirs:
         assert cfg.memory_dirs == [Path("/tmp/a"), Path("/tmp/b")]
 
     def test_tilde_expansion_and_empties(self, monkeypatch):
-        monkeypatch.setenv(
-            "TOKENPAK_COMPANION_MEMORY_DIRS", "~/notes,, ,~/work/journal,"
-        )
+        monkeypatch.setenv("TOKENPAK_COMPANION_MEMORY_DIRS", "~/notes,, ,~/work/journal,")
         cfg = CompanionConfig.from_env()
         home = os.path.expanduser("~")
         assert cfg.memory_dirs == [
@@ -109,9 +107,7 @@ def test_custom_memory_dir_ingests(db):
         # nested + .markdown extension also picked up
         sub = Path(tmp) / "sub"
         sub.mkdir()
-        (sub / "more.markdown").write_text(
-            "## Lessons Learned\n- Back up before migrations\n"
-        )
+        (sub / "more.markdown").write_text("## Lessons Learned\n- Back up before migrations\n")
         assert ingest_from_dir(tmp, db) == 3
         assert db.count() == 3
 
@@ -160,8 +156,7 @@ class TestIngestSources:
             assert res["sources"][0]["reason"] == "present-but-no-matching-files"
 
     def test_mixed_vault_and_memory_dirs(self, db):
-        with tempfile.TemporaryDirectory() as vault, \
-             tempfile.TemporaryDirectory() as notes:
+        with tempfile.TemporaryDirectory() as vault, tempfile.TemporaryDirectory() as notes:
             mem = Path(vault) / "03_AGENT_PACKS" / "A" / "memory"
             mem.mkdir(parents=True)
             (mem / "2026-03-27.md").write_text("## Lessons Learned\n- vault lesson\n")
@@ -182,9 +177,7 @@ class TestIngestSources:
         out of scope for this change.
         """
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / "n.md").write_text(
-                "## Lessons Learned\n- one\n- two\n"
-            )
+            (Path(tmp) / "n.md").write_text("## Lessons Learned\n- one\n- two\n")
             assert ingest_from_dir(tmp, db) == 2
             first = db.count()
             assert ingest_from_dir(tmp, db) == 2
@@ -205,15 +198,15 @@ def test_status_reports_sources(monkeypatch):
 
     # Exercise only the local-config surface; never touch a real proxy.
     monkeypatch.setattr(
-        mcp_tools, "_proxy_get",
+        mcp_tools,
+        "_proxy_get",
         lambda *a, **k: (0, {"detail": "proxy down (test)"}),
     )
 
     # No memory dirs configured -> a self-explaining hint is reported.
     cfg_empty = CompanionConfig.from_env()
     cfg_empty.memory_dirs = []
-    out = json.loads(mcp_tools._handle_session_info(
-        mcp_tools.CompanionState(config=cfg_empty), {}))
+    out = json.loads(mcp_tools._handle_session_info(mcp_tools.CompanionState(config=cfg_empty), {}))
     assert out["config"]["memory_dirs"] == []
     hint = out["config"]["memory_source_hint"]
     assert "TOKENPAK_COMPANION_MEMORY_DIRS" in hint
@@ -225,7 +218,6 @@ def test_status_reports_sources(monkeypatch):
     # Memory dirs configured -> reported, and no "configure me" hint.
     cfg_set = CompanionConfig.from_env()
     cfg_set.memory_dirs = [Path("/tmp/notes"), Path("/tmp/journal")]
-    out2 = json.loads(mcp_tools._handle_session_info(
-        mcp_tools.CompanionState(config=cfg_set), {}))
+    out2 = json.loads(mcp_tools._handle_session_info(mcp_tools.CompanionState(config=cfg_set), {}))
     assert out2["config"]["memory_dirs"] == ["/tmp/notes", "/tmp/journal"]
     assert "memory_source_hint" not in out2["config"]

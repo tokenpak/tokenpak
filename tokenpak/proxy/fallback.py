@@ -5,12 +5,18 @@ Extracted from runtime/proxy.py (L608-811) as part of TPK-RESTRUCTURE-002.
 Circuit breakers, rate limiting, header sanitizing, and error helpers were
 separated into proxy/circuit_breaker.py (TPK-RESTRUCTURE-003).
 """
+
+from __future__ import annotations
+
 import json
 import os
 import threading
 import time
 from typing import Optional
 from urllib.parse import urlparse
+
+from tokenpak.core.config_loader import get as _cfg
+from tokenpak.proxy.adapters.base import FormatAdapter
 
 from .circuit_breaker import (  # noqa: F401 — re-exported for consumers
     _BLOCKED_FORWARD_HEADERS,
@@ -34,13 +40,7 @@ from .circuit_breaker import (  # noqa: F401 — re-exported for consumers
     _sanitize_headers,
     _suggest_model,
 )
-from .config import UPSTREAM_ROUTES, UPSTREAM_TIMEOUT, _cfg
-
-# ForwardAdapter import — used by _resolve_upstream
-try:
-    from tokenpak.proxy.adapters.registry import FormatAdapter
-except ImportError:
-    FormatAdapter = object  # type: ignore
+from .config import UPSTREAM_ROUTES, UPSTREAM_TIMEOUT
 
 # ---------------------------------------------------------------------------
 # Key rotation configuration (env-driven)
@@ -50,7 +50,7 @@ _KEY_COOLDOWN_429: float = float(os.environ.get("TOKENPAK_KEY_COOLDOWN_429", "60
 _KEY_COOLDOWN_401: float = float(os.environ.get("TOKENPAK_KEY_COOLDOWN_401", "300"))
 
 
-def _build_key_pool() -> list:
+def _build_key_pool() -> list[str]:
     candidates = [
         os.environ.get("ANTHROPIC_API_KEY", "").strip(),
         os.environ.get("ANTHROPIC_OAUTH_TOKEN", "").strip(),
@@ -61,7 +61,8 @@ def _build_key_pool() -> list:
     print(f"[key-pool] Found {len(pool)} Anthropic API key(s)", flush=True)
     return pool
 
-_ANTHROPIC_KEY_POOL: list = _build_key_pool()
+
+_ANTHROPIC_KEY_POOL: list[str] = _build_key_pool()
 
 
 def _reload_config_from_env() -> str:
@@ -89,7 +90,7 @@ def _reload_config_from_env() -> str:
 
 
 # Per-key cooldown state: {key_index: cooldown_until_timestamp}
-_KEY_COOLDOWN_STATE: dict = {}
+_KEY_COOLDOWN_STATE: dict[int, float] = {}
 _KEY_COOLDOWN_LOCK = threading.Lock()
 # Round-robin counter (only used in roundrobin mode)
 _KEY_RR_INDEX: int = 0
@@ -108,10 +109,13 @@ def _cool_down_key(idx: int, duration: float, reason: str) -> None:
     with _KEY_COOLDOWN_LOCK:
         _KEY_COOLDOWN_STATE[idx] = time.time() + duration
     key_hint = (_ANTHROPIC_KEY_POOL[idx][:8] + "...") if _ANTHROPIC_KEY_POOL else "?"
-    print(f"[key-pool] Key #{idx} ({key_hint}) cooling down for {duration}s — reason: {reason}", flush=True)
+    print(
+        f"[key-pool] Key #{idx} ({key_hint}) cooling down for {duration}s — reason: {reason}",
+        flush=True,
+    )
 
 
-def _get_next_key(exclude_idx: Optional[int] = None) -> tuple:
+def _get_next_key(exclude_idx: Optional[int] = None) -> tuple[str | None, int]:
     """
     Return (key, index) for the next available key.
     In failover mode: always start from idx 0, skip cooled-down.
@@ -139,7 +143,7 @@ def _get_next_key(exclude_idx: Optional[int] = None) -> tuple:
     return None, -1
 
 
-def _strip_empty_text_blocks(body_bytes):
+def _strip_empty_text_blocks(body_bytes: bytes) -> bytes:
     """Remove empty text blocks from system/messages — Anthropic rejects them."""
     try:
         data = json.loads(body_bytes)
@@ -147,7 +151,15 @@ def _strip_empty_text_blocks(body_bytes):
         # Clean system blocks
         system = data.get("system")
         if isinstance(system, list):
-            cleaned = [b for b in system if not (isinstance(b, dict) and b.get("type") == "text" and not b.get("text", "").strip())]
+            cleaned = [
+                b
+                for b in system
+                if not (
+                    isinstance(b, dict)
+                    and b.get("type") == "text"
+                    and not b.get("text", "").strip()
+                )
+            ]
             if len(cleaned) != len(system):
                 data["system"] = cleaned
                 changed = True
@@ -155,7 +167,15 @@ def _strip_empty_text_blocks(body_bytes):
         for msg in data.get("messages", []):
             content = msg.get("content")
             if isinstance(content, list):
-                cleaned = [p for p in content if not (isinstance(p, dict) and p.get("type") == "text" and not p.get("text", "").strip())]
+                cleaned = [
+                    p
+                    for p in content
+                    if not (
+                        isinstance(p, dict)
+                        and p.get("type") == "text"
+                        and not p.get("text", "").strip()
+                    )
+                ]
                 if len(cleaned) != len(content):
                     # Ensure at least one content block remains
                     if cleaned:
@@ -173,23 +193,23 @@ def _strip_empty_text_blocks(body_bytes):
         return body_bytes
 
 
-def _cap_cache_control_blocks(body_bytes, max_blocks=4):
+def _cap_cache_control_blocks(body_bytes: bytes, max_blocks: int = 4) -> bytes:
     """Anthropic allows max 4 cache_control blocks. Strip extras (including tools)."""
     try:
         body = json.loads(body_bytes)
     except Exception:
         return body_bytes
-    locations = []
+    locations: list[tuple[str, int, int | None]] = []
     system = body.get("system", [])
     if isinstance(system, list):
         for i, block in enumerate(system):
             if isinstance(block, dict) and "cache_control" in block:
-                locations.append(("system", i))
+                locations.append(("system", i, None))
     tools = body.get("tools", [])
     if isinstance(tools, list):
         for i, tool in enumerate(tools):
             if isinstance(tool, dict) and "cache_control" in tool:
-                locations.append(("tools", i))
+                locations.append(("tools", i, None))
     for mi, msg in enumerate(body.get("messages", [])):
         c = msg.get("content", [])
         if isinstance(c, list):
@@ -205,7 +225,9 @@ def _cap_cache_control_blocks(body_bytes, max_blocks=4):
         elif loc[0] == "tools":
             body["tools"][loc[1]].pop("cache_control", None)
         else:
-            body["messages"][loc[1]]["content"][loc[2]].pop("cache_control", None)
+            content_index = loc[2]
+            if content_index is not None:
+                body["messages"][loc[1]]["content"][content_index].pop("cache_control", None)
     print(
         f"  🔧 Capped cache_control: {len(locations)} -> {max_blocks} (removed from: {[l[0] for l in to_remove]})"
     )
@@ -265,14 +287,14 @@ class FallbackChain:
             idx2, key2 = chain.next_key(exclude=idx)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._pool = _build_key_pool()
 
     @property
     def pool_size(self) -> int:
         return len(self._pool)
 
-    def next_key(self, exclude: Optional[int] = None):
+    def next_key(self, exclude: Optional[int] = None) -> tuple[str | None, int]:
         """Return ``(index, key)`` for the next available API key."""
         return _get_next_key(exclude_idx=exclude)
 
@@ -283,7 +305,7 @@ class FallbackChain:
     def is_available(self, idx: int) -> bool:
         return _key_is_available(idx)
 
-    def resolve_upstream(self, adapter) -> str:
+    def resolve_upstream(self, adapter: FormatAdapter) -> str:
         return _resolve_upstream(adapter)
 
     def reload_config(self) -> str:
@@ -308,8 +330,7 @@ _backoff_logger = _logging.getLogger(__name__)
 
 def _backoff_wait(attempt: int, base: float = _BACKOFF_BASE, cap: float = _BACKOFF_CAP) -> None:
     """Exponential backoff: base * 2^attempt with 25% jitter, capped at cap seconds."""
-    wait = min(base * (2 ** attempt), cap)
-    wait *= (1.0 + _random_module.uniform(0, 0.25))
+    wait = min(base * (2**attempt), cap)
+    wait *= 1.0 + _random_module.uniform(0, 0.25)
     _backoff_logger.info("Rate limited — backoff %.1fs (attempt %d)", wait, attempt)
     time.sleep(wait)
-

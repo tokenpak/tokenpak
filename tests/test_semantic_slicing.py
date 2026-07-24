@@ -103,8 +103,8 @@ def make_indexer():
 # 1. Splitting — deterministic semantic sub-blocks
 # ===========================================================================
 
-class TestSplitting:
 
+class TestSplitting:
     def test_script_batch_produces_three_slices(self):
         slices = slice_content(SCRIPT_BATCH, "doc.md#aabbccdd", "doc.md")
         # Expect at least Script 1, Script 2, Script 3 (plus optional preamble)
@@ -117,7 +117,9 @@ class TestSplitting:
         # Find Ronaldo slice
         ronaldo_slice = next((s for s in slices if "Ronaldo" in s.content), None)
         assert ronaldo_slice is not None, "Should find a slice with Ronaldo content"
-        assert "LeBron" not in ronaldo_slice.content, "Ronaldo slice should not bleed into LeBron slice"
+        assert "LeBron" not in ronaldo_slice.content, (
+            "Ronaldo slice should not bleed into LeBron slice"
+        )
 
     def test_slices_cover_entire_content(self):
         slices = slice_content(SCRIPT_BATCH, "doc.md#aabbccdd", "doc.md")
@@ -155,8 +157,8 @@ class TestSplitting:
 # 2. Stable IDs — same across re-index runs when content unchanged
 # ===========================================================================
 
-class TestStableIDs:
 
+class TestStableIDs:
     def test_slice_ids_stable_across_calls(self):
         slices_1 = slice_content(SCRIPT_BATCH, "doc.md#aabbccdd", "doc.md")
         slices_2 = slice_content(SCRIPT_BATCH, "doc.md#aabbccdd", "doc.md")
@@ -178,8 +180,7 @@ class TestStableIDs:
     def test_unchanged_sibling_slices_have_stable_ids(self):
         """Modifying Script 1 should not change Script 2 or Script 3 IDs."""
         modified = SCRIPT_BATCH.replace(
-            "## Script 1: Ronaldo vs Messi",
-            "## Script 1: Ronaldo vs Messi — UPDATED"
+            "## Script 1: Ronaldo vs Messi", "## Script 1: Ronaldo vs Messi — UPDATED"
         )
         slices_orig = slice_content(SCRIPT_BATCH, "doc.md#aabbccdd", "doc.md")
         slices_mod = slice_content(modified, "doc.md#aabbccdd", "doc.md")
@@ -207,8 +208,8 @@ class TestStableIDs:
 # 3. Retrieval precision — section-specific queries avoid sibling content
 # ===========================================================================
 
-class TestRetrievalPrecision:
 
+class TestRetrievalPrecision:
     def _make_indexed_doc(self, tmp_path: Path) -> tuple:
         """Write SCRIPT_BATCH to a temp file, index it, return (indexer, path)."""
         doc = tmp_path / "scripts.md"
@@ -263,8 +264,8 @@ class TestRetrievalPrecision:
 # 4. Provenance — parent → child links
 # ===========================================================================
 
-class TestProvenance:
 
+class TestProvenance:
     def test_slice_parent_block_id_matches_indexer_record(self, tmp_path):
         doc = tmp_path / "scripts.md"
         doc.write_text(SCRIPT_BATCH, encoding="utf-8")
@@ -329,7 +330,9 @@ class TestProvenance:
         record2 = indexer.index_file(str(doc))
         slices_v2 = indexer.get_slices_for_file(str(doc))
 
-        assert len(slices_v2) > len(slices_v1), "Re-index should produce more slices for extended doc"
+        assert len(slices_v2) > len(slices_v1), (
+            "Re-index should produce more slices for extended doc"
+        )
         assert any("Ali" in s.content for s in slices_v2), "New script content should appear"
 
 
@@ -337,8 +340,8 @@ class TestProvenance:
 # 5. should_slice / detect_split_strategy helpers
 # ===========================================================================
 
-class TestHelpers:
 
+class TestHelpers:
     def test_should_slice_long_multiheading_md(self, tmp_path):
         path = str(tmp_path / "long.md")
         assert should_slice(SCRIPT_BATCH, path) is True
@@ -366,8 +369,8 @@ class TestHelpers:
 # 6. SliceStore persistence
 # ===========================================================================
 
-class TestSliceStorePersistence:
 
+class TestSliceStorePersistence:
     def test_in_memory_store_holds_slices(self):
         store = SliceStore(":memory:")
         slices = slice_content(SCRIPT_BATCH, "doc.md#aabbccdd", "doc.md")

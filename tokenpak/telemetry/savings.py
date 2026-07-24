@@ -185,16 +185,13 @@ def format_savings_by_source(
     if not by_source:
         return "No savings attribution data for this period."
 
-    total_tp_tokens = sum(
-        s.saved_tokens for s in by_source.values() if s.credited_to_tokenpak
-    )
+    total_tp_tokens = sum(s.saved_tokens for s in by_source.values() if s.credited_to_tokenpak)
     total_ext_tokens = sum(
-        s.saved_tokens for s in by_source.values() if not s.credited_to_tokenpak
-        and s.source != SavingsSource.UNATTRIBUTED
+        s.saved_tokens
+        for s in by_source.values()
+        if not s.credited_to_tokenpak and s.source != SavingsSource.UNATTRIBUTED
     )
-    total_cost = sum(
-        s.estimated_cost_saved for s in by_source.values() if s.cost_available
-    )
+    total_cost = sum(s.estimated_cost_saved for s in by_source.values() if s.cost_available)
 
     lines = [
         f"Savings Attribution — Last {days} Days",
@@ -212,7 +209,8 @@ def format_savings_by_source(
 
     # Provider/platform savings (not credited to TokenPak)
     ext_entries = [
-        s for s in by_source.values()
+        s
+        for s in by_source.values()
         if not s.credited_to_tokenpak and s.source != SavingsSource.UNATTRIBUTED
     ]
     if ext_entries:

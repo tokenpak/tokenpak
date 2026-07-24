@@ -240,6 +240,7 @@ audit: ci-lint audit-mypy docs-check forbidden-phrases-check telemetry-audit  ##
 # gates, so expensive strict-mypy and docs checks run exactly once per command.
 # A1 runs the raw complete suite here. The exact CI core partition remains
 # available as ``test-release-core`` and stays independently required in CI.
-# The repository-wide formatter ratchet is deferred.
-release-check: release-check-baseline test test-quick lint-imports fresh-install-demo bench byte-fidelity-check audit release-docs-pattern-check  ## A1-A7/B1/B3/C5/C6
+# A1 includes the pinned repository-wide formatter baseline before the complete
+# functional suite. Pull-request CI runs the same formatter before promotion.
+release-check: release-check-baseline format-check test test-quick lint-imports fresh-install-demo bench byte-fidelity-check audit release-docs-pattern-check  ## A1-A7/B1/B3/C5/C6
 	@echo "release-check: PASS — A1-A7/B1/B3/C5/C6 reached terminal success"

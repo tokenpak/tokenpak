@@ -1,9 +1,11 @@
 """Unit tests for tokenpak/complexity.py"""
+
 from tokenpak.compression.complexity import TaskType, _word_set, score_complexity
 
 # ---------------------------------------------------------------------------
 # score_complexity — basic return types
 # ---------------------------------------------------------------------------
+
 
 class TestScoreComplexityReturnType:
     def test_returns_tuple(self):
@@ -33,6 +35,7 @@ class TestScoreComplexityReturnType:
 # score_complexity — query length contribution
 # ---------------------------------------------------------------------------
 
+
 class TestQueryLengthScoring:
     def test_very_short_query_no_length_bonus(self):
         # < 5 words → 0.0 length score
@@ -57,6 +60,7 @@ class TestQueryLengthScoring:
 # ---------------------------------------------------------------------------
 # score_complexity — multistep patterns
 # ---------------------------------------------------------------------------
+
 
 class TestMultistepPatterns:
     def test_then_increases_score(self):
@@ -83,6 +87,7 @@ class TestMultistepPatterns:
 # score_complexity — complexity boosters
 # ---------------------------------------------------------------------------
 
+
 class TestComplexityBoosters:
     def test_optimize_boosts_score(self):
         base, _ = score_complexity("write a function")
@@ -99,7 +104,9 @@ class TestComplexityBoosters:
 
     def test_multiple_boosters_stack(self):
         single, _ = score_complexity("optimize this")
-        multiple, _ = score_complexity("optimize and refactor and debug and analyze the architecture")
+        multiple, _ = score_complexity(
+            "optimize and refactor and debug and analyze the architecture"
+        )
         assert multiple >= single
 
 
@@ -107,27 +114,24 @@ class TestComplexityBoosters:
 # score_complexity — code context
 # ---------------------------------------------------------------------------
 
+
 class TestCodeContext:
     def test_code_fences_in_context_boost_score(self):
         no_code, _ = score_complexity("explain this")
         with_code, _ = score_complexity(
-            "explain this",
-            context_blocks=["```python\ndef foo():\n    pass\n```"]
+            "explain this", context_blocks=["```python\ndef foo():\n    pass\n```"]
         )
         assert with_code >= no_code
 
     def test_multiple_code_fences_higher_boost(self):
-        one_fence, _ = score_complexity(
-            "explain this",
-            context_blocks=["```python\nx=1\n```"]
-        )
+        one_fence, _ = score_complexity("explain this", context_blocks=["```python\nx=1\n```"])
         three_fences, _ = score_complexity(
             "explain this",
             context_blocks=[
                 "```python\nx=1\n```",
                 "```python\ny=2\n```",
                 "```python\nz=3\n```",
-            ]
+            ],
         )
         assert three_fences >= one_fence
 
@@ -138,16 +142,14 @@ class TestCodeContext:
 
     def test_large_context_volume_boosts_score(self):
         small_ctx, _ = score_complexity("summarize", context_blocks=["short context"])
-        large_ctx, _ = score_complexity(
-            "summarize",
-            context_blocks=["word " * 2500]
-        )
+        large_ctx, _ = score_complexity("summarize", context_blocks=["word " * 2500])
         assert large_ctx >= small_ctx
 
 
 # ---------------------------------------------------------------------------
 # TaskType classification
 # ---------------------------------------------------------------------------
+
 
 class TestClassifyTaskType:
     def test_coding_keywords_classified_as_coding(self):
@@ -169,8 +171,7 @@ class TestClassifyTaskType:
 
     def test_code_fence_in_context_boosts_coding(self):
         _, task_type = score_complexity(
-            "what does this do",
-            context_blocks=["```python\ndef hello(): pass\n```"]
+            "what does this do", context_blocks=["```python\ndef hello(): pass\n```"]
         )
         assert task_type == TaskType.CODING
 
@@ -179,7 +180,9 @@ class TestClassifyTaskType:
         assert task_type == TaskType.CODING
 
     def test_reasoning_keywords(self):
-        _, task_type = score_complexity("analyze and compare the tradeoffs of these architecture approaches")
+        _, task_type = score_complexity(
+            "analyze and compare the tradeoffs of these architecture approaches"
+        )
         assert task_type == TaskType.REASONING
 
     def test_qa_keywords(self):
@@ -190,6 +193,7 @@ class TestClassifyTaskType:
 # ---------------------------------------------------------------------------
 # _word_set helper
 # ---------------------------------------------------------------------------
+
 
 class TestWordSet:
     def test_basic_tokenization(self):
@@ -214,6 +218,7 @@ class TestWordSet:
 # TaskType enum
 # ---------------------------------------------------------------------------
 
+
 class TestTaskTypeEnum:
     def test_all_values_defined(self):
         expected = {"CODING", "REASONING", "SUMMARIZATION", "QA", "CREATIVE", "UNKNOWN"}
@@ -228,6 +233,7 @@ class TestTaskTypeEnum:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_none_context_blocks(self):

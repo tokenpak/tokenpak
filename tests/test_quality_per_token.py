@@ -62,19 +62,22 @@ def _make_ledger(tmp: Path, rows: list[dict]) -> str:
         )
     """)
     for r in rows:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO transactions
                 (timestamp, model_used, task_type, accepted,
                  context_tokens, response_tokens)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            r.get("timestamp", datetime.now(timezone.utc).isoformat()),
-            r.get("model", "test-model"),
-            r.get("task_type", "UNKNOWN"),
-            r.get("accepted"),
-            r.get("context_tokens", 0),
-            r.get("response_tokens", 0),
-        ))
+        """,
+            (
+                r.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                r.get("model", "test-model"),
+                r.get("task_type", "UNKNOWN"),
+                r.get("accepted"),
+                r.get("context_tokens", 0),
+                r.get("response_tokens", 0),
+            ),
+        )
     conn.commit()
     conn.close()
     return db
@@ -91,12 +94,25 @@ def _lp(tmp: Path) -> str:
 
 def test_extract_qpt_basic(tmp):
     """Accepted rows produce correct avg_qpt."""
-    db = _make_ledger(tmp, [
-        {"model": "gpt-4o", "task_type": "CODING", "accepted": 1,
-         "context_tokens": 900, "response_tokens": 100},  # 1.0/1000 = 0.001
-        {"model": "gpt-4o", "task_type": "CODING", "accepted": 1,
-         "context_tokens": 400, "response_tokens": 100},  # 1.0/500 = 0.002
-    ])
+    db = _make_ledger(
+        tmp,
+        [
+            {
+                "model": "gpt-4o",
+                "task_type": "CODING",
+                "accepted": 1,
+                "context_tokens": 900,
+                "response_tokens": 100,
+            },  # 1.0/1000 = 0.001
+            {
+                "model": "gpt-4o",
+                "task_type": "CODING",
+                "accepted": 1,
+                "context_tokens": 400,
+                "response_tokens": 100,
+            },  # 1.0/500 = 0.002
+        ],
+    )
     store = _empty_store()
     result = _extract_quality_per_token(db, store, compression_mode="hybrid")
 
@@ -112,10 +128,18 @@ def test_extract_qpt_basic(tmp):
 
 def test_extract_qpt_rejected_rows(tmp):
     """Rejected rows (accepted=0) contribute outcome_score=0.0."""
-    db = _make_ledger(tmp, [
-        {"model": "m1", "task_type": "QA", "accepted": 0,
-         "context_tokens": 500, "response_tokens": 100},
-    ])
+    db = _make_ledger(
+        tmp,
+        [
+            {
+                "model": "m1",
+                "task_type": "QA",
+                "accepted": 0,
+                "context_tokens": 500,
+                "response_tokens": 100,
+            },
+        ],
+    )
     store = _empty_store()
     result = _extract_quality_per_token(db, store, compression_mode="strict")
 
@@ -128,12 +152,25 @@ def test_extract_qpt_rejected_rows(tmp):
 
 def test_extract_qpt_zero_tokens_excluded(tmp):
     """Rows with zero tokens are excluded from QPT calculation."""
-    db = _make_ledger(tmp, [
-        {"model": "m1", "task_type": "QA", "accepted": 1,
-         "context_tokens": 0, "response_tokens": 0},
-        {"model": "m1", "task_type": "QA", "accepted": 1,
-         "context_tokens": 200, "response_tokens": 50},
-    ])
+    db = _make_ledger(
+        tmp,
+        [
+            {
+                "model": "m1",
+                "task_type": "QA",
+                "accepted": 1,
+                "context_tokens": 0,
+                "response_tokens": 0,
+            },
+            {
+                "model": "m1",
+                "task_type": "QA",
+                "accepted": 1,
+                "context_tokens": 200,
+                "response_tokens": 50,
+            },
+        ],
+    )
     store = _empty_store()
     result = _extract_quality_per_token(db, store)
 
@@ -153,12 +190,25 @@ def test_extract_qpt_missing_db(tmp):
 
 def test_extract_qpt_multiple_models_and_modes(tmp):
     """Each (model, compression_mode, task_type) combo gets its own key."""
-    db = _make_ledger(tmp, [
-        {"model": "m1", "task_type": "CODING", "accepted": 1,
-         "context_tokens": 1000, "response_tokens": 0},
-        {"model": "m2", "task_type": "CODING", "accepted": 1,
-         "context_tokens": 500, "response_tokens": 0},
-    ])
+    db = _make_ledger(
+        tmp,
+        [
+            {
+                "model": "m1",
+                "task_type": "CODING",
+                "accepted": 1,
+                "context_tokens": 1000,
+                "response_tokens": 0,
+            },
+            {
+                "model": "m2",
+                "task_type": "CODING",
+                "accepted": 1,
+                "context_tokens": 500,
+                "response_tokens": 0,
+            },
+        ],
+    )
     store = _empty_store()
     # Call twice with different compression_mode (simulates separate extractions)
     _extract_quality_per_token(db, store, compression_mode="aggressive")
@@ -337,12 +387,25 @@ def test_compression_signal_modes_dict(tmp):
 
 def test_learn_extracts_qpt(tmp):
     """learn() should populate quality_per_token from the routing ledger."""
-    db = _make_ledger(tmp, [
-        {"model": "gpt-4o", "task_type": "QA", "accepted": 1,
-         "context_tokens": 800, "response_tokens": 200},
-        {"model": "gpt-4o", "task_type": "QA", "accepted": 1,
-         "context_tokens": 600, "response_tokens": 150},
-    ])
+    db = _make_ledger(
+        tmp,
+        [
+            {
+                "model": "gpt-4o",
+                "task_type": "QA",
+                "accepted": 1,
+                "context_tokens": 800,
+                "response_tokens": 200,
+            },
+            {
+                "model": "gpt-4o",
+                "task_type": "QA",
+                "accepted": 1,
+                "context_tokens": 600,
+                "response_tokens": 150,
+            },
+        ],
+    )
     lp = _lp(tmp)
     result = learn(ledger_path=db, learning_path=lp)
 

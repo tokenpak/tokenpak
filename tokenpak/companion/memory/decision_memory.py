@@ -34,6 +34,7 @@ from typing import List, Optional
 @dataclass
 class DecisionRecord:
     """A single decision with metadata."""
+
     id: str
     query_hash: str
     query: Optional[str]  # original query (for reference)
@@ -53,7 +54,7 @@ class DecisionMemoryDB:
     Confidence scores are updated based on observed outcomes.
     """
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None) -> None:
         """
         Initialize the database.
 
@@ -68,7 +69,7 @@ class DecisionMemoryDB:
 
         self._init_schema()
 
-    def _init_schema(self):
+    def _init_schema(self) -> None:
         """Initialize the database schema if it doesn't exist."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -103,11 +104,7 @@ class DecisionMemoryDB:
             conn.commit()
 
     def record(
-        self,
-        query: str,
-        decision: str,
-        confidence: float = 0.7,
-        notes: Optional[str] = None
+        self, query: str, decision: str, confidence: float = 0.7, notes: Optional[str] = None
     ) -> str:
         """
         Record a new decision.
@@ -134,20 +131,20 @@ class DecisionMemoryDB:
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO decisions
                 (id, query_hash, query, decision, confidence, timestamp, notes)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (record_id, query_hash, query, decision, confidence, timestamp, notes))
+            """,
+                (record_id, query_hash, query, decision, confidence, timestamp, notes),
+            )
             conn.commit()
 
         return record_id
 
     def retrieve(
-        self,
-        query: Optional[str] = None,
-        query_hash: Optional[str] = None,
-        top_k: int = 5
+        self, query: Optional[str] = None, query_hash: Optional[str] = None, top_k: int = 5
     ) -> List[DecisionRecord]:
         """
         Retrieve decisions by query or query_hash, sorted by confidence (descending).
@@ -170,28 +167,33 @@ class DecisionMemoryDB:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM decisions
                 WHERE query_hash = ?
                 ORDER BY confidence DESC
                 LIMIT ?
-            """, (query_hash, top_k))
+            """,
+                (query_hash, top_k),
+            )
 
             rows = cursor.fetchall()
 
         records = []
         for row in rows:
-            records.append(DecisionRecord(
-                id=row['id'],
-                query_hash=row['query_hash'],
-                query=row['query'],
-                decision=row['decision'],
-                confidence=row['confidence'],
-                timestamp=row['timestamp'],
-                outcome=row['outcome'],
-                success=bool(row['success']) if row['success'] is not None else None,
-                notes=row['notes']
-            ))
+            records.append(
+                DecisionRecord(
+                    id=row["id"],
+                    query_hash=row["query_hash"],
+                    query=row["query"],
+                    decision=row["decision"],
+                    confidence=row["confidence"],
+                    timestamp=row["timestamp"],
+                    outcome=row["outcome"],
+                    success=bool(row["success"]) if row["success"] is not None else None,
+                    notes=row["notes"],
+                )
+            )
 
         return records
 
@@ -211,21 +213,20 @@ class DecisionMemoryDB:
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE decisions
                 SET confidence = ?
                 WHERE id = ?
-            """, (new_confidence, record_id))
+            """,
+                (new_confidence, record_id),
+            )
 
             conn.commit()
             return cursor.rowcount > 0
 
     def record_outcome(
-        self,
-        record_id: str,
-        outcome: str,
-        success: bool,
-        notes: Optional[str] = None
+        self, record_id: str, outcome: str, success: bool, notes: Optional[str] = None
     ) -> bool:
         """
         Record the outcome of a decision and optionally adjust confidence.
@@ -243,9 +244,12 @@ class DecisionMemoryDB:
             cursor = conn.cursor()
 
             # Get current record to adjust confidence
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT confidence FROM decisions WHERE id = ?
-            """, (record_id,))
+            """,
+                (record_id,),
+            )
 
             row = cursor.fetchone()
             if row is None:
@@ -260,11 +264,14 @@ class DecisionMemoryDB:
                 new_confidence = max(0.0, current_confidence - 0.1)
 
             # Record outcome
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE decisions
                 SET outcome = ?, success = ?, confidence = ?, notes = ?
                 WHERE id = ?
-            """, (outcome, 1 if success else 0, new_confidence, notes, record_id))
+            """,
+                (outcome, 1 if success else 0, new_confidence, notes, record_id),
+            )
 
             conn.commit()
             return cursor.rowcount > 0
@@ -283,9 +290,12 @@ class DecisionMemoryDB:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM decisions WHERE id = ?
-            """, (record_id,))
+            """,
+                (record_id,),
+            )
 
             row = cursor.fetchone()
 
@@ -293,15 +303,15 @@ class DecisionMemoryDB:
             return None
 
         return DecisionRecord(
-            id=row['id'],
-            query_hash=row['query_hash'],
-            query=row['query'],
-            decision=row['decision'],
-            confidence=row['confidence'],
-            timestamp=row['timestamp'],
-            outcome=row['outcome'],
-            success=bool(row['success']) if row['success'] is not None else None,
-            notes=row['notes']
+            id=row["id"],
+            query_hash=row["query_hash"],
+            query=row["query"],
+            decision=row["decision"],
+            confidence=row["confidence"],
+            timestamp=row["timestamp"],
+            outcome=row["outcome"],
+            success=bool(row["success"]) if row["success"] is not None else None,
+            notes=row["notes"],
         )
 
     def all(self, order_by: str = "timestamp DESC") -> List[DecisionRecord]:
@@ -327,17 +337,19 @@ class DecisionMemoryDB:
 
         records = []
         for row in rows:
-            records.append(DecisionRecord(
-                id=row['id'],
-                query_hash=row['query_hash'],
-                query=row['query'],
-                decision=row['decision'],
-                confidence=row['confidence'],
-                timestamp=row['timestamp'],
-                outcome=row['outcome'],
-                success=bool(row['success']) if row['success'] is not None else None,
-                notes=row['notes']
-            ))
+            records.append(
+                DecisionRecord(
+                    id=row["id"],
+                    query_hash=row["query_hash"],
+                    query=row["query"],
+                    decision=row["decision"],
+                    confidence=row["confidence"],
+                    timestamp=row["timestamp"],
+                    outcome=row["outcome"],
+                    success=bool(row["success"]) if row["success"] is not None else None,
+                    notes=row["notes"],
+                )
+            )
 
         return records
 
@@ -346,7 +358,8 @@ class DecisionMemoryDB:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM decisions")
-            return cursor.fetchone()[0]
+            row = cursor.fetchone()
+            return int(row[0]) if row is not None else 0
 
     def delete(self, record_id: str) -> bool:
         """

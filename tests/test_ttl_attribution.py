@@ -36,6 +36,7 @@ from tokenpak.proxy.streaming import extract_sse_tokens
 # parse_ttl_attribution
 # ---------------------------------------------------------------------------
 
+
 def _usage(flat: int = 0, one_h: int = 0, five_m: int = 0, with_breakdown: bool = True) -> dict:
     u: dict = {"cache_creation_input_tokens": flat}
     if with_breakdown and (one_h or five_m):
@@ -93,7 +94,10 @@ def test_attribution_fail_open_on_malformed():
 # CacheMetrics + collector aggregation
 # ---------------------------------------------------------------------------
 
-def _metrics(*, ttl: str | None, one_h: int = 0, five_m: int = 0, cached: bool = True) -> CacheMetrics:
+
+def _metrics(
+    *, ttl: str | None, one_h: int = 0, five_m: int = 0, cached: bool = True
+) -> CacheMetrics:
     return CacheMetrics(
         request_id="r",
         stable_prefix_tokens=1000,
@@ -113,8 +117,8 @@ def test_collector_aggregates_per_ttl_totals_and_counts():
     c.record(_metrics(ttl="1h", one_h=400))
     c.record(_metrics(ttl="5m", five_m=128))
     c.record(_metrics(ttl="mixed", one_h=200, five_m=300))
-    c.record(_metrics(ttl="none", cached=True))           # no creation
-    c.record(_metrics(ttl=None, one_h=999, five_m=999))    # legacy: token sums still add
+    c.record(_metrics(ttl="none", cached=True))  # no creation
+    c.record(_metrics(ttl=None, one_h=999, five_m=999))  # legacy: token sums still add
 
     summary = c.summary()
     assert summary["total_cache_creation_ephemeral_1h_tokens"] == 400 + 200 + 999
@@ -146,20 +150,23 @@ def test_clear_resets_ttl_state():
 # SSE extractor (additive)
 # ---------------------------------------------------------------------------
 
+
 def _sse(message_usage: dict) -> bytes:
     event = {"type": "message_start", "message": {"usage": message_usage}}
     return f"data: {json.dumps(event)}\n\n".encode()
 
 
 def test_sse_extracts_per_ttl_breakdown():
-    sse = _sse({
-        "cache_read_input_tokens": 1500,
-        "cache_creation_input_tokens": 600,
-        "cache_creation": {
-            "ephemeral_1h_input_tokens": 400,
-            "ephemeral_5m_input_tokens": 200,
-        },
-    })
+    sse = _sse(
+        {
+            "cache_read_input_tokens": 1500,
+            "cache_creation_input_tokens": 600,
+            "cache_creation": {
+                "ephemeral_1h_input_tokens": 400,
+                "ephemeral_5m_input_tokens": 200,
+            },
+        }
+    )
     r = extract_sse_tokens(sse)
     assert r["cache_creation_input_tokens"] == 600
     assert r["cache_creation_ephemeral_1h_input_tokens"] == 400
@@ -168,10 +175,12 @@ def test_sse_extracts_per_ttl_breakdown():
 
 def test_sse_legacy_payload_still_parses_flat_only():
     """Old payload without per-TTL breakdown → new keys default to 0."""
-    sse = _sse({
-        "cache_read_input_tokens": 100,
-        "cache_creation_input_tokens": 50,
-    })
+    sse = _sse(
+        {
+            "cache_read_input_tokens": 100,
+            "cache_creation_input_tokens": 50,
+        }
+    )
     r = extract_sse_tokens(sse)
     assert r["cache_creation_input_tokens"] == 50
     assert r["cache_creation_ephemeral_1h_input_tokens"] == 0
@@ -181,6 +190,7 @@ def test_sse_legacy_payload_still_parses_flat_only():
 # ---------------------------------------------------------------------------
 # monitor.Monitor schema migration + log() backward-compat
 # ---------------------------------------------------------------------------
+
 
 def _old_schema_db(path: Path) -> None:
     """Create a requests table at the v3-ish schema (no new TTL columns)."""
@@ -279,6 +289,7 @@ def test_monitor_log_with_ttl_kwargs_persists(tmp_path: Path):
     # Flush the async write queue by writing through the synchronous fallback
     # path — call sites use the queue, tests can drain by waiting.
     import time
+
     for _ in range(40):
         time.sleep(0.05)
         conn = sqlite3.connect(str(db))

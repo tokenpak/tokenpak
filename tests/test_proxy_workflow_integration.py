@@ -9,6 +9,7 @@ AC coverage:
   AC4 — tokenpak workflow list --type proxy works
   AC5 — All new tests pass, no existing tests broken
 """
+
 from __future__ import annotations
 
 import os
@@ -20,6 +21,7 @@ from unittest.mock import patch
 # ---------------------------------------------------------------------------
 # Helpers — reload proxy_workflow with a given env var state
 # ---------------------------------------------------------------------------
+
 
 def _reload_proxy_workflow(tracking: str, workflow_dir: str):
     """Reload proxy_workflow module with custom env + workflow dir, return module."""
@@ -39,6 +41,7 @@ def _reload_proxy_workflow(tracking: str, workflow_dir: str):
             Path(workflow_dir),
         ):
             import tokenpak.agentic.proxy_workflow as pw
+
             # Override the manager so it uses our temp dir
             pw._manager_override = None
 
@@ -46,6 +49,7 @@ def _reload_proxy_workflow(tracking: str, workflow_dir: str):
                 if not pw.WORKFLOW_TRACKING_ENABLED:
                     return None
                 from tokenpak.agentic.workflow import WorkflowManager
+
                 return WorkflowManager(workflow_dir=workflow_dir)
 
             pw._get_manager = _patched_get_manager
@@ -55,6 +59,7 @@ def _reload_proxy_workflow(tracking: str, workflow_dir: str):
 # ---------------------------------------------------------------------------
 # AC1 — Feature flag OFF → zero side effects
 # ---------------------------------------------------------------------------
+
 
 class TestFeatureFlagOff:
     """TOKENPAK_WORKFLOW_TRACKING unset / 0 → all calls are no-ops."""
@@ -95,6 +100,7 @@ class TestFeatureFlagOff:
 # AC2 — Feature flag ON → workflow created per request
 # ---------------------------------------------------------------------------
 
+
 class TestFeatureFlagOn:
     """TOKENPAK_WORKFLOW_TRACKING=1 → a workflow record is persisted per request."""
 
@@ -116,6 +122,7 @@ class TestFeatureFlagOn:
 
     def test_workflow_has_proxy_tag(self):
         import json
+
         self.pw.start_proxy_workflow("req-tag-check")
         wf_file = next(Path(self.tmpdir).glob("*.json"))
         data = json.loads(wf_file.read_text())
@@ -124,6 +131,7 @@ class TestFeatureFlagOn:
     def test_full_happy_path(self):
         """Complete all steps successfully → status COMPLETED."""
         import json
+
         wf_id = self.pw.start_proxy_workflow("req-happy")
         assert wf_id is not None
 
@@ -144,7 +152,10 @@ class TestFeatureFlagOn:
 
     def test_metadata_stored(self):
         import json
-        self.pw.start_proxy_workflow("req-meta", metadata={"path": "/v1/messages", "method": "POST"})
+
+        self.pw.start_proxy_workflow(
+            "req-meta", metadata={"path": "/v1/messages", "method": "POST"}
+        )
         wf_file = Path(self.tmpdir) / "req-meta.json"
         data = json.loads(wf_file.read_text())
         assert data["metadata"]["path"] == "/v1/messages"
@@ -159,6 +170,7 @@ class TestFeatureFlagOn:
 # ---------------------------------------------------------------------------
 # AC3 — Crash mid-request → RUNNING step visible → recover surfaces it
 # ---------------------------------------------------------------------------
+
 
 class TestCrashRecovery:
     """Simulates a proxy crash mid-request."""
@@ -178,6 +190,7 @@ class TestCrashRecovery:
 
     def test_failed_step_marks_workflow_failed(self):
         import json
+
         wf_id = self.pw.start_proxy_workflow("req-fail-state")
         self.pw.advance_step(wf_id, "vault_inject", "compress")
         self.pw.fail_step(wf_id, "compress", error="timeout")
@@ -197,6 +210,7 @@ class TestCrashRecovery:
     def test_recover_returns_only_proxy_workflows(self):
         """Non-proxy workflows should not appear in recover_proxy_workflows()."""
         from tokenpak.agentic.workflow import WorkflowManager, WorkflowStep
+
         mgr = WorkflowManager(workflow_dir=self.tmpdir)
         # Create a non-proxy workflow
         non_proxy = mgr.create(
@@ -213,7 +227,9 @@ class TestCrashRecovery:
         results = self.pw.recover_proxy_workflows()
         result_ids = {wf["id"] for wf in results}
         assert proxy_wf_id in result_ids
-        assert non_proxy.id not in result_ids, "Non-proxy workflows must not appear in proxy recover"
+        assert non_proxy.id not in result_ids, (
+            "Non-proxy workflows must not appear in proxy recover"
+        )
 
     def test_completed_workflow_not_in_recover(self):
         """A completed workflow should not be surfaced by recover."""
@@ -231,6 +247,7 @@ class TestCrashRecovery:
 # AC4 — CLI: tokenpak workflow list --type proxy
 # ---------------------------------------------------------------------------
 
+
 class TestWorkflowCLI:
     """CLI-level tests for the workflow command with --type proxy."""
 
@@ -239,6 +256,7 @@ class TestWorkflowCLI:
 
     def _make_manager(self):
         from tokenpak.agentic.workflow import WorkflowManager
+
         return WorkflowManager(workflow_dir=self.tmpdir)
 
     def test_list_type_proxy_filters_correctly(self):
@@ -251,9 +269,13 @@ class TestWorkflowCLI:
 
         # Create a proxy-tagged workflow
         from tokenpak.agentic.workflow import WorkflowStep
+
         proxy_wf = mgr.create(
             name="proxy-request-req-xyz",
-            steps=[WorkflowStep("vault_inject"), WorkflowStep("forward", depends_on=["vault_inject"])],
+            steps=[
+                WorkflowStep("vault_inject"),
+                WorkflowStep("forward", depends_on=["vault_inject"]),
+            ],
             tags=["proxy", "req-xyz"],
         )
         # Create a non-proxy workflow
@@ -285,7 +307,10 @@ class TestWorkflowCLI:
         # Create incomplete proxy workflow
         proxy_wf = mgr.create(
             name="proxy-request-dangling",
-            steps=[WorkflowStep("vault_inject"), WorkflowStep("forward", depends_on=["vault_inject"])],
+            steps=[
+                WorkflowStep("vault_inject"),
+                WorkflowStep("forward", depends_on=["vault_inject"]),
+            ],
             tags=["proxy"],
         )
         mgr.start(proxy_wf.id)
@@ -339,6 +364,7 @@ class TestWorkflowCLI:
 # AC5 — Regression: proxy_workflow import doesn't break when tracking is off
 # ---------------------------------------------------------------------------
 
+
 class TestRegressionNoBreakage:
     """Ensure importing proxy_workflow with flag OFF has zero side effects."""
 
@@ -348,6 +374,7 @@ class TestRegressionNoBreakage:
                 if "proxy_workflow" in mod:
                     del sys.modules[mod]
             import tokenpak.agentic.proxy_workflow as pw
+
             assert pw.WORKFLOW_TRACKING_ENABLED is False
             # All functions should return None / [] without raising
             assert pw.start_proxy_workflow("r1") is None
@@ -359,6 +386,7 @@ class TestRegressionNoBreakage:
     def test_proxy_template_in_workflow_templates(self):
         """The 'proxy' template must be registered in WORKFLOW_TEMPLATES."""
         from tokenpak.agentic.workflow import WORKFLOW_TEMPLATES, list_templates
+
         assert "proxy" in WORKFLOW_TEMPLATES
         assert "proxy" in list_templates()
         steps = WORKFLOW_TEMPLATES["proxy"]
@@ -368,6 +396,7 @@ class TestRegressionNoBreakage:
     def test_proxy_template_step_dependencies(self):
         """Steps in proxy template should have correct dependency chain."""
         from tokenpak.agentic.workflow import WORKFLOW_TEMPLATES
+
         steps = {s["name"]: s for s in WORKFLOW_TEMPLATES["proxy"]}
         assert steps["vault_inject"]["depends_on"] == []
         assert "vault_inject" in steps["compress"]["depends_on"]

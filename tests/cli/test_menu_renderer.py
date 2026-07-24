@@ -36,6 +36,7 @@ from tokenpak.cli.commands.menu_lifecycle import (
 # helpers
 # ---------------------------------------------------------------------------
 
+
 def _capture(fn):
     """Run *fn* with stdout captured; return the captured string."""
     cap = io.StringIO()
@@ -55,6 +56,7 @@ def _count_1049(buf: str) -> tuple[int, int]:
 # ---------------------------------------------------------------------------
 # H1 — pure frame-builder snapshots
 # ---------------------------------------------------------------------------
+
 
 def test_h1_default_frame_has_selection_marker_and_no_ansi_when_color_off():
     lines = picker._compose_frame(
@@ -122,16 +124,34 @@ def test_h1_no_results_frame():
 
 def test_h1_minimal_mode_strips_chrome():
     full = picker._compose_frame(
-        title="Menu", subtitle="sub", header="HEADER\nLINE2", footer="footer",
-        filter_text="", filterable=False, rows=[("A", True), ("B", False)],
-        scroll_above=2, scroll_below=3, no_results=False, color=False,
-        minimal=False, back_label=None,
+        title="Menu",
+        subtitle="sub",
+        header="HEADER\nLINE2",
+        footer="footer",
+        filter_text="",
+        filterable=False,
+        rows=[("A", True), ("B", False)],
+        scroll_above=2,
+        scroll_below=3,
+        no_results=False,
+        color=False,
+        minimal=False,
+        back_label=None,
     )
     minimal = picker._compose_frame(
-        title="Menu", subtitle="sub", header="HEADER\nLINE2", footer="footer",
-        filter_text="", filterable=False, rows=[("A", True), ("B", False)],
-        scroll_above=2, scroll_below=3, no_results=False, color=False,
-        minimal=True, back_label=None,
+        title="Menu",
+        subtitle="sub",
+        header="HEADER\nLINE2",
+        footer="footer",
+        filter_text="",
+        filterable=False,
+        rows=[("A", True), ("B", False)],
+        scroll_above=2,
+        scroll_below=3,
+        no_results=False,
+        color=False,
+        minimal=True,
+        back_label=None,
     )
     full_body, min_body = "\n".join(full), "\n".join(minimal)
     # chrome present in full, absent in minimal
@@ -153,10 +173,12 @@ def test_h1_render_plain_list_strips_ansi():
 # H2 — alt-screen enter/leave balance across every exit path
 # ---------------------------------------------------------------------------
 
+
 def test_h2_balance_normal_exit():
     def run():
         with picker.AltScreenSession(enabled=True):
             sys.stdout.write("frame")
+
     h, l = _count_1049(_capture(run))
     assert (h, l) == (1, 1)
 
@@ -168,6 +190,7 @@ def test_h2_balance_suspend_then_exit():
         sess.__enter__()
         sess.suspend()
         sess.__exit__(None, None, None)
+
     h, l = _count_1049(_capture(run))
     assert (h, l) == (1, 1)
 
@@ -178,6 +201,7 @@ def test_h2_balance_suspend_resume_exit():
         with picker.AltScreenSession(enabled=True) as sess:
             sess.suspend()
             sess.resume()
+
     h, l = _count_1049(_capture(run))
     assert (h, l) == (2, 2)
 
@@ -189,6 +213,7 @@ def test_h2_balance_on_exception():
                 raise RuntimeError("boom")
         except RuntimeError:
             pass
+
     h, l = _count_1049(_capture(run))
     assert (h, l) == (1, 1)
 
@@ -197,12 +222,14 @@ def test_h2_balance_on_exception():
 # H3 — disabled session and non-interactive gating emit no alt-screen
 # ---------------------------------------------------------------------------
 
+
 def test_h3_disabled_session_emits_zero_1049():
     def run():
         with picker.AltScreenSession(enabled=False) as sess:
             sess.suspend()
             sess.resume()
             sys.stdout.write("x")
+
     h, l = _count_1049(_capture(run))
     assert (h, l) == (0, 0)
 
@@ -246,6 +273,7 @@ def test_h3_interactive_disallowed_by_no_tui(monkeypatch):
 # ---------------------------------------------------------------------------
 # H4 — overlay-keys subset of real commands; lifecycle map; --json schema
 # ---------------------------------------------------------------------------
+
 
 def test_h4_lifecycle_overlay_keys_are_real_commands():
     """E3: every lifecycle overlay key must resolve to a real CLI command."""
@@ -301,6 +329,7 @@ def test_h4_bare_json_emits_valid_payload(monkeypatch):
 # §5.3 / D7 — honesty: the status strip never fabricates a savings figure
 # ---------------------------------------------------------------------------
 
+
 def test_status_strip_never_fabricates_dollar_zero(monkeypatch):
     monkeypatch.setenv("TOKENPAK_NO_COLOR", "1")
     # Force a stopped/unknown snapshot (no live proxy) regardless of host state.
@@ -311,7 +340,7 @@ def test_status_strip_never_fabricates_dollar_zero(monkeypatch):
     )
     strip = menumod._status_strip()
     assert "$0.00" not in strip  # the pre-existing fabrication is gone (D7)
-    assert "—" in strip          # honest unknown marker
+    assert "—" in strip  # honest unknown marker
     assert "Stopped" in strip
 
 
@@ -331,6 +360,7 @@ def test_status_strip_renders_real_values_when_known(monkeypatch):
 # ---------------------------------------------------------------------------
 # I — receipt card is pure box-drawing (no Rich), honest content
 # ---------------------------------------------------------------------------
+
 
 def test_receipt_card_uses_unicode_box_drawing():
     card = receipt_card("Proxy started", [("Status", "Running"), ("Endpoint", "127.0.0.1:8766")])

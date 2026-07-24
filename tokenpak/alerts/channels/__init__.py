@@ -35,12 +35,12 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
 
-def _load_channel_configs() -> list[dict]:
+def _load_channel_configs() -> list[dict[str, Any]]:
     """Load channel configs from ~/.tokenpak/config.yaml (or config.json fallback).
 
     Falls back to env-var-based channel selection when no file config exists.
@@ -60,6 +60,7 @@ def _load_channel_configs() -> list[dict]:
             if config_path.suffix == ".yaml":
                 try:
                     import yaml
+
                     with open(config_path) as f:
                         data = yaml.safe_load(f) or {}
                 except ImportError:
@@ -70,7 +71,7 @@ def _load_channel_configs() -> list[dict]:
                     data = json.load(f)
             channels = data.get("alerts", {}).get("channels", [])
             if channels:
-                return channels
+                return cast(list[dict[str, Any]], channels)
         except Exception as exc:
             logger.debug("failed to load channel config from %s: %s", config_path, exc)
 
@@ -119,6 +120,7 @@ def dispatch(event: str, severity: str, message: str, **extra: Any) -> None:
     def _deliver_all() -> None:
         from . import email as email_channel
         from . import slack, telegram, webhook
+
         for ch in channels:
             ch_type = ch.get("type")
             try:
@@ -159,7 +161,8 @@ def dispatch(event: str, severity: str, message: str, **extra: Any) -> None:
     t = threading.Thread(target=_deliver_all, daemon=True, name="tokenpak-alert-dispatch")
     t.start()
 
+
 # Alias for backwards-compatibility with tests that import dispatch_alert
 dispatch_alert = dispatch
 
-__all__ = ['email', 'slack', 'telegram', 'webhook', 'dispatch', 'dispatch_alert']
+__all__ = ["email", "slack", "telegram", "webhook", "dispatch", "dispatch_alert"]

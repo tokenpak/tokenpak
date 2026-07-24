@@ -32,12 +32,12 @@ import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 try:
     import yaml
 except ImportError:
-    yaml = None  # type: ignore[assignment]
+    yaml = None
 
 MACROS_DIR = Path.home() / ".tokenpak" / "macros"
 
@@ -55,7 +55,7 @@ def _require_yaml() -> None:
 def _resolve_vars(text: str, variables: Dict[str, Any]) -> str:
     """Substitute ${VAR} and $VAR placeholders with values from variables dict."""
 
-    def replacer(match):
+    def replacer(match: re.Match[str]) -> str:
         key = match.group(1) or match.group(2)
         return str(variables.get(key, match.group(0)))
 
@@ -135,7 +135,10 @@ class MacroDefinition:
 
     def to_yaml(self) -> str:
         _require_yaml()
-        return yaml.dump(self.to_dict(), default_flow_style=False, sort_keys=False)
+        return cast(
+            str,
+            yaml.dump(self.to_dict(), default_flow_style=False, sort_keys=False),
+        )
 
     @classmethod
     def from_yaml(cls, text: str) -> "MacroDefinition":
@@ -221,13 +224,13 @@ class MacroResult:
     def format(self) -> str:
         """Return human-readable output."""
         lines = [
-            f"{'='*60}",
+            f"{'=' * 60}",
             f"  {self.macro_name.upper()}",
         ]
         if self.dry_run:
             lines.append("  [DRY RUN — no commands executed]")
         lines.append(f"  Started: {self.started_at[:19]}")
-        lines.append(f"{'='*60}")
+        lines.append(f"{'=' * 60}")
 
         for step in self.steps:
             status = "🔍" if step.dry_run else ("✅" if step.success else "❌")
@@ -243,9 +246,9 @@ class MacroResult:
 
         dur = self.duration_seconds
         overall = "✅ PASS" if self.success else "❌ FAIL"
-        lines.append(f"\n{'='*60}")
+        lines.append(f"\n{'=' * 60}")
         lines.append(f"  {overall}  — completed in {dur:.1f}s")
-        lines.append(f"{'='*60}")
+        lines.append(f"{'=' * 60}")
         return "\n".join(lines)
 
 

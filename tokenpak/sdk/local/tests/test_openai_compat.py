@@ -104,9 +104,7 @@ class TestBuildMessages:
         mock_resp = MagicMock()
         client._client.chat.completions.create.return_value = mock_resp
 
-        result = client.complete(
-            model="llama3", tokenpak=_make_pack(), user_message="test"
-        )
+        result = client.complete(model="llama3", tokenpak=_make_pack(), user_message="test")
 
         client._client.chat.completions.create.assert_called_once()
         assert result is mock_resp

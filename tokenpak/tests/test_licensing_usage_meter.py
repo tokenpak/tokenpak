@@ -136,11 +136,7 @@ def test_record_drops_when_no_license(spool: Path, caplog):
 def test_record_explicit_license_id_overrides_default(spool: Path):
     meter = UsageMeter(license_id="default-lic", spool_dir=spool)
     meter.record(tokens_in=1, tokens_out=2, model="m", license_id="override-lic")
-    rows = [
-        json.loads(line)
-        for line in (spool / "buffer.jsonl").read_text().splitlines()
-        if line
-    ]
+    rows = [json.loads(line) for line in (spool / "buffer.jsonl").read_text().splitlines() if line]
     assert rows[0]["license_id"] == "override-lic"
 
 
@@ -268,15 +264,9 @@ def test_4xx_event_is_dropped_not_retried(spool: Path):
 
 def test_record_usage_uses_singleton(spool: Path, monkeypatch: pytest.MonkeyPatch):
     # Force the default meter to use our temp spool
-    monkeypatch.setattr(
-        "tokenpak.licensing.usage_meter.DEFAULT_SPOOL_DIR", spool
-    )
-    record_usage(
-        tokens_in=5, tokens_out=6, model="claude-sonnet-4-6", license_id="TPAK-X"
-    )
-    record_usage(
-        tokens_in=7, tokens_out=8, model="claude-sonnet-4-6", license_id="TPAK-X"
-    )
+    monkeypatch.setattr("tokenpak.licensing.usage_meter.DEFAULT_SPOOL_DIR", spool)
+    record_usage(tokens_in=5, tokens_out=6, model="claude-sonnet-4-6", license_id="TPAK-X")
+    record_usage(tokens_in=7, tokens_out=8, model="claude-sonnet-4-6", license_id="TPAK-X")
     spool_file = spool / "buffer.jsonl"
     assert spool_file.exists()
     rows = [json.loads(line) for line in spool_file.read_text().splitlines() if line]
@@ -341,9 +331,7 @@ def test_spool_skips_malformed_lines(spool: Path):
 
 def test_telemetry_metering_bridge_forwards(spool: Path, monkeypatch: pytest.MonkeyPatch):
     """telemetry.metering.UsageMeter.record() forwards into the licensing meter."""
-    monkeypatch.setattr(
-        "tokenpak.licensing.usage_meter.DEFAULT_SPOOL_DIR", spool
-    )
+    monkeypatch.setattr("tokenpak.licensing.usage_meter.DEFAULT_SPOOL_DIR", spool)
 
     from tokenpak.telemetry.metering import UsageMeter as TelemetryMeter
 
@@ -362,8 +350,6 @@ def test_telemetry_metering_bridge_forwards(spool: Path, monkeypatch: pytest.Mon
     assert spool_file.exists()
     rows = [json.loads(line) for line in spool_file.read_text().splitlines() if line]
     assert any(
-        r["license_id"] == "TPAK-FORWARD-Z"
-        and r["tokens_in"] == 11
-        and r["tokens_out"] == 22
+        r["license_id"] == "TPAK-FORWARD-Z" and r["tokens_in"] == 11 and r["tokens_out"] == 22
         for r in rows
     )

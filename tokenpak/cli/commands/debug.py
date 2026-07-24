@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Optional
+__all__ = ("debug_cmd",)
 
 
-def _state():
+from argparse import Namespace
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from tokenpak.core.debug import DebugState
+    from tokenpak.proxy.spend_guard.receipt import ReceiptDebugPointer
+
+
+def _state() -> DebugState:
     from tokenpak.core.debug import DebugState
 
     return DebugState()
 
 
-def debug_cmd(args) -> None:
+def debug_cmd(args: Namespace) -> None:
     """Dispatch debug sub-commands."""
     debug_args = getattr(args, "debug_args", None) or []
     sub = getattr(args, "debug_cmd", None) or (debug_args[0] if debug_args else None)
@@ -24,13 +32,10 @@ def debug_cmd(args) -> None:
     elif sub == "receipt":
         _cmd_receipt(args)
     else:
-        print(
-            "Usage: tokenpak debug <on [--requests N] | off | status "
-            "| receipt <request_id>>"
-        )
+        print("Usage: tokenpak debug <on [--requests N] | off | status | receipt <request_id>>")
 
 
-def _cmd_receipt(args) -> None:
+def _cmd_receipt(args: Namespace) -> None:
     """Print a redaction-safe Receipt v1 proof object for a recorded request."""
     debug_args = getattr(args, "debug_args", None) or []
     request_id = getattr(args, "request_id", None) or (
@@ -40,7 +45,7 @@ def _cmd_receipt(args) -> None:
     print(_render_request_receipt(request_id, redact=redact))
 
 
-def _resolve_debug_pointer(request_id: str):
+def _resolve_debug_pointer(request_id: str) -> ReceiptDebugPointer:
     """Build a redaction-safe debug-capture pointer for ``request_id``.
 
     Reports ``present=True`` only when a capture blob actually exists for the
@@ -82,9 +87,7 @@ def _render_request_receipt(request_id: Optional[str], *, redact: bool = True) -
     if row is None:
         return _support_bundle_pointer(f"no recorded request '{request_id}'")
 
-    receipt = build_request_receipt(
-        row, debug_pointer=_resolve_debug_pointer(str(request_id))
-    )
+    receipt = build_request_receipt(row, debug_pointer=_resolve_debug_pointer(str(request_id)))
     return render_receipt(receipt, redact=redact)
 
 
@@ -101,7 +104,7 @@ def _support_bundle_pointer(reason: str) -> str:
     )
 
 
-def _cmd_on(args) -> None:
+def _cmd_on(args: Namespace) -> None:
     requests = getattr(args, "debug_requests", None)
     _state().enable(requests=requests)
     if requests:
@@ -121,7 +124,8 @@ def _cmd_status() -> None:
     flag = "ON" if enabled else "OFF"
     remaining = st["requests_remaining"]
     rem_str = str(remaining) if remaining is not None else "unlimited"
-    log_kb = round(st["log_size_bytes"] / 1024, 1)
+    log_size = st["log_size_bytes"]
+    log_kb = round(log_size / 1024, 1) if isinstance(log_size, int) else 0.0
     print(f"Debug mode:    {flag}")
     if enabled:
         print(f"Remaining:     {rem_str}")

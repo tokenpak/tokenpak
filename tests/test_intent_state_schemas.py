@@ -10,10 +10,11 @@ Verifies:
   - select_state_manager factory returns correct IntentStateManager type
 """
 
-
 import pytest
 
-pytest.importorskip("tokenpak.infrastructure.state_manager", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.infrastructure.state_manager", reason="module not available in current build"
+)
 import json
 
 import pytest
@@ -31,6 +32,7 @@ from tokenpak.infrastructure.state_manager import (
 # ---------------------------------------------------------------------------
 # Schema file existence + validity
 # ---------------------------------------------------------------------------
+
 
 class TestSchemaFiles:
     """All schema JSON files must exist and be valid JSON."""
@@ -110,6 +112,7 @@ class TestSchemaFiles:
 # INTENT_SCHEMA_MAP + get_schema_path
 # ---------------------------------------------------------------------------
 
+
 class TestIntentSchemaMap:
     def test_map_covers_expected_intents(self):
         expected = {"debug", "create", "plan", "execute", "query", "search"}
@@ -128,6 +131,7 @@ class TestIntentSchemaMap:
 # ---------------------------------------------------------------------------
 # IntentStateManager — defaults + field isolation
 # ---------------------------------------------------------------------------
+
 
 class TestIntentStateManager:
     def _make(self, intent: str, tmp_dir: str) -> IntentStateManager:
@@ -201,6 +205,7 @@ class TestIntentStateManager:
 # State isolation: intent sub-managers don't share state
 # ---------------------------------------------------------------------------
 
+
 class TestStateIsolation:
     def test_debug_and_plan_states_are_isolated(self, tmp_path):
         ms = MultiSchemaStateManager("iso-sess", base_dir=str(tmp_path))
@@ -223,6 +228,7 @@ class TestStateIsolation:
 # ---------------------------------------------------------------------------
 # MultiSchemaStateManager
 # ---------------------------------------------------------------------------
+
 
 class TestMultiSchemaStateManager:
     def test_for_intent_returns_intent_state_manager(self, tmp_path):
@@ -264,6 +270,7 @@ class TestMultiSchemaStateManager:
 # ---------------------------------------------------------------------------
 # select_state_manager factory
 # ---------------------------------------------------------------------------
+
 
 class TestSelectStateManager:
     def test_returns_intent_state_manager(self, tmp_path):

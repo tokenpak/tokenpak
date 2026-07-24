@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 
 import yaml
 
@@ -223,8 +223,8 @@ class CompressionRecipe:
     name: str
     category: str
     description: str
-    pattern: dict
-    action: dict
+    pattern: dict[str, object]
+    action: dict[str, object]
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, source: str) -> "CompressionRecipe":
@@ -243,18 +243,18 @@ class CompressionRecipe:
             name=name,
             category=category,
             description=str(data["description"]).strip(),
-            pattern=dict(data["pattern"]),
-            action=dict(data["action"]),
+            pattern=dict(cast(Mapping[str, object], data["pattern"])),
+            action=dict(cast(Mapping[str, object], data["action"])),
         )
 
     @property
     def compression_hint(self) -> float:
         """Expected compression ratio 0.0–1.0 (fraction of content removed)."""
-        return float(self.action.get("compression_hint", 0.0))
+        return float(cast(str | int | float, self.action.get("compression_hint", 0.0)))
 
     @property
-    def operations(self) -> list[dict[str, Any]]:
-        return list(self.action.get("operations", []))
+    def operations(self) -> list[dict[str, object]]:
+        return list(cast(list[dict[str, object]], self.action.get("operations", [])))
 
     @property
     def match_mode(self) -> str:
@@ -266,22 +266,22 @@ class CompressionRecipe:
         if mode == "any":
             return True
         if mode == "extension":
-            exts = self.pattern.get("extensions", [])
+            exts = cast(list[str], self.pattern.get("extensions", []))
             for ext in exts:
                 if filename.endswith(ext):
                     return True
             return False
         if mode == "filename":
-            fnames = self.pattern.get("filenames", [])
+            fnames = cast(list[str], self.pattern.get("filenames", []))
             base = Path(filename).name
             return base in fnames
         if mode == "content":
-            keywords = self.pattern.get("keywords", [])
+            keywords = cast(list[str], self.pattern.get("keywords", []))
             return any(kw in content_sample for kw in keywords)
         if mode == "path_pattern":
             import re
 
-            path_patterns = self.pattern.get("path_patterns", [])
+            path_patterns = cast(list[str], self.pattern.get("path_patterns", []))
             return any(re.search(p, filename) for p in path_patterns)
         # Unknown mode: conservative — skip
         return False
@@ -645,7 +645,7 @@ class CompressionRuleEngine:
             content = pattern.sub("", content)
 
         # API rate-limit warnings: count occurrences, strip from 3rd onward
-        def _rate_limit_replacer(m: re.Match) -> str:
+        def _rate_limit_replacer(m: re.Match[str]) -> str:
             self._api_rate_limit_count += 1
             if self._api_rate_limit_count >= 3:
                 return ""

@@ -18,6 +18,7 @@ from tokenpak.vault.scoring import (
 # 1. Multi-signal scoring formula
 # ---------------------------------------------------------------------------
 
+
 class TestScoringFormula:
     def test_base_weighted_sum(self):
         """Verify base 0.45/0.45/0.10 weighting."""
@@ -41,11 +42,7 @@ class TestScoringFormula:
 
     def test_recency_boost_applied(self):
         """Recency boost (+0.05) for current/latest artifacts."""
-        signals = ScoringSignals(
-            bm25_score=5.0,
-            semantic_score=0.5,
-            is_current_commit=False
-        )
+        signals = ScoringSignals(bm25_score=5.0, semantic_score=0.5, is_current_commit=False)
         old_score = compute_final_score(signals)
 
         signals.is_current_commit = True
@@ -54,11 +51,7 @@ class TestScoringFormula:
 
     def test_stale_penalty_applied(self):
         """Stale penalty (-0.15) for old artifacts."""
-        signals = ScoringSignals(
-            bm25_score=5.0,
-            semantic_score=0.8,
-            is_stale_artifact=False
-        )
+        signals = ScoringSignals(bm25_score=5.0, semantic_score=0.8, is_stale_artifact=False)
         fresh_score = compute_final_score(signals)
 
         signals.is_stale_artifact = True
@@ -68,11 +61,7 @@ class TestScoringFormula:
 
     def test_boilerplate_penalty_applied(self):
         """Boilerplate penalty (-0.10) for generic code."""
-        signals = ScoringSignals(
-            bm25_score=5.0,
-            semantic_score=0.6,
-            is_boilerplate=False
-        )
+        signals = ScoringSignals(bm25_score=5.0, semantic_score=0.6, is_boilerplate=False)
         code_score = compute_final_score(signals)
 
         signals.is_boilerplate = True
@@ -81,11 +70,7 @@ class TestScoringFormula:
 
     def test_score_clamped_to_reasonable_range(self):
         """Score stays in [0.0, 2.0] range."""
-        signals = ScoringSignals(
-            bm25_score=10.0,
-            semantic_score=1.0,
-            is_current_commit=True
-        )
+        signals = ScoringSignals(bm25_score=10.0, semantic_score=1.0, is_current_commit=True)
         score = compute_final_score(signals, query="MyFunction in src/file.py")
         assert 0.0 <= score <= 2.0
 
@@ -93,6 +78,7 @@ class TestScoringFormula:
 # ---------------------------------------------------------------------------
 # 2. Coverage score
 # ---------------------------------------------------------------------------
+
 
 class TestCoverageScore:
     def test_strong_coverage(self):
@@ -136,7 +122,7 @@ class TestCoverageScore:
             must_hit_found=False,
             concentration_factor=0.2,
             mass_factor=0.3,
-            interpretation="weak"
+            interpretation="weak",
         )
         assert is_coverage_weak(weak_result)
 
@@ -145,7 +131,7 @@ class TestCoverageScore:
             must_hit_found=True,
             concentration_factor=0.2,
             mass_factor=0.4,
-            interpretation="ok"
+            interpretation="ok",
         )
         assert not is_coverage_weak(ok_result)
 
@@ -159,6 +145,7 @@ class TestCoverageScore:
 # ---------------------------------------------------------------------------
 # 3. Must-hit term extraction
 # ---------------------------------------------------------------------------
+
 
 class TestMustHitTermExtraction:
     def test_extract_function_names(self):
@@ -190,6 +177,7 @@ class TestMustHitTermExtraction:
 # ---------------------------------------------------------------------------
 # 4. Must-hit coverage check
 # ---------------------------------------------------------------------------
+
 
 class TestMustHitCoverageCheck:
     def test_all_terms_found(self):
@@ -229,6 +217,7 @@ class TestMustHitCoverageCheck:
 # 5. Signals struct
 # ---------------------------------------------------------------------------
 
+
 class TestScoringSignals:
     def test_signals_dataclass(self):
         """ScoringSignals properly initialized."""
@@ -256,6 +245,7 @@ class TestScoringSignals:
 # 6. Coverage score result
 # ---------------------------------------------------------------------------
 
+
 class TestCoverageScoreResult:
     def test_result_fields(self):
         """CoverageScoreResult has all required fields."""
@@ -264,7 +254,7 @@ class TestCoverageScoreResult:
             must_hit_found=True,
             concentration_factor=0.15,
             mass_factor=0.25,
-            interpretation="ok"
+            interpretation="ok",
         )
         assert 0.0 <= result.score <= 1.0
         assert result.interpretation in ["strong", "ok", "weak"]
@@ -275,6 +265,7 @@ class TestCoverageScoreResult:
 # ---------------------------------------------------------------------------
 # 7. Integration: Combined scoring + coverage
 # ---------------------------------------------------------------------------
+
 
 class TestIntegratedScoringCoverage:
     def test_high_scores_high_coverage(self):

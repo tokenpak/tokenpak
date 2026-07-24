@@ -19,7 +19,7 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Mapping
+from typing import Any, Iterator, Mapping, Protocol, cast
 
 from tokenpak import _paths
 
@@ -75,6 +75,19 @@ class RollbackRefusedError(OptimizationError):
 
 class CorruptManagedConfigError(OptimizationError):
     """Raised when managed bytes fail schema, hash, or invariant checks."""
+
+
+class _MsvcrtLocking(Protocol):
+    LK_LOCK: int
+    LK_UNLCK: int
+
+    def locking(self, fd: int, mode: int, nbytes: int) -> None: ...
+
+
+def _managed_int(value: object, field: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise CorruptManagedConfigError(f"managed MemoryGuard {field} must be an integer")
+    return value
 
 
 @dataclass(frozen=True)
@@ -496,12 +509,17 @@ def validate_plan_wrapper(data: bytes | str) -> dict[str, Any]:
         sys_low = guard.get("sys_low_mb")
         interval = guard.get("check_interval_secs")
         cooldown = guard.get("cooldown_secs")
-        if not all(
-            isinstance(item, int) and not isinstance(item, bool)
-            for item in (target, ceiling, sys_low, interval, cooldown)
+        target_value = _managed_int(target, "target_mb")
+        ceiling_value = _managed_int(ceiling, "ceiling_mb")
+        sys_low_value = _managed_int(sys_low, "sys_low_mb")
+        interval_value = _managed_int(interval, "check_interval_secs")
+        cooldown_value = _managed_int(cooldown, "cooldown_secs")
+        if not (
+            0 < target_value < ceiling_value
+            and sys_low_value >= 0
+            and interval_value > 0
+            and cooldown_value >= interval_value
         ):
-            raise CorruptManagedConfigError("managed MemoryGuard thresholds must be integers")
-        if not (0 < target < ceiling and sys_low >= 0 and interval > 0 and cooldown >= interval):
             raise CorruptManagedConfigError("managed MemoryGuard thresholds violate invariants")
     return plan
 
@@ -578,14 +596,16 @@ def _exclusive_lock(path: Path) -> Iterator[None]:
             try:
                 import msvcrt
 
+                msvcrt_locking = cast(_MsvcrtLocking, msvcrt)
+
                 if os.fstat(fd).st_size == 0:
                     os.write(fd, b"\0")
                 os.lseek(fd, 0, os.SEEK_SET)
-                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+                msvcrt_locking.locking(fd, msvcrt_locking.LK_LOCK, 1)
 
                 def release() -> None:
                     os.lseek(fd, 0, os.SEEK_SET)
-                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                    msvcrt_locking.locking(fd, msvcrt_locking.LK_UNLCK, 1)
 
             except ImportError as exc:
                 raise OptimizationError("platform has no supported file-lock primitive") from exc

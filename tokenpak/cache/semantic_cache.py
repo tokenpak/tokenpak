@@ -98,14 +98,15 @@ class SemanticCacheEntry:
 
     query_normalized: str
     query_hash: str
-    response: bytes                         # raw upstream bytes (JSON or SSE)
-    content_type: str                       # e.g. "application/json" or "text/event-stream; charset=utf-8"
-    wire_format: Literal["json", "sse"]     # "json" | "sse" — never cross-serve
+    response: bytes  # raw upstream bytes (JSON or SSE)
+    content_type: str  # e.g. "application/json" or "text/event-stream; charset=utf-8"
+    wire_format: Literal["json", "sse"]  # "json" | "sse" — never cross-serve
     created_at: float
     ttl_seconds: int = _DEFAULT_TTL
     hit_count: int = 0
-    similarity_score: float = 1.0          # 1.0 for exact matches
-    key_features: dict = field(default_factory=dict)  # additional cache-key dimensions (model, etc.)
+    similarity_score: float = 1.0  # 1.0 for exact matches
+    # Additional cache-key dimensions (model, etc.).
+    key_features: dict[str, object] = field(default_factory=dict)
 
     @property
     def expires_at(self) -> float:
@@ -209,10 +210,7 @@ class SemanticCache:
             # Only consider entries matching the requested wire format.
             # Store keys are composite (hash:wire_format) so this filter is O(n)
             # but n is small (bounded by max_entries).
-            entries = [
-                e for e in self._store.values()
-                if e.wire_format == expected_format
-            ]
+            entries = [e for e in self._store.values() if e.wire_format == expected_format]
 
         # --- 1. Exact normalised match ---
         for entry in entries:
@@ -267,7 +265,12 @@ class SemanticCache:
 
         # --- Miss ---
         self._total_misses += 1
-        logger.debug("[SemanticCache] MISS hash=%s fmt=%s jaccard_best=%.3f", query_hash[:8], expected_format, best_score)
+        logger.debug(
+            "[SemanticCache] MISS hash=%s fmt=%s jaccard_best=%.3f",
+            query_hash[:8],
+            expected_format,
+            best_score,
+        )
         return SemanticCacheLookup(
             hit=False,
             query_hash=query_hash,
@@ -280,7 +283,7 @@ class SemanticCache:
         query: str,
         response_bytes: bytes,
         content_type: str = "application/json",
-        wire_format: str = "json",
+        wire_format: Literal["json", "sse"] = "json",
     ) -> SemanticCacheEntry:
         """
         Store *response_bytes* for *query*.
@@ -293,6 +296,9 @@ class SemanticCache:
 
         Returns the new ``SemanticCacheEntry``.
         """
+        if not isinstance(response_bytes, bytes):
+            raise TypeError("response_bytes must be bytes")
+
         normalised = _normalise(query)
         query_hash = _hash(normalised)
         # Composite key — wire_format is a key dimension so JSON and SSE

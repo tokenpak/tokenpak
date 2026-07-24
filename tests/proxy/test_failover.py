@@ -26,6 +26,7 @@ from tokenpak.proxy.failover import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_config(providers: List[str]) -> FailoverConfig:
     """Build a minimal FailoverConfig with the given provider names."""
     chain = [
@@ -42,6 +43,7 @@ def _make_config(providers: List[str]) -> FailoverConfig:
 # ---------------------------------------------------------------------------
 # Regression test
 # ---------------------------------------------------------------------------
+
 
 def test_failover_concurrent_reload_no_runtime_error():
     """

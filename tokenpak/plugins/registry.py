@@ -17,7 +17,7 @@ class PluginRegistry:
 
     def __init__(self) -> None:
         self._plugins: List[CompressorPlugin] = []
-        self._names: set = set()
+        self._names: set[str] = set()
 
     # ------------------------------------------------------------------
     # Registration
@@ -84,9 +84,12 @@ class PluginRegistry:
 
         # 1. Canonical: config.yaml
         try:
-            plugin_list = config_get("plugins.enabled", [], None, list)
-            if plugin_list:
-                for path in plugin_list:
+            configured_plugins: object = config_get("plugins.enabled", [])
+            if isinstance(configured_plugins, list) and configured_plugins:
+                for path in configured_plugins:
+                    if not isinstance(path, str):
+                        logger.warning("Ignoring non-string plugin path: %r", path)
+                        continue
                     self._load_plugin_path(path)
                 return
         except Exception as exc:

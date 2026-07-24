@@ -7,6 +7,7 @@ schema and must not mutate the store or emit first-run side effects that would
 pollute deterministic snapshot output. With the env unset, the normal first-run
 admin bootstrap is preserved.
 """
+
 from __future__ import annotations
 
 import pytest

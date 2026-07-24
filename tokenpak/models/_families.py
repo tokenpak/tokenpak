@@ -274,10 +274,16 @@ BUILTIN_FAMILIES: list[FamilyRule] = [
     ),
     # ── Local / OSS ────────────────────────────────────────────
     FamilyRule(pattern="llama", provider="ollama", tier=1, input_per_mtok=0.0, output_per_mtok=0.0),
-    FamilyRule(pattern="mistral", provider="ollama", tier=1, input_per_mtok=0.0, output_per_mtok=0.0),
-    FamilyRule(pattern="mixtral", provider="ollama", tier=2, input_per_mtok=0.0, output_per_mtok=0.0),
+    FamilyRule(
+        pattern="mistral", provider="ollama", tier=1, input_per_mtok=0.0, output_per_mtok=0.0
+    ),
+    FamilyRule(
+        pattern="mixtral", provider="ollama", tier=2, input_per_mtok=0.0, output_per_mtok=0.0
+    ),
     FamilyRule(pattern="qwen", provider="ollama", tier=1, input_per_mtok=0.0, output_per_mtok=0.0),
-    FamilyRule(pattern="deepseek", provider="ollama", tier=2, input_per_mtok=0.0, output_per_mtok=0.0),
+    FamilyRule(
+        pattern="deepseek", provider="ollama", tier=2, input_per_mtok=0.0, output_per_mtok=0.0
+    ),
     FamilyRule(pattern="phi", provider="ollama", tier=1, input_per_mtok=0.0, output_per_mtok=0.0),
 ]
 

@@ -383,10 +383,9 @@ ERROR: second (same stack)
 
     def test_max_stack_sigs_limit(self):
         """Test that stack sigs are capped at max."""
-        log = "\n".join([
-            f"ERROR: error{i}\n\tat location.method{i}(file.java:{i})"
-            for i in range(100)
-        ])
+        log = "\n".join(
+            [f"ERROR: error{i}\n\tat location.method{i}(file.java:{i})" for i in range(100)]
+        )
         extractor = LogExtractor(max_stack_sigs=10)
         result = extractor.extract(log)
         assert result.unique_stack_sigs <= 10

@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.compaction.topic_aware", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.compaction.topic_aware", reason="module not available in current build"
+)
 import unittest
 
 from tokenpak.compaction import (
@@ -213,16 +215,12 @@ class TestTopicSegmentProperties(unittest.TestCase):
 
     def test_is_active_above_threshold(self):
         """is_active should return True when activity_score >= 0.5."""
-        segment = TopicSegment(
-            start=0, end=10, content="test", topic_id="t1", activity_score=0.6
-        )
+        segment = TopicSegment(start=0, end=10, content="test", topic_id="t1", activity_score=0.6)
         self.assertTrue(segment.is_active)
 
     def test_is_active_below_threshold(self):
         """is_active should return False when activity_score < 0.5."""
-        segment = TopicSegment(
-            start=0, end=10, content="test", topic_id="t1", activity_score=0.3
-        )
+        segment = TopicSegment(start=0, end=10, content="test", topic_id="t1", activity_score=0.3)
         self.assertFalse(segment.is_active)
 
 
@@ -268,9 +266,7 @@ class TestPlaceTopicAwareBreakpoints(unittest.TestCase):
 
     def test_zero_target_tokens(self):
         """Zero target tokens should return empty dict."""
-        segments = [
-            TopicSegment(start=0, end=100, content="test", topic_id="t1")
-        ]
+        segments = [TopicSegment(start=0, end=100, content="test", topic_id="t1")]
         result = place_topic_aware_breakpoints(segments, 0)
         self.assertEqual(result, {})
 
@@ -278,8 +274,11 @@ class TestPlaceTopicAwareBreakpoints(unittest.TestCase):
         """Inactive topics should receive budget from 30% allocation."""
         segments = [
             TopicSegment(
-                start=0, end=100, content="inactive topic content",
-                topic_id="inactive_1", activity_score=0.2
+                start=0,
+                end=100,
+                content="inactive topic content",
+                topic_id="inactive_1",
+                activity_score=0.2,
             ),
         ]
         result = place_topic_aware_breakpoints(segments, 1000)

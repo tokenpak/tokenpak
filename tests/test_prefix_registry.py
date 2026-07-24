@@ -34,6 +34,7 @@ from tokenpak.cache.prefix_registry import (
 # canonicalize
 # ---------------------------------------------------------------------------
 
+
 class TestCanonicalize:
     def test_bytes_passthrough(self):
         b = b"raw bytes"
@@ -67,6 +68,7 @@ class TestCanonicalize:
 # fingerprint
 # ---------------------------------------------------------------------------
 
+
 class TestFingerprint:
     def test_prefix(self):
         fid = fingerprint("hello")
@@ -74,7 +76,7 @@ class TestFingerprint:
 
     def test_hex_chars_only(self):
         fid = fingerprint("hello")
-        suffix = fid[len("spfx-"):]
+        suffix = fid[len("spfx-") :]
         assert all(c in "0123456789abcdef" for c in suffix)
         assert len(suffix) == 16
 
@@ -118,6 +120,7 @@ class TestFingerprint:
 # ---------------------------------------------------------------------------
 # StablePrefixRegistry — core semantics
 # ---------------------------------------------------------------------------
+
 
 class TestStablePrefixRegistry:
     def setup_method(self):
@@ -217,6 +220,7 @@ class TestStablePrefixRegistry:
 # Thread safety
 # ---------------------------------------------------------------------------
 
+
 class TestThreadSafety:
     def test_concurrent_get_or_create_same_payload(self):
         reg = StablePrefixRegistry()
@@ -268,6 +272,7 @@ class TestThreadSafety:
 # Process-level singleton
 # ---------------------------------------------------------------------------
 
+
 class TestSingleton:
     def setup_method(self):
         reset_registry()
@@ -301,10 +306,12 @@ class TestSingleton:
 # Import smoke test
 # ---------------------------------------------------------------------------
 
+
 def test_public_api_importable():
     from tokenpak.cache import (
         fingerprint,
         get_registry,
     )
+
     assert callable(fingerprint)
     assert callable(get_registry)

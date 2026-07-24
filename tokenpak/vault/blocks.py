@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
+__all__ = (
+    "BlockRecord",
+    "BlockStore",
+    "SliceStore",
+    "get_block_store",
+)
+
+
 import json
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from tokenpak.vault._atomic import _atomic_write
+
+if TYPE_CHECKING:
+    from tokenpak.vault.slicer import SliceRecord
 
 
 @dataclass
@@ -24,7 +35,7 @@ class BlockRecord:
     compressed_content: str
     quality_score: float = 1.0
     indexed_at: float = field(default_factory=time.time)
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
     @property
     def compression_ratio(self) -> float:
@@ -36,14 +47,14 @@ class BlockRecord:
     def tokens_saved(self) -> int:
         return max(0, self.raw_tokens - self.compressed_tokens)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["compression_ratio"] = self.compression_ratio
         d["tokens_saved"] = self.tokens_saved
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BlockRecord":
+    def from_dict(cls, data: dict[str, Any]) -> "BlockRecord":
         # Drop derived fields that aren't constructor params
         data = {k: v for k, v in data.items() if k not in ("compression_ratio", "tokens_saved")}
         return cls(**data)
@@ -64,7 +75,7 @@ class BlockStore:
         store.flush()
     """
 
-    def __init__(self, store_path: str = ":memory:"):
+    def __init__(self, store_path: str = ":memory:") -> None:
         self._path = store_path
         self._blocks: dict[str, BlockRecord] = {}
 
@@ -178,12 +189,9 @@ class SliceStore:
         results = store.search("Script 1")
     """
 
-    def __init__(self, store_path: str = ":memory:"):
-        # Import here to avoid circular-import at module load time
-        from tokenpak.vault.slicer import SliceRecord as _SR  # noqa: F401
-
+    def __init__(self, store_path: str = ":memory:") -> None:
         self._path = store_path
-        self._slices: dict[str, Any] = {}  # slice_id → SliceRecord
+        self._slices: dict[str, SliceRecord] = {}
         self._parent_index: dict[str, list[str]] = {}  # parent_block_id → [slice_ids]
 
         if store_path != ":memory:":
@@ -193,7 +201,7 @@ class SliceStore:
     # CRUD
     # ------------------------------------------------------------------
 
-    def save(self, record: Any) -> None:
+    def save(self, record: SliceRecord) -> None:
         """Upsert a slice record."""
         old = self._slices.get(record.slice_id)
         if old is not None:
@@ -213,16 +221,16 @@ class SliceStore:
         if self._path != ":memory:":
             self.flush()
 
-    def get(self, slice_id: str) -> Optional[Any]:
+    def get(self, slice_id: str) -> Optional[SliceRecord]:
         return self._slices.get(slice_id)
 
-    def get_by_parent(self, parent_block_id: str) -> list:
+    def get_by_parent(self, parent_block_id: str) -> list[SliceRecord]:
         """Return all slices for a given parent block ID, ordered by slice_index."""
         ids = self._parent_index.get(parent_block_id, [])
         records = [self._slices[sid] for sid in ids if sid in self._slices]
         return sorted(records, key=lambda r: r.slice_index)
 
-    def get_by_path(self, path: str) -> list:
+    def get_by_path(self, path: str) -> list[SliceRecord]:
         """Return all slices whose parent_path matches."""
         return [r for r in self._slices.values() if r.parent_path == path]
 
@@ -235,10 +243,10 @@ class SliceStore:
             self.flush()
         return len(ids)
 
-    def all(self) -> list:
+    def all(self) -> list[SliceRecord]:
         return list(self._slices.values())
 
-    def search(self, query: str, top_k: int = 10) -> list:
+    def search(self, query: str, top_k: int = 10) -> list[SliceRecord]:
         """Keyword search over slice content (multi-term, case-insensitive TF scoring)."""
         import re as _re
 

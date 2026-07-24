@@ -20,8 +20,9 @@ import hashlib
 import json
 import urllib.error
 import urllib.request
+from collections.abc import Mapping
 from pathlib import Path
-from typing import List, Optional
+from typing import cast
 
 PROXY_URL = "http://localhost:8766"
 LOCK_FILE = Path.home() / "vault" / "System" / "tokenpak.lock.json"
@@ -35,39 +36,46 @@ DEPRECATED_CONFIG_FIELDS = {
 }
 
 
-def _compute_config_hash(cfg: dict) -> str:
+def _compute_config_hash(cfg: Mapping[str, object]) -> str:
     normalized = {k: v for k, v in sorted(cfg.items()) if k != "meta"}
     raw = json.dumps(normalized, sort_keys=True).encode()
     return "sha256:" + hashlib.sha256(raw).hexdigest()[:12]
 
 
-def _query_proxy_version() -> Optional[dict]:
+def _json_object(data: bytes | str) -> dict[str, object] | None:
+    decoded: object = json.loads(data)
+    if not isinstance(decoded, dict) or not all(isinstance(key, str) for key in decoded):
+        return None
+    return cast(dict[str, object], decoded)
+
+
+def _query_proxy_version() -> dict[str, object] | None:
     try:
         with urllib.request.urlopen(f"{PROXY_URL}/version", timeout=3) as resp:
-            return json.loads(resp.read())
+            return _json_object(resp.read())
     except Exception:
         return None
 
 
-def _load_lock() -> dict:
+def _load_lock() -> dict[str, object]:
     if LOCK_FILE.exists():
         try:
-            return json.loads(LOCK_FILE.read_text())
+            return _json_object(LOCK_FILE.read_text()) or {}
         except Exception:
             return {}
     return {}
 
 
-def _load_config() -> Optional[dict]:
+def _load_config() -> dict[str, object] | None:
     if TOKENPAK_CFG.exists():
         try:
-            return json.loads(TOKENPAK_CFG.read_text())
+            return _json_object(TOKENPAK_CFG.read_text())
         except Exception:
             return None
     return None
 
 
-def _log_warning(message: str):
+def _log_warning(message: str) -> None:
     """Append warning to today's memory file."""
     try:
         import datetime
@@ -85,13 +93,13 @@ def _log_warning(message: str):
         pass  # Never crash on logging
 
 
-def run_startup_check(agent_name: str = "agent") -> List[str]:
+def run_startup_check(agent_name: str = "agent") -> list[str]:
     """
     Run all startup version checks.
     Returns list of warning strings (empty = all good).
     Warnings are also logged to today's memory file.
     """
-    warnings: List[str] = []
+    warnings: list[str] = []
 
     # 1. Check proxy reachability + version
     proxy_info = _query_proxy_version()
@@ -122,12 +130,12 @@ def run_startup_check(agent_name: str = "agent") -> List[str]:
         # 3. Deprecated fields
         for deprecated_path in DEPRECATED_CONFIG_FIELDS:
             parts = deprecated_path.split(".")
-            obj = cfg
+            obj: object = cfg
             for part in parts:
                 if isinstance(obj, dict) and part in obj:
                     obj = obj[part]
                 else:
-                    obj = None  # type: ignore[assignment]
+                    obj = None
                     break
             if obj is not None:
                 w = f"Deprecated config field found: {deprecated_path} — remove it"

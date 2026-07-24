@@ -55,14 +55,8 @@ class TestCacheHitDetection:
 
         cache = CacheManager()
 
-        request1 = {
-            "model": "gpt-4",
-            "messages": [{"role": "user", "content": "Hello"}]
-        }
-        request2 = {
-            "model": "gpt-4",
-            "messages": [{"role": "user", "content": "Hello"}]
-        }
+        request1 = {"model": "gpt-4", "messages": [{"role": "user", "content": "Hello"}]}
+        request2 = {"model": "gpt-4", "messages": [{"role": "user", "content": "Hello"}]}
 
         # First request should miss
         result1 = cache.get(request1)
@@ -86,13 +80,10 @@ class TestCacheHitDetection:
 
         cache = CacheManager()
 
-        request1 = {
-            "model": "gpt-4",
-            "messages": [{"role": "user", "content": "Hello"}]
-        }
+        request1 = {"model": "gpt-4", "messages": [{"role": "user", "content": "Hello"}]}
         request2 = {
             "model": "gpt-4",
-            "messages": [{"role": "user", "content": "Hello there"}]  # Different!
+            "messages": [{"role": "user", "content": "Hello there"}],  # Different!
         }
 
         cache.set(request1, {"content": "response", "tokens": 10})
@@ -134,7 +125,7 @@ class TestCacheTokenReduction:
         request = {"model": "gpt-4", "messages": [{"role": "user", "content": "Hello"}]}
         response = {
             "content": "Test response",
-            "usage": {"prompt_tokens": 10, "completion_tokens": 8}
+            "usage": {"prompt_tokens": 10, "completion_tokens": 8},
         }
 
         # First call: counts tokens normally
@@ -165,18 +156,12 @@ class TestCacheTokenReduction:
 
         # Direct call cost
         direct_cost = calc.calculate_cost(
-            model="gpt-4",
-            input_tokens=100,
-            output_tokens=50,
-            from_cache=False
+            model="gpt-4", input_tokens=100, output_tokens=50, from_cache=False
         )
 
         # Cached call cost (should be 0 or much lower)
         cached_cost = calc.calculate_cost(
-            model="gpt-4",
-            input_tokens=100,
-            output_tokens=50,
-            from_cache=True
+            model="gpt-4", input_tokens=100, output_tokens=50, from_cache=True
         )
 
         assert cached_cost <= direct_cost
@@ -327,7 +312,7 @@ class TestCacheStatistics:
         stats = cache.get_stats()
         assert stats["hits"] == 2
         assert stats["misses"] == 1
-        assert stats["hit_rate"] == 2/3
+        assert stats["hit_rate"] == 2 / 3
 
     def test_cache_size_monitoring(self):
         """Test cache size is monitored."""

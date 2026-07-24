@@ -22,6 +22,7 @@ class TestLiteLLMIntegration:
         """Verify litellm can be imported."""
         try:
             import litellm
+
             assert litellm is not None
         except ImportError as e:
             pytest.skip(f"litellm not installed: {e}")
@@ -76,6 +77,7 @@ class TestLiteLLMIntegration:
         """Test LiteLLM error handling for invalid API key."""
         try:
             import litellm
+
             litellm.api_base = "http://127.0.0.1:8767"
         except ImportError:
             pytest.skip("litellm not installed")
@@ -99,16 +101,8 @@ class TestLiteLLMFrameworkIntegration:
 
         # Mock the underlying HTTP call
         mock_response = {
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": "Test response"
-                }
-            }],
-            "usage": {
-                "prompt_tokens": 10,
-                "completion_tokens": 8
-            }
+            "choices": [{"message": {"role": "assistant", "content": "Test response"}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 8},
         }
 
         with patch("litellm.completion") as mock_completion:
@@ -116,7 +110,7 @@ class TestLiteLLMFrameworkIntegration:
             result = litellm.completion(
                 model="gpt-4",
                 messages=[{"role": "user", "content": "Hello"}],
-                api_base="http://127.0.0.1:8767"
+                api_base="http://127.0.0.1:8767",
             )
             assert result is not None
 

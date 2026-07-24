@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from ._context_window import get_model_max_context
 from .contracts import (
@@ -113,9 +114,9 @@ def evaluate(
     body: bytes,
     model: str,
     session_id: str,
-    headers: dict | None = None,
+    headers: dict[str, Any] | None = None,
     *,
-    config=None,
+    config: Any = None,
 ) -> "GuardOutcome":
     """Top-level guard entry point.
 

@@ -17,11 +17,14 @@ Covers:
   11. Auto-format detection
   12. Section word counts
 """
+
 from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.ingest.document_parser", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.ingest.document_parser", reason="module not available in current build"
+)
 import pytest
 from tokenpak._internal.ingest.document_parser import (
     DocumentParser,
@@ -173,6 +176,7 @@ MINIMAL_DOC = "Just some plain text with no headings at all."
 # Test 1: Markdown heading hierarchy
 # ---------------------------------------------------------------------------
 
+
 class TestMarkdownHierarchy:
     def test_top_level_sections_count(self):
         doc = PARSER.parse(MARKDOWN_BASIC, fmt="markdown")
@@ -223,6 +227,7 @@ class TestMarkdownHierarchy:
 # Test 2: Table extraction from markdown
 # ---------------------------------------------------------------------------
 
+
 class TestMarkdownTableExtraction:
     def test_tables_found(self):
         doc = PARSER.parse(MARKDOWN_BASIC, fmt="markdown")
@@ -252,6 +257,7 @@ class TestMarkdownTableExtraction:
 # ---------------------------------------------------------------------------
 # Test 3: Section type classification
 # ---------------------------------------------------------------------------
+
 
 class TestSectionClassification:
     def test_overview_type(self):
@@ -293,6 +299,7 @@ class TestSectionClassification:
 # Test 4: Plain text heuristic headings
 # ---------------------------------------------------------------------------
 
+
 class TestPlainTextParsing:
     def test_numbered_headings_detected(self):
         doc = PARSER.parse(PLAIN_TEXT, fmt="text")
@@ -320,6 +327,7 @@ class TestPlainTextParsing:
 # ---------------------------------------------------------------------------
 # Test 5: Deep nesting (H1→H2→H3→H4→H5)
 # ---------------------------------------------------------------------------
+
 
 class TestDeepNesting:
     def test_h1_present(self):
@@ -360,6 +368,7 @@ class TestDeepNesting:
 # Test 6: Empty / malformed docs
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_empty_string(self):
         doc = PARSER.parse(EMPTY_DOC, fmt="markdown")
@@ -397,6 +406,7 @@ class TestEdgeCases:
 # Test 7: HTML parsing
 # ---------------------------------------------------------------------------
 
+
 class TestHTMLParsing:
     def test_html_title_from_h1(self):
         doc = PARSER.parse(HTML_DOC, fmt="html")
@@ -429,6 +439,7 @@ class TestHTMLParsing:
 # Test 8: Citations extracted
 # ---------------------------------------------------------------------------
 
+
 class TestCitations:
     def test_bracket_citations(self):
         citations = _extract_citations("See [Smith 2020] and [Jones et al., 2019].")
@@ -451,6 +462,7 @@ class TestCitations:
 # Test 9: Code blocks captured
 # ---------------------------------------------------------------------------
 
+
 class TestCodeBlocks:
     def test_code_block_in_section(self):
         doc = PARSER.parse(MARKDOWN_WITH_CODE, fmt="markdown")
@@ -463,6 +475,7 @@ class TestCodeBlocks:
 # ---------------------------------------------------------------------------
 # Test 10: heading_tree structure
 # ---------------------------------------------------------------------------
+
 
 class TestHeadingTree:
     def test_tree_is_dict(self):
@@ -495,6 +508,7 @@ class TestHeadingTree:
 # Test 11: Auto-format detection
 # ---------------------------------------------------------------------------
 
+
 class TestAutoDetect:
     def test_markdown_detected(self):
         doc = PARSER.parse(MARKDOWN_BASIC, fmt="auto")
@@ -514,6 +528,7 @@ class TestAutoDetect:
 # Test 12: to_dict serialization
 # ---------------------------------------------------------------------------
 
+
 class TestSerialization:
     def test_to_dict_is_dict(self):
         doc = PARSER.parse(MARKDOWN_BASIC, fmt="markdown")
@@ -523,7 +538,15 @@ class TestSerialization:
     def test_to_dict_has_required_keys(self):
         doc = PARSER.parse(MARKDOWN_BASIC, fmt="markdown")
         d = doc.to_dict()
-        for key in ("title", "sections", "heading_tree", "metadata", "tables", "citations", "total_words"):
+        for key in (
+            "title",
+            "sections",
+            "heading_tree",
+            "metadata",
+            "tables",
+            "citations",
+            "total_words",
+        ):
             assert key in d, f"Missing key: {key}"
 
     def test_section_to_dict(self):
@@ -536,6 +559,7 @@ class TestSerialization:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _flat_headings(sections: list) -> list[DocumentSection]:
     """Flatten section tree into a list."""

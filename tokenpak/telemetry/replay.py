@@ -21,7 +21,10 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, TypeAlias, cast
+
+JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+JsonObject: TypeAlias = dict[str, JsonValue]
 
 _DDL = """
 PRAGMA journal_mode=WAL;
@@ -60,9 +63,9 @@ class ReplayEntry:
     tokens_saved: int
     cost_usd: float = 0.0
     # Opt-in content capture — None means "not captured"
-    messages: Optional[list] = None
-    response: Optional[dict] = None
-    metadata: dict = field(default_factory=dict)
+    messages: Optional[list[JsonValue]] = None
+    response: Optional[JsonObject] = None
+    metadata: JsonObject = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     # Constructors / serialisation
@@ -77,9 +80,9 @@ class ReplayEntry:
         input_tokens_sent: int,
         tokens_saved: int,
         cost_usd: float = 0.0,
-        messages: Optional[list] = None,
-        response: Optional[dict] = None,
-        metadata: Optional[dict] = None,
+        messages: Optional[list[JsonValue]] = None,
+        response: Optional[JsonObject] = None,
+        metadata: Optional[JsonObject] = None,
     ) -> "ReplayEntry":
         """Create a new entry with a fresh UUID and current timestamp."""
         return cls(
@@ -96,7 +99,7 @@ class ReplayEntry:
             metadata=metadata or {},
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> JsonObject:
         return {
             "replay_id": self.replay_id,
             "timestamp": self.timestamp.isoformat(),
@@ -113,9 +116,17 @@ class ReplayEntry:
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "ReplayEntry":
-        messages = json.loads(row["messages_json"]) if row["messages_json"] else None
-        response = json.loads(row["response_json"]) if row["response_json"] else None
-        metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+        messages = (
+            cast(list[JsonValue], json.loads(row["messages_json"]))
+            if row["messages_json"]
+            else None
+        )
+        response = (
+            cast(JsonObject, json.loads(row["response_json"])) if row["response_json"] else None
+        )
+        metadata = (
+            cast(JsonObject, json.loads(row["metadata_json"])) if row["metadata_json"] else {}
+        )
         return cls(
             replay_id=row["replay_id"],
             timestamp=datetime.fromisoformat(row["timestamp"]),
@@ -174,7 +185,7 @@ class ReplayStore:
         if not hasattr(self._local, "conn") or self._local.conn is None:
             self._local.conn = sqlite3.connect(self._path, check_same_thread=False)
             self._local.conn.row_factory = sqlite3.Row
-        return self._local.conn
+        return cast(sqlite3.Connection, self._local.conn)
 
     def _init_db(self) -> None:
         conn = self._conn()
@@ -212,7 +223,7 @@ class ReplayStore:
         )
         conn.commit()
 
-    def list(self, limit: int = 20, provider: Optional[str] = None) -> list:
+    def list(self, limit: int = 20, provider: Optional[str] = None) -> list[ReplayEntry]:
         """Return recent entries, most recent first.
 
         Args:

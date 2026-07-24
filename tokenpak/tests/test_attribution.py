@@ -24,7 +24,6 @@ from tokenpak.telemetry.attribution import (
 
 
 class TestAttributionRecord(unittest.TestCase):
-
     def test_to_dict_contains_all_fields(self):
         rec = AttributionRecord(
             request_id="req-1",
@@ -37,8 +36,16 @@ class TestAttributionRecord(unittest.TestCase):
             compression_pct=12.345,
         )
         d = rec.to_dict()
-        for key in ("request_id", "timestamp", "source", "model",
-                    "tokens_saved", "cost_saved", "cache_hit", "compression_pct"):
+        for key in (
+            "request_id",
+            "timestamp",
+            "source",
+            "model",
+            "tokens_saved",
+            "cost_saved",
+            "cache_hit",
+            "compression_pct",
+        ):
             self.assertIn(key, d)
 
     def test_to_dict_rounds_cost_saved(self):
@@ -59,7 +66,6 @@ class TestAttributionRecord(unittest.TestCase):
 
 
 class TestDetectSource(unittest.TestCase):
-
     def test_explicit_tokenpak_source_header(self):
         src = detect_source(headers={"X-TokenPak-Source": "my-app"})
         self.assertEqual(src, "my-app")
@@ -97,10 +103,12 @@ class TestDetectSource(unittest.TestCase):
         self.assertEqual(src, "unknown")
 
     def test_explicit_source_takes_priority_over_skill(self):
-        src = detect_source(headers={
-            "X-TokenPak-Source": "explicit",
-            "X-TokenPak-Skill": "weather",
-        })
+        src = detect_source(
+            headers={
+                "X-TokenPak-Source": "explicit",
+                "X-TokenPak-Skill": "weather",
+            }
+        )
         self.assertEqual(src, "explicit")
 
     def test_none_headers_safe(self):
@@ -109,9 +117,15 @@ class TestDetectSource(unittest.TestCase):
 
 
 class TestAttributionTracker(unittest.TestCase):
-
-    def _make_rec(self, source="agent-alpha", model="claude-sonnet-4-6",
-                  tokens_saved=100, cost_saved=0.01, cache_hit=False, ts=None):
+    def _make_rec(
+        self,
+        source="agent-alpha",
+        model="claude-sonnet-4-6",
+        tokens_saved=100,
+        cost_saved=0.01,
+        cache_hit=False,
+        ts=None,
+    ):
         return AttributionRecord(
             request_id="req",
             timestamp=ts or time.time(),
@@ -142,7 +156,9 @@ class TestAttributionTracker(unittest.TestCase):
 
     def test_rollup_by_source_basic(self):
         tracker = AttributionTracker()
-        tracker.record(self._make_rec(source="agent-beta", tokens_saved=200, cost_saved=0.05, cache_hit=True))
+        tracker.record(
+            self._make_rec(source="agent-beta", tokens_saved=200, cost_saved=0.05, cache_hit=True)
+        )
         tracker.record(self._make_rec(source="agent-beta", tokens_saved=100, cost_saved=0.03))
         rollup = tracker.rollup_by_source()
         self.assertIn("agent-beta", rollup)
@@ -218,7 +234,6 @@ class TestAttributionTracker(unittest.TestCase):
 
 
 class TestFormatAttribution(unittest.TestCase):
-
     def test_empty_tracker_returns_no_data_message(self):
         tracker = AttributionTracker()
         result = format_attribution(tracker)
@@ -227,9 +242,13 @@ class TestFormatAttribution(unittest.TestCase):
     def test_format_contains_agent_source(self):
         tracker = AttributionTracker()
         rec = AttributionRecord(
-            request_id="r1", timestamp=time.time(),
-            source="agent-alpha", model="claude-sonnet-4-6",
-            tokens_saved=500, cost_saved=0.05, cache_hit=True,
+            request_id="r1",
+            timestamp=time.time(),
+            source="agent-alpha",
+            model="claude-sonnet-4-6",
+            tokens_saved=500,
+            cost_saved=0.05,
+            cache_hit=True,
         )
         tracker.record(rec)
         result = format_attribution(tracker, days=1)
@@ -238,9 +257,12 @@ class TestFormatAttribution(unittest.TestCase):
     def test_format_contains_model(self):
         tracker = AttributionTracker()
         rec = AttributionRecord(
-            request_id="r1", timestamp=time.time(),
-            source="agent-beta", model="claude-opus-4-6",
-            tokens_saved=1000, cost_saved=0.5,
+            request_id="r1",
+            timestamp=time.time(),
+            source="agent-beta",
+            model="claude-opus-4-6",
+            tokens_saved=1000,
+            cost_saved=0.5,
         )
         tracker.record(rec)
         result = format_attribution(tracker, days=1)
@@ -251,8 +273,10 @@ class TestFormatAttribution(unittest.TestCase):
         for _ in range(10):
             rec = AttributionRecord(
                 timestamp=time.time(),
-                source="unknown", model="claude-sonnet-4-6",
-                tokens_saved=10, cost_saved=0.001,
+                source="unknown",
+                model="claude-sonnet-4-6",
+                tokens_saved=10,
+                cost_saved=0.001,
             )
             tracker.record(rec)
         result = format_attribution(tracker, days=1)

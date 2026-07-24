@@ -17,17 +17,27 @@ from tokenpak.proxy.tool_schema_registry import (
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
 
+
 def make_body(tools: list) -> bytes:
     return json.dumps({"model": "claude-3-5-sonnet", "tools": tools}).encode("utf-8")
 
 
-TOOL_A = {"name": "get_weather", "description": "Get weather", "input_schema": {"type": "object", "properties": {}}}
-TOOL_B = {"name": "search_web", "description": "Search the web", "input_schema": {"type": "object", "properties": {}}}
+TOOL_A = {
+    "name": "get_weather",
+    "description": "Get weather",
+    "input_schema": {"type": "object", "properties": {}},
+}
+TOOL_B = {
+    "name": "search_web",
+    "description": "Search the web",
+    "input_schema": {"type": "object", "properties": {}},
+}
 
 
 # ---------------------------------------------------------------------------
 # 1. Singleton — get_registry() returns the same object every call
 # ---------------------------------------------------------------------------
+
 
 class TestGetRegistrySingleton:
     def test_same_instance_on_repeated_calls(self):
@@ -42,6 +52,7 @@ class TestGetRegistrySingleton:
 # ---------------------------------------------------------------------------
 # 2. normalize_request — body WITH tools
 # ---------------------------------------------------------------------------
+
 
 class TestNormalizeRequestWithTools:
     def setup_method(self):
@@ -105,6 +116,7 @@ class TestNormalizeRequestWithTools:
 # 3. normalize_request — body WITHOUT tools (should not crash)
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeRequestNoTools:
     def setup_method(self):
         self.reg = ToolSchemaRegistry()
@@ -138,6 +150,7 @@ class TestNormalizeRequestNoTools:
 # 4. get_frozen_text / get_frozen_hash / stats
 # ---------------------------------------------------------------------------
 
+
 class TestPublicAccessors:
     def setup_method(self):
         self.reg = ToolSchemaRegistry()
@@ -164,8 +177,14 @@ class TestPublicAccessors:
         self.reg.normalize_request(make_body([TOOL_A]))
         s = self.reg.stats()
         expected_keys = {
-            "frozen_tools", "frozen_bytes", "frozen_tokens_approx",
-            "frozen_hash", "frozen_at", "total_requests", "schema_changes", "bytes_saved",
+            "frozen_tools",
+            "frozen_bytes",
+            "frozen_tokens_approx",
+            "frozen_hash",
+            "frozen_at",
+            "total_requests",
+            "schema_changes",
+            "bytes_saved",
         }
         assert expected_keys.issubset(s.keys())
         assert s["total_requests"] == 1
@@ -175,6 +194,7 @@ class TestPublicAccessors:
 # ---------------------------------------------------------------------------
 # 5. Thread safety — concurrent normalize_request calls don't crash
 # ---------------------------------------------------------------------------
+
 
 class TestThreadSafety:
     def test_concurrent_requests_same_tools(self):
@@ -202,6 +222,7 @@ class TestThreadSafety:
 # 6. Internal helpers (smoke tests)
 # ---------------------------------------------------------------------------
 
+
 class TestSchemaFingerprintStability:
     """
     TPK-LATENCY-002 — Acceptance criterion:
@@ -210,8 +231,8 @@ class TestSchemaFingerprintStability:
 
     def test_schema_fingerprint_stability(self):
         """Same tools in different order must produce the same hash (order-insensitive)."""
-        tools_order1 = [TOOL_B, TOOL_A]          # search_web, get_weather
-        tools_order2 = [TOOL_A, TOOL_B]          # get_weather, search_web
+        tools_order1 = [TOOL_B, TOOL_A]  # search_web, get_weather
+        tools_order2 = [TOOL_A, TOOL_B]  # get_weather, search_web
 
         norm1 = _normalize_tools(tools_order1)
         norm2 = _normalize_tools(tools_order2)

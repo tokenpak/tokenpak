@@ -88,7 +88,7 @@ def _mode_from_profile(profile: str | None) -> str | None:
     if normalized in VALID_MODES:
         return normalized
     if normalized.startswith(_PROFILE_PREFIX):
-        mode = normalized[len(_PROFILE_PREFIX):]
+        mode = normalized[len(_PROFILE_PREFIX) :]
         if mode in VALID_MODES:
             return mode
     return None
@@ -201,7 +201,9 @@ def _tui_data(entries: list[dict[str, Any]]) -> dict[str, Any]:
         row = seen.setdefault(sid, {"session_id": sid, "tokens": 0, "cost": 0.0, "saved_pct": 0.0})
         row["tokens"] += _as_int(entry.get("tokens"))
         row["cost"] += _as_number(entry.get("cost"))
-        row["saved_pct"] = max(row["saved_pct"], _as_number((entry.get("extra") or {}).get("compression_pct")))
+        row["saved_pct"] = max(
+            row["saved_pct"], _as_number((entry.get("extra") or {}).get("compression_pct"))
+        )
 
     tape = sorted(seen.values(), key=lambda x: x["cost"], reverse=True)[:10]
     total_cost = sum(_as_number(entry.get("cost")) for entry in entries)
@@ -278,15 +280,22 @@ def _ide_data(entries: list[dict[str, Any]]) -> dict[str, Any]:
         or os.environ.get("TOKENPAK_WORKSPACE")
         or ""
     )
-    inline_savings_tokens = sum(_as_int((entry.get("extra") or {}).get("tokens_saved")) for entry in entries)
-    inline_savings_cost = sum(_as_number((entry.get("extra") or {}).get("cost_saved")) for entry in entries)
+    inline_savings_tokens = sum(
+        _as_int((entry.get("extra") or {}).get("tokens_saved")) for entry in entries
+    )
+    inline_savings_cost = sum(
+        _as_number((entry.get("extra") or {}).get("cost_saved")) for entry in entries
+    )
     timeout_events = [
         {
             "timestamp": entry.get("timestamp", "unknown"),
-            "description": entry.get("error") or (entry.get("extra") or {}).get("description") or "timeout",
+            "description": entry.get("error")
+            or (entry.get("extra") or {}).get("description")
+            or "timeout",
         }
         for entry in entries
-        if "timeout" in str(entry.get("error") or (entry.get("extra") or {}).get("error") or "").lower()
+        if "timeout"
+        in str(entry.get("error") or (entry.get("extra") or {}).get("error") or "").lower()
     ]
     return {
         "active_workspace": workspace or None,
@@ -305,7 +314,9 @@ def _cron_data(entries: list[dict[str, Any]]) -> dict[str, Any]:
         extra = entry.get("extra") or {}
         job_name = extra.get("job_name") or entry.get("job_name")
         if job_name:
-            row = job_map.setdefault(job_name, {"name": job_name, "total": 0, "success": 0, "failed": 0})
+            row = job_map.setdefault(
+                job_name, {"name": job_name, "total": 0, "success": 0, "failed": 0}
+            )
             row["total"] += 1
             status = str(entry.get("status") or extra.get("status") or "success").lower()
             if status in {"error", "failed", "failure"}:
@@ -321,7 +332,9 @@ def _cron_data(entries: list[dict[str, Any]]) -> dict[str, Any]:
     for row in job_stats:
         row["rate"] = (row["success"] / max(row["total"], 1)) * 100
     total_jobs = sum(row["total"] for row in job_stats)
-    success_rate = (sum(row["success"] for row in job_stats) / total_jobs * 100) if total_jobs else None
+    success_rate = (
+        (sum(row["success"] for row in job_stats) / total_jobs * 100) if total_jobs else None
+    )
     return {
         "job_stats": job_stats,
         "success_rate": success_rate,
@@ -584,9 +597,7 @@ def htmx_settings_profile(
     """HTMX: update active profile."""
     errors = validate_settings({"TOKENPAK_ACTIVE_PROFILE": profile})
     if errors:
-        return HTMLResponse(
-            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
-        )
+        return HTMLResponse(f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422)
     ok, write_errors = write_settings({"TOKENPAK_ACTIVE_PROFILE": profile})
     if not ok:
         return HTMLResponse(
@@ -594,7 +605,7 @@ def htmx_settings_profile(
         )
     return HTMLResponse(
         f'<span class="settings-ok">Profile set to <strong>{profile}</strong>. '
-        f'Takes effect on next request.</span>'
+        f"Takes effect on next request.</span>"
     )
 
 
@@ -615,9 +626,7 @@ def htmx_settings_vault(
     }
     errors = validate_settings(updates)
     if errors:
-        return HTMLResponse(
-            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
-        )
+        return HTMLResponse(f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422)
     ok, write_errors = write_settings(updates)
     if not ok:
         return HTMLResponse(
@@ -626,8 +635,8 @@ def htmx_settings_vault(
     state = "enabled" if vault_inject_enabled in {"1", "true", "yes", "on"} else "disabled"
     return HTMLResponse(
         f'<span class="settings-ok">Vault injection {state}. '
-        f'Budget {inject_budget} tokens, top_k={inject_top_k}, min_score={inject_min_score}. '
-        f'Takes effect on next request.</span>'
+        f"Budget {inject_budget} tokens, top_k={inject_top_k}, min_score={inject_min_score}. "
+        f"Takes effect on next request.</span>"
     )
 
 
@@ -644,9 +653,7 @@ def htmx_settings_budget(
     }
     errors = validate_settings(updates)
     if errors:
-        return HTMLResponse(
-            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
-        )
+        return HTMLResponse(f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422)
     ok, write_errors = write_settings(updates)
     if not ok:
         return HTMLResponse(
@@ -655,7 +662,7 @@ def htmx_settings_budget(
     state = "enabled" if budget_controller_enabled in {"1", "true", "yes", "on"} else "disabled"
     return HTMLResponse(
         f'<span class="settings-ok">Budget enforcement {state}. '
-        f'Monthly limit: {budget_total} tokens. Takes effect on next request.</span>'
+        f"Monthly limit: {budget_total} tokens. Takes effect on next request.</span>"
     )
 
 
@@ -675,21 +682,19 @@ def htmx_settings_alerts(
     if cache_alert_webhook_url:
         return HTMLResponse(
             '<p class="settings-error">Webhook URL cannot be saved here. '
-            'Configure remote alert endpoints outside the dashboard.</p>',
+            "Configure remote alert endpoints outside the dashboard.</p>",
             status_code=422,
         )
     if cache_alert_slack_channel:
         return HTMLResponse(
             '<p class="settings-error">Slack destination cannot be saved here. '
-            'Configure alert delivery outside the dashboard.</p>',
+            "Configure alert delivery outside the dashboard.</p>",
             status_code=422,
         )
 
     errors = validate_settings(updates)
     if errors:
-        return HTMLResponse(
-            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
-        )
+        return HTMLResponse(f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422)
     ok, write_errors = write_settings(updates)
     if not ok:
         return HTMLResponse(
@@ -698,7 +703,7 @@ def htmx_settings_alerts(
     state = "enabled" if cache_alert_webhook_enabled in {"1", "true", "yes", "on"} else "disabled"
     return HTMLResponse(
         f'<span class="settings-ok">Cache invalidation alerts {state}. '
-        f'Threshold: {cache_alert_threshold}%. Takes effect on next request.</span>'
+        f"Threshold: {cache_alert_threshold}%. Takes effect on next request.</span>"
     )
 
 
@@ -711,9 +716,7 @@ def htmx_settings_local_first(
     updates = {"TOKENPAK_LOCAL_FIRST_ROUTING": local_first_routing_enabled}
     errors = validate_settings(updates)
     if errors:
-        return HTMLResponse(
-            f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422
-        )
+        return HTMLResponse(f'<p class="settings-error">{"; ".join(errors)}</p>', status_code=422)
     ok, write_errors = write_settings(updates)
     if not ok:
         return HTMLResponse(
@@ -722,7 +725,7 @@ def htmx_settings_local_first(
     state = "enabled" if local_first_routing_enabled in {"1", "true", "yes", "on"} else "disabled"
     return HTMLResponse(
         f'<span class="settings-ok">Local-first routing {state}. '
-        f'Restart proxy for this change to take effect.</span>'
+        f"Restart proxy for this change to take effect.</span>"
     )
 
 
@@ -746,7 +749,7 @@ def htmx_settings_compliance(
         )
     return HTMLResponse(
         f'<span class="settings-ok">Compliance provider set to <strong>{compliance_provider}</strong>. '
-        f'Restart proxy for this change to take effect.</span>'
+        f"Restart proxy for this change to take effect.</span>"
     )
 
 

@@ -18,14 +18,12 @@ logger = logging.getLogger(__name__)
 # Try to import jsonschema for full validation
 try:
     import jsonschema  # noqa: F401
-    from jsonschema import Draft202012Validator, ValidationError
+    from jsonschema import Draft202012Validator
 
     HAS_JSONSCHEMA = True
 except ImportError:
     HAS_JSONSCHEMA = False
-    # Use type: ignore comments to handle the conditional imports
-    Draft202012Validator = None  # type: ignore
-    ValidationError = Exception  # type: ignore
+    Draft202012Validator = None
 
 
 class ValidationResult:
@@ -124,10 +122,10 @@ class ResponseValidator:
         """Validate using jsonschema library."""
         errors: List[Dict[str, Any]] = []
 
-        if self._json_validator is None:  # type: ignore
+        if self._json_validator is None:
             return errors
 
-        for error in self._json_validator.iter_errors(response):  # type: ignore
+        for error in self._json_validator.iter_errors(response):
             field = ".".join(str(p) for p in error.absolute_path) or "(root)"
             errors.append(
                 {
@@ -212,7 +210,7 @@ class ResponseValidator:
 
     def _check_type(self, value: Any, expected: str) -> bool:
         """Check if value matches expected JSON Schema type."""
-        type_map = {
+        type_map: dict[str, type[object] | tuple[type[object], ...]] = {
             "string": str,
             "integer": int,
             "number": (int, float),
@@ -224,10 +222,7 @@ class ResponseValidator:
         expected_types = type_map.get(expected)
         if expected_types is None:
             return True  # Unknown type, skip
-        # Ensure expected_types is a tuple for isinstance
-        if isinstance(expected_types, tuple):
-            return isinstance(value, expected_types)
-        return isinstance(value, (expected_types,))  # type: ignore
+        return isinstance(value, expected_types)
 
     def _validate_semantics(
         self, response: Dict[str, Any]

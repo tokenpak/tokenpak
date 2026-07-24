@@ -27,7 +27,7 @@ tokenpak.compression.pipeline -> tokenpak.proxy.request
 tokenpak.compression.pipeline -> tokenpak.proxy.request_pipeline
 tokenpak.compression.pipeline -> tokenpak.proxy.shadow_reader
 tokenpak.compression.pipeline -> tokenpak.proxy.token_cache
-tokenpak.core.registry.claude_code.adapter -> tokenpak.proxy
+tokenpak.core.registry.claude_code.adapter -> tokenpak.proxy.request
 tokenpak.core.runtime.proxy -> tokenpak.proxy.adapters.utils
 tokenpak.core.runtime.proxy -> tokenpak.proxy.circuit_breaker
 tokenpak.core.runtime.proxy -> tokenpak.proxy.config

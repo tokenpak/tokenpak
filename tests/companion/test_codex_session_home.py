@@ -879,7 +879,9 @@ def test_linux_proc_read_failure_never_publishes_portable_lease_identity(
     assert not paths.pid_sentinel.exists()
 
 
-def test_nonlinux_default_proc_absence_uses_portable_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_nonlinux_default_proc_absence_uses_portable_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     pid = 2_000_000_000
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(

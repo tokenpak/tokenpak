@@ -197,9 +197,7 @@ class TestSchemaConformance:
         ``rollups`` tables that no code ever created)."""
         created = set()
         for p in (REPO_ROOT / "tokenpak").rglob("*.py"):
-            for m in _CREATE_PATTERN.finditer(
-                p.read_text(encoding="utf-8", errors="replace")
-            ):
+            for m in _CREATE_PATTERN.finditer(p.read_text(encoding="utf-8", errors="replace")):
                 created.add(m.group(1).lower())
 
         missing: dict[str, set[str]] = {}
@@ -214,13 +212,10 @@ class TestSchemaConformance:
                             continue
                         if name.startswith("pragma_"):
                             continue
-                        missing.setdefault(name, set()).add(
-                            str(p.relative_to(REPO_ROOT))
-                        )
+                        missing.setdefault(name, set()).add(str(p.relative_to(REPO_ROOT)))
 
-        assert not missing, (
-            "telemetry modules query tables that no code creates: "
-            + "; ".join(f"{t} (in {sorted(fs)})" for t, fs in sorted(missing.items()))
+        assert not missing, "telemetry modules query tables that no code creates: " + "; ".join(
+            f"{t} (in {sorted(fs)})" for t, fs in sorted(missing.items())
         )
 
     @pytest.mark.parametrize(
@@ -459,9 +454,9 @@ class TestStorageThreading:
             db.insert_trace(_make_event(trace_id), usage=_make_usage(trace_id))
 
         conn = sqlite3.connect(str(tmp_path / "t.db"))
-        n = conn.execute(
-            "SELECT COUNT(*) FROM tp_events WHERE trace_id=?", (trace_id,)
-        ).fetchone()[0]
+        n = conn.execute("SELECT COUNT(*) FROM tp_events WHERE trace_id=?", (trace_id,)).fetchone()[
+            0
+        ]
         conn.close()
         assert n == 0, "event row must not survive a failed trace transaction"
         db.close()
@@ -508,9 +503,7 @@ class TestPipelineTruthfulness:
         conn.close()
         db.close()
 
-    def test_failed_usage_cost_write_not_reported_as_success(
-        self, tmp_path, monkeypatch
-    ):
+    def test_failed_usage_cost_write_not_reported_as_success(self, tmp_path, monkeypatch):
         """The old pipeline swallowed usage/cost insert failures and still
         returned success=True. A trace whose rows cannot all be persisted
         must be reported as a failure."""
@@ -535,6 +528,43 @@ class TestPipelineTruthfulness:
 
 
 class TestCwdIndependence:
+    def test_cost_engine_default_honors_scoped_home_and_creates_parent(self, tmp_path, monkeypatch):
+        from tokenpak.telemetry.cost import CostEngine
+
+        home = tmp_path / "nested" / "tokenpak-home"
+        monkeypatch.setenv("TOKENPAK_HOME", str(home))
+
+        engine = CostEngine()
+
+        assert Path(engine.db_path) == home / "telemetry.db"
+        assert (home / "telemetry.db").is_file()
+
+    def test_cost_tracker_explicit_scoped_home_creates_parent(self, tmp_path, monkeypatch):
+        from tokenpak.telemetry.cost_tracker import CostTracker
+
+        home = tmp_path / "nested" / "tokenpak-home"
+        monkeypatch.setenv("TOKENPAK_HOME", str(home))
+
+        tracker = CostTracker(None)
+
+        assert Path(tracker._db_path) == home / "cost.db"
+        assert (home / "cost.db").is_file()
+
+    def test_cost_paths_expand_tilde_and_create_explicit_parent(self, tmp_path, monkeypatch):
+        from tokenpak.telemetry.cost import CostEngine
+        from tokenpak.telemetry.cost_tracker import CostTracker
+
+        fake_home = tmp_path / "operator-home"
+        monkeypatch.setenv("HOME", str(fake_home))
+
+        engine = CostEngine("~/telemetry/nested/pricing.db")
+        tracker = CostTracker("~/telemetry/nested/requests.db")
+
+        assert Path(engine.db_path) == fake_home / "telemetry/nested/pricing.db"
+        assert Path(tracker._db_path) == fake_home / "telemetry/nested/requests.db"
+        assert Path(engine.db_path).is_file()
+        assert Path(tracker._db_path).is_file()
+
     def test_routing_ledger_default_ignores_cwd(self, tmp_path, monkeypatch):
         from tokenpak.routing.routing_ledger import RoutingLedger
 
@@ -580,9 +610,7 @@ class TestCwdIndependence:
             reg_a.close()
             reg_b.close()
 
-    def test_legacy_cwd_file_used_as_fallback_with_warning(
-        self, tmp_path, monkeypatch, caplog
-    ):
+    def test_legacy_cwd_file_used_as_fallback_with_warning(self, tmp_path, monkeypatch, caplog):
         from tokenpak.routing.routing_ledger import RoutingLedger
 
         home = tmp_path / "home"
@@ -623,9 +651,7 @@ class TestCwdIndependence:
             raise sqlite3.OperationalError("database is locked")
 
         monkeypatch.setattr(ledger, "_connect", locked)
-        row_id = ledger.log_transaction(
-            model="m", query="q", context_blocks=[], response="r"
-        )
+        row_id = ledger.log_transaction(model="m", query="q", context_blocks=[], response="r")
         assert row_id == -1
         assert ledger.record_outcome(1, accepted=True) is False
         assert ledger._write_errors == 2

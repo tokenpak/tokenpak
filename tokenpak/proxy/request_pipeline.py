@@ -7,11 +7,26 @@ Later extended with: _resolve_session_id (session-id resolution),
 _apply_budget, _shadow_validate.
 """
 
+from __future__ import annotations
+
+__all__ = (
+    "PROTECTED_MARKERS",
+    "ROUTER_ENABLED",
+    "VALIDATION_GATE_BUDGET_CAP",
+    "VALIDATION_GATE_ENABLED",
+    "can_compress",
+    "classify_message_risk",
+    "is_protected_content",
+)
+
+
 import json
 import logging
 import threading
 import time
-from typing import Any, Dict, Optional, Tuple
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Protocol, TypedDict, cast
 
 from .config import (
     ROUTER_ENABLED,
@@ -20,6 +35,30 @@ from .config import (
 )
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from tokenpak.core.validation_gate import ValidationGate
+    from tokenpak.orchestration.precondition_gates import PreconditionGates
+    from tokenpak.routing.rules import RouteEngine, RouteRule
+    from tokenpak.telemetry.budget_controller import BudgetController
+
+
+class _RouterProtocol(Protocol):
+    def route(self, user_text: str, session_id: str = "") -> _RouterResult: ...
+
+    def health_components(self) -> dict[str, bool]: ...
+
+
+class _HealthCache(TypedDict):
+    ts: float
+    data: dict[str, object] | None
+
+
+class _RouteRulesCache(TypedDict):
+    rules: list[RouteRule] | None
+    mtime: float
+    ts: float
+
 
 # Sentinel stored in a lazy-singleton slot when construction has been attempted
 # and failed. Distinct from ``None`` (never attempted) so the failed init is
@@ -30,11 +69,11 @@ _INIT_FAILED = object()
 # ---------------------------------------------------------------------------
 # Router wiring — DeterministicRouter integration (feature-flagged)
 # ---------------------------------------------------------------------------
-_ROUTER_INSTANCE = None
+_ROUTER_INSTANCE: _RouterProtocol | None = None
 _ROUTER_LOCK = threading.Lock()
 
 
-def _get_router():
+def _get_router() -> _RouterProtocol | None:
     """Return the DeterministicRouter singleton, or None if unavailable/disabled."""
     global _ROUTER_INSTANCE
     if not ROUTER_ENABLED:
@@ -47,34 +86,20 @@ def _get_router():
                 from tokenpak.compression.slot_filler import SlotFiller
                 from tokenpak.proxy.intent_policy import decide as _policy_decide
 
-                try:
-                    from tokenpak.core.validation_gate import ValidationGate
-                except ImportError:
-                    ValidationGate = None  # type: ignore[assignment,misc]
-
                 class _DeterministicRouter:
                     """Classifier-first router: intent → slots → deterministic recipe/action."""
 
-                    def __init__(self):
+                    def __init__(self) -> None:
                         self._pipeline = CompressionPipeline()
                         self._slot_filler = SlotFiller()
                         self._recipe_engine = RecipeEngine()
-                        self._gate = (
-                            ValidationGate(
-                                enabled=VALIDATION_GATE_ENABLED,
-                                token_budget_cap=VALIDATION_GATE_BUDGET_CAP,
-                            )
-                            if ValidationGate is not None
-                            and _has_validation_gate()
-                            and VALIDATION_GATE_ENABLED
-                            else None
-                        )
+                        self._gate = _get_validation_gate()
 
                     def route(self, user_text: str, session_id: str = "") -> "_RouterResult":
                         t0 = time.time()
                         try:
                             # Phase 0.5: Semantic metadata dict (populated by _classify_intent)
-                            _sem_meta: dict = {}
+                            _sem_meta: dict[str, object] = {}
 
                             # Phase 1: Classify intent (semantic resolver runs first internally)
                             intent = _classify_intent(user_text, _semantic_meta=_sem_meta)
@@ -91,9 +116,11 @@ def _get_router():
                                 msgs = [{"role": "user", "content": user_text}]
                                 pipeline_result = self._pipeline.run(msgs)
                                 if pipeline_result.messages:
-                                    compressed = pipeline_result.messages[-1].get(
+                                    candidate = pipeline_result.messages[-1].get(
                                         "content", user_text
                                     )
+                                    if isinstance(candidate, str):
+                                        compressed = candidate
 
                             elapsed = int((time.time() - t0) * 1000)
                             result = _RouterResult(
@@ -125,6 +152,13 @@ def _get_router():
                                 fallback_reason=f"exception:{type(e).__name__}",
                             )
 
+                    def health_components(self) -> dict[str, bool]:
+                        return {
+                            "slot_filler": self._slot_filler is not None,
+                            "recipe_engine": self._recipe_engine is not None,
+                            "validation_gate": self._gate is not None,
+                        }
+
                 _ROUTER_INSTANCE = _DeterministicRouter()
             except Exception as _router_init_err:
                 print(f"  ⚠️ Router init failed: {_router_init_err}")
@@ -132,20 +166,22 @@ def _get_router():
         return _ROUTER_INSTANCE
 
 
-_VALIDATION_GATE_INSTANCE = None
+_VALIDATION_GATE_INSTANCE: ValidationGate | None = None
 _VALIDATION_GATE_LOCK = threading.Lock()
 
 
 def _has_validation_gate() -> bool:
     try:
-        from tokenpak.core.validation_gate import ValidationGate  # noqa
+        from tokenpak.core import validation_gate as _validation_gate
 
+        if _validation_gate is None:
+            return False
         return True
     except Exception:
         return False
 
 
-def _get_validation_gate():
+def _get_validation_gate() -> ValidationGate | None:
     global _VALIDATION_GATE_INSTANCE
     if not VALIDATION_GATE_ENABLED:
         return None
@@ -163,38 +199,25 @@ def _get_validation_gate():
         return _VALIDATION_GATE_INSTANCE
 
 
+@dataclass
 class _RouterResult:
     """Lightweight result object from router.route()."""
 
-    def __init__(
-        self,
-        ok,
-        fallback,
-        intent,
-        recipe_id,
-        slots,
-        elapsed_ms,
-        compressed_text="",
-        capsule=None,
-        error="",
-        fallback_reason="",
-    ):
-        self.ok = ok
-        self.fallback = fallback
-        self.intent = intent
-        self.recipe_id = recipe_id
-        self.slots = slots
-        self.elapsed_ms = elapsed_ms
-        self.compressed_text = compressed_text
-        self.capsule = capsule
-        self.error = error
-        self.fallback_reason = fallback_reason
-        # Semantic resolution metadata (set by route() when SemanticResolver runs)
-        # Keys: intent_alias, intent_canonical, match_type, entity_aliases, normalized
-        self.semantic_meta: dict = {}
+    ok: bool
+    fallback: bool
+    intent: str
+    recipe_id: str
+    slots: dict[str, object]
+    elapsed_ms: int
+    compressed_text: str = ""
+    capsule: object | None = None
+    error: str = ""
+    fallback_reason: str = ""
+    # Keys: intent_alias, intent_canonical, match_type, entity_aliases, normalized
+    semantic_meta: dict[str, object] = field(default_factory=dict)
 
 
-def _classify_intent(text: str, _semantic_meta: "dict | None" = None) -> str:
+def _classify_intent(text: str, _semantic_meta: dict[str, object] | None = None) -> str:
     """Keyword-based intent classification — canonical intent set.
 
     Phase 0: Semantic resolver preprocessing — maps alias variants to canonical
@@ -325,7 +348,11 @@ def _extract_user_text(body_bytes: bytes) -> str:
         data = json.loads(body_bytes)
     except Exception:
         return ""
+    if not isinstance(data, dict):
+        return ""
     messages = data.get("messages", [])
+    if not isinstance(messages, list):
+        return ""
     for msg in reversed(messages):
         if not isinstance(msg, dict):
             continue
@@ -338,12 +365,14 @@ def _extract_user_text(body_bytes: bytes) -> str:
             parts = []
             for block in content:
                 if isinstance(block, dict) and block.get("type") == "text":
-                    parts.append(block.get("text", ""))
+                    candidate = block.get("text", "")
+                    if isinstance(candidate, str):
+                        parts.append(candidate)
             return " ".join(parts)
     return ""
 
 
-def _run_router(body_bytes: bytes, session_id: str = "") -> Tuple[bytes, Optional[dict]]:
+def _run_router(body_bytes: bytes, session_id: str = "") -> tuple[bytes, dict[str, object] | None]:
     """
     Run the DeterministicRouter on the request body.
     Returns (possibly-modified body, meta dict or None).
@@ -358,7 +387,7 @@ def _run_router(body_bytes: bytes, session_id: str = "") -> Tuple[bytes, Optiona
 
     try:
         result = router.route(user_text, session_id=session_id)
-        meta: Dict[str, Any] = {
+        meta: dict[str, object] = {
             "intent": result.intent,
             "recipe_used": result.recipe_id,
             "fallback": result.fallback,
@@ -382,7 +411,7 @@ def _run_router(body_bytes: bytes, session_id: str = "") -> Tuple[bytes, Optiona
         }
 
 
-def _router_health() -> dict:
+def _router_health() -> dict[str, object]:
     """Return router health/status dict for the /health endpoint."""
     components = {
         "slot_filler": False,
@@ -396,34 +425,26 @@ def _router_health() -> dict:
     if router is None:
         return {"enabled": True, "components": components}
 
-    return {
-        "enabled": True,
-        "components": {
-            "slot_filler": hasattr(router, "_slot_filler") and router._slot_filler is not None,
-            "recipe_engine": hasattr(router, "_recipe_engine")
-            and router._recipe_engine is not None,
-            "validation_gate": hasattr(router, "_gate") and router._gate is not None,
-        },
-    }
+    return {"enabled": True, "components": router.health_components()}
 
 
 # ---------------------------------------------------------------------------
 # Health endpoint response cache (1-second TTL to reduce per-request overhead)
 # ---------------------------------------------------------------------------
-_health_cache: dict = {"ts": 0.0, "data": None}
+_health_cache: _HealthCache = {"ts": 0.0, "data": None}
 _HEALTH_CACHE_TTL = 1.0  # seconds
 
 # ---------------------------------------------------------------------------
 # Singleton for RouteEngine (PERF OPT #1 — avoid per-request construction + YAML I/O)
 # RouteStore reads routes.yaml on every store.list() call — cache with mtime guard.
 # ---------------------------------------------------------------------------
-_ROUTE_ENGINE_INSTANCE = None
+_ROUTE_ENGINE_INSTANCE: RouteEngine | object | None = None
 _ROUTE_ENGINE_LOCK = threading.Lock()
-_ROUTE_RULES_CACHE: dict = {"rules": None, "mtime": 0.0, "ts": 0.0}
+_ROUTE_RULES_CACHE: _RouteRulesCache = {"rules": None, "mtime": 0.0, "ts": 0.0}
 _ROUTE_RULES_CACHE_TTL = 5.0  # seconds — refresh rules at most every 5s
 
 
-def _get_route_engine():
+def _get_route_engine() -> RouteEngine | None:
     """Return the RouteEngine singleton, creating it lazily."""
     global _ROUTE_ENGINE_INSTANCE
     if _ROUTE_ENGINE_INSTANCE is None:
@@ -442,10 +463,10 @@ def _get_route_engine():
                     _ROUTE_ENGINE_INSTANCE = _INIT_FAILED
     if _ROUTE_ENGINE_INSTANCE is _INIT_FAILED:
         return None
-    return _ROUTE_ENGINE_INSTANCE
+    return cast("RouteEngine", _ROUTE_ENGINE_INSTANCE)
 
 
-def _get_cached_route_rules():
+def _get_cached_route_rules() -> list[RouteRule]:
     """Return cached list of RouteRules, refreshing only when routes.yaml changes."""
     now = time.time()
     cache = _ROUTE_RULES_CACHE
@@ -475,11 +496,11 @@ def _get_cached_route_rules():
 # ---------------------------------------------------------------------------
 # Singleton for PreconditionGates (PERF OPT #2 — avoid per-request import + init)
 # ---------------------------------------------------------------------------
-_PRECOND_GATES_INSTANCE = None
+_PRECOND_GATES_INSTANCE: PreconditionGates | object | None = None
 _PRECOND_GATES_LOCK = threading.Lock()
 
 
-def _get_precond_gates():
+def _get_precond_gates() -> PreconditionGates | None:
     """Return the PreconditionGates singleton."""
     global _PRECOND_GATES_INSTANCE
     if _PRECOND_GATES_INSTANCE is None:
@@ -499,17 +520,17 @@ def _get_precond_gates():
                     _PRECOND_GATES_INSTANCE = _INIT_FAILED
     if _PRECOND_GATES_INSTANCE is _INIT_FAILED:
         return None
-    return _PRECOND_GATES_INSTANCE
+    return cast("PreconditionGates", _PRECOND_GATES_INSTANCE)
 
 
 # ---------------------------------------------------------------------------
 # Singleton for BudgetController (PERF OPT #3 — avoid per-request import + init)
 # ---------------------------------------------------------------------------
-_BUDGET_CTRL_INSTANCE = None
+_BUDGET_CTRL_INSTANCE: BudgetController | object | None = None
 _BUDGET_CTRL_LOCK = threading.Lock()
 
 
-def _get_budget_controller():
+def _get_budget_controller() -> BudgetController | None:
     """Return the BudgetController singleton."""
     global _BUDGET_CTRL_INSTANCE
     if _BUDGET_CTRL_INSTANCE is None:
@@ -529,7 +550,7 @@ def _get_budget_controller():
                     _BUDGET_CTRL_INSTANCE = _INIT_FAILED
     if _BUDGET_CTRL_INSTANCE is _INIT_FAILED:
         return None
-    return _BUDGET_CTRL_INSTANCE
+    return cast("BudgetController", _BUDGET_CTRL_INSTANCE)
 
 
 # ---------------------------------------------------------------------------
@@ -569,19 +590,23 @@ def is_protected_content(text: str) -> bool:
     return marker_hits >= 2
 
 
-def classify_message_risk(msg: dict) -> str:
+def classify_message_risk(msg: Mapping[str, object]) -> str:
     role = msg.get("role", "")
     content = msg.get("content", "")
 
     if isinstance(content, list):
-        text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and "text" in p]
+        text_parts = [
+            text
+            for p in content
+            if isinstance(p, dict) and isinstance((text := p.get("text")), str)
+        ]
         content_text = "\n".join(text_parts)
     elif isinstance(content, str):
         content_text = content
     else:
         return "narrative"
 
-    if role == "system":
+    if role in {"system", "developer"}:
         return "protected"
     if is_protected_content(content_text):
         return "protected"
@@ -606,7 +631,8 @@ def can_compress(risk_class: str, mode: str) -> bool:
 # Stable/volatile partition + fingerprinting (TOKENPAK_MODE=safe)
 # ---------------------------------------------------------------------------
 
-def _partition_stable_volatile(body: bytes) -> tuple:
+
+def _partition_stable_volatile(body: bytes) -> tuple[bytes, bytes]:
     """Partition request body into (stable_bytes, volatile_bytes) for sha256 fingerprinting.
 
     Spec Component 8 partition rules:
@@ -627,6 +653,9 @@ def _partition_stable_volatile(body: bytes) -> tuple:
     try:
         data = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        return b"", body
+
+    if not isinstance(data, dict):
         return b"", body
 
     messages = data.get("messages", [])
@@ -657,20 +686,24 @@ def _partition_stable_volatile(body: bytes) -> tuple:
 # Transferred from monolith (lines 1189–1212)
 # ---------------------------------------------------------------------------
 
-def _resolve_session_id(headers: Any, model: str) -> str:
+
+def _resolve_session_id(headers: object, model: str) -> str:
     """Resolve session id with Claude Code priority.
 
     Order: X-Claude-Code-Session-Id (Claude Code) -> X-TokenPak-Session
     -> model name (last-resort fallback).
     """
+
     # Case-insensitive header lookup
-    def _h(name: str) -> Optional[str]:
-        if hasattr(headers, "get"):
+    def _h(name: str) -> str | None:
+        getter = getattr(headers, "get", None)
+        if callable(getter):
+            get_header = cast(Callable[[str], object], getter)
             # Try common cases first; many header collections are
             # case-insensitive but some test contexts use plain dicts.
             for variant in (name, name.lower(), name.title()):
-                v = headers.get(variant)
-                if v:
+                v = get_header(variant)
+                if isinstance(v, str) and v:
                     return v
         return None
 
@@ -683,7 +716,15 @@ def _resolve_session_id(headers: Any, model: str) -> str:
     return model
 
 
-def _resolve_agent_id(headers: Any) -> str:
+def _header_items(headers: object) -> Iterable[tuple[object, object]]:
+    items = getattr(headers, "items", None)
+    if not callable(items):
+        return ()
+    get_items = cast(Callable[[], Iterable[tuple[object, object]]], items)
+    return get_items()
+
+
+def _resolve_agent_id(headers: object) -> str:
     """Resolve the agent id from the ``X-Tokenpak-Agent`` header.
 
     Case-insensitive lookup, lower-cased value — matches the spend_guard
@@ -693,7 +734,7 @@ def _resolve_agent_id(headers: Any) -> str:
     downstream) when no caller set the header. Never fabricated.
     """
     try:
-        for hk, hv in (headers.items() if hasattr(headers, "items") else []):
+        for hk, hv in _header_items(headers):
             if str(hk).lower() == "x-tokenpak-agent":
                 return str(hv).strip().lower()
     except Exception:
@@ -701,7 +742,7 @@ def _resolve_agent_id(headers: Any) -> str:
     return ""
 
 
-def _resolve_cycle_id(headers: Any) -> str:
+def _resolve_cycle_id(headers: object) -> str:
     """Resolve the cycle id from the ``X-Tokenpak-Cycle`` header.
 
     No caller stamps this header today; it is resolved here so
@@ -710,7 +751,7 @@ def _resolve_cycle_id(headers: Any) -> str:
     never fabricated.
     """
     try:
-        for hk, hv in (headers.items() if hasattr(headers, "items") else []):
+        for hk, hv in _header_items(headers):
             if str(hk).lower() == "x-tokenpak-cycle":
                 return str(hv).strip()
     except Exception:
@@ -723,17 +764,25 @@ def _resolve_cycle_id(headers: Any) -> str:
 # Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 2070–2082)
 # ---------------------------------------------------------------------------
 
-def _apply_budget(components: Dict[str, Any], total_tokens: Optional[int] = None) -> Dict[str, Any]:
+
+def _apply_budget(
+    components: dict[str, object], total_tokens: int | None = None
+) -> dict[str, object]:
     """Apply Budgeter allocation policy to context components."""
     try:
-        from .config import _cfg
-        budget_total = total_tokens or int(_cfg.get("budget_total_tokens", 100_000))
+        from tokenpak.core.config_loader import get as _cfg
+
+        configured_total = _cfg("budget_total_tokens", 100_000)
+        if configured_total is None:
+            configured_total = 100_000
+        budget_total = total_tokens or int(configured_total)
     except Exception:
         budget_total = total_tokens or 100_000
     try:
         from tokenpak.telemetry.budgeter import Budgeter
 
         b = Budgeter()
-        return b.allocate(components, total_tokens=budget_total)
+        b.total_tokens = budget_total
+        return b.allocate(components)
     except Exception:
         return components  # fail-open

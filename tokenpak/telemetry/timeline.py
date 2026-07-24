@@ -6,10 +6,22 @@ trend analysis, ASCII charts, and anomaly detection.
 
 from __future__ import annotations
 
+__all__ = (
+    "CHART_CHARS",
+    "compute_trends",
+    "detect_anomalies",
+    "format_timeline",
+    "get_timeline",
+    "load_history",
+    "render_chart",
+    "save_snapshot",
+)
+
+
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, TypedDict, cast
 
 HISTORY_PATH = Path.home() / ".tokenpak" / "history.jsonl"
 
@@ -17,23 +29,37 @@ HISTORY_PATH = Path.home() / ".tokenpak" / "history.jsonl"
 CHART_CHARS = " ▁▂▃▄▅▆▇█"
 
 
-def load_history(path: Optional[Path] = None) -> List[dict]:
+class TimelineEntry(TypedDict, total=False):
+    date: str
+    requests: int
+    saved_usd: float
+    cache_hit_pct: float
+    compression_pct: float
+    trend_pct: float
+    trend: str
+    avg_usd: float
+    pct_below: float
+
+
+def load_history(path: Optional[Path] = None) -> List[TimelineEntry]:
     """Load daily snapshots from JSONL file."""
     p = path or HISTORY_PATH
     if not p.exists():
         return []
-    entries = []
+    entries: list[TimelineEntry] = []
     for line in p.read_text().strip().split("\n"):
         line = line.strip()
         if line:
             try:
-                entries.append(json.loads(line))
+                decoded = json.loads(line)
+                if isinstance(decoded, dict):
+                    entries.append(cast(TimelineEntry, decoded))
             except json.JSONDecodeError:
                 continue
     return entries
 
 
-def save_snapshot(snapshot: dict, path: Optional[Path] = None) -> None:
+def save_snapshot(snapshot: TimelineEntry, path: Optional[Path] = None) -> None:
     """Append a daily snapshot to history."""
     p = path or HISTORY_PATH
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -41,7 +67,7 @@ def save_snapshot(snapshot: dict, path: Optional[Path] = None) -> None:
         f.write(json.dumps(snapshot) + "\n")
 
 
-def get_timeline(days: int = 7, path: Optional[Path] = None) -> List[dict]:
+def get_timeline(days: int = 7, path: Optional[Path] = None) -> List[TimelineEntry]:
     """Get last N days of history, sorted newest first."""
     entries = load_history(path)
     if not entries:
@@ -51,11 +77,11 @@ def get_timeline(days: int = 7, path: Optional[Path] = None) -> List[dict]:
     return entries[:days]
 
 
-def compute_trends(entries: List[dict]) -> List[dict]:
+def compute_trends(entries: List[TimelineEntry]) -> List[TimelineEntry]:
     """Add trend arrows and day-over-day change to entries."""
-    result = []
+    result: list[TimelineEntry] = []
     for i, entry in enumerate(entries):
-        e = dict(entry)
+        e: TimelineEntry = entry.copy()
         if i < len(entries) - 1:
             prev_saved = entries[i + 1].get("saved_usd", 0)
             curr_saved = e.get("saved_usd", 0)
@@ -78,7 +104,7 @@ def compute_trends(entries: List[dict]) -> List[dict]:
     return result
 
 
-def detect_anomalies(entries: List[dict], threshold: float = 2.0) -> List[dict]:
+def detect_anomalies(entries: List[TimelineEntry], threshold: float = 2.0) -> List[TimelineEntry]:
     """Flag days that are 2σ below average savings."""
     if len(entries) < 3:
         return []
@@ -93,7 +119,7 @@ def detect_anomalies(entries: List[dict], threshold: float = 2.0) -> List[dict]:
     if std <= 0:
         return []
 
-    anomalies = []
+    anomalies: list[TimelineEntry] = []
     for e in entries:
         saved = e.get("saved_usd", 0)
         if saved < avg - threshold * std:
@@ -110,7 +136,7 @@ def detect_anomalies(entries: List[dict], threshold: float = 2.0) -> List[dict]:
     return anomalies
 
 
-def render_chart(entries: List[dict], width: int = 40) -> str:
+def render_chart(entries: List[TimelineEntry], width: int = 40) -> str:
     """Render ASCII sparkline chart of daily savings."""
     if not entries:
         return "No data for chart."
@@ -143,7 +169,7 @@ def render_chart(entries: List[dict], width: int = 40) -> str:
     return "\n".join(lines)
 
 
-def format_timeline(entries: List[dict], show_chart: bool = False) -> str:
+def format_timeline(entries: List[TimelineEntry], show_chart: bool = False) -> str:
     """Format human-readable timeline report."""
     if not entries:
         return "No history data found.\nRun TokenPak for at least one day to see trends."

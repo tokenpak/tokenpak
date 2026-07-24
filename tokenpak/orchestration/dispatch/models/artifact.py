@@ -28,9 +28,7 @@ class DispatchArtifact(DispatchBaseModel):
     station_run_id: str | None = None
 
     kind: str = Field(description='e.g. "patch", "doc", "report"')
-    target: str = Field(
-        description="storage location under ~/.tpk/dispatch/artifacts/"
-    )
+    target: str = Field(description="storage location under ~/.tpk/dispatch/artifacts/")
     content_hash: str
     size_bytes: int | None = None
 

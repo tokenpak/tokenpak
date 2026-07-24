@@ -105,7 +105,5 @@ class TestOpenAIHeuristicFallback:
 
     def test_heuristic_not_used_when_usage_present(self, adapter):
         """When usage present, extract_input_tokens returns exact count, not heuristic."""
-        body = json.dumps(
-            {"usage": {"prompt_tokens": 999, "total_tokens": 1000}}
-        ).encode()
+        body = json.dumps({"usage": {"prompt_tokens": 999, "total_tokens": 1000}}).encode()
         assert adapter.extract_input_tokens(body) == 999

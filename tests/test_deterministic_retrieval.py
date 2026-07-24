@@ -9,13 +9,15 @@ Verifies:
 4. Cache-stable format is preserved
 """
 
-
 import pytest
 
 try:
     from tokenpak.vault.retrieval import sort_retrieval_results
 except ImportError:
-    pytest.skip("Cannot import sort_retrieval_results from tokenpak.vault.retrieval — removed in current build", allow_module_level=True)
+    pytest.skip(
+        "Cannot import sort_retrieval_results from tokenpak.vault.retrieval — removed in current build",
+        allow_module_level=True,
+    )
 import hashlib
 
 from tokenpak.vault.retrieval import (

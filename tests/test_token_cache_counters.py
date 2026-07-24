@@ -2,6 +2,7 @@
 Test: token_cache_hits and token_cache_misses appear in SESSION and increment correctly.
 TPK-STATS-CACHE-CTR — Cali 2026-03-27
 """
+
 from functools import lru_cache
 
 
@@ -12,12 +13,14 @@ def make_count_tokens():
 
     try:
         import tiktoken
+
         _enc = tiktoken.get_encoding("cl100k_base")
 
         @lru_cache(maxsize=2048)
         def _cached(text: str) -> int:
             return len(_enc.encode(text))
     except ImportError:
+
         @lru_cache(maxsize=2048)
         def _cached(text: str) -> int:
             return len(text) // 4

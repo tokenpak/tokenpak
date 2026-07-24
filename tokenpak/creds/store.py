@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from typing import cast
 
 try:
     import tomllib  # py311+
@@ -24,6 +25,8 @@ except ModuleNotFoundError:  # pragma: no cover
 
 
 CONFIG_PATH = Path.home() / ".tokenpak" / "credentials.toml"
+CredentialEntry = dict[str, object]
+CredentialStore = dict[str, CredentialEntry]
 
 # Ids are slugs we embed in TOML table headers + use as CLI args, so
 # restrict to a safe character set. Matches what the CLI's add step
@@ -31,7 +34,7 @@ CONFIG_PATH = Path.home() / ".tokenpak" / "credentials.toml"
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
-def load() -> dict:
+def load() -> CredentialStore:
     """Return the parsed creds table (``{id: {fields...}}``) or ``{}``."""
     if not CONFIG_PATH.exists():
         return {}
@@ -40,10 +43,10 @@ def load() -> dict:
     except Exception:
         return {}
     creds = data.get("creds") or {}
-    return creds if isinstance(creds, dict) else {}
+    return cast(CredentialStore, creds) if isinstance(creds, dict) else {}
 
 
-def save(creds: dict) -> Path:
+def save(creds: CredentialStore) -> Path:
     """Write ``creds`` to the config file with 0600 perms atomically."""
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -57,7 +60,7 @@ def save(creds: dict) -> Path:
     return CONFIG_PATH
 
 
-def add(cred_id: str, entry: dict) -> None:
+def add(cred_id: str, entry: CredentialEntry) -> None:
     """Insert or replace one credential entry. Caller validates shape."""
     creds = load()
     creds[cred_id] = entry
@@ -82,15 +85,13 @@ def remove(cred_id: str) -> bool:
 def validate_id(cred_id: str) -> None:
     """Raise ValueError if ``cred_id`` isn't a safe slug."""
     if not _ID_RE.match(cred_id):
-        raise ValueError(
-            f"invalid id {cred_id!r} — must match [a-z0-9][a-z0-9._-]*"
-        )
+        raise ValueError(f"invalid id {cred_id!r} — must match [a-z0-9][a-z0-9._-]*")
 
 
 # ── serialisation ──────────────────────────────────────────────────
 
 
-def _serialise(creds: dict) -> str:
+def _serialise(creds: CredentialStore) -> str:
     """Hand-write TOML for our narrow schema.
 
     Each entry is a subtable ``[creds.<id>]`` with primitive values.
@@ -101,7 +102,15 @@ def _serialise(creds: dict) -> str:
         "# file perms should be 0600; `tokenpak creds doctor` will flag otherwise",
         "",
     ]
-    display_order = ("platform", "kind", "key", "token", "scope_hosts", "account_hint", "expires_at")
+    display_order = (
+        "platform",
+        "kind",
+        "key",
+        "token",
+        "scope_hosts",
+        "account_hint",
+        "expires_at",
+    )
 
     for cred_id in sorted(creds):
         body = creds[cred_id] or {}
@@ -128,11 +137,11 @@ def _quote_key(k: str) -> str:
     return f'"{k}"'
 
 
-def _toml_assign(key: str, value) -> str:
+def _toml_assign(key: str, value: object) -> str:
     return f"{_quote_key(key)} = {_toml_value(value)}"
 
 
-def _toml_value(value) -> str:
+def _toml_value(value: object) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int):

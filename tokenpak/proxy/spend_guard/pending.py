@@ -26,7 +26,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from .contracts import PendingRequest
 
@@ -35,20 +35,22 @@ from .contracts import PendingRequest
 # (the proxy re-applies it — see proxy/server.py replay-merge), so dropping
 # these from storage is safe and keeps raw credentials off disk, matching
 # the proxy's "zero disk writes" passthrough contract for credentials.
-_SENSITIVE_HEADERS = frozenset({
-    "authorization",
-    "proxy-authorization",
-    "x-api-key",
-    "api-key",
-    "openai-api-key",
-    "anthropic-api-key",
-    "x-goog-api-key",
-    "cookie",
-    "set-cookie",
-})
+_SENSITIVE_HEADERS = frozenset(
+    {
+        "authorization",
+        "proxy-authorization",
+        "x-api-key",
+        "api-key",
+        "openai-api-key",
+        "anthropic-api-key",
+        "x-goog-api-key",
+        "cookie",
+        "set-cookie",
+    }
+)
 
 
-def redact_headers(headers: dict) -> dict:
+def redact_headers(headers: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of ``headers`` with credential-bearing headers removed.
 
     Case-insensitive on the header name. Used at store time (so creds never
@@ -56,10 +58,7 @@ def redact_headers(headers: dict) -> dict:
     """
     if not headers:
         return {}
-    return {
-        k: v for k, v in headers.items()
-        if str(k).lower() not in _SENSITIVE_HEADERS
-    }
+    return {k: v for k, v in headers.items() if str(k).lower() not in _SENSITIVE_HEADERS}
 
 
 def _db_path(audit_db_path: str) -> Path:
@@ -165,9 +164,7 @@ def _redact_existing_rows(conn: sqlite3.Connection) -> None:
     No rows are deleted — held requests stay replayable (replay uses the live
     approving request's auth, not the persisted copy).
     """
-    rows = conn.execute(
-        "SELECT pending_id, raw_request_headers FROM pending_requests"
-    ).fetchall()
+    rows = conn.execute("SELECT pending_id, raw_request_headers FROM pending_requests").fetchall()
     for row in rows:
         try:
             hdrs = json.loads(row["raw_request_headers"] or "{}")
@@ -178,8 +175,7 @@ def _redact_existing_rows(conn: sqlite3.Connection) -> None:
         redacted = redact_headers(hdrs)
         if redacted != hdrs:
             conn.execute(
-                "UPDATE pending_requests SET raw_request_headers = ? "
-                "WHERE pending_id = ?",
+                "UPDATE pending_requests SET raw_request_headers = ? WHERE pending_id = ?",
                 (json.dumps(redacted, default=str), row["pending_id"]),
             )
 
@@ -197,6 +193,7 @@ def hash_request(body: bytes, model: str) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 class PendingStore:
     """SQLite-backed pending-request store.
 
@@ -213,7 +210,7 @@ class PendingStore:
         *,
         session_id: str,
         body: bytes,
-        headers: dict,
+        headers: dict[str, Any],
         target_url: str,
         provider: str,
         model: str,
@@ -245,9 +242,20 @@ class PendingStore:
                         projected_cost_usd, raw_request_blob,
                         raw_request_headers, target_url, status)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
-                (pending_id, session_id, now, expires_at, request_hash,
-                 provider, model, projected_tokens, projected_cost_usd,
-                 blob, headers_json, target_url),
+                (
+                    pending_id,
+                    session_id,
+                    now,
+                    expires_at,
+                    request_hash,
+                    provider,
+                    model,
+                    projected_tokens,
+                    projected_cost_usd,
+                    blob,
+                    headers_json,
+                    target_url,
+                ),
             )
             conn.commit()
         finally:
@@ -263,7 +271,7 @@ class PendingStore:
             model=model,
             projected_tokens=projected_tokens,
             projected_cost_usd=projected_cost_usd,
-            raw_request_blob=body,           # uncompressed for caller convenience
+            raw_request_blob=body,  # uncompressed for caller convenience
             raw_request_headers=safe_headers,
             target_url=target_url,
             status="pending",

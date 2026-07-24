@@ -26,7 +26,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.intelligence.deep_health", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.intelligence.deep_health", reason="module not available in current build"
+)
 import os
 import shutil
 import time
@@ -45,6 +47,7 @@ from tokenpak.intelligence.server import create_app
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def client():
@@ -73,7 +76,9 @@ def _make_checker(**overrides) -> DeepHealthChecker:
         _check_database=lambda *a, **kw: CheckResult(status="ok", details={"size_mb": 12.5}),
         _check_index=lambda *a, **kw: CheckResult(status="ok", details={"age_hours": 2.0}),
         _check_memory=lambda: CheckResult(status="ok", details={"percent": 6.2}),
-        _check_disk=lambda *a, **kw: CheckResult(status="ok", details={"percent": 45.0, "free_gb": 55.0}),
+        _check_disk=lambda *a, **kw: CheckResult(
+            status="ok", details={"percent": 45.0, "free_gb": 55.0}
+        ),
     )
     defaults.update(overrides)
     return DeepHealthChecker(**defaults)
@@ -82,6 +87,7 @@ def _make_checker(**overrides) -> DeepHealthChecker:
 # ---------------------------------------------------------------------------
 # 1. Basic /health fast path
 # ---------------------------------------------------------------------------
+
 
 def test_basic_health_returns_ok(client):
     resp = client.get("/health")
@@ -106,6 +112,7 @@ def test_basic_health_has_version(client):
 # 2. Deep check — all ok → HTTP 200
 # ---------------------------------------------------------------------------
 
+
 def test_deep_health_all_ok_returns_200():
     checker = _make_checker()
     result = checker.run()
@@ -123,6 +130,7 @@ def test_deep_health_all_ok_checks_present():
 # ---------------------------------------------------------------------------
 # 3. Deep check — one error → HTTP 503
 # ---------------------------------------------------------------------------
+
 
 def test_deep_health_error_provider_503():
     checker = _make_checker(_check_openai=lambda *a, **kw: _err("rate_limited"))
@@ -142,6 +150,7 @@ def test_deep_health_error_check_field():
 # 4. Deep check — one warning → degraded, HTTP 200
 # ---------------------------------------------------------------------------
 
+
 def test_deep_health_warning_is_degraded():
     checker = _make_checker(_check_openai=lambda *a, **kw: _warn())
     result = checker.run()
@@ -159,6 +168,7 @@ def test_deep_health_warning_check_field():
 # ---------------------------------------------------------------------------
 # 5. Provider latency reported
 # ---------------------------------------------------------------------------
+
 
 def test_deep_health_latency_reported():
     checker = _make_checker(_check_anthropic=lambda *a, **kw: _ok(latency_ms=45.0))
@@ -178,9 +188,11 @@ def test_deep_health_latency_in_dict():
 # 6. No API key → error
 # ---------------------------------------------------------------------------
 
+
 def test_check_anthropic_no_api_key():
     """With no ANTHROPIC_API_KEY env var, should return error."""
     from tokenpak.intelligence.deep_health import check_anthropic
+
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     with patch.dict(os.environ, env, clear=True):
         result = check_anthropic()
@@ -190,6 +202,7 @@ def test_check_anthropic_no_api_key():
 
 def test_check_openai_no_api_key():
     from tokenpak.intelligence.deep_health import check_openai
+
     env = {k: v for k, v in os.environ.items() if k != "OPENAI_API_KEY"}
     with patch.dict(os.environ, env, clear=True):
         result = check_openai()
@@ -201,8 +214,10 @@ def test_check_openai_no_api_key():
 # 7. Database ok path
 # ---------------------------------------------------------------------------
 
+
 def test_check_database_ok(tmp_path):
     from tokenpak.intelligence.deep_health import check_database
+
     db = tmp_path / "test.db"
     db.write_bytes(b"\x00" * 1024)
     result = check_database(str(db))
@@ -214,8 +229,10 @@ def test_check_database_ok(tmp_path):
 # 8. Database missing → error
 # ---------------------------------------------------------------------------
 
+
 def test_check_database_missing():
     from tokenpak.intelligence.deep_health import check_database
+
     result = check_database("/nonexistent/path/monitor.db")
     assert result.status == "error"
     assert "not_found" in result.error
@@ -225,8 +242,10 @@ def test_check_database_missing():
 # 9. Index ok path
 # ---------------------------------------------------------------------------
 
+
 def test_check_index_ok(tmp_path):
     from tokenpak.intelligence.deep_health import check_index
+
     idx = tmp_path / "pricing_index.json"
     idx.write_text("{}")
     result = check_index(str(idx))
@@ -238,10 +257,12 @@ def test_check_index_ok(tmp_path):
 # 10. Index stale → warning
 # ---------------------------------------------------------------------------
 
+
 def test_check_index_stale(tmp_path):
     import os
 
     from tokenpak.intelligence.deep_health import check_index
+
     idx = tmp_path / "old_index.json"
     idx.write_text("{}")
     # Backdate modification time by 30 hours
@@ -256,6 +277,7 @@ def test_check_index_stale(tmp_path):
 # ---------------------------------------------------------------------------
 # 11. Memory ok path
 # ---------------------------------------------------------------------------
+
 
 def test_check_memory_ok():
     """Memory check should return a valid result with a percent field."""
@@ -285,6 +307,7 @@ def test_check_memory_ok_mock():
 # ---------------------------------------------------------------------------
 # 12. Memory high → warning
 # ---------------------------------------------------------------------------
+
 
 def test_check_memory_warning():
     """Simulate high memory usage."""
@@ -322,6 +345,7 @@ def test_check_memory_error_oom():
 # 13. Disk ok path
 # ---------------------------------------------------------------------------
 
+
 def test_check_disk_ok():
     result = check_disk("/tmp")
     assert result.status in ("ok", "warning", "error")
@@ -334,6 +358,7 @@ def test_check_disk_ok_mock():
         mock_du.return_value = (total := 100 * 1024**3, 50 * 1024**3, 50 * 1024**3)
         # Patch as a proper namedtuple-like object
         import collections
+
         DU = collections.namedtuple("DU", ["total", "used", "free"])
         mock_du.return_value = DU(100 * 1024**3, 50 * 1024**3, 50 * 1024**3)
         result = check_disk("/")
@@ -345,8 +370,10 @@ def test_check_disk_ok_mock():
 # 14. Disk high → warning
 # ---------------------------------------------------------------------------
 
+
 def test_check_disk_warning():
     import collections
+
     DU = collections.namedtuple("DU", ["total", "used", "free"])
     with patch("shutil.disk_usage") as mock_du:
         mock_du.return_value = DU(100 * 1024**3, 85 * 1024**3, 15 * 1024**3)
@@ -357,6 +384,7 @@ def test_check_disk_warning():
 
 def test_check_disk_error():
     import collections
+
     DU = collections.namedtuple("DU", ["total", "used", "free"])
     with patch("shutil.disk_usage") as mock_du:
         mock_du.return_value = DU(100 * 1024**3, 96 * 1024**3, 4 * 1024**3)
@@ -369,8 +397,10 @@ def test_check_disk_error():
 # 15. HTTP 503 when any check is error
 # ---------------------------------------------------------------------------
 
+
 def test_deep_result_503_on_error():
     from tokenpak.intelligence.deep_health import DeepHealthResult
+
     checks = {
         "anthropic": _ok(),
         "openai": _err("timeout"),
@@ -387,8 +417,10 @@ def test_deep_result_503_on_error():
 # 16. HTTP 200 when only warnings
 # ---------------------------------------------------------------------------
 
+
 def test_deep_result_200_on_degraded():
     from tokenpak.intelligence.deep_health import DeepHealthResult
+
     checks = {
         "anthropic": _warn(),
         "openai": _ok(),
@@ -404,6 +436,7 @@ def test_deep_result_200_on_degraded():
 # ---------------------------------------------------------------------------
 # 17. Response includes version
 # ---------------------------------------------------------------------------
+
 
 def test_deep_health_endpoint_has_version(client):
     """Wire the full endpoint using injected checker."""
@@ -426,6 +459,7 @@ def test_deep_health_endpoint_has_version(client):
 # ---------------------------------------------------------------------------
 # 18. duration_ms reported
 # ---------------------------------------------------------------------------
+
 
 def test_deep_health_duration_reported():
     checker = _make_checker()

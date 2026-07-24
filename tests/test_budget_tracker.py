@@ -11,7 +11,6 @@ Test cases:
   7. Alert summary and history
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.cost.budget_tracker", reason="module not available in current build")
@@ -177,9 +176,7 @@ class TestShouldAlert:
 
         # Simulate time passing
         alert_key = "daily_WARNING"
-        tracker.alert_history[alert_key] = datetime.now(timezone.utc) - timedelta(
-            seconds=10
-        )
+        tracker.alert_history[alert_key] = datetime.now(timezone.utc) - timedelta(seconds=10)
 
         alert2 = tracker.should_alert(85.5, 100.0, "daily")
         assert alert2 is not None

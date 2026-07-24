@@ -32,8 +32,9 @@ Usage
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable, Optional, Protocol, TypeVar, cast
 
 from tokenpak.orchestration.retry import (
     ImmediateAlertError,
@@ -43,6 +44,21 @@ from tokenpak.orchestration.retry import (
 )
 
 logger = logging.getLogger(__name__)
+
+FallbackContext = dict[str, object]
+FallbackResult = TypeVar("FallbackResult")
+
+
+class _ProviderEntry(Protocol):
+    provider: str
+
+
+class _FailoverManager(Protocol):
+    @property
+    def enabled(self) -> bool: ...
+
+    def iter_providers(self, model: str, *, preferred: str) -> Iterable[_ProviderEntry]: ...
+
 
 __all__ = [
     "FallbackRouter",
@@ -69,15 +85,13 @@ class FallbackExhaustedError(Exception):
 
     def __init__(
         self,
-        context: dict,
+        context: FallbackContext,
         cause: Exception,
     ) -> None:
         self.context = context
         self.cause = cause
         task = context.get("task", "unknown")
-        super().__init__(
-            f"Fallback exhausted for task '{task}': {cause}"
-        )
+        super().__init__(f"Fallback exhausted for task '{task}': {cause}")
 
 
 # ---------------------------------------------------------------------------
@@ -111,9 +125,9 @@ class FallbackRouter:
     def __init__(
         self,
         state_dir: Optional[Path | str] = None,
-        failover_manager: Any = None,
-        on_handoff: Optional[Callable[[dict, dict], bool]] = None,
-        on_human_alert: Optional[Callable[[dict], None]] = None,
+        failover_manager: Optional[_FailoverManager] = None,
+        on_handoff: Optional[Callable[[FallbackContext, FallbackContext], bool]] = None,
+        on_human_alert: Optional[Callable[[FallbackContext], None]] = None,
     ) -> None:
         self._state_dir = Path(state_dir) if state_dir is not None else None
         self._failover_manager = failover_manager
@@ -125,15 +139,17 @@ class FallbackRouter:
     # ------------------------------------------------------------------ #
 
     def _make_provider_switch_hook(
-        self, context: dict
+        self, context: FallbackContext
     ) -> Optional[Callable[[str], str]]:
         """Build a provider-switch hook from the FailoverManager if available."""
         mgr = self._failover_manager
-        if mgr is None or not getattr(mgr, "enabled", False):
+        if mgr is None or not mgr.enabled:
             return None
 
-        model = context.get("model", "")
-        preferred = context.get("provider", "anthropic")
+        model_value = context.get("model", "")
+        provider_value = context.get("provider", "anthropic")
+        model = model_value if isinstance(model_value, str) else ""
+        preferred = provider_value if isinstance(provider_value, str) else "anthropic"
 
         # Materialise the iterator once so the hook can step through it.
         try:
@@ -159,10 +175,10 @@ class FallbackRouter:
 
     def call(
         self,
-        fn: Callable[[dict, dict], Any],
-        context: dict,
-        partial_state: Optional[dict] = None,
-    ) -> Any:
+        fn: Callable[[FallbackContext, FallbackContext], FallbackResult],
+        context: FallbackContext,
+        partial_state: Optional[FallbackContext] = None,
+    ) -> FallbackResult | dict[str, bool]:
         """
         Execute *fn* with automatic fallback.
 
@@ -188,9 +204,9 @@ class FallbackRouter:
         """
         on_provider_switch = self._make_provider_switch_hook(context)
 
-        handoff_result: list[Any] = []  # Mutable container for closure
+        handoff_result: list[dict[str, bool]] = []  # Mutable container for closure
 
-        def _on_handoff(ctx: dict, state: dict) -> bool:
+        def _on_handoff(ctx: FallbackContext, state: FallbackContext) -> bool:
             if self.on_handoff is not None:
                 accepted = self.on_handoff(ctx, state)
                 if accepted:
@@ -209,7 +225,7 @@ class FallbackRouter:
         )
 
         try:
-            result = engine.run()
+            result = cast(FallbackResult, engine.run())
             # If a handoff was accepted during run(), return its sentinel.
             if handoff_result:
                 return handoff_result[0]
@@ -239,13 +255,13 @@ class FallbackRouter:
 
 
 def fallback_call(
-    fn: Callable[[dict, dict], Any],
-    context: dict,
+    fn: Callable[[FallbackContext, FallbackContext], FallbackResult],
+    context: FallbackContext,
     state_dir: Optional[Path | str] = None,
-    on_human_alert: Optional[Callable[[dict], None]] = None,
-    on_handoff: Optional[Callable[[dict, dict], bool]] = None,
-    failover_manager: Any = None,
-) -> Any:
+    on_human_alert: Optional[Callable[[FallbackContext], None]] = None,
+    on_handoff: Optional[Callable[[FallbackContext, FallbackContext], bool]] = None,
+    failover_manager: Optional[_FailoverManager] = None,
+) -> FallbackResult | dict[str, bool]:
     """
     One-shot fallback call.  Convenience wrapper around :class:`FallbackRouter`.
 
@@ -288,7 +304,7 @@ def fallback_call(
 # ---------------------------------------------------------------------------
 
 
-def get_recent_fallback_events(n: int = 20) -> list[dict]:
+def get_recent_fallback_events(n: int = 20) -> list[dict[str, object]]:
     """
     Return up to *n* most-recent retry/fallback events from the JSONL log.
 

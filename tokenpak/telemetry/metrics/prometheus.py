@@ -89,7 +89,7 @@ class PrometheusRegistry:
     # Histogram bucket boundaries (seconds) for request duration
     DURATION_BUCKETS_S = [0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, float("inf")]
 
-    def __init__(self, session: dict, monitor: Any = None) -> None:
+    def __init__(self, session: dict[str, Any], monitor: Any = None) -> None:
         """
         Args:
             session: The proxy SESSION dict (in-process totals).
@@ -299,7 +299,7 @@ class PrometheusRegistry:
         return "\n".join(lines) + "\n"
 
 
-def build_metrics_text(session: dict, monitor: Any = None, vault_blocks: int = 0) -> str:
+def build_metrics_text(session: dict[str, Any], monitor: Any = None, vault_blocks: int = 0) -> str:
     """Build Prometheus text format metrics.
 
     Args:

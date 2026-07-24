@@ -14,14 +14,16 @@ compatibility (``TOKENPAK_DB`` / ``TOKENPAK_MONITOR_DB``), canonical
 For other databases (e.g. ``telemetry.db``), the original resolution order
 is preserved:
   1. Environment variable ``TOKENPAK_{NAME}`` (e.g. TOKENPAK_TELEMETRY_DB)
-  2. ``~/.tokenpak/{name}`` if it exists
-  3. Repo-root ``{name}`` if it exists
-  4. ``~/.tokenpak/{name}`` as default (even if not yet created)
+  2. ``TOKENPAK_HOME/{name}`` when the scoped-home override is active
+  3. ``~/.tokenpak/{name}`` if it exists
+  4. Repo-root ``{name}`` if it exists
+  5. ``~/.tokenpak/{name}`` as default (even if not yet created)
 
 For ``telemetry.db`` the legacy ``TOKENPAK_DB_PATH`` env var is honored as a
 deprecated alias of ``TOKENPAK_TELEMETRY_DB`` (some older callers exported
 only the former). ``TOKENPAK_TELEMETRY_DB`` wins when both are set.
 """
+
 from __future__ import annotations
 
 import logging
@@ -52,9 +54,7 @@ def _env_lookup(env_key: str) -> str | None:
         if value:
             if alias not in _warned_aliases:
                 _warned_aliases.add(alias)
-                logger.warning(
-                    "env var %s is deprecated; use %s instead", alias, env_key
-                )
+                logger.warning("env var %s is deprecated; use %s instead", alias, env_key)
             return value
     return None
 
@@ -77,6 +77,10 @@ def get_db_path(name: str = "monitor.db") -> Path:
     env_key = "TOKENPAK_" + name.upper().replace(".", "_").replace("-", "_")
     if p := _env_lookup(env_key):
         return Path(p).expanduser()
+    if os.environ.get("TOKENPAK_HOME", "").strip():
+        from tokenpak._paths import home as _home
+
+        return _home() / name
     dot_dir = Path.home() / ".tokenpak" / name
     if dot_dir.exists():
         return dot_dir

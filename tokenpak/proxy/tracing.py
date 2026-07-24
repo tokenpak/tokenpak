@@ -29,7 +29,7 @@ class StageTrace:
     duration_ms: float = 0.0
     details: Dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -49,7 +49,7 @@ class PipelineTrace:
     stages: List[StageTrace] = field(default_factory=list)
     status: str = "pending"  # pending, complete, error
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["stages"] = [s.to_dict() if hasattr(s, "to_dict") else s for s in self.stages]
         return d
@@ -58,12 +58,12 @@ class PipelineTrace:
 class TraceStorage:
     """Thread-safe storage for recent pipeline traces."""
 
-    def __init__(self, max_traces: int = 10):
-        self._traces: deque = deque(maxlen=max_traces)
+    def __init__(self, max_traces: int = 10) -> None:
+        self._traces: deque[PipelineTrace] = deque(maxlen=max_traces)
         self._lock = threading.Lock()
         self._by_id: Dict[str, PipelineTrace] = {}
 
-    def store(self, trace: PipelineTrace):
+    def store(self, trace: PipelineTrace) -> None:
         """Store a completed trace."""
         with self._lock:
             self._traces.append(trace)

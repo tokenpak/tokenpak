@@ -22,6 +22,7 @@ Covers:
   19. _apply_operations: collapse_whitespace
   20. _apply_operations: json_compact
 """
+
 from __future__ import annotations
 
 import json
@@ -46,6 +47,7 @@ yaml = pytest.importorskip(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _write_recipe(tmp_path: Path, data: dict) -> Path:
     p = tmp_path / "recipe.yaml"
     p.write_text(yaml.dump(data, default_flow_style=False), encoding="utf-8")
@@ -66,8 +68,10 @@ MINIMAL_VALID = {
 
 # ── 1. Scaffold creates a valid file ─────────────────────────────────────────
 
+
 def test_create_generates_file(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     out = sdk.create("my-test-recipe", output_dir=str(tmp_path))
     assert out.exists()
@@ -77,8 +81,10 @@ def test_create_generates_file(tmp_path):
 
 # ── 2. Scaffold with domain example: legal ───────────────────────────────────
 
+
 def test_create_domain_legal(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     out = sdk.create("legal-recipe", output_dir=str(tmp_path), domain_example="legal")
     content = out.read_text()
@@ -88,8 +94,10 @@ def test_create_domain_legal(tmp_path):
 
 # ── 3. Scaffold with domain example: medical ─────────────────────────────────
 
+
 def test_create_domain_medical(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     out = sdk.create("medical-recipe", output_dir=str(tmp_path), domain_example="medical")
     content = out.read_text()
@@ -98,8 +106,10 @@ def test_create_domain_medical(tmp_path):
 
 # ── 4. Validate passes on well-formed recipe ──────────────────────────────────
 
+
 def test_validate_passes_valid(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     path = _write_recipe(tmp_path, MINIMAL_VALID)
     warnings = sdk.validate(path)
@@ -108,8 +118,10 @@ def test_validate_passes_valid(tmp_path):
 
 # ── 5. Validate fails on missing required field ───────────────────────────────
 
+
 def test_validate_fails_missing_field(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK, RecipeValidationError
+
     sdk = RecipeSDK()
     bad = {k: v for k, v in MINIMAL_VALID.items() if k != "name"}
     path = _write_recipe(tmp_path, bad)
@@ -119,8 +131,10 @@ def test_validate_fails_missing_field(tmp_path):
 
 # ── 6. Validate fails on bad compression_hint ────────────────────────────────
 
+
 def test_validate_fails_bad_compression_hint(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK, RecipeValidationError
+
     sdk = RecipeSDK()
     bad = {**MINIMAL_VALID, "action": {**MINIMAL_VALID["action"], "compression_hint": 1.5}}
     path = _write_recipe(tmp_path, bad)
@@ -130,8 +144,10 @@ def test_validate_fails_bad_compression_hint(tmp_path):
 
 # ── 7. Validate warns on unknown category ─────────────────────────────────────
 
+
 def test_validate_warns_unknown_category(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     recipe = {**MINIMAL_VALID, "category": "financial"}
     path = _write_recipe(tmp_path, recipe)
@@ -141,8 +157,10 @@ def test_validate_warns_unknown_category(tmp_path):
 
 # ── 8. Test with explicit input text ──────────────────────────────────────────
 
+
 def test_test_with_input_text(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     path = _write_recipe(tmp_path, MINIMAL_VALID)
     result = sdk.test(path, input_text="# This is a comment\nreal_code = True\n")
@@ -155,8 +173,10 @@ def test_test_with_input_text(tmp_path):
 
 # ── 9. Pattern matching check ─────────────────────────────────────────────────
 
+
 def test_test_pattern_match_extension(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     path = _write_recipe(tmp_path, MINIMAL_VALID)
     # Should match .py
@@ -169,8 +189,10 @@ def test_test_pattern_match_extension(tmp_path):
 
 # ── 10. Ops applied list ───────────────────────────────────────────────────────
 
+
 def test_test_ops_applied(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     recipe = {
         **MINIMAL_VALID,
@@ -190,8 +212,10 @@ def test_test_ops_applied(tmp_path):
 
 # ── 11. Benchmark returns expected keys ───────────────────────────────────────
 
+
 def test_benchmark_keys(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     path = _write_recipe(tmp_path, MINIMAL_VALID)
     result = sdk.benchmark(path, samples=["x = 1  # comment\n"], runs=2)
@@ -206,8 +230,10 @@ def test_benchmark_keys(tmp_path):
 
 # ── 12. Benchmark hint_vs_actual delta ────────────────────────────────────────
 
+
 def test_benchmark_hint_vs_actual(tmp_path):
     from tokenpak.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     path = _write_recipe(tmp_path, MINIMAL_VALID)
     result = sdk.benchmark(path, samples=["# comment\n# more\ncode = 1"], runs=1)
@@ -217,9 +243,11 @@ def test_benchmark_hint_vs_actual(tmp_path):
 
 # ── 13–16. CLI smoke tests ─────────────────────────────────────────────────────
 
+
 def _run_cli(args: list[str], *, input_text: str = "") -> tuple[int, str]:
     """Run CLI via tokenpak.cli.main() and capture stdout."""
     from tokenpak.cli import main
+
     old_argv = sys.argv
     old_stdout = sys.stdout
     sys.argv = ["tokenpak"] + args
@@ -264,8 +292,10 @@ def test_cli_recipe_benchmark(tmp_path):
 
 # ── 17. _apply_operations: regex_replace ──────────────────────────────────────
 
+
 def test_apply_regex_replace():
     from tokenpak.recipe_sdk import _apply_operations
+
     text = "foo bar baz"
     ops = [{"type": "regex_replace", "pattern": r"\bbar\b", "replacement": "REPLACED"}]
     result, applied = _apply_operations(text, ops)
@@ -275,8 +305,10 @@ def test_apply_regex_replace():
 
 # ── 18. _apply_operations: deduplicate_lines ─────────────────────────────────
 
+
 def test_apply_deduplicate_lines():
     from tokenpak.recipe_sdk import _apply_operations
+
     text = "line1\nline2\nline1\nline3\nline2"
     result, applied = _apply_operations(text, [{"type": "deduplicate_lines"}])
     lines = result.strip().splitlines()
@@ -286,8 +318,10 @@ def test_apply_deduplicate_lines():
 
 # ── 19. _apply_operations: collapse_whitespace ───────────────────────────────
 
+
 def test_apply_collapse_whitespace():
     from tokenpak.recipe_sdk import _apply_operations
+
     text = "too   many   spaces\n\n\n\nmany blank lines"
     result, applied = _apply_operations(text, [{"type": "collapse_whitespace"}])
     assert "   " not in result
@@ -297,8 +331,10 @@ def test_apply_collapse_whitespace():
 
 # ── 20. _apply_operations: json_compact ──────────────────────────────────────
 
+
 def test_apply_json_compact():
     from tokenpak.recipe_sdk import _apply_operations
+
     text = json.dumps({"a": 1, "b": [1, 2, 3]}, indent=4)
     result, applied = _apply_operations(text, [{"type": "json_compact"}])
     assert " " not in result  # compacted

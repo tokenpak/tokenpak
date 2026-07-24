@@ -208,9 +208,7 @@ _RISK_KEYWORDS: dict[str, str] = {
 
 # Risk levels that make an associated missing-info item "material" (Front Dock
 # Rule): only HIGH and CRITICAL gaps block. MEDIUM/LOW gaps become assumptions.
-_BLOCKING_RISK_LEVELS: frozenset[RiskLevel] = frozenset(
-    {RiskLevel.HIGH, RiskLevel.CRITICAL}
-)
+_BLOCKING_RISK_LEVELS: frozenset[RiskLevel] = frozenset({RiskLevel.HIGH, RiskLevel.CRITICAL})
 
 
 def is_registered_risk_flag(flag: str) -> bool:
@@ -238,9 +236,7 @@ class UnknownRiskFlagError(ValueError):
     def __init__(self, flag: str) -> None:
         self.flag = flag
         known = ", ".join(sorted(RISK_FLAG_REGISTRY))
-        super().__init__(
-            f"unknown Dispatch risk flag {flag!r}. Registered flags: {known}."
-        )
+        super().__init__(f"unknown Dispatch risk flag {flag!r}. Registered flags: {known}.")
 
 
 # ---------------------------------------------------------------------------
@@ -387,12 +383,8 @@ _INTENT_DEFAULT_ASSUMPTIONS: dict[str, tuple[str, ...]] = {
         "Scope is limited to the current repository working tree.",
         "No external side effects (deploy / dependency install / secret change).",
     ),
-    INTENT_DOC_TASK: (
-        "Output is a Markdown document in the repository.",
-    ),
-    INTENT_QUICK_ANSWER: (
-        "A concise prose answer is sufficient; no files are produced.",
-    ),
+    INTENT_DOC_TASK: ("Output is a Markdown document in the repository.",),
+    INTENT_QUICK_ANSWER: ("A concise prose answer is sufficient; no files are produced.",),
     INTENT_UNKNOWN: (),
 }
 
@@ -591,9 +583,7 @@ class FrontDock:
             if level in _BLOCKING_RISK_LEVELS:
                 blocking_gaps.append((label, level))
             else:
-                assumptions.append(
-                    f"Assuming a sensible default for: {label} (no material risk)."
-                )
+                assumptions.append(f"Assuming a sensible default for: {label} (no material risk).")
 
         # 2) Risk-flag-driven material gaps. A HIGH/CRITICAL risk flag detected in
         #    the request is a gap that materially changes the outcome — the Front
@@ -606,9 +596,7 @@ class FrontDock:
                 blocking_gaps.append((label, level))
             else:
                 # Low/medium risk → recorded as an assumption, not a question.
-                assumptions.append(
-                    f"Proceeding under low/medium-risk handling for: {flag}."
-                )
+                assumptions.append(f"Proceeding under low/medium-risk handling for: {flag}.")
 
         return assumptions, missing_info, blocking_gaps
 
@@ -730,12 +718,9 @@ class FrontDock:
                     id="proceed_with_constraints",
                     label="Proceed with explicit constraints",
                     description=(
-                        "Continue under tight, named constraints accepting the "
-                        "stated risk."
+                        "Continue under tight, named constraints accepting the stated risk."
                     ),
-                    tradeoffs=[
-                        "Accepts a high-risk surface without full information."
-                    ],
+                    tradeoffs=["Accepts a high-risk surface without full information."],
                 ),
                 DecisionOption(
                     id="cancel",

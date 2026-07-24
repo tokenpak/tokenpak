@@ -5,12 +5,29 @@ Extracted from runtime/proxy.py (Phase 1f of TPK-RESTRUCTURE).
 Original location: class Monitor (lines 2320-3204) + SQLite helpers (lines 2248-2319).
 """
 
+from __future__ import annotations
+
+import os
 import sqlite3
 import sys
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from queue import Empty, Queue
+from typing import TypedDict
+
+DbPath = str | os.PathLike[str]
+SqlValue = int | float | str | bytes | None
+InsertParams = tuple[SqlValue, ...]
+DbWorkItem = tuple[DbPath, InsertParams]
+
+
+class _DateSavings(TypedDict):
+    date: str
+    tokens_saved: int
+    cost_saved_usd: float
+
 
 # ---------------------------------------------------------------------------
 # Migration system (optional — graceful fallback)
@@ -18,15 +35,17 @@ from queue import Empty, Queue
 try:
     from db_migrations import get_current_schema_version
     from db_migrations import migrate as db_migrate
+
     MIGRATION_AVAILABLE = True
 except ImportError:
     MIGRATION_AVAILABLE = False
 
-    def db_migrate(conn):
-        pass
+    def db_migrate(conn: sqlite3.Connection) -> None:
+        return None
 
-    def get_current_schema_version(conn):
+    def get_current_schema_version(conn: sqlite3.Connection) -> int:
         return 0
+
 
 # ---------------------------------------------------------------------------
 # Budget config — resolved from env at import time (same as proxy.py)
@@ -40,16 +59,17 @@ BUDGET_ALERT_THRESHOLD_PCT: float = float(_os.environ.get("TOKENPAK_BUDGET_ALERT
 # SQLite write queue — async background writes, <0.1ms enqueue cost
 # ---------------------------------------------------------------------------
 
-_DB_CONNECTION = None
+_DB_CONNECTION: sqlite3.Connection | None = None
+_DB_CONNECTION_PATH: str | None = None
 _DB_LOCK = threading.Lock()
-_DB_WRITE_QUEUE = None
+_DB_WRITE_QUEUE: Queue[DbWorkItem | None] | None = None
 _DB_QUEUE_LOCK = threading.Lock()
 _DB_QUEUE_MAX_SIZE = 1000
-_DB_BACKGROUND_THREAD = None
+_DB_BACKGROUND_THREAD: threading.Thread | None = None
 _DB_BACKGROUND_STOP = threading.Event()
 
 
-def _init_db_write_queue():
+def _init_db_write_queue() -> None:
     """Initialize the database write queue and background thread."""
     global _DB_WRITE_QUEUE, _DB_BACKGROUND_THREAD
     with _DB_QUEUE_LOCK:
@@ -138,7 +158,7 @@ def _is_transient_lock_error(exc: BaseException) -> bool:
     return "locked" in msg or "busy" in msg
 
 
-def _write_row(db_path, insert_params) -> None:
+def _write_row(db_path: DbPath, insert_params: InsertParams) -> None:
     """Write one telemetry row through the guarded shared connection.
 
     All writes (async worker and synchronous fallback) come through here so
@@ -148,7 +168,7 @@ def _write_row(db_path, insert_params) -> None:
     the final failure (or any non-transient error) is raised so the caller
     can count the drop.
     """
-    last_exc = None
+    last_exc: sqlite3.OperationalError | None = None
     for attempt in range(_DB_WRITE_RETRY_ATTEMPTS):
         try:
             with _DB_LOCK:
@@ -162,17 +182,22 @@ def _write_row(db_path, insert_params) -> None:
             last_exc = exc
             if attempt < _DB_WRITE_RETRY_ATTEMPTS - 1:
                 time.sleep(_DB_WRITE_RETRY_BACKOFF_S * (attempt + 1))
-    raise last_exc
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("database write retries exhausted without an exception")
 
 
-def _db_writer_worker():
+def _db_writer_worker() -> None:
     """Background worker thread that drains the DB write queue."""
     while not _DB_BACKGROUND_STOP.is_set():
         try:
             # Block for up to 1 second waiting for items
-            work_item = _DB_WRITE_QUEUE.get(timeout=1.0)
+            queue = _DB_WRITE_QUEUE
+            if queue is None:
+                return
+            work_item = queue.get(timeout=1.0)
             if work_item is None:  # Poison pill to stop
-                _DB_WRITE_QUEUE.task_done()
+                queue.task_done()
                 break
 
             db_path, insert_params = work_item
@@ -181,14 +206,14 @@ def _db_writer_worker():
             except Exception as e:
                 _record_dropped_row("async-writer", e)
             finally:
-                _DB_WRITE_QUEUE.task_done()
+                queue.task_done()
         except Empty:
             continue
         except Exception as e:
             print(f"[TokenPak] DB worker error: {e}", file=sys.stderr)
 
 
-def _wait_for_queue_drain(q, deadline: float) -> bool:
+def _wait_for_queue_drain(q: Queue[DbWorkItem | None], deadline: float) -> bool:
     """Poll until the queue's unfinished tasks reach zero or deadline passes."""
     while True:
         if getattr(q, "unfinished_tasks", 0) == 0:
@@ -228,17 +253,30 @@ def _stop_db_write_queue(timeout: float = 5.0) -> bool:
         return drained
 
 
-def _get_db_connection(db_path: str) -> sqlite3.Connection:
-    """Get or create persistent SQLite connection with WAL mode enabled."""
-    global _DB_CONNECTION
+def _get_db_connection(db_path: DbPath) -> sqlite3.Connection:
+    """Get the guarded SQLite writer connection for ``db_path``.
+
+    The write queue is process-global and each work item carries its own
+    database path.  A cached connection therefore cannot be reused after the
+    queue switches paths: doing so silently commits the row to the previous
+    monitor database.  Production normally has one monitor path, while tests,
+    embedders, and recovery tooling may legitimately interleave several.
+    """
+    global _DB_CONNECTION, _DB_CONNECTION_PATH
+    requested_path = os.path.abspath(os.path.expanduser(os.fspath(db_path)))
+    if _DB_CONNECTION is not None and _DB_CONNECTION_PATH != requested_path:
+        _DB_CONNECTION.close()
+        _DB_CONNECTION = None
+        _DB_CONNECTION_PATH = None
     if _DB_CONNECTION is None:
         _DB_CONNECTION = sqlite3.connect(
-            db_path,
+            requested_path,
             check_same_thread=False,  # Required for ThreadedHTTPServer
         )
         _DB_CONNECTION.execute("PRAGMA journal_mode=WAL")
         _DB_CONNECTION.execute("PRAGMA synchronous=NORMAL")
         _DB_CONNECTION.execute("PRAGMA busy_timeout=5000")
+        _DB_CONNECTION_PATH = requested_path
     return _DB_CONNECTION
 
 
@@ -263,7 +301,9 @@ def _apply_schema_migration(conn: sqlite3.Connection, ddl: str) -> None:
         raise
 
 
-def _estimate_bucket_savings_usd(model, compressed_tokens, cache_read_tokens) -> float:
+def _estimate_bucket_savings_usd(
+    model: str | None, compressed_tokens: int, cache_read_tokens: int
+) -> float:
     """Registry-rate savings estimate for one (model) aggregation bucket.
 
     Compression savings value tokens eliminated entirely at the model's
@@ -276,6 +316,7 @@ def _estimate_bucket_savings_usd(model, compressed_tokens, cache_read_tokens) ->
     if compressed_tokens and compressed_tokens > 0:
         try:
             from tokenpak.models import get_rates
+
             input_rate = get_rates(model or None).get("input", 3.0)
         except Exception:
             input_rate = 3.0
@@ -284,6 +325,7 @@ def _estimate_bucket_savings_usd(model, compressed_tokens, cache_read_tokens) ->
         try:
             from tokenpak.models import detect_provider
             from tokenpak.proxy.cache import estimate_cache_savings
+
             provider = detect_provider(model or "")
             total += estimate_cache_savings(provider, cache_read_tokens, model or "")
         except Exception:
@@ -305,7 +347,7 @@ class Monitor:
     read the counter via :meth:`dropped_row_count`.
     """
 
-    def __init__(self, db_path):
+    def __init__(self, db_path: str | Path) -> None:
         self.db_path = db_path
         self._lock = threading.Lock()
         self._init_db()
@@ -315,7 +357,7 @@ class Monitor:
         except NameError:
             pass
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         conn = sqlite3.connect(str(self.db_path))
         # Wait out short lock contention instead of failing migrations at
         # startup (a raced ALTER would otherwise surface as 'database is
@@ -355,17 +397,37 @@ class Monitor:
         # propagate; swallowing it would silently skip the ALTER, leave the
         # schema behind, and make every INSERT fail with 'no such column'
         # until restart.
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN injected_tokens INTEGER DEFAULT 0")
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN injected_sources TEXT DEFAULT ''")
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN cache_read_tokens INTEGER DEFAULT 0")
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0")
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN would_have_saved INTEGER DEFAULT 0")
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN cache_origin TEXT DEFAULT 'unknown'")
+        _apply_schema_migration(
+            conn, "ALTER TABLE requests ADD COLUMN injected_tokens INTEGER DEFAULT 0"
+        )
+        _apply_schema_migration(
+            conn, "ALTER TABLE requests ADD COLUMN injected_sources TEXT DEFAULT ''"
+        )
+        _apply_schema_migration(
+            conn, "ALTER TABLE requests ADD COLUMN cache_read_tokens INTEGER DEFAULT 0"
+        )
+        _apply_schema_migration(
+            conn, "ALTER TABLE requests ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0"
+        )
+        _apply_schema_migration(
+            conn, "ALTER TABLE requests ADD COLUMN would_have_saved INTEGER DEFAULT 0"
+        )
+        _apply_schema_migration(
+            conn, "ALTER TABLE requests ADD COLUMN cache_origin TEXT DEFAULT 'unknown'"
+        )
         # Anthropic prompt-cache TTL attribution (additive, backward-compatible).
         # Older rows have NULL/0 here; readers must COALESCE for aggregation.
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_1h_tokens INTEGER DEFAULT 0")
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_5m_tokens INTEGER DEFAULT 0")
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN ttl_attribution TEXT DEFAULT NULL")
+        _apply_schema_migration(
+            conn,
+            "ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_1h_tokens INTEGER DEFAULT 0",
+        )
+        _apply_schema_migration(
+            conn,
+            "ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_5m_tokens INTEGER DEFAULT 0",
+        )
+        _apply_schema_migration(
+            conn, "ALTER TABLE requests ADD COLUMN ttl_attribution TEXT DEFAULT NULL"
+        )
         # P0-06 (A6): user_id holds the SHA-256 hex of the proxy auth bearer
         # token when the proxy auth gate accepted the request via the bearer
         # path. Empty string for localhost / pre-A6 rows. Hash only — never the
@@ -412,9 +474,7 @@ class Monitor:
         # Makes a refusal returned as HTTP 200 distinguishable from a successful
         # completion on receipt rows. '' sentinel = not observed (legacy rows,
         # errored/truncated streams) - never fabricated. Idempotent.
-        _apply_schema_migration(
-            conn, "ALTER TABLE requests ADD COLUMN stop_reason TEXT DEFAULT ''"
-        )
+        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN stop_reason TEXT DEFAULT ''")
         conn.commit()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (
@@ -454,6 +514,7 @@ class Monitor:
         # session_id on requests + mutation_audit table
         try:
             from tokenpak.proxy.db import ensure_schema as _ccg02_ensure_schema
+
             _ccg02_ensure_schema(conn)
             conn.commit()
         except Exception as e:
@@ -475,7 +536,7 @@ class Monitor:
         # Reset the shared writer connection under the writer lock so a
         # concurrent write can't race the swap, and close the old handle
         # instead of leaking it.
-        global _DB_CONNECTION
+        global _DB_CONNECTION, _DB_CONNECTION_PATH
         with _DB_LOCK:
             if _DB_CONNECTION is not None:
                 try:
@@ -483,35 +544,36 @@ class Monitor:
                 except Exception:
                     pass
             _DB_CONNECTION = None  # reset so next call reopens fresh
+            _DB_CONNECTION_PATH = None
 
     def log(
         self,
-        model,
-        input_tokens,
-        output_tokens,
-        cost,
-        latency_ms,
-        status_code,
-        endpoint,
-        compilation_mode="",
-        protected_tokens=0,
-        compressed_tokens=0,
-        injected_tokens=0,
-        injected_sources="",
-        cache_read_tokens=0,
-        cache_creation_tokens=0,
-        would_have_saved=0,
-        cache_origin="unknown",
-        user_id="",
-        cache_creation_ephemeral_1h_tokens=0,
-        cache_creation_ephemeral_5m_tokens=0,
-        ttl_attribution=None,
-        session_id="",
-        agent_id="",
-        cycle_id="",
-        attribution_source="",
-        stop_reason="",
-    ):
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+        latency_ms: int,
+        status_code: int,
+        endpoint: str,
+        compilation_mode: str = "",
+        protected_tokens: int = 0,
+        compressed_tokens: int = 0,
+        injected_tokens: int = 0,
+        injected_sources: str = "",
+        cache_read_tokens: int = 0,
+        cache_creation_tokens: int = 0,
+        would_have_saved: int = 0,
+        cache_origin: str = "unknown",
+        user_id: str = "",
+        cache_creation_ephemeral_1h_tokens: int = 0,
+        cache_creation_ephemeral_5m_tokens: int = 0,
+        ttl_attribution: str | None = None,
+        session_id: str = "",
+        agent_id: str = "",
+        cycle_id: str = "",
+        attribution_source: str = "",
+        stop_reason: str = "",
+    ) -> None:
         # ``session_id`` is the resolved Claude Code / TokenPak session id
         # (``_resolve_session_id``). Empty string when no session header was
         # present. NOTE: Claude Code spawned subagents reuse the parent
@@ -553,7 +615,10 @@ class Monitor:
         )
         _queued = False
         try:
-            _DB_WRITE_QUEUE.put_nowait((self.db_path, insert_params))
+            queue = _DB_WRITE_QUEUE
+            if queue is None:
+                raise RuntimeError("database write queue is not initialized")
+            queue.put_nowait((self.db_path, insert_params))
             _queued = True
         except (NameError, Exception):
             # Queue full / uninitialized / stopped: write synchronously through
@@ -614,7 +679,7 @@ class Monitor:
         """
         return get_dropped_row_count()
 
-    def get_stats(self, hours=24):
+    def get_stats(self, hours: int = 24) -> dict[str, object]:
         conn = self._read_connection()
         try:
             # Rows are stamped with LOCAL time (datetime.now().isoformat()),
@@ -652,7 +717,7 @@ class Monitor:
             "cache_creation_tokens": row[9],
         }
 
-    def get_by_model(self):
+    def get_by_model(self) -> dict[str, dict[str, object]]:
         conn = self._read_connection()
         try:
             rows = conn.execute("""
@@ -662,11 +727,13 @@ class Monitor:
             """).fetchall()
         finally:
             conn.close()
-        result = {}
+        result: dict[str, dict[str, object]] = {}
         for r in rows:
             input_tokens = r[2] or 0
             compressed_tokens = r[7] or 0
-            compression_ratio = round(compressed_tokens / input_tokens, 4) if input_tokens > 0 else 0.0
+            compression_ratio = (
+                round(compressed_tokens / input_tokens, 4) if input_tokens > 0 else 0.0
+            )
             result[r[0]] = {
                 "requests": r[1],
                 "input_tokens": input_tokens,
@@ -679,13 +746,20 @@ class Monitor:
             }
         return result
 
-    def _check_budget_alert(self, current_cost=0, _daily_limit=None, _threshold_pct=None):
+    def _check_budget_alert(
+        self,
+        current_cost: float = 0.0,
+        _daily_limit: float | None = None,
+        _threshold_pct: float | None = None,
+    ) -> None:
         try:
             daily_limit = _daily_limit if _daily_limit is not None else BUDGET_DAILY_LIMIT_USD
         except NameError:
             daily_limit = 0.0
         try:
-            threshold_pct = _threshold_pct if _threshold_pct is not None else BUDGET_ALERT_THRESHOLD_PCT
+            threshold_pct = (
+                _threshold_pct if _threshold_pct is not None else BUDGET_ALERT_THRESHOLD_PCT
+            )
         except NameError:
             threshold_pct = 80.0
         if daily_limit <= 0:
@@ -695,13 +769,17 @@ class Monitor:
             # Rows are stamped with LOCAL time (datetime.now().isoformat());
             # the day window must be local too. Bare date('now') is UTC and
             # would read today's spend as $0 for part of every local day.
-            spent = conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost), 0) FROM requests "
-                "WHERE date(timestamp) = date('now', 'localtime')"
-            ).fetchone()[0] or 0.0
+            spent = (
+                conn.execute(
+                    "SELECT COALESCE(SUM(estimated_cost), 0) FROM requests "
+                    "WHERE date(timestamp) = date('now', 'localtime')"
+                ).fetchone()[0]
+                or 0.0
+            )
             total_spent = float(spent) + float(current_cost)
             if total_spent >= daily_limit * threshold_pct / 100:
                 import datetime as _dt
+
                 # Dedupe: the UNIQUE(date(timestamp), period) index plus
                 # INSERT OR IGNORE collapse concurrent triggers into one row
                 # per local day; the NOT EXISTS guard keeps behavior bounded
@@ -725,23 +803,30 @@ class Monitor:
         finally:
             conn.close()
 
-    def get_budget_alert_status(self, _daily_limit=None, _threshold_pct=None):
+    def get_budget_alert_status(
+        self, _daily_limit: float | None = None, _threshold_pct: float | None = None
+    ) -> dict[str, object]:
         try:
             daily_limit = _daily_limit if _daily_limit is not None else BUDGET_DAILY_LIMIT_USD
         except NameError:
             daily_limit = 0.0
         try:
-            threshold_pct = _threshold_pct if _threshold_pct is not None else BUDGET_ALERT_THRESHOLD_PCT
+            threshold_pct = (
+                _threshold_pct if _threshold_pct is not None else BUDGET_ALERT_THRESHOLD_PCT
+            )
         except NameError:
             threshold_pct = 80.0
         conn = self._read_connection()
         try:
             # Local-day window to match the locally-stamped timestamps (see
             # _check_budget_alert).
-            spent = conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost), 0) FROM requests "
-                "WHERE date(timestamp) = date('now', 'localtime')"
-            ).fetchone()[0] or 0.0
+            spent = (
+                conn.execute(
+                    "SELECT COALESCE(SUM(estimated_cost), 0) FROM requests "
+                    "WHERE date(timestamp) = date('now', 'localtime')"
+                ).fetchone()[0]
+                or 0.0
+            )
             spent = float(spent)
             pct_used = round(spent / daily_limit * 100, 2) if daily_limit > 0 else 0.0
             remaining = max(0.0, daily_limit - spent)
@@ -761,7 +846,7 @@ class Monitor:
             "last_alert_at": last_alert_at,
         }
 
-    def get_savings_report(self, since=None):
+    def get_savings_report(self, since: str | None = None) -> dict[str, object]:
         """Savings summary computed from registry pricing rates.
 
         Cost figures use the shared estimator path (model registry rates and
@@ -775,7 +860,7 @@ class Monitor:
         conn = self._read_connection()
         try:
             where = ""
-            params = []
+            params: list[str] = []
             if since:
                 where = "WHERE date(timestamp) >= ?"
                 params = [since]
@@ -795,7 +880,7 @@ class Monitor:
                 params,
             ).fetchall()
 
-            savings_by_model = {}
+            savings_by_model: dict[str, dict[str, object]] = {}
             total_requests = 0
             total_tokens_saved = 0
             total_cost_saved = 0.0
@@ -815,15 +900,13 @@ class Monitor:
                 total_tokens_saved += int(comp + product_cr)
                 total_cost_saved += cost_saved
                 client_cache_read_tokens += client_cr or 0
-                client_cache_read_est_usd += _estimate_bucket_savings_usd(
-                    model, 0, client_cr or 0
-                )
+                client_cache_read_est_usd += _estimate_bucket_savings_usd(model, 0, client_cr or 0)
                 unknown_cache_read_tokens += unknown_cr or 0
 
             # by date (last 7 days) — same per-model rates, folded per day.
             # Local-day window: rows are stamped with local time.
             date_where = "WHERE date(timestamp) >= date('now', 'localtime', '-7 days')"
-            date_params = []
+            date_params: list[str] = []
             if since:
                 date_where += " AND date(timestamp) >= ?"
                 date_params = [since]
@@ -832,7 +915,7 @@ class Monitor:
                 "GROUP BY date(timestamp), model ORDER BY date(timestamp)",
                 date_params,
             ).fetchall()
-            _by_date = {}
+            _by_date: dict[str, _DateSavings] = {}
             for day, model, _reqs, comp, product_cr, _client_cr, _unknown_cr in date_rows:
                 comp = comp or 0
                 product_cr = product_cr or 0
@@ -840,9 +923,7 @@ class Monitor:
                     day, {"date": day, "tokens_saved": 0, "cost_saved_usd": 0.0}
                 )
                 bucket["tokens_saved"] += int(comp + product_cr)
-                bucket["cost_saved_usd"] += _estimate_bucket_savings_usd(
-                    model, comp, product_cr
-                )
+                bucket["cost_saved_usd"] += _estimate_bucket_savings_usd(model, comp, product_cr)
             savings_by_date_7d = [
                 {
                     "date": b["date"],
@@ -865,7 +946,7 @@ class Monitor:
             "unknown_origin_cache_read_tokens": int(unknown_cache_read_tokens),
         }
 
-    def recent(self, limit=20):
+    def recent(self, limit: int = 20) -> list[dict[str, object]]:
         conn = self._read_connection()
         # Local, per-call connection — setting row_factory here cannot leak
         # into other readers (the old shared-connection version mutated

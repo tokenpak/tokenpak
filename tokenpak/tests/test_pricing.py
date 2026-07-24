@@ -7,6 +7,7 @@ NOTE: Comprehensive coverage already lives in test_pricing_module.py.
 This file provides the canonical test_pricing.py entry point as required
 by the task spec, with focused tests on key public API contracts.
 """
+
 from tokenpak.telemetry.pricing import (
     DEFAULT_RATE,
     MODEL_RATES,
@@ -20,6 +21,7 @@ from tokenpak.telemetry.pricing import (
 # ---------------------------------------------------------------------------
 # get_rates — fallback & known-model lookups
 # ---------------------------------------------------------------------------
+
 
 def test_get_rates_known_model():
     rates = get_rates("claude-sonnet-4-5")
@@ -54,13 +56,20 @@ def test_get_rates_cached_cheaper_than_input():
 # estimate_savings — core savings math
 # ---------------------------------------------------------------------------
 
+
 def test_estimate_savings_returns_all_required_keys():
     result = estimate_savings({"tokens_raw": 0})
     required = {
-        "compression_tokens_saved", "compression_cost_saved",
-        "cache_hit_rate", "cache_tokens_saved", "cache_cost_saved",
-        "total_tokens_saved", "total_cost_saved",
-        "cost_without_tokenpak", "cost_with_tokenpak", "reduction_percent",
+        "compression_tokens_saved",
+        "compression_cost_saved",
+        "cache_hit_rate",
+        "cache_tokens_saved",
+        "cache_cost_saved",
+        "total_tokens_saved",
+        "total_cost_saved",
+        "cost_without_tokenpak",
+        "cost_with_tokenpak",
+        "reduction_percent",
     }
     assert required <= result.keys()
 
@@ -124,6 +133,7 @@ def test_estimate_savings_model_override():
 # calculate_request_cost — per-request billing
 # ---------------------------------------------------------------------------
 
+
 def test_calculate_request_cost_input_only():
     # 1M input at sonnet $3/M = $3.00
     cost = calculate_request_cost("claude-sonnet-4-5", input_tokens=1_000_000)
@@ -137,7 +147,9 @@ def test_calculate_request_cost_output_only():
 
 def test_calculate_request_cost_cache_read_cheaper_than_input():
     fresh = calculate_request_cost("claude-sonnet-4-5", input_tokens=1_000_000)
-    cached = calculate_request_cost("claude-sonnet-4-5", input_tokens=0, cache_read_tokens=1_000_000)
+    cached = calculate_request_cost(
+        "claude-sonnet-4-5", input_tokens=0, cache_read_tokens=1_000_000
+    )
     assert cached < fresh
 
 
@@ -158,6 +170,7 @@ def test_calculate_request_cost_returns_float():
 # calculate_request_cost_baseline — no-cache baseline
 # ---------------------------------------------------------------------------
 
+
 def test_calculate_request_cost_baseline_basic():
     cost = calculate_request_cost_baseline("claude-sonnet-4-5", total_input_tokens=1_000_000)
     assert abs(cost - 3.0) < 0.001
@@ -176,13 +189,16 @@ def test_calculate_request_cost_baseline_zero():
 
 def test_calculate_request_cost_baseline_higher_than_cached():
     baseline = calculate_request_cost_baseline("claude-sonnet-4-5", total_input_tokens=1_000_000)
-    with_cache = calculate_request_cost("claude-sonnet-4-5", input_tokens=0, cache_read_tokens=1_000_000)
+    with_cache = calculate_request_cost(
+        "claude-sonnet-4-5", input_tokens=0, cache_read_tokens=1_000_000
+    )
     assert baseline > with_cache
 
 
 # ---------------------------------------------------------------------------
 # get_price — per-direction price lookup
 # ---------------------------------------------------------------------------
+
 
 def test_get_price_input():
     assert get_price("claude-sonnet-4-5", "input") == 3.0

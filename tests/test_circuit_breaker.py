@@ -37,6 +37,7 @@ from tokenpak.proxy.server import ProxyServer
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _fast_config(
     failure_threshold: int = 3,
     recovery_timeout: float = 0.1,
@@ -56,16 +57,20 @@ def _make_cb(
     recovery_timeout: float = 0.1,
     window_seconds: float = 60.0,
 ) -> CircuitBreaker:
-    return CircuitBreaker("test_provider", _fast_config(
-        failure_threshold=failure_threshold,
-        recovery_timeout=recovery_timeout,
-        window_seconds=window_seconds,
-    ))
+    return CircuitBreaker(
+        "test_provider",
+        _fast_config(
+            failure_threshold=failure_threshold,
+            recovery_timeout=recovery_timeout,
+            window_seconds=window_seconds,
+        ),
+    )
 
 
 # ===========================================================================
 # 1. provider_from_url
 # ===========================================================================
+
 
 class TestProviderFromUrl:
     def test_anthropic(self):
@@ -94,6 +99,7 @@ class TestProviderFromUrl:
 # ===========================================================================
 # 2. CircuitBreaker — CLOSED state
 # ===========================================================================
+
 
 class TestClosedState:
     def test_new_breaker_is_closed(self):
@@ -141,6 +147,7 @@ class TestClosedState:
 # 3. CircuitBreaker — OPEN state
 # ===========================================================================
 
+
 class TestOpenState:
     def _open_circuit(self, threshold: int = 3) -> CircuitBreaker:
         cb = _make_cb(failure_threshold=threshold, recovery_timeout=0.1)
@@ -187,6 +194,7 @@ class TestOpenState:
 # ===========================================================================
 # 4. CircuitBreaker — HALF_OPEN state
 # ===========================================================================
+
 
 class TestHalfOpenState:
     def _half_open_circuit(self) -> CircuitBreaker:
@@ -262,6 +270,7 @@ class TestHalfOpenState:
 # 5. CircuitBreaker — full state machine round trip
 # ===========================================================================
 
+
 class TestStateMachineRoundTrip:
     def test_full_cycle(self):
         cb = _make_cb(failure_threshold=2, recovery_timeout=0.05)
@@ -290,6 +299,7 @@ class TestStateMachineRoundTrip:
 # ===========================================================================
 # 6. CircuitBreaker — thread safety
 # ===========================================================================
+
 
 class TestThreadSafety:
     def test_concurrent_failures_do_not_corrupt_state(self):
@@ -342,6 +352,7 @@ class TestThreadSafety:
 # ===========================================================================
 # 7. CircuitBreakerRegistry
 # ===========================================================================
+
 
 class TestRegistry:
     def test_per_provider_isolation(self):
@@ -405,6 +416,7 @@ class TestRegistry:
 # 8. /health endpoint includes circuit_breakers
 # ===========================================================================
 
+
 @pytest.fixture(scope="module")
 def proxy_with_cb():
     """Start a proxy for integration tests."""
@@ -459,6 +471,7 @@ class TestHealthEndpointCircuitBreakers:
 # 9. /circuit-breakers endpoint
 # ===========================================================================
 
+
 class TestCircuitBreakersEndpoint:
     pytestmark = pytest.mark.needs_proxy
 
@@ -485,6 +498,7 @@ class TestCircuitBreakersEndpoint:
 # ===========================================================================
 # 10. Status dict structure
 # ===========================================================================
+
 
 class TestStatusDict:
     def test_status_has_required_fields(self):

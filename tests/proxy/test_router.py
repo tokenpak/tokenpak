@@ -21,6 +21,7 @@ from tokenpak.proxy.router import ProviderRouter
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _json_body(model: str = "claude-sonnet-4-5") -> bytes:
     return json.dumps({"model": model, "messages": []}).encode()
 
@@ -37,6 +38,7 @@ def _headers_with_content_length(body: bytes, delta: int = 0) -> dict:
 # ---------------------------------------------------------------------------
 # Regression tests
 # ---------------------------------------------------------------------------
+
 
 def test_router_rejects_content_length_too_large():
     """

@@ -5,16 +5,13 @@ on a particular ``scripts/`` package layout. The focus is the Dispatch
 v0.1-alpha package-data assertion (G4): the gate must FAIL when a declared
 Dispatch registry/schema glob ships no file in the wheel or sdist.
 """
+
 import importlib.util
 from pathlib import Path
 
 import pytest
 
-_MOD_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "scripts"
-    / "check-dist-contents.py"
-)
+_MOD_PATH = Path(__file__).resolve().parents[2] / "scripts" / "check-dist-contents.py"
 _spec = importlib.util.spec_from_file_location("check_dist_contents", _MOD_PATH)
 cdc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cdc)
@@ -173,9 +170,7 @@ def test_missing_companion_glob_fails(glob):
 
 def test_companion_required_files_cover_all_five_hooks():
     hooks = {
-        n
-        for n in cdc.REQUIRED_COMPANION_FILES
-        if n.startswith("tokenpak/companion/codex/hooks_")
+        n for n in cdc.REQUIRED_COMPANION_FILES if n.startswith("tokenpak/companion/codex/hooks_")
     }
     assert hooks == {
         "tokenpak/companion/codex/hooks_session_start.sh",

@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Any
 
 
-def _capability(state: str, *, source: str, detail: str | None = None, **extra: Any) -> dict[str, Any]:
+def _capability(
+    state: str, *, source: str, detail: str | None = None, **extra: Any
+) -> dict[str, Any]:
     payload: dict[str, Any] = {"state": state, "source": source}
     if detail:
         payload["detail"] = detail

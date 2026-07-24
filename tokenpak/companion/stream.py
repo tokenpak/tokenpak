@@ -229,7 +229,7 @@ class _StreamState:
         for line in text.splitlines():
             stripped = line.strip()
             if stripped.startswith("event:"):
-                kind = stripped[len("event:"):].strip()
+                kind = stripped[len("event:") :].strip()
                 if kind:
                     self.last_event_kind = kind
                     if kind == _MESSAGE_STOP_MARKER:
@@ -378,10 +378,7 @@ def _ensure_events_table(conn: sqlite3.Connection) -> None:
         )
         """
     )
-    conn.execute(
-        f"CREATE INDEX IF NOT EXISTS idx_provider_events_ts "
-        f"ON {_EVENTS_TABLE}(timestamp)"
-    )
+    conn.execute(f"CREATE INDEX IF NOT EXISTS idx_provider_events_ts ON {_EVENTS_TABLE}(timestamp)")
 
 
 def _emit_provider_error(
@@ -450,15 +447,13 @@ def read_provider_errors(
         conn.row_factory = sqlite3.Row
         try:
             cur = conn.execute(
-                "SELECT name FROM sqlite_master "
-                "WHERE type='table' AND name=?",
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                 (_EVENTS_TABLE,),
             )
             if cur.fetchone() is None:
                 return []
             rows = conn.execute(
-                f"SELECT * FROM {_EVENTS_TABLE} WHERE kind=? "
-                f"ORDER BY id DESC LIMIT ?",
+                f"SELECT * FROM {_EVENTS_TABLE} WHERE kind=? ORDER BY id DESC LIMIT ?",
                 (kind, int(limit)),
             ).fetchall()
             return [dict(r) for r in rows]
@@ -519,9 +514,7 @@ def self_check(db_path: Optional[str] = None) -> Dict[str, Any]:
             result["trace_id"] = err.trace_id
             result["reason"] = err.reason
             rows = read_provider_errors(db_path=tmp)
-            result["event_written"] = any(
-                r.get("trace_id") == err.trace_id for r in rows
-            )
+            result["event_written"] = any(r.get("trace_id") == err.trace_id for r in rows)
     finally:
         if prev is None:
             os.environ.pop(GUARD_ENV, None)
@@ -535,9 +528,7 @@ def self_check(db_path: Optional[str] = None) -> Dict[str, Any]:
                     pass
 
     result["passed"] = bool(
-        result["flagged"]
-        and result["code"] == STREAM_TRUNCATED_CODE
-        and result["event_written"]
+        result["flagged"] and result["code"] == STREAM_TRUNCATED_CODE and result["event_written"]
     )
     return result
 

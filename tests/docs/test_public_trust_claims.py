@@ -16,7 +16,11 @@ def _public_markdown_files() -> list[Path]:
 def _public_text_files() -> list[Path]:
     files = _public_markdown_files()
     for suffix in ("*.md", "*.py", "*.sh"):
-        files.extend(path for path in sorted((ROOT / "examples").rglob(suffix)) if "__pycache__" not in path.parts)
+        files.extend(
+            path
+            for path in sorted((ROOT / "examples").rglob(suffix))
+            if "__pycache__" not in path.parts
+        )
     return files
 
 

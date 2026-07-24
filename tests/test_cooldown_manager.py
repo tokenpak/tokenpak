@@ -1,9 +1,10 @@
 """Tests for tokenpak._internal.auth.cooldown_manager module."""
 
-
 import pytest
 
-pytest.importorskip("tokenpak.infrastructure.cooldown", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.infrastructure.cooldown", reason="module not available in current build"
+)
 import asyncio
 import json
 import tempfile
@@ -56,10 +57,12 @@ class TestCooldownManagerLoadSave:
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             cooldowns_path.write_text(
-                json.dumps({
-                    "provider:key1": {"cooldownUntil": 1234567890, "errorCount": 2},
-                    "provider:key2": {"cooldownUntil": 1234567891, "errorCount": 0},
-                })
+                json.dumps(
+                    {
+                        "provider:key1": {"cooldownUntil": 1234567890, "errorCount": 2},
+                        "provider:key2": {"cooldownUntil": 1234567891, "errorCount": 0},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
@@ -77,9 +80,7 @@ class TestCooldownManagerLoadSave:
                 cooldowns_file=cooldowns_path,
                 auth_profiles_file=Path(tmpdir) / "profiles.json",
             )
-            data = {
-                "test:key": {"cooldownUntil": 1234567890, "errorCount": 1}
-            }
+            data = {"test:key": {"cooldownUntil": 1234567890, "errorCount": 1}}
             manager._save_cooldowns(data)
             assert cooldowns_path.exists()
             saved = json.loads(cooldowns_path.read_text())
@@ -95,9 +96,11 @@ class TestCooldownManagerClearExpired:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             now = time.time()
             cooldowns_path.write_text(
-                json.dumps({
-                    "test:key": {"cooldownUntil": now + 3600, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "test:key": {"cooldownUntil": now + 3600, "errorCount": 1},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
@@ -115,9 +118,11 @@ class TestCooldownManagerClearExpired:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             now = time.time()
             cooldowns_path.write_text(
-                json.dumps({
-                    "test:key": {"cooldownUntil": now - 3600, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "test:key": {"cooldownUntil": now - 3600, "errorCount": 1},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
@@ -135,9 +140,11 @@ class TestCooldownManagerClearExpired:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             now = time.time()
             cooldowns_path.write_text(
-                json.dumps({
-                    "test:key": {"cooldownUntil": now - 100, "errorCount": 15},
-                })
+                json.dumps(
+                    {
+                        "test:key": {"cooldownUntil": now - 100, "errorCount": 15},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
@@ -155,11 +162,13 @@ class TestCooldownManagerClearExpired:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             now = time.time()
             cooldowns_path.write_text(
-                json.dumps({
-                    "expired1": {"cooldownUntil": now - 100, "errorCount": 1},
-                    "expired2": {"cooldownUntil": now - 100, "errorCount": 2},
-                    "active": {"cooldownUntil": now + 3600, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "expired1": {"cooldownUntil": now - 100, "errorCount": 1},
+                        "expired2": {"cooldownUntil": now - 100, "errorCount": 2},
+                        "active": {"cooldownUntil": now + 3600, "errorCount": 1},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
@@ -204,12 +213,14 @@ class TestCooldownManagerProfiles:
             profiles_path = Path(tmpdir) / "profiles.json"
             now = time.time()
             profiles_path.write_text(
-                json.dumps({
-                    "my-profile": {
-                        "cooldownUntil": now + 3600,
-                        "errorCount": 1,
-                    },
-                })
+                json.dumps(
+                    {
+                        "my-profile": {
+                            "cooldownUntil": now + 3600,
+                            "errorCount": 1,
+                        },
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=Path(tmpdir) / "cooldowns.json",
@@ -224,12 +235,14 @@ class TestCooldownManagerProfiles:
             profiles_path = Path(tmpdir) / "profiles.json"
             now = time.time()
             profiles_path.write_text(
-                json.dumps({
-                    "my-profile": {
-                        "cooldownUntil": now - 100,
-                        "errorCount": 2,
-                    },
-                })
+                json.dumps(
+                    {
+                        "my-profile": {
+                            "cooldownUntil": now - 100,
+                            "errorCount": 2,
+                        },
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=Path(tmpdir) / "cooldowns.json",
@@ -244,12 +257,14 @@ class TestCooldownManagerProfiles:
             profiles_path = Path(tmpdir) / "profiles.json"
             now = time.time()
             profiles_path.write_text(
-                json.dumps({
-                    "problematic": {
-                        "cooldownUntil": now - 100,
-                        "errorCount": 15,
-                    },
-                })
+                json.dumps(
+                    {
+                        "problematic": {
+                            "cooldownUntil": now - 100,
+                            "errorCount": 15,
+                        },
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=Path(tmpdir) / "cooldowns.json",
@@ -264,13 +279,15 @@ class TestCooldownManagerProfiles:
             profiles_path = Path(tmpdir) / "profiles.json"
             now = time.time()
             profiles_path.write_text(
-                json.dumps({
-                    "profile1": {
-                        "cooldownUntil": now - 100,
-                        "errorCount": 1,
-                        "usageStats": {"count": 5},
-                    },
-                })
+                json.dumps(
+                    {
+                        "profile1": {
+                            "cooldownUntil": now - 100,
+                            "errorCount": 1,
+                            "usageStats": {"count": 5},
+                        },
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=Path(tmpdir) / "cooldowns.json",
@@ -301,9 +318,11 @@ class TestCooldownManagerActiveCooldowns:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             now = time.time()
             cooldowns_path.write_text(
-                json.dumps({
-                    "test:key": {"cooldownUntil": now + 3600, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "test:key": {"cooldownUntil": now + 3600, "errorCount": 1},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
@@ -319,9 +338,11 @@ class TestCooldownManagerActiveCooldowns:
             profiles_path = Path(tmpdir) / "profiles.json"
             now = time.time()
             profiles_path.write_text(
-                json.dumps({
-                    "profile1": {"cooldownUntil": now + 3600, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "profile1": {"cooldownUntil": now + 3600, "errorCount": 1},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=Path(tmpdir) / "cooldowns.json",
@@ -336,10 +357,12 @@ class TestCooldownManagerActiveCooldowns:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             now = time.time()
             cooldowns_path.write_text(
-                json.dumps({
-                    "expired": {"cooldownUntil": now - 100, "errorCount": 1},
-                    "active": {"cooldownUntil": now + 3600, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "expired": {"cooldownUntil": now - 100, "errorCount": 1},
+                        "active": {"cooldownUntil": now + 3600, "errorCount": 1},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
@@ -361,14 +384,18 @@ class TestCooldownManagerRunCycle:
             now = time.time()
 
             cooldowns_path.write_text(
-                json.dumps({
-                    "test:key": {"cooldownUntil": now - 100, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "test:key": {"cooldownUntil": now - 100, "errorCount": 1},
+                    }
+                )
             )
             profiles_path.write_text(
-                json.dumps({
-                    "profile1": {"cooldownUntil": now - 100, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "profile1": {"cooldownUntil": now - 100, "errorCount": 1},
+                    }
+                )
             )
 
             manager = CooldownManager(
@@ -385,11 +412,13 @@ class TestCooldownManagerRunCycle:
             now = time.time()
 
             cooldowns_path.write_text(
-                json.dumps({
-                    "k1": {"cooldownUntil": now - 100, "errorCount": 1},
-                    "k2": {"cooldownUntil": now - 100, "errorCount": 1},
-                    "k3": {"cooldownUntil": now + 3600, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "k1": {"cooldownUntil": now - 100, "errorCount": 1},
+                        "k2": {"cooldownUntil": now - 100, "errorCount": 1},
+                        "k3": {"cooldownUntil": now + 3600, "errorCount": 1},
+                    }
+                )
             )
 
             manager = CooldownManager(
@@ -474,9 +503,11 @@ class TestBackgroundCooldownClearerAsync:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             now = time.time()
             cooldowns_path.write_text(
-                json.dumps({
-                    "test:key": {"cooldownUntil": now - 100, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "test:key": {"cooldownUntil": now - 100, "errorCount": 1},
+                    }
+                )
             )
 
             manager = CooldownManager(
@@ -503,9 +534,11 @@ class TestBackgroundCooldownClearerAsync:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             now = time.time()
             cooldowns_path.write_text(
-                json.dumps({
-                    "test:key": {"cooldownUntil": now - 100, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "test:key": {"cooldownUntil": now - 100, "errorCount": 1},
+                    }
+                )
             )
 
             manager = CooldownManager(
@@ -547,9 +580,11 @@ class TestCooldownManagerEdgeCases:
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             cooldowns_path.write_text(
-                json.dumps({
-                    "test:key": {"errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "test:key": {"errorCount": 1},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,
@@ -566,9 +601,11 @@ class TestCooldownManagerEdgeCases:
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_path = Path(tmpdir) / "cooldowns.json"
             cooldowns_path.write_text(
-                json.dumps({
-                    "test:key": {"cooldownUntil": 0, "errorCount": 1},
-                })
+                json.dumps(
+                    {
+                        "test:key": {"cooldownUntil": 0, "errorCount": 1},
+                    }
+                )
             )
             manager = CooldownManager(
                 cooldowns_file=cooldowns_path,

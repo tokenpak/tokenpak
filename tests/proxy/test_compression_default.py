@@ -8,6 +8,7 @@ Tests that after the default-flip:
   - BUDGET_CONTROLLER_ENABLED is True (was False pre-flip)
   - A 6 kB payload triggers measurable token reduction via compact_request_body
 """
+
 from __future__ import annotations
 
 import importlib
@@ -90,8 +91,10 @@ def _reload_config_loader():
     """Reload the config_loader chain so CONFIG_PATH picks up current TOKENPAK_CONFIG env var."""
     try:
         import tokenpak._internal.config_loader as _icl
+
         importlib.reload(_icl)
         import tokenpak.config_loader as _cl
+
         importlib.reload(_cl)
     except Exception:
         pass
@@ -146,6 +149,7 @@ def _make_anthropic_payload(history: str) -> bytes:
 # Tests — proxy defaults (standalone file)
 # ---------------------------------------------------------------------------
 
+
 class TestProxyV4Defaults:
     """Verify TRIX-01 constant flip in proxy.py."""
 
@@ -171,6 +175,7 @@ class TestProxyV4Defaults:
 # Tests — compression fires on a 6 kB payload
 # ---------------------------------------------------------------------------
 
+
 class TestCompressionFires:
     """Verify that a 6kB payload is actually compressed under default settings."""
 
@@ -190,9 +195,7 @@ class TestCompressionFires:
 
         # Pass adapter explicitly to simulate a /v1/messages request (Anthropic format).
         # Without a path hint, _detect_adapter falls back to passthrough which skips compression.
-        adapter = pv4._detect_adapter(
-            "/v1/messages", {"content-type": "application/json"}, payload
-        )
+        adapter = pv4._detect_adapter("/v1/messages", {"content-type": "application/json"}, payload)
 
         result = pv4.compact_request_body(payload, adapter=adapter)
         new_body, sent_tokens, original_tokens, protected_tokens = result
@@ -217,6 +220,7 @@ class TestCompressionFires:
 # Tests — tokenpak.proxy.config (package path used by ProxyServer)
 # ---------------------------------------------------------------------------
 
+
 class TestProxyConfigDefaults:
     """Verify the same flip in tokenpak/proxy/config.py (used by ProxyServer)."""
 
@@ -225,6 +229,7 @@ class TestProxyConfigDefaults:
         stashed, old_cfg = _set_clean_env()
         try:
             import tokenpak.proxy.config as cfg
+
             importlib.reload(cfg)
             assert cfg.COMPACT_THRESHOLD_TOKENS == 1500, (
                 f"Expected 1500, got {cfg.COMPACT_THRESHOLD_TOKENS}"
@@ -237,6 +242,7 @@ class TestProxyConfigDefaults:
         stashed, old_cfg = _set_clean_env()
         try:
             import tokenpak.proxy.config as cfg
+
             importlib.reload(cfg)
             assert cfg.BUDGET_CONTROLLER_ENABLED is True, (
                 f"Expected True, got {cfg.BUDGET_CONTROLLER_ENABLED}"

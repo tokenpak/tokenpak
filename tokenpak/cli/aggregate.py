@@ -20,6 +20,7 @@ class AggregateRow:
 
     Holds per-agent, per-machine, per-model request and cost totals.
     """
+
     agent: str
     machine: str
     model: str

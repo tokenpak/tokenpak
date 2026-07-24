@@ -95,9 +95,11 @@ def test_list_blocks_filter(tmp_path):
 def test_has_changed(tmp_path):
     reg = _reg(tmp_path)
     assert reg.has_changed("x.py", "hello") is True  # new
-    reg.add_block(_block(path="x.py", content_hash=__import__("hashlib").sha256(b"hello").hexdigest()))
+    reg.add_block(
+        _block(path="x.py", content_hash=__import__("hashlib").sha256(b"hello").hexdigest())
+    )
     assert reg.has_changed("x.py", "hello") is False  # unchanged
-    assert reg.has_changed("x.py", "world") is True   # changed
+    assert reg.has_changed("x.py", "world") is True  # changed
     reg.close()
 
 

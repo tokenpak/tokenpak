@@ -17,6 +17,7 @@ Usage::
     # Discover all installed adapters (via entry points)
     extensions.discover()
 """
+
 from __future__ import annotations
 
 import logging
@@ -67,12 +68,9 @@ def discover() -> int:
     try:
         from importlib.metadata import entry_points
 
-        eps = entry_points()
-        # Python 3.12+ returns a SelectableGroups; 3.9 returns dict
-        if hasattr(eps, "select"):
-            adapter_eps = eps.select(group="tokenpak.sdk")
-        else:
-            adapter_eps = eps.get("tokenpak.sdk", [])
+        # TokenPak requires Python 3.10+, whose entry_points API supports
+        # selecting a group directly without the deprecated dict interface.
+        adapter_eps = entry_points(group="tokenpak.sdk")
 
         for ep in adapter_eps:
             try:

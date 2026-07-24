@@ -11,7 +11,10 @@ import pytest
 
 # trackedge is a separate project not installed in the slim release test env;
 # skip cleanly so the release auto-publish gate doesn't error on collection.
-pytest.importorskip("trackedge.processing.feature_engine", reason="trackedge is a separate project not installed in slim test env")
+pytest.importorskip(
+    "trackedge.processing.feature_engine",
+    reason="trackedge is a separate project not installed in slim test env",
+)
 
 import os
 import sys
@@ -34,6 +37,7 @@ from trackedge.processing.feature_engine import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def make_horse(**overrides):
     defaults = {
         "program": 1,
@@ -51,12 +55,28 @@ def make_horse(**overrides):
         "trainer_starts": 100,
         "starts": 10,
         "past_performances": [
-            {"racedate": "2026-01-15", "surface": "D", "speedfigur": 85,
-             "lenback1": 2.0, "lenback2": 3.5, "position1": 2, "position2": 3,
-             "pacefigure": 92, "purse": 50000},
-            {"racedate": "2025-12-20", "surface": "D", "speedfigur": 80,
-             "lenback1": 2.5, "lenback2": 4.0, "position1": 3, "position2": 4,
-             "pacefigure": 88, "purse": 48000},
+            {
+                "racedate": "2026-01-15",
+                "surface": "D",
+                "speedfigur": 85,
+                "lenback1": 2.0,
+                "lenback2": 3.5,
+                "position1": 2,
+                "position2": 3,
+                "pacefigure": 92,
+                "purse": 50000,
+            },
+            {
+                "racedate": "2025-12-20",
+                "surface": "D",
+                "speedfigur": 80,
+                "lenback1": 2.5,
+                "lenback2": 4.0,
+                "position1": 3,
+                "position2": 4,
+                "pacefigure": 88,
+                "purse": 48000,
+            },
         ],
     }
     defaults.update(overrides)
@@ -86,21 +106,26 @@ def synthetic_9_races():
     races = []
     for n in range(1, 10):
         horses = [
-            make_horse(program=i, name=f"Horse{i}",
-                       speed_ratings=[90 - i*3, 85 - i*3, 80 - i*3],
-                       pace_style=["E", "EP", "P", "S"][i % 4])
+            make_horse(
+                program=i,
+                name=f"Horse{i}",
+                speed_ratings=[90 - i * 3, 85 - i * 3, 80 - i * 3],
+                pace_style=["E", "EP", "P", "S"][i % 4],
+            )
             for i in range(1, 6)
         ]
-        races.append({
-            "number": n,
-            "track": "SA",
-            "date": "2026-02-27",
-            "surface": "D",
-            "purse": 50000 + n * 5000,
-            "class_rating": 50000 + n * 5000,
-            "type": "Normal",
-            "horses": horses,
-        })
+        races.append(
+            {
+                "number": n,
+                "track": "SA",
+                "date": "2026-02-27",
+                "surface": "D",
+                "purse": 50000 + n * 5000,
+                "class_rating": 50000 + n * 5000,
+                "type": "Normal",
+                "horses": horses,
+            }
+        )
     return races
 
 
@@ -108,8 +133,8 @@ def synthetic_9_races():
 # 1. Speed Score — across 9-race synthetic field
 # ---------------------------------------------------------------------------
 
-class TestSpeedScoreIntegration:
 
+class TestSpeedScoreIntegration:
     def test_no_nan_speed_scores(self):
         """Speed scores must be finite floats for all horses in 9-race field."""
         races = synthetic_9_races()
@@ -152,8 +177,8 @@ class TestSpeedScoreIntegration:
 # 2. Pace Style — classification
 # ---------------------------------------------------------------------------
 
-class TestPaceStyleIntegration:
 
+class TestPaceStyleIntegration:
     def test_pace_style_values_are_valid(self):
         """All horses in 9-race field must have a valid pace style."""
         valid = {"E", "EP", "P", "S"}
@@ -177,8 +202,8 @@ class TestPaceStyleIntegration:
 # 3. Race Pace Scenario — adjustments
 # ---------------------------------------------------------------------------
 
-class TestRacePaceScenarioIntegration:
 
+class TestRacePaceScenarioIntegration:
     def test_adjustments_are_positive_floats(self):
         """All pace scenario adjustments must be > 0."""
         races = synthetic_9_races()
@@ -193,22 +218,26 @@ class TestRacePaceScenarioIntegration:
 
     def test_slow_pace_boosts_stretch_runners(self):
         """No early horses → P/S get 1.05 boost."""
-        race = make_race(horses=[
-            {"id": "h1", "pace_style": "P", "speed_ratings": [80], "past_performances": []},
-            {"id": "h2", "pace_style": "S", "speed_ratings": [75], "past_performances": []},
-        ])
+        race = make_race(
+            horses=[
+                {"id": "h1", "pace_style": "P", "speed_ratings": [80], "past_performances": []},
+                {"id": "h2", "pace_style": "S", "speed_ratings": [75], "past_performances": []},
+            ]
+        )
         adj = race_pace_scenario(race)
         assert adj["h1"] == pytest.approx(1.05)
         assert adj["h2"] == pytest.approx(1.05)
 
     def test_fast_pace_penalizes_early_horses(self):
         """3+ early horses → E gets penalty, S gets boost."""
-        race = make_race(horses=[
-            {"id": "e1", "pace_style": "E", "speed_ratings": [90], "past_performances": []},
-            {"id": "e2", "pace_style": "E", "speed_ratings": [85], "past_performances": []},
-            {"id": "e3", "pace_style": "E", "speed_ratings": [80], "past_performances": []},
-            {"id": "s1", "pace_style": "S", "speed_ratings": [75], "past_performances": []},
-        ])
+        race = make_race(
+            horses=[
+                {"id": "e1", "pace_style": "E", "speed_ratings": [90], "past_performances": []},
+                {"id": "e2", "pace_style": "E", "speed_ratings": [85], "past_performances": []},
+                {"id": "e3", "pace_style": "E", "speed_ratings": [80], "past_performances": []},
+                {"id": "s1", "pace_style": "S", "speed_ratings": [75], "past_performances": []},
+            ]
+        )
         adj = race_pace_scenario(race)
         assert adj["e1"] < 1.0
         assert adj["s1"] > 1.0
@@ -218,8 +247,8 @@ class TestRacePaceScenarioIntegration:
 # 4. Class Fit — scoring
 # ---------------------------------------------------------------------------
 
-class TestClassFitIntegration:
 
+class TestClassFitIntegration:
     def test_class_fit_scores_in_range(self):
         """Class fit score must be in 0-100 for all 9-race synthetic field."""
         races = synthetic_9_races()
@@ -255,8 +284,8 @@ class TestClassFitIntegration:
 # 5. Workout Fitness — scoring
 # ---------------------------------------------------------------------------
 
-class TestWorkoutFitnessIntegration:
 
+class TestWorkoutFitnessIntegration:
     def test_workout_fitness_in_range(self):
         """Workout fitness must be 0-100 for all combinations."""
         for workouts in (
@@ -289,8 +318,8 @@ class TestWorkoutFitnessIntegration:
 # 6. Layoff Penalty — penalty multiplier
 # ---------------------------------------------------------------------------
 
-class TestLayoffPenaltyIntegration:
 
+class TestLayoffPenaltyIntegration:
     def test_recent_race_no_penalty(self):
         assert layoff_penalty(make_horse(days_since_last_race=10, recent_workouts=[])) == 1.0
 
@@ -322,8 +351,8 @@ class TestLayoffPenaltyIntegration:
 # 7. Connections Score — jockey/trainer quality
 # ---------------------------------------------------------------------------
 
-class TestConnectionsScoreIntegration:
 
+class TestConnectionsScoreIntegration:
     def test_connections_score_in_range(self):
         """Score must be 0-100."""
         races = synthetic_9_races()
@@ -339,8 +368,12 @@ class TestConnectionsScoreIntegration:
             (0.50, 0.50, 1000, 1000),
             (0.30, 0.25, 5, 5),
         ]:
-            horse = make_horse(jockey_win_rate=jwin, trainer_win_rate=twin,
-                               jockey_starts=jstarts, trainer_starts=tstarts)
+            horse = make_horse(
+                jockey_win_rate=jwin,
+                trainer_win_rate=twin,
+                jockey_starts=jstarts,
+                trainer_starts=tstarts,
+            )
             score = connections_score(horse)
             assert not math.isnan(score), f"NaN for {jwin},{twin},{jstarts},{tstarts}"
 
@@ -349,8 +382,8 @@ class TestConnectionsScoreIntegration:
 # 8. First-Time Starter Reweight
 # ---------------------------------------------------------------------------
 
-class TestFirstTimeStarterReweightIntegration:
 
+class TestFirstTimeStarterReweightIntegration:
     def test_weights_sum_to_one_for_all_starts(self):
         """Weights must sum to exactly 1.0 for any starts count."""
         for starts in [0, 1, 2, 5, 10, 50]:
@@ -378,8 +411,8 @@ class TestFirstTimeStarterReweightIntegration:
 # 9. Apply Shrinkage
 # ---------------------------------------------------------------------------
 
-class TestApplyShrinkageIntegration:
 
+class TestApplyShrinkageIntegration:
     def test_zero_starts_returns_baseline(self):
         assert apply_shrinkage(0.30, 0) == pytest.approx(0.12)
 
@@ -399,8 +432,8 @@ class TestApplyShrinkageIntegration:
 # 10. No NaN/None in Full Feature Pass (9-race synthetic)
 # ---------------------------------------------------------------------------
 
-class TestNoNanNoneInFullFeaturePass:
 
+class TestNoNanNoneInFullFeaturePass:
     def _compute_all_features(self, horse, race):
         """Run all feature functions and collect results."""
         ss = speed_score(horse)

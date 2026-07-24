@@ -16,6 +16,7 @@ from tokenpak.compression.intent_classifier import (
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _assert_valid_result(result: ClassificationResult) -> None:
     """Assert all fields are within valid ranges."""
     assert isinstance(result, ClassificationResult)
@@ -30,6 +31,7 @@ def _assert_valid_result(result: ClassificationResult) -> None:
 # Test 1: GEN_Q — general question with no code signals
 # ---------------------------------------------------------------------------
 
+
 def test_gen_q_basic():
     result = classify("What is machine learning?")
     _assert_valid_result(result)
@@ -41,6 +43,7 @@ def test_gen_q_basic():
 # ---------------------------------------------------------------------------
 # Test 2: CODE_Q — code explanation request
 # ---------------------------------------------------------------------------
+
 
 def test_code_q_explain():
     result = classify(
@@ -62,6 +65,7 @@ def test_code_q_file_path():
 # Test 3: CODE_EDIT — code modification request
 # ---------------------------------------------------------------------------
 
+
 def test_code_edit_refactor():
     result = classify("Refactor the BudgetController to use async/await")
     _assert_valid_result(result)
@@ -79,6 +83,7 @@ def test_code_edit_implement():
 # ---------------------------------------------------------------------------
 # Test 4: DEBUG — error/traceback analysis
 # ---------------------------------------------------------------------------
+
 
 def test_debug_stack_trace():
     result = classify(
@@ -100,6 +105,7 @@ def test_debug_error_keyword():
 # Test 5: DOC_EDIT — documentation request
 # ---------------------------------------------------------------------------
 
+
 def test_doc_edit_readme():
     result = classify("Write a README for the tokenpak project")
     _assert_valid_result(result)
@@ -118,6 +124,7 @@ def test_doc_edit_docstring():
 # Test 6: PLAN — architecture/design request
 # ---------------------------------------------------------------------------
 
+
 def test_plan_architecture():
     result = classify("Design the architecture for a distributed rate limiter")
     _assert_valid_result(result)
@@ -134,8 +141,11 @@ def test_plan_strategy():
 # Test 7: REVIEW — diff/PR/feedback request
 # ---------------------------------------------------------------------------
 
+
 def test_review_diff():
-    result = classify("Review this diff and give me feedback", context="diff --git a/proxy.py b/proxy.py")
+    result = classify(
+        "Review this diff and give me feedback", context="diff --git a/proxy.py b/proxy.py"
+    )
     _assert_valid_result(result)
     assert result.intent == IntentClass.REVIEW
     assert result.needs_retrieval is True
@@ -151,15 +161,22 @@ def test_review_pull_request():
 # Test 8: Complexity scores in valid range for all intents
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("query,context", [
-    ("What?", ""),
-    ("Explain this function in detail including all edge cases and performance implications", "def foo(): pass"),
-    (
-        "Refactor the entire auth system to use JWT tokens and add rate limiting and logging",
-        "class Auth:\n    pass\n" * 50,
-    ),
-    ("Fix the bug", "Traceback:\n  File 'a.py', line 1\nKeyError"),
-])
+
+@pytest.mark.parametrize(
+    "query,context",
+    [
+        ("What?", ""),
+        (
+            "Explain this function in detail including all edge cases and performance implications",
+            "def foo(): pass",
+        ),
+        (
+            "Refactor the entire auth system to use JWT tokens and add rate limiting and logging",
+            "class Auth:\n    pass\n" * 50,
+        ),
+        ("Fix the bug", "Traceback:\n  File 'a.py', line 1\nKeyError"),
+    ],
+)
 def test_complexity_score_always_valid(query, context):
     result = classify(query, context=context)
     _assert_valid_result(result)
@@ -169,6 +186,7 @@ def test_complexity_score_always_valid(query, context):
 # ---------------------------------------------------------------------------
 # Test 9: needs_retrieval / needs_writeback flags
 # ---------------------------------------------------------------------------
+
 
 def test_gen_q_no_retrieval_no_writeback():
     result = classify("Tell me about Python's GIL")
@@ -192,6 +210,7 @@ def test_debug_needs_retrieval():
 # ---------------------------------------------------------------------------
 # Test 10: Edge cases
 # ---------------------------------------------------------------------------
+
 
 def test_empty_string():
     result = classify("")

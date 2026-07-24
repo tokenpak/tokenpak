@@ -13,7 +13,7 @@ be gated by an additional flag in the stage that wants to mutate.
 from __future__ import annotations
 
 import os
-from typing import Tuple
+from collections.abc import Mapping
 
 ENV_FLAG = "TOKENPAK_OPTIMIZATION_PIPELINE"
 
@@ -25,7 +25,7 @@ _TRUTHY_OBSERVE = {"1", "on", "observe", "true", "yes"}
 _TRUTHY_APPLY = {"apply"}
 
 
-def read_mode(env: dict | None = None) -> str:
+def read_mode(env: Mapping[str, str] | None = None) -> str:
     """Read the pipeline mode from env (or a passed dict, for tests)."""
     source = env if env is not None else os.environ
     raw = source.get(ENV_FLAG, "")
@@ -40,7 +40,7 @@ def read_mode(env: dict | None = None) -> str:
     return MODE_OFF
 
 
-def is_pipeline_enabled(env: dict | None = None) -> bool:
+def is_pipeline_enabled(env: Mapping[str, str] | None = None) -> bool:
     """True when the pipeline should run (in observe-only mode)."""
     return read_mode(env) != MODE_OFF
 
@@ -50,7 +50,7 @@ def bypass_reasons(
     method: str,
     path: str,
     body: bytes,
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """Preflight bypass check.
 
     Returns (bypass, reason). When bypass=True the pipeline should not run

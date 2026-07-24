@@ -1,15 +1,47 @@
 # SPDX-License-Identifier: Apache-2.0
 """Token counting utilities with caching, lazy loading, and robust truncation."""
 
+__all__ = (
+    "cache_info",
+    "clear_cache",
+    "count_tokens",
+    "count_tokens_uncached",
+    "estimate_tokens",
+    "truncate_to_tokens",
+)
+
 from functools import lru_cache
-from typing import Optional, Tuple
+from typing import Optional, Protocol, Sequence, Tuple
+
+
+class _Encoder(Protocol):
+    """Minimal interface used from a tiktoken encoder."""
+
+    def encode(self, text: str) -> Sequence[int]: ...
+
+
+class CacheStats(Protocol):
+    """Public fields exposed by ``functools.lru_cache`` statistics."""
+
+    @property
+    def hits(self) -> int: ...
+
+    @property
+    def misses(self) -> int: ...
+
+    @property
+    def maxsize(self) -> int | None: ...
+
+    @property
+    def currsize(self) -> int: ...
+
 
 # Lazy-loaded encoder (tiktoken init is slow ~100ms)
-_ENC: Optional[object] = None
+_ENC: Optional[_Encoder] = None
 _FALLBACK_MODE = False
 
 
-def _get_encoder():
+def _get_encoder() -> Optional[_Encoder]:
     """Lazy-load tiktoken encoder on first use."""
     global _ENC, _FALLBACK_MODE
     if _ENC is None and not _FALLBACK_MODE:
@@ -119,15 +151,15 @@ def estimate_tokens(text: str) -> int:
     if not text:
         return 0
     # len(encode) handles multibyte correctly; still O(n) but no Python-level loop
-    byte_len = len(text.encode('utf-8'))
+    byte_len = len(text.encode("utf-8"))
     return max(1, byte_len // 4)
 
 
-def clear_cache():
+def clear_cache() -> None:
     """Clear the token count cache."""
     count_tokens.cache_clear()
 
 
-def cache_info():
+def cache_info() -> CacheStats:
     """Get cache statistics."""
     return count_tokens.cache_info()

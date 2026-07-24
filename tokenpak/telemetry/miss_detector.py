@@ -8,7 +8,7 @@ asks for missing info, wrong signatures, uncertain answers. Logs gaps to
 
 import json
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -94,7 +94,7 @@ _MISSING_INFO_RE = [re.compile(p, re.IGNORECASE) for p in _MISSING_INFO_PATTERNS
 # ---------------------------------------------------------------------------
 
 
-def _first_match(patterns: List[re.Pattern], text: str) -> Optional[str]:
+def _first_match(patterns: List[re.Pattern[str]], text: str) -> Optional[str]:
     """Return the first matching substring, or None."""
     for pat in patterns:
         m = pat.search(text)
@@ -127,12 +127,12 @@ def _is_module_in_context(module: str, context_blocks: List[str]) -> bool:
     return False
 
 
-def _extract_fn_signatures(text: str) -> dict:
+def _extract_fn_signatures(text: str) -> dict[str, int]:
     """
     Extract function definitions from text.
     Returns {fn_name: param_count} for each detected definition.
     """
-    sigs = {}
+    sigs: dict[str, int] = {}
     # Python: def foo(a, b, c):
     for m in re.finditer(r"\bdef\s+(\w+)\s*\(([^)]*)\)", text):
         name = m.group(1)
@@ -151,7 +151,7 @@ def _extract_fn_signatures(text: str) -> dict:
     return sigs
 
 
-def _extract_fn_calls(text: str) -> dict:
+def _extract_fn_calls(text: str) -> dict[str, int]:
     """
     Extract function calls from text.
     Returns {fn_name: param_count} for each call detected.
@@ -395,13 +395,19 @@ def detect_misses(
 # ---------------------------------------------------------------------------
 
 
-def _load_gaps(gaps_path: str) -> List[dict]:
+def _load_gaps(gaps_path: str) -> list[dict[str, object]]:
     """Load existing gaps from JSON store."""
     p = Path(gaps_path)
     if p.exists():
         try:
-            data = json.loads(p.read_text())
-            return data if isinstance(data, list) else []
+            data: object = json.loads(p.read_text())
+            if not isinstance(data, list):
+                return []
+            records: list[dict[str, object]] = []
+            for item in data:
+                if isinstance(item, dict):
+                    records.append({str(key): value for key, value in item.items()})
+            return records
         except (json.JSONDecodeError, OSError):
             return []
     return []
@@ -410,10 +416,15 @@ def _load_gaps(gaps_path: str) -> List[dict]:
 def save_gaps(gaps: List[ContextGap], gaps_path: str = DEFAULT_GAPS_PATH) -> None:
     """Append new gaps to gaps.json (does not overwrite existing entries)."""
     existing = _load_gaps(gaps_path)
-    new_entries = []
+    new_entries: list[dict[str, object]] = []
     for gap in gaps:
-        entry = asdict(gap)
-        entry["signal_type"] = gap.signal_type.value  # Store as string
+        entry: dict[str, object] = {
+            "query": gap.query,
+            "signal_type": gap.signal_type.value,
+            "evidence": gap.evidence,
+            "timestamp": gap.timestamp,
+            "related_blocks": list(gap.related_blocks),
+        }
         new_entries.append(entry)
     combined = existing + new_entries
     p = Path(gaps_path)
@@ -421,7 +432,7 @@ def save_gaps(gaps: List[ContextGap], gaps_path: str = DEFAULT_GAPS_PATH) -> Non
     p.write_text(json.dumps(combined, indent=2))
 
 
-def load_gaps(gaps_path: str = DEFAULT_GAPS_PATH) -> List[dict]:
+def load_gaps(gaps_path: str = DEFAULT_GAPS_PATH) -> list[dict[str, object]]:
     """Load all persisted gaps."""
     return _load_gaps(gaps_path)
 
@@ -456,6 +467,8 @@ def should_expand_retrieval(
     gaps = _load_gaps(gaps_path)
     for gap in gaps:
         prior_query = gap.get("query", "")
+        if not isinstance(prior_query, str):
+            continue
         if _word_overlap_ratio(query, prior_query) >= overlap_threshold:
             return True
     return False

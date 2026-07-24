@@ -2,6 +2,7 @@
 Tests for system prompt section-level compression.
 Verifies: content preservation, protection accuracy, compression ratio improvement.
 """
+
 import re
 import sys
 
@@ -9,6 +10,7 @@ import sys
 # Minimal stubs to test the functions without importing full proxy
 def count_tokens(text):
     return max(1, len(text) // 4)
+
 
 _SENSITIVE_SECTION_HEADERS = [
     "/SOUL.md",
@@ -21,11 +23,13 @@ _SENSITIVE_SECTION_HEADERS = [
     "## Current Date",
 ]
 
+
 def _is_sensitive_section(header):
     for pat in _SENSITIVE_SECTION_HEADERS:
         if pat in header:
             return True
     return False
+
 
 def _whitespace_compress(text):
     if not text:
@@ -42,6 +46,7 @@ def _whitespace_compress(text):
             blank_count = 0
             result.append(line)
     return "\n".join(result)
+
 
 def _compress_system_prompt_sections(system_text, mode):
     if not system_text or mode == "strict":
@@ -81,14 +86,27 @@ def _compress_system_prompt_sections(system_text, mode):
 
 # --- Tests ---
 
+
 def test_sensitive_section_detection():
     """Only truly personal file paths are detected as sensitive."""
-    assert _is_sensitive_section("## /home/user/.tokenpak/workspace/SOUL.md"), "SOUL.md should be sensitive"
-    assert _is_sensitive_section("## /home/user/.tokenpak/workspace/USER.md"), "USER.md should be sensitive"
-    assert _is_sensitive_section("## /home/user/.tokenpak/workspace/MEMORY.md"), "MEMORY.md should be sensitive"
-    assert not _is_sensitive_section("## /home/user/.tokenpak/workspace/AGENTS.md"), "AGENTS.md is operational, not sensitive"
-    assert not _is_sensitive_section("## /home/user/.tokenpak/workspace/TOOLS.md"), "TOOLS.md is operational, not sensitive"
-    assert not _is_sensitive_section("## /home/user/.tokenpak/workspace/HEARTBEAT.md"), "HEARTBEAT.md is operational, not sensitive"
+    assert _is_sensitive_section("## /home/user/.tokenpak/workspace/SOUL.md"), (
+        "SOUL.md should be sensitive"
+    )
+    assert _is_sensitive_section("## /home/user/.tokenpak/workspace/USER.md"), (
+        "USER.md should be sensitive"
+    )
+    assert _is_sensitive_section("## /home/user/.tokenpak/workspace/MEMORY.md"), (
+        "MEMORY.md should be sensitive"
+    )
+    assert not _is_sensitive_section("## /home/user/.tokenpak/workspace/AGENTS.md"), (
+        "AGENTS.md is operational, not sensitive"
+    )
+    assert not _is_sensitive_section("## /home/user/.tokenpak/workspace/TOOLS.md"), (
+        "TOOLS.md is operational, not sensitive"
+    )
+    assert not _is_sensitive_section("## /home/user/.tokenpak/workspace/HEARTBEAT.md"), (
+        "HEARTBEAT.md is operational, not sensitive"
+    )
     assert not _is_sensitive_section("## Tooling"), "Tooling section not sensitive"
     assert not _is_sensitive_section("## Safety"), "Safety section not sensitive"
     assert not _is_sensitive_section("## Runtime"), "Runtime section not sensitive"
@@ -159,7 +177,9 @@ Runtime info here.
     assert protected_pct < 50, f"Protected should be <50% but got {protected_pct:.1f}%"
     assert "personal soul content" in compressed, "SOUL.md preserved"
     assert "John Doe personal info" in compressed, "USER.md preserved"
-    assert "Agent operational procedures" in compressed, "AGENTS.md (operational) preserved and not protected"
+    assert "Agent operational procedures" in compressed, (
+        "AGENTS.md (operational) preserved and not protected"
+    )
     print(f"PASS: test_protected_ratio_reduction (protected: {protected_pct:.1f}%)")
 
 
@@ -207,23 +227,23 @@ def test_projected_impact_realistic():
     # Build a realistic system prompt (rough approximation of a typical agent's)
     sections = {
         "safe": [
-            ("## Tooling", "A" * 3200),          # 800 tokens of tool descriptions
-            ("## Tool Call Style", "B" * 1200),   # 300 tokens
-            ("## Safety", "C" * 800),             # 200 tokens
-            ("## TokenPak CLI", "D" * 800),        # 200 tokens
-            ("## Skills", "E" * 2400),            # 600 tokens
-            ("## Memory Recall", "F" * 600),      # 150 tokens
-            ("## Model Aliases", "G" * 1200),     # 300 tokens
+            ("## Tooling", "A" * 3200),  # 800 tokens of tool descriptions
+            ("## Tool Call Style", "B" * 1200),  # 300 tokens
+            ("## Safety", "C" * 800),  # 200 tokens
+            ("## TokenPak CLI", "D" * 800),  # 200 tokens
+            ("## Skills", "E" * 2400),  # 600 tokens
+            ("## Memory Recall", "F" * 600),  # 150 tokens
+            ("## Model Aliases", "G" * 1200),  # 300 tokens
             ("## /home/user/workspace/AGENTS.md", "H" * 12000),  # 3000 tokens OPERATIONAL
-            ("## /home/user/workspace/TOOLS.md", "I" * 10000),   # 2500 tokens OPERATIONAL
-            ("## /home/user/workspace/HEARTBEAT.md", "J" * 2400), # 600 tokens OPERATIONAL
-            ("## Runtime", "K" * 800),            # 200 tokens
+            ("## /home/user/workspace/TOOLS.md", "I" * 10000),  # 2500 tokens OPERATIONAL
+            ("## /home/user/workspace/HEARTBEAT.md", "J" * 2400),  # 600 tokens OPERATIONAL
+            ("## Runtime", "K" * 800),  # 200 tokens
         ],
         "sensitive": [
-            ("## /home/user/workspace/SOUL.md", "L" * 3200),    # 800 tokens PERSONAL
-            ("## /home/user/workspace/USER.md", "M" * 6000),    # 1500 tokens PERSONAL
+            ("## /home/user/workspace/SOUL.md", "L" * 3200),  # 800 tokens PERSONAL
+            ("## /home/user/workspace/USER.md", "M" * 6000),  # 1500 tokens PERSONAL
             ("## /home/user/workspace/MEMORY.md", "N" * 8000),  # 2000 tokens PERSONAL
-            ("## Current Date", "O" * 200),                      # 50 tokens
+            ("## Current Date", "O" * 200),  # 50 tokens
         ],
     }
 
@@ -250,7 +270,9 @@ def test_projected_impact_realistic():
     print(f"  Old protected ratio: ~91.5% | New protected ratio: {protected_pct:.1f}%")
 
     # Key metric: protected ratio dramatically reduced from 91.5% baseline
-    assert protected_pct < 40, f"Protected should be <40% (from 91.5% baseline), got {protected_pct:.1f}%"
+    assert protected_pct < 40, (
+        f"Protected should be <40% (from 91.5% baseline), got {protected_pct:.1f}%"
+    )
     # Whitespace compression savings depend on actual whitespace in the prompt
     # (test content uses repeated chars, not real markdown with blank lines)
     # In real prompts with markdown, expect 15-35% whitespace savings
@@ -285,7 +307,7 @@ for test in tests:
         failed += 1
 
 if __name__ == "__main__":
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Results: {passed}/{len(tests)} passed, {failed} failed")
     if failed == 0:
         print("ALL TESTS PASS ✅")

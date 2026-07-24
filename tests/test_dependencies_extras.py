@@ -21,7 +21,9 @@ import pytest
 # slim release test gate must skip cleanly there. This test file's purpose
 # (validate pyproject extras shape) is Python-version-independent —
 # running it on 3.11/3.12/3.13 is sufficient coverage of the invariant.
-tomllib = pytest.importorskip("tomllib", reason="tomllib is stdlib in Python 3.11+; this test runs on 3.11/3.12/3.13")
+tomllib = pytest.importorskip(
+    "tomllib", reason="tomllib is stdlib in Python 3.11+; this test runs on 3.11/3.12/3.13"
+)
 
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 

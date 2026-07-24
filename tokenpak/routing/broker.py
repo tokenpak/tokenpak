@@ -54,6 +54,7 @@ class RoutingDecision:
 
     Captures which model was selected, why, and with what confidence.
     """
+
     original_model: str
     selected_model: str
     action: str  # passthrough | downgrade | upgrade
@@ -74,6 +75,7 @@ def _load_tiers(tiers_path: str = DEFAULT_TIERS_PATH) -> Dict[str, int]:
     """
     try:
         from tokenpak.models import get_all_tiers
+
         return get_all_tiers()
     except ImportError:
         try:

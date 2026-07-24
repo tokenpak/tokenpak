@@ -49,7 +49,7 @@ class TriggerDaemon:
         self._stop_event = threading.Event()
         self._timer_last_fire: Dict[str, float] = {}
         self._file_mtimes: Dict[str, float] = {}
-        self._known_files: Dict[str, set] = {}  # glob→set of paths
+        self._known_files: Dict[str, set[str]] = {}  # glob→set of paths
         self._cost_last_check = 0.0
 
     # ── public ───────────────────────────────────────────────────────────────

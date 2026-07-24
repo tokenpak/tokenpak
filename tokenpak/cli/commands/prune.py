@@ -11,11 +11,18 @@ Usage:
 
 from __future__ import annotations
 
+__all__ = (
+    "DEFAULT_THRESHOLD",
+    "SEP",
+    "run_prune",
+)
+
+
 import json
 import os
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import TypedDict, cast
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -35,19 +42,34 @@ _BLOCK_STORE_PATH = os.environ.get(
 # ---------------------------------------------------------------------------
 
 
-def _load_pins() -> set:
+class Block(TypedDict, total=False):
+    """Fields consumed from a persisted vault block."""
+
+    block_id: str
+    quality_score: float
+    raw_tokens: int
+    tokens_saved: int
+    path: str
+
+
+def _load_pins() -> set[str]:
     """Load set of pinned block IDs from disk."""
     path = Path(_PINS_PATH)
     if not path.exists():
         return set()
     try:
         data = json.loads(path.read_text())
-        return set(data.get("pinned", []))
+        if not isinstance(data, dict):
+            return set()
+        pinned = data.get("pinned", [])
+        if not isinstance(pinned, list):
+            return set()
+        return {item for item in pinned if isinstance(item, str)}
     except Exception:
         return set()
 
 
-def _load_blocks() -> List[dict]:
+def _load_blocks() -> list[Block]:
     """Load all blocks from the block store JSON."""
     path = Path(_BLOCK_STORE_PATH)
     if not path.exists():
@@ -56,12 +78,14 @@ def _load_blocks() -> List[dict]:
         data = json.loads(path.read_text())
         # BlockStore stores blocks under the key "blocks"
         blocks = data.get("blocks", {})
-        return list(blocks.values()) if isinstance(blocks, dict) else []
+        if not isinstance(blocks, dict):
+            return []
+        return [cast(Block, block) for block in blocks.values() if isinstance(block, dict)]
     except Exception:
         return []
 
 
-def _save_blocks(blocks_list: List[dict]) -> None:
+def _save_blocks(blocks_list: list[Block]) -> None:
     """Save updated block list back to store."""
     path = Path(_BLOCK_STORE_PATH)
     if not path.exists():
@@ -76,8 +100,8 @@ def _save_blocks(blocks_list: List[dict]) -> None:
 
 
 def _prune_candidates(
-    blocks: List[dict], pins: set, threshold: float
-) -> Tuple[List[dict], List[dict]]:
+    blocks: list[Block], pins: set[str], threshold: float
+) -> tuple[list[Block], list[Block]]:
     """Split blocks into (candidates_to_prune, blocks_to_keep)."""
     candidates = []
     keep = []
@@ -93,13 +117,13 @@ def _prune_candidates(
     return candidates, keep
 
 
-def _fmt_block(b: dict) -> str:
+def _fmt_block(b: Block) -> str:
     bid = b.get("block_id", "?")
     score = b.get("quality_score", 0.0)
     raw = b.get("raw_tokens", 0)
     saved = b.get("tokens_saved", 0)
     path = b.get("path", "")
-    return f"  {bid:<40}  score={score:.2f}  raw={raw:,}  saved={saved:,}\n" f"    path: {path}"
+    return f"  {bid:<40}  score={score:.2f}  raw={raw:,}  saved={saved:,}\n    path: {path}"
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +160,7 @@ def run_prune(
     total_freed = sum(b.get("raw_tokens", 0) for b in candidates)
 
     if as_json:
-        result = {
+        result: dict[str, object] = {
             "candidates": len(candidates),
             "freed_tokens": total_freed,
             "dry_run": dry_run,
@@ -203,7 +227,7 @@ try:
         help="Quality score below which blocks are pruned",
     )
     @click.option("--json", "as_json", is_flag=True, help="Output raw JSON")
-    def prune_cmd(auto, dry_run, threshold, as_json):
+    def prune_cmd(auto: bool, dry_run: bool, threshold: float, as_json: bool) -> None:
         """Remove low-priority blocks from compression store.
 
         \b
@@ -217,5 +241,7 @@ try:
 
 except ImportError:
 
-    def prune_cmd(*args, **kwargs):  # type: ignore
+    def prune_cmd_fallback(*args: object, **kwargs: object) -> None:
         run_prune()
+
+    globals()["prune_cmd"] = prune_cmd_fallback

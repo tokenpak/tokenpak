@@ -11,9 +11,7 @@ def test_message_basic():
 
 
 def test_message_budget_trim():
-    msg = TokenPakMessage(
-        role="user", content="A" * 200, budget=10, avg_tokens_per_char=0.25
-    )
+    msg = TokenPakMessage(role="user", content="A" * 200, budget=10, avg_tokens_per_char=0.25)
     assert len(msg.content) <= 45
 
 
@@ -87,29 +85,21 @@ class MockManager:
 
 
 def test_groupchat_create():
-    tpgc = TokenPakGroupChat(
-        groupchat=MockGroupChat(), manager=MockManager(), budget=4000
-    )
+    tpgc = TokenPakGroupChat(groupchat=MockGroupChat(), manager=MockManager(), budget=4000)
     assert tpgc.budget == 4000
 
 
 def test_groupchat_get_history():
-    tpgc = TokenPakGroupChat(
-        groupchat=MockGroupChat(), manager=MockManager(), budget=4000
-    )
+    tpgc = TokenPakGroupChat(groupchat=MockGroupChat(), manager=MockManager(), budget=4000)
     history = tpgc.get_compressed_history()
     assert isinstance(history, list)
 
 
 def test_groupchat_message_count():
-    tpgc = TokenPakGroupChat(
-        groupchat=MockGroupChat(), manager=MockManager(), budget=4000
-    )
+    tpgc = TokenPakGroupChat(groupchat=MockGroupChat(), manager=MockManager(), budget=4000)
     assert tpgc.message_count == 1
 
 
 def test_groupchat_budget_status():
-    tpgc = TokenPakGroupChat(
-        groupchat=MockGroupChat(), manager=MockManager(), budget=4000
-    )
+    tpgc = TokenPakGroupChat(groupchat=MockGroupChat(), manager=MockManager(), budget=4000)
     assert tpgc.budget_status["budget"] == 4000

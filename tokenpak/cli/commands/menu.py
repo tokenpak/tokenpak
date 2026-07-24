@@ -60,6 +60,7 @@ class _ExitMenu(Exception):
 # Brand header
 # ---------------------------------------------------------------------------
 
+
 def _header() -> str:
     c = supports_color()
     try:
@@ -70,12 +71,13 @@ def _header() -> str:
     pak = paint("pak", Color.TEAL + Color.BOLD, c)
     ver = paint(f"v{__version__}", Color.LIGHT_GRAY, c)
     tagline = paint("LLM Proxy with Context Compression", Color.LIGHT_GRAY, c)
-    return f"\n  \U0001F4E6 {token}{pak}  {ver}\n  {tagline}\n"
+    return f"\n  \U0001f4e6 {token}{pak}  {ver}\n  {tagline}\n"
 
 
 # ---------------------------------------------------------------------------
 # Live status strip — cached, non-blocking, honest (spec D + flag #3)
 # ---------------------------------------------------------------------------
+
 
 def _status_strip() -> str:
     """Build the status strip from the cached honest snapshot.
@@ -102,7 +104,9 @@ def _status_strip() -> str:
     if s.saved is not None:
         saved_str = f"${s.saved:.2f}"
         # Pale yellow (tp-signal-value) is reserved for the savings number only.
-        parts.append(paint("Saved:", Color.LIGHT_GRAY, c) + " " + paint(saved_str, Color.PASTEL_YELLOW, c))
+        parts.append(
+            paint("Saved:", Color.LIGHT_GRAY, c) + " " + paint(saved_str, Color.PASTEL_YELLOW, c)
+        )
     else:
         parts.append(paint("Saved:", Color.LIGHT_GRAY, c) + " " + paint("—", Color.LIGHT_GRAY, c))
 
@@ -112,6 +116,7 @@ def _status_strip() -> str:
 # ---------------------------------------------------------------------------
 # Command execution
 # ---------------------------------------------------------------------------
+
 
 def _exec(cmd: str, args: str = "", *, clear: bool = True) -> int:
     """Execute a tokenpak command and show output. Returns its exit code.
@@ -137,6 +142,7 @@ def _exec(cmd: str, args: str = "", *, clear: bool = True) -> int:
             argv.extend(args.split())
         sys.argv = argv
         from tokenpak._cli_core import main as cli_main
+
         cli_main()
     except SystemExit as _se:
         code = _se.code if isinstance(_se.code, int) else (0 if _se.code is None else 1)
@@ -153,6 +159,7 @@ def _exec(cmd: str, args: str = "", *, clear: bool = True) -> int:
 # ---------------------------------------------------------------------------
 # Lifecycle dispatch (spec C) + receipts (spec I)
 # ---------------------------------------------------------------------------
+
 
 def _return_prompt(*, return_only: bool = False) -> bool:
     """Show the post-command prompt. Returns True to return to the menu.
@@ -258,106 +265,125 @@ def _dispatch(cmd: str, args: str = "") -> None:
 # ---------------------------------------------------------------------------
 
 # Commands that need a text input before executing
-_INPUT_COMMANDS: dict[str, dict] = {
-    "index":        {"label": "Directory to index:", "placeholder": "e.g. ~/projects/myapp"},
-    "search":       {"label": "Search query:", "placeholder": "e.g. authentication middleware"},
-    "calibrate":    {"label": "Directory to calibrate:", "placeholder": "e.g. ~/projects/myapp"},
-    "validate":     {"label": "File to validate:", "placeholder": "e.g. ./output.tokpak"},
-    "config-check": {"label": "Config file to check:", "placeholder": "e.g. ~/.tokenpak/config.yaml"},
+_INPUT_COMMANDS: dict[str, dict[str, str]] = {
+    "index": {"label": "Directory to index:", "placeholder": "e.g. ~/projects/myapp"},
+    "search": {"label": "Search query:", "placeholder": "e.g. authentication middleware"},
+    "calibrate": {"label": "Directory to calibrate:", "placeholder": "e.g. ~/projects/myapp"},
+    "validate": {"label": "File to validate:", "placeholder": "e.g. ./output.tokpak"},
+    "config-check": {
+        "label": "Config file to check:",
+        "placeholder": "e.g. ~/.tokenpak/config.yaml",
+    },
 }
 
 # Commands that need a subcommand picked first.
 # Each subcommand can optionally have an "input" key for args it needs.
-_SUBCOMMAND_COMMANDS: dict[str, list[tuple[str, str, dict]]] = {
+_SUBCOMMAND_COMMANDS: dict[str, list[tuple[str, str, dict[str, str]]]] = {
     # (subcommand_args, display_label, input_config)
     # input_config: {} means no input needed; {"label": ..., "placeholder": ...} means prompt first
     "route": [
-        ("list",    "View routing rules",  {}),
-        ("add",     "Add a rule",          {}),
-        ("test",    "Test a rule",         {"label": "Prompt text:", "placeholder": "e.g. Explain this code"}),
-        ("remove",  "Remove a rule",       {"label": "Rule ID:", "placeholder": ""}),
+        ("list", "View routing rules", {}),
+        ("add", "Add a rule", {}),
+        ("test", "Test a rule", {"label": "Prompt text:", "placeholder": "e.g. Explain this code"}),
+        ("remove", "Remove a rule", {"label": "Rule ID:", "placeholder": ""}),
     ],
     "budget": [
-        ("status",  "View budget",    {}),
-        ("set",     "Set limits",     {}),
-        ("history", "Spend history",  {}),
+        ("status", "View budget", {}),
+        ("set", "Set limits", {}),
+        ("history", "Spend history", {}),
     ],
     "config": [
-        ("show",     "View config",      {}),
-        ("validate", "Validate",         {}),
-        ("init",     "Create default",   {}),
-        ("migrate",  "Migrate legacy",   {}),
-        ("path",     "Config path",      {}),
+        ("show", "View config", {}),
+        ("validate", "Validate", {}),
+        ("init", "Create default", {}),
+        ("migrate", "Migrate legacy", {}),
+        ("path", "Config path", {}),
     ],
     "recipe": [
-        ("create",    "Create recipe",    {"label": "Recipe name:", "placeholder": "e.g. my-legal-cleanup"}),
-        ("validate",  "Validate recipe",  {"label": "Recipe file:", "placeholder": "e.g. ./my-recipe.yaml"}),
-        ("test",      "Test recipe",      {"label": "Recipe file:", "placeholder": "e.g. ./my-recipe.yaml"}),
-        ("benchmark", "Benchmark recipe", {"label": "Recipe file:", "placeholder": "e.g. ./my-recipe.yaml"}),
+        (
+            "create",
+            "Create recipe",
+            {"label": "Recipe name:", "placeholder": "e.g. my-legal-cleanup"},
+        ),
+        (
+            "validate",
+            "Validate recipe",
+            {"label": "Recipe file:", "placeholder": "e.g. ./my-recipe.yaml"},
+        ),
+        ("test", "Test recipe", {"label": "Recipe file:", "placeholder": "e.g. ./my-recipe.yaml"}),
+        (
+            "benchmark",
+            "Benchmark recipe",
+            {"label": "Recipe file:", "placeholder": "e.g. ./my-recipe.yaml"},
+        ),
     ],
     "template": [
-        ("list",   "List templates",   {}),
-        ("add",    "Add template",     {"label": "Template name:", "placeholder": "e.g. code-review"}),
-        ("show",   "Show template",    {"label": "Template name:", "placeholder": ""}),
-        ("remove", "Remove template",  {"label": "Template name:", "placeholder": ""}),
+        ("list", "List templates", {}),
+        ("add", "Add template", {"label": "Template name:", "placeholder": "e.g. code-review"}),
+        ("show", "Show template", {"label": "Template name:", "placeholder": ""}),
+        ("remove", "Remove template", {"label": "Template name:", "placeholder": ""}),
     ],
     "debug": [
-        ("on",     "Enable debug",  {}),
-        ("off",    "Disable debug", {}),
-        ("status", "Debug status",  {}),
+        ("on", "Enable debug", {}),
+        ("off", "Disable debug", {}),
+        ("status", "Debug status", {}),
     ],
     "learn": [
         ("status", "View patterns", {}),
-        ("reset",  "Reset patterns", {}),
+        ("reset", "Reset patterns", {}),
     ],
     "trigger": [
-        ("list",   "List triggers",  {}),
-        ("add",    "Add trigger",    {}),
+        ("list", "List triggers", {}),
+        ("add", "Add trigger", {}),
         ("remove", "Remove trigger", {"label": "Trigger ID:", "placeholder": ""}),
     ],
     "macro": [
-        ("list",   "List macros",  {}),
+        ("list", "List macros", {}),
         ("create", "Create macro", {}),
-        ("run",    "Run macro",    {"label": "Macro name:", "placeholder": ""}),
-        ("show",   "Show macro",   {"label": "Macro name:", "placeholder": ""}),
+        ("run", "Run macro", {"label": "Macro name:", "placeholder": ""}),
+        ("show", "Show macro", {"label": "Macro name:", "placeholder": ""}),
     ],
     "fingerprint": [
-        ("sync",        "Sync fingerprints", {}),
-        ("cache",       "View cache",        {}),
-        ("clear-cache", "Clear cache",       {}),
+        ("sync", "Sync fingerprints", {}),
+        ("cache", "View cache", {}),
+        ("clear-cache", "Clear cache", {}),
     ],
     "lock": [
-        ("list",    "List locks",    {}),
-        ("claim",   "Claim lock",    {"label": "File path:", "placeholder": ""}),
-        ("release", "Release lock",  {"label": "File path:", "placeholder": ""}),
+        ("list", "List locks", {}),
+        ("claim", "Claim lock", {"label": "File path:", "placeholder": ""}),
+        ("release", "Release lock", {"label": "File path:", "placeholder": ""}),
     ],
     "agent": [
-        ("list",       "List agents",    {}),
-        ("register",   "Register agent", {"label": "Agent name:", "placeholder": ""}),
-        ("locks",      "View locks",     {}),
+        ("list", "List agents", {}),
+        ("register", "Register agent", {"label": "Agent name:", "placeholder": ""}),
+        ("locks", "View locks", {}),
     ],
     "retrieval": [
         ("status", "Retrieval status", {}),
-        ("test",   "Test retrieval",   {"label": "Search query:", "placeholder": "e.g. authentication"}),
+        (
+            "test",
+            "Test retrieval",
+            {"label": "Search query:", "placeholder": "e.g. authentication"},
+        ),
     ],
     "prove": [
-        ("run",       "Run value proof",  {}),
-        ("list",      "List scenarios",   {}),
-        ("providers", "Show providers",   {}),
+        ("run", "Run value proof", {}),
+        ("list", "List scenarios", {}),
+        ("providers", "Show providers", {}),
     ],
     "alerts": [
         ("test --channel webhook", "Test webhook", {}),
-        ("test --channel slack",   "Test Slack",   {}),
+        ("test --channel slack", "Test Slack", {}),
     ],
     "fleet": [
         ("", "Show fleet status", {}),
     ],
     "permissions": [
-        ("show",         "View current tiers",            {}),
-        ("set strict",   "Set strict tier",               {}),
-        ("set standard", "Set standard tier (default)",   {}),
-        ("set auto",     "Set auto tier",                 {}),
-        ("reset",        "Reset managed keys + fleet off", {}),
+        ("show", "View current tiers", {}),
+        ("set strict", "Set strict tier", {}),
+        ("set standard", "Set standard tier (default)", {}),
+        ("set auto", "Set auto tier", {}),
+        ("reset", "Reset managed keys + fleet off", {}),
     ],
 }
 
@@ -418,7 +444,7 @@ def _header_compact() -> str:
     c = supports_color()
     token = paint("token", Color.WHITE + Color.BOLD, c)
     pak = paint("pak", Color.TEAL + Color.BOLD, c)
-    return f"\U0001F4E6 {token}{pak}"
+    return f"\U0001f4e6 {token}{pak}"
 
 
 # ---------------------------------------------------------------------------
@@ -426,27 +452,37 @@ def _header_compact() -> str:
 # ---------------------------------------------------------------------------
 
 _HOME_ITEMS = [
-    ("start_proxy",  "Start proxy"),
-    ("run_demo",     "Run demo"),
+    ("start_proxy", "Start proxy"),
+    ("run_demo", "Run demo"),
     ("check_health", "Proxy status"),
-    ("view_spend",   "Spend & savings"),
-    ("configure",    "Configure"),
-    ("permissions",  "Permission tier"),
-    ("companion",    "Companion"),
-    ("diagnose",     "Troubleshoot"),
-    ("browse_all",   "Browse all commands"),
+    ("view_spend", "Spend & savings"),
+    ("configure", "Configure"),
+    ("permissions", "Permission tier"),
+    ("companion", "Companion"),
+    ("diagnose", "Troubleshoot"),
+    ("browse_all", "Browse all commands"),
 ]
 
 _SEARCH_ALIASES: dict[str, list[str]] = {
-    "start_proxy":  ["start", "proxy", "run", "launch", "serve"],
-    "run_demo":     ["demo", "sample", "example", "test compression"],
+    "start_proxy": ["start", "proxy", "run", "launch", "serve"],
+    "run_demo": ["demo", "sample", "example", "test compression"],
     "check_health": ["status", "health", "ping", "alive", "proxy status"],
-    "view_spend":   ["cost", "spend", "savings", "budget", "money", "price", "usage"],
-    "configure":    ["config", "settings", "setup", "edit", "route", "recipe", "budget"],
-    "permissions":  ["permission", "tier", "fleet", "strict", "standard", "auto", "approval", "sandbox", "bypass"],
-    "companion":    ["claude", "codex", "session", "pak", "capsule", "journal", "mcp", "companion"],
-    "diagnose":     ["doctor", "diag", "fix", "repair", "debug", "troubleshoot", "health check"],
-    "browse_all":   ["all", "commands", "search", "find", "list"],
+    "view_spend": ["cost", "spend", "savings", "budget", "money", "price", "usage"],
+    "configure": ["config", "settings", "setup", "edit", "route", "recipe", "budget"],
+    "permissions": [
+        "permission",
+        "tier",
+        "fleet",
+        "strict",
+        "standard",
+        "auto",
+        "approval",
+        "sandbox",
+        "bypass",
+    ],
+    "companion": ["claude", "codex", "session", "pak", "capsule", "journal", "mcp", "companion"],
+    "diagnose": ["doctor", "diag", "fix", "repair", "debug", "troubleshoot", "health check"],
+    "browse_all": ["all", "commands", "search", "find", "list"],
 }
 
 # Tier-3 fallback dispatch table (spec B3): map each home-menu item to the
@@ -456,14 +492,14 @@ _SEARCH_ALIASES: dict[str, list[str]] = {
 # command (``companion`` fans out to ``claude`` / ``codex``) are intentionally
 # absent — selecting one prints a launcher hint instead of dispatching.
 _HOME_FALLBACK_CMDS: dict[str, str] = {
-    "start_proxy":  "start",
-    "run_demo":     "demo",
+    "start_proxy": "start",
+    "run_demo": "demo",
     "check_health": "status",
-    "view_spend":   "cost",
-    "configure":    "config",
-    "permissions":  "permissions show",
-    "diagnose":     "doctor",
-    "browse_all":   "help",
+    "view_spend": "cost",
+    "configure": "config",
+    "permissions": "permissions show",
+    "diagnose": "doctor",
+    "browse_all": "help",
 }
 
 # Canonical command names a user may type directly at the fallback prompt but
@@ -475,19 +511,20 @@ _FALLBACK_DIRECT_CMDS: frozenset[str] = frozenset({"claude", "codex"})
 # Section menus
 # ---------------------------------------------------------------------------
 
+
 def _section_demo(hdr: str) -> None:
     c = supports_color()
     while True:
         choice = pick(
             paint("Run demo", _TITLE, c),
             [
-                ("",                      "Run default demo"),
-                ("--category python",     "Python sample"),
+                ("", "Run default demo"),
+                ("--category python", "Python sample"),
                 ("--category javascript", "JavaScript sample"),
-                ("--category markdown",   "Markdown sample"),
-                ("--category config",     "Config sample"),
-                ("--seed",                "Seed demo data"),
-                ("--clear",               "Reset demo data"),
+                ("--category markdown", "Markdown sample"),
+                ("--category config", "Config sample"),
+                ("--seed", "Seed demo data"),
+                ("--clear", "Reset demo data"),
             ],
             header=hdr,
             subtitle="See compression in action. No API key required.",
@@ -498,8 +535,12 @@ def _section_demo(hdr: str) -> None:
         if choice == "--clear":
             # Confirm destructive action
             confirm_opts = [("yes", "Yes, reset demo data"), ("no", "No, go back")]
-            ans = pick("Reset demo data?", confirm_opts, header=hdr,
-                       subtitle="This will remove current demo artifacts and recreate defaults.")
+            ans = pick(
+                "Reset demo data?",
+                confirm_opts,
+                header=hdr,
+                subtitle="This will remove current demo artifacts and recreate defaults.",
+            )
             if ans != "yes":
                 continue
         _dispatch("demo", choice)
@@ -511,10 +552,10 @@ def _section_spend(hdr: str) -> None:
         choice = pick(
             paint("Spend & savings", _TITLE, c),
             [
-                ("",             "Today"),
-                ("--week",       "This week"),
-                ("--month",      "This month"),
-                ("--by-model",   "By model"),
+                ("", "Today"),
+                ("--week", "This week"),
+                ("--month", "This month"),
+                ("--by-model", "By model"),
                 ("--export-csv", "Export CSV"),
             ],
             header=hdr,
@@ -532,11 +573,11 @@ def _section_configure(hdr: str) -> None:
         choice = pick(
             paint("Configure", _TITLE, c),
             [
-                ("show",     "View current config"),
+                ("show", "View current config"),
                 ("validate", "Validate config"),
-                ("init",     "Create default config"),
-                ("migrate",  "Migrate legacy config"),
-                ("path",     "Show config file path"),
+                ("init", "Create default config"),
+                ("migrate", "Migrate legacy config"),
+                ("path", "Show config file path"),
             ],
             header=hdr,
             subtitle="View, validate, or change your configuration.",
@@ -679,8 +720,8 @@ def _section_companion(hdr: str) -> None:
         choice = pick(
             paint("Companion", _TITLE, c),
             [
-                ("claude",       "Launch Claude companion"),
-                ("codex",        "Launch Codex companion"),
+                ("claude", "Launch Claude companion"),
+                ("codex", "Launch Codex companion"),
             ],
             header=hdr,
             subtitle="Launch AI coding tools with tokenpak optimization active.",
@@ -697,9 +738,9 @@ def _section_diagnose(hdr: str) -> None:
         choice = pick(
             paint("Troubleshoot", _TITLE, c),
             [
-                ("",              "Run diagnostics"),
-                ("--fix",         "Diagnose and auto-fix"),
-                ("--verbose",     "Verbose diagnostics"),
+                ("", "Run diagnostics"),
+                ("--fix", "Diagnose and auto-fix"),
+                ("--verbose", "Verbose diagnostics"),
                 ("--claude-code", "Check companion setup"),
             ],
             header=hdr,
@@ -712,72 +753,100 @@ def _section_diagnose(hdr: str) -> None:
 
 
 _POLISHED_LABELS: dict[str, str] = {
-    "start":        "Start proxy",
-    "stop":         "Stop proxy",
-    "restart":      "Restart proxy",
-    "demo":         "Run demo",
-    "cost":         "View spend & savings",
-    "status":       "Proxy status",
-    "logs":         "Recent logs",
-    "index":        "Index directory",
-    "search":       "Search indexed content",
-    "route":        "Manage routing rules",
-    "recipe":       "Manage compression recipes",
-    "template":     "Manage prompt templates",
-    "budget":       "Set budget limits",
-    "alerts":       "Manage alert channels",
-    "goals":        "Track savings goals",
-    "config":       "View & edit config",
-    "permissions":  "Permission tiers",
-    "explain":      "Explain workflow profiles",
-    "version":      "Show version",
-    "update":       "Update tokenpak",
-    "benchmark":    "Run benchmarks",
-    "calibrate":    "Calibrate workers",
-    "doctor":       "Run diagnostics",
-    "diagnose":     "Full health check",
-    "dashboard":    "Live dashboard",
-    "timeline":     "View savings trend",
-    "attribution":  "Savings by source",
-    "models":       "Per-model breakdown",
-    "forecast":     "Cost projections",
-    "debug":        "Toggle debug logging",
-    "claude":       "Launch Claude companion",
-    "codex":        "Launch Codex companion",
-    "test":         "Interactive A/B test",
-    "prove":        "A/B value proof",
-    "trigger":      "Manage event triggers",
-    "macro":        "Manage macros",
+    "start": "Start proxy",
+    "stop": "Stop proxy",
+    "restart": "Restart proxy",
+    "demo": "Run demo",
+    "cost": "View spend & savings",
+    "status": "Proxy status",
+    "logs": "Recent logs",
+    "index": "Index directory",
+    "search": "Search indexed content",
+    "route": "Manage routing rules",
+    "recipe": "Manage compression recipes",
+    "template": "Manage prompt templates",
+    "budget": "Set budget limits",
+    "alerts": "Manage alert channels",
+    "goals": "Track savings goals",
+    "config": "View & edit config",
+    "permissions": "Permission tiers",
+    "explain": "Explain workflow profiles",
+    "version": "Show version",
+    "update": "Update tokenpak",
+    "benchmark": "Run benchmarks",
+    "calibrate": "Calibrate workers",
+    "doctor": "Run diagnostics",
+    "diagnose": "Full health check",
+    "dashboard": "Live dashboard",
+    "timeline": "View savings trend",
+    "attribution": "Savings by source",
+    "models": "Per-model breakdown",
+    "forecast": "Cost projections",
+    "debug": "Toggle debug logging",
+    "claude": "Launch Claude companion",
+    "codex": "Launch Codex companion",
+    "test": "Interactive A/B test",
+    "prove": "A/B value proof",
+    "trigger": "Manage event triggers",
+    "macro": "Manage macros",
     "config-check": "Validate config file",
-    "validate":     "Validate JSON file",
-    "diff":         "Show context changes",
-    "serve":        "Start proxy server",
-    "replay":       "Replay captured sessions",
-    "audit":        "Audit log management",
-    "compliance":   "Compliance reports",
+    "validate": "Validate JSON file",
+    "diff": "Show context changes",
+    "serve": "Start proxy server",
+    "replay": "Replay captured sessions",
+    "audit": "Audit log management",
+    "compliance": "Compliance reports",
     # Internal / advanced — kept but separated
-    "fingerprint":  "Fingerprint management",
-    "agent":        "Agent coordination",
-    "lock":         "File lock management",
-    "run":          "Schedule macro runs",
-    "learn":        "View learned patterns",
+    "fingerprint": "Fingerprint management",
+    "agent": "Agent coordination",
+    "lock": "File lock management",
+    "run": "Schedule macro runs",
+    "learn": "View learned patterns",
     "vault-health": "Vault index health",
-    "fleet":        "Fleet status",
-    "aggregate":    "Aggregate ledger",
-    "requests":     "Live request explorer",
-    "stats":        "Registry stats",
-    "retrieval":    "Test search retrieval",
-    "monitor":      "Start live monitor",
+    "fleet": "Fleet status",
+    "aggregate": "Aggregate ledger",
+    "requests": "Live request explorer",
+    "stats": "Registry stats",
+    "retrieval": "Test search retrieval",
+    "monitor": "Start live monitor",
 }
 
 # Commands shown in the default "Common" view
 _COMMON_COMMANDS = {
-    "start", "stop", "restart", "demo", "cost", "status", "logs",
-    "index", "search", "route", "recipe", "budget", "config", "explain", "permissions",
-    "version", "update", "doctor", "diagnose", "dashboard", "timeline",
-    "models", "forecast", "claude", "codex", "test", "prove",
-    "benchmark", "calibrate", "alerts", "template", "goals",
-    "attribution", "debug",
+    "start",
+    "stop",
+    "restart",
+    "demo",
+    "cost",
+    "status",
+    "logs",
+    "index",
+    "search",
+    "route",
+    "recipe",
+    "budget",
+    "config",
+    "explain",
+    "permissions",
+    "version",
+    "update",
+    "doctor",
+    "diagnose",
+    "dashboard",
+    "timeline",
+    "models",
+    "forecast",
+    "claude",
+    "codex",
+    "test",
+    "prove",
+    "benchmark",
+    "calibrate",
+    "alerts",
+    "template",
+    "goals",
+    "attribution",
+    "debug",
 }
 
 
@@ -857,6 +926,7 @@ def _handle_home_item(item: str, hdr: str) -> None:
 # ---------------------------------------------------------------------------
 # Tier-3 interactive fallback (spec B3) — for terminals without the picker
 # ---------------------------------------------------------------------------
+
 
 def _resolve_fallback_command(text: str) -> Optional[str]:
     """Resolve a typed fallback selection to a canonical CLI command.
@@ -950,6 +1020,7 @@ def _run_plain_fallback() -> None:
 # Main menu
 # ---------------------------------------------------------------------------
 
+
 def run_menu() -> None:
     """Launch the interactive branded menu."""
     global _SESSION
@@ -969,24 +1040,21 @@ def run_menu() -> None:
 
                 # Show CLI command hint on the right for each item
                 _CMD_HINTS = {
-                    "start_proxy":  "tokenpak start",
-                    "run_demo":     "tokenpak demo",
+                    "start_proxy": "tokenpak start",
+                    "run_demo": "tokenpak demo",
                     "check_health": "tokenpak status",
-                    "view_spend":   "tokenpak cost",
-                    "configure":    "tokenpak config",
-                    "permissions":  "tokenpak permissions",
-                    "companion":    "",
-                    "diagnose":     "tokenpak doctor",
-                    "browse_all":   "",
+                    "view_spend": "tokenpak cost",
+                    "configure": "tokenpak config",
+                    "permissions": "tokenpak permissions",
+                    "companion": "",
+                    "diagnose": "tokenpak doctor",
+                    "browse_all": "",
                 }
                 styled_options = []
                 for val, label in home_options:
                     hint = _CMD_HINTS.get(val, "")
                     if hint:
-                        styled = (
-                            f"{label:<26}"
-                            + paint(hint, Color.LIGHT_GRAY, c)
-                        )
+                        styled = f"{label:<26}" + paint(hint, Color.LIGHT_GRAY, c)
                     else:
                         styled = label
                     styled_options.append((val, styled))

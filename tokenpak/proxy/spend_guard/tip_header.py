@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Optional
+from typing import Callable, Optional
 
 from .contracts import TIPDirective
 
@@ -30,6 +30,7 @@ from .contracts import TIPDirective
 # Handler signature: (directive: TIPDirective, value: str | None) -> None
 # (mutates directive in place).
 
+
 def _set_allow(d: TIPDirective, v: Optional[str]) -> None:
     if v in ("once", "15m", "session"):
         d.allow_scope = v  # type: ignore[assignment]
@@ -37,11 +38,13 @@ def _set_allow(d: TIPDirective, v: Optional[str]) -> None:
     elif v in ("on", "true", "1"):
         d.allow_scope = "session"
 
+
 def _set_bypass(d: TIPDirective, v: Optional[str]) -> None:
     if v is None or v in ("on", "true", "1", "yes"):
         d.bypass = True
     elif v in ("off", "false", "0", "no"):
         d.bypass = False
+
 
 def _set_max(d: TIPDirective, v: Optional[str]) -> None:
     if not v:
@@ -68,13 +71,16 @@ def _set_max(d: TIPDirective, v: Optional[str]) -> None:
     except ValueError:
         pass
 
+
 def _set_estimate(d: TIPDirective, v: Optional[str]) -> None:
     if v is None or v in ("on", "true", "1", "yes"):
         d.estimate_only = True
 
+
 def _set_cancel(d: TIPDirective, v: Optional[str]) -> None:
     if v is None or v in ("on", "true", "1", "yes"):
         d.cancel = True
+
 
 def _set_reason(d: TIPDirective, v: Optional[str]) -> None:
     if v is not None:
@@ -85,13 +91,13 @@ def _set_reason(d: TIPDirective, v: Optional[str]) -> None:
         d.reason = v
 
 
-DIRECTIVE_REGISTRY: dict = {
-    "allow":    (_set_allow,    "Authorize the held request: once / 15m / session."),
-    "bypass":   (_set_bypass,   "Skip Yes/No prompt; still subject to hard-block."),
-    "max":      (_set_max,      "Cost ceiling ($N) or token ceiling (Nk_tokens / Nm_tokens)."),
+DIRECTIVE_REGISTRY: dict[str, tuple[Callable[[TIPDirective, Optional[str]], None], str]] = {
+    "allow": (_set_allow, "Authorize the held request: once / 15m / session."),
+    "bypass": (_set_bypass, "Skip Yes/No prompt; still subject to hard-block."),
+    "max": (_set_max, "Cost ceiling ($N) or token ceiling (Nk_tokens / Nm_tokens)."),
     "estimate": (_set_estimate, "Return RiskEstimate JSON, no provider call."),
-    "cancel":   (_set_cancel,   "Discard any pending request for this session."),
-    "reason":   (_set_reason,   "Free-text annotation for audit log."),
+    "cancel": (_set_cancel, "Discard any pending request for this session."),
+    "reason": (_set_reason, "Free-text annotation for audit log."),
 }
 
 
@@ -107,14 +113,17 @@ _TIP_RE = re.compile(r"^\s*\[TIP:\s*([^\]]*)\]\s*", re.IGNORECASE)
 # - bare alphanumerics ("once", "on", "1m_tokens")
 # - $-prefixed amounts ("$10", "$10.50")
 # - quoted strings ("planned refactor")
-_KV_RE = re.compile(r"""
+_KV_RE = re.compile(
+    r"""
     (?P<key>[a-zA-Z_]+)
     (?:=(?:
         "(?P<qval>[^"]*)" |
         '(?P<sval>[^']*)' |
         (?P<bval>[^\s\]]+)
     ))?
-""", re.VERBOSE)
+""",
+    re.VERBOSE,
+)
 
 
 def parse_tip_header(text: str) -> tuple[Optional[TIPDirective], str]:
@@ -144,7 +153,7 @@ def parse_tip_header(text: str) -> tuple[Optional[TIPDirective], str]:
         except Exception:
             directive.unknown_keys.append(f"{key}=parse_error")
 
-    remainder = text[m.end():]
+    remainder = text[m.end() :]
     return directive, remainder
 
 

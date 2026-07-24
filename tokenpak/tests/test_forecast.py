@@ -44,25 +44,31 @@ def spend_records_7days() -> List[Dict[str, Any]]:
         date_str = current_date.isoformat()
 
         # 2-3 transactions per day
-        records.append({
-            "timestamp": f"{date_str}T08:00:00Z",
-            "cost_usd": base_cost + (day_offset * 0.5),
-            "model": "claude-3-sonnet",
-            "agent": "Agent tasks",
-        })
-        records.append({
-            "timestamp": f"{date_str}T14:00:00Z",
-            "cost_usd": base_cost * 0.5 + (day_offset * 0.2),
-            "model": "gpt-4",
-            "agent": "TokenPak CLI",
-        })
+        records.append(
+            {
+                "timestamp": f"{date_str}T08:00:00Z",
+                "cost_usd": base_cost + (day_offset * 0.5),
+                "model": "claude-3-sonnet",
+                "agent": "Agent tasks",
+            }
+        )
+        records.append(
+            {
+                "timestamp": f"{date_str}T14:00:00Z",
+                "cost_usd": base_cost * 0.5 + (day_offset * 0.2),
+                "model": "gpt-4",
+                "agent": "TokenPak CLI",
+            }
+        )
         if day_offset % 2 == 0:
-            records.append({
-                "timestamp": f"{date_str}T20:00:00Z",
-                "cost_usd": base_cost * 0.3,
-                "model": "claude-3-haiku",
-                "agent": "Cron jobs",
-            })
+            records.append(
+                {
+                    "timestamp": f"{date_str}T20:00:00Z",
+                    "cost_usd": base_cost * 0.3,
+                    "model": "claude-3-haiku",
+                    "agent": "Cron jobs",
+                }
+            )
 
     return records
 
@@ -78,18 +84,22 @@ def spend_records_30days() -> List[Dict[str, Any]]:
         date_str = current_date.isoformat()
 
         daily_base = 10.0 + (day_offset // 7) * 2  # Trending up slightly
-        records.append({
-            "timestamp": f"{date_str}T10:00:00Z",
-            "cost_usd": daily_base,
-            "model": "claude-3-sonnet",
-            "agent": "Agent tasks",
-        })
-        records.append({
-            "timestamp": f"{date_str}T15:00:00Z",
-            "cost_usd": daily_base * 0.4,
-            "model": "gpt-4",
-            "agent": "other",
-        })
+        records.append(
+            {
+                "timestamp": f"{date_str}T10:00:00Z",
+                "cost_usd": daily_base,
+                "model": "claude-3-sonnet",
+                "agent": "Agent tasks",
+            }
+        )
+        records.append(
+            {
+                "timestamp": f"{date_str}T15:00:00Z",
+                "cost_usd": daily_base * 0.4,
+                "model": "gpt-4",
+                "agent": "other",
+            }
+        )
 
     return records
 
@@ -272,7 +282,7 @@ def test_calculate_wow_trend_positive(mock_budget_tracker) -> None:
             "cost_usd": 150.0,
             "model": "gpt-4",
             "agent": "task",
-        }
+        },
     ]
 
     # Previous week: lower spend
@@ -288,7 +298,7 @@ def test_calculate_wow_trend_positive(mock_budget_tracker) -> None:
             "cost_usd": 50.0,
             "model": "gpt-4",
             "agent": "task",
-        }
+        },
     ]
 
     all_records = current_records + prev_records
@@ -337,7 +347,7 @@ def test_calculate_wow_trend_negative(mock_budget_tracker) -> None:
             "cost_usd": 100.0,
             "model": "gpt-4",
             "agent": "task",
-        }
+        },
     ]
 
     all_records = current_records + prev_records

@@ -1,6 +1,5 @@
 """Tests for cost tracking."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.pro.routing.costs", reason="module not available in current build")
@@ -264,12 +263,8 @@ class TestCostTracker:
 
     def test_get_entries_by_model(self):
         """Test filtering entries by model."""
-        self.tracker.track_request(
-            provider="anthropic", model="claude-3", input_cost=0.01
-        )
-        self.tracker.track_request(
-            provider="anthropic", model="claude-2", input_cost=0.02
-        )
+        self.tracker.track_request(provider="anthropic", model="claude-3", input_cost=0.01)
+        self.tracker.track_request(provider="anthropic", model="claude-2", input_cost=0.02)
 
         entries = self.tracker.get_entries_by_model("claude-3")
         assert len(entries) == 1
@@ -291,9 +286,7 @@ class TestCostTracker:
 
     def test_export_entries_json(self):
         """Test exporting entries as JSON."""
-        self.tracker.track_request(
-            provider="anthropic", input_cost=0.01, model="claude-3"
-        )
+        self.tracker.track_request(provider="anthropic", input_cost=0.01, model="claude-3")
 
         json_str = self.tracker.export_entries()
         assert "anthropic" in json_str

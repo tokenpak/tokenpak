@@ -31,7 +31,10 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from tokenpak.tip.pak import Pak
 
 # Tokenpak imports are deferred into handlers to keep `tokenpak --help`
 # fast (these contracts pull in the vault subsystem on import).
@@ -59,29 +62,22 @@ def build_pak_parser(sub: Any) -> None:
     )
     paksub = p_pak.add_subparsers(dest="pak_action", required=False)
 
-    p_inspect = paksub.add_parser(
-        "inspect", help="Show Pak metadata (read-only)"
-    )
+    p_inspect = paksub.add_parser("inspect", help="Show Pak metadata (read-only)")
     p_inspect.add_argument(
         "pak_ref",
         help="Pak ID (e.g. 'vault:path#hash') or path to a Pak file",
     )
-    p_inspect.add_argument(
-        "--json", action="store_true", help="Emit JSON instead of text"
-    )
+    p_inspect.add_argument("--json", action="store_true", help="Emit JSON instead of text")
     p_inspect.set_defaults(func=cmd_pak_inspect)
 
-    p_export = paksub.add_parser(
-        "export", help="Extract Pak content + anchors to a directory"
-    )
+    p_export = paksub.add_parser("export", help="Extract Pak content + anchors to a directory")
     p_export.add_argument("pak_ref", help="Pak ID to export")
-    p_export.add_argument(
-        "--output", "-o", required=True, help="Output directory"
-    )
+    p_export.add_argument("--output", "-o", required=True, help="Output directory")
     p_export.set_defaults(func=cmd_pak_export)
 
     p_create = paksub.add_parser(
-        "create", help="Create a Pak file from a directory (OSS)",
+        "create",
+        help="Create a Pak file from a directory (OSS)",
         description=(
             "Package a directory into a Pak JSON file. The Pak captures "
             "anchor file content, objective/summary metadata, and a "
@@ -90,33 +86,39 @@ def build_pak_parser(sub: Any) -> None:
         ),
     )
     p_create.add_argument("source_dir", help="Directory to package")
-    p_create.add_argument(
-        "--output", "-o", required=True, help="Output Pak file path"
-    )
+    p_create.add_argument("--output", "-o", required=True, help="Output Pak file path")
     p_create.add_argument("--title", default="", help="Pak title (default: directory name)")
     p_create.add_argument("--objective", default="", help="Pak objective (free-form)")
     p_create.add_argument("--summary", default="", help="Pak summary (free-form)")
     p_create.add_argument("--ttl", default="", help="Pak TTL hint (free-form, e.g. '7d')")
     p_create.add_argument(
-        "--continuation-notes", default="",
+        "--continuation-notes",
+        default="",
         help="Notes for continuation (free-form)",
     )
     p_create.add_argument(
-        "--include-content", action="store_true", default=True,
+        "--include-content",
+        action="store_true",
+        default=True,
         help="Embed file content in the Pak (default: on; use --no-include-content to omit)",
     )
     p_create.add_argument(
-        "--no-include-content", dest="include_content", action="store_false",
+        "--no-include-content",
+        dest="include_content",
+        action="store_false",
         help="Omit file content; only record paths + per-file sha256",
     )
     p_create.add_argument(
-        "--max-bytes", type=int, default=2_000_000,
+        "--max-bytes",
+        type=int,
+        default=2_000_000,
         help="Skip files larger than this when embedding content (default: 2 MiB)",
     )
     p_create.set_defaults(func=cmd_pak_create)
 
     p_import = paksub.add_parser(
-        "import", help="Install a Pak file into the local store (OSS)",
+        "import",
+        help="Install a Pak file into the local store (OSS)",
         description=(
             "Copy a Pak file into the local Pak store under "
             "<TOKENPAK_HOME>/paks/ so it is discoverable by `pak inspect <id>`. "
@@ -126,17 +128,14 @@ def build_pak_parser(sub: Any) -> None:
     )
     p_import.add_argument("pak_file", help="Path to a Pak file to install")
     p_import.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Overwrite if a Pak with the same id is already installed",
     )
     p_import.set_defaults(func=cmd_pak_import)
 
-    p_status = paksub.add_parser(
-        "status", help="Show MultiPak Pro readiness diagnostics"
-    )
-    p_status.add_argument(
-        "--json", action="store_true", help="Emit JSON instead of text"
-    )
+    p_status = paksub.add_parser("status", help="Show MultiPak Pro readiness diagnostics")
+    p_status.add_argument("--json", action="store_true", help="Emit JSON instead of text")
     p_status.set_defaults(func=cmd_pak_status)
 
     # Default — bare `tokenpak pak` prints help.
@@ -401,8 +400,8 @@ def cmd_pak_create(args: Any) -> int:
     include_content: bool = bool(getattr(args, "include_content", True))
     max_bytes: int = int(getattr(args, "max_bytes", 2_000_000))
 
-    anchors: list[dict] = []
-    skipped: list[dict] = []
+    anchors: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
     for path in sorted(src.rglob("*")):
         # A2 (codex-review-1): never follow symlinks — a link to e.g.
         # /etc/hostname would otherwise be read as a file and its target
@@ -472,8 +471,10 @@ def cmd_pak_create(args: Any) -> int:
         return 1
 
     print(f"✅ Created Pak {pak_id} → {out}")
-    print(f"   anchors: {len(anchors)}  skipped: {len(skipped)}  "
-          f"checksum: {pak_payload['checksum'][:24]}…")
+    print(
+        f"   anchors: {len(anchors)}  skipped: {len(skipped)}  "
+        f"checksum: {pak_payload['checksum'][:24]}…"
+    )
     if skipped:
         print(f"ℹ️  {len(skipped)} file(s) skipped — see Pak 'skipped' field for details.")
     return 0
@@ -531,9 +532,7 @@ def cmd_pak_import(args: Any) -> int:
         )
         return 1
 
-    pak_id = payload.get("pak_id") or (
-        "pak:" + actual[len("sha256:") : len("sha256:") + 16]
-    )
+    pak_id = payload.get("pak_id") or ("pak:" + actual[len("sha256:") : len("sha256:") + 16])
     store_dir = _paths.under("paks")
     store_dir.mkdir(parents=True, exist_ok=True)
     safe_id = pak_id.replace(":", "_").replace("/", "_")
@@ -541,8 +540,7 @@ def cmd_pak_import(args: Any) -> int:
 
     if target.exists() and not getattr(args, "force", False):
         print(
-            f"✗ tokenpak pak import — already installed: {target} "
-            "(use --force to overwrite)",
+            f"✗ tokenpak pak import — already installed: {target} (use --force to overwrite)",
             file=sys.stderr,
         )
         return 1
@@ -563,7 +561,7 @@ def cmd_pak_import(args: Any) -> int:
     return 0
 
 
-def _estimate_tokens(anchors: list[dict]) -> int:
+def _estimate_tokens(anchors: list[dict[str, Any]]) -> int:
     """Rough token estimate (chars / 4) over embedded anchor content.
 
     Beta 1 placeholder — Pro adds real model-specific tokenizers.
@@ -628,7 +626,7 @@ def _vault_block_count() -> int:
     if "tokenpak.proxy.vault_bridge" not in _sys.modules:
         return 0
     try:
-        from tokenpak.proxy.vault_bridge import get_vault_index  # type: ignore[import]
+        from tokenpak.proxy.vault_bridge import get_vault_index
 
         vi = get_vault_index()
         if vi is None:
@@ -659,9 +657,9 @@ def _promotion_candidate_count() -> int:
         return 0
 
 
-def _resolve_vault_pak(pak_ref: str):
+def _resolve_vault_pak(pak_ref: str) -> Pak | None:
     """Return a Pak instance for a vault: ID, or None when not indexed."""
-    block_id = pak_ref[len("vault:"):]
+    block_id = pak_ref[len("vault:") :]
     try:
         from tokenpak.proxy.vault_bridge import get_vault_index
 
@@ -721,7 +719,7 @@ def _inspect_from_file(path: str, *, as_json: bool) -> int:
     return 0
 
 
-def _print_pak_text(payload: dict) -> None:
+def _print_pak_text(payload: dict[str, Any]) -> None:
     """Render a Pak's metadata.
 
     Handles two shapes:
@@ -769,7 +767,7 @@ def _print_pak_text(payload: dict) -> None:
     print(f"  confidence  : {payload.get('confidence', '?')}")
     src = payload.get("source", {}) or {}
     print(f"  source      : {src.get('platform', '?')} ({src.get('source_type', '?')})")
-    src_hash = src.get('source_hash', '') or ''
+    src_hash = src.get("source_hash", "") or ""
     print(f"  source_hash : {src_hash[:16]}…" if src_hash else "  source_hash : ")
     print(f"  created_at  : {src.get('created_at', '?')}")
     scope = payload.get("scope", {}) or {}

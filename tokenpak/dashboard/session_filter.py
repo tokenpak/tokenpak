@@ -222,7 +222,8 @@ class SessionFilter:
 
     def _count(self, conn: sqlite3.Connection, where_sql: str, args: List[Any]) -> int:
         cur = conn.execute(f"SELECT COUNT(*) FROM requests WHERE {where_sql}", args)
-        return cur.fetchone()[0]
+        row = cur.fetchone()
+        return int(row[0]) if row is not None else 0
 
     def _fetch(
         self,

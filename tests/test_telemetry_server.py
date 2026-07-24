@@ -21,7 +21,10 @@ import pytest
 
 # fastapi is an optional dep ([serve]/[telemetry]); skip cleanly when absent
 # so the release test gate stays green without installing tokenpak[full].
-pytest.importorskip("fastapi", reason="fastapi not installed (optional dep — install via tokenpak[serve] or [telemetry])")
+pytest.importorskip(
+    "fastapi",
+    reason="fastapi not installed (optional dep — install via tokenpak[serve] or [telemetry])",
+)
 
 from fastapi.testclient import TestClient
 
@@ -31,6 +34,7 @@ from tokenpak.telemetry.storage import TelemetryDB
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_storage() -> TelemetryDB:
     """Create an in-memory TelemetryDB for isolation."""
@@ -59,8 +63,8 @@ def _event(**kwargs) -> dict:
 # parse_filter
 # ---------------------------------------------------------------------------
 
-class TestParseFilter:
 
+class TestParseFilter:
     def test_empty_returns_empty(self):
         assert parse_filter(None) == {}
         assert parse_filter("") == {}
@@ -77,9 +81,9 @@ class TestParseFilter:
 
     def test_agent_normalized(self):
         """'agent' key normalizes to 'agent_id'."""
-        result = parse_filter("agent:trix")
+        result = parse_filter("agent:beta")
         assert "agent_id" in result
-        assert result["agent_id"] == "trix"
+        assert result["agent_id"] == "beta"
 
     def test_unknown_keys_ignored(self):
         """Unknown filter keys are silently dropped."""
@@ -103,7 +107,9 @@ class TestParseFilter:
         assert result.get("model") == "provider:something"
 
     def test_all_valid_keys(self):
-        f = parse_filter("provider:openai,model:gpt-4o,agent_id:sue,status:ok,start:2026-01-01,end:2026-12-31")
+        f = parse_filter(
+            "provider:openai,model:gpt-4o,agent_id:alpha,status:ok,start:2026-01-01,end:2026-12-31"
+        )
         assert f.get("provider") == "openai"
         assert f.get("status") == "ok"
         assert f.get("start") == "2026-01-01"
@@ -113,8 +119,8 @@ class TestParseFilter:
 # /health endpoint
 # ---------------------------------------------------------------------------
 
-class TestHealthEndpoint:
 
+class TestHealthEndpoint:
     def test_health_returns_200(self):
         client = _make_client()
         r = client.get("/health")
@@ -153,8 +159,8 @@ class TestHealthEndpoint:
 # /v1/telemetry/ingest
 # ---------------------------------------------------------------------------
 
-class TestIngestEndpoint:
 
+class TestIngestEndpoint:
     def test_ingest_single_event_200(self):
         client = _make_client()
         r = client.post("/v1/telemetry/ingest", json={"events": [_event()]})
@@ -192,8 +198,11 @@ class TestIngestEndpoint:
 
     def test_ingest_missing_body_rejects(self):
         client = _make_client()
-        r = client.post("/v1/telemetry/ingest", content=b"not json",
-                        headers={"Content-Type": "application/json"})
+        r = client.post(
+            "/v1/telemetry/ingest",
+            content=b"not json",
+            headers={"Content-Type": "application/json"},
+        )
         assert r.status_code == 422
 
     def test_ingest_minimal_event(self):
@@ -207,7 +216,9 @@ class TestIngestEndpoint:
         """Events ingested should appear in subsequent queries."""
         storage = _make_storage()
         client = _make_client(storage)
-        client.post("/v1/telemetry/ingest", json={"events": [_event(provider="openai", model="gpt-4o")]})
+        client.post(
+            "/v1/telemetry/ingest", json={"events": [_event(provider="openai", model="gpt-4o")]}
+        )
         # Verify stored
         cur = storage._conn.cursor()
         cur.execute("SELECT COUNT(*) FROM tp_events")
@@ -244,8 +255,8 @@ class TestIngestEndpoint:
 # /v1/summary
 # ---------------------------------------------------------------------------
 
-class TestSummaryEndpoint:
 
+class TestSummaryEndpoint:
     def test_summary_returns_200(self):
         client = _make_client()
         r = client.get("/v1/summary")
@@ -273,8 +284,8 @@ class TestSummaryEndpoint:
 # /v1/timeseries
 # ---------------------------------------------------------------------------
 
-class TestTimeseriesEndpoint:
 
+class TestTimeseriesEndpoint:
     def test_timeseries_returns_200(self):
         client = _make_client()
         r = client.get("/v1/timeseries")
@@ -297,8 +308,8 @@ class TestTimeseriesEndpoint:
 # /v1/traces
 # ---------------------------------------------------------------------------
 
-class TestTracesEndpoint:
 
+class TestTracesEndpoint:
     def test_traces_returns_200(self):
         client = _make_client()
         r = client.get("/v1/traces")
@@ -337,8 +348,8 @@ class TestTracesEndpoint:
 # /v1/providers, /v1/models, /v1/agents
 # ---------------------------------------------------------------------------
 
-class TestDimensionEndpoints:
 
+class TestDimensionEndpoints:
     def test_providers_returns_200(self):
         client = _make_client()
         r = client.get("/v1/providers")
@@ -366,8 +377,8 @@ class TestDimensionEndpoints:
 # Error recovery
 # ---------------------------------------------------------------------------
 
-class TestErrorRecovery:
 
+class TestErrorRecovery:
     def test_ingest_extra_fields_allowed(self):
         """Extra event fields should not cause 422 (extra='allow')."""
         client = _make_client()
@@ -414,8 +425,8 @@ class TestErrorRecovery:
 # Integration: ingest → query flow
 # ---------------------------------------------------------------------------
 
-class TestEndToEndFlow:
 
+class TestEndToEndFlow:
     def test_ingest_then_summary(self):
         storage = _make_storage()
         client = _make_client(storage)
@@ -451,8 +462,8 @@ class TestEndToEndFlow:
 # /v1/telemetry/stats
 # ---------------------------------------------------------------------------
 
-class TestStatsEndpoint:
 
+class TestStatsEndpoint:
     def test_stats_returns_200(self):
         client = _make_client()
         r = client.get("/v1/telemetry/stats")
@@ -476,8 +487,8 @@ class TestStatsEndpoint:
 # /v1/pricing
 # ---------------------------------------------------------------------------
 
-class TestPricingEndpoint:
 
+class TestPricingEndpoint:
     def test_pricing_returns_200_or_500(self):
         client = _make_client()
         r = client.get("/v1/pricing")
@@ -488,8 +499,8 @@ class TestPricingEndpoint:
 # /v1/exports/trace
 # ---------------------------------------------------------------------------
 
-class TestExportEndpoints:
 
+class TestExportEndpoints:
     def test_export_trace_missing_returns_404(self):
         client = _make_client()
         r = client.get("/v1/exports/trace/nonexistent-xyz")
@@ -505,8 +516,8 @@ class TestExportEndpoints:
 # /metrics (Prometheus)
 # ---------------------------------------------------------------------------
 
-class TestMetricsEndpoint:
 
+class TestMetricsEndpoint:
     def test_metrics_returns_200(self):
         client = _make_client()
         r = client.get("/metrics")
@@ -525,8 +536,8 @@ class TestMetricsEndpoint:
 # /v1/rollups/*
 # ---------------------------------------------------------------------------
 
-class TestRollupsEndpoints:
 
+class TestRollupsEndpoints:
     def test_rollups_status_returns_200(self):
         client = _make_client()
         r = client.get("/v1/rollups/status")
@@ -552,8 +563,8 @@ class TestRollupsEndpoints:
 # /v1/settings/alerts
 # ---------------------------------------------------------------------------
 
-class TestAlertSettings:
 
+class TestAlertSettings:
     def test_get_alert_settings_returns_200(self):
         client = _make_client()
         r = client.get("/v1/settings/alerts")
@@ -569,8 +580,8 @@ class TestAlertSettings:
 # /v1/capsule
 # ---------------------------------------------------------------------------
 
-class TestCapsuleEndpoint:
 
+class TestCapsuleEndpoint:
     def test_capsule_minimal_body(self):
         client = _make_client()
         r = client.post("/v1/capsule", json={"budget_tokens": 100})
@@ -579,11 +590,14 @@ class TestCapsuleEndpoint:
 
     def test_capsule_with_segments(self):
         client = _make_client()
-        r = client.post("/v1/capsule", json={
-            "budget_tokens": 1000,
-            "segments": [{"type": "text", "content": "hello world", "tokens": 5}],
-            "session_id": "test-sess",
-        })
+        r = client.post(
+            "/v1/capsule",
+            json={
+                "budget_tokens": 1000,
+                "segments": [{"type": "text", "content": "hello world", "tokens": 5}],
+                "session_id": "test-sess",
+            },
+        )
         assert r.status_code in (200, 422, 500)
 
     def test_capsule_missing_budget_rejects(self):
@@ -601,8 +615,8 @@ class TestCapsuleEndpoint:
 # /v1/trace/{id} + /v1/trace/{id}/segments + /v1/trace/{id}/events
 # ---------------------------------------------------------------------------
 
-class TestTraceDetailEndpoints:
 
+class TestTraceDetailEndpoints:
     def test_trace_detail_missing(self):
         client = _make_client()
         r = client.get("/v1/trace/nonexistent-trace-xyz")
@@ -623,8 +637,8 @@ class TestTraceDetailEndpoints:
 # /v1/telemetry/refresh
 # ---------------------------------------------------------------------------
 
-class TestTelemetryRefresh:
 
+class TestTelemetryRefresh:
     def test_telemetry_refresh_200(self):
         client = _make_client()
         r = client.post("/v1/telemetry/refresh")
@@ -640,8 +654,8 @@ class TestTelemetryRefresh:
 # Additional endpoints to push coverage to ≥70%
 # ---------------------------------------------------------------------------
 
-class TestCacheEndpoints:
 
+class TestCacheEndpoints:
     def test_cache_stats_returns_200(self):
         client = _make_client()
         r = client.get("/v1/cache/stats")
@@ -659,7 +673,6 @@ class TestCacheEndpoints:
 
 
 class TestFilterOptions:
-
     def test_filter_options_returns_200(self):
         client = _make_client()
         r = client.get("/v1/filters/options")
@@ -679,7 +692,6 @@ class TestFilterOptions:
 
 
 class TestInsightsEndpoint:
-
     def test_insights_returns_200(self):
         client = _make_client()
         r = client.get("/v1/insights")
@@ -687,7 +699,6 @@ class TestInsightsEndpoint:
 
 
 class TestRollupsAdditional:
-
     def test_rollups_consistency_returns_200(self):
         client = _make_client()
         r = client.get("/v1/rollups/consistency")
@@ -700,7 +711,6 @@ class TestRollupsAdditional:
 
 
 class TestAdminEndpoints:
-
     def test_admin_recalculate_returns_200(self):
         client = _make_client()
         r = client.post("/v1/admin/recalculate")
@@ -708,7 +718,6 @@ class TestAdminEndpoints:
 
 
 class TestAlertSettingsWrite:
-
     def test_put_alert_settings_unavailable_or_ok(self):
         client = _make_client()
         r = client.put("/v1/settings/alerts", json={"threshold": 0.05})
@@ -721,7 +730,6 @@ class TestAlertSettingsWrite:
 
 
 class TestPricingRates:
-
     def test_pricing_rates_returns_200_or_500(self):
         client = _make_client()
         r = client.get("/v1/pricing/rates")

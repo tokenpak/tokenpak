@@ -8,6 +8,7 @@ from tokenpak.telemetry.cost_tracker import CostTracker, estimate_cost, get_cost
 # estimate_cost
 # ---------------------------------------------------------------------------
 
+
 class TestEstimateCost:
     def test_known_model_sonnet(self):
         # 1M input + 1M output = $3 + $15 = $18
@@ -57,6 +58,7 @@ class TestEstimateCost:
 # CostTracker
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def tracker():
     """In-memory tracker for isolation."""
@@ -66,6 +68,13 @@ def tracker():
 
 
 class TestRecordRequest:
+    def test_default_constructor_remains_in_memory(self):
+        default_tracker = CostTracker()
+        try:
+            assert default_tracker._db_path == ":memory:"
+        finally:
+            default_tracker.close()
+
     def test_inserts_row_and_returns_cost(self, tracker):
         cost = tracker.record_request("gpt-4o", 1000, 500)
         expected = estimate_cost("gpt-4o", 1000, 500)
@@ -116,8 +125,14 @@ class TestGetSummary:
     def test_summary_includes_all_keys(self, tracker):
         tracker.record_request("gpt-4o", 100, 50)
         summary = tracker.get_summary("all")
-        for key in ("period", "total_requests", "total_tokens", "total_cost_usd",
-                    "prompt_tokens", "completion_tokens"):
+        for key in (
+            "period",
+            "total_requests",
+            "total_tokens",
+            "total_cost_usd",
+            "prompt_tokens",
+            "completion_tokens",
+        ):
             assert key in summary
 
 
@@ -151,7 +166,7 @@ class TestGetByModel:
         assert rows["gpt-4o"]["total_tokens"] == 4500
 
     def test_ordered_by_cost_desc(self, tracker):
-        tracker.record_request("claude-haiku-3-5", 100, 10)   # cheap
+        tracker.record_request("claude-haiku-3-5", 100, 10)  # cheap
         tracker.record_request("gpt-4o", 1_000_000, 500_000)  # expensive
         rows = tracker.get_by_model("all")
         assert rows[0]["model"] == "gpt-4o"  # highest cost first

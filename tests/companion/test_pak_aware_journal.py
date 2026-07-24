@@ -75,9 +75,7 @@ def _entry_meta(db: Path, entry_id: int) -> dict:
 
     conn = sqlite3.connect(str(db))
     try:
-        row = conn.execute(
-            "SELECT metadata_json FROM entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT metadata_json FROM entries WHERE id = ?", (entry_id,)).fetchone()
     finally:
         conn.close()
     return json.loads(row[0]) if row else {}

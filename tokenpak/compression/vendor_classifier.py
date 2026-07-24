@@ -134,7 +134,7 @@ def should_include_in_index(path: str, content: Optional[str] = None) -> bool:
     return not (result.is_vendor and result.confidence >= 0.80)
 
 
-def create_metadata_only_block(path: str, content: str, reason: str) -> dict:
+def create_metadata_only_block(path: str, content: str, reason: str) -> dict[str, object]:
     """Create metadata-only block for vendor files.
 
     Args:

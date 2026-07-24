@@ -77,7 +77,7 @@ def scan_for_references(text: str) -> List[Reference]:
         Deduplicated list of Reference objects in order of first appearance.
     """
     refs: List[Reference] = []
-    seen_urls: set = set()
+    seen_urls: set[str] = set()
 
     # --- GitHub issues (before bare URL so they don't get caught as URL) ---
     for m in _GH_ISSUE_URL.finditer(text):

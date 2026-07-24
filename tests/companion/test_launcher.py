@@ -4,6 +4,7 @@
 Validates that _write_mcp_config, _write_settings, and _write_system_prompt
 produce the correct file contents.  Does NOT exec into Claude Code.
 """
+
 from __future__ import annotations
 
 import json
@@ -36,8 +37,8 @@ import pytest
 # main_passes_through_extra_args / main_proxy_detection_exception_path)
 # remain meaningful guards.
 SKIP_LAUNCHER_BANNER_TEXT_DRIFT = (
-    "Test asserts literal `\"companion ready\"` in launcher stderr. "
-    "Production banner now emits `\"TokenPak Companion / Ready • ...\"` "
+    'Test asserts literal `"companion ready"` in launcher stderr. '
+    'Production banner now emits `"TokenPak Companion / Ready • ..."` '
     "without the lowercase `companion ready` substring. API drift."
 )
 
@@ -48,6 +49,7 @@ from tokenpak.companion.config import CompanionConfig
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_config(tmp_path: Path, **kwargs) -> CompanionConfig:
     """Build a CompanionConfig that writes to tmp_path."""
@@ -64,10 +66,13 @@ def _make_config(tmp_path: Path, **kwargs) -> CompanionConfig:
 # _write_mcp_config
 # ---------------------------------------------------------------------------
 
+
 def test_write_mcp_config_creates_file(tmp_path):
     """_write_mcp_config writes mcp.json to config.run_dir."""
     cfg = CompanionConfig(journal_dir=tmp_path / "journal")
-    with patch.object(type(cfg), "run_dir", new_callable=lambda: property(lambda self: tmp_path / "run")):
+    with patch.object(
+        type(cfg), "run_dir", new_callable=lambda: property(lambda self: tmp_path / "run")
+    ):
         (tmp_path / "run").mkdir(parents=True, exist_ok=True)
         path = launcher._write_mcp_config(cfg)
     assert Path(path).exists()
@@ -95,9 +100,7 @@ def test_write_mcp_config_uses_safe_python_path(tmp_path):
     run_dir.mkdir(parents=True)
     with patch.object(type(cfg), "run_dir", new_callable=lambda: property(lambda self: run_dir)):
         launcher._write_mcp_config(cfg)
-    server = json.loads((run_dir / "mcp.json").read_text())["mcpServers"][
-        "tokenpak-companion"
-    ]
+    server = json.loads((run_dir / "mcp.json").read_text())["mcpServers"]["tokenpak-companion"]
     assert "-P" in server["args"]
     # -P must precede -m to take effect for the module launch.
     assert server["args"].index("-P") < server["args"].index("-m")
@@ -106,6 +109,7 @@ def test_write_mcp_config_uses_safe_python_path(tmp_path):
 # ---------------------------------------------------------------------------
 # _write_settings
 # ---------------------------------------------------------------------------
+
 
 def test_write_settings_with_hooks_enabled(tmp_path):
     """settings.json includes UserPromptSubmit hook when hooks_enabled=True."""
@@ -149,6 +153,7 @@ def test_write_settings_has_mcp_permission(tmp_path):
 # _write_system_prompt
 # ---------------------------------------------------------------------------
 
+
 def test_write_system_prompt_creates_file(tmp_path):
     """_write_system_prompt creates companion-prompt.md."""
     cfg = CompanionConfig(journal_dir=tmp_path / "journal")
@@ -169,8 +174,13 @@ def test_write_system_prompt_mentions_all_tools(tmp_path):
         path = launcher._write_system_prompt(cfg)
     content = Path(path).read_text()
     for tool in [
-        "estimate_tokens", "check_budget", "load_capsule",
-        "prune_context", "journal_read", "journal_write", "session_info",
+        "estimate_tokens",
+        "check_budget",
+        "load_capsule",
+        "prune_context",
+        "journal_read",
+        "journal_write",
+        "session_info",
     ]:
         assert tool in content, f"System prompt missing tool: {tool}"
 
@@ -179,17 +189,23 @@ def test_write_system_prompt_mentions_all_tools(tmp_path):
 # main() — file generation without execvpe
 # ---------------------------------------------------------------------------
 
+
 def test_main_generates_all_config_files(tmp_path):
     """launcher.main() creates mcp.json, settings.json, companion-prompt.md."""
     run_dir = tmp_path / "run"
     journal_dir = tmp_path / "journal"
 
-    with patch.dict(os.environ, {
-        "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
-        "TOKENPAK_COMPANION_ENABLED": "1",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
+            "TOKENPAK_COMPANION_ENABLED": "1",
+        },
+    ):
         # Patch run_dir and os.execvpe so we don't actually launch claude
-        with patch.object(CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)):
+        with patch.object(
+            CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)
+        ):
             run_dir.mkdir(parents=True, exist_ok=True)
             with patch("tokenpak.companion.launcher.os.execvpe") as mock_exec:
                 launcher.main([])
@@ -208,7 +224,9 @@ def test_main_passes_through_extra_args(tmp_path):
     journal_dir = tmp_path / "journal"
 
     with patch.dict(os.environ, {"TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir)}):
-        with patch.object(CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)):
+        with patch.object(
+            CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)
+        ):
             run_dir.mkdir(parents=True, exist_ok=True)
             with patch("tokenpak.companion.launcher.os.execvpe") as mock_exec:
                 launcher.main(["--no-update-notifier", "-p", "test prompt"])
@@ -221,6 +239,7 @@ def test_main_passes_through_extra_args(tmp_path):
 # ---------------------------------------------------------------------------
 # _prefix_session_name
 # ---------------------------------------------------------------------------
+
 
 def test_prefix_session_name_no_flag():
     """When no --name/-n flag is present, injects the default branded label.
@@ -274,6 +293,7 @@ def test_prefix_session_name_does_not_mutate_input():
 # main() — proxy detection exception path
 # ---------------------------------------------------------------------------
 
+
 def test_main_proxy_detection_exception_path(tmp_path):
     """When httpx raises, proxy detection falls through without setting ANTHROPIC_BASE_URL."""
     run_dir = tmp_path / "run"
@@ -281,11 +301,16 @@ def test_main_proxy_detection_exception_path(tmp_path):
 
     import httpx as _httpx
 
-    with patch.dict(os.environ, {
-        "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
-        "TOKENPAK_COMPANION_PROXY_URL": "",  # no explicit proxy
-    }):
-        with patch.object(CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)):
+    with patch.dict(
+        os.environ,
+        {
+            "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
+            "TOKENPAK_COMPANION_PROXY_URL": "",  # no explicit proxy
+        },
+    ):
+        with patch.object(
+            CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)
+        ):
             run_dir.mkdir(parents=True, exist_ok=True)
             with patch("tokenpak.companion.launcher.os.execvpe") as mock_exec:
                 with patch.object(_httpx, "get", side_effect=Exception("connection refused")):
@@ -307,11 +332,16 @@ def test_main_banner_written_to_stderr(tmp_path, capsys):
     run_dir = tmp_path / "run"
     journal_dir = tmp_path / "journal"
 
-    with patch.dict(os.environ, {
-        "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
-        "TOKENPAK_COMPANION_PROFILE": "balanced",
-    }):
-        with patch.object(CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)):
+    with patch.dict(
+        os.environ,
+        {
+            "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
+            "TOKENPAK_COMPANION_PROFILE": "balanced",
+        },
+    ):
+        with patch.object(
+            CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)
+        ):
             run_dir.mkdir(parents=True, exist_ok=True)
             with patch("tokenpak.companion.launcher.os.execvpe"):
                 launcher.main([])

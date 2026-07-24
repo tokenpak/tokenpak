@@ -35,6 +35,7 @@ from tokenpak.proxy.streaming import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _free_port() -> int:
     """Return an ephemeral TCP port on 127.0.0.1."""
     with socket.socket() as s:
@@ -42,44 +43,59 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _build_anthropic_sse(output_tokens: int = 42,
-                          cache_read: int = 0,
-                          cache_create: int = 0) -> bytes:
+def _build_anthropic_sse(
+    output_tokens: int = 42, cache_read: int = 0, cache_create: int = 0
+) -> bytes:
     """Build a realistic Anthropic SSE stream."""
     events = []
 
     # message_start — carries cache token stats
-    events.append({
-        "type": "message_start",
-        "message": {
-            "id": "msg_test",
-            "type": "message",
-            "role": "assistant",
-            "model": "claude-opus-4-5",
-            "content": [],
-            "stop_reason": None,
-            "usage": {
-                "input_tokens": 100,
-                "cache_read_input_tokens": cache_read,
-                "cache_creation_input_tokens": cache_create,
-                "output_tokens": 0,
+    events.append(
+        {
+            "type": "message_start",
+            "message": {
+                "id": "msg_test",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-opus-4-5",
+                "content": [],
+                "stop_reason": None,
+                "usage": {
+                    "input_tokens": 100,
+                    "cache_read_input_tokens": cache_read,
+                    "cache_creation_input_tokens": cache_create,
+                    "output_tokens": 0,
+                },
             },
-        },
-    })
+        }
+    )
     # content blocks
-    events.append({"type": "content_block_start", "index": 0,
-                    "content_block": {"type": "text", "text": ""}})
-    events.append({"type": "content_block_delta", "index": 0,
-                    "delta": {"type": "text_delta", "text": "Hello"}})
-    events.append({"type": "content_block_delta", "index": 0,
-                    "delta": {"type": "text_delta", "text": " world"}})
+    events.append(
+        {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}
+    )
+    events.append(
+        {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "text_delta", "text": "Hello"},
+        }
+    )
+    events.append(
+        {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "text_delta", "text": " world"},
+        }
+    )
     events.append({"type": "content_block_stop", "index": 0})
     # message_delta — carries output token count
-    events.append({
-        "type": "message_delta",
-        "delta": {"stop_reason": "end_turn", "stop_sequence": None},
-        "usage": {"output_tokens": output_tokens},
-    })
+    events.append(
+        {
+            "type": "message_delta",
+            "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+            "usage": {"output_tokens": output_tokens},
+        }
+    )
     events.append({"type": "message_stop"})
 
     lines = []
@@ -92,9 +108,9 @@ def _build_anthropic_sse(output_tokens: int = 42,
 def _build_openai_sse(completion_tokens: int = 17) -> bytes:
     """Build a minimal OpenAI SSE stream."""
     lines = [
-        f'data: {json.dumps({"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":None}]})}\n\n',
-        f'data: {json.dumps({"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":None}]})}\n\n',
-        f'data: {json.dumps({"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":completion_tokens,"total_tokens":10+completion_tokens}})}\n\n',
+        f"data: {json.dumps({'id': 'chatcmpl-x', 'object': 'chat.completion.chunk', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': None}]})}\n\n",
+        f"data: {json.dumps({'id': 'chatcmpl-x', 'object': 'chat.completion.chunk', 'choices': [{'index': 0, 'delta': {'content': 'Hi'}, 'finish_reason': None}]})}\n\n",
+        f"data: {json.dumps({'id': 'chatcmpl-x', 'object': 'chat.completion.chunk', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}], 'usage': {'prompt_tokens': 10, 'completion_tokens': completion_tokens, 'total_tokens': 10 + completion_tokens}})}\n\n",
         "data: [DONE]\n\n",
     ]
     return "".join(lines).encode("utf-8")
@@ -103,6 +119,7 @@ def _build_openai_sse(completion_tokens: int = 17) -> bytes:
 # ---------------------------------------------------------------------------
 # Unit tests: extract_sse_tokens
 # ---------------------------------------------------------------------------
+
 
 class TestExtractSseTokens:
     """Unit tests for extract_sse_tokens()."""
@@ -167,8 +184,8 @@ class TestExtractSseTokens:
     def test_mixed_anthropic_and_openai_fields(self):
         """If both formats appear, should not crash and return best-effort values."""
         lines = [
-            f'data: {json.dumps({"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 10}})}\n\n',
-            f'data: {json.dumps({"usage": {"completion_tokens": 5}})}\n\n',
+            f"data: {json.dumps({'type': 'message_delta', 'delta': {'stop_reason': 'end_turn'}, 'usage': {'output_tokens': 10}})}\n\n",
+            f"data: {json.dumps({'usage': {'completion_tokens': 5}})}\n\n",
             "data: [DONE]\n\n",
         ]
         sse = "".join(lines).encode("utf-8")
@@ -180,6 +197,7 @@ class TestExtractSseTokens:
 # ---------------------------------------------------------------------------
 # Unit tests: StreamHandler
 # ---------------------------------------------------------------------------
+
 
 class TestStreamHandler:
     """Unit tests for the StreamHandler helper class."""
@@ -217,6 +235,7 @@ class TestStreamHandler:
     def test_gzip_decompression(self):
         """StreamHandler decompresses gzip-encoded chunks."""
         import gzip
+
         raw = b"data: hello\n\n"
         compressed = gzip.compress(raw)
         sh = StreamHandler(content_encoding="gzip")
@@ -234,6 +253,7 @@ class TestStreamHandler:
 # ---------------------------------------------------------------------------
 # Unit tests: iter_sse_events
 # ---------------------------------------------------------------------------
+
 
 class TestIterSseEvents:
     """Unit tests for iter_sse_events()."""
@@ -264,6 +284,7 @@ class TestIterSseEvents:
 # Integration tests: proxy streaming path
 # ---------------------------------------------------------------------------
 
+
 def _make_sse_upstream(port: int, sse_body: bytes, content_type: str = "text/event-stream"):
     """
     Spin up a minimal fake SSE upstream server on `port`.
@@ -274,7 +295,8 @@ def _make_sse_upstream(port: int, sse_body: bytes, content_type: str = "text/eve
     """
 
     class _Handler(BaseHTTPRequestHandler):
-        def log_message(self, *a): pass  # silence
+        def log_message(self, *a):
+            pass  # silence
 
         def do_POST(self):
             # Drain request body
@@ -398,17 +420,17 @@ class TestProxyStreamingEndToEnd:
         """
         upstream_port = upstream_port or self.upstream_port
         target = f"http://127.0.0.1:{upstream_port}/v1/messages"
-        payload = json.dumps({
-            "model": "claude-opus-4-5",
-            "max_tokens": 100,
-            "stream": True,
-            # Use ≥16 chars so _estimate_tokens_from_body returns input_tokens > 0
-            # (estimates as len(content) // 4, so need at least 5 chars for > 0)
-            "messages": [{"role": "user", "content": "Hello, streaming test!"}],
-        }).encode()
-        proxy_handler = urllib.request.ProxyHandler(
-            {"http": f"http://127.0.0.1:{self.proxy_port}"}
-        )
+        payload = json.dumps(
+            {
+                "model": "claude-opus-4-5",
+                "max_tokens": 100,
+                "stream": True,
+                # Use ≥16 chars so _estimate_tokens_from_body returns input_tokens > 0
+                # (estimates as len(content) // 4, so need at least 5 chars for > 0)
+                "messages": [{"role": "user", "content": "Hello, streaming test!"}],
+            }
+        ).encode()
+        proxy_handler = urllib.request.ProxyHandler({"http": f"http://127.0.0.1:{self.proxy_port}"})
         opener = urllib.request.build_opener(proxy_handler)
         req = urllib.request.Request(
             target,
@@ -425,12 +447,14 @@ class TestProxyStreamingEndToEnd:
     def _raw_stream_request(self, upstream_port: int):
         """Send an absolute-form proxy request without response decoding."""
         target = f"http://127.0.0.1:{upstream_port}/v1/messages"
-        payload = json.dumps({
-            "model": "claude-opus-4-5",
-            "max_tokens": 100,
-            "stream": True,
-            "messages": [{"role": "user", "content": "Hello, streaming test!"}],
-        }).encode()
+        payload = json.dumps(
+            {
+                "model": "claude-opus-4-5",
+                "max_tokens": 100,
+                "stream": True,
+                "messages": [{"role": "user", "content": "Hello, streaming test!"}],
+            }
+        ).encode()
         connection = http.client.HTTPConnection(
             "127.0.0.1",
             self.proxy_port,
@@ -499,7 +523,7 @@ class TestProxyStreamingEndToEnd:
         """A sub-4KiB SSE must not wait for an upstream EOF flush."""
         upstream_port = _free_port()
         upstream_eof = threading.Event()
-        chunks = [self.sse_body[i:i + 64] for i in range(0, len(self.sse_body), 64)]
+        chunks = [self.sse_body[i : i + 64] for i in range(0, len(self.sse_body), 64)]
         assert len(self.sse_body) < 4096
         assert len(chunks) >= 12
         assert max(map(len, chunks)) <= 64
@@ -596,7 +620,8 @@ class TestProxyStreamingEndToEnd:
         upstream_port2 = _free_port()
 
         class _NoCtHandler(BaseHTTPRequestHandler):
-            def log_message(self, *a): pass
+            def log_message(self, *a):
+                pass
 
             def do_POST(self):
                 cl = int(self.headers.get("Content-Length", 0))
@@ -630,7 +655,8 @@ class TestProxyStreamingEndToEnd:
         upstream_port3 = _free_port()
 
         class _NoCcHandler(BaseHTTPRequestHandler):
-            def log_message(self, *a): pass
+            def log_message(self, *a):
+                pass
 
             def do_POST(self):
                 cl = int(self.headers.get("Content-Length", 0))
@@ -671,6 +697,7 @@ class TestProxyStreamingEndToEnd:
 # Unit tests: OpenAI streaming format
 # ---------------------------------------------------------------------------
 
+
 class TestOpenAIStreamParsing:
     """Verify token extraction from OpenAI-format SSE streams."""
 
@@ -681,7 +708,7 @@ class TestOpenAIStreamParsing:
 
     def test_openai_stream_zero_completion_tokens(self):
         lines = [
-            f'data: {json.dumps({"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":0}})}\n\n',
+            f"data: {json.dumps({'choices': [{'delta': {}, 'finish_reason': 'stop'}], 'usage': {'prompt_tokens': 5, 'completion_tokens': 0}})}\n\n",
             "data: [DONE]\n\n",
         ]
         sse = "".join(lines).encode()
@@ -691,7 +718,7 @@ class TestOpenAIStreamParsing:
     def test_stream_without_usage_returns_zero(self):
         """If no usage block exists, output_tokens defaults to 0."""
         lines = [
-            f'data: {json.dumps({"choices":[{"delta":{"content":"hi"},"finish_reason":None}]})}\n\n',
+            f"data: {json.dumps({'choices': [{'delta': {'content': 'hi'}, 'finish_reason': None}]})}\n\n",
             "data: [DONE]\n\n",
         ]
         sse = "".join(lines).encode()
@@ -702,6 +729,7 @@ class TestOpenAIStreamParsing:
 # ---------------------------------------------------------------------------
 # Edge case tests: Streaming failure paths
 # ---------------------------------------------------------------------------
+
 
 class TestStreamingFailurePaths:
     """Error paths, malformed chunks, and connection drop scenarios."""
@@ -728,7 +756,7 @@ class TestStreamingFailurePaths:
 
     def test_partial_chunk_no_crash(self):
         """Partial/truncated SSE line should not raise."""
-        partial = b"data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text"
+        partial = b'data: {"type":"content_block_delta","delta":{"type":"text'
         # No crash expected
         result = extract_sse_tokens(partial)
         assert isinstance(result, dict)
@@ -748,9 +776,10 @@ class TestStreamingFailurePaths:
     def test_multiple_usage_events_last_wins(self):
         """When multiple usage blocks appear, last non-zero value should dominate."""
         import json as _json
+
         lines = [
-            f'data: {_json.dumps({"type":"message_delta","usage":{"output_tokens":10}})}\n\n',
-            f'data: {_json.dumps({"type":"message_delta","usage":{"output_tokens":25}})}\n\n',
+            f"data: {_json.dumps({'type': 'message_delta', 'usage': {'output_tokens': 10}})}\n\n",
+            f"data: {_json.dumps({'type': 'message_delta', 'usage': {'output_tokens': 25}})}\n\n",
             "data: [DONE]\n\n",
         ]
         sse = "".join(lines).encode()
@@ -759,10 +788,7 @@ class TestStreamingFailurePaths:
 
     def test_iter_sse_events_malformed_chunk(self):
         """iter_sse_events should yield valid events, skip bad ones."""
-        sse_bytes = (
-            b"data: not-json\n\n"
-            b'data: {"type":"ping"}\n\n'
-        )
+        sse_bytes = b'data: not-json\n\ndata: {"type":"ping"}\n\n'
         events = list(iter_sse_events(sse_bytes))
         # At least the valid ping event should come through (or empty list — no crash)
         assert isinstance(events, list)
@@ -775,7 +801,8 @@ class TestStreamingFailurePaths:
     def test_stream_usage_zero_output_tokens(self):
         """usage block with output_tokens=0 should return 0, not be silently ignored."""
         import json as _json
-        line = f'data: {_json.dumps({"usage":{"output_tokens":0,"prompt_tokens":100}})}\n\n'
+
+        line = f"data: {_json.dumps({'usage': {'output_tokens': 0, 'prompt_tokens': 100}})}\n\n"
         sse = line.encode()
         result = extract_sse_tokens(sse)
         assert "output_tokens" in result

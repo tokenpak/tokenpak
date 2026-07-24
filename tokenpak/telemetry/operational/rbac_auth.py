@@ -198,12 +198,12 @@ class RBACStore:
                         True,
                     ),
                 )
-                print(f"\n{'='*50}")
+                print(f"\n{'=' * 50}")
                 print("TokenPak RBAC — First-run admin account created")
                 print("  Username : admin")
                 print(f"  Password : {password}")
                 print("  Change this password immediately!")
-                print(f"{'='*50}\n")
+                print(f"{'=' * 50}\n")
                 logger.warning("Admin bootstrapped — change the default password.")
 
     # ------------------------------------------------------------------

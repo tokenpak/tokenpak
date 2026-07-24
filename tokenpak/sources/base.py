@@ -1,8 +1,10 @@
 """Base connector interface for data sources."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Iterator, List, Optional
 
 
 @dataclass
@@ -11,10 +13,10 @@ class ConnectorConfig:
 
     name: str
     source_path: str  # Local path, URL, or identifier
-    auth_token: Optional[str] = None
+    auth_token: str | None = None
     sync_interval_minutes: int = 5
-    include_patterns: List[str] = field(default_factory=lambda: ["**/*"])
-    exclude_patterns: List[str] = field(default_factory=list)
+    include_patterns: list[str] = field(default_factory=lambda: ["**/*"])
+    exclude_patterns: list[str] = field(default_factory=list)
     max_file_size_mb: int = 10
 
 
@@ -26,8 +28,8 @@ class RemoteFile:
     source_id: str  # Unique identifier (file ID, URL, etc.)
     size_bytes: int
     modified_at: str  # ISO timestamp
-    content_hash: Optional[str] = None
-    file_type: Optional[str] = None
+    content_hash: str | None = None
+    file_type: str | None = None
 
 
 class Connector(ABC):
@@ -44,9 +46,9 @@ class Connector(ABC):
     name: str = "base"
     tier: str = "free"  # free, pro, enterprise
 
-    def __init__(self, config: ConnectorConfig):
+    def __init__(self, config: ConnectorConfig) -> None:
         self.config = config
-        self._sync_state: dict = {}
+        self._sync_state: dict[str, object] = {}
 
     @abstractmethod
     def connect(self) -> bool:
@@ -57,7 +59,7 @@ class Connector(ABC):
         pass
 
     @abstractmethod
-    def list_files(self, since: Optional[str] = None) -> Iterator[RemoteFile]:
+    def list_files(self, since: str | None = None) -> Iterator[RemoteFile]:
         """
         List files from the source.
 
@@ -82,14 +84,14 @@ class Connector(ABC):
         """
         pass
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """Close connection to the data source."""
         pass
 
-    def get_sync_state(self) -> dict:
+    def get_sync_state(self) -> dict[str, object]:
         """Get current sync state for resumable syncs."""
         return self._sync_state
 
-    def set_sync_state(self, state: dict):
+    def set_sync_state(self, state: dict[str, object]) -> None:
         """Restore sync state."""
         self._sync_state = state

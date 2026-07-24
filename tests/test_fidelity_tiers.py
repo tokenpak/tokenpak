@@ -78,9 +78,7 @@ class TestFidelityTierEnum:
         assert TIER_COST_FACTOR[FidelityTier.L0_RAW] == max(TIER_COST_FACTOR.values())
 
     def test_l4_is_cheapest(self):
-        assert TIER_COST_FACTOR[FidelityTier.L4_SUMMARY] == min(
-            TIER_COST_FACTOR.values()
-        )
+        assert TIER_COST_FACTOR[FidelityTier.L4_SUMMARY] == min(TIER_COST_FACTOR.values())
 
 
 # ---------------------------------------------------------------------------
@@ -127,9 +125,7 @@ class TestTierGeneratorPython:
         assert block.tiers[FidelityTier.L3_CHANGED] == block.tiers[FidelityTier.L2_ANNOTATED]
 
     def test_l3_with_changed_lines(self):
-        block = TierGenerator.generate(
-            SIMPLE_PYTHON, source_id="t", changed_lines=[12]
-        )
+        block = TierGenerator.generate(SIMPLE_PYTHON, source_id="t", changed_lines=[12])
         changed = block.tiers[FidelityTier.L3_CHANGED]
         assert changed  # non-empty
         # Should not contain the entire source
@@ -281,7 +277,9 @@ class TestTierSelector:
         tier_full = TierSelector.select(9.0, 0.9, relevance_score=1.0)
         tier_low = TierSelector.select(9.0, 0.9, relevance_score=0.1)
         # Low-relevance version should be cheaper (descending order)
-        assert FidelityTier.descending().index(tier_low) >= FidelityTier.descending().index(tier_full)
+        assert FidelityTier.descending().index(tier_low) >= FidelityTier.descending().index(
+            tier_full
+        )
 
     def test_select_for_block_returns_string(self):
         block = TierGenerator.generate(SIMPLE_PYTHON, source_id="b")

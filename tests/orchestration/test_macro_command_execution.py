@@ -39,9 +39,7 @@ def test_premade_step_runs_as_argv(monkeypatch):
         return real(action, **kwargs)
 
     monkeypatch.setattr(commands_mod, "run_command_action", spy)
-    PremadeMacroRunner()._run_step(
-        {"name": "n", "label": "l", "cmd": "tokenpak status --json"}
-    )
+    PremadeMacroRunner()._run_step({"name": "n", "label": "l", "cmd": "tokenpak status --json"})
     assert seen["use_shell"] is False
     assert seen["argv"] == ("tokenpak", "status", "--json")
 

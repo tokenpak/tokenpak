@@ -1,6 +1,5 @@
 """Tests for failover handler."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.pro.routing.failover", reason="module not available in current build")
@@ -68,17 +67,13 @@ class TestFailoverHandler:
 
     def test_get_backoff_delay_none(self):
         """Test backoff with factor 1.0."""
-        handler = FailoverHandler(
-            self.providers, max_retries=3, backoff_factor=1.0
-        )
+        handler = FailoverHandler(self.providers, max_retries=3, backoff_factor=1.0)
         delay = handler.get_backoff_delay(Provider.ANTHROPIC)
         assert delay == 0.0
 
     def test_get_backoff_delay_exponential(self):
         """Test exponential backoff calculation."""
-        handler = FailoverHandler(
-            self.providers, max_retries=3, backoff_factor=2.0
-        )
+        handler = FailoverHandler(self.providers, max_retries=3, backoff_factor=2.0)
 
         handler.increment_retry(Provider.ANTHROPIC)
         delay1 = handler.get_backoff_delay(Provider.ANTHROPIC)
@@ -101,9 +96,7 @@ class TestFailoverHandler:
         async def mock_request(adapter):
             return {"status": "success", "data": "test"}
 
-        result = await self.handler.execute_with_failover(
-            mock_request, adapters
-        )
+        result = await self.handler.execute_with_failover(mock_request, adapters)
 
         assert result["status"] == "success"
         assert result["data"] == "test"
@@ -127,9 +120,7 @@ class TestFailoverHandler:
                 raise RuntimeError("First provider failed")
             return {"status": "success", "data": "fallback"}
 
-        result = await self.handler.execute_with_failover(
-            mock_request, adapters
-        )
+        result = await self.handler.execute_with_failover(mock_request, adapters)
 
         assert result["status"] == "success"
         assert call_count >= 2  # At least 2 calls
@@ -153,9 +144,7 @@ class TestFailoverHandler:
     @pytest.mark.asyncio
     async def test_failover_timeout(self):
         """Test timeout handling in failover."""
-        handler = FailoverHandler(
-            [Provider.ANTHROPIC], max_retries=1, timeout=0.1
-        )
+        handler = FailoverHandler([Provider.ANTHROPIC], max_retries=1, timeout=0.1)
 
         mock_adapter = Mock()
         adapters = {Provider.ANTHROPIC: mock_adapter}
@@ -175,9 +164,7 @@ class TestFailoverHandler:
         def mock_request(adapter):
             return {"status": "success", "data": "test"}
 
-        result = self.handler.execute_with_failover_sync(
-            mock_request, adapters
-        )
+        result = self.handler.execute_with_failover_sync(mock_request, adapters)
 
         assert result["status"] == "success"
 
@@ -199,9 +186,7 @@ class TestFailoverHandler:
                 raise RuntimeError("First provider failed")
             return {"status": "success"}
 
-        result = self.handler.execute_with_failover_sync(
-            mock_request, adapters
-        )
+        result = self.handler.execute_with_failover_sync(mock_request, adapters)
 
         assert result["status"] == "success"
         assert call_count >= 2
@@ -215,9 +200,7 @@ class TestFailoverHandler:
             raise RuntimeError("Always fails")
 
         with pytest.raises(RuntimeError, match="All adapters failed"):
-            self.handler.execute_with_failover_sync(
-                mock_request, adapters
-            )
+            self.handler.execute_with_failover_sync(mock_request, adapters)
 
     @pytest.mark.asyncio
     async def test_failover_skip_missing_adapter(self):
@@ -229,17 +212,13 @@ class TestFailoverHandler:
             assert adapter is mock_adapter  # Should skip ANTHROPIC
             return {"status": "success"}
 
-        result = await self.handler.execute_with_failover(
-            mock_request, adapters
-        )
+        result = await self.handler.execute_with_failover(mock_request, adapters)
 
         assert result["status"] == "success"
 
     def test_max_retries_respected(self):
         """Test that max retries limit is respected."""
-        handler = FailoverHandler(
-            [Provider.ANTHROPIC], max_retries=2
-        )
+        handler = FailoverHandler([Provider.ANTHROPIC], max_retries=2)
 
         mock_adapter = Mock()
         adapters = {Provider.ANTHROPIC: mock_adapter}

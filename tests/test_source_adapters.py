@@ -1,9 +1,10 @@
 """Unit tests for Source Adapters (Phase 3.3)."""
 
-
 import pytest
 
-pytest.importorskip("tokenpak.connectors.notion_adapter", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.connectors.notion_adapter", reason="module not available in current build"
+)
 import os
 import subprocess
 import tempfile
@@ -18,6 +19,7 @@ from tokenpak.connectors.url_adapter import URLAdapter, _extract_title, _strip_h
 # ---------------------------------------------------------------------------
 # Provenance dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestProvenance:
     def test_fields_populated(self):
@@ -47,6 +49,7 @@ class TestProvenance:
 # HTML helpers
 # ---------------------------------------------------------------------------
 
+
 class TestHTMLHelpers:
     def test_strip_html_removes_tags(self):
         result = _strip_html("<p>Hello <b>world</b></p>")
@@ -75,6 +78,7 @@ class TestHTMLHelpers:
 # ---------------------------------------------------------------------------
 # URL adapter
 # ---------------------------------------------------------------------------
+
 
 def _mock_response(body: bytes, headers: dict = None, status: int = 200):
     """Build a mock urllib response."""
@@ -109,9 +113,7 @@ class TestURLAdapter:
     @patch("urllib.request.urlopen")
     def test_version_is_hash_when_no_etag(self, mock_urlopen, _robots):
         html = b"<html><body>no etag</body></html>"
-        mock_urlopen.return_value = _mock_response(
-            html, {"Content-Type": "text/html"}
-        )
+        mock_urlopen.return_value = _mock_response(html, {"Content-Type": "text/html"})
         _, prov = self.adapter.ingest("https://example.com/no-etag")
         assert len(prov.source_version) == 64  # sha256 hex
 
@@ -129,17 +131,13 @@ class TestURLAdapter:
     @patch("tokenpak.connectors.url_adapter._check_robots", return_value=True)
     @patch("urllib.request.urlopen")
     def test_has_changed_true_on_new_etag(self, mock_urlopen, _robots):
-        mock_urlopen.return_value = _mock_response(
-            b"", {"ETag": '"new-etag"'}
-        )
+        mock_urlopen.return_value = _mock_response(b"", {"ETag": '"new-etag"'})
         assert self.adapter.has_changed("https://example.com", "old-etag") is True
 
     @patch("tokenpak.connectors.url_adapter._check_robots", return_value=True)
     @patch("urllib.request.urlopen")
     def test_has_changed_false_on_same_etag(self, mock_urlopen, _robots):
-        mock_urlopen.return_value = _mock_response(
-            b"", {"ETag": '"same-etag"'}
-        )
+        mock_urlopen.return_value = _mock_response(b"", {"ETag": '"same-etag"'})
         assert self.adapter.has_changed("https://example.com", "same-etag") is False
 
     def test_source_type(self):
@@ -164,9 +162,15 @@ _NOTION_PAGE = {
 _NOTION_BLOCKS = {
     "results": [
         {"type": "heading_1", "heading_1": {"rich_text": [{"plain_text": "Introduction"}]}},
-        {"type": "paragraph",  "paragraph":  {"rich_text": [{"plain_text": "This is a paragraph."}]}},
-        {"type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"plain_text": "Item one"}]}},
-        {"type": "code", "code": {"language": "python", "rich_text": [{"plain_text": "def foo(): pass"}]}},
+        {"type": "paragraph", "paragraph": {"rich_text": [{"plain_text": "This is a paragraph."}]}},
+        {
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {"rich_text": [{"plain_text": "Item one"}]},
+        },
+        {
+            "type": "code",
+            "code": {"language": "python", "rich_text": [{"plain_text": "def foo(): pass"}]},
+        },
     ],
     "has_more": False,
 }
@@ -212,10 +216,13 @@ class TestNotionAdapter:
 # Git adapter
 # ---------------------------------------------------------------------------
 
+
 def _init_git_repo(tmpdir: str, files: dict) -> str:
     """Create a minimal git repo with given files and return its path."""
     subprocess.run(["git", "init", tmpdir], capture_output=True, check=True)
-    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True
+    )
     subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
     for path, content in files.items():
         full = os.path.join(tmpdir, path)
@@ -225,7 +232,9 @@ def _init_git_repo(tmpdir: str, files: dict) -> str:
     subprocess.run(["git", "add", "-A"], cwd=tmpdir, capture_output=True, check=True)
     subprocess.run(
         ["git", "commit", "-m", "init"],
-        cwd=tmpdir, capture_output=True, check=True,
+        cwd=tmpdir,
+        capture_output=True,
+        check=True,
     )
     return tmpdir
 
@@ -237,9 +246,7 @@ class TestGitAdapter:
         _init_git_repo(self.tmpdir, {"src/auth.py": "def login(): pass\n"})
 
     def test_ingest_reads_file_at_head(self):
-        content, prov = self.adapter.ingest(
-            "src/auth.py", repo_path=self.tmpdir
-        )
+        content, prov = self.adapter.ingest("src/auth.py", repo_path=self.tmpdir)
         assert "def login(): pass" in content
         assert prov.source_type == "git"
         assert prov.source_id == "src/auth.py"
@@ -252,9 +259,10 @@ class TestGitAdapter:
 
     def test_has_changed_false_on_same_commit(self):
         _, prov = self.adapter.ingest("src/auth.py", repo_path=self.tmpdir)
-        assert self.adapter.has_changed(
-            "src/auth.py", prov.source_version, repo_path=self.tmpdir
-        ) is False
+        assert (
+            self.adapter.has_changed("src/auth.py", prov.source_version, repo_path=self.tmpdir)
+            is False
+        )
 
     def test_has_changed_true_after_commit(self):
         _, prov_old = self.adapter.ingest("src/auth.py", repo_path=self.tmpdir)
@@ -266,12 +274,11 @@ class TestGitAdapter:
         subprocess.run(["git", "add", "-A"], cwd=self.tmpdir, capture_output=True)
         subprocess.run(
             ["git", "commit", "-m", "update"],
-            cwd=self.tmpdir, capture_output=True,
+            cwd=self.tmpdir,
+            capture_output=True,
         )
 
-        assert self.adapter.has_changed(
-            "src/auth.py", old_sha, repo_path=self.tmpdir
-        ) is True
+        assert self.adapter.has_changed("src/auth.py", old_sha, repo_path=self.tmpdir) is True
 
     def test_missing_repo_path_raises(self):
         with pytest.raises(SourceFetchError, match="repo_path"):
@@ -289,6 +296,7 @@ class TestGitAdapter:
 # Wire format provenance block
 # ---------------------------------------------------------------------------
 
+
 class TestWireProvenance:
     def test_provenance_in_pack_output(self):
         from tokenpak.wire import pack
@@ -300,14 +308,16 @@ class TestWireProvenance:
             fetched_at="2026-02-25T00:00:00+00:00",
             title="Docs",
         )
-        blocks = [{
-            "ref": "docs",
-            "type": "text",
-            "quality": 0.9,
-            "tokens": 100,
-            "content": "Important documentation.",
-            "provenance": prov,
-        }]
+        blocks = [
+            {
+                "ref": "docs",
+                "type": "text",
+                "quality": 0.9,
+                "tokens": 100,
+                "content": "Important documentation.",
+                "provenance": prov,
+            }
+        ]
         output = pack(blocks, budget=1000)
         assert "[SOURCE: url:https://example.com/docs]" in output
         assert "[VERSION:" in output
@@ -315,13 +325,15 @@ class TestWireProvenance:
     def test_no_provenance_no_source_tag(self):
         from tokenpak.wire import pack
 
-        blocks = [{
-            "ref": "local",
-            "type": "code",
-            "quality": 1.0,
-            "tokens": 50,
-            "content": "def foo(): pass",
-        }]
+        blocks = [
+            {
+                "ref": "local",
+                "type": "code",
+                "quality": 1.0,
+                "tokens": 50,
+                "content": "def foo(): pass",
+            }
+        ]
         output = pack(blocks, budget=1000)
         assert "[SOURCE:" not in output
 
@@ -329,7 +341,15 @@ class TestWireProvenance:
         from tokenpak.wire import pack
 
         prov = Provenance("git", "src/main.py", "a" * 40, "2026-02-25T00:00:00+00:00")
-        blocks = [{"ref": "x", "type": "code", "quality": 1.0, "tokens": 10,
-                   "content": "x=1", "provenance": prov}]
+        blocks = [
+            {
+                "ref": "x",
+                "type": "code",
+                "quality": 1.0,
+                "tokens": 10,
+                "content": "x=1",
+                "provenance": prov,
+            }
+        ]
         output = pack(blocks, budget=1000)
         assert f"[VERSION: {'a' * 16}]" in output

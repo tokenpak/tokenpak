@@ -31,10 +31,15 @@ def current_session_id() -> str:
     from the hook, so this file is the only channel by which it learns the
     active session id. Returns "" if no marker exists yet."""
     try:
-        run_dir = Path(os.environ.get(
-            "TOKENPAK_COMPANION_JOURNAL_DIR",
-            str(Path.home() / ".tokenpak" / "companion"),
-        )) / "run"
+        run_dir = (
+            Path(
+                os.environ.get(
+                    "TOKENPAK_COMPANION_JOURNAL_DIR",
+                    str(Path.home() / ".tokenpak" / "companion"),
+                )
+            )
+            / "run"
+        )
         marker = run_dir / "current-session"
         if marker.exists():
             return marker.read_text(encoding="utf-8").strip()
@@ -64,6 +69,7 @@ class CompanionState:
     def budget_tracker(self) -> Any:
         if self._budget_tracker is None:
             from ..budget.tracker import BudgetTracker
+
             self._budget_tracker = BudgetTracker(
                 db_path=self.config.journal_dir / "budget.db",
                 daily_budget=self.config.budget_daily_usd,
@@ -74,6 +80,7 @@ class CompanionState:
     def journal_store(self) -> Any:
         if self._journal_store is None:
             from ..journal.store import JournalStore
+
             self._journal_store = JournalStore(
                 db_path=self.config.journal_dir / "journal.db",
             )
@@ -84,9 +91,11 @@ class CompanionState:
 # Tool registry
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ToolDef:
     """MCP tool definition."""
+
     name: str
     description: str
     input_schema: dict[str, Any]
@@ -127,35 +136,38 @@ def _handle_estimate_tokens_legacy_unused(state: CompanionState, args: dict[str,
     chars = len(text)
     try:
         from tokenpak.telemetry.tokens import count_tokens
+
         CHUNK = 100_000
         if chars <= CHUNK:
             tokens = count_tokens(text)
         else:
-            tokens = sum(
-                count_tokens(text[i:i + CHUNK])
-                for i in range(0, chars, CHUNK)
-            )
+            tokens = sum(count_tokens(text[i : i + CHUNK]) for i in range(0, chars, CHUNK))
         method = "tiktoken"
     except Exception:
         tokens = chars // 4
         method = "heuristic (chars/4)"
 
-    return json.dumps({
-        "tokens": tokens,
-        "chars": chars,
-        "method": method,
-        "source": file_path or "inline text",
-    }, indent=2)
+    return json.dumps(
+        {
+            "tokens": tokens,
+            "chars": chars,
+            "method": method,
+            "source": file_path or "inline text",
+        },
+        indent=2,
+    )
 
 
 def _handle_check_budget(state: CompanionState, args: dict[str, Any]) -> str:
     """Check remaining budget via proxy /tpk/v1/budget."""
     status, body = _proxy_get("/tpk/v1/budget")
     if status == 0:
-        return json.dumps({
-            "error": "proxy_unreachable",
-            "detail": body.get("detail", "is the tokenpak proxy running?"),
-        })
+        return json.dumps(
+            {
+                "error": "proxy_unreachable",
+                "detail": body.get("detail", "is the tokenpak proxy running?"),
+            }
+        )
     if status >= 400:
         return json.dumps(body)
     # Honest-reporting (split-brain trust fix): the proxy only accounts for
@@ -244,10 +256,12 @@ def _handle_journal_read(state: CompanionState, args: dict[str, Any]) -> str:
         )
 
     if status == 0:
-        return json.dumps({
-            "error": "proxy_unreachable",
-            "detail": body.get("detail", ""),
-        })
+        return json.dumps(
+            {
+                "error": "proxy_unreachable",
+                "detail": body.get("detail", ""),
+            }
+        )
     if status >= 400:
         return json.dumps(body)
     return json.dumps(body, indent=2)
@@ -268,10 +282,12 @@ def _handle_journal_write(state: CompanionState, args: dict[str, Any]) -> str:
         {"content": content, "entry_type": "user"},
     )
     if status == 0:
-        return json.dumps({
-            "error": "proxy_unreachable",
-            "detail": body.get("detail", ""),
-        })
+        return json.dumps(
+            {
+                "error": "proxy_unreachable",
+                "detail": body.get("detail", ""),
+            }
+        )
     if status >= 400:
         return json.dumps(body)
     return json.dumps(body)
@@ -311,8 +327,7 @@ def _handle_session_info(state: CompanionState, args: dict[str, Any]) -> str:
     if status == 200:
         local["proxy"] = proxy_info
     elif status == 0:
-        local["proxy"] = {"error": "proxy_unreachable",
-                          "detail": proxy_info.get("detail", "")}
+        local["proxy"] = {"error": "proxy_unreachable", "detail": proxy_info.get("detail", "")}
     else:
         local["proxy"] = proxy_info
     return json.dumps(local, indent=2)
@@ -333,7 +348,12 @@ def _proxy_base_url() -> str:
     return _os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
 
 
-def _proxy_request(method: str, path: str, params: Optional[dict[str, Any]] = None, body: Optional[dict[str, Any]] = None) -> tuple[int, dict[str, Any]]:
+def _proxy_request(
+    method: str,
+    path: str,
+    params: Optional[dict[str, Any]] = None,
+    body: Optional[dict[str, Any]] = None,
+) -> tuple[int, dict[str, Any]]:
     """HTTP call against the local proxy's /tpk/v1/* app API.
 
     Returns (status_code, json_body). Never raises — network/parse errors
@@ -373,7 +393,9 @@ def _proxy_get(path: str, params: Optional[dict[str, Any]] = None) -> tuple[int,
     return _proxy_request("GET", path, params=params)
 
 
-def _proxy_post(path: str, body: Optional[dict[str, Any]] = None, params: Optional[dict[str, Any]] = None) -> tuple[int, dict[str, Any]]:
+def _proxy_post(
+    path: str, body: Optional[dict[str, Any]] = None, params: Optional[dict[str, Any]] = None
+) -> tuple[int, dict[str, Any]]:
     return _proxy_request("POST", path, params=params, body=body)
 
 
@@ -397,10 +419,12 @@ def _handle_vault_search(state: CompanionState, args: dict[str, Any]) -> str:
 
     status, body = _proxy_get("/tpk/v1/vault/search", {"q": query, "limit": limit})
     if status == 0:
-        return json.dumps({
-            "error": "proxy_unreachable",
-            "detail": body.get("detail", "is the tokenpak proxy running? try `tokenpak start`"),
-        })
+        return json.dumps(
+            {
+                "error": "proxy_unreachable",
+                "detail": body.get("detail", "is the tokenpak proxy running? try `tokenpak start`"),
+            }
+        )
     if status >= 400:
         return json.dumps(body)
     # Pass through the proxy's response shape as-is; it already matches our contract.
@@ -444,7 +468,10 @@ TOOLS: list[ToolDef] = [
             "type": "object",
             "properties": {
                 "text": {"type": "string", "description": "Text to estimate tokens for"},
-                "file_path": {"type": "string", "description": "Path to a file (alternative to text)"},
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to a file (alternative to text)",
+                },
             },
         },
         handler=_handle_estimate_tokens,
@@ -461,7 +488,10 @@ TOOLS: list[ToolDef] = [
         input_schema={
             "type": "object",
             "properties": {
-                "session_id": {"type": "string", "description": "Session ID to load (omit to list available)"},
+                "session_id": {
+                    "type": "string",
+                    "description": "Session ID to load (omit to list available)",
+                },
             },
         },
         handler=_handle_load_capsule,
@@ -473,7 +503,11 @@ TOOLS: list[ToolDef] = [
             "type": "object",
             "properties": {
                 "text": {"type": "string", "description": "Text to prune"},
-                "max_tokens": {"type": "integer", "description": "Target token count (default 2000)", "default": 2000},
+                "max_tokens": {
+                    "type": "integer",
+                    "description": "Target token count (default 2000)",
+                    "default": 2000,
+                },
             },
             "required": ["text"],
         },
@@ -485,9 +519,19 @@ TOOLS: list[ToolDef] = [
         input_schema={
             "type": "object",
             "properties": {
-                "session_id": {"type": "string", "description": "Session to query (default: current)"},
-                "entry_type": {"type": "string", "description": "Filter by type: auto, user, milestone, cost"},
-                "limit": {"type": "integer", "description": "Max entries to return (default 20)", "default": 20},
+                "session_id": {
+                    "type": "string",
+                    "description": "Session to query (default: current)",
+                },
+                "entry_type": {
+                    "type": "string",
+                    "description": "Filter by type: auto, user, milestone, cost",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max entries to return (default 20)",
+                    "default": 20,
+                },
             },
         },
         handler=_handle_journal_read,
@@ -523,7 +567,11 @@ TOOLS: list[ToolDef] = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query (words or phrase)"},
-                "limit": {"type": "integer", "description": "Max results (default 5, max 20)", "default": 5},
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (default 5, max 20)",
+                    "default": 5,
+                },
             },
             "required": ["query"],
         },
@@ -540,7 +588,10 @@ TOOLS: list[ToolDef] = [
             "type": "object",
             "properties": {
                 "block_id": {"type": "string", "description": "Exact block_id from vault_search"},
-                "path": {"type": "string", "description": "Path substring to match (alternative to block_id)"},
+                "path": {
+                    "type": "string",
+                    "description": "Path substring to match (alternative to block_id)",
+                },
             },
         },
         handler=_handle_vault_retrieve,

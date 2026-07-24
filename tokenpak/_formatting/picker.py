@@ -32,7 +32,8 @@ from __future__ import annotations
 
 import shutil
 import sys
-from typing import Optional
+from types import TracebackType
+from typing import Literal, Optional
 
 try:
     import termios
@@ -139,7 +140,12 @@ class AltScreenSession:
         """Re-enter the alt-screen after a suspended command."""
         self._enter_alt()
 
-    def __exit__(self, *exc) -> bool:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> Literal[False]:
         self._leave_alt()
         return False
 

@@ -41,6 +41,7 @@ from tokenpak.cli.commands.diff import (
 # DiffBlock
 # ---------------------------------------------------------------------------
 
+
 def test_diffblock_symbol_removed():
     b = DiffBlock("id1", "My Block", "removed")
     assert b.symbol == "+"
@@ -67,6 +68,7 @@ def test_diffblock_to_dict_includes_symbol():
 # ---------------------------------------------------------------------------
 # _classify_segment
 # ---------------------------------------------------------------------------
+
 
 def test_classify_removed_by_action():
     seg = {"actions": '["remove"]', "tokens_raw": 100, "tokens_after_tp": 0}
@@ -99,8 +101,13 @@ def test_classify_compressed_by_token_ratio():
 # _is_pinned
 # ---------------------------------------------------------------------------
 
+
 def test_is_pinned_true():
-    seg = {"content_type": "pinned_instruction", "segment_type": "instruction", "segment_source": ""}
+    seg = {
+        "content_type": "pinned_instruction",
+        "segment_type": "instruction",
+        "segment_source": "",
+    }
     assert _is_pinned(seg) is True
 
 
@@ -113,15 +120,40 @@ def test_is_pinned_false():
 # _build_diff_from_segments
 # ---------------------------------------------------------------------------
 
+
 def test_build_diff_correct_counts():
     """Diff should correctly partition segments into removed/compressed/retained."""
     segments = [
-        {"segment_id": "s1", "actions": '["remove"]', "tokens_raw": 100, "tokens_after_tp": 0,
-         "segment_type": "knowledge", "segment_source": "old.md", "content_type": "", "debug_ref": "Legacy block"},
-        {"segment_id": "s2", "actions": '["compress"]', "tokens_raw": 400, "tokens_after_tp": 100,
-         "segment_type": "knowledge", "segment_source": "main.md", "content_type": "", "debug_ref": "MasterPlaybook"},
-        {"segment_id": "s3", "actions": "[]", "tokens_raw": 50, "tokens_after_tp": 50,
-         "segment_type": "instruction", "segment_source": "system.md", "content_type": "pinned", "debug_ref": "ADR log"},
+        {
+            "segment_id": "s1",
+            "actions": '["remove"]',
+            "tokens_raw": 100,
+            "tokens_after_tp": 0,
+            "segment_type": "knowledge",
+            "segment_source": "old.md",
+            "content_type": "",
+            "debug_ref": "Legacy block",
+        },
+        {
+            "segment_id": "s2",
+            "actions": '["compress"]',
+            "tokens_raw": 400,
+            "tokens_after_tp": 100,
+            "segment_type": "knowledge",
+            "segment_source": "main.md",
+            "content_type": "",
+            "debug_ref": "MasterPlaybook",
+        },
+        {
+            "segment_id": "s3",
+            "actions": "[]",
+            "tokens_raw": 50,
+            "tokens_after_tp": 50,
+            "segment_type": "instruction",
+            "segment_source": "system.md",
+            "content_type": "pinned",
+            "debug_ref": "ADR log",
+        },
     ]
     diff = _build_diff_from_segments("trace-123", segments)
     assert len(diff.removed) == 1
@@ -133,8 +165,16 @@ def test_build_diff_correct_counts():
 def test_build_diff_compression_pct_calculated():
     """Compression percentage should be computed for compressed blocks."""
     segments = [
-        {"segment_id": "s1", "actions": '["compress"]', "tokens_raw": 1000, "tokens_after_tp": 250,
-         "segment_type": "knowledge", "segment_source": "file.md", "content_type": "", "debug_ref": "Big doc"},
+        {
+            "segment_id": "s1",
+            "actions": '["compress"]',
+            "tokens_raw": 1000,
+            "tokens_after_tp": 250,
+            "segment_type": "knowledge",
+            "segment_source": "file.md",
+            "content_type": "",
+            "debug_ref": "Big doc",
+        },
     ]
     diff = _build_diff_from_segments("t1", segments)
     b = diff.compressed[0]
@@ -153,6 +193,7 @@ def test_build_diff_empty_segments():
 # print_diff
 # ---------------------------------------------------------------------------
 
+
 def test_print_diff_empty(capsys):
     diff = _empty_diff()
     print_diff(diff)
@@ -162,12 +203,36 @@ def test_print_diff_empty(capsys):
 
 def test_print_diff_shows_symbols(capsys):
     segments = [
-        {"segment_id": "s1", "actions": '["remove"]', "tokens_raw": 100, "tokens_after_tp": 0,
-         "segment_type": "knowledge", "segment_source": "", "content_type": "", "debug_ref": "Old cache"},
-        {"segment_id": "s2", "actions": '["compress"]', "tokens_raw": 200, "tokens_after_tp": 60,
-         "segment_type": "knowledge", "segment_source": "", "content_type": "", "debug_ref": "Playbook"},
-        {"segment_id": "s3", "actions": "[]", "tokens_raw": 50, "tokens_after_tp": 50,
-         "segment_type": "instruction", "segment_source": "", "content_type": "pinned", "debug_ref": "ADR"},
+        {
+            "segment_id": "s1",
+            "actions": '["remove"]',
+            "tokens_raw": 100,
+            "tokens_after_tp": 0,
+            "segment_type": "knowledge",
+            "segment_source": "",
+            "content_type": "",
+            "debug_ref": "Old cache",
+        },
+        {
+            "segment_id": "s2",
+            "actions": '["compress"]',
+            "tokens_raw": 200,
+            "tokens_after_tp": 60,
+            "segment_type": "knowledge",
+            "segment_source": "",
+            "content_type": "",
+            "debug_ref": "Playbook",
+        },
+        {
+            "segment_id": "s3",
+            "actions": "[]",
+            "tokens_raw": 50,
+            "tokens_after_tp": 50,
+            "segment_type": "instruction",
+            "segment_source": "",
+            "content_type": "pinned",
+            "debug_ref": "ADR",
+        },
     ]
     diff = _build_diff_from_segments("trace-1", segments)
     print_diff(diff)
@@ -179,7 +244,9 @@ def test_print_diff_shows_symbols(capsys):
 
 def test_print_diff_pinned_in_retained(capsys):
     """Pinned blocks should show as retained with '=' symbol."""
-    b = DiffBlock("x1", "Architecture ADR", "retained", pinned=True, tokens_before=100, tokens_after=100)
+    b = DiffBlock(
+        "x1", "Architecture ADR", "retained", pinned=True, tokens_before=100, tokens_after=100
+    )
     diff = ContextDiff(trace_id="t", timestamp=None, removed=[], compressed=[], retained=[b])
     print_diff(diff)
     out = capsys.readouterr().out
@@ -190,8 +257,16 @@ def test_print_diff_pinned_in_retained(capsys):
 def test_print_diff_json_output(capsys):
     """`--json` output must be valid JSON with required keys."""
     segments = [
-        {"segment_id": "s1", "actions": '["remove"]', "tokens_raw": 50, "tokens_after_tp": 0,
-         "segment_type": "knowledge", "segment_source": "", "content_type": "", "debug_ref": "Old"},
+        {
+            "segment_id": "s1",
+            "actions": '["remove"]',
+            "tokens_raw": 50,
+            "tokens_after_tp": 0,
+            "segment_type": "knowledge",
+            "segment_source": "",
+            "content_type": "",
+            "debug_ref": "Old",
+        },
     ]
     diff = _build_diff_from_segments("t-json", segments)
     print_diff(diff, raw=True)
@@ -208,10 +283,12 @@ def test_print_diff_json_output(capsys):
 # Pro gating
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skip(reason=SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS)
 def test_diff_gated_non_pro(capsys):
     """Non-Pro license should print an upgrade prompt and exit."""
     import pytest
+
     with patch("tokenpak.infrastructure.license_activation.is_pro", return_value=False):
         args = MagicMock()
         args.verbose = False

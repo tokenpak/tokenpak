@@ -191,9 +191,7 @@ def test_size_budget_enforced(tmp_path):
     (root / "b.txt").write_text("b" * 200, encoding="utf-8")
 
     budget = ContextBudget(size_budget_bytes=250, token_budget=10_000_000)
-    bundle = LocalContextProvider(root, budget=budget).build_context(
-        _manifest(), _station()
-    )
+    bundle = LocalContextProvider(root, budget=budget).build_context(_manifest(), _station())
 
     assert bundle.truncated is True
     assert len(bundle.files) == 1
@@ -220,9 +218,7 @@ def test_token_budget_enforced(tmp_path):
 
     # Budget admits one file's tokens (100) but not two (200).
     budget = ContextBudget(size_budget_bytes=10_000_000, token_budget=120)
-    bundle = LocalContextProvider(root, budget=budget).build_context(
-        _manifest(), _station()
-    )
+    bundle = LocalContextProvider(root, budget=budget).build_context(_manifest(), _station())
 
     assert bundle.truncated is True
     assert len(bundle.files) == 1
@@ -275,9 +271,7 @@ def test_no_repo_scan_when_disabled(tmp_path):
     """enable_repo_scan=False yields no repo_scan-sourced files."""
 
     root = _build_repo(tmp_path)
-    provider = LocalContextProvider(
-        root, explicit_files=["src/app.py"], enable_repo_scan=False
-    )
+    provider = LocalContextProvider(root, explicit_files=["src/app.py"], enable_repo_scan=False)
     bundle = provider.build_context(_manifest(), _station())
     assert [f.path for f in bundle.files] == ["src/app.py"]
     assert "repo_scan" not in bundle.sources

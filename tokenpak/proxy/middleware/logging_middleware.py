@@ -4,37 +4,52 @@ Request logging middleware for TokenPak proxy.
 Integrates with proxy request/response cycle to capture metrics.
 """
 
+from __future__ import annotations
+
+__all__ = (
+    "CacheAudit",
+    "CompileAudit",
+    "LoggingMiddleware",
+    "MetricsAudit",
+    "RequestLogger",
+)
+
+
 import time
 import uuid
+from collections.abc import Callable, Mapping
 from functools import wraps
-from typing import Any, Callable, Dict, Optional
+from typing import Optional, ParamSpec, TypeVar
 
 from .audit_trail import CacheAudit, CompileAudit, MetricsAudit
 from .logger import RequestLogger
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class LoggingMiddleware:
     """Request logging middleware for proxy."""
 
-    def __init__(self, logger: RequestLogger):
+    def __init__(self, logger: RequestLogger) -> None:
         self.logger = logger
-        self._request_contexts: Dict[str, Dict[str, Any]] = {}
+        self._request_contexts: dict[str, dict[str, object]] = {}
 
     def wrap_request(
         self,
         endpoint: str,
         method: str = "POST",
-    ) -> Callable:
+    ) -> Callable[[Callable[P, R]], Callable[P, R]]:
         """Decorator to wrap a request handler with logging."""
 
-        def decorator(handler: Callable) -> Callable:
+        def decorator(handler: Callable[P, R]) -> Callable[P, R]:
             @wraps(handler)
-            def wrapper(*args, **kwargs) -> Any:
+            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
                 request_id = str(uuid.uuid4())
                 start_time = time.time()
 
                 # Extract client IP from Flask/Starlette request object if present
-                client_ip = self._get_client_ip(args, kwargs)
+                client_ip = self._get_client_ip(tuple(args), dict(kwargs))
 
                 # Store context for audit trails
                 self._request_contexts[request_id] = {
@@ -61,7 +76,8 @@ class LoggingMiddleware:
                     if isinstance(result, tuple):
                         # (data, status_code) or (data, status_code, headers)
                         data = result[0]
-                        status_code = result[1] if len(result) > 1 else 200
+                        candidate_status = result[1] if len(result) > 1 else 200
+                        status_code = candidate_status if isinstance(candidate_status, int) else 200
                         response_size = len(str(data)) if data else 0
                     else:
                         response_size = len(str(result)) if result else 0
@@ -122,7 +138,7 @@ class LoggingMiddleware:
 
         return decorator
 
-    def log_compile_audit(self, audit: CompileAudit):
+    def log_compile_audit(self, audit: CompileAudit) -> None:
         """Log compilation audit trail."""
         # Convert audit to log entry
         message = (
@@ -156,7 +172,7 @@ class LoggingMiddleware:
             level="info",
         )
 
-    def log_cache_audit(self, audit: CacheAudit):
+    def log_cache_audit(self, audit: CacheAudit) -> None:
         """Log cache audit trail."""
         message = f"Cache {audit.operation}: {audit.block_id or 'all'} ({'hit' if audit.cache_hit else 'miss'})"
 
@@ -176,7 +192,7 @@ class LoggingMiddleware:
             level="info",
         )
 
-    def log_metrics_audit(self, audit: MetricsAudit):
+    def log_metrics_audit(self, audit: MetricsAudit) -> None:
         """Log metrics audit trail."""
         message = (
             f"Metrics: {audit.aggregation_window} window, {audit.data_points_returned} data points"
@@ -196,19 +212,27 @@ class LoggingMiddleware:
             level="info",
         )
 
-    def _get_client_ip(self, args: tuple, kwargs: dict) -> Optional[str]:
+    def _get_client_ip(
+        self, args: tuple[object, ...], kwargs: Mapping[str, object]
+    ) -> Optional[str]:
         """Extract client IP from request object."""
         # Try to find a request object in args/kwargs
         for arg in args:
-            if hasattr(arg, "remote_addr"):
-                return arg.remote_addr
-            if hasattr(arg, "client") and hasattr(arg.client, "host"):
-                return arg.client.host
+            remote_addr = getattr(arg, "remote_addr", None)
+            if isinstance(remote_addr, str):
+                return remote_addr
+            client = getattr(arg, "client", None)
+            host = getattr(client, "host", None)
+            if isinstance(host, str):
+                return host
 
         for value in kwargs.values():
-            if hasattr(value, "remote_addr"):
-                return value.remote_addr
-            if hasattr(value, "client") and hasattr(value.client, "host"):
-                return value.client.host
+            remote_addr = getattr(value, "remote_addr", None)
+            if isinstance(remote_addr, str):
+                return remote_addr
+            client = getattr(value, "client", None)
+            host = getattr(client, "host", None)
+            if isinstance(host, str):
+                return host
 
         return None

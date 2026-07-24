@@ -260,9 +260,9 @@ def _builder() -> DispatchWorker:
 
 def test_compose_prompt_is_additive_base_preserved():
     builder = _builder()
-    overlay = OverlayLoader(
-        packaged_dir=_PACKAGED_OVERLAY_DIR, user_dir=Path("/nonexistent")
-    ).load("overlay.code_builder.v1")
+    overlay = OverlayLoader(packaged_dir=_PACKAGED_OVERLAY_DIR, user_dir=Path("/nonexistent")).load(
+        "overlay.code_builder.v1"
+    )
 
     composed = compose_prompt(builder, overlay)
 
@@ -290,9 +290,9 @@ def test_compose_prompt_without_overlay_returns_base():
 
 def test_bind_overlay_succeeds_when_worker_has_capabilities():
     builder = _builder()
-    overlay = OverlayLoader(
-        packaged_dir=_PACKAGED_OVERLAY_DIR, user_dir=Path("/nonexistent")
-    ).load("overlay.code_builder.v1")
+    overlay = OverlayLoader(packaged_dir=_PACKAGED_OVERLAY_DIR, user_dir=Path("/nonexistent")).load(
+        "overlay.code_builder.v1"
+    )
     composed = bind_overlay(builder, overlay)
     assert composed == compose_prompt(builder, overlay)
 
@@ -300,9 +300,9 @@ def test_bind_overlay_succeeds_when_worker_has_capabilities():
 def test_bind_overlay_fails_when_worker_lacks_overlay_capabilities():
     reg = DispatchWorkerRegistry.from_dir()
     reviewer = reg.get("worker.reviewer.default.v1")  # has no code_drafting
-    overlay = OverlayLoader(
-        packaged_dir=_PACKAGED_OVERLAY_DIR, user_dir=Path("/nonexistent")
-    ).load("overlay.code_builder.v1")
+    overlay = OverlayLoader(packaged_dir=_PACKAGED_OVERLAY_DIR, user_dir=Path("/nonexistent")).load(
+        "overlay.code_builder.v1"
+    )
     with pytest.raises(RouteBindError) as exc:
         bind_overlay(reviewer, overlay)
     assert "code_drafting" in exc.value.missing
@@ -313,14 +313,12 @@ def test_bind_overlay_fails_when_worker_lacks_overlay_capabilities():
 
 def test_assert_route_binding_intersects_station_capabilities():
     builder = _builder()  # has code_drafting + patch_generation, no semantic_review
-    overlay = OverlayLoader(
-        packaged_dir=_PACKAGED_OVERLAY_DIR, user_dir=Path("/nonexistent")
-    ).load("overlay.code_builder.v1")
+    overlay = OverlayLoader(packaged_dir=_PACKAGED_OVERLAY_DIR, user_dir=Path("/nonexistent")).load(
+        "overlay.code_builder.v1"
+    )
     # Station demands a capability the builder lacks -> binding must fail.
     with pytest.raises(RouteBindError) as exc:
-        assert_route_binding(
-            builder, overlay, station_required_capabilities=["semantic_review"]
-        )
+        assert_route_binding(builder, overlay, station_required_capabilities=["semantic_review"])
     assert exc.value.missing == ["semantic_review"]
 
 

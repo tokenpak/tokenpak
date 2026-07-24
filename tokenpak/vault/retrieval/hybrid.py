@@ -1,13 +1,25 @@
 """
 Hybrid retriever orchestrator: combines BM25 + optional local vector search via RRF fusion.
 """
+
 from __future__ import annotations
+
+__all__ = (
+    "BM25Retriever",
+    "FusedResult",
+    "HybridRetriever",
+    "HybridSearchConfig",
+    "LocalVectorRetriever",
+    "RetrievalQuery",
+    "rrf_fusion_detailed",
+)
+
 
 import asyncio
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from .base import FusedResult, HybridSearchConfig, RetrievalQuery
+from .base import FusedResult, HybridSearchConfig, RetrievalQuery, RetrievalResult
 from .bm25 import BM25Retriever
 from .fusion import rrf_fusion_detailed
 from .vector_local import LocalVectorRetriever
@@ -48,17 +60,19 @@ class HybridRetriever:
     def vector_available(self) -> bool:
         return self._vector is not None and self._vector.is_available()
 
-    async def index(self, documents: list) -> int:
+    async def index(self, documents: list[dict[str, object]]) -> int:
         """Index documents into both BM25 and vector retrievers."""
         tasks = [self._bm25.index(documents)]
-        if self.vector_available:
-            tasks.append(self._vector.index(documents))  # type: ignore[union-attr]
+        vector = self._vector
+        if vector is not None and vector.is_available():
+            tasks.append(vector.index(documents))
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for r in results:
-            if isinstance(r, Exception):
+            if isinstance(r, BaseException):
                 logger.warning("Indexing error: %s", r)
         # Return BM25 count as the canonical count
-        return int(results[0]) if not isinstance(results[0], Exception) else 0
+        first_result = results[0]
+        return first_result if not isinstance(first_result, BaseException) else 0
 
     async def search(self, query_text: str, top_k: int = 5) -> List[FusedResult]:
         """
@@ -72,26 +86,31 @@ class HybridRetriever:
             min_score=config.bm25_min_score,
         )
 
-        if self.vector_available:
+        vector = self._vector
+        if vector is not None and vector.is_available():
             vec_query = RetrievalQuery(
                 text=query_text,
                 top_k=max(top_k * 4, config.top_k),
                 min_score=0.0,
             )
-            bm25_results, vec_results = await asyncio.gather(
+            bm25_out, vector_out = await asyncio.gather(
                 self._bm25.search(bm25_query),
-                self._vector.search(vec_query),  # type: ignore[union-attr]
+                vector.search(vec_query),
                 return_exceptions=True,
             )
 
-            if isinstance(bm25_results, Exception):
-                logger.warning("BM25 search error: %s", bm25_results)
-                bm25_results = []
-            if isinstance(vec_results, Exception):
-                logger.warning("Vector search error: %s", vec_results)
-                vec_results = []
+            if isinstance(bm25_out, BaseException):
+                logger.warning("BM25 search error: %s", bm25_out)
+                bm25_results: List[RetrievalResult] = []
+            else:
+                bm25_results = bm25_out
+            if isinstance(vector_out, BaseException):
+                logger.warning("Vector search error: %s", vector_out)
+                vec_results: List[RetrievalResult] = []
+            else:
+                vec_results = vector_out
 
-            result_lists = {}
+            result_lists: Dict[str, List[RetrievalResult]] = {}
             if bm25_results:
                 result_lists["bm25"] = bm25_results
             if vec_results:
@@ -104,7 +123,7 @@ class HybridRetriever:
         else:
             # BM25-only fallback
             bm25_results = await self._bm25.search(bm25_query)
-            if isinstance(bm25_results, Exception):
+            if isinstance(bm25_results, BaseException):
                 logger.warning("BM25 search error: %s", bm25_results)
                 bm25_results = []
             result_lists = {"bm25": bm25_results} if bm25_results else {}

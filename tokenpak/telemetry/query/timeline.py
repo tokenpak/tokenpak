@@ -71,7 +71,7 @@ def _cost_for_tokens(model: str, tokens: int, cache_hit: bool = False) -> float:
 class TimelineGenerator:
     """Generate hourly buckets of cost/token data from entries."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     def hourly_buckets(

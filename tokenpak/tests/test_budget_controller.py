@@ -75,7 +75,13 @@ class TestBudgetControllerInit:
         assert bc.t4_intents == {IntentClass.DEBUG}
 
     def test_custom_tier_tokens(self):
-        custom_tokens = {"T0_8K": 9000, "T1_16K": 17000, "T2_32K": 33000, "T3_64K": 65000, "T4_128K": 129000}
+        custom_tokens = {
+            "T0_8K": 9000,
+            "T1_16K": 17000,
+            "T2_32K": 33000,
+            "T3_64K": 65000,
+            "T4_128K": 129000,
+        }
         bc = BudgetController(tier_tokens=custom_tokens)
         assert bc.tier_tokens == custom_tokens
 
@@ -238,7 +244,9 @@ class TestCheckSpendingThreshold:
 class TestMaybeEscalate:
     def _decision(self, tier: str, bc: BudgetController | None = None) -> BudgetDecision:
         _bc = bc or BudgetController()
-        return _bc.decide(_classify(IntentClass.CODE_EDIT if tier == "T2_32K" else IntentClass.GEN_Q))
+        return _bc.decide(
+            _classify(IntentClass.CODE_EDIT if tier == "T2_32K" else IntentClass.GEN_Q)
+        )
 
     def test_no_escalation_when_coverage_sufficient(self):
         bc = BudgetController(coverage_threshold=0.55)

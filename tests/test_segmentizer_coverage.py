@@ -292,7 +292,12 @@ def test_token_counts_sum_within_2pct_of_total() -> None:
         for m in msgs
     )
     # Use per-message token sum instead of total string (avoids separator skew)
-    per_msg_total = sum(len(m.get("content", "")) // 4 if isinstance(m.get("content"), str) else len(json.dumps(m.get("content"))) // 4 for m in msgs)
+    per_msg_total = sum(
+        len(m.get("content", "")) // 4
+        if isinstance(m.get("content"), str)
+        else len(json.dumps(m.get("content"))) // 4
+        for m in msgs
+    )
     seg_total = _total_tokens(segs)
     if per_msg_total > 0:
         diff_pct = abs(seg_total - per_msg_total) / per_msg_total

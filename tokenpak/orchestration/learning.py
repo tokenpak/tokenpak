@@ -13,11 +13,34 @@ Feeds model routing decisions, recipe selection, and budget allocation.
 
 from __future__ import annotations
 
+__all__ = (
+    "DEFAULT_LEARNING_PATH",
+    "MIN_SAMPLES_THRESHOLD",
+    "cmd_learn_status",
+    "get_best_model",
+    "get_best_quality_per_token",
+    "get_compression_quality_signal",
+    "get_durable_lessons",
+    "get_effective_compression",
+    "learn",
+    "load",
+    "on_episode_complete",
+    "record_lesson",
+    "record_quality_per_token",
+    "reset",
+    "run_memory_promotion",
+)
+
+
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Optional, TypedDict, cast
+
+if TYPE_CHECKING:
+    from tokenpak.orchestration.episode_distiller import EpisodeRecord
+    from tokenpak.orchestration.memory_promoter import Lesson
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -29,6 +52,108 @@ DEFAULT_LEARNING_PATH = os.path.expanduser("~/.tokenpak/learning.json")
 MIN_SAMPLES_THRESHOLD = 5
 
 
+class ModelPerformanceStats(TypedDict):
+    acceptance_rate: float
+    samples: int
+    wins: int
+    losses: int
+
+
+ModelPerformance = dict[str, dict[str, ModelPerformanceStats]]
+
+
+class CompressionCount(TypedDict):
+    retries: int
+    successes: int
+
+
+class CompressionStats(TypedDict):
+    retry_rate: float
+    retries: int
+    successes: int
+    event_count: int
+
+
+CompressionModeMap = dict[str, CompressionStats]
+CompressionResults = dict[str, CompressionModeMap | dict[str, str]]
+
+
+class BlockUtilityStats(TypedDict, total=False):
+    score: float
+    hits: int
+    misses: int
+    last_cited: Optional[str]
+
+
+BlockUtility = dict[str, BlockUtilityStats]
+
+
+class ContextGapSummary(TypedDict):
+    total: int
+    by_signal: dict[str, int]
+    queries_with_gaps: int
+    expansion_triggers: int
+
+
+class QualityPerTokenStats(TypedDict):
+    model: str
+    compression_mode: str
+    task_type: str
+    total_outcome: float
+    total_tokens: int
+    samples: int
+    avg_qpt: float
+
+
+QualityPerTokenMap = dict[str, QualityPerTokenStats]
+
+
+class LearningStore(TypedDict):
+    version: int
+    updated: str
+    model_performance: ModelPerformance
+    compression_modes: CompressionResults
+    block_utility: BlockUtility
+    context_gaps: ContextGapSummary
+    quality_per_token: QualityPerTokenMap
+
+
+class CalibrationEvent(TypedDict, total=False):
+    mode: str
+    type: str
+    risk_classes: list[str]
+
+
+class CalibrationData(TypedDict, total=False):
+    events: list[CalibrationEvent]
+    overrides: dict[str, str]
+
+
+class ContextGapRecord(TypedDict, total=False):
+    signal_type: str
+    query: str
+
+
+class BestQualityPerToken(TypedDict):
+    model: str
+    compression_mode: str
+    task_type: str
+    avg_qpt: float
+    samples: int
+
+
+class ModeQualitySummary(TypedDict):
+    avg_qpt: float
+    samples: int
+
+
+class CompressionQualitySignal(TypedDict):
+    best_mode: Optional[str]
+    prefer_compression: bool
+    modes: dict[str, ModeQualitySummary]
+    recommendation: str
+
+
 # ---------------------------------------------------------------------------
 # Schema helpers
 # ---------------------------------------------------------------------------
@@ -38,7 +163,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _empty_store() -> dict:
+def _empty_store() -> LearningStore:
     return {
         "version": 1,
         "updated": _now_iso(),
@@ -57,19 +182,19 @@ def _empty_store() -> dict:
     }
 
 
-def _load(path: str) -> dict:
+def _load(path: str) -> LearningStore:
     p = Path(path)
     if p.exists():
         try:
             data = json.loads(p.read_text())
             if isinstance(data, dict) and data.get("version") == 1:
-                return data
+                return cast(LearningStore, data)
         except (json.JSONDecodeError, OSError):
             pass
     return _empty_store()
 
 
-def _save(data: dict, path: str) -> None:
+def _save(data: LearningStore, path: str) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     data["updated"] = _now_iso()
@@ -83,8 +208,8 @@ def _save(data: dict, path: str) -> None:
 
 def _extract_model_performance(
     ledger_path: str,
-    store: dict,
-) -> dict:
+    store: LearningStore,
+) -> ModelPerformance:
     """
     Pull model acceptance rates by task_type from the routing_ledger SQLite DB.
     Updates store["model_performance"] in place and returns it.
@@ -113,12 +238,12 @@ def _extract_model_performance(
     except sqlite3.Error:
         return store["model_performance"]
 
-    perf: Dict[str, Dict] = {}
+    perf: ModelPerformance = {}
     for row in rows:
-        task_type = row["task_type"] or "UNKNOWN"
-        model = row["model_used"]
-        total = row["total"]
-        wins = row["wins"]
+        task_type = str(row["task_type"] or "UNKNOWN")
+        model = str(row["model_used"])
+        total = int(row["total"])
+        wins = int(row["wins"])
 
         if task_type not in perf:
             perf[task_type] = {}
@@ -127,7 +252,7 @@ def _extract_model_performance(
             "acceptance_rate": round(wins / total, 4) if total > 0 else 0.0,
             "samples": total,
             "wins": wins,
-            "losses": row["losses"],
+            "losses": int(row["losses"]),
         }
 
     store["model_performance"] = perf
@@ -141,8 +266,8 @@ def _extract_model_performance(
 
 def _extract_compression_modes(
     calibration_path: str,
-    store: dict,
-) -> dict:
+    store: LearningStore,
+) -> CompressionResults:
     """
     Derive compression mode effectiveness from calibration.json events.
     Updates store["compression_modes"] in place and returns it.
@@ -152,13 +277,13 @@ def _extract_compression_modes(
         return store["compression_modes"]
 
     try:
-        data = json.loads(p.read_text())
+        data = cast(CalibrationData, json.loads(p.read_text()))
     except (json.JSONDecodeError, OSError):
         return store["compression_modes"]
 
     events = data.get("events", [])
     # Build per (risk_class, mode) retry/success counts
-    counts: Dict[str, Dict[str, Dict]] = {}  # risk_class → mode → {retries, successes}
+    counts: dict[str, dict[str, CompressionCount]] = {}
 
     for ev in events:
         mode = ev.get("mode", "unknown").lower()
@@ -175,20 +300,25 @@ def _extract_compression_modes(
             counts["_ALL"][mode]["successes"] += 1
 
     # Compute retry_rate for each (rc, mode)
-    result: Dict[str, Dict] = {}
+    result: CompressionResults = {}
     for rc, modes in counts.items():
-        result[rc] = {}
+        mode_results: CompressionModeMap = {}
         all_successes = counts.get("_ALL", {})
         for mode, stats in modes.items():
             retries = stats["retries"]
-            successes = all_successes.get(mode, {}).get("successes", 0) + stats.get("successes", 0)
+            shared_successes = all_successes.get(mode)
+            successes = (
+                shared_successes["successes"] if shared_successes is not None else 0
+            ) + stats["successes"]
             total = retries + successes
-            result[rc][mode] = {
+            mode_results[mode] = {
                 "retry_rate": round(retries / total, 4) if total > 0 else 0.0,
                 "retries": retries,
                 "successes": successes,
                 "event_count": total,
             }
+
+        result[rc] = mode_results
 
     # Add current overrides for reference
     result["_overrides"] = data.get("overrides", {})
@@ -203,8 +333,8 @@ def _extract_compression_modes(
 
 def _extract_block_utility(
     utility_path: str,
-    store: dict,
-) -> dict:
+    store: LearningStore,
+) -> BlockUtility:
     """
     Load citation utility scores from utility.json.
     Updates store["block_utility"] in place and returns it.
@@ -221,8 +351,9 @@ def _extract_block_utility(
     if not isinstance(data, dict):
         return store["block_utility"]
 
-    store["block_utility"] = data
-    return data
+    utility = cast(BlockUtility, data)
+    store["block_utility"] = utility
+    return utility
 
 
 # ---------------------------------------------------------------------------
@@ -232,8 +363,8 @@ def _extract_block_utility(
 
 def _extract_context_gaps(
     gaps_path: str,
-    store: dict,
-) -> dict:
+    store: LearningStore,
+) -> ContextGapSummary:
     """
     Aggregate context gap signals from gaps.json.
     Updates store["context_gaps"] in place and returns it.
@@ -250,11 +381,12 @@ def _extract_context_gaps(
     if not isinstance(gaps_list, list):
         return store["context_gaps"]
 
-    by_signal: Dict[str, int] = {}
-    unique_queries: set = set()
+    gaps = cast(list[ContextGapRecord], gaps_list)
+    by_signal: dict[str, int] = {}
+    unique_queries: set[str] = set()
     expansion_triggers = 0
 
-    for gap in gaps_list:
+    for gap in gaps:
         sig = gap.get("signal_type", "UNKNOWN")
         by_signal[sig] = by_signal.get(sig, 0) + 1
         q = gap.get("query", "")
@@ -264,8 +396,8 @@ def _extract_context_gaps(
         if sig in ("EXPLICIT_ASK", "HALLUCINATED_IMPORT"):
             expansion_triggers += 1
 
-    summary = {
-        "total": len(gaps_list),
+    summary: ContextGapSummary = {
+        "total": len(gaps),
         "by_signal": by_signal,
         "queries_with_gaps": len(unique_queries),
         "expansion_triggers": expansion_triggers,
@@ -281,9 +413,9 @@ def _extract_context_gaps(
 
 def _extract_quality_per_token(
     ledger_path: str,
-    store: dict,
+    store: LearningStore,
     compression_mode: str = "unknown",
-) -> dict:
+) -> QualityPerTokenMap:
     """
     Compute quality_per_token from routing_ledger transactions.
 
@@ -305,7 +437,7 @@ def _extract_quality_per_token(
 
     p = Path(ledger_path)
     if not p.exists():
-        return store.get("quality_per_token", {})
+        return store["quality_per_token"]
 
     try:
         conn = sqlite3.connect(str(p), check_same_thread=False)
@@ -323,14 +455,14 @@ def _extract_quality_per_token(
         """).fetchall()
         conn.close()
     except sqlite3.Error:
-        return store.get("quality_per_token", {})
+        return store["quality_per_token"]
 
     # Aggregate per (model, compression_mode, task_type)
-    agg: Dict[str, Dict] = {}
+    agg: QualityPerTokenMap = {}
     for row in rows:
-        task_type = (row["task_type"] or "UNKNOWN").upper()
-        model = row["model_used"] or "unknown"
-        tokens_used = (row["context_tokens"] or 0) + (row["response_tokens"] or 0)
+        task_type = str(row["task_type"] or "UNKNOWN").upper()
+        model = str(row["model_used"] or "unknown")
+        tokens_used = int(row["context_tokens"] or 0) + int(row["response_tokens"] or 0)
         outcome_score = 1.0 if row["accepted"] == 1 else 0.0
         qpt = outcome_score / tokens_used
 
@@ -389,7 +521,7 @@ def record_quality_per_token(
         return
 
     store = _load(learning_path)
-    qpt_map: Dict[str, Dict] = store.setdefault("quality_per_token", {})
+    qpt_map = store["quality_per_token"]
 
     key = f"{model}|{compression_mode}|{task_type.upper()}"
     if key not in qpt_map:
@@ -423,7 +555,7 @@ def learn(
     utility_path: Optional[str] = None,
     gaps_path: Optional[str] = None,
     learning_path: str = DEFAULT_LEARNING_PATH,
-) -> dict:
+) -> LearningStore:
     """
     Extract patterns from all telemetry sources and persist to learning.json.
 
@@ -480,7 +612,7 @@ def get_best_model(
         Model name string or None.
     """
     store = _load(learning_path)
-    task_data = store.get("model_performance", {}).get(task_type.upper(), {})
+    task_data = store["model_performance"].get(task_type.upper(), {})
     if not task_data:
         return None
 
@@ -524,11 +656,14 @@ def get_effective_compression(
     """
     _MODE_ORDER = ["aggressive", "hybrid", "strict"]
     store = _load(learning_path)
-    rc_data = store.get("compression_modes", {}).get(risk_class.upper(), {})
-    mode_data = rc_data.get(base_mode.lower(), {})
+    rc_data = cast(
+        CompressionModeMap,
+        store["compression_modes"].get(risk_class.upper(), {}),
+    )
+    mode_data = rc_data.get(base_mode.lower())
 
-    retry_rate = mode_data.get("retry_rate", 0.0)
-    event_count = mode_data.get("event_count", 0)
+    retry_rate = mode_data.get("retry_rate", 0.0) if mode_data else 0.0
+    event_count = mode_data.get("event_count", 0) if mode_data else 0
 
     if event_count < MIN_SAMPLES_THRESHOLD or retry_rate <= 0.20:
         return base_mode.lower()
@@ -550,7 +685,7 @@ def get_best_quality_per_token(
     task_type: str,
     learning_path: str = DEFAULT_LEARNING_PATH,
     min_samples: int = MIN_SAMPLES_THRESHOLD,
-) -> Optional[Dict]:
+) -> Optional[BestQualityPerToken]:
     """
     Return the (model, compression_mode) combo with the highest avg quality_per_token
     for a given task_type.
@@ -567,10 +702,10 @@ def get_best_quality_per_token(
         or None.
     """
     store = _load(learning_path)
-    qpt_map = store.get("quality_per_token", {})
+    qpt_map = store["quality_per_token"]
     task_upper = task_type.upper()
 
-    best: Optional[Dict] = None
+    best: Optional[BestQualityPerToken] = None
     best_qpt = -1.0
 
     for key, stats in qpt_map.items():
@@ -602,7 +737,7 @@ def get_compression_quality_signal(
     task_type: str,
     learning_path: str = DEFAULT_LEARNING_PATH,
     min_samples: int = MIN_SAMPLES_THRESHOLD,
-) -> Dict:
+) -> CompressionQualitySignal:
     """
     Compare quality_per_token across compression modes for a model+task_type.
 
@@ -624,11 +759,11 @@ def get_compression_quality_signal(
         Signal dict.
     """
     store = _load(learning_path)
-    qpt_map = store.get("quality_per_token", {})
+    qpt_map = store["quality_per_token"]
     task_upper = task_type.upper()
     model_lower = model.lower()
 
-    modes: Dict[str, Dict] = {}
+    modes: dict[str, ModeQualitySummary] = {}
     for key, stats in qpt_map.items():
         if stats.get("task_type", "").upper() != task_upper:
             continue
@@ -652,7 +787,8 @@ def get_compression_quality_signal(
         }
 
     best_mode = max(trusted, key=lambda m: trusted[m]["avg_qpt"])
-    strict_qpt = trusted.get("strict", {}).get("avg_qpt", 0.0)
+    strict_mode = trusted.get("strict")
+    strict_qpt = strict_mode["avg_qpt"] if strict_mode is not None else 0.0
     best_qpt = trusted[best_mode]["avg_qpt"]
 
     # Prefer compression if best non-strict mode beats strict
@@ -660,8 +796,7 @@ def get_compression_quality_signal(
 
     if prefer_compression:
         recommendation = (
-            f"Use {best_mode} compression — best QPT "
-            f"({best_qpt:.2e}) vs strict ({strict_qpt:.2e})"
+            f"Use {best_mode} compression — best QPT ({best_qpt:.2e}) vs strict ({strict_qpt:.2e})"
         )
     else:
         recommendation = (
@@ -683,7 +818,7 @@ def get_compression_quality_signal(
 # ---------------------------------------------------------------------------
 
 
-def load(learning_path: str = DEFAULT_LEARNING_PATH) -> dict:
+def load(learning_path: str = DEFAULT_LEARNING_PATH) -> LearningStore:
     """Load and return the current learning store."""
     return _load(learning_path)
 
@@ -710,39 +845,40 @@ def cmd_learn_status(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
     print()
 
     # Model performance
-    mp = store.get("model_performance", {})
+    mp = store["model_performance"]
     if mp:
         print("📊  Model Performance by Task Type")
         for task_type, models in sorted(mp.items()):
             print(f"  {task_type}")
-            for model, stats in sorted(
+            for model, model_stats in sorted(
                 models.items(),
                 key=lambda kv: kv[1].get("acceptance_rate", 0),
                 reverse=True,
             ):
-                rate = stats.get("acceptance_rate", 0)
-                samples = stats.get("samples", 0)
+                rate = model_stats.get("acceptance_rate", 0)
+                samples = model_stats.get("samples", 0)
                 bar = "█" * int(rate * 10)
                 flag = " ✓" if samples >= MIN_SAMPLES_THRESHOLD else " (low data)"
-                print(f"    {model:<40} {rate*100:5.1f}%  [{bar:<10}]  n={samples}{flag}")
+                print(f"    {model:<40} {rate * 100:5.1f}%  [{bar:<10}]  n={samples}{flag}")
         print()
     else:
         print("📊  Model Performance  — no data yet\n")
 
     # Compression modes
-    cm = store.get("compression_modes", {})
-    overrides = cm.pop("_overrides", {})
+    cm = store["compression_modes"]
+    overrides = cast(dict[str, str], cm.pop("_overrides", {}))
     if cm:
         print("🗜   Compression Mode Effectiveness")
-        for rc, modes in sorted(cm.items()):
+        for rc, raw_modes in sorted(cm.items()):
             if rc.startswith("_"):
                 continue
+            modes = cast(CompressionModeMap, raw_modes)
             print(f"  {rc}")
-            for mode, stats in sorted(modes.items()):
-                retry_rate = stats.get("retry_rate", 0)
-                events = stats.get("event_count", 0)
+            for mode, compression_stats in sorted(modes.items()):
+                retry_rate = compression_stats.get("retry_rate", 0)
+                events = compression_stats.get("event_count", 0)
                 flag = " ⚠️  (high retry)" if retry_rate > 0.20 else ""
-                print(f"    {mode:<14} retry={retry_rate*100:.1f}%  n={events}{flag}")
+                print(f"    {mode:<14} retry={retry_rate * 100:.1f}%  n={events}{flag}")
         if overrides:
             print(f"  Active overrides: {overrides}")
         print()
@@ -750,7 +886,7 @@ def cmd_learn_status(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
         print("🗜   Compression Modes  — no data yet\n")
 
     # Block utility
-    bu = store.get("block_utility", {})
+    bu = store["block_utility"]
     if bu:
         # Show top 10 and bottom 5 by score
         scored = [(sid, v.get("score", 5.0)) for sid, v in bu.items()]
@@ -768,7 +904,7 @@ def cmd_learn_status(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
         print("📌  Block Utility  — no data yet\n")
 
     # Context gaps
-    cg = store.get("context_gaps", {})
+    cg = store["context_gaps"]
     total = cg.get("total", 0)
     if total > 0:
         print(f"🔍  Context Gaps  ({total} total)")
@@ -781,22 +917,22 @@ def cmd_learn_status(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
     print()
 
     # Quality-per-token
-    qpt_map = store.get("quality_per_token", {})
+    qpt_map = store["quality_per_token"]
     if qpt_map:
         print(f"⚡  Quality-per-Token  ({len(qpt_map)} combos tracked)")
         # Group by task_type
-        by_task: Dict[str, list] = {}
-        for key, stats in qpt_map.items():
-            tt = stats.get("task_type", "UNKNOWN")
-            by_task.setdefault(tt, []).append(stats)
+        by_task: dict[str, list[QualityPerTokenStats]] = {}
+        for key, qpt_stats in qpt_map.items():
+            task_type = qpt_stats.get("task_type", "UNKNOWN")
+            by_task.setdefault(task_type, []).append(qpt_stats)
         for tt in sorted(by_task):
             entries = sorted(by_task[tt], key=lambda s: s.get("avg_qpt", 0.0), reverse=True)
             print(f"  {tt}")
-            for stats in entries:
-                model = stats.get("model", "?")
-                mode = stats.get("compression_mode", "?")
-                avg = stats.get("avg_qpt", 0.0)
-                n = stats.get("samples", 0)
+            for qpt_stats in entries:
+                model = qpt_stats.get("model", "?")
+                mode = qpt_stats.get("compression_mode", "?")
+                avg = qpt_stats.get("avg_qpt", 0.0)
+                n = qpt_stats.get("samples", 0)
                 flag = " ✓" if n >= MIN_SAMPLES_THRESHOLD else " (low data)"
                 print(f"    {model:<36} [{mode:<12}] QPT={avg:.2e}  n={n}{flag}")
         print()
@@ -816,9 +952,9 @@ def record_lesson(
     outcome: Optional[float] = None,
     specificity_score: float = 0.5,
     material_savings: float = 0.0,
-    metadata: Optional[dict] = None,
+    metadata: Optional[dict[str, object]] = None,
     memory_path: Optional[str] = None,
-) -> "object":
+) -> "Lesson":
     """Record a lesson observation via the memory promotion system.
 
     Delegates to memory_promoter.record_lesson(). New lessons start at Tier 1
@@ -857,7 +993,7 @@ def record_lesson(
 
 def run_memory_promotion(
     memory_path: Optional[str] = None,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Run a full promotion + demotion sweep over all tracked lessons.
 
     Promotes lessons that pass tier gates, demotes expired/unused ones,
@@ -879,7 +1015,7 @@ def run_memory_promotion(
 
 def get_durable_lessons(
     memory_path: Optional[str] = None,
-) -> list:
+) -> list["Lesson"]:
     """Return all Tier 4 (Durable / permanent) lessons.
 
     Args:
@@ -904,14 +1040,14 @@ def get_durable_lessons(
 
 
 def on_episode_complete(
-    raw_episode: dict,
+    raw_episode: dict[str, object],
     task_type: str = "TASK",
     compression_mode: str = "unknown",
     learning_path: str = DEFAULT_LEARNING_PATH,
     memory_path: Optional[str] = None,
     specificity_score: float = 0.5,
     savings_pct: float = 0.0,
-) -> "object":
+) -> "EpisodeRecord":
     """Post-episode hook: distill raw episode data and record it in the learning store.
 
     Call this after each agent work episode completes.  It will:
@@ -932,7 +1068,6 @@ def on_episode_complete(
         The distilled EpisodeRecord.
     """
     from tokenpak.orchestration.episode_distiller import (  # noqa: PLC0415
-        EpisodeRecord,
         distill_episode,
         submit_to_memory,
     )
@@ -942,7 +1077,7 @@ def on_episode_complete(
     # Record quality_per_token in the learning store (no-op if tokens_spent == 0)
     if record.tokens_spent > 0:
         record_quality_per_token(
-            model=raw_episode.get("model", "unknown"),
+            model=cast(str, raw_episode.get("model", "unknown")),
             task_type=task_type,
             outcome_score=record.outcome_score(),
             tokens_used=record.tokens_spent,

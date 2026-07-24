@@ -74,7 +74,7 @@ def check_providers() -> Dict[str, Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def _estimate_dict_memory_mb(d: dict) -> float:
+def _estimate_dict_memory_mb(d: dict[Any, Any]) -> float:
     """Best-effort estimate of in-memory dict size in MB via sys.getsizeof."""
     try:
         import sys as _sys
@@ -101,7 +101,7 @@ def get_cache_metrics() -> Dict[str, Any]:
         from tokenpak.cache.registry import CacheRegistry
 
         summary = CacheRegistry.summary()
-        total_entries = sum(v.get("size", 0) for v in summary.values())
+        total_entries = sum(int(v.get("size", 0)) for v in summary.values())
         # Estimate memory by summing internal dicts for each registered cache
         total_memory_mb = 0.0
         for name in CacheRegistry.names():

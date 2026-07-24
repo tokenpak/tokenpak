@@ -6,6 +6,7 @@ exponential-backoff retry (1 s, 2 s, drop). Timeout: 5 s per attempt.
 Delivery itself is intentionally ungated here; commercial gating is handled
 by higher-level product surfaces, not the low-level transport.
 """
+
 from __future__ import annotations
 
 import json

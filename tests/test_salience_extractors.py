@@ -100,6 +100,7 @@ FIXME: The migration script has a race condition on concurrent writes.
 # detect_content_type
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDetectContentType:
     def test_log_detection(self):
         ct = detect_content_type(LOG_TEXT)
@@ -122,6 +123,7 @@ class TestDetectContentType:
 # ═══════════════════════════════════════════════════════════════════════════
 # LogExtractor
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestLogExtractor:
     def test_error_count(self):
@@ -148,9 +150,8 @@ class TestLogExtractor:
         # Duplicate stack frames should be collapsed
         repeated_log = (
             "2024-01-15T10:00:01Z ERROR boom\n"
-            "  File \"app.py\", line 10, in run\n" * 5
-            + "2024-01-15T10:00:02Z ERROR boom again\n"
-            "  File \"app.py\", line 10, in run\n" * 3
+            '  File "app.py", line 10, in run\n' * 5 + "2024-01-15T10:00:02Z ERROR boom again\n"
+            '  File "app.py", line 10, in run\n' * 3
         )
         r = LogExtractor().extract(repeated_log)
         # Should collapse all identical frames into 1 unique sig
@@ -169,6 +170,7 @@ class TestLogExtractor:
 # ═══════════════════════════════════════════════════════════════════════════
 # CodeExtractor
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestCodeExtractor:
     def test_imports_detected(self):
@@ -219,6 +221,7 @@ class TestCodeExtractor:
 # DocExtractor
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDocExtractor:
     def test_headings_extracted(self):
         r = DocExtractor().extract(DOC_TEXT)
@@ -252,6 +255,7 @@ class TestDocExtractor:
 # ═══════════════════════════════════════════════════════════════════════════
 # Router / extract()
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRouter:
     def test_routes_log(self):

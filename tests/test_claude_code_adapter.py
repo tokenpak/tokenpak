@@ -2,7 +2,9 @@
 
 import pytest
 
-pytest.importorskip("tokenpak.registry.claude_code.launcher", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.registry.claude_code.launcher", reason="module not available in current build"
+)
 import os
 import urllib.error
 from unittest.mock import MagicMock, patch

@@ -10,12 +10,25 @@ Supports hooks that run shell scripts at key proxy lifecycle points:
 Each hook receives JSON context via stdin with relevant event fields.
 """
 
+__all__ = (
+    "HOOK_NAMES",
+    "fire_hook",
+    "fire_on_budget_alert",
+    "fire_on_error",
+    "fire_on_request",
+    "fire_on_response",
+    "get_hook_path",
+    "hook_exists",
+    "install_hook",
+    "list_hooks",
+)
+
 import json
 import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Mapping, Optional, TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +41,24 @@ HOOK_NAMES = {
     "on_error": "Runs on proxy error (stdin: {model, provider, error_type, error_message, timestamp})",
     "on_budget_alert": "Runs when budget threshold is hit (stdin: {budget_id, limit_usd, spent_usd, pct_used, timestamp})",
 }
+
+
+class HookInfo(TypedDict):
+    """Installation state for one supported hook."""
+
+    path: str
+    exists: bool
+    executable: bool
+    description: str
+
+
+class HookResult(TypedDict):
+    """Result returned after invoking a hook process."""
+
+    success: bool
+    stdout: str
+    stderr: str
+    returncode: int
 
 
 def _hooks_dir() -> Path:
@@ -46,14 +77,14 @@ def hook_exists(hook_name: str) -> bool:
     return path.exists() and os.access(path, os.X_OK)
 
 
-def list_hooks() -> Dict[str, Dict[str, Any]]:
+def list_hooks() -> dict[str, HookInfo]:
     """
     List all possible hooks and their current status.
 
     Returns:
         Dict mapping hook_name → {path, exists, executable, description}
     """
-    result = {}
+    result: dict[str, HookInfo] = {}
     for name, desc in HOOK_NAMES.items():
         path = get_hook_path(name)
         result[name] = {
@@ -108,9 +139,9 @@ echo "[tokenpak:{hook_name}] $context" >> ~/.tokenpak/hooks/{hook_name}.log
 
 def fire_hook(
     hook_name: str,
-    context: Dict[str, Any],
+    context: Mapping[str, object],
     timeout: int = 30,
-) -> Optional[Dict[str, Any]]:
+) -> Optional[HookResult]:
     """
     Fire a hook script with the given context.
 
@@ -164,7 +195,12 @@ def fire_hook(
         return {"success": False, "stdout": "", "stderr": str(e), "returncode": -1}
 
 
-def fire_on_request(model: str, provider: str, messages_count: int, **extra) -> Optional[Dict]:
+def fire_on_request(
+    model: str,
+    provider: str,
+    messages_count: int,
+    **extra: object,
+) -> Optional[HookResult]:
     """Fire the on_request hook."""
     return fire_hook(
         "on_request",
@@ -183,8 +219,8 @@ def fire_on_response(
     tokens_used: int,
     cost_usd: float,
     latency_ms: int,
-    **extra,
-) -> Optional[Dict]:
+    **extra: object,
+) -> Optional[HookResult]:
     """Fire the on_response hook."""
     return fire_hook(
         "on_response",
@@ -200,8 +236,12 @@ def fire_on_response(
 
 
 def fire_on_error(
-    model: str, provider: str, error_type: str, error_message: str, **extra
-) -> Optional[Dict]:
+    model: str,
+    provider: str,
+    error_type: str,
+    error_message: str,
+    **extra: object,
+) -> Optional[HookResult]:
     """Fire the on_error hook."""
     return fire_hook(
         "on_error",
@@ -219,8 +259,8 @@ def fire_on_budget_alert(
     budget_id: str,
     limit_usd: float,
     spent_usd: float,
-    **extra,
-) -> Optional[Dict]:
+    **extra: object,
+) -> Optional[HookResult]:
     """Fire the on_budget_alert hook."""
     pct_used = round((spent_usd / limit_usd * 100) if limit_usd > 0 else 0, 1)
     return fire_hook(

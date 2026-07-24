@@ -74,8 +74,7 @@ def test_parser_registers_all_actions():
         elif action == "export":
             args = parser.parse_args(["pak", action, "vault:x#y", "-o", "/tmp/o"])
         elif action == "create":
-            args = parser.parse_args(["pak", action, "/tmp/src",
-                                      "-o", "/tmp/out.pak.json"])
+            args = parser.parse_args(["pak", action, "/tmp/src", "-o", "/tmp/out.pak.json"])
         elif action == "import":
             # Beta 1: import now takes a pak file (not a directory).
             args = parser.parse_args(["pak", action, "/tmp/in.pak.json"])
@@ -295,7 +294,8 @@ def test_import_rejects_missing_file(capsys, tmp_path):
     file must exit 1 with a clear ``file not found`` error.
     """
     args = SimpleNamespace(
-        pak_file=str(tmp_path / "nope.pak.json"), force=False,
+        pak_file=str(tmp_path / "nope.pak.json"),
+        force=False,
     )
     rc = cmd_pak_import(args)
     err = capsys.readouterr().err

@@ -280,6 +280,7 @@ class TestAuditLogCLI:
 
     def _run(self, argv):
         from tokenpak.cli import build_parser
+
         parser = build_parser()
         args = parser.parse_args(argv)
         captured = StringIO()

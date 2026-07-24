@@ -1,8 +1,12 @@
-# TokenPak Proxy — Production SLA Targets
+# TokenPak Proxy — Release Validation Targets
 
-_Last updated: 2026-03-24 | Phase 6 Production Hardening_
+_Last updated: 2026-07-23_
 
-## Proxy Endpoint SLAs
+These are governed release-validation thresholds, not a universal performance
+claim. An absolute pass requires the reference profile and immutable receipt
+defined by the TokenPak benchmarking contract.
+
+## Warmed Endpoint Targets
 
 | Endpoint | p50 target | p95 target | p99 target | Error rate |
 |----------|-----------|-----------|-----------|------------|
@@ -10,31 +14,30 @@ _Last updated: 2026-03-24 | Phase 6 Production Hardening_
 | `/stats` | < 15ms | < 250ms | < 500ms | < 0.1% |
 | `/v1/messages` (passthrough) | < 50ms overhead | — | — | < 0.1% |
 
-> **Note:** Targets reflect <dev-host> (4GB RAM, Python HTTPServer, 20-worker bounded pool).
-> Production deployment with asyncio server (`server_async.py`) should achieve p99 < 20ms.
-
-## Measured Performance (2026-03-24)
-
-Benchmark run on <dev-host>, 100 req/sec sustained for 5s:
-
-| Endpoint | p50 | p95 | p99 | Errors |
-|----------|-----|-----|-----|--------|
-| `/health` | ~4ms | ~100ms | ~250ms | 0% |
-| `/stats` | ~4ms | ~100ms | ~250ms | 0% |
+For `/health`, the governed warmed test uses an explicit readiness barrier,
+20-request warm-up, and then exactly 500 open-loop requests at 100 requests/s
+with 20 workers. Cold listener readiness and startup admission are recorded in
+separate datasets and never merged into the warmed percentile vector. Shared
+or nonmatching CI hosts produce informational evidence only; they do not widen
+the 500-ms p99 threshold.
 
 ## Features Validated (Phase 6)
 
 ### /health endpoint
-Reports: `status`, `uptime_seconds`, `compression_ratio_avg`, `circuit_breakers`, `index_freshness`, `request_timeout_seconds`
+The basic response reports: `status`, `uptime_seconds`, `version`,
+`requests_total`, `requests_errors`, `compression_ratio_avg`, `is_degraded`,
+`is_shutting_down`, `in_flight_requests`, `memory_guard`, `admission`,
+`agent_concurrency`, `timestamp`, `connection_pool`, and `circuit_breakers`.
 
 ```bash
 curl http://localhost:8766/health
-curl http://localhost:8766/health?deep=true # includes memory + disk
+curl 'http://localhost:8766/health?deep=true' # additive providers, memory, disk
 ```
 
-### Index Freshness Check
-`/health` now reports `index_freshness.age_seconds` — stale if > 600s (10 min).
-Index auto-reloads every 5min via `VAULT_INDEX_RELOAD_INTERVAL`.
+The basic response is uncached. Deep mode returns JSON even when the optional
+process-memory dependency is unavailable and distinguishes unavailable from a
+measured zero. The snapshot is assembled from several bounded runtime reads;
+it is operationally current but is not a transactional cross-field snapshot.
 
 ### Graceful Adapter Fallback
 Circuit breaker per provider (`tokenpak/agent/proxy/circuit_breaker.py`):
@@ -59,23 +62,21 @@ cd ~/Projects/tokenpak
 python -m pytest tests/benchmarks/test_load_100rps.py -v
 ```
 
-6 tests covering:
-- p99 < 500ms at 100 req/sec (5s sustained)
-- p50 < 15ms at 100 req/sec
-- Zero errors under load
-- /stats p99 < 30ms (relative)
-- Throughput ≥ 85 req/sec achievable
-- JSON validity under concurrent load
+The governed runner retains every latency observation and its complete machine
+receipt. It fails closed for missing or duplicate samples, generator
+saturation, runner/artifact drift, missing telemetry, listener drops or
+overflows, request errors, or a nonmatching reference profile. The regular
+test suite also retains functional `/health` and `/stats` checks; those tests
+do not substitute for the release receipt.
 
 ## Error Rate Budget
 
 - **Target:** < 0.1% (1 error per 1,000 requests)
-- **Measured:** 0% in all load test runs
 - **Circuit breaker threshold:** 5 failures / 60s window
 
 ## Upgrade Path
 
-For production deployments requiring stricter p99:
-1. Switch to `server_async.py` (asyncio-based, removes GIL contention)
-2. Gzip-compress vault index blocks (3x smaller, faster load) — see `analysis/index-compression-2026-03.md`
-3. Exclude JS/binary chunks from vault index (~7.5MB saved)
+If the governed warmed target fails, preserve the raw vectors and host/process
+telemetry, classify the cause, and repair the implementation or harness. Do
+not raise the threshold or reinterpret a passing retry without separately
+governed evidence.

@@ -358,9 +358,7 @@ class TestNotionConnector:
             "id": "page-abc",
             "object": "page",
             "last_edited_time": "2026-01-01T00:00:00Z",
-            "properties": {
-                "title": [{"plain_text": "My Page"}]
-            },
+            "properties": {"title": [{"plain_text": "My Page"}]},
         }
         rf = c._to_remote_file(notion_obj)
         assert rf.path == "My Page.md"
@@ -371,9 +369,7 @@ class TestNotionConnector:
             "id": "page-def",
             "object": "page",
             "last_edited_time": "2026-01-01T00:00:00Z",
-            "properties": {
-                "title": {"title": [{"plain_text": "Dict Title"}]}
-            },
+            "properties": {"title": {"title": [{"plain_text": "Dict Title"}]}},
         }
         rf = c._to_remote_file(notion_obj)
         assert rf.path == "Dict Title.md"
@@ -398,7 +394,10 @@ class TestNotionConnector:
     def test_blocks_to_markdown_bullet(self):
         c = self._make()
         blocks = [
-            {"type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"plain_text": "Item"}]}}
+            {
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {"rich_text": [{"plain_text": "Item"}]},
+            }
         ]
         result = c._blocks_to_markdown(blocks)
         assert "- Item" in result
@@ -611,12 +610,15 @@ class TestNotionAdapter:
         """Full ingest path with all network calls mocked."""
         page_data = {
             "last_edited_time": "2026-01-01T12:00:00Z",
-            "properties": {
-                "title": {"type": "title", "title": [{"plain_text": "Test Page"}]}
-            },
+            "properties": {"title": {"type": "title", "title": [{"plain_text": "Test Page"}]}},
         }
         blocks_data = [
-            {"results": [{"type": "paragraph", "paragraph": {"rich_text": [{"plain_text": "Body text"}]}}], "has_more": False}
+            {
+                "results": [
+                    {"type": "paragraph", "paragraph": {"rich_text": [{"plain_text": "Body text"}]}}
+                ],
+                "has_more": False,
+            }
         ]
         call_count = [0]
 
@@ -630,6 +632,7 @@ class TestNotionAdapter:
             return {}
 
         import tokenpak.sources.notion_adapter as na_mod
+
         monkeypatch.setattr(na_mod, "_get", mock_get)
 
         adapter = NotionAdapter(api_token="tok")
@@ -650,7 +653,10 @@ class TestNotionAdapter:
         blocks_response = {"results": [], "has_more": False}
 
         import tokenpak.sources.notion_adapter as na_mod
-        monkeypatch.setattr(na_mod, "_get", lambda url, h: page_data if "/pages/" in url else blocks_response)
+
+        monkeypatch.setattr(
+            na_mod, "_get", lambda url, h: page_data if "/pages/" in url else blocks_response
+        )
 
         adapter = NotionAdapter(api_token="tok")
         content, prov = adapter.ingest("page-456")
@@ -658,6 +664,7 @@ class TestNotionAdapter:
 
     def test_has_changed_true(self, monkeypatch):
         import tokenpak.sources.notion_adapter as na_mod
+
         monkeypatch.setattr(
             na_mod, "_get", lambda url, h: {"last_edited_time": "2026-02-01T00:00:00Z"}
         )
@@ -666,6 +673,7 @@ class TestNotionAdapter:
 
     def test_has_changed_false(self, monkeypatch):
         import tokenpak.sources.notion_adapter as na_mod
+
         ts = "2026-01-01T00:00:00Z"
         monkeypatch.setattr(na_mod, "_get", lambda url, h: {"last_edited_time": ts})
         adapter = NotionAdapter(api_token="tok")

@@ -191,6 +191,12 @@ class TestCheckAndRecord(unittest.TestCase):
         self.assertIsNotNone(result.entry)
         self.assertEqual(result.entry.response, resp)
 
+    def test_record_rejects_parsed_response_objects(self):
+        mw = _session_mw()
+
+        with self.assertRaisesRegex(TypeError, "response_bytes must be bytes"):
+            mw.record("What is Python?", {"answer": "A programming language"})  # type: ignore[arg-type]
+
     def test_session_scope_isolation_between_keys(self):
         mw = _session_mw()
         q = "What is machine learning?"
@@ -207,7 +213,7 @@ class TestCheckAndRecord(unittest.TestCase):
 
     def test_record_stores_in_correct_cache(self):
         mw = _session_mw()
-        mw.record("hello world", b'{}', scope_key="sess-X")
+        mw.record("hello world", b"{}", scope_key="sess-X")
         self.assertIn("sess-X", mw._caches)
         self.assertEqual(mw._caches["sess-X"].size(), 1)
 
@@ -220,7 +226,7 @@ class TestCheckAndRecord(unittest.TestCase):
     def test_jaccard_hit_on_similar_query(self):
         mw = _session_mw(similarity_threshold=0.50)
         # Store original; then check with a very close paraphrase
-        mw.record("What is artificial intelligence research", b'{}', scope_key="s1")
+        mw.record("What is artificial intelligence research", b"{}", scope_key="s1")
         # Similar but not identical (shares most tokens)
         result = mw.check("What is artificial intelligence research today", scope_key="s1")
         # Jaccard over shared tokens should hit at 0.50 threshold
@@ -229,7 +235,7 @@ class TestCheckAndRecord(unittest.TestCase):
 
     def test_disabled_cache_always_miss(self):
         mw = SemanticCacheMiddleware(SemanticCacheConfig(enabled=False, scope="session"))
-        mw.record("hello", b'{}', scope_key="s1")
+        mw.record("hello", b"{}", scope_key="s1")
         result = mw.check("hello", scope_key="s1")
         self.assertFalse(result.hit)
 
@@ -313,7 +319,7 @@ class TestStats(unittest.TestCase):
     def test_stats_hit_increments_hits(self):
         mw = _session_mw()
         q = "What is NLP?"
-        mw.record(q, b'{}', scope_key="s-stat2")
+        mw.record(q, b"{}", scope_key="s-stat2")
         mw.check(q, scope_key="s-stat2")
         stats = mw.stats(scope_key="s-stat2")
         self.assertEqual(stats["hits"], 1)
@@ -321,8 +327,8 @@ class TestStats(unittest.TestCase):
     def test_stats_total_is_sum(self):
         mw = _session_mw()
         q = "What is NLP?"
-        mw.record(q, b'{}', scope_key="s-stat3")
-        mw.check(q, scope_key="s-stat3")          # hit
+        mw.record(q, b"{}", scope_key="s-stat3")
+        mw.check(q, scope_key="s-stat3")  # hit
         mw.check("other query", scope_key="s-stat3")  # miss
         stats = mw.stats(scope_key="s-stat3")
         self.assertEqual(stats["total"], 2)
@@ -330,8 +336,8 @@ class TestStats(unittest.TestCase):
     def test_stats_hit_rate_calculation(self):
         mw = _session_mw()
         q = "What is NLP?"
-        mw.record(q, b'{}', scope_key="s-rate")
-        mw.check(q, scope_key="s-rate")          # hit
+        mw.record(q, b"{}", scope_key="s-rate")
+        mw.check(q, scope_key="s-rate")  # hit
         mw.check("other query", scope_key="s-rate")  # miss
         stats = mw.stats(scope_key="s-rate")
         self.assertAlmostEqual(stats["hit_rate"], 0.5)
@@ -345,7 +351,7 @@ class TestStats(unittest.TestCase):
 class TestClear(unittest.TestCase):
     def test_clear_empties_cache(self):
         mw = _session_mw()
-        mw.record("test query", b'{}', scope_key="s-clear")
+        mw.record("test query", b"{}", scope_key="s-clear")
         self.assertEqual(mw._caches["s-clear"].size(), 1)
         mw.clear(scope_key="s-clear")
         self.assertEqual(mw._caches["s-clear"].size(), 0)
@@ -356,15 +362,15 @@ class TestClear(unittest.TestCase):
 
     def test_clear_global_scope_empties_shared_cache(self):
         mw = _global_mw()
-        mw.record("global query", b'{}', scope_key="any-key")
+        mw.record("global query", b"{}", scope_key="any-key")
         self.assertGreater(mw._caches["__global__"].size(), 0)
         mw.clear(scope_key="any-key")
         self.assertEqual(mw._caches["__global__"].size(), 0)
 
     def test_clear_one_scope_does_not_affect_another(self):
         mw = _session_mw()
-        mw.record("query A", b'{}', scope_key="scope-A")
-        mw.record("query B", b'{}', scope_key="scope-B")
+        mw.record("query A", b"{}", scope_key="scope-A")
+        mw.record("query B", b"{}", scope_key="scope-B")
         mw.clear(scope_key="scope-A")
         self.assertEqual(mw._caches["scope-A"].size(), 0)
         self.assertEqual(mw._caches["scope-B"].size(), 1)

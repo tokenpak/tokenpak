@@ -89,9 +89,7 @@ class TestCompactionPolicy:
         assert p.mode == CompactionMode.BALANCED
 
     def test_from_dict_wrapped(self):
-        p = CompactionPolicy.from_dict(
-            {"compaction": {"mode": "aggressive", "max_tokens": 4000}}
-        )
+        p = CompactionPolicy.from_dict({"compaction": {"mode": "aggressive", "max_tokens": 4000}})
         assert p.mode == CompactionMode.AGGRESSIVE
         assert p.max_tokens == 4000
 
@@ -116,9 +114,7 @@ class TestCompactionPolicy:
         assert p.per_block_limits["instructions"].max_tokens == 500
 
     def test_from_dict_priority_order(self):
-        p = CompactionPolicy.from_dict(
-            {"compaction": {"priority_order": ["code", "instructions"]}}
-        )
+        p = CompactionPolicy.from_dict({"compaction": {"priority_order": ["code", "instructions"]}})
         assert p.priority_order == ["code", "instructions"]
 
     def test_to_dict_wraps_in_compaction_key(self):
@@ -212,9 +208,7 @@ class TestCompactionPolicy:
             {
                 "compaction": {
                     "mode": "lossless",
-                    "per_block_limits": {
-                        "knowledge": {"mode": "lossless", "max_tokens": 5}
-                    },
+                    "per_block_limits": {"knowledge": {"mode": "lossless", "max_tokens": 5}},
                 }
             }
         )
@@ -268,9 +262,7 @@ class TestTopicAwarePolicy:
         assert p.per_topic_limits["topic_0"] == 200
 
     def test_from_dict_inherits_base_fields(self):
-        p = TopicAwarePolicy.from_dict(
-            {"compaction": {"mode": "aggressive", "max_tokens": 2000}}
-        )
+        p = TopicAwarePolicy.from_dict({"compaction": {"mode": "aggressive", "max_tokens": 2000}})
         assert p.mode == CompactionMode.AGGRESSIVE
         assert p.max_tokens == 2000
 
@@ -351,7 +343,9 @@ class TestTopicAwarePolicy:
         from tokenpak.compression.budgets.topic_aware import TopicSegment
 
         active_seg = TopicSegment(0, 50, "active topic content here", "topic_0", activity_score=0.8)
-        inactive_seg = TopicSegment(50, 100, "inactive topic content here", "topic_1", activity_score=0.2)
+        inactive_seg = TopicSegment(
+            50, 100, "inactive topic content here", "topic_1", activity_score=0.2
+        )
 
         mock_detector = MagicMock()
         mock_detector.segment.return_value = [active_seg, inactive_seg]
@@ -370,7 +364,10 @@ class TestTopicAwarePolicy:
 
         # TopicBoundaryDetector is inline-imported in compact_with_topics → patch in topic_aware module
         # compact is module-level in policy.py → patch there
-        with patch("tokenpak.compression.budgets.topic_aware.TopicBoundaryDetector", return_value=mock_detector):
+        with patch(
+            "tokenpak.compression.budgets.topic_aware.TopicBoundaryDetector",
+            return_value=mock_detector,
+        ):
             with patch("tokenpak.compression.budgets.policy.compact", side_effect=mock_compact):
                 p.compact_with_topics("active topic content here inactive topic content here")
 
@@ -400,7 +397,10 @@ class TestTopicAwarePolicy:
 
         # Both TopicBoundaryDetector and place_topic_aware_breakpoints are inline-imported
         # → patch them in the topic_aware module; compact is module-level in policy.py
-        with patch("tokenpak.compression.budgets.topic_aware.TopicBoundaryDetector", return_value=mock_detector):
+        with patch(
+            "tokenpak.compression.budgets.topic_aware.TopicBoundaryDetector",
+            return_value=mock_detector,
+        ):
             with patch(
                 "tokenpak.compression.budgets.topic_aware.place_topic_aware_breakpoints",
                 return_value={"topic_0": 999},
@@ -423,7 +423,9 @@ class TestTopicAwarePolicy:
 
     def test_instructions_block_uses_standard_compaction(self):
         p = TopicAwarePolicy(mode=CompactionMode.LOSSLESS)
-        result = p.compact_block_with_topics("instruction content\n" * 10, block_type="instructions")
+        result = p.compact_block_with_topics(
+            "instruction content\n" * 10, block_type="instructions"
+        )
         assert isinstance(result, str)
 
     def test_short_text_uses_standard_compaction(self):

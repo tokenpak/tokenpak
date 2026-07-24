@@ -116,7 +116,10 @@ class TestGoogleProviderIntegration:
 
         assert canonical.model == request["model"]
         assert canonical.messages[0]["role"] == "user"
-        assert restored["systemInstruction"]["parts"][0]["text"] == request["systemInstruction"]["parts"][0]["text"]
+        assert (
+            restored["systemInstruction"]["parts"][0]["text"]
+            == request["systemInstruction"]["parts"][0]["text"]
+        )
         assert restored["contents"][0]["parts"][0]["text"].startswith("CRITICAL_FACT")
 
     def test_compression_savings_and_semantics(self):

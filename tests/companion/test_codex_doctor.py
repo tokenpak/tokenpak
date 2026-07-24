@@ -9,6 +9,7 @@ code.  It deliberately does not exercise the broader ``codex features``
 real-state probes: those depend on a ``tests/fixtures/codex`` sample that
 is outside this packet's ``expected_files_changed`` scope.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -6,7 +6,9 @@ TokenPak intercepts LLM requests on your machine and applies a multi-stage compr
 
 ## When Compression Runs
 
-Compression only activates when the request exceeds a token threshold (default: **4,500 tokens**). Requests below the threshold are forwarded unchanged — no overhead.
+Compression only activates when the request exceeds the active profile's token
+threshold (default in the balanced profile: **1,500 tokens**). Requests below
+the threshold are forwarded unchanged — no overhead.
 
 ```
 Request received

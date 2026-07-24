@@ -7,44 +7,139 @@ from typing import List, Tuple
 __all__ = ["STOP_WORDS", "SUFFIX_RULES", "ALIASES", "stem_token", "expand_query", "tokenize"]
 
 # Stop words — removed from both index and query terms
-STOP_WORDS = frozenset({
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "must", "shall", "can", "i", "you", "he",
-    "she", "we", "they", "it", "its", "this", "that", "these", "those",
-    "and", "or", "not", "but", "if", "for", "in", "on", "at", "to",
-    "of", "by", "with", "from", "as", "about", "into", "through",
-})
+STOP_WORDS = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "can",
+        "i",
+        "you",
+        "he",
+        "she",
+        "we",
+        "they",
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        "and",
+        "or",
+        "not",
+        "but",
+        "if",
+        "for",
+        "in",
+        "on",
+        "at",
+        "to",
+        "of",
+        "by",
+        "with",
+        "from",
+        "as",
+        "about",
+        "into",
+        "through",
+    }
+)
 
 # Suffix stripping rules — (suffix, replacement). ONE pass only, min 6 chars.
 SUFFIX_RULES: List[Tuple[str, str]] = [
-    ("ation", ""), ("ment", ""), ("ness", ""), ("tion", ""), ("sion", ""),
-    ("able", ""), ("ible", ""), ("ful", ""), ("less", ""), ("ous", ""),
-    ("ive", ""), ("ing", ""), ("ly", ""), ("er", ""), ("ed", ""), ("es", ""), ("s", ""),
+    ("ation", ""),
+    ("ment", ""),
+    ("ness", ""),
+    ("tion", ""),
+    ("sion", ""),
+    ("able", ""),
+    ("ible", ""),
+    ("ful", ""),
+    ("less", ""),
+    ("ous", ""),
+    ("ive", ""),
+    ("ing", ""),
+    ("ly", ""),
+    ("er", ""),
+    ("ed", ""),
+    ("es", ""),
+    ("s", ""),
 ]
 
 # Synonym aliases — bidirectional. Expanded at QUERY TIME only.
 ALIASES = {
     "auth": ["authentication", "authorization", "authenticate"],
     "config": ["configuration", "configure", "settings"],
-    "db": ["database"], "err": ["error", "exception"], "env": ["environment"],
-    "msg": ["message"], "req": ["request"], "res": ["response"],
-    "repo": ["repository"], "dir": ["directory"], "pkg": ["package"],
-    "dep": ["dependency", "dependencies"], "impl": ["implementation", "implement"],
-    "init": ["initialization", "initialize"], "param": ["parameter"],
-    "args": ["arguments"], "func": ["function"], "var": ["variable"],
-    "val": ["value"], "k8s": ["kubernetes"], "tf": ["terraform"],
-    "ci": ["continuous", "integration"], "cd": ["continuous", "deployment"],
+    "db": ["database"],
+    "err": ["error", "exception"],
+    "env": ["environment"],
+    "msg": ["message"],
+    "req": ["request"],
+    "res": ["response"],
+    "repo": ["repository"],
+    "dir": ["directory"],
+    "pkg": ["package"],
+    "dep": ["dependency", "dependencies"],
+    "impl": ["implementation", "implement"],
+    "init": ["initialization", "initialize"],
+    "param": ["parameter"],
+    "args": ["arguments"],
+    "func": ["function"],
+    "var": ["variable"],
+    "val": ["value"],
+    "k8s": ["kubernetes"],
+    "tf": ["terraform"],
+    "ci": ["continuous", "integration"],
+    "cd": ["continuous", "deployment"],
     # Reverse mappings
-    "authentication": ["auth"], "authorization": ["auth"], "database": ["db"],
-    "configuration": ["config"], "configure": ["config"], "error": ["err"],
-    "exception": ["err"], "environment": ["env"], "message": ["msg"],
-    "request": ["req"], "response": ["res"], "repository": ["repo"],
-    "directory": ["dir"], "package": ["pkg"], "dependency": ["dep"],
-    "dependencies": ["dep"], "implementation": ["impl"], "implement": ["impl"],
-    "initialization": ["init"], "initialize": ["init"], "parameter": ["param"],
-    "arguments": ["args"], "function": ["func"], "variable": ["var"],
-    "kubernetes": ["k8s"], "terraform": ["tf"],
+    "authentication": ["auth"],
+    "authorization": ["auth"],
+    "database": ["db"],
+    "configuration": ["config"],
+    "configure": ["config"],
+    "error": ["err"],
+    "exception": ["err"],
+    "environment": ["env"],
+    "message": ["msg"],
+    "request": ["req"],
+    "response": ["res"],
+    "repository": ["repo"],
+    "directory": ["dir"],
+    "package": ["pkg"],
+    "dependency": ["dep"],
+    "dependencies": ["dep"],
+    "implementation": ["impl"],
+    "implement": ["impl"],
+    "initialization": ["init"],
+    "initialize": ["init"],
+    "parameter": ["param"],
+    "arguments": ["args"],
+    "function": ["func"],
+    "variable": ["var"],
+    "kubernetes": ["k8s"],
+    "terraform": ["tf"],
 }
 
 # Weight constants
@@ -60,7 +155,7 @@ def stem_token(word: str) -> str:
         return word
     for suffix, replacement in SUFFIX_RULES:
         if word.endswith(suffix):
-            stemmed = word[:-len(suffix)] + replacement
+            stemmed = word[: -len(suffix)] + replacement
             if len(stemmed) >= 3:
                 return stemmed
             return word
@@ -69,7 +164,7 @@ def stem_token(word: str) -> str:
 
 def expand_query(tokens: List[str]) -> List[Tuple[str, float]]:
     """Expand query tokens with aliases and stems, returning weighted terms."""
-    term_weights: dict = {}
+    term_weights: dict[str, float] = {}
     for token in tokens:
         if token not in term_weights or term_weights[token] < WEIGHT_ORIGINAL:
             term_weights[token] = WEIGHT_ORIGINAL

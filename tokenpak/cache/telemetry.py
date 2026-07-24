@@ -149,7 +149,7 @@ class CacheMetrics:
         """
         return self.cache_read_tokens * (1.0 - _CACHE_READ_COST_MULTIPLIER)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "request_id": self.request_id,
             "stable_prefix_tokens": self.stable_prefix_tokens,
@@ -391,13 +391,13 @@ class CacheTelemetryCollector:
         with self._lock:
             return dict(self._miss_reasons)
 
-    def recent_requests(self, n: int = 10) -> List[dict]:
+    def recent_requests(self, n: int = 10) -> List[dict[str, object]]:
         """Return the last *n* requests as dicts (newest last)."""
         with self._lock:
             snapshot = list(self._recent)
         return [m.to_dict() for m in snapshot[-n:]]
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, object]:
         """Return all KPIs as a JSON-serialisable dict."""
         with self._lock:
             total = self._total_requests

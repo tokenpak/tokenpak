@@ -70,9 +70,7 @@ def test_sigkill_mid_burst_ledger_recovers(stub_upstream):
                     failed.append(i)
                 first_ack.set()
 
-        threads = [
-            threading.Thread(target=one, args=(i,)) for i in range(PHASE2_REQUESTS)
-        ]
+        threads = [threading.Thread(target=one, args=(i,)) for i in range(PHASE2_REQUESTS)]
         for t in threads:
             t.start()
         # Kill as soon as the burst is demonstrably in progress: at least one
@@ -92,16 +90,13 @@ def test_sigkill_mid_burst_ledger_recovers(stub_upstream):
             assert integrity == "ok", (
                 f"monitor.db failed integrity_check after SIGKILL: {integrity}"
             )
-            rows = conn.execute(
-                "SELECT model, status_code, endpoint FROM requests"
-            ).fetchall()
+            rows = conn.execute("SELECT model, status_code, endpoint FROM requests").fetchall()
         finally:
             conn.close()
 
         # (2) committed-before-crash rows survived
         assert len(rows) >= committed_before_kill, (
-            f"rows committed before the crash were lost: "
-            f"{len(rows)} < {committed_before_kill}"
+            f"rows committed before the crash were lost: {len(rows)} < {committed_before_kill}"
         )
         # (3) recovery did not invent rows
         assert len(rows) <= total_sent, (

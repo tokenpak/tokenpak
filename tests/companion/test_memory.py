@@ -24,6 +24,7 @@ from tokenpak.companion.memory.session_capsules import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_db(tmp_path):
     """Return a fresh in-memory (temp-file) DecisionMemoryDB."""
     db_path = str(tmp_path / "test_memory.db")
@@ -61,6 +62,7 @@ see session-s-001.log
 # ---------------------------------------------------------------------------
 # session_capsules tests
 # ---------------------------------------------------------------------------
+
 
 class TestBuildSessionCapsule:
     def test_decisions_extracted(self):
@@ -165,6 +167,7 @@ class TestCapsuleRetrievalScore:
 # ---------------------------------------------------------------------------
 # DecisionMemoryDB tests
 # ---------------------------------------------------------------------------
+
 
 class TestDecisionMemoryStore:
     def test_record_returns_id(self, tmp_path):

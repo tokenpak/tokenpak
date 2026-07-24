@@ -316,7 +316,7 @@ class BackgroundOAuthRefresher:
         self.interval = interval
         self.manager = manager or OAuthManager()
         self.enabled = enabled
-        self._task: Optional[asyncio.Task] = None
+        self._task: Optional[asyncio.Task[None]] = None
         self._stop_event = asyncio.Event()
 
     async def _loop(self) -> None:

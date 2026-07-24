@@ -73,9 +73,7 @@ class TestValidateOnStartupInvalidWarnOnly:
     @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     @patch("tokenpak.cli.cli_validate_config.format_errors")
     @patch("tokenpak.startup_validator.logger")
-    def test_invalid_config_logs_warning_warn_only(
-        self, mock_logger, mock_format, mock_validate
-    ):
+    def test_invalid_config_logs_warning_warn_only(self, mock_logger, mock_format, mock_validate):
         """Invalid config with warn_only=True logs warning."""
         mock_validate.return_value = (False, [{"field": "api_keys", "message": "Missing"}])
         mock_format.return_value = "Config validation issue:\napi_keys: Missing"
@@ -120,9 +118,7 @@ class TestValidateOnStartupInvalidStrict:
     @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     @patch("tokenpak.cli.cli_validate_config.format_errors")
     @patch("tokenpak.startup_validator.logger")
-    def test_invalid_config_logs_error_strict(
-        self, mock_logger, mock_format, mock_validate
-    ):
+    def test_invalid_config_logs_error_strict(self, mock_logger, mock_format, mock_validate):
         """Invalid config with warn_only=False logs error."""
         mock_validate.return_value = (False, [{"field": "api_keys", "message": "Missing"}])
         mock_format.return_value = "Error: api_keys is required"

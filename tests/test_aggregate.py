@@ -1,4 +1,3 @@
-
 import pytest
 
 pytest.importorskip("tokenpak.aggregate", reason="module not available in current build")
@@ -41,8 +40,18 @@ def test_parse_since_iso_date():
 def test_load_requests_filters_by_since(tmp_path: Path):
     now = datetime.now(timezone.utc)
     rows = [
-        {"timestamp": (now - timedelta(days=2)).isoformat(), "model": "m1", "input_tokens": 10, "output_tokens": 5},
-        {"timestamp": (now - timedelta(hours=1)).isoformat(), "model": "m2", "input_tokens": 3, "output_tokens": 2},
+        {
+            "timestamp": (now - timedelta(days=2)).isoformat(),
+            "model": "m1",
+            "input_tokens": 10,
+            "output_tokens": 5,
+        },
+        {
+            "timestamp": (now - timedelta(hours=1)).isoformat(),
+            "model": "m2",
+            "input_tokens": 3,
+            "output_tokens": 2,
+        },
     ]
     path = tmp_path / "requests.jsonl"
     _write_jsonl(path, rows)
@@ -55,9 +64,30 @@ def test_load_requests_filters_by_since(tmp_path: Path):
 
 def test_aggregate_records_totals():
     records = [
-        {"agent": "main", "model": "claude", "input_tokens": 100, "output_tokens": 50, "cost": 0.01, "saved_cost": 0.002},
-        {"agent": "main", "model": "claude", "input_tokens": 200, "output_tokens": 100, "cost": 0.03, "saved_cost": 0.006},
-        {"agent": "embed", "model": "haiku", "input_tokens": 10, "output_tokens": 5, "cost": 0.001, "saved_cost": 0.0005},
+        {
+            "agent": "main",
+            "model": "claude",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cost": 0.01,
+            "saved_cost": 0.002,
+        },
+        {
+            "agent": "main",
+            "model": "claude",
+            "input_tokens": 200,
+            "output_tokens": 100,
+            "cost": 0.03,
+            "saved_cost": 0.006,
+        },
+        {
+            "agent": "embed",
+            "model": "haiku",
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cost": 0.001,
+            "saved_cost": 0.0005,
+        },
     ]
     rows, totals = aggregate_records(records, machine="cali")
     assert totals["requests"] == 3
@@ -74,7 +104,14 @@ def test_aggregate_records_totals():
 def test_aggregate_records_handles_missing_fields():
     records = [
         {"model": "claude"},
-        {"agent": "main", "model": "claude", "input_tokens": "3", "output_tokens": None, "cost": "0.2", "saved_cost": "0.1"},
+        {
+            "agent": "main",
+            "model": "claude",
+            "input_tokens": "3",
+            "output_tokens": None,
+            "cost": "0.2",
+            "saved_cost": "0.1",
+        },
     ]
     rows, totals = aggregate_records(records, machine="cali")
     assert totals["requests"] == 2
@@ -85,7 +122,14 @@ def test_aggregate_records_handles_missing_fields():
 
 def test_render_table_output():
     records = [
-        {"agent": "main", "model": "claude", "input_tokens": 10, "output_tokens": 5, "cost": 0.01, "saved_cost": 0.002},
+        {
+            "agent": "main",
+            "model": "claude",
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cost": 0.01,
+            "saved_cost": 0.002,
+        },
     ]
     rows, totals = aggregate_records(records, machine="cali")
     table = render_table(rows, totals)

@@ -41,9 +41,9 @@ snapshot. Consumers import the names directly.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional, Sequence, cast
 from uuid import uuid4
 
 SCHEMA_VERSION = "receipt.v1"
@@ -78,7 +78,7 @@ class ProofField:
         """An explicitly-unavailable datum with a machine ``reason`` token."""
         return cls(available=False, value=None, reason=reason)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         if self.available:
             return {"available": True, "value": self.value}
         return {"available": False, "reason": self.reason or "unavailable"}
@@ -157,7 +157,7 @@ class ReceiptDebugPointer:
     capture_mode: Optional[str] = None
     path: Optional[str] = None
 
-    def to_dict(self, *, redact: bool = True) -> dict:
+    def to_dict(self, *, redact: bool = True) -> dict[str, Any]:
         out: dict[str, Any] = {
             "present": self.present,
             "trace_id": self.trace_id,
@@ -195,9 +195,9 @@ class RequestReceiptV1:
     debug_pointer: ReceiptDebugPointer
     trail: ReceiptTrail
 
-    def to_dict(self, *, redact: bool = True) -> dict:
+    def to_dict(self, *, redact: bool = True) -> dict[str, Any]:
         """Serialize to a plain dict. ``redact`` drops the debug capture path."""
-        return _serialize(self, redact=redact)
+        return cast(dict[str, Any], _serialize(self, redact=redact))
 
 
 def _serialize(obj: Any, *, redact: bool) -> Any:
@@ -208,8 +208,7 @@ def _serialize(obj: Any, *, redact: bool) -> Any:
         return obj.to_dict(redact=redact)
     if is_dataclass(obj) and not isinstance(obj, type):
         return {
-            f: _serialize(getattr(obj, f), redact=redact)
-            for f in obj.__dataclass_fields__
+            field.name: _serialize(getattr(obj, field.name), redact=redact) for field in fields(obj)
         }
     return obj
 
@@ -233,9 +232,7 @@ def _provider_from_model(model: str) -> Optional[str]:
     return None
 
 
-def _field_from_record(
-    record: Mapping[str, Any], *keys: str, missing_reason: str
-) -> ProofField:
+def _field_from_record(record: Mapping[str, Any], *keys: str, missing_reason: str) -> ProofField:
     """Pull the first present (non-None) key from ``record`` as a proven field.
 
     A key present with a falsy value (``0``, ``0.0``, ``""``) is still *proven*;
@@ -291,10 +288,12 @@ def _conservative_savings_field(record: Mapping[str, Any]) -> ProofField:
     )
     if not field.available:
         return field
+    if not isinstance(field.value, (str, bytes, bytearray, int, float)):
+        return field  # non-numeric recorded value: surface as-is, never reinterpret
     try:
         positive = float(field.value) > 0
-    except (TypeError, ValueError):
-        return field  # non-numeric recorded value: surface as-is, never reinterpret
+    except ValueError:
+        return field
     if not positive:
         return field  # 0 / negative carries no saving claim — proven, not over-claim
     origin = record.get("cache_origin")
@@ -308,9 +307,9 @@ def build_request_receipt(
     *,
     receipt_id: Optional[str] = None,
     decision: Optional[Any] = None,
-    context_included: Optional[list] = None,
-    context_dropped: Optional[list] = None,
-    optimization_methods: Optional[list] = None,
+    context_included: Optional[Sequence[Any]] = None,
+    context_dropped: Optional[Sequence[Any]] = None,
+    optimization_methods: Optional[Sequence[Any]] = None,
     debug_pointer: Optional[ReceiptDebugPointer] = None,
     clock: Optional[Callable[[], datetime]] = None,
 ) -> RequestReceiptV1:
@@ -352,19 +351,15 @@ def build_request_receipt(
     model_field = _field_from_record(rec, "model", missing_reason="model_not_recorded")
     if not model_field.available and risk is not None and getattr(risk, "model", None):
         model_field = ProofField.known(risk.model)
-    model_str = model_field.value if model_field.available else ""
+    model_str = model_field.value if isinstance(model_field.value, str) else ""
     provider = _provider_from_model(model_str)
     provider_field = (
-        ProofField.known(provider)
-        if provider
-        else ProofField.unavailable("provider_not_derivable")
+        ProofField.known(provider) if provider else ProofField.unavailable("provider_not_derivable")
     )
     route = ReceiptRoute(
         provider=provider_field,
         model=model_field,
-        endpoint=_field_from_record(
-            rec, "endpoint", missing_reason="endpoint_not_recorded"
-        ),
+        endpoint=_field_from_record(rec, "endpoint", missing_reason="endpoint_not_recorded"),
         request_type=_field_from_record(
             rec, "request_type", missing_reason="request_type_not_recorded"
         ),
@@ -413,9 +408,7 @@ def build_request_receipt(
         spend_guard = ReceiptSpendGuard(
             decision=ProofField.known(getattr(decision, "decision", None)),
             reason=ProofField.known(getattr(decision, "reason", None)),
-            requires_approval=ProofField.known(
-                bool(getattr(decision, "requires_approval", False))
-            ),
+            requires_approval=ProofField.known(bool(getattr(decision, "requires_approval", False))),
             threshold_hit=(
                 ProofField.known(getattr(decision, "threshold_hit", None))
                 if getattr(decision, "threshold_hit", None) is not None
@@ -444,15 +437,9 @@ def build_request_receipt(
 
     # --- trail ----------------------------------------------------------
     trail = ReceiptTrail(
-        session_id=_field_from_record(
-            rec, "session_id", missing_reason="session_not_recorded"
-        ),
-        agent_id=_field_from_record(
-            rec, "agent_id", "agent", missing_reason="agent_not_recorded"
-        ),
-        cycle_id=_field_from_record(
-            rec, "cycle_id", missing_reason="cycle_not_recorded"
-        ),
+        session_id=_field_from_record(rec, "session_id", missing_reason="session_not_recorded"),
+        agent_id=_field_from_record(rec, "agent_id", "agent", missing_reason="agent_not_recorded"),
+        cycle_id=_field_from_record(rec, "cycle_id", missing_reason="cycle_not_recorded"),
         dispatch_job_id=_field_from_record(
             rec, "dispatch_job_id", missing_reason="dispatch_job_not_recorded"
         ),
@@ -474,9 +461,7 @@ def build_request_receipt(
     )
 
 
-def render_receipt(
-    receipt: RequestReceiptV1, *, redact: bool = True, indent: int = 2
-) -> str:
+def render_receipt(receipt: RequestReceiptV1, *, redact: bool = True, indent: int = 2) -> str:
     """Render a receipt to a redaction-safe JSON string (``redact=True`` default)."""
     return json.dumps(receipt.to_dict(redact=redact), indent=indent, default=str)
 

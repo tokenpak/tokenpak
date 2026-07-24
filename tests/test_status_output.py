@@ -22,6 +22,7 @@ import pytest
 
 
 MOCK_STATS = {
+    "compilation_mode": "hybrid",
     "session": {
         "requests": 6016,
         "input_tokens": 74_500_000,
@@ -76,22 +77,17 @@ MOCK_STATS = {
 
 MOCK_HEALTH = {
     "status": "ok",
-    "compilation_mode": "hybrid",
-    "stats": {
-        "start_time": 1_770_000_000.0,
-        "requests": 6016,
-        "errors": 5,
-    },
-    "vault_index": {"available": True, "blocks": 6366},
-    "skeleton": {"enabled": True},
-    "shadow_reader": {"enabled": True},
-    "canon": {"enabled": True},
-    "capsule_available": True,
+    "uptime_seconds": 400_000,
+    "requests_total": 6016,
+    "requests_errors": 5,
     "circuit_breakers": {
-        "anthropic": {"open": False, "failures": 0},
-        "openai": {"open": False, "failures": 0},
+        "enabled": True,
+        "any_open": False,
+        "providers": {
+            "anthropic": {"state": "closed", "failures": 0},
+            "openai": {"state": "closed", "failures": 0},
+        },
     },
-    "router": {"enabled": True, "components": {}},
 }
 
 MOCK_CACHE = {
@@ -122,8 +118,11 @@ def make_args(**kwargs):
 def run_cmd_status(args, capsys):
     """Import and run cmd_status, patching proxy calls."""
 
-    with patch("tokenpak.cli._proxy_get") as mock_proxy, \
-         patch("time.time", return_value=1_770_400_000.0):
+    with (
+        patch("tokenpak.cli._proxy_get") as mock_proxy,
+        patch("time.time", return_value=1_770_400_000.0),
+    ):
+
         def _proxy_side(endpoint):
             if endpoint == "/health":
                 return MOCK_HEALTH
@@ -132,9 +131,11 @@ def run_cmd_status(args, capsys):
             elif endpoint == "/cache-stats":
                 return MOCK_CACHE
             return {}
+
         mock_proxy.side_effect = _proxy_side
 
         from tokenpak.cli import cmd_status
+
         cmd_status(args)
 
     return capsys.readouterr()
@@ -257,9 +258,10 @@ class TestFullOutput:
         out, _ = run_cmd_status(make_args(full=True), capsys)
         assert "Cache hit rate" in out
 
-    def test_full_shows_features(self, capsys):
+    def test_full_does_not_invent_removed_health_features(self, capsys):
         out, _ = run_cmd_status(make_args(full=True), capsys)
-        assert "Features" in out
+        assert "Features" not in out
+        assert "Vault Index" not in out
 
     def test_full_does_not_show_savings_header(self, capsys):
         out, _ = run_cmd_status(make_args(full=True), capsys)
@@ -276,11 +278,9 @@ class TestNoMemeFlag:
         # Meme lines all start with 📦 in default view
         # After the "all systems healthy" line there should be no 📦
         lines = out.strip().splitlines()
-        healthy_idx = next(
-            (i for i, l in enumerate(lines) if "All systems healthy" in l), None
-        )
+        healthy_idx = next((i for i, l in enumerate(lines) if "All systems healthy" in l), None)
         if healthy_idx is not None:
-            after = "\n".join(lines[healthy_idx + 1:])
+            after = "\n".join(lines[healthy_idx + 1 :])
             assert "📦" not in after
 
     def test_meme_present_when_not_suppressed(self, capsys):
@@ -297,6 +297,7 @@ class TestProxyUnreachable:
         args = make_args()
         with patch("tokenpak.cli._proxy_get", return_value=None):
             from tokenpak.cli import cmd_status
+
             cmd_status(args)
         out = capsys.readouterr().out
         assert "not reachable" in out or "tokenpak start" in out or "⚠️" in out

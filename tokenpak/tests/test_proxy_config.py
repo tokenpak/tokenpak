@@ -27,6 +27,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _reload_config(env_overrides: dict | None = None):
     """Reload the config module with a clean env, then restore."""
     saved = {k: v for k, v in os.environ.items() if k.startswith("TOKENPAK_")}
@@ -57,17 +58,20 @@ def _reload_config(env_overrides: dict | None = None):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestConfigModuleImport:
     """Test 1: Module imports cleanly."""
 
     def test_import_succeeds(self):
         """Config module can be imported without raising."""
         import tokenpak.proxy.config as cfg  # noqa: F401 — just confirming import
+
         assert cfg is not None
 
     def test_module_has_expected_attributes(self):
         """Key config attributes are present after import."""
         import tokenpak.proxy.config as cfg
+
         expected = [
             "PROXY_PORT",
             "LISTEN_ADDRESS",
@@ -161,10 +165,12 @@ class TestEnvVarOverrides:
 
     def test_env_var_overrides_profile_preset(self):
         """Explicit env var wins over profile preset (setdefault semantics)."""
-        cfg = _reload_config({
-            "TOKENPAK_PROFILE": "safe",         # safe preset: mode=strict
-            "TOKENPAK_MODE": "aggressive",       # explicit override
-        })
+        cfg = _reload_config(
+            {
+                "TOKENPAK_PROFILE": "safe",  # safe preset: mode=strict
+                "TOKENPAK_MODE": "aggressive",  # explicit override
+            }
+        )
         assert cfg.COMPILATION_MODE == "aggressive"
 
 
@@ -224,9 +230,9 @@ class TestUpstreamRoutes:
 
     def test_upstream_env_override_applied(self):
         """TOKENPAK_UPSTREAM_ANTHROPIC_MESSAGES sets an env-override route."""
-        cfg = _reload_config({
-            "TOKENPAK_UPSTREAM_ANTHROPIC_MESSAGES": "https://custom.anthropic.example.com"
-        })
+        cfg = _reload_config(
+            {"TOKENPAK_UPSTREAM_ANTHROPIC_MESSAGES": "https://custom.anthropic.example.com"}
+        )
         assert "anthropic-messages" in cfg.UPSTREAM_ROUTES
         assert cfg.UPSTREAM_ROUTES["anthropic-messages"] == "https://custom.anthropic.example.com"
 

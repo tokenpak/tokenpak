@@ -70,7 +70,7 @@ class EntitySet:
     def by_type(self, entity_type: EntityType) -> list[Entity]:
         return [e for e in self.entities if e.type == entity_type]
 
-    def to_compact_dict(self) -> dict:
+    def to_compact_dict(self) -> dict[str, object]:
         def _ent(t: EntityType) -> list[str]:
             return sorted({e.value for e in self.by_type(t)})
 

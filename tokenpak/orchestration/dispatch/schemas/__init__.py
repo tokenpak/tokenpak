@@ -23,10 +23,7 @@ SCHEMA_DIR = Path(__file__).parent
 def generate_schemas() -> dict[str, dict[str, Any]]:
     """Return ``{record_name: json_schema}`` generated from the live models."""
 
-    return {
-        name: model.model_json_schema()
-        for name, model in DISPATCH_RECORD_MODELS.items()
-    }
+    return {name: model.model_json_schema() for name, model in DISPATCH_RECORD_MODELS.items()}
 
 
 def schema_path(name: str) -> Path:

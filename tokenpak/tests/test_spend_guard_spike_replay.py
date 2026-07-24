@@ -98,13 +98,18 @@ def _dollar_plane_cfg() -> SpendGuardConfig:
     import warnings
 
     from tokenpak.proxy.spend_guard.policy import load_config
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        return load_config(raw_config={"spend_guard": {
-            "block_cost_usd": 10.0,
-            "hard_block_cost_usd": 50.0,
-            "session_block_cost_usd": 10.0,
-        }})
+        return load_config(
+            raw_config={
+                "spend_guard": {
+                    "block_cost_usd": 10.0,
+                    "hard_block_cost_usd": 50.0,
+                    "session_block_cost_usd": 10.0,
+                }
+            }
+        )
 
 
 class TestSpikeReplayLegacyDollarPlane:
@@ -197,9 +202,7 @@ class TestSpikeReplayLegacyDollarPlane:
             forwarded += r["estimated_cost"] or 0.0
 
         assert blocked_at is not None
-        assert forwarded < 11.0, (
-            f"Forwarded ${forwarded:.2f} before block; spec says < $11."
-        )
+        assert forwarded < 11.0, f"Forwarded ${forwarded:.2f} before block; spec says < $11."
 
 
 class TestSpikeReplayContextWindowPercent:
@@ -264,9 +267,7 @@ class TestSpikeReplayContextWindowPercent:
                 blocked_at = r["timestamp"]
                 break
             forwarded += r["estimated_cost"] or 0.0
-        assert blocked_at is not None, (
-            "% basis did NOT block the spike under v1.5.2 defaults."
-        )
+        assert blocked_at is not None, "% basis did NOT block the spike under v1.5.2 defaults."
         # The full spike was $99.67; we expect to forward well under that
         # before the first context-window-% block fires.
         assert forwarded < 99.0, (

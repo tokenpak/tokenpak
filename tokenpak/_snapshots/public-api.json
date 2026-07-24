@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-07-20T20:14:12Z",
-  "package_version": "1.13.0",
+  "generated_at": "2026-07-22T01:17:13Z",
+  "package_version": "1.14.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -2030,6 +2030,26 @@
     {
       "module": "tokenpak.companion.codex.launcher",
       "name": "CompanionConfig"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "FallbackDecision"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "PreflightEvaluation"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "PreflightEvidence"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "PreflightStatus"
+    },
+    {
+      "module": "tokenpak.companion.codex.launcher",
+      "name": "TemporarySessionChoice"
     },
     {
       "module": "tokenpak.companion.codex.launcher",

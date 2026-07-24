@@ -8,6 +8,7 @@ Public API under test:
 
 Error dicts have keys: path, message, suggestion, validator, instance
 """
+
 import json
 import os
 import tempfile
@@ -37,9 +38,7 @@ FULL_VALID = {
     "rate_limit_rpm": 60,
     "upstream": {"timeout": 300},
     "features": {"router": True, "skeleton": False},
-    "failover": {
-        "chain": [{"provider": "anthropic"}, {"provider": "openai"}]
-    },
+    "failover": {"chain": [{"provider": "anthropic"}, {"provider": "openai"}]},
 }
 
 
@@ -238,9 +237,7 @@ class TestOtherFields:
         assert ok
 
     def test_failover_unknown_provider_is_error(self):
-        ok, errors = validate_config_dict(
-            {"failover": {"chain": [{"provider": "fakeai"}]}}
-        )
+        ok, errors = validate_config_dict({"failover": {"chain": [{"provider": "fakeai"}]}})
         assert not ok
         assert any("provider" in e["path"] for e in errors)
 

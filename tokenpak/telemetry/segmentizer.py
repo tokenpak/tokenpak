@@ -133,7 +133,7 @@ def _content_to_str(content: Any) -> str:
                     # still reflects identity.
                     src = block.get("source", {})
                     data_preview = str(src.get("data", ""))[:32]
-                    parts.append(f"[image:{src.get('type','')}:{data_preview}]")
+                    parts.append(f"[image:{src.get('type', '')}:{data_preview}]")
                 else:
                     # tool_use / tool_result blocks etc.
                     parts.append(json.dumps(block, ensure_ascii=False))

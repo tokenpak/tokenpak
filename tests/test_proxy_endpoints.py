@@ -86,7 +86,7 @@ class TestHealthEndpoint(unittest.TestCase):
                 blocks={
                     "block_1": {"source_path": "/path/to/block1", "raw_tokens": 500},
                     "block_2": {"source_path": "/path/to/block2", "raw_tokens": 300},
-                }
+                },
             ),
             "PHASE7_AVAILABLE": True,
             "CANON_AVAILABLE": True,
@@ -99,7 +99,7 @@ class TestHealthEndpoint(unittest.TestCase):
 
     def test_health_endpoint_returns_200(self):
         """Verify /health returns 200 status code."""
-        with patch.dict('sys.modules', {'proxy': MagicMock()}):
+        with patch.dict("sys.modules", {"proxy": MagicMock()}):
             response = self._call_health_endpoint()
             self.assertEqual(self.handler.sent_response_code, 200)
 
@@ -112,8 +112,16 @@ class TestHealthEndpoint(unittest.TestCase):
     def test_health_response_has_required_keys(self):
         """Verify /health JSON contains all required keys."""
         data = self._get_health_data()
-        required_keys = ["status", "version", "uptime_seconds", "requests_total",
-                        "compilation_mode", "vault_index", "stats", "features"]
+        required_keys = [
+            "status",
+            "version",
+            "uptime_seconds",
+            "requests_total",
+            "compilation_mode",
+            "vault_index",
+            "stats",
+            "features",
+        ]
         for key in required_keys:
             self.assertIn(key, data, f"Missing required key: {key}")
 
@@ -144,8 +152,16 @@ class TestHealthEndpoint(unittest.TestCase):
         """Verify /health features is a dict with expected pipeline components."""
         data = self._get_health_data()
         self.assertIsInstance(data["features"], dict)
-        expected_features = ["skeleton", "shadow_reader", "budgeter", "compaction",
-                            "vault_injection", "canon", "cache_control", "router"]
+        expected_features = [
+            "skeleton",
+            "shadow_reader",
+            "budgeter",
+            "compaction",
+            "vault_injection",
+            "canon",
+            "cache_control",
+            "router",
+        ]
         for feature in expected_features:
             self.assertIn(feature, data["features"], f"Missing feature: {feature}")
 
@@ -153,8 +169,9 @@ class TestHealthEndpoint(unittest.TestCase):
         """Verify each feature in /health has an 'enabled' boolean."""
         data = self._get_health_data()
         for feature_name, feature_config in data["features"].items():
-            self.assertIn("enabled", feature_config,
-                         f"Feature '{feature_name}' missing 'enabled' flag")
+            self.assertIn(
+                "enabled", feature_config, f"Feature '{feature_name}' missing 'enabled' flag"
+            )
             self.assertIsInstance(feature_config["enabled"], bool)
 
     def test_health_vault_index_structure(self):
@@ -350,7 +367,14 @@ class TestStatsEndpoints(unittest.TestCase):
     def test_stats_has_required_keys(self):
         """Verify /stats response has required keys."""
         data = self._get_stats_data()
-        required_keys = ["session", "compilation_mode", "vault_index", "today", "by_model", "recent"]
+        required_keys = [
+            "session",
+            "compilation_mode",
+            "vault_index",
+            "today",
+            "by_model",
+            "recent",
+        ]
         for key in required_keys:
             self.assertIn(key, data, f"Missing key in /stats: {key}")
 
@@ -393,8 +417,15 @@ class TestStatsEndpoints(unittest.TestCase):
     def test_stats_session_has_required_keys(self):
         """Verify /stats/session returns aggregated session stats."""
         data = self._get_stats_session_data()
-        required_keys = ["session_requests", "session_total_saved", "tokens_saved",
-                        "tokens_sent", "uptime_hours", "errors", "avg_savings_pct"]
+        required_keys = [
+            "session_requests",
+            "session_total_saved",
+            "tokens_saved",
+            "tokens_sent",
+            "uptime_hours",
+            "errors",
+            "avg_savings_pct",
+        ]
         for key in required_keys:
             self.assertIn(key, data, f"Missing key in /stats/session: {key}")
 
@@ -488,7 +519,7 @@ class TestErrorHandling(unittest.TestCase):
         handler = MockRequestHandler("/trace/nonexistent_id")
         response = {
             "error": "not found",
-            "message": "No trace found for request_id: nonexistent_id"
+            "message": "No trace found for request_id: nonexistent_id",
         }
         body = handler._send_json(response)
         data = json.loads(body.decode())
@@ -585,7 +616,7 @@ class TestResponseStructure(unittest.TestCase):
             self.assertEqual(
                 handler.sent_headers.get("Content-Type"),
                 "application/json",
-                f"Endpoint {endpoint} missing Content-Type header"
+                f"Endpoint {endpoint} missing Content-Type header",
             )
 
     def test_responses_have_content_length_header(self):
@@ -601,10 +632,7 @@ class TestResponseStructure(unittest.TestCase):
         handler = MockRequestHandler("/stats")
         response = {"test": "data"}
         handler._send_json(response)
-        self.assertNotEqual(
-            handler.sent_headers.get("Access-Control-Allow-Origin"),
-            "*"
-        )
+        self.assertNotEqual(handler.sent_headers.get("Access-Control-Allow-Origin"), "*")
 
     def test_json_response_is_valid(self):
         """Verify all responses are valid JSON."""
@@ -651,9 +679,7 @@ class TestCORSContentRoutes(unittest.TestCase):
             origin="https://dash.local",
             env={"TOKENPAK_PROXY_CORS_ORIGINS": "https://dash.local,https://ops.local"},
         )
-        self.assertEqual(
-            headers.get("Access-Control-Allow-Origin"), "https://dash.local"
-        )
+        self.assertEqual(headers.get("Access-Control-Allow-Origin"), "https://dash.local")
         self.assertNotEqual(headers.get("Access-Control-Allow-Origin"), "*")
         self.assertEqual(headers.get("Vary"), "Origin")
 

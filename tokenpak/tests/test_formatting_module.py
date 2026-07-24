@@ -28,6 +28,7 @@ from tokenpak.compression.formatting.colors import Color, paint, supports_color
 # colors.py
 # ===========================================================================
 
+
 class TestColorConstants:
     """Color class holds expected ANSI escape codes."""
 
@@ -72,6 +73,7 @@ class TestSupportsColor:
             with patch.dict("os.environ", env, clear=False):
                 # strip NO_COLOR key if present
                 import os
+
                 old = os.environ.pop("NO_COLOR", None)
                 old2 = os.environ.pop("TOKENPAK_NO_COLOR", None)
                 try:
@@ -86,6 +88,7 @@ class TestSupportsColor:
         stream = MagicMock()
         stream.isatty.return_value = True
         import os
+
         old_nc = os.environ.pop("NO_COLOR", None)
         old_tnc = os.environ.pop("TOKENPAK_NO_COLOR", None)
         old_fc = os.environ.pop("FORCE_COLOR", None)
@@ -103,6 +106,7 @@ class TestSupportsColor:
         stream = MagicMock()
         stream.isatty.return_value = False
         import os
+
         old_nc = os.environ.pop("NO_COLOR", None)
         old_tnc = os.environ.pop("TOKENPAK_NO_COLOR", None)
         old_fc = os.environ.pop("FORCE_COLOR", None)
@@ -120,6 +124,7 @@ class TestSupportsColor:
         stream = object()  # no isatty attribute
         with patch.dict("os.environ", {}, clear=False):
             import os
+
             for k in ("NO_COLOR", "TOKENPAK_NO_COLOR", "FORCE_COLOR"):
                 os.environ.pop(k, None)
             assert supports_color(stream) is False
@@ -147,6 +152,7 @@ class TestPaint:
 # ===========================================================================
 # modes.py
 # ===========================================================================
+
 
 class TestOutputMode:
     """OutputMode enum has correct string values and is a str subclass."""
@@ -203,6 +209,7 @@ class TestResolveMode:
 # symbols.py
 # ===========================================================================
 
+
 class TestSymbols:
     """Semantic symbol constants have expected Unicode characters."""
 
@@ -239,6 +246,7 @@ class TestSymbols:
 # ===========================================================================
 # formatter.py — OutputFormatter
 # ===========================================================================
+
 
 @pytest.fixture
 def fmt_no_color():
@@ -473,17 +481,21 @@ class TestOutputFormatterRaw:
 # __init__.py — public API surface
 # ===========================================================================
 
+
 class TestPublicAPI:
     """formatting package exposes correct public names."""
 
     def test_output_formatter_exported(self):
         from tokenpak.compression.formatting import OutputFormatter as OF
+
         assert OF is OutputFormatter
 
     def test_output_mode_exported(self):
         from tokenpak.compression.formatting import OutputMode as OM
+
         assert OM is OutputMode
 
     def test_resolve_mode_exported(self):
         from tokenpak.compression.formatting import resolve_mode as rm
+
         assert rm is resolve_mode

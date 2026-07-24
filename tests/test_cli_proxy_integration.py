@@ -14,14 +14,19 @@ import pytest
 # Mock proxy SESSION for CLI testing
 SESSION = {}
 
-proxy_state = type('proxy_state', (), {
-    'SESSION': SESSION,
-})()
+proxy_state = type(
+    "proxy_state",
+    (),
+    {
+        "SESSION": SESSION,
+    },
+)()
 
 
 # ============================================================================
 # FIXTURES
 # ============================================================================
+
 
 @pytest.fixture
 def mock_proxy_endpoint():
@@ -60,13 +65,15 @@ def reset_session():
 def cli_args_parser():
     """Get CLI argument parser."""
     import argparse
-    parser = argparse.ArgumentParser(prog='tokenpak')
+
+    parser = argparse.ArgumentParser(prog="tokenpak")
     return parser
 
 
 # ============================================================================
 # TEST GROUP 1: STATUS COMMAND
 # ============================================================================
+
 
 class TestStatusCommand:
     """Test `tokenpak status` command integration."""
@@ -75,13 +82,15 @@ class TestStatusCommand:
         """Test status command returns live proxy response, not stale DB."""
         # Setup mock proxy response
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "total_requests": 1523,
-            "total_input_tokens": 450000,
-            "total_output_tokens": 120000,
-            "proxy_version": "4.0",
-            "uptime_seconds": 3600,
-        })
+        proxy_state.SESSION.update(
+            {
+                "total_requests": 1523,
+                "total_input_tokens": 450000,
+                "total_output_tokens": 120000,
+                "proxy_version": "4.0",
+                "uptime_seconds": 3600,
+            }
+        )
 
         # Simulate status parsing
         status_data = {
@@ -95,18 +104,20 @@ class TestStatusCommand:
     def test_status_output_format_parseable(self, mock_proxy_endpoint):
         """Test status output is parseable."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "uptime_seconds": 3600,
-            "proxy_healthy": True,
-            "port": 8766,
-        })
+        proxy_state.SESSION.update(
+            {
+                "uptime_seconds": 3600,
+                "proxy_healthy": True,
+                "port": 8766,
+            }
+        )
 
         # Format output
         output = f"""Proxy Status:
   Version: 4.0
-  Port: {proxy_state.SESSION.get('port')}
-  Healthy: {proxy_state.SESSION.get('proxy_healthy')}
-  Uptime: {proxy_state.SESSION.get('uptime_seconds')}s
+  Port: {proxy_state.SESSION.get("port")}
+  Healthy: {proxy_state.SESSION.get("proxy_healthy")}
+  Uptime: {proxy_state.SESSION.get("uptime_seconds")}s
 """
 
         # Should be parseable
@@ -117,13 +128,15 @@ class TestStatusCommand:
     def test_status_includes_all_metrics(self, mock_proxy_endpoint):
         """Test status includes all required metrics."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "total_requests": 100,
-            "total_input_tokens": 50000,
-            "total_output_tokens": 10000,
-            "proxy_healthy": True,
-            "avg_latency_ms": 245.5,
-        })
+        proxy_state.SESSION.update(
+            {
+                "total_requests": 100,
+                "total_input_tokens": 50000,
+                "total_output_tokens": 10000,
+                "proxy_healthy": True,
+                "avg_latency_ms": 245.5,
+            }
+        )
 
         # Check all metrics present
         assert "total_requests" in proxy_state.SESSION
@@ -147,21 +160,24 @@ class TestStatusCommand:
 # TEST GROUP 2: COST COMMAND
 # ============================================================================
 
+
 class TestCostCommand:
     """Test `tokenpak cost` command integration."""
 
     def test_cost_shows_cumulative_spend(self, mock_proxy_endpoint):
         """Test cost command shows cumulative spend from SESSION."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "total_spend_usd": 45.67,
-            "spend_by_model": {
-                "claude-3-opus": 32.10,
-                "claude-3-sonnet": 13.57,
-            },
-            "input_tokens_total": 450000,
-            "output_tokens_total": 120000,
-        })
+        proxy_state.SESSION.update(
+            {
+                "total_spend_usd": 45.67,
+                "spend_by_model": {
+                    "claude-3-opus": 32.10,
+                    "claude-3-sonnet": 13.57,
+                },
+                "input_tokens_total": 450000,
+                "output_tokens_total": 120000,
+            }
+        )
 
         assert proxy_state.SESSION["total_spend_usd"] == 45.67
         assert proxy_state.SESSION["spend_by_model"]["claude-3-opus"] == 32.10
@@ -208,7 +224,9 @@ class TestCostCommand:
         proxy_state.SESSION["total_spend_usd"] = 50.00
         proxy_state.SESSION["total_tokens"] = 1000000  # 1M tokens
 
-        cost_per_token = proxy_state.SESSION["total_spend_usd"] / proxy_state.SESSION["total_tokens"]
+        cost_per_token = (
+            proxy_state.SESSION["total_spend_usd"] / proxy_state.SESSION["total_tokens"]
+        )
 
         assert cost_per_token == 0.00005
 
@@ -216,6 +234,7 @@ class TestCostCommand:
 # ============================================================================
 # TEST GROUP 3: DOCTOR COMMAND
 # ============================================================================
+
 
 class TestDoctorCommand:
     """Test `tokenpak doctor` command integration."""
@@ -236,11 +255,13 @@ class TestDoctorCommand:
     def test_doctor_confirms_proxy_healthy(self, mock_proxy_endpoint):
         """Test doctor confirms proxy is healthy."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "proxy_healthy": True,
-            "last_health_check": "2026-03-11T13:36:00Z",
-            "health_check_duration_ms": 45,
-        })
+        proxy_state.SESSION.update(
+            {
+                "proxy_healthy": True,
+                "last_health_check": "2026-03-11T13:36:00Z",
+                "health_check_duration_ms": 45,
+            }
+        )
 
         # Run health check
         is_healthy = proxy_state.SESSION.get("proxy_healthy", False)
@@ -252,8 +273,14 @@ class TestDoctorCommand:
         proxy_state.SESSION.clear()
 
         modules = [
-            "cache", "compression", "circuit_breaker", "failover",
-            "budgeter", "cost_tracker", "token_counter", "rate_limiter",
+            "cache",
+            "compression",
+            "circuit_breaker",
+            "failover",
+            "budgeter",
+            "cost_tracker",
+            "token_counter",
+            "rate_limiter",
         ]
 
         for module in modules:
@@ -261,8 +288,7 @@ class TestDoctorCommand:
 
         # Count healthy modules
         healthy_count = sum(
-            1 for k, v in proxy_state.SESSION.items()
-            if k.endswith("_healthy") and v
+            1 for k, v in proxy_state.SESSION.items() if k.endswith("_healthy") and v
         )
 
         assert healthy_count == len(modules)
@@ -279,11 +305,13 @@ class TestDoctorCommand:
     def test_doctor_reports_configuration_status(self, mock_proxy_endpoint):
         """Test doctor reports configuration status."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "config_valid": True,
-            "config_file": "/etc/tokenpak/config.yaml",
-            "last_config_reload": "2026-03-11T10:00:00Z",
-        })
+        proxy_state.SESSION.update(
+            {
+                "config_valid": True,
+                "config_file": "/etc/tokenpak/config.yaml",
+                "last_config_reload": "2026-03-11T10:00:00Z",
+            }
+        )
 
         assert proxy_state.SESSION["config_valid"]
 
@@ -291,6 +319,7 @@ class TestDoctorCommand:
 # ============================================================================
 # TEST GROUP 4: STATS COMMAND
 # ============================================================================
+
 
 class TestStatsCommand:
     """Test `tokenpak stats` command integration."""
@@ -306,21 +335,23 @@ class TestStatsCommand:
     def test_stats_formats_output_readable(self, mock_proxy_endpoint):
         """Test stats output is readable."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "total_requests": 1523,
-            "total_input_tokens": 450000,
-            "total_output_tokens": 120000,
-            "cache_hit_rate": 0.45,
-            "avg_latency_ms": 245.3,
-        })
+        proxy_state.SESSION.update(
+            {
+                "total_requests": 1523,
+                "total_input_tokens": 450000,
+                "total_output_tokens": 120000,
+                "cache_hit_rate": 0.45,
+                "avg_latency_ms": 245.3,
+            }
+        )
 
         # Format output
         output = f"""Proxy Statistics:
-  Total Requests: {proxy_state.SESSION['total_requests']}
-  Input Tokens: {proxy_state.SESSION['total_input_tokens']:,}
-  Output Tokens: {proxy_state.SESSION['total_output_tokens']:,}
-  Cache Hit Rate: {proxy_state.SESSION['cache_hit_rate']:.1%}
-  Avg Latency: {proxy_state.SESSION['avg_latency_ms']:.1f}ms
+  Total Requests: {proxy_state.SESSION["total_requests"]}
+  Input Tokens: {proxy_state.SESSION["total_input_tokens"]:,}
+  Output Tokens: {proxy_state.SESSION["total_output_tokens"]:,}
+  Cache Hit Rate: {proxy_state.SESSION["cache_hit_rate"]:.1%}
+  Avg Latency: {proxy_state.SESSION["avg_latency_ms"]:.1f}ms
 """
 
         assert "1523" in output
@@ -330,11 +361,13 @@ class TestStatsCommand:
     def test_stats_includes_cache_metrics(self, mock_proxy_endpoint):
         """Test stats include cache hit rate."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "cache_hits": 500,
-            "cache_misses": 600,
-            "cache_hit_rate": 500 / (500 + 600),
-        })
+        proxy_state.SESSION.update(
+            {
+                "cache_hits": 500,
+                "cache_misses": 600,
+                "cache_hit_rate": 500 / (500 + 600),
+            }
+        )
 
         assert proxy_state.SESSION["cache_hit_rate"] > 0
         assert proxy_state.SESSION["cache_hit_rate"] < 1
@@ -342,12 +375,14 @@ class TestStatsCommand:
     def test_stats_includes_latency_metrics(self, mock_proxy_endpoint):
         """Test stats include latency percentiles."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "latency_p50_ms": 150,
-            "latency_p95_ms": 450,
-            "latency_p99_ms": 950,
-            "latency_avg_ms": 245.3,
-        })
+        proxy_state.SESSION.update(
+            {
+                "latency_p50_ms": 150,
+                "latency_p95_ms": 450,
+                "latency_p99_ms": 950,
+                "latency_avg_ms": 245.3,
+            }
+        )
 
         assert proxy_state.SESSION["latency_p50_ms"] < proxy_state.SESSION["latency_p95_ms"]
         assert proxy_state.SESSION["latency_p95_ms"] < proxy_state.SESSION["latency_p99_ms"]
@@ -355,12 +390,14 @@ class TestStatsCommand:
     def test_stats_includes_error_metrics(self, mock_proxy_endpoint):
         """Test stats include error counts."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "error_count": 2,
-            "error_rate": 2 / 1523,
-            "upstream_errors": 1,
-            "timeout_errors": 1,
-        })
+        proxy_state.SESSION.update(
+            {
+                "error_count": 2,
+                "error_rate": 2 / 1523,
+                "upstream_errors": 1,
+                "timeout_errors": 1,
+            }
+        )
 
         assert proxy_state.SESSION["error_count"] == 2
         assert proxy_state.SESSION["error_rate"] < 0.01  # Less than 1%
@@ -369,6 +406,7 @@ class TestStatsCommand:
 # ============================================================================
 # TEST GROUP 5: CLI ERROR HANDLING
 # ============================================================================
+
 
 class TestCLIErrorHandling:
     """Test CLI error handling."""
@@ -413,17 +451,20 @@ class TestCLIErrorHandling:
 # TEST GROUP 6: CLI OUTPUT PARSING
 # ============================================================================
 
+
 class TestCLIOutputParsing:
     """Test CLI output can be parsed programmatically."""
 
     def test_status_json_output_parseable(self):
         """Test status JSON output is valid JSON."""
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "total_requests": 100,
-            "proxy_version": "4.0",
-            "healthy": True,
-        })
+        proxy_state.SESSION.update(
+            {
+                "total_requests": 100,
+                "proxy_version": "4.0",
+                "healthy": True,
+            }
+        )
 
         # Simulate JSON output
         output_json = json.dumps(proxy_state.SESSION)

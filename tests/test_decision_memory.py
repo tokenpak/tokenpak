@@ -2,7 +2,6 @@
 Unit tests for Decision Memory Module
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak._internal.memory", reason="module not available in current build")
@@ -31,30 +30,21 @@ class TestDecisionMemoryDB:
     def test_record_basic(self, temp_db):
         """Test recording a basic decision."""
         record_id = temp_db.record(
-            query="Should we use BM25?",
-            decision="Yes, for <10K blocks",
-            confidence=0.8
+            query="Should we use BM25?", decision="Yes, for <10K blocks", confidence=0.8
         )
         assert record_id is not None
         assert record_id.startswith("dec_")
 
     def test_record_with_defaults(self, temp_db):
         """Test recording with default confidence."""
-        record_id = temp_db.record(
-            query="Test query",
-            decision="Test decision"
-        )
+        record_id = temp_db.record(query="Test query", decision="Test decision")
         record = temp_db.get(record_id)
         assert record is not None
         assert record.confidence == 0.7  # default
 
     def test_get_existing_record(self, temp_db):
         """Test retrieving an existing record."""
-        record_id = temp_db.record(
-            query="Test query",
-            decision="Test decision",
-            confidence=0.85
-        )
+        record_id = temp_db.record(query="Test query", decision="Test decision", confidence=0.85)
         record = temp_db.get(record_id)
         assert record is not None
         assert record.id == record_id
@@ -83,6 +73,7 @@ class TestDecisionMemoryDB:
     def test_retrieve_by_query_hash(self, temp_db):
         """Test retrieving by pre-computed query hash."""
         import hashlib
+
         query = "Test query"
         query_hash = hashlib.sha256(query.lower().encode()).hexdigest()
 
@@ -138,11 +129,7 @@ class TestDecisionMemoryDB:
         """Test recording a successful outcome."""
         record_id = temp_db.record(query="Test", decision="Test", confidence=0.7)
 
-        success = temp_db.record_outcome(
-            record_id=record_id,
-            outcome="It worked!",
-            success=True
-        )
+        success = temp_db.record_outcome(record_id=record_id, outcome="It worked!", success=True)
         assert success is True
 
         record = temp_db.get(record_id)
@@ -155,9 +142,7 @@ class TestDecisionMemoryDB:
         record_id = temp_db.record(query="Test", decision="Test", confidence=0.7)
 
         success = temp_db.record_outcome(
-            record_id=record_id,
-            outcome="It didn't work",
-            success=False
+            record_id=record_id, outcome="It didn't work", success=False
         )
         assert success is True
 
@@ -225,9 +210,7 @@ class TestDecisionMemoryDB:
         """Test a complete learning loop."""
         # Record initial decision
         record_id = temp_db.record(
-            query="Should we use BM25?",
-            decision="Yes, for <10K blocks",
-            confidence=0.7
+            query="Should we use BM25?", decision="Yes, for <10K blocks", confidence=0.7
         )
 
         # Simulate using the decision and getting good outcome
@@ -286,11 +269,7 @@ class TestDecisionMemoryDB:
 
     def test_notes_field(self, temp_db):
         """Test notes field in record."""
-        record_id = temp_db.record(
-            query="Test",
-            decision="Test",
-            notes="This is a test note"
-        )
+        record_id = temp_db.record(query="Test", decision="Test", notes="This is a test note")
         record = temp_db.get(record_id)
         assert record.notes == "This is a test note"
 
@@ -306,7 +285,7 @@ class TestDecisionRecord:
             query="Test query",
             decision="Test decision",
             confidence=0.8,
-            timestamp="2026-03-27T12:00:00Z"
+            timestamp="2026-03-27T12:00:00Z",
         )
         assert record.id == "test_id"
         assert record.confidence == 0.8
@@ -321,7 +300,7 @@ class TestDecisionRecord:
             confidence=0.8,
             timestamp="2026-03-27T12:00:00Z",
             outcome="It worked",
-            success=True
+            success=True,
         )
         assert record.outcome == "It worked"
         assert record.success is True

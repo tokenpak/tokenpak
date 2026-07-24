@@ -108,13 +108,43 @@ def fixture_db() -> sqlite3.Connection:
             cache_creation_tokens, estimated_cost, would_have_saved)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         [
-            (f"{_RECENT_DATE} 10:00:00", "claude-sonnet-4-6", "agent-1", "host-a",
-             1000, 200, 500, 100, 0.003, 0),
-            (f"{_RECENT_DATE} 11:00:00", "claude-sonnet-4-6", "agent-1", "host-a",
-             2000, 300, 700, 150, 0.005, 0),
+            (
+                f"{_RECENT_DATE} 10:00:00",
+                "claude-sonnet-4-6",
+                "agent-1",
+                "host-a",
+                1000,
+                200,
+                500,
+                100,
+                0.003,
+                0,
+            ),
+            (
+                f"{_RECENT_DATE} 11:00:00",
+                "claude-sonnet-4-6",
+                "agent-1",
+                "host-a",
+                2000,
+                300,
+                700,
+                150,
+                0.005,
+                0,
+            ),
             # Different agent → second rollup row
-            (f"{_RECENT_DATE} 12:00:00", "claude-sonnet-4-6", "agent-2", "host-b",
-             1500, 250, 600, 120, 0.004, 50),
+            (
+                f"{_RECENT_DATE} 12:00:00",
+                "claude-sonnet-4-6",
+                "agent-2",
+                "host-b",
+                1500,
+                250,
+                600,
+                120,
+                0.004,
+                50,
+            ),
         ],
     )
     conn.commit()
@@ -125,15 +155,14 @@ def fixture_db() -> sqlite3.Connection:
 # Test 1: rollup SQL correctness
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.oss
 def test_rollup_sums_correctly(fixture_db: sqlite3.Connection) -> None:
     """Rollup aggregates rows per (date, agent_id, host, model) correctly."""
     fixture_db.execute(ROLLUP_SQL)
     fixture_db.commit()
 
-    rows = fixture_db.execute(
-        "SELECT * FROM rollup_daily ORDER BY agent_id"
-    ).fetchall()
+    rows = fixture_db.execute("SELECT * FROM rollup_daily ORDER BY agent_id").fetchall()
     assert len(rows) == 2, f"expected 2 rollup rows, got {len(rows)}"
 
     a1_row = next(r for r in rows if r["agent_id"] == "agent-1")
@@ -151,6 +180,7 @@ def test_rollup_sums_correctly(fixture_db: sqlite3.Connection) -> None:
 # ---------------------------------------------------------------------------
 # Test 2: rollup idempotency
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.oss
 def test_rollup_idempotent(fixture_db: sqlite3.Connection) -> None:
@@ -175,6 +205,7 @@ def test_rollup_idempotent(fixture_db: sqlite3.Connection) -> None:
 # Test 3: run_fleet table output for a fixture DB
 # ---------------------------------------------------------------------------
 
+
 @contextmanager
 def _fixture_db_file(tmp_path: Path) -> Generator[str, None, None]:
     """Create a fixture monitor.db file and yield its path."""
@@ -189,8 +220,18 @@ def _fixture_db_file(tmp_path: Path) -> Generator[str, None, None]:
             cache_creation_tokens, estimated_cost, would_have_saved)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         [
-            (f"{_RECENT_DATE} 10:00:00", "claude-sonnet-4-6", "agent-1", "host-a",
-             1000, 200, 500, 100, 0.003, 0),
+            (
+                f"{_RECENT_DATE} 10:00:00",
+                "claude-sonnet-4-6",
+                "agent-1",
+                "host-a",
+                1000,
+                200,
+                500,
+                100,
+                0.003,
+                0,
+            ),
         ],
     )
     # Populate rollup_daily
@@ -230,6 +271,7 @@ def test_run_fleet_table_output(tmp_path: Path, capsys: pytest.CaptureFixture) -
 # Test 4: --json schema
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.oss
 def test_run_fleet_json_schema(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """run_fleet(as_json=True) emits valid JSON with expected top-level keys."""
@@ -247,10 +289,20 @@ def test_run_fleet_json_schema(tmp_path: Path, capsys: pytest.CaptureFixture) ->
     assert len(data["rows"]) >= 1
 
     row = data["rows"][0]
-    for key in ("date", "agent_id", "host", "model", "requests",
-                "input_tokens", "output_tokens", "cache_read_tokens",
-                "cache_creation_tokens", "estimated_cost", "would_have_saved",
-                "saved_pct"):
+    for key in (
+        "date",
+        "agent_id",
+        "host",
+        "model",
+        "requests",
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_creation_tokens",
+        "estimated_cost",
+        "would_have_saved",
+        "saved_pct",
+    ):
         assert key in row, f"missing key '{key}' in JSON row"
 
 
@@ -258,16 +310,20 @@ def test_run_fleet_json_schema(tmp_path: Path, capsys: pytest.CaptureFixture) ->
 # Test 5: _parse_since
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.oss
-@pytest.mark.parametrize("value,expected", [
-    ("7d", 7),
-    ("14d", 14),
-    ("1d", 1),
-    ("30d", 30),
-    ("7", 7),     # bare integer
-    ("bad", 7),   # fallback default
-    ("0d", 1),    # min clamp
-])
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("7d", 7),
+        ("14d", 14),
+        ("1d", 1),
+        ("30d", 30),
+        ("7", 7),  # bare integer
+        ("bad", 7),  # fallback default
+        ("0d", 1),  # min clamp
+    ],
+)
 def test_parse_since(value: str, expected: int) -> None:
     """_parse_since handles valid and invalid inputs."""
     assert _parse_since(value) == expected
@@ -276,6 +332,7 @@ def test_parse_since(value: str, expected: int) -> None:
 # ---------------------------------------------------------------------------
 # Test 6: empty DB → graceful message
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.oss
 def test_run_fleet_empty_db(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
@@ -296,6 +353,7 @@ def test_run_fleet_empty_db(tmp_path: Path, capsys: pytest.CaptureFixture) -> No
 # ---------------------------------------------------------------------------
 # Test 7: saved_pct TBD when cost=0 and would_have_saved>0
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.oss
 def test_saved_pct_tbd_for_pricing_unknown() -> None:

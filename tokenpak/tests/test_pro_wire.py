@@ -22,6 +22,7 @@ from tokenpak.compression.wire import make_slice_id, pack
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _clear_registries():
     """Reset all _pro_hooks registries between tests."""
     ph._compression.clear()
@@ -243,7 +244,9 @@ class TestPackEdgeCases:
 
     def test_pack_provenance_with_attributes(self):
         """Provenance SimpleNamespace attributes are rendered in the header."""
-        prov = SimpleNamespace(source_type="vault", source_id="doc/test", source_version="abc123def456gh")
+        prov = SimpleNamespace(
+            source_type="vault", source_id="doc/test", source_version="abc123def456gh"
+        )
         block = {
             "ref": "vault/doc",
             "type": "document",

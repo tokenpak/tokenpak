@@ -84,7 +84,7 @@ class TestCacheLayer:
         ref = Reference(
             ref_type="github_issue",
             raw_match="#123",
-            resolved_url="https://github.com/org/repo/issues/123"
+            resolved_url="https://github.com/org/repo/issues/123",
         )
         key = _cache_key(ref)
         assert key == "github_issue:https://github.com/org/repo/issues/123"
@@ -92,28 +92,24 @@ class TestCacheLayer:
     def test_cache_get_hit(self):
         """_cache_get returns cached content if not stale."""
         ref = Reference(
-            ref_type="url",
-            raw_match="http://example.com",
-            resolved_url="http://example.com"
+            ref_type="url", raw_match="http://example.com", resolved_url="http://example.com"
         )
         cache = {
             _cache_key(ref): {
                 "content": "cached content",
-                "fetched_at": 0  # Very old, but testing basic get
+                "fetched_at": 0,  # Very old, but testing basic get
             }
         }
         # With old fetched_at, this will actually return None due to TTL
         # Let's test with fresh timestamp
-        cache[_cache_key(ref)]["fetched_at"] = __import__('time').time()
+        cache[_cache_key(ref)]["fetched_at"] = __import__("time").time()
         result = _cache_get(ref, cache)
         assert result == "cached content"
 
     def test_cache_get_miss(self):
         """_cache_get returns None for missing key."""
         ref = Reference(
-            ref_type="url",
-            raw_match="http://example.com",
-            resolved_url="http://example.com"
+            ref_type="url", raw_match="http://example.com", resolved_url="http://example.com"
         )
         cache = {}
         result = _cache_get(ref, cache)
@@ -122,28 +118,21 @@ class TestCacheLayer:
     def test_cache_get_stale(self):
         """_cache_get returns None if entry is stale."""
         import time
+
         ref = Reference(
-            ref_type="url",
-            raw_match="http://example.com",
-            resolved_url="http://example.com"
+            ref_type="url", raw_match="http://example.com", resolved_url="http://example.com"
         )
         old_time = time.time() - 5000  # 5000 seconds in the past
-        cache = {
-            _cache_key(ref): {
-                "content": "stale content",
-                "fetched_at": old_time
-            }
-        }
+        cache = {_cache_key(ref): {"content": "stale content", "fetched_at": old_time}}
         result = _cache_get(ref, cache)
         assert result is None
 
     def test_cache_put(self):
         """_cache_put stores content with timestamp."""
         import time
+
         ref = Reference(
-            ref_type="url",
-            raw_match="http://example.com",
-            resolved_url="http://example.com"
+            ref_type="url", raw_match="http://example.com", resolved_url="http://example.com"
         )
         cache = {}
         before = time.time()
@@ -158,6 +147,7 @@ class TestCacheLayer:
     def test_prune_stale(self):
         """_prune_stale removes expired entries."""
         import time
+
         now = time.time()
         cache = {
             "fresh": {"content": "x", "fetched_at": now},
@@ -176,7 +166,7 @@ class TestEphemeralBlockBuilder:
         ref = Reference(
             ref_type="github_issue",
             raw_match="#456",
-            resolved_url="https://github.com/org/repo/issues/456"
+            resolved_url="https://github.com/org/repo/issues/456",
         )
         content = "Issue description here"
         block = _build_ephemeral_block(ref, content)
@@ -192,9 +182,7 @@ class TestEphemeralBlockBuilder:
     def test_build_ephemeral_block_token_count(self):
         """Ephemeral block token count is reasonable."""
         ref = Reference(
-            ref_type="url",
-            raw_match="http://example.com",
-            resolved_url="http://example.com"
+            ref_type="url", raw_match="http://example.com", resolved_url="http://example.com"
         )
         content = "x" * 100
         block = _build_ephemeral_block(ref, content)
@@ -213,12 +201,7 @@ class TestCompileWithRefs:
 
         with patch("tokenpak.compression.compiler.pack") as mock_pack:
             mock_pack.return_value = "packed result"
-            result = compile_with_refs(
-                blocks,
-                query,
-                budget=1000,
-                _inject_refs=False
-            )
+            result = compile_with_refs(blocks, query, budget=1000, _inject_refs=False)
 
             assert result == "packed result"
             mock_pack.assert_called_once_with(blocks, 1000)
@@ -231,21 +214,14 @@ class TestCompileWithRefs:
             with patch("tokenpak.compression.compiler.scan_for_references", return_value=[]):
                 with patch("tokenpak.compression.compiler.pack") as mock_pack:
                     mock_pack.return_value = "packed"
-                    result = compile_with_refs(
-                        [],
-                        "query",
-                        budget=100,
-                        cache_path=str(cache_path)
-                    )
+                    result = compile_with_refs([], "query", budget=100, cache_path=str(cache_path))
 
                     assert result == "packed"
 
     def test_compile_with_cached_refs(self):
         """compile_with_refs uses cached references."""
         ref = Reference(
-            ref_type="url",
-            raw_match="http://example.com",
-            resolved_url="http://example.com"
+            ref_type="url", raw_match="http://example.com", resolved_url="http://example.com"
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -253,7 +229,7 @@ class TestCompileWithRefs:
             cache = {
                 _cache_key(ref): {
                     "content": "cached content",
-                    "fetched_at": __import__('time').time()
+                    "fetched_at": __import__("time").time(),
                 }
             }
             _save_cache(cache, str(cache_path))
@@ -267,7 +243,7 @@ class TestCompileWithRefs:
                         blocks,
                         "query with http://example.com",
                         budget=1000,
-                        cache_path=str(cache_path)
+                        cache_path=str(cache_path),
                     )
 
                     assert result == "packed"
@@ -279,9 +255,7 @@ class TestCompileWithRefs:
     def test_compile_budget_allocation(self):
         """compile_with_refs respects token budget."""
         ref = Reference(
-            ref_type="url",
-            raw_match="http://example.com",
-            resolved_url="http://example.com"
+            ref_type="url", raw_match="http://example.com", resolved_url="http://example.com"
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -304,7 +278,7 @@ class TestCompileWithRefs:
                             blocks,
                             "query with http://example.com",
                             budget=500,
-                            cache_path=str(cache_path)
+                            cache_path=str(cache_path),
                         )
 
                         # Verify pack was called

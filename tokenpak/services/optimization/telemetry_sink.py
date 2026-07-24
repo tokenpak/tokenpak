@@ -15,7 +15,12 @@ Feature flag: ``TOKENPAK_ATTRIBUTION_V2`` gates savings/miss persistence.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from collections.abc import Mapping
+from pathlib import Path
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from tokenpak.telemetry.storage import TelemetryDB
 
 from .attribution_stage import get_attributions, is_attribution_v2_enabled
 from .context import OptimizationContext
@@ -23,7 +28,7 @@ from .context import OptimizationContext
 _log = logging.getLogger(__name__)
 
 
-def _default_db_path():
+def _default_db_path() -> Path:
     """Resolve telemetry.db via the single resolver (honors env overrides)."""
     from tokenpak.core.paths import get_db_path
 
@@ -47,17 +52,18 @@ class TelemetrySink:
 
     def __init__(
         self,
-        db_path: Optional[Any] = None,
-        env: Optional[dict] = None,
+        db_path: str | Path | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> None:
         self._db_path = db_path or _default_db_path()
         self._env = env
-        self._db: Optional[Any] = None
+        self._db: TelemetryDB | None = None
 
-    def _get_db(self) -> Any:
+    def _get_db(self) -> "TelemetryDB":
         """Lazily open TelemetryDB (deferred import to avoid circular imports)."""
         if self._db is None:
             from tokenpak.telemetry.storage import TelemetryDB
+
             self._db = TelemetryDB(self._db_path)
         return self._db
 
@@ -82,7 +88,8 @@ class TelemetrySink:
         except Exception as exc:
             _log.debug(
                 "[TelemetrySink] attribution persist error for %s: %s",
-                ctx.request_id, exc,
+                ctx.request_id,
+                exc,
             )
 
         try:
@@ -90,7 +97,8 @@ class TelemetrySink:
         except Exception as exc:
             _log.debug(
                 "[TelemetrySink] cache_miss persist error for %s: %s",
-                ctx.request_id, exc,
+                ctx.request_id,
+                exc,
             )
 
     def _persist_attributions(
@@ -118,7 +126,8 @@ class TelemetrySink:
         db.batch_insert_savings_attributions(rows)
         _log.debug(
             "[TelemetrySink] persisted %d attribution records for %s",
-            len(rows), ctx.request_id,
+            len(rows),
+            ctx.request_id,
         )
 
     def _persist_cache_miss(
@@ -147,7 +156,8 @@ class TelemetrySink:
         db.insert_cache_miss(record.to_row())
         _log.debug(
             "[TelemetrySink] persisted cache miss reason=%s for %s",
-            record.reason, ctx.request_id,
+            record.reason,
+            ctx.request_id,
         )
 
 

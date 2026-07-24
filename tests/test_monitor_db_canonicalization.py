@@ -17,12 +17,8 @@ import pytest
 def _make_monitor_db(path):
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
-    conn.execute(
-        "CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT)"
-    )
-    conn.execute(
-        "INSERT INTO requests (timestamp, model) VALUES ('2026-06-01T00:00:00', 'm')"
-    )
+    conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT)")
+    conn.execute("INSERT INTO requests (timestamp, model) VALUES ('2026-06-01T00:00:00', 'm')")
     conn.commit()
     conn.close()
 
@@ -68,10 +64,13 @@ def test_impl_resolver_finds_canonical_db(tmp_path, monkeypatch):
     assert _impl._resolve_db_path() == str(canonical)
 
 
-@pytest.mark.parametrize("modname", [
-    "tokenpak.cli.commands.budget",
-    "tokenpak.cli.commands.optimize",
-])
+@pytest.mark.parametrize(
+    "modname",
+    [
+        "tokenpak.cli.commands.budget",
+        "tokenpak.cli.commands.optimize",
+    ],
+)
 def test_command_default_monitor_db_is_canonical(modname, tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     monkeypatch.delenv("TOKENPAK_DB", raising=False)

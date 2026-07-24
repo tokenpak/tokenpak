@@ -501,9 +501,7 @@ def test_ensure_hooks_feature_enabled_returns_false_on_nonzero(monkeypatch):
         stdout = ""
         stderr = "unknown feature"
 
-    monkeypatch.setattr(
-        codex_hooks.subprocess, "run", lambda *a, **k: _Completed()
-    )
+    monkeypatch.setattr(codex_hooks.subprocess, "run", lambda *a, **k: _Completed())
     monkeypatch.setattr(codex_hooks, "_suppress_unstable_warning", lambda: None)
 
     assert codex_hooks.ensure_hooks_feature_enabled() is False

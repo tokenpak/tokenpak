@@ -13,7 +13,7 @@ import sqlite3
 import urllib.request
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -63,7 +63,7 @@ COMPRESSION_MODES = {
 def _proxy_get(path: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
     try:
         with urllib.request.urlopen(f"{PROXY_BASE}{path}", timeout=timeout) as r:
-            return json.loads(r.read())
+            return cast(Dict[str, Any], json.loads(r.read()))
     except Exception:
         return None
 
@@ -135,7 +135,7 @@ def _analyze_compression(session: Dict[str, Any]) -> Dict[str, Any]:
 def _analyze_model(session: Dict[str, Any]) -> Dict[str, Any]:
     """Compare current model cost to cheaper alternatives."""
     conn = _db_connect()
-    current_model = ""
+    current_model: str | None = None
     avg_input = 0.0
     avg_output = 0.0
     cost_per_req = 0.0
@@ -160,15 +160,15 @@ def _analyze_model(session: Dict[str, Any]) -> Dict[str, Any]:
         ).fetchone()
         conn.close()
         if row:
-            current_model = row["model"] or ""
+            current_model = row["model"] or None
             avg_input = float(row["avg_in"] or 0)
             avg_output = float(row["avg_out"] or 0)
             cost_per_req = float(row["avg_cost"] or 0)
 
-    if not current_model:
-        # Fall back to proxy health if available
-        health = _proxy_get("/health") or {}
-        current_model = health.get("model", "claude-sonnet-4-6")
+    if current_model is None:
+        # The canonical health contract does not identify a model.  Cost can
+        # still be reported from the measured session total, but model-specific
+        # recommendations must remain unavailable until attribution data exists.
         cost_per_req = total_cost / requests if requests else 0.0
 
     # Find best cheaper alternative from the dynamic model registry
@@ -176,11 +176,15 @@ def _analyze_model(session: Dict[str, Any]) -> Dict[str, Any]:
     best_savings_pct = 0
     best_alt_cost = 0.0
 
-    alt_result = _get_cheaper_alternative(current_model)
+    alt_result = _get_cheaper_alternative(current_model) if current_model else None
     if alt_result:
         alt_name, savings_frac = alt_result
         savings_pct = int(savings_frac * 100)
-        alt_cost = _model_cost_per_request(alt_name, avg_input, avg_output) if avg_input > 0 else cost_per_req * (1 - savings_frac)
+        alt_cost = (
+            _model_cost_per_request(alt_name, avg_input, avg_output)
+            if avg_input > 0
+            else cost_per_req * (1 - savings_frac)
+        )
         if avg_input == 0 or alt_cost < cost_per_req:
             best_alt = (alt_name, savings_pct, "dynamic tier step-down")
             best_alt_cost = alt_cost
@@ -361,7 +365,8 @@ def _render_text(
 
     # Model cost block
     curr_cost = model["cost_per_request"]
-    print(f"  {'Model Cost:':<28}{_fmt_cost(curr_cost)}/request  [{model['current_model']}]")
+    current_model = model.get("current_model") or "unavailable"
+    print(f"  {'Model Cost:':<28}{_fmt_cost(curr_cost)}/request  [{current_model}]")
     if model.get("best_alternative"):
         alt_cost = model["alt_cost_per_request"]
         savings_pct = model["alt_savings_pct"]
@@ -370,7 +375,12 @@ def _render_text(
         )
         print(f"  {'Estimated Savings:':<28}▼ {savings_pct}%")
     else:
-        print(f"  {'Cheaper Alternative:':<28}None (model already optimal)")
+        reason = (
+            "model attribution unavailable"
+            if not model.get("current_model")
+            else "model already optimal"
+        )
+        print(f"  {'Cheaper Alternative:':<28}None ({reason})")
     print()
 
     # Redundancy block
@@ -492,7 +502,7 @@ try:
     @click.option("--verbose", "-v", is_flag=True, help="Per-block analysis")
     @click.option("--json", "as_json", is_flag=True, help="Machine-readable JSON output")
     @click.option("--apply", is_flag=True, help="Auto-apply recommendations")
-    def optimize_cmd(verbose, as_json, apply):
+    def optimize_cmd(verbose: bool, as_json: bool, apply: bool) -> None:
         """Analyze session for cost + token efficiency."""
         run_optimize(verbose=verbose, as_json=as_json, apply=apply)
 

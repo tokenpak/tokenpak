@@ -32,10 +32,11 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 try:
     import requests as _requests
+
     _REQUESTS_AVAILABLE = True
 except ImportError:
     _REQUESTS_AVAILABLE = False
@@ -188,7 +189,7 @@ class AnthropicAdapter(TokenPakAdapter):
             )
 
         try:
-            return resp.json()
+            return cast(dict[str, Any], resp.json())
         except Exception as exc:
             raise TokenPakAdapterError(
                 "AnthropicAdapter.send: response body is not valid JSON."
@@ -216,8 +217,7 @@ class AnthropicAdapter(TokenPakAdapter):
 
         if "content" not in response and "type" not in response:
             self.logger.warning(
-                "parse_response: response missing 'content' and 'type' — "
-                "may be malformed: %s",
+                "parse_response: response missing 'content' and 'type' — may be malformed: %s",
                 list(response.keys()),
             )
 
@@ -233,9 +233,7 @@ class AnthropicAdapter(TokenPakAdapter):
         """
         usage = response.get("usage", {})
         if not usage:
-            self.logger.warning(
-                "extract_tokens: no 'usage' block in response — returning zeros."
-            )
+            self.logger.warning("extract_tokens: no 'usage' block in response — returning zeros.")
             return {
                 "input_tokens": 0,
                 "output_tokens": 0,

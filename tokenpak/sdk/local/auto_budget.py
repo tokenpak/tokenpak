@@ -144,9 +144,7 @@ def auto_budget(
         auto_budget("llama3.1:8b") → 98304 (75% of 131072)
     """
     if output_fraction < 0.0 or output_fraction > 1.0:
-        raise ValueError(
-            f"output_fraction must be between 0 and 1, got {output_fraction}"
-        )
+        raise ValueError(f"output_fraction must be between 0 and 1, got {output_fraction}")
 
     ctx = context_length if context_length is not None else get_context_length(model)
     budget = int(ctx * (1.0 - output_fraction))

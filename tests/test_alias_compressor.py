@@ -21,9 +21,9 @@ from tokenpak.compression.pipeline import CompressionPipeline
 # ---------------------------------------------------------------------------
 
 LONG_PATH = "/home/trix/Projects/tokenpak/tokenpak/agent/compression/pipeline.py"  # 61 chars
-SHORT_PATH = "/tmp/x.py"                                                             # 9 chars
-SERVICE_NAME = "openclaw-gateway-proxy-service"                                       # 30 chars
-ENV_VAR = "TOKENPAK_PROXY_BASE_URL"                                                  # 23 chars
+SHORT_PATH = "/tmp/x.py"  # 9 chars
+SERVICE_NAME = "openclaw-gateway-proxy-service"  # 30 chars
+ENV_VAR = "TOKENPAK_PROXY_BASE_URL"  # 23 chars
 
 
 def _msgs(*texts):
@@ -34,6 +34,7 @@ def _msgs(*texts):
 # ---------------------------------------------------------------------------
 # Test 1: Long paths are replaced and symbol table is generated
 # ---------------------------------------------------------------------------
+
 
 def test_long_paths_replaced():
     """Paths appearing 3+ times should be aliased in message content."""
@@ -48,7 +49,9 @@ def test_long_paths_replaced():
     aliased_text = result.messages[0]["content"]
     body = "\n".join(aliased_text.split("\n")[1:])  # skip header line
     assert LONG_PATH not in body, "Original path should not appear in message body (only in header)"
-    assert any(v == LONG_PATH for v in result.symbol_table.values()), "Symbol table should map to original path"
+    assert any(v == LONG_PATH for v in result.symbol_table.values()), (
+        "Symbol table should map to original path"
+    )
     alias = result.alias_map[LONG_PATH]
     assert alias in body, f"Alias {alias!r} should appear in message body"
 
@@ -56,6 +59,7 @@ def test_long_paths_replaced():
 # ---------------------------------------------------------------------------
 # Test 2: Symbol table format
 # ---------------------------------------------------------------------------
+
 
 def test_symbol_table_format():
     """Symbol table header must follow [ALIASES: K=V | K2=V2] format."""
@@ -77,6 +81,7 @@ def test_symbol_table_format():
 # ---------------------------------------------------------------------------
 # Test 3: Entities under threshold are NOT aliased
 # ---------------------------------------------------------------------------
+
 
 def test_under_threshold_not_aliased():
     """Entities appearing fewer than min_occurrences times should NOT be aliased."""
@@ -106,6 +111,7 @@ def test_short_entity_not_aliased():
 # Test 4: Token savings measured accurately
 # ---------------------------------------------------------------------------
 
+
 def test_savings_measured():
     """tokens_saved should be positive when long entities are aliased."""
     compressor = AliasCompressor(min_occurrences=3, min_entity_length=20)
@@ -123,6 +129,7 @@ def test_savings_measured():
 # ---------------------------------------------------------------------------
 # Test 5: Round-trip — alias → expand restores original
 # ---------------------------------------------------------------------------
+
 
 def test_roundtrip_expand():
     """expand() should restore the original text from aliased content."""
@@ -146,6 +153,7 @@ def test_roundtrip_expand():
 # ---------------------------------------------------------------------------
 # Test 6: Multiple entity types
 # ---------------------------------------------------------------------------
+
 
 def test_multiple_entity_types():
     """URL, env var, service, and class names should all be detectable."""
@@ -173,6 +181,7 @@ def test_multiple_entity_types():
 # ---------------------------------------------------------------------------
 # Test 7: Pipeline integration
 # ---------------------------------------------------------------------------
+
 
 def test_pipeline_alias_stage():
     """CompressionPipeline should run alias stage and include it in stages_run."""
@@ -216,7 +225,7 @@ def test_pipeline_content_unchanged_when_no_aliases():
         enable_segmentation=False,
         enable_directives=False,
         alias_min_occurrences=10,  # very high threshold
-        alias_min_length=200,       # very long min length
+        alias_min_length=200,  # very long min length
     )
     messages = [{"role": "user", "content": "short text here"}]
     result = pipeline.run(messages)

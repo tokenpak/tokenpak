@@ -51,6 +51,7 @@ class CachePolicy:
     def with_bypass(self, reason: str) -> "CachePolicy":
         """Return a copy of this policy with caching bypassed for *reason*."""
         from dataclasses import replace
+
         return replace(self, bypass_reason=reason)
 
 
@@ -75,20 +76,22 @@ class CacheMissReason:
     MODEL_FAMILY_MISMATCH = "model_family_mismatch"
     SAFETY_POLICY_BYPASS = "safety_policy_bypass"
 
-    ALL: frozenset[str] = frozenset({
-        SEMANTIC_CACHE_DISABLED,
-        ADAPTER_MISSING_CAPABILITY,
-        ROUTE_NOT_CACHEABLE,
-        FIDELITY_LOSSLESS_REQUIRED,
-        STREAMING_NOT_SUPPORTED,
-        NO_SCOPE_KEY,
-        BELOW_SIMILARITY_THRESHOLD,
-        TTL_EXPIRED,
-        TOOL_SCHEMA_DIGEST_MISMATCH,
-        GENERATION_PARAMS_MISMATCH,
-        MODEL_FAMILY_MISMATCH,
-        SAFETY_POLICY_BYPASS,
-    })
+    ALL: frozenset[str] = frozenset(
+        {
+            SEMANTIC_CACHE_DISABLED,
+            ADAPTER_MISSING_CAPABILITY,
+            ROUTE_NOT_CACHEABLE,
+            FIDELITY_LOSSLESS_REQUIRED,
+            STREAMING_NOT_SUPPORTED,
+            NO_SCOPE_KEY,
+            BELOW_SIMILARITY_THRESHOLD,
+            TTL_EXPIRED,
+            TOOL_SCHEMA_DIGEST_MISMATCH,
+            GENERATION_PARAMS_MISMATCH,
+            MODEL_FAMILY_MISMATCH,
+            SAFETY_POLICY_BYPASS,
+        }
+    )
 
 
 __all__ = ["CachePolicy", "CacheScopeType", "CacheMissReason"]

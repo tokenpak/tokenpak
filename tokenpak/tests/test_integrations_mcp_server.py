@@ -24,6 +24,7 @@ from tokenpak.sdk.integrations.claude_code.mcp_server import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_index_mock(available: bool = True, search_results=None):
     """Return a VaultIndex-like mock."""
     m = MagicMock()
@@ -41,6 +42,7 @@ def _make_block(block_id="blk1", source_path="docs/file.md"):
 # ---------------------------------------------------------------------------
 # _resolve_vault_root
 # ---------------------------------------------------------------------------
+
 
 class TestResolveVaultRoot:
     def test_returns_none_when_env_unset(self, monkeypatch):
@@ -71,13 +73,9 @@ class TestResolveVaultRoot:
         vault_dir = tmp_path / "myvault"
         vault_dir.mkdir()
         settings = plugin_root.parent.parent.parent / "settings.json"
-        settings.write_text(json.dumps({
-            "pluginConfigs": {
-                "tokenpak-claude-code": {
-                    "vault_root": str(vault_dir)
-                }
-            }
-        }))
+        settings.write_text(
+            json.dumps({"pluginConfigs": {"tokenpak-claude-code": {"vault_root": str(vault_dir)}}})
+        )
         monkeypatch.delenv("TOKENPAK_VAULT_ROOT", raising=False)
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
         result = _resolve_vault_root()
@@ -87,11 +85,11 @@ class TestResolveVaultRoot:
         plugin_root = tmp_path / "a" / "b" / "c"
         plugin_root.mkdir(parents=True)
         settings = plugin_root.parent.parent.parent / "settings.json"
-        settings.write_text(json.dumps({
-            "pluginConfigs": {
-                "tokenpak-claude-code": {"vault_root": "/does/not/exist"}
-            }
-        }))
+        settings.write_text(
+            json.dumps(
+                {"pluginConfigs": {"tokenpak-claude-code": {"vault_root": "/does/not/exist"}}}
+            )
+        )
         monkeypatch.delenv("TOKENPAK_VAULT_ROOT", raising=False)
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
         assert _resolve_vault_root() is None
@@ -100,6 +98,7 @@ class TestResolveVaultRoot:
 # ---------------------------------------------------------------------------
 # _no_corpus_response
 # ---------------------------------------------------------------------------
+
 
 class TestNoCorpusResponse:
     def test_structure(self):
@@ -117,6 +116,7 @@ class TestNoCorpusResponse:
 # _shared_index_lock
 # ---------------------------------------------------------------------------
 
+
 class TestSharedIndexLock:
     def test_yields_without_error(self, tmp_path):
         with _shared_index_lock(str(tmp_path)) as result:
@@ -131,6 +131,7 @@ class TestSharedIndexLock:
 # ---------------------------------------------------------------------------
 # Tool definitions
 # ---------------------------------------------------------------------------
+
 
 class TestToolDefinitions:
     def test_five_tools_defined(self):
@@ -161,6 +162,7 @@ class TestToolDefinitions:
 # ---------------------------------------------------------------------------
 # _dispatch
 # ---------------------------------------------------------------------------
+
 
 class TestDispatch:
     def test_tools_list(self):
@@ -228,6 +230,7 @@ class TestDispatch:
 
     def test_tools_call_handler_exception_returns_error(self, monkeypatch):
         """If a handler raises, dispatch returns a JSON-RPC error."""
+
         def boom(_params):
             raise RuntimeError("handler exploded")
 
@@ -262,6 +265,7 @@ class TestDispatch:
 # ---------------------------------------------------------------------------
 # _handle_search_corpus
 # ---------------------------------------------------------------------------
+
 
 class TestHandleSearchCorpus:
     def test_no_corpus_when_vault_unset(self, monkeypatch):
@@ -313,6 +317,7 @@ class TestHandleSearchCorpus:
 # _handle_extract_structured_fields
 # ---------------------------------------------------------------------------
 
+
 class TestHandleExtractStructuredFields:
     def test_error_on_empty_text(self):
         result = _handle_extract_structured_fields({"text": ""})
@@ -327,9 +332,7 @@ class TestHandleExtractStructuredFields:
 
     def test_type_filter_limits_entity_keys(self):
         text = "Decided: use BM25. GET /api/v1/search"
-        result = _handle_extract_structured_fields(
-            {"text": text, "types": ["decision"]}
-        )
+        result = _handle_extract_structured_fields({"text": text, "types": ["decision"]})
         assert result["status"] == "ok"
         entities = result["entities"]
         # Only "decisions" key should survive
@@ -338,9 +341,7 @@ class TestHandleExtractStructuredFields:
 
     def test_type_filter_api_endpoint(self):
         text = "GET /api/v1/search POST /api/v1/ingest"
-        result = _handle_extract_structured_fields(
-            {"text": text, "types": ["api_endpoint"]}
-        )
+        result = _handle_extract_structured_fields({"text": text, "types": ["api_endpoint"]})
         assert result["status"] == "ok"
         assert "api_endpoints" in result["entities"]
         # No other keys
@@ -356,6 +357,7 @@ class TestHandleExtractStructuredFields:
 # ---------------------------------------------------------------------------
 # _handle_summarize_related_issues
 # ---------------------------------------------------------------------------
+
 
 class TestHandleSummarizeRelatedIssues:
     def test_no_corpus_when_vault_unset(self, monkeypatch):
@@ -402,6 +404,7 @@ class TestHandleSummarizeRelatedIssues:
 # ---------------------------------------------------------------------------
 # _build_summary
 # ---------------------------------------------------------------------------
+
 
 class TestBuildSummary:
     def test_empty_inputs_return_empty_lists(self):
@@ -457,6 +460,7 @@ class TestBuildSummary:
 # _handle_build_context_pack
 # ---------------------------------------------------------------------------
 
+
 class TestHandleBuildContextPack:
     def test_no_corpus_when_vault_unset(self, monkeypatch):
         monkeypatch.delenv("TOKENPAK_VAULT_ROOT", raising=False)
@@ -493,15 +497,14 @@ class TestHandleBuildContextPack:
         monkeypatch.setenv("TOKENPAK_VAULT_ROOT", str(tmp_path))
         mock_index = _make_index_mock(search_results=[])
         with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
-            result = _handle_build_context_pack(
-                {"query": "vault search", "include_related": False}
-            )
+            result = _handle_build_context_pack({"query": "vault search", "include_related": False})
         assert result.get("related_issues") == []
 
 
 # ---------------------------------------------------------------------------
 # _handle_prepare_review_packet
 # ---------------------------------------------------------------------------
+
 
 class TestHandlePrepareReviewPacket:
     def test_no_corpus_when_vault_unset(self, monkeypatch):
@@ -525,9 +528,7 @@ class TestHandlePrepareReviewPacket:
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
-                with patch(
-                    "tokenpak.compression.budgets.policy.CompactionPolicy"
-                ) as MockCP:
+                with patch("tokenpak.compression.budgets.policy.CompactionPolicy") as MockCP:
                     MockCP.default.return_value = mock_policy
                     result = _handle_prepare_review_packet({"branch": "feature/abc"})
 
@@ -553,9 +554,7 @@ class TestHandlePrepareReviewPacket:
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
-                with patch(
-                    "tokenpak.compression.budgets.policy.CompactionPolicy"
-                ) as MockCP:
+                with patch("tokenpak.compression.budgets.policy.CompactionPolicy") as MockCP:
                     MockCP.default.return_value = mock_policy
                     result = _handle_prepare_review_packet({"diff": diff_text})
 
@@ -573,9 +572,7 @@ class TestHandlePrepareReviewPacket:
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
-                with patch(
-                    "tokenpak.compression.budgets.policy.CompactionPolicy"
-                ) as MockCP:
+                with patch("tokenpak.compression.budgets.policy.CompactionPolicy") as MockCP:
                     MockCP.default.return_value = mock_policy
                     result = _handle_prepare_review_packet({})
 
@@ -594,9 +591,7 @@ class TestHandlePrepareReviewPacket:
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
-                with patch(
-                    "tokenpak.compression.budgets.policy.CompactionPolicy"
-                ) as MockCP:
+                with patch("tokenpak.compression.budgets.policy.CompactionPolicy") as MockCP:
                     MockCP.default.return_value = mock_policy
                     result = _handle_prepare_review_packet({"file": "src/core.py"})
 

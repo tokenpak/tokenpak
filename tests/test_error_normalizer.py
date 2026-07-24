@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.agentic.error_normalizer", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.agentic.error_normalizer", reason="module not available in current build"
+)
 import json
 
 from tokenpak.agentic.error_normalizer import ErrorNormalizer, FailureSignatureDB
@@ -20,9 +22,7 @@ def test_external_pattern_config_from_home_path(tmp_path, monkeypatch):
     config_dir = fake_home / ".tokenpak"
     config_dir.mkdir(parents=True)
     (config_dir / "error_patterns.json").write_text(
-        json.dumps([
-            {"regex": "database is locked", "normalized_signature": "DB_LOCKED"}
-        ])
+        json.dumps([{"regex": "database is locked", "normalized_signature": "DB_LOCKED"}])
     )
     monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 

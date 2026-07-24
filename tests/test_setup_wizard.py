@@ -9,7 +9,6 @@ Covers:
   5. Profile features are correctly enabled/disabled
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.profiles", reason="module not available in current build")
@@ -24,6 +23,7 @@ from tokenpak.profiles import PROFILES, apply_profile, get_profile
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def temp_config_dir():
@@ -42,6 +42,7 @@ def mock_home(temp_config_dir, monkeypatch):
 # ---------------------------------------------------------------------------
 # Test 1: Profile definitions are valid
 # ---------------------------------------------------------------------------
+
 
 def test_minimal_profile_exists():
     """Minimal profile should exist and be retrievable."""
@@ -67,7 +68,9 @@ def test_aggressive_profile_exists():
     assert "features" in profile
     # All features should be enabled
     for feature_name, feature_config in profile["features"].items():
-        assert feature_config["enabled"] is True, f"{feature_name} should be enabled in aggressive profile"
+        assert feature_config["enabled"] is True, (
+            f"{feature_name} should be enabled in aggressive profile"
+        )
 
 
 def test_profile_retrieval_invalid_name():
@@ -79,6 +82,7 @@ def test_profile_retrieval_invalid_name():
 # ---------------------------------------------------------------------------
 # Test 2: Profile application to configs
 # ---------------------------------------------------------------------------
+
 
 def test_apply_minimal_profile():
     """Applying minimal profile should set correct features."""
@@ -114,8 +118,7 @@ def test_apply_aggressive_profile():
     assert result["profile"] == "aggressive"
     # Count enabled features
     enabled_count = sum(
-        1 for feature in result["modules"].values()
-        if feature.get("enabled") is True
+        1 for feature in result["modules"].values() if feature.get("enabled") is True
     )
     assert enabled_count == 16, f"Expected 16 enabled features, got {enabled_count}"
 
@@ -136,6 +139,7 @@ def test_apply_profile_preserves_existing_config():
 # ---------------------------------------------------------------------------
 # Test 3: YAML generation and writing
 # ---------------------------------------------------------------------------
+
 
 def test_config_written_to_yaml(temp_config_dir, monkeypatch):
     """Config should be writable to YAML format."""
@@ -164,6 +168,7 @@ def test_config_written_to_yaml(temp_config_dir, monkeypatch):
 # ---------------------------------------------------------------------------
 # Test 4: API key detection from environment
 # ---------------------------------------------------------------------------
+
 
 def test_detect_anthropic_key(monkeypatch):
     """Should detect ANTHROPIC_API_KEY from environment."""
@@ -224,6 +229,7 @@ def test_no_api_keys_found(monkeypatch):
 # Test 5: Feature count in profiles
 # ---------------------------------------------------------------------------
 
+
 def test_minimal_has_1_enabled_feature():
     """Minimal profile should have only compression enabled."""
     profile = get_profile("minimal")
@@ -249,15 +255,28 @@ def test_aggressive_has_16_enabled_features():
 # Test 6: Profile features list
 # ---------------------------------------------------------------------------
 
+
 def test_all_profiles_have_16_feature_toggles():
     """All profiles should define all 16 features."""
     for profile_name, profile in PROFILES.items():
         feature_names = set(profile["features"].keys())
         expected = {
-            "compression", "semantic_cache", "prefix_registry", "query_rewriter",
-            "error_normalizer", "fidelity_tiers", "tokenizer_cache", "request_coalescing",
-            "response_dedup", "header_optimization", "cost_model", "adaptive_routing",
-            "intent_classifier", "latency_predictor", "sampling_engine", "fallback_policy",
+            "compression",
+            "semantic_cache",
+            "prefix_registry",
+            "query_rewriter",
+            "error_normalizer",
+            "fidelity_tiers",
+            "tokenizer_cache",
+            "request_coalescing",
+            "response_dedup",
+            "header_optimization",
+            "cost_model",
+            "adaptive_routing",
+            "intent_classifier",
+            "latency_predictor",
+            "sampling_engine",
+            "fallback_policy",
         }
         assert feature_names == expected, f"Profile {profile_name} missing or extra features"
 
@@ -265,6 +284,7 @@ def test_all_profiles_have_16_feature_toggles():
 # ---------------------------------------------------------------------------
 # Test 7: Idempotent operations
 # ---------------------------------------------------------------------------
+
 
 def test_config_creation_is_idempotent(temp_config_dir, monkeypatch):
     """Creating config twice should succeed without error."""
@@ -292,6 +312,7 @@ def test_config_creation_is_idempotent(temp_config_dir, monkeypatch):
 # ---------------------------------------------------------------------------
 # Test 8: Profile descriptions
 # ---------------------------------------------------------------------------
+
 
 def test_profiles_have_descriptions():
     """All profiles should have descriptions."""

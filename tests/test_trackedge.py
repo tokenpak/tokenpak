@@ -8,8 +8,13 @@ import pytest
 
 # trackedge / numpy are optional in the slim install; skip cleanly when absent
 # so the release test gate stays green without installing tokenpak[full].
-np = pytest.importorskip("numpy", reason="numpy not installed (optional dep — install via tokenpak[intelligence])")
-pytest.importorskip("trackedge.processing.feature_engine", reason="trackedge is a separate project not installed in slim test env")
+np = pytest.importorskip(
+    "numpy", reason="numpy not installed (optional dep — install via tokenpak[intelligence])"
+)
+pytest.importorskip(
+    "trackedge.processing.feature_engine",
+    reason="trackedge is a separate project not installed in slim test env",
+)
 
 import os
 import sys
@@ -36,6 +41,7 @@ from trackedge.processing.feature_engine import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_horse(**kwargs):
     defaults = {
@@ -79,6 +85,7 @@ def make_race(**kwargs):
 # 8.1 Speed Score
 # ---------------------------------------------------------------------------
 
+
 class TestSpeedScore:
     def test_weighted_average(self):
         horse = make_horse(speed_ratings=[90, 80, 70])
@@ -121,6 +128,7 @@ class TestSpeedScore:
 # 8.2 Pace Style
 # ---------------------------------------------------------------------------
 
+
 class TestPaceStyle:
     def test_early(self):
         assert pace_style(make_horse(avg_pace=0.5, avg_lenback=0.5)) == "E"
@@ -144,12 +152,15 @@ class TestPaceStyle:
 # 8.3 Race Pace Scenario
 # ---------------------------------------------------------------------------
 
+
 class TestRacePaceScenario:
     def test_no_early_horses(self):
-        race = make_race(horses=[
-            {"id": "h1", "pace_style": "P"},
-            {"id": "h2", "pace_style": "S"},
-        ])
+        race = make_race(
+            horses=[
+                {"id": "h1", "pace_style": "P"},
+                {"id": "h2", "pace_style": "S"},
+            ]
+        )
         # Annotate pace_style before calling
         adjustments = race_pace_scenario(race)
         # P and S both get a 1.05 boost when no early horses (slow pace benefits all runners)
@@ -157,20 +168,24 @@ class TestRacePaceScenario:
         assert adjustments["h2"] == pytest.approx(1.05)
 
     def test_honest_pace(self):
-        race = make_race(horses=[
-            {"id": "h1", "pace_style": "E"},
-            {"id": "h2", "pace_style": "P"},
-        ])
+        race = make_race(
+            horses=[
+                {"id": "h1", "pace_style": "E"},
+                {"id": "h2", "pace_style": "P"},
+            ]
+        )
         adjustments = race_pace_scenario(race)
         assert all(v == 1.0 for v in adjustments.values())
 
     def test_fast_pace_penalizes_early(self):
-        race = make_race(horses=[
-            {"id": "h1", "pace_style": "E"},
-            {"id": "h2", "pace_style": "E"},
-            {"id": "h3", "pace_style": "E"},
-            {"id": "h4", "pace_style": "S"},
-        ])
+        race = make_race(
+            horses=[
+                {"id": "h1", "pace_style": "E"},
+                {"id": "h2", "pace_style": "E"},
+                {"id": "h3", "pace_style": "E"},
+                {"id": "h4", "pace_style": "S"},
+            ]
+        )
         adjustments = race_pace_scenario(race)
         assert adjustments["h1"] == pytest.approx(0.95)
         assert adjustments["h4"] == pytest.approx(1.10)
@@ -184,6 +199,7 @@ class TestRacePaceScenario:
 # ---------------------------------------------------------------------------
 # 8.4 Class Fit
 # ---------------------------------------------------------------------------
+
 
 class TestClassFit:
     def test_neutral_same_class(self):
@@ -221,12 +237,15 @@ class TestClassFit:
 # 8.5 Workout Fitness
 # ---------------------------------------------------------------------------
 
+
 class TestWorkoutFitness:
     def test_fresh_bullet(self):
-        horse = make_horse(recent_workouts=[
-            {"days_ago": 3, "rank": 1},
-            {"days_ago": 10, "rank": 2},
-        ])
+        horse = make_horse(
+            recent_workouts=[
+                {"days_ago": 3, "rank": 1},
+                {"days_ago": 10, "rank": 2},
+            ]
+        )
         wf = workout_fitness(horse)
         assert wf.has_bullet is True
         assert wf.score >= 85
@@ -244,11 +263,13 @@ class TestWorkoutFitness:
         assert wf.score < 70
 
     def test_score_capped_100(self):
-        horse = make_horse(recent_workouts=[
-            {"days_ago": 3, "rank": 1},
-            {"days_ago": 7, "rank": 2},
-            {"days_ago": 14, "rank": 3},
-        ])
+        horse = make_horse(
+            recent_workouts=[
+                {"days_ago": 3, "rank": 1},
+                {"days_ago": 7, "rank": 2},
+                {"days_ago": 14, "rank": 3},
+            ]
+        )
         wf = workout_fitness(horse)
         assert wf.score <= 100
 
@@ -256,6 +277,7 @@ class TestWorkoutFitness:
 # ---------------------------------------------------------------------------
 # 8.6 Layoff Penalty
 # ---------------------------------------------------------------------------
+
 
 class TestLayoffPenalty:
     def test_recent_no_penalty(self):
@@ -293,6 +315,7 @@ class TestLayoffPenalty:
 # 8.7 Connections Score
 # ---------------------------------------------------------------------------
 
+
 class TestConnectionsScore:
     def test_score_in_range(self):
         horse = make_horse()
@@ -325,6 +348,7 @@ class TestConnectionsScore:
 # 8.8 First-Time Starter Reweight
 # ---------------------------------------------------------------------------
 
+
 class TestFirstTimeStarterReweight:
     def test_zero_starts(self):
         horse = make_horse(starts=0)
@@ -354,6 +378,7 @@ class TestFirstTimeStarterReweight:
 # Shrinkage
 # ---------------------------------------------------------------------------
 
+
 class TestApplyShrinkage:
     def test_zero_starts_returns_baseline(self):
         assert apply_shrinkage(0.30, 0) == pytest.approx(0.12)
@@ -376,6 +401,7 @@ class TestApplyShrinkage:
 # Power Score
 # ---------------------------------------------------------------------------
 
+
 class TestPowerScore:
     def test_output_in_range(self):
         horse = make_horse()
@@ -393,13 +419,19 @@ class TestPowerScore:
     def test_perfect_score(self):
         horse = make_horse()
         race = make_race()
-        features = {k: 100 for k in ["speed_score", "class_fit", "pace_fit", "form_fitness", "connections_score"]}
+        features = {
+            k: 100
+            for k in ["speed_score", "class_fit", "pace_fit", "form_fitness", "connections_score"]
+        }
         assert power_score(horse, race, features) == pytest.approx(100.0)
 
     def test_zero_score(self):
         horse = make_horse()
         race = make_race()
-        features = {k: 0 for k in ["speed_score", "class_fit", "pace_fit", "form_fitness", "connections_score"]}
+        features = {
+            k: 0
+            for k in ["speed_score", "class_fit", "pace_fit", "form_fitness", "connections_score"]
+        }
         assert power_score(horse, race, features) == pytest.approx(0.0)
 
     def test_weighted_correctly(self):
@@ -424,6 +456,7 @@ class TestPowerScore:
 # ---------------------------------------------------------------------------
 # Softmax Probabilities
 # ---------------------------------------------------------------------------
+
 
 class TestSoftmaxProbabilities:
     def test_sums_to_one(self):
@@ -483,6 +516,7 @@ class TestSoftmaxProbabilities:
 # Race Confidence Score
 # ---------------------------------------------------------------------------
 
+
 class TestRaceConfidenceScore:
     def test_returns_valid_level(self):
         race = make_race()
@@ -509,7 +543,13 @@ class TestRaceConfidenceScore:
         scores = {"h1": 80, "h2": 75, "h3": 70}
         probs = softmax_probabilities(scores)
         rc = race_confidence_score(race, scores, probs)
-        for field in [rc.top_probability, rc.probability_gap, rc.data_quality, rc.pace_stability, rc.field_competitiveness]:
+        for field in [
+            rc.top_probability,
+            rc.probability_gap,
+            rc.data_quality,
+            rc.pace_stability,
+            rc.field_competitiveness,
+        ]:
             assert isinstance(field, float)
 
 

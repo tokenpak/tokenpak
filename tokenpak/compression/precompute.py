@@ -22,11 +22,12 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional, cast
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -140,9 +141,9 @@ class PrecomputedArtifact:
     source_path: str = ""
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     token_estimate: int = 0
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "block_id": self.block_id,
             "artifact_type": self.artifact_type,
@@ -156,17 +157,17 @@ class PrecomputedArtifact:
         }
 
     @classmethod
-    def from_dict(cls, d: Dict) -> "PrecomputedArtifact":
+    def from_dict(cls, d: dict[str, object]) -> "PrecomputedArtifact":
         return cls(
-            block_id=d["block_id"],
-            artifact_type=d["artifact_type"],
-            intent=d["intent"],
-            content=d["content"],
-            doc_type=d["doc_type"],
-            source_path=d.get("source_path", ""),
-            created_at=d.get("created_at", ""),
-            token_estimate=d.get("token_estimate", 0),
-            metadata=d.get("metadata", {}),
+            block_id=cast(str, d["block_id"]),
+            artifact_type=cast(str, d["artifact_type"]),
+            intent=cast(str, d["intent"]),
+            content=cast(str, d["content"]),
+            doc_type=cast(str, d["doc_type"]),
+            source_path=cast(str, d.get("source_path", "")),
+            created_at=cast(str, d.get("created_at", "")),
+            token_estimate=cast(int, d.get("token_estimate", 0)),
+            metadata=cast(dict[str, object], d.get("metadata", {})),
         )
 
 
@@ -309,7 +310,7 @@ def generate_error_signature(
         re.IGNORECASE,
     )
 
-    seen: set = set()
+    seen: set[str] = set()
     signatures: List[str] = []
 
     lines = content.splitlines()
@@ -435,7 +436,7 @@ def generate_project_snapshot(
 # Intent → artifact type mapping
 # ---------------------------------------------------------------------------
 
-_INTENT_TO_ARTIFACT: Dict[str, str] = {
+_INTENT_TO_ARTIFACT: dict[str, str] = {
     "query": "fact_card",
     "explain": "feature_table",
     "debug": "error_signature",
@@ -446,7 +447,7 @@ _INTENT_TO_ARTIFACT: Dict[str, str] = {
     "create": "project_snapshot",
 }
 
-_DOC_TYPE_TO_ARTIFACTS: Dict[DocType, List[str]] = {
+_DOC_TYPE_TO_ARTIFACTS: dict[DocType, List[str]] = {
     DocType.CODE: ["fact_card", "error_signature"],
     DocType.CONFIG: ["fact_card", "feature_table"],
     DocType.NARRATIVE: ["fact_card", "project_snapshot"],
@@ -497,7 +498,7 @@ class PrecomputeStore:
         if not p.exists():
             return None
         try:
-            d = json.loads(p.read_text(encoding="utf-8"))
+            d = cast(dict[str, object], json.loads(p.read_text(encoding="utf-8")))
             return PrecomputedArtifact.from_dict(d)
         except (json.JSONDecodeError, KeyError):
             return None
@@ -602,12 +603,12 @@ def get_precomputed_artifact(
 
 
 def recompute_all(
-    blocks: Dict,
+    blocks: dict[str, dict[str, object]],
     blocks_dir: Path,
     artifacts_dir: Optional[Path] = None,
     force: bool = False,
-    on_progress=None,
-) -> Dict[str, int]:
+    on_progress: Callable[[str, int], None] | None = None,
+) -> dict[str, int]:
     """Run precompute_for_block over all blocks in an index.
 
     Args:
@@ -632,8 +633,8 @@ def recompute_all(
             artifacts = precompute_for_block(
                 block_id=block_id,
                 content=content,
-                risk_class=meta.get("risk_class", "narrative"),
-                source_path=meta.get("source_path", ""),
+                risk_class=cast(str, meta.get("risk_class", "narrative")),
+                source_path=cast(str, meta.get("source_path", "")),
                 artifacts_dir=artifacts_dir,
                 force=force,
             )

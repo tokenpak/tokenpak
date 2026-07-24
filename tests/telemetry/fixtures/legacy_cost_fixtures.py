@@ -9,6 +9,7 @@ Schemas match storage.py verbatim — verify against that file before
 extending (PRIMARY KEY (trace_id, request_id, event_type) on tp_events;
 PRIMARY KEY trace_id on tp_costs).
 """
+
 from __future__ import annotations
 
 import sqlite3

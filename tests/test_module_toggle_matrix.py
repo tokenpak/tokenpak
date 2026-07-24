@@ -6,15 +6,18 @@ Tests verify:
 - Verify no MODULE failures (all fail-open)
 """
 
-
 import pytest
 
 # Mock proxy SESSION
 SESSION = {}
 
-proxy_state = type('proxy_state', (), {
-    'SESSION': SESSION,
-})()
+proxy_state = type(
+    "proxy_state",
+    (),
+    {
+        "SESSION": SESSION,
+    },
+)()
 
 
 # ============================================================================
@@ -47,6 +50,7 @@ assert len(MODULES) == 16, f"Expected 16 modules, got {len(MODULES)}"
 # FIXTURES
 # ============================================================================
 
+
 @pytest.fixture(autouse=True)
 def reset_session():
     """Reset SESSION before each test."""
@@ -74,6 +78,7 @@ def init_modules(enabled_modules=None):
 # ============================================================================
 # TEST GROUP 1: INDIVIDUAL MODULE TOGGLES
 # ============================================================================
+
 
 class TestIndividualModuleToggles:
     """Test enabling/disabling each module individually."""
@@ -186,6 +191,7 @@ class TestIndividualModuleToggles:
 # TEST GROUP 2: MULTI-MODULE COMBINATIONS
 # ============================================================================
 
+
 class TestMultiModuleCombinations:
     """Test combinations of modules work together."""
 
@@ -223,6 +229,7 @@ class TestMultiModuleCombinations:
 # ============================================================================
 # TEST GROUP 3: SESSION ENTRIES VALIDATION
 # ============================================================================
+
 
 class TestSessionEntriesValidation:
     """Verify SESSION dict contains only expected entries per toggle combo."""
@@ -279,6 +286,7 @@ class TestSessionEntriesValidation:
 # TEST GROUP 4: FAIL-OPEN BEHAVIOR
 # ============================================================================
 
+
 class TestFailOpenBehavior:
     """Verify all modules fail-open (no cascading failures)."""
 
@@ -328,6 +336,7 @@ class TestFailOpenBehavior:
 # TEST GROUP 5: CALL COUNTING
 # ============================================================================
 
+
 class TestCallCounting:
     """Test module call counting per configuration."""
 
@@ -374,6 +383,7 @@ class TestCallCounting:
 # ============================================================================
 # TEST GROUP 6: TOGGLE SWITCHING
 # ============================================================================
+
 
 class TestToggleSwitching:
     """Test dynamically switching module toggles."""
@@ -435,6 +445,7 @@ class TestToggleSwitching:
 # TEST GROUP 7: ERROR HANDLING PER MODULE
 # ============================================================================
 
+
 class TestErrorHandlingPerModule:
     """Test error handling for individual modules."""
 
@@ -463,7 +474,10 @@ class TestErrorHandlingPerModule:
         proxy_state.SESSION["cache_module"]["call_count"] = 100
         proxy_state.SESSION["cache_module"]["error_count"] = 5
 
-        error_rate = proxy_state.SESSION["cache_module"]["error_count"] / proxy_state.SESSION["cache_module"]["call_count"]
+        error_rate = (
+            proxy_state.SESSION["cache_module"]["error_count"]
+            / proxy_state.SESSION["cache_module"]["call_count"]
+        )
 
         assert error_rate == 0.05  # 5%
 
@@ -472,15 +486,19 @@ class TestErrorHandlingPerModule:
 # TEST GROUP 8: COMPREHENSIVE MATRIX
 # ============================================================================
 
+
 class TestComprehensiveMatrix:
     """Test comprehensive toggle matrix."""
 
-    @pytest.mark.parametrize("module_subset", [
-        [MODULES[0]],
-        [MODULES[0], MODULES[1]],
-        [MODULES[0], MODULES[5], MODULES[10]],
-        MODULES,  # All modules
-    ])
+    @pytest.mark.parametrize(
+        "module_subset",
+        [
+            [MODULES[0]],
+            [MODULES[0], MODULES[1]],
+            [MODULES[0], MODULES[5], MODULES[10]],
+            MODULES,  # All modules
+        ],
+    )
     def test_all_toggle_combinations(self, module_subset):
         """Test various toggle combinations."""
         init_modules(module_subset)

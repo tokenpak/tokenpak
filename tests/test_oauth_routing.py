@@ -33,15 +33,22 @@ from tokenpak.proxy.router import ProviderRouter
 # ---------------------------------------------------------------------------
 
 ANTHROPIC_API_KEY = "sk-ant-api03-testkey123"
-OPENAI_API_KEY    = "sk-testopenai456"
+OPENAI_API_KEY = "sk-testopenai456"
 # Simulate OAuth tokens (opaque, JWT-shaped, non-sk prefix)
-OPAQUE_OAUTH      = "oauth_tok_abcdef1234567890abcdef1234567890"
-JWT_OAUTH         = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV"
+OPAQUE_OAUTH = "oauth_tok_abcdef1234567890abcdef1234567890"
+JWT_OAUTH = ".".join(
+    (
+        "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9",
+        "eyJzdWIiOiJ1c2VyMTIzIn0",
+        "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV",
+    )
+)
 
 
 # ---------------------------------------------------------------------------
 # detect_auth_type tests
 # ---------------------------------------------------------------------------
+
 
 class TestDetectAuthType:
     def test_x_api_key_is_apikey(self):
@@ -89,6 +96,7 @@ class TestDetectAuthType:
 # detect_token_format tests
 # ---------------------------------------------------------------------------
 
+
 class TestDetectTokenFormat:
     def test_apikey_format(self):
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
@@ -110,6 +118,7 @@ class TestDetectTokenFormat:
 # ---------------------------------------------------------------------------
 # is_codex_model tests
 # ---------------------------------------------------------------------------
+
 
 class TestIsCodexModel:
     def test_gpt_52_codex(self):
@@ -134,6 +143,7 @@ class TestIsCodexModel:
 # ---------------------------------------------------------------------------
 # analyze_request tests
 # ---------------------------------------------------------------------------
+
 
 class TestAnalyzeRequest:
     def test_anthropic_api_key_request(self):
@@ -202,6 +212,7 @@ class TestAnalyzeRequest:
 # oauth_telemetry_tags — security: no credential values
 # ---------------------------------------------------------------------------
 
+
 class TestOAuthTelemetryTags:
     def test_tags_contain_no_tokens(self):
         """Verify tags never contain the actual token value."""
@@ -242,6 +253,7 @@ class TestOAuthTelemetryTags:
 # ProviderRouter — Codex routing integration
 # ---------------------------------------------------------------------------
 
+
 class TestProviderRouterCodex:
     def setup_method(self):
         self.router = ProviderRouter()
@@ -252,7 +264,18 @@ class TestProviderRouterCodex:
             headers={"Authorization": f"Bearer {JWT_OAUTH}"},
         )
         assert result.provider == "openai-codex"
-        assert "api.openai.com" in result.base_url
+        assert result.base_url == "https://chatgpt.com/backend-api"
+        assert result.full_url == "https://chatgpt.com/backend-api/codex/responses"
+
+    def test_routes_api_key_responses_to_openai_api(self):
+        result = self.router.route(
+            path="/v1/responses",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+        )
+        assert result.provider == "openai"
+        assert result.base_url == "https://api.openai.com"
+        assert result.full_url == "https://api.openai.com/v1/responses"
+        assert result.auth_type == AUTH_TYPE_APIKEY
 
     def test_routes_codex_model_body(self):
         body = json.dumps({"model": "gpt-5.2-codex", "messages": []}).encode()

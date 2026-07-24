@@ -1,6 +1,5 @@
 """Tests for provider router."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.pro.routing.detector", reason="module not available in current build")
@@ -127,9 +126,7 @@ class TestProviderRouter:
 
     def test_detect_provider_success(self):
         """Test provider detection."""
-        provider = self.router._detect_provider(
-            api_key="sk-ant-test_key_123"
-        )
+        provider = self.router._detect_provider(api_key="sk-ant-test_key_123")
         assert provider == Provider.ANTHROPIC
 
     def test_detect_provider_disabled(self):
@@ -137,9 +134,7 @@ class TestProviderRouter:
         config = RoutingConfig(auto_detect=False)
         router = ProviderRouter(config)
 
-        provider = router._detect_provider(
-            api_key="sk-ant-test_key_123"
-        )
+        provider = router._detect_provider(api_key="sk-ant-test_key_123")
         assert provider is None
 
     @pytest.mark.asyncio
@@ -293,9 +288,7 @@ class TestProviderRouter:
         router1 = ProviderRouter(config1)
         router2 = ProviderRouter(config2)
 
-        router1.cost_tracker.track_request(
-            provider="anthropic", input_cost=0.01
-        )
+        router1.cost_tracker.track_request(provider="anthropic", input_cost=0.01)
 
         summary1 = router1.get_cost_summary()
         summary2 = router2.get_cost_summary()

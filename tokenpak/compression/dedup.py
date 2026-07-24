@@ -134,7 +134,7 @@ def dedup_messages(
 def count_duplicates(
     messages: List[Dict[str, Any]],
     threshold: float = DEDUP_JACCARD_THRESHOLD,
-) -> dict:
+) -> Dict[str, int]:
     """
     Count exact and near-duplicate messages without modifying the list.
 

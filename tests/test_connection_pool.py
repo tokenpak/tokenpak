@@ -45,6 +45,7 @@ from tokenpak.proxy.server import ProxyServer
 # Minimal test HTTP server (spin up locally, never hits real APIs)
 # ---------------------------------------------------------------------------
 
+
 class _EchoHandler(BaseHTTPRequestHandler):
     """Simple HTTP/1.1 server that echoes back a JSON body."""
 
@@ -57,7 +58,7 @@ class _EchoHandler(BaseHTTPRequestHandler):
 
         if "/stream" in self.path:
             # Simulate SSE response
-            payload = b"data: {\"type\":\"ping\"}\n\ndata: {\"type\":\"message_stop\"}\n\n"
+            payload = b'data: {"type":"ping"}\n\ndata: {"type":"message_stop"}\n\n'
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Content-Length", str(len(payload)))
@@ -95,6 +96,7 @@ def echo_server():
 # Test 1 — PoolConfig defaults
 # ---------------------------------------------------------------------------
 
+
 def test_pool_config_defaults():
     cfg = PoolConfig()
     assert cfg.max_connections == 20
@@ -108,6 +110,7 @@ def test_pool_config_defaults():
 # ---------------------------------------------------------------------------
 # Test 2 — PoolConfig.from_env() respects env vars
 # ---------------------------------------------------------------------------
+
 
 def test_pool_config_from_env():
     env = {
@@ -128,14 +131,27 @@ def test_pool_config_from_env():
 # Test 3 — PoolConfig.from_env() uses defaults when vars absent
 # ---------------------------------------------------------------------------
 
+
 def test_pool_config_from_env_defaults():
-    clean = {k: "" for k in [
-        "TOKENPAK_POOL_MAX_CONNECTIONS",
-        "TOKENPAK_POOL_MAX_KEEPALIVE",
-        "TOKENPAK_POOL_KEEPALIVE_EXPIRY",
-        "TOKENPAK_HTTP2",
-    ]}
-    env = {k: "20" if "MAX_CONN" in k else "10" if "KEEPALIVE" in k and "EX" not in k else "30" if "EX" in k else "1" for k in clean}
+    clean = {
+        k: ""
+        for k in [
+            "TOKENPAK_POOL_MAX_CONNECTIONS",
+            "TOKENPAK_POOL_MAX_KEEPALIVE",
+            "TOKENPAK_POOL_KEEPALIVE_EXPIRY",
+            "TOKENPAK_HTTP2",
+        ]
+    }
+    env = {
+        k: "20"
+        if "MAX_CONN" in k
+        else "10"
+        if "KEEPALIVE" in k and "EX" not in k
+        else "30"
+        if "EX" in k
+        else "1"
+        for k in clean
+    }
     with patch.dict(os.environ, {}, clear=False):
         # Remove the keys if present
         saved = {k: os.environ.pop(k, None) for k in clean}
@@ -155,6 +171,7 @@ def test_pool_config_from_env_defaults():
 # Test 4 — ConnectionPool constructs without error
 # ---------------------------------------------------------------------------
 
+
 def test_pool_constructs():
     pool = ConnectionPool()
     assert pool is not None
@@ -165,9 +182,11 @@ def test_pool_constructs():
 # Test 5 — http2_enabled reflects config and h2 availability
 # ---------------------------------------------------------------------------
 
+
 def test_pool_http2_enabled_when_h2_available():
     """When h2 is installed, http2_enabled follows config."""
     from tokenpak.proxy.connection_pool import _H2_AVAILABLE
+
     pool = ConnectionPool(PoolConfig(http2=True))
     assert pool.http2_enabled == _H2_AVAILABLE
     pool.close()
@@ -183,6 +202,7 @@ def test_pool_http2_disabled_via_config():
 # Test 6 — active_providers is empty before first request
 # ---------------------------------------------------------------------------
 
+
 def test_pool_no_providers_initially():
     pool = ConnectionPool()
     assert pool.active_providers == []
@@ -192,6 +212,7 @@ def test_pool_no_providers_initially():
 # ---------------------------------------------------------------------------
 # Test 7 — active_providers populated after first request
 # ---------------------------------------------------------------------------
+
 
 def test_pool_providers_after_request(echo_server):
     pool = ConnectionPool(PoolConfig(http2=False))  # test server is HTTP/1.1
@@ -207,6 +228,7 @@ def test_pool_providers_after_request(echo_server):
 # Test 8 — same client returned for same netloc (connection reuse)
 # ---------------------------------------------------------------------------
 
+
 def test_pool_same_client_per_netloc(echo_server):
     pool = ConnectionPool(PoolConfig(http2=False))
     pool._get_client("127.0.0.1:99")  # prime
@@ -220,6 +242,7 @@ def test_pool_same_client_per_netloc(echo_server):
 # Test 9 — different clients for different netlocs
 # ---------------------------------------------------------------------------
 
+
 def test_pool_different_clients_per_netloc():
     pool = ConnectionPool(PoolConfig(http2=False))
     client_a = pool._get_client("api.anthropic.com")
@@ -231,6 +254,7 @@ def test_pool_different_clients_per_netloc():
 # ---------------------------------------------------------------------------
 # Test 10 — metrics.total_requests increments
 # ---------------------------------------------------------------------------
+
 
 def test_pool_metrics_total_requests(echo_server):
     pool = ConnectionPool(PoolConfig(http2=False))
@@ -246,6 +270,7 @@ def test_pool_metrics_total_requests(echo_server):
 # Test 11 — metrics.reuse_rate is 0.0 with no requests
 # ---------------------------------------------------------------------------
 
+
 def test_pool_metrics_reuse_rate_zero_initially():
     pool = ConnectionPool()
     m = pool.metrics()
@@ -256,6 +281,7 @@ def test_pool_metrics_reuse_rate_zero_initially():
 # ---------------------------------------------------------------------------
 # Test 12 — reset_metrics clears counters
 # ---------------------------------------------------------------------------
+
 
 def test_pool_reset_metrics(echo_server):
     pool = ConnectionPool(PoolConfig(http2=False))
@@ -273,11 +299,15 @@ def test_pool_reset_metrics(echo_server):
 # Test 13 — non-streaming request returns correct status and body
 # ---------------------------------------------------------------------------
 
+
 def test_pool_non_streaming_request(echo_server):
     pool = ConnectionPool(PoolConfig(http2=False))
-    resp = pool.request("POST", echo_server + "/v1/messages",
-                        content=b'{"test": true}',
-                        headers={"Content-Type": "application/json"})
+    resp = pool.request(
+        "POST",
+        echo_server + "/v1/messages",
+        content=b'{"test": true}',
+        headers={"Content-Type": "application/json"},
+    )
     assert resp.status_code == 200
     data = json.loads(resp.content)
     assert data["ok"] is True
@@ -288,12 +318,16 @@ def test_pool_non_streaming_request(echo_server):
 # Test 14 — streaming request yields chunks
 # ---------------------------------------------------------------------------
 
+
 def test_pool_streaming_request(echo_server):
     pool = ConnectionPool(PoolConfig(http2=False))
     chunks: List[bytes] = []
-    with pool.stream("POST", echo_server + "/stream",
-                     content=b'{"stream": true}',
-                     headers={"Content-Type": "application/json"}) as resp:
+    with pool.stream(
+        "POST",
+        echo_server + "/stream",
+        content=b'{"stream": true}',
+        headers={"Content-Type": "application/json"},
+    ) as resp:
         assert resp.status_code == 200
         for chunk in resp.iter_bytes(chunk_size=64):
             chunks.append(chunk)
@@ -306,6 +340,7 @@ def test_pool_streaming_request(echo_server):
 # ---------------------------------------------------------------------------
 # Test 15 — pool.close() releases all clients without error
 # ---------------------------------------------------------------------------
+
 
 def test_pool_close_idempotent(echo_server):
     pool = ConnectionPool(PoolConfig(http2=False))
@@ -321,6 +356,7 @@ def test_pool_close_idempotent(echo_server):
 # ---------------------------------------------------------------------------
 # Test 16 — thread-safety: concurrent requests from multiple threads
 # ---------------------------------------------------------------------------
+
 
 def test_pool_thread_safety(echo_server):
     pool = ConnectionPool(PoolConfig(http2=False, max_connections=10))
@@ -349,6 +385,7 @@ def test_pool_thread_safety(echo_server):
 # Test 17 — PoolMetrics.reuse_rate formula
 # ---------------------------------------------------------------------------
 
+
 def test_pool_metrics_reuse_rate_formula():
     m = PoolMetrics()
     assert m.reuse_rate == 0.0  # no requests
@@ -362,15 +399,24 @@ def test_pool_metrics_reuse_rate_formula():
 # Test 18 — PoolMetrics.to_dict() contains all keys
 # ---------------------------------------------------------------------------
 
+
 def test_pool_metrics_to_dict_keys():
     m = PoolMetrics(total_requests=5, reused_connections=3, new_connections=2, errors=0)
     d = m.to_dict()
-    assert set(d.keys()) == {"total_requests", "reused_connections", "new_connections", "errors", "evicted_clients", "reuse_rate"}
+    assert set(d.keys()) == {
+        "total_requests",
+        "reused_connections",
+        "new_connections",
+        "errors",
+        "evicted_clients",
+        "reuse_rate",
+    }
 
 
 # ---------------------------------------------------------------------------
 # Test 19 — global pool singleton
 # ---------------------------------------------------------------------------
+
 
 def test_global_pool_singleton():
     reset_global_pool()
@@ -383,6 +429,7 @@ def test_global_pool_singleton():
 # ---------------------------------------------------------------------------
 # Test 20 — reset_global_pool creates a fresh pool on next call
 # ---------------------------------------------------------------------------
+
 
 def test_global_pool_reset_creates_fresh():
     reset_global_pool()
@@ -397,6 +444,7 @@ def test_global_pool_reset_creates_fresh():
 # Test 21 — ProxyServer has _connection_pool attribute
 # ---------------------------------------------------------------------------
 
+
 def test_proxy_server_has_connection_pool():
     server = ProxyServer(host="127.0.0.1", port=0)
     assert hasattr(server, "_connection_pool")
@@ -406,6 +454,7 @@ def test_proxy_server_has_connection_pool():
 # ---------------------------------------------------------------------------
 # Test 22 — ProxyServer.health() includes connection_pool section
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.needs_proxy
 def test_proxy_server_health_includes_pool_metrics():
@@ -428,6 +477,7 @@ def test_proxy_server_health_includes_pool_metrics():
 # Test 23 — ProxyServer.stop() closes the pool (active_providers cleared)
 # ---------------------------------------------------------------------------
 
+
 def test_proxy_server_stop_closes_pool(echo_server):
     server = ProxyServer(host="127.0.0.1", port=0)
     # Manually prime the pool with one client
@@ -440,6 +490,7 @@ def test_proxy_server_stop_closes_pool(echo_server):
 # ---------------------------------------------------------------------------
 # Test 24 — errors counter increments on bad URL
 # ---------------------------------------------------------------------------
+
 
 def test_pool_metrics_errors_on_bad_url():
     pool = ConnectionPool(PoolConfig(http2=False, connect_timeout=0.5))
@@ -456,6 +507,7 @@ def test_pool_metrics_errors_on_bad_url():
 # ---------------------------------------------------------------------------
 # Test 25 — _http2_available() returns bool
 # ---------------------------------------------------------------------------
+
 
 def test_http2_available_returns_bool():
     result = _http2_available()

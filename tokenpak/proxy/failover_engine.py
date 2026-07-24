@@ -22,12 +22,41 @@ Failover Events:
 
 from __future__ import annotations
 
+__all__ = (
+    "CIRCUIT_COOL_DOWN_SECONDS",
+    "CIRCUIT_FAILURE_THRESHOLD",
+    "CircuitBreaker",
+    "CircuitState",
+    "ClassifiedError",
+    "ErrorType",
+    "FailoverConfig",
+    "FailoverDecision",
+    "FailoverEngine",
+    "FailoverEvent",
+    "FailoverEventLog",
+    "FailoverManager",
+    "MAX_RETRY_SAME_PROVIDER",
+    "ProviderAttempt",
+    "RATE_LIMIT_WAIT_SECONDS",
+    "classify_error",
+    "decide",
+    "get_event_log",
+    "load_failover_config",
+    "normalize_response",
+    "normalize_stream",
+    "render_failover_footer",
+)
+
+
 import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from .providers.stream_translator import StreamingTranslator
 
 from .failover import FailoverConfig, FailoverManager, load_failover_config
 
@@ -204,7 +233,7 @@ class CircuitBreaker:
             if state.failure_count >= self._threshold and not state.is_open:
                 state.is_open = True
                 logger.warning(
-                    "Circuit OPEN for provider %r after %d failures — " "will retry in %ds",
+                    "Circuit OPEN for provider %r after %d failures — will retry in %ds",
                     provider,
                     state.failure_count,
                     int(self._cool_down),
@@ -278,7 +307,7 @@ class FailoverEventLog:
     def __init__(self) -> None:
         from collections import deque
 
-        self._events: deque = deque(maxlen=self._MAX_EVENTS)
+        self._events: deque[FailoverEvent] = deque(maxlen=self._MAX_EVENTS)
         self._lock = threading.Lock()
 
     def record(self, event: FailoverEvent) -> None:
@@ -604,7 +633,7 @@ def normalize_response(
 def normalize_stream(
     source_provider: str,
     target_provider: str,
-):
+) -> Optional["StreamingTranslator"]:
     """
     Return a StreamingTranslator for failover stream normalization.
 
@@ -639,4 +668,4 @@ def render_failover_footer(
     Example: '⚠️ failover:openai (anthropic 429 rate_limit)'
     """
     status_str = f" {http_status}" if http_status else ""
-    return f"⚠️ failover:{failover_provider} " f"({original_provider}{status_str} {error_type})"
+    return f"⚠️ failover:{failover_provider} ({original_provider}{status_str} {error_type})"

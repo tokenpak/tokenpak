@@ -31,8 +31,7 @@ def _render_summary(s: dict[str, Any]) -> str:
         lines.append("  Key       (none — Free tier)")
     lines.append("")
     lines.append(
-        f"  Gated features enabled: {s['enabled_gated_count']} / "
-        f"{s['gated_feature_count']}"
+        f"  Gated features enabled: {s['enabled_gated_count']} / {s['gated_feature_count']}"
     )
     lines.append("")
     if s["tier"] == _lic.TIER_FREE:
@@ -80,7 +79,9 @@ def run_plan(args: argparse.Namespace) -> int:
     for plan in plans:
         price = plan["price"]
         suffix = "" if price not in ("unannounced", "") else "  — pricing not yet announced"
-        print(f"    {plan['label']:<11}  {price:<10}  ({plan['feature_count']} gated features){suffix}")
+        print(
+            f"    {plan['label']:<11}  {price:<10}  ({plan['feature_count']} gated features){suffix}"
+        )
         if plan["blurb"]:
             print(f"               {plan['blurb']}")
     print("")
@@ -104,8 +105,7 @@ def run_activate(args: argparse.Namespace) -> int:
     key = (getattr(args, "key", "") or "").strip()
     email = (getattr(args, "email", "") or "").strip()
     if not key:
-        print("activate: provide a license key → tokenpak activate <key>",
-              file=_sys.stderr)
+        print("activate: provide a license key → tokenpak activate <key>", file=_sys.stderr)
         _sys.exit(2)
     result = _lic.activate(key, email=email)
     if not result.ok:

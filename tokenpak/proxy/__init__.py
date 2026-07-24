@@ -4,6 +4,8 @@ TokenPak proxy utilities.
 Unified proxy package merging core proxy and agent proxy modules.
 """
 
+from typing import Any
+
 from .cache import CacheEntry, CacheMetrics, LRUCache  # noqa: F401
 from .cache_poison import (  # noqa: F401
     _HEARTBEAT_COUNTER,
@@ -82,7 +84,7 @@ from .tracing import (  # noqa: F401
 class ProxyStats:
     """Stats/metrics container — resets on each new instance (restart)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.requests_total = 0
         self.tokens_processed = 0
         self.errors_total = 0
@@ -93,14 +95,60 @@ class ProxyStats:
 class TokenPakProxy:
     """TokenPak proxy entry point (stub for test surface)."""
 
-    def __init__(self, config=None):
+    def __init__(self, config: Any = None) -> None:
         self.config = config or {}
         self.stats = ProxyStats()
         self._shutdown_event = None
+
 
 from .websocket import (  # noqa: F401
     _ws_handler,
     start_ws_server,
 )
 
-__all__ = ['adapters', 'cache', 'cache_invalidator', 'cache_pipeline', 'cache_poison', 'cache_stats', 'capsule_builder', 'capsule_integration', 'circuit_breaker', 'config', 'connection_pool', 'credential_passthrough', 'custom_providers', 'db', 'degradation', 'embedding_cache', 'embedding_router', 'example_selector', 'failover', 'failover_engine', 'fallback', 'memory_guard', 'middleware', 'monitor', 'oauth', 'passthrough', 'payloads', 'prompt_builder', 'providers', 'proxy', 'request_pipeline', 'router', 'routes', 'server', 'server_async', 'startup', 'stats', 'stats_api', 'streaming', 'token_cache', 'tool_schema_registry', 'tracing', 'vault_bridge', 'websocket']
+__all__ = [
+    "adapters",
+    "cache",
+    "cache_invalidator",
+    "cache_pipeline",
+    "cache_poison",
+    "cache_stats",
+    "capsule_builder",
+    "capsule_integration",
+    "circuit_breaker",
+    "config",
+    "connection_pool",
+    "credential_passthrough",
+    "custom_providers",
+    "db",
+    "degradation",
+    "embedding_cache",
+    "embedding_router",
+    "example_selector",
+    "failover",
+    "failover_engine",
+    "fallback",
+    "memory_guard",
+    "middleware",
+    "monitor",
+    "oauth",
+    "passthrough",
+    "payloads",
+    "prompt_builder",
+    "providers",
+    "proxy",
+    "request_pipeline",
+    "router",
+    "routes",
+    "server",
+    "server_async",
+    "startup",
+    "stats",
+    "stats_api",
+    "streaming",
+    "token_cache",
+    "tool_schema_registry",
+    "tracing",
+    "vault_bridge",
+    "websocket",
+]

@@ -8,6 +8,7 @@ from tokenpak.telemetry.replay import ReplayEntry, ReplayStore, get_replay_store
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_entry(**kwargs) -> ReplayEntry:
     defaults = dict(
         provider="anthropic",
@@ -24,6 +25,7 @@ def make_entry(**kwargs) -> ReplayEntry:
 # ---------------------------------------------------------------------------
 # ReplayEntry unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestReplayEntry:
     def test_new_generates_id_and_timestamp(self):
@@ -68,6 +70,7 @@ class TestReplayEntry:
 # ---------------------------------------------------------------------------
 # ReplayStore tests
 # ---------------------------------------------------------------------------
+
 
 class TestReplayStore:
     def setup_method(self):
@@ -154,6 +157,7 @@ class TestReplayStore:
     def test_close_and_reopen(self):
         import os
         import tempfile
+
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             path = f.name
         try:
@@ -172,6 +176,7 @@ class TestReplayStore:
 # Singleton tests
 # ---------------------------------------------------------------------------
 
+
 class TestGetReplayStore:
     def test_singleton_returns_same(self):
         s1 = get_replay_store()
@@ -181,6 +186,7 @@ class TestGetReplayStore:
     def test_new_path_replaces_singleton(self):
         import os
         import tempfile
+
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             path = f.name
         try:
@@ -190,6 +196,7 @@ class TestGetReplayStore:
         finally:
             # reset singleton back to memory
             from tokenpak.telemetry import replay as _r
+
             _r._store = None
             _r._store_path = ":memory:"
             os.unlink(path)
@@ -198,6 +205,7 @@ class TestGetReplayStore:
 # ---------------------------------------------------------------------------
 # Clear tests
 # ---------------------------------------------------------------------------
+
 
 class TestReplayStoreClear:
     def test_clear_empty_store_returns_zero(self):

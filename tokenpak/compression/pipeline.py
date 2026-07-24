@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Protocol, Tuple, cast
 
 if TYPE_CHECKING:
     from tokenpak.proxy.request import ProxyRequest
@@ -20,6 +20,16 @@ from .dedup import dedup_messages
 from .directives import DirectiveApplier
 from .instruction_table import InstructionTable
 from .segmentizer import Segment, segmentize
+
+
+class _FormatAdapter(Protocol):
+    """Local structural boundary for provider-format adapters."""
+
+    source_format: str
+
+    def normalize(self, body: bytes) -> Any: ...
+
+    def denormalize(self, canonical: Any) -> bytes: ...
 
 
 @dataclass
@@ -226,10 +236,9 @@ def _shadow_validate(original: str, compressed: str) -> bool:
     if not compressed or not original:
         return True
     try:
-        from tokenpak.proxy.shadow_reader import ShadowReader
+        from tokenpak.proxy.shadow_reader import validate
 
-        reader = ShadowReader()
-        result = reader.validate(original=original, compressed=compressed)
+        result = validate(original=original, compressed=compressed)
         return result.passed
     except Exception:
         return True  # fail-open: if shadow reader errors, allow compressed version
@@ -267,7 +276,10 @@ def compact_text(text: str) -> str:
 
 
 def compact_request_body(
-    body_bytes: bytes, adapter=None, *, request: "Optional[ProxyRequest]" = None
+    body_bytes: bytes,
+    adapter: _FormatAdapter | None = None,
+    *,
+    request: "Optional[ProxyRequest]" = None,
 ) -> Tuple[bytes, int, int, int]:
     """
     Style-contract-aware compaction.
@@ -289,7 +301,7 @@ def compact_request_body(
 
     active_adapter = adapter or _detect_adapter("", {}, body_bytes)
     if active_adapter.source_format == "passthrough":
-        model, tokens = extract_request_tokens(body_bytes, adapter=active_adapter)
+        model, tokens = extract_request_tokens(body_bytes, adapter=cast(Any, active_adapter))
         _ = model
         return body_bytes, tokens, tokens, 0
 
@@ -298,7 +310,7 @@ def compact_request_body(
     except Exception:
         return body_bytes, 0, 0, 0
 
-    _, original_tokens = extract_request_tokens(body_bytes, adapter=active_adapter)
+    _, original_tokens = extract_request_tokens(body_bytes, adapter=cast(Any, active_adapter))
     if original_tokens < COMPACT_THRESHOLD_TOKENS:
         return body_bytes, original_tokens, original_tokens, 0
     if COMPACT_MAX_TOKENS > 0 and original_tokens > COMPACT_MAX_TOKENS:
@@ -365,5 +377,5 @@ def compact_request_body(
         new_body = active_adapter.denormalize(canonical)
     except Exception:
         return body_bytes, original_tokens, original_tokens, protected_tokens
-    _, sent_tokens = extract_request_tokens(new_body, adapter=active_adapter)
+    _, sent_tokens = extract_request_tokens(new_body, adapter=cast(Any, active_adapter))
     return new_body, sent_tokens, original_tokens, protected_tokens

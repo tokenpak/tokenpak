@@ -32,7 +32,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
 
@@ -867,7 +867,7 @@ class TelemetryDB:
         row = cur.fetchone()
         if row is None:
             return None
-        return json.loads(row[0])
+        return cast(dict[str, Any], json.loads(row[0]))
 
     # ------------------------------------------------------------------
     # Retention / pruning
@@ -1434,11 +1434,11 @@ class TelemetryDB:
     # Savings attribution
     # ------------------------------------------------------------------
 
-    def insert_savings_attribution(self, row: dict) -> None:
+    def insert_savings_attribution(self, row: dict[str, Any]) -> None:
         """Insert one savings attribution record."""
         self.batch_insert_savings_attributions([row])
 
-    def batch_insert_savings_attributions(self, rows: list) -> None:
+    def batch_insert_savings_attributions(self, rows: list[dict[str, Any]]) -> None:
         """Batch-insert savings attribution records."""
         if not rows:
             return
@@ -1471,7 +1471,7 @@ class TelemetryDB:
         )
         self._conn.commit()
 
-    def query_savings_by_source(self, *, days: int = 7) -> list:
+    def query_savings_by_source(self, *, days: int = 7) -> list[dict[str, Any]]:
         """Aggregate savings tokens and costs grouped by source.
 
         Returns a list of dicts: source, saved_tokens, estimated_cost_saved,
@@ -1499,7 +1499,7 @@ class TelemetryDB:
     # Cache miss reasons
     # ------------------------------------------------------------------
 
-    def insert_cache_miss(self, row: dict) -> None:
+    def insert_cache_miss(self, row: dict[str, Any]) -> None:
         """Insert one cache miss reason record."""
         sql = """
         INSERT INTO tp_cache_miss_reasons
@@ -1520,7 +1520,7 @@ class TelemetryDB:
         )
         self._conn.commit()
 
-    def query_cache_miss_summary(self, *, days: int = 7) -> list:
+    def query_cache_miss_summary(self, *, days: int = 7) -> list[dict[str, Any]]:
         """Aggregate cache miss counts grouped by reason.
 
         Returns a list of dicts: reason, count.

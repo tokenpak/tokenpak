@@ -18,18 +18,21 @@ LOGS_DIR = os.path.expanduser("~/.tokenpak/logs")
 DASHBOARD_HTML = pathlib.Path(__file__).parent / "dashboard.html"
 
 
-def _fetch_stats() -> dict:
+def _fetch_stats() -> dict[str, object]:
     """Fetch live stats from the running proxy."""
     try:
         with urllib.request.urlopen(f"{PROXY_URL}/stats", timeout=3) as r:
-            return json.loads(r.read())
+            decoded: object = json.loads(r.read())
+            if isinstance(decoded, dict):
+                return {str(key): value for key, value in decoded.items()}
+            return {"error": "Proxy stats response was not an object"}
     except Exception as e:
         return {"error": str(e)}
 
 
-def _fetch_errors(limit: int = 100, model_filter: Optional[str] = None) -> list:
+def _fetch_errors(limit: int = 100, model_filter: Optional[str] = None) -> list[dict[str, object]]:
     """Read recent errors from ~/.tokenpak/logs/errors-*.jsonl"""
-    entries = []
+    entries: list[dict[str, object]] = []
     pattern = os.path.join(LOGS_DIR, "errors-*.jsonl")
     files = sorted(glob.glob(pattern), reverse=True)[:3]  # last 3 days
     for fpath in files:
@@ -40,10 +43,13 @@ def _fetch_errors(limit: int = 100, model_filter: Optional[str] = None) -> list:
                     if not line:
                         continue
                     try:
-                        entry = json.loads(line)
+                        decoded: object = json.loads(line)
+                        if not isinstance(decoded, dict):
+                            continue
+                        entry = {str(key): value for key, value in decoded.items()}
                         if model_filter:
                             ctx = entry.get("context", {})
-                            if ctx.get("model") != model_filter:
+                            if not isinstance(ctx, dict) or ctx.get("model") != model_filter:
                                 continue
                         entries.append(entry)
                     except json.JSONDecodeError:
@@ -51,17 +57,17 @@ def _fetch_errors(limit: int = 100, model_filter: Optional[str] = None) -> list:
         except OSError:
             pass
     # newest first, capped
-    entries.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    entries.sort(key=lambda item: str(item.get("timestamp", "")), reverse=True)
     return entries[:limit]
 
 
 class MonitorHandler(BaseHTTPRequestHandler):
     """Simple HTTP handler for the monitor dashboard."""
 
-    def log_message(self, fmt, *args):
+    def log_message(self, fmt: str, *args: object) -> None:
         pass  # suppress server logs
 
-    def do_GET(self):
+    def do_GET(self) -> None:
         if self.path == "/" or self.path == "/index.html":
             self._serve_dashboard()
         elif self.path == "/api/stats":
@@ -71,7 +77,7 @@ class MonitorHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404, "Not Found")
 
-    def _serve_dashboard(self):
+    def _serve_dashboard(self) -> None:
         if DASHBOARD_HTML.exists():
             content = DASHBOARD_HTML.read_bytes()
         else:
@@ -82,11 +88,11 @@ class MonitorHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
-    def _api_stats(self):
+    def _api_stats(self) -> None:
         data = _fetch_stats()
         self._json_response(data)
 
-    def _api_errors(self):
+    def _api_errors(self) -> None:
         from urllib.parse import parse_qs, urlparse
 
         parsed = urlparse(self.path)
@@ -96,7 +102,7 @@ class MonitorHandler(BaseHTTPRequestHandler):
         entries = _fetch_errors(limit=limit, model_filter=model)
         self._json_response({"errors": entries, "count": len(entries)})
 
-    def _json_response(self, data: dict, status: int = 200):
+    def _json_response(self, data: object, status: int = 200) -> None:
         body = json.dumps(data, default=str).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -110,7 +116,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
 
-def run(port: int = DEFAULT_PORT):
+def run(port: int = DEFAULT_PORT) -> None:
     """Start the monitor server (blocking)."""
     server = ThreadedHTTPServer(("127.0.0.1", port), MonitorHandler)
     print(f"TokenPak Monitor → http://localhost:{port}/")

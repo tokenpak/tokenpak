@@ -9,6 +9,7 @@ Covers:
 - Backward-compatible CLI: start_proxy() still works
 - CONNECT tunnelling (smoke test)
 """
+
 from __future__ import annotations
 
 import json
@@ -73,8 +74,13 @@ def _get(path: str) -> tuple[int, dict]:
 # ---------------------------------------------------------------------------
 
 REQUIRED_HEALTH_FIELDS = {
-    "status", "uptime_seconds", "version", "requests_total",
-    "requests_errors", "compression_ratio_avg", "timestamp",
+    "status",
+    "uptime_seconds",
+    "version",
+    "requests_total",
+    "requests_errors",
+    "compression_ratio_avg",
+    "timestamp",
 }
 
 
@@ -98,6 +104,7 @@ def test_async_health_status_ok(async_proxy):
 # Test 2 — /stats endpoint
 # ---------------------------------------------------------------------------
 
+
 def test_async_stats_200(async_proxy):
     status, data = _get("/stats")
     assert status == 200
@@ -108,6 +115,7 @@ def test_async_stats_200(async_proxy):
 # Test 3 — /stats/last returns 200
 # ---------------------------------------------------------------------------
 
+
 def test_async_stats_last_200(async_proxy):
     status, data = _get("/stats/last")
     assert status == 200
@@ -116,6 +124,7 @@ def test_async_stats_last_200(async_proxy):
 # ---------------------------------------------------------------------------
 # Test 4 — /stats/session returns 200 with expected keys
 # ---------------------------------------------------------------------------
+
 
 def test_async_stats_session(async_proxy):
     status, data = _get("/stats/session")
@@ -126,6 +135,7 @@ def test_async_stats_session(async_proxy):
 # ---------------------------------------------------------------------------
 # Test 5 — /traces endpoint
 # ---------------------------------------------------------------------------
+
 
 def test_async_traces(async_proxy):
     status, data = _get("/traces")
@@ -138,6 +148,7 @@ def test_async_traces(async_proxy):
 # Test 6 — /trace/last returns 200 (may be no_traces)
 # ---------------------------------------------------------------------------
 
+
 def test_async_trace_last(async_proxy):
     status, data = _get("/trace/last")
     assert status == 200
@@ -149,6 +160,7 @@ def test_async_trace_last(async_proxy):
 # Test 7 — /degradation endpoint
 # ---------------------------------------------------------------------------
 
+
 def test_async_degradation(async_proxy):
     status, data = _get("/degradation")
     assert status == 200
@@ -157,6 +169,7 @@ def test_async_degradation(async_proxy):
 # ---------------------------------------------------------------------------
 # Test 8 — /circuit-breakers endpoint
 # ---------------------------------------------------------------------------
+
 
 def test_async_circuit_breakers(async_proxy):
     status, data = _get("/circuit-breakers")
@@ -167,6 +180,7 @@ def test_async_circuit_breakers(async_proxy):
 # ---------------------------------------------------------------------------
 # Test 9 — 50+ CONCURRENT requests complete without blocking
 # ---------------------------------------------------------------------------
+
 
 def test_async_50_concurrent_requests(async_proxy):
     """
@@ -217,6 +231,7 @@ def test_async_50_concurrent_requests(async_proxy):
 # Test 10 — Management endpoint overhead < 10ms
 # ---------------------------------------------------------------------------
 
+
 def test_async_health_overhead_under_10ms(async_proxy):
     """
     Proxy overhead on /health must be <10ms (pure server-side, no upstream).
@@ -238,6 +253,7 @@ def test_async_health_overhead_under_10ms(async_proxy):
 # ---------------------------------------------------------------------------
 # Test 11 — Backpressure middleware (503 at capacity)
 # ---------------------------------------------------------------------------
+
 
 def test_async_backpressure_503():
     """
@@ -281,9 +297,7 @@ def test_async_backpressure_503():
         app.add_middleware(ConcurrencyLimiterMiddleware, max_concurrency=1)
 
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as client:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             # Occupy the single concurrency slot.
             in_flight = asyncio.create_task(client.get("/v1/slow"))
             await asyncio.wait_for(entered.wait(), timeout=5)
@@ -324,8 +338,7 @@ def test_async_backpressure_middleware_installed_in_app():
     try:
         app = server_async.create_async_app(object())
         assert any(
-            m.cls is server_async.ConcurrencyLimiterMiddleware
-            for m in app.user_middleware
+            m.cls is server_async.ConcurrencyLimiterMiddleware for m in app.user_middleware
         ), "ConcurrencyLimiterMiddleware not installed by create_async_app"
     finally:
         server_async._proxy_server_ref = saved_ref
@@ -335,7 +348,10 @@ def test_async_backpressure_middleware_installed_in_app():
 # Test 12 — backward-compatible CLI: start_proxy() uses async backend
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skip(reason="Async backend (server_async.py) exists but integration into ProxyServer.start() not yet implemented. Sync backend (BaseHTTPRequestHandler) is working correctly.")
+
+@pytest.mark.skip(
+    reason="Async backend (server_async.py) exists but integration into ProxyServer.start() not yet implemented. Sync backend (BaseHTTPRequestHandler) is working correctly."
+)
 def test_start_proxy_uses_async_backend():
     """start_proxy() must be usable and return a ProxyServer with async backend."""
     from tokenpak.proxy.server import start_proxy
@@ -358,6 +374,7 @@ def test_start_proxy_uses_async_backend():
 # ---------------------------------------------------------------------------
 # Test 13 — /health during high concurrency is always responsive
 # ---------------------------------------------------------------------------
+
 
 def test_health_responsive_during_load(async_proxy):
     """
@@ -398,14 +415,13 @@ def test_health_responsive_during_load(async_proxy):
     valid_times = [t for t in health_times if t < 9000]
     assert len(valid_times) >= 3, "Health checker failed too many times during load"
     median_ms = sorted(valid_times)[len(valid_times) // 2]
-    assert median_ms < 200, (
-        f"Median /health latency under load: {median_ms:.1f}ms — too slow"
-    )
+    assert median_ms < 200, f"Median /health latency under load: {median_ms:.1f}ms — too slow"
 
 
 # ---------------------------------------------------------------------------
 # Test 14 — Unknown route returns 404
 # ---------------------------------------------------------------------------
+
 
 def test_async_404_on_unknown_route(async_proxy):
     try:
@@ -419,6 +435,7 @@ def test_async_404_on_unknown_route(async_proxy):
 # ---------------------------------------------------------------------------
 # Test 15 — Repeated start/stop doesn't hang
 # ---------------------------------------------------------------------------
+
 
 def test_async_proxy_start_stop_cycle():
     from tokenpak.proxy.server import ProxyServer

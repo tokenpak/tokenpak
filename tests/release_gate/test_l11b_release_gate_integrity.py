@@ -12,6 +12,7 @@ CLOSED in the broken shape and passes in the fixed shape:
 Scripts are loaded by path (mirroring the other release_gate tests) so the suite
 does not depend on a particular ``scripts/`` package layout.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -139,5 +140,7 @@ def test_h5_docs_benchmarks_labeled_synthetic_and_no_host_fingerprint():
     assert "Synthetic placeholder" in doc, "BENCHMARKS.md must carry the synthetic banner"
     # Mutate-to-red: the previous doc embedded a build-host kernel string like
     # 'Linux 6.17.0-14-generic'. No host fingerprint may be published.
-    assert not re.search(r"Linux \d+\.\d+", doc), "build-host kernel string leaked into BENCHMARKS.md"
+    assert not re.search(r"Linux \d+\.\d+", doc), (
+        "build-host kernel string leaked into BENCHMARKS.md"
+    )
     assert "uname" not in doc

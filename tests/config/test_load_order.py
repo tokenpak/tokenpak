@@ -88,9 +88,7 @@ def test_tcl02_project_dotenv_beats_user_dotenv(tmp_path):
     cwd = tmp_path / "proj"
     _write(cwd / ".env", "K=project\n")
     _write(home / ".env", "K=user\n")
-    resolver = LoadOrderResolver(
-        environ={}, cwd=cwd, home=home, legacy_home=tmp_path / "legacy"
-    )
+    resolver = LoadOrderResolver(environ={}, cwd=cwd, home=home, legacy_home=tmp_path / "legacy")
     res = resolver.resolve("K")
     assert res.value == "project"
     assert res.layer is Layer.PROJECT_DOTENV
@@ -102,9 +100,7 @@ def test_tcl03_user_dotenv_when_no_project(tmp_path):
     cwd = tmp_path / "proj"
     cwd.mkdir(parents=True)
     _write(home / ".env", "K=user\n")
-    resolver = LoadOrderResolver(
-        environ={}, cwd=cwd, home=home, legacy_home=tmp_path / "legacy"
-    )
+    resolver = LoadOrderResolver(environ={}, cwd=cwd, home=home, legacy_home=tmp_path / "legacy")
     res = resolver.resolve("K")
     assert res.value == "user"
     assert res.layer is Layer.USER_DOTENV
@@ -132,9 +128,7 @@ def test_tcl05_default_when_key_nowhere(tmp_path):
     home = tmp_path / "home"
     cwd = tmp_path / "proj"
     cwd.mkdir(parents=True)
-    resolver = LoadOrderResolver(
-        environ={}, cwd=cwd, home=home, legacy_home=tmp_path / "legacy"
-    )
+    resolver = LoadOrderResolver(environ={}, cwd=cwd, home=home, legacy_home=tmp_path / "legacy")
     res = resolver.resolve("K", default="fallback")
     assert res.value == "fallback"
     assert res.layer is Layer.DEFAULT
@@ -170,9 +164,7 @@ def test_tcl09_openclaw_fallback_off_by_default(tmp_path):
     cwd = tmp_path / "proj"
     cwd.mkdir(parents=True)
     _write(legacy / ".env", "K=from_legacy\n")
-    resolver = LoadOrderResolver(
-        environ={}, cwd=cwd, home=home, legacy_home=legacy
-    )
+    resolver = LoadOrderResolver(environ={}, cwd=cwd, home=home, legacy_home=legacy)
     res = resolver.resolve("K", default="def")
     assert res.value == "def"
     assert res.layer is Layer.DEFAULT
@@ -242,9 +234,7 @@ def test_resolver_creates_no_files_and_no_dirs(tmp_path):
     cwd = tmp_path / "proj"
     legacy = tmp_path / "legacy"
     cwd.mkdir(parents=True)
-    resolver = LoadOrderResolver(
-        environ={"K": "v"}, cwd=cwd, home=home, legacy_home=legacy
-    )
+    resolver = LoadOrderResolver(environ={"K": "v"}, cwd=cwd, home=home, legacy_home=legacy)
     resolver.resolve("K")
     resolver.resolve("MISSING")
     assert not home.exists()

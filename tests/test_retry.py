@@ -31,6 +31,7 @@ def _isolate_retry_module_paths(tmp_path, monkeypatch):
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+
 def make_fn(successes_on=None, always_fail=False, fail_levels=None):
     """
     successes_on: set of call indices (0-based) that succeed
@@ -76,6 +77,7 @@ def make_http_fn(status_code: int, succeed_after: int = 999):
 
 
 # ── basic escalation ──────────────────────────────────────────────────────────
+
 
 def test_success_on_first_attempt(tmp_path):
     fn = make_fn(successes_on={0})
@@ -140,6 +142,7 @@ def test_exhausted_saves_state_and_alerts(tmp_path):
 
 def test_partial_state_preserved(tmp_path):
     """Partial state written by fn is saved on failure."""
+
     def fn(context, state):
         state["progress"] = "halfway"
         raise RuntimeError("fail")
@@ -218,6 +221,7 @@ def test_default_provider_switch_path(tmp_path):
 
 # ── per-error-type behavior ───────────────────────────────────────────────────
 
+
 def test_429_triggers_wait_behavior(tmp_path):
     """429 rate-limit errors should trigger exponential backoff (wait behavior)."""
     fn = make_http_fn(status_code=429, succeed_after=2)
@@ -225,6 +229,7 @@ def test_429_triggers_wait_behavior(tmp_path):
 
     # Patch sleep to capture wait times
     import tokenpak.orchestration.retry as retry_mod  # noqa: F811 — module-level alias exists; kept local for clarity
+
     original_sleep = retry_mod.time.sleep
 
     def fake_sleep(s):
@@ -257,6 +262,7 @@ def test_500_triggers_retry(tmp_path):
     )
     # Monkeypatch sleep so test doesn't actually wait
     import tokenpak.orchestration.retry as retry_mod  # noqa: F811 — module-level alias exists; kept local for clarity
+
     original_sleep = retry_mod.time.sleep
     waits_used = []
     retry_mod.time.sleep = lambda s: waits_used.append(s)
@@ -335,9 +341,11 @@ def test_all_providers_fail_triggers_alert(tmp_path):
 
 # ── config loading ────────────────────────────────────────────────────────────
 
+
 def test_wait_seconds_default_is_1_2_4(tmp_path):
     """Default wait_seconds should be [1, 2, 4] per spec."""
     import tokenpak.orchestration.retry as retry_mod  # noqa: F811 — module-level alias exists; kept local for clarity
+
     # Temporarily override config path to avoid reading real config
     original = retry_mod.CONFIG_PATH
     retry_mod.CONFIG_PATH = tmp_path / "nonexistent_config.json"
@@ -351,6 +359,7 @@ def test_wait_seconds_default_is_1_2_4(tmp_path):
 def test_config_file_overrides_wait_seconds(tmp_path):
     """Config file retry section should override defaults."""
     import tokenpak.orchestration.retry as retry_mod  # noqa: F811 — module-level alias exists; kept local for clarity
+
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps({"retry": {"wait_seconds": [0.5, 1.0, 2.0]}}))
     original = retry_mod.CONFIG_PATH
@@ -364,9 +373,11 @@ def test_config_file_overrides_wait_seconds(tmp_path):
 
 # ── shadow / event logging ────────────────────────────────────────────────────
 
+
 def test_retry_events_logged(tmp_path, monkeypatch):
     """Retry events should be appended to the JSONL log."""
     import tokenpak.orchestration.retry as retry_mod  # noqa: F811 — module-level alias exists; kept local for clarity
+
     event_log = tmp_path / "retry_events.jsonl"
     monkeypatch.setattr(retry_mod, "RETRY_EVENT_LOG", event_log)
 
@@ -384,6 +395,7 @@ def test_retry_events_logged(tmp_path, monkeypatch):
 def test_load_recent_retry_events(tmp_path, monkeypatch):
     """load_recent_retry_events should return events from the JSONL log."""
     import tokenpak.orchestration.retry as retry_mod  # noqa: F811 — module-level alias exists; kept local for clarity
+
     event_log = tmp_path / "retry_events.jsonl"
     monkeypatch.setattr(retry_mod, "RETRY_EVENT_LOG", event_log)
 
@@ -399,9 +411,11 @@ def test_load_recent_retry_events(tmp_path, monkeypatch):
 
 # ── extract_http_status ───────────────────────────────────────────────────────
 
+
 def test_extract_http_status_from_attribute():
     class FakeErr(Exception):
         status_code = 429
+
     assert _extract_http_status(FakeErr()) == "429"
 
 

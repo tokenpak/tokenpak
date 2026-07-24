@@ -154,8 +154,14 @@ class TestHealthChecker(unittest.TestCase):
         mock_providers = {"anthropic": {"status": provider_status}}
         mock_cache = {"entries": 5, "memory_used_mb": 0.1, "compression_ratio": 0.75}
 
-        with mock.patch("tokenpak.telemetry.monitoring.health.check_providers", return_value=mock_providers), \
-             mock.patch("tokenpak.telemetry.monitoring.health.get_cache_metrics", return_value=mock_cache):
+        with (
+            mock.patch(
+                "tokenpak.telemetry.monitoring.health.check_providers", return_value=mock_providers
+            ),
+            mock.patch(
+                "tokenpak.telemetry.monitoring.health.get_cache_metrics", return_value=mock_cache
+            ),
+        ):
             result = checker.check()
         return result
 
@@ -173,9 +179,13 @@ class TestHealthChecker(unittest.TestCase):
         from tokenpak.telemetry.monitoring.health import HealthChecker
 
         checker = HealthChecker(start_time=time.time())
-        with mock.patch("tokenpak.telemetry.monitoring.health.check_providers", return_value={}), \
-             mock.patch("tokenpak.telemetry.monitoring.health.get_cache_metrics",
-                        return_value={"entries": 0, "memory_used_mb": 0.0, "compression_ratio": 0.0}):
+        with (
+            mock.patch("tokenpak.telemetry.monitoring.health.check_providers", return_value={}),
+            mock.patch(
+                "tokenpak.telemetry.monitoring.health.get_cache_metrics",
+                return_value={"entries": 0, "memory_used_mb": 0.0, "compression_ratio": 0.0},
+            ),
+        ):
             result = checker.check()
         self.assertEqual(result["proxy_version"], tokenpak.__version__)
 
@@ -506,8 +516,15 @@ class TestRequestLogRecord(unittest.TestCase):
     def test_to_dict_required_keys(self):
         record = self._make_record()
         d = record.to_dict()
-        for key in ("request_id", "timestamp", "level", "method", "endpoint",
-                    "response_status", "latency_ms"):
+        for key in (
+            "request_id",
+            "timestamp",
+            "level",
+            "method",
+            "endpoint",
+            "response_status",
+            "latency_ms",
+        ):
             self.assertIn(key, d)
 
     def test_to_dict_optional_model_present(self):
@@ -567,12 +584,14 @@ class TestRequestLoggerInit(unittest.TestCase):
     def test_init_with_stdout_config(self):
         from tokenpak.telemetry.monitoring.request_logger import RequestLogger, _StdoutWriter
 
-        rl = RequestLogger(config={
-            "enabled": True,
-            "level": "info",
-            "destination": "stdout",
-            "retention_days": 30,
-        })
+        rl = RequestLogger(
+            config={
+                "enabled": True,
+                "level": "info",
+                "destination": "stdout",
+                "retention_days": 30,
+            }
+        )
         self.assertIsInstance(rl._writer, _StdoutWriter)
         rl.stop()
 
@@ -600,22 +619,42 @@ class TestRequestLoggerInit(unittest.TestCase):
         from tokenpak.telemetry.monitoring.request_logger import RequestLogger
 
         # Use stdout to avoid filesystem I/O
-        with mock.patch.object(RequestLogger, "__init__", lambda self, config=None: (
-            setattr(self, "_cfg", {"enabled": True, "level": "info",
-                                   "destination": "stdout", "retention_days": 30}),
-            setattr(self, "_enabled", True),
-            setattr(self, "_level", "info"),
-            setattr(self, "_destination", "stdout"),
-            setattr(self, "_retention_days", 30),
-            setattr(self, "_writer", mock.MagicMock()),
-            setattr(self, "_queue", __import__("queue").Queue()),
-            setattr(self, "_thread", mock.MagicMock(start=lambda: None)),
-        ) and None):
+        with mock.patch.object(
+            RequestLogger,
+            "__init__",
+            lambda self, config=None: (
+                (
+                    setattr(
+                        self,
+                        "_cfg",
+                        {
+                            "enabled": True,
+                            "level": "info",
+                            "destination": "stdout",
+                            "retention_days": 30,
+                        },
+                    ),
+                    setattr(self, "_enabled", True),
+                    setattr(self, "_level", "info"),
+                    setattr(self, "_destination", "stdout"),
+                    setattr(self, "_retention_days", 30),
+                    setattr(self, "_writer", mock.MagicMock()),
+                    setattr(self, "_queue", __import__("queue").Queue()),
+                    setattr(self, "_thread", mock.MagicMock(start=lambda: None)),
+                )
+                and None
+            ),
+        ):
             pass
 
-        rl1 = RequestLogger(config={
-            "enabled": True, "level": "info", "destination": "stdout", "retention_days": 7,
-        })
+        rl1 = RequestLogger(
+            config={
+                "enabled": True,
+                "level": "info",
+                "destination": "stdout",
+                "retention_days": 7,
+            }
+        )
         RequestLogger._instance = rl1
         rl2 = RequestLogger.get_instance()
         self.assertIs(rl1, rl2)
@@ -624,9 +663,14 @@ class TestRequestLoggerInit(unittest.TestCase):
     def test_build_record_warn_level_for_4xx(self):
         from tokenpak.telemetry.monitoring.request_logger import LEVEL_WARN, RequestLogger
 
-        rl = RequestLogger(config={
-            "enabled": True, "level": "info", "destination": "stdout", "retention_days": 7,
-        })
+        rl = RequestLogger(
+            config={
+                "enabled": True,
+                "level": "info",
+                "destination": "stdout",
+                "retention_days": 7,
+            }
+        )
         record = rl.build_record(
             request_id="r1",
             response_status=404,
@@ -638,9 +682,14 @@ class TestRequestLoggerInit(unittest.TestCase):
     def test_build_record_info_level_for_2xx(self):
         from tokenpak.telemetry.monitoring.request_logger import LEVEL_INFO, RequestLogger
 
-        rl = RequestLogger(config={
-            "enabled": True, "level": "info", "destination": "stdout", "retention_days": 7,
-        })
+        rl = RequestLogger(
+            config={
+                "enabled": True,
+                "level": "info",
+                "destination": "stdout",
+                "retention_days": 7,
+            }
+        )
         record = rl.build_record(request_id="r2", response_status=200, endpoint="/ok")
         self.assertEqual(record.level, LEVEL_INFO)
         rl.stop()
@@ -652,9 +701,14 @@ class TestRequestLoggerInit(unittest.TestCase):
             RequestLogRecord,
         )
 
-        rl = RequestLogger(config={
-            "enabled": False, "level": "info", "destination": "stdout", "retention_days": 7,
-        })
+        rl = RequestLogger(
+            config={
+                "enabled": False,
+                "level": "info",
+                "destination": "stdout",
+                "retention_days": 7,
+            }
+        )
         record = RequestLogRecord(
             request_id="r3",
             timestamp="2026-04-12T20:00:00Z",
@@ -671,9 +725,14 @@ class TestRequestLoggerInit(unittest.TestCase):
             RequestLogRecord,
         )
 
-        rl = RequestLogger(config={
-            "enabled": True, "level": "info", "destination": "stdout", "retention_days": 7,
-        })
+        rl = RequestLogger(
+            config={
+                "enabled": True,
+                "level": "info",
+                "destination": "stdout",
+                "retention_days": 7,
+            }
+        )
         record = RequestLogRecord(
             request_id="r4",
             timestamp="2026-04-12T20:00:00Z",
@@ -920,7 +979,9 @@ class TestAuditTrail(unittest.TestCase):
         trail = self._make_trail()
         trail.record_compile(input_block_count=5, output_block_count=3)
 
-        with mock.patch("tokenpak.telemetry.monitoring.audit_trail.RequestLogger.get_instance") as mock_get:
+        with mock.patch(
+            "tokenpak.telemetry.monitoring.audit_trail.RequestLogger.get_instance"
+        ) as mock_get:
             mock_logger = mock.MagicMock()
             mock_get.return_value = mock_logger
             trail.flush()
@@ -944,7 +1005,9 @@ class TestAuditTrail(unittest.TestCase):
         trail.record_error(error_type="Timeout", message="upstream slow")
 
         calls = []
-        with mock.patch("tokenpak.telemetry.monitoring.audit_trail.RequestLogger.get_instance") as mock_get:
+        with mock.patch(
+            "tokenpak.telemetry.monitoring.audit_trail.RequestLogger.get_instance"
+        ) as mock_get:
             mock_logger = mock.MagicMock()
             mock_logger.log.side_effect = lambda r: calls.append(r.extra["event"])
             mock_get.return_value = mock_logger
@@ -985,15 +1048,11 @@ class TestGetSwapMb(unittest.TestCase):
             used_mb, total_mb, pct = _get_swap_mb()
 
         self.assertAlmostEqual(total_mb, 2048.0)  # 2097152 kB / 1024
-        self.assertAlmostEqual(used_mb, 1024.0)   # 2097152-1048576 kB / 1024
+        self.assertAlmostEqual(used_mb, 1024.0)  # 2097152-1048576 kB / 1024
         self.assertAlmostEqual(pct, 50.0, delta=1.0)
 
     def test_no_swap_returns_zero_pct(self):
-        fake_meminfo = (
-            "MemTotal:       16384000 kB\n"
-            "SwapTotal:       0 kB\n"
-            "SwapFree:        0 kB\n"
-        )
+        fake_meminfo = "MemTotal:       16384000 kB\nSwapTotal:       0 kB\nSwapFree:        0 kB\n"
         mock_open = mock.mock_open(read_data=fake_meminfo)
         with mock.patch("builtins.open", mock_open):
             from tokenpak.telemetry.monitoring.swap_alert import _get_swap_mb
@@ -1051,8 +1110,10 @@ class TestCheckSwapPressure(unittest.TestCase):
     def test_above_threshold_sends_telegram(self):
         import tokenpak.telemetry.monitoring.swap_alert as sa
 
-        with mock.patch.object(sa, "_get_swap_mb", return_value=(1500.0, 2048.0, 73.0)), \
-             mock.patch.object(sa, "_send_telegram", return_value=True) as mock_send:
+        with (
+            mock.patch.object(sa, "_get_swap_mb", return_value=(1500.0, 2048.0, 73.0)),
+            mock.patch.object(sa, "_send_telegram", return_value=True) as mock_send,
+        ):
             result = sa.check_swap_pressure(threshold_mb=1024, cooldown_s=60)
         self.assertTrue(result)
         mock_send.assert_called_once()
@@ -1061,8 +1122,10 @@ class TestCheckSwapPressure(unittest.TestCase):
         import tokenpak.telemetry.monitoring.swap_alert as sa
 
         sa._last_alert_time = time.time()  # alert was just sent
-        with mock.patch.object(sa, "_get_swap_mb", return_value=(1500.0, 2048.0, 73.0)), \
-             mock.patch.object(sa, "_send_telegram", return_value=True) as mock_send:
+        with (
+            mock.patch.object(sa, "_get_swap_mb", return_value=(1500.0, 2048.0, 73.0)),
+            mock.patch.object(sa, "_send_telegram", return_value=True) as mock_send,
+        ):
             result = sa.check_swap_pressure(threshold_mb=1024, cooldown_s=1800)
         self.assertFalse(result)
         mock_send.assert_not_called()
@@ -1072,8 +1135,10 @@ class TestCheckSwapPressure(unittest.TestCase):
 
         sa._last_alert_time = 0.0
         before = time.time()
-        with mock.patch.object(sa, "_get_swap_mb", return_value=(2000.0, 4096.0, 50.0)), \
-             mock.patch.object(sa, "_send_telegram", return_value=True):
+        with (
+            mock.patch.object(sa, "_get_swap_mb", return_value=(2000.0, 4096.0, 50.0)),
+            mock.patch.object(sa, "_send_telegram", return_value=True),
+        ):
             sa.check_swap_pressure(threshold_mb=1024, cooldown_s=0)
         self.assertGreaterEqual(sa._last_alert_time, before)
 
@@ -1081,8 +1146,10 @@ class TestCheckSwapPressure(unittest.TestCase):
         import tokenpak.telemetry.monitoring.swap_alert as sa
 
         sa._last_alert_time = 0.0
-        with mock.patch.object(sa, "_get_swap_mb", return_value=(2000.0, 4096.0, 50.0)), \
-             mock.patch.object(sa, "_send_telegram", return_value=False):
+        with (
+            mock.patch.object(sa, "_get_swap_mb", return_value=(2000.0, 4096.0, 50.0)),
+            mock.patch.object(sa, "_send_telegram", return_value=False),
+        ):
             result = sa.check_swap_pressure(threshold_mb=1024, cooldown_s=0)
         self.assertFalse(result)
 
@@ -1093,24 +1160,27 @@ class TestGetTelegramToken(unittest.TestCase):
 
         fake_config = {"channels": {"telegram": {"botToken": "bot-from-config"}}}
         mock_open = mock.mock_open(read_data=json.dumps(fake_config))
-        with mock.patch("builtins.open", mock_open), \
-             mock.patch.dict("os.environ", {}, clear=True):
+        with mock.patch("builtins.open", mock_open), mock.patch.dict("os.environ", {}, clear=True):
             token = sa._get_telegram_token()
         self.assertEqual(token, "bot-from-config")
 
     def test_falls_back_to_env_var(self):
         import tokenpak.telemetry.monitoring.swap_alert as sa
 
-        with mock.patch("builtins.open", side_effect=FileNotFoundError), \
-             mock.patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "env-token"}):
+        with (
+            mock.patch("builtins.open", side_effect=FileNotFoundError),
+            mock.patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "env-token"}),
+        ):
             token = sa._get_telegram_token()
         self.assertEqual(token, "env-token")
 
     def test_returns_none_when_no_token(self):
         import tokenpak.telemetry.monitoring.swap_alert as sa
 
-        with mock.patch("builtins.open", side_effect=FileNotFoundError), \
-             mock.patch.dict("os.environ", {}, clear=True):
+        with (
+            mock.patch("builtins.open", side_effect=FileNotFoundError),
+            mock.patch.dict("os.environ", {}, clear=True),
+        ):
             token = sa._get_telegram_token()
         self.assertIsNone(token)
 

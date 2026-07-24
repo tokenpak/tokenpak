@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Mapping, Optional, TypedDict
 
 from .generator import Fingerprint
 from .privacy import PrivacyLevel, apply_privacy
@@ -52,16 +52,26 @@ class Directive:
     description: str = ""
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Directive":
+    def from_dict(cls, d: Mapping[str, object]) -> "Directive":
+        params_value = d.get("params")
+        params = (
+            {key: value for key, value in params_value.items() if isinstance(key, str)}
+            if isinstance(params_value, dict)
+            else {}
+        )
+        directive_id = d.get("directive_id")
+        action = d.get("action")
+        priority = d.get("priority")
+        description = d.get("description")
         return cls(
-            directive_id=d.get("directive_id", ""),
-            action=d.get("action", "noop"),
-            params=d.get("params", {}),
-            priority=d.get("priority", 0),
-            description=d.get("description", ""),
+            directive_id=directive_id if isinstance(directive_id, str) else "",
+            action=action if isinstance(action, str) else "noop",
+            params=params,
+            priority=priority if isinstance(priority, int) else 0,
+            description=description if isinstance(description, str) else "",
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "directive_id": self.directive_id,
             "action": self.action,
@@ -69,6 +79,15 @@ class Directive:
             "priority": self.priority,
             "description": self.description,
         }
+
+
+class _CachePayload(TypedDict):
+    """Validated on-disk directive-cache payload."""
+
+    fingerprint_id: str
+    cached_at: float
+    expires_at: float
+    directives: list[dict[str, object]]
 
 
 @dataclass
@@ -117,12 +136,51 @@ def _write_cache(
     logger.debug("Wrote directive cache: %s", path)
 
 
-def _read_cache(fingerprint_id: str, cache_dir: Path) -> Optional[dict]:
+def _string_keyed_dict(value: object) -> Optional[dict[str, object]]:
+    """Return a string-keyed view of a decoded JSON object."""
+    if not isinstance(value, dict):
+        return None
+    return {key: item for key, item in value.items() if isinstance(key, str)}
+
+
+def _parse_cache_payload(value: object) -> Optional[_CachePayload]:
+    """Validate the cache fields consumed by the sync client."""
+    data = _string_keyed_dict(value)
+    if data is None:
+        return None
+
+    fingerprint_id = data.get("fingerprint_id")
+    cached_at = data.get("cached_at")
+    expires_at = data.get("expires_at")
+    raw_directives = data.get("directives")
+    if (
+        not isinstance(fingerprint_id, str)
+        or not isinstance(cached_at, (int, float))
+        or not isinstance(expires_at, (int, float))
+        or not isinstance(raw_directives, list)
+    ):
+        return None
+
+    directives = [
+        directive for item in raw_directives if (directive := _string_keyed_dict(item)) is not None
+    ]
+    return {
+        "fingerprint_id": fingerprint_id,
+        "cached_at": float(cached_at),
+        "expires_at": float(expires_at),
+        "directives": directives,
+    }
+
+
+def _read_cache(fingerprint_id: str, cache_dir: Path) -> Optional[_CachePayload]:
     path = _cache_path(fingerprint_id, cache_dir)
     if not path.exists():
         return None
     try:
-        data = json.loads(path.read_text())
+        decoded: object = json.loads(path.read_text())
+        data = _parse_cache_payload(decoded)
+        if data is None:
+            return None
         if time.time() > data.get("expires_at", 0):
             logger.debug("Cache expired for %s", fingerprint_id)
             return None
@@ -331,7 +389,7 @@ class FingerprintSync:
 
     # ── Internal ──────────────────────────────────────────────────────────
 
-    def _post_fingerprint(self, payload: dict) -> list[Directive]:
+    def _post_fingerprint(self, payload: Mapping[str, object]) -> list[Directive]:
         """POST payload to intelligence server; return parsed directives."""
         url = f"{self.server_url}{_SYNC_ENDPOINT}"
         body = json.dumps(payload).encode()
@@ -347,17 +405,27 @@ class FingerprintSync:
 
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            data = json.loads(resp.read().decode())
+            decoded: object = json.loads(resp.read().decode())
 
+        data = _string_keyed_dict(decoded)
+        if data is None:
+            raise ValueError("Fingerprint sync response must be a JSON object")
         raw_directives = data.get("directives", [])
-        return [Directive.from_dict(d) for d in raw_directives]
+        if not isinstance(raw_directives, list):
+            raise ValueError("Fingerprint sync directives must be a JSON array")
+        return [
+            Directive.from_dict(directive)
+            for item in raw_directives
+            if (directive := _string_keyed_dict(item)) is not None
+        ]
 
-    def _stale_cache(self, fingerprint_id: str) -> Optional[dict]:
+    def _stale_cache(self, fingerprint_id: str) -> Optional[_CachePayload]:
         """Read cache ignoring TTL (for offline fallback)."""
         path = _cache_path(fingerprint_id, self.cache_dir)
         if not path.exists():
             return None
         try:
-            return json.loads(path.read_text())
+            decoded: object = json.loads(path.read_text())
+            return _parse_cache_payload(decoded)
         except Exception:
             return None

@@ -17,8 +17,13 @@ import pytest
 # validator. Skip cleanly on slim install so the release test gate stays
 # green; tests run with full assertions on installs that include
 # jsonschema + yaml (full / dev-with-extras).
-pytest.importorskip("jsonschema", reason="jsonschema is an optional dep; install via pip install jsonschema or tokenpak[full]")
-pytest.importorskip("yaml", reason="PyYAML is an optional dep; install via pip install pyyaml or tokenpak[full]")
+pytest.importorskip(
+    "jsonschema",
+    reason="jsonschema is an optional dep; install via pip install jsonschema or tokenpak[full]",
+)
+pytest.importorskip(
+    "yaml", reason="PyYAML is an optional dep; install via pip install pyyaml or tokenpak[full]"
+)
 
 from tokenpak.cli.commands.validate_config import load_schema, validate_file
 
@@ -143,13 +148,16 @@ class TestValidateFile:
     def test_compression_section_validation(self):
         """Compression section should validate nested fields."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({
-                "port": 8766,
-                "compression": {
-                    "enabled": True,
-                    "max_chars": -5  # Invalid: negative
-                }
-            }, f)
+            json.dump(
+                {
+                    "port": 8766,
+                    "compression": {
+                        "enabled": True,
+                        "max_chars": -5,  # Invalid: negative
+                    },
+                },
+                f,
+            )
             temp_path = f.name
 
         try:
@@ -163,13 +171,16 @@ class TestValidateFile:
     def test_features_section_validation(self):
         """Features section should validate boolean toggles."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({
-                "port": 8766,
-                "features": {
-                    "skeleton": True,
-                    "shadow_reader": "maybe"  # Invalid: should be bool
-                }
-            }, f)
+            json.dump(
+                {
+                    "port": 8766,
+                    "features": {
+                        "skeleton": True,
+                        "shadow_reader": "maybe",  # Invalid: should be bool
+                    },
+                },
+                f,
+            )
             temp_path = f.name
 
         try:
@@ -220,12 +231,15 @@ class TestValidateFile:
     def test_budget_values(self):
         """Budget values should be positive integers."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({
-                "port": 8766,
-                "budget": {
-                    "total_tokens": 0  # Invalid: should be minimum 1
-                }
-            }, f)
+            json.dump(
+                {
+                    "port": 8766,
+                    "budget": {
+                        "total_tokens": 0  # Invalid: should be minimum 1
+                    },
+                },
+                f,
+            )
             temp_path = f.name
 
         try:
@@ -239,13 +253,16 @@ class TestValidateFile:
     def test_vault_injection_score(self):
         """Vault inject_min_score should be >= 0."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({
-                "port": 8766,
-                "vault": {
-                    "index_path": "~/vault/.tokenpak",
-                    "inject_min_score": -1.5  # Invalid
-                }
-            }, f)
+            json.dump(
+                {
+                    "port": 8766,
+                    "vault": {
+                        "index_path": "~/vault/.tokenpak",
+                        "inject_min_score": -1.5,  # Invalid
+                    },
+                },
+                f,
+            )
             temp_path = f.name
 
         try:

@@ -28,6 +28,7 @@ these helpers stay off the public API surface.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
 
 # ── Canonical request classes. Stable string literals — no synonyms,
@@ -96,7 +97,7 @@ class Classification:
     agent_attribution: str = ""
 
 
-def _header(headers, name: str) -> str:
+def _header(headers: Mapping[str, str] | None, name: str) -> str:
     """Case-insensitive header lookup → stripped string value (or "")."""
     if not headers:
         return ""
@@ -111,7 +112,7 @@ def _header(headers, name: str) -> str:
     return ""
 
 
-def is_internal_header(name) -> bool:
+def is_internal_header(name: object) -> bool:
     """True when *name* is in the TokenPak-internal header namespace.
 
     Internal headers MUST never be forwarded to a provider upstream — every
@@ -121,7 +122,7 @@ def is_internal_header(name) -> bool:
     return str(name).lower().startswith(INTERNAL_HEADER_PREFIXES)
 
 
-def classify(headers) -> Classification:
+def classify(headers: Mapping[str, str] | None) -> Classification:
     """Attribute a request via the defined precedence chain.
 
     Evaluates markers in strict order, returning on the first match:
@@ -153,7 +154,7 @@ def classify(headers) -> Classification:
     return Classification(EXTERNAL_UNTAGGED, NO_MARKER, "")
 
 
-def strip_managed_headers(headers) -> list[str]:
+def strip_managed_headers(headers: MutableMapping[str, str]) -> list[str]:
     """Remove TokenPak-internal headers from a forward-bound header map.
 
     Removes every header in the internal namespace (see

@@ -18,6 +18,7 @@ Session mapping:
   metadata) maps to a Claude Code session UUID. The mapping persists in
   ``~/.tokenpak/openclaw_sessions.json`` so conversations survive restarts.
 """
+
 from __future__ import annotations
 
 import json
@@ -26,14 +27,36 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, TypedDict, cast
 
 from tokenpak.sdk.base import TokenPakAdapter
 
 _SESSION_MAP_PATH = Path.home() / ".tokenpak" / "openclaw_sessions.json"
 
 
-def _find_claude_binary() -> Optional[str]:
+class _ModelConfig(TypedDict, total=False):
+    id: str
+    name: str
+    cost: dict[str, float | int]
+
+
+class _ProviderConfig(TypedDict, total=False):
+    baseUrl: str
+    api: str
+    models: list[_ModelConfig]
+    headers: dict[str, str]
+
+
+class _SetupResult(TypedDict, total=False):
+    path: str
+    providers_added: list[str]
+    providers_updated: list[str]
+    claude_code_backend: bool
+    models_source: str
+    error: str
+
+
+def _find_claude_binary() -> str | None:
     """Locate the Claude Code CLI.
 
     The tokenpak proxy runs under systemd user units whose PATH is often
@@ -50,6 +73,7 @@ def _find_claude_binary() -> Optional[str]:
     # Fleet-standard candidate dirs, in precedence order. Matches
     # agent-claude-worker.sh's discover_bin() walk.
     import shutil as _shutil
+
     home = Path.home()
     candidates = [
         home / ".npm-global" / "bin" / "claude",
@@ -67,16 +91,18 @@ def _find_claude_binary() -> Optional[str]:
     if found:
         return found
     return None
-_SESSION_MAP: Optional[dict] = None
 
 
-def _load_session_map() -> dict:
+_SESSION_MAP: dict[str, str] | None = None
+
+
+def _load_session_map() -> dict[str, str]:
     global _SESSION_MAP
     if _SESSION_MAP is not None:
         return _SESSION_MAP
     if _SESSION_MAP_PATH.exists():
         try:
-            _SESSION_MAP = json.loads(_SESSION_MAP_PATH.read_text())
+            _SESSION_MAP = cast(dict[str, str], json.loads(_SESSION_MAP_PATH.read_text()))
         except Exception:
             _SESSION_MAP = {}
     else:
@@ -138,9 +164,7 @@ def execute_via_claude_code(
         if m.get("role") == "user":
             content = m.get("content", "")
             if isinstance(content, list):
-                latest_msg = " ".join(
-                    b.get("text", "") for b in content if b.get("type") == "text"
-                )
+                latest_msg = " ".join(b.get("text", "") for b in content if b.get("type") == "text")
             else:
                 latest_msg = str(content)
             break
@@ -233,10 +257,12 @@ def execute_via_claude_code(
     }
 
 
-def _format_anthropic_response(data: dict, model: str, elapsed: float) -> dict:
+def _format_anthropic_response(
+    data: dict[str, object], model: str, elapsed: float
+) -> dict[str, object]:
     """Convert Claude Code --output-format json to Anthropic API format."""
     result_text = data.get("result", "")
-    usage = data.get("usage", {}) or {}
+    usage = cast(dict[str, object], data.get("usage", {}) or {})
     cost = data.get("cost_usd", 0)
 
     # If the JSON already has Anthropic-format fields, pass through
@@ -259,7 +285,7 @@ def _format_anthropic_response(data: dict, model: str, elapsed: float) -> dict:
     }
 
 
-def _error_response(message: str) -> dict:
+def _error_response(message: str) -> dict[str, object]:
     """Build an Anthropic-format error response."""
     return {
         "type": "error",
@@ -283,14 +309,14 @@ class OpenClawAdapter(TokenPakAdapter):
         url = base_url or os.environ.get("OPENCLAW_GATEWAY_URL", "http://localhost:18789")
         super().__init__(base_url=url, api_key=api_key)
 
-    def prepare_request(self, request: dict) -> dict:
+    def prepare_request(self, request: dict[str, object]) -> dict[str, object]:
         return request
 
-    def parse_response(self, response: dict) -> dict:
+    def parse_response(self, response: dict[str, object]) -> dict[str, object]:
         return response
 
-    def extract_tokens(self, response: dict) -> dict:
-        usage = response.get("usage", {})
+    def extract_tokens(self, response: dict[str, object]) -> dict[str, object]:
+        usage = cast(dict[str, int], response.get("usage", {}))
         return {
             "input_tokens": usage.get("input_tokens", 0),
             "output_tokens": usage.get("output_tokens", 0),
@@ -299,10 +325,11 @@ class OpenClawAdapter(TokenPakAdapter):
             "total": usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
         }
 
-    def send(self, prepared_request: dict) -> dict:
+    def send(self, prepared_request: dict[str, object]) -> dict[str, object]:
         """Send via HTTP (standard path). For claude_code backend,
         the proxy calls execute_via_claude_code() directly."""
         import httpx
+
         headers = {"content-type": "application/json"}
         resp = httpx.post(
             f"{self.base_url}/v1/messages",
@@ -310,7 +337,7 @@ class OpenClawAdapter(TokenPakAdapter):
             headers=headers,
             timeout=120.0,
         )
-        return resp.json()
+        return cast(dict[str, object], resp.json())
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -362,7 +389,7 @@ def discover_openclaw_configs() -> list[Path]:
 def _fetch_models_from_proxy(
     proxy_url: str,
     provider: str,
-) -> list[dict] | None:
+) -> list[_ModelConfig] | None:
     """Query /tpk/v1/models?provider=<provider> for the living model list.
 
     Returns a list of openclaw-shaped dicts ({id, name, cost}) or None
@@ -371,32 +398,41 @@ def _fetch_models_from_proxy(
     """
     try:
         import urllib.request
+
         url = proxy_url.rstrip("/") + f"/tpk/v1/models?provider={provider}"
         with urllib.request.urlopen(url, timeout=3.0) as resp:
             if resp.status != 200:
                 return None
             import json as _json
-            data = _json.loads(resp.read().decode("utf-8"))
+
+            data = cast(dict[str, object], _json.loads(resp.read().decode("utf-8")))
     except Exception:
         return None
 
-    out: list[dict] = []
-    for m in data.get("models", []):
-        mid = m.get("id") or ""
+    out: list[_ModelConfig] = []
+    models = cast(list[dict[str, object]], data.get("models", []))
+    for m in models:
+        mid = cast(str, m.get("id") or "")
         if not mid:
             continue
         # Display name: humanize "claude-opus-4-7" -> "Opus 4.7" for anthropic
         display = _humanize_model_name(mid, provider)
-        out.append({
-            "id": mid,
-            "name": display,
-            "cost": {
-                "input": float(m.get("input_per_mtok", 0) or 0),
-                "output": float(m.get("output_per_mtok", 0) or 0),
-                "cacheRead": float(m.get("cache_read_per_mtok", 0) or 0),
-                "cacheWrite": float(m.get("cache_write_per_mtok", 0) or 0),
-            },
-        })
+        out.append(
+            {
+                "id": mid,
+                "name": display,
+                "cost": {
+                    "input": float(cast(float | int | str, m.get("input_per_mtok", 0) or 0)),
+                    "output": float(cast(float | int | str, m.get("output_per_mtok", 0) or 0)),
+                    "cacheRead": float(
+                        cast(float | int | str, m.get("cache_read_per_mtok", 0) or 0)
+                    ),
+                    "cacheWrite": float(
+                        cast(float | int | str, m.get("cache_write_per_mtok", 0) or 0)
+                    ),
+                },
+            }
+        )
     # Reverse-alpha so the newest naming (opus-4-7) floats above older (opus-4-6)
     out.sort(key=lambda m: m["id"], reverse=True)
     return out
@@ -424,17 +460,26 @@ def _humanize_model_name(model_id: str, provider: str) -> str:
 # unreachable. Dynamic path (_fetch_models_from_proxy) is preferred so
 # models Anthropic ships after this code was written (opus-4-7,
 # sonnet-4-7, etc.) auto-appear without a tokenpak release.
-_PROVIDER_TEMPLATES: dict[str, dict] = {
+_PROVIDER_TEMPLATES: dict[str, _ProviderConfig] = {
     "tokenpak-anthropic": {
         "baseUrl": "http://localhost:8766",
         "api": "anthropic-messages",
         "models": [
-            {"id": "claude-opus-4-6", "name": "Opus 4.6",
-             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
-            {"id": "claude-sonnet-4-6", "name": "Sonnet 4.6",
-             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
-            {"id": "claude-haiku-4-5", "name": "Haiku 4.5",
-             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
+            {
+                "id": "claude-opus-4-6",
+                "name": "Opus 4.6",
+                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            },
+            {
+                "id": "claude-sonnet-4-6",
+                "name": "Sonnet 4.6",
+                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            },
+            {
+                "id": "claude-haiku-4-5",
+                "name": "Haiku 4.5",
+                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            },
         ],
     },
     # Note: tokenpak-openai-codex is NOT templated here — it uses
@@ -445,10 +490,12 @@ _PROVIDER_TEMPLATES: dict[str, dict] = {
         "baseUrl": "http://localhost:8766",
         "api": "google-generative-ai",
         "models": [
-            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash",
-             "cost": {"input": 0, "output": 0}},
-            {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro",
-             "cost": {"input": 0, "output": 0}},
+            {
+                "id": "gemini-2.5-flash",
+                "name": "Gemini 2.5 Flash",
+                "cost": {"input": 0, "output": 0},
+            },
+            {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "cost": {"input": 0, "output": 0}},
         ],
     },
     # tokenpak-claude-code is NOT in this static template — its models
@@ -463,7 +510,9 @@ def detect_openclaw() -> bool:
 
 
 def _build_claude_code_provider(
-    providers: dict, proxy_url: str, result: dict,
+    providers: dict[str, _ProviderConfig],
+    proxy_url: str,
+    result: _SetupResult,
 ) -> None:
     """Build tokenpak-claude-code by syncing models from anthropic provider.
 
@@ -472,15 +521,17 @@ def _build_claude_code_provider(
     Automatically picks up new models when the anthropic provider is updated.
     """
     name = "tokenpak-claude-code"
-    source = providers.get("tokenpak-anthropic") or providers.get("anthropic") or {}
+    source: _ProviderConfig = (
+        providers.get("tokenpak-anthropic") or providers.get("anthropic") or {}
+    )
     source_models = source.get("models", [])
 
     if not source_models:
         return
 
-    models = []
+    models: list[_ModelConfig] = []
     for m in source_models:
-        cc = dict(m)
+        cc = cast(_ModelConfig, dict(m))
         orig_name = cc.get("name", cc["id"])
         if "(Claude Code)" not in orig_name:
             cc["name"] = f"{orig_name} (Claude Code)"
@@ -491,9 +542,11 @@ def _build_claude_code_provider(
     existing_ids = {m["id"] for m in existing.get("models", [])}
     want_ids = {m["id"] for m in models}
 
-    if (existing.get("baseUrl") == proxy_url
-            and existing.get("headers", {}).get("X-TokenPak-Backend") == "claude-code"
-            and existing_ids == want_ids):
+    if (
+        existing.get("baseUrl") == proxy_url
+        and existing.get("headers", {}).get("X-TokenPak-Backend") == "claude-code"
+        and existing_ids == want_ids
+    ):
         return  # already up to date
 
     providers[name] = {
@@ -510,14 +563,15 @@ def _build_claude_code_provider(
 
 
 def _setup_single_openclaw(
-    config_path: Path, proxy_url: str,
-) -> dict[str, Any]:
+    config_path: Path,
+    proxy_url: str,
+) -> _SetupResult:
     """Configure a single openclaw.json. Returns a result dict.
 
     Factored out of setup_openclaw() so the multi-config orchestrator
     can iterate every discovered install.
     """
-    result: dict[str, Any] = {
+    result: _SetupResult = {
         "path": str(config_path),
         "providers_added": [],
         "providers_updated": [],
@@ -525,20 +579,22 @@ def _setup_single_openclaw(
     }
 
     if not config_path.exists():
-        return {**result, "error": f"OpenClaw config not found at {config_path}"}
+        result["error"] = f"OpenClaw config not found at {config_path}"
+        return result
 
-    config = json.loads(config_path.read_text())
+    config = cast(dict[str, object], json.loads(config_path.read_text()))
 
     # Ensure models.providers exists
     if "models" not in config:
         config["models"] = {"mode": "merge", "providers": {}}
-    if "providers" not in config["models"]:
-        config["models"]["providers"] = {}
+    models_config = cast(dict[str, object], config["models"])
+    if "providers" not in models_config:
+        models_config["providers"] = {}
 
-    providers = config["models"]["providers"]
+    providers = cast(dict[str, _ProviderConfig], models_config["providers"])
 
     # Per-provider which "family" to query from /tpk/v1/models
-    _PROVIDER_FAMILY = {
+    _PROVIDER_FAMILY: dict[str, str] = {
         "tokenpak-anthropic": "anthropic",
         "tokenpak-gemini": "google",
     }
@@ -564,13 +620,15 @@ def _setup_single_openclaw(
             result["providers_updated"].append(name)
         else:
             # New provider — add with live (or template fallback) models
-            provider_data = dict(template)
+            provider_data = cast(_ProviderConfig, dict(template))
             provider_data["baseUrl"] = proxy_url
             provider_data["models"] = models_to_use
             providers[name] = provider_data
             result["providers_added"].append(name)
 
-    result["models_source"] = "live-proxy-registry" if live_models is not None else "static-template"
+    result["models_source"] = (
+        "live-proxy-registry" if live_models is not None else "static-template"
+    )
 
     # Also update baseUrl for any tokenpak-* providers NOT in templates
     # (user-created ones like tokenpak-ollama-redpc)
@@ -585,7 +643,7 @@ def _setup_single_openclaw(
     # Ensure auth profiles exist for tokenpak providers
     if "auth" not in config:
         config["auth"] = {"profiles": {}, "order": {}}
-    auth = config["auth"]
+    auth = cast(dict[str, object], config["auth"])
     if "profiles" not in auth:
         auth["profiles"] = {}
     if "order" not in auth:
@@ -599,15 +657,17 @@ def _setup_single_openclaw(
     if "tokenpak-claude-code" in providers:
         auth_targets.append("tokenpak-claude-code")
 
+    profiles = cast(dict[str, object], auth["profiles"])
+    order = cast(dict[str, object], auth["order"])
     for name in auth_targets:
         profile_key = f"{name}:manual"
-        if profile_key not in auth["profiles"]:
-            auth["profiles"][profile_key] = {
+        if profile_key not in profiles:
+            profiles[profile_key] = {
                 "provider": name,
                 "mode": "oauth",
             }
-        if name not in auth.get("order", {}):
-            auth["order"][name] = [profile_key]
+        if name not in order:
+            order[name] = [profile_key]
 
     # Check if claude-code backend is configured
     if "tokenpak-claude-code" in providers:
@@ -623,8 +683,8 @@ def _setup_single_openclaw(
 
 def setup_openclaw(
     proxy_url: str = "http://localhost:8766",
-    config_path: Optional[Path] = None,
-) -> dict[str, Any]:
+    config_path: Path | None = None,
+) -> dict[str, object]:
     """Configure OpenClaw to route through tokenpak.
 
     Adds/updates tokenpak-* provider entries in every openclaw.json on
@@ -659,9 +719,7 @@ def setup_openclaw(
     if not targets:
         return {"error": "No OpenClaw install detected on this host"}
 
-    per_config: list[dict[str, Any]] = [
-        _setup_single_openclaw(t, proxy_url) for t in targets
-    ]
+    per_config: list[_SetupResult] = [_setup_single_openclaw(t, proxy_url) for t in targets]
 
     total_added = sum(len(c.get("providers_added", [])) for c in per_config)
     total_updated = sum(len(c.get("providers_updated", [])) for c in per_config)

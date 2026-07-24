@@ -60,6 +60,7 @@ def estimate_cache_savings(provider: Any, cache_read_tokens: int, model: str = "
 
     # Get input cost per token from dynamic registry
     from tokenpak.models import get_model_costs
+
     costs = get_model_costs(model) if model else {"input": 3.0}
     input_cost_per_mtok = costs["input"]
     input_cost_per_tok = input_cost_per_mtok / 1_000_000
@@ -69,6 +70,7 @@ def estimate_cache_savings(provider: Any, cache_read_tokens: int, model: str = "
     try:
         # Try telemetry/cost.py CACHE_COST_MULTIPLIERS (Provider-keyed)
         from tokenpak.telemetry.cost import CACHE_COST_MULTIPLIERS as _CCM
+
         entry = _CCM.get(provider)
         if entry is None:
             # Fall back to string key

@@ -39,6 +39,7 @@ documented JSON shape the daemon's promote endpoint accepts):
 Default is **OFF**. Public-default proxy behavior is unchanged when the flag is
 unset, which is the shipped default.
 """
+
 from __future__ import annotations
 
 import http.client
@@ -147,14 +148,14 @@ def build_capture_payload(
     session_id: Optional[str] = None,
     platform: str = "proxy",
     captured_at_iso: Optional[str] = None,
-) -> dict:
+) -> dict[str, object]:
     """Build the daemon-shaped ``CaptureEvent`` JSON payload (no Pro import)."""
     if captured_at_iso is None:
         captured_at_iso = datetime.now(timezone.utc).isoformat()
     metadata = {"via": "proxy-capture-intake"}
     if model:
         metadata["model"] = model
-    payload: dict = {
+    payload: dict[str, object] = {
         "source": _SOURCE_LLM_RESPONSE,
         "content": text,
         "captured_at": captured_at_iso,
@@ -166,7 +167,9 @@ def build_capture_payload(
     return payload
 
 
-def forward_to_daemon(payload: Mapping[str, Any], *, timeout: float = _FORWARD_TIMEOUT_S) -> Optional[dict]:
+def forward_to_daemon(
+    payload: Mapping[str, object], *, timeout: float = _FORWARD_TIMEOUT_S
+) -> Optional[dict[str, object]]:
     """POST ``payload`` to the loopback Pro daemon's ``/pak/v1/promote``.
 
     Returns ``{"status": int, "body": dict}`` on a completed round-trip, or
@@ -200,7 +203,7 @@ def forward_to_daemon(payload: Mapping[str, Any], *, timeout: float = _FORWARD_T
         )
         resp = conn.getresponse()
         raw = resp.read()
-        parsed: dict = {}
+        parsed: dict[str, object] = {}
         if raw:
             try:
                 parsed = json.loads(raw.decode("utf-8"))
@@ -224,7 +227,7 @@ def _run_capture(
     *,
     session_id: Optional[str] = None,
     platform: str = "proxy",
-) -> Optional[dict]:
+) -> Optional[dict[str, object]]:
     """Synchronous worker: gate → extract → build → forward. Testable.
 
     Returns the daemon round-trip result, or ``None`` for any no-op/short
@@ -236,9 +239,7 @@ def _run_capture(
         text = extract_response_text(response_body, model)
         if not text:
             return None
-        payload = build_capture_payload(
-            text, model=model, session_id=session_id, platform=platform
-        )
+        payload = build_capture_payload(text, model=model, session_id=session_id, platform=platform)
         return forward_to_daemon(payload)
     except Exception:
         return None

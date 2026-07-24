@@ -89,15 +89,31 @@ class TestLoadRequests:
         with TemporaryDirectory() as tmpdir:
             requests_file = Path(tmpdir) / "requests.jsonl"
             records = [
-                {"agent": "cali", "model": "claude-sonnet", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0, "timestamp": "2026-03-27T00:00:00Z"},
-                {"agent": "trix", "model": "claude-haiku", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T01:00:00Z"},
+                {
+                    "agent": "gamma",
+                    "model": "claude-sonnet",
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "cost": 0.001,
+                    "saved_cost": 0.0,
+                    "timestamp": "2026-03-27T00:00:00Z",
+                },
+                {
+                    "agent": "beta",
+                    "model": "claude-haiku",
+                    "input_tokens": 50,
+                    "output_tokens": 25,
+                    "cost": 0.0001,
+                    "saved_cost": 0.0001,
+                    "timestamp": "2026-03-27T01:00:00Z",
+                },
             ]
             requests_file.write_text("\n".join(json.dumps(r) for r in records))
 
             result = load_requests(requests_file)
             assert len(result) == 2
-            assert result[0]["agent"] == "cali"
-            assert result[1]["agent"] == "trix"
+            assert result[0]["agent"] == "gamma"
+            assert result[1]["agent"] == "beta"
 
     def test_load_requests_with_time_filter(self):
         """Test loading requests with time-based filtering."""
@@ -105,20 +121,36 @@ class TestLoadRequests:
             requests_file = Path(tmpdir) / "requests.jsonl"
             cutoff = datetime(2026, 3, 27, 12, 0, 0, tzinfo=timezone.utc)
             records = [
-                {"agent": "cali", "model": "claude-sonnet", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0, "timestamp": "2026-03-27T10:00:00Z"},  # before cutoff
-                {"agent": "trix", "model": "claude-haiku", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T14:00:00Z"},  # after cutoff
+                {
+                    "agent": "gamma",
+                    "model": "claude-sonnet",
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "cost": 0.001,
+                    "saved_cost": 0.0,
+                    "timestamp": "2026-03-27T10:00:00Z",
+                },  # before cutoff
+                {
+                    "agent": "beta",
+                    "model": "claude-haiku",
+                    "input_tokens": 50,
+                    "output_tokens": 25,
+                    "cost": 0.0001,
+                    "saved_cost": 0.0001,
+                    "timestamp": "2026-03-27T14:00:00Z",
+                },  # after cutoff
             ]
             requests_file.write_text("\n".join(json.dumps(r) for r in records))
 
             result = load_requests(requests_file, since=cutoff)
             assert len(result) == 1
-            assert result[0]["agent"] == "trix"
+            assert result[0]["agent"] == "beta"
 
     def test_load_requests_skip_empty_lines(self):
         """Test that empty lines are skipped."""
         with TemporaryDirectory() as tmpdir:
             requests_file = Path(tmpdir) / "requests.jsonl"
-            content = '{"agent": "cali", "model": "claude", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0, "timestamp": "2026-03-27T00:00:00Z"}\n\n{"agent": "trix", "model": "claude", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T01:00:00Z"}\n'
+            content = '{"agent": "gamma", "model": "claude", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0, "timestamp": "2026-03-27T00:00:00Z"}\n\n{"agent": "beta", "model": "claude", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T01:00:00Z"}\n'
             requests_file.write_text(content)
 
             result = load_requests(requests_file)
@@ -128,7 +160,7 @@ class TestLoadRequests:
         """Test that malformed JSON lines are skipped."""
         with TemporaryDirectory() as tmpdir:
             requests_file = Path(tmpdir) / "requests.jsonl"
-            content = '{"agent": "cali", "model": "claude", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0, "timestamp": "2026-03-27T00:00:00Z"}\nmalformed json line\n{"agent": "trix", "model": "claude", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T01:00:00Z"}\n'
+            content = '{"agent": "gamma", "model": "claude", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0, "timestamp": "2026-03-27T00:00:00Z"}\nmalformed json line\n{"agent": "beta", "model": "claude", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.0001, "timestamp": "2026-03-27T01:00:00Z"}\n'
             requests_file.write_text(content)
 
             result = load_requests(requests_file)
@@ -141,12 +173,19 @@ class TestAggregateRecords:
     def test_aggregate_single_record(self):
         """Test aggregating a single request record."""
         records = [
-            {"agent": "cali", "model": "claude-sonnet", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0}
+            {
+                "agent": "gamma",
+                "model": "claude-sonnet",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cost": 0.001,
+                "saved_cost": 0.0,
+            }
         ]
         rows, totals = aggregate_records(records, "agent-3")
 
         assert len(rows) == 1
-        assert rows[0].agent == "cali"
+        assert rows[0].agent == "gamma"
         assert rows[0].machine == "agent-3"
         assert rows[0].model == "claude-sonnet"
         assert rows[0].requests == 1
@@ -158,8 +197,22 @@ class TestAggregateRecords:
     def test_aggregate_multiple_records_same_agent_model(self):
         """Test aggregating multiple records for the same agent/model pair."""
         records = [
-            {"agent": "cali", "model": "claude-sonnet", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0},
-            {"agent": "cali", "model": "claude-sonnet", "input_tokens": 200, "output_tokens": 100, "cost": 0.002, "saved_cost": 0.0001},
+            {
+                "agent": "gamma",
+                "model": "claude-sonnet",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cost": 0.001,
+                "saved_cost": 0.0,
+            },
+            {
+                "agent": "gamma",
+                "model": "claude-sonnet",
+                "input_tokens": 200,
+                "output_tokens": 100,
+                "cost": 0.002,
+                "saved_cost": 0.0001,
+            },
         ]
         rows, totals = aggregate_records(records, "agent-3")
 
@@ -172,9 +225,30 @@ class TestAggregateRecords:
     def test_aggregate_multiple_agents_models(self):
         """Test aggregating records from multiple agents and models."""
         records = [
-            {"agent": "cali", "model": "claude-sonnet", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0},
-            {"agent": "cali", "model": "claude-haiku", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.00005},
-            {"agent": "trix", "model": "claude-sonnet", "input_tokens": 200, "output_tokens": 100, "cost": 0.002, "saved_cost": 0.0},
+            {
+                "agent": "gamma",
+                "model": "claude-sonnet",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cost": 0.001,
+                "saved_cost": 0.0,
+            },
+            {
+                "agent": "gamma",
+                "model": "claude-haiku",
+                "input_tokens": 50,
+                "output_tokens": 25,
+                "cost": 0.0001,
+                "saved_cost": 0.00005,
+            },
+            {
+                "agent": "beta",
+                "model": "claude-sonnet",
+                "input_tokens": 200,
+                "output_tokens": 100,
+                "cost": 0.002,
+                "saved_cost": 0.0,
+            },
         ]
         rows, totals = aggregate_records(records, "agent-3")
 
@@ -186,7 +260,7 @@ class TestAggregateRecords:
     def test_aggregate_missing_fields(self):
         """Test aggregating records with missing fields (should coerce to 0)."""
         records = [
-            {"agent": "cali", "model": "claude-sonnet"},  # missing tokens and cost
+            {"agent": "gamma", "model": "claude-sonnet"},  # missing tokens and cost
         ]
         rows, totals = aggregate_records(records, "agent-3")
 
@@ -206,9 +280,30 @@ class TestAggregateRecords:
     def test_aggregate_sort_by_cost_descending(self):
         """Test that rows are sorted by cost (descending)."""
         records = [
-            {"agent": "cali", "model": "cheap", "input_tokens": 10, "output_tokens": 5, "cost": 0.0001, "saved_cost": 0.0},
-            {"agent": "trix", "model": "expensive", "input_tokens": 100, "output_tokens": 50, "cost": 0.005, "saved_cost": 0.0},
-            {"agent": "sue", "model": "medium", "input_tokens": 50, "output_tokens": 25, "cost": 0.001, "saved_cost": 0.0},
+            {
+                "agent": "gamma",
+                "model": "cheap",
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "cost": 0.0001,
+                "saved_cost": 0.0,
+            },
+            {
+                "agent": "beta",
+                "model": "expensive",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cost": 0.005,
+                "saved_cost": 0.0,
+            },
+            {
+                "agent": "alpha",
+                "model": "medium",
+                "input_tokens": 50,
+                "output_tokens": 25,
+                "cost": 0.001,
+                "saved_cost": 0.0,
+            },
         ]
         rows, totals = aggregate_records(records, "agent-3")
 

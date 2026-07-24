@@ -81,7 +81,10 @@ def test_tip_cache_json_has_four_distinct_lanes(tmp_path, monkeypatch):
     _create_companion_journal(tmp_path)
 
     captured = StringIO()
-    with patch("tokenpak.cli.commands.status._fetch", return_value=None), patch("sys.stdout", captured):
+    with (
+        patch("tokenpak.cli.commands.status._fetch", return_value=None),
+        patch("sys.stdout", captured),
+    ):
         status.run(as_json=True, db_path=str(db))
 
     payload = json.loads(captured.getvalue())
@@ -95,9 +98,15 @@ def test_tip_cache_json_has_four_distinct_lanes(tmp_path, monkeypatch):
     assert tip_cache["lines"]["companion_enrichment"]["tokens"] == 30_000
     rates = status.get_rates("claude-sonnet-4-6")
     cache_delta = rates["input"] - rates["cached"]
-    assert tip_cache["lines"]["platform_cache"]["usd"] == round(100_000 / 1_000_000 * cache_delta, 6)
-    assert tip_cache["lines"]["tokenpak_managed_cache"]["usd"] == round(50_000 / 1_000_000 * cache_delta, 6)
-    assert tip_cache["lines"]["tokenpak_compression"]["usd"] == round(20_000 / 1_000_000 * rates["input"], 6)
+    assert tip_cache["lines"]["platform_cache"]["usd"] == round(
+        100_000 / 1_000_000 * cache_delta, 6
+    )
+    assert tip_cache["lines"]["tokenpak_managed_cache"]["usd"] == round(
+        50_000 / 1_000_000 * cache_delta, 6
+    )
+    assert tip_cache["lines"]["tokenpak_compression"]["usd"] == round(
+        20_000 / 1_000_000 * rates["input"], 6
+    )
     assert tip_cache["lines"]["companion_enrichment"]["usd"] == 0.09
 
 
@@ -109,7 +118,10 @@ def test_tip_cache_compact_output_renders_four_lanes(tmp_path, monkeypatch):
     _create_companion_journal(tmp_path)
 
     captured = StringIO()
-    with patch("tokenpak.cli.commands.status._fetch", return_value=None), patch("sys.stdout", captured):
+    with (
+        patch("tokenpak.cli.commands.status._fetch", return_value=None),
+        patch("sys.stdout", captured),
+    ):
         status.run(tip_cache=True, db_path=str(db), no_meme=True)
 
     out = captured.getvalue()

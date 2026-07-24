@@ -414,8 +414,7 @@ class RunLedger:
 
         if effect.status is not EffectStatus.PLANNED:
             raise ValueError(
-                "record_planned_effect requires a 'planned' effect "
-                f"(got {effect.status.value!r})"
+                f"record_planned_effect requires a 'planned' effect (got {effect.status.value!r})"
             )
         if effect.finalized_at is not None:
             raise ValueError(
@@ -462,9 +461,7 @@ class RunLedger:
         effect id is unknown.
         """
 
-        return self._finalize_effect(
-            effect_id, EffectStatus.FAILED, finalized_at=finalized_at
-        )
+        return self._finalize_effect(effect_id, EffectStatus.FAILED, finalized_at=finalized_at)
 
     def _finalize_effect(
         self,

@@ -1,15 +1,17 @@
 """
 Tests for tokenpak.proxy.stats.StatsCollector
 """
+
 import threading
 
 import pytest
 
-from tokenpak.proxy.stats import StatsCollector
+from tokenpak.proxy.stats import StatsCollector, to_text
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def fresh() -> StatsCollector:
     return StatsCollector()
@@ -18,6 +20,7 @@ def fresh() -> StatsCollector:
 # ---------------------------------------------------------------------------
 # Test 1: Fresh collector returns zero/default values
 # ---------------------------------------------------------------------------
+
 
 def test_fresh_snapshot_defaults():
     sc = fresh()
@@ -40,15 +43,26 @@ def test_fresh_snapshot_defaults():
     assert s["uptime_seconds"] >= 0
 
 
+def test_module_to_text_helper_remains_available(monkeypatch):
+    sc = fresh()
+    monkeypatch.setattr(sc, "to_text", lambda: "legacy-rendering")
+    assert to_text(sc) == "legacy-rendering"
+
+
 # ---------------------------------------------------------------------------
 # Test 2: record_request tracks counters correctly
 # ---------------------------------------------------------------------------
 
+
 def test_record_request_counters():
     sc = fresh()
-    sc.record_request(model="anthropic/claude-3-5-sonnet",
-                      tokens_in=600, tokens_saved=400,
-                      compressed=True, latency_ms=120.0)
+    sc.record_request(
+        model="anthropic/claude-3-5-sonnet",
+        tokens_in=600,
+        tokens_saved=400,
+        compressed=True,
+        latency_ms=120.0,
+    )
     s = sc.snapshot()
 
     assert s["requests_total"] == 1
@@ -63,6 +77,7 @@ def test_record_request_counters():
 # ---------------------------------------------------------------------------
 # Test 3: Model routing normalisation
 # ---------------------------------------------------------------------------
+
 
 def test_routing_normalisation():
     sc = fresh()
@@ -84,6 +99,7 @@ def test_routing_normalisation():
 # Test 4: Error recording and total
 # ---------------------------------------------------------------------------
 
+
 def test_error_recording():
     sc = fresh()
     sc.record_error("AUTH_001")
@@ -99,6 +115,7 @@ def test_error_recording():
 # ---------------------------------------------------------------------------
 # Test 5: Vault search hit rate
 # ---------------------------------------------------------------------------
+
 
 def test_vault_search_hit_rate():
     sc = fresh()
@@ -117,6 +134,7 @@ def test_vault_search_hit_rate():
 # ---------------------------------------------------------------------------
 # Test 6: reset() clears all counters
 # ---------------------------------------------------------------------------
+
 
 def test_reset():
     sc = fresh()
@@ -137,6 +155,7 @@ def test_reset():
 # ---------------------------------------------------------------------------
 # Test 7: Thread safety — concurrent writes don't corrupt counters
 # ---------------------------------------------------------------------------
+
 
 def test_thread_safety():
     sc = fresh()
@@ -166,6 +185,7 @@ def test_thread_safety():
 # Test 8: requests_per_sec is computed from uptime
 # ---------------------------------------------------------------------------
 
+
 def test_requests_per_sec():
     sc = fresh()
     sc.record_request()
@@ -182,13 +202,20 @@ def test_requests_per_sec():
 # Test 9: snapshot JSON contains all required top-level keys
 # ---------------------------------------------------------------------------
 
+
 def test_snapshot_schema():
     sc = fresh()
     s = sc.snapshot()
     required_keys = {
-        "uptime_seconds", "requests_total", "requests_per_sec",
-        "compression", "routing", "errors", "vault_search",
-        "latest_request_ms", "timestamp",
+        "uptime_seconds",
+        "requests_total",
+        "requests_per_sec",
+        "compression",
+        "routing",
+        "errors",
+        "vault_search",
+        "latest_request_ms",
+        "timestamp",
     }
     assert required_keys == required_keys & s.keys()
 
@@ -196,6 +223,7 @@ def test_snapshot_schema():
 # ---------------------------------------------------------------------------
 # Test 10: Skipped (uncompressed) requests are tracked separately
 # ---------------------------------------------------------------------------
+
 
 def test_skipped_tracking():
     sc = fresh()

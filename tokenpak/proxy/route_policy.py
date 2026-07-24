@@ -13,9 +13,10 @@ Usage::
     if policy["body"] == "byte_preserved":
         body = _original_body  # don't re-serialize
 """
+
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Dict
 
 from tokenpak.proxy.request import ROUTE_CLAUDE_CODE, ROUTE_OPENCLAW, ROUTE_SDK
 
@@ -23,7 +24,7 @@ from tokenpak.proxy.request import ROUTE_CLAUDE_CODE, ROUTE_OPENCLAW, ROUTE_SDK
 # Behavior matrix
 # ---------------------------------------------------------------------------
 
-ROUTE_POLICIES: Dict[str, Dict[str, Any]] = {
+ROUTE_POLICIES: Dict[str, Dict[str, str]] = {
     ROUTE_CLAUDE_CODE: {
         # Auth: pass client's Authorization: Bearer through unchanged
         "auth": "passthrough",
@@ -81,11 +82,11 @@ ROUTE_POLICIES: Dict[str, Dict[str, Any]] = {
 }
 
 # Default policy for unrecognized routes — full pipeline, sanitized headers
-_DEFAULT_POLICY: Dict[str, Any] = dict(ROUTE_POLICIES[ROUTE_SDK])
+_DEFAULT_POLICY: Dict[str, str] = dict(ROUTE_POLICIES[ROUTE_SDK])
 _DEFAULT_POLICY["platform_tag"] = "unknown"
 
 
-def get_policy(route: str) -> Dict[str, Any]:
+def get_policy(route: str) -> Dict[str, str]:
     """Look up the behavior policy for a route classification.
 
     Args:

@@ -19,7 +19,7 @@ class ParsedNode:
     line_end: int
     signature: str  # The declaration line(s)
     docstring: Optional[str] = None
-    decorators: list = field(default_factory=list)
+    decorators: list[str] = field(default_factory=list)
 
 
 class ASTParser:

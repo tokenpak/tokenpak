@@ -1,7 +1,8 @@
-
 import pytest
 
-pytest.importorskip("tokenpak._formatting.formatter", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._formatting.formatter", reason="module not available in current build"
+)
 import types
 
 from tokenpak import cli

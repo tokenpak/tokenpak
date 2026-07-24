@@ -7,6 +7,20 @@
 
 from __future__ import annotations
 
+__all__ = (
+    "Block",
+    "BlockRegistry",
+    "calibrate_workers",
+    "clear_cache",
+    "count_tokens",
+    "get_processor",
+    "get_recommended_workers",
+    "load_profile",
+    "save_profile",
+    "walk_directory",
+)
+
+
 import hashlib
 import json
 import os
@@ -14,9 +28,10 @@ import socket
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Protocol, cast
 
 from tokenpak.compression.processors import get_processor
+from tokenpak.compression.processors.image import ImageProcessor
 from tokenpak.core.registry import Block, BlockRegistry
 from tokenpak.telemetry.tokens import clear_cache, count_tokens
 from tokenpak.vault.walker import walk_directory
@@ -24,20 +39,24 @@ from tokenpak.vault.walker import walk_directory
 PROFILE_PATH = Path.home() / ".tokenpak" / "calibration.json"
 
 
+class _TextProcessor(Protocol):
+    def process(self, content: str, path: str = "") -> str: ...
+
+
 def _ensure_profile_dir() -> None:
     PROFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
-def load_profile() -> Dict:
+def load_profile() -> dict[str, Any]:
     if not PROFILE_PATH.exists():
         return {}
     try:
-        return json.loads(PROFILE_PATH.read_text())
+        return cast(dict[str, Any], json.loads(PROFILE_PATH.read_text()))
     except Exception:
         return {}
 
 
-def save_profile(profile: Dict) -> None:
+def save_profile(profile: dict[str, Any]) -> None:
     _ensure_profile_dir()
     PROFILE_PATH.write_text(json.dumps(profile, indent=2))
 
@@ -46,7 +65,7 @@ def _host_key() -> str:
     return socket.gethostname()
 
 
-def _candidate_workers(max_workers: int = 8) -> List[int]:
+def _candidate_workers(max_workers: int = 8) -> list[int]:
     cpu = max(1, (os.cpu_count() or 2))
     cap = max(1, min(max_workers, cpu))
     cands = [1, 2, 4, 6, 8]
@@ -56,12 +75,12 @@ def _candidate_workers(max_workers: int = 8) -> List[int]:
     return sorted(cands)
 
 
-def _sample_files(directory: str, max_files: int = 150) -> List[Tuple[str, str, str]]:
+def _sample_files(directory: str, max_files: int = 150) -> list[tuple[str, str, int]]:
     files = list(walk_directory(directory))
-    return files[:max_files]  # type: ignore
+    return files[:max_files]
 
 
-def _run_index_once(files: List[Tuple[str, str, str]], workers: int) -> float:
+def _run_index_once(files: list[tuple[str, str, int]], workers: int) -> float:
     """Return elapsed seconds for indexing sample."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -71,7 +90,7 @@ def _run_index_once(files: List[Tuple[str, str, str]], workers: int) -> float:
         reg = BlockRegistry(db)
         start = time.perf_counter()
 
-        def process_one(path: str, file_type: str):
+        def process_one(path: str, file_type: str) -> tuple[str, str, Block] | None:
             try:
                 content = Path(path).read_text(encoding="utf-8", errors="ignore")
             except Exception:
@@ -79,9 +98,9 @@ def _run_index_once(files: List[Tuple[str, str, str]], workers: int) -> float:
             if not content.strip():
                 return None
             proc = get_processor(file_type)
-            if not proc:
+            if not proc or isinstance(proc, ImageProcessor):
                 return None
-            compressed = proc.process(content, path)
+            compressed = cast(_TextProcessor, proc).process(content, path)
             return (
                 path,
                 content,
@@ -98,7 +117,7 @@ def _run_index_once(files: List[Tuple[str, str, str]], workers: int) -> float:
                 ),
             )
 
-        results = []
+        results: list[tuple[str, str, Block]] = []
         if workers > 1:
             with ThreadPoolExecutor(max_workers=workers) as ex:
                 futs = [ex.submit(process_one, p, ft) for p, ft, _ in files]
@@ -122,22 +141,22 @@ def _run_index_once(files: List[Tuple[str, str, str]], workers: int) -> float:
         return elapsed
 
 
-def calibrate_workers(directory: str, max_workers: int = 8, rounds: int = 2) -> Dict:
+def calibrate_workers(directory: str, max_workers: int = 8, rounds: int = 2) -> dict[str, Any]:
     files = _sample_files(directory)
     if not files:
         return {"error": "No files found for calibration"}
 
     candidates = _candidate_workers(max_workers=max_workers)
-    scores = {}
+    scores: dict[int, float] = {}
 
     for w in candidates:
-        runs = []
+        runs: list[float] = []
         for _ in range(max(1, rounds)):
             runs.append(_run_index_once(files, workers=w))
         avg = sum(runs) / len(runs)
         scores[w] = avg
 
-    best_workers = min(scores, key=scores.get)  # type: ignore
+    best_workers = min(scores, key=lambda worker: scores[worker])
 
     profile = load_profile()
     host = _host_key()

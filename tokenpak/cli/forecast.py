@@ -10,7 +10,7 @@ Provides:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Optional
 
@@ -31,18 +31,22 @@ class BurnRateAnalysis:
     week_over_week_trend: Optional[float] = None  # % change (-50 to +50, etc.)
 
     # Breakdown
-    by_model: dict[str, float] = None  # model -> cost
-    by_activity: dict[str, float] = None  # activity -> cost
+    by_model: dict[str, float] = field(default_factory=dict)  # model -> cost
+    by_activity: dict[str, float] = field(default_factory=dict)  # activity -> cost
 
     # Data freshness
     data_points: int = 0  # how many records contributed
     start_date: Optional[date] = None
     end_date: Optional[date] = None
 
-    def __post_init__(self):
-        if self.by_model is None:
+    def __post_init__(self) -> None:
+        # Retain the historical runtime tolerance for callers that explicitly
+        # pass None while giving ordinary construction independent mappings.
+        raw_by_model: object = self.by_model
+        raw_by_activity: object = self.by_activity
+        if raw_by_model is None:
             self.by_model = {}
-        if self.by_activity is None:
+        if raw_by_activity is None:
             self.by_activity = {}
 
 
@@ -88,13 +92,13 @@ def get_burn_rate(
     monthly_projection = daily_avg * 30
 
     # Breakdown by model
-    by_model = {}
+    by_model: dict[str, float] = {}
     for r in window_records:
         model = r["model"] or "unknown"
         by_model[model] = by_model.get(model, 0) + r["cost_usd"]
 
     # Breakdown by activity (using 'agent' field as proxy)
-    by_activity = {}
+    by_activity: dict[str, float] = {}
     for r in window_records:
         activity = r["agent"] or "other"
         if activity == "":
@@ -160,7 +164,7 @@ def _calculate_wow_trend(tracker: BudgetTracker, current_window: int = 7) -> Opt
         return None
 
     trend = ((current_total - prev_total) / prev_total) * 100
-    return trend
+    return float(trend)
 
 
 def format_burn_rate_display(analysis: BurnRateAnalysis, threshold: Optional[float] = None) -> str:

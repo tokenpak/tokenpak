@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.regression.retrieval_watchdog", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.regression.retrieval_watchdog",
+    reason="module not available in current build",
+)
 import tempfile
 from pathlib import Path
 from typing import List, Optional
@@ -229,9 +232,7 @@ class TestIrrelevantSourcesAlert:
     def test_irrelevant_sources_remediation_triggers_reindex(self):
         wd, _ = _watchdog_with_tmp(auto_remediate=True)
         for i in range(5):
-            wd.observe(
-                _make_record(query_id=f"q{i}", chunk_count=10, relevance_scores=[0.85] * 10)
-            )
+            wd.observe(_make_record(query_id=f"q{i}", chunk_count=10, relevance_scores=[0.85] * 10))
 
         bad_scores = [0.9] * 6 + [0.1, 0.15, 0.2, 0.05]
         noisy = _make_record(query_id="q_noisy", chunk_count=10, relevance_scores=bad_scores)

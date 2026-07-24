@@ -92,9 +92,7 @@ class TestProxyGet:
     def test_proxy_get_success(self, mock_urlopen):
         """Test successful proxy request."""
         mock_response = mock.Mock()
-        mock_response.read.return_value = json.dumps(
-            {"status": "ok", "uptime": 3600}
-        ).encode()
+        mock_response.read.return_value = json.dumps({"status": "ok", "uptime": 3600}).encode()
         mock_urlopen.return_value = mock_response
 
         result = _proxy_get("/health", port=8766)
@@ -134,7 +132,7 @@ class TestProxyGet:
 class TestGetSavingsReport:
     """Test _get_savings_report function."""
 
-    @mock.patch("tokenpak.telemetry.query.get_savings_report")
+    @mock.patch("tokenpak.telemetry.query_dsl.get_savings_report")
     def test_savings_report_success(self, mock_get_saved_report):
         """Test successful savings report retrieval."""
         # Mock the telemetry query function
@@ -150,14 +148,13 @@ class TestGetSavingsReport:
         assert result["savings_amount"] == 20.0
         assert result["savings_pct"] == 16.67
 
-    @mock.patch("tokenpak.telemetry.query.get_savings_report")
-    def test_savings_report_exception_returns_zeros(self, mock_fn):
-        """Test exception handling returns zero values."""
-        # When telemetry module is not available or errors, should return zeros
+    @mock.patch("tokenpak.telemetry.query_dsl.get_savings_report")
+    def test_savings_report_exception_returns_unknown(self, mock_fn):
+        """Unavailable telemetry must not be represented as measured zero."""
         mock_fn.side_effect = Exception("Telemetry unavailable")
         result = _get_savings_report()
-        assert result["savings_amount"] == 0.0
-        assert result["cache_hit_rate"] == 0.0
+        assert result["savings_amount"] == "unknown"
+        assert result["cache_hit_rate"] == "unknown"
 
 
 class TestCalculateData:
@@ -165,26 +162,21 @@ class TestCalculateData:
 
     @mock.patch("tokenpak.cli.daily_report._get_savings_report")
     @mock.patch("tokenpak.cli.daily_report._proxy_get")
-    @mock.patch("time.time")
-    def test_calculate_data_with_live_proxy(
-        self, mock_time, mock_proxy_get, mock_savings
-    ):
+    def test_calculate_data_with_live_proxy(self, mock_proxy_get, mock_savings):
         """Test _calculate_data with mocked live proxy responses."""
-        # Mock time (1 hour ago)
-        mock_time.return_value = 1000000.0
 
         def proxy_side_effect(path, port=None):
             responses = {
                 "/health": {
-                    "stats": {
-                        "start_time": 999996.0,  # 4 seconds ago
-                    }
+                    "uptime_seconds": 4,
+                    "requests_total": 100,
+                    "requests_errors": 2,
                 },
                 "/stats": {
-                    "requests": 100,
-                    "errors": 2,
-                    "input_tokens": 10000,
-                    "saved_tokens": 2000,
+                    "session": {
+                        "input_tokens": 10000,
+                        "saved_tokens": 2000,
+                    }
                 },
                 "/cache-stats": {
                     "cache_hits": 50,
@@ -210,8 +202,10 @@ class TestCalculateData:
 
     @mock.patch("tokenpak.cli.daily_report._get_savings_report")
     @mock.patch("tokenpak.cli.daily_report._proxy_get")
-    def test_calculate_data_all_zeros(self, mock_proxy_get, mock_savings):
-        """Test _calculate_data with all zero responses."""
+    def test_calculate_data_unreachable_preserves_unknown_health_metrics(
+        self, mock_proxy_get, mock_savings
+    ):
+        """Missing health data must not be presented as measured zeroes."""
         mock_proxy_get.return_value = None
         mock_savings.return_value = {
             "total_cost": 0.0,
@@ -222,22 +216,31 @@ class TestCalculateData:
         }
 
         data = _calculate_data()
-        assert data.requests == 0
+        assert data.requests == "unknown"
+        assert data.errors == "unknown"
+        assert data.uptime_hours == "unknown"
+        assert data.uptime_minutes == "unknown"
         assert data.savings_amount == 0.0
-        assert data.cache_hit_rate == 0.0
+        assert data.cache_hit_rate == "unknown"
+        assert data.compression_percent == "unknown"
 
     @mock.patch("tokenpak.cli.daily_report._get_savings_report")
     @mock.patch("tokenpak.cli.daily_report._proxy_get")
     def test_calculate_data_zero_input_tokens(self, mock_proxy_get, mock_savings):
         """Test compression percent calculation with zero input tokens."""
+
         def proxy_side_effect(path, port=None):
             responses = {
-                "/health": {"stats": {"start_time": 0}},
+                "/health": {
+                    "uptime_seconds": 0,
+                    "requests_total": 0,
+                    "requests_errors": 0,
+                },
                 "/stats": {
-                    "requests": 0,
-                    "errors": 0,
-                    "input_tokens": 0,
-                    "saved_tokens": 0,
+                    "session": {
+                        "input_tokens": 0,
+                        "saved_tokens": 0,
+                    }
                 },
                 "/cache-stats": {"cache_hits": 0, "cache_misses": 0},
             }
@@ -251,7 +254,31 @@ class TestCalculateData:
         }
 
         data = _calculate_data()
-        assert data.compression_percent == 0.0  # Should not divide by zero
+        assert data.compression_percent == "unknown"  # no token observation denominator
+
+    @mock.patch("tokenpak.cli.daily_report._get_savings_report")
+    @mock.patch("tokenpak.cli.daily_report._proxy_get")
+    def test_partial_payloads_preserve_unknown_values(self, mock_proxy_get, mock_savings):
+        """Absent or wrong-typed fields are not converted into measured zeroes."""
+
+        def proxy_side_effect(path, port=None):
+            return {
+                "/health": {"uptime_seconds": "bad", "requests_total": True},
+                "/stats": {"session": {"input_tokens": 100, "saved_tokens": "bad"}},
+                "/cache-stats": {"cache_hits": 4},
+            }.get(path)
+
+        mock_proxy_get.side_effect = proxy_side_effect
+        mock_savings.return_value = {"savings_amount": None, "savings_pct": "bad"}
+
+        data = _calculate_data()
+        assert data.requests == "unknown"
+        assert data.errors == "unknown"
+        assert data.uptime_hours == "unknown"
+        assert data.compression_percent == "unknown"
+        assert data.cache_hit_rate == "unknown"
+        assert data.savings_amount == "unknown"
+        assert data.savings_percent == "unknown"
 
 
 class TestFormatTerminal:
@@ -520,7 +547,7 @@ _SAMPLE_ROWS = [
     ModelCompressionRow(
         model="claude-opus-4-6",
         request_count=10,
-        avg_compression_ratio=1.0,   # no compression data
+        avg_compression_ratio=1.0,  # no compression data
         tokens_saved=0,
         savings_amount=0.0,
     ),
@@ -570,7 +597,7 @@ class TestModelCompressionRow:
 class TestGetModelCompressionBreakdown:
     """Test _get_model_compression_breakdown()."""
 
-    @mock.patch("tokenpak.telemetry.query.get_model_compression_breakdown")
+    @mock.patch("tokenpak.telemetry.query_dsl.get_model_compression_breakdown")
     def test_returns_populated_list(self, mock_fn):
         """Test happy path: telemetry returns data, mapped to ModelCompressionRow."""
         from tokenpak.telemetry.query_models import ModelCompressionBreakdown
@@ -592,14 +619,14 @@ class TestGetModelCompressionBreakdown:
         assert result[0].model == "claude-sonnet-4-6"
         assert result[0].tokens_saved == 5600
 
-    @mock.patch("tokenpak.telemetry.query.get_model_compression_breakdown")
+    @mock.patch("tokenpak.telemetry.query_dsl.get_model_compression_breakdown")
     def test_returns_empty_list_on_exception(self, mock_fn):
         """Test that any exception yields an empty list (graceful degradation)."""
         mock_fn.side_effect = Exception("DB unavailable")
         result = _get_model_compression_breakdown()
         assert result == []
 
-    @mock.patch("tokenpak.telemetry.query.get_model_compression_breakdown")
+    @mock.patch("tokenpak.telemetry.query_dsl.get_model_compression_breakdown")
     def test_returns_empty_list_when_no_data(self, mock_fn):
         """Test empty DB → empty list."""
         mock_fn.return_value = []

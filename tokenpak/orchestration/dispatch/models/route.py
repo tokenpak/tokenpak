@@ -23,9 +23,7 @@ class RouteStation(DispatchBaseModel):
     system_component: str | None = Field(
         default=None, description='e.g. "delivery_dock"; null for worker stations'
     )
-    prompt_overlay: str | None = Field(
-        default=None, description='e.g. "overlay.code_builder.v1"'
-    )
+    prompt_overlay: str | None = Field(default=None, description='e.g. "overlay.code_builder.v1"')
     required_capabilities: list[str] = Field(default_factory=list)
     loop_policy: StationLoopPolicy | None = Field(
         default=None, description="overrides worker/system default"

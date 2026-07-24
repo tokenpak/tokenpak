@@ -37,36 +37,43 @@ def test_heuristic_engine_importable():
 
 def test_llmlingua_available_is_bool():
     from tokenpak.compression.engines import LLMLINGUA_AVAILABLE
+
     assert isinstance(LLMLINGUA_AVAILABLE, bool)
 
 
 def test_engines_dict_has_heuristic():
     from tokenpak.compression.engines import ENGINES, HeuristicEngine
+
     assert ENGINES.get("heuristic") is HeuristicEngine
 
 
 def test_engines_dict_has_fast():
     from tokenpak.compression.engines import ENGINES, HeuristicEngine
+
     assert ENGINES.get("fast") is HeuristicEngine
 
 
 def test_get_engine_no_args_returns_heuristic():
     from tokenpak.compression.engines import HeuristicEngine, get_engine
+
     assert isinstance(get_engine(), HeuristicEngine)
 
 
 def test_get_engine_heuristic_by_name():
     from tokenpak.compression.engines import HeuristicEngine, get_engine
+
     assert isinstance(get_engine("heuristic"), HeuristicEngine)
 
 
 def test_get_engine_fast_returns_heuristic():
     from tokenpak.compression.engines import HeuristicEngine, get_engine
+
     assert isinstance(get_engine("fast"), HeuristicEngine)
 
 
 def test_get_engine_unknown_name_falls_back_to_heuristic():
     from tokenpak.compression.engines import HeuristicEngine, get_engine
+
     assert isinstance(get_engine("nonexistent_engine_xyz"), HeuristicEngine)
 
 
@@ -77,52 +84,62 @@ def test_get_engine_unknown_name_falls_back_to_heuristic():
 
 def test_hints_default_target_tokens():
     from tokenpak.compression.engines.base import CompactionHints
+
     assert CompactionHints().target_tokens == 1000
 
 
 def test_hints_default_preserve_patterns_is_none():
     from tokenpak.compression.engines.base import CompactionHints
+
     assert CompactionHints().preserve_patterns is None
 
 
 def test_hints_default_preserve_first_n_sentences():
     from tokenpak.compression.engines.base import CompactionHints
+
     assert CompactionHints().preserve_first_n_sentences == 1
 
 
 def test_hints_default_preserve_last_n_sentences():
     from tokenpak.compression.engines.base import CompactionHints
+
     assert CompactionHints().preserve_last_n_sentences == 0
 
 
 def test_hints_default_keep_headers():
     from tokenpak.compression.engines.base import CompactionHints
+
     assert CompactionHints().keep_headers is True
 
 
 def test_hints_default_keep_code_blocks():
     from tokenpak.compression.engines.base import CompactionHints
+
     assert CompactionHints().keep_code_blocks is True
 
 
 def test_hints_default_aggressive_is_false():
     from tokenpak.compression.engines.base import CompactionHints
+
     assert CompactionHints().aggressive is False
 
 
 def test_hints_custom_target_tokens():
     from tokenpak.compression.engines.base import CompactionHints
+
     assert CompactionHints(target_tokens=500).target_tokens == 500
 
 
 def test_hints_custom_preserve_patterns():
     from tokenpak.compression.engines.base import CompactionHints
+
     h = CompactionHints(preserve_patterns=[r"\bfoo\b"])
     assert h.preserve_patterns == [r"\bfoo\b"]
 
 
 def test_hints_custom_aggressive():
     from tokenpak.compression.engines.base import CompactionHints
+
     assert CompactionHints(aggressive=True).aggressive is True
 
 
@@ -176,11 +193,13 @@ def test_estimate_tokens_returns_int(minimal_engine):
 
 def test_heuristic_engine_name():
     from tokenpak.compression.engines.heuristic import HeuristicEngine
+
     assert HeuristicEngine().name == "heuristic"
 
 
 def test_heuristic_compact_empty_string_short_circuits():
     from tokenpak.compression.engines.heuristic import HeuristicEngine
+
     eng = HeuristicEngine()
     result = eng.compact("")
     assert result == ""
@@ -188,12 +207,14 @@ def test_heuristic_compact_empty_string_short_circuits():
 
 def test_heuristic_compact_returns_string():
     from tokenpak.compression.engines.heuristic import HeuristicEngine
+
     eng = HeuristicEngine()
     assert isinstance(eng.compact("hello world"), str)
 
 
 def test_heuristic_compact_none_hints_works():
     from tokenpak.compression.engines.heuristic import HeuristicEngine
+
     eng = HeuristicEngine()
     result = eng.compact("some text", hints=None)
     assert isinstance(result, str)
@@ -293,6 +314,7 @@ def llmlingua_unavailable_engine():
     """LLMLinguaEngine instance created with llmlingua blocked from importing."""
     with patch.dict(sys.modules, {"llmlingua": None}):
         from tokenpak.compression.engines.llmlingua import LLMLinguaEngine
+
         return LLMLinguaEngine()
 
 
@@ -347,6 +369,7 @@ def llmlingua_available_engine(mock_compressor):
     mock_llm.PromptCompressor.return_value = mock_compressor
     with patch.dict(sys.modules, {"llmlingua": mock_llm}):
         from tokenpak.compression.engines.llmlingua import LLMLinguaEngine
+
         return LLMLinguaEngine()
 
 
@@ -354,7 +377,9 @@ def test_llmlingua_available_marks_flag(llmlingua_available_engine):
     assert llmlingua_available_engine._available is True
 
 
-def test_llmlingua_available_compact_empty_returns_empty(llmlingua_available_engine, mock_compressor):
+def test_llmlingua_available_compact_empty_returns_empty(
+    llmlingua_available_engine, mock_compressor
+):
     result = llmlingua_available_engine.compact("")
     assert result == ""
     mock_compressor.compress_prompt.assert_not_called()
@@ -367,6 +392,7 @@ def test_llmlingua_available_compact_returns_compressed_prompt(llmlingua_availab
 
 def test_llmlingua_available_compact_rate_over_target(llmlingua_available_engine, mock_compressor):
     from tokenpak.compression.engines.base import CompactionHints
+
     # 400 chars → 100 estimated tokens; target=50 → ratio = 50/100 = 0.5
     llmlingua_available_engine.compact("a" * 400, hints=CompactionHints(target_tokens=50))
     kwargs = mock_compressor.compress_prompt.call_args[1]
@@ -377,6 +403,7 @@ def test_llmlingua_available_compact_rate_defaults_half_when_under_target(
     llmlingua_available_engine, mock_compressor
 ):
     from tokenpak.compression.engines.base import CompactionHints
+
     # 4 chars → 1 token; target=1000 → current <= target → default rate 0.5
     llmlingua_available_engine.compact("test", hints=CompactionHints(target_tokens=1000))
     kwargs = mock_compressor.compress_prompt.call_args[1]
@@ -387,6 +414,7 @@ def test_llmlingua_available_compact_rate_defaults_half_when_target_zero(
     llmlingua_available_engine, mock_compressor
 ):
     from tokenpak.compression.engines.base import CompactionHints
+
     llmlingua_available_engine.compact("some text", hints=CompactionHints(target_tokens=0))
     kwargs = mock_compressor.compress_prompt.call_args[1]
     assert kwargs["rate"] == pytest.approx(0.5)
@@ -396,6 +424,7 @@ def test_llmlingua_available_compact_force_tokens_from_preserve_patterns(
     llmlingua_available_engine, mock_compressor
 ):
     from tokenpak.compression.engines.base import CompactionHints
+
     hints = CompactionHints(preserve_patterns=[r"foo"])
     llmlingua_available_engine.compact("foo bar foo baz", hints=hints)
     kwargs = mock_compressor.compress_prompt.call_args[1]
@@ -406,6 +435,7 @@ def test_llmlingua_available_compact_no_patterns_passes_none_for_force_tokens(
     llmlingua_available_engine, mock_compressor
 ):
     from tokenpak.compression.engines.base import CompactionHints
+
     llmlingua_available_engine.compact("text here", hints=CompactionHints(preserve_patterns=None))
     kwargs = mock_compressor.compress_prompt.call_args[1]
     assert kwargs["force_tokens"] is None
@@ -435,6 +465,7 @@ def test_llmlingua_available_estimate_tokens_fallback_without_tokenizer():
     mock_llm.PromptCompressor.return_value = mock_comp
     with patch.dict(sys.modules, {"llmlingua": mock_llm}):
         from tokenpak.compression.engines.llmlingua import LLMLinguaEngine
+
         eng = LLMLinguaEngine()
     # hasattr(mock_comp, "tokenizer") is False (restricted by spec)
     assert eng.estimate_tokens("abcdefgh") == 2  # 8 chars → 2 tokens

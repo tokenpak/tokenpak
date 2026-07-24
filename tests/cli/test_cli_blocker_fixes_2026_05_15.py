@@ -100,7 +100,10 @@ def _run_cli(args, env_extra=None):
         env.update(env_extra)
     return subprocess.run(
         [sys.executable, "-m", "tokenpak", *args],
-        capture_output=True, text=True, env=env, timeout=30,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
     )
 
 
@@ -155,7 +158,5 @@ def test_pak_import_duplicate_exits_nonzero(tmp_path):
         ["pak", "import", str(pak_file)],
         env_extra={"TOKENPAK_HOME": str(home)},
     )
-    assert imp2.returncode != 0, (
-        f"duplicate pak import exited 0 (stderr: {imp2.stderr!r})"
-    )
+    assert imp2.returncode != 0, f"duplicate pak import exited 0 (stderr: {imp2.stderr!r})"
     assert "already installed" in (imp2.stderr + imp2.stdout).lower()

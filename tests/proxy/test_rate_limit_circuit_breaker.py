@@ -26,6 +26,7 @@ from tokenpak.proxy.server import ProxyServer
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
@@ -46,11 +47,13 @@ def _make_mock_pool(status_code: int, body: bytes = b"{}") -> MagicMock:
 
 
 _MESSAGES_URL = "http://api.anthropic.com/v1/messages"
-_REQUEST_BODY = json.dumps({
-    "model": "claude-haiku-4-5",
-    "max_tokens": 10,
-    "messages": [{"role": "user", "content": "Hello from test"}],
-}).encode()
+_REQUEST_BODY = json.dumps(
+    {
+        "model": "claude-haiku-4-5",
+        "max_tokens": 10,
+        "messages": [{"role": "user", "content": "Hello from test"}],
+    }
+).encode()
 
 
 def _send_request(port: int, body: bytes = _REQUEST_BODY) -> tuple[int, bytes]:
@@ -74,6 +77,7 @@ def _send_request(port: int, body: bytes = _REQUEST_BODY) -> tuple[int, bytes]:
 # ===========================================================================
 # Test 1: 429 response → session cost = 0 (no phantom cost)
 # ===========================================================================
+
 
 class TestCostZeroOn429:
     """A 429 upstream response must log cost=0, not a positive estimate."""
@@ -109,15 +113,17 @@ class TestCostZeroOn429:
         server.start(blocking=False)
         time.sleep(0.1)
 
-        ok_body = json.dumps({
-            "id": "msg_test",
-            "type": "message",
-            "role": "assistant",
-            "content": [{"type": "text", "text": "Hi"}],
-            "model": "claude-haiku-4-5",
-            "stop_reason": "end_turn",
-            "usage": {"input_tokens": 20, "output_tokens": 5},
-        }).encode()
+        ok_body = json.dumps(
+            {
+                "id": "msg_test",
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": "Hi"}],
+                "model": "claude-haiku-4-5",
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 20, "output_tokens": 5},
+            }
+        ).encode()
         server._connection_pool = _make_mock_pool(200, ok_body)
 
         try:
@@ -136,6 +142,7 @@ class TestCostZeroOn429:
 # Test 2: 5 consecutive 429s open the rate-limit circuit
 # ===========================================================================
 
+
 class TestCircuitOpensAfterThreshold:
     """After threshold 429s, the rate-limit circuit opens and is_open() returns True."""
 
@@ -145,7 +152,7 @@ class TestCircuitOpensAfterThreshold:
         # Below threshold — circuit stays closed
         for i in range(4):
             cb.record_429()
-            assert not cb.is_open(), f"Circuit should be closed after {i+1} 429s"
+            assert not cb.is_open(), f"Circuit should be closed after {i + 1} 429s"
 
         # At threshold — circuit opens
         cb.record_429()
@@ -169,7 +176,7 @@ class TestCircuitOpensAfterThreshold:
             # Send 5 requests — each records a 429 in the rate-limit registry
             for i in range(5):
                 status, _ = _send_request(port)
-                assert status == 429, f"Request {i+1}: expected 429 from stub, got {status}"
+                assert status == 429, f"Request {i + 1}: expected 429 from stub, got {status}"
 
             upstream_calls_after_5 = mock_pool.request.call_count
 
@@ -191,6 +198,7 @@ class TestCircuitOpensAfterThreshold:
 # ===========================================================================
 # Test 3: After cooldown, circuit closes and requests proceed normally
 # ===========================================================================
+
 
 class TestCircuitClosesAfterCooldown:
     """After the cooldown period elapses, the rate-limit circuit closes automatically."""

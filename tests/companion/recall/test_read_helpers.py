@@ -181,9 +181,7 @@ def test_limit_clamps_to_max(tmp_path: Path, require_fts5: None) -> None:
     assert result.limit == 100
 
 
-def test_non_positive_limit_falls_back_to_default(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_non_positive_limit_falls_back_to_default(tmp_path: Path, require_fts5: None) -> None:
     """Zero or negative limits at the API edge default; the HTTP layer rejects."""
     with RecallStore.open(tmp_path / "recall.db") as store:
         result_zero = store.list_paks(PakListFilters(limit=0))
@@ -229,9 +227,7 @@ def test_cursor_resumes_at_next_row(tmp_path: Path, require_fts5: None) -> None:
     assert page2.next_cursor is None
 
 
-def test_invalid_cursor_raises_value_error(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_invalid_cursor_raises_value_error(tmp_path: Path, require_fts5: None) -> None:
     """A malformed cursor surfaces as ``ValueError`` — the HTTP layer maps to 400."""
     with RecallStore.open(tmp_path / "recall.db") as store:
         with pytest.raises(ValueError):
@@ -262,9 +258,7 @@ def test_get_pak_miss(tmp_path: Path, require_fts5: None) -> None:
         assert store.get_pak("never-inserted") is None
 
 
-def test_get_pak_empty_inputs_are_misses(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_get_pak_empty_inputs_are_misses(tmp_path: Path, require_fts5: None) -> None:
     """Empty / whitespace ``pak_id`` short-circuits to ``None`` without a SELECT."""
     with RecallStore.open(tmp_path / "recall.db") as store:
         assert store.get_pak("") is None

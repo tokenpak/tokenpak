@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 # ---------------------------------------------------------------------------
 # Data Classes
@@ -42,7 +42,7 @@ class DiffBlock:
         else:  # retained
             return "="
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.block_id,
             "name": self.name,
@@ -76,7 +76,7 @@ class ContextDiff:
     def total_blocks(self) -> int:
         return len(self.removed) + len(self.compressed) + len(self.retained)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "trace_id": self.trace_id,
             "timestamp": self.timestamp,
@@ -97,7 +97,7 @@ class ContextDiff:
 # ---------------------------------------------------------------------------
 
 
-def _classify_segment(segment: dict) -> str:
+def _classify_segment(segment: dict[str, Any]) -> str:
     """Classify a segment as removed, compressed, or retained."""
     try:
         actions = json.loads(segment.get("actions", "[]"))
@@ -129,7 +129,7 @@ def _classify_segment(segment: dict) -> str:
     return "retained"
 
 
-def _is_pinned(segment: dict) -> bool:
+def _is_pinned(segment: dict[str, Any]) -> bool:
     """Check if a segment is pinned (instruction/system prompt)."""
     content_type = segment.get("content_type", "").lower()
     segment_type = segment.get("segment_type", "").lower()
@@ -146,7 +146,7 @@ def _is_pinned(segment: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _build_diff_from_segments(trace_id: str, segments: list[dict]) -> ContextDiff:
+def _build_diff_from_segments(trace_id: str, segments: list[dict[str, Any]]) -> ContextDiff:
     """Build a ContextDiff from a list of segment records."""
     removed = []
     compressed = []
@@ -196,7 +196,7 @@ def _empty_diff(trace_id: str = "none") -> ContextDiff:
 # ---------------------------------------------------------------------------
 
 
-def _get_recent_trace(since: Optional[str] = None) -> Optional[dict]:
+def _get_recent_trace(since: Optional[str] = None) -> Optional[dict[str, Any]]:
     """Load recent trace from vault or storage. Returns None if not found."""
     # DEFERRED: Implement actual trace retrieval from tp_events or vault
     # For now, this is a stub that returns None (simulating no trace data)
@@ -281,7 +281,7 @@ def print_diff_json(diff: ContextDiff) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run_diff_cmd(args) -> None:
+def run_diff_cmd(args: Any) -> None:
     """Main dispatcher for 'tokenpak diff' subcommand."""
     verbose = getattr(args, "verbose", False)
     raw = getattr(args, "json", False) or getattr(args, "raw", False)

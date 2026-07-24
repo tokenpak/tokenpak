@@ -108,7 +108,9 @@ class TestModelCostCalc(unittest.TestCase):
 class TestBuildRecommendations(unittest.TestCase):
     """Test recommendation generation."""
 
-    def _make_compression(self, current=25.0, optimal=39.0, extra=14.0, mode="balanced", opt_mode="aggressive"):
+    def _make_compression(
+        self, current=25.0, optimal=39.0, extra=14.0, mode="balanced", opt_mode="aggressive"
+    ):
         return {
             "current_pct": current,
             "current_mode": mode,
@@ -119,7 +121,9 @@ class TestBuildRecommendations(unittest.TestCase):
             "additional_savings_pct": extra,
         }
 
-    def _make_model(self, current="claude-opus-4-6", cost=0.05, alt="claude-haiku-4-5", alt_cost=0.003, pct=80):
+    def _make_model(
+        self, current="claude-opus-4-6", cost=0.05, alt="claude-haiku-4-5", alt_cost=0.003, pct=80
+    ):
         return {
             "current_model": current,
             "cost_per_request": cost,
@@ -157,7 +161,9 @@ class TestBuildRecommendations(unittest.TestCase):
             self.assertEqual(r["n"], i)
 
     def test_no_recs_when_optimal(self):
-        compression = self._make_compression(current=50.0, optimal=50.0, extra=0.0, mode="aggressive", opt_mode="aggressive")
+        compression = self._make_compression(
+            current=50.0, optimal=50.0, extra=0.0, mode="aggressive", opt_mode="aggressive"
+        )
         model_data = self._make_model(alt=None, pct=0)
         model_data["best_alternative"] = None
         redundancy = self._make_redundancy(dup=0, stale=0, total=0, tokens=0)
@@ -178,7 +184,9 @@ class TestBuildRecommendations(unittest.TestCase):
         model_data = self._make_model(alt=None)
         model_data["best_alternative"] = None
         recs = _build_recommendations(
-            self._make_compression(current=50.0, optimal=50.0, extra=0.0, mode="aggressive", opt_mode="aggressive"),
+            self._make_compression(
+                current=50.0, optimal=50.0, extra=0.0, mode="aggressive", opt_mode="aggressive"
+            ),
             model_data,
             self._make_redundancy(),
         )
@@ -196,6 +204,7 @@ class TestRunOptimize(unittest.TestCase):
     def test_json_output_is_valid(self, mock_pro, mock_db, mock_proxy):
         # Bypass pro gate by patching is_pro at module level
         import tokenpak.cli.commands.optimize as opt_mod
+
         opt_mod_is_pro = getattr(opt_mod, "is_pro", None)
 
         mock_proxy.return_value = {
@@ -212,6 +221,7 @@ class TestRunOptimize(unittest.TestCase):
 
         import contextlib
         import io
+
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             try:

@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.agentic.validation_framework", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.agentic.validation_framework", reason="module not available in current build"
+)
 import time
 from unittest.mock import MagicMock, patch
 
@@ -39,6 +41,7 @@ from tokenpak.agentic.validation_framework import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _dummy_result(passed: bool = True) -> ValidationResult:
     return ValidationResult(
         passed=passed,
@@ -51,6 +54,7 @@ def _dummy_result(passed: bool = True) -> ValidationResult:
 # ---------------------------------------------------------------------------
 # 1. ABC enforcement
 # ---------------------------------------------------------------------------
+
 
 class TestABCInterface:
     def test_cannot_instantiate_abstract(self):
@@ -87,6 +91,7 @@ class TestABCInterface:
 # ---------------------------------------------------------------------------
 # 2. ServiceHealthValidator — process check
 # ---------------------------------------------------------------------------
+
 
 class TestServiceHealthValidator:
     def test_process_found(self):
@@ -137,6 +142,7 @@ class TestServiceHealthValidator:
 # 3. TestSuiteValidator
 # ---------------------------------------------------------------------------
 
+
 class TestTestSuiteValidator:
     def _make_proc(self, returncode, stdout="", stderr=""):
         return MagicMock(returncode=returncode, stdout=stdout, stderr=stderr)
@@ -164,8 +170,11 @@ class TestTestSuiteValidator:
 
     def test_timeout_produces_failure(self):
         import subprocess
+
         v = TestSuiteValidator(command=["pytest"], timeout=1)
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="pytest", timeout=1)):
+        with patch(
+            "subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="pytest", timeout=1)
+        ):
             r = v.validate({}, {})
         assert r.passed is False
         assert any(c.name == "test_timeout" for c in r.checks)
@@ -174,6 +183,7 @@ class TestTestSuiteValidator:
 # ---------------------------------------------------------------------------
 # 4. FileStateValidator
 # ---------------------------------------------------------------------------
+
 
 class TestFileStateValidator:
     def test_must_exist_pass(self, tmp_path):
@@ -240,6 +250,7 @@ class TestFileStateValidator:
 # 5. SchemaValidator
 # ---------------------------------------------------------------------------
 
+
 class TestSchemaValidator:
     def test_required_keys_present(self):
         v = SchemaValidator({"required_keys": ["status", "id"]})
@@ -291,6 +302,7 @@ class TestSchemaValidator:
 # 6. ValidationOrchestrator — registration and merged result
 # ---------------------------------------------------------------------------
 
+
 class TestValidationOrchestrator:
     def test_no_validators_passes(self):
         orch = ValidationOrchestrator()
@@ -336,12 +348,16 @@ class TestValidationOrchestrator:
 # 7. Orchestrator retry_fn path
 # ---------------------------------------------------------------------------
 
+
 class TestOrchestratorRetry:
     def test_retry_fn_succeeds_on_second_attempt(self):
-        orch = ValidationOrchestrator(retry_policy=RetryPolicy(max_retries=2, retry_delay_seconds=0))
+        orch = ValidationOrchestrator(
+            retry_policy=RetryPolicy(max_retries=2, retry_delay_seconds=0)
+        )
         orch.register_step_validator("step1", SchemaValidator({"required_keys": ["ok"]}))
 
         call_count = [0]
+
         def retry_fn():
             call_count[0] += 1
             return {"ok": True}  # succeed on first retry
@@ -356,7 +372,9 @@ class TestOrchestratorRetry:
     def test_retry_exhausted_triggers_escalation(self):
         escalations = []
         orch = ValidationOrchestrator(
-            retry_policy=RetryPolicy(max_retries=2, retry_delay_seconds=0, escalate_on_exhaustion=True),
+            retry_policy=RetryPolicy(
+                max_retries=2, retry_delay_seconds=0, escalate_on_exhaustion=True
+            ),
             on_escalate=lambda step, res: escalations.append((step, res)),
         )
         orch.register_step_validator("step1", SchemaValidator({"required_keys": ["never"]}))
@@ -371,7 +389,9 @@ class TestOrchestratorRetry:
 
     def test_retry_exhausted_raises_when_no_escalation(self):
         orch = ValidationOrchestrator(
-            retry_policy=RetryPolicy(max_retries=1, retry_delay_seconds=0, escalate_on_exhaustion=False),
+            retry_policy=RetryPolicy(
+                max_retries=1, retry_delay_seconds=0, escalate_on_exhaustion=False
+            ),
         )
         orch.register_step_validator("step1", SchemaValidator({"required_keys": ["never"]}))
         initial = orch.validate_step("step1", {}, {})
@@ -383,9 +403,11 @@ class TestOrchestratorRetry:
 # 8. Escalation callback
 # ---------------------------------------------------------------------------
 
+
 class TestEscalation:
     def test_custom_escalation_receives_result(self):
         received = []
+
         def my_escalate(step, result):
             received.append(result)
 
@@ -404,6 +426,7 @@ class TestEscalation:
 # 9. make_validated_step_handler raises ValidationError on exhaustion
 # ---------------------------------------------------------------------------
 
+
 class TestMakeValidatedStepHandler:
     def test_passes_through_on_success(self):
         orch = ValidationOrchestrator()
@@ -414,7 +437,9 @@ class TestMakeValidatedStepHandler:
 
     def test_raises_on_exhaustion(self):
         orch = ValidationOrchestrator(
-            retry_policy=RetryPolicy(max_retries=1, retry_delay_seconds=0, escalate_on_exhaustion=False),
+            retry_policy=RetryPolicy(
+                max_retries=1, retry_delay_seconds=0, escalate_on_exhaustion=False
+            ),
         )
         orch.register_step_validator("s", SchemaValidator({"required_keys": ["never"]}))
         handler = make_validated_step_handler("s", lambda step, wf: {}, orch)

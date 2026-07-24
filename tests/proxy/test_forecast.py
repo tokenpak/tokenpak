@@ -8,6 +8,7 @@ Tests the forecast_endpoint module and the AC2-specified response shape:
 
 These tests exercise the module directly (no live HTTP server required).
 """
+
 from __future__ import annotations
 
 import os
@@ -36,6 +37,7 @@ from tokenpak.proxy.forecast_endpoint import (  # noqa: E402
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _clear_forecast_latency_buffer():
@@ -100,6 +102,7 @@ def simple_body() -> Dict[str, Any]:
 # count_request_tokens
 # ---------------------------------------------------------------------------
 
+
 class TestCountRequestTokens:
     def test_single_string_message(self):
         body = {"messages": [{"role": "user", "content": "Hello world"}]}
@@ -112,7 +115,10 @@ class TestCountRequestTokens:
 
     def test_system_prompt_counted(self):
         body_no_sys = {"messages": [{"role": "user", "content": "hi"}]}
-        body_sys = {"system": "You are a helpful assistant.", "messages": [{"role": "user", "content": "hi"}]}
+        body_sys = {
+            "system": "You are a helpful assistant.",
+            "messages": [{"role": "user", "content": "hi"}],
+        }
         assert count_request_tokens(body_sys) > count_request_tokens(body_no_sys)
 
     def test_list_content_blocks(self):
@@ -153,6 +159,7 @@ class TestCountRequestTokens:
 # estimate_cache_hit_likelihood
 # ---------------------------------------------------------------------------
 
+
 class TestCacheHitLikelihood:
     def test_no_history_returns_zero(self, empty_db):
         result = estimate_cache_hit_likelihood("claude-sonnet-4-6", empty_db)
@@ -169,7 +176,9 @@ class TestCacheHitLikelihood:
         assert 0.0 <= result <= 1.0
 
     def test_missing_db_returns_zero(self, tmp_path):
-        result = estimate_cache_hit_likelihood("claude-sonnet-4-6", str(tmp_path / "nonexistent.db"))
+        result = estimate_cache_hit_likelihood(
+            "claude-sonnet-4-6", str(tmp_path / "nonexistent.db")
+        )
         assert result == 0.0
 
     def test_result_in_range(self, history_db):
@@ -180,6 +189,7 @@ class TestCacheHitLikelihood:
 # ---------------------------------------------------------------------------
 # estimate_ttfb_ms
 # ---------------------------------------------------------------------------
+
 
 class TestEstimateTtfb:
     def test_no_history_uses_formula(self, empty_db):
@@ -201,6 +211,7 @@ class TestEstimateTtfb:
 # ---------------------------------------------------------------------------
 # build_forecast_response — AC2 compliance
 # ---------------------------------------------------------------------------
+
 
 class TestBuildForecastResponse:
     def test_returns_all_ac2_fields(self, simple_body, empty_db):

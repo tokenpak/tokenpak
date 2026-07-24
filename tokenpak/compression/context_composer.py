@@ -29,7 +29,7 @@ from typing import Any, Optional
 # ---------------------------------------------------------------------------
 
 try:
-    import tiktoken  # type: ignore[import]
+    import tiktoken
 
     _ENCODER = tiktoken.get_encoding("cl100k_base")
 

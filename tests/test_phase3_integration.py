@@ -10,10 +10,11 @@ Covers:
   6. Toggle behavior (toggles ON → entries populated; toggles OFF → no entries)
 """
 
-
 import pytest
 
-pytest.importorskip("tokenpak._internal.regression.stability_scorer", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.regression.stability_scorer", reason="module not available in current build"
+)
 import json
 import tempfile
 import time
@@ -43,6 +44,7 @@ from tokenpak.compression.query_rewriter import (
 # ===========================================================================
 # Fixtures
 # ===========================================================================
+
 
 @pytest.fixture
 def temp_gates_dir():
@@ -81,14 +83,13 @@ def query_rewriter():
 @pytest.fixture
 def stability_scorer(temp_stability_dir):
     """Create a fresh StabilityScorer instance with temp storage."""
-    return StabilityScorer(
-        store_path=str(temp_stability_dir / "stability_scores.json")
-    )
+    return StabilityScorer(store_path=str(temp_stability_dir / "stability_scores.json"))
 
 
 # ===========================================================================
 # Test PreconditionGates (5 tests)
 # ===========================================================================
+
 
 class TestPreconditionGates:
     """Test PreconditionGates module."""
@@ -177,6 +178,7 @@ class TestPreconditionGates:
 # Test QueryRewriter (4 tests)
 # ===========================================================================
 
+
 class TestQueryRewriter:
     """Test QueryRewriter module."""
 
@@ -230,6 +232,7 @@ class TestQueryRewriter:
 # ===========================================================================
 # Test SessionCapsules (4 tests)
 # ===========================================================================
+
 
 class TestSessionCapsules:
     """Test SessionCapsules module."""
@@ -317,6 +320,7 @@ date: 2026-03-11
 # Test StabilityScorer (5 tests)
 # ===========================================================================
 
+
 class TestStabilityScorer:
     """Test StabilityScorer module."""
 
@@ -354,7 +358,7 @@ class TestStabilityScorer:
 
         score = stability_scorer.score_workflow("workflow_b")
 
-        assert isinstance(score, dict) or hasattr(score, 'score')
+        assert isinstance(score, dict) or hasattr(score, "score")
         # Stability score should be between 0 and 1
         if isinstance(score, dict):
             assert 0.0 <= score["score"] <= 1.0
@@ -378,7 +382,7 @@ class TestStabilityScorer:
         score = stability_scorer.score_workflow("workflow_stable")
 
         # High stability should give tight budget
-        if hasattr(score, 'budget_tier'):
+        if hasattr(score, "budget_tier"):
             assert score.budget_tier in ["tight", "normal"]
             assert score.score > 0.5
 
@@ -399,7 +403,7 @@ class TestStabilityScorer:
         score = stability_scorer.score_workflow("workflow_unstable")
 
         # Low stability should give expanded budget
-        if hasattr(score, 'budget_tier'):
+        if hasattr(score, "budget_tier"):
             assert score.budget_tier in ["expanded", "normal"]
             assert score.score < 0.7
 
@@ -435,6 +439,7 @@ class TestStabilityScorer:
 # ===========================================================================
 # Test SESSION Entries and Toggle Behavior (4 tests)
 # ===========================================================================
+
 
 class TestSessionEntries:
     """Test that SESSION dict entries are populated correctly."""
@@ -504,6 +509,7 @@ class TestSessionEntries:
 # Integration Tests (2 tests)
 # ===========================================================================
 
+
 class TestFullIntegration:
     """End-to-end integration tests."""
 
@@ -514,9 +520,7 @@ class TestFullIntegration:
         assert isinstance(gate_passed, bool)
 
         # 2. Rewrite query
-        messages = [
-            {"role": "user", "content": "Hi, can you please help me with something?"}
-        ]
+        messages = [{"role": "user", "content": "Hi, can you please help me with something?"}]
         rewritten = query_rewriter.rewrite_messages(messages)
         assert len(rewritten) == 1
 
@@ -568,13 +572,14 @@ class TestFullIntegration:
         improved_score = stability_scorer.score_workflow(workflow_id)
 
         # Score should improve as we record more stable runs
-        if hasattr(improved_score, 'score') and hasattr(unstable_score, 'score'):
+        if hasattr(improved_score, "score") and hasattr(unstable_score, "score"):
             assert improved_score.score >= unstable_score.score
 
 
 # ===========================================================================
 # Module Count Tests (1 test)
 # ===========================================================================
+
 
 class TestModuleCount:
     """Verify test counts."""
@@ -583,12 +588,12 @@ class TestModuleCount:
         """Verify we have at least 20 test cases."""
         # Count test methods across all test classes
         test_count = (
-            5 +  # TestPreconditionGates
-            4 +  # TestQueryRewriter
-            4 +  # TestSessionCapsules
-            5 +  # TestStabilityScorer
-            4 +  # TestSessionEntries
-            2 +  # TestFullIntegration
-            1    # TestModuleCount
+            5  # TestPreconditionGates
+            + 4  # TestQueryRewriter
+            + 4  # TestSessionCapsules
+            + 5  # TestStabilityScorer
+            + 4  # TestSessionEntries
+            + 2  # TestFullIntegration
+            + 1  # TestModuleCount
         )
         assert test_count >= 20, f"Expected at least 20 tests, got {test_count}"

@@ -16,10 +16,12 @@ import stat
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING as _TYPE_CHECKING
+from typing import Callable as _Callable
+from typing import cast as _cast
 
 from .hooks import TOKENPAK_HOOK_MARKER
 from .mcp_config import SERVER_NAME
-from .mcp_config import unregister as mcp_unregister
+from .mcp_config import _unregister as mcp_unregister
 from .rates_snapshot import DEFAULT_SNAPSHOT_PATH
 from .skills_installer import _clean_skills_config, uninstall_skills
 
@@ -51,33 +53,43 @@ def clean_hooks_json(path: Path | None = None) -> "tuple[bool, str]":
     if not path.exists():
         return False, "hooks.json absent"
     try:
-        data = json.loads(path.read_text())
+        loaded: object = json.loads(path.read_text())
     except json.JSONDecodeError as exc:
         return False, f"invalid JSON, leaving alone: {exc}"
+    if not isinstance(loaded, dict):
+        return False, "hooks.json root is not an object"
+    data = _cast(dict[str, object], loaded)
 
     hooks = data.get("hooks")
     if not isinstance(hooks, dict):
         return False, "no dict-shaped hooks to clean"
 
-    cleaned: dict[str, list[dict]] = {}
+    cleaned: dict[str, list[dict[str, object]]] = {}
     changed = False
-    for event, groups in hooks.items():
+    typed_hooks = _cast(dict[str, object], hooks)
+    for event, groups in typed_hooks.items():
         if not isinstance(groups, list):
             continue
-        kept_groups: list[dict] = []
+        kept_groups: list[dict[str, object]] = []
         for group in groups:
             if not isinstance(group, dict):
                 continue
-            commands = group.get("hooks", [])
-            non_tokenpak = [
-                c
-                for c in commands
-                if isinstance(c, dict) and TOKENPAK_HOOK_MARKER not in c.get("command", "")
-            ]
+            typed_group = _cast(dict[str, object], group)
+            commands = typed_group.get("hooks", [])
+            if not isinstance(commands, list):
+                continue
+            non_tokenpak: list[dict[str, object]] = []
+            for command_entry in commands:
+                if not isinstance(command_entry, dict):
+                    continue
+                typed_entry = _cast(dict[str, object], command_entry)
+                command = typed_entry.get("command")
+                if not isinstance(command, str) or TOKENPAK_HOOK_MARKER not in command:
+                    non_tokenpak.append(typed_entry)
             if len(non_tokenpak) != len(commands):
                 changed = True
             if non_tokenpak:
-                kept_groups.append({**group, "hooks": non_tokenpak})
+                kept_groups.append({**typed_group, "hooks": non_tokenpak})
         if kept_groups:
             cleaned[event] = kept_groups
 
@@ -268,7 +280,7 @@ def _run_selected(
             errors.append(f"MCP unregister: {exc}")
             print(f"  [!!] MCP registration: {exc}")
 
-        cleaners = [
+        cleaners: list[tuple[str, _Callable[[], tuple[bool, str]]]] = [
             ("hooks.json", lambda: clean_hooks_json(paths.hooks)),
             ("AGENTS.md", lambda: clean_agents_md(paths.agents)),
         ]

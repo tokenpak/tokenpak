@@ -50,7 +50,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Mapping, Optional, cast
 
 # ---------------------------------------------------------------------------
 # Public constants
@@ -134,15 +134,13 @@ class PlatformOrigin:
 # request thread, so contention is bounded by that hot path. The 1-second
 # wall-clock window keeps the cache from going stale across pre-send +
 # response-finalize pairs in a single conversation turn.
-_cache: dict = {
-    "path": None,         # cache key: which file path was last read
-    "mtime": None,        # mtime stamp at last read
-    "payload": None,      # parsed JSON payload (or None on miss)
-    "read_ts": 0.0,       # wall-clock time of last read
-}
+_cache_path: Path | None = None
+_cache_mtime: float | None = None
+_cache_payload: dict[str, object] | None = None
+_cache_read_ts = 0.0
 
 
-def _read_active_json() -> Optional[dict]:
+def _read_active_json() -> Optional[dict[str, object]]:
     """Read and parse ``~/.openclaw/sessions/active.json``.
 
     Returns the parsed dict on success, or ``None`` when the file is
@@ -151,6 +149,7 @@ def _read_active_json() -> Optional[dict]:
     Implements a 1-second mtime-keyed in-memory cache to avoid per-request
     filesystem reads under burst traffic.
     """
+    global _cache_path, _cache_mtime, _cache_payload, _cache_read_ts
     path = _active_file_path()
     try:
         try:
@@ -160,33 +159,37 @@ def _read_active_json() -> Optional[dict]:
 
         # Cache hit: same path, same mtime, within the 1-second window.
         if (
-            _cache["path"] == path
-            and _cache["mtime"] == stat.st_mtime
-            and _cache["payload"] is not None
-            and (time.time() - _cache["read_ts"]) < 1.0
+            _cache_path == path
+            and _cache_mtime == stat.st_mtime
+            and _cache_payload is not None
+            and (time.time() - _cache_read_ts) < 1.0
         ):
-            return _cache["payload"]
+            return _cache_payload
 
         with path.open("r", encoding="utf-8") as fh:
             payload = json.load(fh)
         if not isinstance(payload, dict):
             return None
+        if not all(isinstance(key, str) for key in payload):
+            return None
+        typed_payload = cast(dict[str, object], payload)
 
-        _cache["path"] = path
-        _cache["mtime"] = stat.st_mtime
-        _cache["payload"] = payload
-        _cache["read_ts"] = time.time()
-        return payload
+        _cache_path = path
+        _cache_mtime = stat.st_mtime
+        _cache_payload = typed_payload
+        _cache_read_ts = time.time()
+        return typed_payload
     except (FileNotFoundError, PermissionError, json.JSONDecodeError, OSError, UnicodeDecodeError):
         return None
 
 
 def _reset_cache_for_tests() -> None:
     """Reset the module cache. Test-only helper."""
-    _cache["path"] = None
-    _cache["mtime"] = None
-    _cache["payload"] = None
-    _cache["read_ts"] = 0.0
+    global _cache_path, _cache_mtime, _cache_payload, _cache_read_ts
+    _cache_path = None
+    _cache_mtime = None
+    _cache_payload = None
+    _cache_read_ts = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +206,7 @@ def _anonymous() -> PlatformOrigin:
     )
 
 
-def _user_agent(headers: Mapping[str, Any]) -> str:
+def _user_agent(headers: Mapping[str, object]) -> str:
     """Case-insensitively extract User-Agent from a header mapping."""
     if hasattr(headers, "get"):
         ua = headers.get("user-agent")
@@ -221,7 +224,7 @@ def _user_agent(headers: Mapping[str, Any]) -> str:
     return ""
 
 
-def _openclaw_extract(headers: Mapping[str, Any], body: bytes) -> Optional[PlatformOrigin]:
+def _openclaw_extract(headers: Mapping[str, object], body: bytes) -> Optional[PlatformOrigin]:
     """Resolve the OpenClaw platform origin for an inbound request.
 
     Args:
@@ -260,9 +263,11 @@ def _openclaw_extract(headers: Mapping[str, Any], body: bytes) -> Optional[Platf
         return _anonymous()
 
     raw_ts = payload.get("last_event_ts")
+    if not isinstance(raw_ts, (int, float, str)):
+        return _anonymous()
     try:
-        last_ts = float(raw_ts)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+        last_ts = float(raw_ts)
+    except ValueError:
         return _anonymous()
 
     age = time.time() - last_ts

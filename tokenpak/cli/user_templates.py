@@ -19,12 +19,37 @@ CLI:
 
 from __future__ import annotations
 
+__all__ = (
+    "add",
+    "cmd_template_add",
+    "cmd_template_list",
+    "cmd_template_remove",
+    "cmd_template_show",
+    "cmd_template_use",
+    "list_templates",
+    "remove",
+    "show",
+    "use",
+    "variables_in",
+)
+
+
 import json
 import re
 import sys
+from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional, TypedDict
+
+
+class Template(TypedDict):
+    """Validated on-disk prompt-template record."""
+
+    name: str
+    content: str
+    created_at: str
+    updated_at: str
 
 
 def _resolve_templates_dir() -> Path:
@@ -59,38 +84,69 @@ def _now() -> str:
 # ── Core CRUD ────────────────────────────────────────────────────────────────
 
 
-def list_templates() -> List[Dict]:
+def _decode_template(raw: object) -> Optional[Template]:
+    """Validate the JSON boundary before exposing a template record."""
+    if not isinstance(raw, dict):
+        return None
+    name = raw.get("name")
+    content = raw.get("content")
+    created_at = raw.get("created_at")
+    updated_at = raw.get("updated_at")
+    if (
+        not isinstance(name, str)
+        or not isinstance(content, str)
+        or not isinstance(created_at, str)
+        or not isinstance(updated_at, str)
+    ):
+        return None
+    return Template(
+        name=name,
+        content=content,
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+
+def list_templates() -> list[Template]:
     """Return all templates sorted by name."""
     templates = []
     for p in sorted(_templates_dir().glob("*.json")):
         try:
-            data = json.loads(p.read_text())
-            templates.append(data)
+            data = _decode_template(json.loads(p.read_text()))
+            if data is not None:
+                templates.append(data)
         except Exception:
             pass
     return templates
 
 
-def add(name: str, content: str) -> Dict:
+def add(name: str, content: str) -> Template:
     """Create or overwrite a template. Returns the saved template dict."""
     path = _template_path(name)
     now = _now()
     if path.exists():
-        existing = json.loads(path.read_text())
-        template = {**existing, "content": content, "updated_at": now}
+        existing = _decode_template(json.loads(path.read_text()))
+        if existing is None:
+            existing = Template(name=name, content="", created_at=now, updated_at=now)
+        template = Template(
+            name=existing["name"],
+            content=content,
+            created_at=existing["created_at"],
+            updated_at=now,
+        )
     else:
-        template = {"name": name, "content": content, "created_at": now, "updated_at": now}
+        template = Template(name=name, content=content, created_at=now, updated_at=now)
     path.write_text(json.dumps(template, indent=2))
     return template
 
 
-def show(name: str) -> Optional[Dict]:
+def show(name: str) -> Optional[Template]:
     """Return a template dict by name, or None if not found."""
     path = _template_path(name)
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text())
+        return _decode_template(json.loads(path.read_text()))
     except Exception:
         return None
 
@@ -104,7 +160,7 @@ def remove(name: str) -> bool:
     return False
 
 
-def use(name: str, variables: Optional[Dict[str, str]] = None) -> Optional[str]:
+def use(name: str, variables: Optional[dict[str, str]] = None) -> Optional[str]:
     """Expand a template with variables. Returns rendered string, or None if not found."""
     template = show(name)
     if template is None:
@@ -116,7 +172,7 @@ def use(name: str, variables: Optional[Dict[str, str]] = None) -> Optional[str]:
     return content
 
 
-def variables_in(name: str) -> Optional[List[str]]:
+def variables_in(name: str) -> Optional[list[str]]:
     """Return list of {{variable}} names in a template, or None if not found."""
     template = show(name)
     if template is None:
@@ -127,7 +183,7 @@ def variables_in(name: str) -> Optional[List[str]]:
 # ── CLI helpers (argparse-based, wired into cli.py) ──────────────────────────
 
 
-def cmd_template_list(args) -> None:
+def cmd_template_list(args: Namespace) -> None:
     templates = list_templates()
     if not templates:
         print("No templates saved. Add one with: tokenpak template add <name> --content '...'")
@@ -140,7 +196,7 @@ def cmd_template_list(args) -> None:
         print(f"  {t['name']:<28}  {vars_str}")
 
 
-def cmd_template_add(args) -> None:
+def cmd_template_add(args: Namespace) -> None:
     name = args.name
     content = getattr(args, "content", None)
 
@@ -168,7 +224,7 @@ def cmd_template_add(args) -> None:
     )
 
 
-def cmd_template_show(args) -> None:
+def cmd_template_show(args: Namespace) -> None:
     template = show(args.name)
     if template is None:
         print(f"❌ Template '{args.name}' not found.")
@@ -183,7 +239,7 @@ def cmd_template_show(args) -> None:
     print(template["content"])
 
 
-def cmd_template_remove(args) -> None:
+def cmd_template_remove(args: Namespace) -> None:
     deleted = remove(args.name)
     if deleted:
         print(f"✅ Template '{args.name}' removed.")
@@ -191,8 +247,8 @@ def cmd_template_remove(args) -> None:
         print(f"❌ Template '{args.name}' not found.")
 
 
-def cmd_template_use(args) -> None:
-    variables: Dict[str, str] = {}
+def cmd_template_use(args: Namespace) -> None:
+    variables: dict[str, str] = {}
     for item in getattr(args, "var", []) or []:
         if "=" in item:
             k, v = item.split("=", 1)

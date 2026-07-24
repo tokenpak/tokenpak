@@ -54,40 +54,40 @@ class TestGoogleHeuristicFallback:
 
     def test_zero_input_tokens_when_no_usage_metadata(self):
         """Returns 0 when usageMetadata key is missing entirely."""
-        body = json.dumps({
-            "candidates": [
-                {"content": {"parts": [{"text": "hello"}], "role": "model"}}
-            ]
-        }).encode()
+        body = json.dumps(
+            {"candidates": [{"content": {"parts": [{"text": "hello"}], "role": "model"}}]}
+        ).encode()
         assert self.adapter.extract_input_tokens(body) == 0
 
     def test_zero_total_tokens_when_no_usage_metadata(self):
         """Returns 0 for totalTokenCount when usageMetadata is absent."""
-        body = json.dumps({
-            "candidates": [
-                {"content": {"parts": [{"text": "hello"}], "role": "model"}}
-            ]
-        }).encode()
+        body = json.dumps(
+            {"candidates": [{"content": {"parts": [{"text": "hello"}], "role": "model"}}]}
+        ).encode()
         assert self.adapter.extract_total_tokens(body) == 0
 
     def test_zero_input_tokens_when_usage_metadata_empty(self):
         """Returns 0 when usageMetadata is present but promptTokenCount is missing."""
-        body = json.dumps({
-            "candidates": [],
-            "usageMetadata": {"candidatesTokenCount": 5},
-        }).encode()
+        body = json.dumps(
+            {
+                "candidates": [],
+                "usageMetadata": {"candidatesTokenCount": 5},
+            }
+        ).encode()
         assert self.adapter.extract_input_tokens(body) == 0
 
     def test_heuristic_not_used_when_usage_metadata_present(self):
         """When usageMetadata is present, returns real count (not 0)."""
-        body = json.dumps({
-            "candidates": [],
-            "usageMetadata": {
-                "promptTokenCount": 42,
-                "totalTokenCount": 50,
-                "candidatesTokenCount": 8,
-            },
-        }).encode()
+        body = json.dumps(
+            {
+                "candidates": [],
+                "usageMetadata": {
+                    "promptTokenCount": 42,
+                    "totalTokenCount": 50,
+                    "candidatesTokenCount": 8,
+                },
+            }
+        ).encode()
         assert self.adapter.extract_input_tokens(body) == 42
         assert self.adapter.extract_total_tokens(body) == 50
 

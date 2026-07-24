@@ -30,7 +30,7 @@ def block_store(tmp_path):
         "file_a.py#aaa111": {
             "block_id": "file_a.py#aaa111",
             "path": "file_a.py",
-            "quality_score": 0.1,   # LOW — should be pruned
+            "quality_score": 0.1,  # LOW — should be pruned
             "raw_tokens": 1000,
             "compressed_tokens": 600,
             "tokens_saved": 400,
@@ -43,7 +43,7 @@ def block_store(tmp_path):
         "file_b.py#bbb222": {
             "block_id": "file_b.py#bbb222",
             "path": "file_b.py",
-            "quality_score": 0.2,   # LOW — should be pruned
+            "quality_score": 0.2,  # LOW — should be pruned
             "raw_tokens": 500,
             "compressed_tokens": 300,
             "tokens_saved": 200,
@@ -56,7 +56,7 @@ def block_store(tmp_path):
         "file_c.py#ccc333": {
             "block_id": "file_c.py#ccc333",
             "path": "file_c.py",
-            "quality_score": 0.8,   # HIGH — should be kept
+            "quality_score": 0.8,  # HIGH — should be kept
             "raw_tokens": 800,
             "compressed_tokens": 400,
             "tokens_saved": 400,
@@ -115,7 +115,7 @@ def test_prune_identifies_candidates(block_store, pins_path):
 
         assert "file_a.py#aaa111" in candidate_ids  # score 0.1 < 0.4
         assert "file_b.py#bbb222" in candidate_ids  # score 0.2 < 0.4
-        assert "file_c.py#ccc333" in keep_ids       # score 0.8 >= 0.4
+        assert "file_c.py#ccc333" in keep_ids  # score 0.8 >= 0.4
     finally:
         for p in patches:
             p.stop()
@@ -138,10 +138,7 @@ def test_prune_dry_run_no_changes(block_store, pins_path, capsys):
     try:
         with patch("tokenpak.cli.commands.prune.is_pro", return_value=True, create=True):
             # Patch the tier gate away
-            with patch(
-                "tokenpak.cli.commands.prune.run_prune.__module__",
-                create=False
-            ):
+            with patch("tokenpak.cli.commands.prune.run_prune.__module__", create=False):
                 pass
         # Call directly with tier gate bypassed via import mock
         with patch.dict(sys.modules, {"tokenpak.infrastructure.license_activation": None}):

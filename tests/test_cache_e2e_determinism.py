@@ -38,6 +38,7 @@ Run only integration tests (requires stub server + proxy spin-up):
 Skip slow tests:
     pytest tests/test_cache_e2e_determinism.py -v -m "not slow"
 """
+
 from __future__ import annotations
 
 import json
@@ -64,6 +65,7 @@ _TEST_REQUEST = {
 # ---------------------------------------------------------------------------
 # Stub Anthropic-compatible HTTP server
 # ---------------------------------------------------------------------------
+
 
 class _StubAnthropicHandler(BaseHTTPRequestHandler):
     """
@@ -146,6 +148,7 @@ def _wait_port(port: int, timeout: float = 8.0) -> None:
 # Pytest fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def stub_backend():
     """Start the stub Anthropic server, yield (host, port), tear down."""
@@ -184,6 +187,7 @@ def proxy_against_stub(stub_backend):
 # Helper: send a single request through the proxy
 # ---------------------------------------------------------------------------
 
+
 def _post_via_proxy(proxy_port: int, payload: dict) -> tuple[int, dict, dict]:
     """
     Send *payload* to the proxy's /v1/messages endpoint.
@@ -191,6 +195,7 @@ def _post_via_proxy(proxy_port: int, payload: dict) -> tuple[int, dict, dict]:
     Returns (status_code, response_headers_dict, response_json).
     """
     import urllib.request
+
     body = json.dumps(payload).encode()
     req = urllib.request.Request(
         f"http://127.0.0.1:{proxy_port}/v1/messages",
@@ -212,14 +217,13 @@ def _post_via_proxy(proxy_port: int, payload: dict) -> tuple[int, dict, dict]:
 # Integration Tests — require proxy + stub server
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.slow
 class TestProxyCacheDeterminism:
     """Full pipeline: stub backend + real ProxyServer."""
 
-    def test_stable_prefix_identical(
-        self, proxy_against_stub, stub_backend
-    ) -> None:
+    def test_stable_prefix_identical(self, proxy_against_stub, stub_backend) -> None:
         """
         Same request sent 3 times must produce the same X-Tokenpak-Cache-Prefix-Hash.
 
@@ -234,7 +238,7 @@ class TestProxyCacheDeterminism:
         hashes: List[str] = []
         for i in range(3):
             status, headers, _data = _post_via_proxy(proxy_port, _TEST_REQUEST)
-            assert status == 200, f"Request {i+1} returned HTTP {status}"
+            assert status == 200, f"Request {i + 1} returned HTTP {status}"
             prefix_hash = headers.get("X-Tokenpak-Cache-Prefix-Hash", "MISSING")
             hashes.append(prefix_hash)
 
@@ -249,9 +253,7 @@ class TestProxyCacheDeterminism:
             f"  Request 3: {hashes[2]}"
         )
 
-    def test_cache_reuse_on_repeated_requests(
-        self, proxy_against_stub, stub_backend
-    ) -> None:
+    def test_cache_reuse_on_repeated_requests(self, proxy_against_stub, stub_backend) -> None:
         """
         Requests 2 and 3 should show cache_read_input_tokens > 0.
 
@@ -268,7 +270,7 @@ class TestProxyCacheDeterminism:
         cache_reads: List[int] = []
         for i in range(3):
             status, _headers, data = _post_via_proxy(proxy_port, _TEST_REQUEST)
-            assert status == 200, f"Request {i+1} returned HTTP {status}"
+            assert status == 200, f"Request {i + 1} returned HTTP {status}"
             usage = data.get("usage", {})
             cache_read = usage.get("cache_read_input_tokens", 0)
             cache_reads.append(cache_read)
@@ -307,12 +309,14 @@ class TestProxyCacheDeterminism:
 # Unit Tests — no proxy required, fast
 # ---------------------------------------------------------------------------
 
+
 class TestStablePrefixHashComputation:
     """Direct unit tests for _compute_stable_prefix_hash."""
 
     def _get_helper(self):
         """Import the helper under test."""
         from tokenpak.proxy.server import _compute_stable_prefix_hash
+
         return _compute_stable_prefix_hash
 
     def test_stable_prefix_hash_computation_determinism(self) -> None:
@@ -339,26 +343,30 @@ class TestStablePrefixHashComputation:
         static_system = "You are a helpful assistant. Answer concisely."
 
         # Request with only static system
-        base_req = json.dumps({
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 128,
-            "system": [
-                {"type": "text", "text": static_system},
-            ],
-            "messages": [{"role": "user", "content": "Hi"}],
-        }).encode()
+        base_req = json.dumps(
+            {
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 128,
+                "system": [
+                    {"type": "text", "text": static_system},
+                ],
+                "messages": [{"role": "user", "content": "Hi"}],
+            }
+        ).encode()
 
         # Same request + volatile block appended
-        volatile_req = json.dumps({
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 128,
-            "system": [
-                {"type": "text", "text": static_system},
-                # Volatile: contains <retrieved_context> pattern
-                {"type": "text", "text": "<retrieved_context>doc123</retrieved_context>"},
-            ],
-            "messages": [{"role": "user", "content": "Hi"}],
-        }).encode()
+        volatile_req = json.dumps(
+            {
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 128,
+                "system": [
+                    {"type": "text", "text": static_system},
+                    # Volatile: contains <retrieved_context> pattern
+                    {"type": "text", "text": "<retrieved_context>doc123</retrieved_context>"},
+                ],
+                "messages": [{"role": "user", "content": "Hi"}],
+            }
+        ).encode()
 
         hash_base = fn(base_req)
         hash_volatile = fn(volatile_req)
@@ -374,19 +382,23 @@ class TestStablePrefixHashComputation:
         """Different stable system prompts produce different prefix hashes."""
         fn = self._get_helper()
 
-        body_a = json.dumps({
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 128,
-            "system": "You are assistant A.",
-            "messages": [{"role": "user", "content": "Hi"}],
-        }).encode()
+        body_a = json.dumps(
+            {
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 128,
+                "system": "You are assistant A.",
+                "messages": [{"role": "user", "content": "Hi"}],
+            }
+        ).encode()
 
-        body_b = json.dumps({
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 128,
-            "system": "You are assistant B — entirely different.",
-            "messages": [{"role": "user", "content": "Hi"}],
-        }).encode()
+        body_b = json.dumps(
+            {
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 128,
+                "system": "You are assistant B — entirely different.",
+                "messages": [{"role": "user", "content": "Hi"}],
+            }
+        ).encode()
 
         assert fn(body_a) != fn(body_b), (
             "Different static system prompts should produce different hashes"
@@ -396,11 +408,13 @@ class TestStablePrefixHashComputation:
         """A request with no system prompt returns an empty hash string gracefully."""
         fn = self._get_helper()
 
-        body_no_system = json.dumps({
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 128,
-            "messages": [{"role": "user", "content": "Hi"}],
-        }).encode()
+        body_no_system = json.dumps(
+            {
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 128,
+                "messages": [{"role": "user", "content": "Hi"}],
+            }
+        ).encode()
 
         result = fn(body_no_system)
         assert result == "", f"Expected '' for no-system request, got {result!r}"
@@ -421,19 +435,19 @@ class TestStablePrefixHashComputation:
         body = json.dumps(_TEST_REQUEST).encode()
         h = fn(body)
         assert len(h) == 16, f"Expected 16-char hash, got {len(h)}: {h!r}"
-        assert all(c in "0123456789abcdef" for c in h), (
-            f"Hash contains non-hex characters: {h!r}"
-        )
+        assert all(c in "0123456789abcdef" for c in h), f"Hash contains non-hex characters: {h!r}"
 
     def test_string_system_prompt_hashed(self) -> None:
         """String-form system prompt (not list) is hashed correctly."""
         fn = self._get_helper()
-        body = json.dumps({
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 128,
-            "system": "Static string system prompt.",
-            "messages": [{"role": "user", "content": "Hi"}],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 128,
+                "system": "Static string system prompt.",
+                "messages": [{"role": "user", "content": "Hi"}],
+            }
+        ).encode()
 
         h1 = fn(body)
         h2 = fn(body)
@@ -447,14 +461,16 @@ class TestStablePrefixHashComputation:
         The key invariant: it must be deterministic.
         """
         fn = self._get_helper()
-        body = json.dumps({
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 128,
-            "system": [
-                {"type": "text", "text": "<retrieved_context>all volatile</retrieved_context>"},
-            ],
-            "messages": [{"role": "user", "content": "Hi"}],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 128,
+                "system": [
+                    {"type": "text", "text": "<retrieved_context>all volatile</retrieved_context>"},
+                ],
+                "messages": [{"role": "user", "content": "Hi"}],
+            }
+        ).encode()
 
         h1 = fn(body)
         h2 = fn(body)
@@ -464,6 +480,7 @@ class TestStablePrefixHashComputation:
 # ---------------------------------------------------------------------------
 # Cross-process determinism check (subprocess-level)
 # ---------------------------------------------------------------------------
+
 
 class TestCrossProcessPrefixHash:
     """Verify stable prefix hash is identical across Python sub-processes."""

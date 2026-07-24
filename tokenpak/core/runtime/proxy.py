@@ -10,11 +10,14 @@ CLAUDE_CODE_HEADER_ALLOWLIST, LEGACY_HEADER_ALLOWLIST, _classify_route
 _write_mutation_audit, _prune_mutation_audit
 _resolve_session_id
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import sqlite3
+from collections.abc import Mapping, Sequence
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Implemented symbols — re-exported from modular tree
@@ -35,6 +38,7 @@ from tokenpak.telemetry.monitoring.server import ThreadedHTTPServer  # noqa: F40
 # ---------------------------------------------------------------------------
 # can_compress — transparent mode must always return False
 # ---------------------------------------------------------------------------
+
 
 def can_compress(risk_class: str, mode: str) -> bool:
     """Return whether compression is allowed. Transparent and safe modes always return False."""
@@ -79,7 +83,7 @@ class Monitor(_BaseMonitor):
     """Monitor with schema additions (session_id column + mutation_audit table)
     and session_id support in log()."""
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         super()._init_db()
         conn = sqlite3.connect(str(self.db_path))
         # session_id column on requests
@@ -87,9 +91,7 @@ class Monitor(_BaseMonitor):
             conn.execute("ALTER TABLE requests ADD COLUMN session_id TEXT")
         except sqlite3.OperationalError:
             pass
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_requests_session ON requests(session_id)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_session ON requests(session_id)")
         # stable_hash and volatile_hash columns for safe-mode fingerprinting
         try:
             conn.execute("ALTER TABLE requests ADD COLUMN stable_hash TEXT")
@@ -116,12 +118,10 @@ class Monitor(_BaseMonitor):
             )
         """)
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_mutation_audit_session"
-            " ON mutation_audit(session_id)"
+            "CREATE INDEX IF NOT EXISTS idx_mutation_audit_session ON mutation_audit(session_id)"
         )
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_mutation_audit_ts"
-            " ON mutation_audit(timestamp)"
+            "CREATE INDEX IF NOT EXISTS idx_mutation_audit_ts ON mutation_audit(timestamp)"
         )
         conn.commit()
         # cache_invalidator_events table (log-only, Phase 2)
@@ -137,39 +137,46 @@ class Monitor(_BaseMonitor):
             )
         """)
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_cie_session"
-            " ON cache_invalidator_events(session_id)"
+            "CREATE INDEX IF NOT EXISTS idx_cie_session ON cache_invalidator_events(session_id)"
         )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_cie_ts"
-            " ON cache_invalidator_events(timestamp)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cie_ts ON cache_invalidator_events(timestamp)")
         conn.commit()
         conn.close()
 
-    def log(
+    # This compatibility shim intentionally preserves the legacy positional ABI.
+    def log(  # type: ignore[override]
         self,
-        model,
-        input_tokens,
-        output_tokens,
-        cost,
-        latency_ms,
-        status_code,
-        endpoint,
-        compilation_mode="",
-        protected_tokens=0,
-        compressed_tokens=0,
-        injected_tokens=0,
-        injected_sources="",
-        cache_read_tokens=0,
-        cache_creation_tokens=0,
-        would_have_saved=0,
-        session_id="",
-        stable_hash="",
-        volatile_hash="",
-    ):
+        model: object,
+        input_tokens: object,
+        output_tokens: object,
+        cost: object,
+        latency_ms: object,
+        status_code: object,
+        endpoint: object,
+        compilation_mode: object = "",
+        protected_tokens: object = 0,
+        compressed_tokens: object = 0,
+        injected_tokens: object = 0,
+        injected_sources: object = "",
+        cache_read_tokens: object = 0,
+        cache_creation_tokens: object = 0,
+        would_have_saved: object = 0,
+        session_id: object = "",
+        stable_hash: object = "",
+        volatile_hash: object = "",
+        cache_origin: object = "unknown",
+        user_id: object = "",
+        cache_creation_ephemeral_1h_tokens: object = 0,
+        cache_creation_ephemeral_5m_tokens: object = 0,
+        ttl_attribution: object | None = None,
+        agent_id: object = "",
+        cycle_id: object = "",
+        attribution_source: object = "",
+        stop_reason: object = "",
+    ) -> None:
         """Log a request; extends parent with session_id and fingerprints."""
         from datetime import datetime
+
         try:
             _conn = sqlite3.connect(str(self.db_path))
             _conn.execute(
@@ -213,6 +220,7 @@ class Monitor(_BaseMonitor):
 # mutation audit helpers
 # ---------------------------------------------------------------------------
 
+
 def _prune_mutation_audit(conn: sqlite3.Connection, ttl_days: int) -> int:
     """Delete mutation_audit rows older than ttl_days. Returns number of rows deleted."""
     cur = conn.execute(
@@ -224,12 +232,12 @@ def _prune_mutation_audit(conn: sqlite3.Connection, ttl_days: int) -> int:
 
 
 def _write_mutation_audit(
-    db_path: str,
-    request_id,
+    db_path: str | Path,
+    request_id: int | None,
     session_id: str,
     body_pre: bytes,
     body_post: bytes,
-    rules_applied: list,
+    rules_applied: Sequence[str],
     cache_risk: str,
     mode: str,
 ) -> None:
@@ -265,17 +273,18 @@ def _write_mutation_audit(
 # session id resolver
 # ---------------------------------------------------------------------------
 
-def _resolve_session_id(headers, model: str) -> str:
+
+def _resolve_session_id(headers: Mapping[str, object], model: str) -> str:
     """Resolve session id with Claude Code priority.
 
     Order: X-Claude-Code-Session-Id -> X-TokenPak-Session -> model name.
     """
-    def _h(name):
-        if hasattr(headers, "get"):
-            for variant in (name, name.lower(), name.title()):
-                v = headers.get(variant)
-                if v:
-                    return v
+
+    def _h(name: str) -> str | None:
+        for variant in (name, name.lower(), name.title()):
+            value = headers.get(variant)
+            if isinstance(value, str) and value:
+                return value
         return None
 
     cc_id = _h("X-Claude-Code-Session-Id")
@@ -309,7 +318,7 @@ TOKENPAK_HEADER_ALLOWLIST = LEGACY_HEADER_ALLOWLIST  # noqa: F401
 # ---------------------------------------------------------------------------
 import time as _time
 
-SESSION: dict = {
+SESSION: dict[str, object] = {
     "requests": 0,
     "input_tokens": 0,
     "sent_input_tokens": 0,

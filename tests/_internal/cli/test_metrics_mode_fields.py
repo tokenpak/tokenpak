@@ -47,9 +47,11 @@ def _record_request(store, mode_env: dict, *, profile: str = "", mode: str = "")
     """Call record_request with a fake store and supplied env/overrides."""
     from tokenpak.telemetry.anon_metrics import record_request
 
-    with mock.patch("tokenpak._internal.config.get_metrics_enabled", return_value=True), \
-         mock.patch("tokenpak.telemetry.anon_metrics._store", store), \
-         mock.patch.dict(os.environ, mode_env, clear=False):
+    with (
+        mock.patch("tokenpak._internal.config.get_metrics_enabled", return_value=True),
+        mock.patch("tokenpak.telemetry.anon_metrics._store", store),
+        mock.patch.dict(os.environ, mode_env, clear=False),
+    ):
         record_request(
             input_tokens=1000,
             output_tokens=200,
@@ -73,10 +75,15 @@ class TestModeCli:
         """detect_consumption_mode returns 'cli' in a plain terminal."""
         from tokenpak.telemetry.anon_metrics import detect_consumption_mode
 
-        clean_env = {k: v for k, v in os.environ.items()
-                     if k not in ("CRON_INVOCATION", "TERM_PROGRAM", "TMUX")}
-        with mock.patch.dict(os.environ, clean_env, clear=True), \
-             mock.patch("sys.stdin") as mock_stdin:
+        clean_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("CRON_INVOCATION", "TERM_PROGRAM", "TMUX")
+        }
+        with (
+            mock.patch.dict(os.environ, clean_env, clear=True),
+            mock.patch("sys.stdin") as mock_stdin,
+        ):
             mock_stdin.isatty.return_value = True
             result = detect_consumption_mode()
 
@@ -152,10 +159,12 @@ class TestModeSdk:
     def test_detect_sdk_non_interactive(self):
         from tokenpak.telemetry.anon_metrics import detect_consumption_mode
 
-        env = {k: v for k, v in os.environ.items()
-               if k not in ("CRON_INVOCATION", "TERM_PROGRAM", "TMUX")}
-        with mock.patch.dict(os.environ, env, clear=True), \
-             mock.patch("sys.stdin") as mock_stdin:
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("CRON_INVOCATION", "TERM_PROGRAM", "TMUX")
+        }
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch("sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = False
             result = detect_consumption_mode()
 
@@ -282,6 +291,7 @@ class TestModeFieldsSchema:
 
         # Opening the store should migrate it
         from tokenpak.telemetry.anon_metrics import MetricsStore
+
         store = MetricsStore(db_path=db_path)
 
         conn = sqlite3.connect(str(db_path))
@@ -307,7 +317,6 @@ class TestModeFieldsSchema:
 
 
 class TestConfigHelpers:
-
     def test_get_active_profile_from_env(self):
         from tokenpak._internal.config import get_active_profile
 
@@ -318,8 +327,10 @@ class TestConfigHelpers:
         from tokenpak._internal.config import get_active_profile
 
         env = {k: v for k, v in os.environ.items() if k != "TOKENPAK_PROFILE"}
-        with mock.patch.dict(os.environ, env, clear=True), \
-             mock.patch("tokenpak._internal.config._load", return_value={}):
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch("tokenpak._internal.config._load", return_value={}),
+        ):
             assert get_active_profile() == "balanced"
 
     def test_get_consumption_mode_cron(self):

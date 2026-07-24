@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for tokenpak.companion.budget.tracker — BudgetTracker + CostEstimate."""
+
 from __future__ import annotations
 
 import datetime
@@ -14,6 +15,7 @@ from tokenpak.companion.budget.tracker import BudgetTracker, CostEstimate, _reso
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _tracker(tmp_path: Path, budget: float = 0.0) -> BudgetTracker:
     return BudgetTracker(db_path=tmp_path / "budget.db", daily_budget=budget)
 
@@ -21,6 +23,7 @@ def _tracker(tmp_path: Path, budget: float = 0.0) -> BudgetTracker:
 # ---------------------------------------------------------------------------
 # estimate() — cost accuracy
 # ---------------------------------------------------------------------------
+
 
 def test_estimate_sonnet_1m_input_equals_3_usd(tmp_path):
     """1M input tokens at sonnet rate = $3.00."""
@@ -68,6 +71,7 @@ def test_estimate_returns_cost_estimate_dataclass(tmp_path):
 # Cache-read tokens at 10% rate
 # ---------------------------------------------------------------------------
 
+
 def test_estimate_cache_read_10pct_sonnet(tmp_path):
     """Cached tokens at sonnet are charged at 10% of input rate ($0.30/1M)."""
     t = _tracker(tmp_path)
@@ -104,6 +108,7 @@ def test_estimate_mixed_fresh_and_cached(tmp_path):
 # ---------------------------------------------------------------------------
 # record() — SQLite persistence
 # ---------------------------------------------------------------------------
+
 
 def test_record_persists_to_db(tmp_path):
     """record() writes a row to companion_costs."""
@@ -158,6 +163,7 @@ def test_record_increments_session_requests(tmp_path):
 # Daily total — cross-session aggregation
 # ---------------------------------------------------------------------------
 
+
 def test_daily_total_aggregates_across_sessions(tmp_path):
     """Two separate BudgetTracker instances (two sessions) sum correctly."""
     db_path = tmp_path / "budget.db"
@@ -208,6 +214,7 @@ def test_daily_total_excludes_yesterday(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # over_budget detection
 # ---------------------------------------------------------------------------
+
 
 def test_over_budget_flag_when_estimate_exceeds_remaining(tmp_path):
     """over_budget=True when daily_total + estimated_cost > daily_budget."""
@@ -268,6 +275,7 @@ def test_budget_remaining_decreases_after_record(tmp_path):
 # ---------------------------------------------------------------------------
 # _resolve_rates() — model name resolution
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_exact_match():
     """Exact model name resolves to correct rates."""

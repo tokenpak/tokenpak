@@ -12,28 +12,31 @@ Provides:
 - _extract_cache_hints / _inject_prompt_cache_key
 - _parse_bedrock_cached_tokens / _parse_bedrock_cache_creation_tokens
 """
+
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from enum import Enum
-from typing import Any, Optional, Tuple
+from typing import TypeAlias
 
-try:
-    from tokenpak.core.runtime.providers import Provider
-except ImportError:
-    Provider = None  # type: ignore[assignment,misc]
+from tokenpak.core.runtime.providers import Provider
+
+JsonValue: TypeAlias = bool | int | float | str | None | list["JsonValue"] | dict[str, "JsonValue"]
+JsonObject: TypeAlias = dict[str, JsonValue]
 
 
 # ---------------------------------------------------------------------------
 # CACHE-P3-001: Anthropic top-level auto cache mode
 # ---------------------------------------------------------------------------
 
+
 class CacheMode(Enum):
-    AUTO = "auto"        # Top-level request-level cache_control (Anthropic auto mode)
+    AUTO = "auto"  # Top-level request-level cache_control (Anthropic auto mode)
     EXPLICIT = "explicit"  # Per-block cache_control markers (existing behaviour)
 
 
-def _select_anthropic_cache_mode(headers: dict, body_dict: dict) -> "CacheMode":
+def _select_anthropic_cache_mode(headers: Mapping[str, str], body_dict: JsonObject) -> CacheMode:
     """Select auto vs explicit cache mode for an Anthropic request.
 
     Pops 'tokenpak_cache_mode' from body_dict if present — it must not be
@@ -46,12 +49,13 @@ def _select_anthropic_cache_mode(headers: dict, body_dict: dict) -> "CacheMode":
     if mode_hint == "auto":
         return CacheMode.AUTO
     # Default: auto for multi-turn (>2 messages), explicit for short/single-turn
-    if len(body_dict.get("messages", [])) > 2:
+    messages = body_dict.get("messages", [])
+    if isinstance(messages, list) and len(messages) > 2:
         return CacheMode.AUTO
     return CacheMode.EXPLICIT
 
 
-def _apply_anthropic_auto_cache(body_dict: dict) -> None:
+def _apply_anthropic_auto_cache(body_dict: JsonObject) -> None:
     """Apply Anthropic top-level auto cache mode (in-place).
 
     Strips per-block cache_control markers injected by earlier pipeline stages
@@ -63,18 +67,26 @@ def _apply_anthropic_auto_cache(body_dict: dict) -> None:
     messages endpoint (same response fields as explicit mode —
     cache_creation_input_tokens and cache_read_input_tokens in usage).
     """
-    for block in body_dict.get("system", []):
-        if isinstance(block, dict):
-            block.pop("cache_control", None)
-    for tool in body_dict.get("tools", []):
-        if isinstance(tool, dict):
-            tool.pop("cache_control", None)
-    for msg in body_dict.get("messages", []):
-        content = msg.get("content", [])
-        if isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict):
-                    block.pop("cache_control", None)
+    system = body_dict.get("system", [])
+    if isinstance(system, list):
+        for block in system:
+            if isinstance(block, dict):
+                block.pop("cache_control", None)
+    tools = body_dict.get("tools", [])
+    if isinstance(tools, list):
+        for tool in tools:
+            if isinstance(tool, dict):
+                tool.pop("cache_control", None)
+    messages = body_dict.get("messages", [])
+    if isinstance(messages, list):
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        block.pop("cache_control", None)
     # anthropic-only — caller guards Provider.ANTHROPIC
     body_dict["cache_control"] = {"type": "ephemeral"}
 
@@ -83,7 +95,8 @@ def _apply_anthropic_auto_cache(body_dict: dict) -> None:
 # Gemini explicit cache reference injection
 # ---------------------------------------------------------------------------
 
-def _inject_gemini_cache_ref(provider: Any, headers: dict, body: bytes) -> bytes:
+
+def _inject_gemini_cache_ref(provider: Provider, headers: Mapping[str, str], body: bytes) -> bytes:
     """Inject cachedContent reference for Gemini requests.
 
     Accepts cache ref from:
@@ -101,7 +114,7 @@ def _inject_gemini_cache_ref(provider: Any, headers: dict, body: bytes) -> bytes
     Returns:
         Modified body bytes with cachedContent injected (if applicable)
     """
-    if Provider is not None and provider != Provider.GEMINI:
+    if provider != Provider.GEMINI:
         return body
 
     if not body:
@@ -110,6 +123,9 @@ def _inject_gemini_cache_ref(provider: Any, headers: dict, body: bytes) -> bytes
     try:
         data = json.loads(body)
     except (json.JSONDecodeError, TypeError):
+        return body
+
+    if not isinstance(data, dict):
         return body
 
     # Get cache ref: header takes precedence over body field
@@ -133,7 +149,7 @@ def _inject_gemini_cache_ref(provider: Any, headers: dict, body: bytes) -> bytes
     return json.dumps(data).encode()
 
 
-def _parse_gemini_cached_tokens(response_data: dict) -> int:
+def _parse_gemini_cached_tokens(response_data: Mapping[str, object]) -> int:
     """Parse cachedContentTokenCount from Gemini responses.
 
     Gemini returns cache usage in usageMetadata:
@@ -154,14 +170,16 @@ def _parse_gemini_cached_tokens(response_data: dict) -> int:
     usage = response_data.get("usageMetadata", {})
     if not isinstance(usage, dict):
         return 0
-    return usage.get("cachedContentTokenCount", 0)
+    cached_tokens = usage.get("cachedContentTokenCount", 0)
+    return cached_tokens if isinstance(cached_tokens, int) else 0
 
 
 # ---------------------------------------------------------------------------
 # Bedrock Cache Checkpoint Support (CACHE-P3-003)
 # ---------------------------------------------------------------------------
 
-def _extract_bedrock_checkpoints(body: dict) -> list:
+
+def _extract_bedrock_checkpoints(body: JsonObject) -> list[int]:
     """Extract and validate checkpoint positions from TokenPak hints.
 
     Accepts tokenpak_checkpoints field containing array of insertion indices.
@@ -179,13 +197,15 @@ def _extract_bedrock_checkpoints(body: dict) -> list:
         return []
 
     messages = body.get("messages", [])
+    if not isinstance(messages, list):
+        return []
     max_idx = len(messages) - 1
 
     if max_idx < 0:
         return []
 
     # Validate: must be integers, in range [0, max_idx], deduplicate
-    valid = []
+    valid: list[int] = []
     for cp in checkpoints:
         if isinstance(cp, int) and 0 <= cp <= max_idx:
             valid.append(cp)
@@ -195,7 +215,7 @@ def _extract_bedrock_checkpoints(body: dict) -> list:
     return sorted(set(valid), reverse=True)
 
 
-def _inject_bedrock_checkpoints(provider: Any, body: bytes) -> bytes:
+def _inject_bedrock_checkpoints(provider: Provider, body: bytes) -> bytes:
     """Insert cachePoint blocks at specified positions for Bedrock requests.
 
     Bedrock uses checkpoint blocks to mark cache boundaries. A cachePoint block
@@ -211,7 +231,7 @@ def _inject_bedrock_checkpoints(provider: Any, body: bytes) -> bytes:
     Returns:
         Modified body bytes with cachePoint blocks inserted (if Bedrock)
     """
-    if Provider is not None and provider != Provider.BEDROCK:
+    if provider != Provider.BEDROCK:
         return body
 
     if not body:
@@ -222,6 +242,9 @@ def _inject_bedrock_checkpoints(provider: Any, body: bytes) -> bytes:
     except (json.JSONDecodeError, TypeError):
         return body
 
+    if not isinstance(data, dict):
+        return body
+
     # Extract checkpoints (also strips tokenpak_checkpoints from body)
     checkpoints = _extract_bedrock_checkpoints(data)
 
@@ -230,7 +253,7 @@ def _inject_bedrock_checkpoints(provider: Any, body: bytes) -> bytes:
         return json.dumps(data).encode()
 
     messages = data.get("messages", [])
-    if not messages:
+    if not isinstance(messages, list) or not messages:
         return json.dumps(data).encode()
 
     # Insert cachePoint blocks in reverse index order (preserves lower indices)
@@ -247,9 +270,10 @@ def _inject_bedrock_checkpoints(provider: Any, body: bytes) -> bytes:
 # OpenAI / Azure / Codex / xAI prompt_cache_key Passthrough (CACHE-P2-001)
 # ---------------------------------------------------------------------------
 
+
 def _extract_cache_hints(
-    headers: dict, body: dict
-) -> "Tuple[Optional[str], Optional[str]]":
+    headers: Mapping[str, str], body: JsonObject
+) -> tuple[str | None, str | None]:
     """Extract cache key and retention hints from request headers and body.
 
     Header takes precedence over body field when both are present.
@@ -267,12 +291,16 @@ def _extract_cache_hints(
     # regardless of whether a header hint is also present.
     body_key = body.pop("tokenpak_cache_hint", None)
     body_retention = body.pop("tokenpak_cache_retention", None)
-    cache_key = headers.get("x-tokenpak-cache-key") or body_key
-    cache_retention = headers.get("x-tokenpak-cache-retention") or body_retention
+    cache_key = headers.get("x-tokenpak-cache-key")
+    if cache_key is None and isinstance(body_key, str):
+        cache_key = body_key
+    cache_retention = headers.get("x-tokenpak-cache-retention")
+    if cache_retention is None and isinstance(body_retention, str):
+        cache_retention = body_retention
     return cache_key, cache_retention
 
 
-def _inject_prompt_cache_key(provider: Any, headers: dict, body: bytes) -> bytes:
+def _inject_prompt_cache_key(provider: Provider, headers: Mapping[str, str], body: bytes) -> bytes:
     """Inject ``prompt_cache_key`` for OpenAI / Azure OpenAI / Codex / xAI requests.
 
     Accepts cache hints from:
@@ -320,15 +348,14 @@ def _inject_prompt_cache_key(provider: Any, headers: dict, body: bytes) -> bytes
         # tokenpak_* fields may have been stripped; re-encode to apply removal
         return json.dumps(data).encode()
 
-    if Provider is not None:
-        if provider in (Provider.OPENAI, Provider.AZURE_OPENAI, Provider.CODEX):
-            # Codex uses same Responses API as OpenAI — identical cache key fields
-            data["prompt_cache_key"] = cache_key
-            if cache_retention:
-                data["prompt_cache_retention"] = cache_retention
-        elif provider == Provider.XAI:
-            data["prompt_cache_key"] = cache_key
-            # x-grok-conv-id forwarding: handled by _sanitize_headers (not in blocked list)
+    if provider in (Provider.OPENAI, Provider.AZURE_OPENAI, Provider.CODEX):
+        # Codex uses same Responses API as OpenAI — identical cache key fields
+        data["prompt_cache_key"] = cache_key
+        if cache_retention:
+            data["prompt_cache_retention"] = cache_retention
+    elif provider == Provider.XAI:
+        data["prompt_cache_key"] = cache_key
+        # x-grok-conv-id forwarding: handled by _sanitize_headers (not in blocked list)
     # All other providers: silently ignore — tokenpak_* already stripped above
 
     return json.dumps(data).encode()
@@ -338,7 +365,8 @@ def _inject_prompt_cache_key(provider: Any, headers: dict, body: bytes) -> bytes
 # Bedrock cache token parsing
 # ---------------------------------------------------------------------------
 
-def _parse_bedrock_cached_tokens(response_data: dict) -> int:
+
+def _parse_bedrock_cached_tokens(response_data: Mapping[str, object]) -> int:
     """Parse cached token count from Bedrock responses.
 
     Bedrock returns cache metrics in the usage object:
@@ -373,7 +401,7 @@ def _parse_bedrock_cached_tokens(response_data: dict) -> int:
     return cache_read if isinstance(cache_read, int) else 0
 
 
-def _parse_bedrock_cache_creation_tokens(response_data: dict) -> int:
+def _parse_bedrock_cache_creation_tokens(response_data: Mapping[str, object]) -> int:
     """Parse cache creation token count from Bedrock responses.
 
     Args:

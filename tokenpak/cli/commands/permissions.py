@@ -47,6 +47,35 @@ Write discipline (additive-only):
 
 from __future__ import annotations
 
+__all__ = (
+    "ALL_TIERS",
+    "CLAUDE_MODE_TO_TIER",
+    "CLAUDE_TIER_TO_MODE",
+    "CLIENTS",
+    "CODEX_SETTINGS_TO_TIER",
+    "CODEX_TIER_TO_SETTINGS",
+    "DEFAULT_TIER",
+    "PERSISTENT_TIERS",
+    "TIER_DESCRIPTIONS",
+    "TierApplyResult",
+    "applied_tier",
+    "apply_claude_tier",
+    "apply_codex_tier",
+    "apply_tier",
+    "doctor_rows",
+    "fleet_mode_enabled",
+    "get_last_set_tier",
+    "read_claude_tier",
+    "read_codex_tier",
+    "reset_claude_tier",
+    "reset_codex_tier",
+    "reset_tier",
+    "resolved_settings_line",
+    "run_permissions",
+    "set_fleet_mode",
+)
+
+
 import argparse
 import json
 import os
@@ -57,7 +86,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict, cast
 
 try:
     import tomllib  # py311+
@@ -93,16 +122,13 @@ CODEX_TIER_TO_SETTINGS: dict[str, dict[str, str]] = {
     "auto": {"approval_policy": "never", "sandbox_mode": "workspace-write"},
 }
 CODEX_SETTINGS_TO_TIER: dict[tuple[str, str], str] = {
-    (v["approval_policy"], v["sandbox_mode"]): k
-    for k, v in CODEX_TIER_TO_SETTINGS.items()
+    (v["approval_policy"], v["sandbox_mode"]): k for k, v in CODEX_TIER_TO_SETTINGS.items()
 }
 
 TIER_DESCRIPTIONS: dict[str, str] = {
     "strict": "prompts for everything; read-only sandbox (exploring, untrusted code)",
     "standard": "accept file edits; workspace-write sandbox (day-to-day, default)",
-    "auto": (
-        "no prompts; Claude needs external isolation, Codex keeps workspace sandbox"
-    ),
+    "auto": ("no prompts; Claude needs external isolation, Codex keeps workspace sandbox"),
     "fleet": "legacy alias: full-bypass for both TokenPak launchers",
 }
 
@@ -142,6 +168,17 @@ class TierApplyResult:
     rollback_cmd: Optional[str] = None
 
 
+class PermissionSnapshot(TypedDict):
+    """Stable machine-readable permission status."""
+
+    schema: str
+    persistent_tiers: dict[str, dict[str, object]]
+    launcher_defaults: dict[str, dict[str, object]]
+    legacy_fleet_alias: dict[str, object]
+    state_file: str
+    warnings: list[str]
+
+
 # ---------------------------------------------------------------------------
 # TokenPak launcher state (~/.config/tokenpak/permissions.toml)
 # ---------------------------------------------------------------------------
@@ -174,7 +211,7 @@ def _state_path() -> Path:
     return Path.home() / ".config" / "tokenpak" / "permissions.toml"
 
 
-def _read_state_with_error() -> tuple[dict, Optional[str]]:
+def _read_state_with_error() -> tuple[dict[str, object], Optional[str]]:
     """Parse launcher state and retain a safe, user-visible error note."""
     p = _state_path()
     if not p.exists():
@@ -190,18 +227,18 @@ def _read_state_with_error() -> tuple[dict, Optional[str]]:
             or schema_version != 2
         ):
             return {}, f"unsupported launcher state schema_version {schema_version!r}"
-        return state, None
+        return cast(dict[str, object], state), None
     except Exception as exc:
         return {}, f"state file is invalid TOML ({type(exc).__name__})"
 
 
-def _read_state() -> dict:
+def _read_state() -> dict[str, object]:
     """Parse launcher state. Returns an empty mapping on any read error."""
     state, _error = _read_state_with_error()
     return state
 
 
-def _resolved_launcher_mode(state: dict, client: str) -> tuple[str, Optional[str]]:
+def _resolved_launcher_mode(state: dict[str, object], client: str) -> tuple[str, Optional[str]]:
     """Resolve one client mode from v2 state or the legacy compatibility boolean."""
     launcher = state.get("launcher", {})
     if not isinstance(launcher, dict):
@@ -259,7 +296,7 @@ def _get_launcher_mode(client: str) -> str:
         return _DEFAULT_LAUNCHER_MODE
 
 
-def _write_state(state: dict) -> None:
+def _write_state(state: dict[str, object]) -> None:
     """Serialize the known v2 launcher state schema atomically (0644)."""
     launcher = state.get("launcher", {})
     if not isinstance(launcher, dict):
@@ -336,7 +373,7 @@ def _set_launcher_modes(updates: dict[str, str], source: str) -> None:
             raise ValueError(f"launcher mode {mode!r} is unsupported for {client}")
 
     state = _read_state()
-    launcher = state.setdefault("launcher", {})
+    launcher = state.get("launcher")
     if not isinstance(launcher, dict):
         launcher = {}
         state["launcher"] = launcher
@@ -351,22 +388,29 @@ def _set_launcher_modes(updates: dict[str, str], source: str) -> None:
 
 def get_last_set_tier(client: str) -> Optional[str]:
     """Return the persistent tier TokenPak last applied for client, if any."""
-    tier = _read_state().get("tiers", {}).get(client)
-    return tier if tier in PERSISTENT_TIERS else None
+    tiers = _read_state().get("tiers", {})
+    if not isinstance(tiers, dict):
+        return None
+    tier = tiers.get(client)
+    return tier if isinstance(tier, str) and tier in PERSISTENT_TIERS else None
 
 
 def _record_last_set_tier(client: str, tier: str) -> None:
     if tier not in PERSISTENT_TIERS:  # never record "fleet" as a tier
         return
     state = _read_state()
-    state.setdefault("tiers", {})[client] = tier
+    tiers = state.get("tiers")
+    if not isinstance(tiers, dict):
+        tiers = {}
+        state["tiers"] = tiers
+    tiers[client] = tier
     _write_state(state)
 
 
 def _clear_last_set_tier(client: str) -> None:
     state = _read_state()
     tiers = state.get("tiers", {})
-    if client in tiers:
+    if isinstance(tiers, dict) and client in tiers:
         tiers.pop(client, None)
         _write_state(state)
 
@@ -440,9 +484,7 @@ def apply_claude_tier(tier: str, backup: bool = True) -> TierApplyResult:
         if prev != new:
             perms["defaultMode"] = new
             _atomic_write_settings(settings)
-            changes.append(
-                f"permissions.defaultMode: {prev or '(unset)'} → {new} (tier: {tier})"
-            )
+            changes.append(f"permissions.defaultMode: {prev or '(unset)'} → {new} (tier: {tier})")
         _record_last_set_tier("claude-code", tier)
         settings_p = _settings_path()
         rollback = f"cp {bak} {settings_p}" if bak else None
@@ -545,12 +587,13 @@ def _backup_codex_config() -> Optional[Path]:
     return bak
 
 
-def _read_codex_config() -> dict:
+def _read_codex_config() -> dict[str, object]:
     p = _codex_config_path()
     if not p.exists():
         return {}
     try:
-        return tomllib.loads(p.read_text(encoding="utf-8"))
+        loaded = tomllib.loads(p.read_text(encoding="utf-8"))
+        return cast(dict[str, object], loaded)
     except Exception:
         return {}
 
@@ -593,9 +636,7 @@ def _remove_codex_top_level_keys(text: str, keys: tuple[str, ...]) -> str:
     extent = _top_level_extent(lines)
     kept: list[str] = []
     for i, ln in enumerate(lines):
-        if i < extent and any(
-            re.match(rf"^\s*{re.escape(k)}\s*=", ln) for k in keys
-        ):
+        if i < extent and any(re.match(rf"^\s*{re.escape(k)}\s*=", ln) for k in keys):
             continue
         kept.append(ln)
     out = "\n".join(kept)
@@ -628,7 +669,15 @@ def read_codex_tier() -> tuple[str, str]:
         if last is not None:
             return "custom", f"(last set: {last}, modified externally)"
         return DEFAULT_TIER, "(default; not yet applied)"
-    if (approval, sandbox) in CODEX_SETTINGS_TO_TIER:
+    if (
+        isinstance(approval, str)
+        and isinstance(sandbox, str)
+        and (
+            approval,
+            sandbox,
+        )
+        in CODEX_SETTINGS_TO_TIER
+    ):
         return CODEX_SETTINGS_TO_TIER[(approval, sandbox)], ""
     if last is not None:
         return "custom", f"(last set: {last}, modified externally)"
@@ -668,8 +717,8 @@ def apply_codex_tier(tier: str, backup: bool = True) -> TierApplyResult:
             _atomic_write_codex_config(new_text)
             wanted = CODEX_TIER_TO_SETTINGS[tier]
             changes.append(
-                f"approval_policy = \"{wanted['approval_policy']}\", "
-                f"sandbox_mode = \"{wanted['sandbox_mode']}\" (tier: {tier})"
+                f'approval_policy = "{wanted["approval_policy"]}", '
+                f'sandbox_mode = "{wanted["sandbox_mode"]}" (tier: {tier})'
             )
         _record_last_set_tier("codex", tier)
         rollback = f"cp {bak} {p}" if bak else None
@@ -701,9 +750,7 @@ def reset_codex_tier() -> TierApplyResult:
     try:
         if not p.exists():
             _clear_last_set_tier("codex")
-            return TierApplyResult(
-                ok=True, summary="Codex config.toml absent — nothing to reset."
-            )
+            return TierApplyResult(ok=True, summary="Codex config.toml absent — nothing to reset.")
         bak = _backup_codex_config()
         old_text = p.read_text(encoding="utf-8")
         new_text = _remove_codex_top_level_keys(old_text, _CODEX_MANAGED_KEYS)
@@ -953,7 +1000,7 @@ def _print_result(client: str, result: TierApplyResult) -> None:
 _PERMISSIONS_JSON_SCHEMA = "tokenpak.permissions.v1"
 
 
-def _permission_snapshot() -> dict:
+def _permission_snapshot() -> PermissionSnapshot:
     """Build a stable machine-readable view of tiers and launcher defaults."""
     persistent: dict[str, dict[str, object]] = {}
     launcher: dict[str, dict[str, object]] = {}
@@ -989,17 +1036,17 @@ def _permission_snapshot() -> dict:
             "Reset invalid launcher state with `tokenpak permissions launcher "
             "inherit --client both`."
         )
-    return {
-        "schema": _PERMISSIONS_JSON_SCHEMA,
-        "persistent_tiers": persistent,
-        "launcher_defaults": launcher,
-        "legacy_fleet_alias": {
+    return PermissionSnapshot(
+        schema=_PERMISSIONS_JSON_SCHEMA,
+        persistent_tiers=persistent,
+        launcher_defaults=launcher,
+        legacy_fleet_alias={
             "enabled": fleet_mode_enabled(),
             "meaning": "both launcher defaults are full-bypass",
         },
-        "state_file": str(_state_path()),
-        "warnings": warnings,
-    }
+        state_file=str(_state_path()),
+        warnings=warnings,
+    )
 
 
 def _cmd_show(args: argparse.Namespace) -> int:
@@ -1084,15 +1131,11 @@ def _launcher_warning_lines(mode: str, clients: list[str]) -> list[str]:
     lines: list[str] = []
     for client in clients:
         lines.extend(
-            f"[{client} / {mode}] {message}"
-            for message in _launcher_warning_messages(client, mode)
+            f"[{client} / {mode}] {message}" for message in _launcher_warning_messages(client, mode)
         )
     lines.append(_MANAGED_POLICY_WARNING)
     selected = "both" if set(clients) == set(CLIENTS) else clients[0]
-    lines.append(
-        "Reset with: `tokenpak permissions launcher inherit "
-        f"--client {selected}`."
-    )
+    lines.append(f"Reset with: `tokenpak permissions launcher inherit --client {selected}`.")
     return lines
 
 
@@ -1149,8 +1192,15 @@ def _cmd_launcher(args: argparse.Namespace) -> int:
     client_arg = getattr(args, "client", None)
     as_json = bool(getattr(args, "as_json", False))
     quiet = bool(getattr(args, "quiet", False))
-    if not client_arg:
+    if not isinstance(client_arg, str) or not client_arg:
         message = "launcher requires --client codex|claude-code|both"
+        if as_json:
+            print(json.dumps({"schema": _PERMISSIONS_JSON_SCHEMA, "ok": False, "error": message}))
+        else:
+            print(f"permissions: {message}", file=sys.stderr)
+        return 2
+    if not isinstance(mode, str):
+        message = "launcher requires a mode"
         if as_json:
             print(json.dumps({"schema": _PERMISSIONS_JSON_SCHEMA, "ok": False, "error": message}))
         else:
@@ -1165,11 +1215,7 @@ def _cmd_launcher(args: argparse.Namespace) -> int:
             print(f"permissions: {error}", file=sys.stderr)
         return 2
     warnings = _launcher_warning_lines(mode, clients)
-    interactive = (
-        not as_json
-        and not quiet
-        and _interactive_confirmation_allowed()
-    )
+    interactive = not as_json and not quiet and _interactive_confirmation_allowed()
     if not _confirm_launcher_change(
         mode,
         clients,

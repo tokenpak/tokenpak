@@ -16,7 +16,10 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional, cast
+
+_CheckResult = tuple[bool, float, str]
+_ValidationLogEntry = dict[str, object]
 
 DEFAULT_VALIDATION_LOG = ".tokenpak/validation_log.json"
 
@@ -174,22 +177,22 @@ class ValidationResult:
     passed: bool
     score: float
     reason: str
-    checks_run: List[str] = field(default_factory=list)
-    check_scores: dict = field(default_factory=dict)
+    checks_run: list[str] = field(default_factory=list)
+    check_scores: dict[str, float] = field(default_factory=dict)
 
 
-def top_terms(text: str, n: int = 10) -> List[str]:
+def top_terms(text: str, n: int = 10) -> list[str]:
     sentences = _SENTENCE_SPLIT.split(text) if text else []
     if not sentences:
         return []
 
-    def tokenize(s: str) -> List[str]:
+    def tokenize(s: str) -> list[str]:
         return [w.lower().strip("\"'()[]{}.,;:!?-_") for w in s.split() if len(w) >= 3]
 
     sent_tokens = [tokenize(s) for s in sentences]
     doc_count = len(sentences)
 
-    df: dict = {}
+    df: dict[str, int] = {}
     for tokens in sent_tokens:
         for tok in set(tokens):
             if tok not in _STOPWORDS:
@@ -198,13 +201,13 @@ def top_terms(text: str, n: int = 10) -> List[str]:
     if not df:
         return []
 
-    tf: dict = {}
+    tf: dict[str, int] = {}
     all_tokens = [t for toks in sent_tokens for t in toks if t not in _STOPWORDS]
     total = max(len(all_tokens), 1)
     for tok in all_tokens:
         tf[tok] = tf.get(tok, 0) + 1
 
-    scores = {}
+    scores: dict[str, float] = {}
     for tok, freq in tf.items():
         tf_score = freq / total
         idf_score = math.log((doc_count + 1) / (df.get(tok, 0) + 1)) + 1
@@ -214,7 +217,7 @@ def top_terms(text: str, n: int = 10) -> List[str]:
     return ranked[:n]
 
 
-def _check_coverage(original: str, compressed: str) -> tuple:
+def _check_coverage(original: str, compressed: str) -> _CheckResult:
     if not original:
         return True, 1.0, "no original"
     ratio = len(compressed) / len(original)
@@ -231,7 +234,7 @@ def _check_coverage(original: str, compressed: str) -> tuple:
     return True, max(0.0, min(1.0, score)), "ok"
 
 
-def _check_sentence_coherence(compressed: str) -> tuple:
+def _check_sentence_coherence(compressed: str) -> _CheckResult:
     if not compressed.strip():
         return True, 1.0, "empty"
     sentences = [s for s in _SENTENCE_SPLIT.split(compressed) if s.strip()]
@@ -257,7 +260,7 @@ def _check_sentence_coherence(compressed: str) -> tuple:
     return True, 1.0, "ok"
 
 
-def _check_key_terms(original: str, compressed: str) -> tuple:
+def _check_key_terms(original: str, compressed: str) -> _CheckResult:
     terms = top_terms(original, n=10)
     if not terms:
         return True, 1.0, "no key terms"
@@ -275,7 +278,7 @@ def _check_key_terms(original: str, compressed: str) -> tuple:
     return True, retention, "ok"
 
 
-def _check_code_integrity(original: str, compressed: str) -> tuple:
+def _check_code_integrity(original: str, compressed: str) -> _CheckResult:
     open_fences = len(_CODE_FENCE_OPEN.findall(compressed))
     if open_fences % 2 != 0:
         return False, 0.0, f"unclosed code fence ({open_fences} ``` markers)"
@@ -296,7 +299,7 @@ def _check_code_integrity(original: str, compressed: str) -> tuple:
     return True, 1.0, "ok"
 
 
-def _check_numeric_preservation(original: str, compressed: str) -> tuple:
+def _check_numeric_preservation(original: str, compressed: str) -> _CheckResult:
     orig_nums = set(_NUMBER_PATTERN.findall(original))
     comp_nums = set(_NUMBER_PATTERN.findall(compressed))
     altered = [num for num in comp_nums if num not in orig_nums]
@@ -313,7 +316,7 @@ def validate(
     compressed_text: str,
     original_text: str,
     risk_class: str,
-    checks_config: Optional[dict] = None,
+    checks_config: Optional[dict[str, bool]] = None,
 ) -> ValidationResult:
     """Validate compressed text against the original.
 
@@ -329,30 +332,34 @@ def validate(
     cfg = checks_config or {}
     risk_upper = risk_class.upper()
 
-    all_scores: dict = {}
-    checks_run: List[str] = []
+    all_scores: dict[str, float] = {}
+    checks_run: list[str] = []
     first_failure = ""
     failed = False
 
-    def _run(name: str, check_fn, *args):
+    def _record(name: str, check_result: _CheckResult) -> None:
         nonlocal failed, first_failure
-        if not cfg.get(name, True):
-            return
         checks_run.append(name)
-        passed, score, reason = check_fn(*args)
+        passed, score, reason = check_result
         all_scores[name] = score
         if not passed and not failed:
             failed = True
             first_failure = f"{name}: {reason}"
 
-    _run("coverage", _check_coverage, original_text, compressed_text)
-    _run("coherence", _check_sentence_coherence, compressed_text)
-    _run("key_terms", _check_key_terms, original_text, compressed_text)
+    if cfg.get("coverage", True):
+        _record("coverage", _check_coverage(original_text, compressed_text))
+    if cfg.get("coherence", True):
+        _record("coherence", _check_sentence_coherence(compressed_text))
+    if cfg.get("key_terms", True):
+        _record("key_terms", _check_key_terms(original_text, compressed_text))
 
-    if risk_upper == "CODE":
-        _run("code_integrity", _check_code_integrity, original_text, compressed_text)
-    if risk_upper in ("NUMERIC", "LEGAL"):
-        _run("numeric_preservation", _check_numeric_preservation, original_text, compressed_text)
+    if risk_upper == "CODE" and cfg.get("code_integrity", True):
+        _record("code_integrity", _check_code_integrity(original_text, compressed_text))
+    if risk_upper in ("NUMERIC", "LEGAL") and cfg.get("numeric_preservation", True):
+        _record(
+            "numeric_preservation",
+            _check_numeric_preservation(original_text, compressed_text),
+        )
 
     overall = sum(all_scores.values()) / max(len(all_scores), 1)
 
@@ -373,10 +380,10 @@ def log_validation_result(
 ) -> None:
     p = Path(log_path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    existing: list = []
+    existing: list[_ValidationLogEntry] = []
     if p.exists():
         try:
-            existing = json.loads(p.read_text())
+            existing = cast(list[_ValidationLogEntry], json.loads(p.read_text()))
         except (json.JSONDecodeError, OSError):
             existing = []
     entry = {
@@ -398,7 +405,7 @@ def apply_fallback(
     risk_class: str,
     block_ref: str = "unknown",
     log_path: str = DEFAULT_VALIDATION_LOG,
-) -> tuple:
+) -> tuple[str, str]:
     """Validate compression. If failed, fall back to original (HYBRID behaviour).
 
     Returns:
@@ -415,7 +422,9 @@ def apply_fallback(
     return text, action
 
 
-def get_validation_stats(log_path: str = DEFAULT_VALIDATION_LOG) -> dict:
+def get_validation_stats(
+    log_path: str = DEFAULT_VALIDATION_LOG,
+) -> dict[str, int | float | str | None]:
     p = Path(log_path)
     if not p.exists():
         return {
@@ -427,19 +436,19 @@ def get_validation_stats(log_path: str = DEFAULT_VALIDATION_LOG) -> dict:
             "most_common_failure": None,
         }
     try:
-        entries = json.loads(p.read_text())
+        entries = cast(list[_ValidationLogEntry], json.loads(p.read_text()))
     except (json.JSONDecodeError, OSError):
         entries = []
 
     total = len(entries)
     passed = sum(1 for e in entries if e.get("passed"))
     failed = total - passed
-    avg_score = sum(e.get("score", 0) for e in entries) / max(total, 1)
+    avg_score = sum(cast(float, e.get("score", 0)) for e in entries) / max(total, 1)
 
-    reasons = [e.get("reason", "") for e in entries if not e.get("passed")]
+    reasons = [cast(str, e.get("reason", "")) for e in entries if not e.get("passed")]
     most_common = None
     if reasons:
-        freq: dict = {}
+        freq: dict[str, int] = {}
         for r in reasons:
             key = r.split(":")[0].strip()
             freq[key] = freq.get(key, 0) + 1

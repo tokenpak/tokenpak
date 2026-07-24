@@ -10,39 +10,42 @@ No LLM, no external dependencies: stdlib + re only.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Optional, cast
 
 # ---------------------------------------------------------------------------
 # YAML loader (stdlib only — no PyYAML required in tests)
 # ---------------------------------------------------------------------------
 try:
-    import yaml as _yaml  # type: ignore
+    import yaml as _yaml
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> dict[str, dict[str, object]]:
         with open(path, "r") as f:
-            return _yaml.safe_load(f)
+            return cast(dict[str, dict[str, object]], _yaml.safe_load(f))
 
 except ImportError:  # pragma: no cover
     import json
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> dict[str, dict[str, object]]:
         with open(path, "r") as f:
-            return json.load(f)
+            return cast(dict[str, dict[str, object]], json.load(f))
 
 
 # ---------------------------------------------------------------------------
 # Duration parsing
 # ---------------------------------------------------------------------------
 
-_DURATION_PATTERNS = [
+_DurationFormatter = Callable[[re.Match[str]], str]
+
+_DURATION_PATTERNS: list[tuple[re.Pattern[str], _DurationFormatter]] = [
     (re.compile(r"\b(?:last|past)\s+(\d+)\s*days?\b", re.I), lambda m: f"{m.group(1)}d"),
     (re.compile(r"\b(?:last|past)\s+week\b", re.I), lambda _: "7d"),
     (re.compile(r"\b(?:last|past)\s+month\b", re.I), lambda _: "30d"),
     (re.compile(r"\b(\d+)\s*(weeks?)\b", re.I), lambda m: f"{m.group(1)} {m.group(2)}"),
     (re.compile(r"\b(\d+)\s*days?\b", re.I), lambda m: f"{m.group(1)}d"),
-    (re.compile(r"\b(\d+)\s*months?\b", re.I), lambda m: f"{int(m.group(1))*30}d"),
+    (re.compile(r"\b(\d+)\s*months?\b", re.I), lambda m: f"{int(m.group(1)) * 30}d"),
     (re.compile(r"\btoday\b", re.I), lambda _: "1d"),
     (re.compile(r"\bthis\s+week\b", re.I), lambda _: "7d"),
     (re.compile(r"\b(\d+)d\b", re.I), lambda m: f"{m.group(1)}d"),
@@ -136,7 +139,7 @@ _STOP_WORDS = frozenset(
 # ---------------------------------------------------------------------------
 
 
-def _extract_entity(text: str, examples: List[str]) -> Optional[str]:
+def _extract_entity(text: str, examples: list[str]) -> Optional[str]:
     lowered = text.lower()
 
     for ex in sorted(examples, key=len, reverse=True):
@@ -175,7 +178,7 @@ def _extract_entity(text: str, examples: List[str]) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
-def _extract_enum(text: str, values: List[str]) -> Optional[str]:
+def _extract_enum(text: str, values: list[str]) -> Optional[str]:
     lowered = text.lower()
     for v in values:
         if re.search(rf"\b{re.escape(v.lower())}\b", lowered):
@@ -195,8 +198,8 @@ def _extract_enum(text: str, values: List[str]) -> Optional[str]:
 @dataclass
 class FilledSlots:
     intent: str
-    slots: Dict[str, Any] = field(default_factory=dict)
-    missing: List[str] = field(default_factory=list)
+    slots: dict[str, object] = field(default_factory=dict)
+    missing: list[str] = field(default_factory=list)
     confidence: float = 1.0
 
 
@@ -219,9 +222,9 @@ class SlotFiller:
 
     _DEFINITIONS_PATH = Path(__file__).with_name("slot_definitions.yaml")
 
-    def __init__(self, definitions: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, definitions: Optional[dict[str, dict[str, object]]] = None) -> None:
         if definitions is not None:
-            self._defs: Dict[str, Any] = definitions
+            self._defs = definitions
         elif self._DEFINITIONS_PATH.exists():
             self._defs = _load_yaml(str(self._DEFINITIONS_PATH))
         else:
@@ -233,9 +236,9 @@ class SlotFiller:
         if intent_def is None:
             return FilledSlots(intent=canonical, slots={}, missing=[], confidence=0.0)
 
-        slots_schema: Dict[str, Any] = intent_def.get("slots", {})
-        filled: Dict[str, Any] = {}
-        missing: List[str] = []
+        slots_schema = cast(dict[str, dict[str, object]], intent_def.get("slots", {}))
+        filled: dict[str, object] = {}
+        missing: list[str] = []
         extracted_count = 0
         total_required = sum(1 for s in slots_schema.values() if s.get("required", False))
 
@@ -248,11 +251,11 @@ class SlotFiller:
             if slot_type == "duration":
                 value = _extract_duration(text)
             elif slot_type == "enum":
-                value = _extract_enum(text, slot_cfg.get("values", []))
+                value = _extract_enum(text, cast(list[str], slot_cfg.get("values", [])))
             elif slot_type == "entity":
-                value = _extract_entity(text, slot_cfg.get("examples", []))
+                value = _extract_entity(text, cast(list[str], slot_cfg.get("examples", [])))
             elif slot_type in ("int", "str"):
-                examples = slot_cfg.get("examples", [])
+                examples = cast(list[str], slot_cfg.get("examples", []))
                 value = _extract_entity(text, examples) if examples else None
 
             if value is not None:
@@ -282,10 +285,10 @@ class SlotFiller:
         )
 
     @property
-    def definitions(self) -> Dict[str, Any]:
+    def definitions(self) -> dict[str, dict[str, object]]:
         return self._defs
 
-    def known_intents(self) -> List[str]:
+    def known_intents(self) -> list[str]:
         return list(self._defs.keys())
 
     @staticmethod

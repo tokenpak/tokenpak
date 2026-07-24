@@ -1,3 +1,1 @@
-
-
-__all__ = ['api', 'metrics', 'rbac_auth', 'rbac_core', 'rbac_routes']
+__all__ = ["api", "metrics", "rbac_auth", "rbac_core", "rbac_routes"]

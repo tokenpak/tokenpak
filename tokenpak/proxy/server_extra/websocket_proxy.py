@@ -18,12 +18,12 @@ import gzip
 import logging
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 try:
     from websockets.server import WebSocketServerProtocol  # type: ignore
 except ImportError:
-    WebSocketServerProtocol = None  # type: ignore
+    WebSocketServerProtocol = None
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ class WebSocketConnectionStats:
         end = self.disconnected_at if self.disconnected_at is not None else time.time()
         return end - self.connected_at
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise to a plain dict for JSON output / dashboard."""
         return {
             "connection_id": self.connection_id,
@@ -195,9 +195,7 @@ class WebSocketConnectionManager:
         logger.debug("Registered connection %s from %s", connection_id, client_address)
         return True
 
-    def unregister(
-        self, connection_id: str, close_code: Optional[int] = None
-    ) -> None:
+    def unregister(self, connection_id: str, close_code: Optional[int] = None) -> None:
         """
         Unregister an active connection.
 
@@ -212,9 +210,7 @@ class WebSocketConnectionManager:
         if stats is not None:
             stats.disconnected_at = time.time()
             stats.close_code = close_code
-            logger.debug(
-                "Unregistered connection %s (code=%s)", connection_id, close_code
-            )
+            logger.debug("Unregistered connection %s (code=%s)", connection_id, close_code)
 
     # ------------------------------------------------------------------ #
     # Stats recording
@@ -226,9 +222,7 @@ class WebSocketConnectionManager:
         if stats is not None:
             stats.messages_received += 1
 
-    def record_chunk(
-        self, connection_id: str, compressed: int, uncompressed: int
-    ) -> None:
+    def record_chunk(self, connection_id: str, compressed: int, uncompressed: int) -> None:
         """
         Record a compressed chunk sent to *connection_id*.
 
@@ -257,6 +251,6 @@ class WebSocketConnectionManager:
         """Return stats for *connection_id* (active or historical), or None."""
         return self._all.get(connection_id)
 
-    def get_all_stats(self) -> List[dict]:
+    def get_all_stats(self) -> List[dict[str, Any]]:
         """Return a list of serialised stats dicts for all tracked connections."""
         return [s.to_dict() for s in self._all.values()]

@@ -50,9 +50,7 @@ class TestArtifactStore:
         conn = sqlite3.connect(store.db_path)
         cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = {row[0] for row in cursor.fetchall()}
         conn.close()
 

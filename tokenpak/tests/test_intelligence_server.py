@@ -47,17 +47,20 @@ class TestCorsOrigins(unittest.TestCase):
             import importlib
 
             from tokenpak.proxy.intelligence import server as srv
+
             importlib.reload(srv)
             return srv._cors_origins()
 
     def test_wildcard_returns_star_list(self):
         from tokenpak.proxy.intelligence.server import _cors_origins
+
         with patch.dict(os.environ, {"TOKENPAK_CORS_ORIGINS": "*"}):
             result = _cors_origins()
         self.assertEqual(result, ["*"])
 
     def test_comma_separated_parsed(self):
         from tokenpak.proxy.intelligence.server import _cors_origins
+
         with patch.dict(os.environ, {"TOKENPAK_CORS_ORIGINS": "https://a.com,https://b.com"}):
             result = _cors_origins()
         self.assertIn("https://a.com", result)
@@ -65,6 +68,7 @@ class TestCorsOrigins(unittest.TestCase):
 
     def test_empty_env_returns_defaults(self):
         from tokenpak.proxy.intelligence.server import _cors_origins
+
         with patch.dict(os.environ, {"TOKENPAK_CORS_ORIGINS": ""}):
             result = _cors_origins()
         self.assertGreater(len(result), 0)
@@ -73,7 +77,10 @@ class TestCorsOrigins(unittest.TestCase):
 
     def test_whitespace_stripped(self):
         from tokenpak.proxy.intelligence.server import _cors_origins
-        with patch.dict(os.environ, {"TOKENPAK_CORS_ORIGINS": "  https://a.com ,  https://b.com  "}):
+
+        with patch.dict(
+            os.environ, {"TOKENPAK_CORS_ORIGINS": "  https://a.com ,  https://b.com  "}
+        ):
             result = _cors_origins()
         self.assertIn("https://a.com", result)
         self.assertIn("https://b.com", result)

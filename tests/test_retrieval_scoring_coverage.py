@@ -7,7 +7,10 @@ import pytest
 try:
     from tokenpak.vault.retrieval import COVERAGE_OK
 except ImportError:
-    pytest.skip("Cannot import COVERAGE_OK from tokenpak.vault.retrieval — removed in current build", allow_module_level=True)
+    pytest.skip(
+        "Cannot import COVERAGE_OK from tokenpak.vault.retrieval — removed in current build",
+        allow_module_level=True,
+    )
 import pytest
 
 from tokenpak.vault.retrieval import (
@@ -35,6 +38,7 @@ from tokenpak.vault.retrieval import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _block(content: str, source: str = "file.py", block_id: str = "b0") -> dict:
     return {"content": content, "source_path": source, "block_id": block_id}
 
@@ -46,6 +50,7 @@ def _pair(content: str, score: float = 0.5, source: str = "file.py", block_id: s
 # ---------------------------------------------------------------------------
 # 1. Scoring formula: correct values
 # ---------------------------------------------------------------------------
+
 
 class TestScoringFormula:
     def test_baseline_weights_sum(self):
@@ -93,8 +98,12 @@ class TestScoringFormula:
     def test_all_boosts(self):
         base = compute_final_score(sem_norm=0.6, bm25_norm=0.6, meta_norm=0.6)
         all_boosts = compute_final_score(
-            sem_norm=0.6, bm25_norm=0.6, meta_norm=0.6,
-            symbol_hit=True, path_hit=True, is_recent=True,
+            sem_norm=0.6,
+            bm25_norm=0.6,
+            meta_norm=0.6,
+            symbol_hit=True,
+            path_hit=True,
+            is_recent=True,
         )
         delta = _BOOST_SYMBOL + _BOOST_PATH + _BOOST_RECENCY
         assert abs(all_boosts - base - delta) < 1e-9
@@ -102,8 +111,11 @@ class TestScoringFormula:
     def test_all_penalties(self):
         base = compute_final_score(sem_norm=0.6, bm25_norm=0.6, meta_norm=0.6)
         penalised = compute_final_score(
-            sem_norm=0.6, bm25_norm=0.6, meta_norm=0.6,
-            is_stale=True, is_noisy=True,
+            sem_norm=0.6,
+            bm25_norm=0.6,
+            meta_norm=0.6,
+            is_stale=True,
+            is_noisy=True,
         )
         delta = _PENALTY_STALE + _PENALTY_NOISE
         assert abs(base - penalised - delta) < 1e-9
@@ -112,6 +124,7 @@ class TestScoringFormula:
 # ---------------------------------------------------------------------------
 # 2. Coverage score ranges (strong / ok / weak)
 # ---------------------------------------------------------------------------
+
 
 class TestCoverageScoreRanges:
     def _make_strong_result(self) -> list:
@@ -122,8 +135,7 @@ class TestCoverageScoreRanges:
     def _make_weak_result(self) -> list:
         """No must-hit terms, many files, low scores."""
         return [
-            (_block("some content", source=f"file_{i}.py", block_id=f"b{i}"), 0.1)
-            for i in range(8)
+            (_block("some content", source=f"file_{i}.py", block_id=f"b{i}"), 0.1) for i in range(8)
         ]
 
     def test_strong_coverage(self):
@@ -149,8 +161,7 @@ class TestCoverageScoreRanges:
     def test_coverage_in_0_1_range(self):
         for n in [0, 1, 5, 10]:
             chunks = [
-                (_block("content", source=f"f{i}.py", block_id=f"b{i}"), 0.5)
-                for i in range(n)
+                (_block("content", source=f"f{i}.py", block_id=f"b{i}"), 0.5) for i in range(n)
             ]
             cov = compute_coverage_score(chunks, must_hit_terms=["content"])
             assert 0.0 <= cov <= 1.0, f"Coverage out of range: {cov}"
@@ -178,6 +189,7 @@ class TestCoverageScoreRanges:
 # ---------------------------------------------------------------------------
 # 3. Must-hit term extraction
 # ---------------------------------------------------------------------------
+
 
 class TestMustHitExtraction:
     def test_extracts_function_name(self):
@@ -232,6 +244,7 @@ class TestMustHitExtraction:
 # 4. Symbol boost applied correctly
 # ---------------------------------------------------------------------------
 
+
 class TestSymbolBoost:
     def test_symbol_boost_increases_score(self):
         query = "show me the render function"
@@ -264,6 +277,7 @@ class TestSymbolBoost:
 # 5. Stale penalty applied correctly
 # ---------------------------------------------------------------------------
 
+
 class TestStalePenalty:
     def test_stale_chunk_scores_lower(self):
         results = [
@@ -287,6 +301,7 @@ class TestStalePenalty:
 # ---------------------------------------------------------------------------
 # 6. Integration with sort_retrieval_results
 # ---------------------------------------------------------------------------
+
 
 class TestIntegrationWithSort:
     def test_score_and_sort_returns_sorted_desc(self):

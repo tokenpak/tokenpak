@@ -35,6 +35,9 @@ Schema::
 
 from __future__ import annotations
 
+__all__ = ("SQLiteRetrievalBackend",)
+
+
 import json
 import math
 import re
@@ -42,7 +45,17 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, TypedDict, cast
+
+
+class VaultBlock(TypedDict):
+    block_id: str
+    source_path: str
+    risk_class: str
+    must_keep: bool
+    raw_tokens: int
+    content: str
+
 
 # ---------------------------------------------------------------------------
 # BM25 tokenizer (mirrors proxy._bm25_tokenize)
@@ -98,7 +111,7 @@ class SQLiteRetrievalBackend:
     def token_count(self) -> int:
         return self._token_count
 
-    def maybe_reload(self):
+    def maybe_reload(self) -> None:
         """Check if the vault index has changed and rebuild if necessary."""
         now = time.time()
         if now - self._last_checked < self._check_interval:
@@ -123,7 +136,7 @@ class SQLiteRetrievalBackend:
         query: str,
         top_k: int = 5,
         min_score: float = 2.0,
-    ) -> List[Tuple[dict, float]]:
+    ) -> List[Tuple[VaultBlock, float]]:
         """BM25 search. Returns [(block_dict, score), ...] sorted deterministically."""
         if not self.available:
             return []
@@ -208,7 +221,7 @@ class SQLiteRetrievalBackend:
         conn.execute("PRAGMA cache_size=-16000")  # 16 MB page cache
         return conn
 
-    def _ensure_schema(self, conn: sqlite3.Connection):
+    def _ensure_schema(self, conn: sqlite3.Connection) -> None:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS blocks (
                 block_id    TEXT PRIMARY KEY,
@@ -261,7 +274,7 @@ class SQLiteRetrievalBackend:
         except sqlite3.Error:
             return 0.0
 
-    def _set_checkpoint(self, conn: sqlite3.Connection, mtime: float):
+    def _set_checkpoint(self, conn: sqlite3.Connection, mtime: float) -> None:
         conn.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('index_mtime', ?)",
             (str(mtime),),
@@ -271,7 +284,7 @@ class SQLiteRetrievalBackend:
     # Internal — incremental rebuild
     # ------------------------------------------------------------------
 
-    def _rebuild_incremental(self, index_path: Path, mtime: float):
+    def _rebuild_incremental(self, index_path: Path, mtime: float) -> None:
         """Load index.json, diff against DB, upsert changed blocks, prune deleted."""
         try:
             data = json.loads(index_path.read_text())
@@ -282,6 +295,7 @@ class SQLiteRetrievalBackend:
         raw_blocks = data.get("blocks", {})
         if not isinstance(raw_blocks, dict):
             return
+        typed_blocks = cast(dict[object, object], raw_blocks)
 
         blocks_dir = self.tokenpak_dir / "blocks"
         conn = self._connect()
@@ -294,7 +308,7 @@ class SQLiteRetrievalBackend:
                 existing_ids = {
                     r[0] for r in conn.execute("SELECT block_id FROM blocks").fetchall()
                 }
-                new_ids = set(raw_blocks.keys())
+                new_ids = {str(block_id) for block_id in typed_blocks}
 
                 # Blocks to delete (removed from index)
                 deleted = existing_ids - new_ids
@@ -311,7 +325,11 @@ class SQLiteRetrievalBackend:
 
                 # Blocks to upsert
                 added = 0
-                for bid, bdata in raw_blocks.items():
+                for raw_bid, raw_bdata in typed_blocks.items():
+                    bid = str(raw_bid)
+                    if not isinstance(raw_bdata, dict):
+                        continue
+                    bdata = cast(dict[str, object], raw_bdata)
                     content_file = blocks_dir / f"{bid}.txt"
                     try:
                         content = (
@@ -335,7 +353,7 @@ class SQLiteRetrievalBackend:
                             bid,
                             bdata.get("source_path", bid),
                             bdata.get("risk_class", "narrative"),
-                            int(bdata.get("must_keep", False)),
+                            int(bool(bdata.get("must_keep", False))),
                             bdata.get("raw_tokens", 0),
                             content,
                             len(terms),
@@ -395,7 +413,7 @@ class SQLiteRetrievalBackend:
         query_terms: List[str],
         top_k: int,
         min_score: float,
-    ) -> List[Tuple[dict, float]]:
+    ) -> List[Tuple[VaultBlock, float]]:
         """Execute BM25 retrieval via SQL aggregation."""
         k1 = 1.5
         b_param = 0.75
@@ -473,14 +491,14 @@ class SQLiteRetrievalBackend:
                 FROM blocks WHERE block_id IN ({top_placeholders})""",
             top_ids,
         ).fetchall()
-        detail_map = {
-            r[0]: {
-                "block_id": r[0],
-                "source_path": r[1],
-                "risk_class": r[2],
+        detail_map: Dict[str, VaultBlock] = {
+            str(r[0]): {
+                "block_id": str(r[0]),
+                "source_path": str(r[1]),
+                "risk_class": str(r[2]),
                 "must_keep": bool(r[3]),
-                "raw_tokens": r[4],
-                "content": r[5],
+                "raw_tokens": int(r[4]),
+                "content": str(r[5]),
             }
             for r in detail_rows
         }
@@ -492,7 +510,7 @@ class SQLiteRetrievalBackend:
     # ------------------------------------------------------------------
 
     @property
-    def blocks(self) -> Dict[str, dict]:
+    def blocks(self) -> Dict[str, VaultBlock]:
         """Return all blocks as a dict for compatibility with VaultIndex callers.
 
         NOTE: This loads all block content from SQLite — use for debug/metrics
@@ -509,13 +527,13 @@ class SQLiteRetrievalBackend:
             ).fetchall()
             conn.close()
             return {
-                r["block_id"]: {
-                    "block_id": r["block_id"],
-                    "source_path": r["source_path"],
-                    "risk_class": r["risk_class"],
+                str(r["block_id"]): {
+                    "block_id": str(r["block_id"]),
+                    "source_path": str(r["source_path"]),
+                    "risk_class": str(r["risk_class"]),
                     "must_keep": bool(r["must_keep"]),
-                    "raw_tokens": r["raw_tokens"],
-                    "content": r["content"],
+                    "raw_tokens": int(r["raw_tokens"]),
+                    "content": str(r["content"]),
                 }
                 for r in rows
             }

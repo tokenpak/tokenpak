@@ -9,7 +9,6 @@ Verifies:
   - Memory scope filtering works correctly
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.proxy.intent_policy", reason="module not available in current build")
@@ -24,6 +23,7 @@ from tokenpak.proxy.intent_policy import (
 # ---------------------------------------------------------------------------
 # PolicyResult schema tests
 # ---------------------------------------------------------------------------
+
 
 class TestPolicyResultSchema:
     """Verify PolicyResult has all 6 new contract fields."""
@@ -62,6 +62,7 @@ class TestPolicyResultSchema:
 # ---------------------------------------------------------------------------
 # Contract values for all 10 intents
 # ---------------------------------------------------------------------------
+
 
 class TestIntentContracts:
     """Verify all 10 intents have correct contract definitions."""
@@ -118,14 +119,25 @@ class TestIntentContracts:
         assert p.context_quota == 2000
 
     def test_all_10_intents_covered(self):
-        expected = {"status", "usage", "debug", "summarize", "plan",
-                    "execute", "explain", "search", "create", "query"}
+        expected = {
+            "status",
+            "usage",
+            "debug",
+            "summarize",
+            "plan",
+            "execute",
+            "explain",
+            "search",
+            "create",
+            "query",
+        }
         assert expected == set(known_intents())
 
 
 # ---------------------------------------------------------------------------
 # apply_context_contract: memory scope filtering
 # ---------------------------------------------------------------------------
+
 
 class TestMemoryScopeFiltering:
     """Verify memory_scope filters context to allowed categories."""
@@ -158,6 +170,7 @@ class TestMemoryScopeFiltering:
 # apply_context_contract: omission rules
 # ---------------------------------------------------------------------------
 
+
 class TestOmissionRules:
     """Verify omission_rules actually remove excluded categories."""
 
@@ -189,6 +202,7 @@ class TestOmissionRules:
 # ---------------------------------------------------------------------------
 # apply_context_contract: quota enforcement
 # ---------------------------------------------------------------------------
+
 
 class TestQuotaEnforcement:
     """Verify context_quota truncates context at the limit."""
@@ -226,6 +240,7 @@ class TestQuotaEnforcement:
 # apply_context_contract: unknown intent / fallback
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackContract:
     """Unknown intent should fall back to safe defaults."""
 
@@ -253,6 +268,7 @@ class TestFallbackContract:
 # ---------------------------------------------------------------------------
 # to_dict serialization includes contract fields
 # ---------------------------------------------------------------------------
+
 
 class TestToDict:
     """Verify PolicyResult.to_dict() includes all contract fields."""

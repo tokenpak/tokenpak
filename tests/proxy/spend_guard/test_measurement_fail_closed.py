@@ -30,7 +30,8 @@ from tokenpak.proxy.spend_guard.rolling_caps import (
 
 def _cfg(**overrides) -> RollingCapsConfig:
     base = RollingCapsConfig(
-        enabled=True, window_seconds=3600,
+        enabled=True,
+        window_seconds=3600,
         per_agent_max_cost_usd=20.0,
         per_agent_max_tokens_total=5_000_000,
         per_agent_max_cache_read_tokens=4_000_000,
@@ -77,6 +78,7 @@ def _clean_caches():
 # ---------------------------------------------------------------------------
 # Corrupt / unreadable usage DB → fail closed
 # ---------------------------------------------------------------------------
+
 
 def test_corrupt_usage_db_blocks_and_warns(tmp_path, caplog, capsys):
     corrupt = tmp_path / "monitor.db"
@@ -132,6 +134,7 @@ def test_compute_returns_none_on_unreadable_db(tmp_path):
 # Missing usage DB on a fresh install → allow
 # ---------------------------------------------------------------------------
 
+
 def test_missing_usage_db_fresh_install_allows(tmp_path, caplog):
     missing = tmp_path / "never-created" / "monitor.db"
     with caplog.at_level(logging.INFO):
@@ -152,6 +155,7 @@ def test_missing_usage_db_fresh_install_allows(tmp_path, caplog):
 # Resolver-chosen path regression: caps must read the DB the proxy writes
 # ---------------------------------------------------------------------------
 
+
 def test_caps_read_resolver_chosen_usage_db(tmp_path, monkeypatch):
     """With no explicit path, caps must follow the shared path resolver.
 
@@ -165,6 +169,7 @@ def test_caps_read_resolver_chosen_usage_db(tmp_path, monkeypatch):
     resolver_db = tmp_path / "resolver" / "monitor.db"
     resolver_db.parent.mkdir(parents=True)
     import datetime as dt
+
     now_iso = dt.datetime.now().isoformat()
     _mk_valid_db(resolver_db, rows=[(now_iso, 59.90, "sess-big")])
     # The shared resolver honors this env var as its first candidate.

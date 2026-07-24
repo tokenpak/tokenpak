@@ -1,4 +1,3 @@
-
 import pytest
 
 pytest.importorskip("tokenpak.validation_gate", reason="module not available in current build")
@@ -14,10 +13,17 @@ def _body(data: dict) -> bytes:
 def test_gate_blocks_over_budget():
     gate = ValidationGate(enabled=True, token_budget_cap=100)
     result = gate.validate_request(
-        request_body=_body({"model": "claude-sonnet", "messages": [{"role": "user", "content": "hello"}]}),
+        request_body=_body(
+            {"model": "claude-sonnet", "messages": [{"role": "user", "content": "hello"}]}
+        ),
         model="claude-sonnet",
         input_tokens=101,
-        router_meta={"intent": "query", "recipe_used": "pipeline-v1", "slots": {}, "fallback": False},
+        router_meta={
+            "intent": "query",
+            "recipe_used": "pipeline-v1",
+            "slots": {},
+            "fallback": False,
+        },
     )
     assert result.valid is False
     assert any("token budget exceeded" in e for e in result.errors)
@@ -35,7 +41,12 @@ def test_gate_blocks_malformed_deterministic_context():
         ),
         model="claude-sonnet",
         input_tokens=50,
-        router_meta={"intent": "execute", "recipe_used": "pipeline-v1", "slots": {"mode": "apply"}, "fallback": False},
+        router_meta={
+            "intent": "execute",
+            "recipe_used": "pipeline-v1",
+            "slots": {"mode": "apply"},
+            "fallback": False,
+        },
     )
     assert result.valid is False
     assert any("missing required context block" in e for e in result.errors)
@@ -53,7 +64,12 @@ def test_gate_dry_run_returns_plan_and_no_block():
         ),
         model="claude-sonnet",
         input_tokens=50,
-        router_meta={"intent": "execute", "recipe_used": "pipeline-v1", "slots": {"mode": "dry_run"}, "fallback": False},
+        router_meta={
+            "intent": "execute",
+            "recipe_used": "pipeline-v1",
+            "slots": {"mode": "dry_run"},
+            "fallback": False,
+        },
     )
     assert result.valid is True
     assert result.dry_run is True

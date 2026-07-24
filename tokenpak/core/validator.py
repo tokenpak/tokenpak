@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import cast
 
 # ── Schema location ──────────────────────────────────────────────────────────
 
@@ -24,33 +25,33 @@ _SCHEMA_PATH = _SCHEMA_DIR / "tokenpak-v1.0.json"
 class ValidationIssue:
     """A single validation error or warning."""
 
-    def __init__(self, level: str, field: str, message: str):
+    def __init__(self, level: str, field: str, message: str) -> None:
         self.level = level  # "error" | "warning" | "info"
         self.field = field  # JSON path, e.g. "header.version"
         self.message = message
 
-    def __str__(self):
+    def __str__(self) -> str:
         icon = {"error": "✗", "warning": "⚠", "info": "ℹ"}.get(self.level, "?")
         return f"  {icon} [{self.field}] {self.message}"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         return {"level": self.level, "field": self.field, "message": self.message}
 
 
 class ValidationResult:
     """Complete result of a pack validation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.issues: list[ValidationIssue] = []
-        self._valid: Optional[bool] = None
+        self._valid: bool | None = None
 
-    def error(self, field: str, message: str):
+    def error(self, field: str, message: str) -> None:
         self.issues.append(ValidationIssue("error", field, message))
 
-    def warning(self, field: str, message: str):
+    def warning(self, field: str, message: str) -> None:
         self.issues.append(ValidationIssue("warning", field, message))
 
-    def info(self, field: str, message: str):
+    def info(self, field: str, message: str) -> None:
         self.issues.append(ValidationIssue("info", field, message))
 
     @property
@@ -71,7 +72,7 @@ class ValidationResult:
         status = "✓ VALID" if self.valid else "✗ INVALID"
         return f"{status} — {e} error(s), {w} warning(s)"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "valid": self.valid,
             "errors": len(self.errors),
@@ -103,7 +104,7 @@ class TokenPakValidator:
     WORKFLOW_STATUSES = {"not_started", "in_progress", "done", "failed"}
     BLOCK_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
-    def validate(self, pack: dict, verbose: bool = False) -> ValidationResult:
+    def validate(self, pack: Mapping[str, object], verbose: bool = False) -> ValidationResult:
         """Validate a parsed pack dict. Returns a ValidationResult."""
         result = ValidationResult()
         self._check_header(pack, result)
@@ -134,15 +135,18 @@ class TokenPakValidator:
             return result
         try:
             with open(path, encoding="utf-8") as f:
-                pack = json.load(f)
+                decoded: object = json.load(f)
         except json.JSONDecodeError as e:
             result.error("file", f"Invalid JSON: {e}")
             return result
-        return self.validate(pack, verbose=verbose)
+        if not isinstance(decoded, dict) or not all(isinstance(key, str) for key in decoded):
+            result.error("file", "Pack root must be a JSON object with string keys.")
+            return result
+        return self.validate(cast(dict[str, object], decoded), verbose=verbose)
 
     # ── Section checkers ─────────────────────────────────────────────────────
 
-    def _check_header(self, pack: dict, result: ValidationResult):
+    def _check_header(self, pack: Mapping[str, object], result: ValidationResult) -> None:
         if "header" not in pack:
             result.error("header", "Missing required section 'header'.")
             return
@@ -189,7 +193,7 @@ class TokenPakValidator:
         else:
             self._check_iso8601("header.created", h["created"], result)
 
-    def _check_metadata(self, pack: dict, result: ValidationResult):
+    def _check_metadata(self, pack: Mapping[str, object], result: ValidationResult) -> None:
         if "metadata" not in pack:
             result.error("metadata", "Missing required section 'metadata'.")
             return
@@ -217,7 +221,7 @@ class TokenPakValidator:
             elif len(set(m["tags"])) != len(m["tags"]):
                 result.warning("metadata.tags", "Duplicate tags found.")
 
-    def _check_blocks(self, pack: dict, result: ValidationResult):
+    def _check_blocks(self, pack: Mapping[str, object], result: ValidationResult) -> None:
         if "blocks" not in pack:
             result.error("blocks", "Missing required section 'blocks'.")
             return
@@ -279,31 +283,42 @@ class TokenPakValidator:
                 if not isinstance(block["tokens"], int) or block["tokens"] < 0:
                     result.error(f"{prefix}.tokens", "Must be a non-negative integer.")
 
-    def _check_capabilities(self, caps: dict, result: ValidationResult):
+    def _check_capabilities(self, caps: object, result: ValidationResult) -> None:
         if not isinstance(caps, dict):
             result.error("capabilities", "Must be an object.")
             return
-        if "tools" in caps:
-            for i, tool in enumerate(caps["tools"]):
+        tools = caps.get("tools")
+        if isinstance(tools, list):
+            for i, tool in enumerate(tools):
                 p = f"capabilities.tools[{i}]"
+                if not isinstance(tool, dict):
+                    result.error(p, "Each tool must be an object.")
+                    continue
                 if "name" not in tool:
                     result.error(f"{p}.name", "Missing required field 'name'.")
                 if "description" not in tool:
                     result.error(f"{p}.description", "Missing required field 'description'.")
-        if "mcp_servers" in caps:
-            for i, srv in enumerate(caps["mcp_servers"]):
+        servers = caps.get("mcp_servers")
+        if isinstance(servers, list):
+            for i, srv in enumerate(servers):
                 p = f"capabilities.mcp_servers[{i}]"
+                if not isinstance(srv, dict):
+                    result.error(p, "Each MCP server must be an object.")
+                    continue
                 if "uri" not in srv:
                     result.error(f"{p}.uri", "Missing required field 'uri'.")
                 if "name" not in srv:
                     result.error(f"{p}.name", "Missing required field 'name'.")
 
-    def _check_constraints(self, constraints: dict, result: ValidationResult):
+    def _check_constraints(self, constraints: object, result: ValidationResult) -> None:
         if not isinstance(constraints, dict):
             result.error("constraints", "Must be an object.")
             return
         if "guardrails" in constraints:
             g = constraints["guardrails"]
+            if not isinstance(g, dict):
+                result.error("constraints.guardrails", "Must be an object.")
+                return
             if "max_cost_usd" in g and not isinstance(g["max_cost_usd"], (int, float)):
                 result.error("constraints.guardrails.max_cost_usd", "Must be a number.")
             if "timeout_seconds" in g and (
@@ -313,7 +328,7 @@ class TokenPakValidator:
                     "constraints.guardrails.timeout_seconds", "Must be a positive integer."
                 )
 
-    def _check_state(self, state: dict, result: ValidationResult):
+    def _check_state(self, state: object, result: ValidationResult) -> None:
         if not isinstance(state, dict):
             result.error("state", "Must be an object.")
             return
@@ -327,7 +342,7 @@ class TokenPakValidator:
         ):
             result.error("state.step_index", "Must be a non-negative integer.")
 
-    def _check_provenance(self, prov: dict, result: ValidationResult):
+    def _check_provenance(self, prov: object, result: ValidationResult) -> None:
         if not isinstance(prov, dict):
             result.error("provenance", "Must be an object.")
             return
@@ -336,8 +351,12 @@ class TokenPakValidator:
                 "provenance.trust_level",
                 f"Unknown trust level '{prov['trust_level']}'. Valid: {sorted(self.TRUST_LEVELS)}",
             )
-        if "transforms" in prov:
-            for i, t in enumerate(prov["transforms"]):
+        transforms = prov.get("transforms")
+        if isinstance(transforms, list):
+            for i, t in enumerate(transforms):
+                if not isinstance(t, dict):
+                    result.error(f"provenance.transforms[{i}]", "Must be an object.")
+                    continue
                 if "type" not in t:
                     result.error(
                         f"provenance.transforms[{i}].type", "Missing required field 'type'."
@@ -347,12 +366,15 @@ class TokenPakValidator:
                         f"provenance.transforms[{i}].type", f"Unknown transform type '{t['type']}'."
                     )
 
-    def _check_policies(self, policies: dict, result: ValidationResult):
+    def _check_policies(self, policies: object, result: ValidationResult) -> None:
         if not isinstance(policies, dict):
             result.error("policies", "Must be an object.")
             return
         if "compaction" in policies:
             c = policies["compaction"]
+            if not isinstance(c, dict):
+                result.error("policies.compaction", "Must be an object.")
+                c = {}
             if "mode" in c and c["mode"] not in self.COMPACTION_MODES:
                 result.error(
                     "policies.compaction.mode",
@@ -362,6 +384,9 @@ class TokenPakValidator:
                 result.error("policies.compaction.max_tokens", "Must be a positive integer.")
         if "budget" in policies:
             b = policies["budget"]
+            if not isinstance(b, dict):
+                result.error("policies.budget", "Must be an object.")
+                return
             if "total" in b and "per_block_max" in b:
                 if isinstance(b["total"], int) and isinstance(b["per_block_max"], int):
                     if b["per_block_max"] > b["total"]:
@@ -369,24 +394,31 @@ class TokenPakValidator:
                             "policies.budget.per_block_max", "per_block_max exceeds total budget."
                         )
 
-    def _check_embeddings(self, pack: dict, result: ValidationResult):
+    def _check_embeddings(self, pack: Mapping[str, object], result: ValidationResult) -> None:
         emb = pack.get("embeddings", {})
         if not isinstance(emb, dict):
             result.error("embeddings", "Must be an object.")
             return
         if "block_vectors" in emb:
-            blocks = pack.get("blocks", [])
+            raw_blocks = pack.get("blocks", [])
+            blocks = raw_blocks if isinstance(raw_blocks, list) else []
             block_ids = {b.get("id") for b in blocks if isinstance(b, dict)}
-            for vid in emb["block_vectors"]:
+            block_vectors = emb["block_vectors"]
+            if not isinstance(block_vectors, dict):
+                result.error("embeddings.block_vectors", "Must be an object.")
+                return
+            for vid in block_vectors:
                 if vid not in block_ids:
                     result.warning(
                         f"embeddings.block_vectors.{vid}",
                         f"Vector references unknown block id '{vid}'.",
                     )
 
-    def _check_quality_hints(self, pack: dict, result: ValidationResult):
+    def _check_quality_hints(self, pack: Mapping[str, object], result: ValidationResult) -> None:
         """Non-fatal quality checks shown in verbose mode."""
         m = pack.get("metadata", {})
+        if not isinstance(m, dict):
+            return
         if not m.get("target"):
             result.info("metadata.target", "No target specified. Pack may be broadcast.")
         if not m.get("tags"):
@@ -398,11 +430,14 @@ class TokenPakValidator:
                 "metadata.expires", "No expiry set. Consider adding TTL for time-sensitive packs."
             )
         blocks = pack.get("blocks", [])
-        if not any(b.get("type") == "instructions" for b in blocks):
+        if not isinstance(blocks, list):
+            return
+        typed_blocks = [b for b in blocks if isinstance(b, dict)]
+        if not any(b.get("type") == "instructions" for b in typed_blocks):
             result.info(
                 "blocks", "No 'instructions' block found. Consider adding one for agent context."
             )
-        has_evidence = any(b.get("type") == "evidence" for b in blocks)
+        has_evidence = any(b.get("type") == "evidence" for b in typed_blocks)
         if has_evidence and "provenance" not in pack:
             result.info(
                 "provenance",
@@ -412,8 +447,12 @@ class TokenPakValidator:
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     def _check_iso8601(
-        self, field: str, value: Any, result: ValidationResult, check_future: bool = False
-    ):
+        self,
+        field: str,
+        value: object,
+        result: ValidationResult,
+        check_future: bool = False,
+    ) -> None:
         if not isinstance(value, str):
             result.error(field, "Must be an ISO 8601 string.")
             return

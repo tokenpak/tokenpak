@@ -7,6 +7,7 @@ Configuration (env vars or config file):
 - ``TOKENPAK_TELEGRAM_BOT_TOKEN``: bot token issued by @BotFather
 - ``TOKENPAK_TELEGRAM_CHAT_ID``: target chat, channel, or group ID
 """
+
 from __future__ import annotations
 
 import json

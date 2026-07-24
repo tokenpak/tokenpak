@@ -65,7 +65,7 @@ def receipt_id_for_run(run_id: str) -> str:
     accumulating orphaned receipts and repointing the run.
     """
 
-    suffix = run_id[len("run_"):] if run_id.startswith("run_") else run_id
+    suffix = run_id[len("run_") :] if run_id.startswith("run_") else run_id
     return f"receipt_{suffix}"
 
 
@@ -114,9 +114,7 @@ def build_receipt(
     for decision_id in run.decisions:
         decision = ledger.read_decision(decision_id)
         if decision is not None:
-            decisions.append(
-                ReceiptDecision(decision_id=decision.id, status=decision.status.value)
-            )
+            decisions.append(ReceiptDecision(decision_id=decision.id, status=decision.status.value))
 
     effects: list[ReceiptEffect] = []
     for effect_id in run.effects:

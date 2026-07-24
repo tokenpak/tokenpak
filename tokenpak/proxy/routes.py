@@ -18,14 +18,56 @@ Provides a mixin class (ProxyRoutesMixin) with:
     - _serve_dashboard()    — static dashboard files
 """
 
+from __future__ import annotations
+
+__all__ = ("ProxyRoutesMixin",)
+
+
 # ---------------------------------------------------------------------------
 # stdlib
 # ---------------------------------------------------------------------------
 import json
 import time
 from datetime import datetime, timezone
+from email.message import Message
 from pathlib import Path
+from typing import TYPE_CHECKING, BinaryIO, TypedDict, cast
 from urllib.parse import parse_qs, urlparse
+
+if TYPE_CHECKING:
+    from tokenpak.proxy.server import ProxyServer
+
+
+def _as_int(value: object, default: int = 0) -> int:
+    """Normalize one untrusted telemetry value without inventing data."""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float, str)):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def _as_float(value: object, default: float = 0.0) -> float:
+    """Normalize one untrusted telemetry value without inventing data."""
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+class _ModelStats(TypedDict, total=False):
+    """Per-model monitor fields exposed by the dashboard route."""
+
+    requests: int
+    input_tokens: int
+    cost: float
 
 
 class ProxyRoutesMixin:
@@ -37,17 +79,42 @@ class ProxyRoutesMixin:
         class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPRequestHandler): ...
     """
 
+    if TYPE_CHECKING:
+        _ps: ProxyServer
+        headers: Message
+        path: str
+        rfile: BinaryIO
+        wfile: BinaryIO
+
+        def _check_auth(self) -> bool: ...
+
+        def _forward_request(self, method: str) -> None: ...
+
+        def _ollama_proxy(self, method: str) -> None: ...
+
+        def _send_json(self, data: object, *, status: int = 200) -> None: ...
+
+        def end_headers(self) -> None: ...
+
+        def send_header(self, keyword: str, value: str | int) -> None: ...
+
+        def send_response(self, code: int, message: str | None = None) -> None: ...
+
     # ------------------------------------------------------------------
     # GET route dispatch
     # ------------------------------------------------------------------
 
-    def do_GET(self):
+    def do_GET(self) -> None:
         # Security check: verify auth for non-localhost clients
         if not self._check_auth():
             self.send_response(401)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": "Unauthorized — missing or invalid X-TokenPak-Key header"}).encode())
+            self.wfile.write(
+                json.dumps(
+                    {"error": "Unauthorized — missing or invalid X-TokenPak-Key header"}
+                ).encode()
+            )
             return
 
         if self.path == "/" or self.path == "":
@@ -79,12 +146,14 @@ class ProxyRoutesMixin:
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            body = json.dumps({
-                "error": {
-                    "type": "method_not_allowed",
-                    "message": f"Use POST for {self.path.split('?')[0]}",
+            body = json.dumps(
+                {
+                    "error": {
+                        "type": "method_not_allowed",
+                        "message": f"Use POST for {self.path.split('?')[0]}",
+                    }
                 }
-            }).encode()
+            ).encode()
             self.wfile.write(body)
             return
 
@@ -97,13 +166,20 @@ class ProxyRoutesMixin:
             return
 
         if self.path == "/cache-stats":
-            from tokenpak.core.runtime.proxy import _build_cache_stats_payload
-            self._send_json(_build_cache_stats_payload())
+            from tokenpak.proxy.cache_stats import _build_cache_stats_payload
+
+            monitor = self._ps.monitor
+            self._send_json(
+                _build_cache_stats_payload(
+                    session=dict(self._ps.session),
+                    db_path=str(monitor.db_path) if monitor is not None else None,
+                )
+            )
             return
 
         if self.path == "/recent":
-            from tokenpak.core.runtime.proxy import MONITOR
-            self._send_json({"recent": MONITOR.recent(50)})
+            monitor = self._ps.monitor
+            self._send_json({"recent": monitor.recent(50) if monitor is not None else []})
             return
 
         if self.path == "/stats/last":
@@ -164,20 +240,33 @@ class ProxyRoutesMixin:
     # GET route handlers
     # ------------------------------------------------------------------
 
-    def _route_health(self):
-        """Handle GET /health with 1-second response cache."""
-        import time as _time_module
+    def _route_health(self) -> None:
+        """Handle the legacy mixin's cached ``GET /health`` contract.
 
-        from tokenpak.core.runtime.proxy import (
-            CANON_AVAILABLE,
-            CAPSULE_BUILDER,
-            SESSION,
-            TERM_RESOLVER,
-            TOOL_REGISTRY_AVAILABLE,
-            VAULT_INDEX,
-            _get_tool_registry,
-            _request_latencies,
+        ``ProxyRoutesMixin`` is a public, snapshotted compatibility surface but
+        is not the handler used by :class:`ProxyServer`.  Keep its v1.13 payload
+        and one-second cache separate from the canonical, uncached
+        ``ProxyServer.health()`` endpoint.
+        """
+        from tokenpak.proxy.request_pipeline import (
+            _HEALTH_CACHE_TTL,
+            _health_cache,
         )
+
+        now = time.monotonic()
+        cached = _health_cache["data"]
+        if cached is not None and (now - _health_cache["ts"]) < _HEALTH_CACHE_TTL:
+            self._send_json(cached)
+            return
+
+        health_data = self._build_legacy_health_payload()
+        _health_cache["data"] = health_data
+        _health_cache["ts"] = now
+        self._send_json(health_data)
+
+    def _build_legacy_health_payload(self) -> dict[str, object]:
+        """Build the v1.13 mixin payload from current compatibility shims."""
+        from tokenpak.core.runtime.proxy import SESSION
         from tokenpak.proxy.config import (
             BUDGET_TOTAL_TOKENS,
             COMPILATION_MODE,
@@ -188,195 +277,118 @@ class ProxyRoutesMixin:
             TERM_RESOLVER_MAX_BYTES,
             TERM_RESOLVER_TOP_K,
             UPSTREAM_TIMEOUT,
+            VAULT_INDEX_PATH,
             skeleton_active,
         )
         from tokenpak.proxy.fallback import _provider_circuits
-        from tokenpak.proxy.request_pipeline import (
-            _HEALTH_CACHE_TTL,
-            _health_cache,
-            _router_health,
-        )
+        from tokenpak.proxy.request_pipeline import _router_health
         from tokenpak.proxy.stats import build_health_response
+        from tokenpak.proxy.vault_bridge import (
+            get_capsule_builder,
+            get_term_resolver,
+            get_vault_index,
+        )
 
-        now = _time_module.monotonic()
-        if (
-            _health_cache["data"] is not None
-            and (now - _health_cache["ts"]) < _HEALTH_CACHE_TTL
-        ):
-            self._send_json(_health_cache["data"])
-            return
+        vault_index = get_vault_index()
+        raw_blocks = getattr(vault_index, "blocks", None)
+        if isinstance(raw_blocks, (dict, list, tuple, set)):
+            block_count = len(raw_blocks)
+        else:
+            raw_count = getattr(vault_index, "block_count", 0)
+            block_count = raw_count if isinstance(raw_count, int) else 0
 
-        vault_info = {
-            "available": VAULT_INDEX.available,
-            "blocks": len(VAULT_INDEX.blocks),
-            "path": str(VAULT_INDEX.tokenpak_dir),
-        }
-        router_info = _router_health()
-        health_data = build_health_response(
+        return build_health_response(
             session=SESSION,
             compilation_mode=COMPILATION_MODE,
-            vault_info=vault_info,
-            router_info=router_info,
+            vault_info={
+                "available": bool(getattr(vault_index, "available", False)),
+                "blocks": block_count,
+                "path": str(getattr(vault_index, "tokenpak_dir", VAULT_INDEX_PATH)),
+            },
+            router_info=_router_health(),
             router_enabled=ROUTER_ENABLED,
-            capsule_available=CAPSULE_BUILDER is not None,
-            canon_available=CANON_AVAILABLE,
-            # Report from the real capability probe, not the intent flag:
-            # skeleton is "active" only if enabled AND the extractor imports.
+            capsule_available=get_capsule_builder() is not None,
+            # The removed canon/tool-registry singletons have no current
+            # equivalent.  Report them unavailable instead of inventing state.
+            canon_available=False,
             skeleton_enabled=skeleton_active(),
             shadow_enabled=SHADOW_ENABLED,
             budget_total_tokens=BUDGET_TOTAL_TOKENS,
-            tool_registry_stats=(
-                _get_tool_registry().stats() if _get_tool_registry() else {}
-            )
-            if TOOL_REGISTRY_AVAILABLE
-            else {},
-            tool_registry_available=TOOL_REGISTRY_AVAILABLE,
+            tool_registry_stats={},
+            tool_registry_available=False,
             term_resolver_enabled=TERM_RESOLVER_ENABLED,
-            term_resolver_available=TERM_RESOLVER is not None,
+            term_resolver_available=get_term_resolver() is not None,
             term_resolver_top_k=TERM_RESOLVER_TOP_K,
             term_resolver_max_bytes=TERM_RESOLVER_MAX_BYTES,
             query_expansion_enabled=QUERY_EXPANSION_ENABLED,
             upstream_timeout=UPSTREAM_TIMEOUT,
             provider_circuits=_provider_circuits,
-            request_latencies=list(_request_latencies),
+            # The legacy global latency deque no longer exists.  Empty means
+            # unavailable/no observations and preserves the v1.13 wire shape.
+            request_latencies=[],
         )
-        _health_cache["data"] = health_data
-        _health_cache["ts"] = now
-        self._send_json(health_data)
 
-    def _route_stats(self):
+    def _route_stats(self) -> None:
         """Handle GET /stats."""
-        from tokenpak.core.runtime.proxy import (
-            CANON_AVAILABLE,
-            CAPSULE_BUILDER,
-            MONITOR,
-            SESSION,
-            VAULT_INDEX,
-        )
-        from tokenpak.proxy.config import (
-            BUDGET_TOTAL_TOKENS,
-            COMPILATION_MODE,
-            MAX_COMPRESSION_TIME_MS,
-            ROUTER_ENABLED,
-            SHADOW_ENABLED,
-            skeleton_active,
-        )
-        from tokenpak.proxy.stats import build_stats_response
+        self._send_json(self._ps.stats())
 
-        self._send_json(
-            build_stats_response(
-                session=SESSION,
-                compilation_mode=COMPILATION_MODE,
-                vault_info={
-                    "available": VAULT_INDEX.available,
-                    "blocks": len(VAULT_INDEX.blocks),
-                    "last_timing_ms": SESSION.get("vault_last_timing_ms", {}),
-                },
-                router_enabled=ROUTER_ENABLED,
-                capsule_available=CAPSULE_BUILDER is not None,
-                compression_timeouts=SESSION.get("compression_timeouts", 0),
-                max_compression_time_ms=MAX_COMPRESSION_TIME_MS,
-                canon_available=CANON_AVAILABLE,
-                skeleton_enabled=skeleton_active(),
-                shadow_enabled=SHADOW_ENABLED,
-                budget_total_tokens=BUDGET_TOTAL_TOKENS,
-                monitor_today=MONITOR.get_stats(),
-                monitor_by_model=MONITOR.get_by_model(),
-                monitor_recent=MONITOR.recent(10),
-            )
-        )
-
-    def _route_stats_last(self):
+    def _route_stats_last(self) -> None:
         """Handle GET /stats/last — per-request stats for the most recent request."""
-        from tokenpak.core.runtime.proxy import _LAST_REQUEST_LOCK, LAST_REQUEST, SESSION
+        self._send_json(self._ps.last_request_stats())
 
-        with _LAST_REQUEST_LOCK:
-            if LAST_REQUEST["request_id"] is None:
-                self._send_json(
-                    {
-                        "error": "no_requests",
-                        "message": "No requests captured yet. Send a message to see stats.",
-                    }
-                )
-            else:
-                self._send_json(
-                    {
-                        "request_id": LAST_REQUEST["request_id"],
-                        "timestamp": LAST_REQUEST["timestamp"],
-                        "model": LAST_REQUEST["model"],
-                        "tokens_saved": LAST_REQUEST["tokens_saved"],
-                        "percent_saved": LAST_REQUEST["percent_saved"],
-                        "cost_saved": LAST_REQUEST["cost_saved"],
-                        "session_total_saved": round(SESSION["cost_saved"], 4),
-                        "session_requests": SESSION["requests"],
-                        "input_tokens_raw": LAST_REQUEST["input_tokens_raw"],
-                        "input_tokens_sent": LAST_REQUEST["input_tokens_sent"],
-                        "output_tokens": LAST_REQUEST["output_tokens"],
-                    }
-                )
-
-    def _route_stats_session(self):
+    def _route_stats_session(self) -> None:
         """Handle GET /stats/session — session aggregates."""
-        from tokenpak.core.runtime.proxy import SESSION
+        self._send_json(self._ps.session_stats())
 
-        uptime_hours = round((time.time() - SESSION["start_time"]) / 3600, 2)
-        self._send_json(
-            {
-                "session_requests": SESSION["requests"],
-                "session_total_saved": round(SESSION["cost_saved"], 4),
-                "tokens_saved": SESSION["saved_tokens"],
-                "tokens_sent": SESSION["sent_input_tokens"],
-                "tokens_raw": SESSION["input_tokens"],
-                "output_tokens": SESSION["output_tokens"],
-                "total_cost": round(SESSION["cost"], 4),
-                "uptime_hours": uptime_hours,
-                "errors": SESSION["errors"],
-                "avg_savings_pct": round(
-                    SESSION["saved_tokens"] / SESSION["input_tokens"] * 100, 1
-                )
-                if SESSION["input_tokens"] > 0
-                else 0.0,
-            }
-        )
-
-    def _route_savings(self):
+    def _route_savings(self) -> None:
         """Handle GET /savings[?since=...]."""
-        from tokenpak.core.runtime.proxy import MONITOR
-
         parsed = urlparse(self.path)
         qparams = parse_qs(parsed.query)
         since = qparams.get("since", [None])[0]
-        self._send_json(MONITOR.get_savings_report(since=since))
+        monitor = self._ps.monitor
+        if monitor is None:
+            self._send_json({"error": "monitor_unavailable"}, status=503)
+            return
+        self._send_json(monitor.get_savings_report(since=since))
 
-    def _route_vault_debug(self):
+    def _route_vault_debug(self) -> None:
         """Handle GET /vault — debug endpoint showing vault index state."""
-        from tokenpak.core.runtime.proxy import VAULT_INDEX
+        from collections.abc import Mapping
 
-        blocks_info = []
-        for bid, block in VAULT_INDEX.blocks.items():
+        from tokenpak.proxy.vault_bridge import get_vault_index
+
+        vault_index = get_vault_index()
+        raw_blocks = getattr(vault_index, "blocks", {})
+        blocks = raw_blocks if isinstance(raw_blocks, Mapping) else {}
+
+        blocks_info: list[dict[str, object]] = []
+        total_tokens = 0
+        for bid, raw_block in blocks.items():
+            if not isinstance(raw_block, Mapping):
+                continue
+            raw_tokens = _as_int(raw_block.get("raw_tokens"))
+            total_tokens += raw_tokens
             blocks_info.append(
                 {
                     "block_id": bid,
-                    "source_path": block["source_path"],
-                    "risk_class": block["risk_class"],
-                    "raw_tokens": block["raw_tokens"],
+                    "source_path": raw_block.get("source_path", ""),
+                    "risk_class": raw_block.get("risk_class", "unknown"),
+                    "raw_tokens": raw_tokens,
                 }
             )
         self._send_json(
             {
-                "available": VAULT_INDEX.available,
-                "blocks": len(VAULT_INDEX.blocks),
-                "total_tokens": sum(b["raw_tokens"] for b in VAULT_INDEX.blocks.values()),
-                "path": str(VAULT_INDEX.tokenpak_dir),
+                "available": vault_index.available,
+                "blocks": len(blocks),
+                "total_tokens": total_tokens,
+                "path": str(getattr(vault_index, "tokenpak_dir", "")),
                 "block_list": blocks_info,
             }
         )
 
-    def _route_trace_last(self):
+    def _route_trace_last(self) -> None:
         """Handle GET /trace/last."""
-        from tokenpak.proxy.tracing import TRACE_STORAGE
-
-        trace = TRACE_STORAGE.get_last()
+        trace = self._ps.trace_storage.get_last()
         if trace:
             self._send_json(trace.to_dict())
         else:
@@ -387,12 +399,10 @@ class ProxyRoutesMixin:
                 }
             )
 
-    def _route_trace_by_id(self):
+    def _route_trace_by_id(self) -> None:
         """Handle GET /trace/{request_id}."""
-        from tokenpak.proxy.tracing import TRACE_STORAGE
-
         request_id = self.path.split("/trace/")[1]
-        trace = TRACE_STORAGE.get_by_id(request_id)
+        trace = self._ps.trace_storage.get_by_id(request_id)
         if trace:
             self._send_json(trace.to_dict())
         else:
@@ -403,31 +413,33 @@ class ProxyRoutesMixin:
                 }
             )
 
-    def _route_traces_list(self):
+    def _route_traces_list(self) -> None:
         """Handle GET /traces."""
-        from tokenpak.proxy.tracing import TRACE_STORAGE
-
-        traces = TRACE_STORAGE.get_all()
+        traces = self._ps.trace_storage.get_all()
         self._send_json({"traces": [t.to_dict() for t in traces], "count": len(traces)})
 
-    def _route_metrics_prometheus(self):
+    def _route_metrics_prometheus(self) -> None:
         """Handle GET /metrics — Prometheus text format metrics."""
-        from tokenpak.core.runtime.proxy import MONITOR, SESSION, VAULT_INDEX
-
+        session = dict(self._ps.session)
+        monitor = self._ps.monitor
         try:
+            from tokenpak.proxy.vault_bridge import get_vault_index
             from tokenpak.telemetry.metrics.prometheus import build_metrics_text
 
-            vault_blocks = len(VAULT_INDEX.blocks) if VAULT_INDEX.available else 0
-            body_out = build_metrics_text(SESSION, MONITOR, vault_blocks=vault_blocks).encode()
+            vault_index = get_vault_index()
+            raw_blocks = getattr(vault_index, "blocks", {})
+            vault_blocks = (
+                len(raw_blocks) if vault_index.available and isinstance(raw_blocks, dict) else 0
+            )
+            body_out = build_metrics_text(session, monitor, vault_blocks=vault_blocks).encode()
         except Exception:
             # Fallback: minimal unlabeled metrics if module unavailable
-            s = SESSION
-            uptime = int(time.time() - s.get("start_time", time.time()))
+            uptime = int(time.time() - _as_float(session.get("start_time"), time.time()))
             lines = [
-                f"tokenpak_requests_total {s.get('requests', 0)}",
-                f"tokenpak_tokens_input_total {s.get('input_tokens', 0)}",
-                f"tokenpak_tokens_saved_total {s.get('saved_tokens', 0)}",
-                f"tokenpak_errors_total {s.get('errors', 0)}",
+                f"tokenpak_requests_total {session.get('requests', 0)}",
+                f"tokenpak_tokens_input_total {session.get('input_tokens', 0)}",
+                f"tokenpak_tokens_saved_total {session.get('saved_tokens', 0)}",
+                f"tokenpak_errors_total {session.get('errors', 0)}",
                 f"tokenpak_uptime_seconds {uptime}",
             ]
             body_out = "\n".join(lines).encode()
@@ -438,45 +450,53 @@ class ProxyRoutesMixin:
         self.end_headers()
         self.wfile.write(body_out)
 
-    def _route_metrics_dashboard(self):
+    def _route_metrics_dashboard(self) -> None:
         """Handle GET /metrics/dashboard — comprehensive 8-metric dashboard payload."""
-        from tokenpak.core.runtime.proxy import MONITOR, SESSION
-
-        today_stats = MONITOR.get_stats(hours=24)
-        recent_reqs = MONITOR.recent(limit=100)
-        by_model = MONITOR.get_by_model()
-        uptime_secs = int(time.time() - SESSION["start_time"])
+        monitor = self._ps.monitor
+        today_stats = monitor.get_stats(hours=24) if monitor is not None else {}
+        recent_reqs = monitor.recent(limit=100) if monitor is not None else []
+        by_model = monitor.get_by_model() if monitor is not None else {}
+        uptime_secs = int(time.time() - self._ps.session["start_time"])
         uptime_hours = max(0.01, uptime_secs / 3600.0)
 
         # Throughput (req/sec)
         if len(recent_reqs) > 1:
-            first_ts = datetime.fromisoformat(recent_reqs[-1]["timestamp"])
-            last_ts = datetime.fromisoformat(recent_reqs[0]["timestamp"])
-            time_diff_secs = max(1, (last_ts - first_ts).total_seconds())
-            throughput = len(recent_reqs) / time_diff_secs
+            first_value = recent_reqs[-1].get("timestamp")
+            last_value = recent_reqs[0].get("timestamp")
+            if isinstance(first_value, str) and isinstance(last_value, str):
+                first_ts = datetime.fromisoformat(first_value)
+                last_ts = datetime.fromisoformat(last_value)
+                time_diff_secs = max(1.0, (last_ts - first_ts).total_seconds())
+                throughput = len(recent_reqs) / time_diff_secs
+            else:
+                throughput = _as_float(today_stats.get("requests")) / uptime_hours / 3600.0
         else:
-            throughput = today_stats["requests"] / uptime_hours / 3600.0
+            throughput = _as_float(today_stats.get("requests")) / uptime_hours / 3600.0
 
         # Latency percentiles
-        latencies = [r.get("latency_ms", 0) for r in recent_reqs if r.get("latency_ms")]
+        latencies = [
+            _as_float(latency)
+            for row in recent_reqs
+            if (latency := row.get("latency_ms")) is not None
+        ]
         latencies.sort()
         p50 = latencies[len(latencies) // 2] if latencies else 0
         p95 = latencies[int(len(latencies) * 0.95)] if latencies else 0
         p99 = latencies[int(len(latencies) * 0.99)] if latencies else 0
-        avg_latency = today_stats.get("avg_latency_ms", 0)
+        avg_latency = _as_float(today_stats.get("avg_latency_ms"))
 
         # Error rate and top failure types
-        error_count = sum(1 for r in recent_reqs if r.get("status_code", 200) >= 400)
+        error_count = sum(1 for row in recent_reqs if _as_int(row.get("status_code"), 200) >= 400)
         error_rate = error_count / len(recent_reqs) if recent_reqs else 0
-        failure_types: dict = {}
+        failure_types: dict[str, int] = {}
         for r in recent_reqs:
-            sc = r.get("status_code", 200)
+            sc = _as_int(r.get("status_code"), 200)
             if sc >= 400:
                 failure_types[str(sc)] = failure_types.get(str(sc), 0) + 1
 
         # Cache hit ratio
-        total_cache_read = today_stats.get("cache_read_tokens", 0)
-        total_cache_creation = today_stats.get("cache_creation_tokens", 0)
+        total_cache_read = _as_int(today_stats.get("cache_read_tokens"))
+        total_cache_creation = _as_int(today_stats.get("cache_creation_tokens"))
         cache_hit_ratio = 0.0
         if total_cache_read > 0 or total_cache_creation > 0:
             cache_hit_ratio = (
@@ -486,64 +506,66 @@ class ProxyRoutesMixin:
             )
 
         # Model distribution
-        model_dist = {}
+        model_dist: dict[str, _ModelStats] = {}
         for model, data in by_model.items():
             model_dist[model] = {
-                "requests": data.get("requests", 0),
-                "input_tokens": data.get("input_tokens", 0),
-                "cost": data.get("cost", 0.0),
+                "requests": _as_int(data.get("requests")),
+                "input_tokens": _as_int(data.get("input_tokens")),
+                "cost": _as_float(data.get("cost")),
             }
 
-        self._send_json({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "uptime_seconds": uptime_secs,
-            "uptime_hours": round(uptime_hours, 2),
-            "requests": {
-                "total": today_stats.get("requests", 0),
-                "throughput_req_per_sec": round(throughput, 3),
-                "24h_window": True,
-            },
-            "latency": {
-                "p50_ms": round(p50, 1),
-                "p95_ms": round(p95, 1),
-                "p99_ms": round(p99, 1),
-                "avg_ms": round(avg_latency, 1),
-                "samples": len(latencies),
-            },
-            "models": model_dist,
-            "model_count": len(model_dist),
-            "routing": {
-                "smart_routing_hit_rate": 0.0,   # Placeholder
-                "fallback_chain_usage": 0,        # Placeholder
-            },
-            "cache": {
-                "hit_ratio": round(cache_hit_ratio, 3),
-                "read_tokens": total_cache_read,
-                "creation_tokens": total_cache_creation,
-            },
-            "errors": {
-                "error_rate": round(error_rate, 4),
-                "error_count": error_count,
-                "top_failures": dict(
-                    sorted(failure_types.items(), key=lambda x: x[1], reverse=True)[:5]
-                ),
-            },
-            "streaming": {"count": 0, "percentage": 0.0},   # Placeholder
-            "window_24h": {
-                "input_tokens": today_stats.get("input_tokens", 0),
-                "output_tokens": today_stats.get("output_tokens", 0),
-                "protected_tokens": today_stats.get("protected_tokens", 0),
-                "compressed_tokens": today_stats.get("compressed_tokens", 0),
-                "injected_tokens": today_stats.get("injected_tokens", 0),
-                "total_cost": today_stats.get("total_cost", 0.0),
-            },
-        })
+        self._send_json(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "uptime_seconds": uptime_secs,
+                "uptime_hours": round(uptime_hours, 2),
+                "requests": {
+                    "total": today_stats.get("requests", 0),
+                    "throughput_req_per_sec": round(throughput, 3),
+                    "24h_window": True,
+                },
+                "latency": {
+                    "p50_ms": round(p50, 1),
+                    "p95_ms": round(p95, 1),
+                    "p99_ms": round(p99, 1),
+                    "avg_ms": round(avg_latency, 1),
+                    "samples": len(latencies),
+                },
+                "models": model_dist,
+                "model_count": len(model_dist),
+                "routing": {
+                    "smart_routing_hit_rate": 0.0,  # Placeholder
+                    "fallback_chain_usage": 0,  # Placeholder
+                },
+                "cache": {
+                    "hit_ratio": round(cache_hit_ratio, 3),
+                    "read_tokens": total_cache_read,
+                    "creation_tokens": total_cache_creation,
+                },
+                "errors": {
+                    "error_rate": round(error_rate, 4),
+                    "error_count": error_count,
+                    "top_failures": dict(
+                        sorted(failure_types.items(), key=lambda x: x[1], reverse=True)[:5]
+                    ),
+                },
+                "streaming": {"count": 0, "percentage": 0.0},  # Placeholder
+                "window_24h": {
+                    "input_tokens": today_stats.get("input_tokens", 0),
+                    "output_tokens": today_stats.get("output_tokens", 0),
+                    "protected_tokens": today_stats.get("protected_tokens", 0),
+                    "compressed_tokens": today_stats.get("compressed_tokens", 0),
+                    "injected_tokens": today_stats.get("injected_tokens", 0),
+                    "total_cost": today_stats.get("total_cost", 0.0),
+                },
+            }
+        )
 
     # ------------------------------------------------------------------
     # Ingest handlers
     # ------------------------------------------------------------------
 
-    def _ingest(self, path):
+    def _ingest(self, path: str) -> None:
         """Handle /ingest and /ingest/batch POST requests."""
         content_length = int(self.headers.get("Content-Length", 0))
         if content_length == 0:
@@ -563,29 +585,30 @@ class ProxyRoutesMixin:
         elif path == "/ingest/batch":
             self._ingest_batch(payload)
 
-    def _ingest_single(self, payload):
+    def _ingest_single(self, payload: object) -> None:
         """Handle single entry ingest."""
-        from tokenpak.core.runtime.proxy import SESSION, _ingest_write_entry
+        from tokenpak.vault.indexer import _ingest_write_entry
 
         if not isinstance(payload, dict):
             self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)
             return
+        entry = cast(dict[str, object], payload)
         required = {"model", "tokens", "cost"}
-        missing = required - set(payload.keys())
+        missing = required - set(entry.keys())
         if missing:
             self._send_json({"error": f"missing required fields: {', '.join(missing)}"}, status=400)
             return
         try:
-            model = payload.get("model")
-            tokens = payload.get("tokens")
-            cost = payload.get("cost")
+            model = entry.get("model")
+            tokens = entry.get("tokens")
+            cost = entry.get("cost")
             if not isinstance(model, str) or not model:
                 raise ValueError("model must be a non-empty string")
             if not isinstance(tokens, int) or tokens < 0:
                 raise ValueError("tokens must be a non-negative integer")
             if not isinstance(cost, (int, float)) or cost < 0:
                 raise ValueError("cost must be a non-negative number")
-            timestamp = payload.get("timestamp")
+            timestamp = entry.get("timestamp")
             if timestamp is not None:
                 if not isinstance(timestamp, str):
                     raise ValueError("timestamp must be a string")
@@ -595,26 +618,27 @@ class ProxyRoutesMixin:
                     raise ValueError(f"invalid ISO 8601 timestamp: {timestamp}")
             else:
                 timestamp = datetime.now(timezone.utc).isoformat()
-                payload["timestamp"] = timestamp
-            entry_id = _ingest_write_entry(payload)
+                entry["timestamp"] = timestamp
+            entry_id = _ingest_write_entry(entry)
             self._send_json({"status": "ok", "ids": [entry_id]}, status=200)
-            SESSION["ingest_entries"] = SESSION.get("ingest_entries", 0) + 1
+            self._ps.session["ingest_entries"] += 1
         except ValueError as e:
             self._send_json({"error": str(e)}, status=422)
         except Exception as e:
             self._send_json({"error": f"internal error: {e}"}, status=500)
 
-    def _ingest_batch(self, payload):
+    def _ingest_batch(self, payload: object) -> None:
         """Handle batch entry ingest."""
-        from tokenpak.core.runtime.proxy import SESSION, _ingest_write_entry
+        from tokenpak.vault.indexer import _ingest_write_entry
 
         if not isinstance(payload, dict):
             self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)
             return
-        if "events" not in payload:
+        batch = cast(dict[str, object], payload)
+        if "events" not in batch:
             self._send_json({"error": "missing 'events' field"}, status=400)
             return
-        events = payload["events"]
+        events = batch["events"]
         if not isinstance(events, list):
             self._send_json({"error": "events must be a list"}, status=400)
             return
@@ -625,28 +649,30 @@ class ProxyRoutesMixin:
             self._send_json({"error": "events list too large (max 1000)"}, status=400)
             return
 
-        ids = []
-        errors = []
-        for i, event in enumerate(events):
+        ids: list[str] = []
+        errors: list[str] = []
+        for i, raw_event in enumerate(cast(list[object], events)):
+            event = raw_event
             if not isinstance(event, dict):
                 errors.append(f"event[{i}]: expected object, got {type(event).__name__}")
                 continue
+            typed_event = cast(dict[str, object], event)
             required = {"model", "tokens", "cost"}
-            missing = required - set(event.keys())
+            missing = required - set(typed_event.keys())
             if missing:
                 errors.append(f"event[{i}]: missing fields {', '.join(missing)}")
                 continue
             try:
-                model = event.get("model")
-                tokens = event.get("tokens")
-                cost = event.get("cost")
+                model = typed_event.get("model")
+                tokens = typed_event.get("tokens")
+                cost = typed_event.get("cost")
                 if not isinstance(model, str) or not model:
                     raise ValueError("model must be non-empty string")
                 if not isinstance(tokens, int) or tokens < 0:
                     raise ValueError("tokens must be non-negative int")
                 if not isinstance(cost, (int, float)) or cost < 0:
                     raise ValueError("cost must be non-negative number")
-                timestamp = event.get("timestamp")
+                timestamp = typed_event.get("timestamp")
                 if timestamp is not None:
                     if not isinstance(timestamp, str):
                         raise ValueError("timestamp must be string")
@@ -656,8 +682,8 @@ class ProxyRoutesMixin:
                         raise ValueError(f"invalid timestamp: {timestamp}")
                 else:
                     timestamp = datetime.now(timezone.utc).isoformat()
-                    event["timestamp"] = timestamp
-                entry_id = _ingest_write_entry(event)
+                    typed_event["timestamp"] = timestamp
+                entry_id = _ingest_write_entry(typed_event)
                 ids.append(entry_id)
             except ValueError as e:
                 errors.append(f"event[{i}]: {e}")
@@ -666,7 +692,7 @@ class ProxyRoutesMixin:
             self._send_json(
                 {"status": "ok", "ids": ids, "errors": errors if errors else None}, status=200
             )
-            SESSION["ingest_entries"] = SESSION.get("ingest_entries", 0) + len(ids)
+            self._ps.session["ingest_entries"] += len(ids)
         else:
             self._send_json({"error": f"all events failed: {'; '.join(errors)}"}, status=422)
 
@@ -674,7 +700,7 @@ class ProxyRoutesMixin:
     # Static / UI handlers
     # ------------------------------------------------------------------
 
-    def _serve_api_docs(self):
+    def _serve_api_docs(self) -> None:
         """Serve Swagger UI for interactive API documentation."""
         html = """<!DOCTYPE html>
 <html lang="en">
@@ -715,7 +741,7 @@ class ProxyRoutesMixin:
         self.end_headers()
         self.wfile.write(body_bytes)
 
-    def _serve_openapi_yaml(self):
+    def _serve_openapi_yaml(self) -> None:
         """Serve the OpenAPI YAML spec file."""
         import pathlib
 
@@ -736,7 +762,7 @@ class ProxyRoutesMixin:
             {"error": {"type": "not_found", "message": "openapi.yaml not found"}}, status=404
         )
 
-    def _serve_dashboard(self):
+    def _serve_dashboard(self) -> None:
         """Serve static dashboard files (HTML/CSS/JS)."""
         from tokenpak.dashboard import CCI09_DASHBOARD_MODES
         from tokenpak.proxy.config import DASHBOARD_AUTH_ENABLED
@@ -754,6 +780,7 @@ class ProxyRoutesMixin:
             params = parse_qs(parsed.query)
             provided = params.get("token", [None])[0]
             from tokenpak.telemetry.token_manager import load_or_create_token
+
             expected = load_or_create_token()
             if not provided or provided != expected:
                 self._send_json(
@@ -775,7 +802,7 @@ class ProxyRoutesMixin:
             file_path = dashboard_dir / "index.html"
             content_type = "text/html; charset=utf-8"
         else:
-            rel_path = dashboard_request_path[len("/dashboard/"):]
+            rel_path = dashboard_request_path[len("/dashboard/") :]
             file_path = (dashboard_dir / rel_path).resolve()
             if not str(file_path).startswith(str(dashboard_dir.resolve())):
                 self._send_json(
@@ -794,7 +821,11 @@ class ProxyRoutesMixin:
                 content_type = "application/octet-stream"
 
         if not file_path.exists():
-            missing_path = dashboard_request_path if dashboard_request_path in ("/dashboard", "/dashboard/") else rel_path
+            missing_path = (
+                dashboard_request_path
+                if dashboard_request_path in ("/dashboard", "/dashboard/")
+                else rel_path
+            )
             self._send_json(
                 {"error": {"type": "not_found", "message": f"File not found: {missing_path}"}},
                 status=404,

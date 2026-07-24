@@ -2,6 +2,7 @@
 Local vector retriever using sentence-transformers + numpy (faiss optional).
 Gracefully degrades if sentence-transformers is not installed.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -10,7 +11,7 @@ import os
 import uuid
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Protocol, Tuple, cast
 
 from tokenpak.vault._atomic import _atomic_write
 
@@ -36,13 +37,28 @@ try:
 except (ImportError, ValueError):  # pragma: no cover - defensive
     _ST_AVAILABLE = False
 
+
 # Populated lazily by ``_load_sentence_transformer()``. Kept at module scope
 # (rather than a local) so existing call sites and tests that reference
 # ``vector_local.SentenceTransformer`` keep working.
-SentenceTransformer = None  # type: ignore[misc,assignment]
+class _SentenceTransformerModel(Protocol):
+    def encode(self, sentences: List[str], **kwargs: object) -> object: ...
 
 
-def _load_sentence_transformer():
+class _SentenceTransformerFactory(Protocol):
+    def __call__(self, model_name: str) -> _SentenceTransformerModel: ...
+
+
+class _FaissIndex(Protocol):
+    def add(self, vectors: "np.ndarray") -> None: ...
+
+    def search(self, query: "np.ndarray", top_k: int) -> tuple["np.ndarray", "np.ndarray"]: ...
+
+
+SentenceTransformer: _SentenceTransformerFactory | None = None
+
+
+def _load_sentence_transformer() -> _SentenceTransformerFactory | None:
     """Import and return the ``SentenceTransformer`` class on demand.
 
     Returns ``None`` if the backend is not installed. The heavy
@@ -57,11 +73,13 @@ def _load_sentence_transformer():
         from sentence_transformers import SentenceTransformer as _ST
     except ImportError:
         return None
-    SentenceTransformer = _ST
-    return _ST
+    SentenceTransformer = cast(_SentenceTransformerFactory, _ST)
+    return SentenceTransformer
+
 
 try:
     import numpy as np
+
     _NP_AVAILABLE = True
 except ImportError:
     _NP_AVAILABLE = False
@@ -69,10 +87,11 @@ except ImportError:
 
 try:
     import faiss
+
     _FAISS_AVAILABLE = True
 except ImportError:
     _FAISS_AVAILABLE = False
-    faiss = None  # type: ignore[assignment]
+    faiss = None
 
 
 def _cosine_similarity_numpy(query_vec: "np.ndarray", matrix: "np.ndarray") -> "np.ndarray":
@@ -84,7 +103,7 @@ def _cosine_similarity_numpy(query_vec: "np.ndarray", matrix: "np.ndarray") -> "
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
     norms = np.where(norms == 0, 1.0, norms)
     normalized = matrix / norms
-    return normalized @ q
+    return cast("np.ndarray", normalized @ q)
 
 
 class LocalVectorRetriever(Retriever):
@@ -106,12 +125,12 @@ class LocalVectorRetriever(Retriever):
     ) -> None:
         self._model_name = model_name
         self._index_path = Path(index_path) if index_path else None
-        self._model: Optional[Any] = None
-        self._embeddings: Optional[Any] = None  # np.ndarray (N, dim)
+        self._model: _SentenceTransformerModel | None = None
+        self._embeddings: "np.ndarray | None" = None
         self._doc_ids: List[str] = []
         self._contents: List[str] = []
-        self._meta: List[Dict[str, Any]] = []
-        self._faiss_index: Optional[Any] = None
+        self._meta: list[dict[str, object]] = []
+        self._faiss_index: _FaissIndex | None = None
         self._available: bool = _ST_AVAILABLE and _NP_AVAILABLE
         self._loaded: bool = False
 
@@ -152,7 +171,9 @@ class LocalVectorRetriever(Retriever):
             try:
                 self._model = model_cls(self._model_name)
             except Exception as e:
-                logger.warning("Failed to load sentence-transformers model %r: %s", self._model_name, e)
+                logger.warning(
+                    "Failed to load sentence-transformers model %r: %s", self._model_name, e
+                )
                 self._available = False
                 return False
         return True
@@ -163,7 +184,10 @@ class LocalVectorRetriever(Retriever):
             return
         try:
             dim = self._embeddings.shape[1]
-            index = faiss.IndexFlatIP(dim)  # inner product (works with normalized vectors)
+            index = cast(
+                _FaissIndex,
+                faiss.IndexFlatIP(dim),
+            )  # inner product (works with normalized vectors)
             # Normalize embeddings for cosine similarity via inner product
             norms = np.linalg.norm(self._embeddings, axis=1, keepdims=True)
             norms = np.where(norms == 0, 1.0, norms)
@@ -174,9 +198,12 @@ class LocalVectorRetriever(Retriever):
             logger.debug("faiss index build failed (non-fatal): %s", e)
             self._faiss_index = None
 
-    async def index(self, documents: List[Dict[str, Any]]) -> int:
+    async def index(self, documents: list[dict[str, object]]) -> int:
         """Embed and index documents. Each doc needs 'id' and 'content' keys."""
         if not self._ensure_model():
+            return 0
+        model = self._model
+        if model is None:  # defensive: _ensure_model() owns this invariant
             return 0
 
         texts = [str(doc.get("content", "")) for doc in documents]
@@ -184,7 +211,7 @@ class LocalVectorRetriever(Retriever):
         meta = [{k: v for k, v in doc.items() if k not in ("id", "content")} for doc in documents]
 
         try:
-            embeddings = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+            embeddings = model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
         except Exception as e:
             logger.error("Embedding failed: %s", e)
             return 0
@@ -216,9 +243,13 @@ class LocalVectorRetriever(Retriever):
 
         if not self._ensure_model():
             return []
+        model = self._model
+        if model is None:  # defensive: _ensure_model() owns this invariant
+            return []
 
         try:
-            q_vec = self._model.encode([query.text], show_progress_bar=False, convert_to_numpy=True)[0]
+            encoded = model.encode([query.text], show_progress_bar=False, convert_to_numpy=True)
+            q_vec = np.asarray(encoded)[0]
             q_vec = np.array(q_vec, dtype="float32")
         except Exception as e:
             logger.error("Query embedding failed: %s", e)
@@ -229,29 +260,33 @@ class LocalVectorRetriever(Retriever):
         if self._faiss_index is not None:
             try:
                 q_norm = np.linalg.norm(q_vec)
-                q_normalized = (q_vec / q_norm if q_norm > 0 else q_vec).reshape(1, -1).astype("float32")
-                scores_arr, indices = self._faiss_index.search(q_normalized, min(top_k, len(self._doc_ids)))
+                q_normalized = (
+                    (q_vec / q_norm if q_norm > 0 else q_vec).reshape(1, -1).astype("float32")
+                )
+                scores_arr, indices = self._faiss_index.search(
+                    q_normalized, min(top_k, len(self._doc_ids))
+                )
                 pairs: List[Tuple[int, float]] = [
-                    (int(idx), float(sc))
-                    for idx, sc in zip(indices[0], scores_arr[0])
-                    if idx >= 0
+                    (int(idx), float(sc)) for idx, sc in zip(indices[0], scores_arr[0]) if idx >= 0
                 ]
             except Exception:
                 pairs = self._numpy_search(q_vec, top_k)
         else:
             pairs = self._numpy_search(q_vec, top_k)
 
-        results = []
+        results: List[RetrievalResult] = []
         for idx, score in pairs:
             if score < query.min_score:
                 continue
-            results.append(RetrievalResult(
-                doc_id=self._doc_ids[idx],
-                score=score,
-                content=self._contents[idx],
-                metadata=self._meta[idx] if idx < len(self._meta) else {},
-                retriever_type=RetrieverType.VECTOR,
-            ))
+            results.append(
+                RetrievalResult(
+                    doc_id=self._doc_ids[idx],
+                    score=score,
+                    content=self._contents[idx],
+                    metadata=self._meta[idx] if idx < len(self._meta) else {},
+                    retriever_type=RetrieverType.VECTOR,
+                )
+            )
         return results
 
     def _numpy_search(self, q_vec: "np.ndarray", top_k: int) -> List[Tuple[int, float]]:
@@ -277,20 +312,13 @@ class LocalVectorRetriever(Retriever):
         # around it manually. The tmp name must keep the .npy suffix or
         # np.save would append one and the replace source would not exist.
         emb_target = self._index_path / "embeddings.npy"
-        emb_tmp = (
-            self._index_path
-            / f"embeddings.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}.npy"
-        )
+        emb_tmp = self._index_path / f"embeddings.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}.npy"
         np.save(str(emb_tmp), self._embeddings)
         os.replace(emb_tmp, emb_target)
-        _atomic_write(
-            self._index_path / "doc_ids.txt", "\n".join(self._doc_ids)
-        )
+        _atomic_write(self._index_path / "doc_ids.txt", "\n".join(self._doc_ids))
         # Escape newlines in content for single-line storage
         escaped = [c.replace("\\", "\\\\").replace("\n", "\\n") for c in self._contents]
-        _atomic_write(
-            self._index_path / "contents.txt", "\n".join(escaped)
-        )
+        _atomic_write(self._index_path / "contents.txt", "\n".join(escaped))
         _atomic_write(self._index_path / "meta.json", json.dumps(self._meta))
 
     def load(self) -> bool:
@@ -317,7 +345,15 @@ class LocalVectorRetriever(Retriever):
 
             meta_file = self._index_path / "meta.json"
             if meta_file.exists():
-                self._meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                raw_meta = cast(
+                    object,
+                    json.loads(meta_file.read_text(encoding="utf-8")),
+                )
+                if not isinstance(raw_meta, list) or not all(
+                    isinstance(item, dict) for item in raw_meta
+                ):
+                    raise ValueError("vector metadata must be a list of objects")
+                self._meta = [cast(dict[str, object], item) for item in raw_meta]
             else:
                 self._meta = [{} for _ in self._doc_ids]
 

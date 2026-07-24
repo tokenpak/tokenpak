@@ -15,22 +15,15 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, cast
 
 from tokenpak.vault._atomic import _atomic_write
-
-# Precomputation pipeline (lazy import to avoid circular deps)
-try:
-    from .precompute import recompute_all as _recompute_all
-
-    _PRECOMPUTE_AVAILABLE = True
-except ImportError:
-    _PRECOMPUTE_AVAILABLE = False
-    _recompute_all = None
 
 # ---------------------------------------------------------------------------
 # File classification
 # ---------------------------------------------------------------------------
+
+_BlockMetadata = dict[str, object]
 
 _CODE_EXTS = {
     ".py",
@@ -181,7 +174,7 @@ def _estimate_tokens(text: str) -> int:
 class IndexRegistry:
     """Return value of index_directory(). Has .blocks and .tokenpak_dir."""
 
-    def __init__(self, vault_dir: Path, blocks: dict):
+    def __init__(self, vault_dir: Path, blocks: dict[str, _BlockMetadata]):
         self.vault_dir = vault_dir
         self.tokenpak_dir = vault_dir / ".tokenpak"
         self.blocks = blocks  # block_id -> block metadata dict
@@ -215,15 +208,15 @@ def index_directory(
     ignore_patterns = _load_ignore_patterns(vault)
 
     stats = {"scanned": 0, "indexed": 0, "updated": 0, "skipped": 0, "errors": 0}
-    new_blocks: dict[str, dict] = {}
+    new_blocks: dict[str, _BlockMetadata] = {}
 
     # Load existing index for incremental update
     index_file = tokenpak_dir / "index.json"
-    old_blocks: dict[str, dict] = {}
+    old_blocks: dict[str, _BlockMetadata] = {}
     if index_file.exists():
         try:
-            old_data = json.loads(index_file.read_text())
-            old_blocks = old_data.get("blocks", {})
+            old_data = cast(dict[str, object], json.loads(index_file.read_text()))
+            old_blocks = cast(dict[str, _BlockMetadata], old_data.get("blocks", {}))
         except Exception:
             pass
 
@@ -323,7 +316,7 @@ def index_directory(
 
     # Prune blocks for files that no longer exist
     for bid in list(new_blocks.keys()):
-        src = vault / new_blocks[bid]["source_path"]
+        src = vault / cast(str, new_blocks[bid]["source_path"])
         if not src.exists():
             del new_blocks[bid]
             block_file = blocks_dir / f"{bid}.txt"

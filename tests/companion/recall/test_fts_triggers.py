@@ -44,6 +44,7 @@ def _full_row() -> dict[str, str]:
 
 # ----- Trigger expectations on the schema -----------------------------------
 
+
 def test_v2_triggers_are_registered(tmp_path: Path, require_fts5: None) -> None:
     """The three v2 triggers are present on a freshly-opened store."""
     db_path = tmp_path / "recall.db"
@@ -59,6 +60,7 @@ def test_v2_triggers_are_registered(tmp_path: Path, require_fts5: None) -> None:
 
 # ----- Insert path (via upsert_pak) ----------------------------------------
 
+
 def test_upsert_pak_populates_fts(tmp_path: Path, require_fts5: None) -> None:
     """``upsert_pak`` inserts a paks row → FTS row appears via the trigger."""
     db_path = tmp_path / "recall.db"
@@ -72,9 +74,8 @@ def test_upsert_pak_populates_fts(tmp_path: Path, require_fts5: None) -> None:
 
 # ----- Insert path (via raw SQL) -------------------------------------------
 
-def test_raw_insert_into_paks_populates_fts(
-    tmp_path: Path, require_fts5: None
-) -> None:
+
+def test_raw_insert_into_paks_populates_fts(tmp_path: Path, require_fts5: None) -> None:
     """A direct ``INSERT INTO paks`` also fires the AFTER INSERT trigger."""
     db_path = tmp_path / "recall.db"
     with RecallStore.open(db_path) as store:
@@ -104,9 +105,8 @@ def test_raw_insert_into_paks_populates_fts(
 
 # ----- Update path ---------------------------------------------------------
 
-def test_upsert_body_change_updates_fts_content(
-    tmp_path: Path, require_fts5: None
-) -> None:
+
+def test_upsert_body_change_updates_fts_content(tmp_path: Path, require_fts5: None) -> None:
     """Updating title/summary via ``upsert_pak`` rewrites the FTS row."""
     db_path = tmp_path / "recall.db"
     with RecallStore.open(db_path) as store:
@@ -125,9 +125,7 @@ def test_upsert_body_change_updates_fts_content(
     assert new_hits == ["vault://block/credential"]
 
 
-def test_raw_update_of_title_only_rewrites_fts(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_raw_update_of_title_only_rewrites_fts(tmp_path: Path, require_fts5: None) -> None:
     """A direct ``UPDATE paks SET title=?`` fires the column-filtered trigger."""
     db_path = tmp_path / "recall.db"
     with RecallStore.open(db_path) as store:
@@ -146,9 +144,7 @@ def test_raw_update_of_title_only_rewrites_fts(
     assert hits_old == []
 
 
-def test_unrelated_column_update_does_not_rewrite_fts(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_unrelated_column_update_does_not_rewrite_fts(tmp_path: Path, require_fts5: None) -> None:
     """Updating only ``project`` must not delete the FTS row.
 
     The ``AFTER UPDATE OF title, summary`` filter means an unrelated
@@ -168,9 +164,8 @@ def test_unrelated_column_update_does_not_rewrite_fts(
 
 # ----- Delete path ---------------------------------------------------------
 
-def test_delete_from_paks_removes_fts_row(
-    tmp_path: Path, require_fts5: None
-) -> None:
+
+def test_delete_from_paks_removes_fts_row(tmp_path: Path, require_fts5: None) -> None:
     """``DELETE FROM paks WHERE pak_id = ?`` fires the AFTER DELETE trigger."""
     db_path = tmp_path / "recall.db"
     with RecallStore.open(db_path) as store:
@@ -189,6 +184,7 @@ def test_delete_from_paks_removes_fts_row(
 
 # ----- Multi-row sanity ----------------------------------------------------
 
+
 def test_match_isolates_rows(tmp_path: Path, require_fts5: None) -> None:
     """FTS rows are independent; deleting one row leaves siblings searchable."""
     db_path = tmp_path / "recall.db"
@@ -202,9 +198,7 @@ def test_match_isolates_rows(tmp_path: Path, require_fts5: None) -> None:
         store.upsert_pak(**a)
         store.upsert_pak(**b)
 
-        store.conn.execute(
-            "DELETE FROM paks WHERE pak_id = ?", ("vault://block/credential",)
-        )
+        store.conn.execute("DELETE FROM paks WHERE pak_id = ?", ("vault://block/credential",))
         store.conn.commit()
         ids = _fts_pak_ids(store)
         hits = _match(store, "cache")

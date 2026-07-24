@@ -1,9 +1,11 @@
 """Tests for baseline registry and delta detector."""
 
-
 import pytest
 
-pytest.importorskip("tokenpak._internal.regression.baseline_registry", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.regression.baseline_registry",
+    reason="module not available in current build",
+)
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -281,9 +283,7 @@ class TestDeltaDecision:
         }
 
         delta = detector.compute_delta(current_state, baseline_state)
-        should_reuse = detector.should_reuse_baseline(
-            delta, baseline_still_passes=False
-        )
+        should_reuse = detector.should_reuse_baseline(delta, baseline_still_passes=False)
 
         assert should_reuse is False
 
@@ -354,9 +354,7 @@ class TestIntegration:
         retrieved = registry.get_baseline("workflow-001")
 
         # Trivial delta + baseline passes → reuse
-        should_reuse = detector.should_reuse_baseline(
-            delta, baseline_still_passes=True
-        )
+        should_reuse = detector.should_reuse_baseline(delta, baseline_still_passes=True)
 
         assert retrieved is not None
         assert should_reuse is True

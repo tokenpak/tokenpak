@@ -45,69 +45,64 @@ def _handle_initialize(req_id, params):
     """Handle initialize request — report server capabilities."""
     _state["startup_time_ms"] = int((time.time() - START_TIME) * 1000)
     _log(f"initialize: startup took {_state['startup_time_ms']}ms")
-    _send({
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "result": {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {
-                "tools": {}
+    _send(
+        {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "tokenpak-companion-probe", "version": "0.0.1"},
             },
-            "serverInfo": {
-                "name": "tokenpak-companion-probe",
-                "version": "0.0.1"
-            }
         }
-    })
+    )
 
 
 def _handle_tools_list(req_id, params):
     """List available tools."""
-    _send({
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "result": {
-            "tools": [
-                {
-                    "name": "probe_status",
-                    "description": "Returns probe validation status — call this to verify the tokenpak companion MCP server is working. Reports startup time, call count, and state persistence.",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                },
-                {
-                    "name": "estimate_tokens",
-                    "description": "Estimate token count for a given text string. Returns approximate token count using the ~4 chars/token heuristic. This is a probe — production version will use a real tokenizer.",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "text": {
-                                "type": "string",
-                                "description": "Text to estimate tokens for"
-                            }
+    _send(
+        {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "tools": [
+                    {
+                        "name": "probe_status",
+                        "description": "Returns probe validation status — call this to verify the tokenpak companion MCP server is working. Reports startup time, call count, and state persistence.",
+                        "inputSchema": {"type": "object", "properties": {}, "required": []},
+                    },
+                    {
+                        "name": "estimate_tokens",
+                        "description": "Estimate token count for a given text string. Returns approximate token count using the ~4 chars/token heuristic. This is a probe — production version will use a real tokenizer.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "text": {
+                                    "type": "string",
+                                    "description": "Text to estimate tokens for",
+                                }
+                            },
+                            "required": ["text"],
                         },
-                        "required": ["text"]
-                    }
-                },
-                {
-                    "name": "read_transcript",
-                    "description": "Read and summarize the current session transcript. Tests whether MCP tools can access Claude Code's transcript file.",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "transcript_path": {
-                                "type": "string",
-                                "description": "Path to transcript JSONL file"
-                            }
+                    },
+                    {
+                        "name": "read_transcript",
+                        "description": "Read and summarize the current session transcript. Tests whether MCP tools can access Claude Code's transcript file.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "transcript_path": {
+                                    "type": "string",
+                                    "description": "Path to transcript JSONL file",
+                                }
+                            },
+                            "required": ["transcript_path"],
                         },
-                        "required": ["transcript_path"]
-                    }
-                }
-            ]
+                    },
+                ]
+            },
         }
-    })
+    )
 
 
 def _handle_tools_call(req_id, params):
@@ -118,38 +113,44 @@ def _handle_tools_call(req_id, params):
     _log(f"tool_call #{_state['call_count']}: {tool_name}({json.dumps(args)[:200]})")
 
     if tool_name == "probe_status":
-        result_text = json.dumps({
-            "status": "ok",
-            "startup_time_ms": _state["startup_time_ms"],
-            "call_count": _state["call_count"],
-            "state_persistent": _state["call_count"] > 1,
-            "notes_stored": len(_state["notes"]),
-            "pid": os.getpid(),
-        }, indent=2)
-        _send({
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "content": [{"type": "text", "text": result_text}]
+        result_text = json.dumps(
+            {
+                "status": "ok",
+                "startup_time_ms": _state["startup_time_ms"],
+                "call_count": _state["call_count"],
+                "state_persistent": _state["call_count"] > 1,
+                "notes_stored": len(_state["notes"]),
+                "pid": os.getpid(),
+            },
+            indent=2,
+        )
+        _send(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {"content": [{"type": "text", "text": result_text}]},
             }
-        })
+        )
 
     elif tool_name == "estimate_tokens":
         text = args.get("text", "")
         char_count = len(text)
         est_tokens = char_count // 4
-        result_text = json.dumps({
-            "char_count": char_count,
-            "estimated_tokens": est_tokens,
-            "method": "char/4 heuristic (probe only)",
-        }, indent=2)
-        _send({
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "content": [{"type": "text", "text": result_text}]
+        result_text = json.dumps(
+            {
+                "char_count": char_count,
+                "estimated_tokens": est_tokens,
+                "method": "char/4 heuristic (probe only)",
+            },
+            indent=2,
+        )
+        _send(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {"content": [{"type": "text", "text": result_text}]},
             }
-        })
+        )
 
     elif tool_name == "read_transcript":
         path = args.get("transcript_path", "")
@@ -173,37 +174,42 @@ def _handle_tools_call(req_id, params):
                     roles[role] = roles.get(role, 0) + 1
                 except json.JSONDecodeError:
                     pass
-            result_text = json.dumps({
-                "readable": True,
-                "message_count": msg_count,
-                "total_chars": total_chars,
-                "estimated_tokens": total_chars // 4,
-                "role_breakdown": roles,
-                "file_size_bytes": os.path.getsize(path),
-            }, indent=2)
+            result_text = json.dumps(
+                {
+                    "readable": True,
+                    "message_count": msg_count,
+                    "total_chars": total_chars,
+                    "estimated_tokens": total_chars // 4,
+                    "role_breakdown": roles,
+                    "file_size_bytes": os.path.getsize(path),
+                },
+                indent=2,
+            )
         except Exception as e:
-            result_text = json.dumps({
-                "readable": False,
-                "error": str(e),
-            }, indent=2)
+            result_text = json.dumps(
+                {
+                    "readable": False,
+                    "error": str(e),
+                },
+                indent=2,
+            )
         _log(f"  read_transcript result: {result_text[:200]}")
-        _send({
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "content": [{"type": "text", "text": result_text}]
+        _send(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {"content": [{"type": "text", "text": result_text}]},
             }
-        })
+        )
 
     else:
-        _send({
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "error": {
-                "code": -32601,
-                "message": f"Unknown tool: {tool_name}"
+        _send(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
             }
-        })
+        )
 
 
 def _handle_notifications(method, params):
@@ -241,14 +247,13 @@ def main():
             _handle_notifications(method, req.get("params", {}))
         elif req_id is not None:
             # Unknown method with an ID — send error
-            _send({
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "error": {
-                    "code": -32601,
-                    "message": f"Method not found: {method}"
+            _send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32601, "message": f"Method not found: {method}"},
                 }
-            })
+            )
         # else: notification we don't handle — ignore
 
     _log("MCP probe server exiting")

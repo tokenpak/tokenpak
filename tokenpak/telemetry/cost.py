@@ -30,7 +30,8 @@ import sqlite3
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, cast
 
 logger = logging.getLogger(__name__)
 
@@ -43,40 +44,45 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 try:
     from tokenpak.core.runtime.providers import Provider as _Provider
+
     CACHE_COST_MULTIPLIERS: Dict[object, Dict[str, float]] = {
-        _Provider.ANTHROPIC:   {"read": 0.10, "creation": 1.25},  # reads=10%, creation=125%
-        _Provider.OPENAI:      {"read": 0.50, "creation": 1.0},   # reads=50%, no creation surcharge
+        _Provider.ANTHROPIC: {"read": 0.10, "creation": 1.25},  # reads=10%, creation=125%
+        _Provider.OPENAI: {"read": 0.50, "creation": 1.0},  # reads=50%, no creation surcharge
         _Provider.AZURE_OPENAI: {"read": 0.50, "creation": 1.0},
-        _Provider.XAI:         {"read": 0.50, "creation": 1.0},
-        _Provider.GROQ:        {"read": 0.0,  "creation": 1.0},   # Free (volatile cache)
-        _Provider.FIREWORKS:   {"read": 0.0,  "creation": 1.0},   # No cache pricing surcharge
-        _Provider.TOGETHER:    {"read": 0.0,  "creation": 1.0},   # No cache pricing surcharge
-        _Provider.GEMINI:      {"read": 0.25, "creation": 1.0},   # 25% of input cost
-        _Provider.BEDROCK:     {"read": 0.10, "creation": 1.0},   # 10% of input cost
-        _Provider.CODEX:       {"read": 0.50, "creation": 1.0},   # Follows OpenAI pricing
-        _Provider.UNKNOWN:     {"read": 0.10, "creation": 1.25},  # Conservative default
+        _Provider.XAI: {"read": 0.50, "creation": 1.0},
+        _Provider.GROQ: {"read": 0.0, "creation": 1.0},  # Free (volatile cache)
+        _Provider.FIREWORKS: {"read": 0.0, "creation": 1.0},  # No cache pricing surcharge
+        _Provider.TOGETHER: {"read": 0.0, "creation": 1.0},  # No cache pricing surcharge
+        _Provider.GEMINI: {"read": 0.25, "creation": 1.0},  # 25% of input cost
+        _Provider.BEDROCK: {"read": 0.10, "creation": 1.0},  # 10% of input cost
+        _Provider.CODEX: {"read": 0.50, "creation": 1.0},  # Follows OpenAI pricing
+        _Provider.UNKNOWN: {"read": 0.10, "creation": 1.25},  # Conservative default
     }
 except (ImportError, AttributeError):
     # Fallback to string-keyed dict if Provider enum is unavailable
     CACHE_COST_MULTIPLIERS: Dict[str, Dict[str, float]] = {  # type: ignore[no-redef]
-        "anthropic":   {"read": 0.10, "creation": 1.25},
-        "openai":      {"read": 0.50, "creation": 1.0},
+        "anthropic": {"read": 0.10, "creation": 1.25},
+        "openai": {"read": 0.50, "creation": 1.0},
         "azure_openai": {"read": 0.50, "creation": 1.0},
-        "xai":         {"read": 0.50, "creation": 1.0},
-        "groq":        {"read": 0.0,  "creation": 1.0},
-        "fireworks":   {"read": 0.0,  "creation": 1.0},
-        "together":    {"read": 0.0,  "creation": 1.0},
-        "gemini":      {"read": 0.25, "creation": 1.0},
-        "bedrock":     {"read": 0.10, "creation": 1.0},
-        "codex":       {"read": 0.50, "creation": 1.0},
-        "unknown":     {"read": 0.10, "creation": 1.25},
+        "xai": {"read": 0.50, "creation": 1.0},
+        "groq": {"read": 0.0, "creation": 1.0},
+        "fireworks": {"read": 0.0, "creation": 1.0},
+        "together": {"read": 0.0, "creation": 1.0},
+        "gemini": {"read": 0.25, "creation": 1.0},
+        "bedrock": {"read": 0.10, "creation": 1.0},
+        "codex": {"read": 0.50, "creation": 1.0},
+        "unknown": {"read": 0.10, "creation": 1.25},
     }
 
 # ---------------------------------------------------------------------------
 # Current pricing rates (USD per 1K input/output tokens)
 # Source: official docs, 2026-02 snapshot
 # ---------------------------------------------------------------------------
-SEED_PRICING: List[dict] = [
+PricingSeedValue = str | float
+PricingRowValue = str | int | float
+
+
+SEED_PRICING: List[dict[str, PricingSeedValue]] = [
     # Anthropic
     {
         "provider": "anthropic",
@@ -231,7 +237,7 @@ class CostResult:
     savings_pct: float  # savings_amount / baseline_cost * 100
     data_source: str  # "official" | "estimated" | "fallback"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, PricingRowValue]:
         return {
             "model": self.model,
             "pricing_version": self.pricing_version,
@@ -314,9 +320,12 @@ class CostEngine:
 
     def __init__(self, db_path: str = ""):
         from tokenpak.core.paths import get_db_path
-        self.db_path = db_path or str(get_db_path("telemetry.db"))
+
+        resolved_path = Path(db_path).expanduser() if db_path else get_db_path("telemetry.db")
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path = str(resolved_path)
         self._lock = threading.Lock()
-        self._pricing_cache: dict[tuple, Pricing] = {}
+        self._pricing_cache: dict[tuple[str, str], Pricing] = {}
         self._init_db()
 
     # ------------------------------------------------------------------
@@ -459,13 +468,18 @@ class CostEngine:
         self._pricing_cache[cache_key] = pricing
         return pricing
 
-    def _fuzzy_match(self, conn: sqlite3.Connection, model: str, event_date: str):
+    def _fuzzy_match(
+        self, conn: sqlite3.Connection, model: str, event_date: str
+    ) -> Optional[sqlite3.Row]:
         """Try matching by model name substring."""
         model_lower = model.lower()
-        rows = conn.execute(
-            "SELECT * FROM tp_pricing WHERE effective_date <= ? ORDER BY effective_date DESC",
-            (event_date,),
-        ).fetchall()
+        rows = cast(
+            list[sqlite3.Row],
+            conn.execute(
+                "SELECT * FROM tp_pricing WHERE effective_date <= ? ORDER BY effective_date DESC",
+                (event_date,),
+            ).fetchall(),
+        )
         for row in rows:
             if row["model"] in model_lower or model_lower in row["model"]:
                 return row
@@ -543,7 +557,7 @@ class CostEngine:
     # ------------------------------------------------------------------
     # Pricing catalog management
     # ------------------------------------------------------------------
-    def list_pricing(self, version: Optional[str] = None) -> List[dict]:
+    def list_pricing(self, version: Optional[str] = None) -> List[dict[str, object]]:
         """List all pricing entries, optionally filtered by version."""
         conn = self._connect()
         if version:
@@ -556,7 +570,7 @@ class CostEngine:
                 "SELECT * FROM tp_pricing ORDER BY version DESC, provider, model"
             ).fetchall()
         conn.close()
-        return [dict(r) for r in rows]
+        return [{str(column): value for column, value in dict(row).items()} for row in rows]
 
     def add_pricing(
         self,
@@ -595,7 +609,7 @@ class CostEngine:
         from_date: str,
         to_date: str,
         pricing_version: Optional[str] = None,
-    ) -> dict:
+    ) -> dict[str, str | int]:
         """
         Recalculate costs for events in a date range.
 

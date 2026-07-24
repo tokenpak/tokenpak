@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -162,6 +163,7 @@ def create_app(
     app = FastAPI(title="TokenPak Telemetry", version="1.1.0")
     if not db_path:
         from tokenpak.core.paths import get_db_path
+
         db_path = str(get_db_path("telemetry.db"))
     _storage = storage or TelemetryDB(db_path)
     _pipeline = pipeline or TelemetryPipeline(storage=_storage)
@@ -172,7 +174,7 @@ def create_app(
 
     @app.get("/health")
     @app.get("/v1/health")
-    async def health():
+    async def health() -> dict[str, object]:
         """Rich health check — ingest status, error rate, last event, request counts."""
         import time as _t
 
@@ -245,14 +247,14 @@ def create_app(
         _alert_settings = None
 
     @app.get("/v1/settings/alerts")
-    async def get_alert_settings():
+    async def get_alert_settings() -> dict[str, object]:
         """Return current alert configuration."""
         if _alert_settings is None:
             return {"status": "unavailable"}
         return {"status": "ok", "config": _alert_settings.load()}
 
     @app.put("/v1/settings/alerts")
-    async def put_alert_settings(request: Request):
+    async def put_alert_settings(request: Request) -> dict[str, object]:
         """Update alert configuration."""
         if _alert_settings is None:
             from fastapi import HTTPException
@@ -272,7 +274,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.post("/v1/settings/alerts/test")
-    async def test_alert():
+    async def test_alert() -> dict[str, object]:
         """Send a test notification to all configured channels."""
         _alert_settings.load() if _alert_settings else {}
         return {
@@ -282,7 +284,7 @@ def create_app(
         }
 
     @app.post("/v1/telemetry/ingest", response_model=IngestResponse)
-    async def ingest(request: IngestRequest, background_tasks: BackgroundTasks):
+    async def ingest(request: IngestRequest, background_tasks: BackgroundTasks) -> IngestResponse:
         """Ingest a batch of telemetry events into the local DB."""
         start_time = time.perf_counter()
         results, processed, failed = [], 0, 0
@@ -343,7 +345,7 @@ def create_app(
         )
 
     @app.get("/v1/telemetry/stats", response_model=StatsResponse)
-    async def stats():
+    async def stats() -> dict[str, object]:
         """Return aggregated usage statistics from the telemetry DB."""
         try:
             loop = asyncio.get_event_loop()
@@ -360,7 +362,7 @@ def create_app(
     async def summary(
         filter: Optional[str] = Query(None, description="Filter DSL: provider:X,model:Y,agent:Z"),
         days: int = Query(30, ge=1, description="Number of days to include"),
-    ):
+    ) -> Response:
         """Return aggregate summary statistics. Cached 5 min per filter combo."""
         import json as _json_s
 
@@ -408,7 +410,7 @@ def create_app(
         interval: str = Query("hour", description="Interval: hour|day"),
         filter: Optional[str] = Query(None, description="Filter DSL"),
         since: Optional[float] = Query(None, description="Unix timestamp to start from"),
-    ):
+    ) -> dict[str, object]:
         """Return time-bucketed metric data for charting."""
         try:
             if metric not in ("cost", "tokens", "savings", "requests"):
@@ -440,7 +442,7 @@ def create_app(
         offset: int = Query(0, ge=0),
         filter: Optional[str] = Query(None, description="Filter DSL"),
         since: Optional[float] = Query(None, description="Unix timestamp"),
-    ):
+    ) -> dict[str, object]:
         """Return paginated list of traces with optional filtering."""
         try:
             filters = parse_filter(filter)
@@ -471,7 +473,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/trace/{trace_id}", response_model=TraceDetailResponse)
-    async def get_trace(trace_id: str):
+    async def get_trace(trace_id: str) -> dict[str, object]:
         """Return full trace details including events, usage, cost, segments."""
         try:
             from tokenpak.cache.cache_report import format_cache_report
@@ -496,7 +498,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/trace/{trace_id}/segments", response_model=SegmentsResponse)
-    async def get_trace_segments(trace_id: str):
+    async def get_trace_segments(trace_id: str) -> dict[str, object]:
         """Return segment breakdown for a trace."""
         try:
             loop = asyncio.get_event_loop()
@@ -506,7 +508,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/trace/{trace_id}/events", response_model=TraceEventsResponse)
-    async def get_trace_events(trace_id: str):
+    async def get_trace_events(trace_id: str) -> dict[str, object]:
         """Return all pipeline events for a trace in chronological order."""
         try:
             loop = asyncio.get_event_loop()
@@ -524,7 +526,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/models", response_model=ModelsResponse)
-    async def list_models():
+    async def list_models() -> dict[str, object]:
         """Return list of unique models seen in telemetry."""
         try:
             loop = asyncio.get_event_loop()
@@ -534,7 +536,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/providers", response_model=ProvidersResponse)
-    async def list_providers():
+    async def list_providers() -> dict[str, object]:
         """Return list of unique providers seen in telemetry."""
         try:
             loop = asyncio.get_event_loop()
@@ -544,7 +546,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/agents", response_model=AgentsResponse)
-    async def list_agents():
+    async def list_agents() -> dict[str, object]:
         """Return list of unique agents seen in telemetry."""
         try:
             loop = asyncio.get_event_loop()
@@ -554,7 +556,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/pricing", response_model=PricingResponse)
-    async def get_pricing():
+    async def get_pricing() -> dict[str, object]:
         """Return current pricing catalog."""
         try:
             catalog = PricingCatalog.load()
@@ -567,7 +569,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/exports/trace/{trace_id}")
-    async def export_trace(trace_id: str):
+    async def export_trace(trace_id: str) -> Response:
         """Export full trace as downloadable JSON bundle."""
         try:
             loop = asyncio.get_event_loop()
@@ -596,7 +598,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/metrics")
-    async def prometheus_metrics():
+    async def prometheus_metrics() -> Response:
         """
         Return Prometheus text exposition format metrics.
 
@@ -624,7 +626,7 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.post("/v1/rollups/compute", response_model=RollupsComputeResponse)
-    async def compute_rollups():
+    async def compute_rollups() -> dict[str, object]:
         """Trigger rollup computation (typically called by cron)."""
         try:
             loop = asyncio.get_event_loop()
@@ -638,7 +640,7 @@ def create_app(
     # -----------------------------------------------------------------------
 
     @app.post("/v1/capsule", response_model=CapsuleResponse)
-    async def build_capsule(body: CapsuleBody):
+    async def build_capsule(body: CapsuleBody) -> dict[str, object]:
         """Build a ContextCapsule from segments within a token budget."""
         try:
             import dataclasses
@@ -689,15 +691,15 @@ def create_app(
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-    _rollup_state: dict[str, Any] = {"last_refresh": None}
+    _rollup_state: dict[str, float | None] = {"last_refresh": None}
 
     @app.get("/v1/rollups/status", response_model=RollupsStatusResponse)
-    async def rollup_status():
+    async def rollup_status() -> dict[str, object]:
         """Return rollup refresh status."""
         return {"status": "ok", "last_refresh": _rollup_state.get("last_refresh")}
 
     @app.post("/v1/rollups/refresh", response_model=RollupsRefreshResponse)
-    async def rollup_refresh(days: int = Query(30, ge=1)):
+    async def rollup_refresh(days: int = Query(30, ge=1)) -> dict[str, object]:
         """Manually trigger a rollup refresh."""
         try:
             import time as _time
@@ -714,7 +716,9 @@ def create_app(
     # -----------------------------------------------------------------------
 
     @app.post("/v1/telemetry/refresh", response_model=TelemetryRefreshResponse)
-    async def telemetry_refresh(background_tasks: BackgroundTasks):
+    async def telemetry_refresh(
+        background_tasks: BackgroundTasks,
+    ) -> dict[str, object]:
         """On-demand telemetry refresh: re-run backfill from session JSONL files
         and recompute rollups. Triggered via dashboard button or CLI.
         Does NOT auto-commit to git — avoids conflict with agent work."""
@@ -722,7 +726,7 @@ def create_app(
         import subprocess
         import sys
 
-        def _run_refresh():
+        def _run_refresh() -> dict[str, str]:
             backfill_script = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                 "..",
@@ -747,9 +751,7 @@ def create_app(
                     # Ensure backfill writes into the SAME DB the server is using
                     from tokenpak.core.paths import get_db_path as _get_db_path
 
-                    db_path = getattr(_storage, "_path", None) or str(
-                        _get_db_path("telemetry.db")
-                    )
+                    db_path = getattr(_storage, "_path", None) or str(_get_db_path("telemetry.db"))
                     args = [sys.executable, backfill_script]
                     if db_path:
                         args += ["--db", os.path.expanduser(str(db_path))]
@@ -822,9 +824,9 @@ def create_app(
     # -----------------------------------------------------------------------
     # Auto-Rollup Cron Background Task
     # -----------------------------------------------------------------------
-    _rollup_task: dict[str, Any] = {"task": None}
+    _rollup_task: dict[str, asyncio.Task[None] | None] = {"task": None}
 
-    async def _auto_rollup_loop(interval_minutes: int = 5):
+    async def _auto_rollup_loop(interval_minutes: int = 5) -> None:
         """Background task that computes rollups every N minutes."""
         interval_seconds = interval_minutes * 60
         while True:
@@ -853,16 +855,17 @@ def create_app(
 
     # lifespan replaces @app.on_event (DeprecationWarning-free)
     @asynccontextmanager
-    async def _lifespan(app: FastAPI):
+    async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Skip auto-rollup in test environments
         if db_path and not db_path.startswith(":"):
             _rollup_task["task"] = asyncio.create_task(_auto_rollup_loop(interval_minutes=5))
             logger.info("Auto-rollup background task started (interval: 5 minutes)")
         yield
-        if _rollup_task.get("task"):
-            _rollup_task["task"].cancel()
+        task = _rollup_task.get("task")
+        if task is not None:
+            task.cancel()
             try:
-                await _rollup_task["task"]
+                await task
             except asyncio.CancelledError:
                 pass
             logger.info("Auto-rollup background task stopped")
@@ -870,31 +873,36 @@ def create_app(
     # ---------------------------------------------------------------------------
     # Cost reprocessing + pricing endpoints
     # ---------------------------------------------------------------------------
-    _cost_engine: dict = {}  # lazy singleton
+    _cost_engine: dict[str, CostEngine] = {}
 
     @app.post("/v1/admin/recalculate")
     async def recalculate_costs(
         from_date: str = Query(..., description="Start date YYYY-MM-DD"),
         to_date: str = Query(..., description="End date YYYY-MM-DD"),
         pricing_version: Optional[str] = Query(None, description="Pricing version override"),
-    ):
+    ) -> dict[str, object]:
         """Recalculate costs for events in a date range using current pricing."""
         loop = asyncio.get_event_loop()
 
-        def _run():
+        def _run() -> dict[str, object]:
             if "engine" not in _cost_engine:
                 _cost_engine["engine"] = CostEngine(db_path=db_path)
-            return _cost_engine["engine"].reprocess_costs(from_date, to_date, pricing_version)
+            raw_result = _cost_engine["engine"].reprocess_costs(from_date, to_date, pricing_version)
+            result: dict[str, object] = {}
+            result.update(raw_result)
+            return result
 
         result = await loop.run_in_executor(_executor, _run)
         return {"status": "ok", **result}
 
     @app.get("/v1/pricing/rates")
-    async def list_pricing_rates(version: Optional[str] = Query(None)):
+    async def list_pricing_rates(
+        version: Optional[str] = Query(None),
+    ) -> dict[str, object]:
         """List all pricing entries in tp_pricing table."""
         loop = asyncio.get_event_loop()
 
-        def _run():
+        def _run() -> list[dict[str, object]]:
             if "engine" not in _cost_engine:
                 _cost_engine["engine"] = CostEngine(db_path=db_path)
             return _cost_engine["engine"].list_pricing(version)
@@ -910,7 +918,7 @@ def create_app(
     # Filter options endpoint
     # ---------------------------------------------------------------------------
     @app.get("/v1/filters/options")
-    async def get_filter_options():
+    async def get_filter_options() -> Response:
         """Return available filter values. Cached 10 min."""
         import json as _json_f
 
@@ -924,7 +932,7 @@ def create_app(
             )
         loop = asyncio.get_event_loop()
 
-        def _query():
+        def _query() -> tuple[list[str], list[str], list[str]]:
             try:
                 import sqlite3 as _sqlite3
 
@@ -933,13 +941,13 @@ def create_app(
                 cur.execute(
                     "SELECT DISTINCT provider FROM tp_events WHERE provider != '' ORDER BY provider"
                 )
-                providers = [r[0] for r in cur.fetchall()]
+                providers = [str(r[0]) for r in cur.fetchall()]
                 cur.execute("SELECT DISTINCT model FROM tp_events WHERE model != '' ORDER BY model")
-                models = [r[0] for r in cur.fetchall()]
+                models = [str(r[0]) for r in cur.fetchall()]
                 cur.execute(
                     "SELECT DISTINCT agent_id FROM tp_events WHERE agent_id != '' ORDER BY agent_id"
                 )
-                agents = [r[0] for r in cur.fetchall()]
+                agents = [str(r[0]) for r in cur.fetchall()]
                 conn.close()
                 return providers, models, agents
             except Exception:
@@ -971,12 +979,12 @@ def create_app(
     # ---------------------------------------------------------------------------
     # Insights endpoint (Phase 8: Decision Support)
     # ---------------------------------------------------------------------------
-    _insight_engine: dict = {}  # lazy singleton per app instance
+    _insight_engine: dict[str, InsightEngine] = {}
 
     @app.get("/v1/insights")
     async def get_insights(
         days: int = Query(7, ge=1, le=90, description="Days of history to analyze"),
-    ):
+    ) -> dict[str, object]:
         """
         Generate automatic insights and decision support suggestions.
 
@@ -985,12 +993,17 @@ def create_app(
         """
         loop = asyncio.get_event_loop()
 
-        def _run():
+        def _run() -> list[dict[str, object]]:
             if "engine" not in _insight_engine:
                 _insight_engine["engine"] = InsightEngine(db_path=db_path)
             engine = _insight_engine["engine"]
             insights = engine.generate_insights(days=days)
-            return [i.to_dict() for i in insights]
+            rows: list[dict[str, object]] = []
+            for insight in insights:
+                row: dict[str, object] = {}
+                row.update(insight.to_dict())
+                rows.append(row)
+            return rows
 
         insight_list = await loop.run_in_executor(_executor, _run)
         return {
@@ -1006,7 +1019,7 @@ def create_app(
     async def rollup_rebuild(
         from_date: str = Query(..., description="Start date YYYY-MM-DD"),
         to_date: str = Query(..., description="End date YYYY-MM-DD"),
-    ):
+    ) -> dict[str, object]:
         """Rebuild rollups for a date range (idempotent). Invalidates caches."""
         from datetime import date as _date
 
@@ -1029,7 +1042,9 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/rollups/consistency")
-    async def rollup_consistency(days: int = Query(7, ge=1, le=90)):
+    async def rollup_consistency(
+        days: int = Query(7, ge=1, le=90),
+    ) -> dict[str, object]:
         """Check rollup vs raw event consistency."""
         try:
             _re = RollupEngine(_storage)
@@ -1041,32 +1056,26 @@ def create_app(
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/v1/cache/stats")
-    async def cache_stats_ep():
+    async def cache_stats_ep() -> dict[str, object]:
         """Return cache hit/miss stats."""
         return {"status": "ok", "cache": _cache.stats}
 
     @app.post("/v1/cache/clear")
-    async def cache_clear_ep(prefix: Optional[str] = Query(None)):
+    async def cache_clear_ep(prefix: Optional[str] = Query(None)) -> dict[str, object]:
         """Clear cache entries."""
         count = _cache.invalidate_prefix(prefix) if prefix else _cache.clear()
         return {"status": "ok", "cleared": count}
 
     @app.post("/v1/cache/evict")
-    async def cache_evict_ep():
+    async def cache_evict_ep() -> dict[str, object]:
         """Evict expired cache entries."""
         return {"status": "ok", "evicted": _cache.evict_expired()}
 
     # Assign lifespan to the already-created app
     try:
-        # Try modern Starlette 0.14+ style
-        app.lifespan = _lifespan
+        app.router.lifespan_context = _lifespan
     except (TypeError, AttributeError):
-        # Fall back for older versions
-        try:
-            app.router.lifespan_context = _lifespan
-        except Exception:
-            # If all else fails, just continue without lifespan
-            pass
+        logger.warning("Telemetry lifespan hooks are unavailable")
 
     return app
 

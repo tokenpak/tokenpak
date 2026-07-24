@@ -11,6 +11,7 @@ Acceptance Criteria:
   AC5 — EXACT pytest -v output shown
   AC6 — EXACT git log --oneline | head -3 shown
 """
+
 from __future__ import annotations
 
 import json
@@ -32,6 +33,7 @@ from tokenpak.proxy.server import ProxyServer
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _wait_for_port(port: int, host: str = "127.0.0.1", timeout: float = 5.0):
     """Block until the port accepts connections or timeout raises."""
     deadline = time.time() + timeout
@@ -49,15 +51,17 @@ def _wait_for_port(port: int, host: str = "127.0.0.1", timeout: float = 5.0):
 # Mock upstream server
 # ---------------------------------------------------------------------------
 
-_MOCK_RESPONSE = json.dumps({
-    "id": "msg_e2e_test_001",
-    "type": "message",
-    "role": "assistant",
-    "content": [{"type": "text", "text": "Hello from mock upstream!"}],
-    "model": "claude-3-haiku-20240307",
-    "stop_reason": "end_turn",
-    "usage": {"input_tokens": 10, "output_tokens": 8},
-}).encode()
+_MOCK_RESPONSE = json.dumps(
+    {
+        "id": "msg_e2e_test_001",
+        "type": "message",
+        "role": "assistant",
+        "content": [{"type": "text", "text": "Hello from mock upstream!"}],
+        "model": "claude-3-haiku-20240307",
+        "stop_reason": "end_turn",
+        "usage": {"input_tokens": 10, "output_tokens": 8},
+    }
+).encode()
 
 
 class _MockUpstreamHandler(BaseHTTPRequestHandler):
@@ -111,6 +115,7 @@ def proxy(mock_upstream):
 # Test 1: Proxy starts and /health returns 200 OK
 # ---------------------------------------------------------------------------
 
+
 class TestProxyStartup:
     def test_proxy_health_ok(self, proxy):
         """Proxy must start and report healthy at /health."""
@@ -119,7 +124,10 @@ class TestProxyStartup:
         with urllib.request.urlopen(req, timeout=5) as resp:
             assert resp.status == 200
             data = json.loads(resp.read())
-        assert data["status"] in ("ok", "degraded")  # degraded is valid when no upstream is configured
+        assert data["status"] in (
+            "ok",
+            "degraded",
+        )  # degraded is valid when no upstream is configured
         assert "version" in data
         assert data["uptime_seconds"] >= 0
 
@@ -132,17 +140,20 @@ class TestProxyStartup:
 # Test 2: Proxy forwards requests to upstream
 # ---------------------------------------------------------------------------
 
+
 class TestProxyForwarding:
     def test_proxy_forwards_post_to_upstream(self, proxy):
         """POST to proxy with full target URL must be forwarded to mock upstream."""
         _, mock_url = proxy
 
         # Build a minimal Anthropic-style request body
-        request_body = json.dumps({
-            "model": "claude-3-haiku-20240307",
-            "max_tokens": 100,
-            "messages": [{"role": "user", "content": "hello world"}],
-        }).encode()
+        request_body = json.dumps(
+            {
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 100,
+                "messages": [{"role": "user", "content": "hello world"}],
+            }
+        ).encode()
 
         # Send through proxy using full URL form (proxy mode)
         target_url = f"{mock_url}/v1/messages"
@@ -184,11 +195,13 @@ class TestProxyForwarding:
         """Proxy should handle direct-URL forwarding (CONNECT-style passthrough)."""
         _, mock_url = proxy
 
-        request_body = json.dumps({
-            "model": "claude-3-haiku-20240307",
-            "max_tokens": 50,
-            "messages": [{"role": "user", "content": "test routing"}],
-        }).encode()
+        request_body = json.dumps(
+            {
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 50,
+                "messages": [{"role": "user", "content": "test routing"}],
+            }
+        ).encode()
 
         # Direct URL forwarding: proxy target in the URL itself
         req = urllib.request.Request(
@@ -207,6 +220,7 @@ class TestProxyForwarding:
 # ---------------------------------------------------------------------------
 # Test 3: Compression hook integration
 # ---------------------------------------------------------------------------
+
 
 class TestCompressionPipeline:
     def test_proxy_with_compression_hook(self, mock_upstream):
@@ -246,15 +260,19 @@ class TestCompressionPipeline:
 
         # Build a large request body to exercise the compression pipeline
         large_content = "The quick brown fox jumps over the lazy dog. " * 200  # ~900 words
-        request_body = json.dumps({
-            "model": "claude-3-haiku-20240307",
-            "max_tokens": 100,
-            "messages": [
-                {"role": "user", "content": large_content},
-            ],
-        }).encode()
+        request_body = json.dumps(
+            {
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 100,
+                "messages": [
+                    {"role": "user", "content": large_content},
+                ],
+            }
+        ).encode()
 
-        assert len(request_body) > 5000, "Request body should be large enough to trigger compression"
+        assert len(request_body) > 5000, (
+            "Request body should be large enough to trigger compression"
+        )
 
         # Send to /v1/messages — even if upstream is unreachable, proxy won't crash
         req = urllib.request.Request(
@@ -278,12 +296,14 @@ class TestCompressionPipeline:
 # Test 4: Zero-config startup
 # ---------------------------------------------------------------------------
 
+
 class TestZeroConfigStartup:
     def test_proxy_starts_without_config(self):
         """Proxy must start with no environment variables or config files."""
         with patch.dict("os.environ", {}, clear=False):
             # Remove any TOKENPAK_* vars that might pre-configure upstreams
             import os
+
             env_backup = {k: v for k, v in os.environ.items() if k.startswith("TOKENPAK_")}
             for k in env_backup:
                 os.environ.pop(k, None)

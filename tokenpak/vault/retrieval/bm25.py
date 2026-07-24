@@ -2,6 +2,7 @@
 BM25 retriever — standalone implementation adapted from VaultIndex in proxy.py.
 No external dependencies (stdlib only).
 """
+
 from __future__ import annotations
 
 import math
@@ -26,7 +27,7 @@ class BM25Index:
     """In-memory BM25 index over a document corpus."""
 
     def __init__(self) -> None:
-        self._docs: Dict[str, str] = {}          # doc_id -> content
+        self._docs: Dict[str, str] = {}  # doc_id -> content
         self._meta: Dict[str, Dict[str, Any]] = {}  # doc_id -> metadata
         self._df: Dict[str, int] = {}
         self._tfs: Dict[str, Dict[str, int]] = {}
@@ -151,13 +152,15 @@ class BM25Retriever(Retriever):
                 content = content_file.read_text(errors="replace")
             except OSError:
                 continue
-            documents.append({
-                "id": bid,
-                "content": content,
-                "source_path": bdata.get("source_path", bid),
-                "risk_class": bdata.get("risk_class", "narrative"),
-                "raw_tokens": bdata.get("raw_tokens", 0),
-            })
+            documents.append(
+                {
+                    "id": bid,
+                    "content": content,
+                    "source_path": bdata.get("source_path", bid),
+                    "risk_class": bdata.get("risk_class", "narrative"),
+                    "raw_tokens": bdata.get("raw_tokens", 0),
+                }
+            )
 
         if documents:
             self._index.build(documents)

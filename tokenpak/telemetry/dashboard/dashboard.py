@@ -18,6 +18,13 @@ Usage::
 
 from __future__ import annotations
 
+__all__ = (
+    "RollupEngine",
+    "TelemetryDB",
+    "create_dashboard_router",
+)
+
+
 import asyncio
 import logging
 import sqlite3
@@ -27,10 +34,10 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Mapping, Optional, Sequence, TypedDict
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from tokenpak.telemetry.rollups import RollupEngine
@@ -46,26 +53,77 @@ _STATIC_DIR = _HERE / "static"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 
+class Notification(TypedDict):
+    """Dashboard notification retained in the in-memory queue."""
+
+    id: str
+    type: str
+    title: str
+    message: str
+    ts: int
+    read: bool
+
+
+class ExportMetadata(TypedDict):
+    """Metadata included with dashboard exports."""
+
+    generated_at: str
+    filters: dict[str, object]
+    pricing_version: str
+    record_count: int
+    data_source_note: str
+
+
+class ExportTokenCounts(TypedDict):
+    raw_input: object
+    compressed_input: object
+    output: object
+
+
+class ExportCost(TypedDict):
+    baseline: float
+    actual: float
+    savings: float
+    savings_pct: float
+
+
+class ExportTrace(TypedDict):
+    trace_id: object
+    timestamp: object
+    provider: object
+    model: object
+    tokens: ExportTokenCounts
+    cost: ExportCost
+    latency_ms: object
+    status: object
+    data_source: str
+
+
 # ── Glossary: load term_cards.json for tooltip/glossary page ──────────────
 try:
     import json as _json_mod
 
     _TERM_CARDS_PATH = _HERE.parent.parent / "term_cards.json"
-    _GLOSSARY_DATA_GLOBAL: dict = (
+    _raw_glossary: object = (
         _json_mod.loads(_TERM_CARDS_PATH.read_text()) if _TERM_CARDS_PATH.exists() else {}
+    )
+    _GLOSSARY_DATA_GLOBAL: dict[str, object] = (
+        {str(key): value for key, value in _raw_glossary.items()}
+        if isinstance(_raw_glossary, dict)
+        else {}
     )
 except Exception:
     _GLOSSARY_DATA_GLOBAL = {}
 templates.env.globals["glossary_data"] = _GLOSSARY_DATA_GLOBAL
 
 # --- Notification System ---
-_NOTIFICATIONS: deque = deque(maxlen=100)  # Max 100 notifications in memory
+_NOTIFICATIONS: deque[Notification] = deque(maxlen=100)
 _NOTIF_MAX = 100
 
 
-def _add_notification(notif_type: str, title: str, message: str) -> dict:
+def _add_notification(notif_type: str, title: str, message: str) -> Notification:
     """Add a notification to the queue."""
-    n = {
+    n: Notification = {
         "id": str(uuid.uuid4()),
         "type": notif_type,
         "title": title,
@@ -77,7 +135,7 @@ def _add_notification(notif_type: str, title: str, message: str) -> dict:
     return n
 
 
-def _detect_cost_spike(storage) -> list:
+def _detect_cost_spike(storage: object) -> list[Notification]:
     """Check if today's cost is >2x the average of the past 7 days."""
     try:
         db_path = storage._db_path if hasattr(storage, "_db_path") else str(storage)
@@ -124,7 +182,7 @@ def _detect_cost_spike(storage) -> list:
         return []
 
 
-def _check_cache_miss_rate(storage) -> list:
+def _check_cache_miss_rate(storage: object) -> list[Notification]:
     """Check if cache miss rate is >80% in recent requests."""
     try:
         db_path = storage._db_path if hasattr(storage, "_db_path") else str(storage)
@@ -155,7 +213,7 @@ def _check_cache_miss_rate(storage) -> list:
         return []
 
 
-def _check_recent_errors(storage) -> list:
+def _check_recent_errors(storage: object) -> list[Notification]:
     """Check if there are any errors (status_code >= 400) in recent requests."""
     try:
         db_path = storage._db_path if hasattr(storage, "_db_path") else str(storage)
@@ -187,7 +245,7 @@ def _safe_list_traces(
     provider: Optional[str],
     model: Optional[str],
     agent: Optional[str],
-) -> list:
+) -> list[dict[str, object]]:
     """List traces, returning empty list on error."""
     try:
         return storage.list_traces(
@@ -204,7 +262,7 @@ def _safe_list_traces(
         return []
 
 
-def _build_glossary_context() -> dict:
+def _build_glossary_context() -> dict[str, object]:
     """Return context dict for the glossary page template."""
     CATEGORIES = {
         "cost": {
@@ -318,25 +376,32 @@ def create_dashboard_router(
     # -----------------------------------------------------------------------
     # Helper: fetch dimension lists for filter dropdowns
     # -----------------------------------------------------------------------
-    def _get_filter_options():
+    def _get_filter_options() -> tuple[list[str], list[str], list[str]]:
         """Return available providers, models, agents for filter dropdowns."""
         try:
             cur = storage._conn.cursor()
             cur.execute(
                 "SELECT DISTINCT provider FROM tp_events WHERE provider != '' ORDER BY provider"
             )
-            providers = [r[0] for r in cur.fetchall()]
+            providers = [str(r[0]) for r in cur.fetchall()]
             cur.execute("SELECT DISTINCT model FROM tp_events WHERE model != '' ORDER BY model")
-            models = [r[0] for r in cur.fetchall()]
+            models = [str(r[0]) for r in cur.fetchall()]
             cur.execute(
                 "SELECT DISTINCT agent_id FROM tp_events WHERE agent_id != '' ORDER BY agent_id"
             )
-            agents = [r[0] for r in cur.fetchall()]
+            agents = [str(r[0]) for r in cur.fetchall()]
             return providers, models, agents
         except Exception:
             return [], [], []
 
-    def _filter_ctx(days, provider, model, agent, status, compression):
+    def _filter_ctx(
+        days: int,
+        provider: Optional[str],
+        model: Optional[str],
+        agent: Optional[str],
+        status: Optional[str],
+        compression: Optional[str],
+    ) -> dict[str, object]:
         """Build shared filter context dict for all views."""
         providers, models, agents = _get_filter_options()
         return {
@@ -359,7 +424,7 @@ def create_dashboard_router(
     # -----------------------------------------------------------------------
 
     @router.get("/", include_in_schema=False)
-    async def root():
+    async def root() -> RedirectResponse:
         """Serve the telemetry dashboard HTML page."""
         return RedirectResponse(url="/dashboard/finops")
 
@@ -379,7 +444,7 @@ def create_dashboard_router(
         compare_range: Optional[str] = Query("previous"),
         status: Optional[str] = Query(None),
         compression: Optional[str] = Query(None),
-    ):
+    ) -> Response:
         """FinOps dashboard — cost, savings, compression."""
         loop = asyncio.get_event_loop()
 
@@ -465,7 +530,7 @@ def create_dashboard_router(
         agent: Optional[str] = Query(None),
         status: Optional[str] = Query(None),
         compression: Optional[str] = Query(None),
-    ):
+    ) -> Response:
         """Engineering dashboard — tokens, requests, agents."""
         loop = asyncio.get_event_loop()
 
@@ -484,7 +549,7 @@ def create_dashboard_router(
         )
         top_traces = sorted(
             top_traces_raw,
-            key=lambda t: (t.get("input_billed") or t.get("total_tokens_billed") or 0),
+            key=lambda t: _as_float(t.get("input_billed") or t.get("total_tokens_billed") or 0),
             reverse=True,
         )[:20]
 
@@ -513,7 +578,7 @@ def create_dashboard_router(
     # -----------------------------------------------------------------------
 
     @router.get("/integration", response_class=HTMLResponse)
-    async def integration(request: Request):
+    async def integration(request: Request) -> Response:
         """Integration settings page."""
         ctx = {
             "request": request,
@@ -539,7 +604,7 @@ def create_dashboard_router(
         agent: Optional[str] = Query(default=""),
         status: Optional[str] = Query(default="all"),
         limit: int = Query(default=10000, ge=1, le=10000),
-    ):
+    ) -> Response:
         """Export traces as CSV."""
         import asyncio
         import datetime
@@ -581,7 +646,7 @@ def create_dashboard_router(
         agent: Optional[str] = Query(default=""),
         status: Optional[str] = Query(default="all"),
         limit: int = Query(default=10000, ge=1, le=10000),
-    ):
+    ) -> Response:
         """Export traces as JSON."""
         import asyncio
         import datetime
@@ -616,7 +681,7 @@ def create_dashboard_router(
         )
 
     @router.get("/export/trace/{trace_id}")
-    async def export_trace(trace_id: str):
+    async def export_trace(trace_id: str) -> Response:
         """Export single trace as JSON."""
         import asyncio
         import json
@@ -659,7 +724,7 @@ def create_dashboard_router(
         agent: Optional[str] = Query(None),
         status: Optional[str] = Query(None),
         compression: Optional[str] = Query(None),
-    ):
+    ) -> Response:
         """Audit dashboard — trace timeline, filters, drilldown."""
         loop = asyncio.get_event_loop()
 
@@ -694,7 +759,7 @@ def create_dashboard_router(
         request: Request,
         trace_id: str,
         days: int = Query(7),
-    ):
+    ) -> Response:
         """HTMX drilldown — full trace detail with segments and hash chain."""
         loop = asyncio.get_event_loop()
 
@@ -722,7 +787,7 @@ def create_dashboard_router(
         provider: Optional[str] = Query(default=""),
         model: Optional[str] = Query(default=""),
         format: str = Query(default="paragraph"),
-    ):
+    ) -> dict[str, object]:
         """Generate executive summary in paragraph or bullet format."""
         import asyncio
         import functools
@@ -747,7 +812,7 @@ def create_dashboard_router(
 
     @router.get("/settings", response_class=HTMLResponse)
     @router.get("/settings/{section}", response_class=HTMLResponse)
-    async def settings_view(request: Request, section: str = "personal"):
+    async def settings_view(request: Request, section: str = "personal") -> Response:
         """Settings page with 8 sections."""
         valid_sections = [
             "personal",
@@ -770,7 +835,7 @@ def create_dashboard_router(
         return templates.TemplateResponse(request, "settings.html", ctx)
 
     @router.post("/settings/save", response_class=HTMLResponse)
-    async def settings_save(request: Request):
+    async def settings_save(request: Request) -> HTMLResponse:
         """Server-side settings save (stub; most prefs use localStorage)."""
         try:
             await request.json()
@@ -780,14 +845,16 @@ def create_dashboard_router(
 
     # --- Notification endpoints ---
     @router.get("/notifications")
-    async def get_notifications(limit: int = Query(20)):
+    async def get_notifications(limit: int = Query(20)) -> dict[str, object]:
         """Get recent notifications."""
         notifs = list(_NOTIFICATIONS)[:limit]
         unread = sum(1 for n in _NOTIFICATIONS if not n["read"])
         return {"notifications": notifs, "unread": unread}
 
     @router.post("/notifications/{notification_id}/read")
-    async def mark_notification_read(notification_id: str):
+    async def mark_notification_read(
+        notification_id: str,
+    ) -> dict[str, bool] | tuple[dict[str, bool], int]:
         """Mark a notification as read."""
         for n in _NOTIFICATIONS:
             if n["id"] == notification_id:
@@ -796,7 +863,7 @@ def create_dashboard_router(
         return {"ok": False}, 404
 
     @router.post("/notifications/read-all")
-    async def mark_all_read():
+    async def mark_all_read() -> dict[str, object]:
         """Mark all notifications as read."""
         count = 0
         for n in _NOTIFICATIONS:
@@ -806,12 +873,12 @@ def create_dashboard_router(
         return {"ok": True, "marked": count}
 
     @router.get("/glossary", response_class=HTMLResponse)
-    async def glossary_view(request: Request):
+    async def glossary_view(request: Request) -> Response:
         """Terminology glossary page — standardized terms and definitions."""
         ctx = _build_glossary_context()
         ctx["request"] = request
         ctx["view"] = "glossary"
-        return templates.TemplateResponse("glossary.html", ctx)
+        return templates.TemplateResponse(request, "glossary.html", ctx)
 
     return router
 
@@ -827,7 +894,7 @@ def _generate_executive_summary(
     provider: str | None = None,
     model: str | None = None,
     format: str = "paragraph",
-):
+) -> str:
     """Generate executive summary in paragraph or bullet format."""
     import datetime
 
@@ -945,7 +1012,7 @@ def _generate_executive_summary(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _export_metadata(filters, record_count):
+def _export_metadata(filters: Mapping[str, object], record_count: int) -> ExportMetadata:
     """Generate export metadata header."""
     import datetime
 
@@ -958,7 +1025,17 @@ def _export_metadata(filters, record_count):
     }
 
 
-def _format_trace_for_export(event):
+def _as_float(value: object) -> float:
+    """Coerce a telemetry scalar to float without accepting arbitrary objects."""
+    if isinstance(value, (str, bytes, int, float)):
+        try:
+            return float(value)
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
+def _format_trace_for_export(event: Mapping[str, object]) -> ExportTrace:
     """Convert a telemetry event to export-ready dict."""
     return {
         "trace_id": event.get("trace_id", ""),
@@ -971,10 +1048,10 @@ def _format_trace_for_export(event):
             "output": event.get("output_tokens", 0),
         },
         "cost": {
-            "baseline": round(float(event.get("baseline_cost_usd", 0) or 0), 4),
-            "actual": round(float(event.get("cost_usd", 0) or 0), 4),
-            "savings": round(float(event.get("savings_usd", 0) or 0), 4),
-            "savings_pct": round(float(event.get("savings_pct", 0) or 0), 1),
+            "baseline": round(_as_float(event.get("baseline_cost_usd", 0)), 4),
+            "actual": round(_as_float(event.get("cost_usd", 0)), 4),
+            "savings": round(_as_float(event.get("savings_usd", 0)), 4),
+            "savings_pct": round(_as_float(event.get("savings_pct", 0)), 1),
         },
         "latency_ms": event.get("duration_ms", 0),
         "status": event.get("status", "unknown"),
@@ -982,7 +1059,7 @@ def _format_trace_for_export(event):
     }
 
 
-def _build_csv_export(traces, filters):
+def _build_csv_export(traces: Sequence[Mapping[str, object]], filters: Mapping[str, object]) -> str:
     """Generate CSV content as string."""
     import csv
     import datetime
@@ -1045,7 +1122,9 @@ def _build_csv_export(traces, filters):
     return output.getvalue()
 
 
-def _build_json_export(traces, filters):
+def _build_json_export(
+    traces: Sequence[Mapping[str, object]], filters: Mapping[str, object]
+) -> str:
     """Generate JSON export with metadata."""
     import json
 

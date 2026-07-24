@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import Field, field_validator
@@ -123,9 +123,7 @@ class PromptOverlay(DispatchBaseModel):
         default_factory=list,
         description="additive directives appended after the base worker prompt",
     )
-    required_capabilities: list[str] = Field(
-        default_factory=list, description="registry-bound"
-    )
+    required_capabilities: list[str] = Field(default_factory=list, description="registry-bound")
 
     @field_validator("required_capabilities")
     @classmethod
@@ -133,7 +131,7 @@ class PromptOverlay(DispatchBaseModel):
         return _validate_capability_list(value)
 
 
-def _read_yaml_mapping(path: Path, error_cls: type[ValueError]) -> dict:
+def _read_yaml_mapping(path: Path, error_cls: type[ValueError]) -> dict[str, Any]:
     """Load ``path`` as a YAML mapping, raising ``error_cls`` on any problem."""
 
     try:
@@ -141,9 +139,7 @@ def _read_yaml_mapping(path: Path, error_cls: type[ValueError]) -> dict:
     except (OSError, yaml.YAMLError) as exc:  # pragma: no cover - exercised via tests
         raise error_cls(f"failed to read overlay/worker YAML {path}: {exc}") from exc
     if not isinstance(raw, dict):
-        raise error_cls(
-            f"expected a YAML mapping in {path}, got {type(raw).__name__}"
-        )
+        raise error_cls(f"expected a YAML mapping in {path}, got {type(raw).__name__}")
     return raw
 
 
@@ -186,9 +182,7 @@ class DispatchWorkerRegistry:
         try:
             return DispatchWorker.model_validate(data)
         except Exception as exc:  # noqa: BLE001 - re-wrapped with file context
-            raise WorkerProfileError(
-                f"invalid worker profile {path.name}: {exc}"
-            ) from exc
+            raise WorkerProfileError(f"invalid worker profile {path.name}: {exc}") from exc
 
     def ids(self) -> list[str]:
         """Return the registered worker ids (sorted)."""
@@ -206,9 +200,7 @@ class DispatchWorkerRegistry:
         try:
             return self._workers[worker_id]
         except KeyError as exc:
-            raise KeyError(
-                f"no worker {worker_id!r} in registry; known: {self.ids()}"
-            ) from exc
+            raise KeyError(f"no worker {worker_id!r} in registry; known: {self.ids()}") from exc
 
     def for_role(self, role: str) -> list[DispatchWorker]:
         """Return every worker declaring ``role`` (dynamic role→worker lookup)."""
@@ -234,9 +226,7 @@ class OverlayLoader:
         # point ``TOKENPAK_HOME`` at a tmp dir. An explicit path (e.g. tmp_path)
         # is honoured verbatim.
         self._user_dir = user_dir
-        self._packaged_dir = (
-            packaged_dir if packaged_dir is not None else _PACKAGED_OVERLAY_DIR
-        )
+        self._packaged_dir = packaged_dir if packaged_dir is not None else _PACKAGED_OVERLAY_DIR
 
     def _resolve_user_dir(self) -> Path:
         return self._user_dir if self._user_dir is not None else user_overlay_dir()
@@ -265,9 +255,7 @@ class OverlayLoader:
         sources = self._discover()
         path = sources.get(overlay_id)
         if path is None:
-            raise OverlayError(
-                f"no overlay {overlay_id!r}; known overlays: {sorted(sources)}"
-            )
+            raise OverlayError(f"no overlay {overlay_id!r}; known overlays: {sorted(sources)}")
         return self._load_overlay(path)
 
     def load_all(self) -> dict[str, PromptOverlay]:

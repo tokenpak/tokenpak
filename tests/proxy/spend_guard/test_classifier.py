@@ -89,9 +89,7 @@ def test_empty_headers_and_noop_strip():
 
 _NEUTRAL_IDENTIFIER = re.compile(r"^(agent|worker|client)-[a-z0-9]+$", re.IGNORECASE)
 
-_AGENT_FIXTURE_VALUE = re.compile(
-    r"""[Xx]-[Tt]okenpak-[Aa]gent["']\s*:\s*["']([^"']+)["']"""
-)
+_AGENT_FIXTURE_VALUE = re.compile(r"""[Xx]-[Tt]okenpak-[Aa]gent["']\s*:\s*["']([^"']+)["']""")
 
 
 def test_agent_fixture_identifiers_are_neutral():

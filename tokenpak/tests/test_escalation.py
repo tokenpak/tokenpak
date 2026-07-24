@@ -37,14 +37,17 @@ def make_retrieve_fn(coverage_score: float = 0.8):
     We embed the intended coverage in the chunk 'score' field;
     the real compute_coverage_score may differ, so we monkey-patch where needed.
     """
+
     def _retrieve(*, query, tier, k, expand=False, targeted=False):
         return make_chunks(score=coverage_score, n=k)
+
     return _retrieve
 
 
 def make_pack_fn(fits: bool = True):
     def _pack(chunks, tier):
         return {"tier": tier, "chunks": len(chunks), "fits": fits}
+
     return _pack
 
 
@@ -192,13 +195,17 @@ class TestRecoverFromInsufficientContextSignal:
         assert result.escalated is False
 
     def test_signal_detected_not_fits_escalates(self):
-        result = self._recover("I can't see the MyRouter implementation.", fits=False, current_tier=1)
+        result = self._recover(
+            "I can't see the MyRouter implementation.", fits=False, current_tier=1
+        )
         assert result.triggered is True
         assert result.escalated is True
         assert result.tier == 2
 
     def test_signal_detected_not_fits_at_max_tier(self):
-        result = self._recover("I can't see the MyRouter implementation.", fits=False, current_tier=3)
+        result = self._recover(
+            "I can't see the MyRouter implementation.", fits=False, current_tier=3
+        )
         assert result.triggered is True
         assert result.escalated is False
         assert result.tier == 3

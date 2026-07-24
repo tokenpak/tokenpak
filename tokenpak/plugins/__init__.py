@@ -1,3 +1,3 @@
 # TokenPak Plugin System
 
-__all__ = ['base', 'examples', 'registry']
+__all__ = ["base", "examples", "registry"]

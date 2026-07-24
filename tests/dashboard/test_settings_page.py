@@ -17,7 +17,10 @@ from unittest.mock import patch
 
 import pytest
 
-pytest.importorskip("fastapi", reason="fastapi not installed (optional dep — install via tokenpak[serve] or [telemetry])")
+pytest.importorskip(
+    "fastapi",
+    reason="fastapi not installed (optional dep — install via tokenpak[serve] or [telemetry])",
+)
 
 from fastapi.testclient import TestClient
 
@@ -38,6 +41,7 @@ except ImportError as exc:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def client():
     app = create_dashboard_app()
@@ -54,6 +58,7 @@ def tmp_env_file(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # 1. Page renders
 # ---------------------------------------------------------------------------
+
 
 class TestSettingsPageRenders:
     def test_returns_200(self, client):
@@ -108,6 +113,7 @@ class TestSettingsPageRenders:
 # ---------------------------------------------------------------------------
 # 2. Each toggle / setting persists via HTMX endpoints
 # ---------------------------------------------------------------------------
+
 
 class TestProfilePersists:
     def test_valid_profile_returns_200(self, client, tmp_env_file):
@@ -240,6 +246,7 @@ class TestAlertSettingsPersist:
 # 3. Atomic-write safety
 # ---------------------------------------------------------------------------
 
+
 class TestAtomicWriteSafety:
     def test_write_creates_file(self, tmp_env_file):
         assert not tmp_env_file.exists()
@@ -286,6 +293,7 @@ class TestAtomicWriteSafety:
 # 4. Malformed input rejected
 # ---------------------------------------------------------------------------
 
+
 class TestInputValidation:
     def test_negative_budget_rejected(self):
         errors = validate_settings({"TOKENPAK_INJECT_BUDGET": "-1"})
@@ -316,15 +324,17 @@ class TestInputValidation:
         assert errors
 
     def test_valid_settings_no_errors(self):
-        errors = validate_settings({
-            "TOKENPAK_ACTIVE_PROFILE": "claude-code-cli",
-            "TOKENPAK_INJECT_BUDGET": "4000",
-            "TOKENPAK_INJECT_TOP_K": "5",
-            "TOKENPAK_INJECT_MIN_SCORE": "2.0",
-            "TOKENPAK_BUDGET_CONTROLLER": "1",
-            "TOKENPAK_BUDGET_TOTAL": "12000",
-            "TOKENPAK_CACHE_ALERT_THRESHOLD": "50.0",
-        })
+        errors = validate_settings(
+            {
+                "TOKENPAK_ACTIVE_PROFILE": "claude-code-cli",
+                "TOKENPAK_INJECT_BUDGET": "4000",
+                "TOKENPAK_INJECT_TOP_K": "5",
+                "TOKENPAK_INJECT_MIN_SCORE": "2.0",
+                "TOKENPAK_BUDGET_CONTROLLER": "1",
+                "TOKENPAK_BUDGET_TOTAL": "12000",
+                "TOKENPAK_CACHE_ALERT_THRESHOLD": "50.0",
+            }
+        )
         assert errors == []
 
     @pytest.mark.parametrize(
@@ -354,7 +364,9 @@ class TestInputValidation:
             ("TOKENPAK_CACHE_ALERT_SLACK_CHANNEL", "#tokenpak-alerts"),
         ],
     )
-    def test_sensitive_remote_excluded_keys_abort_without_creating_file(self, tmp_env_file, key, value):
+    def test_sensitive_remote_excluded_keys_abort_without_creating_file(
+        self, tmp_env_file, key, value
+    ):
         ok, errors = write_settings({key: value}, path=tmp_env_file)
         assert not ok
         assert errors
@@ -393,6 +405,7 @@ class TestInputValidation:
 # 5. JSON API endpoint
 # ---------------------------------------------------------------------------
 
+
 class TestApiCurrentSettings:
     def test_returns_200(self, client):
         r = client.get("/settings/claude-code/api/current")
@@ -424,6 +437,7 @@ class TestApiCurrentSettings:
 # ---------------------------------------------------------------------------
 # 6. Read env file
 # ---------------------------------------------------------------------------
+
 
 class TestReadEnvFile:
     def test_missing_file_returns_empty_dict(self, tmp_env_file):

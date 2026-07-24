@@ -1,4 +1,3 @@
-
 import pytest
 
 pytest.importorskip("tokenpak.registry", reason="module not available in current build")
@@ -23,7 +22,9 @@ class TokenPakSmokeTest(unittest.TestCase):
             d = root / "docs"
             d.mkdir()
             (d / "a.md").write_text("# TokenPak\n\nThis is a benchmark test for token compression.")
-            (d / "b.py").write_text("import os\n\ndef hello(name):\n    \"\"\"Say hi\"\"\"\n    print(name)")
+            (d / "b.py").write_text(
+                'import os\n\ndef hello(name):\n    """Say hi"""\n    print(name)'
+            )
             (d / "c.json").write_text('{"name":"tokenpak","version":1,"items":[1,2,3]}')
 
             db = root / "registry.db"
@@ -38,15 +39,17 @@ class TokenPakSmokeTest(unittest.TestCase):
                 if not p:
                     continue
                 compressed = p.process(content, path)
-                reg.add_block(Block(
-                    path=path,
-                    content_hash=hashlib.sha256(content.encode()).hexdigest(),
-                    version=1,
-                    file_type=ftype,
-                    raw_tokens=count_tokens(content),
-                    compressed_tokens=count_tokens(compressed),
-                    compressed_content=compressed,
-                ))
+                reg.add_block(
+                    Block(
+                        path=path,
+                        content_hash=hashlib.sha256(content.encode()).hexdigest(),
+                        version=1,
+                        file_type=ftype,
+                        raw_tokens=count_tokens(content),
+                        compressed_tokens=count_tokens(compressed),
+                        compressed_content=compressed,
+                    )
+                )
 
             stats = reg.get_stats()
             self.assertGreaterEqual(stats["total_files"], 3)
@@ -58,13 +61,16 @@ class TokenPakSmokeTest(unittest.TestCase):
             alloc = quadratic_allocate(budget_blocks, 1000)
             self.assertEqual(sum(alloc.values()), 1000)
 
-            wire_blocks = [{
-                "ref": f"{m.path}#v{m.version}",
-                "type": m.file_type,
-                "quality": m.quality_score,
-                "tokens": min(200, m.compressed_tokens),
-                "content": m.compressed_content,
-            } for m in matches]
+            wire_blocks = [
+                {
+                    "ref": f"{m.path}#v{m.version}",
+                    "type": m.file_type,
+                    "quality": m.quality_score,
+                    "tokens": min(200, m.compressed_tokens),
+                    "content": m.compressed_content,
+                }
+                for m in matches
+            ]
             out = pack(wire_blocks, 1000, {"query": "token compression"})
             self.assertIn("TOKPAK:1", out)
 

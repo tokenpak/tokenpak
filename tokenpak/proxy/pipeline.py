@@ -21,11 +21,12 @@ Usage::
     policy = get_policy(route)
     result = process_request(request, policy)
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 from tokenpak.proxy.request import ProxyRequest
 
@@ -33,9 +34,11 @@ from tokenpak.proxy.request import ProxyRequest
 # Pipeline trace — lightweight record of what each stage did
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StageResult:
     """What a single pipeline stage produced."""
+
     name: str
     skipped: bool = False
     skip_reason: str = ""
@@ -46,6 +49,7 @@ class StageResult:
 @dataclass
 class PipelineResult:
     """Outcome of a full ``process_request()`` call."""
+
     request: ProxyRequest
     stages: List[StageResult] = field(default_factory=list)
     vault_injection_text: str = ""
@@ -54,6 +58,7 @@ class PipelineResult:
 # ---------------------------------------------------------------------------
 # Individual stage functions
 # ---------------------------------------------------------------------------
+
 
 def stage_cache_poison_removal(
     request: ProxyRequest,
@@ -249,6 +254,7 @@ def stage_cache_control(
 
     try:
         from tokenpak.proxy.prompt_builder import apply_stable_cache_control
+
         request.body = apply_stable_cache_control(request.body)
         result.details["applied"] = True
     except ImportError:
@@ -331,7 +337,7 @@ def stage_ttl_hotfix(
         return request, result
 
     # Collect all blocks with cache_control in document order
-    blocks: list = []
+    blocks: list[dict[str, Any]] = []
     for item in body_data.get("system") or []:
         if isinstance(item, dict):
             blocks.append(item)
@@ -410,12 +416,17 @@ def stage_byte_restore(
         return request, result
 
     # Import byte-level injection functions (modular request.py)
+    byte_inject: Callable[[bytes, str], bytes] | None = None
     try:
-        from tokenpak.proxy.request import _byte_inject_system_block
-    except ImportError:
-        _byte_inject_system_block = None
+        from tokenpak.proxy.request import (
+            _byte_inject_system_block as imported_byte_inject,
+        )
 
-    if not vault_injection_text or max_inject_chars <= 0 or _byte_inject_system_block is None:
+        byte_inject = imported_byte_inject
+    except ImportError:
+        pass
+
+    if not vault_injection_text or max_inject_chars <= 0 or byte_inject is None:
         request.body = original_body
         result.details["action"] = "restored_original"
         return request, result
@@ -423,7 +434,9 @@ def stage_byte_restore(
     # Check query length relevance gate
     query_signal = ""
     try:
-        from tokenpak.proxy.vault_bridge import extract_query_signal
+        from tokenpak.proxy import vault_bridge
+
+        extract_query_signal = getattr(vault_bridge, "extract_query_signal")
         query_signal = extract_query_signal(original_body, adapter=adapter)
     except (ImportError, Exception):
         pass
@@ -434,7 +447,7 @@ def stage_byte_restore(
         return request, result
 
     trimmed = vault_injection_text[:max_inject_chars]
-    request.body = _byte_inject_system_block(original_body, trimmed)
+    request.body = byte_inject(original_body, trimmed)
     result.details["action"] = "byte_spliced"
     result.details["injected_chars"] = len(trimmed)
     return request, result
@@ -443,6 +456,7 @@ def stage_byte_restore(
 # ---------------------------------------------------------------------------
 # Pipeline orchestrator
 # ---------------------------------------------------------------------------
+
 
 def process_request(
     request: ProxyRequest,
@@ -472,7 +486,8 @@ def process_request(
     """
     if policy.get("body") == "byte_preserved":
         return _passthrough_pipeline(
-            request, policy,
+            request,
+            policy,
             route=route,
             client_has_auth=client_has_auth,
             adapter=adapter,
@@ -480,7 +495,8 @@ def process_request(
             get_cli_token=get_cli_token,
         )
     return _full_pipeline(
-        request, policy,
+        request,
+        policy,
         route=route,
         client_has_auth=client_has_auth,
         adapter=adapter,
@@ -527,7 +543,8 @@ def _passthrough_pipeline(
 
     # Stage: Auth injection (passthrough for Claude Code, but included for completeness)
     request, stage = stage_auth_injection(
-        request, policy,
+        request,
+        policy,
         client_has_auth=client_has_auth,
         get_pool_key=get_pool_key,
         get_cli_token=get_cli_token,
@@ -536,7 +553,8 @@ def _passthrough_pipeline(
 
     # Stage: Byte restore + vault splice
     request, stage = stage_byte_restore(
-        request, policy,
+        request,
+        policy,
         original_body=original_body,
         vault_injection_text=vault_text,
         adapter=adapter,
@@ -580,9 +598,7 @@ def _full_pipeline(
     pipeline.stages.append(stage)
 
     # Stage 2: Compaction
-    request, stage = stage_compaction(
-        request, policy, adapter=adapter, compact_fn=compact_fn
-    )
+    request, stage = stage_compaction(request, policy, adapter=adapter, compact_fn=compact_fn)
     pipeline.stages.append(stage)
 
     # Stage: TTL ordering hotfix
@@ -597,7 +613,8 @@ def _full_pipeline(
 
     # Stage: Auth injection
     request, stage = stage_auth_injection(
-        request, policy,
+        request,
+        policy,
         client_has_auth=client_has_auth,
         get_pool_key=get_pool_key,
         get_cli_token=get_cli_token,

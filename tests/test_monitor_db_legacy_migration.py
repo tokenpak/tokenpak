@@ -148,8 +148,8 @@ def test_dry_run_is_default_and_touches_nothing(home):
     summary = migrator.migrate(target, migrator.legacy_candidates(home))  # no apply
 
     assert summary["apply"] is False
-    assert not target.exists()       # canonical NOT created
-    assert src.exists()              # source untouched
+    assert not target.exists()  # canonical NOT created
+    assert src.exists()  # source untouched
     assert _count(src) == 2
 
 
@@ -195,9 +195,9 @@ def test_schema_mismatch_is_skipped_not_dropped(home):
 
     summary = migrator.migrate(target, migrator.legacy_candidates(home), apply=True)
 
-    assert summary["skipped"]                     # surfaced, not silently merged
+    assert summary["skipped"]  # surfaced, not silently merged
     assert summary["exit_code"] == 2
-    assert bad.exists()                           # NOT archived, NOT deleted
+    assert bad.exists()  # NOT archived, NOT deleted
 
 
 def test_incompatible_existing_target_leaves_valid_source_untouched(home):
@@ -234,8 +234,8 @@ def test_dangling_legacy_symlink_archived_not_followed(home):
 
     summary = migrator.migrate(target, migrator.legacy_candidates(home), apply=True)
 
-    assert not link.exists()                      # archived in place
-    assert not (home / "tokenpak" / "monitor.db").exists()   # never created
+    assert not link.exists()  # archived in place
+    assert not (home / "tokenpak" / "monitor.db").exists()  # never created
     assert any("legacy-" in a for _, a in summary["archived"])
 
 
@@ -246,5 +246,5 @@ def test_cli_main_dry_run_exit_zero(home):
     rc = migrator.main(["--home", str(home)])
 
     assert rc == 0
-    assert src.exists()                           # dry-run default: untouched
+    assert src.exists()  # dry-run default: untouched
     assert not migrator.canonical_target(home).exists()

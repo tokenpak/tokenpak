@@ -85,11 +85,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff
+          pip install "ruff==0.15.22"
 
-      - name: Lint with Ruff
+      - name: Lint and format with pinned Ruff
         run: |
           ruff check tokenpak/ tests/ --select=E,F,W,I --ignore=E501,E701,E702,E402,E741,F841
+          ruff format --check tokenpak/ tests/
 
   slim-install-smoke:
     name: Slim Install Smoke

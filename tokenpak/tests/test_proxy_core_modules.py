@@ -445,7 +445,13 @@ class TestPoolMetrics:
         from tokenpak.proxy.connection_pool import PoolMetrics
 
         d = PoolMetrics().to_dict()
-        for k in ("total_requests", "reused_connections", "new_connections", "errors", "reuse_rate"):
+        for k in (
+            "total_requests",
+            "reused_connections",
+            "new_connections",
+            "errors",
+            "reuse_rate",
+        ):
             assert k in d
 
 
@@ -1160,9 +1166,7 @@ class TestPartitionStableVolatile:
     def test_single_message_no_stable(self):
         from tokenpak.proxy.request_pipeline import _partition_stable_volatile
 
-        body = json.dumps(
-            {"messages": [{"role": "user", "content": "hi"}]}
-        ).encode()
+        body = json.dumps({"messages": [{"role": "user", "content": "hi"}]}).encode()
 
         stable, volatile = _partition_stable_volatile(body)
         stable_obj = json.loads(stable)
@@ -1182,9 +1186,7 @@ class TestPartitionStableVolatile:
     def test_deterministic_output(self):
         from tokenpak.proxy.request_pipeline import _partition_stable_volatile
 
-        body = json.dumps(
-            {"messages": [{"role": "user", "content": "test"}]}
-        ).encode()
+        body = json.dumps({"messages": [{"role": "user", "content": "test"}]}).encode()
 
         s1, v1 = _partition_stable_volatile(body)
         s2, v2 = _partition_stable_volatile(body)
@@ -1241,7 +1243,5 @@ class TestExtractUserText:
     def test_no_user_role_returns_empty(self):
         from tokenpak.proxy.request_pipeline import _extract_user_text
 
-        body = json.dumps(
-            {"messages": [{"role": "assistant", "content": "hello"}]}
-        ).encode()
+        body = json.dumps({"messages": [{"role": "assistant", "content": "hello"}]}).encode()
         assert _extract_user_text(body) == ""

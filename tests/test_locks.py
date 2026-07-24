@@ -111,7 +111,9 @@ def test_lock_dir_created_automatically(tmp_path):
     mgr = FileLockManager(agent_id="x", lock_dir=new_dir)
     assert new_dir.exists()
 
+
 # ── renew tests ──────────────────────────────────────────────────────────────
+
 
 def test_renew_extends_expiry(mgr, tmp_path):
     target = tmp_path / "file.txt"
@@ -123,12 +125,14 @@ def test_renew_extends_expiry(mgr, tmp_path):
 
 def test_renew_no_lock_raises(mgr, tmp_path):
     from tokenpak.orchestration.locks import LockExpiredError
+
     with pytest.raises(LockExpiredError):
         mgr.renew(tmp_path / "nonexistent.txt")
 
 
 def test_renew_conflict_raises(tmp_path):
     from tokenpak.orchestration.locks import LockConflictError
+
     mgr_a = FileLockManager(agent_id="agent-a", lock_dir=tmp_path / "locks", timeout_s=60)
     mgr_b = FileLockManager(agent_id="agent-b", lock_dir=tmp_path / "locks", timeout_s=60)
     target = tmp_path / "file.txt"
@@ -139,6 +143,7 @@ def test_renew_conflict_raises(tmp_path):
 
 def test_renew_expired_raises(tmp_path):
     from tokenpak.orchestration.locks import LockExpiredError
+
     mgr = FileLockManager(agent_id="agent-a", lock_dir=tmp_path / "locks", timeout_s=0)
     target = tmp_path / "file.txt"
     mgr.claim(target, timeout_s=0)
@@ -154,4 +159,3 @@ def test_renew_sets_renewed_field(mgr, tmp_path):
     record = mgr.renew(target)
     assert "renewed" in record
     assert record["renewed"] >= before
-

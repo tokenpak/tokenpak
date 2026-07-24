@@ -25,6 +25,7 @@ from tokenpak.telemetry.storage import TelemetryDB
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_event(**kw) -> TelemetryEvent:
     defaults = dict(
         trace_id="test-trace-1",
@@ -69,7 +70,6 @@ def _table_cols(db: TelemetryDB, table: str) -> set[str]:
 
 
 class TestSchemaColumns:
-
     def test_tp_events_has_span_id(self):
         db = TelemetryDB(":memory:")
         assert "span_id" in _table_cols(db, "tp_events")
@@ -156,7 +156,6 @@ class TestSchemaColumns:
 
 
 class TestDataclassFields:
-
     def test_telemetry_event_has_span_id(self):
         e = TelemetryEvent()
         assert hasattr(e, "span_id")
@@ -219,7 +218,6 @@ class TestDataclassFields:
 
 
 class TestInsertTraceNewFields:
-
     def test_span_id_persisted(self):
         db = TelemetryDB(":memory:")
         e = _make_event(span_id="span-abc", node_id="node-xyz")
@@ -293,7 +291,6 @@ class TestInsertTraceNewFields:
 
 
 class TestSchemaMigration:
-
     def test_migration_idempotent_multiple_runs(self):
         """Running _migrate_schema() multiple times must not raise."""
         db = TelemetryDB(":memory:")
@@ -369,7 +366,6 @@ class TestSchemaMigration:
 
 
 class TestRollupAvgColumns:
-
     def test_compute_rollups_includes_avg_raw_tokens(self):
         """After inserting events+segments, rollup should have avg_raw_tokens."""
         db = TelemetryDB(":memory:")
@@ -379,13 +375,20 @@ class TestRollupAvgColumns:
             e = _make_event(trace_id=trace_id)
             u = Usage(trace_id=trace_id, input_billed=100, output_billed=50)
             c = Cost(trace_id=trace_id, cost_total=0.005)
-            s = Segment(trace_id=trace_id, segment_id=f"seg-{i}", tokens_raw=200 + i * 100, tokens_after_tp=150 + i * 80)
+            s = Segment(
+                trace_id=trace_id,
+                segment_id=f"seg-{i}",
+                tokens_raw=200 + i * 100,
+                tokens_after_tp=150 + i * 80,
+            )
             db.insert_trace(e, u, c, [s])
 
         db.compute_rollups()
 
         cur = db._conn.cursor()
-        cur.execute("SELECT avg_raw_tokens, avg_final_tokens, avg_cost FROM tp_rollup_daily_model LIMIT 1")
+        cur.execute(
+            "SELECT avg_raw_tokens, avg_final_tokens, avg_cost FROM tp_rollup_daily_model LIMIT 1"
+        )
         row = cur.fetchone()
         assert row is not None, "No rollup rows computed"
         avg_raw, avg_final, avg_cost = row[0], row[1], row[2]
@@ -423,7 +426,6 @@ class TestRollupAvgColumns:
 
 
 class TestProviderUsageRaw:
-
     def test_provider_usage_raw_stores_valid_json(self):
         db = TelemetryDB(":memory:")
         raw = {"input": 1000, "output": 250, "cacheRead": 800, "cost": {"total": 0.05}}

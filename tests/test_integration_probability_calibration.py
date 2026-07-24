@@ -11,7 +11,10 @@ import pytest
 
 # trackedge is a separate project not installed in the slim release test env;
 # skip cleanly so the release auto-publish gate doesn't error on collection.
-pytest.importorskip("trackedge.model.probability", reason="trackedge is a separate project not installed in slim test env")
+pytest.importorskip(
+    "trackedge.model.probability",
+    reason="trackedge is a separate project not installed in slim test env",
+)
 
 import os
 import sys
@@ -23,6 +26,7 @@ from trackedge.model.probability import softmax_probabilities, top_contenders
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def five_horse_scores():
     return {"h1": 90, "h2": 80, "h3": 75, "h4": 60, "h5": 55}
@@ -44,8 +48,8 @@ def synthetic_9_races_scores():
 # 1. Core Probability Properties
 # ---------------------------------------------------------------------------
 
-class TestSoftmaxCoreProperties:
 
+class TestSoftmaxCoreProperties:
     def test_probs_sum_to_1_five_horses(self):
         """5-horse race must sum to 1.0."""
         probs = softmax_probabilities(five_horse_scores())
@@ -80,7 +84,7 @@ class TestSoftmaxCoreProperties:
         scores = {"h1": 75, "h2": 75, "h3": 75}
         probs = softmax_probabilities(scores)
         for p in probs.values():
-            assert abs(p - 1/3) < 1e-9
+            assert abs(p - 1 / 3) < 1e-9
 
     def test_single_horse_gets_all_probability(self):
         """Single-horse race → 100% probability."""
@@ -96,8 +100,8 @@ class TestSoftmaxCoreProperties:
 # 2. Temperature Effects
 # ---------------------------------------------------------------------------
 
-class TestTemperatureEffects:
 
+class TestTemperatureEffects:
     def test_high_temp_flatter_distribution(self):
         """T=100 should be flatter than T=5."""
         scores = {"h1": 90, "h2": 50}
@@ -147,8 +151,8 @@ class TestTemperatureEffects:
 # 3. Guardrails / Edge Cases
 # ---------------------------------------------------------------------------
 
-class TestProbabilityEdgeCases:
 
+class TestProbabilityEdgeCases:
     def test_nan_scores_handled_gracefully(self):
         """NaN scores should not crash; all probs must be valid."""
         scores = {"h1": float("nan"), "h2": 80.0, "h3": 75.0}
@@ -163,7 +167,7 @@ class TestProbabilityEdgeCases:
         probs = softmax_probabilities(scores)
         assert abs(sum(probs.values()) - 1.0) < 1e-9
         for p in probs.values():
-            assert abs(p - 1/3) < 1e-9
+            assert abs(p - 1 / 3) < 1e-9
 
     def test_large_field_sums_to_1(self):
         """20-horse field must still sum to 1.0."""
@@ -190,8 +194,8 @@ class TestProbabilityEdgeCases:
 # 4. Top Contenders
 # ---------------------------------------------------------------------------
 
-class TestTopContenders:
 
+class TestTopContenders:
     def test_top_contenders_ordered(self):
         """top_contenders() must return horses in descending probability order."""
         scores = {"h1": 90, "h2": 80, "h3": 70, "h4": 60}
@@ -218,8 +222,8 @@ class TestTopContenders:
 # 5. Full 9-Race Simulation
 # ---------------------------------------------------------------------------
 
-class TestFullNineRaceProbabilitySimulation:
 
+class TestFullNineRaceProbabilitySimulation:
     def _simulate_race_probs(self, n_horses=5, base_score=80, spread=10):
         """Generate scores and compute probabilities for one simulated race."""
         scores = {f"h{i}": float(base_score - i * spread) for i in range(n_horses)}

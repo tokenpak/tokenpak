@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Hashable
 from datetime import datetime
+from typing import TypeVar
 
 from .models import (
     APIEndpoint,
@@ -26,6 +28,8 @@ from .patterns import (
     ORG_RE,
     PERSON_RE,
 )
+
+_T = TypeVar("_T")
 
 
 class EntityExtractor:
@@ -153,7 +157,7 @@ class EntityExtractor:
 
     @staticmethod
     def _dedupe(entity_set: EntitySet) -> EntitySet:
-        seen = set()
+        seen: set[tuple[str, str]] = set()
         deduped_entities: list[Entity] = []
         for e in entity_set.entities:
             key = (e.type.value, e.value.lower())
@@ -163,9 +167,9 @@ class EntityExtractor:
             deduped_entities.append(e)
         entity_set.entities = deduped_entities
 
-        def _uniq(seq, key_fn):
-            out = []
-            seen_local = set()
+        def _uniq(seq: list[_T], key_fn: Callable[[_T], Hashable]) -> list[_T]:
+            out: list[_T] = []
+            seen_local: set[Hashable] = set()
             for item in seq:
                 k = key_fn(item)
                 if k in seen_local:

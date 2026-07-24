@@ -11,8 +11,21 @@ Usage:
     # {text: str, span: str, score: float}
 """
 
+__all__ = ("SpanExtractor",)
+
 import re
-from typing import List
+from typing import TypedDict, cast
+
+
+class SpanResult(TypedDict):
+    text: str
+    span: str
+    score: float
+
+
+class BatchSpanResult(SpanResult):
+    chunk_id: object
+
 
 try:
     import tiktoken
@@ -58,7 +71,7 @@ except ImportError:
     )
 
 
-def _split_sentences(text: str) -> List[str]:
+def _split_sentences(text: str) -> list[str]:
     """Split text into sentences using simple regex."""
     # Split on ., !, ? followed by whitespace/newline, or on newlines
     sentences = re.split(r"(?<=[.!?])\s+|\n{2,}", text.strip())
@@ -123,7 +136,7 @@ class SpanExtractor:
             except Exception:
                 self.use_reranker = False
 
-    def _score_sentences(self, sentences: List[str], query: str) -> List[float]:
+    def _score_sentences(self, sentences: list[str], query: str) -> list[float]:
         """Score sentences against query. Returns parallel list of scores."""
         if self.use_reranker and self._reranker:
             pairs = [(query, s) for s in sentences]
@@ -141,7 +154,7 @@ class SpanExtractor:
         chunk_text: str,
         query: str,
         max_tokens: int = 50,
-    ) -> dict:
+    ) -> SpanResult:
         """
         Extract the most relevant span from a chunk.
 
@@ -167,7 +180,7 @@ class SpanExtractor:
         ranked = sorted(indexed, key=lambda x: x[1][1], reverse=True)
 
         # Select top sentences that fit within max_tokens
-        selected_indices: List[int] = []  # original sentence indices
+        selected_indices: list[int] = []  # original sentence indices
         total_tokens = 0
         top_score = 0.0
 
@@ -209,10 +222,10 @@ class SpanExtractor:
 
     def extract_spans_batch(
         self,
-        chunks: List[dict],
+        chunks: list[dict[str, object]],
         query: str,
         max_tokens_each: int = 50,
-    ) -> List[dict]:
+    ) -> list[BatchSpanResult]:
         """
         Extract spans from multiple chunks.
 
@@ -223,14 +236,16 @@ class SpanExtractor:
         Returns:
             list of {text, span, score, chunk_id}
         """
-        results = []
+        results: list[BatchSpanResult] = []
         for chunk in chunks:
-            text = chunk.get("text", "")
+            text = cast(str, chunk.get("text", ""))
             span_data = self.extract_span(text, query, max_tokens_each)
             results.append(
-                {
-                    **span_data,
-                    "chunk_id": chunk.get("id", "unknown"),
-                }
+                BatchSpanResult(
+                    text=span_data["text"],
+                    span=span_data["span"],
+                    score=span_data["score"],
+                    chunk_id=chunk.get("id", "unknown"),
+                )
             )
         return results

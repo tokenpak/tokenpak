@@ -89,9 +89,7 @@ class CompanionConfig:
             hooks_enabled=_bool("TOKENPAK_COMPANION_HOOKS", True),
             mcp_enabled=_bool("TOKENPAK_COMPANION_MCP", True),
             show_cost=_bool("TOKENPAK_COMPANION_SHOW_COST", True),
-            prune_threshold=int(
-                os.environ.get("TOKENPAK_COMPANION_PRUNE_THRESHOLD", "50000")
-            ),
+            prune_threshold=int(os.environ.get("TOKENPAK_COMPANION_PRUNE_THRESHOLD", "50000")),
             bare=_bool("TOKENPAK_COMPANION_BARE", False),
             memory_dirs=_path_list("TOKENPAK_COMPANION_MEMORY_DIRS"),
         )

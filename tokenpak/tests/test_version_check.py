@@ -62,9 +62,7 @@ class TestQueryProxyVersion:
         """Test querying a reachable proxy."""
         mock_response = json.dumps({"version": "1.2.3", "status": "ok"})
         with mock.patch("urllib.request.urlopen") as mock_open:
-            mock_open.return_value.__enter__.return_value.read.return_value = (
-                mock_response.encode()
-            )
+            mock_open.return_value.__enter__.return_value.read.return_value = mock_response.encode()
             result = version_check._query_proxy_version()
             assert result == {"version": "1.2.3", "status": "ok"}
             mock_open.assert_called_once()
@@ -79,9 +77,7 @@ class TestQueryProxyVersion:
     def test_proxy_invalid_json(self):
         """Test handling invalid JSON from proxy."""
         with mock.patch("urllib.request.urlopen") as mock_open:
-            mock_open.return_value.__enter__.return_value.read.return_value = (
-                b"invalid json"
-            )
+            mock_open.return_value.__enter__.return_value.read.return_value = b"invalid json"
             result = version_check._query_proxy_version()
             assert result is None
 
@@ -178,9 +174,7 @@ class TestLogWarning:
     def test_warning_logging_graceful_failure(self):
         """Test that logging failures don't crash."""
         # Should not raise even if memory dir is inaccessible
-        with mock.patch.object(
-            version_check, "MEMORY_DIR", Path("/root/impossible/path")
-        ):
+        with mock.patch.object(version_check, "MEMORY_DIR", Path("/root/impossible/path")):
             # Should not raise
             version_check._log_warning("test warning")
 
@@ -196,29 +190,23 @@ class TestRunStartupCheck:
             "proxyVersion": "1.2.3",
             "configHash": version_check._compute_config_hash(cfg),
         }
-        with mock.patch(
-            "tokenpak.version_check._query_proxy_version", return_value=proxy_response
-        ), mock.patch(
-            "tokenpak.version_check._load_config", return_value=cfg
-        ), mock.patch(
-            "tokenpak.version_check._load_lock", return_value=lock
-        ), mock.patch(
-            "tokenpak.version_check._log_warning"
+        with (
+            mock.patch("tokenpak.version_check._query_proxy_version", return_value=proxy_response),
+            mock.patch("tokenpak.version_check._load_config", return_value=cfg),
+            mock.patch("tokenpak.version_check._load_lock", return_value=lock),
+            mock.patch("tokenpak.version_check._log_warning"),
         ):
             warnings = version_check.run_startup_check()
             assert warnings == []
 
     def test_proxy_unreachable_warning(self):
         """Test warning when proxy is unreachable."""
-        with mock.patch(
-            "tokenpak.version_check._query_proxy_version", return_value=None
-        ), mock.patch(
-            "tokenpak.version_check._load_config", return_value=None
-        ), mock.patch(
-            "tokenpak.version_check._load_lock", return_value={}
-        ), mock.patch(
-            "tokenpak.version_check._log_warning"
-        ) as mock_log:
+        with (
+            mock.patch("tokenpak.version_check._query_proxy_version", return_value=None),
+            mock.patch("tokenpak.version_check._load_config", return_value=None),
+            mock.patch("tokenpak.version_check._load_lock", return_value={}),
+            mock.patch("tokenpak.version_check._log_warning") as mock_log,
+        ):
             warnings = version_check.run_startup_check()
             assert len(warnings) == 1
             assert "proxy not reachable" in warnings[0]
@@ -228,15 +216,12 @@ class TestRunStartupCheck:
         """Test warning when proxy version drifts from lock."""
         proxy_response = {"version": "2.0.0"}
         lock = {"proxyVersion": "1.2.3"}
-        with mock.patch(
-            "tokenpak.version_check._query_proxy_version", return_value=proxy_response
-        ), mock.patch(
-            "tokenpak.version_check._load_config", return_value=None
-        ), mock.patch(
-            "tokenpak.version_check._load_lock", return_value=lock
-        ), mock.patch(
-            "tokenpak.version_check._log_warning"
-        ) as mock_log:
+        with (
+            mock.patch("tokenpak.version_check._query_proxy_version", return_value=proxy_response),
+            mock.patch("tokenpak.version_check._load_config", return_value=None),
+            mock.patch("tokenpak.version_check._load_lock", return_value=lock),
+            mock.patch("tokenpak.version_check._log_warning") as mock_log,
+        ):
             warnings = version_check.run_startup_check()
             assert any("version drift" in w for w in warnings)
             mock_log.assert_called()
@@ -245,15 +230,12 @@ class TestRunStartupCheck:
         """Test warning when config hash drifts from lock."""
         cfg = {"proxy": {"port": 8766}}
         lock = {"configHash": "sha256:oldoldold"}
-        with mock.patch(
-            "tokenpak.version_check._query_proxy_version", return_value=None
-        ), mock.patch(
-            "tokenpak.version_check._load_config", return_value=cfg
-        ), mock.patch(
-            "tokenpak.version_check._load_lock", return_value=lock
-        ), mock.patch(
-            "tokenpak.version_check._log_warning"
-        ) as mock_log:
+        with (
+            mock.patch("tokenpak.version_check._query_proxy_version", return_value=None),
+            mock.patch("tokenpak.version_check._load_config", return_value=cfg),
+            mock.patch("tokenpak.version_check._load_lock", return_value=lock),
+            mock.patch("tokenpak.version_check._log_warning") as mock_log,
+        ):
             warnings = version_check.run_startup_check()
             assert any("hash drift" in w for w in warnings)
             mock_log.assert_called()
@@ -264,15 +246,12 @@ class TestRunStartupCheck:
             "proxy": {"port": 8766},
             "meta": {"legacyMode": True},  # deprecated
         }
-        with mock.patch(
-            "tokenpak.version_check._query_proxy_version", return_value=None
-        ), mock.patch(
-            "tokenpak.version_check._load_config", return_value=cfg
-        ), mock.patch(
-            "tokenpak.version_check._load_lock", return_value={}
-        ), mock.patch(
-            "tokenpak.version_check._log_warning"
-        ) as mock_log:
+        with (
+            mock.patch("tokenpak.version_check._query_proxy_version", return_value=None),
+            mock.patch("tokenpak.version_check._load_config", return_value=cfg),
+            mock.patch("tokenpak.version_check._load_lock", return_value={}),
+            mock.patch("tokenpak.version_check._log_warning") as mock_log,
+        ):
             warnings = version_check.run_startup_check()
             assert any("deprecated" in w.lower() for w in warnings)
 
@@ -281,14 +260,11 @@ class TestRunStartupCheck:
         proxy_response = None  # Unreachable
         cfg = {"proxy": {"port": 8766}}
         lock = {"configHash": "sha256:badbadbad"}
-        with mock.patch(
-            "tokenpak.version_check._query_proxy_version", return_value=proxy_response
-        ), mock.patch(
-            "tokenpak.version_check._load_config", return_value=cfg
-        ), mock.patch(
-            "tokenpak.version_check._load_lock", return_value=lock
-        ), mock.patch(
-            "tokenpak.version_check._log_warning"
+        with (
+            mock.patch("tokenpak.version_check._query_proxy_version", return_value=proxy_response),
+            mock.patch("tokenpak.version_check._load_config", return_value=cfg),
+            mock.patch("tokenpak.version_check._load_lock", return_value=lock),
+            mock.patch("tokenpak.version_check._log_warning"),
         ):
             warnings = version_check.run_startup_check()
             assert len(warnings) >= 2  # At least proxy + hash warnings

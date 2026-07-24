@@ -26,7 +26,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 
 # Companion-internal launcher helper (probe/remediation_hint are called by
 # launcher.py, not by end users): export nothing as released public API.
@@ -814,7 +814,10 @@ def _windows_codex_processes(budget: _ProbeBudget) -> tuple[list[_ProcessInfo], 
                 ("szExeFile", wintypes.WCHAR * 260),
             )
 
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        win_dll = cast(Callable[..., ctypes.CDLL], getattr(ctypes, "WinDLL"))
+        get_last_error = cast(Callable[[], int], getattr(ctypes, "get_last_error"))
+        set_last_error = cast(Callable[[int], None], getattr(ctypes, "set_last_error"))
+        kernel32 = win_dll("kernel32", use_last_error=True)
         kernel32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
         kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
         kernel32.Process32FirstW.argtypes = (
@@ -832,7 +835,7 @@ def _windows_codex_processes(budget: _ProbeBudget) -> tuple[list[_ProcessInfo], 
         snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
         invalid_handle = ctypes.c_void_p(-1).value
         if snapshot == invalid_handle:
-            raise OSError(ctypes.get_last_error(), "CreateToolhelp32Snapshot failed")
+            raise OSError(get_last_error(), "CreateToolhelp32Snapshot failed")
         entry = PROCESSENTRY32W()
         entry.dwSize = ctypes.sizeof(entry)
         first = kernel32.Process32FirstW
@@ -840,10 +843,10 @@ def _windows_codex_processes(budget: _ProbeBudget) -> tuple[list[_ProcessInfo], 
         processes: list[_ProcessInfo] = []
         count = 0
         try:
-            ctypes.set_last_error(0)
+            set_last_error(0)
             available = _toolhelp_has_entry(
                 bool(first(snapshot, ctypes.byref(entry))),
-                ctypes.get_last_error(),
+                get_last_error(),
             )
             while available:
                 if budget.expired():
@@ -869,10 +872,10 @@ def _windows_codex_processes(budget: _ProbeBudget) -> tuple[list[_ProcessInfo], 
                             start_time=start_time,
                         )
                     )
-                ctypes.set_last_error(0)
+                set_last_error(0)
                 available = _toolhelp_has_entry(
                     bool(next_entry(snapshot, ctypes.byref(entry))),
-                    ctypes.get_last_error(),
+                    get_last_error(),
                 )
         finally:
             kernel32.CloseHandle(snapshot)
@@ -1140,8 +1143,8 @@ def probe(
             if lock.pid not in lock_owner_cache:
                 observed = lock_owner_observations.get(lock.pid)
                 if lock.pid not in lock_owner_observations:
-                    attached = scan.attachments.get(lock.pid)
-                    observed = attached[0] if attached is not None else None
+                    attachment_record = scan.attachments.get(lock.pid)
+                    observed = attachment_record[0] if attachment_record is not None else None
                 if observed is None:
                     budget.add("process_changed")
                     lock_owner_cache[lock.pid] = None
@@ -1258,9 +1261,14 @@ def remediation_hint(status: LockStatus) -> str:
         )
     elif status.running_pids:
         lines.append("          finish or close the running session normally before retrying")
-    lines.append(
-        "          to run a parallel session without contention, set "
-        "TOKENPAK_CODEX_SESSION_MODE=workspace (per-project home) or "
-        "=isolated (fresh per-session home)."
-    )
+    if not status.diagnostics_complete:
+        lines.append(
+            "          TokenPak cannot safely offer a temporary session until "
+            "the inspection completes"
+        )
+    else:
+        lines.append(
+            "          an interactive launch may choose a temporary session "
+            "without the prior shared history"
+        )
     return "\n".join(lines)

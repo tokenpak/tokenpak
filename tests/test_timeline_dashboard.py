@@ -1,6 +1,5 @@
 """Tests for tokenpak.timeline — savings timeline and trend analysis."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.timeline", reason="module not available in current build")
@@ -24,13 +23,15 @@ def _make_entries(n=7, base_saved=50.0):
     """Generate mock daily entries."""
     entries = []
     for i in range(n):
-        entries.append({
-            "date": f"2026-03-{11 - i:02d}",
-            "requests": 200 + i * 10,
-            "saved_usd": base_saved + (i % 3 - 1) * 10,
-            "cache_hit_pct": 90 + (i % 5),
-            "compression_pct": 5.0 + (i % 3),
-        })
+        entries.append(
+            {
+                "date": f"2026-03-{11 - i:02d}",
+                "requests": 200 + i * 10,
+                "saved_usd": base_saved + (i % 3 - 1) * 10,
+                "cache_hit_pct": 90 + (i % 5),
+                "compression_pct": 5.0 + (i % 3),
+            }
+        )
     return entries
 
 
@@ -178,13 +179,55 @@ class TestFormatTimeline:
     def test_format_shows_anomaly(self):
         # Need tight cluster + extreme outlier for 2σ detection
         entries = [
-            {"date": "2026-03-11", "saved_usd": 50, "cache_hit_pct": 95, "requests": 200, "compression_pct": 5},
-            {"date": "2026-03-10", "saved_usd": 50, "cache_hit_pct": 94, "requests": 190, "compression_pct": 4.5},
-            {"date": "2026-03-09", "saved_usd": 50, "cache_hit_pct": 96, "requests": 210, "compression_pct": 5.5},
-            {"date": "2026-03-08", "saved_usd": 50, "cache_hit_pct": 95, "requests": 200, "compression_pct": 5},
-            {"date": "2026-03-07", "saved_usd": 50, "cache_hit_pct": 95, "requests": 200, "compression_pct": 5},
-            {"date": "2026-03-06", "saved_usd": 1, "cache_hit_pct": 10, "requests": 50, "compression_pct": 1},
-            {"date": "2026-03-05", "saved_usd": 50, "cache_hit_pct": 95, "requests": 200, "compression_pct": 5},
+            {
+                "date": "2026-03-11",
+                "saved_usd": 50,
+                "cache_hit_pct": 95,
+                "requests": 200,
+                "compression_pct": 5,
+            },
+            {
+                "date": "2026-03-10",
+                "saved_usd": 50,
+                "cache_hit_pct": 94,
+                "requests": 190,
+                "compression_pct": 4.5,
+            },
+            {
+                "date": "2026-03-09",
+                "saved_usd": 50,
+                "cache_hit_pct": 96,
+                "requests": 210,
+                "compression_pct": 5.5,
+            },
+            {
+                "date": "2026-03-08",
+                "saved_usd": 50,
+                "cache_hit_pct": 95,
+                "requests": 200,
+                "compression_pct": 5,
+            },
+            {
+                "date": "2026-03-07",
+                "saved_usd": 50,
+                "cache_hit_pct": 95,
+                "requests": 200,
+                "compression_pct": 5,
+            },
+            {
+                "date": "2026-03-06",
+                "saved_usd": 1,
+                "cache_hit_pct": 10,
+                "requests": 50,
+                "compression_pct": 1,
+            },
+            {
+                "date": "2026-03-05",
+                "saved_usd": 50,
+                "cache_hit_pct": 95,
+                "requests": 200,
+                "compression_pct": 5,
+            },
         ]
         output = format_timeline(entries)
         assert "Anomaly" in output or "anomaly" in output.lower()

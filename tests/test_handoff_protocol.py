@@ -19,12 +19,14 @@ import pytest
 # Top-level imports
 # ---------------------------------------------------------------------------
 
+
 def test_top_level_imports():
     from tokenpak import (
         Handoff,
         HandoffBlock,
         TokenPak,
     )
+
     assert TokenPak is not None
     assert Handoff is not None
     assert HandoffBlock is not None
@@ -34,8 +36,10 @@ def test_top_level_imports():
 # HandoffBlock
 # ---------------------------------------------------------------------------
 
+
 def test_handoff_block_basic():
     from tokenpak import HandoffBlock
+
     b = HandoffBlock(type="memory", id="state_1", content="some content")
     assert b.type == "memory"
     assert b.id == "state_1"
@@ -44,6 +48,7 @@ def test_handoff_block_basic():
 
 def test_handoff_block_round_trip():
     from tokenpak import HandoffBlock
+
     b = HandoffBlock(type="evidence", id="ev1", content="finding", metadata={"score": 0.9})
     d = b.to_dict()
     b2 = HandoffBlock.from_dict(d)
@@ -57,8 +62,10 @@ def test_handoff_block_round_trip():
 # TokenPak
 # ---------------------------------------------------------------------------
 
+
 def test_token_pak_add_and_get():
     from tokenpak import HandoffBlock, TokenPak
+
     pack = TokenPak()
     block = HandoffBlock(type="memory", id="m1", content="data")
     pack.add(block)
@@ -68,6 +75,7 @@ def test_token_pak_add_and_get():
 
 def test_token_pak_chaining():
     from tokenpak import HandoffBlock, TokenPak
+
     pack = (
         TokenPak()
         .add(HandoffBlock(type="memory", id="a", content="aaa"))
@@ -78,6 +86,7 @@ def test_token_pak_chaining():
 
 def test_token_pak_blocks_by_type():
     from tokenpak import HandoffBlock, TokenPak
+
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="m1", content="1"))
     pack.add(HandoffBlock(type="memory", id="m2", content="2"))
@@ -88,6 +97,7 @@ def test_token_pak_blocks_by_type():
 
 def test_token_pak_remove():
     from tokenpak import HandoffBlock, TokenPak
+
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="m1", content="x"))
     assert pack.remove("m1") is True
@@ -97,11 +107,13 @@ def test_token_pak_remove():
 
 def test_token_pak_to_prompt_empty():
     from tokenpak import TokenPak
+
     assert TokenPak().to_prompt() == ""
 
 
 def test_token_pak_to_prompt_format():
     from tokenpak import HandoffBlock, TokenPak
+
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="s1", content="state here"))
     pack.add(HandoffBlock(type="evidence", id="e1", content="evidence here"))
@@ -114,6 +126,7 @@ def test_token_pak_to_prompt_format():
 
 def test_token_pak_round_trip():
     from tokenpak import HandoffBlock, TokenPak
+
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="x", content="hello"))
     d = pack.to_dict()
@@ -126,26 +139,29 @@ def test_token_pak_round_trip():
 # HandoffWire (exported as Handoff from top-level)
 # ---------------------------------------------------------------------------
 
+
 def test_handoff_wire_basic():
     from tokenpak import Handoff, HandoffBlock, TokenPak
+
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="t", content="task state"))
-    h = Handoff(pack=pack, from_agent="cali", to_agent="sue")
-    assert h.from_agent == "cali"
-    assert h.to_agent == "sue"
+    h = Handoff(pack=pack, from_agent="gamma", to_agent="alpha")
+    assert h.from_agent == "gamma"
+    assert h.to_agent == "alpha"
     assert h.id is not None
 
 
 def test_handoff_wire_round_trip():
     from tokenpak import Handoff, HandoffBlock, TokenPak
+
     pack = TokenPak()
     pack.add(HandoffBlock(type="memory", id="task_state", content="some state"))
     pack.add(HandoffBlock(type="evidence", id="findings", content="research output"))
-    h = Handoff(pack=pack, from_agent="cali", to_agent="sue", summary="Done X")
+    h = Handoff(pack=pack, from_agent="gamma", to_agent="alpha", summary="Done X")
     wire = h.to_wire()
     h2 = Handoff.from_wire(wire)
-    assert h2.from_agent == "cali"
-    assert h2.to_agent == "sue"
+    assert h2.from_agent == "gamma"
+    assert h2.to_agent == "alpha"
     assert h2.id == h.id
     assert h2.summary == "Done X"
     prompt = h2.pack.to_prompt()
@@ -155,22 +171,25 @@ def test_handoff_wire_round_trip():
 
 def test_handoff_wire_invalid_json():
     from tokenpak import Handoff
+
     with pytest.raises(ValueError, match="Invalid wire format"):
         Handoff.from_wire("not-json")
 
 
 def test_handoff_wire_unknown_version():
     from tokenpak import Handoff
+
     with pytest.raises(ValueError, match="Unrecognised wire version"):
         Handoff.from_wire(json.dumps({"version": "other:1"}))
 
 
 def test_handoff_wire_metadata():
     from tokenpak import Handoff, TokenPak
+
     h = Handoff(
         pack=TokenPak(),
-        from_agent="cali",
-        to_agent="sue",
+        from_agent="gamma",
+        to_agent="alpha",
         metadata={"sprint": 7, "priority": "p1"},
     )
     wire = h.to_wire()
@@ -183,6 +202,7 @@ def test_handoff_wire_metadata():
 # CrewAI TokenPakHandoff
 # ---------------------------------------------------------------------------
 
+
 def test_crewai_prepare_receive_wire(tmp_path):
     # WS-A residual import guard — TSR-01-followup. crewai_tokenpak is an
     # optional companion package; only the 3 crewai-specific tests in this
@@ -193,12 +213,13 @@ def test_crewai_prepare_receive_wire(tmp_path):
     )
     TokenPakHandoff = crewai_tokenpak.TokenPakHandoff
     from tokenpak.agentic.handoff import HandoffManager
+
     mgr = HandoffManager(handoff_dir=tmp_path / "hf")
     h = TokenPakHandoff(budget=1000, manager=mgr)
     wire = h.prepare_handoff(
         state={"key": "value", "step": 3},
-        from_agent="cali",
-        to_agent="sue",
+        from_agent="gamma",
+        to_agent="alpha",
         what_was_done="Researched topic",
         whats_next="Write report",
     )
@@ -206,7 +227,7 @@ def test_crewai_prepare_receive_wire(tmp_path):
     result = h.receive_handoff_wire(wire)
     assert "prompt" in result
     assert "pack" in result
-    assert "key: \"value\"" in result["prompt"] or "key:" in result["prompt"]
+    assert 'key: "value"' in result["prompt"] or "key:" in result["prompt"]
 
 
 def test_crewai_legacy_dict_api():
@@ -229,6 +250,7 @@ def test_crewai_unknown_agents_no_crash(tmp_path):
     )
     TokenPakHandoff = crewai_tokenpak.TokenPakHandoff
     from tokenpak.agentic.handoff import HandoffManager
+
     mgr = HandoffManager(handoff_dir=tmp_path / "hf2")
     h = TokenPakHandoff(budget=1000, manager=mgr)
     wire = h.prepare_handoff(
@@ -260,6 +282,7 @@ def _autogen_assistant_unavailable() -> bool:
     """
     try:
         from autogen_tokenpak import TokenPakAssistant  # noqa: F401
+
         return False
     except ImportError:
         return True
@@ -274,6 +297,7 @@ _AUTOGEN_SKIP = pytest.mark.skipif(
 @_AUTOGEN_SKIP
 def test_autogen_assistant_creation():
     from autogen_tokenpak import TokenPakAssistant
+
     a = TokenPakAssistant(name="alice", budget=2000)
     assert a.name == "alice"
     assert a.budget == 2000
@@ -282,6 +306,7 @@ def test_autogen_assistant_creation():
 @_AUTOGEN_SKIP
 def test_autogen_receive_and_compress():
     from autogen_tokenpak import TokenPakAssistant
+
     a = TokenPakAssistant(name="alice", budget=2000)
     a.receive_message("Hello", sender_name="user")
     a.receive_message("Do the task", sender_name="boss")
@@ -293,13 +318,14 @@ def test_autogen_receive_and_compress():
 def test_autogen_prepare_apply_handoff(tmp_path):
     from autogen_tokenpak import TokenPakAssistant
     from tokenpak.agentic.handoff import HandoffManager
+
     mgr = HandoffManager(handoff_dir=tmp_path / "hf3")
-    alice = TokenPakAssistant(name="cali", budget=2000, manager=mgr)
-    bob   = TokenPakAssistant(name="sue",  budget=2000, manager=mgr)
+    alice = TokenPakAssistant(name="gamma", budget=2000, manager=mgr)
+    bob = TokenPakAssistant(name="alpha", budget=2000, manager=mgr)
 
     alice.receive_message("Research quantum computing", sender_name="user")
     wire = alice.prepare_handoff(
-        to_agent="sue",
+        to_agent="alpha",
         what_was_done="Researched quantum computing",
         whats_next="Write the report",
     )
@@ -318,11 +344,12 @@ def test_autogen_handoff_wire_round_trip(tmp_path):
     from tokenpak.agentic.handoff import HandoffManager
 
     from tokenpak import Handoff, HandoffBlock
+
     mgr = HandoffManager(handoff_dir=tmp_path / "hf4")
-    a = TokenPakAssistant(name="cali", budget=2000, manager=mgr)
+    a = TokenPakAssistant(name="gamma", budget=2000, manager=mgr)
     extra = [HandoffBlock(type="evidence", id="ev1", content="key finding")]
     wire = a.prepare_handoff(
-        to_agent="sue",
+        to_agent="alpha",
         what_was_done="Done A",
         whats_next="Next B",
         extra_blocks=extra,

@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.regression.stability_scorer", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.regression.stability_scorer", reason="module not available in current build"
+)
 import math
 import tempfile
 from pathlib import Path
@@ -68,9 +70,9 @@ def test_chaotic_workflow_expanded_budget():
     """Low pass rate, high retries, variable tokens → score < 0.5 → expanded."""
     records = [
         _record(
-            passed=(i % 3 == 0),      # ~33% pass rate
+            passed=(i % 3 == 0),  # ~33% pass rate
             retried=True,
-            token_count=500 + i * 200, # high variance
+            token_count=500 + i * 200,  # high variance
             validation_passed=(i % 4 == 0),
         )
         for i in range(12)
@@ -91,9 +93,9 @@ def test_medium_workflow_normal_budget():
     """Mixed results → 0.5 ≤ score ≤ 0.8 → normal budget."""
     records = [
         _record(
-            passed=(i % 2 == 0),   # 50% pass rate
+            passed=(i % 2 == 0),  # 50% pass rate
             retried=(i % 3 == 0),  # ~33% retry
-            token_count=1000,      # stable tokens
+            token_count=1000,  # stable tokens
             validation_passed=(i % 2 == 0),
         )
         for i in range(10)

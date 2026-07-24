@@ -23,9 +23,9 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, Optional, Tuple
 
 __all__ = [
     "CacheTelemetry",
@@ -44,7 +44,7 @@ class ProviderCacheStats:
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
     savings_usd: float = 0.0
-    mode_counts: Dict[str, int] = field(default_factory=dict)
+    mode_counts: dict[str, int] = field(default_factory=dict)
 
     @property
     def total(self) -> int:
@@ -54,7 +54,7 @@ class ProviderCacheStats:
     def hit_rate(self) -> float:
         return (self.hits / self.total) if self.total > 0 else 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "hits": self.hits,
             "misses": self.misses,
@@ -90,7 +90,7 @@ class CacheTelemetry:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._by_provider: Dict[str, ProviderCacheStats] = {}
+        self._by_provider: dict[str, ProviderCacheStats] = {}
 
     # ------------------------------------------------------------------
     # Recording
@@ -99,7 +99,7 @@ class CacheTelemetry:
     def record(
         self,
         provider: str,
-        mode: Optional[str],
+        mode: str | None,
         cache_read_tokens: int,
         cache_creation_tokens: int,
         savings_usd: float = 0.0,
@@ -140,7 +140,7 @@ class CacheTelemetry:
     # Serialization
     # ------------------------------------------------------------------
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Return current telemetry state as a JSON-serializable dict."""
         with self._lock:
             by_provider = {k: v.to_dict() for k, v in self._by_provider.items()}
@@ -172,7 +172,9 @@ class CacheTelemetry:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def extract_anthropic_signals(response_body: dict) -> Tuple[int, int]:
+    def extract_anthropic_signals(
+        response_body: Mapping[str, object],
+    ) -> tuple[int, int]:
         """Extract (cache_read_tokens, cache_creation_tokens) from Anthropic response.
 
         Anthropic returns cache metrics directly in the usage object::
@@ -201,10 +203,12 @@ class CacheTelemetry:
             return 0, 0
         read = usage.get("cache_read_input_tokens", 0) or 0
         creation = usage.get("cache_creation_input_tokens", 0) or 0
-        return int(read), int(creation)
+        return _token_count(read), _token_count(creation)
 
     @staticmethod
-    def extract_openai_signals(response_body: dict) -> Tuple[int, int]:
+    def extract_openai_signals(
+        response_body: Mapping[str, object],
+    ) -> tuple[int, int]:
         """Extract (cache_read_tokens, 0) from OpenAI response.
 
         OpenAI returns cached token counts in prompt_tokens_details::
@@ -233,10 +237,12 @@ class CacheTelemetry:
         if not isinstance(details, dict):
             return 0, 0
         cached = details.get("cached_tokens", 0) or 0
-        return int(cached), 0
+        return _token_count(cached), 0
 
     @staticmethod
-    def extract_gemini_signals(response_body: dict) -> Tuple[int, int]:
+    def extract_gemini_signals(
+        response_body: Mapping[str, object],
+    ) -> tuple[int, int]:
         """Extract (cache_read_tokens, 0) from Gemini response.
 
         Gemini returns cache usage in usageMetadata::
@@ -259,10 +265,12 @@ class CacheTelemetry:
         if not isinstance(usage, dict):
             return 0, 0
         cached = usage.get("cachedContentTokenCount", 0) or 0
-        return int(cached), 0
+        return _token_count(cached), 0
 
     @staticmethod
-    def extract_bedrock_signals(response_body: dict) -> Tuple[int, int]:
+    def extract_bedrock_signals(
+        response_body: Mapping[str, object],
+    ) -> tuple[int, int]:
         """Extract (cache_read_tokens, cache_creation_tokens) from Bedrock response.
 
         Bedrock returns cache metrics in the usage object (Converse API)::
@@ -288,20 +296,16 @@ class CacheTelemetry:
         usage = response_body.get("usage", {})
         if not isinstance(usage, dict):
             return 0, 0
-        read = (
-            usage.get("cacheReadInputTokens", 0)
-            or usage.get("cacheReadInputTokenCount", 0)
-            or 0
-        )
+        read = usage.get("cacheReadInputTokens", 0) or usage.get("cacheReadInputTokenCount", 0) or 0
         creation = (
-            usage.get("cacheWriteInputTokens", 0)
-            or usage.get("cacheWriteInputTokenCount", 0)
-            or 0
+            usage.get("cacheWriteInputTokens", 0) or usage.get("cacheWriteInputTokenCount", 0) or 0
         )
-        return int(read), int(creation)
+        return _token_count(read), _token_count(creation)
 
     @staticmethod
-    def extract_signals_from_headers(headers: dict) -> Tuple[int, int]:
+    def extract_signals_from_headers(
+        headers: Mapping[str, object],
+    ) -> tuple[int, int]:
         """Extract Anthropic cache signals from HTTP response headers.
 
         Anthropic sends cache token counts as response headers in addition to
@@ -318,15 +322,25 @@ class CacheTelemetry:
         Returns:
             Tuple of (cache_read_tokens, cache_creation_tokens).
         """
+
         # Headers may be passed as http.client.HTTPMessage (case-insensitive)
         # or as a plain dict (case-sensitive). Try both.
         def _get(key: str) -> int:
             val = headers.get(key) or headers.get(key.lower()) or 0
-            try:
-                return int(val)
-            except (ValueError, TypeError):
-                return 0
+            return _token_count(val)
 
         read = _get("anthropic-cache-read-input-tokens")
         creation = _get("anthropic-cache-creation-input-tokens")
         return read, creation
+
+
+def _token_count(value: object) -> int:
+    """Convert a provider token field to an integer without leaking errors."""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float, str, bytes, bytearray)):
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return 0
+    return 0

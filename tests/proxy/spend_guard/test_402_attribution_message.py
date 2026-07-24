@@ -6,6 +6,7 @@ was misread as "worker-a spent $60.15" when the $60.15 was the FLEET aggregate
 and ``agent=worker-a`` was merely the triggering caller. These tests assert the
 dimension-aware wording + structured fields so an operator reads it correctly.
 """
+
 from __future__ import annotations
 
 import json

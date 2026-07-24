@@ -1,16 +1,19 @@
 """TokenPak Telemetry Collector — watches session files and sends to ingest API."""
+
 from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 import requests
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver
 
 # Re-export RequestStats for tests that import from this module
 from tokenpak.telemetry.proxy_collector import RequestStats as RequestStats  # noqa: F401
@@ -49,12 +52,12 @@ class TelemetryCollector:
         self.file_states: dict[str, FileState] = {}
         self.pending_events: list[dict[str, Any]] = []
         self.last_flush_time = time.time()
-        self.observer: Optional[Observer] = None  # type: ignore
+        self.observer: Optional[BaseObserver] = None
         self._running = False
         if config.state_file and config.state_file.exists():
             self._load_state()
 
-    def start(self, blocking: bool = True):
+    def start(self, blocking: bool = True) -> None:
         """Start the file watcher background thread."""
         self._running = True
         if self.config.backfill_on_start:
@@ -73,7 +76,7 @@ class TelemetryCollector:
             except KeyboardInterrupt:
                 self.stop()
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the file watcher and clean up resources."""
         self._running = False
         if self.observer:
@@ -82,7 +85,7 @@ class TelemetryCollector:
         self._flush_batch(force=True)
         self._save_state()
 
-    def backfill(self, paths: Optional[list[Path]] = None):
+    def backfill(self, paths: Optional[list[Path]] = None) -> None:
         """Emit stored events from before the watcher was started."""
         for base_path in paths or self.config.watch_paths:
             if not base_path.exists():
@@ -92,12 +95,13 @@ class TelemetryCollector:
                     self._process_file(file_path, from_start=True)
         self._flush_batch(force=True)
 
-    def _on_file_change(self, event):
-        file_path = Path(event.src_path)
+    def _on_file_change(self, event: FileSystemEvent) -> None:
+        src_path = os.fsdecode(event.src_path)
+        file_path = Path(src_path)
         if any(file_path.match(p) for p in self.config.file_patterns):
             self._process_file(file_path)
 
-    def _process_file(self, file_path: Path, from_start: bool = False):
+    def _process_file(self, file_path: Path, from_start: bool = False) -> None:
         key = str(file_path)
         if key not in self.file_states:
             self.file_states[key] = FileState(path=file_path)
@@ -123,14 +127,14 @@ class TelemetryCollector:
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")
 
-    def _check_flush_timeout(self):
+    def _check_flush_timeout(self) -> None:
         if (
             self.pending_events
             and (time.time() - self.last_flush_time) >= self.config.batch_timeout_seconds
         ):
             self._flush_batch()
 
-    def _flush_batch(self, force: bool = False):
+    def _flush_batch(self, force: bool = False) -> None:
         if not self.pending_events:
             self.last_flush_time = time.time()
             return
@@ -147,9 +151,12 @@ class TelemetryCollector:
             logger.error(f"Failed to send events: {e}")
         self.last_flush_time = time.time()
 
-    def _load_state(self):
+    def _load_state(self) -> None:
+        state_file = self.config.state_file
+        if state_file is None:
+            return
         try:
-            with open(self.config.state_file, "r") as f:
+            with open(state_file, "r") as f:
                 data = json.load(f)
                 for key, s in data.get("file_states", {}).items():
                     self.file_states[key] = FileState(
@@ -161,7 +168,7 @@ class TelemetryCollector:
         except Exception:
             pass
 
-    def _save_state(self):
+    def _save_state(self) -> None:
         if not self.config.state_file:
             return
         try:
@@ -184,15 +191,15 @@ class TelemetryCollector:
 
 
 class _FileEventHandler(FileSystemEventHandler):
-    def __init__(self, callback: Callable):
+    def __init__(self, callback: Callable[[FileSystemEvent], None]) -> None:
         self.callback = callback
 
-    def on_modified(self, event):
+    def on_modified(self, event: FileSystemEvent) -> None:
         """Called by watchdog when a watched file changes."""
         if not event.is_directory:
             self.callback(event)
 
-    def on_created(self, event):
+    def on_created(self, event: FileSystemEvent) -> None:
         """Called by watchdog when a new file is created in the watched directory."""
         if not event.is_directory:
             self.callback(event)

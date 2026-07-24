@@ -1,6 +1,5 @@
 """Tests for adapter registry."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.pro.routing.registry", reason="module not available in current build")
@@ -84,27 +83,21 @@ class TestAdapterRegistry:
 
     def test_load_adapter_class_invalid_path(self):
         """Test loading adapter with invalid module path."""
-        self.registry.register_adapter(
-            Provider.ANTHROPIC, "invalid_path_no_dot"
-        )
+        self.registry.register_adapter(Provider.ANTHROPIC, "invalid_path_no_dot")
 
         with pytest.raises(ValueError, match="Invalid module path"):
             self.registry.load_adapter_class(Provider.ANTHROPIC)
 
     def test_load_adapter_class_missing_module(self):
         """Test loading adapter with missing module."""
-        self.registry.register_adapter(
-            Provider.ANTHROPIC, "nonexistent.module.ClassPath"
-        )
+        self.registry.register_adapter(Provider.ANTHROPIC, "nonexistent.module.ClassPath")
 
         with pytest.raises(ValueError, match="Failed to import"):
             self.registry.load_adapter_class(Provider.ANTHROPIC)
 
     def test_load_adapter_class_missing_class(self):
         """Test loading adapter with missing class."""
-        self.registry.register_adapter(
-            Provider.ANTHROPIC, "sys.NonexistentClass"
-        )
+        self.registry.register_adapter(Provider.ANTHROPIC, "sys.NonexistentClass")
 
         with pytest.raises(ValueError, match="Class not found"):
             self.registry.load_adapter_class(Provider.ANTHROPIC)

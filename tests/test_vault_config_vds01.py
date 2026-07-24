@@ -23,6 +23,7 @@ from tokenpak.vault import config as vault_config
 # vault.yaml schema
 # ---------------------------------------------------------------------------
 
+
 def test_default_config_path_uses_env_override(tmp_path, monkeypatch):
     """TOKENPAK_VAULT_CONFIG overrides the default ~/.tokenpak/vault.yaml."""
     custom = tmp_path / "custom.yaml"
@@ -127,15 +128,13 @@ def test_update_index_health_stamps_fields(tmp_path):
 def test_update_index_health_returns_none_for_unregistered_path(tmp_path):
     """update_index_health on an unknown path is a no-op returning None."""
     cfg = vault_config.VaultConfig()
-    assert (
-        vault_config.update_index_health(cfg, str(tmp_path / "ghost"), status="ok")
-        is None
-    )
+    assert vault_config.update_index_health(cfg, str(tmp_path / "ghost"), status="ok") is None
 
 
 # ---------------------------------------------------------------------------
 # CLI flag wiring
 # ---------------------------------------------------------------------------
+
 
 def test_argparse_registers_reindex_flags():
     """`tokenpak index --reindex-all` and `--reindex-path X` parse cleanly."""
@@ -207,9 +206,7 @@ def test_reindex_all_with_empty_config_exits_nonzero(tmp_path, monkeypatch, caps
     assert "No registered vault paths" in err
 
 
-def test_reindex_path_indexes_registered_dir_and_stamps_health(
-    tmp_path, monkeypatch, capsys
-):
+def test_reindex_path_indexes_registered_dir_and_stamps_health(tmp_path, monkeypatch, capsys):
     """`--reindex-path` indexes a registered dir and updates health metadata."""
     proj = tmp_path / "proj"
     proj.mkdir()

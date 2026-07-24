@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional
 
 from .context import OptimizationContext
@@ -36,7 +37,7 @@ _ENV_FLAG = "TOKENPAK_ATTRIBUTION_V2"
 _ATTRIBUTIONS_ATTR = "_tip06_attributions"
 
 
-def is_attribution_v2_enabled(env: Optional[Dict[str, str]] = None) -> bool:
+def is_attribution_v2_enabled(env: Mapping[str, str] | None = None) -> bool:
     """True when TOKENPAK_ATTRIBUTION_V2 is set to a truthy value."""
     source = env if env is not None else os.environ
     val = (source.get(_ENV_FLAG, "") or "").strip().lower()
@@ -71,7 +72,7 @@ class AttributionStage:
     """
 
     name: str = "attribution"
-    required_capabilities: frozenset = frozenset()
+    required_capabilities: frozenset[str] = frozenset()
 
     def __init__(self, env: Optional[Dict[str, str]] = None) -> None:
         self._env = env
@@ -123,7 +124,8 @@ class AttributionStage:
         except Exception as exc:
             _log.debug(
                 "[AttributionStage] extraction error: %s: %s",
-                type(exc).__name__, exc,
+                type(exc).__name__,
+                exc,
             )
             attributions = []
 

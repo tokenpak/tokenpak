@@ -42,11 +42,7 @@ def test_fleet_pid_untouched_under_scoped_home(scoped_home):
     from tokenpak.proxy.server import _write_proxy_pid_file
 
     fleet_pid = Path.home() / ".tokenpak" / "proxy.pid"
-    before = (
-        (fleet_pid.read_bytes(), fleet_pid.stat().st_mtime_ns)
-        if fleet_pid.exists()
-        else None
-    )
+    before = (fleet_pid.read_bytes(), fleet_pid.stat().st_mtime_ns) if fleet_pid.exists() else None
 
     _write_proxy_pid_file()  # runs under scoped_home
 
@@ -105,9 +101,7 @@ def test_license_path_scoped(scoped_home, monkeypatch):
 # ── Test 5: static guard — no hardcoded Path.home() fleet-runtime path remains ─
 def test_no_home_hardcode_for_runtime_state():
     root = Path(__file__).resolve().parents[2] / "tokenpak" / "proxy"
-    hardcode = re.compile(
-        r'Path\.home\(\)\s*/\s*"\.tokenpak"|expanduser\(\s*"~/\.tokenpak'
-    )
+    hardcode = re.compile(r'Path\.home\(\)\s*/\s*"\.tokenpak"|expanduser\(\s*"~/\.tokenpak')
     offenders = {}
     for rel in ("server.py", "proxy_watchdog.py", "startup.py"):
         text = (root / rel).read_text()

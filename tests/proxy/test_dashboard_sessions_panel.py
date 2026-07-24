@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 # Helpers: build a temp monitor.db with known fixture data
 # ---------------------------------------------------------------------------
 
+
 def _make_db(rows: List[Dict[str, Any]]) -> str:
     """Return path to a temp db populated with the given request rows."""
     fd, path = tempfile.mkstemp(suffix=".db")
@@ -98,17 +99,19 @@ def _query_sessions(db_path: str) -> List[Dict[str, Any]]:
             p50 = vals[mid] if n % 2 else (vals[mid - 1] + vals[mid]) // 2
         else:
             p50 = 0
-        sessions.append({
-            "session_id": sid,
-            "input_tokens": row["input_tokens"] or 0,
-            "output_tokens": row["output_tokens"] or 0,
-            "cache_read_input_tokens": row["cache_read_input_tokens"] or 0,
-            "cache_creation_input_tokens": row["cache_creation_input_tokens"] or 0,
-            "cost": round(row["cost"] or 0.0, 6),
-            "request_count": row["request_count"] or 0,
-            "latency_p50": p50,
-            "platform": row["platform"] or "unknown",
-        })
+        sessions.append(
+            {
+                "session_id": sid,
+                "input_tokens": row["input_tokens"] or 0,
+                "output_tokens": row["output_tokens"] or 0,
+                "cache_read_input_tokens": row["cache_read_input_tokens"] or 0,
+                "cache_creation_input_tokens": row["cache_creation_input_tokens"] or 0,
+                "cost": round(row["cost"] or 0.0, 6),
+                "request_count": row["request_count"] or 0,
+                "latency_p50": p50,
+                "platform": row["platform"] or "unknown",
+            }
+        )
     conn.close()
     return sessions
 
@@ -141,11 +144,13 @@ class TestEmptyDatabase:
         assert sessions == []
 
     def test_null_session_ids_excluded(self, tmp_path):
-        db = _make_db([
-            {"session_id": None, "input_tokens": 10},
-            {"session_id": "", "input_tokens": 20},
-            {"session_id": "real-session", "input_tokens": 30},
-        ])
+        db = _make_db(
+            [
+                {"session_id": None, "input_tokens": 10},
+                {"session_id": "", "input_tokens": 20},
+                {"session_id": "real-session", "input_tokens": 30},
+            ]
+        )
         sessions = _query_sessions(db)
         assert len(sessions) == 1
         assert sessions[0]["session_id"] == "real-session"
@@ -154,14 +159,16 @@ class TestEmptyDatabase:
 
 class TestTopSessionsOrdering:
     def test_sessions_ordered_by_request_count_desc(self, tmp_path):
-        db = _make_db([
-            {"session_id": "a", "input_tokens": 5},
-            {"session_id": "b", "input_tokens": 5},
-            {"session_id": "b", "input_tokens": 5},
-            {"session_id": "b", "input_tokens": 5},
-            {"session_id": "c", "input_tokens": 5},
-            {"session_id": "c", "input_tokens": 5},
-        ])
+        db = _make_db(
+            [
+                {"session_id": "a", "input_tokens": 5},
+                {"session_id": "b", "input_tokens": 5},
+                {"session_id": "b", "input_tokens": 5},
+                {"session_id": "b", "input_tokens": 5},
+                {"session_id": "c", "input_tokens": 5},
+                {"session_id": "c", "input_tokens": 5},
+            ]
+        )
         sessions = _query_sessions(db)
         assert [s["session_id"] for s in sessions] == ["b", "c", "a"]
         os.unlink(db)
@@ -176,24 +183,26 @@ class TestTopSessionsOrdering:
 
 class TestAggregatedColumns:
     def test_token_columns_summed(self, tmp_path):
-        db = _make_db([
-            {
-                "session_id": "s1",
-                "input_tokens": 100,
-                "output_tokens": 50,
-                "cache_read_tokens": 10,
-                "cache_creation_tokens": 5,
-                "estimated_cost": 0.002,
-            },
-            {
-                "session_id": "s1",
-                "input_tokens": 200,
-                "output_tokens": 80,
-                "cache_read_tokens": 20,
-                "cache_creation_tokens": 8,
-                "estimated_cost": 0.004,
-            },
-        ])
+        db = _make_db(
+            [
+                {
+                    "session_id": "s1",
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "cache_read_tokens": 10,
+                    "cache_creation_tokens": 5,
+                    "estimated_cost": 0.002,
+                },
+                {
+                    "session_id": "s1",
+                    "input_tokens": 200,
+                    "output_tokens": 80,
+                    "cache_read_tokens": 20,
+                    "cache_creation_tokens": 8,
+                    "estimated_cost": 0.004,
+                },
+            ]
+        )
         sessions = _query_sessions(db)
         assert len(sessions) == 1
         s = sessions[0]
@@ -211,9 +220,15 @@ class TestAggregatedColumns:
         assert len(sessions) == 1
         s = sessions[0]
         required = {
-            "session_id", "input_tokens", "output_tokens",
-            "cache_read_input_tokens", "cache_creation_input_tokens",
-            "cost", "request_count", "latency_p50", "platform",
+            "session_id",
+            "input_tokens",
+            "output_tokens",
+            "cache_read_input_tokens",
+            "cache_creation_input_tokens",
+            "cost",
+            "request_count",
+            "latency_p50",
+            "platform",
         }
         assert required.issubset(set(s.keys()))
         os.unlink(db)
@@ -222,10 +237,7 @@ class TestAggregatedColumns:
 class TestLatencyP50:
     def test_p50_odd_count(self, tmp_path):
         # 5 values: [10, 20, 30, 40, 50] → median = 30
-        rows = [
-            {"session_id": "s", "latency_ms": v}
-            for v in [50, 10, 30, 20, 40]
-        ]
+        rows = [{"session_id": "s", "latency_ms": v} for v in [50, 10, 30, 20, 40]]
         db = _make_db(rows)
         sessions = _query_sessions(db)
         assert sessions[0]["latency_p50"] == 30
@@ -233,10 +245,7 @@ class TestLatencyP50:
 
     def test_p50_even_count(self, tmp_path):
         # 4 values: [10, 20, 30, 40] → median = (20+30)//2 = 25
-        rows = [
-            {"session_id": "s", "latency_ms": v}
-            for v in [40, 10, 30, 20]
-        ]
+        rows = [{"session_id": "s", "latency_ms": v} for v in [40, 10, 30, 20]]
         db = _make_db(rows)
         sessions = _query_sessions(db)
         assert sessions[0]["latency_p50"] == 25
@@ -257,9 +266,11 @@ class TestLatencyP50:
 
 class TestPlatformField:
     def test_platform_from_attribution_source(self, tmp_path):
-        db = _make_db([
-            {"session_id": "s", "attribution_source": "claude-code"},
-        ])
+        db = _make_db(
+            [
+                {"session_id": "s", "attribution_source": "claude-code"},
+            ]
+        )
         sessions = _query_sessions(db)
         assert sessions[0]["platform"] == "claude-code"
         os.unlink(db)

@@ -54,7 +54,7 @@ class OllamaEmbeddingAdapter(EmbeddingAdapter):
         # Ensure input is always a list
         input_value = canonical.input if isinstance(canonical.input, list) else [canonical.input]
 
-        payload: Dict = {
+        payload: Dict[str, object] = {
             "model": canonical.model,
             "input": input_value,
         }

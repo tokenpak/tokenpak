@@ -1057,6 +1057,8 @@ Start proxy server
 - `--telemetry` — Start telemetry ingest server
 - `--ingest` — Start Phase 5A ingest API server
 - `--workers` — Number of uvicorn workers
+- `--profile` — Workflow profile for this proxy process (default: TOKENPAK_PROFILE or balanced) — choices: `safe`, `balanced`, `aggressive`, `agentic`, `transparent`
+- `--stats-footer` — Print a per-request token-savings receipt (estimated dollars) in the proxy terminal (default: off)
 - `--shutdown-timeout` — Seconds to wait for in-flight requests to complete before forcing shutdown (default: 30, or TOKENPAK_SHUTDOWN_TIMEOUT env var)
 - `--safe` — Disable compression defaults (restore pre-1.1 passthrough behavior). Equivalent to TOKENPAK_COMPACT=0.
 

@@ -33,9 +33,7 @@ def sock_info(tmp_path):
     sock.listen(1)
     port = sock.getsockname()[1]
     info_path = tmp_path / "daemon.sock-info"
-    info_path.write_text(
-        json.dumps({"port": port, "tip_version": "1.0", "started_at": 0})
-    )
+    info_path.write_text(json.dumps({"port": port, "tip_version": "1.0", "started_at": 0}))
     yield info_path, port, sock
     try:
         sock.close()
@@ -78,10 +76,7 @@ def test_is_reachable_true_when_active(sock_info):
 
 
 def test_is_reachable_false_when_file_missing(tmp_path):
-    assert (
-        daemon_probe.is_daemon_reachable(sock_info_override=tmp_path / "nope")
-        is False
-    )
+    assert daemon_probe.is_daemon_reachable(sock_info_override=tmp_path / "nope") is False
 
 
 def test_state_unavailable_for_invalid_port_range(tmp_path):
@@ -180,9 +175,7 @@ def test_status_returns_200_with_required_fields():
 
 def test_status_daemon_state_is_unavailable_by_default():
     """No daemon installed on this host (overwhelming common case)."""
-    with patch.object(
-        daemon_probe, "_SOCK_INFO_PATH", Path("/tmp/__nonexistent_sock_info__")
-    ):
+    with patch.object(daemon_probe, "_SOCK_INFO_PATH", Path("/tmp/__nonexistent_sock_info__")):
         h = _get("/pak/v1/status")
     body = h.response_json()
     assert body["daemon_state"] == "unavailable"
@@ -362,7 +355,7 @@ def _patch_recall_store(monkeypatch, tmp_path, seed_rows: list[dict] | None = No
 
     store_path = tmp_path / "recall.db"
     with RecallStore.open(store_path) as store:
-        for r in (seed_rows or []):
+        for r in seed_rows or []:
             store.upsert_pak(**r)
 
     monkeypatch.setattr(
@@ -470,9 +463,7 @@ def test_list_default_and_cap_at_100(tmp_path, monkeypatch, require_fts5):
     assert body2["truncated"] is True
 
 
-def test_list_smaller_limit_truncates_when_more_remain(
-    tmp_path, monkeypatch, require_fts5
-):
+def test_list_smaller_limit_truncates_when_more_remain(tmp_path, monkeypatch, require_fts5):
     """Decision 4 — sub-cap limit still surfaces truncated + cursor when more rows match."""
     _patch_recall_store(
         monkeypatch,
@@ -491,9 +482,7 @@ def test_list_smaller_limit_truncates_when_more_remain(
     assert body["next_cursor"] is not None
 
 
-def test_list_cursor_round_trip_completes_page(
-    tmp_path, monkeypatch, require_fts5
-):
+def test_list_cursor_round_trip_completes_page(tmp_path, monkeypatch, require_fts5):
     """Decision 1 + 4 — feeding ``next_cursor`` back yields the remainder."""
     _patch_recall_store(
         monkeypatch,
@@ -724,7 +713,9 @@ def test_promote_forwards_to_daemon_when_active(tmp_path):
     sock_path = tmp_path / "daemon.sock-info"
     payload = b'{"source":"llm_response","content":"hi everyone","captured_at":"2026-05-09T17:00:00+00:00","platform":"x"}'
 
-    with _DaemonStub(canned_status=201, canned_body={"promoted": True, "pak_id": "pak-int-abc123"}) as stub:
+    with _DaemonStub(
+        canned_status=201, canned_body={"promoted": True, "pak_id": "pak-int-abc123"}
+    ) as stub:
         _write_sock_info(sock_path, stub.port)
         with patch.object(daemon_probe, "_SOCK_INFO_PATH", sock_path):
             h = _post("/pak/v1/promote", body=payload)
@@ -836,9 +827,7 @@ def test_tpk_v1_health_still_works():
     class _NoServerHandler(_StubHandler):
         # Need a `server` attribute that exposes proxy_server — health
         # reads uptime from there. Stub with None so handler degrades.
-        server = type(
-            "_S", (), {"proxy_server": None}
-        )()
+        server = type("_S", (), {"proxy_server": None})()
 
     from tokenpak.proxy.app_endpoints import try_handle_get
 

@@ -36,9 +36,12 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional, cast
 
 logger = logging.getLogger(__name__)
+
+TermCard = dict[str, object]
+TermCardCollection = dict[str, TermCard]
 
 # ---------------------------------------------------------------------------
 # Hard character caps per field
@@ -91,20 +94,22 @@ def _truncate(value: str, cap: int) -> str:
     return value
 
 
-def enforce_caps(card: dict[str, Any]) -> dict[str, Any]:
+def enforce_caps(card: TermCard) -> TermCard:
     """Return a copy of *card* with all fields truncated to their hard caps."""
     out = dict(card)
     for field, cap in CAPS.items():
-        if field in out and isinstance(out[field], str):
-            out[field] = _truncate(out[field], cap)
+        value = out.get(field)
+        if isinstance(value, str):
+            out[field] = _truncate(value, cap)
     for field, item_cap in CAPS_LIST_ITEM.items():
-        if field in out and isinstance(out[field], list):
+        value = out.get(field)
+        if isinstance(value, list):
             max_items = CAPS_LIST_MAX[field]
-            out[field] = [_truncate(str(item), item_cap) for item in out[field][:max_items]]
+            out[field] = [_truncate(str(item), item_cap) for item in value[:max_items]]
     return out
 
 
-def validate_card(card: dict[str, Any]) -> list[str]:
+def validate_card(card: TermCard) -> list[str]:
     """
     Return a list of validation error strings.
     Empty list means the card is valid.
@@ -150,7 +155,7 @@ def validate_card(card: dict[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def detect_alias_conflicts(cards: dict[str, Any]) -> list[str]:
+def detect_alias_conflicts(cards: TermCardCollection) -> list[str]:
     """
     Scan all cards and report any alias that maps to more than one canonical term.
     Returns a list of human-readable conflict descriptions (non-silent).
@@ -159,8 +164,11 @@ def detect_alias_conflicts(cards: dict[str, Any]) -> list[str]:
     for canonical, card in cards.items():
         # canonical key itself
         alias_map[canonical.lower()].append(canonical)
-        for alias in card.get("aliases", []):
-            alias_map[alias.lower()].append(canonical)
+        aliases = card.get("aliases", [])
+        if isinstance(aliases, list):
+            for alias in aliases:
+                if isinstance(alias, str):
+                    alias_map[alias.lower()].append(canonical)
 
     conflicts = []
     for alias, owners in alias_map.items():
@@ -175,25 +183,33 @@ def detect_alias_conflicts(cards: dict[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def sort_cards(cards: dict[str, Any]) -> dict[str, Any]:
+def sort_cards(cards: TermCardCollection) -> TermCardCollection:
     """Return cards dict sorted deterministically: tier ASC, term ASC."""
-    return dict(
-        sorted(
-            cards.items(),
-            key=lambda kv: (kv[1].get("tier", 9), kv[0].lower()),
-        )
-    )
+
+    def _sort_key(item: tuple[str, TermCard]) -> tuple[int, str]:
+        tier = item[1].get("tier")
+        return (tier if isinstance(tier, int) else 9, item[0].lower())
+
+    return dict(sorted(cards.items(), key=_sort_key))
 
 
-def load_cards(path: Path = TERM_CARDS_PATH) -> dict[str, Any]:
+def load_cards(path: Path = TERM_CARDS_PATH) -> TermCardCollection:
     """Load term_cards.json; return empty dict if missing."""
     if not path.exists():
         return {}
     with path.open(encoding="utf-8") as fh:
-        return json.load(fh)
+        raw = cast(object, json.load(fh))
+    if not isinstance(raw, dict):
+        raise ValueError(f"term card file must contain an object: {path}")
+    cards: TermCardCollection = {}
+    for raw_key, raw_card in cast(dict[object, object], raw).items():
+        if not isinstance(raw_card, dict):
+            raise ValueError(f"term card {raw_key!r} must contain an object")
+        cards[str(raw_key)] = cast(TermCard, raw_card)
+    return cards
 
 
-def save_cards(cards: dict[str, Any], path: Path = TERM_CARDS_PATH) -> None:
+def save_cards(cards: TermCardCollection, path: Path = TERM_CARDS_PATH) -> None:
     """Save cards to JSON with deterministic ordering."""
     sorted_cards = sort_cards(cards)
     with path.open("w", encoding="utf-8") as fh:
@@ -217,7 +233,7 @@ _MIN_OCCURRENCES = 3
 def extract_candidates_from_source(
     source_root: Path,
     existing_keys: set[str],
-) -> dict[str, dict[str, Any]]:
+) -> TermCardCollection:
     """
     Scan Python source files under *source_root* and return candidate Tier 1
     term cards for snake_case identifiers that appear ≥ _MIN_OCCURRENCES times
@@ -247,7 +263,7 @@ def extract_candidates_from_source(
                 source_map[ident].append(rel)
 
     now = datetime.now(timezone.utc).isoformat()
-    candidates: dict[str, dict[str, Any]] = {}
+    candidates: TermCardCollection = {}
     for ident, count in frequency.items():
         if count >= _MIN_OCCURRENCES and ident not in existing_keys:
             candidates[ident] = {
@@ -274,10 +290,10 @@ def extract_candidates_from_source(
 
 def lazy_add(
     term: str,
-    cards: dict[str, Any],
+    cards: TermCardCollection,
     source_refs: Optional[list[str]] = None,
     path: Path = TERM_CARDS_PATH,
-) -> dict[str, Any]:
+) -> TermCard:
     """
     Add a stub Tier 2 card for *term* if it doesn't already exist.
     Returns the card (existing or newly created).
@@ -315,7 +331,7 @@ def lazy_add(
 # ---------------------------------------------------------------------------
 
 
-def validation_report(cards: dict[str, Any]) -> str:
+def validation_report(cards: TermCardCollection) -> str:
     """
     Run full validation over all cards and return a human-readable report.
     Also detects alias conflicts.
@@ -329,7 +345,7 @@ def validation_report(cards: dict[str, Any]) -> str:
 
     conflicts = detect_alias_conflicts(cards)
 
-    tier_counts = defaultdict(int)
+    tier_counts: defaultdict[object, int] = defaultdict(int)
     for card in cards.values():
         tier_counts[card.get("tier", "?")] += 1
 
@@ -367,7 +383,7 @@ def build(
     cards_path: Path = TERM_CARDS_PATH,
     add_tier1: bool = True,
     dry_run: bool = False,
-) -> dict[str, Any]:
+) -> TermCardCollection:
     """
     Full build pipeline:
       1. Load existing cards.
@@ -425,7 +441,7 @@ def build(
 # ---------------------------------------------------------------------------
 
 
-def _cli():
+def _cli() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(

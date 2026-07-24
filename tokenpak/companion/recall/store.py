@@ -363,9 +363,7 @@ class RecallStore:
         for name in _REQUIRED_FIELDS:
             v = values[name]
             if v is None or not isinstance(v, str) or not v.strip():
-                raise ValueError(
-                    f"upsert_pak: required field {name!r} must be a non-empty string"
-                )
+                raise ValueError(f"upsert_pak: required field {name!r} must be a non-empty string")
         if summary is None:
             summary = ""
 
@@ -497,9 +495,7 @@ class RecallStore:
             # Keyset for ORDER BY updated_at DESC, pak_id DESC: the next page
             # starts strictly after (cur_ts, cur_id) in that DESC ordering —
             # i.e. (updated_at, pak_id) is less than the cursor's tuple.
-            where_clauses.append(
-                "(updated_at < ? OR (updated_at = ? AND pak_id < ?))"
-            )
+            where_clauses.append("(updated_at < ? OR (updated_at = ? AND pak_id < ?))")
             params.extend([cur_ts, cur_ts, cur_id])
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
@@ -591,17 +587,11 @@ class RecallStore:
             code = entry.reason_code
             weight = entry.weight
             if not isinstance(code, str) or not code.strip():
-                raise ValueError(
-                    "set_pak_reason_codes: reason_code must be a non-empty string"
-                )
+                raise ValueError("set_pak_reason_codes: reason_code must be a non-empty string")
             if not isinstance(weight, (int, float)) or not (0.0 <= float(weight) <= 1.0):
-                raise ValueError(
-                    f"set_pak_reason_codes: weight for {code!r} must be in [0.0, 1.0]"
-                )
+                raise ValueError(f"set_pak_reason_codes: weight for {code!r} must be in [0.0, 1.0]")
             if code in seen:
-                raise ValueError(
-                    f"set_pak_reason_codes: duplicate reason_code {code!r} in input"
-                )
+                raise ValueError(f"set_pak_reason_codes: duplicate reason_code {code!r} in input")
             seen.add(code)
             cleaned.append((code, float(weight)))
 
@@ -682,18 +672,14 @@ class RecallStore:
             flag = entry.risk_flag
             severity = entry.severity
             if not isinstance(flag, str) or not flag.strip():
-                raise ValueError(
-                    "set_pak_risk_flags: risk_flag must be a non-empty string"
-                )
+                raise ValueError("set_pak_risk_flags: risk_flag must be a non-empty string")
             if severity not in RISK_FLAG_SEVERITIES:
                 raise ValueError(
                     f"set_pak_risk_flags: severity for {flag!r} must be one of "
                     f"{sorted(RISK_FLAG_SEVERITIES)!r}, got {severity!r}"
                 )
             if flag in seen:
-                raise ValueError(
-                    f"set_pak_risk_flags: duplicate risk_flag {flag!r} in input"
-                )
+                raise ValueError(f"set_pak_risk_flags: duplicate risk_flag {flag!r} in input")
             seen.add(flag)
             cleaned.append((flag, severity))
 

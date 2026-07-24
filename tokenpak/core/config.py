@@ -50,6 +50,7 @@ def get_config() -> dict[str, Any]:
     # Start with YAML base (config_loader.py) for overlapping keys
     try:
         from tokenpak.core.config_loader import load_config as _load_yaml_config
+
         base = _load_yaml_config()
     except Exception:
         base = {}
@@ -135,7 +136,7 @@ def set_capsule_builder_enabled(enabled: bool) -> None:
     _save(data)
 
 
-def load_config() -> dict:
+def load_config() -> dict[str, Any]:
     """Return the full config dict (for direct access by other modules)."""
     return _load()
 

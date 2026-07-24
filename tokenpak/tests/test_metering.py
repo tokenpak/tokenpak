@@ -20,7 +20,6 @@ from tokenpak.telemetry.metering import UsageMeter, UsageMeterManager, UsageReco
 
 
 class TestUsageRecord(unittest.TestCase):
-
     def test_defaults_set(self):
         rec = UsageRecord(
             model="claude-sonnet-4-6",
@@ -42,14 +41,17 @@ class TestUsageRecord(unittest.TestCase):
     def test_explicit_timestamp_preserved(self):
         ts = "2026-03-27T00:00:00+00:00"
         rec = UsageRecord(
-            model="m", input_tokens=0, output_tokens=0, saved_tokens=0,
-            request_type="chat", timestamp=ts
+            model="m",
+            input_tokens=0,
+            output_tokens=0,
+            saved_tokens=0,
+            request_type="chat",
+            timestamp=ts,
         )
         self.assertEqual(rec.timestamp, ts)
 
 
 class TestUsageMeter(unittest.TestCase):
-
     def setUp(self):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self._tmpdir.name) / "usage.db"
@@ -59,8 +61,14 @@ class TestUsageMeter(unittest.TestCase):
     def tearDown(self):
         self._tmpdir.cleanup()
 
-    def _record_sync(self, model="claude-sonnet-4-6", input_tokens=100,
-                     output_tokens=10, saved_tokens=5, request_type="chat"):
+    def _record_sync(
+        self,
+        model="claude-sonnet-4-6",
+        input_tokens=100,
+        output_tokens=10,
+        saved_tokens=5,
+        request_type="chat",
+    ):
         """Record and wait for async background thread to finish."""
         self.meter.record(model, input_tokens, output_tokens, saved_tokens, request_type)
         time.sleep(0.1)
@@ -73,8 +81,13 @@ class TestUsageMeter(unittest.TestCase):
         self.assertEqual(summary["key_id"], "test-key")
 
     def test_single_record(self):
-        self._record_sync(model="claude-sonnet-4-6", input_tokens=500,
-                          output_tokens=50, saved_tokens=25, request_type="chat")
+        self._record_sync(
+            model="claude-sonnet-4-6",
+            input_tokens=500,
+            output_tokens=50,
+            saved_tokens=25,
+            request_type="chat",
+        )
         summary = self.meter.get_daily_summary(self.today)
         self.assertEqual(summary["total_requests"], 1)
         self.assertEqual(summary["total_input_tokens"], 500)
@@ -91,8 +104,12 @@ class TestUsageMeter(unittest.TestCase):
         self.assertEqual(summary["total_saved_tokens"], 15)
 
     def test_by_model_breakdown(self):
-        self._record_sync(model="claude-sonnet-4-6", input_tokens=100, output_tokens=10, saved_tokens=5)
-        self._record_sync(model="claude-haiku-4-5", input_tokens=50, output_tokens=5, saved_tokens=2)
+        self._record_sync(
+            model="claude-sonnet-4-6", input_tokens=100, output_tokens=10, saved_tokens=5
+        )
+        self._record_sync(
+            model="claude-haiku-4-5", input_tokens=50, output_tokens=5, saved_tokens=2
+        )
         summary = self.meter.get_daily_summary(self.today)
         self.assertIn("claude-sonnet-4-6", summary["by_model"])
         self.assertIn("claude-haiku-4-5", summary["by_model"])
@@ -101,7 +118,9 @@ class TestUsageMeter(unittest.TestCase):
 
     def test_by_type_breakdown(self):
         self._record_sync(request_type="chat", input_tokens=100, output_tokens=10, saved_tokens=0)
-        self._record_sync(request_type="completion", input_tokens=50, output_tokens=5, saved_tokens=0)
+        self._record_sync(
+            request_type="completion", input_tokens=50, output_tokens=5, saved_tokens=0
+        )
         summary = self.meter.get_daily_summary(self.today)
         self.assertIn("chat", summary["by_type"])
         self.assertIn("completion", summary["by_type"])
@@ -120,7 +139,9 @@ class TestUsageMeter(unittest.TestCase):
         self.assertEqual(summary["total_input_tokens"], large)
 
     def test_unknown_model_handled(self):
-        self._record_sync(model="unknown-model-xyz", input_tokens=10, output_tokens=1, saved_tokens=0)
+        self._record_sync(
+            model="unknown-model-xyz", input_tokens=10, output_tokens=1, saved_tokens=0
+        )
         summary = self.meter.get_daily_summary(self.today)
         self.assertIn("unknown-model-xyz", summary["by_model"])
 
@@ -132,6 +153,7 @@ class TestUsageMeter(unittest.TestCase):
     def test_cleanup_old_data_removes_rows(self):
         # Insert an old record directly with a past timestamp
         import sqlite3
+
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "INSERT INTO usage (key_id, timestamp, model, input_tokens, output_tokens, saved_tokens, request_type) "
@@ -154,9 +176,7 @@ class TestUsageMeter(unittest.TestCase):
         threads = []
         for _ in range(10):
             t = threading.Thread(
-                target=lambda: self.meter.record(
-                    "claude-sonnet-4-6", 100, 10, 5, "chat"
-                )
+                target=lambda: self.meter.record("claude-sonnet-4-6", 100, 10, 5, "chat")
             )
             threads.append(t)
             t.start()
@@ -168,7 +188,6 @@ class TestUsageMeter(unittest.TestCase):
 
 
 class TestUsageMeterManager(unittest.TestCase):
-
     def setUp(self):
         # Reset singleton for isolated tests
         UsageMeterManager._instance = None

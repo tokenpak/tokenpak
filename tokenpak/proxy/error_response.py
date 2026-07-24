@@ -110,8 +110,9 @@ def _extract_message_from_provider_body(body: bytes, provider: str) -> Optional[
         return str(err["message"])
     if isinstance(err, str) and err:
         return err
-    if isinstance(data.get("message"), str) and data["message"]:
-        return data["message"]
+    message = data.get("message")
+    if isinstance(message, str) and message:
+        return message
 
     return None
 

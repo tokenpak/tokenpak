@@ -20,6 +20,7 @@ composer = ContextComposer()
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
 
+
 def make_chunks(n: int, content_size: int = 50) -> list[RetrievedChunk]:
     """Create n chunks with descending rank and ~content_size chars each."""
     return [
@@ -35,15 +36,13 @@ def make_chunks(n: int, content_size: int = 50) -> list[RetrievedChunk]:
 
 def total_tokens(result: ComposedContext) -> int:
     """Sum token cost of all messages in the result."""
-    return sum(
-        _count_tokens(m.get("content", "")) + 4
-        for m in result.final_prompt_messages
-    )
+    return sum(_count_tokens(m.get("content", "")) + 4 for m in result.final_prompt_messages)
 
 
 # ---------------------------------------------------------------------------
 # 1. Packing respects budget limit (non-escalation path)
 # ---------------------------------------------------------------------------
+
 
 class TestBudgetRespected:
     def test_no_escalation_when_fits(self):
@@ -82,6 +81,7 @@ class TestBudgetRespected:
 # ---------------------------------------------------------------------------
 # 2. Priority order maintained
 # ---------------------------------------------------------------------------
+
 
 class TestPriorityOrder:
     def test_system_prompt_first(self):
@@ -133,6 +133,7 @@ class TestPriorityOrder:
 # 3. Lowest chunks dropped first
 # ---------------------------------------------------------------------------
 
+
 class TestDropLowestFirst:
     def test_lowest_rank_dropped_first(self):
         chunks = [
@@ -175,6 +176,7 @@ class TestDropLowestFirst:
 # 4. Escalation signaled when can't fit
 # ---------------------------------------------------------------------------
 
+
 class TestEscalation:
     def test_escalation_on_impossible_budget(self):
         """System + user alone exceed budget → escalation."""
@@ -207,6 +209,7 @@ class TestEscalation:
 # 5. Micro-summary generated for dropped content
 # ---------------------------------------------------------------------------
 
+
 class TestMicroSummary:
     def test_summarized_chunks_populated_when_dropped(self):
         chunks = make_chunks(10, content_size=200)
@@ -229,7 +232,9 @@ class TestMicroSummary:
         if result.dropped_chunks:
             all_content = " ".join(m.get("content", "") for m in result.final_prompt_messages)
             # Summary message may not fit in a very tight budget; explain_plan always records it
-            in_messages = "dropped_context_summary" in all_content or "dropped" in all_content.lower()
+            in_messages = (
+                "dropped_context_summary" in all_content or "dropped" in all_content.lower()
+            )
             in_plan = any("drop" in e.lower() or "DROPPED" in e for e in result.explain_plan)
             assert in_messages or in_plan, "Drop activity not recorded in messages or explain_plan"
 
@@ -246,6 +251,7 @@ class TestMicroSummary:
 # ---------------------------------------------------------------------------
 # 6. Empty retrieval still produces valid prompt
 # ---------------------------------------------------------------------------
+
 
 class TestEmptyRetrieval:
     def test_empty_chunks_valid_output(self):
@@ -289,6 +295,7 @@ class TestEmptyRetrieval:
 # 7. ComposedContext fields
 # ---------------------------------------------------------------------------
 
+
 class TestComposedContextFields:
     def test_result_type(self):
         result = composer.compose(budget=1000, user_request="Test.")
@@ -331,10 +338,7 @@ class TestComposedContextFields:
             recent_turns=turns,
         )
         # Count occurrences of "Turn" in messages
-        turn_messages = [
-            m for m in result.final_prompt_messages
-            if "Turn" in m.get("content", "")
-        ]
+        turn_messages = [m for m in result.final_prompt_messages if "Turn" in m.get("content", "")]
         assert len(turn_messages) <= 4
 
 

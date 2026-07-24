@@ -47,6 +47,7 @@ class CompressionPolicy:
     def with_bypass(self, reason: str) -> "CompressionPolicy":
         """Return a copy of this policy with compression bypassed for *reason*."""
         from dataclasses import replace
+
         return replace(self, bypass_reason=reason)
 
 
@@ -77,29 +78,33 @@ class ProtectedSpanType:
     URL = "url"
     CREDENTIAL_PLACEHOLDER = "credential_placeholder"
 
-    ALL: frozenset[str] = frozenset({
-        FILE_PATH,
-        FUNCTION_SIGNATURE,
-        CLASS_SIGNATURE,
-        COMMAND,
-        EXIT_CODE,
-        STACK_TRACE_FRAME,
-        EXCEPTION_MESSAGE,
-        JSON_SCHEMA,
-        YAML_KEY,
-        CONFIG_VALUE,
-        LINE_NUMBER,
-        DIFF_HUNK_HEADER,
-        DIFF_ADDED_REMOVED_LINES,
-        URL,
-        CREDENTIAL_PLACEHOLDER,
-    })
+    ALL: frozenset[str] = frozenset(
+        {
+            FILE_PATH,
+            FUNCTION_SIGNATURE,
+            CLASS_SIGNATURE,
+            COMMAND,
+            EXIT_CODE,
+            STACK_TRACE_FRAME,
+            EXCEPTION_MESSAGE,
+            JSON_SCHEMA,
+            YAML_KEY,
+            CONFIG_VALUE,
+            LINE_NUMBER,
+            DIFF_HUNK_HEADER,
+            DIFF_ADDED_REMOVED_LINES,
+            URL,
+            CREDENTIAL_PLACEHOLDER,
+        }
+    )
 
     # Subset that is always protected regardless of fidelity policy
-    ALWAYS_PROTECTED: frozenset[str] = frozenset({
-        CREDENTIAL_PLACEHOLDER,
-        JSON_SCHEMA,
-    })
+    ALWAYS_PROTECTED: frozenset[str] = frozenset(
+        {
+            CREDENTIAL_PLACEHOLDER,
+            JSON_SCHEMA,
+        }
+    )
 
 
 __all__ = ["CompressionPolicy", "ProtectedSpanType"]

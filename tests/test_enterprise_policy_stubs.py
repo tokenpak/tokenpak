@@ -35,6 +35,7 @@ def test_policy_engine_imports():
         PolicyEngine,
         PolicyEngineBase,
     )
+
     assert issubclass(PolicyEngine, PolicyEngineBase)
 
 
@@ -44,6 +45,7 @@ def test_sla_router_imports():
         SLARouter,
         SLARouterBase,
     )
+
     assert issubclass(SLARouter, SLARouterBase)
 
 
@@ -53,6 +55,7 @@ def test_governance_engine_imports():
         GovernanceEngine,
         GovernanceEngineBase,
     )
+
     assert issubclass(GovernanceEngine, GovernanceEngineBase)
 
 
@@ -72,6 +75,7 @@ def _mock_non_enterprise():
 def _mock_tier(tier: str = "OSS"):
     """Patch get_plan() to return a minimal result with given tier name."""
     from unittest.mock import MagicMock
+
     mock_result = MagicMock()
     mock_result.tier.value = tier.lower()
     return patch(
@@ -84,6 +88,7 @@ def test_policy_engine_oss_tier_list_policies(capsys):
     """list_policies on OSS tier prints upgrade message and returns []."""
     with _mock_non_enterprise(), _mock_tier("oss"):
         from tokenpak.enterprise.policy import PolicyEngine
+
         engine = PolicyEngine()
         engine._delegate = None  # force stub path
 
@@ -99,6 +104,7 @@ def test_policy_engine_oss_tier_enforce_allows(capsys):
     """enforce() on OSS tier allows everything (no policy engine active)."""
     with _mock_non_enterprise(), _mock_tier("oss"):
         from tokenpak.enterprise.policy import PolicyEngine
+
         engine = PolicyEngine()
         engine._delegate = None
 
@@ -112,6 +118,7 @@ def test_sla_router_oss_tier_list_profiles(capsys):
     """list_profiles on OSS tier prints upgrade message and returns []."""
     with _mock_non_enterprise(), _mock_tier("oss"):
         from tokenpak.enterprise.sla import SLARouter
+
         router = SLARouter()
         router._delegate = None
 
@@ -126,6 +133,7 @@ def test_sla_router_oss_tier_resolve_passthrough():
     """resolve() on OSS tier passes model through unchanged."""
     with _mock_non_enterprise(), _mock_tier("oss"):
         from tokenpak.enterprise.sla import SLARouter
+
         router = SLARouter()
         router._delegate = None
 
@@ -140,6 +148,7 @@ def test_governance_engine_oss_tier_classify(capsys):
     """classify() on OSS tier prints upgrade message and returns default."""
     with _mock_non_enterprise(), _mock_tier("oss"):
         from tokenpak.enterprise.governance import DataClass, GovernanceEngine
+
         engine = GovernanceEngine()
         engine._delegate = None
 
@@ -157,16 +166,19 @@ def test_governance_engine_oss_tier_classify(capsys):
 
 def test_cli_policy_module_importable():
     from tokenpak.cli.commands import policy
+
     assert callable(getattr(policy, "run", None))
 
 
 def test_cli_sla_module_importable():
     from tokenpak.cli.commands import sla
+
     assert callable(getattr(sla, "run", None))
 
 
 def test_cli_compliance_module_importable():
     from tokenpak.cli.commands import compliance
+
     assert callable(getattr(compliance, "run", None))
 
 
@@ -174,6 +186,7 @@ def test_cli_policy_show_no_license(capsys):
     """tokenpak policy show on OSS prints upgrade and exits."""
     with _mock_non_enterprise(), _mock_tier("oss"):
         from tokenpak.cli.commands.policy import run
+
         with pytest.raises(SystemExit) as exc_info:
             run(["show"])
         assert exc_info.value.code == 2
@@ -186,6 +199,7 @@ def test_cli_sla_status_no_license(capsys):
     """tokenpak sla status on OSS prints upgrade and exits."""
     with _mock_non_enterprise(), _mock_tier("oss"):
         from tokenpak.cli.commands.sla import run
+
         with pytest.raises(SystemExit) as exc_info:
             run(["status"])
         assert exc_info.value.code == 2
@@ -198,6 +212,7 @@ def test_cli_compliance_report_no_license(capsys):
     """tokenpak compliance report soc2 on OSS prints upgrade and exits."""
     with _mock_non_enterprise(), _mock_tier("oss"):
         from tokenpak.cli.commands.compliance import run
+
         with pytest.raises(SystemExit) as exc_info:
             run(["report", "soc2"])
         assert exc_info.value.code == 2

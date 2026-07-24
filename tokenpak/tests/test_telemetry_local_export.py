@@ -106,9 +106,9 @@ class TestLocalExporterRetention:
         from tokenpak.telemetry import local_exporter
 
         # Create a stale file (35 days old)
-        stale_date = datetime.fromordinal(
-            datetime.now(timezone.utc).toordinal() - 35
-        ).strftime("%Y-%m-%d")
+        stale_date = datetime.fromordinal(datetime.now(timezone.utc).toordinal() - 35).strftime(
+            "%Y-%m-%d"
+        )
         stale_file = tmp_path / f"metrics-{stale_date}.jsonl"
         stale_file.write_text('{"stale": true}\n')
 
@@ -121,9 +121,9 @@ class TestLocalExporterRetention:
         from tokenpak.telemetry import local_exporter
 
         # Create a recent file (5 days old)
-        recent_date = datetime.fromordinal(
-            datetime.now(timezone.utc).toordinal() - 5
-        ).strftime("%Y-%m-%d")
+        recent_date = datetime.fromordinal(datetime.now(timezone.utc).toordinal() - 5).strftime(
+            "%Y-%m-%d"
+        )
         recent_file = tmp_path / f"metrics-{recent_date}.jsonl"
         recent_file.write_text('{"recent": true}\n')
 
@@ -136,9 +136,9 @@ class TestLocalExporterRetention:
         from tokenpak.telemetry import local_exporter
 
         # File exactly 30 days old should survive (cutoff is strictly < 30 days)
-        boundary_date = datetime.fromordinal(
-            datetime.now(timezone.utc).toordinal() - 30
-        ).strftime("%Y-%m-%d")
+        boundary_date = datetime.fromordinal(datetime.now(timezone.utc).toordinal() - 30).strftime(
+            "%Y-%m-%d"
+        )
         boundary_file = tmp_path / f"metrics-{boundary_date}.jsonl"
         boundary_file.write_text('{"boundary": true}\n')
 

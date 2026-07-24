@@ -61,7 +61,7 @@ class RateLimitBackoff:
             return min(retry_after, self.max_wait)
 
         # Exponential: base_wait * 2^attempt
-        computed = self.base_wait * (2.0 ** attempt)
+        computed = self.base_wait * (2.0**attempt)
 
         # Apply jitter (additive, uniform in [0, jitter_factor * computed))
         if self.jitter_factor > 0:

@@ -1,4 +1,5 @@
 """CLI launcher logic for the Claude Code adapter."""
+
 import os
 import sys
 from typing import List, Optional
@@ -7,7 +8,7 @@ from tokenpak.core.registry.claude_code.config import ClaudeCodeConfig
 from tokenpak.core.registry.claude_code.health import check_proxy_health
 
 
-def build_launch_env(config: ClaudeCodeConfig) -> dict:
+def build_launch_env(config: ClaudeCodeConfig) -> dict[str, str]:
     """Merge proxy environment variables into a copy of the current environment.
 
     Args:

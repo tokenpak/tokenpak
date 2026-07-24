@@ -10,7 +10,7 @@ class Block:
     source: Optional[str] = None
     token_count: Optional[int] = None
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "content": self.content,
             "metadata": self.metadata,
@@ -32,7 +32,7 @@ def doc_to_block(doc: Any) -> Block:
 
 def block_to_doc(block: Block) -> Any:
     class SimpleDoc:
-        def __init__(self, content, meta):
+        def __init__(self, content: str, meta: Dict[str, Any]) -> None:
             self.page_content = content
             self.metadata = meta
 

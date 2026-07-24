@@ -10,6 +10,8 @@ Usage in proxy.py:
     AUTH_GUARD.record_response(provider="anthropic", status_code=status)
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -17,9 +19,12 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict
+from typing import Callable
 
 logger = logging.getLogger(__name__)
+
+AuthFailureDetails = dict[str, object]
+AuthFailureHandler = Callable[[str, str, AuthFailureDetails], None]
 
 # ---------------------------------------------------------------------------
 # Config (override via env vars)
@@ -41,16 +46,16 @@ class AuthGuard:
     - Resets counter on any successful (non-401/403) response.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.Lock()
         # provider_name → consecutive failure count
-        self._counters: Dict[str, int] = {}
+        self._counters: dict[str, int] = {}
         # provider_name → last alert timestamp (epoch float)
-        self._last_alert: Dict[str, float] = {}
+        self._last_alert: dict[str, float] = {}
         # Registered event handlers: (provider, event_name, details) -> None
-        self._handlers: list = []
+        self._handlers: list[AuthFailureHandler] = []
 
-    def on_auth_failure(self, handler: Callable[[str, str, dict], None]) -> None:
+    def on_auth_failure(self, handler: AuthFailureHandler) -> None:
         """Register a callback for auth-failure-detected events.
 
         handler(provider: str, event: str, details: dict) -> None
@@ -116,7 +121,7 @@ class AuthGuard:
         handlers = list(self._handlers)
 
         # Run handlers in a background thread so proxy isn't blocked
-        def _run_handlers():
+        def _run_handlers() -> None:
             for h in handlers:
                 try:
                     h(provider, "auth-failure-detected", details)
@@ -126,7 +131,7 @@ class AuthGuard:
         t = threading.Thread(target=_run_handlers, daemon=True, name="auth-guard-alert")
         t.start()
 
-    def _log_incident(self, details: dict) -> None:
+    def _log_incident(self, details: AuthFailureDetails) -> None:
         """Append incident to ~/.tokenpak/incidents.log"""
         INCIDENT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(details)
@@ -137,11 +142,11 @@ class AuthGuard:
     # ------------------------------------------------------------------
     # Introspection helpers (for /stats or tests)
     # ------------------------------------------------------------------
-    def get_counters(self) -> dict:
+    def get_counters(self) -> dict[str, int]:
         with self._lock:
             return dict(self._counters)
 
-    def get_last_alert_times(self) -> dict:
+    def get_last_alert_times(self) -> dict[str, float]:
         with self._lock:
             return dict(self._last_alert)
 

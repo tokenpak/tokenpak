@@ -27,6 +27,7 @@ from tokenpak.sdk.integrations.litellm.proxy import ProxyHandler, _json_error
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_block(content="hello world", path="docs/a.md", tokens=None):
     return SimpleNamespace(
         compressed_content=content,
@@ -49,6 +50,7 @@ def _wire_pack_passthrough(wire_blocks, budget):
 # formatter._estimate_tokens
 # ---------------------------------------------------------------------------
 
+
 class TestEstimateTokens:
     def test_empty_string_returns_one(self):
         assert _estimate_tokens("") == 1
@@ -64,6 +66,7 @@ class TestEstimateTokens:
 # formatter._dict_to_blocks
 # ---------------------------------------------------------------------------
 
+
 class TestDictToBlocks:
     def test_empty_blocks_list(self):
         result = _dict_to_blocks({"blocks": []})
@@ -71,9 +74,7 @@ class TestDictToBlocks:
 
     def test_converts_dict_to_namespace(self):
         pack_dict = {
-            "blocks": [
-                {"ref": "docs/a.md", "type": "text", "content": "hello", "tokens": 5}
-            ]
+            "blocks": [{"ref": "docs/a.md", "type": "text", "content": "hello", "tokens": 5}]
         }
         result = _dict_to_blocks(pack_dict)
         assert len(result) == 1
@@ -109,6 +110,7 @@ class TestDictToBlocks:
 # formatter.blocks_to_messages
 # ---------------------------------------------------------------------------
 
+
 class TestBlocksToMessages:
     def test_empty_blocks_produces_system_message(self):
         with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
@@ -129,7 +131,9 @@ class TestBlocksToMessages:
             {"role": "user", "content": "hi"},
         ]
         with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
-            msgs = blocks_to_messages(blocks, budget=8000, compaction="none", existing_messages=existing)
+            msgs = blocks_to_messages(
+                blocks, budget=8000, compaction="none", existing_messages=existing
+            )
         # First message is new system, old system skipped, user included
         assert msgs[0]["role"] == "system"
         assert msgs[0]["content"] != "old system"
@@ -170,6 +174,7 @@ class TestBlocksToMessages:
 # ---------------------------------------------------------------------------
 # formatter.compile_pack
 # ---------------------------------------------------------------------------
+
 
 class TestCompilePack:
     def test_compile_list_of_blocks(self):
@@ -213,6 +218,7 @@ class TestCompilePack:
 # ---------------------------------------------------------------------------
 # parser.parse_tokenpak_request
 # ---------------------------------------------------------------------------
+
 
 class TestParseTokenpakRequest:
     def test_pattern1_explicit_tokenpak_kwarg(self):
@@ -266,6 +272,7 @@ class TestParseTokenpakRequest:
 # parser.extract_budget_from_kwargs
 # ---------------------------------------------------------------------------
 
+
 class TestExtractBudgetFromKwargs:
     def test_tokenpak_budget_takes_precedence(self):
         assert extract_budget_from_kwargs({"tokenpak_budget": 4000, "max_tokens": 2000}) == 4000
@@ -286,6 +293,7 @@ class TestExtractBudgetFromKwargs:
 # parser.extract_compaction_from_kwargs
 # ---------------------------------------------------------------------------
 
+
 class TestExtractCompactionFromKwargs:
     def test_returns_balanced_by_default(self):
         assert extract_compaction_from_kwargs({}) == "balanced"
@@ -303,6 +311,7 @@ class TestExtractCompactionFromKwargs:
 # ---------------------------------------------------------------------------
 # middleware.TokenPakMiddleware — init
 # ---------------------------------------------------------------------------
+
 
 class TestTokenPakMiddlewareInit:
     def test_default_init(self):
@@ -325,6 +334,7 @@ class TestTokenPakMiddlewareInit:
 # ---------------------------------------------------------------------------
 # middleware.TokenPakMiddleware — pre_call_hook
 # ---------------------------------------------------------------------------
+
 
 class TestTokenPakMiddlewarePreCallHook:
     def test_passthrough_when_no_tokenpak(self):
@@ -387,6 +397,7 @@ class TestTokenPakMiddlewarePreCallHook:
 # middleware.TokenPakMiddleware — post_call_success_hook
 # ---------------------------------------------------------------------------
 
+
 class TestTokenPakMiddlewarePostCallHook:
     def test_attaches_tokenpak_stats_when_telemetry_on(self):
         mw = TokenPakMiddleware(telemetry=True)
@@ -411,7 +422,14 @@ class TestTokenPakMiddlewarePostCallHook:
     def test_no_stats_when_telemetry_off(self):
         mw = TokenPakMiddleware(telemetry=False)
         response = MagicMock()
-        data = {"_tokenpak_meta": {"compile_ms": 1, "budget": 8000, "compaction": "none", "system_tokens": 100}}
+        data = {
+            "_tokenpak_meta": {
+                "compile_ms": 1,
+                "budget": 8000,
+                "compaction": "none",
+                "system_tokens": 100,
+            }
+        }
         result = mw.post_call_success_hook(data, None, response)
         # telemetry off → tokenpak_stats not set (response unmodified)
         assert not hasattr(result, "tokenpak_stats") or result.tokenpak_stats is None or True
@@ -429,6 +447,7 @@ class TestTokenPakMiddlewarePostCallHook:
 # ---------------------------------------------------------------------------
 # middleware.TokenPakMiddleware — wrap_kwargs
 # ---------------------------------------------------------------------------
+
 
 class TestTokenPakMiddlewareWrapKwargs:
     def test_wrap_with_tokenpak(self):
@@ -464,6 +483,7 @@ class TestTokenPakMiddlewareWrapKwargs:
 # proxy._json_error
 # ---------------------------------------------------------------------------
 
+
 class TestJsonError:
     def test_returns_dict_with_error_key(self):
         result = _json_error(400, "Bad request")
@@ -479,6 +499,7 @@ class TestJsonError:
 # ---------------------------------------------------------------------------
 # proxy.ProxyHandler — init
 # ---------------------------------------------------------------------------
+
 
 class TestProxyHandlerInit:
     def test_default_values(self):
@@ -502,6 +523,7 @@ class TestProxyHandlerInit:
 # ---------------------------------------------------------------------------
 # proxy.ProxyHandler — handle (dict input path)
 # ---------------------------------------------------------------------------
+
 
 class TestProxyHandlerHandle:
     def _run(self, coro):

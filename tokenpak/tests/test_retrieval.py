@@ -40,10 +40,12 @@ from tokenpak.vault.search import (  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _block(content: str, source_path: str = "test.md", block_id: str = "b1", **kwargs):
     b = {"content": content, "source_path": source_path, "block_id": block_id}
     b.update(kwargs)
     return b
+
 
 def _token_counter(text: str) -> int:
     """Simple char-based counter: 4 chars = 1 token."""
@@ -53,6 +55,7 @@ def _token_counter(text: str) -> int:
 # ---------------------------------------------------------------------------
 # sort_retrieval_results
 # ---------------------------------------------------------------------------
+
 
 class TestSortRetrievalResults:
     def test_higher_score_first(self):
@@ -92,6 +95,7 @@ class TestSortRetrievalResults:
 # ---------------------------------------------------------------------------
 # inject_retrieved_context
 # ---------------------------------------------------------------------------
+
 
 class TestInjectRetrievedContext:
     def test_empty_results_returns_empty(self):
@@ -144,6 +148,7 @@ class TestInjectRetrievedContext:
     def test_schema_block_uses_json_when_intent_matches(self):
         """Block with schema metadata and schema intent should use schema content."""
         from unittest.mock import patch
+
         block = _block(
             "raw content",
             metadata={"schema": {"field": "value"}, "doc_type": "spec"},
@@ -159,6 +164,7 @@ class TestInjectRetrievedContext:
 # ---------------------------------------------------------------------------
 # measure_injection_consistency
 # ---------------------------------------------------------------------------
+
 
 class TestMeasureInjectionConsistency:
     def test_deterministic_fn_is_consistent(self):
@@ -189,6 +195,7 @@ class TestMeasureInjectionConsistency:
 # ---------------------------------------------------------------------------
 # compute_final_score
 # ---------------------------------------------------------------------------
+
 
 class TestComputeFinalScore:
     def test_base_score(self):
@@ -235,6 +242,7 @@ class TestComputeFinalScore:
 # extract_must_hit_terms
 # ---------------------------------------------------------------------------
 
+
 class TestExtractMustHitTerms:
     def test_extracts_class_names(self):
         terms = extract_must_hit_terms("test ProviderRouter behavior")
@@ -260,6 +268,7 @@ class TestExtractMustHitTerms:
 # ---------------------------------------------------------------------------
 # chunks_contain_term + all_must_hits_found
 # ---------------------------------------------------------------------------
+
 
 class TestMustHitHelpers:
     def test_chunks_contain_term_found(self):
@@ -289,6 +298,7 @@ class TestMustHitHelpers:
 # ---------------------------------------------------------------------------
 # compute_coverage_score
 # ---------------------------------------------------------------------------
+
 
 class TestComputeCoverageScore:
     def test_empty_chunks_returns_zero(self):
@@ -323,6 +333,7 @@ class TestComputeCoverageScore:
 # ---------------------------------------------------------------------------
 # interpret_coverage
 # ---------------------------------------------------------------------------
+
 
 class TestInterpretCoverage:
     def test_strong_coverage(self):

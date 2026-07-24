@@ -11,7 +11,6 @@ Comprehensive test suite covering:
 - Rolling window goals
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.goals", reason="module not available in current build")
@@ -641,7 +640,7 @@ class TestGoalManager(unittest.TestCase):
         goal2 = manager.add_goal(name="Goal 2", goal_type="savings", target_value=100.0)
 
         manager.update_progress(goal1.goal_id, 100.0)  # 100%
-        manager.update_progress(goal2.goal_id, 50.0)   # 50%
+        manager.update_progress(goal2.goal_id, 50.0)  # 50%
 
         stats = manager.get_summary_stats()
 

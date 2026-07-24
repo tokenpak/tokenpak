@@ -32,17 +32,12 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _SCRIPT_PATH = (
-    Path(__file__).resolve().parents[2]
-    / ".github"
-    / "scripts"
-    / "check-forbidden-impl-vocab.py"
+    Path(__file__).resolve().parents[2] / ".github" / "scripts" / "check-forbidden-impl-vocab.py"
 )
 
 
 def _load_script_module():
-    spec = importlib.util.spec_from_file_location(
-        "_check_forbidden_impl_vocab", _SCRIPT_PATH
-    )
+    spec = importlib.util.spec_from_file_location("_check_forbidden_impl_vocab", _SCRIPT_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -144,18 +139,10 @@ def test_skip_path_substrings_cover_self_inputs(script) -> None:
 def test_should_scan_respects_skip_list(script) -> None:
     """``_should_scan`` returns False for any path matching the skip list."""
     assert (
-        script._should_scan(
-            Path("01_PROJECTS/tokenpak/standards/08-naming-glossary.md")
-        )
-        is False
+        script._should_scan(Path("01_PROJECTS/tokenpak/standards/08-naming-glossary.md")) is False
     )
-    assert (
-        script._should_scan(Path(".github/scripts/check-forbidden-impl-vocab.py"))
-        is False
-    )
-    assert (
-        script._should_scan(Path("tokenpak/companion/recall/schema.py")) is True
-    )
+    assert script._should_scan(Path(".github/scripts/check-forbidden-impl-vocab.py")) is False
+    assert script._should_scan(Path("tokenpak/companion/recall/schema.py")) is True
 
 
 def test_should_scan_filters_by_extension(script) -> None:

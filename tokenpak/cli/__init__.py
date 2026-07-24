@@ -25,4 +25,4 @@ for _name, _val in vars(_core).items():
 # Ensure the key public names are importable
 main = _core.main  # noqa: F811
 
-__all__ = ['commands', 'main', 'trigger_cmd']
+__all__ = ["commands", "main", "trigger_cmd"]

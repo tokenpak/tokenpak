@@ -56,7 +56,7 @@ class LiveDisplay:
         self.arm_b_log = arm_b_log
         self._method: Optional[str] = None
         self._tmux_pane_id: Optional[str] = None
-        self._subprocesses: list[subprocess.Popen] = []
+        self._subprocesses: list[subprocess.Popen[bytes]] = []
 
     def start(self) -> Optional[str]:
         """Start the live display. Returns a description, or None if skipped."""
@@ -100,12 +100,20 @@ class LiveDisplay:
         try:
             # Create a vertical split showing both logs stacked
             result = subprocess.run(
-                ["tmux", "split-window", "-h", "-l", "50%",
-                 f"echo '  Arm A (baseline)'; echo '─────────────────'; "
-                 f"tail -f {self.arm_a_log} & "
-                 f"echo ''; echo '  Arm B (w/ TokenPak)'; echo '─────────────────'; "
-                 f"tail -f {self.arm_b_log}; wait"],
-                capture_output=True, text=True, check=True,
+                [
+                    "tmux",
+                    "split-window",
+                    "-h",
+                    "-l",
+                    "50%",
+                    f"echo '  Arm A (baseline)'; echo '─────────────────'; "
+                    f"tail -f {self.arm_a_log} & "
+                    f"echo ''; echo '  Arm B (w/ TokenPak)'; echo '─────────────────'; "
+                    f"tail -f {self.arm_b_log}; wait",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
             )
             # Focus back to the original pane (left side)
             subprocess.run(["tmux", "select-pane", "-L"], capture_output=True)
@@ -113,7 +121,8 @@ class LiveDisplay:
             # Get the pane ID so we can clean it up later
             pane_result = subprocess.run(
                 ["tmux", "display-message", "-p", "-t", ":.+", "#{pane_id}"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             self._tmux_pane_id = pane_result.stdout.strip() or None
 
@@ -138,13 +147,21 @@ class LiveDisplay:
                     f"tail -f {self.arm_b_log}; wait"
                 )
                 if term_cmd == "gnome-terminal":
-                    args = [term_cmd, "--title", "TokenPak Test — Live View",
-                            "--", "bash", "-c", tail_script]
+                    args = [
+                        term_cmd,
+                        "--title",
+                        "TokenPak Test — Live View",
+                        "--",
+                        "bash",
+                        "-c",
+                        tail_script,
+                    ]
                 else:
                     args = [term_cmd, "-e", f"bash -c '{tail_script}'"]
 
                 p = subprocess.Popen(args, stderr=subprocess.DEVNULL)
                 import time as _time
+
                 _time.sleep(0.3)
                 if p.poll() is not None:
                     continue

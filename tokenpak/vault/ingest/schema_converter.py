@@ -78,7 +78,7 @@ def detect_document_type(content: str, filename: str = "") -> Optional[str]:
             if re.search(pat, lowered):
                 scores[doc_type] += 1
 
-    best_type = max(scores, key=scores.get)
+    best_type = max(scores, key=lambda doc_type: scores[doc_type])
     if scores[best_type] <= 0:
         return None
     return best_type

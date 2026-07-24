@@ -29,7 +29,7 @@ Structured error codes (from errors.py):
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, cast
 
 # ---------------------------------------------------------------------------
 # Base exception (from exceptions.py — richer interface)
@@ -65,27 +65,28 @@ class TokenPakError(Exception):
     def suggestion(self) -> str:
         """User-facing suggestion for resolving the error."""
         if isinstance(self.detail, dict):
-            return self.detail.get("suggestion", "Check TokenPak logs for details.")
+            return cast(
+                str,
+                self.detail.get("suggestion", "Check TokenPak logs for details."),
+            )
         return "Check TokenPak logs for details."
 
     @property
     def context(self) -> Optional[str]:
         """Optional context string for debugging."""
         if isinstance(self.detail, dict):
-            return self.detail.get("context")
+            return cast(Optional[str], self.detail.get("context"))
         return None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Return structured error response dict for API responses."""
-        result: dict = {
-            "error": {
-                "type": self.error_type,
-                "message": self.message,
-            }
+        error: dict[str, object] = {
+            "type": self.error_type,
+            "message": self.message,
         }
         if self.detail is not None:
-            result["error"]["detail"] = self.detail
-        return result
+            error["detail"] = self.detail
+        return {"error": error}
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.message!r})"
@@ -118,12 +119,13 @@ class UpstreamError(ProxyError):
         self.status_code = status_code
         self.provider = provider
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         d = super().to_dict()
+        error = cast(dict[str, object], d["error"])
         if self.status_code is not None:
-            d["error"]["status_code"] = self.status_code
+            error["status_code"] = self.status_code
         if self.provider is not None:
-            d["error"]["provider"] = self.provider
+            error["provider"] = self.provider
         return d
 
 
@@ -346,7 +348,9 @@ class InvalidAPIKeyError(AuthError):
 
     def __init__(self, provider: str) -> None:
         msg = f"Invalid or expired API key for {provider}"
-        super().__init__(msg, detail={"suggestion": f"Check your {provider} API key in the TokenPak config."})
+        super().__init__(
+            msg, detail={"suggestion": f"Check your {provider} API key in the TokenPak config."}
+        )
 
 
 class MissingAPIKeyError(AuthError):
@@ -542,7 +546,7 @@ class CLIError(TokenPakError):
         suggestion: Optional[str] = None,
         context: Optional[str] = None,
     ) -> None:
-        detail: dict = {}
+        detail: dict[str, str] = {}
         if suggestion:
             detail["suggestion"] = suggestion
         if context:

@@ -66,9 +66,7 @@ def test_upsert_sets_timestamps(tmp_path: Path, require_fts5: None) -> None:
     assert row == ("2026-05-11T12:00:00Z", "2026-05-11T12:00:00Z")
 
 
-def test_upsert_default_summary_is_empty_string(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_upsert_default_summary_is_empty_string(tmp_path: Path, require_fts5: None) -> None:
     """``summary`` defaults to ``""`` and is stored as such."""
     db_path = tmp_path / "recall.db"
     fields = {k: v for k, v in _BASE_ROW.items() if k != "summary"}
@@ -97,9 +95,7 @@ def test_upsert_two_distinct_paks(tmp_path: Path, require_fts5: None) -> None:
     assert n == 2
 
 
-def test_upsert_optional_fields_stored_as_null(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_upsert_optional_fields_stored_as_null(tmp_path: Path, require_fts5: None) -> None:
     """``project`` / ``topic`` / ``superseded_by`` default to NULL when omitted."""
     db_path = tmp_path / "recall.db"
     minimal = {
@@ -143,9 +139,7 @@ def test_upsert_missing_required_field_raises(
     assert missing in str(exc.value)
 
 
-def test_upsert_failed_validation_does_not_insert(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_upsert_failed_validation_does_not_insert(tmp_path: Path, require_fts5: None) -> None:
     """A validation failure must not leave a row behind."""
     db_path = tmp_path / "recall.db"
     bad = dict(_BASE_ROW)
@@ -157,9 +151,7 @@ def test_upsert_failed_validation_does_not_insert(
     assert n == 0
 
 
-def test_upsert_unknown_superseded_by_raises_integrity(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_upsert_unknown_superseded_by_raises_integrity(tmp_path: Path, require_fts5: None) -> None:
     """A foreign-key violation on ``superseded_by`` surfaces as IntegrityError."""
     import sqlite3
 

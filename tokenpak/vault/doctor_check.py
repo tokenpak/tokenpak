@@ -61,16 +61,14 @@ class PathFinding:
     last_indexed: Optional[str] = None
     last_index_status: Optional[str] = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "path": self.path,
             "status": self.status,
             "severity": self.severity,
             "message": self.message,
             "schedule": self.schedule,
-            "age_seconds": (
-                round(self.age_seconds, 1) if self.age_seconds is not None else None
-            ),
+            "age_seconds": (round(self.age_seconds, 1) if self.age_seconds is not None else None),
             "threshold_seconds": self.threshold_seconds,
             "last_indexed": self.last_indexed,
             "last_index_status": self.last_index_status,
@@ -149,10 +147,7 @@ def _check_one(entry: vault_config.VaultPathEntry, *, now: datetime) -> PathFind
             path=path_str,
             status="failed",
             severity="warn",
-            message=(
-                f"last reindex failed: {path_str} "
-                f"(status={entry.last_index_status})"
-            ),
+            message=(f"last reindex failed: {path_str} (status={entry.last_index_status})"),
             schedule=schedule,
             last_indexed=entry.last_indexed,
             last_index_status=entry.last_index_status,
@@ -174,8 +169,7 @@ def _check_one(entry: vault_config.VaultPathEntry, *, now: datetime) -> PathFind
             status="never",
             severity="warn",
             message=(
-                f"vault path never indexed: {path_str} "
-                "(run: tokenpak index --reindex-path <path>)"
+                f"vault path never indexed: {path_str} (run: tokenpak index --reindex-path <path>)"
             ),
             schedule=schedule,
         )
@@ -238,10 +232,7 @@ def _check_one(entry: vault_config.VaultPathEntry, *, now: datetime) -> PathFind
         path=path_str,
         status="ok",
         severity="pass",
-        message=(
-            f"vault index fresh: {path_str} "
-            f"(last rebuild {_humanize_age(age_seconds)} ago)"
-        ),
+        message=(f"vault index fresh: {path_str} (last rebuild {_humanize_age(age_seconds)} ago)"),
         schedule=schedule,
         age_seconds=age_seconds,
         threshold_seconds=threshold,
@@ -292,7 +283,7 @@ def _humanize_age(seconds: float) -> str:
     return f"{seconds / 86400:.1f}d"
 
 
-def summarize(findings: Iterable[PathFinding]) -> dict:
+def summarize(findings: Iterable[PathFinding]) -> dict[str, int]:
     """Aggregate findings into a one-line summary dict for the doctor record."""
     counts = {"ok": 0, "stale": 0, "missing": 0, "never": 0, "corrupt": 0, "failed": 0}
     for f in findings:

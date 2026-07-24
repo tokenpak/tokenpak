@@ -54,7 +54,7 @@ class JinaEmbeddingAdapter(EmbeddingAdapter):
         Returns:
             (url, headers, body) ready to forward to https://api.jina.ai/v1/embeddings.
         """
-        payload: Dict = {
+        payload: Dict[str, object] = {
             "model": canonical.model,
             "input": canonical.input,
             # encoding_format → embedding_type
@@ -67,9 +67,7 @@ class JinaEmbeddingAdapter(EmbeddingAdapter):
 
         # Map input_type → Jina task enum; unknown values passed through unchanged
         if canonical.input_type is not None:
-            payload["task"] = _INPUT_TYPE_TO_TASK.get(
-                canonical.input_type, canonical.input_type
-            )
+            payload["task"] = _INPUT_TYPE_TO_TASK.get(canonical.input_type, canonical.input_type)
 
         # dimensions not supported by Jina v1 embeddings; omit silently
 

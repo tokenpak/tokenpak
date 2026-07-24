@@ -23,7 +23,6 @@ from tokenpak.routing.routing_ledger import RoutingLedger
 
 
 class TestRoutingLedgerInit(unittest.TestCase):
-
     def _make_ledger(self):
         tmp = tempfile.mktemp(suffix=".db")
         return RoutingLedger(db_path=tmp), tmp
@@ -40,7 +39,6 @@ class TestRoutingLedgerInit(unittest.TestCase):
 
 
 class TestLogTransaction(unittest.TestCase):
-
     def setUp(self):
         self._f = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.ledger = RoutingLedger(db_path=self._f.name)
@@ -112,7 +110,6 @@ class TestLogTransaction(unittest.TestCase):
 
 
 class TestRecordOutcome(unittest.TestCase):
-
     def setUp(self):
         self._f = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.ledger = RoutingLedger(db_path=self._f.name)
@@ -141,7 +138,6 @@ class TestRecordOutcome(unittest.TestCase):
 
 
 class TestGetTransaction(unittest.TestCase):
-
     def setUp(self):
         self._f = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.ledger = RoutingLedger(db_path=self._f.name)
@@ -160,7 +156,6 @@ class TestGetTransaction(unittest.TestCase):
 
 
 class TestGetRecent(unittest.TestCase):
-
     def setUp(self):
         self._f = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.ledger = RoutingLedger(db_path=self._f.name)
@@ -191,7 +186,6 @@ class TestGetRecent(unittest.TestCase):
 
 
 class TestGetStats(unittest.TestCase):
-
     def setUp(self):
         self._f = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.ledger = RoutingLedger(db_path=self._f.name)
@@ -222,7 +216,6 @@ class TestGetStats(unittest.TestCase):
 
 
 class TestSampleCountAndAcceptanceRate(unittest.TestCase):
-
     def setUp(self):
         self._f = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.ledger = RoutingLedger(db_path=self._f.name)
@@ -258,7 +251,6 @@ class TestSampleCountAndAcceptanceRate(unittest.TestCase):
 
 
 class TestContextWeight(unittest.TestCase):
-
     def test_zero_tokens(self):
         w = RoutingLedger._compute_context_weight(0, 0)
         self.assertEqual(w, 0.0)
@@ -277,7 +269,6 @@ class TestContextWeight(unittest.TestCase):
 
 
 class TestConcurrency(unittest.TestCase):
-
     def test_concurrent_writes_safe(self):
         f = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         ledger = RoutingLedger(db_path=f.name)

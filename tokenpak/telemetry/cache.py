@@ -142,7 +142,7 @@ class CacheStore:
             return self._evict_expired()
 
     @property
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, int | float]:
         with self._lock:
             total = self._hits + self._misses
             return {

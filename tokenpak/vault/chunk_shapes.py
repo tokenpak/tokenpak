@@ -1,4 +1,5 @@
 """tokenpak.vault.chunk_shapes — re-export shim for chunk shaping (note: source is chunk_shaping)."""
+
 from tokenpak.vault.chunk_shaping import (
     CHUNK_SHAPES,
     _shape_code_contiguous,

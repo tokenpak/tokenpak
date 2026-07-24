@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.intelligence.cost_intelligence", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.intelligence.cost_intelligence", reason="module not available in current build"
+)
 from datetime import date, timedelta
 from typing import List
 
@@ -30,6 +32,7 @@ from tokenpak.intelligence.server import create_app
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_metrics(
     n: int,
@@ -65,6 +68,7 @@ def _make_client(tier: LicenseTier = LicenseTier.PRO):
 # ===========================================================================
 # CostIntelligence — unit tests
 # ===========================================================================
+
 
 class TestTrends:
     def test_empty_metrics_returns_zero_trends(self):
@@ -222,10 +226,7 @@ class TestProjections:
         today = date.today()
         costs = [10.0, 8.0, 6.0, 4.0, 2.0]  # steep decline
         metrics = [
-            DailyMetric(
-                (today - timedelta(days=len(costs) - 1 - i)).isoformat(),
-                c, 1000, 200
-            )
+            DailyMetric((today - timedelta(days=len(costs) - 1 - i)).isoformat(), c, 1000, 200)
             for i, c in enumerate(costs)
         ]
         proj = CostIntelligence.compute_projections(metrics)
@@ -241,8 +242,15 @@ class TestProjections:
 class TestRecommendations:
     def test_opus_gets_cheaper_alternatives(self):
         breakdown = [
-            {"model": "claude-opus-4-5", "cost_usd": 100.0, "days": 30,
-             "input_tokens": 1000, "output_tokens": 500, "tokens_saved": 0, "requests": 10}
+            {
+                "model": "claude-opus-4-5",
+                "cost_usd": 100.0,
+                "days": 30,
+                "input_tokens": 1000,
+                "output_tokens": 500,
+                "tokens_saved": 0,
+                "requests": 10,
+            }
         ]
         recs = CostIntelligence.compute_recommendations(breakdown)
         models = [r.recommended_model for r in recs]
@@ -253,16 +261,30 @@ class TestRecommendations:
     def test_gemini_flash_no_recommendations(self):
         """gemini-2-flash is already the cheapest — no alternatives."""
         breakdown = [
-            {"model": "gemini-2-flash", "cost_usd": 5.0, "days": 30,
-             "input_tokens": 1000, "output_tokens": 500, "tokens_saved": 0, "requests": 5}
+            {
+                "model": "gemini-2-flash",
+                "cost_usd": 5.0,
+                "days": 30,
+                "input_tokens": 1000,
+                "output_tokens": 500,
+                "tokens_saved": 0,
+                "requests": 5,
+            }
         ]
         recs = CostIntelligence.compute_recommendations(breakdown)
         assert recs == []
 
     def test_recs_sorted_by_monthly_savings(self):
         breakdown = [
-            {"model": "claude-opus-4-5", "cost_usd": 500.0, "days": 30,
-             "input_tokens": 1000, "output_tokens": 500, "tokens_saved": 0, "requests": 50}
+            {
+                "model": "claude-opus-4-5",
+                "cost_usd": 500.0,
+                "days": 30,
+                "input_tokens": 1000,
+                "output_tokens": 500,
+                "tokens_saved": 0,
+                "requests": 50,
+            }
         ]
         recs = CostIntelligence.compute_recommendations(breakdown)
         for i in range(len(recs) - 1):
@@ -273,8 +295,15 @@ class TestRecommendations:
 
     def test_unknown_model_no_crash(self):
         breakdown = [
-            {"model": "totally-unknown-model-xyz", "cost_usd": 10.0, "days": 30,
-             "input_tokens": 1000, "output_tokens": 500, "tokens_saved": 0, "requests": 5}
+            {
+                "model": "totally-unknown-model-xyz",
+                "cost_usd": 10.0,
+                "days": 30,
+                "input_tokens": 1000,
+                "output_tokens": 500,
+                "tokens_saved": 0,
+                "requests": 5,
+            }
         ]
         recs = CostIntelligence.compute_recommendations(breakdown)
         # No alternatives defined → empty list, no crash
@@ -345,6 +374,7 @@ class TestFullAnalysis:
 # ===========================================================================
 # API endpoint tests
 # ===========================================================================
+
 
 class TestCostAnalyzeEndpoint:
     def _payload(self, n: int = 7, cost: float = 1.0):

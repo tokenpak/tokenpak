@@ -8,8 +8,10 @@ from tokenpak.plugins.base import CompressorPlugin
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class MinimalPlugin(CompressorPlugin):
     """Concrete subclass with minimal implementation."""
+
     name = "minimal"
 
     def compress(self, text: str, context: dict) -> dict:
@@ -18,6 +20,7 @@ class MinimalPlugin(CompressorPlugin):
 
 class HighPriorityPlugin(CompressorPlugin):
     """Concrete subclass that overrides priority."""
+
     name = "high_priority"
 
     def compress(self, text: str, context: dict) -> dict:
@@ -38,6 +41,7 @@ class NoNamePlugin(CompressorPlugin):
 # Abstract enforcement
 # ---------------------------------------------------------------------------
 
+
 class TestCompressorPluginABC:
     def test_cannot_instantiate_abc_directly(self):
         """CompressorPlugin is abstract — direct instantiation must fail."""
@@ -46,6 +50,7 @@ class TestCompressorPluginABC:
 
     def test_must_implement_compress(self):
         """Subclass without compress() cannot be instantiated."""
+
         class IncompletePlugin(CompressorPlugin):
             name = "incomplete"
             # compress() not implemented
@@ -61,6 +66,7 @@ class TestCompressorPluginABC:
 # ---------------------------------------------------------------------------
 # name attribute
 # ---------------------------------------------------------------------------
+
 
 class TestPluginName:
     def test_name_attribute_set(self):
@@ -82,6 +88,7 @@ class TestPluginName:
 # priority()
 # ---------------------------------------------------------------------------
 
+
 class TestPluginPriority:
     def test_default_priority(self):
         p = MinimalPlugin()
@@ -99,6 +106,7 @@ class TestPluginPriority:
 # ---------------------------------------------------------------------------
 # compress() contract
 # ---------------------------------------------------------------------------
+
 
 class TestPluginCompress:
     def test_compress_returns_dict(self):

@@ -22,22 +22,35 @@ from pathlib import Path
 from tokenpak._cli_core import build_parser, registered_command_names
 
 REGISTRY_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "tokenpak" / "core" / "registry" / "commands.json"
+    Path(__file__).resolve().parent.parent / "tokenpak" / "core" / "registry" / "commands.json"
 )
 
 # The nine commands brought into the help catalog by DISPATCH-P0-4: ``pak`` plus
 # its verb family, and the eight previously-invisible-but-invokable commands.
 P0_4_ADDED = {
-    "pak", "pakplan", "tip", "creds", "claude", "codex", "prove", "init", "setup",
+    "pak",
+    "pakplan",
+    "tip",
+    "creds",
+    "claude",
+    "codex",
+    "prove",
+    "init",
+    "setup",
 }
 
 # The eight phantom commands disposed by DISPATCH-P0-4 (default = REMOVE; none
 # confirmed against the Pro catalog, none with near-term OSS roadmap evidence).
 # They must never reappear as advertised commands without becoming invokable.
 P0_4_DISPOSED = {
-    "workflow", "handoff", "retain", "metrics",
-    "policy", "sla", "compression", "maintenance",
+    "workflow",
+    "handoff",
+    "retain",
+    "metrics",
+    "policy",
+    "sla",
+    "compression",
+    "maintenance",
 }
 
 # Snapshot (as of DISPATCH-P0-4, 2026-06-11) of how many invokable verbs are
@@ -74,9 +87,7 @@ def test_added_commands_are_advertised_and_invokable():
     assert P0_4_ADDED <= advertised, (
         f"missing from help registry: {sorted(P0_4_ADDED - advertised)}"
     )
-    assert P0_4_ADDED <= invokable, (
-        f"not invokable by parser: {sorted(P0_4_ADDED - invokable)}"
-    )
+    assert P0_4_ADDED <= invokable, f"not invokable by parser: {sorted(P0_4_ADDED - invokable)}"
 
 
 def test_disposed_phantoms_absent():

@@ -5,6 +5,7 @@ Asserts that each builder produces a well-formed SQLite DB with the expected
 tp_events / tp_costs row counts and key shapes.  Does NOT exercise cost.py
 repair logic — that belongs to the parent task's regression suite.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -89,9 +90,7 @@ def test_multi_event_row_count():
 def test_multi_event_composite_pk_uniqueness():
     """All three rows are independently addressable via composite PK."""
     conn = build_multi_event_per_trace_db()
-    rows = conn.execute(
-        "SELECT trace_id, request_id, event_type FROM tp_events"
-    ).fetchall()
+    rows = conn.execute("SELECT trace_id, request_id, event_type FROM tp_events").fetchall()
     pks = {(r[0], r[1], r[2]) for r in rows}
     assert len(pks) == 3, "composite PK (trace_id, request_id, event_type) must be unique per row"
 
@@ -185,11 +184,6 @@ def test_legacy_schema_traces_matched():
 def test_all_builders_return_connection(name: str, builder) -> None:
     conn = builder()
     assert isinstance(conn, sqlite3.Connection), f"{name}: expected sqlite3.Connection"
-    tables = {
-        r[0]
-        for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )
-    }
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "tp_events" in tables, f"{name}: missing tp_events table"
     assert "tp_costs" in tables, f"{name}: missing tp_costs table"

@@ -40,7 +40,9 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser(sub: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def build_parser(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> argparse.ArgumentParser:
     """Register ``tokenpak upgrade`` on a subparsers action."""
     p = sub.add_parser(
         "upgrade",

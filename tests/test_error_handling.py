@@ -51,6 +51,7 @@ from tokenpak.proxy.streaming import StreamHandler, extract_sse_tokens
 # Test 1: Invalid API Key Error Handling
 # ==============================================================================
 
+
 class TestInvalidApiKeyHandling(unittest.TestCase):
     """Test error handling when API keys are invalid or missing."""
 
@@ -125,15 +126,16 @@ class TestInvalidApiKeyHandling(unittest.TestCase):
 
         # mask_for_logging should redact auth
         safe_headers = passthrough.mask_for_logging(headers)
-        assert "[REDACTED]" in safe_headers.get("authorization", ""), \
+        assert "[REDACTED]" in safe_headers.get("authorization", ""), (
             "Auth header should be redacted"
-        assert "secret-key" not in str(safe_headers), \
-            "Secret should never appear in safe headers"
+        )
+        assert "secret-key" not in str(safe_headers), "Secret should never appear in safe headers"
 
 
 # ==============================================================================
 # Test 2: Timeout Error Handling
 # ==============================================================================
+
 
 class TestTimeoutErrorHandling(unittest.TestCase):
     """Test error handling for timeout scenarios."""
@@ -152,12 +154,10 @@ class TestTimeoutErrorHandling(unittest.TestCase):
         breaker.record_failure()
 
         # Circuit should be OPEN
-        assert breaker.state == CircuitState.OPEN, \
-            "Circuit should trip after threshold failures"
+        assert breaker.state == CircuitState.OPEN, "Circuit should trip after threshold failures"
 
         # Subsequent requests should be fast-failed
-        assert not breaker.allow_request(), \
-            "Should fast-fail while circuit is open"
+        assert not breaker.allow_request(), "Should fast-fail while circuit is open"
 
     def test_circuit_breaker_recovery_probe_timeout(self):
         """Test circuit breaker recovery mechanism."""
@@ -176,8 +176,7 @@ class TestTimeoutErrorHandling(unittest.TestCase):
         time.sleep(0.15)
 
         # Should allow probe request
-        assert breaker.allow_request(), \
-            "Should allow probe request after recovery timeout"
+        assert breaker.allow_request(), "Should allow probe request after recovery timeout"
         assert breaker.state == CircuitState.HALF_OPEN
 
         # Probe success → circuit closes
@@ -199,13 +198,13 @@ class TestTimeoutErrorHandling(unittest.TestCase):
         assert breaker.state == CircuitState.HALF_OPEN
 
         breaker.record_failure()  # Probe fails
-        assert breaker.state == CircuitState.OPEN, \
-            "Failed probe should reopen circuit"
+        assert breaker.state == CircuitState.OPEN, "Failed probe should reopen circuit"
 
 
 # ==============================================================================
 # Test 3: Malformed Request Handling
 # ==============================================================================
+
 
 class TestMalformedRequestHandling(unittest.TestCase):
     """Test error handling for malformed requests."""
@@ -222,8 +221,9 @@ class TestMalformedRequestHandling(unittest.TestCase):
         )
 
         # Should still route to anthropic based on path/headers
-        assert result.provider == "anthropic", \
+        assert result.provider == "anthropic", (
             "Should route based on path/headers despite invalid body"
+        )
 
     def test_sse_streaming_malformed_json_event(self):
         """Test SSE handler gracefully handles malformed JSON events."""
@@ -233,22 +233,20 @@ data: {"type": "message_delta", "usage": {"output_tokens": 10}}
 """
         result = extract_sse_tokens(malformed_sse)
         # Should extract valid tokens and skip malformed
-        assert result.get("output_tokens", 0) == 10, \
+        assert result.get("output_tokens", 0) == 10, (
             "Should extract valid tokens despite malformed events"
+        )
 
     def test_sse_streaming_invalid_utf8(self):
         """Test SSE handler handles invalid UTF-8 gracefully."""
         invalid_utf8 = b"data: \xff\xfe{invalid}"
         result = extract_sse_tokens(invalid_utf8)
         # Should not crash — fallback to replace mode
-        assert isinstance(result, dict), \
-            "Should return dict even with invalid UTF-8"
+        assert isinstance(result, dict), "Should return dict even with invalid UTF-8"
 
     def test_failover_malformed_config_yaml(self):
         """Test failover gracefully handles malformed YAML config."""
-        with mock.patch(
-            "tokenpak.proxy.failover.load_failover_config"
-        ) as mock_load:
+        with mock.patch("tokenpak.proxy.failover.load_failover_config") as mock_load:
             mock_load.side_effect = Exception("YAML parse error")
             # Should not crash
             try:
@@ -260,6 +258,7 @@ data: {"type": "message_delta", "usage": {"output_tokens": 10}}
 # ==============================================================================
 # Test 4: Cache Miss & Edge Cases
 # ==============================================================================
+
 
 class TestCacheMissEdgeCases(unittest.TestCase):
     """Test error handling for cache miss scenarios."""
@@ -285,8 +284,9 @@ class TestCacheMissEdgeCases(unittest.TestCase):
 
         # Request model not in mapping — should use original
         mapped = mgr.map_model("claude-haiku-4-5", "openai")
-        assert mapped == "claude-haiku-4-5", \
+        assert mapped == "claude-haiku-4-5", (
             "Should return original model name when mapping missing"
+        )
 
     def test_circuit_breaker_concurrent_access(self):
         """Test circuit breaker thread safety."""
@@ -333,13 +333,13 @@ class TestCacheMissEdgeCases(unittest.TestCase):
         # Clear both env vars
         with mock.patch.dict(os.environ, {}, clear=True):
             results = list(mgr.iter_providers("claude-opus-4-5"))
-            assert len(results) == 0, \
-                "Should skip all providers when no credentials available"
+            assert len(results) == 0, "Should skip all providers when no credentials available"
 
 
 # ==============================================================================
 # Test 5: Logging Failures
 # ==============================================================================
+
 
 class TestLoggingFailures(unittest.TestCase):
     """Test error handling when logging fails."""
@@ -381,24 +381,21 @@ class TestLoggingFailures(unittest.TestCase):
 # Test 6: Provider Unavailability
 # ==============================================================================
 
+
 class TestProviderUnavailability(unittest.TestCase):
     """Test error handling when providers are unavailable."""
 
     def test_circuit_breaker_registry_per_provider(self):
         """Test circuit breaker isolates failures per provider."""
-        registry = CircuitBreakerRegistry(
-            config=CircuitBreakerConfig(failure_threshold=2)
-        )
+        registry = CircuitBreakerRegistry(config=CircuitBreakerConfig(failure_threshold=2))
 
         # Trip anthropic circuit
         registry.record_failure("anthropic")
         registry.record_failure("anthropic")
-        assert not registry.allow_request("anthropic"), \
-            "Anthropic should be open"
+        assert not registry.allow_request("anthropic"), "Anthropic should be open"
 
         # OpenAI should still be available
-        assert registry.allow_request("openai"), \
-            "OpenAI should be unaffected"
+        assert registry.allow_request("openai"), "OpenAI should be unaffected"
 
     def test_provider_detection_from_url(self):
         """Test provider detection handles various URL formats."""
@@ -411,8 +408,9 @@ class TestProviderUnavailability(unittest.TestCase):
 
         for url, expected_provider in test_cases:
             result = provider_from_url(url)
-            assert expected_provider in result or result == expected_provider, \
+            assert expected_provider in result or result == expected_provider, (
                 f"Should detect {expected_provider} from {url}"
+            )
 
     def test_failover_unavailable_primary_uses_secondary(self):
         """Test failover switches to secondary when primary fails."""
@@ -433,10 +431,7 @@ class TestProviderUnavailability(unittest.TestCase):
         )
         mgr = FailoverManager(config=config)
 
-        with mock.patch.dict(
-            os.environ,
-            {"ANTHROPIC_API_KEY": "key1", "OPENAI_API_KEY": "key2"}
-        ):
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key1", "OPENAI_API_KEY": "key2"}):
             results = list(mgr.iter_providers("gpt-4"))
             assert len(results) >= 1, "Should have at least one provider"
             # First should be anthropic, second should be openai
@@ -448,6 +443,7 @@ class TestProviderUnavailability(unittest.TestCase):
 # ==============================================================================
 # Test 7: Connection Pool Error Handling
 # ==============================================================================
+
 
 class TestConnectionPoolErrorHandling(unittest.TestCase):
     """Test error handling in connection pool management."""
@@ -464,18 +460,17 @@ class TestConnectionPoolErrorHandling(unittest.TestCase):
         registry.record_failure("anthropic")
 
         # Should fast-fail instead of hanging
-        assert not registry.allow_request("anthropic"), \
-            "Should fast-fail when provider is down"
+        assert not registry.allow_request("anthropic"), "Should fast-fail when provider is down"
 
         # Wait and try recovery
         time.sleep(0.15)
-        assert registry.allow_request("anthropic"), \
-            "Should allow recovery probe"
+        assert registry.allow_request("anthropic"), "Should allow recovery probe"
 
 
 # ==============================================================================
 # Test 8: Edge Case - Concurrent Failover Attempts
 # ==============================================================================
+
 
 class TestConcurrentFailover(unittest.TestCase):
     """Test failover handles concurrent requests safely."""
@@ -491,23 +486,22 @@ class TestConcurrentFailover(unittest.TestCase):
                 results.append(state)
                 time.sleep(0.001)
 
-        threads = [
-            threading.Thread(target=check_state, args=("anthropic",))
-            for _ in range(3)
-        ]
+        threads = [threading.Thread(target=check_state, args=("anthropic",)) for _ in range(3)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
 
         # Should have consistent state values
-        assert all(isinstance(r, CircuitState) for r in results), \
+        assert all(isinstance(r, CircuitState) for r in results), (
             "All states should be CircuitState instances"
+        )
 
 
 # ==============================================================================
 # Integration Tests
 # ==============================================================================
+
 
 class TestErrorHandlingIntegration(unittest.TestCase):
     """Integration tests for complete error flows."""
@@ -532,10 +526,7 @@ class TestErrorHandlingIntegration(unittest.TestCase):
         mgr = FailoverManager(config=failover_config)
         registry = CircuitBreakerRegistry()
 
-        with mock.patch.dict(
-            os.environ,
-            {"ANTHROPIC_API_KEY": "key1", "OPENAI_API_KEY": "key2"}
-        ):
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key1", "OPENAI_API_KEY": "key2"}):
             # Simulate anthropic failure
             registry.record_failure("anthropic")
             registry.record_failure("anthropic")

@@ -1,4 +1,4 @@
-"""DispatchRoute registry + loader.
+"""DispatchRoute registry + loader implementation.
 
 This module turns the packaged route YAML profiles into validated,
 registry-bound :class:`~tokenpak.orchestration.dispatch.models.route.DispatchRoute`
@@ -33,6 +33,7 @@ user overrides) plus the live worker registry are the single sources of truth.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -90,12 +91,11 @@ class RouteResolutionError(ValueError):
         self.station_id = station_id
         self.reason = reason
         super().__init__(
-            f"route {route_id!r} station {station_id!r} cannot bind to any worker: "
-            f"{reason}"
+            f"route {route_id!r} station {station_id!r} cannot bind to any worker: {reason}"
         )
 
 
-def _read_yaml_mapping(path: Path, error_cls: type[ValueError]) -> dict:
+def _read_yaml_mapping(path: Path, error_cls: type[ValueError]) -> dict[str, Any]:
     """Load ``path`` as a YAML mapping, raising ``error_cls`` on any problem."""
 
     try:
@@ -103,9 +103,7 @@ def _read_yaml_mapping(path: Path, error_cls: type[ValueError]) -> dict:
     except (OSError, yaml.YAMLError) as exc:  # pragma: no cover - exercised via tests
         raise error_cls(f"failed to read route YAML {path}: {exc}") from exc
     if not isinstance(raw, dict):
-        raise error_cls(
-            f"expected a YAML mapping in {path}, got {type(raw).__name__}"
-        )
+        raise error_cls(f"expected a YAML mapping in {path}, got {type(raw).__name__}")
     return raw
 
 
@@ -160,9 +158,7 @@ class DispatchRouteRegistry:
         try:
             return DispatchRoute.model_validate(data)
         except Exception as exc:  # noqa: BLE001 - re-wrapped with file context
-            raise RouteProfileError(
-                f"invalid route profile {path.name}: {exc}"
-            ) from exc
+            raise RouteProfileError(f"invalid route profile {path.name}: {exc}") from exc
 
     def ids(self) -> list[str]:
         """Return the registered route ids (sorted)."""
@@ -180,9 +176,7 @@ class DispatchRouteRegistry:
         try:
             return self._routes[route_id]
         except KeyError as exc:
-            raise KeyError(
-                f"no route {route_id!r} in registry; known: {self.ids()}"
-            ) from exc
+            raise KeyError(f"no route {route_id!r} in registry; known: {self.ids()}") from exc
 
     def has(self, route_id: str) -> bool:
         """Return ``True`` iff ``route_id`` is registered."""
@@ -221,6 +215,8 @@ def resolve_station_workers(
         return []
 
     role = station.required_role
+    if role is None:
+        return []
     required = set(station.required_capabilities)
     eligible: list[DispatchWorker] = []
     for worker in worker_registry.for_role(role):
@@ -250,6 +246,8 @@ def bind_route(
         workers = resolve_station_workers(station, worker_registry)
         if not workers:
             role = station.required_role
+            if role is None:
+                continue
             have_role = [w.id for w in worker_registry.for_role(role)]
             if not have_role:
                 reason = f"no worker declares role {role!r}"

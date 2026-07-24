@@ -1,6 +1,5 @@
 """Tests for TokenPak intent + complexity classifier."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.intent_classifier", reason="module not available in current build")
@@ -67,7 +66,7 @@ Exception: Division by zero
         """DEBUG: Error/bug keywords."""
         result = classify(
             "There's an exception when I call this function",
-            context="def my_func():\n    x = 1 / 0"
+            context="def my_func():\n    x = 1 / 0",
         )
         assert result.intent == IntentClass.DEBUG
 
@@ -163,7 +162,10 @@ def process(data):
   File "app.py", line 10
   File "utils.py", line 5
 Exception: Something failed"""
-        result = classify("Fix this", context=context, )
+        result = classify(
+            "Fix this",
+            context=context,
+        )
         assert result.complexity_score > 0.1
 
     def test_complexity_clamped_0_to_1(self):

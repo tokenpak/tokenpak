@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 BUILTIN_PROVIDERS: list[tuple[str, Callable[[], list[Credential]]]] = []
 
 
-def _register():
+def _register() -> None:
     """Lazy-register built-ins. Lets each provider module import cleanly
     without side-effects on import order."""
     from . import claude_cli, codex_cli, env_pool, openclaw, user_config

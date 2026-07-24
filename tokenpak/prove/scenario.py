@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -78,7 +79,7 @@ class Scenario:
     system: str = "You are a helpful software engineer. Be concise and precise."
     max_tokens: int = 4096
     turns: list[Turn] = field(default_factory=list)
-    matrix: list[dict] = field(default_factory=list)
+    matrix: list[dict[str, Any]] = field(default_factory=list)
     source_path: str = ""
 
     @classmethod
@@ -160,9 +161,9 @@ def _detect_provider(model: str) -> str:
     return "anthropic"
 
 
-def list_scenarios() -> list[dict]:
+def list_scenarios() -> list[dict[str, Any]]:
     """List all available scenarios with metadata."""
-    scenarios: list[dict] = []
+    scenarios: list[dict[str, Any]] = []
     seen: set[str] = set()
 
     for source, directory in [("user", _USER_DIR), ("built-in", _BUILTIN_DIR)]:
@@ -174,22 +175,26 @@ def list_scenarios() -> list[dict]:
             seen.add(path.stem)
             try:
                 s = Scenario.from_file(path)
-                scenarios.append({
-                    "id": path.stem,
-                    "name": s.name,
-                    "model": s.model,
-                    "provider": s.provider,
-                    "turns": len(s.turns),
-                    "source": source,
-                    "path": str(path),
-                })
+                scenarios.append(
+                    {
+                        "id": path.stem,
+                        "name": s.name,
+                        "model": s.model,
+                        "provider": s.provider,
+                        "turns": len(s.turns),
+                        "source": source,
+                        "path": str(path),
+                    }
+                )
             except Exception as e:
-                scenarios.append({
-                    "id": path.stem,
-                    "name": f"(error: {e})",
-                    "source": source,
-                    "path": str(path),
-                })
+                scenarios.append(
+                    {
+                        "id": path.stem,
+                        "name": f"(error: {e})",
+                        "source": source,
+                        "path": str(path),
+                    }
+                )
 
     return scenarios
 

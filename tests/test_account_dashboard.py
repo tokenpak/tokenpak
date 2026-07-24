@@ -9,13 +9,15 @@ Coverage:
   - JSON API endpoints
 """
 
-
 import pytest
 
 try:
     from tokenpak.dashboard.account_dashboard import _get_license_key_id
 except ImportError:
-    pytest.skip("Cannot import _get_license_key_id from tokenpak.dashboard.account_dashboard — removed in current build", allow_module_level=True)
+    pytest.skip(
+        "Cannot import _get_license_key_id from tokenpak.dashboard.account_dashboard — removed in current build",
+        allow_module_level=True,
+    )
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -111,11 +113,7 @@ class TestUsageDataLoading:
         mock_manager.get_meter.return_value = mock_meter
         mock_manager_class.return_value = mock_manager
 
-        data = _load_usage_data(
-            "TPAK-TEST-123",
-            "2026-03-21",
-            "2026-03-22"
-        )
+        data = _load_usage_data("TPAK-TEST-123", "2026-03-21", "2026-03-22")
 
         assert len(data) == 2
         assert data[0]["date"] == "2026-03-21"
@@ -225,8 +223,7 @@ class TestAccountDashboardRoutes:
         from fastapi import HTTPException
 
         mock_check.side_effect = HTTPException(
-            status_code=403,
-            detail="Account dashboard requires Pro"
+            status_code=403, detail="Account dashboard requires Pro"
         )
 
         response = client.get("/dashboard/account/usage")

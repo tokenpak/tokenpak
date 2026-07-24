@@ -17,9 +17,11 @@ import pytest
 # Mock proxy structures (avoiding full import to prevent circular dependencies)
 SESSION = {}
 
+
 @dataclass
 class StageTrace:
     """Trace for a single pipeline stage."""
+
     name: str
     enabled: bool = True
     input_tokens: int = 0
@@ -31,8 +33,10 @@ class StageTrace:
     def to_dict(self) -> dict:
         return asdict(self)
 
+
 class TraceStorage:
     """Storage for pipeline traces."""
+
     def __init__(self, max_traces: int = 10):
         self.max_traces = max_traces
         self.traces = []
@@ -40,7 +44,7 @@ class TraceStorage:
     def store(self, trace: StageTrace):
         self.traces.append(trace)
         if len(self.traces) > self.max_traces:
-            self.traces = self.traces[-self.max_traces:]
+            self.traces = self.traces[-self.max_traces :]
 
     def get_last(self) -> Optional[StageTrace]:
         return self.traces[-1] if self.traces else None
@@ -51,16 +55,22 @@ class TraceStorage:
     def get_all(self) -> List[StageTrace]:
         return self.traces
 
-proxy_state = type('proxy_state', (), {
-    'SESSION': SESSION,
-    'StageTrace': StageTrace,
-    'TraceStorage': TraceStorage,
-})()
+
+proxy_state = type(
+    "proxy_state",
+    (),
+    {
+        "SESSION": SESSION,
+        "StageTrace": StageTrace,
+        "TraceStorage": TraceStorage,
+    },
+)()
 
 
 # ============================================================================
 # FIXTURES
 # ============================================================================
+
 
 @pytest.fixture
 def mock_http_server(monkeypatch):
@@ -69,6 +79,7 @@ def mock_http_server(monkeypatch):
 
     def mock_request(method, url, **kwargs):
         """Mock HTTP client for testing."""
+
         class MockResponse:
             def __init__(self, status_code, json_data=None, text_data=None):
                 self.status_code = status_code
@@ -91,13 +102,16 @@ def mock_http_server(monkeypatch):
         if "health" in url:
             return MockResponse(200, {"status": "healthy", "proxy_version": "v4"})
         elif "completions" in url or "messages" in url:
-            return MockResponse(200, {
-                "id": "msg_12345",
-                "type": "message",
-                "role": "assistant",
-                "content": [{"type": "text", "text": "Test response"}],
-                "usage": {"input_tokens": 10, "output_tokens": 20}
-            })
+            return MockResponse(
+                200,
+                {
+                    "id": "msg_12345",
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Test response"}],
+                    "usage": {"input_tokens": 10, "output_tokens": 20},
+                },
+            )
         else:
             return MockResponse(404, {"error": "Not found"})
 
@@ -115,6 +129,7 @@ def reset_session():
 # TEST GROUP 1: REQUEST/RESPONSE ROUNDTRIP
 # ============================================================================
 
+
 class TestProxyRequestResponseRoundtrip:
     """Test complete request/response cycles through proxy."""
 
@@ -122,11 +137,13 @@ class TestProxyRequestResponseRoundtrip:
         """Test completion request round-trip."""
         # Setup
         proxy_state.SESSION.clear()
-        proxy_state.SESSION.update({
-            "total_input_tokens": 0,
-            "total_output_tokens": 0,
-            "request_count": 0,
-        })
+        proxy_state.SESSION.update(
+            {
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+                "request_count": 0,
+            }
+        )
 
         # Build test request
         body = {
@@ -156,7 +173,7 @@ class TestProxyRequestResponseRoundtrip:
             input_tokens=5,
             output_tokens=15,
             duration_ms=150.0,
-            details={"chunks": 5, "bytes_streamed": 2048}
+            details={"chunks": 5, "bytes_streamed": 2048},
         )
 
         assert trace.name == "stream_handler"
@@ -182,6 +199,7 @@ class TestProxyRequestResponseRoundtrip:
 # ============================================================================
 # TEST GROUP 2: MODULE FIRING VERIFICATION
 # ============================================================================
+
 
 class TestModuleFiring:
     """Verify all 16 modules fire and log SESSION entries."""
@@ -235,10 +253,22 @@ class TestModuleFiring:
 
         # Initialize all modules
         module_list = [
-            "cache", "compression", "circuit_breaker", "failover",
-            "budgeter", "cost_tracker", "token_counter", "rate_limiter",
-            "schema_registry", "vault_injector", "prompt_builder", "telemetry",
-            "cache_poison_remover", "adaptive_selector", "audit_logger", "health_monitor"
+            "cache",
+            "compression",
+            "circuit_breaker",
+            "failover",
+            "budgeter",
+            "cost_tracker",
+            "token_counter",
+            "rate_limiter",
+            "schema_registry",
+            "vault_injector",
+            "prompt_builder",
+            "telemetry",
+            "cache_poison_remover",
+            "adaptive_selector",
+            "audit_logger",
+            "health_monitor",
         ]
 
         for name in module_list:
@@ -251,6 +281,7 @@ class TestModuleFiring:
 # ============================================================================
 # TEST GROUP 3: RESPONSE VALIDATION
 # ============================================================================
+
 
 class TestResponseValidation:
     """Test response format, headers, and status codes."""
@@ -307,6 +338,7 @@ class TestResponseValidation:
 # TEST GROUP 4: ERROR HANDLING
 # ============================================================================
 
+
 class TestErrorHandling:
     """Test proxy error handling and resilience."""
 
@@ -357,6 +389,7 @@ class TestErrorHandling:
 # TEST GROUP 5: PIPELINE TRACING
 # ============================================================================
 
+
 class TestPipelineTracing:
     """Test pipeline trace storage and retrieval."""
 
@@ -390,8 +423,8 @@ class TestPipelineTracing:
         for i in range(5):
             trace = proxy_state.StageTrace(
                 name=f"stage_{i}",
-                input_tokens=i*10,
-                output_tokens=i*20,
+                input_tokens=i * 10,
+                output_tokens=i * 20,
             )
             ts.store(trace)
 
@@ -402,6 +435,7 @@ class TestPipelineTracing:
 # ============================================================================
 # TEST GROUP 6: PERFORMANCE METRICS
 # ============================================================================
+
 
 class TestPerformanceMetrics:
     """Test proxy performance tracking."""

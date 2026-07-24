@@ -13,13 +13,22 @@ Principle: Only promote if:
 
 from __future__ import annotations
 
+__all__ = (
+    "DEFAULT_TTL",
+    "Lesson",
+    "MemoryPromoter",
+    "PROMOTION_RULES",
+    "TIER_NAMES",
+)
+
+
 import json
 import logging
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +57,8 @@ DEFAULT_TTL = {
 }
 
 DEFAULT_PROMOTER_PATH = Path.home() / ".tokenpak" / "memory_promoter.json"
+# Backward-compatible name used by the public learning bridge.
+DEFAULT_MEMORY_PATH = DEFAULT_PROMOTER_PATH
 
 
 @dataclass
@@ -67,6 +78,7 @@ class Lesson:
     last_seen_at: float  # Unix timestamp
     last_promoted_at: float  # Unix timestamp when promoted to current tier
     promoted_from: Optional[int]  # Previous tier
+    metadata: dict[str, object] = field(default_factory=dict)
 
     def success_rate(self) -> float:
         """Return success rate (0-1)."""
@@ -89,8 +101,23 @@ class Lesson:
         age_seconds = time.time() - self.last_seen_at
         return age_seconds > ttl
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "lesson_id": self.lesson_id,
+            "content": self.content,
+            "tier": self.tier,
+            "occurrences": self.occurrences,
+            "successes": self.successes,
+            "failures": self.failures,
+            "contradictions": self.contradictions,
+            "specificity_score": self.specificity_score,
+            "savings_pct": self.savings_pct,
+            "created_at": self.created_at,
+            "last_seen_at": self.last_seen_at,
+            "last_promoted_at": self.last_promoted_at,
+            "promoted_from": self.promoted_from,
+            "metadata": self.metadata,
+        }
 
 
 class MemoryPromoter:
@@ -129,6 +156,7 @@ class MemoryPromoter:
         content: str,
         specificity_score: float = 0.5,
         savings_pct: float = 0.0,
+        metadata: Optional[Mapping[str, object]] = None,
     ) -> Lesson:
         """Create a new lesson starting at Tier 1."""
         now = time.time()
@@ -146,6 +174,7 @@ class MemoryPromoter:
             last_seen_at=now,
             last_promoted_at=now,
             promoted_from=None,
+            metadata=dict(metadata or {}),
         )
         self.lessons[lesson_id] = lesson
         self._save()
@@ -255,9 +284,13 @@ class MemoryPromoter:
         lesson.tier = new_tier
         lesson.last_promoted_at = time.time()
         if dry_run:
-            logger.info(f"[DRY-RUN] Would promote lesson {lesson.lesson_id} from Tier {old_tier} to Tier {new_tier}")
+            logger.info(
+                f"[DRY-RUN] Would promote lesson {lesson.lesson_id} from Tier {old_tier} to Tier {new_tier}"
+            )
         else:
-            logger.info(f"Promoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {new_tier}")
+            logger.info(
+                f"Promoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {new_tier}"
+            )
 
     def _demote(self, lesson: Lesson) -> None:
         """Demote lesson to lower tier."""
@@ -296,7 +329,7 @@ class MemoryPromoter:
         """Get all lessons."""
         return list(self.lessons.values())
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, object]:
         """Return statistics about the memory store."""
         by_tier = {i: 0 for i in range(1, 5)}
         total_lessons = len(self.lessons)
@@ -308,3 +341,68 @@ class MemoryPromoter:
             "by_tier": by_tier,
             "tier_names": TIER_NAMES,
         }
+
+
+def record_lesson(
+    lesson_id: str,
+    content: str,
+    outcome: Optional[float] = None,
+    specificity_score: float = 0.5,
+    material_savings: float = 0.0,
+    metadata: Optional[Mapping[str, object]] = None,
+    memory_path: str | Path = DEFAULT_MEMORY_PATH,
+) -> Lesson:
+    """Create or update one lesson through the stable module-level bridge."""
+    promoter = MemoryPromoter(path=memory_path)
+    lesson = promoter.get_lesson(lesson_id)
+    if lesson is None:
+        lesson = promoter.add_lesson(
+            lesson_id=lesson_id,
+            content=content,
+            specificity_score=specificity_score,
+            savings_pct=material_savings * 100,
+            metadata=metadata,
+        )
+    if outcome is None:
+        return lesson
+    updated = (
+        promoter.record_success(lesson_id) if outcome >= 0.5 else promoter.record_failure(lesson_id)
+    )
+    return updated if updated is not None else lesson
+
+
+def promote_all(
+    memory_path: str | Path = DEFAULT_MEMORY_PATH,
+) -> dict[str, str]:
+    """Reconcile expiry and one-step promotion for every stored lesson."""
+    promoter = MemoryPromoter(path=memory_path)
+    before = {lesson.lesson_id: lesson.tier for lesson in promoter.get_all_lessons()}
+    expired = {lesson.lesson_id for lesson in promoter.get_all_lessons() if lesson.is_expired()}
+    promoter.cleanup_expired()
+
+    promoted = False
+    for lesson in promoter.get_all_lessons():
+        if lesson.lesson_id in expired:
+            continue
+        promoted = promoter._maybe_promote(lesson) or promoted
+    if promoted:
+        promoter._save()
+
+    after = {lesson.lesson_id: lesson.tier for lesson in promoter.get_all_lessons()}
+    actions: dict[str, str] = {}
+    for lesson_id, old_tier in before.items():
+        new_tier = after.get(lesson_id)
+        if new_tier is None:
+            actions[lesson_id] = "removed"
+        elif new_tier > old_tier:
+            actions[lesson_id] = f"promoted_to_tier_{new_tier}"
+        elif new_tier < old_tier:
+            actions[lesson_id] = f"demoted_to_tier_{new_tier}"
+    return actions
+
+
+def get_durable_lessons(
+    memory_path: str | Path = DEFAULT_MEMORY_PATH,
+) -> list[Lesson]:
+    """Return all durable (Tier 4) lessons from the selected store."""
+    return MemoryPromoter(path=memory_path).get_tier_lessons(4)

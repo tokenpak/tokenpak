@@ -8,7 +8,6 @@ Verifies that compression thresholds don't degrade, determinism holds,
 and lossless/lossy guarantees are met.
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.capsule.builder", reason="module not available in current build")
@@ -140,7 +139,9 @@ class TestCapsuleEnvelope:
         body_bytes = json.dumps(request).encode("utf-8")
         new_body, stats = builder.process(body_bytes)
 
-        assert stats["blocks_capsulized"] == 1, f"Expected 1 block to be capsulized, got {stats['blocks_capsulized']}"
+        assert stats["blocks_capsulized"] == 1, (
+            f"Expected 1 block to be capsulized, got {stats['blocks_capsulized']}"
+        )
         assert stats["ratio"] < 0.85, f"Capsule ratio {stats['ratio']} exceeds 0.85"
 
         # Verify the new body is valid JSON

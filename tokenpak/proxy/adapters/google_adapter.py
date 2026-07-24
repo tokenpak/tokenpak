@@ -20,13 +20,29 @@ _GOOGLE_TYPE_MAP: Dict[str, str] = {
 }
 
 # JSON Schema keywords not supported by Google functionDeclarations
-_GOOGLE_UNSUPPORTED_SCHEMA_KEYS: FrozenSet[str] = frozenset({
-    "$schema", "$ref", "$defs", "$id", "$comment", "definitions",
-    "additionalProperties", "patternProperties",
-    "oneOf", "anyOf", "allOf", "not",
-    "if", "then", "else",
-    "examples", "default", "title", "format",
-})
+_GOOGLE_UNSUPPORTED_SCHEMA_KEYS: FrozenSet[str] = frozenset(
+    {
+        "$schema",
+        "$ref",
+        "$defs",
+        "$id",
+        "$comment",
+        "definitions",
+        "additionalProperties",
+        "patternProperties",
+        "oneOf",
+        "anyOf",
+        "allOf",
+        "not",
+        "if",
+        "then",
+        "else",
+        "examples",
+        "default",
+        "title",
+        "format",
+    }
+)
 
 
 class GoogleGenerativeAIAdapter(FormatAdapter):

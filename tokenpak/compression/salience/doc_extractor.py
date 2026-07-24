@@ -18,7 +18,7 @@ from typing import List, Set
 
 # ── constants ─────────────────────────────────────────────────────────────
 
-ANNOTATION_CONTEXT_LINES: int = 2   # lines after each TODO/FIXME/etc.
+ANNOTATION_CONTEXT_LINES: int = 2  # lines after each TODO/FIXME/etc.
 
 # ── patterns ──────────────────────────────────────────────────────────────
 

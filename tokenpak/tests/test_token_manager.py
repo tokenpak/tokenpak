@@ -18,6 +18,7 @@ from tokenpak.telemetry.token_manager import (
 # Helper fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def temp_token_dir():
     """Create a temporary directory for token file operations."""
@@ -36,6 +37,7 @@ def mock_token_file(temp_token_dir):
 # ---------------------------------------------------------------------------
 # Test: generate_token()
 # ---------------------------------------------------------------------------
+
 
 def test_generate_token_returns_hex_string():
     """generate_token() should return a valid 32-character hex string."""
@@ -67,6 +69,7 @@ def test_generate_token_never_empty():
 # ---------------------------------------------------------------------------
 # Test: load_or_create_token()
 # ---------------------------------------------------------------------------
+
 
 def test_load_existing_token(mock_token_file):
     """load_or_create_token() should load and return an existing token."""
@@ -127,6 +130,7 @@ def test_load_or_create_sets_secure_permissions(mock_token_file):
 # Test: regenerate_token()
 # ---------------------------------------------------------------------------
 
+
 def test_regenerate_token_creates_new_token(mock_token_file):
     """regenerate_token() should create a new token and overwrite the file."""
     # Create initial token
@@ -174,6 +178,7 @@ def test_regenerate_token_sets_secure_permissions(mock_token_file):
 # Test: get_token()
 # ---------------------------------------------------------------------------
 
+
 def test_get_token_returns_existing_token(mock_token_file):
     """get_token() should return the current token from file."""
     test_token = "abcd1234efgh5678ijkl9012mnop3456"
@@ -218,6 +223,7 @@ def test_get_token_error_message_helpful(mock_token_file):
 # ---------------------------------------------------------------------------
 # Edge cases and stress tests
 # ---------------------------------------------------------------------------
+
 
 def test_token_file_directory_creation(mock_token_file):
     """load_or_create_token() should create parent directories if needed."""
@@ -265,6 +271,7 @@ def test_get_token_after_load_or_create(mock_token_file):
 # ---------------------------------------------------------------------------
 # Robustness and error handling
 # ---------------------------------------------------------------------------
+
 
 def test_token_with_leading_trailing_newlines(mock_token_file):
     """Should handle tokens with various whitespace edge cases."""

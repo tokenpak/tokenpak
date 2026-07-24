@@ -19,6 +19,7 @@ Key invariants under test:
   - The dev shim (``TOKENPAK_LICENSE_DEV_SHIM=1`` + ``TPK-DEVSHIM-`` prefix)
     is two-factor and OFF by default.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -47,13 +48,12 @@ def _sandbox_license(tmp_path, monkeypatch):
     'unreachable' so tests are hermetic regardless of host daemon state."""
     monkeypatch.setenv("TOKENPAK_LICENSE_FILE", str(tmp_path / "license.json"))
     monkeypatch.delenv("TOKENPAK_LICENSE_DEV_SHIM", raising=False)
-    monkeypatch.setattr(
-        licensing.daemon_probe, "detect_daemon_state", lambda **_: "unavailable"
-    )
+    monkeypatch.setattr(licensing.daemon_probe, "detect_daemon_state", lambda **_: "unavailable")
     yield
 
 
 # ── Defaults ────────────────────────────────────────────────────────────
+
 
 def test_missing_license_defaults_to_free():
     lic = load_license()
@@ -71,6 +71,7 @@ def test_unknown_feature_is_free_and_allowed():
 
 # ── Shape validation (fail-fast on garbage) ──────────────────────────────
 
+
 @pytest.mark.parametrize(
     "bad",
     ["", "   ", "short", "free", "placeholder", "tbd", "bad key with spaces!!"],
@@ -81,6 +82,7 @@ def test_activate_rejects_garbage(bad):
 
 
 # ── Public default: fail closed ──────────────────────────────────────────
+
 
 def test_activate_public_default_does_not_unlock_pro():
     """No shim + no daemon: a plausible key is stored but stays pending."""
@@ -108,6 +110,7 @@ def test_devshim_env_without_prefix_stays_locked(monkeypatch):
 
 
 # ── Dev shim: both factors present ───────────────────────────────────────
+
 
 @pytest.mark.parametrize(
     "key,expected_tier",

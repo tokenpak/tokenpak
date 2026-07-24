@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
+StatsValue = str | int | float
+
 
 @dataclass
 class RequestStats:
@@ -28,7 +30,7 @@ class RequestStats:
             return "⚡ TokenPak: 0 tokens saved"
         return f"⚡ TokenPak: -{self.tokens_saved:,} tokens ({self.percent_saved:.0f}%) | ${self.cost_saved:.3f} saved"
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, StatsValue]:
         """Convert to dict."""
         return {
             "request_id": self.request_id,
@@ -59,7 +61,7 @@ class SessionStats:
             return 0.0
         return (self.session_total_saved / self.session_total_tokens_raw) * 100
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, StatsValue]:
         """Convert to dict."""
         return {
             "session_requests": self.session_requests,
@@ -77,7 +79,7 @@ class StatsStorage:
 
     def __init__(self, max_history: int = 100):
         self.max_history = max_history
-        self.request_history: deque = deque(maxlen=max_history)
+        self.request_history: deque[RequestStats] = deque(maxlen=max_history)
         self.session_stats = SessionStats()
         self.lock = threading.Lock()
 
@@ -119,7 +121,7 @@ class StatsStorage:
                 return self.request_history[-1]
         return None
 
-    def get_last_with_session(self) -> dict:
+    def get_last_with_session(self) -> dict[str, object]:
         """Get last request stats combined with session totals."""
         with self.lock:
             if not self.request_history:

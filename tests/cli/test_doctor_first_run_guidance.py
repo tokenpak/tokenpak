@@ -70,6 +70,19 @@ def test_api_key_setup_detail_includes_windows_and_posix_examples():
     assert "set ANTHROPIC_API_KEY=sk-..." in detail
 
 
+def test_doctor_treats_missing_api_keys_as_optional_for_oauth(monkeypatch, tmp_path):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    check = _find_check(_doctor_json(monkeypatch, tmp_path), "api_keys")
+
+    assert check["status"] == "pass"
+    assert "optional" in check["message"]
+    assert "OAuth/session auth" in check["message"]
+    assert "direct provider key" in check["detail"]
+
+
 def test_disk_usage_probe_stops_at_entry_limit(tmp_path):
     root = tmp_path / "state"
     root.mkdir()

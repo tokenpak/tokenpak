@@ -19,7 +19,8 @@ from tokenpak.services.optimization.route_recipe_policy import (
 )
 
 pytestmark = pytest.mark.skipif(
-    not _ENGINE_AVAILABLE, reason="OSS recipe engine unavailable in this build",
+    not _ENGINE_AVAILABLE,
+    reason="OSS recipe engine unavailable in this build",
 )
 
 
@@ -38,7 +39,7 @@ def test_debugging_resolves_log_or_stack_recipe():
     policy = DEFAULT_POLICIES[RouteClass.DEBUGGING]
     recipes = select_recipes(
         policy,
-        content_sample="ValueError: nope\n  File \"x.py\", line 1, in foo\n",
+        content_sample='ValueError: nope\n  File "x.py", line 1, in foo\n',
     )
     assert recipes
     names = {r.name for r in recipes}

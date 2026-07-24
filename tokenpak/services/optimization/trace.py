@@ -92,6 +92,7 @@ class OptimizationTrace:
         """
         try:
             from tokenpak.tip.trace_contract import OptimizationTrace as _TipTrace  # noqa: F401
+
             return {"tip_version": "v1", **self.to_dict()}
         except Exception:
             return self.to_dict()

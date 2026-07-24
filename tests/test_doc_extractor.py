@@ -1,5 +1,8 @@
 """Tests for tokenpak.compression.salience.doc_extractor module."""
 
+import inspect
+
+from tokenpak.compression.doc_compressor import compress_document
 from tokenpak.compression.salience.doc_extractor import (
     DocExtractionResult,
     DocExtractor,
@@ -65,6 +68,13 @@ class TestDocExtractorInit:
         """Test disabling RST heading detection."""
         extractor = DocExtractor(include_rst_headings=False)
         assert extractor.include_rst_headings is False
+
+    def test_module_helper_preserves_kwargs_compatibility(self):
+        signature = inspect.signature(compress_document)
+        assert any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in signature.parameters.values()
+        )
 
 
 class TestDocExtractorEmpty:
@@ -452,7 +462,7 @@ More"""
 
     def test_code_blocks_with_annotations(self):
         """Test handling of code blocks with TODO."""
-        doc = '''# Code
+        doc = """# Code
 
 ```python
 def func():
@@ -461,7 +471,7 @@ def func():
 ```
 
 Regular text: TODO implement
-'''
+"""
         extractor = DocExtractor()
         result = extractor.extract(doc)
         assert result.annotation_count >= 1

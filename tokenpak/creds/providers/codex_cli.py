@@ -36,9 +36,7 @@ def _decode_jwt_exp(jwt: str) -> "tuple[int | None, str | None]":
         padded = parts[1] + "=" * (-len(parts[1]) % 4)
         payload = json.loads(base64.urlsafe_b64decode(padded))
         exp = payload.get("exp")
-        account_id = (
-            payload.get("https://api.openai.com/auth", {}).get("chatgpt_account_id")
-        )
+        account_id = payload.get("https://api.openai.com/auth", {}).get("chatgpt_account_id")
         return (int(exp) if exp else None), account_id
     except Exception:
         return None, None

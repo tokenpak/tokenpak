@@ -239,19 +239,25 @@ def _print_fleet_table(
         saved = int(r.get("would_have_saved", 0))  # tokens avoided, not dollars
         pct = _saved_pct(cost, saved, model=r.get("model"))
 
-        print(fmt.format(
-            agent, host, model,
-            f"{reqs:,}",
-            _fmt_tokens(cr),
-            _fmt_tokens(cc),
-            _fmt_cost(cost),
-            pct,
-        ))
+        print(
+            fmt.format(
+                agent,
+                host,
+                model,
+                f"{reqs:,}",
+                _fmt_tokens(cr),
+                _fmt_tokens(cc),
+                _fmt_cost(cost),
+                pct,
+            )
+        )
 
     print("  " + "─" * 82)
     total_reqs = sum(r.get("requests", 0) for r in rows)
     total_cost = sum(float(r.get("estimated_cost", 0.0)) for r in rows)
-    print(f"  {len(rows)} rows | {total_reqs:,} total requests | {_fmt_cost(total_cost)} total cost")
+    print(
+        f"  {len(rows)} rows | {total_reqs:,} total requests | {_fmt_cost(total_cost)} total cost"
+    )
     print()
 
 
@@ -269,22 +275,22 @@ def _print_fleet_json(
     for r in rows:
         cost = float(r.get("estimated_cost", 0.0))
         saved = int(r.get("would_have_saved", 0))  # tokens avoided, not dollars
-        output["rows"].append({
-            "date": r.get("date"),
-            "agent_id": r.get("agent_id"),
-            "host": r.get("host"),
-            "model": r.get("model"),
-            "requests": r.get("requests", 0),
-            "input_tokens": r.get("input_tokens", 0),
-            "output_tokens": r.get("output_tokens", 0),
-            "cache_read_tokens": r.get("cache_read_tokens", 0),
-            "cache_creation_tokens": r.get("cache_creation_tokens", 0),
-            "estimated_cost": cost,
-            "would_have_saved": saved,
-            "would_have_saved_unit": "tokens",
-            "would_have_saved_usd": round(
-                _would_have_saved_usd(r.get("model"), saved), 6
-            ),
-            "saved_pct": _saved_pct(cost, saved, model=r.get("model")),
-        })
+        output["rows"].append(
+            {
+                "date": r.get("date"),
+                "agent_id": r.get("agent_id"),
+                "host": r.get("host"),
+                "model": r.get("model"),
+                "requests": r.get("requests", 0),
+                "input_tokens": r.get("input_tokens", 0),
+                "output_tokens": r.get("output_tokens", 0),
+                "cache_read_tokens": r.get("cache_read_tokens", 0),
+                "cache_creation_tokens": r.get("cache_creation_tokens", 0),
+                "estimated_cost": cost,
+                "would_have_saved": saved,
+                "would_have_saved_unit": "tokens",
+                "would_have_saved_usd": round(_would_have_saved_usd(r.get("model"), saved), 6),
+                "saved_pct": _saved_pct(cost, saved, model=r.get("model")),
+            }
+        )
     print(json.dumps(output, indent=2, default=str))

@@ -252,7 +252,9 @@ class TestContextPackCompile:
     def test_compile_single_block(self):
         """compile() with single block works."""
         pack = ContextPack()
-        pack.add(PackBlock(id="sys", type="instructions", content="System prompt.", priority="critical"))
+        pack.add(
+            PackBlock(id="sys", type="instructions", content="System prompt.", priority="critical")
+        )
 
         result = pack.compile()
         assert isinstance(result, CompiledResult)
@@ -303,12 +305,11 @@ class TestContextPackCompile:
     def test_compile_critical_priority_budget_respected(self):
         """Critical blocks are kept within budget constraints."""
         pack = ContextPack(budget=10000)
-        pack.add(PackBlock(
-            id="crit",
-            type="instructions",
-            content="Critical instruction",
-            priority="critical"
-        ))
+        pack.add(
+            PackBlock(
+                id="crit", type="instructions", content="Critical instruction", priority="critical"
+            )
+        )
 
         result = pack.compile()
         # Critical block should be kept
@@ -319,12 +320,14 @@ class TestContextPackCompile:
         """Blocks exceeding max_tokens are compacted."""
         pack = ContextPack(budget=10000)
         long_text = "word " * 500  # ~500 words
-        pack.add(PackBlock(
-            id="long",
-            type="test",
-            content=long_text,
-            max_tokens=50  # Strict limit
-        ))
+        pack.add(
+            PackBlock(
+                id="long",
+                type="test",
+                content=long_text,
+                max_tokens=50,  # Strict limit
+            )
+        )
 
         result = pack.compile()
         # Output should be truncated
@@ -367,8 +370,8 @@ class TestContextPackCompile:
 
         result = pack.compile()
         assert len(result.report.decisions) == 2
-        assert all(hasattr(d, 'block_id') for d in result.report.decisions)
-        assert all(hasattr(d, 'action') for d in result.report.decisions)
+        assert all(hasattr(d, "block_id") for d in result.report.decisions)
+        assert all(hasattr(d, "action") for d in result.report.decisions)
 
     def test_compile_report_final_order(self):
         """Report includes final_order of block IDs."""
@@ -387,12 +390,7 @@ class TestPackPromptHelper:
 
     def test_pack_prompt_basic(self):
         """pack_prompt() with all arguments."""
-        result = pack_prompt(
-            system="System",
-            docs="Documentation",
-            history="History",
-            budget=2000
-        )
+        result = pack_prompt(system="System", docs="Documentation", history="History", budget=2000)
         assert isinstance(result, str)
         assert "System" in result
         assert "Documentation" in result
@@ -430,26 +428,14 @@ class TestPackPromptHelper:
     def test_pack_prompt_custom_budget(self):
         """pack_prompt() accepts custom budget."""
         # With very low budget, content gets truncated
-        result_low = pack_prompt(
-            system="System content",
-            docs="D" * 1000,
-            budget=50
-        )
-        result_high = pack_prompt(
-            system="System content",
-            docs="D" * 1000,
-            budget=5000
-        )
+        result_low = pack_prompt(system="System content", docs="D" * 1000, budget=50)
+        result_high = pack_prompt(system="System content", docs="D" * 1000, budget=5000)
         # Higher budget should yield more content
         assert len(result_high) >= len(result_low)
 
     def test_pack_prompt_priority_preserved(self):
         """pack_prompt() assigns correct priorities to blocks."""
-        result = pack_prompt(
-            system="System",
-            docs="Docs",
-            history="History"
-        )
+        result = pack_prompt(system="System", docs="Docs", history="History")
         # System (critical) should appear before history (low)
         sys_idx = result.find("System")
         hist_idx = result.find("History")
@@ -475,11 +461,7 @@ class TestEdgeCasesAndIntegration:
     def test_unicode_content(self):
         """Handle Unicode content correctly."""
         pack = ContextPack()
-        pack.add(PackBlock(
-            id="unicode",
-            type="test",
-            content="Hello 👋 World 🌍 Émojis: 📚🔬🎨"
-        ))
+        pack.add(PackBlock(id="unicode", type="test", content="Hello 👋 World 🌍 Émojis: 📚🔬🎨"))
 
         result = pack.compile()
         assert "👋" in result.text
@@ -507,11 +489,7 @@ class TestEdgeCasesAndIntegration:
         """Compile with many blocks (stress test)."""
         pack = ContextPack(budget=10000)
         for i in range(100):
-            pack.add(PackBlock(
-                id=f"block-{i}",
-                type="test",
-                content=f"Block {i} content"
-            ))
+            pack.add(PackBlock(id=f"block-{i}", type="test", content=f"Block {i} content"))
 
         result = pack.compile()
         assert result.report.input_blocks == 100
@@ -537,12 +515,7 @@ class TestEdgeCasesAndIntegration:
     def test_max_tokens_zero(self):
         """max_tokens=0 results in empty/minimal output."""
         pack = ContextPack()
-        pack.add(PackBlock(
-            id="zero",
-            type="test",
-            content="Long content here",
-            max_tokens=0
-        ))
+        pack.add(PackBlock(id="zero", type="test", content="Long content here", max_tokens=0))
 
         result = pack.compile()
         # Content should be severely truncated
@@ -550,6 +523,7 @@ class TestEdgeCasesAndIntegration:
 
     def test_compile_reproducibility(self):
         """Same input always produces same output."""
+
         def make_pack():
             p = ContextPack(budget=5000)
             p.add(PackBlock(id="a", type="test", content="Content A", priority="high"))

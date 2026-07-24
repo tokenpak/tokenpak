@@ -14,6 +14,7 @@ Test classes:
   - TestProxyResponseConstruction      — ProxyResponse dataclass creation
   - TestSessionIdAndPlatformFlow       — session_id/source_platform flow
 """
+
 from __future__ import annotations
 
 import json
@@ -35,6 +36,7 @@ from tokenpak.proxy.request import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _body_bytes(system=None, model="claude-sonnet-4-5", **extra) -> bytes:
     data: dict[str, Any] = {"model": model, "max_tokens": 50}
     if system is not None:
@@ -46,8 +48,9 @@ def _body_bytes(system=None, model="claude-sonnet-4-5", **extra) -> bytes:
     return json.dumps(data).encode()
 
 
-def _make_request(body: bytes | None = None, session_id: str | None = None,
-                  source_platform: str = "test") -> ProxyRequest:
+def _make_request(
+    body: bytes | None = None, session_id: str | None = None, source_platform: str = "test"
+) -> ProxyRequest:
     b = body if body is not None else _body_bytes()
     return ProxyRequest(
         method="POST",
@@ -62,6 +65,7 @@ def _make_request(body: bytes | None = None, session_id: str | None = None,
 # ---------------------------------------------------------------------------
 # TestByteInjectSystemBlockRequest
 # ---------------------------------------------------------------------------
+
 
 class TestByteInjectSystemBlockRequest:
     def test_request_kwarg_overrides_body_arg(self):
@@ -104,6 +108,7 @@ class TestByteInjectSystemBlockRequest:
 # TestInjectVaultContextRequest
 # ---------------------------------------------------------------------------
 
+
 class TestInjectVaultContextRequest:
     def test_request_kwarg_signature_accepted(self):
         """inject_vault_context accepts request kwarg without raising TypeError."""
@@ -126,7 +131,7 @@ class TestInjectVaultContextRequest:
         from tokenpak.proxy.vault_bridge import inject_vault_context
 
         req_body = _body_bytes()
-        positional_body = b'{}' * 0  # empty bytes — no valid query signal
+        positional_body = b"{}" * 0  # empty bytes — no valid query signal
         req = _make_request(body=req_body)
 
         # We can't easily assert the vault ran (it may be unavailable in CI),
@@ -156,6 +161,7 @@ class TestInjectVaultContextRequest:
 # ---------------------------------------------------------------------------
 # TestCompactRequestBodyRequest
 # ---------------------------------------------------------------------------
+
 
 class TestCompactRequestBodyRequest:
     def test_request_kwarg_signature_accepted(self):
@@ -204,6 +210,7 @@ class TestCompactRequestBodyRequest:
 # TestLegacyBytesBackwardCompat
 # ---------------------------------------------------------------------------
 
+
 class TestLegacyBytesBackwardCompat:
     def test_legacy_bytes_path_unchanged(self):
         """_byte_inject_system_block(body, text) — original call signature works."""
@@ -234,6 +241,7 @@ class TestLegacyBytesBackwardCompat:
 # ---------------------------------------------------------------------------
 # TestProxyRequestConstruction
 # ---------------------------------------------------------------------------
+
 
 class TestProxyRequestConstruction:
     def test_proxy_request_fields(self):
@@ -277,6 +285,7 @@ class TestProxyRequestConstruction:
 # TestProxyResponseConstruction
 # ---------------------------------------------------------------------------
 
+
 class TestProxyResponseConstruction:
     def test_basic_proxy_response(self):
         resp = ProxyResponse(
@@ -314,6 +323,7 @@ class TestProxyResponseConstruction:
 # ---------------------------------------------------------------------------
 # TestSessionIdAndPlatformFlow
 # ---------------------------------------------------------------------------
+
 
 class TestSessionIdAndPlatformFlow:
     def test_session_id_set_on_request(self):

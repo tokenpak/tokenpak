@@ -216,9 +216,7 @@ class TestNetworkPartitionChaos:
 
         for status in (500, 502, 503):
             classified = classify_error(http_status=status)
-            assert classified.should_switch is True, (
-                f"HTTP {status} should trigger provider switch"
-            )
+            assert classified.should_switch is True, f"HTTP {status} should trigger provider switch"
 
     def test_failover_chain_skips_empty_credential_env(self, tmp_path, monkeypatch):
         """Providers whose credential env var is unset are skipped in failover chain."""
@@ -272,6 +270,7 @@ class TestDiskChaos:
         # Simulate disk-full: patch the tracker's _lock to raise on acquire
         # (simulates file-lock failure or OS error during a write path)
         import collections
+
         with patch.object(tracker, "_events", new=collections.deque(maxlen=10)):
             # Should not raise even with a fresh deque (empty state)
             tracker.record_compression_failure(ValueError("disk simulation"))
@@ -288,7 +287,9 @@ class TestDiskChaos:
 
         events = tracker.get_recent()
         assert len(events) >= 1
-        config_events = [e for e in events if e["event_type"] == DegradationEventType.CONFIG_FALLBACK]
+        config_events = [
+            e for e in events if e["event_type"] == DegradationEventType.CONFIG_FALLBACK
+        ]
         assert len(config_events) >= 1
 
 
@@ -324,15 +325,17 @@ class TestMemoryPressure:
 
         log = FailoverEventLog()
         for i in range(500):
-            log.record(FailoverEvent(
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                original_provider="anthropic",
-                failover_provider="openai",
-                error_type="rate_limit",
-                http_status=429,
-                model="claude-sonnet-4-5",
-                succeeded=True,
-            ))
+            log.record(
+                FailoverEvent(
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    original_provider="anthropic",
+                    failover_provider="openai",
+                    error_type="rate_limit",
+                    http_status=429,
+                    model="claude-sonnet-4-5",
+                    succeeded=True,
+                )
+            )
 
         events = log.get_recent(limit=500)
         assert len(events) <= 100, (

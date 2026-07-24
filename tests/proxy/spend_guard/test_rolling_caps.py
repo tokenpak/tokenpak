@@ -21,9 +21,11 @@ from tokenpak.proxy.spend_guard.rolling_caps import (
 
 # ----- Configurations used across multiple tests -----
 
+
 def default_cfg(**overrides) -> RollingCapsConfig:
     base = RollingCapsConfig(
-        enabled=True, window_seconds=3600,
+        enabled=True,
+        window_seconds=3600,
         per_agent_max_cost_usd=20.0,
         per_agent_max_tokens_total=5_000_000,
         per_agent_max_cache_read_tokens=4_000_000,
@@ -37,6 +39,7 @@ def default_cfg(**overrides) -> RollingCapsConfig:
 
 
 # ----- 1. per-agent cost cap fires when projection pushes over -----
+
 
 def test_rolling_cap_per_agent_cost_blocks(tmp_monitor_db):
     """Agent agent-a accumulated $19.95 in the window; new request at $0.30
@@ -53,7 +56,8 @@ def test_rolling_cap_per_agent_cost_blocks(tmp_monitor_db):
     breach = check_rolling_caps(
         agent_id="agent-a",
         projected_cost_usd=0.30,
-        projected_input_tokens=1000, projected_output_tokens=100,
+        projected_input_tokens=1000,
+        projected_output_tokens=100,
         projected_cache_read_tokens=0,
         config=default_cfg(),
         monitor_db_path=tmp_monitor_db,
@@ -66,6 +70,7 @@ def test_rolling_cap_per_agent_cost_blocks(tmp_monitor_db):
 
 # ----- 2. per-agent below threshold passes -----
 
+
 def test_rolling_cap_per_agent_below_threshold(tmp_monitor_db):
     """Agent agent-a accumulated $18.00; new request at $0.50 → $18.50 still
     under $20.0 → no breach."""
@@ -76,7 +81,8 @@ def test_rolling_cap_per_agent_below_threshold(tmp_monitor_db):
     breach = check_rolling_caps(
         agent_id="agent-a",
         projected_cost_usd=0.50,
-        projected_input_tokens=1000, projected_output_tokens=100,
+        projected_input_tokens=1000,
+        projected_output_tokens=100,
         projected_cache_read_tokens=0,
         config=default_cfg(),
         monitor_db_path=tmp_monitor_db,
@@ -85,6 +91,7 @@ def test_rolling_cap_per_agent_below_threshold(tmp_monitor_db):
 
 
 # ----- 3. per-fleet cost cap fires -----
+
 
 def test_rolling_cap_per_fleet_cost_blocks(tmp_monitor_db):
     """3 different agents each at ~$19 → fleet total ~$57; new $4 → breach."""
@@ -96,7 +103,8 @@ def test_rolling_cap_per_fleet_cost_blocks(tmp_monitor_db):
     breach = check_rolling_caps(
         agent_id="agent-a",
         projected_cost_usd=4.0,  # would push fleet to ~$61 > $60 cap
-        projected_input_tokens=1000, projected_output_tokens=100,
+        projected_input_tokens=1000,
+        projected_output_tokens=100,
         projected_cache_read_tokens=0,
         config=default_cfg(),
         monitor_db_path=tmp_monitor_db,
@@ -110,6 +118,7 @@ def test_rolling_cap_per_fleet_cost_blocks(tmp_monitor_db):
 
 # ----- 3b. fleet cap fires when no agent is at risk individually -----
 
+
 def test_rolling_cap_per_fleet_cost_blocks_when_agents_low(tmp_monitor_db):
     """5 agents each at $15 → fleet $75 > $60 cap, but each agent under $20."""
     cfg = default_cfg(per_agent_max_cost_usd=20.0, per_fleet_max_cost_usd=60.0)
@@ -121,7 +130,8 @@ def test_rolling_cap_per_fleet_cost_blocks_when_agents_low(tmp_monitor_db):
     breach = check_rolling_caps(
         agent_id="agent-e",  # at $15 individually, fleet at $75
         projected_cost_usd=0.10,
-        projected_input_tokens=100, projected_output_tokens=10,
+        projected_input_tokens=100,
+        projected_output_tokens=10,
         projected_cache_read_tokens=0,
         config=cfg,
         monitor_db_path=tmp_monitor_db,
@@ -132,19 +142,27 @@ def test_rolling_cap_per_fleet_cost_blocks_when_agents_low(tmp_monitor_db):
 
 # ----- 4. per-agent token total cap -----
 
+
 def test_rolling_cap_per_agent_tokens_blocks(tmp_monitor_db):
     """Agent at 4,900,000 tokens; +200k → 5.1M > 5.0M cap."""
     for i in range(10):
         sid = f"agent-a-tok-{i}"
         record_session_agent(sid, "agent-a")
         # 490k tokens/row × 10 = 4.9M
-        insert_request(tmp_monitor_db, sid, cost=0.01,
-                       input_tokens=400_000, output_tokens=90_000,
-                       cache_read_tokens=0, seconds_ago=60 + i)
+        insert_request(
+            tmp_monitor_db,
+            sid,
+            cost=0.01,
+            input_tokens=400_000,
+            output_tokens=90_000,
+            cache_read_tokens=0,
+            seconds_ago=60 + i,
+        )
     breach = check_rolling_caps(
         agent_id="agent-a",
         projected_cost_usd=0.01,
-        projected_input_tokens=150_000, projected_output_tokens=50_000,
+        projected_input_tokens=150_000,
+        projected_output_tokens=50_000,
         projected_cache_read_tokens=0,
         config=default_cfg(),
         monitor_db_path=tmp_monitor_db,
@@ -155,20 +173,28 @@ def test_rolling_cap_per_agent_tokens_blocks(tmp_monitor_db):
 
 # ----- 5. per-agent cache_read cap -----
 
+
 def test_rolling_cap_per_agent_cache_read_blocks(tmp_monitor_db):
     """Agent has 3.9M cache_read; +200k cache_read → 4.1M > 4.0M cap."""
     for i in range(10):
         sid = f"agent-a-cr-{i}"
         record_session_agent(sid, "agent-a")
-        insert_request(tmp_monitor_db, sid, cost=0.01,
-                       input_tokens=1000, output_tokens=100,
-                       cache_read_tokens=390_000, seconds_ago=60 + i)
+        insert_request(
+            tmp_monitor_db,
+            sid,
+            cost=0.01,
+            input_tokens=1000,
+            output_tokens=100,
+            cache_read_tokens=390_000,
+            seconds_ago=60 + i,
+        )
     # Use a relaxed token-total cap so it doesn't fire first
     cfg = default_cfg(per_agent_max_tokens_total=20_000_000)
     breach = check_rolling_caps(
         agent_id="agent-a",
         projected_cost_usd=0.01,
-        projected_input_tokens=1000, projected_output_tokens=100,
+        projected_input_tokens=1000,
+        projected_output_tokens=100,
         projected_cache_read_tokens=200_000,
         config=cfg,
         monitor_db_path=tmp_monitor_db,
@@ -178,6 +204,7 @@ def test_rolling_cap_per_agent_cache_read_blocks(tmp_monitor_db):
 
 
 # ----- 6. window aging — rows outside the window don't count -----
+
 
 def test_rolling_cap_window_aging(tmp_monitor_db):
     """Old rows outside the 1h window must not count toward the rolling sum."""
@@ -189,7 +216,8 @@ def test_rolling_cap_window_aging(tmp_monitor_db):
     breach = check_rolling_caps(
         agent_id="agent-a",
         projected_cost_usd=1.0,  # well under $20 if nothing else counts
-        projected_input_tokens=1000, projected_output_tokens=100,
+        projected_input_tokens=1000,
+        projected_output_tokens=100,
         projected_cache_read_tokens=0,
         config=default_cfg(),
         monitor_db_path=tmp_monitor_db,
@@ -198,6 +226,7 @@ def test_rolling_cap_window_aging(tmp_monitor_db):
 
 
 # ----- 7. unknown agent (no header) — only fleet cap applies -----
+
 
 def test_rolling_cap_unknown_agent(tmp_monitor_db):
     """Request with no agent_id → per-agent caps SKIPPED; fleet still applies."""
@@ -210,7 +239,8 @@ def test_rolling_cap_unknown_agent(tmp_monitor_db):
     breach = check_rolling_caps(
         agent_id="",
         projected_cost_usd=0.10,
-        projected_input_tokens=1000, projected_output_tokens=100,
+        projected_input_tokens=1000,
+        projected_output_tokens=100,
         projected_cache_read_tokens=0,
         config=default_cfg(per_fleet_max_cost_usd=60.0),
         monitor_db_path=tmp_monitor_db,
@@ -222,6 +252,7 @@ def test_rolling_cap_unknown_agent(tmp_monitor_db):
 
 # ----- 8. disabled rolling caps are a no-op -----
 
+
 def test_rolling_cap_disabled(tmp_monitor_db):
     """rolling_caps.enabled=False → no breach even with massive usage."""
     for i in range(100):
@@ -232,7 +263,8 @@ def test_rolling_cap_disabled(tmp_monitor_db):
     breach = check_rolling_caps(
         agent_id="agent-a",
         projected_cost_usd=100.0,
-        projected_input_tokens=100_000, projected_output_tokens=10_000,
+        projected_input_tokens=100_000,
+        projected_output_tokens=10_000,
         projected_cache_read_tokens=0,
         config=cfg,
         monitor_db_path=tmp_monitor_db,
@@ -241,6 +273,7 @@ def test_rolling_cap_disabled(tmp_monitor_db):
 
 
 # ----- 9. zero-cap fields are treated as 'cap disabled', not 'cap=0' -----
+
 
 def test_rolling_cap_zero_value_means_disabled(tmp_monitor_db):
     """A zero cap value disables that particular dimension."""
@@ -253,7 +286,8 @@ def test_rolling_cap_zero_value_means_disabled(tmp_monitor_db):
     breach = check_rolling_caps(
         agent_id="agent-a",
         projected_cost_usd=100.0,
-        projected_input_tokens=100_000, projected_output_tokens=10_000,
+        projected_input_tokens=100_000,
+        projected_output_tokens=10_000,
         projected_cache_read_tokens=0,
         config=cfg,
         monitor_db_path=tmp_monitor_db,

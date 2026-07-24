@@ -62,9 +62,8 @@ from .stations.reviewer import (
 # Cost note: emitted on any delivery package whose
 # route used a Reviewer Station. Single source of truth — both the package
 # builder and tests read this constant.
-REVIEWER_COST_NOTE = (
-    "This route uses a Reviewer Station; +1 LLM call vs single-shot execution."
-)
+REVIEWER_COST_NOTE = "This route uses a Reviewer Station; +1 LLM call vs single-shot execution."
+
 
 # The handoff outcomes, expressed as the delivery-package status values the
 # Gatehouse can emit. Kept distinct from the reviewer's own
@@ -156,9 +155,7 @@ class Gatehouse:
 
     # ---- individual deterministic checks ----------------------------------
 
-    def check_manifest_completeness(
-        self, manifest: DispatchManifest
-    ) -> GatehouseCheckResult:
+    def check_manifest_completeness(self, manifest: DispatchManifest) -> GatehouseCheckResult:
         """manifest_completeness — required manifest fields are present & non-empty.
 
         Structural only: confirms ``goal``, ``route_id``, ``job_id`` are set and
@@ -195,7 +192,9 @@ class Gatehouse:
         """
 
         try:
-            model = route if isinstance(route, DispatchRoute) else DispatchRoute.model_validate(route)
+            model = (
+                route if isinstance(route, DispatchRoute) else DispatchRoute.model_validate(route)
+            )
         except ValidationError as exc:
             return GatehouseCheckResult(
                 name="route_station_schema",
@@ -227,8 +226,7 @@ class Gatehouse:
         has_component = bool(station.system_component)
         if has_role == has_component:
             return (
-                f"station {station.id!r} must set exactly one of required_role / "
-                "system_component"
+                f"station {station.id!r} must set exactly one of required_role / system_component"
             )
         return None
 
@@ -301,9 +299,7 @@ class Gatehouse:
             detail=f"{completed} completed station output(s) structurally valid",
         )
 
-    def check_permission_constraints(
-        self, manifest: DispatchManifest
-    ) -> GatehouseCheckResult:
+    def check_permission_constraints(self, manifest: DispatchManifest) -> GatehouseCheckResult:
         """permission constraints — manifest permissions are internally consistent.
 
         Structural consistency only: an action may not appear in both
@@ -320,19 +316,13 @@ class Gatehouse:
         forbidden = set(perms.forbidden_actions)
         contradictions = sorted(allowed & forbidden)
         missing_denied = [
-            glob
-            for glob in MANDATORY_DENIED_PATHS
-            if glob not in manifest.path_policy.denied_paths
+            glob for glob in MANDATORY_DENIED_PATHS if glob not in manifest.path_policy.denied_paths
         ]
         problems: list[str] = []
         if contradictions:
-            problems.append(
-                f"action(s) both allowed and forbidden: {contradictions}"
-            )
+            problems.append(f"action(s) both allowed and forbidden: {contradictions}")
         if missing_denied:
-            problems.append(
-                f"path policy missing mandatory denied glob(s): {missing_denied}"
-            )
+            problems.append(f"path policy missing mandatory denied glob(s): {missing_denied}")
         if problems:
             return GatehouseCheckResult(
                 name="permission_constraints",
@@ -399,9 +389,7 @@ class Gatehouse:
             self.check_manifest_completeness(manifest),
             self.check_route_station_schema(route),
             self.check_acceptance_criteria_presence(manifest),
-            self.check_station_output_schema(
-                station_runs, validators=station_output_validators
-            ),
+            self.check_station_output_schema(station_runs, validators=station_output_validators),
             self.check_permission_constraints(manifest),
             self.check_delivery_package_completeness(route, delivery_package_fields),
         ]
@@ -532,8 +520,7 @@ class Gatehouse:
 
         created_at = now or datetime.now(timezone.utc)
         reason = (
-            reviewer_result.delivery_recommendation.reason
-            or "Reviewer Station returned a warning."
+            reviewer_result.delivery_recommendation.reason or "Reviewer Station returned a warning."
         )
         return DispatchDecision(
             id=f"decision_{job_id}_reviewer_warning",

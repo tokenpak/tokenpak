@@ -31,6 +31,7 @@ from tokenpak.telemetry.models import (  # noqa: E402
 # get_model_pricing
 # ---------------------------------------------------------------------------
 
+
 class TestGetModelPricing:
     def test_exact_match(self):
         pricing = get_model_pricing("gpt-4o")
@@ -73,6 +74,7 @@ class TestGetModelPricing:
 # ---------------------------------------------------------------------------
 # ModelStats
 # ---------------------------------------------------------------------------
+
 
 class TestModelStats:
     def _make_stats(self, **kwargs):
@@ -138,9 +140,17 @@ class TestModelStats:
         stats = self._make_stats()
         d = stats.to_dict()
         expected_keys = {
-            "model", "requests", "input_tokens", "output_tokens",
-            "cache_hits", "cache_read_tokens", "errors",
-            "avg_latency_ms", "cache_hit_rate", "compression_efficiency", "cost_metrics",
+            "model",
+            "requests",
+            "input_tokens",
+            "output_tokens",
+            "cache_hits",
+            "cache_read_tokens",
+            "errors",
+            "avg_latency_ms",
+            "cache_hit_rate",
+            "compression_efficiency",
+            "cost_metrics",
         }
         assert expected_keys.issubset(d.keys())
 
@@ -155,6 +165,7 @@ class TestModelStats:
 # ---------------------------------------------------------------------------
 # ModelAnalyzer
 # ---------------------------------------------------------------------------
+
 
 class TestModelAnalyzer:
     def _write_events(self, tmp_path: Path, events: list) -> Path:
@@ -171,15 +182,17 @@ class TestModelAnalyzer:
         assert result == {}
 
     def test_load_single_event(self, tmp_path):
-        events = [{
-            "model": "claude-sonnet-4-5",
-            "status": "ok",
-            "input_tokens": 1000,
-            "output_tokens": 200,
-            "cache_hits": 0,
-            "cache_read_tokens": 0,
-            "latency_ms": 500,
-        }]
+        events = [
+            {
+                "model": "claude-sonnet-4-5",
+                "status": "ok",
+                "input_tokens": 1000,
+                "output_tokens": 200,
+                "cache_hits": 0,
+                "cache_read_tokens": 0,
+                "latency_ms": 500,
+            }
+        ]
         log_file = self._write_events(tmp_path, events)
         analyzer = ModelAnalyzer(log_path=str(log_file))
         result = analyzer.load_from_file()
@@ -190,10 +203,24 @@ class TestModelAnalyzer:
 
     def test_load_multiple_models(self, tmp_path):
         events = [
-            {"model": "gpt-4o", "status": "ok", "input_tokens": 500, "output_tokens": 100,
-             "cache_hits": 0, "cache_read_tokens": 0, "latency_ms": 200},
-            {"model": "claude-haiku-4-5", "status": "ok", "input_tokens": 300, "output_tokens": 50,
-             "cache_hits": 1, "cache_read_tokens": 100, "latency_ms": 100},
+            {
+                "model": "gpt-4o",
+                "status": "ok",
+                "input_tokens": 500,
+                "output_tokens": 100,
+                "cache_hits": 0,
+                "cache_read_tokens": 0,
+                "latency_ms": 200,
+            },
+            {
+                "model": "claude-haiku-4-5",
+                "status": "ok",
+                "input_tokens": 300,
+                "output_tokens": 50,
+                "cache_hits": 1,
+                "cache_read_tokens": 100,
+                "latency_ms": 100,
+            },
         ]
         log_file = self._write_events(tmp_path, events)
         analyzer = ModelAnalyzer(log_path=str(log_file))
@@ -204,8 +231,15 @@ class TestModelAnalyzer:
 
     def test_error_events_counted_separately(self, tmp_path):
         events = [
-            {"model": "gpt-4o", "status": "ok", "input_tokens": 500, "output_tokens": 100,
-             "cache_hits": 0, "cache_read_tokens": 0, "latency_ms": 200},
+            {
+                "model": "gpt-4o",
+                "status": "ok",
+                "input_tokens": 500,
+                "output_tokens": 100,
+                "cache_hits": 0,
+                "cache_read_tokens": 0,
+                "latency_ms": 200,
+            },
             {"model": "gpt-4o", "status": "error"},
         ]
         log_file = self._write_events(tmp_path, events)
@@ -226,9 +260,15 @@ class TestModelAnalyzer:
 
     def test_get_summary_with_data(self, tmp_path):
         events = [
-            {"model": "claude-sonnet-4-5", "status": "ok", "input_tokens": 1_000_000,
-             "output_tokens": 100_000, "cache_hits": 2, "cache_read_tokens": 50_000,
-             "latency_ms": 800},
+            {
+                "model": "claude-sonnet-4-5",
+                "status": "ok",
+                "input_tokens": 1_000_000,
+                "output_tokens": 100_000,
+                "cache_hits": 2,
+                "cache_read_tokens": 50_000,
+                "latency_ms": 800,
+            },
         ]
         log_file = self._write_events(tmp_path, events)
         analyzer = ModelAnalyzer(log_path=str(log_file))
@@ -241,9 +281,15 @@ class TestModelAnalyzer:
 
     def test_get_summary_cost_saved(self, tmp_path):
         events = [
-            {"model": "gpt-4o", "status": "ok", "input_tokens": 1_000_000,
-             "output_tokens": 0, "cache_hits": 0, "cache_read_tokens": 500_000,
-             "latency_ms": 300},
+            {
+                "model": "gpt-4o",
+                "status": "ok",
+                "input_tokens": 1_000_000,
+                "output_tokens": 0,
+                "cache_hits": 0,
+                "cache_read_tokens": 500_000,
+                "latency_ms": 300,
+            },
         ]
         log_file = self._write_events(tmp_path, events)
         analyzer = ModelAnalyzer(log_path=str(log_file))

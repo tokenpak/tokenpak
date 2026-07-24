@@ -15,6 +15,7 @@ The non-localhost simulation patches ``_ProxyHandler._enforce_proxy_auth`` so
 that the gate sees a synthesized remote IP while the actual TCP connection
 remains on loopback (no second NIC required).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -126,6 +127,7 @@ class TestCheckProxyAuth:
         ``proxy.py`` suite, applied to the modular-tree implementation."""
         import ast
         from pathlib import Path
+
         src = (Path(pa.__file__)).read_text()
         tree = ast.parse(src)
         found = False
@@ -144,6 +146,7 @@ class TestCheckProxyAuth:
     def test_token_value_never_logged(self) -> None:
         """The token value must not appear in any log/print call's literal."""
         from pathlib import Path
+
         src = Path(pa.__file__).read_text()
         for i, line in enumerate(src.splitlines(), 1):
             stripped = line.strip()
@@ -268,7 +271,9 @@ def proxy(monkeypatch) -> Tuple[proxy_server.ProxyServer, int, list[str]]:
         pass
 
 
-def _post(port: int, target_url: str, headers: dict, body: bytes = b"{}") -> Tuple[int, dict, bytes]:
+def _post(
+    port: int, target_url: str, headers: dict, body: bytes = b"{}"
+) -> Tuple[int, dict, bytes]:
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     h = {"Content-Length": str(len(body)), **headers}
     conn.request("POST", target_url, body=body, headers=h)
@@ -370,10 +375,9 @@ class TestProxyHandlerIntegration:
         )
         assert status == 200, f"expected upstream 200; got {status} {body}"
         # I5: the proxy auth Bearer must NOT have reached the upstream.
-        upstream_auth = (
-            _UpstreamMock.captured_headers.get("Authorization")
-            or _UpstreamMock.captured_headers.get("authorization")
-        )
+        upstream_auth = _UpstreamMock.captured_headers.get(
+            "Authorization"
+        ) or _UpstreamMock.captured_headers.get("authorization")
         assert upstream_auth != client_proxy_auth, (
             "I5 VIOLATION: proxy auth Bearer leaked to upstream — "
             f"saw Authorization={upstream_auth!r}"
@@ -383,10 +387,9 @@ class TestProxyHandlerIntegration:
         )
         # The upstream-bound credential the client supplied (x-api-key) reaches the
         # upstream — that's the provider's own key, which is correct.
-        upstream_xkey = (
-            _UpstreamMock.captured_headers.get("X-Api-Key")
-            or _UpstreamMock.captured_headers.get("x-api-key")
-        )
+        upstream_xkey = _UpstreamMock.captured_headers.get(
+            "X-Api-Key"
+        ) or _UpstreamMock.captured_headers.get("x-api-key")
         assert upstream_xkey == upstream_api_key
 
 
@@ -410,12 +413,11 @@ class TestMonitorTelemetryRowUserId:
 
     def _last_row(self, db_path):
         import sqlite3
+
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         try:
-            row = conn.execute(
-                "SELECT * FROM requests ORDER BY id DESC LIMIT 1"
-            ).fetchone()
+            row = conn.execute("SELECT * FROM requests ORDER BY id DESC LIMIT 1").fetchone()
             return dict(row) if row else None
         finally:
             conn.close()
@@ -424,8 +426,10 @@ class TestMonitorTelemetryRowUserId:
         """ALTER-TABLE migration adds user_id, and CREATE-TABLE includes it on
         a fresh DB."""
         from tokenpak.proxy.monitor import Monitor as _Monitor
+
         m = _Monitor(self._fresh_db(tmp_path))
         import sqlite3
+
         conn = sqlite3.connect(m.db_path)
         try:
             cols = [r[1] for r in conn.execute("PRAGMA table_info(requests)").fetchall()]
@@ -439,6 +443,7 @@ class TestMonitorTelemetryRowUserId:
         ``Monitor.log`` calls then take the synchronous-fallback branch — same
         write semantics, just deterministic for tests."""
         from tokenpak.proxy import monitor as monitor_mod
+
         monkeypatch.setattr(monitor_mod, "_DB_WRITE_QUEUE", None, raising=False)
 
     def test_log_persists_user_id_hash_sync_path(self, tmp_path, monkeypatch):
@@ -446,6 +451,7 @@ class TestMonitorTelemetryRowUserId:
         verify the emitted row's user_id column == hash_token(token) and that
         the raw token never appears anywhere in the row."""
         from tokenpak.proxy.monitor import Monitor as _Monitor
+
         m = _Monitor(self._fresh_db(tmp_path))
         self._force_sync_path(monkeypatch)
         token = "rotation-secret-AB-1234567890"
@@ -466,13 +472,12 @@ class TestMonitorTelemetryRowUserId:
         # I5-adjacent: no column may contain the raw token, even partially.
         for k, v in row.items():
             if isinstance(v, str):
-                assert token not in v, (
-                    f"raw token leaked to telemetry column {k!r}: {v!r}"
-                )
+                assert token not in v, f"raw token leaked to telemetry column {k!r}: {v!r}"
 
     def test_log_default_user_id_is_empty_string(self, tmp_path, monkeypatch):
         """Localhost / pre-A6 callers do not pass user_id → empty string."""
         from tokenpak.proxy.monitor import Monitor as _Monitor
+
         m = _Monitor(self._fresh_db(tmp_path))
         self._force_sync_path(monkeypatch)
         m.log(
@@ -494,20 +499,16 @@ class TestMonitorTelemetryRowUserId:
         code shifts. Equivalent in spirit to test_hmac_compare_digest_used."""
         import ast
         from pathlib import Path
+
         src = Path(proxy_server.__file__).read_text()
         tree = ast.parse(src)
         found = False
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                if node.func.attr == "log" and any(
-                    kw.arg == "user_id" for kw in node.keywords
-                ):
+                if node.func.attr == "log" and any(kw.arg == "user_id" for kw in node.keywords):
                     # narrow to the ps.monitor.log call by checking attribute chain
                     val = node.func.value
-                    if (
-                        isinstance(val, ast.Attribute)
-                        and val.attr == "monitor"
-                    ):
+                    if isinstance(val, ast.Attribute) and val.attr == "monitor":
                         found = True
                         break
             # also accept (less strictly) any `.log(user_id=...)` call as
@@ -515,11 +516,6 @@ class TestMonitorTelemetryRowUserId:
             if isinstance(node, ast.Call) and any(
                 isinstance(kw.arg, str) and kw.arg == "user_id" for kw in node.keywords
             ):
-                if (
-                    isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "log"
-                ):
+                if isinstance(node.func, ast.Attribute) and node.func.attr == "log":
                     found = True
-        assert found, (
-            "expected ps.monitor.log(... user_id=...) wire in tokenpak/proxy/server.py"
-        )
+        assert found, "expected ps.monitor.log(... user_id=...) wire in tokenpak/proxy/server.py"

@@ -39,7 +39,7 @@ import os
 import threading
 import time
 from collections import deque
-from typing import Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 logger = logging.getLogger("tokenpak.proxy.admission")
 
@@ -66,7 +66,7 @@ def _config_max_parallel() -> int:
     except ImportError:
         raw = DEFAULT_MAX_PARALLEL
     try:
-        if isinstance(raw, bool):  # bool is an int subclass; True would mean 1
+        if raw is None or isinstance(raw, bool):  # bool is an int subclass; True would mean 1
             raise ValueError
         value = int(raw)
         if value < 1:
@@ -103,9 +103,7 @@ def resolve_agent_concurrency() -> Tuple[Optional[int], str]:
                 return cap, "env"
         except ValueError:
             pass
-        logger.warning(
-            "invalid %s=%r — falling back to config/default", ENV_OVERRIDE, raw
-        )
+        logger.warning("invalid %s=%r — falling back to config/default", ENV_OVERRIDE, raw)
     return _config_max_parallel(), "config"
 
 
@@ -168,7 +166,7 @@ class AgentConcurrencyGate:
         self.source = source
         self._cond = threading.Condition(threading.Lock())
         self._in_flight = 0
-        self._queue: deque = deque()
+        self._queue: deque[object] = deque()
         self.admitted_total = 0
         self.queued_total = 0
         self.rejected_queue_full = 0
@@ -241,7 +239,7 @@ class AgentConcurrencyGate:
 
     # -- observability -------------------------------------------------------
 
-    def snapshot(self) -> dict:
+    def snapshot(self) -> dict[str, Any]:
         """Point-in-time gate state for /health, status, and doctor surfaces."""
         with self._cond:
             in_flight = self._in_flight

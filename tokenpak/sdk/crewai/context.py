@@ -16,9 +16,7 @@ class TokenPakContext:
         return max(1, int(len(text) * self.avg_tokens_per_char))
 
     def _agent_tokens_used(self, agent_name):
-        return sum(
-            self._estimate_tokens(c) for c in self._agent_context.get(agent_name, [])
-        )
+        return sum(self._estimate_tokens(c) for c in self._agent_context.get(agent_name, []))
 
     def add_context(self, agent_name, content):
         budget = self._agent_budgets.get(agent_name, 1000)

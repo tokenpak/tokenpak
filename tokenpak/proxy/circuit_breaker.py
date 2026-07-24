@@ -7,16 +7,40 @@ merged from the legacy agent proxy circuit breaker.
 
 Extracted from runtime/proxy.py (L812-1146) as part of TPK-RESTRUCTURE-003.
 """
+
+from __future__ import annotations
+
 import os
 import socket
 import threading
 import time
 from collections import deque
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Optional, TypedDict
 
-from .config import _cfg
+from tokenpak.core.config_loader import get as _cfg
+
+
+class _OllamaCircuitState(TypedDict):
+    open: bool
+    last_failure: float
+    cooldown: float
+
+
+class _ProviderCircuitState(TypedDict):
+    failures: int
+    open: bool
+    last_failure: float
+    threshold: int
+    cooldown: float
+
+
+class _RateBucket(TypedDict):
+    tokens: float
+    last_refill: float
+
 
 # ---------------------------------------------------------------------------
 # Ollama upstream routing
@@ -28,10 +52,10 @@ OLLAMA_UPSTREAM: str = _cfg(
 OLLAMA_CONNECT_TIMEOUT: int = _cfg("upstream.ollama_timeout", 20, "TOKENPAK_OLLAMA_TIMEOUT", int)
 
 # Circuit breaker for ollama upstream — avoids repeated 2-min TCP hangs
-_ollama_circuit: dict = {
-    "open": False,          # True = upstream known-dead, skip attempts
-    "last_failure": 0.0,    # timestamp of last failure
-    "cooldown": 120,        # seconds before retrying after failure
+_ollama_circuit: _OllamaCircuitState = {
+    "open": False,  # True = upstream known-dead, skip attempts
+    "last_failure": 0.0,  # timestamp of last failure
+    "cooldown": 120,  # seconds before retrying after failure
 }
 _ollama_circuit_lock = threading.Lock()
 
@@ -39,7 +63,7 @@ _ollama_circuit_lock = threading.Lock()
 # Per-provider circuit breakers (Anthropic, OpenAI, Google)
 # ---------------------------------------------------------------------------
 
-_provider_circuits: dict = {
+_provider_circuits: dict[str, _ProviderCircuitState] = {
     "anthropic": {
         "failures": 0,
         "open": False,
@@ -123,19 +147,17 @@ def _circuit_record_success(provider: str) -> None:
 # ---------------------------------------------------------------------------
 
 _RATE_LIMIT_RPM: int = _cfg("rate_limit_rpm", 60, "TOKENPAK_RATE_LIMIT_RPM", int)
-_rate_buckets: dict = {}
+_rate_buckets: dict[str, _RateBucket] = {}
 _rate_bucket_lock = threading.Lock()
 
 # Request body size limit — configurable, default 10 MB
-_MAX_REQUEST_BYTES: int = int(
-    os.environ.get("TOKENPAK_MAX_REQUEST_SIZE", str(10 * 1024 * 1024))
-)
+_MAX_REQUEST_BYTES: int = int(os.environ.get("TOKENPAK_MAX_REQUEST_SIZE", str(10 * 1024 * 1024)))
 
 # ---------------------------------------------------------------------------
 # Headers that must NEVER be forwarded upstream (security / hop-by-hop)
 # ---------------------------------------------------------------------------
 
-_BLOCKED_FORWARD_HEADERS: frozenset = frozenset(
+_BLOCKED_FORWARD_HEADERS: frozenset[str] = frozenset(
     {
         "host",
         "proxy-connection",
@@ -151,15 +173,15 @@ _BLOCKED_FORWARD_HEADERS: frozenset = frozenset(
         "accept-encoding",
         "x-forwarded-for",
         "x-real-ip",
-        "x-forwarded-host",     # prevent IP spoofing upstream
-        "x-tokenpak-bypass",    # internal header — never forward to upstream
+        "x-forwarded-host",  # prevent IP spoofing upstream
+        "x-tokenpak-bypass",  # internal header — never forward to upstream
     }
 )
 
 
-def _sanitize_headers(raw_headers) -> dict:
+def _sanitize_headers(raw_headers: Mapping[str, str]) -> dict[str, str]:
     """Build a clean forwarding header dict, stripping hop-by-hop and dangerous headers."""
-    result = {}
+    result: dict[str, str] = {}
     for key in raw_headers:
         if key.lower() in _BLOCKED_FORWARD_HEADERS:
             continue
@@ -171,10 +193,12 @@ def _sanitize_headers(raw_headers) -> dict:
 # Error helpers
 # ---------------------------------------------------------------------------
 
+
 def _suggest_model(requested: str) -> Optional[str]:
     """Return the closest known model name for a given (possibly wrong) model string."""
 
     from tokenpak.models import known_models
+
     _known = known_models()
     if not _known or not requested:
         return None
@@ -193,8 +217,12 @@ def _suggest_model(requested: str) -> Optional[str]:
 
 
 def _make_structured_error(
-    error_type: str, message: str, suggestion: str, status: int = 400, **extra
-) -> dict:
+    error_type: str,
+    message: str,
+    suggestion: str,
+    status: int = 400,
+    **extra: object,
+) -> dict[str, object]:
     """Build a flat, user-facing structured error response.
 
     Returns a dict of the form::
@@ -204,14 +232,18 @@ def _make_structured_error(
     This is the canonical format for user-facing errors surfaced directly by the proxy
     (not forwarded from upstream).  Upstream errors go through _enrich_upstream_error instead.
     """
-    payload: dict = {"error": error_type, "message": message, "suggestion": suggestion}
+    payload: dict[str, object] = {
+        "error": error_type,
+        "message": message,
+        "suggestion": suggestion,
+    }
     payload.update(extra)
     return payload
 
 
 def _enrich_upstream_error(
-    normalized: dict, status: int, retry_after_header: Optional[str] = None
-) -> dict:
+    normalized: dict[str, object], status: int, retry_after_header: Optional[str] = None
+) -> dict[str, object]:
     """Add actionable ``hint`` / ``suggestion`` and ``retry_after`` fields to a normalized error dict.
 
     Covers five key error paths:
@@ -221,9 +253,12 @@ def _enrich_upstream_error(
       4. Malformed request body (400 / validation_error / invalid_request_error)
       5. Provider unavailable (502 / 503 / provider_unavailable)
     """
-    err = normalized.get("error", {})
-    err_type = err.get("type", "")
-    err_msg = err.get("message", "").lower()
+    raw_error = normalized.get("error", {})
+    err: dict[str, object] = raw_error if isinstance(raw_error, dict) else {}
+    raw_error_type = err.get("type", "")
+    err_type = raw_error_type if isinstance(raw_error_type, str) else ""
+    raw_error_message = err.get("message", "")
+    err_msg = raw_error_message.lower() if isinstance(raw_error_message, str) else ""
 
     # 1. Invalid API key
     if status == 401 or err_type in ("authentication_error", "auth_error", "invalid_api_key"):
@@ -243,11 +278,17 @@ def _enrich_upstream_error(
         or "model" in err_msg
         and "not found" in err_msg
     ):
-        _req_model = err.get("model") or ""
+        raw_requested_model = err.get("model")
+        _req_model = raw_requested_model if isinstance(raw_requested_model, str) else ""
         if not _req_model:
             import re as _re
 
-            _m = _re.search(r"model[:\s]+['\"]?([^\s'\"]+)['\"]?", err.get("message", ""), _re.I)
+            message = err.get("message", "")
+            _m = _re.search(
+                r"model[:\s]+['\"]?([^\s'\"]+)['\"]?",
+                message if isinstance(message, str) else "",
+                _re.I,
+            )
             _req_model = _m.group(1) if _m else ""
         _suggested = _suggest_model(_req_model) if _req_model else None
         suggestion = "The requested model was not found on the upstream provider."
@@ -261,7 +302,7 @@ def _enrich_upstream_error(
     elif status == 429 or err_type in ("rate_limit_error", "rate_limit_exceeded"):
         _ra = retry_after_header or err.get("retry_after")
         suggestion = "Provider returned 429 — upstream rate limit exceeded."
-        if _ra:
+        if isinstance(_ra, (str, int, float)) and _ra:
             try:
                 err["retry_after"] = int(float(_ra))
                 suggestion += f" Retry after {err['retry_after']} seconds."
@@ -275,7 +316,8 @@ def _enrich_upstream_error(
 
     # 4. Malformed request (400 / invalid_request_error / invalid_json)
     elif status == 400 or err_type in ("invalid_request_error", "validation_error", "invalid_json"):
-        _msg = err.get("message", "")
+        raw_message = err.get("message", "")
+        _msg = raw_message if isinstance(raw_message, str) else ""
         if err_type == "invalid_json":
             suggestion = "The request body must be valid JSON. Check for missing quotes, trailing commas, or unescaped characters."
         else:
@@ -326,6 +368,7 @@ def _enrich_upstream_error(
 # Rate limit check
 # ---------------------------------------------------------------------------
 
+
 def _rate_limit_check(client_ip: str) -> bool:
     """Return True if request is ALLOWED. False = throttle (429)."""
     if _RATE_LIMIT_RPM <= 0:
@@ -349,6 +392,7 @@ def _rate_limit_check(client_ip: str) -> bool:
 # Ollama health check background thread
 # ---------------------------------------------------------------------------
 
+
 def _ollama_health_loop() -> None:
     """Background thread: ping ollama upstream every 30s.
     Pre-opens circuit if unreachable so requests fail instantly."""
@@ -356,6 +400,8 @@ def _ollama_health_loop() -> None:
 
     parsed = urlparse(OLLAMA_UPSTREAM)
     host = parsed.hostname
+    if host is None:
+        return
     port = parsed.port or 11434
     check_interval = 30  # seconds between checks
 
@@ -395,8 +441,9 @@ if os.environ.get("TOKENPAK_OLLAMA_ENABLED", "0") == "1":
 
 class CircuitState(str, Enum):
     """Circuit breaker states."""
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Fast-failing
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Fast-failing
     HALF_OPEN = "half_open"  # Probing recovery
 
 
@@ -405,9 +452,9 @@ class CircuitBreakerConfig:
     """Configuration for all circuit breakers."""
 
     enabled: bool = True
-    failure_threshold: int = 5   # failures in window before tripping
+    failure_threshold: int = 5  # failures in window before tripping
     recovery_timeout: float = 60.0  # seconds before OPEN → HALF_OPEN
-    window_seconds: float = 60.0    # rolling failure counting window
+    window_seconds: float = 60.0  # rolling failure counting window
     # Also require failures/(failures+successes) in the window to be at least
     # this ratio before tripping. Prevents false trips when upstream has a
     # minority failure rate (e.g. 15% Server disconnected) but is otherwise
@@ -442,8 +489,8 @@ class CircuitBreaker:
         self._config = config
         self._lock = threading.Lock()
         self._state: CircuitState = CircuitState.CLOSED
-        self._failure_times: deque = deque()
-        self._success_times: deque = deque()
+        self._failure_times: deque[float] = deque()
+        self._success_times: deque[float] = deque()
         self._opened_at: float = 0.0
         self._probe_in_flight: bool = False
         self._total_trips: int = 0
@@ -508,10 +555,7 @@ class CircuitBreaker:
             successes = len(self._success_times)
             total = fails + successes
             ratio = (fails / total) if total > 0 else 1.0
-            if (
-                fails >= self._config.failure_threshold
-                and ratio >= self._config.min_failure_ratio
-            ):
+            if fails >= self._config.failure_threshold and ratio >= self._config.min_failure_ratio:
                 self._state = CircuitState.OPEN
                 self._opened_at = now
                 self._total_trips += 1
@@ -521,7 +565,7 @@ class CircuitBreaker:
         with self._lock:
             return self._state
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, object]:
         """Return a status dict for the /health endpoint."""
         with self._lock:
             now = time.monotonic()
@@ -533,9 +577,7 @@ class CircuitBreaker:
             failures_in_window = len(self._failure_times)
             successes_in_window = len(self._success_times)
             total_in_window = failures_in_window + successes_in_window
-            failure_ratio = (
-                failures_in_window / total_in_window if total_in_window > 0 else 0.0
-            )
+            failure_ratio = failures_in_window / total_in_window if total_in_window > 0 else 0.0
             time_until_probe: Optional[float] = None
             if self._state == CircuitState.OPEN:
                 remaining = self._config.recovery_timeout - (now - self._opened_at)
@@ -564,7 +606,7 @@ class CircuitBreaker:
 
 
 # Known provider URL substrings → canonical provider names
-_PROVIDER_PATTERNS: List[tuple] = [
+_PROVIDER_PATTERNS: list[tuple[str, str]] = [
     ("anthropic.com", "anthropic"),
     ("openai.com", "openai"),
     # ChatGPT Codex subscription — OAuth JWT → chatgpt.com/backend-api.
@@ -589,7 +631,9 @@ def provider_from_url(url: str) -> str:
             return provider
     try:
         from urllib.parse import urlparse
-        return urlparse(url).hostname or "unknown"
+
+        hostname = urlparse(url).hostname
+        return hostname if hostname else "unknown"
     except Exception:
         return "unknown"
 
@@ -599,7 +643,7 @@ class CircuitBreakerRegistry:
 
     def __init__(self, config: Optional[CircuitBreakerConfig] = None) -> None:
         self._config = config or CircuitBreakerConfig.from_env()
-        self._breakers: Dict[str, CircuitBreaker] = {}
+        self._breakers: dict[str, CircuitBreaker] = {}
         self._lock = threading.Lock()
 
     def _get_or_create(self, provider: str) -> CircuitBreaker:
@@ -628,7 +672,7 @@ class CircuitBreakerRegistry:
             for breaker in self._breakers.values():
                 breaker._config = new_config
 
-    def all_statuses(self) -> Dict[str, Any]:
+    def all_statuses(self) -> dict[str, dict[str, object]]:
         with self._lock:
             providers = list(self._breakers.items())
         return {name: cb.status() for name, cb in providers}
@@ -717,7 +761,7 @@ class RateLimitCircuitBreaker:
         self._threshold: int = threshold if threshold is not None else _RL_THRESHOLD
         self._cooldown_sec: float = cooldown_sec if cooldown_sec is not None else _RL_COOLDOWN_SEC
         self._lock = threading.Lock()
-        self._429_times: deque = deque()
+        self._429_times: deque[float] = deque()
         self._opened_at: float = 0.0
         self._is_open: bool = False
 
@@ -766,7 +810,7 @@ class RateLimitCircuitBreaker:
             self._429_times.clear()
             self._opened_at = 0.0
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, object]:
         """Return a status dict suitable for health-check endpoints."""
         with self._lock:
             now = time.monotonic()
@@ -796,7 +840,7 @@ class RateLimitCircuitBreakerRegistry:
         self._window_sec = window_sec
         self._threshold = threshold
         self._cooldown_sec = cooldown_sec
-        self._breakers: Dict[str, RateLimitCircuitBreaker] = {}
+        self._breakers: dict[str, RateLimitCircuitBreaker] = {}
         self._lock = threading.Lock()
 
     def _get_or_create(self, provider: str) -> RateLimitCircuitBreaker:
@@ -826,7 +870,7 @@ class RateLimitCircuitBreakerRegistry:
         for b in breakers:
             b.reset()
 
-    def all_statuses(self) -> Dict[str, Any]:
+    def all_statuses(self) -> dict[str, dict[str, object]]:
         with self._lock:
             items = list(self._breakers.items())
         return {name: b.status() for name, b in items}

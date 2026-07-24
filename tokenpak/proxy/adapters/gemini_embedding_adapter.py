@@ -57,9 +57,9 @@ class GeminiEmbeddingAdapter(EmbeddingAdapter):
 
         if len(canonical.input) > 1:
             # Batch path: batchEmbedContents accepts multiple texts in one request.
-            requests_list: List[Dict] = []
+            requests_list: List[Dict[str, object]] = []
             for text in canonical.input:
-                req: Dict = {
+                req: Dict[str, object] = {
                     "model": f"models/{model}",
                     "content": {"parts": [{"text": text}]},
                 }
@@ -67,7 +67,7 @@ class GeminiEmbeddingAdapter(EmbeddingAdapter):
                     req["outputDimensionality"] = canonical.dimensions
                 requests_list.append(req)
 
-            payload: Dict = {"requests": requests_list}
+            payload: Dict[str, object] = {"requests": requests_list}
             url = (
                 f"{_GEMINI_EMBED_BASE}/v1beta/models/{model}:batchEmbedContents"
                 f"?{urlencode({'key': api_key})}"
@@ -104,7 +104,7 @@ class GeminiEmbeddingAdapter(EmbeddingAdapter):
 
         if "embeddings" in raw:
             # batchEmbedContents response
-            data: List[Dict] = [
+            data: List[Dict[str, object]] = [
                 {
                     "object": "embedding",
                     "index": i,
@@ -117,7 +117,7 @@ class GeminiEmbeddingAdapter(EmbeddingAdapter):
             values: List[float] = raw.get("embedding", {}).get("values", [])
             data = [{"object": "embedding", "index": 0, "embedding": values}]
 
-        openai_response: Dict = {
+        openai_response: Dict[str, object] = {
             "object": "list",
             "data": data,
             "model": raw.get("model", self.get_default_model()),

@@ -264,6 +264,7 @@ class TestServerModuleImports:
         """Server module should import without errors."""
         try:
             import tokenpak.telemetry.server as server_module
+
             assert hasattr(server_module, "create_app")
             assert hasattr(server_module, "parse_filter")
             assert hasattr(server_module, "TelemetryEvent")
@@ -279,6 +280,7 @@ class TestServerModuleImports:
             IngestResponse,
             TelemetryEvent,
         )
+
         assert TelemetryEvent is not None
         assert IngestRequest is not None
         assert IngestResponse is not None

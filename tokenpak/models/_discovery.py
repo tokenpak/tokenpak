@@ -178,9 +178,7 @@ class ModelDiscovery:
                 "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "models": self._discovered,
             }
-            CACHE_PATH.write_text(
-                json.dumps(payload, indent=2), encoding="utf-8"
-            )
+            CACHE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except OSError:
             log.debug("Failed to save discovery cache", exc_info=True)
 

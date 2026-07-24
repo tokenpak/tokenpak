@@ -21,14 +21,21 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional
+from types import FrameType
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Protocol, cast
 
 if TYPE_CHECKING:
     # Forward-ref only — actual import is delayed inside the start() path
     # behind a watchdog-availability guard (see line ~99).
+    from watchdog.events import FileSystemEvent
     from watchdog.observers.api import BaseObserver
 
 logger = logging.getLogger(__name__)
+
+
+class _TextProcessor(Protocol):
+    def process(self, content: str, path: str = "") -> str: ...
+
 
 DEFAULT_IGNORE_PATTERNS = [
     "*.pyc",
@@ -54,10 +61,10 @@ DEFAULT_IGNORE_PATTERNS = [
 class WatcherConfig:
     """Configuration for the file watcher."""
 
-    watch_paths: list
+    watch_paths: list[str]
     debounce_ms: int = 500
     recursive: bool = True
-    ignore_patterns: list = field(default_factory=lambda: list(DEFAULT_IGNORE_PATTERNS))
+    ignore_patterns: list[str] = field(default_factory=lambda: list(DEFAULT_IGNORE_PATTERNS))
     db_path: Optional[str] = None
     use_gitignore: bool = True
     use_tokenpakignore: bool = True
@@ -85,7 +92,9 @@ class VaultWatcher:
     - Graceful Ctrl+C handling when blocking=True
     """
 
-    def __init__(self, config: WatcherConfig, on_change: Optional[Callable[[str], None]] = None):
+    def __init__(
+        self, config: WatcherConfig, on_change: Optional[Callable[[str], None]] = None
+    ) -> None:
         self.config = config
         self.on_change = on_change
         self._running = False
@@ -93,7 +102,7 @@ class VaultWatcher:
         self._pending: Dict[str, float] = {}
         self._debounce_lock = threading.Lock()
         self._debounce_thread: Optional[threading.Thread] = None
-        self._observer = None
+        self._observer: BaseObserver | None = None
         self._gitignore_patterns: List[str] = []
         self._tokenpakignore_patterns: List[str] = []
         self._load_ignore_files()
@@ -111,20 +120,21 @@ class VaultWatcher:
         watcher_ref = self
 
         class _Handler(FileSystemEventHandler):
-            def on_any_event(self, event):
+            def on_any_event(self, event: FileSystemEvent) -> None:
                 if event.is_directory:
                     return
                 src = getattr(event, "src_path", None)
                 if src and not watcher_ref._should_ignore(src):
                     watcher_ref._on_fs_event(src)
 
-        self._observer: BaseObserver = Observer()  # type: ignore
+        observer: BaseObserver = Observer()
         for raw_path in self.config.watch_paths:
             watch_dir = str(Path(raw_path).expanduser().resolve())
-            self._observer.schedule(_Handler(), watch_dir, recursive=self.config.recursive)  # type: ignore
+            observer.schedule(_Handler(), watch_dir, recursive=self.config.recursive)
             logger.info("Watching: %s", watch_dir)
 
-        self._observer.start()  # type: ignore
+        observer.start()
+        self._observer = observer
 
         self._debounce_thread = threading.Thread(
             target=self._debounce_loop, daemon=True, name="tp-watcher-debounce"
@@ -146,7 +156,7 @@ class VaultWatcher:
     def is_running(self) -> bool:
         return self._running
 
-    def status(self) -> dict:
+    def status(self) -> dict[str, object]:
         """Return a status/stats dict."""
         s = self._stats
         watched = [str(Path(p).expanduser().resolve()) for p in self.config.watch_paths]
@@ -235,7 +245,7 @@ class VaultWatcher:
         while self._running:
             time.sleep(max(debounce_s / 4, 0.05))
             now = time.monotonic()
-            ready = []
+            ready: list[str] = []
             with self._debounce_lock:
                 for path, ts in list(self._pending.items()):
                     if now - ts >= debounce_s:
@@ -245,7 +255,7 @@ class VaultWatcher:
             if ready:
                 self._reindex(ready)
 
-    def _reindex(self, changed_paths: list) -> None:
+    def _reindex(self, changed_paths: list[str]) -> None:
         self._stats.reindexes_triggered += 1
         reindexed = 0
         try:
@@ -278,7 +288,7 @@ class VaultWatcher:
                 processor = get_processor(file_type)
                 if processor is None:
                     continue
-                compressed = processor.process(content, str(p))
+                compressed = cast(_TextProcessor, processor).process(content, str(p))
 
                 content_hash = hashlib.sha256(content.encode()).hexdigest()
                 block = {
@@ -322,7 +332,7 @@ class VaultWatcher:
         print(f"  debounce: {self.config.debounce_ms}ms | recursive: {self.config.recursive}")
         print()
 
-        def _handle_signal(sig, frame):
+        def _handle_signal(sig: int, frame: FrameType | None) -> None:
             print("\n[tokenpak] Stopping watcher…")
             self.stop()
             sys.exit(0)

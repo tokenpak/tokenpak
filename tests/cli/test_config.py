@@ -113,8 +113,9 @@ def test_doctor_env_vars_listed_and_secret_not_leaked(fake_home, capsys):
     assert "ANTHROPIC_API_KEY" in d4.detail
     # render and assert the secret value never reaches stdout
     home_path, rule = config_env._home_rule()
-    config_env.render_doctor(checks, as_json=False, quiet=False, verbose=True,
-                             home=home_path, rule=rule, exit_code=code)
+    config_env.render_doctor(
+        checks, as_json=False, quiet=False, verbose=True, home=home_path, rule=rule, exit_code=code
+    )
     out = capsys.readouterr().out
     assert "PLACEHOLDER-not-real" not in out
 
@@ -150,8 +151,15 @@ def test_doctor_json_output_parses(fake_home):
     home_path, rule = config_env._home_rule()
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        config_env.render_doctor(checks, as_json=True, quiet=False, verbose=False,
-                                 home=home_path, rule=rule, exit_code=code)
+        config_env.render_doctor(
+            checks,
+            as_json=True,
+            quiet=False,
+            verbose=False,
+            home=home_path,
+            rule=rule,
+            exit_code=code,
+        )
     parsed = json.loads(buf.getvalue())
     assert set(parsed) == {"home", "checks", "summary", "exit_code"}
     assert parsed["exit_code"] == code

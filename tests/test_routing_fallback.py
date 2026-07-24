@@ -41,7 +41,12 @@ from tokenpak.routing.fallback import (
 
 def _ctx(**kw):
     """Minimal context dict."""
-    base = {"task": "test-task", "task_id": "t-001", "model": "claude-opus-4-5", "provider": "anthropic"}
+    base = {
+        "task": "test-task",
+        "task_id": "t-001",
+        "model": "claude-opus-4-5",
+        "provider": "anthropic",
+    }
     base.update(kw)
     return base
 
@@ -63,6 +68,7 @@ def _make_fn(succeed_on_attempt: int = 1, error_code: str = "500"):
 def _always_fail(error_msg: str = "HTTP 500 server error"):
     def fn(ctx, state):
         raise ValueError(error_msg)
+
     return fn
 
 
@@ -73,6 +79,7 @@ class TestFallbackRouterSuccess:
     def test_success_first_try(self, tmp_path):
         def fn(ctx, state):
             return "result"
+
         router = FallbackRouter(state_dir=tmp_path)
         assert router.call(fn=fn, context=_ctx()) == "result"
 
@@ -144,10 +151,17 @@ class TestFallbackRouterFailover:
     def _make_failover_manager(self, providers=("anthropic", "openai", "google")):
         """Build a FailoverManager with given providers all credential-available."""
         from tokenpak.proxy.failover import FailoverConfig, ProviderEntry
+
         chain = [
             ProviderEntry(
                 provider=p,
-                model_map={"claude-opus-4-5": "gpt-4o" if p == "openai" else "gemini-1.5-pro" if p == "google" else "claude-opus-4-5"},
+                model_map={
+                    "claude-opus-4-5": "gpt-4o"
+                    if p == "openai"
+                    else "gemini-1.5-pro"
+                    if p == "google"
+                    else "claude-opus-4-5"
+                },
                 credential_env=f"{p.upper()}_API_KEY",
             )
             for p in providers
@@ -158,6 +172,7 @@ class TestFallbackRouterFailover:
 
         # Build real iteration from config
         from tokenpak.proxy.failover import FailoverManager
+
         real_mgr = FailoverManager(config=cfg)
         # Patch env so credentials appear available
         with patch.dict("os.environ", {f"{p.upper()}_API_KEY": "test-key" for p in providers}):
@@ -169,8 +184,10 @@ class TestFallbackRouterFailover:
     def test_failover_disabled_uses_default_switch(self, tmp_path):
         """When failover disabled, provider switch hook is None → RetryEngine uses its own default."""
         from tokenpak.proxy.failover import FailoverConfig
+
         cfg = FailoverConfig(enabled=False, chain=[])
         from tokenpak.proxy.failover import FailoverManager
+
         mgr = FailoverManager(config=cfg)
 
         providers_seen = []
@@ -193,6 +210,7 @@ class TestFallbackRouterFailover:
     def test_failover_enabled_drives_provider_switch(self, tmp_path):
         """When failover enabled, FailoverManager provides provider ordering."""
         from tokenpak.proxy.failover import FailoverConfig, FailoverManager, ProviderEntry
+
         chain = [
             ProviderEntry(provider="anthropic", model_map={}, credential_env="ANTHROPIC_API_KEY"),
             ProviderEntry(provider="openai", model_map={}, credential_env="OPENAI_API_KEY"),
@@ -252,6 +270,7 @@ class TestFunctionalAPI:
     def test_fallback_call_success(self, tmp_path):
         def fn(ctx, state):
             return "functional-ok"
+
         result = fallback_call(fn=fn, context=_ctx(), state_dir=tmp_path)
         assert result == "functional-ok"
 

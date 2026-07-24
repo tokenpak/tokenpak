@@ -225,12 +225,8 @@ class OrderingHints:
             ) from exc
         return cls(
             stable_first=bool(data.get("stable_first", True)),
-            task_delta_after_stable_context=bool(
-                data.get("task_delta_after_stable_context", True)
-            ),
-            output_requirements_near_end=bool(
-                data.get("output_requirements_near_end", True)
-            ),
+            task_delta_after_stable_context=bool(data.get("task_delta_after_stable_context", True)),
+            output_requirements_near_end=bool(data.get("output_requirements_near_end", True)),
             cache_sensitive_blocks=tuple(data.get("cache_sensitive_blocks", ())),
             anchor_block_position=pos,
         )
@@ -335,9 +331,7 @@ class ContextPackage:
                 included_paks=coverage_d.get("included_paks", 0),
                 hydrated_anchors=coverage_d.get("hydrated_anchors", 0),
                 missing_context=tuple(coverage_d.get("missing_context", ())),
-                confidence=CoverageConfidence(
-                    coverage_d.get("confidence", "medium")
-                ),
+                confidence=CoverageConfidence(coverage_d.get("confidence", "medium")),
             ),
             policy=PolicyDecision(
                 cross_project_blocked=policy_d.get("cross_project_blocked", False),

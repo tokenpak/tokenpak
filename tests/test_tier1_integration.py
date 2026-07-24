@@ -70,19 +70,22 @@ REALISTIC_SYSTEM_PROMPT = {
     "text": "You are Claude, a helpful AI assistant made by Anthropic. You provide accurate, thoughtful responses.",
 }
 
+
 def make_anthropic_messages(*user_texts: str) -> list:
     """Create a realistic Anthropic API message array."""
     messages = []
     for text in user_texts:
-        messages.append({
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": text,
-                }
-            ],
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": text,
+                    }
+                ],
+            }
+        )
     return messages
 
 
@@ -103,6 +106,7 @@ def make_anthropic_request(
 # ---------------------------------------------------------------------------
 # TestSemanticCacheIntegration — Proxy Cache Lookup/Store
 # ---------------------------------------------------------------------------
+
 
 class TestSemanticCacheIntegration:
     """Verify SemanticCache lookup() returns None on miss, store() persists, lookup() hits."""
@@ -160,7 +164,7 @@ class TestSemanticCacheIntegration:
         """Cache disabled via config should always return miss."""
         cache = SemanticCache(SemanticCacheConfig(enabled=False))
         query = json.dumps(make_anthropic_request("Be helpful.", "test"))
-        response = {"content": [{"type": "text", "text": "response"}]}
+        response = b'{"content":[{"type":"text","text":"response"}]}'
 
         cache.store(query, response)
         result = cache.lookup(query)
@@ -228,6 +232,7 @@ class TestSemanticCacheIntegration:
 # TestPrefixRegistryIntegration — Stable Prefix Tracking
 # ---------------------------------------------------------------------------
 
+
 class TestPrefixRegistryIntegration:
     """Verify get_or_create() returns metadata, repeated calls return same ID."""
 
@@ -293,12 +298,10 @@ class TestPrefixRegistryIntegration:
         """Test with realistic Anthropic system prompt."""
         registry = StablePrefixRegistry()
         request_a = make_anthropic_request(
-            "You are Claude, a helpful AI assistant made by Anthropic.",
-            "What is Python?"
+            "You are Claude, a helpful AI assistant made by Anthropic.", "What is Python?"
         )
         request_b = make_anthropic_request(
-            "You are Claude, a helpful AI assistant made by Anthropic.",
-            "What is JavaScript?"
+            "You are Claude, a helpful AI assistant made by Anthropic.", "What is JavaScript?"
         )
 
         # Both requests have same system prompt; only messages differ
@@ -352,6 +355,7 @@ class TestPrefixRegistryIntegration:
 # TestCompressionDictIntegration — Message List Compression
 # ---------------------------------------------------------------------------
 
+
 class TestCompressionDictIntegration:
     """Verify apply() takes messages, returns compressed messages; toggles work."""
 
@@ -359,14 +363,21 @@ class TestCompressionDictIntegration:
         """apply() returns DictionaryResult with messages, replacements_made."""
         with tempfile.TemporaryDirectory() as tmpdir:
             dict_path = Path(tmpdir) / "compression_dict.json"
-            dict_path.write_text(json.dumps({
-                "environment variable configuration mismatch": "ENV_MISMATCH",
-                "connection refused": "CONN_REFUSED",
-            }))
+            dict_path.write_text(
+                json.dumps(
+                    {
+                        "environment variable configuration mismatch": "ENV_MISMATCH",
+                        "connection refused": "CONN_REFUSED",
+                    }
+                )
+            )
 
             cd = CompressionDictionary(dict_path=dict_path)
             messages = [
-                {"role": "user", "content": "We got an environment variable configuration mismatch error."},
+                {
+                    "role": "user",
+                    "content": "We got an environment variable configuration mismatch error.",
+                },
                 {"role": "assistant", "content": "That is a connection refused issue."},
             ]
 
@@ -381,9 +392,13 @@ class TestCompressionDictIntegration:
         """Verify replacements are actually applied to message content."""
         with tempfile.TemporaryDirectory() as tmpdir:
             dict_path = Path(tmpdir) / "compression_dict.json"
-            dict_path.write_text(json.dumps({
-                "database connection error": "DB_CONN_ERR",
-            }))
+            dict_path.write_text(
+                json.dumps(
+                    {
+                        "database connection error": "DB_CONN_ERR",
+                    }
+                )
+            )
 
             cd = CompressionDictionary(dict_path=dict_path)
             messages = [
@@ -427,9 +442,13 @@ class TestCompressionDictIntegration:
         """apply() should work with single message."""
         with tempfile.TemporaryDirectory() as tmpdir:
             dict_path = Path(tmpdir) / "compression_dict.json"
-            dict_path.write_text(json.dumps({
-                "critical system failure": "CRIT_SYS_FAIL",
-            }))
+            dict_path.write_text(
+                json.dumps(
+                    {
+                        "critical system failure": "CRIT_SYS_FAIL",
+                    }
+                )
+            )
 
             cd = CompressionDictionary(dict_path=dict_path)
             messages = [
@@ -445,10 +464,14 @@ class TestCompressionDictIntegration:
         """apply() should handle multiple messages in a conversation."""
         with tempfile.TemporaryDirectory() as tmpdir:
             dict_path = Path(tmpdir) / "compression_dict.json"
-            dict_path.write_text(json.dumps({
-                "memory allocation failed": "MEM_FAIL",
-                "network timeout occurred": "NET_TIMEOUT",
-            }))
+            dict_path.write_text(
+                json.dumps(
+                    {
+                        "memory allocation failed": "MEM_FAIL",
+                        "network timeout occurred": "NET_TIMEOUT",
+                    }
+                )
+            )
 
             cd = CompressionDictionary(dict_path=dict_path)
             messages = [
@@ -461,8 +484,10 @@ class TestCompressionDictIntegration:
             result = cd.apply(messages)
 
             assert len(result.messages) == 4
-            assert all("MEM_FAIL" in msg.get("content", "") or "NET_TIMEOUT" in msg.get("content", "")
-                      for msg in result.messages)
+            assert all(
+                "MEM_FAIL" in msg.get("content", "") or "NET_TIMEOUT" in msg.get("content", "")
+                for msg in result.messages
+            )
 
     def test_compression_dict_session_dict_entries(self):
         """Verify SESSION dict tracking for compression dictionary."""
@@ -473,9 +498,13 @@ class TestCompressionDictIntegration:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             dict_path = Path(tmpdir) / "compression_dict.json"
-            dict_path.write_text(json.dumps({
-                "protocol version mismatch": "PROTO_MISMATCH",
-            }))
+            dict_path.write_text(
+                json.dumps(
+                    {
+                        "protocol version mismatch": "PROTO_MISMATCH",
+                    }
+                )
+            )
 
             cd = CompressionDictionary(dict_path=dict_path)
             messages = [
@@ -496,9 +525,13 @@ class TestCompressionDictIntegration:
         """apply() should preserve non-content fields in messages."""
         with tempfile.TemporaryDirectory() as tmpdir:
             dict_path = Path(tmpdir) / "compression_dict.json"
-            dict_path.write_text(json.dumps({
-                "error message": "ERR",
-            }))
+            dict_path.write_text(
+                json.dumps(
+                    {
+                        "error message": "ERR",
+                    }
+                )
+            )
 
             cd = CompressionDictionary(dict_path=dict_path)
             messages = [
@@ -522,6 +555,7 @@ class TestCompressionDictIntegration:
 # TestToggleDisabled — All Modules Respect Toggles
 # ---------------------------------------------------------------------------
 
+
 class TestToggleDisabled:
     """Verify each module is skipped when toggle env var is set to '0'."""
 
@@ -529,7 +563,7 @@ class TestToggleDisabled:
         """SemanticCache with enabled=False should skip all lookups."""
         cache = SemanticCache(SemanticCacheConfig(enabled=False))
         request = json.dumps(make_anthropic_request("test", "query"))
-        response = {"content": "response"}
+        response = b'{"content":"response"}'
 
         cache.store(request, response)
         result = cache.lookup(request)
@@ -570,6 +604,7 @@ class TestToggleDisabled:
 # TestIntegrationSuite — Combined Tests Across Modules
 # ---------------------------------------------------------------------------
 
+
 class TestIntegrationSuite:
     """Tests that verify modules work together (realistic pipeline scenario)."""
 
@@ -583,20 +618,25 @@ class TestIntegrationSuite:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             dict_path = Path(tmpdir) / "compression_dict.json"
-            dict_path.write_text(json.dumps({
-                "authentication token expired": "AUTH_EXPIRED",
-            }))
+            dict_path.write_text(
+                json.dumps(
+                    {
+                        "authentication token expired": "AUTH_EXPIRED",
+                    }
+                )
+            )
             compression = CompressionDictionary(dict_path=dict_path)
 
             # Create realistic request
             request = make_anthropic_request(
-                "You are a helpful assistant.",
-                "My authentication token expired. What should I do?"
+                "You are a helpful assistant.", "My authentication token expired. What should I do?"
             )
             request_json = json.dumps(request)
             response = {
                 "id": "msg-123",
-                "content": [{"type": "text", "text": "Generate a new authentication token expired."}],
+                "content": [
+                    {"type": "text", "text": "Generate a new authentication token expired."}
+                ],
                 "model": "claude-3-5-sonnet-20241022",
             }
 
@@ -616,7 +656,11 @@ class TestIntegrationSuite:
                 new_msg = dict(msg)
                 if isinstance(msg.get("content"), list):
                     # Anthropic format: content is list of blocks
-                    text_parts = [block.get("text", "") for block in msg["content"] if isinstance(block, dict) and block.get("type") == "text"]
+                    text_parts = [
+                        block.get("text", "")
+                        for block in msg["content"]
+                        if isinstance(block, dict) and block.get("type") == "text"
+                    ]
                     new_msg["content"] = " ".join(text_parts)
                 messages_for_compression.append(new_msg)
 

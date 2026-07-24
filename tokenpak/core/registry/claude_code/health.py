@@ -1,4 +1,5 @@
 """Proxy health check for the Claude Code adapter."""
+
 import urllib.error
 import urllib.request
 from typing import Tuple

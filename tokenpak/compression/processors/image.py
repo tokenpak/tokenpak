@@ -30,10 +30,9 @@ logger = logging.getLogger(__name__)
 # Attempt to import Pillow; set a flag so the rest of the module can branch.
 # ---------------------------------------------------------------------------
 try:
-    from PIL import (  # type: ignore  # noqa: F401
+    from PIL import (
         Image,
         ImageEnhance,
-        ImageFilter,
         ImageOps,
     )
 
@@ -79,8 +78,7 @@ def classify(image_path: str) -> ImageType:
     """
     if not _PILLOW_AVAILABLE:
         raise ImportError(
-            "Pillow is required for image classification. "
-            "Run: pip install tokenpak[image]"
+            "Pillow is required for image classification. Run: pip install tokenpak[image]"
         )
 
     with Image.open(image_path) as img:
@@ -89,7 +87,9 @@ def classify(image_path: str) -> ImageType:
 
         # Downsample for fast color counting
         thumb = img.convert("RGB").resize((64, 64), Image.LANCZOS)
-        _pdata = thumb.get_flattened_data() if hasattr(thumb, "get_flattened_data") else thumb.getdata()  # type: ignore[union-attr]
+        _pdata = (
+            thumb.get_flattened_data() if hasattr(thumb, "get_flattened_data") else thumb.getdata()
+        )
         unique_colors = len(set(_pdata))
 
     if aspect > 1.2 or unique_colors < 100:
@@ -120,8 +120,7 @@ def compress(
     """
     if not _PILLOW_AVAILABLE:
         raise ImportError(
-            "Pillow is required for image compression. "
-            "Run: pip install tokenpak[image]"
+            "Pillow is required for image compression. Run: pip install tokenpak[image]"
         )
 
     original_size = os.path.getsize(image_path)
@@ -190,7 +189,7 @@ class ImageProcessor:
     :meth:`process` returns the raw file bytes unchanged and emits a warning.
     """
 
-    def process(self, content: bytes, path: str = "") -> bytes:  # type: ignore[override]
+    def process(self, content: bytes, path: str = "") -> bytes:
         """Compress *content* (raw image bytes) using context-aware strategies.
 
         Args:
@@ -216,7 +215,11 @@ class ImageProcessor:
             w, h = img.size
             aspect = h / w if w > 0 else 1.0
             thumb = img.convert("RGB").resize((64, 64), Image.LANCZOS)
-            _pdata = thumb.get_flattened_data() if hasattr(thumb, "get_flattened_data") else thumb.getdata()  # type: ignore[union-attr]
+            _pdata = (
+                thumb.get_flattened_data()
+                if hasattr(thumb, "get_flattened_data")
+                else thumb.getdata()
+            )
             unique_colors = len(set(_pdata))
 
         if aspect > 1.2 or unique_colors < 100:

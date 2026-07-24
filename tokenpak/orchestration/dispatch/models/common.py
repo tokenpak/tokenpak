@@ -79,9 +79,7 @@ class PathPolicy(DispatchBaseModel):
     """
 
     allowed_paths: list[str] = Field(default_factory=list)
-    denied_paths: list[str] = Field(
-        default_factory=lambda: list(MANDATORY_DENIED_PATHS)
-    )
+    denied_paths: list[str] = Field(default_factory=lambda: list(MANDATORY_DENIED_PATHS))
     allow_new_files: bool = True
     allow_delete_files: bool = False
 
@@ -130,12 +128,8 @@ class StationLoopPolicy(DispatchBaseModel):
     max_iterations: int = 2
     max_tool_calls: int = 6
     max_wall_seconds: int = 600
-    stop_when: list[LoopStopCondition] = Field(
-        default_factory=lambda: list(LoopStopCondition)
-    )
-    on_exhausted: list[LoopOnExhausted] = Field(
-        default_factory=lambda: list(LoopOnExhausted)
-    )
+    stop_when: list[LoopStopCondition] = Field(default_factory=lambda: list(LoopStopCondition))
+    on_exhausted: list[LoopOnExhausted] = Field(default_factory=lambda: list(LoopOnExhausted))
 
 
 # ---------------------------------------------------------------------------

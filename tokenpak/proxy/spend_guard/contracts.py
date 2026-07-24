@@ -15,6 +15,7 @@ from typing import Literal, Optional
 # Estimator output
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RiskEstimate:
     """Projection of a single inbound request's cost.
@@ -26,12 +27,12 @@ class RiskEstimate:
 
     model: str
     current_context_tokens: int
-    request_tokens: int                 # uncached new content in this request
-    projected_input_tokens: int         # current_context_tokens + request_tokens
-    projected_output_tokens: int        # heuristic: max_tokens hint or default
-    projected_cost_usd: float           # full input+output cost at model rates
-    cache_hit_ratio: float              # 0.0..1.0 — fraction we expect cached
-    rates: dict = field(default_factory=dict)  # {input, output, cached} per MTok
+    request_tokens: int  # uncached new content in this request
+    projected_input_tokens: int  # current_context_tokens + request_tokens
+    projected_output_tokens: int  # heuristic: max_tokens hint or default
+    projected_cost_usd: float  # full input+output cost at model rates
+    cache_hit_ratio: float  # 0.0..1.0 — fraction we expect cached
+    rates: dict[str, float] = field(default_factory=dict)  # per-MTok rates
 
 
 # ---------------------------------------------------------------------------
@@ -46,8 +47,8 @@ class PreflightDecision:
     """Policy verdict on a RiskEstimate."""
 
     decision: DecisionKind
-    reason: str                         # short machine token, e.g. ``projected_tokens_exceeded``
-    requires_approval: bool             # True when caller can unblock with yes/[TIP]
+    reason: str  # short machine token, e.g. ``projected_tokens_exceeded``
+    requires_approval: bool  # True when caller can unblock with yes/[TIP]
     threshold_hit: Optional[str] = None  # the named threshold, for logging
     risk: Optional[RiskEstimate] = None
 
@@ -55,6 +56,7 @@ class PreflightDecision:
 # ---------------------------------------------------------------------------
 # Pending store
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PendingRequest:
@@ -69,15 +71,16 @@ class PendingRequest:
     model: str
     projected_tokens: int
     projected_cost_usd: float
-    raw_request_blob: bytes             # gzipped original body — replay verbatim
-    raw_request_headers: dict           # forwarded as-is on replay (auth etc.)
-    target_url: str                     # provider URL to replay to
+    raw_request_blob: bytes  # gzipped original body — replay verbatim
+    raw_request_headers: dict[str, str]  # forwarded as-is on replay (auth etc.)
+    target_url: str  # provider URL to replay to
     status: Literal["pending", "consumed", "discarded", "expired"] = "pending"
 
 
 # ---------------------------------------------------------------------------
 # TIP directive
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class TIPDirective:
@@ -95,7 +98,7 @@ class TIPDirective:
     estimate_only: bool = False
     cancel: bool = False
     reason: Optional[str] = None
-    unknown_keys: list = field(default_factory=list)  # for warning audit
+    unknown_keys: list[str] = field(default_factory=list)  # for warning audit
 
 
 # ---------------------------------------------------------------------------
@@ -103,14 +106,14 @@ class TIPDirective:
 # ---------------------------------------------------------------------------
 
 OutcomeKind = Literal[
-    "forward",          # forward_body to provider unchanged
-    "forward_modified", # forward_body with TIP-stripped bytes
-    "block",            # return block_response_body to client; no provider call
-    "hard_block",       # like block but explicitly cannot be bypassed
-    "replay",           # forward_body is the consumed pending blob
-    "estimate",         # return estimate_response_body to client
-    "cancel",           # return cancel_response_body to client; pending discarded
-    "reprompt",         # return reprompt_response_body to client; pending kept
+    "forward",  # forward_body to provider unchanged
+    "forward_modified",  # forward_body with TIP-stripped bytes
+    "block",  # return block_response_body to client; no provider call
+    "hard_block",  # like block but explicitly cannot be bypassed
+    "replay",  # forward_body is the consumed pending blob
+    "estimate",  # return estimate_response_body to client
+    "cancel",  # return cancel_response_body to client; pending discarded
+    "reprompt",  # return reprompt_response_body to client; pending kept
 ]
 
 
@@ -125,14 +128,14 @@ class GuardOutcome:
     """
 
     kind: OutcomeKind
-    body: Optional[bytes] = None              # bytes to forward upstream (forward/replay)
-    headers: Optional[dict] = None            # headers to forward (replay only — original)
-    target_url: Optional[str] = None          # provider URL for replay
-    response_body: Optional[bytes] = None     # JSON to return to client now
+    body: Optional[bytes] = None  # bytes to forward upstream (forward/replay)
+    headers: Optional[dict[str, str]] = None  # headers to forward (replay only — original)
+    target_url: Optional[str] = None  # provider URL for replay
+    response_body: Optional[bytes] = None  # JSON to return to client now
     http_status: int = 200
     decision: Optional[PreflightDecision] = None
     pending_id: Optional[str] = None
-    audit_event: Optional[str] = None         # event_type for audit row
+    audit_event: Optional[str] = None  # event_type for audit row
     # In-flight admission ticket (rolling-cap accounting). Present only on
     # forward outcomes that were admitted past the rolling caps; the proxy
     # settles it once the request's actual cost is recorded (or it fails).

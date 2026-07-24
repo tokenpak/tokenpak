@@ -295,9 +295,7 @@ class Pak:
         privacy_d = data.get("privacy") or {}
         retention_d = data.get("retention") or {}
         relationships_d = data.get("relationships") or {}
-        anchors = tuple(
-            PakAnchor(**a) for a in (data.get("anchors") or ())
-        )
+        anchors = tuple(PakAnchor(**a) for a in (data.get("anchors") or ()))
 
         return cls(
             pak_id=data["pak_id"],
@@ -315,9 +313,7 @@ class Pak:
             authority=PakAuthority(data["authority"]),
             confidence=PakConfidence(data["confidence"]),
             retention=PakRetentionPolicy(ttl=PakRetention(retention_d.get("ttl", "session"))),
-            privacy=PakPrivacy(
-                class_=PakPrivacyClass(privacy_d.get("class", "local_only"))
-            ),
+            privacy=PakPrivacy(class_=PakPrivacyClass(privacy_d.get("class", "local_only"))),
             anchors=anchors,
             relationships=PakRelationships(
                 depends_on=tuple(relationships_d.get("depends_on", ())),

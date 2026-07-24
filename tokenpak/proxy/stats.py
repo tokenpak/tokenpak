@@ -23,10 +23,53 @@ Usage:
 
 from __future__ import annotations
 
+__all__ = (
+    "CompressionStats",
+    "MAX_LOG_BYTES",
+    "ROLLING_WINDOW",
+    "STATS",
+    "StatsCollector",
+    "build_health_response",
+    "build_stats_response",
+    "get_compression_stats",
+    "get_stats_collector",
+    "reset_singleton",
+    "reset_stats_collector",
+    "to_text",
+)
+
+
 import threading
 import time
+from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Optional, TypedDict
+
+
+class _CompressionSnapshot(TypedDict):
+    tokens_before: int
+    tokens_after: int
+    ratio: float
+    compressed: int
+    skipped: int
+
+
+class _VaultSearchSnapshot(TypedDict):
+    cache_hits: int
+    cache_misses: int
+    hit_rate: float
+
+
+class StatsSnapshot(TypedDict):
+    uptime_seconds: float
+    requests_total: int
+    requests_per_sec: float
+    compression: _CompressionSnapshot
+    routing: dict[str, int]
+    errors: dict[str, int]
+    vault_search: _VaultSearchSnapshot
+    latest_request_ms: float | None
+    timestamp: str
 
 
 class StatsCollector:
@@ -42,14 +85,14 @@ class StatsCollector:
         self._skipped_total: int = 0
 
         # Token counters
-        self._tokens_before: int = 0   # raw input tokens (before compression)
-        self._tokens_after: int = 0    # tokens actually sent upstream
+        self._tokens_before: int = 0  # raw input tokens (before compression)
+        self._tokens_after: int = 0  # tokens actually sent upstream
 
         # Routing breakdown  { "anthropic/claude-3-5-sonnet": 12, ... }
-        self._routing: Dict[str, int] = {}
+        self._routing: dict[str, int] = {}
 
         # Error counts  { "AUTH_001": 3, ... }
-        self._errors: Dict[str, int] = {}
+        self._errors: dict[str, int] = {}
 
         # Vault search cache
         self._vault_hits: int = 0
@@ -118,7 +161,7 @@ class StatsCollector:
     # Snapshot
     # ------------------------------------------------------------------
 
-    def snapshot(self) -> dict:
+    def snapshot(self) -> StatsSnapshot:
         """Return a JSON-serialisable metrics snapshot."""
         with self._lock:
             uptime = time.monotonic() - self._start_time
@@ -176,44 +219,48 @@ class StatsCollector:
             return "ollama"
         return model  # keep unknown as-is
 
+    def to_dict(self) -> StatsSnapshot:
+        """Return the metrics snapshot through the legacy method name."""
+        return self.snapshot()
+
+    def to_text(self) -> str:
+        """Return plaintext representation suitable for shell tooling."""
+        data = self.snapshot()
+        compression = data["compression"]
+        vault = data["vault_search"]
+        lines = [
+            f"uptime_seconds={data['uptime_seconds']}",
+            f"requests_total={data['requests_total']}",
+            f"requests_per_sec={data['requests_per_sec']}",
+            f"compression_ratio={compression['ratio']}",
+            f"tokens_before={compression['tokens_before']}",
+            f"tokens_after={compression['tokens_after']}",
+            f"compressed={compression['compressed']}",
+            f"skipped={compression['skipped']}",
+            f"errors_total={data['errors']['total']}",
+            f"vault_hit_rate={vault['hit_rate']}",
+            f"vault_hits={vault['cache_hits']}",
+            f"vault_misses={vault['cache_misses']}",
+            f"latest_request_ms={data['latest_request_ms']}",
+            f"timestamp={data['timestamp']}",
+        ]
+        for provider, count in data["routing"].items():
+            lines.append(f"routing_{provider}={count}")
+        for code, count in data["errors"].items():
+            if code != "total":
+                lines.append(f"error_{code}={count}")
+        return "\n".join(lines)
+
+
+def to_text(self: StatsCollector) -> str:
+    """Return the legacy module-level plaintext rendering helper."""
+    return self.to_text()
+
 
 # ---------------------------------------------------------------------------
 # Module-level singleton — import and use directly
 # ---------------------------------------------------------------------------
 STATS = StatsCollector()
-
-# Aliases for compatibility
-StatsCollector.to_dict = StatsCollector.snapshot
-
-def to_text(self: "StatsCollector") -> str:
-    """Return plaintext representation suitable for grep/bash scripting."""
-    d = self.snapshot()
-    c = d["compression"]
-    v = d["vault_search"]
-    lines = [
-        f"uptime_seconds={d['uptime_seconds']}",
-        f"requests_total={d['requests_total']}",
-        f"requests_per_sec={d['requests_per_sec']}",
-        f"compression_ratio={c['ratio']}",
-        f"tokens_before={c['tokens_before']}",
-        f"tokens_after={c['tokens_after']}",
-        f"compressed={c['compressed']}",
-        f"skipped={c['skipped']}",
-        f"errors_total={d['errors']['total']}",
-        f"vault_hit_rate={v['hit_rate']}",
-        f"vault_hits={v['cache_hits']}",
-        f"vault_misses={v['cache_misses']}",
-        f"latest_request_ms={d['latest_request_ms']}",
-        f"timestamp={d['timestamp']}",
-    ]
-    for provider, count in d["routing"].items():
-        lines.append(f"routing_{provider}={count}")
-    for code, count in d["errors"].items():
-        if code != "total":
-            lines.append(f"error_{code}={count}")
-    return "\n".join(lines)
-
-StatsCollector.to_text = to_text  # type: ignore[method-assign]
 
 # ---- Singleton helpers ----
 _SINGLETON_LOCK = threading.Lock()
@@ -236,23 +283,22 @@ def reset_stats_collector() -> None:
     with _SINGLETON_LOCK:
         _SINGLETON = StatsCollector()
         # Update module-level STATS as well
-        import sys
-        sys.modules[__name__].STATS = _SINGLETON
+        STATS = _SINGLETON
 
 
 def build_health_response(
     *,
-    session: dict,
+    session: Mapping[str, object],
     compilation_mode: str,
-    vault_info: dict,
-    router_info: dict,
+    vault_info: Mapping[str, object],
+    router_info: Mapping[str, object],
     router_enabled: bool,
     capsule_available: bool,
     canon_available: bool,
     skeleton_enabled: bool,
     shadow_enabled: bool,
     budget_total_tokens: int,
-    tool_registry_stats: dict,
+    tool_registry_stats: Mapping[str, object],
     tool_registry_available: bool,
     term_resolver_enabled: bool,
     term_resolver_available: bool,
@@ -260,9 +306,9 @@ def build_health_response(
     term_resolver_max_bytes: int,
     query_expansion_enabled: bool,
     upstream_timeout: int,
-    provider_circuits: dict,
-    request_latencies: list,
-) -> dict:
+    provider_circuits: Mapping[str, Mapping[str, object]],
+    request_latencies: list[float],
+) -> dict[str, object]:
     """
     Assemble the /health endpoint response dict.
 
@@ -346,9 +392,9 @@ def build_health_response(
 
 def build_stats_response(
     *,
-    session: dict,
+    session: Mapping[str, object],
     compilation_mode: str,
-    vault_info: dict,
+    vault_info: Mapping[str, object],
     router_enabled: bool,
     capsule_available: bool,
     compression_timeouts: int,
@@ -357,10 +403,10 @@ def build_stats_response(
     skeleton_enabled: bool,
     shadow_enabled: bool,
     budget_total_tokens: int,
-    monitor_today: Any,
-    monitor_by_model: Any,
-    monitor_recent: Any,
-) -> dict:
+    monitor_today: object,
+    monitor_by_model: object,
+    monitor_recent: object,
+) -> dict[str, object]:
     """
     Assemble the /stats endpoint response dict.
 
@@ -441,8 +487,8 @@ class CompressionStats:
         # request for the life of the process (unbounded RSS growth on a
         # long-running proxy). Totals are tracked separately above; the
         # per-request samples only feed rolling averages.
-        self._ratios: _collections.deque = _collections.deque(maxlen=ROLLING_WINDOW)
-        self._latencies: _collections.deque = _collections.deque(maxlen=ROLLING_WINDOW)
+        self._ratios: _collections.deque[float] = _collections.deque(maxlen=ROLLING_WINDOW)
+        self._latencies: _collections.deque[int] = _collections.deque(maxlen=ROLLING_WINDOW)
 
     def record_compression(
         self,
@@ -452,7 +498,7 @@ class CompressionStats:
         ratio: float,
         latency_ms: int,
         status: str = "ok",
-    ) -> dict:
+    ) -> dict[str, object]:
         with self._lock:
             self._requests_total += 1
             if status != "ok":
@@ -469,7 +515,7 @@ class CompressionStats:
             }
         return event
 
-    def flush_shutdown_record(self, record: dict) -> bool:
+    def flush_shutdown_record(self, record: Mapping[str, object]) -> bool:
         """Append a shutdown summary record to the events JSONL file.
 
         Called by the proxy's graceful-shutdown path so session totals
@@ -494,7 +540,7 @@ class CompressionStats:
             )
             return False
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, object]:
         with self._lock:
             n = len(self._ratios)
             return {

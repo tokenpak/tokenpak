@@ -4,6 +4,8 @@ Fetches web pages, strips HTML to clean text, detects changes via ETag.
 Respects robots.txt before fetching. No third-party deps (stdlib only).
 """
 
+from __future__ import annotations
+
 import html
 import ipaddress
 import re
@@ -11,7 +13,9 @@ import socket
 import urllib.parse
 import urllib.request
 import urllib.robotparser
-from typing import Tuple
+from http.client import HTTPMessage
+from types import TracebackType
+from typing import IO, Protocol, cast
 
 from .base_source import Provenance, SourceAdapter, SourceFetchError
 
@@ -28,6 +32,23 @@ _STRIP_TAGS = re.compile(r"<[^>]+>")
 # Collapse whitespace
 _COLLAPSE_WS = re.compile(r"\s{2,}")
 _METADATA_IPS = {ipaddress.ip_address("169.254.169.254")}
+
+
+class _URLResponse(Protocol):
+    headers: HTTPMessage
+
+    def read(self) -> bytes: ...
+
+    def getcode(self) -> int: ...
+
+    def __enter__(self) -> _URLResponse: ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
 
 
 def _strip_html(raw_html: str) -> str:
@@ -105,7 +126,7 @@ def _validate_url_safe(url: str) -> None:
     except OSError:
         return
     for info in infos:
-        resolved = info[4][0]
+        resolved = str(info[4][0])
         if _is_blocked_address(resolved):
             raise SourceFetchError(f"Blocked local or private URL host: {host}")
 
@@ -113,14 +134,22 @@ def _validate_url_safe(url: str) -> None:
 class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Validate redirect targets before urllib follows them."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+        newurl: str,
+    ) -> urllib.request.Request | None:
         _validate_url_safe(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def _urlopen_checked(req: urllib.request.Request, timeout: int):
+def _urlopen_checked(req: urllib.request.Request, timeout: int) -> _URLResponse:
     opener = urllib.request.build_opener(_SafeRedirectHandler)
-    return opener.open(req, timeout=timeout)
+    return cast(_URLResponse, opener.open(req, timeout=timeout))
 
 
 class URLAdapter(SourceAdapter):
@@ -128,7 +157,7 @@ class URLAdapter(SourceAdapter):
 
     source_type = "url"
 
-    def ingest(self, source_id: str, **kwargs) -> Tuple[str, Provenance]:
+    def ingest(self, source_id: str, **kwargs: object) -> tuple[str, Provenance]:
         """
         Fetch a URL and return clean text + provenance.
 
@@ -152,8 +181,8 @@ class URLAdapter(SourceAdapter):
             )
             with _urlopen_checked(req, timeout=_HTTP_TIMEOUT) as resp:
                 raw_bytes = resp.read()
-                etag = resp.headers.get("ETag", "")
-                content_type = resp.headers.get("Content-Type", "")
+                etag = resp.headers.get("ETag") or ""
+                content_type = resp.headers.get("Content-Type") or ""
         except Exception as exc:
             raise SourceFetchError(f"Failed to fetch {url}: {exc}") from exc
 
@@ -186,7 +215,7 @@ class URLAdapter(SourceAdapter):
         )
         return content, provenance
 
-    def has_changed(self, source_id: str, cached_version: str, **kwargs) -> bool:
+    def has_changed(self, source_id: str, cached_version: str, **kwargs: object) -> bool:
         """
         Check whether the page has changed via a HEAD request + ETag comparison.
         Falls back to full fetch + hash if HEAD returns no ETag.
@@ -203,7 +232,7 @@ class URLAdapter(SourceAdapter):
                 headers={"User-Agent": "TokenPak/1.0"},
             )
             with _urlopen_checked(req, timeout=_HTTP_TIMEOUT) as resp:
-                etag = resp.headers.get("ETag", "").strip('"')
+                etag = (resp.headers.get("ETag") or "").strip('"')
             if etag:
                 return etag != cached_version
         except Exception:

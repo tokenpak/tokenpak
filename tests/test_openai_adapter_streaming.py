@@ -17,6 +17,7 @@ from tokenpak.proxy.adapters import OpenAIChatAdapter, OpenAIResponsesAdapter
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _chat_body(extra: dict | None = None) -> bytes:
     """Return a minimal valid OpenAI Chat Completions request body."""
     payload: dict = {
@@ -42,6 +43,7 @@ def _responses_body(extra: dict | None = None) -> bytes:
 # ---------------------------------------------------------------------------
 # OpenAIChatAdapter — stream: true → CanonicalRequest.stream is True
 # ---------------------------------------------------------------------------
+
 
 class TestChatStreamingFlagEnabled:
     """stream: true in request body must produce canonical.stream == True."""
@@ -70,6 +72,7 @@ class TestChatStreamingFlagEnabled:
 # ---------------------------------------------------------------------------
 # OpenAIChatAdapter — stream: false / absent → CanonicalRequest.stream is False
 # ---------------------------------------------------------------------------
+
 
 class TestChatStreamingFlagDisabled:
     """stream absent or false must produce canonical.stream == False."""
@@ -102,6 +105,7 @@ class TestChatStreamingFlagDisabled:
 # OpenAIChatAdapter — edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestChatStreamingEdgeCases:
     """Malformed and boundary inputs behave predictably."""
 
@@ -128,6 +132,7 @@ class TestChatStreamingEdgeCases:
 # OpenAIChatAdapter — SSE format
 # ---------------------------------------------------------------------------
 
+
 class TestChatSSEFormat:
     """get_sse_format() declares the correct SSE format string."""
 
@@ -142,6 +147,7 @@ class TestChatSSEFormat:
 # ---------------------------------------------------------------------------
 # OpenAIResponsesAdapter — stream: true → CanonicalRequest.stream is True
 # ---------------------------------------------------------------------------
+
 
 class TestResponsesStreamingFlagEnabled:
     """stream: true in Responses API request body sets canonical.stream == True."""
@@ -170,6 +176,7 @@ class TestResponsesStreamingFlagEnabled:
 # ---------------------------------------------------------------------------
 # OpenAIResponsesAdapter — stream: false / absent → CanonicalRequest.stream is False
 # ---------------------------------------------------------------------------
+
 
 class TestResponsesStreamingFlagDisabled:
     """stream absent or false must produce canonical.stream == False."""
@@ -202,6 +209,7 @@ class TestResponsesStreamingFlagDisabled:
 # OpenAIResponsesAdapter — edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestResponsesStreamingEdgeCases:
     """Malformed and boundary inputs behave predictably."""
 
@@ -227,6 +235,7 @@ class TestResponsesStreamingEdgeCases:
 # ---------------------------------------------------------------------------
 # OpenAIResponsesAdapter — SSE format
 # ---------------------------------------------------------------------------
+
 
 class TestResponsesSSEFormat:
     """get_sse_format() declares the correct SSE format string."""

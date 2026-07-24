@@ -208,9 +208,7 @@ class TestBreakerPolarityEndToEnd:
             "provider 5xx must not be recorded as breaker success"
         )
 
-    def test_upstream_200_records_provider_success(
-        self, proxy, stub_upstream, breaker_spy
-    ):
+    def test_upstream_200_records_provider_success(self, proxy, stub_upstream, breaker_spy):
         _stub_state.update(status=200, delay=0.0, body=b'{"ok": true}')
         status, _ = _proxy_request(stub_upstream, _REQ_BODY)
 

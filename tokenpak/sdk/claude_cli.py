@@ -1,14 +1,16 @@
 """tokenpak.sdk.claude_cli — Claude Code CLI adapter."""
+
 from __future__ import annotations
 
 import json
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 try:
     import requests as _requests
+
     _REQUESTS_AVAILABLE = True
 except ImportError:
     _REQUESTS_AVAILABLE = False
@@ -95,7 +97,7 @@ class ClaudeCLIAdapter(TokenPakAdapter):
             )
 
         try:
-            return resp.json()
+            return cast(dict[str, Any], resp.json())
         except Exception as exc:
             raise TokenPakAdapterError(
                 "ClaudeCLIAdapter.send: response body is not valid JSON."

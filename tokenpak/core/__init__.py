@@ -1,4 +1,5 @@
 """infrastructure — Cross-cutting concerns: debug, licensing, error handling, state."""
+
 import os as _os
 
 # Directory containing this package's source files.
@@ -11,4 +12,17 @@ from .error_handling import TokenPakError, TokenPakWarning
 from .state_manager import StateManager
 from .version_check import run_startup_check
 
-__all__ = ['DebugLogger', 'DebugState', 'StateManager', 'run_startup_check', 'TokenPakError', 'TokenPakWarning', 'cooldown', 'debug', 'error_handling', 'startup_validator', 'state_manager', 'version_check']
+__all__ = [
+    "DebugLogger",
+    "DebugState",
+    "StateManager",
+    "run_startup_check",
+    "TokenPakError",
+    "TokenPakWarning",
+    "cooldown",
+    "debug",
+    "error_handling",
+    "startup_validator",
+    "state_manager",
+    "version_check",
+]

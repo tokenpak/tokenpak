@@ -2,11 +2,50 @@
 
 from __future__ import annotations
 
+__all__ = (
+    "RequestStats",
+    "SessionStats",
+    "TelemetryCollector",
+    "get_collector",
+)
+
+
 import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, TypedDict
+
+
+class _RequestStatsOptional(TypedDict, total=False):
+    failover_chain: list[str]
+    original_provider: str | None
+    final_provider: str | None
+    failover_indicator: str | None
+
+
+class RequestStatsDict(_RequestStatsOptional):
+    """Serializable representation of :class:`RequestStats`."""
+
+    request_id: str
+    timestamp: str
+    input_tokens_raw: int
+    input_tokens_sent: int
+    tokens_saved: int
+    percent_saved: float
+    cost_saved: float
+
+
+class SessionStatsDict(TypedDict):
+    """Serializable representation of :class:`SessionStats`."""
+
+    session_requests: int
+    session_total_tokens_raw: int
+    session_total_tokens_sent: int
+    session_total_saved: int
+    session_total_cost_saved: float
+    session_total_percent: float
+    session_start_time: str
 
 
 @dataclass
@@ -51,8 +90,8 @@ class RequestStats:
             base = f"{base} | {indicator}"
         return base
 
-    def to_dict(self) -> dict:
-        d = {
+    def to_dict(self) -> RequestStatsDict:
+        d: RequestStatsDict = {
             "request_id": self.request_id,
             "timestamp": self.timestamp.isoformat(),
             "input_tokens_raw": self.input_tokens_raw,
@@ -86,7 +125,7 @@ class SessionStats:
             return 0.0
         return (self.session_total_saved / self.session_total_tokens_raw) * 100
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> SessionStatsDict:
         return {
             "session_requests": self.session_requests,
             "session_total_tokens_raw": self.session_total_tokens_raw,
@@ -103,7 +142,7 @@ class TelemetryCollector:
 
     def __init__(self, max_history: int = 500):
         self._max_history = max_history
-        self._history: deque = deque(maxlen=max_history)
+        self._history: deque[RequestStats] = deque(maxlen=max_history)
         self._session = SessionStats()
         self._lock = threading.Lock()
 
@@ -153,7 +192,7 @@ class TelemetryCollector:
                 session_start_time=self._session.session_start_time,
             )
 
-    def get_history(self, limit: int = 10) -> list:
+    def get_history(self, limit: int = 10) -> list[RequestStats]:
         with self._lock:
             items = list(self._history)
         return items[-limit:]
@@ -164,7 +203,7 @@ class TelemetryCollector:
             self._session = SessionStats()
 
     @staticmethod
-    def create_demo_stats() -> tuple:
+    def create_demo_stats() -> tuple[RequestStats, SessionStats]:
         req = RequestStats(
             request_id="req-demo-001",
             timestamp=datetime.now(),

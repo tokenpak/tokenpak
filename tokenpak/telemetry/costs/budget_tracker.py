@@ -17,11 +17,19 @@ Alert Thresholds:
 
 from __future__ import annotations
 
+__all__ = (
+    "AlertLevel",
+    "BudgetAlert",
+    "BudgetConfig",
+    "BudgetTracker",
+)
+
+
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict, Optional, TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +54,7 @@ class BudgetAlert:
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     message: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.message:
             self.message = self._format_message()
 
@@ -70,10 +78,28 @@ class BudgetConfig:
     enabled: bool = True
 
 
+class BudgetConfigInput(TypedDict, total=False):
+    """Supported budget configuration keys."""
+
+    daily_limit: Optional[float]
+    weekly_limit: Optional[float]
+    enabled: bool
+
+
+class BudgetSummary(TypedDict):
+    """Serializable budget-tracker state."""
+
+    enabled: bool
+    daily_limit: Optional[float]
+    weekly_limit: Optional[float]
+    alert_cooldown_minutes: float
+    last_alerts: dict[str, str]
+
+
 class BudgetTracker:
     """Track spending against configurable budget thresholds"""
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[BudgetConfigInput] = None):
         """
         Initialize budget tracker.
 
@@ -84,7 +110,7 @@ class BudgetTracker:
         self.alert_history: Dict[str, datetime] = {}  # threshold_key -> last_alert_time
         self.alert_cooldown = timedelta(minutes=5)  # Avoid duplicate alerts
 
-    def _parse_config(self, config: Dict) -> BudgetConfig:
+    def _parse_config(self, config: BudgetConfigInput) -> BudgetConfig:
         """Parse budget config from dict"""
         return BudgetConfig(
             daily_limit=config.get("daily_limit"),
@@ -92,7 +118,7 @@ class BudgetTracker:
             enabled=config.get("enabled", True),
         )
 
-    def load_budget_config(self, config_dict: Dict) -> None:
+    def load_budget_config(self, config_dict: BudgetConfigInput) -> None:
         """Load budget configuration from dict"""
         self.config = self._parse_config(config_dict)
         logger.info(
@@ -183,7 +209,7 @@ class BudgetTracker:
 
         return alert
 
-    def get_budget_summary(self) -> Dict:
+    def get_budget_summary(self) -> BudgetSummary:
         """Get human-readable budget summary"""
         return {
             "enabled": self.config.enabled,
@@ -213,9 +239,7 @@ class BudgetTracker:
         empty = 10 - filled
         bar = "█" * filled + "░" * empty
 
-        return (
-            f"[{bar}] {pct:.0f}% of {limit_type} budget " f"(${current_spend:.2f} / ${limit:.2f})"
-        )
+        return f"[{bar}] {pct:.0f}% of {limit_type} budget (${current_spend:.2f} / ${limit:.2f})"
 
     def reset_alert_history(self) -> None:
         """Clear alert history (useful for testing)"""

@@ -17,6 +17,7 @@ from tokenpak.vendor_classifier import (
 # 1. Path pattern detection
 # ---------------------------------------------------------------------------
 
+
 class TestVendorPathDetection:
     def test_obsidian_plugins_detected(self):
         """Path with .obsidian/plugins should be detected as vendor."""
@@ -55,6 +56,7 @@ class TestVendorPathDetection:
 # 2. Extension-based detection
 # ---------------------------------------------------------------------------
 
+
 class TestVendorExtensionDetection:
     def test_minified_js_detected(self):
         """*.min.js should be detected."""
@@ -87,6 +89,7 @@ class TestVendorExtensionDetection:
 # 3. Content heuristics
 # ---------------------------------------------------------------------------
 
+
 class TestVendorContentDetection:
     def test_long_line_content(self):
         """Content with very long lines should be flagged."""
@@ -117,6 +120,7 @@ def hello_world():
 # 4. should_include_in_index convenience function
 # ---------------------------------------------------------------------------
 
+
 class TestShouldIncludeInIndex:
     def test_normal_code_included(self):
         """Normal code should be included."""
@@ -139,13 +143,12 @@ class TestShouldIncludeInIndex:
 # 5. Metadata-only block creation
 # ---------------------------------------------------------------------------
 
+
 class TestMetadataOnlyBlock:
     def test_metadata_block_structure(self):
         """Metadata-only block has required fields."""
         block = create_metadata_only_block(
-            "node_modules/pkg/index.js",
-            "var x = 1;",
-            "Path matches vendor pattern"
+            "node_modules/pkg/index.js", "var x = 1;", "Path matches vendor pattern"
         )
         assert block["classification"] == "vendor"
         assert "source_path" in block
@@ -170,14 +173,11 @@ class TestMetadataOnlyBlock:
 # 6. Classification result
 # ---------------------------------------------------------------------------
 
+
 class TestClassificationResult:
     def test_result_structure(self):
         """ClassificationResult has required fields."""
-        result = ClassificationResult(
-            is_vendor=True,
-            reason="Test reason",
-            confidence=0.95
-        )
+        result = ClassificationResult(is_vendor=True, reason="Test reason", confidence=0.95)
         assert result.is_vendor
         assert result.reason == "Test reason"
         assert 0.0 <= result.confidence <= 1.0
@@ -185,17 +185,14 @@ class TestClassificationResult:
     def test_confidence_bounds(self):
         """Confidence is always 0.0-1.0."""
         for conf in [0.0, 0.5, 0.99, 1.0]:
-            result = ClassificationResult(
-                is_vendor=True,
-                reason="Test",
-                confidence=conf
-            )
+            result = ClassificationResult(is_vendor=True, reason="Test", confidence=conf)
             assert 0.0 <= result.confidence <= 1.0
 
 
 # ---------------------------------------------------------------------------
 # 7. Integration tests
 # ---------------------------------------------------------------------------
+
 
 class TestVendorClassifierIntegration:
     def test_multiple_vendor_signals(self):

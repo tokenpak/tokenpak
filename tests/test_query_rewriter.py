@@ -47,9 +47,7 @@ class TestOpenerStripping:
         assert "gradient descent" in result.rewritten.lower()
 
     def test_could_you_please(self, rewriter):
-        result = rewriter.rewrite(
-            "Could you please summarise the main points of this document?"
-        )
+        result = rewriter.rewrite("Could you please summarise the main points of this document?")
         assert result.rewritten.strip() != ""
         assert "summarise" in result.rewritten.lower() or "summariz" in result.rewritten.lower()
 
@@ -104,9 +102,7 @@ class TestInlineFillerStripping:
         assert "kind of" not in result.rewritten.lower()
 
     def test_as_i_mentioned(self, rewriter):
-        result = rewriter.rewrite(
-            "As I mentioned before, the service runs on port 8080."
-        )
+        result = rewriter.rewrite("As I mentioned before, the service runs on port 8080.")
         assert "mentioned" not in result.rewritten.lower()
         assert "8080" in result.rewritten
 
@@ -195,17 +191,13 @@ class TestTechnicalPreservation:
 
 class TestRewriteQueryFunction:
     def test_basic(self):
-        result = rewrite_query(
-            "Hey, can you please help me understand what a tensor is? Thanks!"
-        )
+        result = rewrite_query("Hey, can you please help me understand what a tensor is? Thanks!")
         assert isinstance(result, RewriteResult)
         assert "tensor" in result.rewritten.lower()
         assert "Hey" not in result.rewritten
 
     def test_technical_preserved(self):
-        result = rewrite_query(
-            "Could you basically check `sort_of_weird` at https://example.com?"
-        )
+        result = rewrite_query("Could you basically check `sort_of_weird` at https://example.com?")
         assert "`sort_of_weird`" in result.rewritten
         assert "https://example.com" in result.rewritten
 

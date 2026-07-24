@@ -26,6 +26,7 @@ from tokenpak.vault.vault_health import VaultHealth
 # Fixtures — minimal synthetic transcript tree
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def fake_projects_root(tmp_path: Path) -> Path:
     """A ~/.claude/projects clone with two sessions across two project dirs."""
@@ -35,42 +36,53 @@ def fake_projects_root(tmp_path: Path) -> Path:
     proj_a.mkdir(parents=True)
     session_a = proj_a / "session-aaaa-1111.jsonl"
     session_a.write_text(
-        "\n".join([
-            json.dumps({
-                "type": "custom-title",
-                "customTitle": "📦 tokenpak claude",
-            }),
-            json.dumps({
-                "type": "user",
-                "message": {
-                    "role": "user",
-                    "content": "How do I configure the proxy injection budget?",
-                },
-                "timestamp": "2026-05-15T10:00:00.000Z",
-            }),
-            json.dumps({
-                "type": "assistant",
-                "message": {
-                    "role": "assistant",
-                    "model": "claude-opus-4-7",
-                    "content": [
-                        {"type": "thinking", "thinking": "this should not be indexed"},
-                        {"type": "text", "text": "INJECT_BUDGET defaults to 4000 tokens."},
-                    ],
-                },
-                "timestamp": "2026-05-15T10:00:05.000Z",
-                "cwd": "/home/dev",
-            }),
-            json.dumps({
-                "type": "user",
-                "message": {
-                    "role": "user",
-                    "content": "<local-command-caveat>noise</local-command-caveat>",
-                },
-            }),
-            # Corrupt line — must not crash the parser
-            "{not valid json",
-        ]) + "\n",
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "custom-title",
+                        "customTitle": "📦 tokenpak claude",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "role": "user",
+                            "content": "How do I configure the proxy injection budget?",
+                        },
+                        "timestamp": "2026-05-15T10:00:00.000Z",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "role": "assistant",
+                            "model": "claude-opus-4-7",
+                            "content": [
+                                {"type": "thinking", "thinking": "this should not be indexed"},
+                                {"type": "text", "text": "INJECT_BUDGET defaults to 4000 tokens."},
+                            ],
+                        },
+                        "timestamp": "2026-05-15T10:00:05.000Z",
+                        "cwd": "/home/dev",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "role": "user",
+                            "content": "<local-command-caveat>noise</local-command-caveat>",
+                        },
+                    }
+                ),
+                # Corrupt line — must not crash the parser
+                "{not valid json",
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -78,16 +90,21 @@ def fake_projects_root(tmp_path: Path) -> Path:
     proj_b.mkdir(parents=True)
     session_b = proj_b / "session-bbbb-2222.jsonl"
     session_b.write_text(
-        "\n".join([
-            json.dumps({
-                "type": "user",
-                "message": {
-                    "role": "user",
-                    "content": "Plan the database migration for the upcoming release.",
-                },
-                "timestamp": "2026-05-14T08:00:00.000Z",
-            }),
-        ]) + "\n",
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "role": "user",
+                            "content": "Plan the database migration for the upcoming release.",
+                        },
+                        "timestamp": "2026-05-14T08:00:00.000Z",
+                    }
+                ),
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -114,6 +131,7 @@ def tokenpak_dir(tmp_path: Path) -> Path:
 # Off-by-default
 # ---------------------------------------------------------------------------
 
+
 def test_disabled_by_default(monkeypatch, tokenpak_dir, fake_projects_root):
     monkeypatch.delenv(ct.ENV_FLAG, raising=False)
 
@@ -129,9 +147,7 @@ def test_disabled_by_default(monkeypatch, tokenpak_dir, fake_projects_root):
 def test_force_bypasses_env_flag(monkeypatch, tokenpak_dir, fake_projects_root):
     monkeypatch.delenv(ct.ENV_FLAG, raising=False)
 
-    result = ct.index_claude_transcripts(
-        tokenpak_dir, projects_root=fake_projects_root, force=True
-    )
+    result = ct.index_claude_transcripts(tokenpak_dir, projects_root=fake_projects_root, force=True)
 
     assert result["skipped"] is False
     assert result["added"] == 2
@@ -151,10 +167,9 @@ def test_env_flag_enables(monkeypatch, tokenpak_dir, fake_projects_root):
 # Parsing
 # ---------------------------------------------------------------------------
 
+
 def test_parse_extracts_user_and_assistant_text(fake_projects_root):
-    session = next(iter(
-        (fake_projects_root / "-home-dev").glob("*.jsonl")
-    ))
+    session = next(iter((fake_projects_root / "-home-dev").glob("*.jsonl")))
     msgs = ct.parse_jsonl_session(session)
 
     roles = [m.role for m in msgs]
@@ -167,9 +182,7 @@ def test_parse_extracts_user_and_assistant_text(fake_projects_root):
 
 
 def test_parse_tolerates_corrupt_jsonl(fake_projects_root):
-    session = next(iter(
-        (fake_projects_root / "-home-dev").glob("*.jsonl")
-    ))
+    session = next(iter((fake_projects_root / "-home-dev").glob("*.jsonl")))
     # parse_jsonl_session should not raise even though the file ends with a
     # malformed JSON line.
     msgs = ct.parse_jsonl_session(session)
@@ -179,6 +192,7 @@ def test_parse_tolerates_corrupt_jsonl(fake_projects_root):
 # ---------------------------------------------------------------------------
 # Block metadata + index merge
 # ---------------------------------------------------------------------------
+
 
 def test_block_metadata_preserved(monkeypatch, tokenpak_dir, fake_projects_root):
     monkeypatch.setenv(ct.ENV_FLAG, "1")
@@ -219,9 +233,7 @@ def test_block_id_is_stable_and_namespaced(monkeypatch, tokenpak_dir, fake_proje
 
 def test_no_transcript_mutation(monkeypatch, tokenpak_dir, fake_projects_root):
     monkeypatch.setenv(ct.ENV_FLAG, "1")
-    session = next(iter(
-        (fake_projects_root / "-home-dev").glob("*.jsonl")
-    ))
+    session = next(iter((fake_projects_root / "-home-dev").glob("*.jsonl")))
     before_hash = hashlib.sha256(session.read_bytes()).hexdigest()
     before_mtime = session.stat().st_mtime
 
@@ -233,9 +245,7 @@ def test_no_transcript_mutation(monkeypatch, tokenpak_dir, fake_projects_root):
     assert before_mtime == after_mtime
 
 
-def test_block_txt_written_and_searchable_content(
-    monkeypatch, tokenpak_dir, fake_projects_root
-):
+def test_block_txt_written_and_searchable_content(monkeypatch, tokenpak_dir, fake_projects_root):
     monkeypatch.setenv(ct.ENV_FLAG, "1")
     ct.index_claude_transcripts(tokenpak_dir, projects_root=fake_projects_root)
 
@@ -243,9 +253,7 @@ def test_block_txt_written_and_searchable_content(
     files = list(blocks_dir.glob("claude_transcript.*.txt"))
     assert len(files) == 2
 
-    session_a_file = next(
-        p for p in files if "session-aaaa-1111" in p.name
-    )
+    session_a_file = next(p for p in files if "session-aaaa-1111" in p.name)
     body = session_a_file.read_text()
     assert "INJECT_BUDGET" in body
     # thinking blocks must not leak into the searchable body
@@ -256,9 +264,8 @@ def test_block_txt_written_and_searchable_content(
 # Filesystem rebuild preserves transcript blocks
 # ---------------------------------------------------------------------------
 
-def test_filesystem_rebuild_preserves_transcript_blocks(
-    monkeypatch, tmp_path, fake_projects_root
-):
+
+def test_filesystem_rebuild_preserves_transcript_blocks(monkeypatch, tmp_path, fake_projects_root):
     # Set up a tiny vault that VaultHealth will rebuild over.
     vault_dir = tmp_path / "vault"
     vault_dir.mkdir()
@@ -269,13 +276,10 @@ def test_filesystem_rebuild_preserves_transcript_blocks(
     health = VaultHealth(vault_dir=vault_dir)
     health.tokenpak_dir.mkdir(parents=True, exist_ok=True)
     health.blocks_dir.mkdir(parents=True, exist_ok=True)
-    ct.index_claude_transcripts(
-        health.tokenpak_dir, projects_root=fake_projects_root
-    )
+    ct.index_claude_transcripts(health.tokenpak_dir, projects_root=fake_projects_root)
     pre = json.loads(health.index_path.read_text())
     pre_transcript_bids = {
-        bid for bid, b in pre["blocks"].items()
-        if b.get("source_type") == "claude_transcript"
+        bid for bid, b in pre["blocks"].items() if b.get("source_type") == "claude_transcript"
     }
     assert len(pre_transcript_bids) == 2
 
@@ -300,6 +304,7 @@ def test_filesystem_rebuild_preserves_transcript_blocks(
 # Search response labeling — exercises the proxy endpoint helper directly
 # ---------------------------------------------------------------------------
 
+
 def test_proxy_search_response_labels_source(monkeypatch, tokenpak_dir, fake_projects_root):
     """The proxy ``_handle_vault_search`` rows include ``source`` so callers
     can distinguish transcript hits from filesystem-vault hits.
@@ -313,8 +318,7 @@ def test_proxy_search_response_labels_source(monkeypatch, tokenpak_dir, fake_pro
 
     # Build the in-memory block shape that VaultIndex._load produces.
     transcript_block_meta = next(
-        b for b in data["blocks"].values()
-        if b.get("source_type") == "claude_transcript"
+        b for b in data["blocks"].values() if b.get("source_type") == "claude_transcript"
     )
     block_in_memory = {
         "block_id": transcript_block_meta["block_id"],

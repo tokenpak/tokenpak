@@ -7,34 +7,69 @@ INGRESS → DETECT_PROVIDER → NORMALIZE → STORE
 
 from __future__ import annotations
 
+__all__ = (
+    "PipelineResult",
+    "PipelineStage",
+    "StageResult",
+    "TelemetryDB",
+    "TelemetryEvent",
+    "TelemetryPipeline",
+)
+
+
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Protocol, TypeAlias
 
 from .models import TelemetryEvent
 from .storage import TelemetryDB
 
 logger = logging.getLogger(__name__)
+
+EventData: TypeAlias = dict[str, Any]
+
+
+class ShadowHookProtocol(Protocol):
+    def record_request(self, model: str, query: str, context_tokens: int = 0) -> Optional[int]: ...
+
+    def record_response(
+        self,
+        txn_key: Optional[int],
+        response_text: str,
+        response_tokens: int = 0,
+        latency_ms: float = 0.0,
+        context_blocks: Optional[list[str]] = None,
+    ) -> Optional[int]: ...
+
+
+_shadow_hook: ShadowHookProtocol | None
+_classify_intent: Callable[[str], object] | None
+_shadow_validate: Callable[[str, str], object] | None
+
 # --- Shadow hook + intent classifier (fail-silent) ---
 try:
     from tokenpak.proxy.shadow_hook import ShadowHook as _ShadowHookClass
 
     _shadow_hook = _ShadowHookClass()
 except Exception:
-    _shadow_hook = None  # type: ignore
+    _shadow_hook = None
 
 try:
-    from tokenpak.compression.complexity import classify_intent as _classify_intent  # type: ignore
+    from tokenpak.compression.intent_classifier import classify as _compression_classify
+
+    _classify_intent = _compression_classify
 except Exception:
-    _classify_intent = None  # type: ignore  # type: ignore
+    _classify_intent = None
 
 try:
-    from tokenpak.proxy.shadow_reader import validate as _shadow_validate
+    from tokenpak.proxy.shadow_reader import validate
+
+    _shadow_validate = validate
 except Exception:
-    _shadow_validate = None  # type: ignore
+    _shadow_validate = None
 
 
 class PipelineStage(str, Enum):
@@ -87,7 +122,7 @@ class TelemetryPipeline:
         event_id = None
         partial_stored = False
 
-        stage_handlers: list[tuple[PipelineStage, Callable]] = [
+        stage_handlers: list[tuple[PipelineStage, Callable[[EventData], EventData]]] = [
             (PipelineStage.INGRESS, self._stage_ingress),
             (PipelineStage.DETECT_PROVIDER, self._stage_detect_provider),
             (PipelineStage.NORMALIZE, self._stage_normalize),
@@ -136,14 +171,14 @@ class TelemetryPipeline:
             total_duration_ms=(time.perf_counter() - start_time) * 1000,
         )
 
-    def _stage_ingress(self, raw_event: dict) -> dict:
+    def _stage_ingress(self, raw_event: EventData) -> EventData:
         if not isinstance(raw_event, dict):
             raise ValueError("Event must be a dictionary")
         if "ingress_ts" not in raw_event:
             raw_event["ingress_ts"] = time.time()
         return raw_event
 
-    def _stage_detect_provider(self, event: dict) -> dict:
+    def _stage_detect_provider(self, event: EventData) -> EventData:
         provider = "unknown"
         # Prefer explicit provider when caller supplies it (e.g. openai-codex)
         explicit = event.get("provider") or event.get("_provider")
@@ -162,7 +197,7 @@ class TelemetryPipeline:
         event["_detected_provider"] = provider
         return event
 
-    def _stage_normalize(self, event: dict) -> dict:
+    def _stage_normalize(self, event: EventData) -> EventData:
         provider = event.get("_detected_provider", "unknown")
         usage = event.get("usage", {})
         # Session JSONL sometimes uses: input/output/cacheRead/cacheWrite
@@ -205,7 +240,7 @@ class TelemetryPipeline:
         }
         return event
 
-    def _stage_store(self, event: dict) -> dict:
+    def _stage_store(self, event: EventData) -> EventData:
         import uuid
 
         normalized = event.get("_normalized", {})
@@ -213,11 +248,12 @@ class TelemetryPipeline:
 
         # Classify intent (fail-silent)
         intent = "unknown"
-        if _classify_intent is not None:  # type: ignore
+        if _classify_intent is not None:
             try:
                 query = str(event.get("query", event.get("messages", "")))[:500]
-                ic = _classify_intent(query)  # type: ignore
-                intent = ic.value if hasattr(ic, "value") else str(ic)
+                classification = _classify_intent(query)
+                classified_intent = getattr(classification, "intent", classification)
+                intent = str(getattr(classified_intent, "value", classified_intent))
             except Exception:
                 pass
 
@@ -335,13 +371,13 @@ class TelemetryPipeline:
             _o = event.get("_original")
             if _c and _o:
                 try:
-                    _shadow_validate(_o, _c)  # type: ignore
+                    _shadow_validate(_o, _c)
                 except Exception:
                     pass
 
         return {"event_id": telemetry_event.trace_id, "stored": True, "intent": intent}
 
-    def _store_partial(self, event: dict, failed_stage: PipelineStage) -> Optional[dict]:
+    def _store_partial(self, event: EventData, failed_stage: PipelineStage) -> Optional[EventData]:
         import uuid
 
         try:

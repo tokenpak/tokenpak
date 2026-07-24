@@ -114,13 +114,17 @@ def main() -> int:
             pass  # never fail the block decision on journal error
         msg = f"tokenpak: budget exceeded (${daily_total:.2f} / ${budget:.2f} daily)"
         print(msg, file=sys.stderr)
-        print(json.dumps({
-            "hookSpecificOutput": {
-                "hookEventName": "UserPromptSubmit",
-                "decision": "block",
-                "reason": msg,
-            }
-        }))
+        print(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "UserPromptSubmit",
+                        "decision": "block",
+                        "reason": msg,
+                    }
+                }
+            )
+        )
         return 2
 
     # Journal write (best-effort, non-blocking). Log even when tokens_est is 0
@@ -156,10 +160,15 @@ def _write_session_marker(session_id: str) -> None:
     server (a separate process) can bind ``state.session_id`` to it. Atomic
     write via tmp+replace. Best-effort; never fails the hook."""
     try:
-        run_dir = Path(os.environ.get(
-            "TOKENPAK_COMPANION_JOURNAL_DIR",
-            str(Path.home() / ".tokenpak" / "companion"),
-        )) / "run"
+        run_dir = (
+            Path(
+                os.environ.get(
+                    "TOKENPAK_COMPANION_JOURNAL_DIR",
+                    str(Path.home() / ".tokenpak" / "companion"),
+                )
+            )
+            / "run"
+        )
         run_dir.mkdir(parents=True, exist_ok=True)
         # pid-unique temp name so two concurrent hook processes can't
         # interleave writes to the same temp file before the atomic rename.
@@ -179,10 +188,16 @@ def _get_daily_total() -> float:
     never a summed series of cumulative transcript estimates.
     """
     import datetime
-    db_path = Path(os.environ.get(
-        "TOKENPAK_COMPANION_JOURNAL_DIR",
-        str(Path.home() / ".tokenpak" / "companion"),
-    )) / "budget.db"
+
+    db_path = (
+        Path(
+            os.environ.get(
+                "TOKENPAK_COMPANION_JOURNAL_DIR",
+                str(Path.home() / ".tokenpak" / "companion"),
+            )
+        )
+        / "budget.db"
+    )
     try:
         if not db_path.exists():
             return 0.0
@@ -208,10 +223,15 @@ def _journal_savings(
     Uses the canonical journal schema from companion._sqlite (shared with
     JournalStore) — the hook must never carry a divergent DDL copy.
     """
-    db_path = Path(os.environ.get(
-        "TOKENPAK_COMPANION_JOURNAL_DIR",
-        str(Path.home() / ".tokenpak" / "companion"),
-    )) / "journal.db"
+    db_path = (
+        Path(
+            os.environ.get(
+                "TOKENPAK_COMPANION_JOURNAL_DIR",
+                str(Path.home() / ".tokenpak" / "companion"),
+            )
+        )
+        / "journal.db"
+    )
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = _db.connect(db_path)
@@ -221,17 +241,20 @@ def _journal_savings(
             "tokens_avoided": int(max(0, tokens_avoided)),
             "cost_avoided_usd": float(max(0.0, cost_avoided_usd)),
         }
-        content = (
-            f"{tool}: -{meta['tokens_avoided']:,} tokens "
-            f"(~${meta['cost_avoided_usd']:.4f})"
-        )
+        content = f"{tool}: -{meta['tokens_avoided']:,} tokens (~${meta['cost_avoided_usd']:.4f})"
         metadata_json = json.dumps(meta)
         conn.execute(
             "INSERT OR IGNORE INTO entries "
             "(session_id, timestamp, entry_type, content, metadata_json, content_hash) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (session_id, time.time(), "companion_savings", content, metadata_json,
-             _db.entry_content_hash("companion_savings", content, metadata_json)),
+            (
+                session_id,
+                time.time(),
+                "companion_savings",
+                content,
+                metadata_json,
+                _db.entry_content_hash("companion_savings", content, metadata_json),
+            ),
         )
         conn.commit()
         conn.close()
@@ -248,10 +271,15 @@ def _journal_write(session_id: str, tokens_est: int, cost_est: float) -> None:
     Duplicate deliveries of the same event collapse via the content-hash
     UNIQUE index; dropped writes are logged instead of silently passed.
     """
-    db_path = Path(os.environ.get(
-        "TOKENPAK_COMPANION_JOURNAL_DIR",
-        str(Path.home() / ".tokenpak" / "companion"),
-    )) / "journal.db"
+    db_path = (
+        Path(
+            os.environ.get(
+                "TOKENPAK_COMPANION_JOURNAL_DIR",
+                str(Path.home() / ".tokenpak" / "companion"),
+            )
+        )
+        / "journal.db"
+    )
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = _db.connect(db_path)
@@ -262,8 +290,14 @@ def _journal_write(session_id: str, tokens_est: int, cost_est: float) -> None:
             "INSERT OR IGNORE INTO entries "
             "(session_id, timestamp, entry_type, content, metadata_json, content_hash) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (session_id, time.time(), "auto", content, metadata_json,
-             _db.entry_content_hash("auto", content, metadata_json)),
+            (
+                session_id,
+                time.time(),
+                "auto",
+                content,
+                metadata_json,
+                _db.entry_content_hash("auto", content, metadata_json),
+            ),
         )
         conn.commit()
         conn.close()
@@ -287,18 +321,29 @@ def _record_cost(session_id: str, tokens_est: int, cost_est: float) -> None:
     recording planes contribute 'actual' rows, which the gate prefers.
     """
     import datetime
-    db_path = Path(os.environ.get(
-        "TOKENPAK_COMPANION_JOURNAL_DIR",
-        str(Path.home() / ".tokenpak" / "companion"),
-    )) / "budget.db"
+
+    db_path = (
+        Path(
+            os.environ.get(
+                "TOKENPAK_COMPANION_JOURNAL_DIR",
+                str(Path.home() / ".tokenpak" / "companion"),
+            )
+        )
+        / "budget.db"
+    )
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = _db.connect(db_path)
         _db.ensure_costs_schema(conn)
         conn.execute(
             _db.COSTS_ESTIMATE_UPSERT_SQL,
-            (time.time(), datetime.date.today().isoformat(), session_id,
-             int(max(0, tokens_est)), round(float(max(0.0, cost_est)), 6)),
+            (
+                time.time(),
+                datetime.date.today().isoformat(),
+                session_id,
+                int(max(0, tokens_est)),
+                round(float(max(0.0, cost_est)), 6),
+            ),
         )
         conn.commit()
         conn.close()

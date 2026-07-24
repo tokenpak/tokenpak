@@ -39,7 +39,10 @@ SKIP_INJECT_NO_HEADER_WHEN_EMPTY = (
 try:
     from tokenpak.vault.retrieval import inject_retrieved_context
 except ImportError:
-    pytest.skip("Cannot import inject_retrieved_context from tokenpak.vault.retrieval — removed in current build", allow_module_level=True)
+    pytest.skip(
+        "Cannot import inject_retrieved_context from tokenpak.vault.retrieval — removed in current build",
+        allow_module_level=True,
+    )
 import concurrent.futures
 import threading
 from typing import Any, Dict, List, Tuple
@@ -56,6 +59,7 @@ from tokenpak.vault.retrieval import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_block(
     path: str = "docs/test.md",
@@ -90,6 +94,7 @@ def _make_blocks(n: int, base_score: float = 1.0) -> List[Tuple[Dict[str, Any], 
 # 1. Large queries
 # ---------------------------------------------------------------------------
 
+
 class TestLargeQueryHandling:
     """Retrieval with very large content blocks."""
 
@@ -119,7 +124,9 @@ class TestLargeQueryHandling:
         # 500 blocks × ~5KB each ≈ 2.5MB of text
         big_content = "x" * 5000
         blocks = [
-            _make_block(path=f"f{i}.md", block_id=f"b{i}", content=big_content, score=float(500 - i))
+            _make_block(
+                path=f"f{i}.md", block_id=f"b{i}", content=big_content, score=float(500 - i)
+            )
             for i in range(500)
         ]
 
@@ -142,6 +149,7 @@ class TestLargeQueryHandling:
 # ---------------------------------------------------------------------------
 # 2. Unicode + special chars
 # ---------------------------------------------------------------------------
+
 
 class TestUnicodeAndSpecialChars:
     """Retrieval with non-ASCII and edge-case characters."""
@@ -200,6 +208,7 @@ class TestUnicodeAndSpecialChars:
 # 3. Empty/missing vault index
 # ---------------------------------------------------------------------------
 
+
 class TestEmptyVaultIndex:
     """Retrieval when vault is empty or malformed."""
 
@@ -239,6 +248,7 @@ class TestEmptyVaultIndex:
 # ---------------------------------------------------------------------------
 # 4. Concurrent requests (threaded)
 # ---------------------------------------------------------------------------
+
 
 class TestConcurrentRetrieval:
     """Thread-safety of retrieval functions."""
@@ -320,6 +330,7 @@ class TestConcurrentRetrieval:
 # 5. Deterministic sort stability
 # ---------------------------------------------------------------------------
 
+
 class TestSortDeterminism:
     """sort_retrieval_results must be deterministic (cache-stable)."""
 
@@ -349,6 +360,7 @@ class TestSortDeterminism:
     def test_repeated_sort_identical(self):
         """Sorting the same list twice produces identical output."""
         import random
+
         random.seed(42)
         blocks = _make_blocks(50)
         random.shuffle(blocks)
@@ -361,6 +373,7 @@ class TestSortDeterminism:
 # ---------------------------------------------------------------------------
 # 6. Must-hit terms
 # ---------------------------------------------------------------------------
+
 
 class TestMustHitTerms:
     """extract_must_hit_terms and all_must_hits_found edge cases."""

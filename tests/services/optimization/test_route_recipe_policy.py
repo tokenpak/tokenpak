@@ -56,20 +56,25 @@ def test_unknown_route_class_constant_resolves_to_no_optimize():
 
 def test_route_policy_invariant_lossless_iff_fidelity():
     p = RoutePolicy(
-        route_class="x", fidelity=FidelityTier.LOSSLESS_REQUIRED,
+        route_class="x",
+        fidelity=FidelityTier.LOSSLESS_REQUIRED,
     )
     assert p.lossless_required is True
 
     p2 = RoutePolicy(
-        route_class="y", lossless_required=True,
+        route_class="y",
+        lossless_required=True,
     )
     assert p2.fidelity == FidelityTier.LOSSLESS_REQUIRED
 
 
 def test_all_fidelity_tiers_constant_matches_expected_set():
     expected = {
-        "lossless_required", "semantic_safe", "aggressive_ok",
-        "cache_response_safe", "no_optimize",
+        "lossless_required",
+        "semantic_safe",
+        "aggressive_ok",
+        "cache_response_safe",
+        "no_optimize",
     }
     assert ALL_FIDELITY_TIERS == frozenset(expected)
 
@@ -102,13 +107,16 @@ class _StubEngine:
 
 
 def test_select_recipes_returns_in_policy_order():
-    eng = _StubEngine({
-        "a": _StubRecipe(name="a"),
-        "b": _StubRecipe(name="b"),
-        "c": _StubRecipe(name="c"),
-    })
+    eng = _StubEngine(
+        {
+            "a": _StubRecipe(name="a"),
+            "b": _StubRecipe(name="b"),
+            "c": _StubRecipe(name="c"),
+        }
+    )
     policy = RoutePolicy(
-        route_class="x", recipe_names=("c", "a", "b"),
+        route_class="x",
+        recipe_names=("c", "a", "b"),
     )
     out = select_recipes(policy, engine=eng)
     assert [r.name for r in out] == ["c", "a", "b"]
@@ -117,17 +125,20 @@ def test_select_recipes_returns_in_policy_order():
 def test_select_recipes_skips_missing_names_silently():
     eng = _StubEngine({"a": _StubRecipe(name="a")})
     policy = RoutePolicy(
-        route_class="x", recipe_names=("a", "missing", "also-missing"),
+        route_class="x",
+        recipe_names=("a", "missing", "also-missing"),
     )
     out = select_recipes(policy, engine=eng)
     assert [r.name for r in out] == ["a"]
 
 
 def test_select_recipes_drops_overhint_in_lossless_mode():
-    eng = _StubEngine({
-        "low": _StubRecipe(name="low", compression_hint=0.10),
-        "high": _StubRecipe(name="high", compression_hint=0.80),
-    })
+    eng = _StubEngine(
+        {
+            "low": _StubRecipe(name="low", compression_hint=0.10),
+            "high": _StubRecipe(name="high", compression_hint=0.80),
+        }
+    )
     policy = RoutePolicy(
         route_class="x",
         recipe_names=("high", "low"),
@@ -140,11 +151,14 @@ def test_select_recipes_drops_overhint_in_lossless_mode():
 
 
 def test_select_recipes_keeps_high_hint_when_not_lossless():
-    eng = _StubEngine({
-        "high": _StubRecipe(name="high", compression_hint=0.80),
-    })
+    eng = _StubEngine(
+        {
+            "high": _StubRecipe(name="high", compression_hint=0.80),
+        }
+    )
     policy = RoutePolicy(
-        route_class="x", recipe_names=("high",),
+        route_class="x",
+        recipe_names=("high",),
         fidelity=FidelityTier.SEMANTIC_SAFE,
     )
     out = select_recipes(policy, engine=eng)
@@ -153,12 +167,15 @@ def test_select_recipes_keeps_high_hint_when_not_lossless():
 
 def test_select_recipes_filters_by_content_match():
     # Only content-mode recipes get matched against content_sample.
-    eng = _StubEngine({
-        "yes": _StubRecipe(name="yes", match_mode="content", matches_result=True),
-        "no": _StubRecipe(name="no", match_mode="content", matches_result=False),
-    })
+    eng = _StubEngine(
+        {
+            "yes": _StubRecipe(name="yes", match_mode="content", matches_result=True),
+            "no": _StubRecipe(name="no", match_mode="content", matches_result=False),
+        }
+    )
     policy = RoutePolicy(
-        route_class="x", recipe_names=("yes", "no"),
+        route_class="x",
+        recipe_names=("yes", "no"),
     )
     out = select_recipes(policy, content_sample="anything", engine=eng)
     assert [r.name for r in out] == ["yes"]
@@ -166,11 +183,15 @@ def test_select_recipes_filters_by_content_match():
 
 def test_select_recipes_extension_mode_passes_through():
     # Extension-mode recipes should NOT be content-filtered.
-    eng = _StubEngine({
-        "ext": _StubRecipe(
-            name="ext", match_mode="extension", matches_result=False,
-        ),
-    })
+    eng = _StubEngine(
+        {
+            "ext": _StubRecipe(
+                name="ext",
+                match_mode="extension",
+                matches_result=False,
+            ),
+        }
+    )
     policy = RoutePolicy(route_class="x", recipe_names=("ext",))
     out = select_recipes(policy, content_sample="ignored", engine=eng)
     assert [r.name for r in out] == ["ext"]
@@ -211,7 +232,9 @@ def test_apply_policy_no_optimize_returns_text_unchanged():
 def test_apply_policy_no_recipes_skips():
     eng = _stub_engine(_StubRecipe(name="a"))
     policy = RoutePolicy(
-        route_class="x", recipe_names=(), fidelity=FidelityTier.SEMANTIC_SAFE,
+        route_class="x",
+        recipe_names=(),
+        fidelity=FidelityTier.SEMANTIC_SAFE,
     )
     result = apply_policy("hello", policy=policy, engine=eng)
     assert not result.applied
@@ -229,11 +252,7 @@ def test_apply_policy_compresses_outside_protected_spans():
         ],
     )
     eng = _stub_engine(recipe)
-    text = (
-        "Just a quick note.\n\n\n"
-        "See /etc/foo.cfg for context.\n\n\n"
-        "Basically, that's all.\n"
-    )
+    text = "Just a quick note.\n\n\nSee /etc/foo.cfg for context.\n\n\nBasically, that's all.\n"
     policy = RoutePolicy(
         route_class="status_check",
         fidelity=FidelityTier.SEMANTIC_SAFE,

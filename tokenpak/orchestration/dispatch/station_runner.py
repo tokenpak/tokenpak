@@ -290,7 +290,11 @@ class StationRunner:
         only after a schema-valid payload exists — criterion 4).
         """
 
-        mode = autonomy_mode if isinstance(autonomy_mode, AutonomyMode) else AutonomyMode(autonomy_mode)
+        mode = (
+            autonomy_mode
+            if isinstance(autonomy_mode, AutonomyMode)
+            else AutonomyMode(autonomy_mode)
+        )
         sr_id = station_run_id or f"stationrun_{uuid4().hex}"
 
         policy = resolve_loop_policy(
@@ -452,9 +456,7 @@ class StationRunner:
             tool_violation = False
             for request in turn.tool_requests:
                 try:
-                    authorize_tool_call(
-                        request.tool, mode, approval_granted=approval_granted
-                    )
+                    authorize_tool_call(request.tool, mode, approval_granted=approval_granted)
                 except (ToolPolicyViolation, ApprovalRequiredError):
                     tool_violation = True
                     break
@@ -493,7 +495,10 @@ class StationRunner:
             )
             outcome = evaluate_stop(state, policy)
             if outcome.should_stop:
-                if outcome.stop_condition is LoopStopCondition.OUTPUT_SCHEMA_VALID_AND_NO_PENDING_TOOL_REQUESTS:
+                if (
+                    outcome.stop_condition
+                    is LoopStopCondition.OUTPUT_SCHEMA_VALID_AND_NO_PENDING_TOOL_REQUESTS
+                ):
                     status = StationRunStatus.COMPLETED
                 elif outcome.exhausted:
                     # Budget exhausted: on_exhausted → mark_failed (the

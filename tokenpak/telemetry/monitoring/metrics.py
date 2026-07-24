@@ -198,7 +198,7 @@ class ProxyMetricsCollector:
             from tokenpak.cache.registry import CacheRegistry
 
             summary = CacheRegistry.summary()
-            total_entries = sum(v.get("size", 0) for v in summary.values())
+            total_entries = sum(int(v.get("size", 0)) for v in summary.values())
             # Estimate memory for each registered cache
             total_bytes = 0
             for name in CacheRegistry.names():

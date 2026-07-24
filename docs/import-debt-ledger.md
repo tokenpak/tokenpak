@@ -63,7 +63,7 @@ Closing tracker: `BURN-A4-G1`.
 | IMP-008 | `tokenpak.core.runtime.proxy -> tokenpak.proxy.request_pipeline` | upward-import | ⬜ pending | BURN-A4-G1 | 26fa650 |
 | IMP-009 | `tokenpak.core.runtime.proxy -> tokenpak.proxy.monitor` | upward-import | ⬜ pending | BURN-A4-G1 | 26fa650 |
 | IMP-010 | `tokenpak.core.runtime.proxy -> tokenpak.telemetry.monitoring.server` | upward-import | ⬜ pending | BURN-A4-G1 | 26fa650 |
-| IMP-011 | `tokenpak.core.registry.claude_code.adapter -> tokenpak.proxy` | upward-import | ⬜ pending | BURN-A4-G1 | 26fa650 |
+| IMP-011 | `tokenpak.core.registry.claude_code.adapter -> tokenpak.proxy.request` | upward-import | ⬜ pending | BURN-A4-G1 | 26fa650 |
 
 ## Group 2 — `orchestration.commands → _cli_core` monolith (1 edge)
 

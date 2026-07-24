@@ -12,4 +12,4 @@ Feature flag: ``TOKENPAK_CAPSULE_BUILDER=1`` (env var) enables the builder.
 
 from .builder import CapsuleBuilder  # noqa: F401
 
-__all__ = ['CapsuleBuilder', 'builder']
+__all__ = ["CapsuleBuilder", "builder"]

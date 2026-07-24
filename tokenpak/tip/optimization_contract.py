@@ -86,10 +86,18 @@ class OptimizationContract:
         return True
 
     def effective_route_class_str(self) -> str:
-        return self.route_class.value if isinstance(self.route_class, OptimizationRouteClass) else str(self.route_class)
+        return (
+            self.route_class.value
+            if isinstance(self.route_class, OptimizationRouteClass)
+            else str(self.route_class)
+        )
 
     def effective_fidelity_str(self) -> str:
-        return self.fidelity_policy.value if isinstance(self.fidelity_policy, FidelityPolicy) else str(self.fidelity_policy)
+        return (
+            self.fidelity_policy.value
+            if isinstance(self.fidelity_policy, FidelityPolicy)
+            else str(self.fidelity_policy)
+        )
 
 
 __all__ = ["OptimizationContract"]

@@ -1,6 +1,5 @@
 """Unit tests for Compile-Time Tool Orchestration (Phase 3.4)."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.reference_scanner", reason="module not available in current build")
@@ -29,6 +28,7 @@ from tokenpak.reference_scanner import (
 # ---------------------------------------------------------------------------
 # Reference scanner — detection patterns
 # ---------------------------------------------------------------------------
+
 
 class TestReferenceScanner:
     def test_github_issue_url(self):
@@ -106,6 +106,7 @@ class TestReferenceScanner:
 # Reference fetcher
 # ---------------------------------------------------------------------------
 
+
 class TestReferenceFetcher:
     def test_linear_ticket_returns_none(self):
         ref = Reference(RefType.LINEAR_TICKET, "ENG-123", "ENG-123")
@@ -165,6 +166,7 @@ class TestReferenceFetcher:
 # Cache layer
 # ---------------------------------------------------------------------------
 
+
 class TestRefCache:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -202,7 +204,7 @@ class TestRefCache:
             _cache_key(ref2): {"content": "new", "fetched_at": time.time()},
         }
         pruned = _prune_stale(cache)
-        assert _cache_key(ref)  not in pruned
+        assert _cache_key(ref) not in pruned
         assert _cache_key(ref2) in pruned
 
     def test_second_fetch_uses_cache(self):
@@ -217,7 +219,9 @@ class TestRefCache:
         Path(cache_path).write_text(json.dumps(cache))
 
         fetch_calls = []
-        original_fetch = __import__("tokenpak.reference_fetcher", fromlist=["fetch_reference"]).fetch_reference
+        original_fetch = __import__(
+            "tokenpak.reference_fetcher", fromlist=["fetch_reference"]
+        ).fetch_reference
 
         def tracking_fetch(r):
             fetch_calls.append(r)
@@ -234,6 +238,7 @@ class TestRefCache:
 # Ephemeral block injection
 # ---------------------------------------------------------------------------
 
+
 class TestEphemeralInjection:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -242,26 +247,35 @@ class TestEphemeralInjection:
     def test_ephemeral_tag_in_output(self):
         with patch("tokenpak.compiler.fetch_reference") as mock_fetch:
             mock_fetch.return_value = "Issue title: Fix auth bug\nThe login crashes."
-            blocks = [{"ref": "src/auth.py", "type": "CODE", "quality": 1.0,
-                       "tokens": 100, "content": "def login(): pass"}]
+            blocks = [
+                {
+                    "ref": "src/auth.py",
+                    "type": "CODE",
+                    "quality": 1.0,
+                    "tokens": 100,
+                    "content": "def login(): pass",
+                }
+            ]
             query = "https://github.com/owner/repo/issues/42"
-            output = compile_with_refs(blocks, query, budget=5000,
-                                       cache_path=self.cache_path)
+            output = compile_with_refs(blocks, query, budget=5000, cache_path=self.cache_path)
         assert "[EPHEMERAL]" in output or "EPHEMERAL" in output or mock_fetch.called
 
     def test_regular_blocks_always_included(self):
         with patch("tokenpak.compiler.fetch_reference", return_value=None):
-            blocks = [{"ref": "main.py", "type": "CODE", "quality": 1.0,
-                       "tokens": 50, "content": "x = 1"}]
-            output = compile_with_refs(blocks, "no refs here", budget=1000,
-                                       cache_path=self.cache_path)
+            blocks = [
+                {"ref": "main.py", "type": "CODE", "quality": 1.0, "tokens": 50, "content": "x = 1"}
+            ]
+            output = compile_with_refs(
+                blocks, "no refs here", budget=1000, cache_path=self.cache_path
+            )
         assert "x = 1" in output
 
     def test_ephemeral_dropped_when_over_budget(self):
         big_content = "word " * 10000  # Very large content
         with patch("tokenpak.compiler.fetch_reference", return_value=big_content):
-            blocks = [{"ref": "x", "type": "CODE", "quality": 1.0,
-                       "tokens": 900, "content": "code here"}]
+            blocks = [
+                {"ref": "x", "type": "CODE", "quality": 1.0, "tokens": 900, "content": "code here"}
+            ]
             # Very tight budget (only 1000 total, 900 used by regular blocks)
             output = compile_with_refs(
                 blocks,
@@ -274,14 +288,16 @@ class TestEphemeralInjection:
 
     def test_no_refs_no_fetch(self):
         with patch("tokenpak.compiler.fetch_reference") as mock_fetch:
-            compile_with_refs([], "just a plain query with no links", budget=1000,
-                              cache_path=self.cache_path)
+            compile_with_refs(
+                [], "just a plain query with no links", budget=1000, cache_path=self.cache_path
+            )
         mock_fetch.assert_not_called()
 
     def test_fetch_failure_handled_gracefully(self):
         with patch("tokenpak.compiler.fetch_reference", side_effect=Exception("net error")):
-            blocks = [{"ref": "x", "type": "CODE", "quality": 1.0,
-                       "tokens": 10, "content": "x = 1"}]
+            blocks = [
+                {"ref": "x", "type": "CODE", "quality": 1.0, "tokens": 10, "content": "x = 1"}
+            ]
             # Should not crash
             output = compile_with_refs(
                 blocks,
@@ -296,15 +312,18 @@ class TestEphemeralInjection:
 # CLI --inject-refs flag
 # ---------------------------------------------------------------------------
 
+
 class TestCLIInjectRefs:
     def test_inject_refs_flag_in_parser(self):
         from tokenpak.cli import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["search", "auth function", "--inject-refs"])
         assert args.inject_refs is True
 
     def test_default_no_inject_refs(self):
         from tokenpak.cli import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["search", "auth function"])
         assert args.inject_refs is False

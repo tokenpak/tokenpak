@@ -85,9 +85,7 @@ def test_run_fleet_json_reports_token_based_savings(tmp_path, capsys):
     tokens = 1_000_000
     cost = rate  # spend exactly the value of the avoided tokens -> 50%
     db = tmp_path / "monitor.db"
-    _make_monitor_db(
-        db, model=model, estimated_cost=cost, would_have_saved_tokens=tokens
-    )
+    _make_monitor_db(db, model=model, estimated_cost=cost, would_have_saved_tokens=tokens)
 
     run_fleet(since_days=7, as_json=True, db_path=str(db))
     payload = json.loads(capsys.readouterr().out)
@@ -108,9 +106,7 @@ def test_run_fleet_table_smoke(tmp_path, capsys):
     model = "claude-sonnet-4-6"
     rate = get_rates(model)["input"]
     db = tmp_path / "monitor.db"
-    _make_monitor_db(
-        db, model=model, estimated_cost=rate, would_have_saved_tokens=1_000_000
-    )
+    _make_monitor_db(db, model=model, estimated_cost=rate, would_have_saved_tokens=1_000_000)
 
     run_fleet(since_days=7, as_json=False, db_path=str(db))
     out = capsys.readouterr().out

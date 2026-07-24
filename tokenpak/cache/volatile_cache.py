@@ -37,6 +37,7 @@ def _make_key(key: Any) -> str:
         return json.dumps(key, sort_keys=True, separators=(",", ":"), default=str)
     return str(key)
 
+
 _DEFAULT_TTL = 270.0  # 4.5 minutes — aligns with proxy injection cache
 _DEFAULT_MAX_SIZE = 1000
 

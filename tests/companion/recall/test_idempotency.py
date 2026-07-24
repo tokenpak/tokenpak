@@ -27,9 +27,7 @@ def _row() -> dict[str, str]:
     }
 
 
-def test_upsert_same_content_hash_is_idempotent_count(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_upsert_same_content_hash_is_idempotent_count(tmp_path: Path, require_fts5: None) -> None:
     """Calling twice with identical content_hash yields exactly one row."""
     db_path = tmp_path / "recall.db"
     with RecallStore.open(db_path) as store:
@@ -57,9 +55,7 @@ def test_upsert_same_content_hash_preserves_created_at_bumps_updated_at(
     assert updated == "2026-05-11T11:00:00Z"
 
 
-def test_upsert_idempotency_holds_across_reopen(
-    tmp_path: Path, require_fts5: None
-) -> None:
+def test_upsert_idempotency_holds_across_reopen(tmp_path: Path, require_fts5: None) -> None:
     """Re-opening the store keeps the single-row invariant."""
     db_path = tmp_path / "recall.db"
     with RecallStore.open(db_path) as first:

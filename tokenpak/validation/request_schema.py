@@ -1,4 +1,5 @@
 """tokenpak.validation.request_schema — compatibility shim. Canonical location: tokenpak.core.validation.request_schema."""
+
 from tokenpak.core.validation.request_schema import *  # noqa: F401, F403
 from tokenpak.core.validation.request_schema import (  # noqa: F401
     ANTHROPIC_MESSAGE_SCHEMA,

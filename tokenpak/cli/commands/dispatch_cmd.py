@@ -43,14 +43,110 @@ Design notes:
 
 from __future__ import annotations
 
+import argparse
 import functools
+import importlib
 import importlib.util
 import json
 import sqlite3
 import sys
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Optional, Protocol, TypedDict, TypeVar, cast
+
+if TYPE_CHECKING:
+    from tokenpak.orchestration.dispatch.ledger.db import RunLedger
+    from tokenpak.orchestration.dispatch.models.decision import DispatchDecision
+
+_PayloadT = TypeVar("_PayloadT")
+_SqlValue = str | int | float | bytes | None
+
+
+class _RouteTriggers(Protocol):
+    intents: Sequence[str]
+
+
+class _RouteStation(Protocol):
+    id: str
+    required_role: str | None
+    required_capabilities: Sequence[str]
+
+
+class _RouteProfile(Protocol):
+    id: str
+    name: str
+    triggers: _RouteTriggers
+    stations: Sequence[_RouteStation]
+
+
+class _RouteRegistry(Protocol):
+    def all(self) -> list[_RouteProfile]: ...
+
+
+class _ReceiptStationRow(TypedDict):
+    station_run_id: str
+    worker_id: str
+    status: str
+    result_payload_excerpt: str
+
+
+class _ReceiptTelemetryPayload(TypedDict):
+    total_input_tokens: int
+    total_output_tokens: int
+    total_latency_ms: int
+    cache_hits: int
+    estimated_cost: float | None
+
+
+class _ReceiptPayload(TypedDict):
+    id: str
+    job_id: str
+    run_id: str
+    route_id: str
+    final_status: str
+    stations: list[_ReceiptStationRow]
+    telemetry: _ReceiptTelemetryPayload
+
+
+class _DeliveryPayload(TypedDict, total=False):
+    job_id: str
+    status: object
+    intent: str
+    run_id: object
+    run_status: object
+    receipt_id: object
+    delivered: bool
+    summary: str
+    note: str
+
+
+class _DecisionOptionCard(TypedDict):
+    id: str
+    label: str
+    description: str
+    tradeoffs: list[str]
+
+
+class _DecisionRecommendationCard(TypedDict):
+    option_id: str
+    rationale: str
+
+
+class _DecisionCard(TypedDict):
+    id: str
+    job_id: str
+    scope: str
+    title: str
+    question: str
+    reason: str
+    risk_level: str
+    status: str
+    options: list[_DecisionOptionCard]
+    recommendation: _DecisionRecommendationCard
+    selected_option_id: str | None
+
 
 # ---------------------------------------------------------------------------
 # Preview-honesty boundary (v0.1-alpha)
@@ -73,7 +169,9 @@ _ALPHA_PREVIEW_NO_RECEIPT_NOTE = (
 # ---------------------------------------------------------------------------
 
 
-def build_dispatch_parser(sub: Any) -> None:
+def build_dispatch_parser(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
     """Register the ``tokenpak dispatch`` command group on *sub*."""
     p = sub.add_parser(
         "dispatch",
@@ -91,27 +189,37 @@ def build_dispatch_parser(sub: Any) -> None:
     p_run = dsub.add_parser("run", help="Intake + route a request into a Dispatch job")
     p_run.add_argument("request", help="The request text to dispatch")
     p_run.add_argument(
-        "--route", dest="route", default=None,
+        "--route",
+        dest="route",
+        default=None,
         help="Force an explicit Route (e.g. code_task); overrides auto-routing",
     )
     p_run.add_argument(
-        "--autonomy", dest="autonomy", default=None,
+        "--autonomy",
+        dest="autonomy",
+        default=None,
         choices=["advisory", "draft", "dispatch_with_approval", "auto_dispatch_limited"],
         help="Autonomy mode override (default depends on caller)",
     )
     p_run.add_argument(
-        "--ci", dest="ci", action="store_true",
+        "--ci",
+        dest="ci",
+        action="store_true",
         help="CI/automation caller; default autonomy = auto_dispatch_limited",
     )
     p_run.add_argument(
-        "--dry-run", dest="dry_run", action="store_true",
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
         help=(
             "Draft only; default autonomy = draft. Performs intake + route "
             "selection without persisting anything (no ledger writes)"
         ),
     )
     p_run.add_argument(
-        "--confirm", dest="confirm", action="store_true",
+        "--confirm",
+        dest="confirm",
+        action="store_true",
         help="Treat an approval-gated route as approved (record the bound route)",
     )
     _add_json(p_run)
@@ -127,7 +235,9 @@ def build_dispatch_parser(sub: Any) -> None:
     p_inspect = dsub.add_parser("inspect", help="Inspect a job's full record set")
     p_inspect.add_argument("job_id", help="Dispatch job id (job_…)")
     p_inspect.add_argument(
-        "--late", dest="late", action="store_true",
+        "--late",
+        dest="late",
+        action="store_true",
         help="Include late results (post-cancellation TIP output)",
     )
     _add_json(p_inspect)
@@ -136,7 +246,9 @@ def build_dispatch_parser(sub: Any) -> None:
     # -- decisions (inbox list) ---------------------------------------------
     p_dec = dsub.add_parser("decisions", help="List Decision Inbox cards")
     p_dec.add_argument(
-        "--job", dest="job", default=None,
+        "--job",
+        dest="job",
+        default=None,
         help="Filter to one job id",
     )
     _add_json(p_dec)
@@ -146,7 +258,9 @@ def build_dispatch_parser(sub: Any) -> None:
     p_appr = dsub.add_parser("approve", help="Approve a pending decision")
     p_appr.add_argument("decision_id", help="Decision id (decision_…)")
     p_appr.add_argument(
-        "--option", dest="option", default=None,
+        "--option",
+        dest="option",
+        default=None,
         help="Selected option id (default: the recommended option)",
     )
     _add_json(p_appr)
@@ -177,9 +291,7 @@ def build_dispatch_parser(sub: Any) -> None:
     p_cancel.set_defaults(func=cmd_dispatch_cancel)
 
     # -- discard-late --------------------------------------------------------
-    p_dlate = dsub.add_parser(
-        "discard-late", help="Discard a late result for a station run"
-    )
+    p_dlate = dsub.add_parser("discard-late", help="Discard a late result for a station run")
     p_dlate.add_argument("station_run_id", help="Station run id (stationrun_…)")
     _add_json(p_dlate)
     p_dlate.set_defaults(func=cmd_dispatch_discard_late)
@@ -212,12 +324,18 @@ def build_dispatch_parser(sub: Any) -> None:
     _add_json(p_workers)
     p_workers.set_defaults(func=cmd_dispatch_workers)
 
-    p.set_defaults(func=lambda a: (p.print_help() or 0))
+    def _print_dispatch_help(_args: argparse.Namespace) -> int:
+        p.print_help()
+        return 0
+
+    p.set_defaults(func=_print_dispatch_help)
 
 
-def _add_json(parser: Any) -> None:
+def _add_json(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "--json", dest="as_json", action="store_true",
+        "--json",
+        dest="as_json",
+        action="store_true",
         help="Emit machine-readable JSON instead of human-readable output",
     )
 
@@ -227,24 +345,32 @@ def _add_json(parser: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _ledger():
+def _ledger() -> RunLedger:
     """Open the Run Ledger at the canonical Dispatch path (honors TOKENPAK_HOME)."""
     from tokenpak.orchestration.dispatch.ledger.db import RunLedger
 
     return RunLedger()
 
 
-def _ledger_path():
+def _ledger_path() -> Path:
     from tokenpak.orchestration.dispatch.ledger.db import ledger_db_path
 
     return ledger_db_path()
 
 
-def _emit(payload: dict, as_json: bool, render) -> int:
+def _emit(
+    payload: _PayloadT,
+    as_json: bool,
+    render: Callable[[_PayloadT], int],
+) -> int:
     """Common emit helper: JSON branch or human render. Returns the exit code."""
     if as_json:
         print(json.dumps(payload, indent=2, default=str, sort_keys=True))
-        return int(payload.get("_rc", 0))
+        if isinstance(payload, dict):
+            raw_exit_code = payload.get("_rc", 0)
+            if isinstance(raw_exit_code, int):
+                return raw_exit_code
+        return 0
     return render(payload)
 
 
@@ -363,7 +489,9 @@ def _dispatch_runtime_available() -> bool:
         return False
 
 
-def _needs_runtime(fn):
+def _needs_runtime(
+    fn: Callable[[argparse.Namespace], int],
+) -> Callable[[argparse.Namespace], int]:
     """Degrade a runtime-touching dispatch verb to a truthful, actionable message.
 
     Three environments are distinguished so a tester is never pointed at a false
@@ -381,8 +509,8 @@ def _needs_runtime(fn):
     """
 
     @functools.wraps(fn)
-    def _wrapper(args: Any) -> int:
-        as_json = getattr(args, "as_json", False)
+    def _wrapper(args: argparse.Namespace) -> int:
+        as_json = bool(getattr(args, "as_json", False))
         if not _dispatch_runtime_source_present():
             return _err(
                 _DISPATCH_RUNTIME_UNAVAILABLE_MSG,
@@ -412,14 +540,15 @@ def _needs_runtime(fn):
 # ---------------------------------------------------------------------------
 
 
-def _default_autonomy(args: Any) -> str:
+def _default_autonomy(args: argparse.Namespace) -> str:
     """Resolve the default autonomy mode for the caller.
 
     Precedence: explicit ``--autonomy`` > ``--dry-run`` (draft) > ``--ci``
     (auto_dispatch_limited) > bare CLI default (dispatch_with_approval).
     """
-    if getattr(args, "autonomy", None):
-        return args.autonomy
+    explicit = getattr(args, "autonomy", None)
+    if isinstance(explicit, str) and explicit:
+        return explicit
     if getattr(args, "dry_run", False):
         return "draft"
     if getattr(args, "ci", False):
@@ -428,7 +557,7 @@ def _default_autonomy(args: Any) -> str:
 
 
 @_needs_runtime
-def cmd_dispatch_run(args: Any) -> int:
+def cmd_dispatch_run(args: argparse.Namespace) -> int:
     from tokenpak.orchestration.dispatch.dispatch import DispatchRuntime
     from tokenpak.orchestration.dispatch.frontdock import FrontDock
 
@@ -482,47 +611,54 @@ def cmd_dispatch_run(args: Any) -> int:
             "decision records were written)."
         )
 
-    def render(p: dict) -> int:
-        print("Dispatch run" + ("  (dry-run — nothing persisted)" if p["dry_run"] else ""))
+    def render(_payload: object) -> int:
+        print("Dispatch run" + ("  (dry-run — nothing persisted)" if dry_run else ""))
         print("────────────")
-        if p.get("dry_run"):
+        if dry_run:
             print("  (dry run — nothing persisted)")
-        print(f"  Job        : {p['job_id']}")
-        print(f"  Intent     : {p['detected_intent']}")
-        print(f"  Autonomy   : {p['autonomy_mode']}")
-        if p["route_id"]:
-            print(f"  Route      : {p['route_name']} ({p['route_id']})")
+        print(f"  Job        : {intake.job.id}")
+        print(f"  Intent     : {intake.job.detected_intent}")
+        print(f"  Autonomy   : {autonomy}")
+        if outcome.route is not None:
+            print(f"  Route      : {outcome.route.name} ({outcome.route.id})")
         else:
             print("  Route      : (none selected)")
-        print(f"  Selection  : {p['selection_status']}  "
-              f"[layer={p['precedence_layer']}, confidence={p['confidence']}]")
-        if p["decision_ids"]:
+        print(
+            f"  Selection  : {outcome.status}  "
+            f"[layer={outcome.precedence_layer}, confidence={outcome.confidence}]"
+        )
+        if decisions:
             print()
             print("  Decision Inbox:")
-            for did in p["decision_ids"]:
-                print(f"    • {did}  →  tokenpak dispatch approve {did}")
-        if p["assumptions"]:
+            for decision in decisions:
+                print(f"    • {decision.id}  →  tokenpak dispatch approve {decision.id}")
+        if intake.job.assumptions:
             print("  Assumptions:")
-            for a in p["assumptions"]:
-                print(f"    - {a}")
-        if p["missing_info"]:
+            for assumption in intake.job.assumptions:
+                print(f"    - {assumption}")
+        if intake.job.missing_info:
             print("  Missing info:")
-            for m in p["missing_info"]:
-                print(f"    - {m}")
-        if p["dry_run"]:
+            for missing in intake.job.missing_info:
+                print(f"    - {missing}")
+        if dry_run:
             print()
-            print("  → Dry-run: draft only. No job, manifest, route, or decision "
-                  "was written to the ledger.")
+            print(
+                "  → Dry-run: draft only. No job, manifest, route, or decision "
+                "was written to the ledger."
+            )
             return 0
-        if p["selection_status"] == "auto_dispatch":
+        if outcome.status == "auto_dispatch":
             print()
-            print("  → Route auto-dispatched. Inspect with "
-                  f"`tokenpak dispatch status {p['job_id']}`.")
-        elif p["selection_status"] == "needs_approval":
+            print(
+                f"  → Route auto-dispatched. Inspect with `tokenpak dispatch status {intake.job.id}`."
+            )
+        elif outcome.status == "needs_approval":
             print()
-            print("  → Route selected but needs approval (autonomy gate). "
-                  "Confirm or raise autonomy to dispatch.")
-        elif p["selection_status"] == "refused":
+            print(
+                "  → Route selected but needs approval (autonomy gate). "
+                "Confirm or raise autonomy to dispatch."
+            )
+        elif outcome.status == "refused":
             print()
             print("  → No route was confident enough to dispatch (refused).")
         return 0
@@ -536,7 +672,7 @@ def cmd_dispatch_run(args: Any) -> int:
 
 
 @_needs_runtime
-def cmd_dispatch_status(args: Any) -> int:
+def cmd_dispatch_status(args: argparse.Namespace) -> int:
     as_json = getattr(args, "as_json", False)
     ledger = _ledger()
     try:
@@ -563,27 +699,27 @@ def cmd_dispatch_status(args: Any) -> int:
         "source_task_packet_id": job.source_task_packet_id,
     }
 
-    def render(p: dict) -> int:
-        print(f"Job {p['job_id']}")
-        print("─" * (4 + len(p["job_id"])))
-        print(f"  Status          : {p['status']}")
-        if p["control_state"] != "active":
-            print(f"  Control state   : {p['control_state']}")
-        print(f"  Intent          : {p['detected_intent']}")
-        print(f"  Autonomy        : {p['autonomy_mode']}")
-        print(f"  Runs            : {p['run_count']}")
-        if p["run_id"]:
-            print(f"  Latest run      : {p['run_id']} ({p['run_status']})")
-        print(f"  Pending decisions: {p['pending_decisions']}")
-        if p["source_task_packet_id"]:
-            print(f"  Task packet     : {p['source_task_packet_id']}")
+    def render(_payload: object) -> int:
+        print(f"Job {job.id}")
+        print("─" * (4 + len(job.id)))
+        print(f"  Status          : {_enum_value(job.status)}")
+        if control_state != "active":
+            print(f"  Control state   : {control_state}")
+        print(f"  Intent          : {job.detected_intent}")
+        print(f"  Autonomy        : {_enum_value(job.autonomy_mode)}")
+        print(f"  Runs            : {len(runs)}")
+        if latest is not None:
+            print(f"  Latest run      : {latest['id']} ({latest['status']})")
+        print(f"  Pending decisions: {pending}")
+        if job.source_task_packet_id:
+            print(f"  Task packet     : {job.source_task_packet_id}")
         return 0
 
     return _emit(payload, as_json, render)
 
 
 @_needs_runtime
-def cmd_dispatch_inspect(args: Any) -> int:
+def cmd_dispatch_inspect(args: argparse.Namespace) -> int:
     as_json = getattr(args, "as_json", False)
     include_late = getattr(args, "late", False)
     ledger = _ledger()
@@ -604,8 +740,7 @@ def cmd_dispatch_inspect(args: Any) -> int:
         "manifests": [r["id"] for r in manifests],
         "runs": [{"id": r["id"], "status": r["status"]} for r in runs],
         "decisions": [
-            {"id": d["id"], "status": d["status"], "scope": d["scope"]}
-            for d in decisions
+            {"id": d["id"], "status": d["status"], "scope": d["scope"]} for d in decisions
         ],
         "receipts": [r["id"] for r in receipts],
     }
@@ -616,32 +751,35 @@ def cmd_dispatch_inspect(args: Any) -> int:
             {"id": r["id"], "station_run_id": r.get("station_run_id")} for r in late
         ]
 
-    def render(p: dict) -> int:
-        print(f"Inspect job {p['job']['id']}")
+    def render(_payload: object) -> int:
+        print(f"Inspect job {job.id}")
         print("─" * 40)
-        print(f"  Request    : {p['job']['raw_request']}")
-        print(f"  Intent     : {p['job']['detected_intent']}")
-        print(f"  Status     : {p['job']['status']}")
-        print(f"  Autonomy   : {p['job']['autonomy_mode']}")
-        print(f"  Manifests  : {', '.join(p['manifests']) or '(none)'}")
+        print(f"  Request    : {job.raw_request}")
+        print(f"  Intent     : {job.detected_intent}")
+        print(f"  Status     : {_enum_value(job.status)}")
+        print(f"  Autonomy   : {_enum_value(job.autonomy_mode)}")
+        print(f"  Manifests  : {', '.join(_row_text(row, 'id') for row in manifests) or '(none)'}")
         print("  Runs:")
-        for r in p["runs"]:
-            print(f"    - {r['id']} ({r['status']})")
-        if not p["runs"]:
+        for run in runs:
+            print(f"    - {run['id']} ({run['status']})")
+        if not runs:
             print("    (none)")
         print("  Decisions:")
-        for d in p["decisions"]:
-            print(f"    - {d['id']} [{d['scope']}] {d['status']}")
-        if not p["decisions"]:
+        for decision in decisions:
+            print(f"    - {decision['id']} [{decision['scope']}] {decision['status']}")
+        if not decisions:
             print("    (none)")
-        print(f"  Receipts   : {', '.join(p['receipts']) or '(none)'}")
-        if not p["receipts"]:
+        print(f"  Receipts   : {', '.join(_row_text(row, 'id') for row in receipts) or '(none)'}")
+        if not receipts:
             print(f"  Note       : {_ALPHA_PREVIEW_NO_RECEIPT_NOTE}")
         if include_late:
             print("  Late results:")
-            for r in p.get("late_results", []):
-                print(f"    - {r['id']} (station {r['station_run_id']})")
-            if not p.get("late_results"):
+            for late_result in late:
+                print(
+                    f"    - {_row_text(late_result, 'id')} "
+                    f"(station {late_result.get('station_run_id')})"
+                )
+            if not late:
                 print("    (none)")
         return 0
 
@@ -654,29 +792,29 @@ def cmd_dispatch_inspect(args: Any) -> int:
 
 
 @_needs_runtime
-def cmd_dispatch_decisions(args: Any) -> int:
+def cmd_dispatch_decisions(args: argparse.Namespace) -> int:
     as_json = getattr(args, "as_json", False)
     job_filter = getattr(args, "job", None)
     ledger = _ledger()
     try:
         rows = _query_decisions(ledger, job_filter)
-        decisions = [ledger.read_decision(r["id"]) for r in rows]
-        decisions = [d for d in decisions if d is not None]
+        loaded_decisions = [ledger.read_decision(_row_text(row, "id")) for row in rows]
+        decisions = [decision for decision in loaded_decisions if decision is not None]
     finally:
         ledger.close()
 
     cards = [_decision_card(d) for d in decisions]
     payload = {"count": len(cards), "decisions": cards}
 
-    def render(p: dict) -> int:
-        if not p["decisions"]:
+    def render(_payload: object) -> int:
+        if not cards:
             scope = f" for job {job_filter}" if job_filter else ""
             print(f"Decision Inbox is empty{scope}.")
             return 0
-        print(f"Decision Inbox — {p['count']} decision(s)")
+        print(f"Decision Inbox — {len(cards)} decision(s)")
         print("═" * 50)
-        for c in p["decisions"]:
-            _print_decision_card(c)
+        for card in cards:
+            _print_decision_card(card)
             print()
         return 0
 
@@ -684,16 +822,16 @@ def cmd_dispatch_decisions(args: Any) -> int:
 
 
 @_needs_runtime
-def cmd_dispatch_approve(args: Any) -> int:
+def cmd_dispatch_approve(args: argparse.Namespace) -> int:
     return _resolve_decision(args, approve=True)
 
 
 @_needs_runtime
-def cmd_dispatch_reject(args: Any) -> int:
+def cmd_dispatch_reject(args: argparse.Namespace) -> int:
     return _resolve_decision(args, approve=False)
 
 
-def _resolve_decision(args: Any, *, approve: bool) -> int:
+def _resolve_decision(args: argparse.Namespace, *, approve: bool) -> int:
     from tokenpak.orchestration.dispatch.models.enums import DecisionStatus, ResolvedBy
 
     as_json = getattr(args, "as_json", False)
@@ -703,13 +841,15 @@ def _resolve_decision(args: Any, *, approve: bool) -> int:
         decision = ledger.read_decision(args.decision_id)
         if decision is None:
             return _err(
-                f"no such decision: {args.decision_id}", as_json,
+                f"no such decision: {args.decision_id}",
+                as_json,
                 code="decision_not_found",
             )
         if decision.status != DecisionStatus.PENDING:
             return _err(
                 f"decision already {_enum_value(decision.status)}: {args.decision_id}",
-                as_json, code="decision_not_pending",
+                as_json,
+                code="decision_not_pending",
             )
 
         if approve:
@@ -718,7 +858,8 @@ def _resolve_decision(args: Any, *, approve: bool) -> int:
             if option_id not in valid:
                 return _err(
                     f"unknown option {option_id!r} (valid: {sorted(valid)})",
-                    as_json, code="unknown_option",
+                    as_json,
+                    code="unknown_option",
                 )
             decision.status = DecisionStatus.RESOLVED
             decision.resolution.selected_option_id = option_id
@@ -740,11 +881,11 @@ def _resolve_decision(args: Any, *, approve: bool) -> int:
         "selected_option_id": decision.resolution.selected_option_id,
     }
 
-    def render(p: dict) -> int:
+    def render(_payload: object) -> int:
         mark = "✓" if approve else "✗"
-        print(f"{mark} Decision {p['decision_id']} {verb}d → {p['status']}")
-        if p["selected_option_id"]:
-            print(f"  Selected option: {p['selected_option_id']}")
+        print(f"{mark} Decision {decision.id} {verb}d → {_enum_value(decision.status)}")
+        if decision.resolution.selected_option_id:
+            print(f"  Selected option: {decision.resolution.selected_option_id}")
         return 0
 
     return _emit(payload, as_json, render)
@@ -756,16 +897,16 @@ def _resolve_decision(args: Any, *, approve: bool) -> int:
 
 
 @_needs_runtime
-def cmd_dispatch_pause(args: Any) -> int:
+def cmd_dispatch_pause(args: argparse.Namespace) -> int:
     return _set_control_state(args, "paused", verb="pause")
 
 
 @_needs_runtime
-def cmd_dispatch_resume(args: Any) -> int:
+def cmd_dispatch_resume(args: argparse.Namespace) -> int:
     return _set_control_state(args, "active", verb="resume")
 
 
-def _set_control_state(args: Any, control_state: str, *, verb: str) -> int:
+def _set_control_state(args: argparse.Namespace, control_state: str, *, verb: str) -> int:
     """Record a CLI control state (paused/active) WITHOUT mutating the job's
     canonical ``status`` enum (which has no ``paused`` member). The flag lives in a
     sidecar control table so the canonical DispatchJob payload stays valid.
@@ -790,17 +931,17 @@ def _set_control_state(args: Any, control_state: str, *, verb: str) -> int:
         "control_state": control_state,
     }
 
-    def render(p: dict) -> int:
-        print(f"Job {p['job_id']} {verb}d: "
-              f"control {p['prior_control_state']} → {p['control_state']} "
-              f"(status: {p['job_status']})")
+    def render(_payload: object) -> int:
+        print(
+            f"Job {args.job_id} {verb}d: control {prior} → {control_state} (status: {job_status})"
+        )
         return 0
 
     return _emit(payload, as_json, render)
 
 
 @_needs_runtime
-def cmd_dispatch_cancel(args: Any) -> int:
+def cmd_dispatch_cancel(args: argparse.Namespace) -> int:
     as_json = getattr(args, "as_json", False)
     ledger = _ledger()
     try:
@@ -823,29 +964,34 @@ def cmd_dispatch_cancel(args: Any) -> int:
         ),
     }
 
-    def render(p: dict) -> int:
-        print(f"Job {p['job_id']} cancelled: {p['prior_status']} → cancelled")
-        print(f"  {p['note']}")
+    def render(_payload: object) -> int:
+        print(f"Job {args.job_id} cancelled: {prior} → cancelled")
+        print(
+            "  New stations are prevented from starting. Late TIP output is "
+            "captured as a LateResult and never applied. No token refund."
+        )
         return 0
 
     return _emit(payload, as_json, render)
 
 
 @_needs_runtime
-def cmd_dispatch_discard_late(args: Any) -> int:
+def cmd_dispatch_discard_late(args: argparse.Namespace) -> int:
     as_json = getattr(args, "as_json", False)
     ledger = _ledger()
     try:
         rows = _query_rows(
-            ledger, "SELECT * FROM late_results WHERE station_run_id = ?",
+            ledger,
+            "SELECT * FROM late_results WHERE station_run_id = ?",
             (args.station_run_id,),
         )
         if not rows:
             return _err(
                 f"no late results for station run: {args.station_run_id}",
-                as_json, code="no_late_results",
+                as_json,
+                code="no_late_results",
             )
-        discarded = [r["id"] for r in rows]
+        discarded = [_row_text(row, "id") for row in rows]
         for late_id in discarded:
             _delete_row(ledger, "late_results", late_id)
     finally:
@@ -853,11 +999,10 @@ def cmd_dispatch_discard_late(args: Any) -> int:
 
     payload = {"station_run_id": args.station_run_id, "discarded": discarded}
 
-    def render(p: dict) -> int:
-        print(f"Discarded {len(p['discarded'])} late result(s) "
-              f"for station run {p['station_run_id']}:")
-        for lid in p["discarded"]:
-            print(f"  - {lid}")
+    def render(_payload: object) -> int:
+        print(f"Discarded {len(discarded)} late result(s) for station run {args.station_run_id}:")
+        for late_id in discarded:
+            print(f"  - {late_id}")
         return 0
 
     return _emit(payload, as_json, render)
@@ -869,7 +1014,7 @@ def cmd_dispatch_discard_late(args: Any) -> int:
 
 
 @_needs_runtime
-def cmd_dispatch_receipt(args: Any) -> int:
+def cmd_dispatch_receipt(args: argparse.Namespace) -> int:
     from tokenpak.orchestration.dispatch.public_safe import sanitize_public_obj
 
     as_json = getattr(args, "as_json", False)
@@ -879,22 +1024,23 @@ def cmd_dispatch_receipt(args: Any) -> int:
         if job is None:
             return _err(f"no such job: {args.job_id}", as_json, code="job_not_found")
         rows = _query_by_job(ledger, "dispatch_receipts", args.job_id)
-        receipts = [ledger.read_receipt(r["id"]) for r in rows]
-        receipts = [r for r in receipts if r is not None]
+        loaded_receipts = [ledger.read_receipt(_row_text(row, "id")) for row in rows]
+        receipts = [receipt for receipt in loaded_receipts if receipt is not None]
     finally:
         ledger.close()
 
     if not receipts:
         return _err(
             f"no receipt for job {args.job_id}. {_ALPHA_PREVIEW_NO_RECEIPT_NOTE}",
-            as_json, code="no_receipt",
+            as_json,
+            code="no_receipt",
         )
 
     receipt = receipts[-1]
     raw = json.loads(receipt.model_dump_json())
-    payload = sanitize_public_obj(raw)
+    payload = cast(_ReceiptPayload, sanitize_public_obj(raw))
 
-    def render(p: dict) -> int:
+    def render(p: _ReceiptPayload) -> int:
         print(f"Receipt {p['id']}")
         print("─" * 40)
         print(f"  Job          : {p['job_id']}")
@@ -903,8 +1049,7 @@ def cmd_dispatch_receipt(args: Any) -> int:
         print(f"  Final status : {p['final_status']}")
         print("  Stations:")
         for s in p.get("stations", []):
-            print(f"    - {s['station_run_id']} "
-                  f"[Worker {s['worker_id']}] {s['status']}")
+            print(f"    - {s['station_run_id']} [Worker {s['worker_id']}] {s['status']}")
             if s.get("result_payload_excerpt"):
                 print(f"        {s['result_payload_excerpt']}")
         tele = p.get("telemetry", {})
@@ -922,7 +1067,7 @@ def cmd_dispatch_receipt(args: Any) -> int:
 
 
 @_needs_runtime
-def cmd_dispatch_delivery(args: Any) -> int:
+def cmd_dispatch_delivery(args: argparse.Namespace) -> int:
     """Show the Delivery Package view for a job.
 
     The Gatehouse builds a :class:`DeliveryPackage` during a run; the alpha CLI
@@ -943,7 +1088,7 @@ def cmd_dispatch_delivery(args: Any) -> int:
         ledger.close()
 
     latest_run = runs[-1] if runs else None
-    raw = {
+    raw: _DeliveryPayload = {
         "job_id": job.id,
         "status": _enum_value(job.status),
         "intent": job.detected_intent,
@@ -959,9 +1104,9 @@ def cmd_dispatch_delivery(args: Any) -> int:
     }
     if not receipts:
         raw["note"] = _ALPHA_PREVIEW_NO_RECEIPT_NOTE
-    payload = sanitize_public_obj(raw)
+    payload = cast(_DeliveryPayload, sanitize_public_obj(raw))
 
-    def render(p: dict) -> int:
+    def render(p: _DeliveryPayload) -> int:
         print(f"Delivery Package — job {p['job_id']}")
         print("─" * 44)
         print(f"  Status   : {p['status']}")
@@ -970,8 +1115,7 @@ def cmd_dispatch_delivery(args: Any) -> int:
             print(f"  Run      : {p['run_id']} ({p['run_status']})")
         print(f"  Delivered: {'yes' if p['delivered'] else 'no'}")
         if p["receipt_id"]:
-            print(f"  Receipt  : {p['receipt_id']}  "
-                  f"(tokenpak dispatch receipt {p['job_id']})")
+            print(f"  Receipt  : {p['receipt_id']}  (tokenpak dispatch receipt {p['job_id']})")
         print(f"  Summary  : {p['summary']}")
         if p.get("note"):
             print(f"  Note     : {p['note']}")
@@ -986,7 +1130,7 @@ def cmd_dispatch_delivery(args: Any) -> int:
 
 
 @_needs_runtime
-def cmd_dispatch_routes(args: Any) -> int:
+def cmd_dispatch_routes(args: argparse.Namespace) -> int:
     """List discoverable Dispatch routes (packaged defaults + user overrides).
 
     Read-only discovery: enumerates the *merged* route registry (packaged
@@ -994,19 +1138,24 @@ def cmd_dispatch_routes(args: Any) -> int:
     so a tester can find legal route ids/names — plus each route's stations —
     without reading source. Touches no ledger and executes no runtime.
     """
-    from tokenpak.orchestration.dispatch.registry.routes import (
-        RouteProfileError,
-        merged_route_registry,
-        user_routes_dir,
+    routes_module = importlib.import_module("tokenpak.orchestration.dispatch.registry.routes")
+    merged_route_registry = cast(
+        Callable[[], _RouteRegistry],
+        getattr(routes_module, "merged_route_registry"),
+    )
+    user_routes_dir = cast(
+        Callable[[], Path],
+        getattr(routes_module, "user_routes_dir"),
     )
 
     as_json = getattr(args, "as_json", False)
     try:
         routes = merged_route_registry().all()
         overrides_dir = str(user_routes_dir())
-    except (RouteProfileError, OSError) as exc:
+    except (ValueError, OSError) as exc:
         return _err(
-            f"failed to load route registry: {exc}", as_json,
+            f"failed to load route registry: {exc}",
+            as_json,
             code="route_registry_error",
         )
 
@@ -1032,26 +1181,26 @@ def cmd_dispatch_routes(args: Any) -> int:
         "routes": route_rows,
     }
 
-    def render(p: dict) -> int:
-        if not p["routes"]:
+    def render(_payload: object) -> int:
+        if not routes:
             print("No Dispatch routes registered.")
         else:
-            print(f"Dispatch routes — {p['count']} registered")
+            print(f"Dispatch routes — {len(routes)} registered")
             print("═" * 50)
-            for r in p["routes"]:
-                print(f"  {r['id']}   {r['name']}")
-                print(f"      intents : {', '.join(r['intents']) or '(none)'}")
-                stations = ", ".join(s["id"] for s in r["stations"]) or "(none)"
-                print(f"      stations: {stations}")
+            for route in routes:
+                print(f"  {route.id}   {route.name}")
+                print(f"      intents : {', '.join(route.triggers.intents) or '(none)'}")
+                station_ids = ", ".join(station.id for station in route.stations) or "(none)"
+                print(f"      stations: {station_ids}")
         print()
-        print(f"  User route overrides: {p['user_routes_dir']}")
+        print(f"  User route overrides: {overrides_dir}")
         return 0
 
     return _emit(payload, as_json, render)
 
 
 @_needs_runtime
-def cmd_dispatch_workers(args: Any) -> int:
+def cmd_dispatch_workers(args: argparse.Namespace) -> int:
     """List discoverable Dispatch workers + prompt overlays (packaged + user).
 
     Read-only discovery: enumerates the packaged worker registry (worker ids,
@@ -1074,7 +1223,8 @@ def cmd_dispatch_workers(args: Any) -> int:
         overrides_dir = str(user_overlay_dir())
     except (WorkerProfileError, OSError) as exc:
         return _err(
-            f"failed to load worker registry: {exc}", as_json,
+            f"failed to load worker registry: {exc}",
+            as_json,
             code="worker_registry_error",
         )
 
@@ -1094,19 +1244,19 @@ def cmd_dispatch_workers(args: Any) -> int:
         "workers": worker_rows,
     }
 
-    def render(p: dict) -> int:
-        if not p["workers"]:
+    def render(_payload: object) -> int:
+        if not workers:
             print("No Dispatch workers registered.")
         else:
-            print(f"Dispatch workers — {p['count']} registered")
+            print(f"Dispatch workers — {len(workers)} registered")
             print("═" * 50)
-            for w in p["workers"]:
-                print(f"  {w['id']}")
-                print(f"      roles       : {', '.join(w['roles']) or '(none)'}")
-                print(f"      capabilities: {', '.join(w['capabilities']) or '(none)'}")
+            for worker in workers:
+                print(f"  {worker.id}")
+                print(f"      roles       : {', '.join(worker.roles) or '(none)'}")
+                print(f"      capabilities: {', '.join(worker.capabilities) or '(none)'}")
         print()
-        print(f"  Overlays: {', '.join(p['overlays']) or '(none)'}")
-        print(f"  User overlay overrides: {p['user_overlay_dir']}")
+        print(f"  Overlays: {', '.join(overlay_ids) or '(none)'}")
+        print(f"  User overlay overrides: {overrides_dir}")
         return 0
 
     return _emit(payload, as_json, render)
@@ -1117,34 +1267,34 @@ def cmd_dispatch_workers(args: Any) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _decision_card(decision: Any) -> dict:
-    return {
-        "id": decision.id,
-        "job_id": decision.job_id,
-        "scope": _enum_value(decision.scope),
-        "title": decision.title,
-        "question": decision.question,
-        "reason": decision.reason,
-        "risk_level": _enum_value(decision.risk_level),
-        "status": _enum_value(decision.status),
-        "options": [
-            {
-                "id": o.id,
-                "label": o.label,
-                "description": o.description,
-                "tradeoffs": list(o.tradeoffs),
-            }
-            for o in decision.options
+def _decision_card(decision: DispatchDecision) -> _DecisionCard:
+    return _DecisionCard(
+        id=decision.id,
+        job_id=decision.job_id,
+        scope=_enum_text(decision.scope),
+        title=decision.title,
+        question=decision.question,
+        reason=decision.reason,
+        risk_level=_enum_text(decision.risk_level),
+        status=_enum_text(decision.status),
+        options=[
+            _DecisionOptionCard(
+                id=option.id,
+                label=option.label,
+                description=option.description,
+                tradeoffs=list(option.tradeoffs),
+            )
+            for option in decision.options
         ],
-        "recommendation": {
-            "option_id": decision.recommendation.option_id,
-            "rationale": decision.recommendation.rationale,
-        },
-        "selected_option_id": decision.resolution.selected_option_id,
-    }
+        recommendation=_DecisionRecommendationCard(
+            option_id=decision.recommendation.option_id,
+            rationale=decision.recommendation.rationale,
+        ),
+        selected_option_id=decision.resolution.selected_option_id,
+    )
 
 
-def _print_decision_card(c: dict) -> None:
+def _print_decision_card(c: _DecisionCard) -> None:
     print(f"  {c['id']}   [{c['scope']} scope · risk {c['risk_level']} · {c['status']}]")
     print(f"    {c['title']}")
     print(f"    Q: {c['question']}")
@@ -1159,8 +1309,7 @@ def _print_decision_card(c: dict) -> None:
         for t in o["tradeoffs"]:
             print(f"          · {t}")
     if c["status"] == "pending":
-        print(f"    → tokenpak dispatch approve {c['id']}   "
-              f"| tokenpak dispatch reject {c['id']}")
+        print(f"    → tokenpak dispatch approve {c['id']}   | tokenpak dispatch reject {c['id']}")
 
 
 # ---------------------------------------------------------------------------
@@ -1168,26 +1317,37 @@ def _print_decision_card(c: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _conn(ledger) -> sqlite3.Connection:
+def _row_text(row: dict[str, object], key: str) -> str:
+    value = row.get(key)
+    if not isinstance(value, str):
+        raise ValueError(f"Dispatch ledger field {key!r} is not text")
+    return value
+
+
+def _conn(ledger: RunLedger) -> sqlite3.Connection:
     """The RunLedger's live connection (read/update for listing + status changes)."""
     return ledger._conn  # noqa: SLF001 — intentional: same-package CLI surface.
 
 
-def _query_rows(ledger, sql: str, params: tuple) -> list[dict]:
+def _query_rows(
+    ledger: RunLedger,
+    sql: str,
+    params: tuple[_SqlValue, ...],
+) -> list[dict[str, object]]:
     conn = _conn(ledger)
     prior = conn.row_factory
     conn.row_factory = sqlite3.Row
     try:
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+        return [cast(dict[str, object], dict(row)) for row in conn.execute(sql, params)]
     finally:
         conn.row_factory = prior
 
 
-def _query_by_job(ledger, table: str, job_id: str) -> list[dict]:
+def _query_by_job(ledger: RunLedger, table: str, job_id: str) -> list[dict[str, object]]:
     return _query_rows(ledger, f"SELECT * FROM {table} WHERE job_id = ?", (job_id,))
 
 
-def _query_runs_for_job(ledger, job_id: str) -> list[dict]:
+def _query_runs_for_job(ledger: RunLedger, job_id: str) -> list[dict[str, object]]:
     return _query_rows(
         ledger,
         "SELECT * FROM dispatch_runs WHERE job_id = ? ORDER BY rowid ASC",
@@ -1195,29 +1355,29 @@ def _query_runs_for_job(ledger, job_id: str) -> list[dict]:
     )
 
 
-def _query_decisions(ledger, job_id: Optional[str]) -> list[dict]:
+def _query_decisions(ledger: RunLedger, job_id: Optional[str]) -> list[dict[str, object]]:
     if job_id:
         return _query_rows(
             ledger,
             "SELECT * FROM dispatch_decisions WHERE job_id = ? ORDER BY rowid ASC",
             (job_id,),
         )
-    return _query_rows(
-        ledger, "SELECT * FROM dispatch_decisions ORDER BY rowid ASC", ()
-    )
+    return _query_rows(ledger, "SELECT * FROM dispatch_decisions ORDER BY rowid ASC", ())
 
 
-def _count_pending_decisions(ledger, job_id: str) -> int:
+def _count_pending_decisions(ledger: RunLedger, job_id: str) -> int:
     rows = _query_rows(
         ledger,
-        "SELECT COUNT(*) AS n FROM dispatch_decisions "
-        "WHERE job_id = ? AND status = 'pending'",
+        "SELECT COUNT(*) AS n FROM dispatch_decisions WHERE job_id = ? AND status = 'pending'",
         (job_id,),
     )
-    return int(rows[0]["n"]) if rows else 0
+    if not rows:
+        return 0
+    count = rows[0].get("n")
+    return int(count) if isinstance(count, (int, str)) else 0
 
 
-def _update_job_status_row(ledger, job_id: str, status: str) -> None:
+def _update_job_status_row(ledger: RunLedger, job_id: str, status: str) -> None:
     """Update the job's status column + the persisted payload's status field.
 
     ``status`` MUST be a valid :class:`DispatchJobStatus` enum value (the payload
@@ -1226,16 +1386,18 @@ def _update_job_status_row(ledger, job_id: str, status: str) -> None:
     :func:`_write_control_state`, which never touches the canonical payload.
     """
     conn = _conn(ledger)
-    row = _query_rows(
-        ledger, "SELECT payload FROM dispatch_jobs WHERE id = ?", (job_id,)
-    )
+    row = _query_rows(ledger, "SELECT payload FROM dispatch_jobs WHERE id = ?", (job_id,))
     if row:
+        stored_payload = _row_text(row[0], "payload")
         try:
-            payload = json.loads(row[0]["payload"])
+            decoded = json.loads(stored_payload)
+            if not isinstance(decoded, dict):
+                raise ValueError("Dispatch job payload is not an object")
+            payload = cast(dict[str, object], decoded)
             payload["status"] = status
             new_payload = json.dumps(payload)
         except (ValueError, KeyError):
-            new_payload = row[0]["payload"]
+            new_payload = stored_payload
         with conn:
             conn.execute(
                 "UPDATE dispatch_jobs SET status = ?, payload = ? WHERE id = ?",
@@ -1257,13 +1419,13 @@ _CONTROL_TABLE_DDL = (
 )
 
 
-def _ensure_control_table(ledger) -> None:
+def _ensure_control_table(ledger: RunLedger) -> None:
     conn = _conn(ledger)
     with conn:
         conn.execute(_CONTROL_TABLE_DDL)
 
 
-def _write_control_state(ledger, job_id: str, control_state: str) -> None:
+def _write_control_state(ledger: RunLedger, job_id: str, control_state: str) -> None:
     _ensure_control_table(ledger)
     conn = _conn(ledger)
     now = datetime.now(timezone.utc).isoformat()
@@ -1276,17 +1438,20 @@ def _write_control_state(ledger, job_id: str, control_state: str) -> None:
         )
 
 
-def _read_control_state(ledger, job_id: str) -> Optional[str]:
+def _read_control_state(ledger: RunLedger, job_id: str) -> Optional[str]:
     _ensure_control_table(ledger)
     rows = _query_rows(
         ledger,
         "SELECT control_state FROM dispatch_job_control WHERE job_id = ?",
         (job_id,),
     )
-    return rows[0]["control_state"] if rows else None
+    if not rows:
+        return None
+    control_state = rows[0].get("control_state")
+    return control_state if isinstance(control_state, str) else None
 
 
-def _delete_row(ledger, table: str, row_id: str) -> None:
+def _delete_row(ledger: RunLedger, table: str, row_id: str) -> None:
     conn = _conn(ledger)
     with conn:
         conn.execute(f"DELETE FROM {table} WHERE id = ?", (row_id,))
@@ -1297,9 +1462,14 @@ def _delete_row(ledger, table: str, row_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _enum_value(value: Any) -> Any:
+def _enum_value(value: object) -> object:
     """Return ``.value`` for an Enum, else the value itself (str passthrough)."""
-    return getattr(value, "value", value)
+    return value.value if isinstance(value, Enum) else value
+
+
+def _enum_text(value: object) -> str:
+    """Return the stable string representation of an enum-backed CLI value."""
+    return str(_enum_value(value))
 
 
 __all__ = [

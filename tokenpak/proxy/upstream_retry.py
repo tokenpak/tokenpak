@@ -14,7 +14,7 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Optional
+from typing import Any, Mapping, Optional
 
 import httpx
 
@@ -259,9 +259,7 @@ class UpstreamRetryPolicy:
         return None
 
     def _delay(self, attempt: int, retry_after: object = None) -> float:
-        backoff = self.backoff or RateLimitBackoff(
-            base_wait=0.2, max_wait=2.5, jitter_factor=0.0
-        )
+        backoff = self.backoff or RateLimitBackoff(base_wait=0.2, max_wait=2.5, jitter_factor=0.0)
         return backoff.wait_time(attempt, retry_after=_parse_retry_after(retry_after))
 
     def retry_for_exception(
@@ -334,7 +332,7 @@ def build_terminal_recovery_payload(
     message: str,
     stream_started: bool,
     recovery_record: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Build the structured terminal recovery error envelope."""
 
     error = {
@@ -352,7 +350,7 @@ def build_terminal_recovery_payload(
     return {"error": error}
 
 
-def _redact_headers(headers: Mapping[str, object] | None) -> dict:
+def _redact_headers(headers: Mapping[str, object] | None) -> dict[str, str]:
     if not headers:
         return {}
     return {

@@ -31,6 +31,7 @@ from .openai_responses_adapter import OpenAIResponsesAdapter
 # requiring any user configuration — zero-config, just works.
 # ---------------------------------------------------------------------------
 
+
 def _is_chatgpt_oauth_token(auth_header: str) -> bool:
     """Return True if the Authorization header carries a ChatGPT OAuth JWT."""
     if not auth_header:

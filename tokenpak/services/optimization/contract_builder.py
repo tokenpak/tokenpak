@@ -1,11 +1,11 @@
 """Build a per-request ``OptimizationContract``.
 
 The contract is the upstream-contract-shaped artifact that a stage consults
-to decide whether it is eligible. In this scaffold the builder produces a
+to decide whether it is eligible. This compatibility builder produces a
 minimal proxy-local stand-in that records the inputs and exposes a
-``has(...)`` capability check; once the upstream contract
-(``tokenpak.tip.optimization_contract``) is imported into this workspace the
-builder will return a real ``OptimizationContract`` instance.
+``has(...)`` capability check. The richer TIP contract requires request,
+model, cache, compression, and telemetry inputs that this legacy surface does
+not receive.
 """
 
 from __future__ import annotations
@@ -61,12 +61,10 @@ def build_contract(
     policy: Optional[Dict[str, Any]] = None,
     fidelity: str = "default",
     extras: Optional[Dict[str, Any]] = None,
-) -> Any:
+) -> _LocalOptimizationContract:
     """Construct an OptimizationContract for the current request.
 
-    Returns a ``tokenpak.tip.optimization_contract.OptimizationContract`` if
-    the upstream contract is importable; otherwise a
-    ``_LocalOptimizationContract``. Both expose ``.has(capability)``.
+    Returns the stable ``_LocalOptimizationContract`` compatibility shape.
     """
     caps = _adapter_capabilities(adapter)
     route_class = route or ""
@@ -75,37 +73,16 @@ def build_contract(
     if policy:
         extras_dict.setdefault("policy", dict(policy))
 
-    try:
-        from tokenpak.tip.optimization_contract import (  # type: ignore[import-not-found]
-            OptimizationContract as _TipContract,
-        )
-        # Best-effort construction — the upstream contract's signature is
-        # documented in the design but may differ slightly. If construction
-        # fails, fall back to the local stub.
-        try:
-            return _TipContract(
-                capabilities=caps,
-                route_class=route_class,
-                platform=platform_str,
-                fidelity=fidelity,
-                extras=extras_dict,
-            )
-        except TypeError:
-            return _LocalOptimizationContract(
-                capabilities=caps,
-                route_class=route_class,
-                platform=platform_str,
-                fidelity=fidelity,
-                extras=extras_dict,
-            )
-    except Exception:
-        return _LocalOptimizationContract(
-            capabilities=caps,
-            route_class=route_class,
-            platform=platform_str,
-            fidelity=fidelity,
-            extras=extras_dict,
-        )
+    # This service-level scaffold intentionally returns its stable local
+    # contract. The richer TIP contract requires request/model/cache policy
+    # fields that are not inputs to this compatibility builder.
+    return _LocalOptimizationContract(
+        capabilities=caps,
+        route_class=route_class,
+        platform=platform_str,
+        fidelity=fidelity,
+        extras=extras_dict,
+    )
 
 
 __all__ = ["build_contract", "_LocalOptimizationContract"]

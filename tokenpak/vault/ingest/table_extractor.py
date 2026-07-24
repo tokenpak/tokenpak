@@ -27,7 +27,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Any, Optional, Sequence
+from typing import Optional, Sequence
 
 # ---------------------------------------------------------------------------
 # NormalizedTable — structured representation of a single table
@@ -45,7 +45,7 @@ class NormalizedTable:
     headers: list[str]
     """Normalized column headers."""
 
-    rows: list[dict]
+    rows: list[dict[str, str]]
     """Rows as header → value mappings."""
 
     source_section: str = ""
@@ -70,7 +70,7 @@ class NormalizedTable:
     # Serving helpers
     # ------------------------------------------------------------------
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, object]:
         """Compact summary: headers + row_count + first data row sample."""
         sample = self.rows[0] if self.rows else {}
         return {
@@ -111,7 +111,7 @@ class NormalizedTable:
             caption=self.caption,
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Full serializable dict."""
         return {
             "headers": self.headers,
@@ -128,7 +128,7 @@ class NormalizedTable:
 # ---------------------------------------------------------------------------
 
 
-def _detect_numeric_columns(headers: list[str], rows: list[dict]) -> list[str]:
+def _detect_numeric_columns(headers: list[str], rows: list[dict[str, str]]) -> list[str]:
     """Return column names whose values are ≥60 % numeric across all rows."""
     if not rows:
         return []
@@ -177,7 +177,7 @@ class _HTMLTableParser(HTMLParser):
         self._captions: list[str] = []
         self._current_caption: Optional[str] = None
 
-    def handle_starttag(self, tag: str, attrs: Any) -> None:
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == "table":
             self._in_table += 1
             if self._in_table == 1:
@@ -286,7 +286,7 @@ class TableExtractor:
                 header_line = lines[i - 1] if i > 0 else None
                 if header_line and self._MD_ROW.match(header_line):
                     headers = self._parse_md_row(header_line)
-                    rows: list[dict] = []
+                    rows: list[dict[str, str]] = []
                     j = i + 1
                     while j < len(lines) and self._MD_ROW.match(lines[j]):
                         cells = self._parse_md_row(lines[j])
@@ -438,7 +438,7 @@ class TableExtractor:
         if len(headers) < 2:  # noqa: PLR2004
             return None
 
-        rows: list[dict] = []
+        rows: list[dict[str, str]] = []
         for line in data_lines:
             cells = re.split(r"  +", line.strip())
             cells = [(cells + [""] * len(headers))[: len(headers)]]

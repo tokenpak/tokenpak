@@ -38,7 +38,7 @@ import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Iterable, Optional, cast
 
 SCHEMA_VERSION = 1
 
@@ -46,6 +46,7 @@ SCHEMA_VERSION = 1
 # ---------------------------------------------------------------------------
 # Path resolution
 # ---------------------------------------------------------------------------
+
 
 def default_config_path() -> Path:
     """Return the canonical ``vault.yaml`` path, honoring TOKENPAK_VAULT_CONFIG."""
@@ -72,6 +73,7 @@ def default_index_path() -> Path:
 # Schema dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class VaultPathEntry:
     """One registered directory in ``vault.yaml``."""
@@ -84,8 +86,8 @@ class VaultPathEntry:
     last_index_duration_ms: Optional[int] = None
     last_index_files: Optional[int] = None
 
-    def to_dict(self) -> dict:
-        d = asdict(self)
+    def to_dict(self) -> dict[str, object]:
+        d = cast(dict[str, object], asdict(self))
         # Drop None values so the YAML stays readable.
         return {k: v for k, v in d.items() if v is not None}
 
@@ -97,7 +99,7 @@ class VaultConfig:
     version: int = SCHEMA_VERSION
     paths: list[VaultPathEntry] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "version": self.version,
             "paths": [p.to_dict() for p in self.paths],
@@ -116,30 +118,35 @@ class VaultConfig:
 # Load / save
 # ---------------------------------------------------------------------------
 
+
 def _normalize(path: str) -> str:
     """Normalize a directory path for equality comparisons."""
     return str(Path(path).expanduser().resolve(strict=False))
 
 
-def _load_yaml_text(text: str) -> dict:
+def _load_yaml_text(text: str) -> dict[str, object]:
     """Parse YAML text, falling back to JSON if PyYAML is missing."""
     try:
-        import yaml  # type: ignore
+        import yaml
 
-        data = yaml.safe_load(text)
+        data = cast(object, yaml.safe_load(text))
     except ImportError:
         import json
 
-        data = json.loads(text) if text.strip() else {}
-    return data or {}
+        data = cast(object, json.loads(text)) if text.strip() else {}
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError("vault.yaml must contain a mapping at the document root")
+    return cast(dict[str, object], data)
 
 
-def _dump_yaml_text(data: dict) -> str:
+def _dump_yaml_text(data: dict[str, object]) -> str:
     """Serialize ``data`` as YAML; fall back to JSON if PyYAML is missing."""
     try:
-        import yaml  # type: ignore
+        import yaml
 
-        return yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
+        return str(yaml.safe_dump(data, sort_keys=False, default_flow_style=False))
     except ImportError:
         import json
 
@@ -153,15 +160,24 @@ def load(path: Optional[Path] = None) -> VaultConfig:
         return VaultConfig()
 
     raw = _load_yaml_text(cfg_path.read_text(encoding="utf-8"))
-    version = int(raw.get("version", SCHEMA_VERSION))
+    raw_version = raw.get("version", SCHEMA_VERSION)
+    if not isinstance(raw_version, (str, bytes, bytearray, int, float)):
+        raise ValueError(f"vault.yaml: invalid schema version: {raw_version!r}")
+    version = int(raw_version)
     if version != SCHEMA_VERSION:
         raise ValueError(
             f"vault.yaml schema version {version} not supported "
             f"(this build expects v{SCHEMA_VERSION})"
         )
 
+    raw_paths = raw.get("paths", [])
+    if raw_paths is None:
+        raw_paths = []
+    if not isinstance(raw_paths, list):
+        raise ValueError("vault.yaml: paths must be a list")
+
     entries: list[VaultPathEntry] = []
-    for item in raw.get("paths", []) or []:
+    for item in raw_paths:
         if not isinstance(item, dict) or "path" not in item:
             raise ValueError(f"vault.yaml: invalid path entry: {item!r}")
         entries.append(
@@ -193,6 +209,7 @@ def save(cfg: VaultConfig, path: Optional[Path] = None) -> Path:
 # ---------------------------------------------------------------------------
 # Mutators (used by paid vault add/remove and the OSS reindex flags)
 # ---------------------------------------------------------------------------
+
 
 def add_path(
     cfg: VaultConfig,
@@ -258,14 +275,17 @@ def update_index_health(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _opt_str(v: Any) -> Optional[str]:
+
+def _opt_str(v: object) -> Optional[str]:
     if v is None:
         return None
     return str(v)
 
 
-def _opt_int(v: Any) -> Optional[int]:
+def _opt_int(v: object) -> Optional[int]:
     if v is None:
+        return None
+    if not isinstance(v, (str, bytes, bytearray, int, float)):
         return None
     try:
         return int(v)

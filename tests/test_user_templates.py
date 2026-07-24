@@ -12,6 +12,7 @@ import tokenpak.user_templates as ut
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def isolated_templates_dir(tmp_path, monkeypatch):
     """Redirect all template storage to a temp directory for isolation."""
@@ -20,6 +21,7 @@ def isolated_templates_dir(tmp_path, monkeypatch):
 
 
 # ── list_templates ────────────────────────────────────────────────────────────
+
 
 def test_list_empty():
     assert ut.list_templates() == []
@@ -41,6 +43,7 @@ def test_list_sorted_by_name():
 
 
 # ── add / show ────────────────────────────────────────────────────────────────
+
 
 def test_add_creates_template():
     t = ut.add("greet", "Hi {{name}}!")
@@ -71,6 +74,7 @@ def test_show_returns_dict():
 
 # ── remove ────────────────────────────────────────────────────────────────────
 
+
 def test_remove_returns_true_when_found():
     ut.add("del_me", "delete this")
     assert ut.remove("del_me") is True
@@ -82,6 +86,7 @@ def test_remove_returns_false_when_missing():
 
 
 # ── use ───────────────────────────────────────────────────────────────────────
+
 
 def test_use_no_variables():
     ut.add("plain", "Static content here.")
@@ -114,6 +119,7 @@ def test_use_empty_variables():
 
 # ── variables_in ──────────────────────────────────────────────────────────────
 
+
 def test_variables_in_finds_vars():
     ut.add("multi", "{{a}} and {{b}} and {{a}} again")
     vs = ut.variables_in("multi")
@@ -130,6 +136,7 @@ def test_variables_in_empty_for_no_vars():
 
 
 # ── CLI commands ──────────────────────────────────────────────────────────────
+
 
 def _make_args(**kwargs):
     """Build a minimal argparse-like namespace."""

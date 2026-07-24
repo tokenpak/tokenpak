@@ -5,6 +5,7 @@ Delegates to ``tokenpak.models`` for all model pricing lookups.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Optional
 
 from tokenpak.models import get_rates as _registry_get_rates
@@ -12,14 +13,18 @@ from tokenpak.models import get_rates as _registry_get_rates
 # Default rates (kept for backward compatibility — same as registry default)
 DEFAULT_RATE = {"input": 3.0, "cached": 0.30, "output": 15.0}
 
+
 # Backward-compatible dict — populated from the model registry at import time.
 def _build_model_rates() -> dict[str, dict[str, float]]:
     from tokenpak.models import get_registry
+
     result: dict[str, dict[str, float]] = {}
     for info in get_registry().all_models():
         result[info.model_id] = {
             "input": info.input_per_mtok,
-            "cached": info.cache_read_per_mtok if info.cache_read_per_mtok is not None else info.input_per_mtok * 0.1,
+            "cached": info.cache_read_per_mtok
+            if info.cache_read_per_mtok is not None
+            else info.input_per_mtok * 0.1,
             "output": info.output_per_mtok,
         }
     return result
@@ -28,12 +33,26 @@ def _build_model_rates() -> dict[str, dict[str, float]]:
 MODEL_RATES: dict[str, dict[str, float]] = _build_model_rates()
 
 
-def get_rates(model: Optional[str] = None) -> dict:
+Numeric = int | float
+StatValue = Numeric | str
+SavingsRow = Mapping[str, StatValue]
+
+
+def _numeric(value: StatValue) -> Numeric:
+    """Return a numeric telemetry value without widening every stat to Any."""
+    if isinstance(value, (int, float)):
+        return value
+    return float(value)
+
+
+def get_rates(model: Optional[str] = None) -> dict[str, float]:
     """Get pricing rates for a model. Delegates to the dynamic model registry."""
     return _registry_get_rates(model)
 
 
-def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
+def estimate_savings(
+    stats: Mapping[str, StatValue], model: Optional[str] = None
+) -> dict[str, Numeric]:
     """Calculate compression + cache savings from proxy stats.
 
     Args:
@@ -60,15 +79,14 @@ def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
             - reduction_percent: % cost reduction
     """
     # Determine model to use
-    model_name = model or stats.get("model")
+    configured_model = stats.get("model")
+    model_name = model or (str(configured_model) if configured_model else None)
     rates = get_rates(model_name)
 
     # Extract stats with defaults
-    tokens_raw = stats.get("tokens_raw", stats.get("input_tokens", 0))
-    tokens_saved_compression = stats.get("tokens_saved", 0)
-    cache_read_tokens = stats.get("cache_read_tokens", 0)
-    cache_write_tokens = stats.get("cache_write_tokens", 0)
-    session_requests = stats.get("session_requests", 0)
+    tokens_raw = _numeric(stats.get("tokens_raw", stats.get("input_tokens", 0)))
+    tokens_saved_compression = _numeric(stats.get("tokens_saved", 0))
+    cache_read_tokens = _numeric(stats.get("cache_read_tokens", 0))
 
     # Compression savings
     compression_cost_saved = (tokens_saved_compression / 1_000_000) * rates["input"]
@@ -158,7 +176,7 @@ def get_price(model: str, direction: str = "input") -> float:
     return rates.get("input", 3.0)
 
 
-def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict:
+def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict[str, object]:
     """Calculate real dollar savings from the monitor DB using per-model rates.
 
     Args:
@@ -173,13 +191,15 @@ def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict:
     from datetime import datetime, timedelta, timezone
 
     # Build period filter
-    period_map = {"1h": timedelta(hours=1), "24h": timedelta(hours=24),
-                  "7d": timedelta(days=7), "30d": timedelta(days=30)}
+    period_map = {
+        "1h": timedelta(hours=1),
+        "24h": timedelta(hours=24),
+        "7d": timedelta(days=7),
+        "30d": timedelta(days=30),
+    }
     where_clause = ""
     if period and period in period_map:
-        cutoff = (datetime.now(timezone.utc) - period_map[period]).strftime(
-            "%Y-%m-%dT%H:%M:%S"
-        )
+        cutoff = (datetime.now(timezone.utc) - period_map[period]).strftime("%Y-%m-%dT%H:%M:%S")
         where_clause = f"WHERE timestamp >= '{cutoff}'"
 
     try:
@@ -210,7 +230,7 @@ def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict:
         except Exception:
             pass
 
-    per_model = []
+    per_model: list[dict[str, StatValue]] = []
     total_cost_without = 0.0
     total_cost_with = 0.0
     total_requests = 0
@@ -244,15 +264,17 @@ def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict:
         )
         reduction_pct = saved / cost_without * 100.0 if cost_without > 0 else 0.0
 
-        per_model.append({
-            "model": row["model"],
-            "requests": row["requests"],
-            "cost": round(cost_with, 4),
-            "cost_without": round(cost_without, 4),
-            "saved": round(saved, 4),
-            "cache_hit_percent": round(cache_hit_pct, 1),
-            "reduction_percent": round(reduction_pct, 1),
-        })
+        per_model.append(
+            {
+                "model": row["model"],
+                "requests": row["requests"],
+                "cost": round(cost_with, 4),
+                "cost_without": round(cost_without, 4),
+                "saved": round(saved, 4),
+                "cache_hit_percent": round(cache_hit_pct, 1),
+                "reduction_percent": round(reduction_pct, 1),
+            }
+        )
 
         total_cost_without += cost_without
         total_cost_with += cost_with
@@ -310,7 +332,9 @@ def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict:
     }
 
 
-def calculate_savings_breakdown(per_model_data: list) -> dict:
+def calculate_savings_breakdown(
+    per_model_data: list[SavingsRow],
+) -> dict[str, float]:
     """Break down savings by type: cache optimization vs token compression.
 
     Args:
@@ -323,7 +347,7 @@ def calculate_savings_breakdown(per_model_data: list) -> dict:
     # Compression savings are not separately tracked in the current DB schema
     # (compressed_tokens column is present but represents tokens after compression).
     # We attribute all measurable savings to cache_optimization.
-    cache_savings = sum(entry.get("saved", 0.0) for entry in per_model_data)
+    cache_savings = sum(_numeric(entry.get("saved", 0.0)) for entry in per_model_data)
     compression_savings = 0.0  # would need pre/post compression token counts per request
 
     return {
@@ -333,7 +357,10 @@ def calculate_savings_breakdown(per_model_data: list) -> dict:
     }
 
 
-def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
+def calculate_savings_from_proxy_stats(
+    stats: Mapping[str, Numeric],
+    by_model: Mapping[str, Mapping[str, Numeric]],
+) -> dict[str, object]:
     """Compute savings summary from proxy session stats and per-model breakdown.
 
     Parameters
@@ -381,7 +408,7 @@ def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
     total_saved_pct = (total_saved / cost_without * 100) if cost_without > 0 else 0.0
 
     # Per-model breakdown
-    per_model = {}
+    per_model: dict[str, dict[str, float]] = {}
     for model, mstats in by_model.items():
         m_in = mstats.get("input_tokens", 0)
         m_out = mstats.get("output_tokens", 0)

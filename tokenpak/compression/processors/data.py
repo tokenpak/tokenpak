@@ -4,6 +4,10 @@ import csv
 import io
 import json
 from pathlib import Path
+from typing import TypeAlias, cast
+
+JSONValue: TypeAlias = str | int | float | bool | None | list["JSONValue"] | dict[str, "JSONValue"]
+JSONSchema: TypeAlias = str | list["JSONSchema"] | dict[str, "JSONSchema"]
 
 
 class DataProcessor:
@@ -27,7 +31,7 @@ class DataProcessor:
     def _process_json(self, content: str) -> str:
         """Extract JSON schema with types and sample values."""
         try:
-            data = json.loads(content)
+            data = cast(JSONValue, json.loads(content))
         except json.JSONDecodeError:
             return f"[Invalid JSON — {len(content)} chars]"
 
@@ -46,23 +50,25 @@ class DataProcessor:
 
         return "\n".join(result)
 
-    def _extract_json_schema(self, data, depth: int = 0, max_depth: int = 3) -> dict | str:
+    def _extract_json_schema(
+        self, data: JSONValue, depth: int = 0, max_depth: int = 3
+    ) -> JSONSchema:
         """Recursively extract JSON schema (keys + types)."""
         if depth >= max_depth:
             return f"<{type(data).__name__}>"
 
         if isinstance(data, dict):
-            schema = {}
+            schema: dict[str, JSONSchema] = {}
             for i, (key, value) in enumerate(data.items()):
                 if i >= 15:  # Limit keys shown
                     schema["..."] = f"({len(data) - 15} more keys)"
                     break
-                schema[key] = self._extract_json_schema(value, depth + 1, max_depth)  # type: ignore[assignment]
+                schema[key] = self._extract_json_schema(value, depth + 1, max_depth)
             return schema
         elif isinstance(data, list):
             if len(data) == 0:
                 return "[]"
-            return [self._extract_json_schema(data[0], depth + 1, max_depth)]  # type: ignore[return-value]
+            return [self._extract_json_schema(data[0], depth + 1, max_depth)]
         elif isinstance(data, str):
             return "string"
         elif isinstance(data, bool):
@@ -113,7 +119,7 @@ class DataProcessor:
         try:
             import yaml
 
-            data = yaml.safe_load(content)
+            data = cast(JSONValue, yaml.safe_load(content))
             if isinstance(data, (dict, list)):
                 schema = self._extract_json_schema(data, depth=0, max_depth=3)
                 return "[YAML Schema]\n" + json.dumps(schema, indent=2)

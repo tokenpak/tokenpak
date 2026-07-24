@@ -1,6 +1,7 @@
 """
 Base abstractions for the hybrid retrieval system.
 """
+
 from __future__ import annotations
 
 import os
@@ -19,6 +20,7 @@ class RetrieverType(Enum):
 @dataclass
 class RetrievalResult:
     """A single result from any retriever."""
+
     doc_id: str
     score: float
     content: str
@@ -32,6 +34,7 @@ class RetrievalResult:
 @dataclass
 class RetrievalQuery:
     """Query parameters for retrieval."""
+
     text: str
     top_k: int = 10
     min_score: float = 0.0
@@ -41,6 +44,7 @@ class RetrievalQuery:
 @dataclass
 class FusedResult:
     """Result after RRF fusion across multiple retrievers."""
+
     doc_id: str
     fused_score: float
     source_results: Dict[str, RetrievalResult] = field(default_factory=dict)
@@ -66,6 +70,7 @@ class FusedResult:
 @dataclass
 class HybridSearchConfig:
     """Configuration for the hybrid retriever."""
+
     # BM25 settings
     bm25_weight: float = 0.5
     bm25_min_score: float = 0.0
@@ -94,6 +99,7 @@ class HybridSearchConfig:
             TOKENPAK_RETRIEVAL_TOP_K    int (default 20)
             TOKENPAK_VAULT_INDEX_PATH   path to vault .tokenpak directory
         """
+
         def _float(key: str, default: float) -> float:
             try:
                 return float(os.environ[key])
@@ -132,8 +138,7 @@ class Retriever(ABC):
 
     @property
     @abstractmethod
-    def retriever_type(self) -> RetrieverType:
-        ...
+    def retriever_type(self) -> RetrieverType: ...
 
     @abstractmethod
     async def search(self, query: RetrievalQuery) -> List[RetrievalResult]:

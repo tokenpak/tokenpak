@@ -66,6 +66,7 @@ def _guard_cfg(tmp_path) -> SpendGuardConfig:
 # 1. consume() single-winner semantics under concurrency
 # ---------------------------------------------------------------------------
 
+
 def test_threaded_double_consume_exactly_one_replay(store):
     """N concurrent consume() calls on one pending row → exactly one winner."""
     p = _store_one(store)
@@ -105,6 +106,7 @@ def test_consume_marks_row_consumed(store):
 # 2. block-path store failure fails closed
 # ---------------------------------------------------------------------------
 
+
 def _block_decision(est: RiskEstimate) -> PreflightDecision:
     return PreflightDecision(
         decision="block",
@@ -129,7 +131,8 @@ def test_block_path_store_failure_returns_block(tmp_path, monkeypatch, caplog):
     )
     monkeypatch.setattr(orchestrator, "run_estimate", lambda body, model: est)
     monkeypatch.setattr(
-        orchestrator, "decide",
+        orchestrator,
+        "decide",
         lambda *a, **k: _block_decision(est),
     )
 
@@ -140,7 +143,10 @@ def test_block_path_store_failure_returns_block(tmp_path, monkeypatch, caplog):
 
     with caplog.at_level(logging.WARNING):
         outcome = orchestrator.evaluate(
-            _BODY, "claude-sonnet-4-6", "sess-storefail", {},
+            _BODY,
+            "claude-sonnet-4-6",
+            "sess-storefail",
+            {},
             config=_guard_cfg(tmp_path),
         )
 
@@ -158,6 +164,7 @@ def test_block_path_store_failure_returns_block(tmp_path, monkeypatch, caplog):
 # 3. expired pending rows are reconciled by evaluate()
 # ---------------------------------------------------------------------------
 
+
 def test_evaluate_sweeps_expired_pending_rows(tmp_path, monkeypatch):
     """First evaluate() in a process expires stale pending rows."""
     cfg = _guard_cfg(tmp_path)
@@ -165,21 +172,25 @@ def test_evaluate_sweeps_expired_pending_rows(tmp_path, monkeypatch):
     # Distinct body: the stale row must not collide with the evaluated
     # request in the anti-loop request-hash cache.
     stale = _store_one(
-        store, session_id="sess-crashed", ttl_seconds=-5,
+        store,
+        session_id="sess-crashed",
+        ttl_seconds=-5,
         body=b'{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"old"}]}',
     )
 
     monkeypatch.setattr(orchestrator, "_LAST_EXPIRE_SWEEP", 0.0)
     outcome = orchestrator.evaluate(
-        _BODY, "claude-sonnet-4-6", "sess-live", {}, config=cfg,
+        _BODY,
+        "claude-sonnet-4-6",
+        "sess-live",
+        {},
+        config=cfg,
     )
     assert outcome.kind in ("forward", "forward_modified")
 
     row = store.get_by_id(stale.pending_id)
     assert row is not None
-    assert row.status == "expired", (
-        "crashed-session pending row was not reconciled by evaluate()"
-    )
+    assert row.status == "expired", "crashed-session pending row was not reconciled by evaluate()"
 
 
 def test_expire_sweep_is_rate_limited(tmp_path, monkeypatch):

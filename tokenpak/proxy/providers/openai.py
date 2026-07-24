@@ -64,14 +64,16 @@ class OpenAIFormat:
     def parse_request(body: bytes) -> Dict[str, Any]:
         """Parse an OpenAI API request body."""
         try:
-            return json.loads(body)
+            parsed: object = json.loads(body)
+            return parsed if isinstance(parsed, dict) else {}
         except (json.JSONDecodeError, UnicodeDecodeError):
             return {}
 
     @staticmethod
     def extract_model(data: Dict[str, Any]) -> str:
         """Extract model name from request."""
-        return data.get("model", "unknown")
+        model = data.get("model", "unknown")
+        return model if isinstance(model, str) else "unknown"
 
     @staticmethod
     def extract_system(data: Dict[str, Any]) -> str:
@@ -129,7 +131,7 @@ class OpenAIFormat:
     @staticmethod
     def is_streaming(data: Dict[str, Any]) -> bool:
         """Check if request is streaming."""
-        return data.get("stream", False)
+        return bool(data.get("stream", False))
 
     @staticmethod
     def build_request(
@@ -137,10 +139,10 @@ class OpenAIFormat:
         messages: List[Dict[str, Any]],
         max_tokens: Optional[int] = None,
         stream: bool = True,
-        **kwargs,
+        **kwargs: object,
     ) -> bytes:
         """Build an OpenAI API request body."""
-        data = {
+        data: Dict[str, object] = {
             "model": model,
             "messages": messages,
             "stream": stream,
@@ -159,6 +161,7 @@ class OpenAIFormat:
         try:
             data = json.loads(body)
             usage = data.get("usage", {})
-            return usage.get("completion_tokens", 0)
+            tokens = usage.get("completion_tokens", 0)
+            return tokens if isinstance(tokens, int) else 0
         except (json.JSONDecodeError, UnicodeDecodeError):
             return 0

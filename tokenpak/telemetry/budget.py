@@ -10,12 +10,23 @@ Implements:
 
 from __future__ import annotations
 
+__all__ = (
+    "BudgetConfig",
+    "BudgetStatus",
+    "BudgetTracker",
+    "SpendRecord",
+    "get_budget_tracker",
+    "load_budget_config",
+    "save_budget_config",
+)
+
+
 import sqlite3
 import threading
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict, cast
 
 import yaml
 
@@ -33,7 +44,7 @@ class BudgetConfig:
     alert_at_percent: float = 80.0  # Alert when this % of budget is consumed
     hard_stop: bool = False  # If True, block requests when budget exceeded
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, float | bool | None]:
         return {
             "daily_limit_usd": self.daily_limit_usd,
             "monthly_limit_usd": self.monthly_limit_usd,
@@ -42,7 +53,7 @@ class BudgetConfig:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "BudgetConfig":
+    def from_dict(cls, d: dict[str, Any]) -> "BudgetConfig":
         return cls(
             daily_limit_usd=d.get("daily_limit_usd"),
             monthly_limit_usd=d.get("monthly_limit_usd"),
@@ -76,7 +87,7 @@ class BudgetStatus:
     alert_triggered: bool
     as_of: datetime
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str | float | bool]:
         return {
             "period": self.period,
             "limit_usd": self.limit_usd,
@@ -86,6 +97,24 @@ class BudgetStatus:
             "alert_triggered": self.alert_triggered,
             "as_of": self.as_of.isoformat(),
         }
+
+
+class SpendRow(TypedDict):
+    request_id: str
+    timestamp: str
+    model: str
+    cost_usd: float
+    tokens_input: int
+    tokens_output: int
+    agent: str
+
+
+class ModelSpendSummary(TypedDict):
+    model: str
+    requests: int
+    tokens_input: int
+    tokens_output: int
+    cost_usd: float
 
 
 # ---------------------------------------------------------------------------
@@ -112,9 +141,7 @@ CREATE INDEX IF NOT EXISTS idx_spend_ts ON tp_spend(timestamp);
 # inflate spend totals and move budget enforcement. Applied as an additive
 # migration; pre-existing duplicate rows are deduped (newest row wins) in
 # the same transaction before the unique index is created.
-_UNIQUE_INDEX_DDL = (
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_spend_request_id ON tp_spend(request_id)"
-)
+_UNIQUE_INDEX_DDL = "CREATE UNIQUE INDEX IF NOT EXISTS idx_spend_request_id ON tp_spend(request_id)"
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +179,7 @@ class BudgetTracker:
         if not hasattr(self._local, "conn") or self._local.conn is None:
             self._local.conn = sqlite3.connect(self._db_path, check_same_thread=False)
             self._local.conn.row_factory = sqlite3.Row
-        return self._local.conn
+        return cast(sqlite3.Connection, self._local.conn)
 
     def _init_db(self) -> None:
         conn = self._conn()
@@ -299,7 +326,7 @@ class BudgetTracker:
         period: Optional[str] = None,
         model: Optional[str] = None,
         agent: Optional[str] = None,
-    ) -> list[dict]:
+    ) -> list[SpendRow]:
         """List spend records with optional filters."""
         conditions: list[str] = []
         params: list[Any] = []
@@ -328,9 +355,20 @@ class BudgetTracker:
             .execute(f"SELECT * FROM tp_spend {where} ORDER BY timestamp DESC LIMIT ?", params)
             .fetchall()
         )
-        return [dict(r) for r in rows]
+        return [
+            {
+                "request_id": str(row["request_id"]),
+                "timestamp": str(row["timestamp"]),
+                "model": str(row["model"]),
+                "cost_usd": float(row["cost_usd"]),
+                "tokens_input": int(row["tokens_input"]),
+                "tokens_output": int(row["tokens_output"]),
+                "agent": str(row["agent"]),
+            }
+            for row in rows
+        ]
 
-    def by_model_summary(self, period: Optional[str] = None) -> list[dict]:
+    def by_model_summary(self, period: Optional[str] = None) -> list[ModelSpendSummary]:
         """Return spend grouped by model."""
         conditions: list[str] = []
         params: list[Any] = []
@@ -359,7 +397,16 @@ class BudgetTracker:
             )
             .fetchall()
         )
-        return [dict(r) for r in rows]
+        return [
+            {
+                "model": str(row["model"]),
+                "requests": int(row["requests"]),
+                "tokens_input": int(row["tokens_input"]),
+                "tokens_output": int(row["tokens_output"]),
+                "cost_usd": float(row["cost_usd"]),
+            }
+            for row in rows
+        ]
 
     def export_csv(self, period: Optional[str] = None) -> str:
         """Return CSV string of spend records."""

@@ -44,11 +44,11 @@ import time
 import uuid
 from collections import defaultdict
 from enum import Enum
-from typing import Callable, Dict, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ class RateLimiter:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         # key → [count, window_start_ts]
-        self._buckets: Dict[str, list] = defaultdict(lambda: [0, 0.0])
+        self._buckets: Dict[str, list[Any]] = defaultdict(lambda: [0, 0.0])
 
     @staticmethod
     def _hash(key: str) -> str:
@@ -238,7 +238,7 @@ class TokenPakAuthMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: Any,
         validator: Optional[APIKeyValidator] = None,
         limiter: Optional[RateLimiter] = None,
     ) -> None:
@@ -246,7 +246,11 @@ class TokenPakAuthMiddleware(BaseHTTPMiddleware):
         self.validator = validator or APIKeyValidator()
         self.limiter = limiter or RateLimiter()
 
-    async def dispatch(self, request: Request, call_next: Callable):
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
         # ── 1. Request ID ──────────────────────────────────────
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
@@ -286,8 +290,7 @@ class TokenPakAuthMiddleware(BaseHTTPMiddleware):
                 status_code=429,
                 content={
                     "error": "Too Many Requests",
-                    "detail": f"Rate limit exceeded for tier '{tier}'. "
-                    f"Retry after {retry_after}s.",
+                    "detail": f"Rate limit exceeded for tier '{tier}'. Retry after {retry_after}s.",
                 },
                 headers={
                     "X-Request-ID": request_id,

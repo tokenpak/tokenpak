@@ -140,10 +140,10 @@ class License:
     tier: str = TIER_FREE
     key: str = ""
     activated_at: Optional[str] = None
-    expires_at: Optional[str] = None      # ISO date; None = no expiry
+    expires_at: Optional[str] = None  # ISO date; None = no expiry
     seats: int = 1
     email: str = ""
-    status: str = "active"                # active | pending_validation | expired | revoked
+    status: str = "active"  # active | pending_validation | expired | revoked
     features_override: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -280,7 +280,8 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
     key = (key or "").strip()
     if not key:
         return ActivationResult(
-            ok=False, summary="No license key provided.",
+            ok=False,
+            summary="No license key provided.",
             error="empty_key",
         )
     if len(key) < 16:
@@ -303,10 +304,7 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
     if not re.match(r"^[A-Za-z0-9._/+=\-]+$", key):
         return ActivationResult(
             ok=False,
-            summary=(
-                "License key has unexpected characters. Keys are "
-                "alphanumeric plus '-._/+='."
-            ),
+            summary=("License key has unexpected characters. Keys are alphanumeric plus '-._/+='."),
             error="bad_key_charset",
         )
     if key.lower() in {"test", "demo", "placeholder", "tbd", "free"}:
@@ -331,9 +329,8 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
     # license.json still never unlocks Pro — is_feature_enabled remains the
     # choke point; only this explicitly-opted-in dev path or a daemon-verified
     # signature can set status="active" at a paid tier.
-    if (
-        os.environ.get("TOKENPAK_LICENSE_DEV_SHIM") == "1"
-        and key.upper().startswith(_DEVSHIM_PREFIX)
+    if os.environ.get("TOKENPAK_LICENSE_DEV_SHIM") == "1" and key.upper().startswith(
+        _DEVSHIM_PREFIX
     ):
         shim_tier = _devshim_tier(key)
         lic = License(
@@ -347,7 +344,9 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
             save_license(lic)
         except Exception as exc:
             return ActivationResult(
-                ok=False, summary="Could not write license file.", error=str(exc),
+                ok=False,
+                summary="Could not write license file.",
+                error=str(exc),
             )
         return ActivationResult(
             ok=True,
@@ -361,7 +360,7 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
         )
 
     lic = License(
-        tier=TIER_FREE,                    # validator upgrades this once wired
+        tier=TIER_FREE,  # validator upgrades this once wired
         key=key,
         activated_at=datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
         email=email,
@@ -371,7 +370,9 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
         save_license(lic)
     except Exception as exc:
         return ActivationResult(
-            ok=False, summary="Could not write license file.", error=str(exc),
+            ok=False,
+            summary="Could not write license file.",
+            error=str(exc),
         )
     # Best-effort: ask the Pro daemon for the verified tier. Fails closed
     # — daemon unreachable, unverified signature, placeholder verifier
@@ -379,10 +380,7 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
     # status=pending_validation. Local file edits MUST NEVER unlock Pro.
     daemon_state, advisory = _consult_daemon_for_tier(lic)
     if daemon_state == "verified":
-        summary = (
-            f"License key stored and verified by the Pro daemon. "
-            f"Active tier: {lic.tier}."
-        )
+        summary = f"License key stored and verified by the Pro daemon. Active tier: {lic.tier}."
     elif daemon_state == "unverified":
         summary = (
             "License key stored. Pro daemon rejected verification "
@@ -563,14 +561,16 @@ def discover_plans() -> list[dict[str, Any]]:
         if tier != TIER_FREE and tier not in tier_features:
             continue
         feats = sorted(tier_features.get(tier, []))
-        catalog.append({
-            "tier": tier,
-            "label": describe_tier(tier),
-            "feature_count": len(feats),
-            "features": feats,
-            "price": pricing.get(tier, "unannounced"),
-            "blurb": blurbs.get(tier, ""),
-        })
+        catalog.append(
+            {
+                "tier": tier,
+                "label": describe_tier(tier),
+                "feature_count": len(feats),
+                "features": feats,
+                "price": pricing.get(tier, "unannounced"),
+                "blurb": blurbs.get(tier, ""),
+            }
+        )
     return catalog
 
 
@@ -643,9 +643,18 @@ def summary_for_cli(lic: Optional[License] = None) -> dict[str, Any]:
 
 
 __all__ = [
-    "TIER_FREE", "TIER_PRO", "TIER_TEAM", "TIER_ENTERPRISE",
-    "License", "ActivationResult",
-    "load_license", "save_license", "delete_license",
-    "activate", "deactivate",
-    "is_feature_enabled", "describe_tier", "summary_for_cli",
+    "TIER_FREE",
+    "TIER_PRO",
+    "TIER_TEAM",
+    "TIER_ENTERPRISE",
+    "License",
+    "ActivationResult",
+    "load_license",
+    "save_license",
+    "delete_license",
+    "activate",
+    "deactivate",
+    "is_feature_enabled",
+    "describe_tier",
+    "summary_for_cli",
 ]

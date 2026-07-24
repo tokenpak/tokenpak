@@ -109,7 +109,7 @@ def test_trigger_event_data_is_argv_not_shell(tmp_path):
     registry.add(
         event_type="file:changed",
         pattern="*",
-        action=f"{sys.executable} -c \"import sys; print(sys.argv[1])\" $EVENT_DATA",
+        action=f'{sys.executable} -c "import sys; print(sys.argv[1])" $EVENT_DATA',
     )
 
     payload = f"changed.txt; touch {marker}"

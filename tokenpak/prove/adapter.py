@@ -53,14 +53,29 @@ import json
 import os
 import subprocess
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Any, Optional
+from typing import Protocol, TextIO, TypedDict, cast
 
 import httpx
 import yaml
 
 # ── Data classes ────────────────────────────────────────────────────────
+
+
+class _ProviderConfig(TypedDict, total=False):
+    format: str
+    base_url: str
+    api_key_env: str
+    cli_command: str
+    models: dict[str, dict[str, float]]
+
+
+class _ScenarioTurn(Protocol):
+    number: int
+    label: str
+    prompt: str
 
 
 @dataclass
@@ -84,16 +99,16 @@ class ArmConfig:
     """Configuration for one arm of a prove run."""
 
     name: str
-    platform: str              # api | proxy | cli
-    provider: str              # anthropic | openai | google | grok | …
-    model: str                 # claude-sonnet-4-6 | gpt-4o | …
+    platform: str  # api | proxy | cli
+    provider: str  # anthropic | openai | google | grok | …
+    model: str  # claude-sonnet-4-6 | gpt-4o | …
     via_tokenpak: bool = False  # shorthand: True sets platform=proxy
 
     # Overrides (optional — resolved from registry if blank)
     base_url: str = ""
     api_key_env: str = ""
-    format: str = ""           # anthropic | openai | google (auto-detected)
-    cli_command: str = ""      # for platform=cli, e.g. "claude -p" or "codex exec"
+    format: str = ""  # anthropic | openai | google (auto-detected)
+    cli_command: str = ""  # for platform=cli, e.g. "claude -p" or "codex exec"
 
     def resolve(self) -> "ArmConfig":
         """Fill in blanks from the provider registry."""
@@ -146,18 +161,18 @@ class ArmResult:
 # Provider registry
 # ═══════════════════════════════════════════════════════════════════════
 
-_BUILTIN_PROVIDERS: dict[str, dict[str, Any]] = {
+_BUILTIN_PROVIDERS: dict[str, _ProviderConfig] = {
     "anthropic": {
         "format": "anthropic",
         "base_url": "https://api.anthropic.com",
         "api_key_env": "ANTHROPIC_API_KEY",
         "cli_command": "claude -p",
         "models": {
-            "claude-opus-4-6":   {"input": 15.0, "output": 75.0, "cached": 1.50},
-            "claude-opus-4-5":   {"input": 15.0, "output": 75.0, "cached": 1.50},
-            "claude-sonnet-4-6": {"input": 3.0,  "output": 15.0, "cached": 0.30},
-            "claude-sonnet-4-5": {"input": 3.0,  "output": 15.0, "cached": 0.30},
-            "claude-haiku-4-5":  {"input": 0.80, "output": 4.0,  "cached": 0.08},
+            "claude-opus-4-6": {"input": 15.0, "output": 75.0, "cached": 1.50},
+            "claude-opus-4-5": {"input": 15.0, "output": 75.0, "cached": 1.50},
+            "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cached": 0.30},
+            "claude-sonnet-4-5": {"input": 3.0, "output": 15.0, "cached": 0.30},
+            "claude-haiku-4-5": {"input": 0.80, "output": 4.0, "cached": 0.08},
         },
     },
     "openai": {
@@ -166,13 +181,13 @@ _BUILTIN_PROVIDERS: dict[str, dict[str, Any]] = {
         "api_key_env": "OPENAI_API_KEY",
         "cli_command": "codex exec",
         "models": {
-            "gpt-4o":       {"input": 2.50, "output": 10.0, "cached": 1.25},
-            "gpt-4o-mini":  {"input": 0.15, "output": 0.60, "cached": 0.075},
-            "o3":           {"input": 10.0, "output": 40.0, "cached": 5.0},
-            "o3-mini":      {"input": 1.10, "output": 4.40, "cached": 0.55},
-            "o4-mini":      {"input": 1.10, "output": 4.40, "cached": 0.55},
-            "o1":           {"input": 15.0, "output": 60.0, "cached": 7.50},
-            "gpt-4.1":      {"input": 2.0,  "output": 8.0,  "cached": 0.50},
+            "gpt-4o": {"input": 2.50, "output": 10.0, "cached": 1.25},
+            "gpt-4o-mini": {"input": 0.15, "output": 0.60, "cached": 0.075},
+            "o3": {"input": 10.0, "output": 40.0, "cached": 5.0},
+            "o3-mini": {"input": 1.10, "output": 4.40, "cached": 0.55},
+            "o4-mini": {"input": 1.10, "output": 4.40, "cached": 0.55},
+            "o1": {"input": 15.0, "output": 60.0, "cached": 7.50},
+            "gpt-4.1": {"input": 2.0, "output": 8.0, "cached": 0.50},
             "gpt-4.1-mini": {"input": 0.40, "output": 1.60, "cached": 0.10},
             "gpt-4.1-nano": {"input": 0.10, "output": 0.40, "cached": 0.025},
         },
@@ -182,9 +197,9 @@ _BUILTIN_PROVIDERS: dict[str, dict[str, Any]] = {
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
         "api_key_env": "GOOGLE_API_KEY",
         "models": {
-            "gemini-2.5-pro":   {"input": 1.25, "output": 10.0, "cached": 0.3125},
+            "gemini-2.5-pro": {"input": 1.25, "output": 10.0, "cached": 0.3125},
             "gemini-2.5-flash": {"input": 0.15, "output": 0.60, "cached": 0.0375},
-            "gemini-2.0-flash": {"input": 0.075,"output": 0.30, "cached": 0.01875},
+            "gemini-2.0-flash": {"input": 0.075, "output": 0.30, "cached": 0.01875},
         },
     },
     "xai": {
@@ -192,37 +207,43 @@ _BUILTIN_PROVIDERS: dict[str, dict[str, Any]] = {
         "base_url": "https://api.x.ai/v1",
         "api_key_env": "XAI_API_KEY",
         "models": {
-            "grok-3":      {"input": 3.0,  "output": 15.0, "cached": 0.30},
+            "grok-3": {"input": 3.0, "output": 15.0, "cached": 0.30},
             "grok-3-mini": {"input": 0.30, "output": 0.50, "cached": 0.03},
         },
     },
 }
 
 _USER_CONFIG_PATH = Path.home() / ".tokenpak" / "prove" / "providers.yaml"
-_user_providers: Optional[dict] = None
+_user_providers: dict[str, _ProviderConfig] | None = None
 
 
-def _load_user_providers() -> dict:
+def _load_user_providers() -> dict[str, _ProviderConfig]:
     global _user_providers
     if _user_providers is not None:
         return _user_providers
     _user_providers = {}
     if _USER_CONFIG_PATH.exists():
         try:
-            data = yaml.safe_load(_USER_CONFIG_PATH.read_text()) or {}
-            _user_providers = data.get("providers", {})
+            data = cast(dict[str, object], yaml.safe_load(_USER_CONFIG_PATH.read_text()) or {})
+            _user_providers = cast(dict[str, _ProviderConfig], data.get("providers", {}))
         except Exception:
             pass
     return _user_providers
 
 
-def _get_provider(name: str) -> dict:
+def _get_provider(name: str) -> _ProviderConfig:
     """Look up provider config by name (user overrides built-in)."""
     user = _load_user_providers()
     if name in user:
-        merged = {**_BUILTIN_PROVIDERS.get(name, {}), **user[name]}
+        merged = cast(
+            _ProviderConfig,
+            {**_BUILTIN_PROVIDERS.get(name, {}), **user[name]},
+        )
         if "models" in user[name] and name in _BUILTIN_PROVIDERS:
-            merged["models"] = {**_BUILTIN_PROVIDERS[name].get("models", {}), **user[name]["models"]}
+            merged["models"] = {
+                **_BUILTIN_PROVIDERS[name].get("models", {}),
+                **user[name]["models"],
+            }
         return merged
     if name in _BUILTIN_PROVIDERS:
         return _BUILTIN_PROVIDERS[name]
@@ -241,23 +262,25 @@ def _get_model_rates(provider: str, model: str) -> dict[str, float]:
     return {"input": 3.0, "output": 15.0, "cached": 0.30}
 
 
-def list_providers() -> list[dict]:
+def list_providers() -> list[dict[str, object]]:
     """List all available providers with their models."""
-    result = []
-    seen = set()
+    result: list[dict[str, object]] = []
+    seen: set[str] = set()
     for source, providers in [("user", _load_user_providers()), ("built-in", _BUILTIN_PROVIDERS)]:
         for name, cfg in providers.items():
             if name in seen:
                 continue
             seen.add(name)
             merged = _get_provider(name)
-            result.append({
-                "name": name,
-                "format": merged.get("format", name),
-                "base_url": merged.get("base_url", ""),
-                "models": list(merged.get("models", {}).keys()),
-                "source": source,
-            })
+            result.append(
+                {
+                    "name": name,
+                    "format": merged.get("format", name),
+                    "base_url": merged.get("base_url", ""),
+                    "models": list(merged.get("models", {}).keys()),
+                    "source": source,
+                }
+            )
     return result
 
 
@@ -266,8 +289,9 @@ def list_providers() -> list[dict]:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def estimate_cost(provider: str, model: str, input_tok: int,
-                  output_tok: int, cache_read_tok: int = 0) -> float:
+def estimate_cost(
+    provider: str, model: str, input_tok: int, output_tok: int, cache_read_tok: int = 0
+) -> float:
     rates = _get_model_rates(provider, model)
     fresh = max(0, input_tok - cache_read_tok)
     return (
@@ -286,17 +310,26 @@ _RETRY_BACKOFF = [10, 30, 60]  # seconds between retries for 429/529
 
 
 def _run_turn_anthropic(
-    client: httpx.Client, base_url: str, api_key: str,
-    model: str, system: str, messages: list[dict],
-    max_tokens: int, log_file: Optional[IO],
+    client: httpx.Client,
+    base_url: str,
+    api_key: str,
+    model: str,
+    system: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    log_file: TextIO | None,
 ) -> TurnResult:
     result = TurnResult()
     t0 = time.monotonic()
-    body = {"model": model, "max_tokens": max_tokens, "system": system,
-            "messages": messages, "stream": True}
+    body = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": messages,
+        "stream": True,
+    }
     url = f"{base_url}/v1/messages"
-    headers = {"anthropic-version": "2023-06-01",
-               "content-type": "application/json"}
+    headers = {"anthropic-version": "2023-06-01", "content-type": "application/json"}
     if api_key:
         headers["x-api-key"] = api_key
     parts: list[str] = []
@@ -310,11 +343,14 @@ def _run_turn_anthropic(
                     resp.read()
                     wait = _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
                     import sys as _sys
+
                     print(f"      rate limited, retrying in {wait}s...", file=_sys.stderr)
                     time.sleep(wait)
                     continue
                 if resp.status_code != 200:
-                    result.error = f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
+                    result.error = (
+                        f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
+                    )
                     result.latency_s = time.monotonic() - t0
                     return result
                 for line in resp.iter_lines():
@@ -338,7 +374,8 @@ def _run_turn_anthropic(
                         if txt:
                             parts.append(txt)
                             if log_file:
-                                log_file.write(txt); log_file.flush()
+                                log_file.write(txt)
+                                log_file.flush()
                     elif t == "message_delta":
                         result.output_tokens = evt.get("usage", {}).get("output_tokens", 0)
             break  # success
@@ -354,15 +391,25 @@ def _run_turn_anthropic(
 
 
 def _run_turn_openai(
-    client: httpx.Client, base_url: str, api_key: str,
-    model: str, system: str, messages: list[dict],
-    max_tokens: int, log_file: Optional[IO],
+    client: httpx.Client,
+    base_url: str,
+    api_key: str,
+    model: str,
+    system: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    log_file: TextIO | None,
 ) -> TurnResult:
     result = TurnResult()
     t0 = time.monotonic()
     full_msgs = [{"role": "system", "content": system}] + messages
-    body = {"model": model, "max_tokens": max_tokens, "messages": full_msgs,
-            "stream": True, "stream_options": {"include_usage": True}}
+    body = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": full_msgs,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
     url = f"{base_url}/v1/chat/completions"
     headers = {"content-type": "application/json"}
     if api_key:
@@ -378,11 +425,14 @@ def _run_turn_openai(
                     resp.read()
                     wait = _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
                     import sys as _sys
+
                     print(f"      rate limited, retrying in {wait}s...", file=_sys.stderr)
                     time.sleep(wait)
                     continue
                 if resp.status_code != 200:
-                    result.error = f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
+                    result.error = (
+                        f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
+                    )
                     result.latency_s = time.monotonic() - t0
                     return result
                 for line in resp.iter_lines():
@@ -401,7 +451,8 @@ def _run_turn_openai(
                         if txt:
                             parts.append(txt)
                             if log_file:
-                                log_file.write(txt); log_file.flush()
+                                log_file.write(txt)
+                                log_file.flush()
                     usage = evt.get("usage")
                     if usage:
                         result.input_tokens = usage.get("prompt_tokens", 0)
@@ -421,9 +472,14 @@ def _run_turn_openai(
 
 
 def _run_turn_google(
-    client: httpx.Client, base_url: str, api_key: str,
-    model: str, system: str, messages: list[dict],
-    max_tokens: int, log_file: Optional[IO],
+    client: httpx.Client,
+    base_url: str,
+    api_key: str,
+    model: str,
+    system: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    log_file: TextIO | None,
 ) -> TurnResult:
     """Google Gemini generateContent (streaming)."""
     result = TurnResult()
@@ -433,7 +489,7 @@ def _run_turn_google(
     for m in messages:
         role = "user" if m["role"] == "user" else "model"
         contents.append({"role": role, "parts": [{"text": m["content"]}]})
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": contents,
         "generationConfig": {"maxOutputTokens": max_tokens},
     }
@@ -447,7 +503,9 @@ def _run_turn_google(
     try:
         with client.stream("POST", url, headers=headers, json=body, timeout=120.0) as resp:
             if resp.status_code != 200:
-                result.error = f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
+                result.error = (
+                    f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
+                )
                 result.latency_s = time.monotonic() - t0
                 return result
             for line in resp.iter_lines():
@@ -463,7 +521,8 @@ def _run_turn_google(
                         if txt:
                             parts.append(txt)
                             if log_file:
-                                log_file.write(txt); log_file.flush()
+                                log_file.write(txt)
+                                log_file.flush()
                 usage = evt.get("usageMetadata")
                 if usage:
                     result.input_tokens = usage.get("promptTokenCount", 0)
@@ -478,7 +537,17 @@ def _run_turn_google(
     return result
 
 
-_FORMAT_DISPATCH = {
+_TurnExecutor = Callable[
+    [ArmConfig, str, list[dict[str, str]], int, TextIO | None, httpx.Client],
+    TurnResult,
+]
+_FormatExecutor = Callable[
+    [httpx.Client, str, str, str, str, list[dict[str, str]], int, TextIO | None],
+    TurnResult,
+]
+
+
+_FORMAT_DISPATCH: dict[str, _FormatExecutor] = {
     "anthropic": _run_turn_anthropic,
     "openai": _run_turn_openai,
     "google": _run_turn_google,
@@ -505,7 +574,7 @@ def _resolve_api_key(provider: str, api_key_env: str) -> str:
                 data = json.loads(creds_path.read_text())
                 token = data.get("claudeAiOauth", {}).get("accessToken", "")
                 if token:
-                    return token
+                    return cast(str, token)
         except Exception:
             pass
 
@@ -517,7 +586,7 @@ def _resolve_api_key(provider: str, api_key_env: str) -> str:
                 data = json.loads(auth_path.read_text())
                 token = data.get("tokens", {}).get("access_token", "")
                 if token:
-                    return token
+                    return cast(str, token)
         except Exception:
             pass
 
@@ -525,8 +594,12 @@ def _resolve_api_key(provider: str, api_key_env: str) -> str:
 
 
 def _execute_turn_api(
-    cfg: ArmConfig, system: str, messages: list[dict],
-    max_tokens: int, log_file: Optional[IO], client: httpx.Client,
+    cfg: ArmConfig,
+    system: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    log_file: TextIO | None,
+    client: httpx.Client,
 ) -> TurnResult:
     """Execute via direct HTTP API call (bypasses proxy)."""
     api_key = _resolve_api_key(cfg.provider, cfg.api_key_env)
@@ -535,13 +608,16 @@ def _execute_turn_api(
     run_fn = _FORMAT_DISPATCH.get(cfg.format)
     if not run_fn:
         return TurnResult(error=f"Unknown format: {cfg.format}")
-    return run_fn(client, cfg.base_url, api_key, cfg.model, system,
-                  messages, max_tokens, log_file)
+    return run_fn(client, cfg.base_url, api_key, cfg.model, system, messages, max_tokens, log_file)
 
 
 def _execute_turn_proxy(
-    cfg: ArmConfig, system: str, messages: list[dict],
-    max_tokens: int, log_file: Optional[IO], client: httpx.Client,
+    cfg: ArmConfig,
+    system: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    log_file: TextIO | None,
+    client: httpx.Client,
 ) -> TurnResult:
     """Execute via tokenpak proxy — same format, different base URL.
 
@@ -554,13 +630,16 @@ def _execute_turn_proxy(
     run_fn = _FORMAT_DISPATCH.get(cfg.format)
     if not run_fn:
         return TurnResult(error=f"Unknown format: {cfg.format}")
-    return run_fn(client, cfg.base_url, api_key, cfg.model, system,
-                  messages, max_tokens, log_file)
+    return run_fn(client, cfg.base_url, api_key, cfg.model, system, messages, max_tokens, log_file)
 
 
 def _execute_turn_cli(
-    cfg: ArmConfig, system: str, messages: list[dict],
-    max_tokens: int, log_file: Optional[IO], client: httpx.Client,
+    cfg: ArmConfig,
+    system: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    log_file: TextIO | None,
+    client: httpx.Client,
 ) -> TurnResult:
     """Execute via CLI subprocess with real multi-turn sessions.
 
@@ -631,7 +710,7 @@ def _execute_turn_cli(
                 # Extract session ID for subsequent turns
                 sid = data.get("session_id", "")
                 if sid:
-                    cfg._session_id = sid
+                    setattr(cfg, "_session_id", sid)
                 # Extract real token usage
                 usage = data.get("usage", {}) or {}
                 result.input_tokens = usage.get("input_tokens", 0)
@@ -668,7 +747,7 @@ def _execute_turn_cli(
     return result
 
 
-_PLATFORM_DISPATCH = {
+_PLATFORM_DISPATCH: dict[str, _TurnExecutor] = {
     "api": _execute_turn_api,
     "proxy": _execute_turn_proxy,
     "cli": _execute_turn_cli,
@@ -682,11 +761,11 @@ _PLATFORM_DISPATCH = {
 
 def run_arm(
     cfg: ArmConfig,
-    turns: list,
+    turns: Sequence[_ScenarioTurn],
     system: str,
     max_tokens: int,
-    log_path: Optional[Path] = None,
-    on_turn_complete: Optional[callable] = None,
+    log_path: Path | None = None,
+    on_turn_complete: Callable[[int, TurnResult], None] | None = None,
 ) -> ArmResult:
     """Run all turns through one arm using the adapter system.
 
@@ -706,7 +785,8 @@ def run_arm(
     # For CLI platforms, assign a unique session ID for multi-turn state
     if cfg.platform == "cli" and not getattr(cfg, "_session_id", ""):
         import uuid
-        cfg._session_id = str(uuid.uuid4())
+
+        setattr(cfg, "_session_id", str(uuid.uuid4()))
 
     result = ArmResult(
         arm_name=cfg.name,
@@ -730,11 +810,13 @@ def run_arm(
         if log_file:
             tp_label = " + TokenPak" if cfg.via_tokenpak else ""
             log_file.write(f"\n{'=' * 60}\n")
-            log_file.write(f"  {cfg.name}  |  {cfg.platform}/{cfg.provider}/{cfg.model}{tp_label}\n")
+            log_file.write(
+                f"  {cfg.name}  |  {cfg.platform}/{cfg.provider}/{cfg.model}{tp_label}\n"
+            )
             log_file.write(f"{'=' * 60}\n\n")
             log_file.flush()
 
-        messages: list[dict] = []
+        messages: list[dict[str, str]] = []
         client = httpx.Client(timeout=httpx.Timeout(120.0, connect=10.0))
 
         for turn in turns:
@@ -751,8 +833,10 @@ def run_arm(
             turn_result.label = turn.label
             if not turn_result.cost_usd:
                 turn_result.cost_usd = estimate_cost(
-                    cfg.provider, cfg.model,
-                    turn_result.input_tokens, turn_result.output_tokens,
+                    cfg.provider,
+                    cfg.model,
+                    turn_result.input_tokens,
+                    turn_result.output_tokens,
                     turn_result.cache_read_tokens,
                 )
 
@@ -764,7 +848,11 @@ def run_arm(
                 if turn_result.error:
                     log_file.write(f"  ERROR: {turn_result.error}\n")
                 else:
-                    cache = f" ({turn_result.cache_read_tokens:,} cached)" if turn_result.cache_read_tokens else ""
+                    cache = (
+                        f" ({turn_result.cache_read_tokens:,} cached)"
+                        if turn_result.cache_read_tokens
+                        else ""
+                    )
                     log_file.write(
                         f"  {turn_result.input_tokens:,} input{cache}"
                         f" / {turn_result.output_tokens:,} output"

@@ -28,9 +28,7 @@ def parse_window(value: Optional[str]) -> int:
         return 24
     m = _WINDOW_RE.match(str(value))
     if not m:
-        raise ValueError(
-            f"invalid --window value: {value!r} (expected like '24h' or '7d')"
-        )
+        raise ValueError(f"invalid --window value: {value!r} (expected like '24h' or '7d')")
     n = int(m.group(1))
     if n <= 0:
         raise ValueError(f"--window must be positive, got {value!r}")
@@ -63,7 +61,9 @@ def cmd_recommendations(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser(sub: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def build_parser(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> argparse.ArgumentParser:
     """Register ``tokenpak recommendations`` on a subparsers action."""
     p = sub.add_parser(
         "recommendations",

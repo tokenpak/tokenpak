@@ -80,6 +80,7 @@ from tokenpak.exceptions import (
 # errors.py: Base class — ErrorsTokenPakError
 # ============================================================
 
+
 class TestErrorsTokenPakError:
     """Tests for errors.py TokenPakError base class."""
 
@@ -131,6 +132,7 @@ class TestErrorsTokenPakError:
 # errors.py: Config errors
 # ============================================================
 
+
 class TestConfigErrors:
     def test_config_error_code(self):
         err = ConfigError("bad config")
@@ -169,6 +171,7 @@ class TestConfigErrors:
 # errors.py: Connection / Timeout
 # ============================================================
 
+
 class TestTimeoutError:
     def test_timeout_error_attributes(self):
         err = TPTimeoutError("redis", 30)
@@ -179,6 +182,7 @@ class TestTimeoutError:
 
     def test_timeout_error_is_connection_error(self):
         from tokenpak.errors import ConnectionError as TPConnectionError
+
         err = TPTimeoutError("db", 5)
         assert isinstance(err, TPConnectionError)
 
@@ -186,6 +190,7 @@ class TestTimeoutError:
 # ============================================================
 # errors.py: Auth errors
 # ============================================================
+
 
 class TestAuthErrors:
     def test_authentication_error_base(self):
@@ -213,6 +218,7 @@ class TestAuthErrors:
 # errors.py: Rate limit
 # ============================================================
 
+
 class TestErrorsRateLimitError:
     def test_without_retry_after(self):
         err = ErrorsRateLimitError("openai")
@@ -229,6 +235,7 @@ class TestErrorsRateLimitError:
 # ============================================================
 # errors.py: Cache errors
 # ============================================================
+
 
 class TestCacheErrors:
     def test_cache_error_base(self):
@@ -250,6 +257,7 @@ class TestCacheErrors:
 # errors.py: Provider errors
 # ============================================================
 
+
 class TestProviderErrors:
     def test_provider_error(self):
         err = ProviderError("anthropic", 503, "service unavailable")
@@ -268,6 +276,7 @@ class TestProviderErrors:
 # errors.py: Internal errors
 # ============================================================
 
+
 class TestInternalErrors:
     def test_internal_error(self):
         err = InternalError("unexpected state")
@@ -284,6 +293,7 @@ class TestInternalErrors:
 # ============================================================
 # errors.py: Proxy startup errors
 # ============================================================
+
 
 class TestProxyStartupErrors:
     def test_proxy_startup_error(self):
@@ -318,6 +328,7 @@ class TestProxyStartupErrors:
 # errors.py: Integration / CLI errors
 # ============================================================
 
+
 class TestIntegrationAndCLIErrors:
     def test_litellm_error(self):
         err = LiteLLMError("connection refused")
@@ -350,6 +361,7 @@ class TestIntegrationAndCLIErrors:
 # errors.py: format_error utility
 # ============================================================
 
+
 class TestFormatError:
     def test_format_tokenpak_error(self):
         err = MissingConfigError("api_keys")
@@ -378,6 +390,7 @@ class TestFormatError:
 # ============================================================
 # exceptions.py: Base class — TokenPakError
 # ============================================================
+
 
 class TestExceptionsTokenPakError:
     def test_basic_instantiation(self):
@@ -428,6 +441,7 @@ class TestExceptionsTokenPakError:
 # ============================================================
 # exceptions.py: Hierarchy — ProxyError, UpstreamError, CircuitOpenError
 # ============================================================
+
 
 class TestProxyErrors:
     def test_proxy_error_is_tokenpak_error(self):
@@ -482,6 +496,7 @@ class TestProxyErrors:
 # exceptions.py: CompressionError, ConfigError, AuthError
 # ============================================================
 
+
 class TestCompressionConfigAuth:
     def test_compression_error(self):
         err = CompressionError("failed to compress")
@@ -511,6 +526,7 @@ class TestCompressionConfigAuth:
 # exceptions.py: RateLimitError
 # ============================================================
 
+
 class TestExceptionsRateLimitError:
     def test_basic(self):
         err = RateLimitError("rate exceeded")
@@ -530,6 +546,7 @@ class TestExceptionsRateLimitError:
 # ============================================================
 # exceptions.py: CacheError, ValidationError, LicenseError
 # ============================================================
+
 
 class TestCacheValidationLicense:
     def test_cache_error(self):
@@ -565,6 +582,7 @@ class TestCacheValidationLicense:
 # ============================================================
 # Cross-cutting: nested exceptions / chaining
 # ============================================================
+
 
 class TestNestedExceptions:
     def test_exceptions_py_error_as_cause(self):

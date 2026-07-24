@@ -33,21 +33,24 @@ def build_features_parser(sub: Any) -> None:
     fsub = p.add_subparsers(dest="features_action", required=False)
 
     p.add_argument(
-        "--json", dest="as_json", action="store_true",
+        "--json",
+        dest="as_json",
+        action="store_true",
         help="Emit JSON instead of text",
     )
     p.add_argument(
-        "--tier", default=None,
+        "--tier",
+        default=None,
         help="Filter to a specific tier: free|pro|team|enterprise",
     )
     p.set_defaults(func=cmd_features_list)
 
-    p_explain = fsub.add_parser(
-        "explain", help="Explain entitlement for one feature"
-    )
+    p_explain = fsub.add_parser("explain", help="Explain entitlement for one feature")
     p_explain.add_argument("feature", help="Feature key (e.g. T9_replay_system)")
     p_explain.add_argument(
-        "--json", dest="as_json", action="store_true",
+        "--json",
+        dest="as_json",
+        action="store_true",
         help="Emit JSON",
     )
     p_explain.set_defaults(func=cmd_features_explain)
@@ -59,7 +62,7 @@ def cmd_features_list(args: Any) -> int:
     lic = _lic.load_license()
     active_tier = lic.tier if lic else _lic.TIER_FREE
 
-    rows: list[dict] = []
+    rows: list[dict[str, str]] = []
     seen: set[str] = set()
 
     # All gated features (tracked in _GATES).
@@ -70,24 +73,32 @@ def cmd_features_list(args: Any) -> int:
     # Free features are everything not in _GATES — there is no closed
     # enumeration of them, so we surface a single advisory row rather
     # than fabricating a list (per `feedback_always_dynamic.md`).
-    rows.append({
-        "feature": "(other)",
-        "required_tier": _lic.TIER_FREE,
-        "state": "active",
-        "reason": "Free-tier features are implicit; any feature not "
-                  "listed here is available without a license.",
-    })
+    rows.append(
+        {
+            "feature": "(other)",
+            "required_tier": _lic.TIER_FREE,
+            "state": "active",
+            "reason": "Free-tier features are implicit; any feature not "
+            "listed here is available without a license.",
+        }
+    )
 
     tier_filter = (getattr(args, "tier", None) or "").strip().lower() or None
     if tier_filter:
         rows = [r for r in rows if r["required_tier"] == tier_filter]
 
     if getattr(args, "as_json", False):
-        print(json.dumps({
-            "active_tier": active_tier,
-            "license_status": (lic.status if lic else "free"),
-            "features": rows,
-        }, indent=2, sort_keys=True))
+        print(
+            json.dumps(
+                {
+                    "active_tier": active_tier,
+                    "license_status": (lic.status if lic else "free"),
+                    "features": rows,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 0
 
     print(f"Active license tier: {active_tier}")
@@ -138,7 +149,7 @@ def cmd_features_explain(args: Any) -> int:
     return 0
 
 
-def _row(feature: str, required: str, active_tier: str, lic) -> dict:
+def _row(feature: str, required: str, active_tier: str, lic: Any) -> dict[str, str]:
     from tokenpak import licensing as _lic
 
     enabled = _lic.is_feature_enabled(feature, lic=lic)

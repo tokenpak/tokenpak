@@ -12,4 +12,15 @@ from .session_capsules import (
     serialize_capsule,
 )
 
-__all__ = ['REQUIRED_CAPSULE_SECTIONS', 'build_session_capsule', 'capsule_retrieval_score', 'score_capsule_sections', 'serialize_capsule', 'DecisionMemoryDB', 'DecisionRecord', 'decision_memory', 'lesson_ingest', 'session_capsules']
+__all__ = [
+    "REQUIRED_CAPSULE_SECTIONS",
+    "build_session_capsule",
+    "capsule_retrieval_score",
+    "score_capsule_sections",
+    "serialize_capsule",
+    "DecisionMemoryDB",
+    "DecisionRecord",
+    "decision_memory",
+    "lesson_ingest",
+    "session_capsules",
+]

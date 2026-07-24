@@ -8,7 +8,6 @@ Tests:
 5. /stats JSON includes swap_mb field (integration-style unit test)
 """
 
-
 import logging
 import os
 import sys
@@ -110,9 +109,7 @@ class TestCheckSwapPressure(unittest.TestCase):
 
     def test_warning_logged_when_above_threshold(self):
         """swap > threshold → warning emitted."""
-        with patch(
-            "tokenpak.runtime.proxy.get_swap_mb", return_value=700.0
-        ):
+        with patch("tokenpak.runtime.proxy.get_swap_mb", return_value=700.0):
             with self.assertLogs("tokenpak.runtime.proxy", level="WARNING") as cm:
                 result = check_swap_pressure(threshold_mb=600.0)
         self.assertEqual(result, 700.0)
@@ -123,11 +120,10 @@ class TestCheckSwapPressure(unittest.TestCase):
 
     def test_no_warning_when_at_threshold(self):
         """swap == threshold → no warning (boundary: threshold is not exceeded)."""
-        with patch(
-            "tokenpak.runtime.proxy.get_swap_mb", return_value=600.0
-        ):
+        with patch("tokenpak.runtime.proxy.get_swap_mb", return_value=600.0):
             # Should not emit any WARNING — use assertNoLogs (Python 3.10+) or check manually
             import io
+
             handler = logging.StreamHandler(io.StringIO())
             handler.setLevel(logging.WARNING)
             logger = logging.getLogger("tokenpak.runtime.proxy")
@@ -142,10 +138,9 @@ class TestCheckSwapPressure(unittest.TestCase):
 
     def test_no_warning_when_below_threshold(self):
         """swap < threshold → no warning."""
-        with patch(
-            "tokenpak.runtime.proxy.get_swap_mb", return_value=100.0
-        ):
+        with patch("tokenpak.runtime.proxy.get_swap_mb", return_value=100.0):
             import io
+
             handler = logging.StreamHandler(io.StringIO())
             handler.setLevel(logging.WARNING)
             logger = logging.getLogger("tokenpak.runtime.proxy")
@@ -160,9 +155,7 @@ class TestCheckSwapPressure(unittest.TestCase):
 
     def test_returns_swap_value(self):
         """check_swap_pressure() always returns the current swap value."""
-        with patch(
-            "tokenpak.runtime.proxy.get_swap_mb", return_value=42.5
-        ):
+        with patch("tokenpak.runtime.proxy.get_swap_mb", return_value=42.5):
             result = check_swap_pressure(threshold_mb=600.0)
         self.assertAlmostEqual(result, 42.5)
 

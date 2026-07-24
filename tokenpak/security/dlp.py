@@ -34,6 +34,7 @@ Public API:
 Environment variables:
   TOKENPAK_DLP_MODE    warn|redact|block  (default: warn)
 """
+
 from __future__ import annotations
 
 import logging
@@ -66,9 +67,7 @@ class DLPBlockError(Exception):
 
     def __init__(self, findings: List[DLPMatch]) -> None:
         self.findings = findings
-        super().__init__(
-            f"DLP block: {len(findings)} secret(s) detected in outbound text"
-        )
+        super().__init__(f"DLP block: {len(findings)} secret(s) detected in outbound text")
 
 
 # ---------------------------------------------------------------------------
@@ -106,26 +105,20 @@ _RULES: List[_Rule] = [
     _Rule(
         "generic-api-key",
         "Generic API Key",
-        re.compile(
-            r"(?i)api[_-]?key\s*[=:]\s*['\"]?[0-9a-zA-Z_\-]{20,}['\"]?"
-        ),
+        re.compile(r"(?i)api[_-]?key\s*[=:]\s*['\"]?[0-9a-zA-Z_\-]{20,}['\"]?"),
         "high",
     ),
     # Password / secret assignments in code
     _Rule(
         "password",
         "Password in Code",
-        re.compile(
-            r"(?i)(?:password|passwd|pwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]"
-        ),
+        re.compile(r"(?i)(?:password|passwd|pwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]"),
         "high",
     ),
     _Rule(
         "generic-secret",
         "Generic Secret Assignment",
-        re.compile(
-            r"(?i)(?:secret|api_secret|client_secret)\s*[=:]\s*['\"][^'\"]{8,}['\"]"
-        ),
+        re.compile(r"(?i)(?:secret|api_secret|client_secret)\s*[=:]\s*['\"][^'\"]{8,}['\"]"),
         "high",
     ),
     # PII patterns
@@ -156,9 +149,7 @@ _RULES: List[_Rule] = [
     _Rule(
         "private-key-block",
         "Private Key PEM Block",
-        re.compile(
-            r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----"
-        ),
+        re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----"),
         "critical",
     ),
     # Vendor-specific token formats — from public vendor documentation
@@ -251,19 +242,17 @@ class DLPScanner:
         character offsets.
         """
         # Collect all spans with their replacement strings
-        spans: List[tuple] = []  # (start, end, replacement)
+        spans: List[tuple[int, int, str]] = []  # (start, end, replacement)
         for rule in _RULES:
             for m in rule.pattern.finditer(text):
-                spans.append(
-                    (m.start(), m.end(), f"[REDACTED:{rule.rule_id}]")
-                )
+                spans.append((m.start(), m.end(), f"[REDACTED:{rule.rule_id}]"))
 
         if not spans:
             return text
 
         # Sort by start position ascending, then deduplicate overlapping spans
         spans.sort(key=lambda x: x[0])
-        merged: List[tuple] = []
+        merged: List[tuple[int, int, str]] = []
         for span in spans:
             start, end, replacement = span
             if merged and start < merged[-1][1]:

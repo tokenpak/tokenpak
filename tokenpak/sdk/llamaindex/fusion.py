@@ -166,9 +166,7 @@ class MultiIndexFusion:
                 results.append((name, []))
         return results
 
-    async def _query_all_async(
-        self, query_str: str, **kwargs
-    ) -> List[Tuple[str, List[Any]]]:
+    async def _query_all_async(self, query_str: str, **kwargs) -> List[Tuple[str, List[Any]]]:
         """Query all indexes in parallel using asyncio."""
 
         async def _query_one(name: str, engine: Any) -> Tuple[str, List[Any]]:

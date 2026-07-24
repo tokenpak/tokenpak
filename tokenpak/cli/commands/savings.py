@@ -125,8 +125,13 @@ def _query_savings(period: str = "24h", model: str | None = None) -> dict:
         row = con.execute(sql, params).fetchone()
         con.close()
         if not row:
-            return {"requests": 0, "avg_raw_tokens": 0, "avg_compressed_tokens": 0,
-                    "tokens_saved_total": 0, "reduction_pct": 0.0}
+            return {
+                "requests": 0,
+                "avg_raw_tokens": 0,
+                "avg_compressed_tokens": 0,
+                "tokens_saved_total": 0,
+                "reduction_pct": 0.0,
+            }
         total_raw = row["total_raw"] or 0
         total_comp = row["total_compressed"] or 0
         tokens_saved = total_raw - total_comp

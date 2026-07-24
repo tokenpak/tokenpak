@@ -25,6 +25,7 @@ class TestErrorTranslationSpecification:
         # For now, verify we can at least test the concept
         try:
             from tokenpak.proxy.adapters.base import ErrorTranslator
+
             translator = ErrorTranslator()
             assert translator is not None
         except ImportError:
@@ -116,11 +117,7 @@ class TestRetryLogicSpecification:
             return {"success": True}
 
         try:
-            result = translator.retry_on_transient(
-                mock_call,
-                max_retries=3,
-                backoff_factor=0.01
-            )
+            result = translator.retry_on_transient(mock_call, max_retries=3, backoff_factor=0.01)
             # If implemented, should succeed after retry
             if result:
                 assert call_count == 2
@@ -143,11 +140,7 @@ class TestRetryLogicSpecification:
             raise ConnectionError("Service unavailable")
 
         try:
-            result = translator.retry_on_transient(
-                always_fails,
-                max_retries=2,
-                backoff_factor=0.01
-            )
+            result = translator.retry_on_transient(always_fails, max_retries=2, backoff_factor=0.01)
             # Should return error
             if result and "error" in result:
                 assert result["status_code"] >= 500
@@ -174,6 +167,7 @@ class TestTimeoutHandlingSpecification:
 
         def slow_call():
             import time
+
             time.sleep(10)
             return {"data": "never reached"}
 

@@ -15,7 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.macros.engine", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.macros.engine", reason="module not available in current build"
+)
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -29,6 +31,7 @@ from tokenpak._internal.macros.engine import (
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def engine(tmp_path):
@@ -53,6 +56,7 @@ def var_macro_steps():
 
 
 # ── Variable substitution ─────────────────────────────────────────────────────
+
 
 class TestResolveVars:
     def test_curly_brace_style(self):
@@ -80,6 +84,7 @@ class TestResolveVars:
 
 
 # ── MacroDefinition ───────────────────────────────────────────────────────────
+
 
 class TestMacroDefinition:
     def test_to_dict_roundtrip(self):
@@ -109,6 +114,7 @@ class TestMacroDefinition:
 
 
 # ── Lifecycle (create / list / show / delete) ─────────────────────────────────
+
 
 class TestMacroLifecycle:
     def test_create_writes_yaml(self, engine, simple_macro_steps):
@@ -200,17 +206,20 @@ class TestMacroLifecycle:
 
     def test_create_from_yaml_string(self, engine):
         yaml = pytest.importorskip("yaml")
-        raw = yaml.dump({
-            "name": "from-yaml",
-            "description": "loaded from string",
-            "steps": [{"name": "s1", "cmd": "echo ok", "label": "OK"}],
-        })
+        raw = yaml.dump(
+            {
+                "name": "from-yaml",
+                "description": "loaded from string",
+                "steps": [{"name": "s1", "cmd": "echo ok", "label": "OK"}],
+            }
+        )
         path = engine.create_from_yaml(raw)
         assert engine.exists("from-yaml")
         assert "from-yaml" in str(path)
 
 
 # ── Execution ─────────────────────────────────────────────────────────────────
+
 
 class TestMacroExecution:
     def test_run_returns_macro_result(self, engine, simple_macro_steps):
@@ -239,7 +248,9 @@ class TestMacroExecution:
         pytest.importorskip("yaml")
         engine.create("failfast", simple_macro_steps)
         with patch.object(engine, "_run_step") as mock_step:
-            mock_step.return_value = StepResult("greet", "Say hello", "echo hello", "", "err", False, 1)
+            mock_step.return_value = StepResult(
+                "greet", "Say hello", "echo hello", "", "err", False, 1
+            )
             result = engine.run("failfast", continue_on_error=False)
         assert result.success is False
         # Only first step ran (fail-fast)
@@ -305,7 +316,14 @@ class TestMacroExecution:
             mock_step.return_value = StepResult("s", "S", "cmd", "out", "", True, 0)
             result = engine.run("dkeys")
         d = result.to_dict()
-        for key in ("macro_name", "started_at", "finished_at", "duration_seconds", "success", "steps"):
+        for key in (
+            "macro_name",
+            "started_at",
+            "finished_at",
+            "duration_seconds",
+            "success",
+            "steps",
+        ):
             assert key in d
 
     def test_timeout_returns_failure(self, engine, simple_macro_steps):
@@ -318,6 +336,7 @@ class TestMacroExecution:
 
 
 # ── Variable substitution in execution ───────────────────────────────────────
+
 
 class TestVariableSubstitution:
     def test_macro_defaults_used(self, engine):
@@ -353,7 +372,9 @@ class TestVariableSubstitution:
             [{"name": "s1", "cmd": "deploy --tag ${tag}", "label": "Deploy"}],
         )
         with patch.object(engine, "_run_step") as mock_step:
-            mock_step.return_value = StepResult("s1", "Deploy", "deploy --tag v1.2", "ok", "", True, 0)
+            mock_step.return_value = StepResult(
+                "s1", "Deploy", "deploy --tag v1.2", "ok", "", True, 0
+            )
             engine.run("subst-new", variables={"tag": "v1.2"})
         called_cmd = mock_step.call_args[0][2]
         assert called_cmd == "deploy --tag v1.2"
@@ -366,7 +387,9 @@ class TestVariableSubstitution:
             variables={"env": "staging"},
         )
         with patch.object(engine, "_run_step") as mock_step:
-            mock_step.return_value = StepResult("s1", "Deploy staging", "echo ok", "ok", "", True, 0)
+            mock_step.return_value = StepResult(
+                "s1", "Deploy staging", "echo ok", "ok", "", True, 0
+            )
             engine.run("subst-label")
         called_label = mock_step.call_args[0][1]
         assert called_label == "Deploy staging"
@@ -374,11 +397,21 @@ class TestVariableSubstitution:
 
 # ── MacroResult.format ────────────────────────────────────────────────────────
 
+
 class TestMacroResultFormat:
     def _make_result(self, success=True, dry_run=False):
         steps = [
             StepResult("s1", "Step One", "echo hi", "hi", "", True, 0, dry_run=dry_run),
-            StepResult("s2", "Step Two", "echo bye", "bye", "", success, 0 if success else 1, dry_run=dry_run),
+            StepResult(
+                "s2",
+                "Step Two",
+                "echo bye",
+                "bye",
+                "",
+                success,
+                0 if success else 1,
+                dry_run=dry_run,
+            ),
         ]
         return MacroResult(
             macro_name="test-macro",
@@ -416,6 +449,7 @@ class TestMacroResultFormat:
 
 
 # ── Integration: real subprocess execution ────────────────────────────────────
+
 
 class TestRealExecution:
     def test_echo_command_runs(self, engine):

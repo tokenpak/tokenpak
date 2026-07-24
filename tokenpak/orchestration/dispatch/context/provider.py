@@ -438,7 +438,9 @@ class LocalContextProvider:
         # (path, source) candidate list, in fixed precedence order. Within each
         # explicitly-supplied group, sort by the relative path for determinism.
         candidates: list[tuple[str, ContextSource]] = []
-        candidates += self._candidates(self._declared_manifest_files(manifest), ContextSource.EXPLICIT)
+        candidates += self._candidates(
+            self._declared_manifest_files(manifest), ContextSource.EXPLICIT
+        )
         candidates += self._candidates(self._explicit_files, ContextSource.EXPLICIT)
         candidates += self._candidates(self._station_files(station), ContextSource.ROUTE_STATION)
         candidates += self._candidates(self._frontmatter_files, ContextSource.TASK_FRONTMATTER)

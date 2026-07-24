@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, cast
 
 # ─────────────────────────────────────────────
 # Command tiers (complexity-based, not license-based)
@@ -52,12 +52,12 @@ _INTERMEDIATE_COMMANDS = {
 _REGISTRY_PATH = Path(__file__).parent.parent.parent / "core" / "registry" / "commands.json"
 
 
-def _load_registry() -> list[dict]:
+def _load_registry() -> list[dict[str, Any]]:
     """Load command registry from JSON. Returns empty list on failure."""
     try:
         with open(_REGISTRY_PATH) as f:
             data = json.load(f)
-        return data.get("commands", [])
+        return cast(list[dict[str, Any]], data.get("commands", []))
     except Exception:
         return []
 
@@ -67,9 +67,11 @@ def _load_registry() -> list[dict]:
 # ─────────────────────────────────────────────
 
 
-def _group_commands(commands: list[dict]) -> dict[str, list[dict]]:
+def _group_commands(
+    commands: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
     """Group command list by category, preserving order."""
-    groups: dict[str, list[dict]] = {}
+    groups: dict[str, list[dict[str, Any]]] = {}
     for cmd in commands:
         cat = cmd.get("category", "Other")
         groups.setdefault(cat, []).append(cmd)
@@ -129,7 +131,7 @@ def print_intermediate_help() -> None:
     print("Run `tokenpak help <command>` for details on any command.")
 
 
-def _discover_plugin_command_names(known: set) -> list[str]:
+def _discover_plugin_command_names(known: set[str]) -> list[str]:
     """Return verbs registered under the ``tokenpak.commands`` entry-point group.
 
     Excludes any name already known to the core CLI (built-ins win) and honors
@@ -148,7 +150,7 @@ def _discover_plugin_command_names(known: set) -> list[str]:
         if hasattr(eps, "select"):
             command_eps = eps.select(group="tokenpak.commands")
         else:  # pragma: no cover - legacy importlib.metadata
-            command_eps = eps.get("tokenpak.commands", [])
+            command_eps = cast(Any, eps).get("tokenpak.commands", [])
         names = {ep.name for ep in command_eps if ep.name not in known}
         return sorted(names)
     except Exception:
@@ -173,7 +175,7 @@ def print_full_help(tier: Optional[str] = None) -> None:
             print(f"    {name:<16} {desc}{alias_str}")
         print()
 
-    known = {c.get("command") for c in commands}
+    known = cast(set[str], {c.get("command") for c in commands})
     plugin_names = _discover_plugin_command_names(known)
     if plugin_names:
         print("  Pro / plugins:")
@@ -280,7 +282,7 @@ try:
     @click.command("help")
     @click.argument("command", required=False, default=None)
     @click.option("--minimal", is_flag=True, help="Show compact one-line command list")
-    def help_cmd(command: Optional[str], minimal: bool):
+    def help_cmd(command: Optional[str], minimal: bool) -> None:
         """Show help. Use `help <command>` for details."""
         if minimal:
             print_minimal_help()

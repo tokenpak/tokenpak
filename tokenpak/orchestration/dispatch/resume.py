@@ -224,13 +224,9 @@ def _reconcile_applied(
     for effect in applied:
         current = _current_hash(effect, workspace_root)
         if current == effect.after_hash:
-            reconciliations.append(
-                EffectReconciliation(effect.id, effect.target, "matches_after")
-            )
+            reconciliations.append(EffectReconciliation(effect.id, effect.target, "matches_after"))
         else:
-            reconciliations.append(
-                EffectReconciliation(effect.id, effect.target, "drift")
-            )
+            reconciliations.append(EffectReconciliation(effect.id, effect.target, "drift"))
             drifted.append(effect)
 
     if not drifted:
@@ -320,9 +316,7 @@ def _reconcile_planned(
         )
 
     # Mixed or unknown → user decision required (partial / unknown state).
-    decision = _build_planned_unknown_decision(
-        last=last, planned=planned, created_at=created_at
-    )
+    decision = _build_planned_unknown_decision(last=last, planned=planned, created_at=created_at)
     return ResumeOutcome(
         action=ResumeAction.DECISION_REQUIRED,
         station_status_transition=StationRunStatus.NEEDS_RECOVERY,

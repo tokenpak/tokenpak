@@ -1,6 +1,5 @@
 """Tests for the BudgetTracker — local cost tracking module."""
 
-
 import pytest
 
 from tokenpak.telemetry.budget import (
@@ -19,6 +18,7 @@ def tracker():
 # ---------------------------------------------------------------------------
 # record_spend
 # ---------------------------------------------------------------------------
+
 
 def test_record_spend_returns_record(tracker):
     rec = tracker.record_spend(0.05, request_id="r1", model="claude-sonnet")
@@ -47,6 +47,7 @@ def test_record_spend_accumulates(tracker):
 # total_spent periods
 # ---------------------------------------------------------------------------
 
+
 def test_total_spent_empty(tracker):
     assert tracker.total_spent("daily") == 0.0
     assert tracker.total_spent("monthly") == 0.0
@@ -62,6 +63,7 @@ def test_total_spent_all(tracker):
 # ---------------------------------------------------------------------------
 # get_status
 # ---------------------------------------------------------------------------
+
 
 def test_get_status_daily_under_limit(tracker):
     tracker.record_spend(5.0, request_id="st-1")
@@ -100,6 +102,7 @@ def test_get_status_monthly(tracker):
 # is_budget_exceeded
 # ---------------------------------------------------------------------------
 
+
 def test_budget_not_exceeded(tracker):
     tracker.record_spend(5.0, request_id="ex-1")
     assert tracker.is_budget_exceeded() is False
@@ -118,6 +121,7 @@ def test_budget_exceeded_monthly(tracker):
 # ---------------------------------------------------------------------------
 # list_spend
 # ---------------------------------------------------------------------------
+
 
 def test_list_spend_basic(tracker):
     tracker.record_spend(1.0, request_id="a", model="m1")
@@ -139,6 +143,7 @@ def test_list_spend_model_filter(tracker):
 # by_model_summary
 # ---------------------------------------------------------------------------
 
+
 def test_by_model_summary(tracker):
     tracker.record_spend(1.0, request_id="bm-1", model="m1", tokens_input=100, tokens_output=50)
     tracker.record_spend(2.0, request_id="bm-2", model="m1", tokens_input=200, tokens_output=100)
@@ -153,6 +158,7 @@ def test_by_model_summary(tracker):
 # ---------------------------------------------------------------------------
 # export_csv
 # ---------------------------------------------------------------------------
+
 
 def test_export_csv_empty(tracker):
     csv = tracker.export_csv()
@@ -170,6 +176,7 @@ def test_export_csv_with_data(tracker):
 # ---------------------------------------------------------------------------
 # prune
 # ---------------------------------------------------------------------------
+
 
 def test_prune_removes_old(tracker):
     # Insert a record with an old timestamp directly
@@ -193,8 +200,11 @@ def test_prune_removes_old(tracker):
 # BudgetConfig serde
 # ---------------------------------------------------------------------------
 
+
 def test_config_round_trip():
-    cfg = BudgetConfig(daily_limit_usd=5.0, monthly_limit_usd=50.0, alert_at_percent=75.0, hard_stop=True)
+    cfg = BudgetConfig(
+        daily_limit_usd=5.0, monthly_limit_usd=50.0, alert_at_percent=75.0, hard_stop=True
+    )
     d = cfg.to_dict()
     cfg2 = BudgetConfig.from_dict(d)
     assert cfg2.daily_limit_usd == 5.0
@@ -206,6 +216,7 @@ def test_config_round_trip():
 # ---------------------------------------------------------------------------
 # BudgetStatus.to_dict
 # ---------------------------------------------------------------------------
+
 
 def test_budget_status_to_dict(tracker):
     tracker.record_spend(3.0, request_id="td-1")

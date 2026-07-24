@@ -98,6 +98,7 @@ Configuration is stored in TOML format. See config.py for details.
 # Test 1: CHUNK_SHAPES registry
 # ---------------------------------------------------------------------------
 
+
 class TestChunkShapesRegistry:
     def test_all_expected_intents_present(self):
         expected = {"debug", "explain", "search", "plan", "create", "summarize"}
@@ -131,6 +132,7 @@ class TestChunkShapesRegistry:
 # Test 2: get_shape_for_intent
 # ---------------------------------------------------------------------------
 
+
 class TestGetShapeForIntent:
     def test_known_intent_returns_correct_shape(self):
         config = get_shape_for_intent("debug")
@@ -153,6 +155,7 @@ class TestGetShapeForIntent:
 # ---------------------------------------------------------------------------
 # Test 3: code_contiguous shape
 # ---------------------------------------------------------------------------
+
 
 class TestCodeContiguousShape:
     def test_includes_imports(self):
@@ -180,6 +183,7 @@ class TestCodeContiguousShape:
 # Test 4: fact_chunk shape
 # ---------------------------------------------------------------------------
 
+
 class TestFactChunkShape:
     def test_strips_narrative_filler(self):
         result = _shape_fact_chunk(PROSE_CONTENT, max_lines=50)
@@ -204,6 +208,7 @@ class TestFactChunkShape:
 # ---------------------------------------------------------------------------
 # Test 5: decision_summary shape
 # ---------------------------------------------------------------------------
+
 
 class TestDecisionSummaryShape:
     def test_extracts_decision_section(self):
@@ -232,6 +237,7 @@ class TestDecisionSummaryShape:
 # Test 6: section_header shape
 # ---------------------------------------------------------------------------
 
+
 class TestSectionHeaderShape:
     def test_extracts_headings(self):
         result = _shape_section_header(HEADING_CONTENT, max_lines=50)
@@ -258,6 +264,7 @@ class TestSectionHeaderShape:
 # Test 7: apply_shape dispatch
 # ---------------------------------------------------------------------------
 
+
 class TestApplyShape:
     def test_dispatches_to_correct_fn(self):
         config = {"shape": "code_contiguous", "max_lines": 50}
@@ -279,10 +286,14 @@ class TestApplyShape:
 # Test 8: reshape_chunks integration
 # ---------------------------------------------------------------------------
 
+
 class TestReshapeChunks:
     def _make_results(self, content: str, n: int = 2):
         return [
-            ({"block_id": f"file.py#chunk{i}", "source_path": "file.py", "content": content}, float(n - i))
+            (
+                {"block_id": f"file.py#chunk{i}", "source_path": "file.py", "content": content},
+                float(n - i),
+            )
             for i in range(n)
         ]
 

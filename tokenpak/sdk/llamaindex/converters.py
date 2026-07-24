@@ -130,9 +130,7 @@ def llamaindex_node_to_block(
         # Real llama_index objects
         text = getattr(node, "text", None) or getattr(node, "get_content", lambda: "")()
         metadata = dict(getattr(node, "metadata", {}) or {})
-        node_id = (
-            block_id or getattr(node, "node_id", None) or _make_node_id(text, metadata)
-        )
+        node_id = block_id or getattr(node, "node_id", None) or _make_node_id(text, metadata)
 
     # --- Build provenance ---
     provenance: Dict[str, Any] = {

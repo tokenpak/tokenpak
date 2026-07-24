@@ -1,4 +1,3 @@
-
 import pytest
 
 pytest.importorskip("tokenpak.connectors.obsidian", reason="module not available in current build")

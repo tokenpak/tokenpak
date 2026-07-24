@@ -30,6 +30,7 @@ from tokenpak.agentic.handoff import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def tmp_manager(tmp_path):
     """Return a HandoffManager backed by a temp dir."""
@@ -47,6 +48,7 @@ def sample_file(tmp_path):
 # ---------------------------------------------------------------------------
 # Summary generation
 # ---------------------------------------------------------------------------
+
 
 def test_generate_summary_all_fields():
     s = _generate_summary("Built X", "Review Y", ["a.py", "b.py"])
@@ -70,6 +72,7 @@ def test_generate_summary_many_files():
 # Registered-agents-only enforcement
 # ---------------------------------------------------------------------------
 
+
 def test_create_unknown_from_agent(tmp_manager):
     with pytest.raises(ValueError, match="Unknown from_agent"):
         tmp_manager.create_handoff(from_agent="unknown_bot", to_agent="sue")
@@ -92,6 +95,7 @@ def test_all_registered_agents_allowed(tmp_manager):
 # ---------------------------------------------------------------------------
 # Create
 # ---------------------------------------------------------------------------
+
 
 def test_create_handoff_basic(tmp_manager):
     h = tmp_manager.create_handoff(from_agent="cali", to_agent="sue")
@@ -134,6 +138,7 @@ def test_create_handoff_custom_ttl(tmp_manager):
 # ---------------------------------------------------------------------------
 # Receive
 # ---------------------------------------------------------------------------
+
 
 def test_receive_nonexistent(tmp_manager):
     with pytest.raises(FileNotFoundError):
@@ -181,6 +186,7 @@ def test_receive_is_idempotent(tmp_manager):
 # Apply
 # ---------------------------------------------------------------------------
 
+
 def test_apply_full_lifecycle(tmp_manager, sample_file):
     refs = [ContextRef(type="file", path=sample_file)]
     h = tmp_manager.create_handoff(from_agent="cali", to_agent="sue", context_refs=refs)
@@ -226,6 +232,7 @@ def test_apply_is_idempotent(tmp_manager):
 # ---------------------------------------------------------------------------
 # Auto-expiry
 # ---------------------------------------------------------------------------
+
 
 def test_receive_expired_handoff(tmp_manager):
     h = tmp_manager.create_handoff(from_agent="cali", to_agent="sue", ttl_hours=0.0)
@@ -284,6 +291,7 @@ def test_expire_stale_does_not_re_expire(tmp_manager):
 # List / filter
 # ---------------------------------------------------------------------------
 
+
 def test_list_all(tmp_manager):
     tmp_manager.create_handoff(from_agent="cali", to_agent="sue")
     tmp_manager.create_handoff(from_agent="sue", to_agent="cali")
@@ -325,6 +333,7 @@ def test_list_empty(tmp_manager):
 # ContextRef serialization
 # ---------------------------------------------------------------------------
 
+
 def test_context_ref_round_trip():
     ref = ContextRef(type="file", path="/some/path.md", description="A doc", valid=True)
     d = ref.to_dict()
@@ -338,6 +347,7 @@ def test_context_ref_round_trip():
 # ---------------------------------------------------------------------------
 # Handoff serialization
 # ---------------------------------------------------------------------------
+
 
 def test_handoff_round_trip(tmp_manager):
     refs = [ContextRef(type="note", path="note123", description="Context note")]

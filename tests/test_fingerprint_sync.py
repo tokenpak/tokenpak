@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.fingerprint.generator", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.fingerprint.generator", reason="module not available in current build"
+)
 import json
 import time
 import uuid
@@ -28,6 +30,7 @@ from tokenpak._internal.fingerprint.sync import (
 # ─────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────
+
 
 @pytest.fixture
 def tmp_cache(tmp_path):
@@ -63,6 +66,7 @@ def sample_directives():
 # ─────────────────────────────────────────────
 # Generator tests
 # ─────────────────────────────────────────────
+
 
 class TestFingerprintGenerator:
     def test_generate_returns_fingerprint(self, sample_fingerprint):
@@ -126,6 +130,7 @@ class TestFingerprintGenerator:
 # Privacy tests
 # ─────────────────────────────────────────────
 
+
 class TestPrivacy:
     def test_minimal_strips_segments(self, sample_fingerprint):
         d = apply_privacy(sample_fingerprint.to_dict(), PrivacyLevel.MINIMAL)
@@ -147,6 +152,7 @@ class TestPrivacy:
 # ─────────────────────────────────────────────
 # Cache tests
 # ─────────────────────────────────────────────
+
 
 class TestCache:
     def test_write_and_read_cache(self, tmp_cache, sample_directives):
@@ -202,6 +208,7 @@ class TestCache:
 # Mock server sync tests
 # ─────────────────────────────────────────────
 
+
 class TestMockServerSync:
     def _mock_server_response(self, directives: list[dict]) -> MagicMock:
         mock_resp = MagicMock()
@@ -214,7 +221,13 @@ class TestMockServerSync:
     @patch("urllib.request.urlopen")
     def test_sync_from_server(self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint):
         server_directives = [
-            {"directive_id": "srv-001", "action": "compress", "params": {}, "priority": 1, "description": ""}
+            {
+                "directive_id": "srv-001",
+                "action": "compress",
+                "params": {},
+                "priority": 1,
+                "description": "",
+            }
         ]
         mock_urlopen.return_value = self._mock_server_response(server_directives)
 
@@ -228,9 +241,17 @@ class TestMockServerSync:
 
     @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True)
     @patch("urllib.request.urlopen")
-    def test_sync_uses_cache_on_second_call(self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint):
+    def test_sync_uses_cache_on_second_call(
+        self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint
+    ):
         server_directives = [
-            {"directive_id": "srv-001", "action": "compress", "params": {}, "priority": 1, "description": ""}
+            {
+                "directive_id": "srv-001",
+                "action": "compress",
+                "params": {},
+                "priority": 1,
+                "description": "",
+            }
         ]
         mock_urlopen.return_value = self._mock_server_response(server_directives)
 
@@ -245,7 +266,9 @@ class TestMockServerSync:
 
     @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True)
     @patch("urllib.request.urlopen", side_effect=Exception("connection refused"))
-    def test_offline_fallback_to_oss(self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint):
+    def test_offline_fallback_to_oss(
+        self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint
+    ):
         client = FingerprintSync(cache_dir=tmp_cache, server_url="http://mock-server")
         result = client.sync(sample_fingerprint)
 
@@ -256,10 +279,13 @@ class TestMockServerSync:
 
     @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True)
     @patch("urllib.request.urlopen", side_effect=Exception("connection refused"))
-    def test_offline_fallback_to_stale_cache(self, mock_urlopen, mock_is_pro, tmp_cache,
-                                              sample_fingerprint, sample_directives):
+    def test_offline_fallback_to_stale_cache(
+        self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint, sample_directives
+    ):
         # Pre-seed a stale cache entry (expired TTL but file exists)
-        _write_cache(sample_fingerprint.fingerprint_id, sample_directives, ttl=1, cache_dir=tmp_cache)
+        _write_cache(
+            sample_fingerprint.fingerprint_id, sample_directives, ttl=1, cache_dir=tmp_cache
+        )
         time.sleep(1.1)
 
         client = FingerprintSync(cache_dir=tmp_cache, server_url="http://mock-server")
@@ -283,6 +309,7 @@ class TestMockServerSync:
 # ─────────────────────────────────────────────
 # License gate tests
 # ─────────────────────────────────────────────
+
 
 class TestLicenseGate:
     @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=False)
@@ -308,6 +335,7 @@ class TestLicenseGate:
 # ─────────────────────────────────────────────
 # OSS fallback directives
 # ─────────────────────────────────────────────
+
 
 class TestOSSFallback:
     def test_oss_fallback_returns_directives(self):

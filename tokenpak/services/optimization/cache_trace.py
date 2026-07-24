@@ -21,6 +21,7 @@ from dataclasses import dataclass
 # Miss-reason vocabulary (mirrors CacheMissReason from cache_contract)
 # ---------------------------------------------------------------------------
 
+
 class CacheMissReason:
     SEMANTIC_CACHE_DISABLED = "semantic_cache_disabled"
     ADAPTER_MISSING_CAPABILITY = "adapter_missing_capability"
@@ -42,6 +43,7 @@ class CacheMissReason:
 # Trace dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CacheStageTrace:
     """Outcome of one semantic cache lookup/record cycle.
@@ -52,14 +54,14 @@ class CacheStageTrace:
 
     # Lookup outcome
     hit: bool = False
-    miss_reason: str = ""          # one of CacheMissReason.*; empty on hit
-    strategy: str = "none"         # "exact" | "jaccard" | "none"
+    miss_reason: str = ""  # one of CacheMissReason.*; empty on hit
+    strategy: str = "none"  # "exact" | "jaccard" | "none"
     similarity: float = 0.0
-    query_hash: str = ""           # first 12 chars of SHA-256 of normalized query
-    scope_key_prefix: str = ""     # first 8 chars of scope_key (never full session id)
+    query_hash: str = ""  # first 12 chars of SHA-256 of normalized query
+    scope_key_prefix: str = ""  # first 8 chars of scope_key (never full session id)
 
     # Savings
-    savings_tokens: int = 0        # estimated input tokens saved on hit
+    savings_tokens: int = 0  # estimated input tokens saved on hit
 
     # Eligibility metadata
     route: str = ""
@@ -71,17 +73,20 @@ class CacheStageTrace:
 
     def to_detail_str(self) -> str:
         """Serialize to a compact JSON string for ``StageTrace.detail``."""
-        return json.dumps({
-            "hit": self.hit,
-            "miss_reason": self.miss_reason,
-            "strategy": self.strategy,
-            "similarity": round(self.similarity, 4),
-            "query_hash": self.query_hash,
-            "savings_tokens": self.savings_tokens,
-            "route": self.route,
-            "allow_response_reuse": self.allow_response_reuse,
-            "recorded": self.recorded,
-        }, separators=(",", ":"))
+        return json.dumps(
+            {
+                "hit": self.hit,
+                "miss_reason": self.miss_reason,
+                "strategy": self.strategy,
+                "similarity": round(self.similarity, 4),
+                "query_hash": self.query_hash,
+                "savings_tokens": self.savings_tokens,
+                "route": self.route,
+                "allow_response_reuse": self.allow_response_reuse,
+                "recorded": self.recorded,
+            },
+            separators=(",", ":"),
+        )
 
 
 __all__ = ["CacheStageTrace", "CacheMissReason"]

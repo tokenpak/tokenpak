@@ -68,18 +68,20 @@ def _make_session(**overrides) -> dict:
 
 
 class TestPrometheusHelpers(unittest.TestCase):
-
     def test_labels_empty(self):
         from tokenpak.metrics.prometheus import _labels
+
         self.assertEqual(_labels(), "")
 
     def test_labels_single(self):
         from tokenpak.metrics.prometheus import _labels
+
         result = _labels(model="gpt-4o")
         self.assertEqual(result, '{model="gpt-4o"}')
 
     def test_labels_multiple(self):
         from tokenpak.metrics.prometheus import _labels
+
         result = _labels(model="gpt-4o", status="success")
         self.assertIn('model="gpt-4o"', result)
         self.assertIn('status="success"', result)
@@ -88,18 +90,22 @@ class TestPrometheusHelpers(unittest.TestCase):
 
     def test_escape_label_backslash(self):
         from tokenpak.metrics.prometheus import _escape_label_value
+
         self.assertEqual(_escape_label_value("a\\b"), "a\\\\b")
 
     def test_escape_label_quote(self):
         from tokenpak.metrics.prometheus import _escape_label_value
+
         self.assertEqual(_escape_label_value('a"b'), 'a\\"b')
 
     def test_escape_label_newline(self):
         from tokenpak.metrics.prometheus import _escape_label_value
+
         self.assertEqual(_escape_label_value("a\nb"), "a\\nb")
 
     def test_counter_lines(self):
         from tokenpak.metrics.prometheus import _counter
+
         lines = _counter("my_counter", "help text", 42)
         self.assertEqual(lines[0], "# HELP my_counter help text")
         self.assertEqual(lines[1], "# TYPE my_counter counter")
@@ -107,6 +113,7 @@ class TestPrometheusHelpers(unittest.TestCase):
 
     def test_gauge_lines(self):
         from tokenpak.metrics.prometheus import _gauge
+
         lines = _gauge("my_gauge", "help", 3.14)
         self.assertEqual(lines[1], "# TYPE my_gauge gauge")
         self.assertIn("3.14", lines[2])
@@ -117,6 +124,7 @@ class TestPrometheusRegistryNoMonitor(unittest.TestCase):
 
     def setUp(self):
         from tokenpak.metrics.prometheus import PrometheusRegistry
+
         self.reg = PrometheusRegistry(_make_session(), monitor=None)
         self.output = self.reg.render()
 
@@ -173,9 +181,8 @@ class TestPrometheusRegistryNoMonitor(unittest.TestCase):
 
     def test_compression_ratio_1_when_no_tokens_sent(self):
         from tokenpak.metrics.prometheus import PrometheusRegistry
-        reg = PrometheusRegistry(
-            _make_session(input_tokens=0, sent_input_tokens=0), monitor=None
-        )
+
+        reg = PrometheusRegistry(_make_session(input_tokens=0, sent_input_tokens=0), monitor=None)
         out = reg.render()
         self.assertIn("tokenpak_compression_ratio 1.0", out)
 
@@ -194,19 +201,21 @@ class TestPrometheusRegistryNoMonitor(unittest.TestCase):
 
 
 class TestBuildMetricsText(unittest.TestCase):
-
     def test_returns_string(self):
         from tokenpak.metrics.prometheus import build_metrics_text
+
         result = build_metrics_text({})
         self.assertIsInstance(result, str)
 
     def test_empty_session_works(self):
         from tokenpak.metrics.prometheus import build_metrics_text
+
         result = build_metrics_text({})
         self.assertIn("tokenpak_requests_total", result)
 
     def test_no_monitor_works(self):
         from tokenpak.metrics.prometheus import build_metrics_text
+
         result = build_metrics_text(_make_session(), monitor=None)
         self.assertIn("tokenpak_tokens_saved_total", result)
 

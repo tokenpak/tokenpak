@@ -169,9 +169,7 @@ class TestNoLeak:
 
     def test_assert_no_leak_raises_on_poisoned_content(self):
         """Trace marker injected into content must be detected."""
-        poisoned = _openai_response(
-            content=f"Assistant says: {TRACE_ENVELOPE_KEY} found here"
-        )
+        poisoned = _openai_response(content=f"Assistant says: {TRACE_ENVELOPE_KEY} found here")
         with pytest.raises(AssertionError):
             assert_no_leak(poisoned)
 
@@ -343,7 +341,15 @@ class TestEconomics:
 
     def test_zero_economics(self):
         """Empty economics block produces zeroed fields."""
-        trace = TraceBuilder().routing("x", "y", "z").budget("t", 0).retrieval().packing().economics().build()
+        trace = (
+            TraceBuilder()
+            .routing("x", "y", "z")
+            .budget("t", 0)
+            .retrieval()
+            .packing()
+            .economics()
+            .build()
+        )
         assert trace.economics["actual_tokens"] == 0
         assert trace.economics["cost_usd"] == 0.0
         assert trace.economics["savings_usd"] == 0.0

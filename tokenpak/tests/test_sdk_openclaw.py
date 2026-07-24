@@ -4,6 +4,7 @@ Covers the 2026-04-18 regression where `setup_openclaw()` only ever
 touched `~/.openclaw/openclaw.json` and missed sibling installs like
 `~/.openclaw-governor/openclaw.json` (the governor install).
 """
+
 from __future__ import annotations
 
 import json
@@ -19,22 +20,34 @@ from tokenpak.sdk.openclaw import (
 def _write_stub_config(path: Path) -> None:
     """Write a minimal but realistic openclaw.json stub at `path`."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({
-        "models": {
-            "mode": "merge",
-            "providers": {
-                # pre-existing non-tokenpak provider should survive untouched
-                "anthropic": {
-                    "baseUrl": "https://api.anthropic.com",
-                    "api": "anthropic-messages",
-                    "models": [
-                        {"id": "claude-opus-4-7", "name": "Opus 4.7",
-                         "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
-                    ],
+    path.write_text(
+        json.dumps(
+            {
+                "models": {
+                    "mode": "merge",
+                    "providers": {
+                        # pre-existing non-tokenpak provider should survive untouched
+                        "anthropic": {
+                            "baseUrl": "https://api.anthropic.com",
+                            "api": "anthropic-messages",
+                            "models": [
+                                {
+                                    "id": "claude-opus-4-7",
+                                    "name": "Opus 4.7",
+                                    "cost": {
+                                        "input": 0,
+                                        "output": 0,
+                                        "cacheRead": 0,
+                                        "cacheWrite": 0,
+                                    },
+                                },
+                            ],
+                        },
+                    },
                 },
-            },
-        },
-    }))
+            }
+        )
+    )
 
 
 def test_discover_finds_multiple_configs(tmp_path, monkeypatch):

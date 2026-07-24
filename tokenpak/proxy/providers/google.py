@@ -48,7 +48,8 @@ class GoogleFormat:
     def parse_request(body: bytes) -> Dict[str, Any]:
         """Parse a Google API request body."""
         try:
-            return json.loads(body)
+            parsed: object = json.loads(body)
+            return parsed if isinstance(parsed, dict) else {}
         except (json.JSONDecodeError, UnicodeDecodeError):
             return {}
 
@@ -58,7 +59,8 @@ class GoogleFormat:
         Extract model name.
         Note: Google embeds model in URL path, not body.
         """
-        return data.get("model", "gemini-pro")
+        model = data.get("model", "gemini-pro")
+        return model if isinstance(model, str) else "gemini-pro"
 
     @staticmethod
     def extract_system(data: Dict[str, Any]) -> str:
@@ -128,16 +130,16 @@ class GoogleFormat:
         contents: List[Dict[str, Any]],
         system_instruction: Optional[str] = None,
         generation_config: Optional[Dict[str, Any]] = None,
-        **kwargs,
+        **kwargs: object,
     ) -> bytes:
         """Build a Google API request body."""
-        data = {"contents": contents}
+        data: Dict[str, object] = {"contents": contents}
 
         if system_instruction:
-            data["systemInstruction"] = {"parts": [{"text": system_instruction}]}  # type: ignore[assignment]
+            data["systemInstruction"] = {"parts": [{"text": system_instruction}]}
 
         if generation_config:
-            data["generationConfig"] = generation_config  # type: ignore[assignment]
+            data["generationConfig"] = generation_config
 
         data.update(kwargs)
 
@@ -149,6 +151,7 @@ class GoogleFormat:
         try:
             data = json.loads(body)
             usage = data.get("usageMetadata", {})
-            return usage.get("candidatesTokenCount", 0)
+            tokens = usage.get("candidatesTokenCount", 0)
+            return tokens if isinstance(tokens, int) else 0
         except (json.JSONDecodeError, UnicodeDecodeError):
             return 0

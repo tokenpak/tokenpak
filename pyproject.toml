@@ -66,6 +66,10 @@ dependencies = [
     "watchdog>=3.0.0",
     "cryptography>=41.0.0",
     "urllib3>=2.0.0",
+    # Native Codex sends Responses API request bodies with Content-Encoding:
+    # zstd. TokenPak decodes them before inspection/optimization and forwards
+    # a standards-compliant uncompressed JSON entity upstream.
+    "zstandard>=0.23.0,<1",
     # TOML reader for permission-tier / creds config on Python < 3.11
     # (stdlib `tomllib` lands in 3.11; `tomli` is the tiny backport).
     "tomli>=2.0.1; python_version < '3.11'",
@@ -139,7 +143,9 @@ dev = [
     # stalling the job to the runner limit).
     "pytest-timeout>=2.1.0",
     "black>=24.0.0",
-    "ruff>=0.2.0",
+    # Formatter output is a release gate; pin it so a tool release cannot turn
+    # an unchanged checkout red or silently rewrite the baseline.
+    "ruff==0.15.22",
     # Architecture-contract gate (.importlinter) and its contract tests
     # under tests/lint/test_import_contracts.py.
     "import-linter>=2.0",

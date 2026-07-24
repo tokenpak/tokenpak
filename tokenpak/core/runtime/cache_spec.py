@@ -26,9 +26,9 @@ Config schema (config.yaml):
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Optional
 
 from tokenpak.core.runtime.providers import Provider
 
@@ -87,10 +87,10 @@ class CacheSpec:
     """
 
     enabled: bool = True
-    default_mode: Optional[CacheMode] = None
+    default_mode: CacheMode | None = None
     """Global default mode. None = auto-select the best mode per provider."""
     fallback_policy: FallbackPolicy = FallbackPolicy.BEST_EFFORT
-    provider_overrides: dict[str, dict] = field(default_factory=dict)
+    provider_overrides: dict[str, dict[str, str]] = field(default_factory=dict)
     """Per-provider config overrides keyed by Provider.value string.
     e.g. {"anthropic": {"mode": "block_explicit"}}"""
 
@@ -102,26 +102,26 @@ class CacheSpec:
 
 PROVIDER_CACHE_MODES: dict[Provider, list[CacheMode]] = {
     # Anthropic: explicit (legacy default) and auto prefix mode (added CACHE-P3-001)
-    Provider.ANTHROPIC:    [CacheMode.BLOCK_EXPLICIT, CacheMode.PREFIX_AUTO],
+    Provider.ANTHROPIC: [CacheMode.BLOCK_EXPLICIT, CacheMode.PREFIX_AUTO],
     # OpenAI-family: automatic prefix caching via prompt_cache_key
-    Provider.OPENAI:       [CacheMode.PREFIX_AUTO],
+    Provider.OPENAI: [CacheMode.PREFIX_AUTO],
     Provider.AZURE_OPENAI: [CacheMode.PREFIX_AUTO],
-    Provider.XAI:          [CacheMode.PREFIX_AUTO],
-    Provider.GROQ:         [CacheMode.PREFIX_AUTO],
-    Provider.FIREWORKS:    [CacheMode.PREFIX_AUTO],
-    Provider.TOGETHER:     [CacheMode.PREFIX_AUTO],
+    Provider.XAI: [CacheMode.PREFIX_AUTO],
+    Provider.GROQ: [CacheMode.PREFIX_AUTO],
+    Provider.FIREWORKS: [CacheMode.PREFIX_AUTO],
+    Provider.TOGETHER: [CacheMode.PREFIX_AUTO],
     # Codex uses the same Responses API as OpenAI (prompt_cache_key + prompt_cache_retention)
-    Provider.CODEX:        [CacheMode.PREFIX_AUTO],
+    Provider.CODEX: [CacheMode.PREFIX_AUTO],
     # Gemini: external cachedContent object reference
-    Provider.GEMINI:       [CacheMode.CACHE_OBJECT],
+    Provider.GEMINI: [CacheMode.CACHE_OBJECT],
     # Bedrock: checkpoint-based (primary) and explicit block markers (secondary)
-    Provider.BEDROCK:      [CacheMode.CHECKPOINT, CacheMode.BLOCK_EXPLICIT],
+    Provider.BEDROCK: [CacheMode.CHECKPOINT, CacheMode.BLOCK_EXPLICIT],
     # Unknown: no cache support
-    Provider.UNKNOWN:      [],
+    Provider.UNKNOWN: [],
 }
 
 
-def default_cache_mode(provider: Provider) -> Optional[CacheMode]:
+def default_cache_mode(provider: Provider) -> CacheMode | None:
     """Return the default (first supported) cache mode for a provider, or None."""
     modes = PROVIDER_CACHE_MODES.get(provider, [])
     return modes[0] if modes else None
@@ -130,8 +130,8 @@ def default_cache_mode(provider: Provider) -> Optional[CacheMode]:
 def resolve_cache_mode(
     spec: CacheSpec,
     provider: Provider,
-    request_hint: Optional[str] = None,
-) -> Optional[CacheMode]:
+    request_hint: str | None = None,
+) -> CacheMode | None:
     """Resolve the effective cache mode for a request.
 
     Priority order (highest to lowest):
@@ -208,7 +208,7 @@ def resolve_cache_mode(
     return default_cache_mode(provider)
 
 
-def load_cache_spec_from_config(cfg_fn: Callable) -> CacheSpec:
+def load_cache_spec_from_config(cfg_fn: Callable[..., object]) -> CacheSpec:
     """Build a CacheSpec from the tokenpak config.
 
     Reads ``cache.*`` keys using *cfg_fn* (the ``_cfg`` accessor from proxy.py).
@@ -220,20 +220,19 @@ def load_cache_spec_from_config(cfg_fn: Callable) -> CacheSpec:
     Returns:
         CacheSpec populated from config file + environment variable overrides.
     """
-    enabled: bool = cfg_fn("cache.enabled", True, "TOKENPAK_CACHE_ENABLED", bool)
+    enabled_raw = cfg_fn("cache.enabled", True, "TOKENPAK_CACHE_ENABLED", bool)
+    enabled = enabled_raw if isinstance(enabled_raw, bool) else True
 
-    fallback_str: str = cfg_fn(
-        "cache.fallback_policy", "best-effort", "TOKENPAK_CACHE_FALLBACK", str
-    )
+    fallback_raw = cfg_fn("cache.fallback_policy", "best-effort", "TOKENPAK_CACHE_FALLBACK", str)
+    fallback_str = fallback_raw if isinstance(fallback_raw, str) else "best-effort"
     try:
         fallback_policy = FallbackPolicy(fallback_str)
     except ValueError:
         fallback_policy = FallbackPolicy.BEST_EFFORT
 
-    default_mode_str: Optional[str] = cfg_fn(
-        "cache.default_mode", None, "TOKENPAK_CACHE_DEFAULT_MODE", str
-    )
-    default_mode: Optional[CacheMode] = None
+    default_mode_raw = cfg_fn("cache.default_mode", None, "TOKENPAK_CACHE_DEFAULT_MODE", str)
+    default_mode_str = default_mode_raw if isinstance(default_mode_raw, str) else None
+    default_mode: CacheMode | None = None
     if default_mode_str:
         try:
             default_mode = CacheMode(default_mode_str)
@@ -241,11 +240,12 @@ def load_cache_spec_from_config(cfg_fn: Callable) -> CacheSpec:
             pass  # Unknown mode string — leave as None
 
     # Per-provider mode overrides: cache.<provider_value>.mode
-    provider_overrides: dict[str, dict] = {}
+    provider_overrides: dict[str, dict[str, str]] = {}
     for p in Provider:
         if p is Provider.UNKNOWN:
             continue
-        mode_val: Optional[str] = cfg_fn(f"cache.{p.value}.mode", None, None, str)
+        raw_mode = cfg_fn(f"cache.{p.value}.mode", None, None, str)
+        mode_val = raw_mode if isinstance(raw_mode, str) else None
         if mode_val:
             provider_overrides[p.value] = {"mode": mode_val}
 

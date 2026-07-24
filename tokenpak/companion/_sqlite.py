@@ -165,6 +165,7 @@ DAILY_SPEND_SQL = """
 # Connection factory
 # ---------------------------------------------------------------------------
 
+
 def connect(
     db_path: Path | str,
     *,
@@ -181,9 +182,7 @@ def connect(
     cross-process race is harmless because whichever opener succeeds
     converts the file persistently for everyone.
     """
-    conn = sqlite3.connect(
-        str(db_path), timeout=timeout, check_same_thread=check_same_thread
-    )
+    conn = sqlite3.connect(str(db_path), timeout=timeout, check_same_thread=check_same_thread)
     try:
         conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
         conn.execute("PRAGMA journal_mode=WAL")
@@ -198,6 +197,7 @@ def connect(
 # ---------------------------------------------------------------------------
 # Schema (create + additive migration)
 # ---------------------------------------------------------------------------
+
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
     """Additive column migration; never touches existing rows."""
@@ -231,6 +231,7 @@ def ensure_costs_schema(conn: sqlite3.Connection) -> None:
 # Dedupe key
 # ---------------------------------------------------------------------------
 
+
 def entry_content_hash(entry_type: str, content: str, metadata_json: str = "{}") -> str:
     """Canonical dedupe key for a journal entry.
 
@@ -248,6 +249,7 @@ def entry_content_hash(entry_type: str, content: str, metadata_json: str = "{}")
 # Dropped-write accounting
 # ---------------------------------------------------------------------------
 
+
 def note_dropped_write(db_path: Path | str, op: str, exc: BaseException) -> None:
     """Record a dropped best-effort write instead of losing it silently.
 
@@ -259,18 +261,14 @@ def note_dropped_write(db_path: Path | str, op: str, exc: BaseException) -> None
     try:
         run_dir = db_path.parent / "run"
         run_dir.mkdir(parents=True, exist_ok=True)
-        line = (
-            f"{time.time():.3f}\t{db_path.name}\t{op}\t"
-            f"{type(exc).__name__}: {exc}\n"
-        )
+        line = f"{time.time():.3f}\t{db_path.name}\t{op}\t{type(exc).__name__}: {exc}\n"
         with open(run_dir / DROPPED_WRITES_LOG, "a", encoding="utf-8") as fh:
             fh.write(line)
     except Exception:
         pass
     try:
         print(
-            f"tokenpak: dropped {op} write to {db_path.name} "
-            f"({type(exc).__name__})",
+            f"tokenpak: dropped {op} write to {db_path.name} ({type(exc).__name__})",
             file=sys.stderr,
         )
     except Exception:

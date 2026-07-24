@@ -39,9 +39,7 @@ class TestSynthesizerCreation:
 class TestSynthesizerCompression:
     def test_no_compression_when_under_budget(self):
         s = TokenPakSynthesizer(budget=4000)
-        short_nodes = [
-            {"id": "n0", "text": "Short text.", "metadata": {}, "score": 1.0}
-        ]
+        short_nodes = [{"id": "n0", "text": "Short text.", "metadata": {}, "score": 1.0}]
         result = s.synthesize("test query", short_nodes)
         assert (
             result["compression_stats"]["input_tokens"]
@@ -129,24 +127,18 @@ class TestTrimContent:
 
     def test_headers_preserved(self):
         text = "# Header\nSome content here. " * 100
-        result = TokenPakSynthesizer._trim_content(
-            text, token_budget=20, keep_headers=True
-        )
+        result = TokenPakSynthesizer._trim_content(text, token_budget=20, keep_headers=True)
         assert "# Header" in result
 
     def test_code_block_preserved(self):
         text = "```python\nprint('hello')\n```\n" + "filler " * 500
-        result = TokenPakSynthesizer._trim_content(
-            text, token_budget=20, keep_code=True
-        )
+        result = TokenPakSynthesizer._trim_content(text, token_budget=20, keep_code=True)
         assert "```" in result
         assert "print" in result
 
     def test_no_preserve_headers(self):
         text = "# Header\n" + "word " * 200
-        result = TokenPakSynthesizer._trim_content(
-            text, token_budget=10, keep_headers=False
-        )
+        result = TokenPakSynthesizer._trim_content(text, token_budget=10, keep_headers=False)
         # May or may not have header depending on position, just verify it runs
         assert isinstance(result, str)
         assert len(result) > 0

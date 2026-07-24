@@ -2,7 +2,6 @@
 Tests for tokenpak.adapters — platform detection and configuration.
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.adapters.claude_cli", reason="module not available in current build")
@@ -16,6 +15,7 @@ from tokenpak.adapters.registry import detect_platform
 # ---------------------------------------------------------------------------
 # OpenClaw adapter
 # ---------------------------------------------------------------------------
+
 
 class TestOpenClawAdapter:
     def test_detect_via_header(self):
@@ -55,6 +55,7 @@ class TestOpenClawAdapter:
 # Claude CLI adapter
 # ---------------------------------------------------------------------------
 
+
 class TestClaudeCLIAdapter:
     def test_detect_via_user_agent(self):
         assert ClaudeCLIAdapter.detect({"User-Agent": "claude-cli/1.0"}, {}) is True
@@ -91,6 +92,7 @@ class TestClaudeCLIAdapter:
 # Generic adapter
 # ---------------------------------------------------------------------------
 
+
 class TestGenericAdapter:
     def test_always_detects(self):
         assert GenericAdapter.detect({}, {}) is True
@@ -109,6 +111,7 @@ class TestGenericAdapter:
 # ---------------------------------------------------------------------------
 # Registry / detect_platform
 # ---------------------------------------------------------------------------
+
 
 class TestRegistry:
     def test_openclaw_wins_via_header(self):
@@ -155,6 +158,7 @@ class TestRegistry:
         """detect_platform should work without explicit env arg (uses os.environ)."""
         # No OPENCLAW_SESSION or CLAUDE_CLI in real env during tests — should be generic.
         import os
+
         env_backup = os.environ.copy()
         os.environ.pop("OPENCLAW_SESSION", None)
         os.environ.pop("CLAUDE_CLI", None)

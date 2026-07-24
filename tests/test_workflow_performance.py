@@ -54,13 +54,13 @@ class TestWorkflowStats:
         assert s.avg_duration == 0.0
 
     def test_avg_duration_computed(self):
-        s = WorkflowStats(template="deploy", success_count=2, failure_count=0,
-                          total_duration_seconds=60.0)
+        s = WorkflowStats(
+            template="deploy", success_count=2, failure_count=0, total_duration_seconds=60.0
+        )
         assert s.avg_duration == pytest.approx(30.0)
 
     def test_avg_tokens_computed(self):
-        s = WorkflowStats(template="deploy", success_count=4, failure_count=0,
-                          total_tokens=8000)
+        s = WorkflowStats(template="deploy", success_count=4, failure_count=0, total_tokens=8000)
         assert s.avg_tokens == pytest.approx(2000.0)
 
     def test_regression_rate_no_successes(self):
@@ -79,8 +79,9 @@ class TestWorkflowStats:
             total_duration_seconds=45.5,
             total_tokens=12000,
             regression_count=1,
-            history=[{"ts": 1.0, "success": True, "duration": 10.0, "tokens": 3000,
-                       "regression": False}],
+            history=[
+                {"ts": 1.0, "success": True, "duration": 10.0, "tokens": 3000, "regression": False}
+            ],
         )
         restored = WorkflowStats.from_dict(s.to_dict())
         assert restored.template == s.template
@@ -159,8 +160,9 @@ class TestWorkflowPerformanceTracker:
 
     def test_score_formula_components(self, tmp_stats):
         """Manually verify each weighted component."""
-        tmp_stats.record("deploy", success=True, duration_seconds=150.0, tokens_used=25_000,
-                         regression=False)
+        tmp_stats.record(
+            "deploy", success=True, duration_seconds=150.0, tokens_used=25_000, regression=False
+        )
         s = tmp_stats.get_stats("deploy")
         expected = (
             s.success_rate * 0.5
@@ -205,6 +207,7 @@ class TestWorkflowPerformanceTracker:
 class TestRecordWorkflowExecution:
     def _make_wf(self, template, status_value, started_at, completed_at):
         from tokenpak.agentic.workflow import WorkflowRecord, WorkflowStatus
+
         wf = MagicMock(spec=WorkflowRecord)
         wf.template = template
         wf.status = WorkflowStatus(status_value)

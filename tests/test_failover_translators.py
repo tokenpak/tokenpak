@@ -27,6 +27,7 @@ from tokenpak.proxy.providers.translator import translate_response
 # Fixtures — sample payloads
 # ---------------------------------------------------------------------------
 
+
 def _ant_response(
     text: str = "Hello!",
     stop_reason: str = "end_turn",
@@ -96,6 +97,7 @@ def _google_response(
 # Response translation: anthropic → openai
 # ---------------------------------------------------------------------------
 
+
 class TestAnthropicToOpenAIResponse:
     def test_text_content(self):
         out = translate_response(_ant_response("Hi there"), "anthropic", "openai")
@@ -104,7 +106,9 @@ class TestAnthropicToOpenAIResponse:
         assert out["choices"][0]["finish_reason"] == "stop"
 
     def test_usage_mapping(self):
-        out = translate_response(_ant_response(input_tokens=20, output_tokens=8), "anthropic", "openai")
+        out = translate_response(
+            _ant_response(input_tokens=20, output_tokens=8), "anthropic", "openai"
+        )
         assert out["usage"]["prompt_tokens"] == 20
         assert out["usage"]["completion_tokens"] == 8
         assert out["usage"]["total_tokens"] == 28
@@ -160,6 +164,7 @@ class TestAnthropicToOpenAIResponse:
 # Response translation: openai → anthropic
 # ---------------------------------------------------------------------------
 
+
 class TestOpenAIToAnthropicResponse:
     def test_text_content(self):
         out = translate_response(_oai_response("Hello back"), "openai", "anthropic")
@@ -168,7 +173,9 @@ class TestOpenAIToAnthropicResponse:
         assert out["content"][0]["text"] == "Hello back"
 
     def test_usage_mapping(self):
-        out = translate_response(_oai_response(prompt_tokens=15, completion_tokens=7), "openai", "anthropic")
+        out = translate_response(
+            _oai_response(prompt_tokens=15, completion_tokens=7), "openai", "anthropic"
+        )
         assert out["usage"]["input_tokens"] == 15
         assert out["usage"]["output_tokens"] == 7
 
@@ -226,6 +233,7 @@ class TestOpenAIToAnthropicResponse:
 # Response translation: google → anthropic
 # ---------------------------------------------------------------------------
 
+
 class TestGoogleToAnthropicResponse:
     def test_text_content(self):
         out = translate_response(_google_response("Gemini says hi"), "google", "anthropic")
@@ -234,12 +242,16 @@ class TestGoogleToAnthropicResponse:
         assert out["content"][0]["text"] == "Gemini says hi"
 
     def test_usage_mapping(self):
-        out = translate_response(_google_response(prompt_count=12, candidates_count=6), "google", "anthropic")
+        out = translate_response(
+            _google_response(prompt_count=12, candidates_count=6), "google", "anthropic"
+        )
         assert out["usage"]["input_tokens"] == 12
         assert out["usage"]["output_tokens"] == 6
 
     def test_stop_reason_max_tokens(self):
-        out = translate_response(_google_response(finish_reason="MAX_TOKENS"), "google", "anthropic")
+        out = translate_response(
+            _google_response(finish_reason="MAX_TOKENS"), "google", "anthropic"
+        )
         assert out["stop_reason"] == "max_tokens"
 
     def test_function_call_content(self):
@@ -248,9 +260,7 @@ class TestGoogleToAnthropicResponse:
                 {
                     "content": {
                         "role": "model",
-                        "parts": [
-                            {"functionCall": {"name": "get_time", "args": {"tz": "UTC"}}}
-                        ],
+                        "parts": [{"functionCall": {"name": "get_time", "args": {"tz": "UTC"}}}],
                     },
                     "finishReason": "TOOL_CODE",
                     "index": 0,
@@ -300,6 +310,7 @@ class TestGoogleToAnthropicResponse:
 # ---------------------------------------------------------------------------
 # Response translation: anthropic → google
 # ---------------------------------------------------------------------------
+
 
 class TestAnthropicToGoogleResponse:
     def test_text_content(self):
@@ -352,7 +363,9 @@ class TestAnthropicToGoogleResponse:
         assert not any("Private thoughts" in t for t in texts)
 
     def test_usage_mapping(self):
-        out = translate_response(_ant_response(input_tokens=20, output_tokens=8), "anthropic", "google")
+        out = translate_response(
+            _ant_response(input_tokens=20, output_tokens=8), "anthropic", "google"
+        )
         meta = out["usageMetadata"]
         assert meta["promptTokenCount"] == 20
         assert meta["candidatesTokenCount"] == 8
@@ -371,6 +384,7 @@ class TestAnthropicToGoogleResponse:
 # Response translation: google → openai (via chain)
 # ---------------------------------------------------------------------------
 
+
 class TestGoogleToOpenAIResponse:
     def test_text_content(self):
         out = translate_response(_google_response("From Google to OAI"), "google", "openai")
@@ -386,6 +400,7 @@ class TestGoogleToOpenAIResponse:
 # Response translation: openai → google (via chain)
 # ---------------------------------------------------------------------------
 
+
 class TestOpenAIToGoogleResponse:
     def test_text_content(self):
         out = translate_response(_oai_response("From OAI to Google"), "openai", "google")
@@ -400,6 +415,7 @@ class TestOpenAIToGoogleResponse:
 # ---------------------------------------------------------------------------
 # Streaming: Anthropic → OpenAI
 # ---------------------------------------------------------------------------
+
 
 def _ant_stream_events(text: str = "Hello world", stop_reason: str = "end_turn") -> List[str]:
     return [
@@ -429,16 +445,14 @@ class TestAnthropicToOpenAIStreaming:
         chunks = self._translate(_ant_stream_events("test text"))
         # Find text delta chunk
         text_chunks = [
-            c for c in chunks
-            if c.get("choices", [{}])[0].get("delta", {}).get("content")
+            c for c in chunks if c.get("choices", [{}])[0].get("delta", {}).get("content")
         ]
         assert any("test text" in c["choices"][0]["delta"]["content"] for c in text_chunks)
 
     def test_finish_reason_emitted(self):
         chunks = self._translate(_ant_stream_events())
         finish_chunks = [
-            c for c in chunks
-            if c.get("choices", [{}])[0].get("finish_reason") is not None
+            c for c in chunks if c.get("choices", [{}])[0].get("finish_reason") is not None
         ]
         assert len(finish_chunks) == 1
         assert finish_chunks[0]["choices"][0]["finish_reason"] == "stop"
@@ -446,8 +460,7 @@ class TestAnthropicToOpenAIStreaming:
     def test_max_tokens_finish_reason(self):
         chunks = self._translate(_ant_stream_events(stop_reason="max_tokens"))
         finish_chunks = [
-            c for c in chunks
-            if c.get("choices", [{}])[0].get("finish_reason") is not None
+            c for c in chunks if c.get("choices", [{}])[0].get("finish_reason") is not None
         ]
         assert finish_chunks[0]["choices"][0]["finish_reason"] == "length"
 
@@ -455,8 +468,8 @@ class TestAnthropicToOpenAIStreaming:
         events = [
             'data: {"type":"message_start","message":{"id":"msg_t","model":"claude-sonnet-4-5","role":"assistant","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}',
             'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"search","input":{}}}',
-            'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"q\":"}}',
-            'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"\"test\"}"}}',
+            'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{"q":"}}',
+            'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":""test"}"}}',
             'data: {"type":"content_block_stop","index":0}',
             'data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":5}}',
             'data: {"type":"message_stop"}',
@@ -465,8 +478,7 @@ class TestAnthropicToOpenAIStreaming:
         chunks = self._translate(events)
         # Should have tool_calls in at least one delta
         tool_chunks = [
-            c for c in chunks
-            if c.get("choices", [{}])[0].get("delta", {}).get("tool_calls")
+            c for c in chunks if c.get("choices", [{}])[0].get("delta", {}).get("tool_calls")
         ]
         assert len(tool_chunks) > 0
         first_tc = tool_chunks[0]["choices"][0]["delta"]["tool_calls"][0]
@@ -486,6 +498,7 @@ class TestAnthropicToOpenAIStreaming:
 # ---------------------------------------------------------------------------
 # Streaming: OpenAI → Anthropic
 # ---------------------------------------------------------------------------
+
 
 def _oai_stream_events(text: str = "Hello back") -> List[str]:
     return [
@@ -517,7 +530,8 @@ class TestOpenAIToAnthropicStreaming:
     def test_text_delta_emitted(self):
         chunks = self._translate(_oai_stream_events("test content"))
         deltas = [
-            c for c in chunks
+            c
+            for c in chunks
             if c.get("type") == "content_block_delta"
             and c.get("delta", {}).get("type") == "text_delta"
         ]
@@ -544,7 +558,8 @@ class TestOpenAIToAnthropicStreaming:
         ]
         chunks = self._translate(events)
         tool_starts = [
-            c for c in chunks
+            c
+            for c in chunks
             if c.get("type") == "content_block_start"
             and c.get("content_block", {}).get("type") == "tool_use"
         ]
@@ -558,6 +573,7 @@ class TestOpenAIToAnthropicStreaming:
 # ---------------------------------------------------------------------------
 # Streaming: Google → Anthropic
 # ---------------------------------------------------------------------------
+
 
 class TestGoogleToAnthropicStreaming:
     def _translate(self, events: List[str]) -> List[Dict[str, Any]]:
@@ -578,10 +594,7 @@ class TestGoogleToAnthropicStreaming:
             "data: [DONE]",
         ]
         chunks = self._translate(events)
-        deltas = [
-            c for c in chunks
-            if c.get("type") == "content_block_delta"
-        ]
+        deltas = [c for c in chunks if c.get("type") == "content_block_delta"]
         assert len(deltas) > 0
 
     def test_message_start_emitted(self):
@@ -596,6 +609,7 @@ class TestGoogleToAnthropicStreaming:
 # ---------------------------------------------------------------------------
 # Streaming: passthrough (same provider)
 # ---------------------------------------------------------------------------
+
 
 class TestStreamingPassthrough:
     def test_same_provider_passthrough(self):
@@ -612,6 +626,7 @@ class TestStreamingPassthrough:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_translate_response_unknown_pair(self):
@@ -641,9 +656,11 @@ class TestEdgeCases:
 
     def test_translate_stream_iterator(self):
         t = StreamingTranslator("anthropic", "openai")
-        events = iter([
-            'data: {"type":"message_start","message":{"id":"m","model":"claude-sonnet-4-5","role":"assistant","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}',
-            "data: [DONE]",
-        ])
+        events = iter(
+            [
+                'data: {"type":"message_start","message":{"id":"m","model":"claude-sonnet-4-5","role":"assistant","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}',
+                "data: [DONE]",
+            ]
+        )
         results = list(t.translate_stream(events))
         assert len(results) >= 1

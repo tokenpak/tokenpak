@@ -11,27 +11,41 @@ the JSON is converted to YAML and the original renamed to config.json.migrated.
 import json as _json
 import os
 import sys
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import TypeVar, cast, overload
+
+ConfigDict = dict[str, object]
+ValueCaster = Callable[..., object]
+_T = TypeVar("_T")
+
+
+def _as_config_dict(value: object) -> ConfigDict:
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        return {}
+    return cast(ConfigDict, value)
+
 
 try:
     import yaml as _yaml
 
     _HAS_YAML = True
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> ConfigDict:
         with open(path, "r") as f:
-            return _yaml.safe_load(f) or {}
+            return _as_config_dict(_yaml.safe_load(f) or {})
 
 except ImportError:
     _HAS_YAML = False
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> ConfigDict:
         with open(path, "r") as f:
-            return _json.load(f)
+            return _as_config_dict(_json.load(f))
 
 
-CONFIG_PATH = Path(os.environ.get("TOKENPAK_CONFIG", str(Path.home() / ".tokenpak" / "config.yaml")))
+CONFIG_PATH = Path(
+    os.environ.get("TOKENPAK_CONFIG", str(Path.home() / ".tokenpak" / "config.yaml"))
+)
 
 
 def _maybe_migrate_json_to_yaml() -> None:
@@ -71,26 +85,31 @@ def _maybe_migrate_json_to_yaml() -> None:
     try:
         json_path.rename(migrated_path)
     except Exception as exc:
-        print(f"tokenpak: migrated config.yaml written but failed to rename config.json: {exc}",
-              file=sys.stderr)
+        print(
+            f"tokenpak: migrated config.yaml written but failed to rename config.json: {exc}",
+            file=sys.stderr,
+        )
         return
 
     print("tokenpak: migrated config.json \u2192 config.yaml")
 
+
 # Cached config
-_config: Optional[Dict[str, Any]] = None
+_config: ConfigDict | None = None
 
 
-def _deep_get(d: dict, keys: str, default=None):
+def _deep_get(d: Mapping[str, object], keys: str, default: object = None) -> object:
     """Get nested dict value by dot-path. e.g. 'compression.threshold_tokens'"""
+    current: object = d
     parts = keys.split(".")
     for part in parts:
-        if not isinstance(d, dict):
+        if not isinstance(current, dict):
             return default
-        d = d.get(part, default)
-        if d is default and part != parts[-1]:
+        mapping = cast(dict[str, object], current)
+        current = mapping.get(part, default)
+        if current is default and part != parts[-1]:
             return default
-    return d
+    return current
 
 
 def _bool_env(val: str) -> bool:
@@ -98,7 +117,7 @@ def _bool_env(val: str) -> bool:
     return val.lower() in ("1", "true", "yes", "on")
 
 
-def load_config(path: Optional[str] = None) -> Dict[str, Any]:
+def load_config(path: str | None = None) -> ConfigDict:
     """Load config from YAML file. Returns empty dict if file missing.
 
     On first call (no custom *path*), runs automatic JSON-to-YAML migration
@@ -124,7 +143,30 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
     return _config
 
 
-def get(key: str, default=None, env_var: str = None, cast=None):
+@overload
+def get(
+    key: str,
+    default: object,
+    env_var: str | None,
+    cast: Callable[..., _T],
+) -> _T: ...
+
+
+@overload
+def get(
+    key: str,
+    default: _T | None = None,
+    env_var: str | None = None,
+    cast: None = None,
+) -> _T | str | None: ...
+
+
+def get(
+    key: str,
+    default: object = None,
+    env_var: str | None = None,
+    cast: ValueCaster | None = None,
+) -> object:
     """
     Get config value. Priority: env var > config file > default.
 
@@ -149,17 +191,19 @@ def get(key: str, default=None, env_var: str = None, cast=None):
     if file_val is not None:
         if cast is bool and isinstance(file_val, str):
             return _bool_env(file_val)
-        return cast(file_val) if cast and not isinstance(file_val, cast) else file_val
+        if cast is not None and isinstance(cast, type) and not isinstance(file_val, cast):
+            return cast(file_val)
+        return file_val
 
     return default
 
 
-def get_all() -> Dict[str, Any]:
+def get_all() -> ConfigDict:
     """Get full merged config (file + env overrides) as flat dict."""
     cfg = load_config()
 
     # Build result with env var overrides
-    result = {}
+    result: ConfigDict = {}
 
     # Core
     result["port"] = get("port", 8766, "TOKENPAK_PORT", int)
@@ -262,14 +306,24 @@ def get_all() -> Dict[str, Any]:
     # Logging (merged from legacy config.json)
     result["logging.enabled"] = get("logging.enabled", True, "TOKENPAK_LOG_ENABLED", bool)
     result["logging.level"] = get("logging.level", "info", "TOKENPAK_LOG_LEVEL", str)
-    result["logging.destination"] = get("logging.destination", "file", "TOKENPAK_LOG_DESTINATION", str)
-    result["logging.retention_days"] = get("logging.retention_days", 30, "TOKENPAK_LOG_RETENTION_DAYS", int)
-    result["logging.include_request_body"] = get("logging.include_request_body", False, "TOKENPAK_LOG_REQUEST_BODY", bool)
-    result["logging.include_response_body"] = get("logging.include_response_body", False, "TOKENPAK_LOG_RESPONSE_BODY", bool)
+    result["logging.destination"] = get(
+        "logging.destination", "file", "TOKENPAK_LOG_DESTINATION", str
+    )
+    result["logging.retention_days"] = get(
+        "logging.retention_days", 30, "TOKENPAK_LOG_RETENTION_DAYS", int
+    )
+    result["logging.include_request_body"] = get(
+        "logging.include_request_body", False, "TOKENPAK_LOG_REQUEST_BODY", bool
+    )
+    result["logging.include_response_body"] = get(
+        "logging.include_response_body", False, "TOKENPAK_LOG_RESPONSE_BODY", bool
+    )
 
     # Validation (merged from legacy config.json)
     result["validation.mode"] = get("validation.mode", "warn", "TOKENPAK_REQUEST_VALIDATION", str)
-    result["validation.strict"] = get("validation.strict", False, "TOKENPAK_VALIDATION_STRICT", bool)
+    result["validation.strict"] = get(
+        "validation.strict", False, "TOKENPAK_VALIDATION_STRICT", bool
+    )
 
     # Plugins (merged from legacy config.json)
     result["plugins.enabled"] = get("plugins.enabled", [], None, list)

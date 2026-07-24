@@ -1,6 +1,5 @@
 """Unit tests for calibrator.py (Part C — Compression Calibration)."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.calibrator", reason="module not available in current build")
@@ -25,6 +24,7 @@ from tokenpak.calibrator import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_path(tmpdir):
     return os.path.join(tmpdir, "calibration.json")
 
@@ -44,6 +44,7 @@ def _flood_retries(path, risk_class, mode, n, days_ago=0):
 # ---------------------------------------------------------------------------
 # _event_weight (decay)
 # ---------------------------------------------------------------------------
+
 
 class TestEventWeight:
     def test_fresh_event_weight_1(self):
@@ -68,6 +69,7 @@ class TestEventWeight:
 # ---------------------------------------------------------------------------
 # log_retry + log_success basic
 # ---------------------------------------------------------------------------
+
 
 class TestLogging:
     def setup_method(self):
@@ -125,6 +127,7 @@ class TestLogging:
 # compute_retry_rate + decay
 # ---------------------------------------------------------------------------
 
+
 class TestComputeRetryRate:
     def test_no_events_returns_zero(self):
         rate = compute_retry_rate("CODE", "aggressive", [])
@@ -150,10 +153,11 @@ class TestComputeRetryRate:
 
     def test_mixed_50pct_rate(self):
         now = datetime.now(timezone.utc)
-        events = (
-            [{"type": "retry",   "mode": "aggressive", "risk_classes": ["CODE"], "timestamp": _ts(0)}] * 5 +
-            [{"type": "success", "mode": "aggressive", "risk_classes": [],        "timestamp": _ts(0)}] * 5
-        )
+        events = [
+            {"type": "retry", "mode": "aggressive", "risk_classes": ["CODE"], "timestamp": _ts(0)}
+        ] * 5 + [
+            {"type": "success", "mode": "aggressive", "risk_classes": [], "timestamp": _ts(0)}
+        ] * 5
         rate = compute_retry_rate("CODE", "aggressive", events, now=now)
         assert rate == pytest.approx(0.5)
 
@@ -169,7 +173,12 @@ class TestComputeRetryRate:
     def test_wrong_risk_class_not_counted(self):
         now = datetime.now(timezone.utc)
         events = [
-            {"type": "retry", "mode": "aggressive", "risk_classes": ["NARRATIVE"], "timestamp": _ts(0)}
+            {
+                "type": "retry",
+                "mode": "aggressive",
+                "risk_classes": ["NARRATIVE"],
+                "timestamp": _ts(0),
+            }
             for _ in range(10)
         ]
         rate = compute_retry_rate("CODE", "aggressive", events, now=now)
@@ -190,8 +199,8 @@ class TestComputeRetryRate:
         # 1 fresh retry + 1 fresh success → 50%
         # Replace fresh retry with 10d-old retry (weight=0.5): rate < 50%
         events = [
-            {"type": "retry",   "mode": "aggressive", "risk_classes": ["CODE"], "timestamp": _ts(10)},
-            {"type": "success", "mode": "aggressive", "risk_classes": [],        "timestamp": _ts(0)},
+            {"type": "retry", "mode": "aggressive", "risk_classes": ["CODE"], "timestamp": _ts(10)},
+            {"type": "success", "mode": "aggressive", "risk_classes": [], "timestamp": _ts(0)},
         ]
         rate = compute_retry_rate("CODE", "aggressive", events, now=now)
         # retry_w=0.5, success_w=1.0 → rate = 0.5/1.5 ≈ 0.333
@@ -201,6 +210,7 @@ class TestComputeRetryRate:
 # ---------------------------------------------------------------------------
 # Auto-downgrade logic
 # ---------------------------------------------------------------------------
+
 
 class TestAutoDowngrade:
     def setup_method(self):
@@ -253,6 +263,7 @@ class TestAutoDowngrade:
 # get_effective_mode
 # ---------------------------------------------------------------------------
 
+
 class TestGetEffectiveMode:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -275,7 +286,9 @@ class TestGetEffectiveMode:
         # Manually write a hybrid override but caller requests strict
         data = load_calibration(self.path)
         data["overrides"]["CODE"] = "hybrid"
-        from pathlib import Path; Path(self.path).write_text(json.dumps(data))  # noqa: I001
+        from pathlib import Path
+
+        Path(self.path).write_text(json.dumps(data))  # noqa: I001
         mode = get_effective_mode("strict", "CODE", calibration_path=self.path)
         assert mode == "strict"
 
@@ -296,6 +309,7 @@ class TestGetEffectiveMode:
 # _downgrade_mode
 # ---------------------------------------------------------------------------
 
+
 class TestDowngradeMode:
     def test_aggressive_to_hybrid(self):
         assert _downgrade_mode("aggressive") == "hybrid"
@@ -314,6 +328,7 @@ class TestDowngradeMode:
 # Persistence: load_calibration
 # ---------------------------------------------------------------------------
 
+
 class TestPersistence:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -326,6 +341,7 @@ class TestPersistence:
 
     def test_corrupt_file_returns_empty_structure(self):
         from pathlib import Path
+
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         Path(self.path).write_text("{not valid json")
         data = load_calibration(self.path)

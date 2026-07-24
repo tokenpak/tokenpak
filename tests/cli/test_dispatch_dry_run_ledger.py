@@ -64,9 +64,7 @@ def _table_counts(db_path) -> dict:
     try:
         tables = [
             r[0]
-            for r in con.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         ]
         return {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
     finally:
@@ -79,9 +77,7 @@ def _table_counts(db_path) -> dict:
 
 
 def test_dry_run_creates_no_ledger(home):
-    rc, out, err, exc = _invoke(
-        ["dispatch", "run", "add a hello function", "--dry-run", "--json"]
-    )
+    rc, out, err, exc = _invoke(["dispatch", "run", "add a hello function", "--dry-run", "--json"])
     assert exc is None, err
     assert rc == 0
     payload = json.loads(out)
@@ -117,9 +113,7 @@ def test_dry_run_does_not_mutate_existing_ledger(home):
     before = _table_counts(db)
 
     # A dry-run must add/mutate nothing.
-    rc, out, err, exc = _invoke(
-        ["dispatch", "run", "add another feature", "--dry-run", "--json"]
-    )
+    rc, out, err, exc = _invoke(["dispatch", "run", "add another feature", "--dry-run", "--json"])
     assert exc is None, err
     assert rc == 0
     after = _table_counts(db)

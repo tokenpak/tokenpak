@@ -68,10 +68,7 @@ def test_audit_stub_points_to_security_docs(capsys):
 
 def test_registry_describes_pro_enterprise_report_surfaces():
     payload = json.loads(_read("tokenpak/core/registry/commands.json"))
-    commands = {
-        item["command"]: item
-        for item in payload["commands"]
-    }
+    commands = {item["command"]: item for item in payload["commands"]}
 
     compliance = commands["compliance"]
     audit = commands["audit"]

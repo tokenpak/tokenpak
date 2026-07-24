@@ -56,6 +56,18 @@ Callers may pass callables to intercept escalation decisions:
 
 from __future__ import annotations
 
+__all__ = (
+    "DEFAULT_PER_ERROR",
+    "ImmediateAlertError",
+    "MODEL_DOWNGRADE_PATH",
+    "PROVIDER_FALLBACK_PATH",
+    "RetryAttempt",
+    "RetryEngine",
+    "RetryExhaustedError",
+    "load_recent_retry_events",
+)
+
+
 import json
 import logging
 import os
@@ -63,7 +75,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable, Generic, Mapping, Optional, TypedDict, TypeVar, cast
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +112,39 @@ DEFAULT_PER_ERROR: dict[str, str] = {
 }
 
 
-def _load_retry_config() -> dict:
+class RetryConfig(TypedDict, total=False):
+    wait_seconds: list[float]
+    downgrade_chain: list[str]
+    provider_chain: list[str]
+    per_error: dict[str, str]
+
+
+class RetryAttemptData(TypedDict, total=False):
+    level: int
+    description: str
+    error: str
+    http_status: str
+    timestamp: float
+
+
+class HandoffResult(TypedDict):
+    _handoff: bool
+    state_file: str
+
+
+RetryData = dict[str, object]
+TaskResult = TypeVar("TaskResult")
+
+
+def _load_retry_config() -> RetryConfig:
     """Load the retry section from ~/.tokenpak/config.json (fail-safe)."""
     try:
         if CONFIG_PATH.exists():
             data = json.loads(CONFIG_PATH.read_text())
-            return data.get("retry", {})
+            if isinstance(data, dict):
+                retry = data.get("retry", {})
+                if isinstance(retry, dict):
+                    return cast(RetryConfig, retry)
     except (json.JSONDecodeError, OSError):
         pass
     return {}
@@ -126,7 +165,7 @@ def _extract_http_status(exc: Exception) -> Optional[str]:
     return None
 
 
-def _append_retry_event(event: dict) -> None:
+def _append_retry_event(event: Mapping[str, object]) -> None:
     """Append a retry event to the JSONL log (fail-silent)."""
     try:
         RETRY_EVENT_LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -136,16 +175,18 @@ def _append_retry_event(event: dict) -> None:
         pass
 
 
-def load_recent_retry_events(n: int = 20) -> list[dict]:
+def load_recent_retry_events(n: int = 20) -> list[RetryData]:
     """Return up to *n* most-recent retry events from the JSONL log."""
     if not RETRY_EVENT_LOG.exists():
         return []
     try:
         lines = RETRY_EVENT_LOG.read_text().strip().splitlines()
-        events = []
+        events: list[RetryData] = []
         for line in lines:
             try:
-                events.append(json.loads(line))
+                event = json.loads(line)
+                if isinstance(event, dict):
+                    events.append(cast(RetryData, event))
             except json.JSONDecodeError:
                 pass
         return events[-n:]
@@ -156,7 +197,12 @@ def load_recent_retry_events(n: int = 20) -> list[dict]:
 class RetryExhaustedError(Exception):
     """Raised when all 5 escalation levels have failed."""
 
-    def __init__(self, context: dict, partial_state: dict, attempts: list[dict]):
+    def __init__(
+        self,
+        context: RetryData,
+        partial_state: RetryData,
+        attempts: list["RetryAttempt"],
+    ) -> None:
         self.context = context
         self.partial_state = partial_state
         self.attempts = attempts
@@ -183,8 +229,8 @@ class RetryAttempt:
     http_status: Optional[str] = None
     timestamp: float = field(default_factory=time.time)
 
-    def to_dict(self) -> dict:
-        d = {
+    def to_dict(self) -> RetryAttemptData:
+        d: RetryAttemptData = {
             "level": self.level,
             "description": self.description,
             "error": self.error,
@@ -195,7 +241,7 @@ class RetryAttempt:
         return d
 
 
-class RetryEngine:
+class RetryEngine(Generic[TaskResult]):
     """
     5-level retry engine with escalation, per-error routing, and partial-state preservation.
 
@@ -229,24 +275,24 @@ class RetryEngine:
 
     def __init__(
         self,
-        fn: Callable[[dict, dict], Any],
-        context: dict,
-        partial_state: Optional[dict] = None,
+        fn: Callable[[RetryData, RetryData], TaskResult],
+        context: RetryData,
+        partial_state: Optional[RetryData] = None,
         state_dir: Optional[Path | str] = None,
         agent_id: Optional[str] = None,
         wait_seconds: Optional[list[float]] = None,
         per_error: Optional[dict[str, str]] = None,
         on_model_downgrade: Optional[Callable[[str], str]] = None,
         on_provider_switch: Optional[Callable[[str], str]] = None,
-        on_handoff: Optional[Callable[[dict, dict], bool]] = None,
-        on_human_alert: Optional[Callable[[dict], None]] = None,
-    ):
+        on_handoff: Optional[Callable[[RetryData, RetryData], bool]] = None,
+        on_human_alert: Optional[Callable[[RetryData], None]] = None,
+    ) -> None:
         # Load persistent config
         cfg = _load_retry_config()
 
         self.fn = fn
         self.context = context
-        self.partial_state: dict = partial_state if partial_state is not None else {}
+        self.partial_state: RetryData = partial_state if partial_state is not None else {}
         self.state_dir = Path(state_dir or DEFAULT_STATE_DIR)
         self.agent_id = agent_id or os.environ.get("TOKENPAK_AGENT", "cali")
         self.wait_seconds = wait_seconds or cfg.get("wait_seconds", [1.0, 2.0, 4.0])
@@ -266,8 +312,8 @@ class RetryEngine:
         self.on_handoff = on_handoff
         self.on_human_alert = on_human_alert or self._default_human_alert
         self.attempts: list[RetryAttempt] = []
-        self._current_model: str = context.get("model", self._model_chain[0])
-        self._current_provider: str = context.get("provider", self._provider_chain[0])
+        self._current_model = cast(str, context.get("model", self._model_chain[0]))
+        self._current_provider = cast(str, context.get("provider", self._provider_chain[0]))
         self.state_dir.mkdir(parents=True, exist_ok=True)
 
     # ── per-error routing ─────────────────────────────────────────────────────
@@ -317,7 +363,7 @@ class RetryEngine:
             pass
         return self._provider_chain[-1]
 
-    def _default_human_alert(self, alert: dict) -> None:
+    def _default_human_alert(self, alert: RetryData) -> None:
         logger.critical(
             "TOKENPAK HUMAN ALERT: %s",
             json.dumps(alert, indent=2, default=str),
@@ -343,13 +389,13 @@ class RetryEngine:
         return path
 
     @classmethod
-    def load_state(cls, state_file: Path) -> dict:
+    def load_state(cls, state_file: Path) -> RetryData:
         """Reload persisted state for inspection or resume."""
-        return json.loads(Path(state_file).read_text())
+        return cast(RetryData, json.loads(Path(state_file).read_text()))
 
     # ── shadow/event logging ──────────────────────────────────────────────────
 
-    def _log_event(self, event_type: str, **extra: Any) -> None:
+    def _log_event(self, event_type: str, **extra: object) -> None:
         """Append a structured retry event to the JSONL shadow log."""
         event = {
             "event": event_type,
@@ -364,7 +410,7 @@ class RetryEngine:
 
     # ── escalation levels ─────────────────────────────────────────────────────
 
-    def _level0_wait_retry(self) -> Any:
+    def _level0_wait_retry(self) -> TaskResult:
         """Level 0: exponential backoff, up to len(wait_seconds) attempts."""
         for i, wait in enumerate(self.wait_seconds):
             try:
@@ -378,7 +424,7 @@ class RetryEngine:
                 self.attempts.append(
                     RetryAttempt(
                         level=0,
-                        description=f"wait-retry attempt {i+1}/{len(self.wait_seconds)}, waited {actual_wait}s",
+                        description=f"wait-retry attempt {i + 1}/{len(self.wait_seconds)}, waited {actual_wait}s",
                         error=str(exc),
                         http_status=_extract_http_status(exc),
                     )
@@ -398,7 +444,7 @@ class RetryEngine:
         # Final attempt after last wait
         return self.fn(self.context, self.partial_state)
 
-    def _level1_downgrade_model(self) -> Any:
+    def _level1_downgrade_model(self) -> TaskResult:
         """Level 1: downgrade to cheaper/more-available model."""
         next_model = self.on_model_downgrade(self._current_model)
         if next_model == self._current_model:
@@ -411,7 +457,7 @@ class RetryEngine:
         self.context = {**self.context, "model": next_model}
         return self.fn(self.context, self.partial_state)
 
-    def _level2_switch_provider(self) -> Any:
+    def _level2_switch_provider(self) -> TaskResult:
         """Level 2: switch to alternate provider."""
         next_provider = self.on_provider_switch(self._current_provider)
         if next_provider == self._current_provider:
@@ -426,7 +472,7 @@ class RetryEngine:
         self.context = {**self.context, "provider": next_provider}
         return self.fn(self.context, self.partial_state)
 
-    def _level3_handoff(self) -> Any:
+    def _level3_handoff(self) -> HandoffResult:
         """Level 3: hand off to another agent, preserving state."""
         if self.on_handoff is None:
             raise RuntimeError("No handoff handler configured")
@@ -446,7 +492,7 @@ class RetryEngine:
     def _level4_human_alert(self, last_error: Exception) -> None:
         """Level 4: save state + alert human. Always raises RetryExhaustedError after."""
         state_path = self._save_state()
-        alert = {
+        alert: RetryData = {
             "severity": "critical",
             "agent": self.agent_id,
             "task_id": self.context.get("task_id", "unknown"),
@@ -466,7 +512,7 @@ class RetryEngine:
 
     # ── main entry point ──────────────────────────────────────────────────────
 
-    def run(self) -> Any:
+    def run(self) -> TaskResult | HandoffResult:
         """
         Execute the task with full escalation.
 
@@ -475,7 +521,7 @@ class RetryEngine:
         """
         self._log_event("run_start")
 
-        escalation_levels = [
+        escalation_levels: list[tuple[int, str, Callable[[], TaskResult | HandoffResult]]] = [
             (0, "wait + retry", self._level0_wait_retry),
             (1, "model downgrade", self._level1_downgrade_model),
             (2, "provider switch", self._level2_switch_provider),
@@ -524,5 +570,5 @@ class RetryEngine:
         raise RetryExhaustedError(
             context=self.context,
             partial_state=self.partial_state,
-            attempts=self.attempts,  # type: ignore
+            attempts=self.attempts,
         )

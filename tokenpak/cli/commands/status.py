@@ -22,7 +22,8 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from types import ModuleType
+from typing import Any, Dict, List, Optional, cast
 
 try:
     import click
@@ -35,15 +36,29 @@ except ImportError:
 try:
     from tokenpak.models import get_rates
 except ImportError:
-    def get_rates(model: Optional[str] = None) -> dict:
+
+    def get_rates(model: Optional[str] = None) -> dict[str, float]:
         return {"input": 3.0, "cached": 0.30, "output": 15.0}
 
+
+_lic: ModuleType | None
 try:
     from tokenpak import licensing as _lic
     from tokenpak.cli.commands.upgrade import DEFAULT_UPGRADE_URL
 except ImportError:
     _lic = None
     DEFAULT_UPGRADE_URL = "https://tokenpak.ai/pro"
+
+
+def _estimate_session_savings(
+    session: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Return typed pricing output when the optional telemetry helper is present."""
+    try:
+        from tokenpak.telemetry.pricing_rates import estimate_savings
+    except ImportError:
+        return None
+    return cast(dict[str, Any], estimate_savings(session))
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +143,10 @@ def _fetch(url: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
     """Fetch JSON from a URL. Returns None on failure."""
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
-            return json.loads(r.read())
+            payload = json.loads(r.read())
+            if isinstance(payload, dict):
+                return payload
+            return None
     except Exception:
         return None
 
@@ -147,6 +165,7 @@ def _get_db_path() -> str:
     """
     try:
         from tokenpak import _paths
+
         resolved = _paths.monitor_db(mode="read")
         if resolved is not None:
             return str(resolved)
@@ -174,13 +193,15 @@ def _get_version() -> str:
     """Get tokenpak version string."""
     try:
         import tokenpak
+
         ver = getattr(tokenpak, "__version__", None)
-        if ver:
+        if isinstance(ver, str) and ver:
             return "v" + ver
     except Exception:
         pass
     try:
         import importlib.metadata
+
         return "v" + importlib.metadata.version("tokenpak")
     except Exception:
         pass
@@ -220,7 +241,7 @@ def _calculate_fleet_savings(
         "30d": "-30 days",
     }
     where_clause = ""
-    params: list = []
+    params: list[str] = []
     if period and period in period_map:
         where_clause = "WHERE timestamp >= datetime('now', ?)"
         params = [period_map[period]]
@@ -263,10 +284,14 @@ def _calculate_fleet_savings(
                 -- NULL/unknown) the stored compressed_tokens is legacy accounting
                 -- that reflects input-minus-sent delta, not real savings — per the
                 -- project_tokenpak_status_attribution contract.
-                {("COALESCE(SUM(CASE WHEN cache_origin = 'proxy' "
-                  "THEN compressed_tokens ELSE 0 END), 0)"
-                  if has_origin else "0")
-                } AS compressed_tokens,
+                {
+                (
+                    "COALESCE(SUM(CASE WHEN cache_origin = 'proxy' "
+                    "THEN compressed_tokens ELSE 0 END), 0)"
+                    if has_origin
+                    else "0"
+                )
+            } AS compressed_tokens,
                 COALESCE(SUM(protected_tokens), 0) AS protected_tokens,
                 COALESCE(SUM(estimated_cost), 0.0) AS estimated_cost,
                 {proxy_cr_expr}  AS proxy_managed_cache_read,
@@ -315,7 +340,7 @@ def _calculate_fleet_savings(
         output_rate = rates["output"]
 
         req_count = row["requests"]
-        input_tok = row["input_tokens"]      # post-compression tokens actually sent
+        input_tok = row["input_tokens"]  # post-compression tokens actually sent
         output_tok = row["output_tokens"]
         cache_read = row["cache_read_tokens"]
         cache_create = row["cache_creation_tokens"]
@@ -326,7 +351,9 @@ def _calculate_fleet_savings(
         # client did — any passthrough platform), or 'unknown' (pre-migration
         # rows; conservatively treated as client so we never over-claim).
         if has_origin:
-            proxy_managed_cr = row["proxy_managed_cache_read"] if "proxy_managed_cache_read" in row.keys() else 0
+            proxy_managed_cr = (
+                row["proxy_managed_cache_read"] if "proxy_managed_cache_read" in row.keys() else 0
+            )
             client_managed_cr = max(0, cache_read - proxy_managed_cr)
         else:
             # Legacy rows without origin → all observed cache attributed to client
@@ -339,7 +366,9 @@ def _calculate_fleet_savings(
         # - Client-managed cache reads stay at cached rate (Claude Code does this regardless)
         # - Output at output rate
         raw_input = input_tok + compressed_tok  # pre-compression input
-        baseline_input = raw_input + proxy_managed_cr  # only proxy-managed cache was tokenpak's doing
+        baseline_input = (
+            raw_input + proxy_managed_cr
+        )  # only proxy-managed cache was tokenpak's doing
         without_cost = (
             (baseline_input / 1_000_000) * input_rate
             + (client_managed_cr / 1_000_000) * cached_rate
@@ -366,26 +395,30 @@ def _calculate_fleet_savings(
 
         # Cache hit rate: all cache_read / total input handled (observability, not attribution)
         total_input_handled = cache_read + input_tok
-        cache_hit_rate = (cache_read / total_input_handled * 100) if total_input_handled > 0 else 0.0
+        cache_hit_rate = (
+            (cache_read / total_input_handled * 100) if total_input_handled > 0 else 0.0
+        )
 
-        models.append({
-            "model": model_name,
-            "requests": req_count,
-            "without_cost": round(without_cost, 2),
-            "with_cost": round(with_cost, 2),
-            "saved": round(saved, 2),
-            "savings_pct": round(pct, 1),
-            "cache_hit_rate": round(cache_hit_rate, 1),
-            "cache_savings": round(cache_saving, 2),
-            "compression_savings": round(compression_saving, 2),
-            "claude_code_cache_savings": round(claude_code_cache_saving, 2),
-            "input_tokens": input_tok,
-            "output_tokens": output_tok,
-            "cache_read_tokens": cache_read,
-            "proxy_managed_cache_read": proxy_managed_cr,
-            "client_managed_cache_read": client_managed_cr,
-            "compressed_tokens": compressed_tok,
-        })
+        models.append(
+            {
+                "model": model_name,
+                "requests": req_count,
+                "without_cost": round(without_cost, 2),
+                "with_cost": round(with_cost, 2),
+                "saved": round(saved, 2),
+                "savings_pct": round(pct, 1),
+                "cache_hit_rate": round(cache_hit_rate, 1),
+                "cache_savings": round(cache_saving, 2),
+                "compression_savings": round(compression_saving, 2),
+                "claude_code_cache_savings": round(claude_code_cache_saving, 2),
+                "input_tokens": input_tok,
+                "output_tokens": output_tok,
+                "cache_read_tokens": cache_read,
+                "proxy_managed_cache_read": proxy_managed_cr,
+                "client_managed_cache_read": client_managed_cr,
+                "compressed_tokens": compressed_tok,
+            }
+        )
 
         total_without += without_cost
         total_with += with_cost
@@ -588,7 +621,10 @@ def _query_rollup_daily_tip_attribution(
     lane_cols = {
         "platform_cache": ("platform_cache_tokens", "platform_cache_savings_usd"),
         "tokenpak_compression": ("tokenpak_compression_tokens", "tokenpak_compression_savings_usd"),
-        "tokenpak_managed_cache": ("tokenpak_managed_cache_tokens", "tokenpak_managed_cache_savings_usd"),
+        "tokenpak_managed_cache": (
+            "tokenpak_managed_cache_tokens",
+            "tokenpak_managed_cache_savings_usd",
+        ),
         "companion_enrichment": ("companion_enrichment_tokens", "companion_enrichment_savings_usd"),
     }
     if not any(t in cols or u in cols for t, u in lane_cols.values()):
@@ -604,9 +640,7 @@ def _query_rollup_daily_tip_attribution(
 
     select_parts = ["COALESCE(SUM(requests), 0)" if "requests" in cols else "0"]
     for tokens_col, usd_col in lane_cols.values():
-        select_parts.append(
-            f"COALESCE(SUM({tokens_col}), 0)" if tokens_col in cols else "0"
-        )
+        select_parts.append(f"COALESCE(SUM({tokens_col}), 0)" if tokens_col in cols else "0")
         select_parts.append(f"COALESCE(SUM({usd_col}), 0.0)" if usd_col in cols else "0.0")
 
     row = conn.execute(
@@ -704,13 +738,18 @@ def _query_tip_cache_attribution(
             return rollup
 
         col_names = {r[1] for r in conn.execute("PRAGMA table_info(requests)").fetchall()}
-        if "requests" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}:
+        if "requests" not in {
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }:
             conn.close()
             return _empty_tip_attribution("requests_table_missing", db_path)
 
         has_origin = "cache_origin" in col_names
         origin_expr = "COALESCE(cache_origin, 'unknown')" if has_origin else "'unknown'"
-        compressed_expr = "COALESCE(SUM(compressed_tokens), 0)" if "compressed_tokens" in col_names else "0"
+        compressed_expr = (
+            "COALESCE(SUM(compressed_tokens), 0)" if "compressed_tokens" in col_names else "0"
+        )
         cache_read_col = "cache_read_tokens" if "cache_read_tokens" in col_names else None
         model_expr = "COALESCE(model, 'unknown')" if "model" in col_names else "'unknown'"
         where, params = _db_period_filter(days, hours)
@@ -820,26 +859,34 @@ def _print_tip_cache_attribution(
     print(f"  🔎 {title} ({attribution.get('window', 'all time')})")
 
     lines = attribution.get("lines", {})
-    print(_fmt_tip_line(
-        "Platform cache",
-        lines.get("platform_cache", {}),
-        "provider/client cache; observed, not TokenPak credit",
-    ))
-    print(_fmt_tip_line(
-        "TokenPak compression",
-        lines.get("tokenpak_compression", {}),
-        "compressed tokens avoided before provider",
-    ))
-    print(_fmt_tip_line(
-        "TokenPak managed-cache",
-        lines.get("tokenpak_managed_cache", {}),
-        "cache hits from TokenPak-owned markers",
-    ))
-    print(_fmt_tip_line(
-        "Companion enrichment",
-        lines.get("companion_enrichment", {}),
-        "prompt-side capsule/vault context avoided",
-    ))
+    print(
+        _fmt_tip_line(
+            "Platform cache",
+            lines.get("platform_cache", {}),
+            "provider/client cache; observed, not TokenPak credit",
+        )
+    )
+    print(
+        _fmt_tip_line(
+            "TokenPak compression",
+            lines.get("tokenpak_compression", {}),
+            "compressed tokens avoided before provider",
+        )
+    )
+    print(
+        _fmt_tip_line(
+            "TokenPak managed-cache",
+            lines.get("tokenpak_managed_cache", {}),
+            "cache hits from TokenPak-owned markers",
+        )
+    )
+    print(
+        _fmt_tip_line(
+            "Companion enrichment",
+            lines.get("companion_enrichment", {}),
+            "prompt-side capsule/vault context avoided",
+        )
+    )
 
     unknown = int(attribution.get("unknown_cache_tokens", 0) or 0)
     if unknown > 0:
@@ -892,6 +939,7 @@ def run(
     """
     if fleet:
         from tokenpak.cli._impl import run_fleet
+
         since_days = _parse_since(since) if since else (days if days > 0 else 7)
         return run_fleet(since_days=since_days, as_json=as_json, db_path=db_path)
     if as_json:
@@ -995,7 +1043,9 @@ def run(
     proxy_cache_usd = 0.0
     if total_reqs > 0:
         total_billed_input = sent_tok + cache_read_tok
-        avg_input_rate = (cost / (total_billed_input / 1_000_000)) if total_billed_input > 0 else 3.0
+        avg_input_rate = (
+            (cost / (total_billed_input / 1_000_000)) if total_billed_input > 0 else 3.0
+        )
         avg_input_rate = min(avg_input_rate, 20.0)
         tp_compression_usd = (saved_tok / 1_000_000) * avg_input_rate
         proxy_cache_usd = (cache_proxy_tok / 1_000_000) * avg_input_rate * 0.9
@@ -1006,7 +1056,9 @@ def run(
 
     # Cache %: cache_read out of total input handled by provider (observability)
     total_input_handled = sent_tok + cache_read_tok
-    provider_cache_pct = (cache_read_tok / total_input_handled * 100) if total_input_handled > 0 else 0.0
+    provider_cache_pct = (
+        (cache_read_tok / total_input_handled * 100) if total_input_handled > 0 else 0.0
+    )
 
     # --- Companion (prompt-side) savings ---
     # Tokens avoided before the wire via prune_context / load_capsule / etc.
@@ -1015,6 +1067,7 @@ def run(
     companion_usd = 0.0
     try:
         from pathlib import Path as _P
+
         _companion_db = _P(os.path.expanduser("~/.tokenpak/companion/journal.db"))
         if _companion_db.exists() and session.get("start_time"):
             _since = float(session["start_time"])
@@ -1041,22 +1094,17 @@ def run(
     # tokenpak actively manages cache behavior via:
     # - apply_stable_cache_control: places cache_control breakpoints at system
     #   prompt, tools, conversation midpoint, second-to-last assistant
-    # - tool_schema_registry: normalizes tool JSON to byte-identical across
-    #   requests, preventing cache busts from non-deterministic ordering
     # - classify_system_blocks: separates stable vs volatile content, placing
     #   breakpoints before volatile blocks so stable prefix stays cached
     # Pull tokenpak-specific cache stats from the live proxy's /cache-stats
-    tp_cache_hit_rate = 0.0
-    tp_cache_misses_prevented = 0
+    tp_cache_hit_rate: float | None = None
     tp_cache_hits = 0
     tp_cache_misses = 0
     if cache:
         tp_cache_hits = cache.get("cache_hits", 0)
         tp_cache_misses = cache.get("cache_misses", 0)
         tp_total = tp_cache_hits + tp_cache_misses
-        tp_cache_hit_rate = (tp_cache_hits / tp_total * 100) if tp_total > 0 else 0.0
-        # Schema changes absorbed = misses prevented by tool normalization
-        tp_cache_misses_prevented = health.get("tool_schema_registry", {}).get("schema_changes", 0) if health else 0
+        tp_cache_hit_rate = (tp_cache_hits / tp_total * 100) if tp_total > 0 else None
 
     # =====================================================================
     # RENDER
@@ -1075,14 +1123,24 @@ def run(
     print()
     print(f"  💰 Value Created ({source_label})")
     print(f"     Total saved                {_fmt_cost(tp_total_usd):>10}")
-    print(f"       Prompt-side (companion)  {_fmt_cost(companion_usd):>10}   {_fmt_num(companion_tokens_avoided)} tokens avoided pre-send")
-    print(f"       Wire-side (proxy)        {_fmt_cost(wire_side_usd):>10}   compression + proxy-managed cache")
+    print(
+        f"       Prompt-side (companion)  {_fmt_cost(companion_usd):>10}   {_fmt_num(companion_tokens_avoided)} tokens avoided pre-send"
+    )
+    print(
+        f"       Wire-side (proxy)        {_fmt_cost(wire_side_usd):>10}   compression + proxy-managed cache"
+    )
     if saved_tok > 0:
-        print(f"         Compression          {_fmt_cost(tp_compression_usd):>10}   {tp_compression_pct:4.1f}% token reduction")
+        print(
+            f"         Compression          {_fmt_cost(tp_compression_usd):>10}   {tp_compression_pct:4.1f}% token reduction"
+        )
     if cache_proxy_tok > 0:
-        print(f"         Proxy cache          {_fmt_cost(proxy_cache_usd):>10}   {_fmt_num(cache_proxy_tok)} tokens")
+        print(
+            f"         Proxy cache          {_fmt_cost(proxy_cache_usd):>10}   {_fmt_num(cache_proxy_tok)} tokens"
+        )
     if injected_tok > 0:
-        print(f"     Vault injected         {_fmt_num(injected_tok):>10}   across {injection_hits} requests")
+        print(
+            f"     Vault injected         {_fmt_num(injected_tok):>10}   across {injection_hits} requests"
+        )
 
     tip_attribution = _query_tip_cache_attribution(db_path=db_path, days=days, hours=hours)
     _print_tip_cache_attribution(tip_attribution, compact=False)
@@ -1102,8 +1160,16 @@ def run(
     print()
     total_cache_handled = sent_tok + cache_read_tok
     print("  🔄 Cache activity (observed)")
-    print(f"     Token cache rate     {provider_cache_pct:>9.0f}%   {_fmt_num(cache_read_tok)} of {_fmt_num(total_cache_handled)} input tokens")
-    print(f"     Request hit rate     {tp_cache_hit_rate:>9.0f}%   {tp_cache_hits:,} of {tp_cache_hits + tp_cache_misses:,} requests")
+    print(
+        f"     Token cache rate     {provider_cache_pct:>9.0f}%   {_fmt_num(cache_read_tok)} of {_fmt_num(total_cache_handled)} input tokens"
+    )
+    if tp_cache_hit_rate is None:
+        print("     Request hit rate           n/a   no cache observations")
+    else:
+        print(
+            f"     Request hit rate     {tp_cache_hit_rate:>9.0f}%   "
+            f"{tp_cache_hits:,} of {tp_cache_hits + tp_cache_misses:,} requests"
+        )
     if cache_read_tok > 0 or cache_proxy_tok or cache_client_tok or cache_unknown_tok:
         print(
             f"     Origin               "
@@ -1111,8 +1177,6 @@ def run(
             f"  proxy: {_fmt_num(cache_proxy_tok)}"
             f"  unknown: {_fmt_num(cache_unknown_tok)}"
         )
-    if tp_cache_misses_prevented > 0:
-        print(f"     Schema normalized    {tp_cache_misses_prevented:>10}   tool changes absorbed")
     if cache:
         miss_reasons = cache.get("miss_reasons", {})
         if miss_reasons:
@@ -1221,7 +1285,7 @@ _PROVIDER_CASE = """
 """
 
 
-def _query_breakdown(db_path: Optional[str], group_expr: str) -> list:
+def _query_breakdown(db_path: Optional[str], group_expr: str) -> list[sqlite3.Row]:
     """Run a grouped breakdown query against monitor.db."""
     conn = _connect_db(db_path)
     if conn is None:
@@ -1247,14 +1311,16 @@ def _query_breakdown(db_path: Optional[str], group_expr: str) -> list:
         conn.close()
 
 
-def _print_breakdown_table(title: str, emoji: str, rows: list) -> None:
+def _print_breakdown_table(title: str, emoji: str, rows: list[sqlite3.Row]) -> None:
     """Print a formatted breakdown table."""
     version = _get_version()
     print(f"\n  TOKENPAK {version}  |  {title}")
     print(SEP)
     print()
     print(f"  {emoji} {title}")
-    print(f"     {'Source':<20} {'Reqs':>7}  {'Input':>8}  {'Cache%':>6}  {'Compressed':>10}  {'Cost':>10}")
+    print(
+        f"     {'Source':<20} {'Reqs':>7}  {'Input':>8}  {'Cache%':>6}  {'Compressed':>10}  {'Cost':>10}"
+    )
     print(f"     {'─' * 20} {'─' * 7}  {'─' * 8}  {'─' * 6}  {'─' * 10}  {'─' * 10}")
 
     total_reqs = 0
@@ -1276,7 +1342,9 @@ def _print_breakdown_table(title: str, emoji: str, rows: list) -> None:
         )
 
     print(f"     {'─' * 20} {'─' * 7}  {'─' * 8}  {'─' * 6}  {'─' * 10}  {'─' * 10}")
-    print(f"     {'Total':<20} {total_reqs:>7,}  {'':>8}  {'':>6}  {'':>10}  {_fmt_cost(total_cost):>10}")
+    print(
+        f"     {'Total':<20} {total_reqs:>7,}  {'':>8}  {'':>6}  {'':>10}  {_fmt_cost(total_cost):>10}"
+    )
 
     # Show models per source
     print()
@@ -1284,7 +1352,9 @@ def _print_breakdown_table(title: str, emoji: str, rows: list) -> None:
         models = r["models"] or ""
         model_list = sorted(set(models.split(",")))[:4]
         if model_list:
-            suffix = f" +{len(set(models.split(','))) - 4}" if len(set(models.split(","))) > 4 else ""
+            suffix = (
+                f" +{len(set(models.split(','))) - 4}" if len(set(models.split(","))) > 4 else ""
+            )
             print(f"     {r['label']:<20} {', '.join(model_list)}{suffix}")
     print()
 
@@ -1455,53 +1525,85 @@ def run_full(
 
     if raw:
         # Fetch everything and dump
-        session = _fetch(f"{proxy_base}/stats/session") or {}
-        deg = _fetch(f"{proxy_base}/degradation") or {}
+        session = _fetch(f"{proxy_base}/stats/session")
+        deg = _fetch(f"{proxy_base}/degradation")
         print(json.dumps({"health": health, "session": session, "degradation": deg}, indent=2))
         return
 
     # --- Fetch session stats ---
-    session = _fetch(f"{proxy_base}/stats/session") or {}
+    session_payload = _fetch(f"{proxy_base}/stats/session")
+    session = session_payload if isinstance(session_payload, dict) else None
     deg = _fetch(f"{proxy_base}/degradation") or {}
 
     # Core fields
-    is_degraded = health.get("is_degraded", False)
-    status_icon = "⚠️ " if is_degraded else "●"
-    status_text = "DEGRADED" if is_degraded else "Active"
-    uptime_s = health.get("uptime_seconds", 0)
-    uptime_h = uptime_s // 3600
-    uptime_m = (uptime_s % 3600) // 60
-    uptime_str = f"{uptime_h}h {uptime_m}m" if uptime_h else f"{uptime_m}m"
+    is_degraded_value = health.get("is_degraded")
+    is_degraded = is_degraded_value if isinstance(is_degraded_value, bool) else None
+    health_status = health.get("status")
+    status_known = health_status in {"ok", "degraded", "shutting_down"}
+    uptime_value = health.get("uptime_seconds")
+    if isinstance(uptime_value, (int, float)) and not isinstance(uptime_value, bool):
+        uptime_s = max(0, int(uptime_value))
+        uptime_h = uptime_s // 3600
+        uptime_m = (uptime_s % 3600) // 60
+        uptime_str = f"{uptime_h}h {uptime_m}m" if uptime_h else f"{uptime_m}m"
+    else:
+        uptime_str = "unknown"
 
-    requests = session.get("session_requests", 0)
-    tokens_saved = session.get("tokens_saved", 0)
-    tokens_raw = session.get("tokens_raw", 0)
-    total_cost = session.get("total_cost", 0.0)
-    cost_saved = session.get("session_total_saved", 0.0)
-    avg_savings = session.get("avg_savings_pct", 0.0)
-    errors = session.get("errors", 0)
-    compression_avg = health.get("compression_ratio_avg", 0.0)
+    def _metric(name: str) -> int | float | None:
+        value = session.get(name) if session is not None else None
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+    def _count(value: int | float | None) -> str:
+        return f"{int(value):,}" if value is not None else "unknown"
+
+    def _money(value: int | float | None) -> str:
+        return f"${float(value):.4f}" if value is not None else "unknown"
+
+    requests = _metric("session_requests")
+    tokens_saved = _metric("tokens_saved")
+    tokens_raw = _metric("tokens_raw")
+    total_cost = _metric("total_cost")
+    cost_saved = _metric("session_total_saved")
+    avg_savings = _metric("avg_savings_pct")
+    errors = _metric("errors")
+    compression_avg = health.get("compression_ratio_avg")
 
     if minimal:
-        mark = "⚠️ DEGRADED" if is_degraded else "● Active"
-        pct = f"{avg_savings:.1f}% saved" if tokens_raw else "n/a"
-        print(f"{mark} | {requests:,} req | {pct}")
+        if is_degraded is True:
+            mark = "⚠️ DEGRADED"
+        elif status_known:
+            mark = "● Active"
+        else:
+            mark = "? Health unknown"
+        pct = (
+            f"{avg_savings:.1f}% saved"
+            if avg_savings is not None and tokens_raw is not None and tokens_raw > 0
+            else "n/a"
+        )
+        print(f"{mark} | {_count(requests)} req | {pct}")
         return
 
     print("\nTOKENPAK  |  Status (Full)")
     print(SEP_LEGACY)
 
-    print(f"{'✅  Proxy running':<28}port {proxy_base.split(':')[-1]} — hybrid mode")
+    proxy_label = "✅  Proxy running" if status_known else "⚠️  Proxy health"
+    proxy_state = str(health_status) if status_known else "unknown"
+    print(f"{proxy_label:<28}port {proxy_base.split(':')[-1]} — {proxy_state}")
     print(f"{'✅  Uptime':<28}{uptime_str}")
-    print(
-        f"{'✅  Health':<28}OK (0 errors)" if errors == 0 else f"{'⚠️  Health':<28}{errors} errors"
-    )
+    if errors == 0 and status_known:
+        print(f"{'✅  Health':<28}OK (0 errors)")
+    elif errors is not None:
+        print(f"{'⚠️  Health':<28}{_count(errors)} errors")
+    else:
+        print(f"{'⚠️  Health':<28}error count unknown")
 
     agent_concurrency = health.get("agent_concurrency") or {}
     if agent_concurrency.get("enabled"):
         cap = agent_concurrency.get("effective_cap")
         configured = agent_concurrency.get("max_parallel_subagents")
-        cap_label = f"{cap}" if cap == configured else f"{cap} (serial — degraded, configured {configured})"
+        cap_label = (
+            f"{cap}" if cap == configured else f"{cap} (serial — degraded, configured {configured})"
+        )
         in_flight = agent_concurrency.get("in_flight", 0)
         queued = agent_concurrency.get("queued", 0)
         busy = agent_concurrency.get("rejected_queue_full", 0) + agent_concurrency.get(
@@ -1514,37 +1616,54 @@ def run_full(
         )
     print()
 
-    # Import estimate_savings if available
-    try:
-        from tokenpak.telemetry.pricing import estimate_savings
-    except ImportError:
-        estimate_savings = None
-
     # Calculate and display savings summary
-    if estimate_savings and session:
-        savings_data = estimate_savings(session)
+    pricing_inputs = (tokens_raw, tokens_saved, _metric("cache_read_tokens"))
+    savings_data = (
+        _estimate_session_savings(session)
+        if session is not None and all(value is not None for value in pricing_inputs)
+        else None
+    )
+    if savings_data is not None:
         print("💰  Session Savings")
-        print(f"    Requests:      {requests:,}")
-        print(f"    Input tokens:  {tokens_raw:,}")
-        print(f"    Tokens saved:  {tokens_saved:,} ({avg_savings:.1f}% compression)")
-        print(
-            f"    Cache reads:   {session.get('cache_read_tokens', 0):,} ({savings_data.get('cache_hit_rate', 0):.0f}% hit rate)"
+        print(f"    Requests:      {_count(requests)}")
+        print(f"    Input tokens:  {_count(tokens_raw)}")
+        compression = f"{avg_savings:.1f}%" if avg_savings is not None else "unknown"
+        print(f"    Tokens saved:  {_count(tokens_saved)} ({compression} compression)")
+        cache_read = _metric("cache_read_tokens")
+        hit_rate = savings_data.get("cache_hit_rate")
+        hit_rate_text = (
+            f"{float(hit_rate):.0f}%"
+            if isinstance(hit_rate, (int, float)) and not isinstance(hit_rate, bool)
+            else "unknown"
         )
-        print(f"    Est. saved:    ${savings_data.get('total_cost_saved', 0):.2f}")
+        print(f"    Cache reads:   {_count(cache_read)} ({hit_rate_text} hit rate)")
+        total_saved = savings_data.get("total_cost_saved")
+        total_saved_text = (
+            f"${float(total_saved):.2f}"
+            if isinstance(total_saved, (int, float)) and not isinstance(total_saved, bool)
+            else "unknown"
+        )
+        print(f"    Est. saved:    {total_saved_text}")
         print()
     else:
         # Fallback without pricing module
-        print(f"{'Session Requests:':<28}{requests:,}")
-        print(f"{'Errors:':<28}{errors:,}")
-        print(f"{'Tokens (raw):':<28}{tokens_raw:,}")
-        print(f"{'Tokens (saved):':<28}{tokens_saved:,}")
-        print(f"{'Avg Compression:':<28}{avg_savings:.1f}%  (ratio {compression_avg:.3f})")
-        print(f"{'Cost (this session):':<28}${total_cost:.4f}")
-        print(f"{'Cost Saved:':<28}${cost_saved:.4f}")
+        print(f"{'Session Requests:':<28}{_count(requests)}")
+        print(f"{'Errors:':<28}{_count(errors)}")
+        print(f"{'Tokens (raw):':<28}{_count(tokens_raw)}")
+        print(f"{'Tokens (saved):':<28}{_count(tokens_saved)}")
+        ratio_suffix = (
+            f"  (ratio {compression_avg:.3f})"
+            if isinstance(compression_avg, (int, float)) and not isinstance(compression_avg, bool)
+            else ""
+        )
+        avg_text = f"{avg_savings:.1f}%" if avg_savings is not None else "unknown"
+        print(f"{'Avg Compression:':<28}{avg_text}{ratio_suffix}")
+        print(f"{'Cost (this session):':<28}{_money(total_cost)}")
+        print(f"{'Cost Saved:':<28}{_money(cost_saved)}")
         print()
 
     # --- Degradation block ---
-    if is_degraded or deg.get("recent_events"):
+    if is_degraded is True or deg.get("recent_events"):
         print()
         print(SEP_LEGACY)
         deg.get("status", "unknown")
@@ -1569,7 +1688,7 @@ def run_full(
                 print(f"  {recovered} [{ts}] {etype}: {detail[:70]}")
 
     print(SEP_LEGACY)
-    if is_degraded:
+    if is_degraded is True:
         print("ℹ️  Running degraded — requests still served. Run `tokenpak doctor` for details.")
     else:
         print("ℹ️  Run `tokenpak status` for savings overview.")
@@ -1597,10 +1716,16 @@ if HAS_CLICK:
     @click.option("--json", "as_json", is_flag=True, help="Full JSON data dump")
     @click.option("--no-meme", is_flag=True, help="Suppress tagline")
     @click.option("--db", "db_path", default=None, help="Monitor DB path override")
-    @click.option("--days", default=0, type=int, help="Filter to last N days (combinable with --hours)")
-    @click.option("--hours", default=0, type=int, help="Filter to last N hours (combinable with --days)")
+    @click.option(
+        "--days", default=0, type=int, help="Filter to last N days (combinable with --hours)"
+    )
+    @click.option(
+        "--hours", default=0, type=int, help="Filter to last N hours (combinable with --days)"
+    )
     @click.option("--fleet", is_flag=True, help="Fleet rollup view — reads rollup_daily")
-    @click.option("--since", default=None, help="With --fleet: window in days, e.g. '7d' (default: 7d)")
+    @click.option(
+        "--since", default=None, help="With --fleet: window in days, e.g. '7d' (default: 7d)"
+    )
     def status_cmd(
         proxy: str,
         full: bool,

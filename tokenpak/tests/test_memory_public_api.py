@@ -89,6 +89,7 @@ version: 1.0
         assert isinstance(serialized, str)
         # Verify it's valid JSON
         import json
+
         parsed = json.loads(serialized)
         assert parsed is not None
 
@@ -215,6 +216,7 @@ class TestDecisionMemoryDBStoreRetrieve:
     def test_capsule_round_trip_serialize_deserialize(self):
         """Build → serialize → JSON.loads → verify fields survive."""
         import json
+
         raw_text = """---
 session_id: rt-001
 ---
@@ -248,11 +250,13 @@ class TestMemoryPublicAPINoInternalLeakage:
     def test_imports_cleanly(self):
         """Importing from public API doesn't raise errors."""
         from tokenpak.agent import memory
+
         assert memory is not None
 
     def test_all_exports_in_all(self):
         """__all__ matches actual exports."""
         from tokenpak import agent
+
         memory_module = agent.memory
         assert hasattr(memory_module, "__all__")
         all_items = memory_module.__all__

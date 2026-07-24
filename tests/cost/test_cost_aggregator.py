@@ -79,31 +79,40 @@ class TestDailySummaries:
         assert len(s.by_model) == 2
 
     def test_multi_day_range(self, agg, tracker):
-        _populate(tracker, [
-            (-2, "gpt-4o", 1000, 200),
-            (-1, "gpt-4o", 800, 150),
-            (0,  "gpt-4o", 600, 100),
-        ])
+        _populate(
+            tracker,
+            [
+                (-2, "gpt-4o", 1000, 200),
+                (-1, "gpt-4o", 800, 150),
+                (0, "gpt-4o", 600, 100),
+            ],
+        )
         summaries = agg.daily_summaries(days=3)
         assert len(summaries) == 3
         days = [s.day for s in summaries]
         assert days == sorted(days)  # ordered oldest → newest
 
     def test_days_outside_range_excluded(self, agg, tracker):
-        _populate(tracker, [
-            (-10, "gpt-4o", 1000, 200),
-            (-1,  "gpt-4o", 500, 100),
-        ])
+        _populate(
+            tracker,
+            [
+                (-10, "gpt-4o", 1000, 200),
+                (-1, "gpt-4o", 500, 100),
+            ],
+        )
         summaries = agg.daily_summaries(days=3)
         # Only the -1 day should be in 3-day window
         assert len(summaries) == 1
 
     def test_returns_sorted_oldest_first(self, agg, tracker):
-        _populate(tracker, [
-            (0,  "gpt-4o", 100, 20),
-            (-3, "gpt-4o", 200, 40),
-            (-6, "gpt-4o", 300, 60),
-        ])
+        _populate(
+            tracker,
+            [
+                (0, "gpt-4o", 100, 20),
+                (-3, "gpt-4o", 200, 40),
+                (-6, "gpt-4o", 300, 60),
+            ],
+        )
         summaries = agg.daily_summaries(days=7)
         assert len(summaries) == 3
         assert summaries[0].day < summaries[1].day < summaries[2].day
@@ -149,17 +158,23 @@ class TestAggregate:
         assert len(result["by_model"]) == 1
 
     def test_multi_day_totals(self, agg, tracker):
-        _populate(tracker, [(-2, "gpt-4o", 1000, 200), (-1, "gpt-4o", 1000, 200), (0, "gpt-4o", 1000, 200)])
+        _populate(
+            tracker,
+            [(-2, "gpt-4o", 1000, 200), (-1, "gpt-4o", 1000, 200), (0, "gpt-4o", 1000, 200)],
+        )
         result = agg.aggregate(days=3)
         assert result["total_requests"] == 3
         assert result["days"] == 3
 
     def test_by_model_aggregated_across_days(self, agg, tracker):
-        _populate(tracker, [
-            (-1, "gpt-4o", 1000, 200),
-            (0,  "gpt-4o", 1000, 200),
-            (0,  "claude-haiku-3-5", 500, 100),
-        ])
+        _populate(
+            tracker,
+            [
+                (-1, "gpt-4o", 1000, 200),
+                (0, "gpt-4o", 1000, 200),
+                (0, "claude-haiku-3-5", 500, 100),
+            ],
+        )
         result = agg.aggregate(days=2)
         models = {m["model"] for m in result["by_model"]}
         assert "gpt-4o" in models
@@ -214,11 +229,14 @@ class TestExportCsv:
         assert cost > 0
 
     def test_csv_multiple_days(self, agg, tracker):
-        _populate(tracker, [
-            (-2, "gpt-4o", 100, 20),
-            (-1, "gpt-4o", 100, 20),
-            (0,  "gpt-4o", 100, 20),
-        ])
+        _populate(
+            tracker,
+            [
+                (-2, "gpt-4o", 100, 20),
+                (-1, "gpt-4o", 100, 20),
+                (0, "gpt-4o", 100, 20),
+            ],
+        )
         csv_text = agg.export_csv(days=3)
         rows = list(csv.reader(io.StringIO(csv_text)))
         assert len(rows) == 4  # header + 3 days
@@ -268,11 +286,14 @@ class TestBurnRateAlarm:
         assert alarms == []
 
     def test_multiple_alarm_days(self, agg, tracker):
-        _populate(tracker, [
-            (-2, "gpt-4o", 100_000, 20_000),
-            (-1, "gpt-4o", 100_000, 20_000),
-            (0,  "gpt-4o", 100_000, 20_000),
-        ])
+        _populate(
+            tracker,
+            [
+                (-2, "gpt-4o", 100_000, 20_000),
+                (-1, "gpt-4o", 100_000, 20_000),
+                (0, "gpt-4o", 100_000, 20_000),
+            ],
+        )
         alarms = agg.check_burn_rate(monthly_budget_usd=1.0, threshold_pct=20.0, days=3)
         assert len(alarms) == 3
 

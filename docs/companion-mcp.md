@@ -32,6 +32,37 @@ tokenpak codex           # launches Codex with the companion active
 `tokenpak codex` does the equivalent for Codex, registering the same MCP server
 through `codex mcp add` so it shows up in `codex mcp list`.
 
+### When another Codex session is already running
+
+TokenPak normally uses your existing local Codex history. If another Codex
+session still holds that history, TokenPak waits briefly for it to become safe.
+After verified contention, an interactive launch offers a temporary session:
+
+```text
+Another Codex session is using your shared local history.
+Start a temporary session without that prior history? [y/N]
+```
+
+Choosing **Yes** creates a new temporary history lineage for that invocation.
+It does not attach the prior shared history, replace the normal lineage, or
+change the default for future launches. Choosing **No** or pressing Enter
+preserves the safe refusal. TokenPak does not offer the fallback when inspection
+is incomplete or reports a permission, storage, corruption, or unknown failure.
+
+The temporary session is retention-managed and may remain on disk after Codex
+exits. The prompt is never shown in CI or non-interactive commands.
+
+Advanced operators can still select an explicit compatibility mode for
+diagnostics, recovery, or automation:
+
+```bash
+# Stable internal history per project.
+TOKENPAK_CODEX_SESSION_MODE=workspace tokenpak codex
+
+# New internal history for one invocation.
+TOKENPAK_CODEX_SESSION_MODE=isolated tokenpak codex
+```
+
 The MCP server is the same stdio JSON-RPC program in both cases:
 `python3 -m tokenpak.companion.mcp.server`. Only the discovery mechanism
 differs between clients.

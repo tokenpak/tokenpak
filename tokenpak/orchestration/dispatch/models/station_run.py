@@ -38,9 +38,7 @@ class DispatchStationRun(DispatchBaseModel):
     result_payload: dict[str, Any] | None = None
     result_schema_version: str
 
-    attempt_number: int = Field(
-        default=1, description="1 for first try; increments on rerun"
-    )
+    attempt_number: int = Field(default=1, description="1 for first try; increments on rerun")
 
 
 __all__ = ["DispatchStationRun"]

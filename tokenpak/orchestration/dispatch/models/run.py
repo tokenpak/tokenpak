@@ -28,15 +28,9 @@ class DispatchRun(DispatchBaseModel):
     station_runs: list[str] = Field(
         default_factory=list, description="DispatchStationRun.id values"
     )
-    decisions: list[str] = Field(
-        default_factory=list, description="DispatchDecision.id values"
-    )
-    effects: list[str] = Field(
-        default_factory=list, description="DispatchEffect.id values"
-    )
-    late_results: list[str] = Field(
-        default_factory=list, description="LateResult.id values"
-    )
+    decisions: list[str] = Field(default_factory=list, description="DispatchDecision.id values")
+    effects: list[str] = Field(default_factory=list, description="DispatchEffect.id values")
+    late_results: list[str] = Field(default_factory=list, description="LateResult.id values")
     receipt_id: str | None = None
 
 

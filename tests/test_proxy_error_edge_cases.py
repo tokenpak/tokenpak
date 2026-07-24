@@ -13,6 +13,7 @@ Covers inputs not exercised by test_proxy_error_response_standardization.py:
   - HTTP 504 — upstream_timeout (closest unit-testable analog to connection timeout)
   - Partial / truncated response bodies at various cut points
 """
+
 from __future__ import annotations
 
 import json
@@ -32,6 +33,7 @@ def _parse(body: bytes) -> dict:
 # ---------------------------------------------------------------------------
 # Malformed JSON upstream response
 # ---------------------------------------------------------------------------
+
 
 class TestMalformedJsonBody:
     """normalize_upstream_error must not raise for any malformed JSON input."""
@@ -98,6 +100,7 @@ class TestMalformedJsonBody:
 # Empty response body
 # ---------------------------------------------------------------------------
 
+
 class TestEmptyBody:
     """Empty or whitespace-only bodies must fall back to a non-empty message."""
 
@@ -136,6 +139,7 @@ class TestEmptyBody:
 # HTTP 429 — rate-limit and Retry-After passthrough
 # ---------------------------------------------------------------------------
 
+
 class TestHttp429RateLimitRetryAfter:
     """
     429 must normalize to rate_limit_error with upstream_status=429 preserved.
@@ -156,26 +160,40 @@ class TestHttp429RateLimitRetryAfter:
         assert data["error"]["upstream_status"] == 429
 
     def test_429_anthropic_message_extracted(self):
-        body = json.dumps({
-            "type": "error",
-            "error": {"type": "rate_limit_error", "message": "Too many tokens in 60s window."},
-        }).encode()
+        body = json.dumps(
+            {
+                "type": "error",
+                "error": {"type": "rate_limit_error", "message": "Too many tokens in 60s window."},
+            }
+        ).encode()
         data = _parse(normalize_upstream_error(429, body, "anthropic"))
         assert data["error"]["message"] == "Too many tokens in 60s window."
         assert data["error"]["upstream_status"] == 429
 
     def test_429_openai_message_extracted(self):
-        body = json.dumps({
-            "error": {"message": "Rate limit exceeded: 60 req/min.", "type": "requests", "code": "rate_limit_exceeded"},
-        }).encode()
+        body = json.dumps(
+            {
+                "error": {
+                    "message": "Rate limit exceeded: 60 req/min.",
+                    "type": "requests",
+                    "code": "rate_limit_exceeded",
+                },
+            }
+        ).encode()
         data = _parse(normalize_upstream_error(429, body, "openai"))
         assert data["error"]["message"] == "Rate limit exceeded: 60 req/min."
         assert data["error"]["upstream_status"] == 429
 
     def test_429_google_message_extracted(self):
-        body = json.dumps({
-            "error": {"code": 429, "message": "Quota exceeded for quota metric.", "status": "RESOURCE_EXHAUSTED"},
-        }).encode()
+        body = json.dumps(
+            {
+                "error": {
+                    "code": 429,
+                    "message": "Quota exceeded for quota metric.",
+                    "status": "RESOURCE_EXHAUSTED",
+                },
+            }
+        ).encode()
         data = _parse(normalize_upstream_error(429, body, "google"))
         assert data["error"]["type"] == "rate_limit_error"
         assert "Quota exceeded" in data["error"]["message"]
@@ -197,8 +215,8 @@ class TestHttp429RateLimitRetryAfter:
 # HTTP 503 — service unavailable
 # ---------------------------------------------------------------------------
 
-class TestHttp503ServiceUnavailable:
 
+class TestHttp503ServiceUnavailable:
     def test_503_type_is_service_unavailable(self):
         assert _status_to_error_type(503) == "service_unavailable"
 
@@ -208,10 +226,12 @@ class TestHttp503ServiceUnavailable:
         assert data["error"]["provider"] == "anthropic"
 
     def test_503_anthropic_message_extracted(self):
-        body = json.dumps({
-            "type": "error",
-            "error": {"type": "overloaded_error", "message": "Overloaded. Please retry."},
-        }).encode()
+        body = json.dumps(
+            {
+                "type": "error",
+                "error": {"type": "overloaded_error", "message": "Overloaded. Please retry."},
+            }
+        ).encode()
         data = _parse(normalize_upstream_error(503, body, "anthropic"))
         assert data["error"]["message"] == "Overloaded. Please retry."
 
@@ -230,6 +250,7 @@ class TestHttp503ServiceUnavailable:
 # ---------------------------------------------------------------------------
 # HTTP 504 — upstream timeout (unit-testable timeout analog)
 # ---------------------------------------------------------------------------
+
 
 class TestTimeoutError:
     """
@@ -266,25 +287,29 @@ class TestTimeoutError:
 # Partial / truncated response body
 # ---------------------------------------------------------------------------
 
+
 class TestPartialTruncatedBody:
     """
     Bodies cut at arbitrary positions must not raise and must produce a valid
     canonical envelope with a non-empty fallback message.
     """
 
-    @pytest.mark.parametrize("body", [
-        b'{"error": {"message": "Rate',
-        b'{"error": {"message": "Rate limit exceeded',
-        b'{"error": {"message": "Rate limit exceeded"}',  # missing outer }
-        b'{"error":',
-        b'{"err',
-        b'"',
-        b"{}",
-        b"{",
-        b"[",
-        b'{"error": null}',
-        b'{"error": {"message": ""}}',  # empty string message
-    ])
+    @pytest.mark.parametrize(
+        "body",
+        [
+            b'{"error": {"message": "Rate',
+            b'{"error": {"message": "Rate limit exceeded',
+            b'{"error": {"message": "Rate limit exceeded"}',  # missing outer }
+            b'{"error":',
+            b'{"err',
+            b'"',
+            b"{}",
+            b"{",
+            b"[",
+            b'{"error": null}',
+            b'{"error": {"message": ""}}',  # empty string message
+        ],
+    )
     def test_truncated_body_does_not_raise(self, body):
         data = _parse(normalize_upstream_error(429, body, "openai"))
         assert "error" in data

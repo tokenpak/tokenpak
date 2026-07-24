@@ -187,9 +187,7 @@ class TokenPakConversationHook:
                         # Compress older messages
                         if isinstance(msg, dict) and "content" in msg:
                             msg_copy = dict(msg)
-                            msg_copy["content"] = self._normalize_text(
-                                msg.get("content", "")
-                            )
+                            msg_copy["content"] = self._normalize_text(msg.get("content", ""))
                             compressed_messages.append(msg_copy)
                             messages_compressed += 1
                         else:
@@ -209,9 +207,7 @@ class TokenPakConversationHook:
                             tool_copy["description"] = self._normalize_text(
                                 tool_copy["description"]
                             )
-                        if "parameters" in tool_copy and isinstance(
-                            tool_copy["parameters"], dict
-                        ):
+                        if "parameters" in tool_copy and isinstance(tool_copy["parameters"], dict):
                             params = tool_copy["parameters"]
                             if "properties" in params:
                                 for prop_key in params["properties"]:
@@ -230,9 +226,7 @@ class TokenPakConversationHook:
         # Calculate compression ratio
         compressed_tokens = self._estimate_tokens(json.dumps(compressed))
         compression_ratio = (
-            (original_tokens - compressed_tokens) / original_tokens
-            if original_tokens > 0
-            else 0.0
+            (original_tokens - compressed_tokens) / original_tokens if original_tokens > 0 else 0.0
         )
 
         # Store report
@@ -369,9 +363,7 @@ class TokenPakAssistant:
         # Build a TokenPak with message history + summary blocks
         blocks = []
         for i, msg in enumerate(self.get_messages(compress=True)):
-            blocks.append(
-                HBlock(type="history", id=f"msg{i}", content=msg.get("content", ""))
-            )
+            blocks.append(HBlock(type="history", id=f"msg{i}", content=msg.get("content", "")))
         if what_was_done:
             blocks.append(HBlock(type="summary", id="done", content=what_was_done))
         if whats_next:

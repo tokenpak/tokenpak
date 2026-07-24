@@ -1,9 +1,10 @@
 """tokenpak.sdk.registry — platform detection and adapter registry."""
+
 from __future__ import annotations
 
 import os
 import sys
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 if TYPE_CHECKING:
     from tokenpak.sdk.base import TokenPakAdapter
@@ -30,15 +31,18 @@ def get_adapter(platform: Optional[str] = None) -> "TokenPakAdapter":
     p = platform or detect_platform()
     if p == "openclaw":
         from tokenpak.sdk.openclaw import OpenClawAdapter
+
         return OpenClawAdapter()
     if p == "claude_cli":
         from tokenpak.sdk.claude_cli import ClaudeCLIAdapter
+
         return ClaudeCLIAdapter()
     from tokenpak.sdk.generic import GenericAdapter
+
     return GenericAdapter()
 
 
-def setup_platform(platform: Optional[str] = None, **kwargs) -> dict:
+def setup_platform(platform: Optional[str] = None, **kwargs: Any) -> dict[str, Any]:
     """Run platform-specific setup/configuration.
 
     Detects the platform (or uses the one provided) and configures
@@ -56,18 +60,21 @@ def setup_platform(platform: Optional[str] = None, **kwargs) -> dict:
 
     if p == "openclaw":
         from tokenpak.sdk.openclaw import detect_openclaw, setup_openclaw
+
         if not detect_openclaw():
             return {"error": "No OpenClaw install detected on this host"}
-        return setup_openclaw(**kwargs)
+        return cast(dict[str, Any], setup_openclaw(**kwargs))
 
     if p in ("claude_cli", "generic"):
         # Claude Code setup is in cli/commands/install.py
         from tokenpak.cli.commands.install import run_install_cmd
+
         # Create a minimal args namespace
         class _Args:
             mode = kwargs.get("mode")
             proxy_url = kwargs.get("proxy_url")
             systemd = kwargs.get("systemd", False)
+
         run_install_cmd(_Args())
         return {"platform": "claude_cli", "status": "configured"}
 

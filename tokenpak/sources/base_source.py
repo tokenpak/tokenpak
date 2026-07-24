@@ -4,6 +4,8 @@ On-demand ingestion: fetch a single source → Block with Provenance.
 Separate from the sync-oriented Connector (base.py) which is Pro-tier.
 """
 
+from __future__ import annotations
+
 import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -33,7 +35,7 @@ class SourceAdapter(ABC):
     source_type: str = "unknown"
 
     @abstractmethod
-    def ingest(self, source_id: str, **kwargs) -> tuple:
+    def ingest(self, source_id: str, **kwargs: object) -> tuple[str, Provenance]:
         """
         Fetch content from the source.
 
@@ -50,7 +52,7 @@ class SourceAdapter(ABC):
         ...
 
     @abstractmethod
-    def has_changed(self, source_id: str, cached_version: str, **kwargs) -> bool:
+    def has_changed(self, source_id: str, cached_version: str, **kwargs: object) -> bool:
         """
         Check whether the source has changed since cached_version.
 

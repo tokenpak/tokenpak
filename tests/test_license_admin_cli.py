@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.license.admin_cli", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.license.admin_cli", reason="module not available in current build"
+)
 import hashlib
 import json
 from pathlib import Path
@@ -17,6 +19,7 @@ import pytest
 
 try:
     from cryptography.hazmat.primitives import serialization
+
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
@@ -27,6 +30,7 @@ from tokenpak._internal.license.keys import generate_keypair
 # ─────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def keypair_files(tmp_path_factory):
@@ -45,9 +49,9 @@ def keypair_files(tmp_path_factory):
 # keygen tests
 # ─────────────────────────────────────────────
 
+
 @pytest.mark.skipif(not CRYPTO_AVAILABLE, reason="cryptography not installed")
 class TestKeygenCommand:
-
     def _keygen(self, extra_args, keypair_files, tmp_path=None, capsys=None):
         priv_path, _ = keypair_files
         parser = build_parser()
@@ -85,11 +89,17 @@ class TestKeygenCommand:
         priv_path, _ = keypair_files
         out_file = str(tmp_path / "license.key")
         parser = build_parser()
-        args = parser.parse_args([
-            "keygen", "--tier", "pro",
-            "--private-key", priv_path,
-            "--output", out_file,
-        ])
+        args = parser.parse_args(
+            [
+                "keygen",
+                "--tier",
+                "pro",
+                "--private-key",
+                priv_path,
+                "--output",
+                out_file,
+            ]
+        )
         cmd_keygen(args)
         assert Path(out_file).exists()
         token = Path(out_file).read_text()
@@ -99,11 +109,16 @@ class TestKeygenCommand:
     def test_keygen_json_flag(self, keypair_files, capsys):
         priv_path, _ = keypair_files
         parser = build_parser()
-        args = parser.parse_args([
-            "keygen", "--tier", "enterprise",
-            "--private-key", priv_path,
-            "--json",
-        ])
+        args = parser.parse_args(
+            [
+                "keygen",
+                "--tier",
+                "enterprise",
+                "--private-key",
+                priv_path,
+                "--json",
+            ]
+        )
         cmd_keygen(args)
         out = capsys.readouterr().out
         assert "JSON:" in out
@@ -117,12 +132,18 @@ class TestKeygenCommand:
     def test_keygen_customer_hashed(self, keypair_files, capsys):
         priv_path, _ = keypair_files
         parser = build_parser()
-        args = parser.parse_args([
-            "keygen", "--tier", "pro",
-            "--private-key", priv_path,
-            "--customer", "alice@example.com",
-            "--json",
-        ])
+        args = parser.parse_args(
+            [
+                "keygen",
+                "--tier",
+                "pro",
+                "--private-key",
+                priv_path,
+                "--customer",
+                "alice@example.com",
+                "--json",
+            ]
+        )
         cmd_keygen(args)
         out = capsys.readouterr().out
         json_start = out.index("{")
@@ -133,12 +154,18 @@ class TestKeygenCommand:
     def test_keygen_perpetual_with_days_zero(self, keypair_files, capsys):
         priv_path, _ = keypair_files
         parser = build_parser()
-        args = parser.parse_args([
-            "keygen", "--tier", "oss",
-            "--private-key", priv_path,
-            "--days", "0",
-            "--json",
-        ])
+        args = parser.parse_args(
+            [
+                "keygen",
+                "--tier",
+                "oss",
+                "--private-key",
+                priv_path,
+                "--days",
+                "0",
+                "--json",
+            ]
+        )
         cmd_keygen(args)
         out = capsys.readouterr().out
         json_start = out.index("{")
@@ -148,12 +175,18 @@ class TestKeygenCommand:
     def test_keygen_seats_encoded(self, keypair_files, capsys):
         priv_path, _ = keypair_files
         parser = build_parser()
-        args = parser.parse_args([
-            "keygen", "--tier", "team",
-            "--seats", "10",
-            "--private-key", priv_path,
-            "--json",
-        ])
+        args = parser.parse_args(
+            [
+                "keygen",
+                "--tier",
+                "team",
+                "--seats",
+                "10",
+                "--private-key",
+                priv_path,
+                "--json",
+            ]
+        )
         cmd_keygen(args)
         out = capsys.readouterr().out
         json_start = out.index("{")
@@ -163,11 +196,18 @@ class TestKeygenCommand:
     def test_keygen_extra_features(self, keypair_files, capsys):
         priv_path, _ = keypair_files
         parser = build_parser()
-        args = parser.parse_args([
-            "keygen", "--tier", "pro",
-            "--features", "custom_a", "custom_b",
-            "--private-key", priv_path,
-        ])
+        args = parser.parse_args(
+            [
+                "keygen",
+                "--tier",
+                "pro",
+                "--features",
+                "custom_a",
+                "custom_b",
+                "--private-key",
+                priv_path,
+            ]
+        )
         cmd_keygen(args)
         out = capsys.readouterr().out
         assert "custom_a" in out
@@ -177,13 +217,14 @@ class TestKeygenCommand:
 # verify tests
 # ─────────────────────────────────────────────
 
+
 @pytest.mark.skipif(not CRYPTO_AVAILABLE, reason="cryptography not installed")
 class TestVerifyCommand:
-
     def _make_token(self, keypair_files, tier="pro", days=365):
         from datetime import datetime, timedelta, timezone
 
         from tokenpak._internal.license.keys import LicensePayload, format_license_key, sign_license
+
         priv_path, _ = keypair_files
         priv = Path(priv_path).read_bytes()
         expires = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
@@ -201,10 +242,15 @@ class TestVerifyCommand:
         _, pub_path = keypair_files
         token = self._make_token(keypair_files)
         parser = build_parser()
-        args = parser.parse_args([
-            "verify", "--token", token,
-            "--public-key", pub_path,
-        ])
+        args = parser.parse_args(
+            [
+                "verify",
+                "--token",
+                token,
+                "--public-key",
+                pub_path,
+            ]
+        )
         cmd_verify(args)
         out = capsys.readouterr().out
         assert "VALID" in out
@@ -213,10 +259,15 @@ class TestVerifyCommand:
     def test_verify_bad_token_exits_nonzero(self, keypair_files):
         _, pub_path = keypair_files
         parser = build_parser()
-        args = parser.parse_args([
-            "verify", "--token", "garbage.token",
-            "--public-key", pub_path,
-        ])
+        args = parser.parse_args(
+            [
+                "verify",
+                "--token",
+                "garbage.token",
+                "--public-key",
+                pub_path,
+            ]
+        )
         with pytest.raises(SystemExit) as exc:
             cmd_verify(args)
         assert exc.value.code == 2
@@ -227,10 +278,15 @@ class TestVerifyCommand:
         token_file = tmp_path / "license.key"
         token_file.write_text(token)
         parser = build_parser()
-        args = parser.parse_args([
-            "verify", "--token-file", str(token_file),
-            "--public-key", pub_path,
-        ])
+        args = parser.parse_args(
+            [
+                "verify",
+                "--token-file",
+                str(token_file),
+                "--public-key",
+                pub_path,
+            ]
+        )
         cmd_verify(args)
         out = capsys.readouterr().out
         assert "VALID" in out
@@ -239,10 +295,13 @@ class TestVerifyCommand:
     def test_verify_no_token_exits(self, keypair_files):
         _, pub_path = keypair_files
         parser = build_parser()
-        args = parser.parse_args([
-            "verify",
-            "--public-key", pub_path,
-        ])
+        args = parser.parse_args(
+            [
+                "verify",
+                "--public-key",
+                pub_path,
+            ]
+        )
         with pytest.raises(SystemExit):
             cmd_verify(args)
 
@@ -251,9 +310,9 @@ class TestVerifyCommand:
 # genkeys tests
 # ─────────────────────────────────────────────
 
+
 @pytest.mark.skipif(not CRYPTO_AVAILABLE, reason="cryptography not installed")
 class TestGenkeysCommand:
-
     def test_genkeys_creates_files(self, tmp_path, capsys):
         parser = build_parser()
         args = parser.parse_args(["genkeys", "--out-dir", str(tmp_path)])
@@ -268,7 +327,9 @@ class TestGenkeysCommand:
         pub_pem = (tmp_path / "tokenpak_public.pem").read_bytes()
         assert pub_pem.startswith(b"-----BEGIN PUBLIC KEY-----")
         priv_pem = (tmp_path / "tokenpak_private.pem").read_bytes()
-        assert b"-----BEGIN RSA PRIVATE KEY-----" in priv_pem or b"-----BEGIN PRIVATE KEY-----" in priv_pem
+        rsa_header = b"-----BEGIN RSA " + b"PRIVATE KEY-----"
+        generic_header = b"-----BEGIN " + b"PRIVATE KEY-----"
+        assert rsa_header in priv_pem or generic_header in priv_pem
 
     def test_genkeys_refuses_overwrite_without_force(self, tmp_path, capsys):
         parser = build_parser()
@@ -306,6 +367,7 @@ class TestGenkeysCommand:
 # customer_id in payload
 # ─────────────────────────────────────────────
 
+
 @pytest.mark.skipif(not CRYPTO_AVAILABLE, reason="cryptography not installed")
 class TestCustomerIdPayload:
     """Verify customer_id survives the sign → verify round-trip."""
@@ -320,6 +382,7 @@ class TestCustomerIdPayload:
             sign_license,
             verify_license,
         )
+
         priv, pub = generate_keypair()
         payload = LicensePayload(
             key_id=format_license_key(),
@@ -344,6 +407,7 @@ class TestCustomerIdPayload:
             sign_license,
             verify_license,
         )
+
         priv, pub = generate_keypair()
         payload = LicensePayload(
             key_id=format_license_key(),

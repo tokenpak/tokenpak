@@ -2,7 +2,9 @@
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.macros.premade_macros", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.macros.premade_macros", reason="module not available in current build"
+)
 import pytest
 from tokenpak._internal.macros.premade_macros import (
     PREMADE_MACROS,
@@ -28,11 +30,9 @@ class TestPremadeMacrosStructure:
         assert isinstance(result, str)
 
     def test_format_macro_output_complex_dict(self):
-        result = format_macro_output({
-            "key1": "value1",
-            "key2": [1, 2, 3],
-            "key3": {"nested": "dict"}
-        })
+        result = format_macro_output(
+            {"key1": "value1", "key2": [1, 2, 3], "key3": {"nested": "dict"}}
+        )
         assert isinstance(result, str)
 
     def test_format_macro_output_unicode_dict(self):
@@ -49,7 +49,7 @@ class TestPremadeMacrosStructure:
 
     def test_premade_macro_runner_exists(self):
         runner = PremadeMacroRunner()
-        assert hasattr(runner, '__class__')
+        assert hasattr(runner, "__class__")
 
     def test_format_macro_callable(self):
         assert callable(format_macro_output)

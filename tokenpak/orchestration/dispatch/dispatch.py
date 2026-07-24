@@ -39,7 +39,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Mapping, Optional, Protocol, Union, runtime_checkable
+from importlib import import_module
+from typing import Any, Callable, Mapping, Optional, Protocol, Union, cast, runtime_checkable
 
 from .frontdock import FrontDockResult, TipClient
 from .models.decision import (
@@ -57,14 +58,47 @@ from .models.enums import (
 )
 from .models.job import DispatchJob
 from .models.route import DispatchRoute
-from .registry.routes import (
-    DispatchRouteRegistry,
-    RouteResolutionError,
-    bind_route,
-    default_route_registry,
-    route_is_bindable,
-)
+from .models.worker import DispatchWorker
 from .registry.workers import DispatchWorkerRegistry, default_worker_registry
+
+
+class RouteRegistry(Protocol):
+    """Runtime contract consumed by deterministic route selection."""
+
+    def ids(self) -> list[str]: ...
+
+    def all(self) -> list[DispatchRoute]: ...
+
+    def get(self, route_id: str) -> DispatchRoute: ...
+
+    def has(self, route_id: str) -> bool: ...
+
+    def for_intent(self, intent: str) -> list[DispatchRoute]: ...
+
+
+class _RouteRegistryModule(Protocol):
+    DispatchRouteRegistry: type[RouteRegistry]
+    RouteResolutionError: type[Exception]
+    bind_route: Callable[
+        [DispatchRoute, DispatchWorkerRegistry],
+        dict[str, list[DispatchWorker]],
+    ]
+    default_route_registry: Callable[[], RouteRegistry]
+    route_is_bindable: Callable[[DispatchRoute, DispatchWorkerRegistry], bool]
+
+
+# ``registry/routes.py`` intentionally sits beside the packaged ``routes/``
+# profile directory. Import it dynamically so static analyzers do not mistake
+# the data directory for a Python namespace package.
+_route_registry_module = cast(
+    _RouteRegistryModule,
+    import_module("tokenpak.orchestration.dispatch.registry.routes"),
+)
+DispatchRouteRegistry = _route_registry_module.DispatchRouteRegistry
+RouteResolutionError = _route_registry_module.RouteResolutionError
+bind_route = _route_registry_module.bind_route
+default_route_registry = _route_registry_module.default_route_registry
+route_is_bindable = _route_registry_module.route_is_bindable
 
 # ---------------------------------------------------------------------------
 # Alpha scoring constants
@@ -145,7 +179,9 @@ class RouteSuggestion:
         """
 
         if not isinstance(payload, Mapping):
-            raise InvalidRouteSuggestion(f"suggestion must be a mapping, got {type(payload).__name__}")
+            raise InvalidRouteSuggestion(
+                f"suggestion must be a mapping, got {type(payload).__name__}"
+            )
         route_id = payload.get("route_id")
         if not isinstance(route_id, str) or not route_id:
             raise InvalidRouteSuggestion("suggestion missing a non-empty 'route_id'")
@@ -211,9 +247,7 @@ class RouteSuggester:
     def __init__(self, client: Optional[RouteSuggestClient] = None) -> None:
         self._client = client
 
-    def suggest(
-        self, request: str, candidate_route_ids: list[str]
-    ) -> Optional[RouteSuggestion]:
+    def suggest(self, request: str, candidate_route_ids: list[str]) -> Optional[RouteSuggestion]:
         """Return a validated :class:`RouteSuggestion`, or ``None`` if unavailable.
 
         Returns ``None`` when there is no client, the client raises, the payload
@@ -424,7 +458,7 @@ class SelectionOutcome:
     confidence: int
     precedence_layer: str  # which precedence step decided
     decision: Optional[DispatchDecision] = None
-    bindings: Mapping[str, list] = field(default_factory=dict)
+    bindings: Mapping[str, list[DispatchWorker]] = field(default_factory=dict)
     reasons: tuple[str, ...] = ()
     scores: tuple[RouteScore, ...] = ()
 
@@ -457,7 +491,7 @@ class DispatchRuntime:
 
     def __init__(
         self,
-        route_registry: Optional[DispatchRouteRegistry] = None,
+        route_registry: Optional[RouteRegistry] = None,
         worker_registry: Optional[DispatchWorkerRegistry] = None,
         suggester: Optional[RouteSuggester] = None,
     ) -> None:
@@ -470,7 +504,7 @@ class DispatchRuntime:
     # -- public API ----------------------------------------------------------
 
     @property
-    def routes(self) -> DispatchRouteRegistry:
+    def routes(self) -> RouteRegistry:
         return self._routes
 
     @property
@@ -528,8 +562,11 @@ class DispatchRuntime:
         if len(trigger_routes) == 1:
             route = trigger_routes[0]
             score = score_route(
-                route, job, self._workers,
-                suggestion=suggestion, has_material_missing_info=material_missing,
+                route,
+                job,
+                self._workers,
+                suggestion=suggestion,
+                has_material_missing_info=material_missing,
             )
             return self._finalize_scored(
                 job, route, score, created_at, layer="exact_route_trigger_match"
@@ -544,8 +581,11 @@ class DispatchRuntime:
             if len(intent_matched) == 1:
                 route = intent_matched[0]
                 score = score_route(
-                    route, job, self._workers,
-                    suggestion=suggestion, has_material_missing_info=material_missing,
+                    route,
+                    job,
+                    self._workers,
+                    suggestion=suggestion,
+                    has_material_missing_info=material_missing,
                 )
                 return self._finalize_scored(
                     job, route, score, created_at, layer="intent_classification"
@@ -562,7 +602,12 @@ class DispatchRuntime:
             if len(scores) == 1 or scores[0].score > scores[1].score:
                 route = self._routes.get(best.route_id)
                 return self._finalize_scored(
-                    job, route, best, created_at, layer="registry_tie_break", scores=scores
+                    job,
+                    route,
+                    best,
+                    created_at,
+                    layer="registry_tie_break",
+                    scores=tuple(scores),
                 )
 
         # Layer 6 — no decisive route: ask the user.
@@ -572,8 +617,7 @@ class DispatchRuntime:
             layer="dispatch_decision",
             confidence=scores[0].confidence if scores else 0,
             reason=(
-                "No route could be selected deterministically (ambiguous tie or "
-                "no candidate)."
+                "No route could be selected deterministically (ambiguous tie or no candidate)."
             ),
             scores=tuple(scores),
         )
@@ -678,27 +722,43 @@ class DispatchRuntime:
                 # Defensive: scoring penalized an unbindable route, so it should
                 # not reach >=60, but never auto-dispatch an unstaffable route.
                 return self._refuse(
-                    job, route, confidence=confidence, layer=layer,
-                    reasons=(f"Route cannot be staffed: {exc}",), scores=scores,
+                    job,
+                    route,
+                    confidence=confidence,
+                    layer=layer,
+                    reasons=(f"Route cannot be staffed: {exc}",),
+                    scores=scores,
                 )
             return self._dispatch_or_approve(
-                job, route, confidence=confidence, layer=layer,
-                bindings=bindings, reasons=reasons, scores=scores,
+                job,
+                route,
+                confidence=confidence,
+                layer=layer,
+                bindings=bindings,
+                reasons=reasons,
+                scores=scores,
             )
 
         if confidence >= THRESHOLD_DECISION_FLOOR:
             return self._build_decision_outcome(
-                job, created_at, layer=layer, confidence=confidence,
+                job,
+                created_at,
+                layer=layer,
+                confidence=confidence,
                 reason=(
                     f"Route {route.id!r} scored {confidence} (40-59 band): "
                     "confirm before dispatching."
                 ),
-                recommended_route_id=route.id, scores=scores,
+                recommended_route_id=route.id,
+                scores=scores,
             )
 
         # confidence < 40 → refuse.
         return self._refuse(
-            job, route, confidence=confidence, layer=layer,
+            job,
+            route,
+            confidence=confidence,
+            layer=layer,
             reasons=(
                 f"Best route {route.id!r} scored {confidence} (< {THRESHOLD_DECISION_FLOOR}): "
                 "refusing to dispatch.",
@@ -715,7 +775,7 @@ class DispatchRuntime:
         *,
         confidence: int,
         layer: str,
-        bindings: Mapping[str, list],
+        bindings: Mapping[str, list[DispatchWorker]],
         reasons: tuple[str, ...],
         scores: tuple[RouteScore, ...] = (),
     ) -> SelectionOutcome:
@@ -821,7 +881,9 @@ class DispatchRuntime:
 
         scored = [
             score_route(
-                route, job, self._workers,
+                route,
+                job,
+                self._workers,
                 suggestion=suggestion,
                 has_material_missing_info=has_material_missing_info,
             )

@@ -10,6 +10,7 @@ Covers:
 - Augment mode fusion math
 - Edge cases
 """
+
 from __future__ import annotations
 
 import sys
@@ -31,6 +32,7 @@ from tokenpak.vault.backend_protocol import (
 # Helpers / minimal implementations
 # ---------------------------------------------------------------------------
 
+
 def _make_block(block_id: str, content: str = "hello world", tokens: int = 10) -> dict:
     return {
         "block_id": block_id,
@@ -42,6 +44,7 @@ def _make_block(block_id: str, content: str = "hello world", tokens: int = 10) -
 
 class MinimalBackend(RetrievalBackendBase):
     """Minimal backend for testing."""
+
     def __init__(self, vault_path: str = "/tmp"):
         self._vault_path = vault_path
         self._available = True
@@ -54,7 +57,9 @@ class MinimalBackend(RetrievalBackendBase):
     def maybe_reload(self) -> None:
         self._reloaded = True
 
-    def search(self, query: str, top_k: int = 5, min_score: float = 2.0) -> List[Tuple[dict, float]]:
+    def search(
+        self, query: str, top_k: int = 5, min_score: float = 2.0
+    ) -> List[Tuple[dict, float]]:
         blocks = [
             (_make_block("a", "python programming language tutorial", 50), 8.0),
             (_make_block("b", "machine learning with python", 40), 5.0),
@@ -65,12 +70,14 @@ class MinimalBackend(RetrievalBackendBase):
 
 class MinimalScorer:
     """Minimal semantic scorer for testing."""
+
     def score(self, query: str, block_ids: List[str]) -> Dict[str, float]:
         return {bid: 0.5 for bid in block_ids}
 
 
 class IncompleteBackend:
     """Missing search() — should not satisfy protocol."""
+
     @property
     def available(self) -> bool:
         return True
@@ -84,12 +91,14 @@ class IncompleteBackend:
 
 class IncompleteScorer:
     """Missing score() — should not satisfy protocol."""
+
     pass
 
 
 # ---------------------------------------------------------------------------
 # Protocol conformance tests
 # ---------------------------------------------------------------------------
+
 
 class TestRetrievalBackendProtocol:
     def test_minimal_backend_satisfies_protocol(self):
@@ -113,9 +122,15 @@ class TestRetrievalBackendProtocol:
 
     def test_protocol_requires_available_property(self):
         class NoAvailable:
-            def maybe_reload(self): pass
-            def search(self, q, top_k=5, min_score=2.0): return []
-            def compile_injection(self, q, budget=4000, top_k=5, min_score=2.0): return "", 0, []
+            def maybe_reload(self):
+                pass
+
+            def search(self, q, top_k=5, min_score=2.0):
+                return []
+
+            def compile_injection(self, q, budget=4000, top_k=5, min_score=2.0):
+                return "", 0, []
+
         # runtime_checkable only checks method presence, not property
         # but available is a property — check manually
         assert not hasattr(NoAvailable(), "available")
@@ -145,6 +160,7 @@ class TestSemanticScorerProtocol:
 # RetrievalBackendBase mixin tests
 # ---------------------------------------------------------------------------
 
+
 class TestRetrievalBackendBase:
     def test_compile_injection_returns_nonempty_for_results(self):
         backend = MinimalBackend()
@@ -168,9 +184,14 @@ class TestRetrievalBackendBase:
     def test_compile_injection_empty_results(self):
         class EmptyBackend(RetrievalBackendBase):
             @property
-            def available(self): return True
-            def maybe_reload(self): pass
-            def search(self, query, top_k=5, min_score=2.0): return []
+            def available(self):
+                return True
+
+            def maybe_reload(self):
+                pass
+
+            def search(self, query, top_k=5, min_score=2.0):
+                return []
 
         backend = EmptyBackend()
         text, tokens, refs = backend.compile_injection("anything")
@@ -207,10 +228,15 @@ class TestRetrievalBackendBase:
 
     def test_compile_injection_large_block_truncated(self):
         """Blocks exceeding budget should be truncated, not dropped entirely."""
+
         class BigBlockBackend(RetrievalBackendBase):
             @property
-            def available(self): return True
-            def maybe_reload(self): pass
+            def available(self):
+                return True
+
+            def maybe_reload(self):
+                pass
+
             def search(self, query, top_k=5, min_score=2.0):
                 big_content = "word " * 5000  # ~25000 chars
                 return [(_make_block("big", big_content, 5000), 10.0)]
@@ -224,6 +250,7 @@ class TestRetrievalBackendBase:
 # ---------------------------------------------------------------------------
 # Custom backend loading — Replace mode
 # ---------------------------------------------------------------------------
+
 
 def _register_fake_module(module_name: str, cls):
     """Helper: register a fake module in sys.modules."""
@@ -270,7 +297,9 @@ class TestLoadCustomBackend:
         # IncompleteBackend has no vault_path constructor — will fail on instantiation
         # or protocol check. Either TypeError is acceptable.
         class BadBackend(IncompleteBackend):
-            def __init__(self, vault_path): super().__init__()
+            def __init__(self, vault_path):
+                super().__init__()
+
         _register_fake_module("fake_bad", BadBackend)
         try:
             with pytest.raises(TypeError):
@@ -290,6 +319,7 @@ class TestLoadCustomBackend:
 # ---------------------------------------------------------------------------
 # Custom scorer loading — Augment mode
 # ---------------------------------------------------------------------------
+
 
 class TestLoadCustomScorer:
     def setup_method(self):
@@ -330,6 +360,7 @@ class TestLoadCustomScorer:
 
     def test_partial_scorer_results_allowed(self):
         """Scorer returning only some block_ids is valid — missing = 0.0."""
+
         class PartialScorer:
             def score(self, query, block_ids):
                 # Only score first block
@@ -349,11 +380,13 @@ class TestLoadCustomScorer:
 # Augment mode fusion math
 # ---------------------------------------------------------------------------
 
+
 class TestAugmentModeFusion:
     """Test score fusion from tokenpak.vault.search.compute_final_score."""
 
     def test_compute_final_score_imports(self):
         from tokenpak.vault.search import compute_final_score
+
         assert callable(compute_final_score)
 
     def test_fusion_weights_applied(self):
@@ -417,12 +450,17 @@ class TestAugmentModeFusion:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_unavailable_backend_search_returns_nothing(self):
         class UnavailableBackend(RetrievalBackendBase):
             @property
-            def available(self): return False
-            def maybe_reload(self): pass
+            def available(self):
+                return False
+
+            def maybe_reload(self):
+                pass
+
             def search(self, query, top_k=5, min_score=2.0):
                 # Should not be called when unavailable
                 return []
@@ -440,6 +478,7 @@ class TestEdgeCases:
 
     def test_scorer_exception_graceful(self):
         """Scorer raising exception — caller should handle gracefully."""
+
         class ExplodingScorer:
             def score(self, query, block_ids):
                 raise RuntimeError("embeddings service down")
@@ -450,6 +489,7 @@ class TestEdgeCases:
 
     def test_scorer_scores_clamped_high(self):
         """Scores > 1.0 from scorer — caller should clamp."""
+
         class HighScorer:
             def score(self, query, block_ids):
                 return {bid: 9.9 for bid in block_ids}  # Way too high
@@ -461,6 +501,7 @@ class TestEdgeCases:
 
     def test_scorer_negative_scores(self):
         """Negative scores from scorer — caller should clamp to 0."""
+
         class NegativeScorer:
             def score(self, query, block_ids):
                 return {bid: -0.5 for bid in block_ids}

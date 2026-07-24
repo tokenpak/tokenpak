@@ -25,7 +25,8 @@ import os
 import time
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, cast
 
 from tokenpak import _paths
 from tokenpak.platform.capabilities import _detect_dashboard_capabilities
@@ -56,23 +57,23 @@ def _proxy_port() -> int:
         return PROXY_PORT
 
 
-def _auth_profiles_file():
+def _auth_profiles_file() -> Path:
     return _paths.under("auth-profiles.json")
 
 
-def _fleet_config_file():
+def _fleet_config_file() -> Path:
     return _paths.under("fleet.yaml")
 
 
-def _proxy_pid_file():
+def _proxy_pid_file() -> Path:
     return _paths.under("proxy.pid")
 
 
-def _dispatch_runs_db():
+def _dispatch_runs_db() -> Path:
     return _paths.under("dispatch", "runs.db")
 
 
-def _companion_journal_db():
+def _companion_journal_db() -> Path:
     return _paths.under("companion", "journal.db")
 
 
@@ -81,13 +82,16 @@ def _companion_journal_db():
 # ---------------------------------------------------------------------------
 
 
-def _http_get(path: str, port: int | None = None, timeout: float = 3.0) -> Optional[Dict]:
+def _http_get(path: str, port: int | None = None, timeout: float = 3.0) -> Optional[Dict[str, Any]]:
     """Fetch JSON from proxy management endpoint. Returns None on failure."""
     port = _proxy_port() if port is None else port
     try:
         url = f"http://127.0.0.1:{port}{path}"
         with urllib.request.urlopen(url, timeout=timeout) as resp:
-            return json.loads(resp.read())
+            payload = json.loads(resp.read())
+            if isinstance(payload, dict):
+                return payload
+            return None
     except Exception:
         return None
 
@@ -118,7 +122,9 @@ def _load_auth_profiles() -> Dict[str, Any]:
         return {}
     try:
         data = json.loads(auth_profiles_file.read_text())
-        return data if isinstance(data, dict) else {}
+        if isinstance(data, dict):
+            return data
+        return {}
     except Exception:
         return {}
 
@@ -254,7 +260,9 @@ def _compression_percent(data: Dict[str, Any] | None) -> Dict[str, Any]:
 def _normalize_layout(layout: str | None) -> str:
     name = (layout or "home").strip().lower()
     if name not in LAYOUTS:
-        raise ValueError(f"unknown dashboard layout {layout!r}; expected one of {', '.join(LAYOUTS)}")
+        raise ValueError(
+            f"unknown dashboard layout {layout!r}; expected one of {', '.join(LAYOUTS)}"
+        )
     return name
 
 
@@ -646,7 +654,9 @@ def _legacy_view_from_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         "tokens_out": _legacy_value(summary["tokens_out"], None),
         "saved_tokens": _legacy_value(spend["saved_tokens"], None),
         "saved_dollars": _legacy_value(spend["saved_usd"], None),
-        "compression_pct": f"{compression_pct:.0f}%" if isinstance(compression_pct, (int, float)) else "not measured",
+        "compression_pct": f"{compression_pct:.0f}%"
+        if isinstance(compression_pct, (int, float))
+        else "not measured",
         "compression_mode": _legacy_value(spend["compression_mode"], "unknown"),
         "auth_profiles": _load_auth_profiles(),
         "recent_errors": _legacy_value(summary["recent_errors"], []),
@@ -680,7 +690,7 @@ def collect_fleet_data() -> List[Dict[str, Any]]:
     if not agents:
         return [collect_local_data()]
 
-    def _fetch_remote(agent: dict) -> Dict[str, Any]:
+    def _fetch_remote(agent: dict[str, str]) -> Dict[str, Any]:
         name = agent.get("name", "?")
         host = agent.get("host", "")
         user = agent.get("user", "")
@@ -702,10 +712,12 @@ def collect_fleet_data() -> List[Dict[str, Any]]:
             )
             if result.returncode == 0:
                 data = json.loads(result.stdout)
+                if not isinstance(data, dict):
+                    raise ValueError("remote dashboard returned a non-object payload")
                 if data.get("schema_version") == SCHEMA_VERSION:
                     data = _legacy_view_from_snapshot(data)
                 data["agent_name"] = name
-                return data
+                return cast(Dict[str, Any], data)
         except Exception:
             pass
         return {
@@ -776,8 +788,8 @@ def _render_dashboard(data: Dict[str, Any]) -> None:
     console.print(
         f"Proxy: {proxy_icon} on :{data['proxy_port']} "
         f"[dim](uptime: {uptime})[/dim]  "
-        f"Compression: [yellow]{data.get('compression_mode','hybrid')}[/yellow] | "
-        f"[green]{data.get('compression_pct','n/a')}[/green] avg savings"
+        f"Compression: [yellow]{data.get('compression_mode', 'hybrid')}[/yellow] | "
+        f"[green]{data.get('compression_pct', 'n/a')}[/green] avg savings"
     )
     console.print()
 

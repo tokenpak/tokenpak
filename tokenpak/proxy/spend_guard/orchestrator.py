@@ -13,10 +13,30 @@ TIP-header handling, and audit logging.
 
 from __future__ import annotations
 
+__all__ = (
+    "GuardOutcome",
+    "PendingRequest",
+    "PendingStore",
+    "SpendGuardConfig",
+    "build_block",
+    "build_block_store_unavailable",
+    "build_cancelled",
+    "build_estimate",
+    "build_hard_block",
+    "build_pending_waiting",
+    "build_reprompt",
+    "decide",
+    "evaluate",
+    "hash_request",
+    "load_config",
+    "run_estimate",
+)
+
+
 import logging
 import threading
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from .block_response import (
     block as build_block,
@@ -39,7 +59,7 @@ from .block_response import (
 from .block_response import (
     reprompt as build_reprompt,
 )
-from .contracts import GuardOutcome, PendingRequest
+from .contracts import GuardOutcome, OutcomeKind, PendingRequest, PreflightDecision
 from .estimator import estimate as run_estimate
 from .pending import PendingStore, hash_request
 from .policy import SpendGuardConfig, decide, load_config
@@ -91,7 +111,7 @@ def evaluate(
     body: bytes,
     model: str,
     session_id: str,
-    headers: dict,
+    headers: dict[str, str],
     *,
     config: Optional[SpendGuardConfig] = None,
     target_url: str = "",
@@ -117,6 +137,7 @@ def evaluate(
     forward_body = body
     try:
         from .tip_header import parse_and_strip_tip_header
+
         tip_directive, forward_body = parse_and_strip_tip_header(body)
     except ImportError:
         pass
@@ -129,8 +150,14 @@ def evaluate(
         existing = store.get_by_session(session_id)
         if existing:
             store.discard(existing.pending_id)
-            _audit(cfg, "cancel", session_id, decision_str="cancel",
-                   pending_id=existing.pending_id, tip=tip_directive)
+            _audit(
+                cfg,
+                "cancel",
+                session_id,
+                decision_str="cancel",
+                pending_id=existing.pending_id,
+                tip=tip_directive,
+            )
             return GuardOutcome(
                 kind="cancel",
                 response_body=build_cancelled(existing),
@@ -151,6 +178,7 @@ def evaluate(
         try:
             from .intent import parse_intent
             from .replay import resolve_pending
+
             intent = parse_intent(forward_body)
             outcome = resolve_pending(
                 store=store,
@@ -164,17 +192,27 @@ def evaluate(
                     "pending_waiting": build_pending_waiting,
                 },
             )
-            _audit(cfg, outcome.audit_event or "pending", session_id,
-                   decision_str=outcome.kind, pending_id=existing_pending.pending_id,
-                   tip=tip_directive)
+            _audit(
+                cfg,
+                outcome.audit_event or "pending",
+                session_id,
+                decision_str=outcome.kind,
+                pending_id=existing_pending.pending_id,
+                tip=tip_directive,
+            )
             return outcome
         except ImportError:
             # Fallback before the intent parser lands: subsequent requests
             # during a pending block are themselves blocked with a
             # "waiting approval" message.
-            _audit(cfg, "pending_waiting", session_id,
-                   decision_str="block", pending_id=existing_pending.pending_id,
-                   tip=tip_directive)
+            _audit(
+                cfg,
+                "pending_waiting",
+                session_id,
+                decision_str="block",
+                pending_id=existing_pending.pending_id,
+                tip=tip_directive,
+            )
             return GuardOutcome(
                 kind="block",
                 response_body=build_pending_waiting(existing_pending),
@@ -188,9 +226,14 @@ def evaluate(
     h = hash_request(forward_body, model)
     recent = store.recent_block_by_hash(h, within_seconds=30.0)
     if recent is not None and recent.status in ("pending", "expired", "discarded"):
-        _audit(cfg, "anti_loop_hit", session_id,
-               decision_str="block", pending_id=recent.pending_id,
-               tip=tip_directive)
+        _audit(
+            cfg,
+            "anti_loop_hit",
+            session_id,
+            decision_str="block",
+            pending_id=recent.pending_id,
+            tip=tip_directive,
+        )
         return GuardOutcome(
             kind="block",
             response_body=build_block(_synthetic_decision(recent), recent),
@@ -226,6 +269,7 @@ def evaluate(
         if admission_ticket:
             try:
                 from .rolling_caps import settle_pending_spend
+
                 settle_pending_spend(admission_ticket)
             except Exception:
                 pass
@@ -239,6 +283,7 @@ def evaluate(
             check_rolling_caps_and_admit,
             record_session_agent,
         )
+
         # Agent attribution — case-insensitive header lookup.
         agent_id = ""
         for hk, hv in (headers or {}).items():
@@ -261,7 +306,9 @@ def evaluate(
             # Estimator doesn't directly project cache_read; use ratio
             # from est.cache_hit_ratio applied to projected_input_tokens
             # as a conservative estimate.
-            projected_cache_read = int(est.projected_input_tokens * float(getattr(est, "cache_hit_ratio", 0.0) or 0.0))
+            projected_cache_read = int(
+                est.projected_input_tokens * float(getattr(est, "cache_hit_ratio", 0.0) or 0.0)
+            )
             breach, admission_ticket = check_rolling_caps_and_admit(
                 agent_id=agent_id,
                 projected_cost_usd=float(est.projected_cost_usd),
@@ -273,15 +320,18 @@ def evaluate(
             if breach is not None:
                 # TIP bypass respects existing semantics: [TIP: bypass=on]
                 # or [TIP: allow=once] both let this request through.
-                tip_allowed = (
-                    tip_directive is not None and (
-                        tip_directive.bypass or tip_directive.allow_scope is not None
-                    )
+                tip_allowed = tip_directive is not None and (
+                    tip_directive.bypass or tip_directive.allow_scope is not None
                 )
                 if not tip_allowed:
-                    _audit(cfg, "rolling_cap_block", session_id,
-                           decision_str="rolling_cap_block",
-                           projected_cost=est.projected_cost_usd, tip=tip_directive)
+                    _audit(
+                        cfg,
+                        "rolling_cap_block",
+                        session_id,
+                        decision_str="rolling_cap_block",
+                        projected_cost=est.projected_cost_usd,
+                        tip=tip_directive,
+                    )
                     return GuardOutcome(
                         kind="block",
                         response_body=build_rolling_cap_block(breach),
@@ -289,9 +339,14 @@ def evaluate(
                         audit_event="rolling_cap_block",
                     )
                 else:
-                    _audit(cfg, "rolling_cap_tip_bypass", session_id,
-                           decision_str="allow",
-                           projected_cost=est.projected_cost_usd, tip=tip_directive)
+                    _audit(
+                        cfg,
+                        "rolling_cap_tip_bypass",
+                        session_id,
+                        decision_str="allow",
+                        projected_cost=est.projected_cost_usd,
+                        tip=tip_directive,
+                    )
                     # TIP-authorized forward still spends — track it so
                     # concurrent checks see the in-flight cost.
                     admission_ticket = admit_pending_spend(
@@ -311,7 +366,8 @@ def evaluate(
         _log.warning(
             "spend_guard: rolling-cap check failed unexpectedly "
             "(%s: %s) — continuing with per-session checks only",
-            type(e).__name__, e,
+            type(e).__name__,
+            e,
         )
 
     # Session-cumulative running cost — read from monitor.db.
@@ -319,6 +375,7 @@ def evaluate(
     if cfg.session_block_cost_usd > 0:
         try:
             from .session_state import session_cumulative_cost
+
             session_running = session_cumulative_cost(
                 session_id, window_seconds=cfg.session_window_seconds
             )
@@ -333,21 +390,34 @@ def evaluate(
     model_max_context_tokens: Optional[int] = None
     try:
         from ._context_window import get_model_max_context
+
         model_max_context_tokens = get_model_max_context(model)
     except Exception as e:
         _log.debug("spend_guard: context_window lookup failed: %s", e)
 
     decision = decide(
-        est, cfg, tip=tip_directive,
+        est,
+        cfg,
+        tip=tip_directive,
         session_running_cost_usd=session_running,
         model_max_context_tokens=model_max_context_tokens,
     )
 
     # ── [TIP: estimate=on] short-circuit (only when allowed by policy)
-    if tip_directive is not None and tip_directive.estimate_only and decision.decision != "hard_block":
+    if (
+        tip_directive is not None
+        and tip_directive.estimate_only
+        and decision.decision != "hard_block"
+    ):
         _cancel_admission()  # nothing forwards, nothing spends
-        _audit(cfg, "estimate", session_id, decision_str="estimate", tip=tip_directive,
-               projected_cost=est.projected_cost_usd)
+        _audit(
+            cfg,
+            "estimate",
+            session_id,
+            decision_str="estimate",
+            tip=tip_directive,
+            projected_cost=est.projected_cost_usd,
+        )
         return GuardOutcome(
             kind="estimate",
             response_body=build_estimate(est),
@@ -359,21 +429,40 @@ def evaluate(
     # ── Allow / warn → forward
     if decision.decision in ("allow", "warn"):
         if decision.decision == "warn":
-            _audit(cfg, "warn", session_id, decision_str="warn",
-                   projected_cost=est.projected_cost_usd, tip=tip_directive)
+            _audit(
+                cfg,
+                "warn",
+                session_id,
+                decision_str="warn",
+                projected_cost=est.projected_cost_usd,
+                tip=tip_directive,
+            )
         # Even with TIP-bypass we audit (allow path with tip_directive set)
         if tip_directive is not None:
-            _audit(cfg, "tip_bypass", session_id, decision_str="allow",
-                   projected_cost=est.projected_cost_usd, tip=tip_directive)
-        kind = "forward_modified" if forward_body is not body else "forward"
-        return GuardOutcome(kind=kind, body=forward_body, decision=decision,
-                            admission_ticket=admission_ticket)
+            _audit(
+                cfg,
+                "tip_bypass",
+                session_id,
+                decision_str="allow",
+                projected_cost=est.projected_cost_usd,
+                tip=tip_directive,
+            )
+        kind: OutcomeKind = "forward_modified" if forward_body is not body else "forward"
+        return GuardOutcome(
+            kind=kind, body=forward_body, decision=decision, admission_ticket=admission_ticket
+        )
 
     # ── Hard-block → return immediately, no pending stored
     if decision.decision == "hard_block":
         _cancel_admission()
-        _audit(cfg, "hard_block", session_id, decision_str="hard_block",
-               projected_cost=est.projected_cost_usd, tip=tip_directive)
+        _audit(
+            cfg,
+            "hard_block",
+            session_id,
+            decision_str="hard_block",
+            projected_cost=est.projected_cost_usd,
+            tip=tip_directive,
+        )
         return GuardOutcome(
             kind="hard_block",
             response_body=build_hard_block(decision),
@@ -387,7 +476,7 @@ def evaluate(
     try:
         pending = store.store(
             session_id=session_id,
-            body=body,                 # store original (pre-TIP-strip) bytes
+            body=body,  # store original (pre-TIP-strip) bytes
             headers=headers,
             target_url=target_url,
             provider=_provider_from_url(target_url),
@@ -405,10 +494,17 @@ def evaluate(
         _log.warning(
             "spend_guard: pending-store write failed (%s: %s) — "
             "returning fail-closed block without a pending row",
-            type(e).__name__, e,
+            type(e).__name__,
+            e,
         )
-        _audit(cfg, "block", session_id, decision_str="block_store_unavailable",
-               projected_cost=est.projected_cost_usd, tip=tip_directive)
+        _audit(
+            cfg,
+            "block",
+            session_id,
+            decision_str="block_store_unavailable",
+            projected_cost=est.projected_cost_usd,
+            tip=tip_directive,
+        )
         return GuardOutcome(
             kind="block",
             response_body=build_block_store_unavailable(decision),
@@ -416,9 +512,15 @@ def evaluate(
             decision=decision,
             audit_event="block",
         )
-    _audit(cfg, "block", session_id, decision_str="block",
-           pending_id=pending.pending_id, projected_cost=est.projected_cost_usd,
-           tip=tip_directive)
+    _audit(
+        cfg,
+        "block",
+        session_id,
+        decision_str="block",
+        pending_id=pending.pending_id,
+        projected_cost=est.projected_cost_usd,
+        tip=tip_directive,
+    )
     return GuardOutcome(
         kind="block",
         response_body=build_block(decision, pending),
@@ -429,7 +531,7 @@ def evaluate(
     )
 
 
-def _synthetic_decision(recent: PendingRequest):
+def _synthetic_decision(recent: PendingRequest) -> PreflightDecision:
     """Reconstruct a minimal PreflightDecision for anti-loop block responses."""
     from .contracts import PreflightDecision, RiskEstimate
 
@@ -452,12 +554,12 @@ def _synthetic_decision(recent: PendingRequest):
     )
 
 
-def _audit(cfg, event_type, session_id, **fields) -> None:
+def _audit(cfg: SpendGuardConfig, event_type: str, session_id: str, **fields: Any) -> None:
     """Best-effort audit-log write. Never raises into the hot path."""
     try:
         from .audit import write_audit
-        write_audit(cfg.audit_db_path, event_type=event_type,
-                    session_id=session_id, **fields)
+
+        write_audit(cfg.audit_db_path, event_type=event_type, session_id=session_id, **fields)
     except ImportError:
         # audit module not yet landed
         pass

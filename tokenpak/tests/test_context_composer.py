@@ -197,17 +197,13 @@ class TestContextComposer:
             session_state=session,
         )
         # Session state should appear in a message
-        assert any(
-            session in msg.get("content", "") for msg in result.final_prompt_messages
-        )
+        assert any(session in msg.get("content", "") for msg in result.final_prompt_messages)
 
     def test_compose_chunks_ranked_by_relevance(self, composer):
         """Higher-ranked chunks are included first."""
         chunks = [
             RetrievedChunk(content="Low relevance content here", rank=0.3, chunk_id="low"),
-            RetrievedChunk(
-                content="High relevance content here", rank=0.95, chunk_id="high"
-            ),
+            RetrievedChunk(content="High relevance content here", rank=0.95, chunk_id="high"),
             RetrievedChunk(content="Medium relevance content", rank=0.6, chunk_id="mid"),
         ]
         result = composer.compose(
@@ -267,14 +263,13 @@ class TestContextComposer:
         )
         # Recent turns should be in messages
         assert len(result.final_prompt_messages) > 1
-        assert any("First message" in msg.get("content", "") for msg in result.final_prompt_messages)
+        assert any(
+            "First message" in msg.get("content", "") for msg in result.final_prompt_messages
+        )
 
     def test_compose_limits_recent_turns_to_4(self, composer):
         """Recent turns are limited to the last 4."""
-        turns = [
-            {"role": "user", "content": f"Message {i}"}
-            for i in range(10)
-        ]
+        turns = [{"role": "user", "content": f"Message {i}"} for i in range(10)]
         result = composer.compose(
             budget=4096,
             recent_turns=turns,
@@ -282,7 +277,8 @@ class TestContextComposer:
         # Should only include last 4 turns, not all 10
         # Count how many turn-like messages are in the result
         turn_count = sum(
-            1 for msg in result.final_prompt_messages
+            1
+            for msg in result.final_prompt_messages
             if any(f"Message {i}" in msg.get("content", "") for i in range(6, 10))
         )
         assert turn_count > 0  # At least some recent ones included
@@ -295,9 +291,7 @@ class TestContextComposer:
             previous_phase_summary=summary,
         )
         # Summary should be in messages or at least logged
-        assert any(
-            summary in msg.get("content", "") for msg in result.final_prompt_messages
-        )
+        assert any(summary in msg.get("content", "") for msg in result.final_prompt_messages)
 
     def test_compose_budget_respected(self, composer):
         """Actual tokens should respect budget (no escalation)."""

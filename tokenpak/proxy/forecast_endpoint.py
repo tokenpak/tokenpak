@@ -24,17 +24,17 @@ import json
 import sqlite3
 import threading
 from collections import deque
-from typing import Union
+from typing import Any, Union
 
 # ---------------------------------------------------------------------------
 # Rolling latency buffer (shared with server.py via import)
 # ---------------------------------------------------------------------------
 
-_forecast_latencies: deque = deque(maxlen=100)
+_forecast_latencies: deque[float] = deque(maxlen=100)
 _forecast_latency_lock = threading.Lock()
 
 
-def count_request_tokens(body: dict) -> int:
+def count_request_tokens(body: dict[str, Any]) -> int:
     """Count input tokens for a /v1/messages-shaped request body.
 
     Handles both string content and list-of-content-block shapes.
@@ -118,7 +118,7 @@ def estimate_cache_hit_likelihood(
             ).fetchone()
             if row and row[0] and row[0] > 0:
                 hits = row[1] or 0
-                return round(hits / row[0], 4)
+                return float(round(hits / row[0], 4))
         finally:
             conn.close()
     except Exception:
@@ -161,10 +161,10 @@ def estimate_ttfb_ms(
 
 
 def build_forecast_response(
-    body: dict,
+    body: dict[str, Any],
     db_path: Union[str, object],
     session_id: str = "",
-) -> dict:
+) -> dict[str, object]:
     """Build the AC2-compliant forecast response dict from a /v1/messages body.
 
     Args:
@@ -205,6 +205,7 @@ def build_forecast_response(
                 text = block.get("text", "")
                 if isinstance(text, str):
                     from tokenpak.proxy.token_cache import count_tokens
+
                     cache_creates_estimate += count_tokens(text)
     for msg in body.get("messages", []):
         if not isinstance(msg, dict):
@@ -216,11 +217,10 @@ def build_forecast_response(
                     block_text = block.get("text", "")
                     if isinstance(block_text, str):
                         from tokenpak.proxy.token_cache import count_tokens
+
                         cache_creates_estimate += count_tokens(block_text)
 
-    cache_hit_likelihood = estimate_cache_hit_likelihood(
-        model, db_path, session_id=session_id
-    )
+    cache_hit_likelihood = estimate_cache_hit_likelihood(model, db_path, session_id=session_id)
     cached_tokens = int(input_tokens * cache_hit_likelihood)
     ttfb_estimate_ms = estimate_ttfb_ms(model, input_tokens, db_path)
 

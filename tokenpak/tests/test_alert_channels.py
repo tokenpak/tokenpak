@@ -19,6 +19,7 @@ from tokenpak.alerts.channels import telegram
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _fake_response(status: int = 200):
     """Return a context-manager mock that simulates urlopen success."""
     resp = mock.MagicMock()
@@ -79,9 +80,7 @@ class TestTelegramAlertDeliver:
         assert captured["ct"] == "application/json"
 
     def test_returns_false_on_network_error(self):
-        with mock.patch(
-            "urllib.request.urlopen", side_effect=OSError("connection refused")
-        ):
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("connection refused")):
             with mock.patch.object(telegram, "_BACKOFF_BASE", 0.0):
                 result = telegram.deliver("T", "C", "ev", "warning", "msg")
         assert result is False
@@ -147,18 +146,14 @@ class TestEmailAlertDeliver:
     def test_uses_ssl_on_port_465(self):
         smtp_inst = self._mock_smtp()
         with mock.patch("smtplib.SMTP_SSL", return_value=smtp_inst) as ssl_cls:
-            email_channel.deliver(
-                "smtp.example.com", 465, "a@b.com", "ev", "info", "msg"
-            )
+            email_channel.deliver("smtp.example.com", 465, "a@b.com", "ev", "info", "msg")
         ssl_cls.assert_called_once_with("smtp.example.com", 465)
         smtp_inst.starttls.assert_not_called()
 
     def test_no_login_when_no_credentials(self):
         smtp_inst = self._mock_smtp()
         with mock.patch("smtplib.SMTP", return_value=smtp_inst):
-            email_channel.deliver(
-                "smtp.example.com", 587, "a@b.com", "ev", "info", "msg"
-            )
+            email_channel.deliver("smtp.example.com", 587, "a@b.com", "ev", "info", "msg")
         smtp_inst.login.assert_not_called()
 
     def test_subject_contains_event_and_severity(self):
@@ -174,13 +169,9 @@ class TestEmailAlertDeliver:
         assert "critical" in body
 
     def test_returns_false_on_smtp_error(self):
-        with mock.patch(
-            "smtplib.SMTP", side_effect=smtplib.SMTPException("connect failed")
-        ):
+        with mock.patch("smtplib.SMTP", side_effect=smtplib.SMTPException("connect failed")):
             with mock.patch.object(email_channel, "_BACKOFF_BASE", 0.0):
-                result = email_channel.deliver(
-                    "bad-host", 587, "a@b.com", "ev", "warning", "msg"
-                )
+                result = email_channel.deliver("bad-host", 587, "a@b.com", "ev", "warning", "msg")
         assert result is False
 
     def test_retries_up_to_max_attempts(self):
@@ -193,9 +184,7 @@ class TestEmailAlertDeliver:
 
         with mock.patch("smtplib.SMTP", side_effect=flaky):
             with mock.patch.object(email_channel, "_BACKOFF_BASE", 0.0):
-                email_channel.deliver(
-                    "host", 587, "a@b.com", "ev", "warning", "msg"
-                )
+                email_channel.deliver("host", 587, "a@b.com", "ev", "warning", "msg")
 
         assert call_count == email_channel._MAX_RETRIES
 
@@ -245,9 +234,7 @@ class TestAlertDispatchTelegramEmail:
                 ch_registry.dispatch("test_event", "warning", "test message")
                 time.sleep(0.3)
 
-        mock_deliver.assert_called_once_with(
-            "TOK", "CID", "test_event", "warning", "test message"
-        )
+        mock_deliver.assert_called_once_with("TOK", "CID", "test_event", "warning", "test message")
 
     def test_dispatch_calls_email(self):
         cfg = [
@@ -285,9 +272,7 @@ class TestAlertDispatchTelegramEmail:
         cfg = [{"type": "telegram", "bot_token": "", "chat_id": "CID"}]
 
         with mock.patch("tokenpak.alerts.channels._load_channel_configs", return_value=cfg):
-            with mock.patch(
-                "tokenpak.alerts.channels.telegram.deliver"
-            ) as mock_deliver:
+            with mock.patch("tokenpak.alerts.channels.telegram.deliver") as mock_deliver:
                 ch_registry.dispatch("ev", "info", "msg")
                 time.sleep(0.3)
 
@@ -297,9 +282,7 @@ class TestAlertDispatchTelegramEmail:
         cfg = [{"type": "email", "smtp_host": "", "to": "a@b.com"}]
 
         with mock.patch("tokenpak.alerts.channels._load_channel_configs", return_value=cfg):
-            with mock.patch(
-                "tokenpak.alerts.channels.email.deliver"
-            ) as mock_deliver:
+            with mock.patch("tokenpak.alerts.channels.email.deliver") as mock_deliver:
                 ch_registry.dispatch("ev", "info", "msg")
                 time.sleep(0.3)
 
@@ -311,9 +294,7 @@ class TestAlertDispatchTelegramEmail:
         monkeypatch.setenv("TOKENPAK_TELEGRAM_CHAT_ID", "MYCHAT")
 
         # Also prevent config-file lookup from matching anything
-        with mock.patch(
-            "pathlib.Path.exists", return_value=False
-        ):
+        with mock.patch("pathlib.Path.exists", return_value=False):
             configs = ch_registry._load_channel_configs()
 
         assert len(configs) == 1

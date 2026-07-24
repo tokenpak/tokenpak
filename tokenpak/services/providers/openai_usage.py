@@ -30,19 +30,19 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Optional
+from collections.abc import Mapping
 
 from tokenpak.services.providers._registry import register_parser
 
 PROVIDER_NAME = "openai"
 
 
-def _hash_ref(usage: dict) -> str:
+def _hash_ref(usage: Mapping[str, object]) -> str:
     raw = json.dumps(usage, sort_keys=True).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:12]
 
 
-def parse_usage(usage: Optional[dict]) -> dict:
+def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
     if not isinstance(usage, dict):
         return {
             "input_tokens": None,

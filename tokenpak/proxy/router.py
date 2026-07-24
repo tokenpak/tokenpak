@@ -7,23 +7,41 @@ Handles provider detection, cost estimation, and URL construction.
 
 import json
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
 # Provider base URLs
 PROVIDER_URLS = {
     "anthropic": "https://api.anthropic.com",
     "openai": "https://api.openai.com",
-    # openai-codex: subscription OAuth model (gpt-5.x-codex series)
-    # Uses api.openai.com with OAuth Bearer token instead of API key.
-    # Preferred endpoint: /v1/responses (Responses API)
-    "openai-codex": "https://api.openai.com",
+    # openai-codex: ChatGPT subscription OAuth.  Clients address the standard
+    # /v1/responses surface; TokenPak rewrites it to the ChatGPT backend path.
+    "openai-codex": "https://chatgpt.com/backend-api",
     "google": "https://generativelanguage.googleapis.com",
 }
 
 # Hosts we intercept for logging/processing.
 # Custom providers registered in config.yaml are added at startup by config.py.
-INTERCEPT_HOSTS = {"api.anthropic.com", "api.openai.com", "generativelanguage.googleapis.com"}
+INTERCEPT_HOSTS = {
+    "api.anthropic.com",
+    "api.openai.com",
+    "chatgpt.com",
+    "generativelanguage.googleapis.com",
+}
+
+
+def _is_codex_oauth_authorization(headers: Dict[str, str]) -> bool:
+    """Return true for a supplied OAuth bearer rather than an OpenAI API key.
+
+    The token value is used only for in-memory route classification and is
+    never copied into a route result or log record.
+    """
+    lower_headers = {key.lower(): value for key, value in headers.items()}
+    authorization = lower_headers.get("authorization", "").strip()
+    if not authorization.lower().startswith("bearer "):
+        return False
+    credential = authorization[7:].strip()
+    return bool(credential) and not credential.lower().startswith("sk-")
 
 
 def should_intercept(url: str) -> bool:
@@ -102,14 +120,11 @@ class ProviderRouter:
             try:
                 declared = int(content_length_str)
             except (ValueError, TypeError):
-                raise ValueError(
-                    f"Invalid Content-Length header value: {content_length_str!r}"
-                )
+                raise ValueError(f"Invalid Content-Length header value: {content_length_str!r}")
             actual = len(body)
             if declared != actual:
                 raise ValueError(
-                    f"Content-Length mismatch: header says {declared}, "
-                    f"body is {actual} bytes"
+                    f"Content-Length mismatch: header says {declared}, body is {actual} bytes"
                 )
 
         # Check if it's already a full URL
@@ -138,10 +153,14 @@ class ProviderRouter:
         from .oauth import analyze_request as _analyze_oauth
 
         _oauth_ctx = _analyze_oauth(path, headers, model)
+        upstream_path = path
+        if provider == "openai-codex" and path.split("?", 1)[0] == "/v1/responses":
+            suffix = "?" + path.split("?", 1)[1] if "?" in path else ""
+            upstream_path = "/codex/responses" + suffix
         return RouteResult(
             provider=provider,
             base_url=base_url,
-            full_url=base_url + path,
+            full_url=base_url + upstream_path,
             should_intercept=True,  # Reverse proxy always intercepts
             model=model,
             auth_type=_oauth_ctx.auth_type,
@@ -154,6 +173,8 @@ class ProviderRouter:
         host_lower = host.lower()
         if "anthropic" in host_lower:
             return "anthropic"
+        elif "chatgpt" in host_lower:
+            return "openai-codex"
         elif "openai" in host_lower:
             return "openai"
         elif "googleapis" in host_lower or "google" in host_lower:
@@ -184,8 +205,10 @@ class ProviderRouter:
             # ~/.codex/auth.json and rewrites to chatgpt.com/backend-api.
             return "openai-codex"
         if "/v1/responses" in path:
-            # OpenAI Responses API — used by Codex subscription models
-            return "openai-codex"
+            # The same Responses path is used by both OpenAI API-key clients
+            # and Codex subscription clients.  Preserve API-key traffic on
+            # api.openai.com; only an OAuth bearer selects the ChatGPT backend.
+            return "openai-codex" if _is_codex_oauth_authorization(headers) else "openai"
         if "/chat/completions" in path:
             return "openai"
         if "/models/" in path and "generateContent" in path:
@@ -222,7 +245,7 @@ class ProviderRouter:
         """Extract model name from request body."""
         try:
             data = json.loads(body)
-            return data.get("model", "unknown")
+            return cast(str, data.get("model", "unknown"))
         except (json.JSONDecodeError, UnicodeDecodeError):
             return "unknown"
 
@@ -249,6 +272,7 @@ def estimate_cost(
     """
     # Get costs from dynamic registry
     from tokenpak.models import get_model_costs
+
     costs = get_model_costs(model) if model else DEFAULT_COSTS
 
     # Calculate regular input (excluding cache tokens)

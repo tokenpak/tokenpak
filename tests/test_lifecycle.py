@@ -18,6 +18,7 @@ Acceptance criteria coverage:
   ✅ Port in use → clear error via _startup_preflight
   ✅ Configurable drain timeout via TOKENPAK_SHUTDOWN_TIMEOUT env var
 """
+
 from __future__ import annotations
 
 import http.client
@@ -98,6 +99,7 @@ def _startup_preflight(port: int) -> None:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _get(path: str, port: int) -> Tuple[int, dict]:
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
     conn.request("GET", path)
@@ -117,6 +119,7 @@ def _free_port() -> int:
 # ---------------------------------------------------------------------------
 # Fixture — isolated proxy server per test class
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def proxy_port():
@@ -148,6 +151,7 @@ def live_proxy(proxy_port):
 # ---------------------------------------------------------------------------
 # Startup tests
 # ---------------------------------------------------------------------------
+
 
 class TestStartup:
     """Validate startup pre-flight and readiness announcement."""
@@ -217,6 +221,7 @@ class TestStartup:
 # Shutdown tests
 # ---------------------------------------------------------------------------
 
+
 class TestShutdown:
     """Validate SIGTERM/SIGINT handling and in-flight drain."""
 
@@ -284,7 +289,9 @@ class TestShutdown:
         server = HTTPServer(("127.0.0.1", proxy_port), ForwardProxyHandler)
         _proxy_ready = True
         _shutdown_event.clear()
-        t = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
+        t = threading.Thread(
+            target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True
+        )
         t.start()
         time.sleep(0.1)
 
@@ -325,6 +332,7 @@ class TestShutdown:
 # Kill -9 recovery / unclean restart tests
 # ---------------------------------------------------------------------------
 
+
 class TestKillRecovery:
     """Validate that stale PID and state files don't block restart."""
 
@@ -364,6 +372,7 @@ class TestKillRecovery:
 # ---------------------------------------------------------------------------
 # Failure modes
 # ---------------------------------------------------------------------------
+
 
 class TestFailureModes:
     """Validate clear errors for bad configuration."""

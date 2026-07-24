@@ -10,11 +10,16 @@ Wire format in request payload:
 """
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Callable, cast
+
+_validate_state: Callable[..., None] | None = None
 
 try:
     from jsonschema import ValidationError, validate  # noqa: F401
+
+    _validate_state = cast(Callable[..., None], validate)
 
     _HAS_JSONSCHEMA = True
 except ImportError:
@@ -22,6 +27,13 @@ except ImportError:
 
 
 _SCHEMA_PATH = Path(__file__).parent / "state_schema.json"
+StateDict = dict[str, object]
+
+
+def _json_object(value: object) -> StateDict | None:
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        return None
+    return cast(StateDict, value)
 
 
 class StateManager:
@@ -35,7 +47,7 @@ class StateManager:
     Wire format: compact JSON (no whitespace), prefixed with STATE_JSON:
     """
 
-    def __init__(self, session_id: str, base_dir: str = ".tpk"):
+    def __init__(self, session_id: str, base_dir: str = ".tpk") -> None:
         self.session_id = session_id
         self.base_dir = Path(base_dir)
         state_dir = self.base_dir / "state"
@@ -45,17 +57,19 @@ class StateManager:
 
     # ── Init / Load ──────────────────────────────────────────────────────────
 
-    def load(self) -> dict:
+    def load(self) -> StateDict:
         """Load state from disk, or initialize empty state."""
         if self.state_path.exists():
             try:
                 with open(self.state_path, encoding="utf-8") as f:
-                    return json.load(f)
+                    loaded = _json_object(json.load(f))
+                    if loaded is not None:
+                        return loaded
             except (json.JSONDecodeError, OSError):
                 pass  # Corrupt/missing — fall through to init
         return self._init_state()
 
-    def _init_state(self) -> dict:
+    def _init_state(self) -> StateDict:
         return {
             "goal": "",
             "constraints": [],
@@ -70,7 +84,7 @@ class StateManager:
 
     def validate(self) -> None:
         """Validate state against schema. Raises ValidationError on failure."""
-        if not _HAS_JSONSCHEMA:
+        if not _HAS_JSONSCHEMA or _validate_state is None:
             # Manual required-field check if jsonschema not installed
             for field in ("goal", "current_task"):
                 if field not in self.state:
@@ -80,7 +94,7 @@ class StateManager:
         if _SCHEMA_PATH.exists():
             with open(_SCHEMA_PATH, encoding="utf-8") as f:
                 schema = json.load(f)
-            validate(instance=self.state, schema=schema)
+            _validate_state(instance=self.state, schema=schema)
 
     # ── Persistence ──────────────────────────────────────────────────────────
 
@@ -114,10 +128,12 @@ class StateManager:
         Args:
             item: Item to mark as completed
         """
-        if item in self.state.get("open", []):
-            self.state["open"].remove(item)
-        if item not in self.state.get("done", []):
-            self.state.setdefault("done", []).append(item)
+        open_items = self._list_field("open")
+        done_items = self._list_field("done")
+        if item in open_items:
+            open_items.remove(item)
+        if item not in done_items:
+            done_items.append(item)
 
     def add_open(self, item: str) -> None:
         """Add a new open/in-progress item to the state.
@@ -125,7 +141,7 @@ class StateManager:
         Args:
             item: Item description
         """
-        self.state.setdefault("open", []).append(item)
+        self._list_field("open").append(item)
 
     def add_next(self, item: str) -> None:
         """Add a queued item for next action.
@@ -133,7 +149,7 @@ class StateManager:
         Args:
             item: Item description
         """
-        self.state.setdefault("next", []).append(item)
+        self._list_field("next").append(item)
 
     def add_constraint(self, constraint: str) -> None:
         """Add a constraint or limitation to the session state.
@@ -141,18 +157,29 @@ class StateManager:
         Args:
             constraint: Constraint description
         """
-        self.state.setdefault("constraints", []).append(constraint)
+        self._list_field("constraints").append(constraint)
 
-    def set_def(self, key: str, value: Any) -> None:
+    def set_def(self, key: str, value: object) -> None:
         """Set a key-value definition or config in the state defs map.
 
         Args:
             key: Definition key
             value: Definition value
         """
-        self.state.setdefault("defs", {})[key] = value
+        definitions = self.state.setdefault("defs", {})
+        if not isinstance(definitions, dict):
+            definitions = {}
+            self.state["defs"] = definitions
+        cast(dict[str, object], definitions)[key] = value
 
-    def apply_patch(self, patch: dict) -> None:
+    def _list_field(self, key: str) -> list[object]:
+        value = self.state.setdefault(key, [])
+        if not isinstance(value, list):
+            value = []
+            self.state[key] = value
+        return cast(list[object], value)
+
+    def apply_patch(self, patch: Mapping[str, object]) -> None:
         """
         Apply a Phase 3 patch operation.
 
@@ -162,8 +189,10 @@ class StateManager:
           {"op": "SET",    "path": "current_task",  "value": "..."}
           {"op": "SET",    "path": "goal",          "value": "..."}
         """
-        op = patch.get("op", "").upper()
-        path = patch.get("path", "")
+        raw_op = patch.get("op", "")
+        raw_path = patch.get("path", "")
+        op = raw_op.upper() if isinstance(raw_op, str) else ""
+        path = raw_path if isinstance(raw_path, str) else ""
         value = patch.get("value")
 
         if op == "ADD":
@@ -200,7 +229,16 @@ class StateManager:
 
         wire_text: full section string, e.g. 'STATE_JSON:\\n{...}'
         """
-        lines = wire_text.strip().splitlines()
+        prefix, separator, payload = wire_text.strip().partition("\n")
+        if prefix != "STATE_JSON:" or not separator:
+            raise ValueError("Expected STATE_JSON section")
+        decoded = _json_object(json.loads(payload))
+        if decoded is None:
+            raise ValueError("STATE_JSON payload must be an object")
+        manager = cls(session_id, base_dir)
+        manager.state = decoded
+        manager.validate()
+        return manager
 
 
 # ---------------------------------------------------------------------------
@@ -209,19 +247,23 @@ class StateManager:
 
 import copy as _copy
 
+_validate_intent_state: Callable[..., None] | None = None
+
 try:
     from jsonschema import ValidationError as _ValidationError  # noqa: F401, F811
     from jsonschema import validate as _validate
+
+    _validate_intent_state = cast(Callable[..., None], _validate)
 
     _HAS_JSONSCHEMA_MS = True
 except ImportError:
     _HAS_JSONSCHEMA_MS = False
 
 # Lazy import to avoid circular dependencies
-_SCHEMAS_DIR_CACHE = None
+_SCHEMAS_DIR_CACHE: Path | None = None
 
 
-def _get_schemas_dir():
+def _get_schemas_dir() -> Path:
     global _SCHEMAS_DIR_CACHE
     if _SCHEMAS_DIR_CACHE is None:
         _SCHEMAS_DIR_CACHE = Path(__file__).parent / "agent" / "state_schemas"
@@ -240,7 +282,7 @@ class IntentStateManager:
     """
 
     # Intent → default empty state initializer
-    _DEFAULTS = {
+    _DEFAULTS: dict[str, StateDict] = {
         "debug": {
             "error": "",
             "affected_files": [],
@@ -280,7 +322,7 @@ class IntentStateManager:
         },
     }
 
-    def __init__(self, session_id, intent, base_dir=".tpk"):
+    def __init__(self, session_id: str, intent: str, base_dir: str = ".tpk") -> None:
         self.session_id = session_id
         self.intent = intent
         self.base_dir = Path(base_dir)
@@ -292,7 +334,7 @@ class IntentStateManager:
 
     # ── Schema ───────────────────────────────────────────────────────────────
 
-    def _load_schema(self):
+    def _load_schema(self) -> StateDict | None:
         """Load the JSON schema file for this intent (if it exists)."""
         schemas_dir = _get_schemas_dir()
         try:
@@ -303,38 +345,40 @@ class IntentStateManager:
                 schema_path = schemas_dir / filename
                 if schema_path.exists():
                     with open(schema_path, encoding="utf-8") as f:
-                        return json.load(f)
+                        return _json_object(json.load(f))
         except ImportError:
             pass
         return None
 
     # ── Init / Load ──────────────────────────────────────────────────────────
 
-    def load(self):
+    def load(self) -> StateDict:
         """Load persisted state or initialize from defaults."""
         if self.state_path.exists():
             try:
                 with open(self.state_path, encoding="utf-8") as f:
-                    return json.load(f)
+                    loaded = _json_object(json.load(f))
+                    if loaded is not None:
+                        return loaded
             except (json.JSONDecodeError, OSError):
                 pass
         return self._init_state()
 
-    def _init_state(self):
+    def _init_state(self) -> StateDict:
         defaults = self._DEFAULTS.get(self.intent, {})
         return _copy.deepcopy(defaults)
 
     # ── Validation ───────────────────────────────────────────────────────────
 
-    def validate(self):
+    def validate(self) -> None:
         """Validate intent state against its JSON schema."""
-        if not _HAS_JSONSCHEMA_MS or self._schema is None:
+        if not _HAS_JSONSCHEMA_MS or self._schema is None or _validate_intent_state is None:
             return
-        _validate(instance=self.state, schema=self._schema)
+        _validate_intent_state(instance=self.state, schema=self._schema)
 
     # ── Persistence ──────────────────────────────────────────────────────────
 
-    def save(self):
+    def save(self) -> None:
         """Validate and persist state."""
         self.validate()
         with open(self.state_path, "w", encoding="utf-8") as f:
@@ -342,29 +386,29 @@ class IntentStateManager:
 
     # ── Mutation ─────────────────────────────────────────────────────────────
 
-    def set(self, key, value):
+    def set(self, key: str, value: object) -> None:
         """Set a field in the current intent state."""
         self.state[key] = value
 
-    def get(self, key, default=None):
+    def get(self, key: str, default: object = None) -> object:
         """Get a field from the current intent state."""
         return self.state.get(key, default)
 
-    def update(self, patch):
+    def update(self, patch: Mapping[str, object]) -> None:
         """Shallow-merge a dict of updates into state."""
         self.state.update(patch)
 
     # ── Wire format ──────────────────────────────────────────────────────────
 
-    def to_wire_format(self):
+    def to_wire_format(self) -> str:
         """Compact JSON (no whitespace) — only fields relevant to this intent."""
         return json.dumps(self.state, separators=(",", ":"))
 
-    def to_wire_section(self):
+    def to_wire_section(self) -> str:
         """Full STATE_JSON section tagged with intent."""
         return f"STATE_JSON[{self.intent}]:\n{self.to_wire_format()}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<IntentStateManager session={self.session_id!r} intent={self.intent!r}>"
 
 
@@ -380,23 +424,23 @@ class MultiSchemaStateManager:
         wire = mgr.build_wire_section("debug")  # only injects debug fields
     """
 
-    def __init__(self, session_id, base_dir=".tpk"):
+    def __init__(self, session_id: str, base_dir: str = ".tpk") -> None:
         self.session_id = session_id
         self.base_dir = base_dir
-        self._managers = {}
+        self._managers: dict[str, IntentStateManager] = {}
 
-    def for_intent(self, intent):
+    def for_intent(self, intent: str) -> IntentStateManager:
         """Get or create the IntentStateManager for a given intent."""
         if intent not in self._managers:
             self._managers[intent] = IntentStateManager(self.session_id, intent, self.base_dir)
         return self._managers[intent]
 
-    def save_all(self):
+    def save_all(self) -> None:
         """Persist all active intent states."""
         for mgr in self._managers.values():
             mgr.save()
 
-    def build_wire_section(self, intent):
+    def build_wire_section(self, intent: str) -> str:
         """
         Build the STATE_JSON wire section for the given intent.
 
@@ -404,18 +448,19 @@ class MultiSchemaStateManager:
         """
         return self.for_intent(intent).to_wire_section()
 
-    def active_intents(self):
+    def active_intents(self) -> list[str]:
         """Return the list of intents with active state managers."""
         return list(self._managers.keys())
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
-            f"<MultiSchemaStateManager session={self.session_id!r} "
-            f"active={self.active_intents()}>"
+            f"<MultiSchemaStateManager session={self.session_id!r} active={self.active_intents()}>"
         )
 
 
-def select_state_manager(session_id, intent, base_dir=".tpk"):
+def select_state_manager(
+    session_id: str, intent: str, base_dir: str = ".tpk"
+) -> IntentStateManager:
     """
     Factory: select and return the appropriate IntentStateManager for a classified intent.
 

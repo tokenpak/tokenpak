@@ -117,9 +117,7 @@ def test_integrate_accepts_no_tui_and_remains_print_only(monkeypatch, capsys):
     must not error, must be stripped from argv, and the output must still
     contain the shell-aware setup instructions.
     """
-    monkeypatch.setattr(
-        sys, "argv", ["tokenpak", "integrate", "claude-code", "--no-tui"]
-    )
+    monkeypatch.setattr(sys, "argv", ["tokenpak", "integrate", "claude-code", "--no-tui"])
     monkeypatch.setenv("TOKENPAK_SHELL", "posix")
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(sys.stdout, "isatty", lambda: True)

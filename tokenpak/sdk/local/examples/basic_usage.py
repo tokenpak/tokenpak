@@ -82,9 +82,7 @@ def demo_utils():
         print(f"  [{b.type}] tokens={b.tokens} | {b.content[:50]}...")
 
     # Build pack
-    pack = pack_from_blocks(
-        blocks, instructions="Answer based on the evidence.", budget=6144
-    )
+    pack = pack_from_blocks(blocks, instructions="Answer based on the evidence.", budget=6144)
     messages = pack.to_messages()
     print(f"\nPack messages: {len(messages)} message(s)")
     print(f"System message preview:\n{messages[0]['content'][:200]}\n")
@@ -119,15 +117,11 @@ def demo_ollama():
         print("Auto-detected budgets:")
         for model in ["llama3", "phi3", "mistral", "llama3.1:8b"]:
             info = client.budget_info(model)
-            print(
-                f"  {model}: context={info['context_length']:,}  budget={info['input_budget']:,}"
-            )
+            print(f"  {model}: context={info['context_length']:,}  budget={info['input_budget']:,}")
 
         # Build a pack and chat
         pack = TokenPak(instructions="Answer based on the evidence below.")
-        pack.add(
-            Block(type="evidence", content="The Eiffel Tower is in Paris, France.")
-        )
+        pack.add(Block(type="evidence", content="The Eiffel Tower is in Paris, France."))
         pack.add(Block(type="evidence", content="It was built by Gustave Eiffel."))
 
         response = client.chat(model="llama3", tokenpak=pack)

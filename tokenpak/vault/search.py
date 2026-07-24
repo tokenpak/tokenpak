@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from typing import Any, Dict, List, Optional, Tuple
 
 from tokenpak.companion.memory.session_capsules import capsule_retrieval_score
@@ -37,6 +38,7 @@ try:
     from tokenpak.vault.query_expansion import (
         tokenize as _qe_tokenize,
     )
+
     _QUERY_EXPANSION_AVAILABLE = True
 except ImportError:
     _QUERY_EXPANSION_AVAILABLE = False
@@ -48,6 +50,11 @@ except ImportError:
 RETRIEVED_CONTEXT_HEADER = "## Retrieved Context"
 DEFAULT_MAX_TOKENS = 4000
 DEFAULT_TOP_K = 10
+
+
+def _fallback_count_tokens(text: str) -> int:
+    """Return a deterministic token estimate when telemetry helpers are absent."""
+    return max(1, len(text) // 4)
 
 
 def sort_retrieval_results(
@@ -88,7 +95,7 @@ def sort_retrieval_results(
 def inject_retrieved_context(
     results: List[Tuple[Dict[str, Any], float]],
     max_tokens: int = DEFAULT_MAX_TOKENS,
-    count_tokens_fn: Optional[Any] = None,
+    count_tokens_fn: Optional[Callable[[str], int]] = None,
     intent: Optional[str] = None,
 ) -> Tuple[str, int, List[str]]:
     """Build a cache-stable injection block from retrieval results.
@@ -111,13 +118,11 @@ def inject_retrieved_context(
     """
     if count_tokens_fn is None:
         try:
-            from tokenpak.telemetry.tokens import count_tokens  # type: ignore
+            from tokenpak.telemetry.tokens import count_tokens
 
             count_tokens_fn = count_tokens
         except ImportError:
-            # Rough fallback: 4 chars ≈ 1 token
-            def count_tokens_fn(t):
-                return max(1, len(t) // 4)
+            count_tokens_fn = _fallback_count_tokens
 
     sorted_results = sort_retrieval_results(results)
 
@@ -134,6 +139,7 @@ def inject_retrieved_context(
     _pd_total_saved = 0
     try:
         from tokenpak.vault.progressive_disclosure import disclose as _pd_disclose
+
         _pd_available = True
     except ImportError:
         _pd_available = False
@@ -177,6 +183,7 @@ def inject_retrieved_context(
 
     if _pd_total_saved > 0:
         import logging as _logging
+
         _logging.getLogger(__name__).debug(
             "inject_retrieved_context: progressive_disclosure saved %d tokens total",
             _pd_total_saved,
@@ -199,11 +206,12 @@ def _select_block_content(block: Dict[str, Any], prefer_schema: bool) -> str:
             payload = {"doc_type": doc_type, "schema": schema}
             return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
-    return block.get("content", "")
+    content = block.get("content", "")
+    return content if isinstance(content, str) else str(content)
 
 
 def measure_injection_consistency(
-    injection_fn,
+    injection_fn: Callable[[str], Tuple[str, int, List[str]]],
     query: str,
     runs: int = 5,
 ) -> Dict[str, Any]:
@@ -471,8 +479,8 @@ def score_and_sort(
     query: str = "",
     semantic_scores: Optional[Dict[str, float]] = None,
     meta_scores: Optional[Dict[str, float]] = None,
-    recent_ids: Optional[set] = None,
-    stale_ids: Optional[set] = None,
+    recent_ids: Optional[set[str]] = None,
+    stale_ids: Optional[set[str]] = None,
 ) -> List[Tuple[Dict[str, Any], float]]:
     """Apply multi-signal scoring to raw retrieval results and sort.
 
@@ -590,11 +598,13 @@ def _compile_from_results(
     if not results:
         return "", 0, []
 
+    count_token_fn: Callable[[str], int]
     try:
-        from tokenpak.telemetry.tokens import count_tokens  # type: ignore
+        from tokenpak.telemetry.tokens import count_tokens as _cached_count_tokens
+
+        count_token_fn = _cached_count_tokens
     except ImportError:
-        def count_tokens(t: str) -> int:  # type: ignore[misc]
-            return max(1, len(t) // 4)
+        count_token_fn = _fallback_count_tokens
 
     injection_parts: List[str] = []
     tokens_used = 0
@@ -603,7 +613,7 @@ def _compile_from_results(
     for block, score in results:
         # Modular VaultIndex stores content directly in block dict
         content = block.get("content", "")
-        block_tokens = block.get("raw_tokens", 0) or count_tokens(content)
+        block_tokens = block.get("raw_tokens", 0) or count_token_fn(content)
 
         remaining = budget - tokens_used
         if remaining <= 100:
@@ -612,7 +622,7 @@ def _compile_from_results(
         if block_tokens > remaining:
             char_limit = remaining * 4
             content = content[:char_limit].rsplit("\n", 1)[0]
-            block_tokens = count_tokens(content)
+            block_tokens = count_token_fn(content)
             if block_tokens > remaining:
                 break
 
@@ -626,5 +636,5 @@ def _compile_from_results(
 
     header = "\n\n## Retrieved Context\n"
     injection_text = header + "\n\n".join(injection_parts)
-    tokens_used = count_tokens(injection_text)
+    tokens_used = count_token_fn(injection_text)
     return injection_text, tokens_used, source_refs

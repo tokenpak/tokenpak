@@ -15,36 +15,45 @@ Your Client → http://localhost:8766 → [Compress] → Provider API → [Stats
 1. Your client sends a normal API request to `localhost:8766`
 2. TokenPak compresses the prompt (if beneficial)
 3. The compressed request is forwarded to the real provider
-4. The response comes back (with optional stats footer)
+4. The response comes back unchanged by the receipt display
 5. Cost and token data are recorded locally
 
-Your API key is in the `Authorization` header and passes through untouched. TokenPak never reads, stores, or logs credentials.
+The proxy receives the provider credential header only to forward the request;
+it does not persist or log that credential. Anthropic normally uses
+`x-api-key`; OpenAI-compatible providers normally use `Authorization`.
 
 ---
 
 ## Start the Proxy
 
+For a first measured receipt from a real request, use the canonical
+[three-command first-receipt path](../first-receipt.md). Its second command is:
+
 ```bash
-tokenpak serve
-# Default: port 8766, hybrid compression mode
+tokenpak serve --profile aggressive --stats-footer
 ```
 
-**Options:**
+The normal defaults remain `balanced` profile with the receipt footer off. The
+flags above apply only to that process.
+
+**Supported options:**
 
 ```bash
 tokenpak serve \
   --port 8766 \
-  --mode hybrid \      # strict | hybrid | aggressive
-  --daemon             # background mode
+  --profile balanced \
+  --stats-footer
 ```
 
-**Compression modes:**
+**Workflow profiles:**
 
-| Mode | When to use |
-|------|-------------|
-| `strict` | Only compress when clearly beneficial (>4500 tokens) |
-| `hybrid` | Balance compression and latency (recommended) |
-| `aggressive` | Maximum compression, every request |
+| Profile | When to use |
+|---------|-------------|
+| `safe` | Conservative operation; not a positive compression-receipt path |
+| `balanced` | Normal balance of compression and latency (default) |
+| `aggressive` | Maximum eligible compression; used by the reference receipt path |
+| `agentic` | Longer-context agent workflows |
+| `transparent` | Compatibility passthrough; no positive compression receipt expected |
 
 ---
 
@@ -54,7 +63,7 @@ TokenPak detects the target provider from your request headers and routes accord
 
 | Your `Authorization` format | Routes to |
 |----------------------------|-----------|
-| `Bearer sk-ant-...` | `api.anthropic.com` |
+| `x-api-key` or `anthropic-version` header | `api.anthropic.com` |
 | `Bearer sk-...` | `api.openai.com` |
 | Custom headers | Configurable via `proxy.passthrough_url` |
 
@@ -164,42 +173,38 @@ Use different upstream URLs per provider:
 
 ## Compression Configuration
 
-Control what gets compressed via `~/.tokenpak/config.json`:
-
-```json
-{
-  "compression": {
-    "enabled": true,
-    "level": "balanced",
-    "threshold_tokens": 4500,
-    "preserve_code": true,
-    "preserve_json": false
-  }
-}
-```
-
-Or via CLI:
+Select a supported workflow profile for one proxy process with `--profile`.
+Environment variables remain available for explicit operator overrides:
 
 ```bash
-tokenpak config set compression.level aggressive
-tokenpak config set compression.threshold_tokens 2000
+TOKENPAK_COMPACT_THRESHOLD_TOKENS=2000 \
+  tokenpak serve --profile balanced
 ```
+
+Leaving both controls unset preserves the normal `balanced` profile.
 
 ---
 
-## Response Footer (Stats Injection)
+## Local Receipt Footer
 
-By default, TokenPak appends a one-line stats footer to each response:
+The footer is off by default. Enable it for one proxy process with
+`--stats-footer`. After each completed request, TokenPak prints a one-line
+receipt to the proxy terminal's standard error:
 
 ```
-[TokenPak: 4,231→2,847 tokens | saved 33% | $0.004]
+⚡ TokenPak: -1,384 tokens (33%) | $0.004 saved
 ```
 
-Disable it:
+It does not alter the provider response. Token savings are measured from that
+request's before/after counts; the dollar value is estimated from the local
+model-pricing table. To make the setting explicit without a CLI flag, use:
 
 ```bash
-tokenpak config set proxy.stats_footer false
+TOKENPAK_STATS_FOOTER=1 tokenpak serve --profile aggressive
 ```
+
+The offline `tokenpak demo` fixture does not qualify as a first-request receipt.
+Short/protected inputs and byte-preserved routes may correctly report zero.
 
 ---
 
@@ -212,8 +217,10 @@ Override any config value with env vars:
 | `TOKENPAK_PORT` | `8766` | Proxy listen port |
 | `TOKENPAK_MODE` | `hybrid` | Compression mode |
 | `TOKENPAK_COMPACT` | `1` | Master compression switch (0/1) |
-| `TOKENPAK_COMPACT_THRESHOLD_TOKENS` | `4500` | Min tokens to trigger compression |
+| `TOKENPAK_COMPACT_THRESHOLD_TOKENS` | `1500` in `balanced` | Min tokens to trigger compression |
 | `TOKENPAK_DB` | `~/.tokenpak/monitor.db` | Database path |
+| `TOKENPAK_PROFILE` | `balanced` | Workflow profile used by the proxy |
+| `TOKENPAK_STATS_FOOTER` | `0` | Print per-request receipt to proxy stderr |
 
 ---
 

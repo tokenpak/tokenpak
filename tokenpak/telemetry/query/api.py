@@ -404,7 +404,7 @@ def create_query_app(prefix: str = "") -> Any:
     app.include_router(router, prefix=prefix)
 
     @app.get("/health")
-    def health():
+    def health() -> dict[str, str]:
         return {"status": "ok", "service": "tokenpak-query"}
 
     return app

@@ -261,9 +261,63 @@ def _make_temp_db(path: Path) -> None:
     conn.executemany(
         "INSERT INTO requests (id, timestamp, model, status_code, input_tokens, output_tokens, estimated_cost, latency_ms, request_type, endpoint, compilation_mode, protected_tokens, compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
-            ("r1", "2026-04-01T10:00:00", "gpt-4o", 200, 100, 50, 0.01, 120.0, "chat", "/v1/chat", "default", 0, 0, 0, "", 0, 0),
-            ("r2", "2026-04-01T11:00:00", "claude-sonnet", 200, 200, 80, 0.02, 150.0, "chat", "/v1/chat", "default", 0, 0, 0, "", 0, 0),
-            ("r3", "2026-04-01T12:00:00", "gpt-4o", 400, 50, 0, 0.0, 10.0, "chat", "/v1/chat", "default", 0, 0, 0, "", 0, 0),
+            (
+                "r1",
+                "2026-04-01T10:00:00",
+                "gpt-4o",
+                200,
+                100,
+                50,
+                0.01,
+                120.0,
+                "chat",
+                "/v1/chat",
+                "default",
+                0,
+                0,
+                0,
+                "",
+                0,
+                0,
+            ),
+            (
+                "r2",
+                "2026-04-01T11:00:00",
+                "claude-sonnet",
+                200,
+                200,
+                80,
+                0.02,
+                150.0,
+                "chat",
+                "/v1/chat",
+                "default",
+                0,
+                0,
+                0,
+                "",
+                0,
+                0,
+            ),
+            (
+                "r3",
+                "2026-04-01T12:00:00",
+                "gpt-4o",
+                400,
+                50,
+                0,
+                0.0,
+                10.0,
+                "chat",
+                "/v1/chat",
+                "default",
+                0,
+                0,
+                0,
+                "",
+                0,
+                0,
+            ),
         ],
     )
     conn.commit()
@@ -542,9 +596,7 @@ def test_export_api_stats():
     from dashboard.export_api import ExportAPI
 
     req_body = json.dumps({"format": "full", "data_type": "stats"}).encode()
-    body, status, headers = ExportAPI.handle(
-        raw_body=req_body, session_stats={"requests": 5}
-    )
+    body, status, headers = ExportAPI.handle(raw_body=req_body, session_stats={"requests": 5})
     assert status == 200
     assert b"metric" in body
 
@@ -694,6 +746,7 @@ def test_today_returns_string():
     assert isinstance(t, str)
     # format: YYYY-MM-DD
     from datetime import date
+
     date.fromisoformat(t)  # raises if invalid
 
 
@@ -703,6 +756,7 @@ def test_days_ago_returns_string():
     result = _days_ago(7)
     assert isinstance(result, str)
     from datetime import date
+
     date.fromisoformat(result)
 
 

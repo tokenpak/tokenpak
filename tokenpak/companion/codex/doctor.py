@@ -34,7 +34,7 @@ from .skills_installer import (
 )
 
 if _TYPE_CHECKING:
-    from .session_home import SessionPaths
+    from .session_home import SessionPaths, _RetentionReport
 
 CheckFn = Callable[[], "tuple[bool | str, str]"]
 
@@ -49,7 +49,7 @@ _ACTIVE_CODEX_HOME: contextvars.ContextVar[Path | None] = contextvars.ContextVar
 _ACTIVE_SESSION_MODE: contextvars.ContextVar[str] = contextvars.ContextVar(
     "tokenpak_codex_doctor_mode", default="shared"
 )
-_ACTIVE_RETENTION_REPORT: contextvars.ContextVar[object | None] = contextvars.ContextVar(
+_ACTIVE_RETENTION_REPORT: contextvars.ContextVar[_RetentionReport | None] = contextvars.ContextVar(
     "tokenpak_codex_doctor_retention", default=None
 )
 
@@ -229,7 +229,7 @@ def _check_skills_legacy_orphans() -> "tuple[bool | str, str]":
     )
 
 
-def _retention_report():
+def _retention_report() -> _RetentionReport:
     from .session_home import inspect_isolated_homes
 
     cached = _ACTIVE_RETENTION_REPORT.get()

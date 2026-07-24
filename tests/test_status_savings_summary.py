@@ -1,331 +1,228 @@
-"""Tests for compact savings summary in `tokenpak status` output.
+"""Contract tests for the savings-first ``tokenpak status`` renderer.
 
-Verifies:
-- Savings line appears when today's data is available
-- Graceful no-data fallback when no requests today
-- Compression % computed correctly
-- Token count formatted correctly (K, M, raw)
-- Cost saved shows when >0, omits when 0
-- Proxy unreachable: no savings line (no crash)
+These tests exercise the current command implementation.  They intentionally
+distinguish TokenPak-created savings from provider/client cache observations so
+the CLI never credits TokenPak for cache work it did not perform.
 """
 
+from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-import pytest
-
-# WS-A residual import guard — TSR-01-followup.
-# `tokenpak status` and the savings summary it produces transitively
-# pull in `fastapi` via the dashboard surface; on a slim [dev] install
-# fastapi is absent and the import chain raises ModuleNotFoundError
-# during fixture / mock setup. Skip cleanly so the release test gate
-# stays green; full-install runs exercise normally.
-pytest.importorskip(
-    "fastapi",
-    reason="fastapi is an optional dep transitively required by the status-savings stats path",
-)
+from tokenpak.cli.commands import status
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _make_health(port=8766, compilation_mode="hybrid"):
-    """Minimal health response."""
-    import time
+def _health() -> dict:
     return {
-        "status": "healthy",
-        "compilation_mode": compilation_mode,
-        "stats": {
-            "start_time": time.time() - 300,
-            "requests": 10,
-            "errors": 0,
-            "input_tokens": 100_000,
-            "sent_input_tokens": 70_000,
-            "saved_tokens": 30_000,
-            "protected_tokens": 5_000,
-            "cost": 0.50,
-            "cost_saved": 0.0,
-        },
-        "router": {"components": {}},
-        "skeleton": {"enabled": True},
-        "shadow_reader": {"enabled": True},
-        "canon": {"enabled": True},
-        "capsule_available": True,
-        "circuit_breakers": {},
-        "vault_index": {"available": True, "blocks": 1000},
+        "status": "ok",
+        "uptime_seconds": 3600,
     }
 
 
-def _make_stats(today_requests=100,
-                today_input=1_000_000,
-                today_compressed=50_000,
-                today_cache_read=200_000,
-                today_cost=10.0):
-    """Minimal stats response with a today block."""
-    return {
+def _stats(
+    *,
+    requests: int = 10,
+    sent: int = 70_000,
+    saved: int = 30_000,
+    cache_read: int = 20_000,
+    cost: float = 0.50,
+    cache_origin: dict[str, int] | None = None,
+    errors: int = 0,
+) -> dict:
+    payload = {
         "session": {
-            "requests": today_requests,
-            "input_tokens": 100_000,
-            "sent_input_tokens": 70_000,
-            "saved_tokens": 30_000,
-            "protected_tokens": 5_000,
+            "requests": requests,
+            "input_tokens": sent + saved,
+            "sent_input_tokens": sent,
+            "saved_tokens": saved,
+            "protected_tokens": 0,
             "output_tokens": 2_000,
-            "cost": 0.50,
-            "cost_saved": 0.0,
+            "cost": cost,
+            "errors": errors,
             "start_time": 0,
-            "errors": 0,
-            "compilation_mode": "hybrid",
-            "active_profile": "balanced",
             "injected_tokens": 0,
             "injection_hits": 0,
-            "injection_skips": 0,
-            "cache_read_tokens": 0,
+            "cache_read_tokens": cache_read,
             "cache_creation_tokens": 0,
-            "cache_hits": 0,
-            "cache_misses": 0,
-            "cache_miss_reasons": {},
-            "token_cache_hits": 0,
-            "token_cache_misses": 0,
-            "canon_hits": 0,
-            "canon_tokens_saved": 0,
-            "ingest_entries": 0,
-            "compression_timeouts": 0,
-            "vault_last_timing_ms": {},
-        },
-        "today": {
-            "requests": today_requests,
-            "input_tokens": today_input,
-            "output_tokens": 10_000,
-            "total_cost": today_cost,
-            "avg_latency_ms": 500.0,
-            "protected_tokens": 0,
-            "compressed_tokens": today_compressed,
-            "injected_tokens": 0,
-            "cache_read_tokens": today_cache_read,
-            "cache_creation_tokens": 0,
-        },
-        "compilation_mode": "hybrid",
-        "vault_index": {"available": True, "blocks": 1000},
-        "router": {"enabled": True},
-        "capsule_available": True,
+        }
+    }
+    if cache_origin is not None:
+        payload["cache_read_by_origin"] = cache_origin
+    return payload
+
+
+def _historical(*, requests: int = 0) -> dict:
+    return {
+        "totals": {"requests": requests, "with_cost": 0.0},
+        "models": [],
     }
 
 
-def _run_cmd_status(health, stats, cache=None, cost_saved_db=0.0):
-    """Run cmd_status with mocked proxy endpoints, return captured stdout."""
-    from argparse import Namespace
+def _tip_unavailable(**_kwargs) -> dict:
+    return {
+        "window": "all time",
+        "lines": {},
+        "source": "unavailable",
+        "requests": 0,
+        "reason": "no cache attribution observations",
+    }
 
-    args = Namespace(
-        mode=None,
-        output=None,
-        minimal=False,
-        raw=False,
-        json=False,
-        profile=None,
-        port=None,
-        no_color=True,
+
+def _render(
+    *,
+    health: dict | None,
+    stats: dict | None,
+    cache: dict | None = None,
+    historical: dict | None = None,
+) -> str:
+    responses = {
+        "/health": health,
+        "/stats": stats,
+        "/cache-stats": cache,
+    }
+
+    def _fetch(url: str, timeout: int = 5):
+        del timeout
+        return next((value for suffix, value in responses.items() if url.endswith(suffix)), None)
+
+    out = StringIO()
+    with (
+        patch.object(status, "_fetch", side_effect=_fetch),
+        patch.object(
+            status,
+            "_calculate_fleet_savings",
+            return_value=historical or {"error": "db_not_found"},
+        ),
+        patch.object(status, "_query_tip_cache_attribution", side_effect=_tip_unavailable),
+        patch.object(status, "_connect_db", return_value=None),
+        patch.object(status, "_print_free_tier_upgrade_hint"),
+        patch.object(status, "_get_version", return_value="1.14.0"),
+        redirect_stdout(out),
+    ):
+        status.run(no_meme=True)
+    return out.getvalue()
+
+
+def test_current_value_traffic_and_cache_sections_are_rendered():
+    out = _render(health=_health(), stats=_stats())
+    assert "Value Created (this session)" in out
+    assert "Traffic" in out
+    assert "Cache activity (observed)" in out
+    assert "Healthy" in out
+
+
+def test_compression_uses_sent_plus_avoided_tokens_as_denominator():
+    out = _render(health=_health(), stats=_stats(sent=80_000, saved=20_000, cache_read=0))
+    assert "20.0% token reduction" in out
+
+
+def test_zero_compression_omits_compression_credit_line():
+    out = _render(health=_health(), stats=_stats(saved=0))
+    assert "Compression" not in out
+
+
+def test_client_cache_is_observed_but_not_credited_to_tokenpak():
+    out = _render(
+        health=_health(),
+        stats=_stats(
+            saved=0,
+            cache_read=50_000,
+            cache_origin={"client": 50_000, "proxy": 0, "unknown": 0},
+        ),
     )
+    assert "client: 50.0K" in out
+    assert "Proxy cache" not in out
+    assert "Wire-side (proxy)             $0.00" in out
 
-    captured = StringIO()
 
-    from tokenpak.telemetry.query import SavingsReport
-    mock_savings = SavingsReport(
-        total_cost=0.0,
-        estimated_without_compression=0.0,
-        savings_amount=cost_saved_db,
-        savings_pct=(cost_saved_db * 10) if cost_saved_db else 0.0,
+def test_proxy_owned_cache_is_credited_separately():
+    out = _render(
+        health=_health(),
+        stats=_stats(
+            saved=0,
+            cache_read=50_000,
+            cache_origin={"client": 0, "proxy": 50_000, "unknown": 0},
+        ),
     )
-
-    with patch("tokenpak._cli_core._proxy_get") as mock_get, \
-         patch("tokenpak._cli_core.get_savings_report", mock_savings.__class__, create=True), \
-         patch("sys.stdout", captured):
-
-        def _side_effect(endpoint):
-            if endpoint == "/health":
-                return health
-            if endpoint == "/stats":
-                return stats
-            if endpoint == "/cache-stats":
-                return cache
-            return None
-
-        mock_get.side_effect = _side_effect
-
-        # Patch get_savings_report inside the function scope
-        with patch("tokenpak.telemetry.query.get_savings_report", return_value=mock_savings):
-            from tokenpak._cli_core import cmd_status
-            try:
-                cmd_status(args)
-            except SystemExit:
-                pass
-
-    return captured.getvalue()
+    assert "Proxy cache" in out
+    assert "proxy: 50.0K" in out
 
 
-# ---------------------------------------------------------------------------
-# Tests: savings line present with data
-# ---------------------------------------------------------------------------
-
-class TestSavingsSummaryPresent:
-    """Savings line appears when today has data."""
-
-    def test_savings_line_in_output(self):
-        health = _make_health()
-        stats = _make_stats(today_requests=100, today_compressed=50_000, today_cache_read=200_000)
-        out = _run_cmd_status(health, stats)
-        assert "Savings:" in out
-
-    def test_compression_pct_shown(self):
-        health = _make_health()
-        # 100K input, 10K compressed → 10%
-        stats = _make_stats(today_input=100_000, today_compressed=10_000, today_cache_read=0)
-        out = _run_cmd_status(health, stats)
-        assert "10.0% avg compression" in out
-
-    def test_tokens_saved_shown_in_K(self):
-        health = _make_health()
-        # 5K compressed + 45K cache_read = 50K saved → "50K tokens saved today"
-        stats = _make_stats(today_input=100_000, today_compressed=5_000, today_cache_read=45_000)
-        out = _run_cmd_status(health, stats)
-        assert "50K tokens saved today" in out
-
-    def test_tokens_saved_shown_in_M(self):
-        health = _make_health()
-        # 1M compressed + 2M cache_read = 3M
-        stats = _make_stats(today_input=10_000_000, today_compressed=1_000_000, today_cache_read=2_000_000)
-        out = _run_cmd_status(health, stats)
-        assert "3.0M tokens saved today" in out
-
-    def test_tokens_saved_raw_when_small(self):
-        health = _make_health()
-        # 500 compressed + 300 cache = 800 (below 1K threshold)
-        stats = _make_stats(today_input=10_000, today_compressed=500, today_cache_read=300)
-        out = _run_cmd_status(health, stats)
-        assert "800 tokens saved today" in out
-
-    def test_cost_saved_shown_when_positive(self):
-        health = _make_health()
-        stats = _make_stats(today_compressed=50_000, today_cache_read=200_000)
-        out = _run_cmd_status(health, stats, cost_saved_db=4.80)
-        assert "~$4.80 saved today" in out
-
-    def test_cost_saved_omitted_when_zero(self):
-        health = _make_health()
-        stats = _make_stats(today_compressed=50_000, today_cache_read=200_000)
-        out = _run_cmd_status(health, stats, cost_saved_db=0.0)
-        # Should NOT have cost saved line
-        assert "saved today" not in out or "tokens saved today" in out  # only token count, no cost
-
-    def test_savings_line_uses_pipe_separator(self):
-        health = _make_health()
-        stats = _make_stats(today_compressed=50_000, today_cache_read=200_000)
-        out = _run_cmd_status(health, stats)
-        # The savings line should have | separating parts
-        savings_line = [l for l in out.splitlines() if "Savings:" in l]
-        assert len(savings_line) == 1
-        assert "|" in savings_line[0]
+def test_unknown_cache_origin_is_reported_without_proxy_credit():
+    out = _render(
+        health=_health(),
+        stats=_stats(
+            saved=0,
+            cache_read=12_000,
+            cache_origin={"client": 0, "proxy": 0, "unknown": 12_000},
+        ),
+    )
+    assert "unknown: 12.0K" in out
+    assert "Proxy cache" not in out
 
 
-# ---------------------------------------------------------------------------
-# Tests: no-data graceful fallback
-# ---------------------------------------------------------------------------
-
-class TestSavingsSummaryNoData:
-    """Graceful handling when no requests today."""
-
-    def test_no_data_fallback_message(self):
-        health = _make_health()
-        stats = _make_stats(today_requests=0, today_compressed=0, today_cache_read=0)
-        out = _run_cmd_status(health, stats)
-        assert "no data yet" in out or "Savings:" in out  # either message is acceptable
-
-    def test_no_crash_when_stats_none(self):
-        health = _make_health()
-        # stats=None means proxy returned nothing
-        out = _run_cmd_status(health, stats=None)
-        # Should not crash; savings line just won't appear
-        assert "Proxy: running" in out or "Proxy: not reachable" in out
-
-    def test_no_crash_when_proxy_unreachable(self):
-        # health=None means proxy is down
-        out = _run_cmd_status(health=None, stats=None)
-        assert "not reachable" in out or "Proxy:" in out
-        # No savings line when proxy is down
-        assert "Savings:" not in out
-
-    def test_no_crash_when_today_missing_from_stats(self):
-        health = _make_health()
-        # Stats present but missing 'today' key
-        stats = _make_stats()
-        del stats["today"]
-        out = _run_cmd_status(health, stats)
-        # Should not crash
-        assert "Proxy: running" in out
+def test_cache_rates_come_from_cache_observations():
+    out = _render(
+        health=_health(),
+        stats=_stats(sent=80_000, cache_read=20_000),
+        cache={"cache_hits": 3, "cache_misses": 1, "miss_reasons": {}},
+    )
+    assert "Token cache rate            20%" in out
+    assert "Request hit rate            75%" in out
+    assert "3 of 4 requests" in out
 
 
-# ---------------------------------------------------------------------------
-# Tests: edge cases
-# ---------------------------------------------------------------------------
+def test_no_cache_observations_are_not_fabricated_from_uptime():
+    out = _render(health=_health(), stats=_stats(cache_read=0), cache=None)
+    assert "Token cache rate             0%" in out
+    assert "Request hit rate           n/a" in out
+    assert "no cache observations" in out
+    assert "Schema normalized" not in out
 
-class TestSavingsSummaryEdgeCases:
-    """Edge cases for savings computation."""
 
-    def test_zero_compression_no_compression_shown(self):
-        health = _make_health()
-        # 0 compressed tokens → compression % = 0, should not show compression line
-        stats = _make_stats(today_input=100_000, today_compressed=0, today_cache_read=50_000)
-        out = _run_cmd_status(health, stats)
-        savings_lines = [l for l in out.splitlines() if "Savings:" in l]
-        if savings_lines:
-            assert "0.0% avg compression" not in savings_lines[0]
+def test_removed_health_registry_observation_is_not_invented():
+    out = _render(
+        health={**_health(), "tool_schema_registry": {"schema_changes": 4}},
+        stats=_stats(),
+        cache={"cache_hits": 0, "cache_misses": 1, "miss_reasons": {}},
+    )
+    assert "Schema normalized" not in out
 
-    def test_only_compression_no_cache(self):
-        health = _make_health()
-        stats = _make_stats(today_input=100_000, today_compressed=20_000, today_cache_read=0)
-        out = _run_cmd_status(health, stats)
-        assert "Savings:" in out
-        assert "20.0% avg compression" in out
 
-    def test_only_cache_no_compression(self):
-        health = _make_health()
-        stats = _make_stats(today_input=100_000, today_compressed=0, today_cache_read=50_000)
-        out = _run_cmd_status(health, stats)
-        # 50K tokens saved from cache → should appear
-        assert "Savings:" in out
-        assert "50K tokens saved today" in out
+def test_proxy_errors_produce_actionable_health_message():
+    out = _render(health=_health(), stats=_stats(errors=2))
+    assert "2 error(s)" in out
+    assert "tokenpak doctor" in out
 
-    def test_savings_db_exception_handled_gracefully(self):
-        """If telemetry DB errors out, savings line should still show without cost."""
-        health = _make_health()
-        stats = _make_stats(today_compressed=50_000, today_cache_read=200_000)
-        captured = StringIO()
-        from argparse import Namespace
-        args = Namespace(
-            mode=None, output=None, minimal=False, raw=False,
-            json=False, profile=None, port=None, no_color=True,
-        )
-        with patch("tokenpak._cli_core._proxy_get") as mock_get, \
-             patch("sys.stdout", captured):
 
-            def _side_effect(endpoint):
-                if endpoint == "/health":
-                    return health
-                if endpoint == "/stats":
-                    return stats
-                return None
+def test_proxy_unreachable_without_database_fails_gracefully():
+    out = _render(health=None, stats=None)
+    assert "Proxy unreachable and no monitor database found" in out
+    assert "tokenpak serve" in out
+    assert "Traceback" not in out
 
-            mock_get.side_effect = _side_effect
 
-            # Make get_savings_report raise
-            with patch("tokenpak.telemetry.query.get_savings_report", side_effect=Exception("DB error")):
-                from tokenpak._cli_core import cmd_status
-                try:
-                    cmd_status(args)
-                except SystemExit:
-                    pass
+def test_proxy_unreachable_can_render_historical_database_data():
+    historical = {
+        "totals": {"requests": 2, "with_cost": 0.25},
+        "models": [
+            {
+                "model": "claude-sonnet-4-6",
+                "requests": 2,
+                "input_tokens": 1_000,
+                "output_tokens": 100,
+                "cache_read_tokens": 0,
+                "compressed_tokens": 250,
+            }
+        ],
+    }
+    out = _render(health=None, stats=None, historical=historical)
+    assert "Value Created (all time)" in out
+    assert "Requests                      2" in out
+    assert "Proxy unreachable" in out
 
-        out = captured.getvalue()
-        # Should not crash; savings line may or may not show but no traceback
-        assert "Traceback" not in out
-        assert "Proxy: running" in out
+
+def test_missing_live_stats_uses_historical_database_data():
+    out = _render(health=_health(), stats=None, historical=_historical(requests=0))
+    assert "Value Created (all time)" in out
+    assert "Traceback" not in out

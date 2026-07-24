@@ -20,8 +20,18 @@ Each error dict has keys:
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TypedDict, cast
+
+
+class ConfigError(TypedDict):
+    path: str
+    message: str
+    suggestion: str
+    validator: str
+    instance: object | None
+
 
 # ---------------------------------------------------------------------------
 # Schema definition
@@ -71,7 +81,13 @@ _VALID_PROVIDERS = {"anthropic", "openai", "google", "gemini", "openrouter"}
 _VALID_RETRIEVAL_BACKENDS = {"json_blocks", "sqlite"}
 
 
-def _err(path: str, message: str, suggestion: str = "", validator: str = "custom", instance=None) -> dict:
+def _err(
+    path: str,
+    message: str,
+    suggestion: str = "",
+    validator: str = "custom",
+    instance: object | None = None,
+) -> ConfigError:
     return {
         "path": path,
         "message": message,
@@ -86,44 +102,57 @@ def _err(path: str, message: str, suggestion: str = "", validator: str = "custom
 # ---------------------------------------------------------------------------
 
 
-def _validate_dict(config: Dict[str, Any]) -> List[dict]:
-    errors: List[dict] = []
+def _validate_dict(config: object) -> list[ConfigError]:
+    errors: list[ConfigError] = []
 
     if not isinstance(config, dict):
-        errors.append(_err("<root>", "Config must be a dictionary (object)", "Use YAML dict or JSON object", "type"))
+        errors.append(
+            _err(
+                "<root>",
+                "Config must be a dictionary (object)",
+                "Use YAML dict or JSON object",
+                "type",
+            )
+        )
         return errors
 
     # --- port ---
     if "port" in config:
         port = config["port"]
         if not isinstance(port, int) or isinstance(port, bool):
-            errors.append(_err(
-                "port",
-                "port must be an integer",
-                "Set port to an integer (e.g., 8766)",
-                "type",
-                port,
-            ))
+            errors.append(
+                _err(
+                    "port",
+                    "port must be an integer",
+                    "Set port to an integer (e.g., 8766)",
+                    "type",
+                    port,
+                )
+            )
         elif not (1024 <= port <= 65535):
-            errors.append(_err(
-                "port",
-                f"port must be in range 1024–65535 (got {port})",
-                "Use a port in the range 1024–65535 (e.g., 8766)",
-                "range",
-                port,
-            ))
+            errors.append(
+                _err(
+                    "port",
+                    f"port must be in range 1024–65535 (got {port})",
+                    "Use a port in the range 1024–65535 (e.g., 8766)",
+                    "range",
+                    port,
+                )
+            )
 
     # --- mode ---
     if "mode" in config:
         mode = config["mode"]
         if mode not in _VALID_MODES:
-            errors.append(_err(
-                "mode",
-                f"mode must be one of: {', '.join(sorted(_VALID_MODES))} (got {mode!r})",
-                f"Set mode to one of: {', '.join(sorted(_VALID_MODES))}",
-                "enum",
-                mode,
-            ))
+            errors.append(
+                _err(
+                    "mode",
+                    f"mode must be one of: {', '.join(sorted(_VALID_MODES))} (got {mode!r})",
+                    f"Set mode to one of: {', '.join(sorted(_VALID_MODES))}",
+                    "enum",
+                    mode,
+                )
+            )
 
     # --- compression ---
     if "compression" in config:
@@ -132,33 +161,39 @@ def _validate_dict(config: Dict[str, Any]) -> List[dict]:
             if "threshold_tokens" in comp:
                 val = comp["threshold_tokens"]
                 if not isinstance(val, int) or isinstance(val, bool) or val < 0:
-                    errors.append(_err(
-                        "compression.threshold_tokens",
-                        "compression.threshold_tokens must be a non-negative integer",
-                        "Set compression.threshold_tokens to a positive integer (e.g., 4500)",
-                        "range",
-                        val,
-                    ))
+                    errors.append(
+                        _err(
+                            "compression.threshold_tokens",
+                            "compression.threshold_tokens must be a non-negative integer",
+                            "Set compression.threshold_tokens to a positive integer (e.g., 4500)",
+                            "range",
+                            val,
+                        )
+                    )
             if "cache_size" in comp:
                 val = comp["cache_size"]
                 if not isinstance(val, int) or isinstance(val, bool) or val < 10:
-                    errors.append(_err(
-                        "compression.cache_size",
-                        "compression.cache_size must be >= 10",
-                        "Set compression.cache_size to at least 10 (e.g., 2000)",
-                        "range",
-                        val,
-                    ))
+                    errors.append(
+                        _err(
+                            "compression.cache_size",
+                            "compression.cache_size must be >= 10",
+                            "Set compression.cache_size to at least 10 (e.g., 2000)",
+                            "range",
+                            val,
+                        )
+                    )
             if "max_chars" in comp:
                 val = comp["max_chars"]
                 if not isinstance(val, int) or isinstance(val, bool) or val < 1:
-                    errors.append(_err(
-                        "compression.max_chars",
-                        "compression.max_chars must be a positive integer",
-                        "Set compression.max_chars to a positive integer (e.g., 120)",
-                        "range",
-                        val,
-                    ))
+                    errors.append(
+                        _err(
+                            "compression.max_chars",
+                            "compression.max_chars must be a positive integer",
+                            "Set compression.max_chars to a positive integer (e.g., 120)",
+                            "range",
+                            val,
+                        )
+                    )
 
     # --- budget ---
     if "budget" in config:
@@ -167,13 +202,15 @@ def _validate_dict(config: Dict[str, Any]) -> List[dict]:
             if "total_tokens" in budget:
                 val = budget["total_tokens"]
                 if not isinstance(val, int) or isinstance(val, bool):
-                    errors.append(_err(
-                        "budget.total_tokens",
-                        "budget.total_tokens must be an integer",
-                        "Set budget.total_tokens to an integer (e.g., 12000)",
-                        "type",
-                        val,
-                    ))
+                    errors.append(
+                        _err(
+                            "budget.total_tokens",
+                            "budget.total_tokens must be an integer",
+                            "Set budget.total_tokens to an integer (e.g., 12000)",
+                            "type",
+                            val,
+                        )
+                    )
 
     # --- vault ---
     if "vault" in config:
@@ -181,36 +218,46 @@ def _validate_dict(config: Dict[str, Any]) -> List[dict]:
         if isinstance(vault, dict):
             if "inject_min_score" in vault:
                 val = vault["inject_min_score"]
-                if not isinstance(val, (int, float)) or isinstance(val, bool) or not (0.0 <= val <= 10.0):
-                    errors.append(_err(
-                        "vault.inject_min_score",
-                        "vault.inject_min_score must be between 0.0 and 10.0",
-                        "Set vault.inject_min_score to a float in 0.0–10.0 (e.g., 0.5)",
-                        "range",
-                        val,
-                    ))
+                if (
+                    not isinstance(val, (int, float))
+                    or isinstance(val, bool)
+                    or not (0.0 <= val <= 10.0)
+                ):
+                    errors.append(
+                        _err(
+                            "vault.inject_min_score",
+                            "vault.inject_min_score must be between 0.0 and 10.0",
+                            "Set vault.inject_min_score to a float in 0.0–10.0 (e.g., 0.5)",
+                            "range",
+                            val,
+                        )
+                    )
             if "retrieval_backend" in vault:
                 val = vault["retrieval_backend"]
                 if val not in _VALID_RETRIEVAL_BACKENDS:
-                    errors.append(_err(
-                        "vault.retrieval_backend",
-                        f"vault.retrieval_backend must be one of: {', '.join(sorted(_VALID_RETRIEVAL_BACKENDS))} (got {val!r})",
-                        f"Set vault.retrieval_backend to one of: {', '.join(sorted(_VALID_RETRIEVAL_BACKENDS))}",
-                        "enum",
-                        val,
-                    ))
+                    errors.append(
+                        _err(
+                            "vault.retrieval_backend",
+                            f"vault.retrieval_backend must be one of: {', '.join(sorted(_VALID_RETRIEVAL_BACKENDS))} (got {val!r})",
+                            f"Set vault.retrieval_backend to one of: {', '.join(sorted(_VALID_RETRIEVAL_BACKENDS))}",
+                            "enum",
+                            val,
+                        )
+                    )
 
     # --- rate_limit_rpm ---
     if "rate_limit_rpm" in config:
         val = config["rate_limit_rpm"]
         if not isinstance(val, int) or isinstance(val, bool) or val < 1:
-            errors.append(_err(
-                "rate_limit_rpm",
-                "rate_limit_rpm must be an integer >= 1",
-                "Set rate_limit_rpm to a positive integer (e.g., 60)",
-                "range",
-                val,
-            ))
+            errors.append(
+                _err(
+                    "rate_limit_rpm",
+                    "rate_limit_rpm must be an integer >= 1",
+                    "Set rate_limit_rpm to a positive integer (e.g., 60)",
+                    "range",
+                    val,
+                )
+            )
 
     # --- upstream ---
     if "upstream" in config:
@@ -218,13 +265,15 @@ def _validate_dict(config: Dict[str, Any]) -> List[dict]:
         if isinstance(up, dict) and "timeout" in up:
             val = up["timeout"]
             if not isinstance(val, int) or isinstance(val, bool) or not (1 <= val <= 3600):
-                errors.append(_err(
-                    "upstream.timeout",
-                    "upstream.timeout must be an integer in 1–3600 seconds",
-                    "Set upstream.timeout to a value between 1 and 3600 (e.g., 300)",
-                    "range",
-                    val,
-                ))
+                errors.append(
+                    _err(
+                        "upstream.timeout",
+                        "upstream.timeout must be an integer in 1–3600 seconds",
+                        "Set upstream.timeout to a value between 1 and 3600 (e.g., 300)",
+                        "range",
+                        val,
+                    )
+                )
 
     # --- features ---
     if "features" in config:
@@ -232,13 +281,15 @@ def _validate_dict(config: Dict[str, Any]) -> List[dict]:
         if isinstance(features, dict):
             for key in features:
                 if key not in _KNOWN_FEATURE_KEYS:
-                    errors.append(_err(
-                        f"features.{key}",
-                        f"Unknown feature flag: {key!r}",
-                        f"Remove features.{key} or use one of: {', '.join(sorted(_KNOWN_FEATURE_KEYS))}",
-                        "unknown_field",
-                        key,
-                    ))
+                    errors.append(
+                        _err(
+                            f"features.{key}",
+                            f"Unknown feature flag: {key!r}",
+                            f"Remove features.{key} or use one of: {', '.join(sorted(_KNOWN_FEATURE_KEYS))}",
+                            "unknown_field",
+                            key,
+                        )
+                    )
 
     # --- failover ---
     if "failover" in config:
@@ -250,24 +301,28 @@ def _validate_dict(config: Dict[str, Any]) -> List[dict]:
                     if isinstance(entry, dict) and "provider" in entry:
                         prov = entry["provider"]
                         if prov not in _VALID_PROVIDERS:
-                            errors.append(_err(
-                                f"failover.chain[{i}].provider",
-                                f"Unknown provider: {prov!r}. Must be one of: {', '.join(sorted(_VALID_PROVIDERS))}",
-                                f"Use a known provider: {', '.join(sorted(_VALID_PROVIDERS))}",
-                                "enum",
-                                prov,
-                            ))
+                            errors.append(
+                                _err(
+                                    f"failover.chain[{i}].provider",
+                                    f"Unknown provider: {prov!r}. Must be one of: {', '.join(sorted(_VALID_PROVIDERS))}",
+                                    f"Use a known provider: {', '.join(sorted(_VALID_PROVIDERS))}",
+                                    "enum",
+                                    prov,
+                                )
+                            )
 
     # --- unknown top-level keys ---
     for key in config:
         if key not in _KNOWN_TOP_KEYS:
-            errors.append(_err(
-                key,
-                f"Unknown top-level field: {key!r}",
-                f"Remove {key!r} or check spelling. Allowed fields: {', '.join(sorted(_KNOWN_TOP_KEYS))}",
-                "unknown_field",
-                key,
-            ))
+            errors.append(
+                _err(
+                    key,
+                    f"Unknown top-level field: {key!r}",
+                    f"Remove {key!r} or check spelling. Allowed fields: {', '.join(sorted(_KNOWN_TOP_KEYS))}",
+                    "unknown_field",
+                    key,
+                )
+            )
 
     return errors
 
@@ -277,7 +332,7 @@ def _validate_dict(config: Dict[str, Any]) -> List[dict]:
 # ---------------------------------------------------------------------------
 
 
-def validate_config_dict(config: Dict[str, Any]) -> Tuple[bool, List[dict]]:
+def validate_config_dict(config: object) -> tuple[bool, list[ConfigError]]:
     """
     Validate a TokenPak config dict.
 
@@ -289,7 +344,7 @@ def validate_config_dict(config: Dict[str, Any]) -> Tuple[bool, List[dict]]:
     return len(errors) == 0, errors
 
 
-def validate_config_file(filepath: str) -> Tuple[bool, List[dict]]:
+def validate_config_file(filepath: str) -> tuple[bool, list[ConfigError]]:
     """
     Load and validate a TokenPak config file (YAML or JSON).
 
@@ -300,12 +355,14 @@ def validate_config_file(filepath: str) -> Tuple[bool, List[dict]]:
     path = Path(filepath).expanduser()
 
     if not path.exists():
-        return False, [_err(
-            "file",
-            f"Config file not found: {path}",
-            f"Create the file at: {path}",
-            "custom",
-        )]
+        return False, [
+            _err(
+                "file",
+                f"Config file not found: {path}",
+                f"Create the file at: {path}",
+                "custom",
+            )
+        ]
 
     if not path.is_file():
         return False, [_err("file", f"Not a file: {path}", "Provide a path to a file", "custom")]
@@ -318,7 +375,8 @@ def validate_config_file(filepath: str) -> Tuple[bool, List[dict]]:
     suffix = path.suffix.lower()
     if suffix in (".yaml", ".yml"):
         try:
-            import yaml  # type: ignore
+            import yaml
+
             config = yaml.safe_load(content)
         except Exception as e:
             return False, [_err("file", f"YAML parse error: {e}", "Fix YAML syntax", "custom")]
@@ -329,18 +387,29 @@ def validate_config_file(filepath: str) -> Tuple[bool, List[dict]]:
             return False, [_err("file", f"JSON parse error: {e}", "Fix JSON syntax", "json")]
 
     if not isinstance(config, dict):
-        return False, [_err("<root>", "Config must be a dictionary (object)", "Use YAML dict or JSON object", "type")]
+        return False, [
+            _err(
+                "<root>",
+                "Config must be a dictionary (object)",
+                "Use YAML dict or JSON object",
+                "type",
+            )
+        ]
+    if not all(isinstance(key, str) for key in config):
+        return False, [
+            _err("<root>", "Config keys must be strings", "Use named YAML or JSON fields", "type")
+        ]
 
-    errors = _validate_dict(config)
+    errors = _validate_dict(cast(dict[str, object], config))
     return len(errors) == 0, errors
 
 
-def format_errors(errors: List[dict], filepath: Optional[str] = None) -> str:
+def format_errors(errors: Sequence[ConfigError], filepath: str | None = None) -> str:
     """Format error list as a human-readable string."""
     if not errors:
         return ""
 
-    lines = []
+    lines: list[str] = []
     if filepath:
         lines.append(f"Config validation failed: {filepath}")
         lines.append(f"Found {len(errors)} error(s):\n")

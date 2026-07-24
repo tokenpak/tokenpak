@@ -9,6 +9,8 @@ Monitors proxy health and automatically fixes common issues:
 - Logs to ~/.tokenpak/watchdog.log
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -16,7 +18,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import TypeAlias
 
 from tokenpak import _paths  # scoped-home path resolver (honors TOKENPAK_HOME)
 
@@ -52,6 +54,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+_CooldownEntry: TypeAlias = dict[str, object]
+
+
 class CooldownManager:
     """Manage and auto-clear expired auth cooldowns.
 
@@ -65,33 +70,48 @@ class CooldownManager:
 
     HIGH_ERROR_THRESHOLD = 10  # don't clear if errorCount is high (real problem)
 
-    def __init__(self, cooldowns_file: Path = COOLDOWNS_FILE):
+    def __init__(self, cooldowns_file: Path = COOLDOWNS_FILE) -> None:
         self.cooldowns_file = cooldowns_file
 
-    def _load(self) -> Dict:
+    def _load(self) -> dict[str, _CooldownEntry]:
         if not self.cooldowns_file.exists():
             return {}
         try:
-            return json.loads(self.cooldowns_file.read_text())
+            raw = json.loads(self.cooldowns_file.read_text())
+            if not isinstance(raw, dict):
+                return {}
+            entries: dict[str, _CooldownEntry] = {}
+            for key, entry in raw.items():
+                if not isinstance(key, str) or not isinstance(entry, dict):
+                    continue
+                # Preserve provider-specific fields such as usageStats.  The
+                # watchdog narrows only the fields it reads; it does not own
+                # or rewrite the rest of the persisted entry schema.
+                entries[key] = dict(entry)
+            return entries
         except (json.JSONDecodeError, OSError):
             return {}
 
-    def _save(self, data: Dict):
+    def _save(self, data: dict[str, _CooldownEntry]) -> None:
         self.cooldowns_file.write_text(json.dumps(data, indent=2))
 
-    def clear_expired(self) -> List[str]:
+    def clear_expired(self) -> list[str]:
         """Clear cooldowns where cooldownUntil < now. Returns list of cleared keys."""
         data = self._load()
         if not data:
             return []
 
         now = time.time()
-        cleared = []
-        updated = {}
+        cleared: list[str] = []
+        updated: dict[str, _CooldownEntry] = {}
 
         for key, entry in data.items():
-            cooldown_until = entry.get("cooldownUntil", 0)
-            error_count = entry.get("errorCount", 0)
+            raw_cooldown_until = entry.get("cooldownUntil", 0)
+            raw_error_count = entry.get("errorCount", 0)
+            cooldown_until = (
+                float(raw_cooldown_until) if isinstance(raw_cooldown_until, (int, float)) else 0.0
+            )
+            error_count = raw_error_count if isinstance(raw_error_count, int) else 0
 
             if cooldown_until == 0:
                 # No cooldown timestamp — skip
@@ -109,7 +129,7 @@ class CooldownManager:
 
         return cleared
 
-    def check_auth_profiles(self) -> List[str]:
+    def check_auth_profiles(self) -> list[str]:
         """Check auth-profiles.json for profiles with cooldownUntil set. Returns warnings."""
         if not AUTH_PROFILES_FILE.exists():
             return []
@@ -119,12 +139,14 @@ class CooldownManager:
         except (json.JSONDecodeError, OSError):
             return []
 
-        warnings = []
+        warnings: list[str] = []
         now = time.time()
         changed = False
 
         if isinstance(profiles, dict):
             for profile_name, profile in profiles.items():
+                if not isinstance(profile_name, str) or not isinstance(profile, dict):
+                    continue
                 cooldown_until = profile.get("cooldownUntil", 0)
                 if cooldown_until and cooldown_until < now:
                     error_count = profile.get("errorCount", 0)
@@ -151,9 +173,9 @@ class CooldownManager:
 class ProxyWatchdog:
     """Monitor and auto-heal proxy process."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.restart_count = 0
-        self.last_stats_log = 0
+        self.last_stats_log = 0.0
         self.cooldown_mgr = CooldownManager()
 
     def is_proxy_running(self) -> bool:
@@ -227,7 +249,7 @@ class ProxyWatchdog:
             logger.error(f"Failed to restart proxy: {e}")
             return False
 
-    def check_memory_usage(self):
+    def check_memory_usage(self) -> None:
         """Warn if proxy memory exceeds 500MB."""
         try:
             result = subprocess.run(
@@ -252,7 +274,7 @@ class ProxyWatchdog:
         except Exception:
             pass
 
-    def check_error_rate(self):
+    def check_error_rate(self) -> None:
         """Warn if proxy error rate in session is high."""
         try:
             result = subprocess.run(
@@ -269,14 +291,14 @@ class ProxyWatchdog:
         except Exception:
             pass
 
-    def clear_cooldowns(self):
+    def clear_cooldowns(self) -> None:
         """Clear any expired cooldowns from state files."""
         cleared = self.cooldown_mgr.clear_expired()
         warnings = self.cooldown_mgr.check_auth_profiles()
         for w in warnings:
             logger.info(f"Auth profile cooldown active: {w}")
 
-    def log_stats(self):
+    def log_stats(self) -> None:
         """Log summary stats every hour."""
         now = time.time()
         if now - self.last_stats_log > STATS_INTERVAL:
@@ -304,7 +326,7 @@ class ProxyWatchdog:
             except Exception:
                 pass
 
-    def run(self):
+    def run(self) -> None:
         """Main watchdog loop."""
         logger.info("TokenPak watchdog started")
 
@@ -335,7 +357,7 @@ class ProxyWatchdog:
                 time.sleep(HEALTH_CHECK_INTERVAL)
 
 
-def main():
+def main() -> None:
     """Run watchdog daemon."""
     watchdog = ProxyWatchdog()
     watchdog.run()

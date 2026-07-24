@@ -9,6 +9,7 @@ Covers the four known failure modes:
 
 Pipeline under test: pre_send → token estimation → budget check → journal write
 """
+
 from __future__ import annotations
 
 import json
@@ -57,6 +58,7 @@ _REPO_ROOT = str(Path(__file__).parent.parent.parent)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _run_hook(
     hook_input: dict,
     tmp_path: Path,
@@ -93,6 +95,7 @@ def _make_transcript(path: Path, size_bytes: int = 5000) -> Path:
 def _seed_budget_db(db_path: Path, daily_cost: float, budget: float = 0.001) -> None:
     """Pre-seed the budget.db so daily_total equals daily_cost."""
     from tokenpak.companion.budget.tracker import BudgetTracker
+
     tracker = BudgetTracker(db_path=db_path, daily_budget=budget)
     # Record enough tokens to reach daily_cost (using sonnet: $3 / 1M tokens)
     tokens = int(daily_cost / 3.0 * 1_000_000)
@@ -103,6 +106,7 @@ def _seed_budget_db(db_path: Path, daily_cost: float, budget: float = 0.001) -> 
 # ---------------------------------------------------------------------------
 # Failure Mode 1: Hook fails silently (returns OK but doesn't process)
 # ---------------------------------------------------------------------------
+
 
 def test_silent_failure_journal_written_on_allow(tmp_path):
     """Hook returns 0 AND writes a journal entry — not just silent OK.
@@ -157,9 +161,7 @@ def test_silent_failure_stderr_confirms_processing(tmp_path):
     assert "tokenpak" in result.stderr, (
         f"No stderr output — hook may have short-circuited silently: {result.stderr!r}"
     )
-    assert "tokens" in result.stderr, (
-        f"Expected token count in stderr, got: {result.stderr!r}"
-    )
+    assert "tokens" in result.stderr, f"Expected token count in stderr, got: {result.stderr!r}"
 
 
 @pytest.mark.skip(reason=SKIP_HOOK_ALWAYS_JOURNALS_BY_DESIGN)
@@ -197,6 +199,7 @@ def test_silent_failure_zero_token_skips_journal(tmp_path):
 # ---------------------------------------------------------------------------
 # Failure Mode 2: Budget check passes when it should block (threshold off-by-one)
 # ---------------------------------------------------------------------------
+
 
 def test_budget_off_by_one_at_exact_limit_blocks(tmp_path):
     """daily_total + cost_est >= budget must block, not pass through.
@@ -268,9 +271,7 @@ def test_budget_zero_disables_gate(tmp_path):
         tmp_path=tmp_path,
         extra_env={"TOKENPAK_COMPANION_BUDGET": "0"},
     )
-    assert result.returncode == 0, (
-        "Budget=0 must disable the gate, not block everything"
-    )
+    assert result.returncode == 0, "Budget=0 must disable the gate, not block everything"
 
 
 def test_budget_block_seeded_daily_total_exceeds(tmp_path):
@@ -307,6 +308,7 @@ def test_budget_block_seeded_daily_total_exceeds(tmp_path):
 # Failure Mode 3: Journal write drops entries under concurrent access
 # ---------------------------------------------------------------------------
 
+
 def test_concurrent_journal_writes_no_data_loss(tmp_path):
     """5 concurrent hook invocations must all write their journal entries.
 
@@ -336,9 +338,7 @@ def test_concurrent_journal_writes_no_data_loss(tmp_path):
 
     # All hooks must have exited 0
     exit_codes = [r.returncode for r in results]
-    assert all(c == 0 for c in exit_codes), (
-        f"Some concurrent hooks failed: exit codes {exit_codes}"
-    )
+    assert all(c == 0 for c in exit_codes), f"Some concurrent hooks failed: exit codes {exit_codes}"
 
     journal_db = tmp_path / "journal.db"
     assert journal_db.exists(), "journal.db not created by concurrent hooks"
@@ -348,9 +348,7 @@ def test_concurrent_journal_writes_no_data_loss(tmp_path):
     written_ids = {r[0] for r in rows}
     expected_ids = {f"concurrent-session-{i}" for i in range(n_workers)}
     dropped = expected_ids - written_ids
-    assert not dropped, (
-        f"Concurrent journal writes dropped {len(dropped)} session(s): {dropped}"
-    )
+    assert not dropped, f"Concurrent journal writes dropped {len(dropped)} session(s): {dropped}"
 
 
 def test_concurrent_journal_writes_correct_entry_count(tmp_path):
@@ -445,6 +443,7 @@ def test_concurrent_journal_store_direct_no_data_loss(tmp_path):
 # Failure Mode 4: MCP tool dispatch returns wrong error codes for edge cases
 # ---------------------------------------------------------------------------
 
+
 def test_error_code_block_is_2_not_1(tmp_path):
     """Budget block must exit with code 2, not 1 or any other non-zero value.
 
@@ -465,9 +464,7 @@ def test_error_code_block_is_2_not_1(tmp_path):
         tmp_path=tmp_path,
         extra_env={"TOKENPAK_COMPANION_BUDGET": "0.001"},
     )
-    assert result.returncode == 2, (
-        f"Budget block must exit 2 (block), got {result.returncode}"
-    )
+    assert result.returncode == 2, f"Budget block must exit 2 (block), got {result.returncode}"
 
 
 def test_error_code_allow_is_0_not_nonzero(tmp_path):
@@ -526,12 +523,8 @@ def test_error_code_block_json_has_required_fields(tmp_path):
     assert hook_out.get("hookEventName") == "UserPromptSubmit", (
         f"hookEventName missing or wrong: {hook_out}"
     )
-    assert hook_out.get("decision") == "block", (
-        f"decision field missing or wrong: {hook_out}"
-    )
-    assert hook_out.get("reason"), (
-        f"reason field missing or empty: {hook_out}"
-    )
+    assert hook_out.get("decision") == "block", f"decision field missing or wrong: {hook_out}"
+    assert hook_out.get("reason"), f"reason field missing or empty: {hook_out}"
 
 
 def test_error_code_malformed_input_does_not_exit_nonzero(tmp_path):
@@ -541,8 +534,8 @@ def test_error_code_malformed_input_does_not_exit_nonzero(tmp_path):
     which Claude Code treats as a hook error and surfaces to the user.
     """
     malformed_inputs = [
-        "",                          # empty stdin
-        "not json at all",           # garbage
+        "",  # empty stdin
+        "not json at all",  # garbage
         '{"unexpected_key": null}',  # valid JSON, no known fields
         '{"session_id": null, "transcript_path": 12345}',  # wrong types
     ]

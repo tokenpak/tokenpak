@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.triggers.store", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.triggers.store", reason="module not available in current build"
+)
 import json
 
 import pytest
@@ -24,6 +26,7 @@ from tokenpak.cli.trigger_cmd import trigger_group
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def runner():
@@ -39,6 +42,7 @@ def store(tmp_path) -> TriggerStore:
 def patched_group(store, monkeypatch):
     """Patch _store() so CLI commands use our temp store."""
     import tokenpak.cli.trigger_cmd as mod
+
     monkeypatch.setattr(mod, "_store", lambda: store)
     return store
 
@@ -47,27 +51,27 @@ def patched_group(store, monkeypatch):
 # add / remove lifecycle
 # ---------------------------------------------------------------------------
 
+
 class TestAddRemoveLifecycle:
     def test_add_creates_trigger(self, runner, patched_group):
-        result = runner.invoke(trigger_group, [
-            "add", "--event", "git:commit", "--action", "echo committed"
-        ])
+        result = runner.invoke(
+            trigger_group, ["add", "--event", "git:commit", "--action", "echo committed"]
+        )
         assert result.exit_code == 0, result.output
         assert "Trigger added" in result.output
         assert len(patched_group.list()) == 1
 
     def test_add_returns_id(self, runner, patched_group):
-        result = runner.invoke(trigger_group, [
-            "add", "--event", "file:changed:*.py", "--action", "echo py"
-        ])
+        result = runner.invoke(
+            trigger_group, ["add", "--event", "file:changed:*.py", "--action", "echo py"]
+        )
         triggers = patched_group.list()
         assert triggers[0].id in result.output
 
     def test_add_json(self, runner, patched_group):
-        result = runner.invoke(trigger_group, [
-            "add", "--event", "cost:daily>5", "--action", "echo cost",
-            "--json"
-        ])
+        result = runner.invoke(
+            trigger_group, ["add", "--event", "cost:daily>5", "--action", "echo cost", "--json"]
+        )
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["event"] == "cost:daily>5"
@@ -101,9 +105,7 @@ class TestAddRemoveLifecycle:
 
     def test_add_multiple_persist(self, runner, patched_group):
         for event in ["git:commit", "git:push", "file:changed:*.py"]:
-            runner.invoke(trigger_group, [
-                "add", "--event", event, "--action", f"echo {event}"
-            ])
+            runner.invoke(trigger_group, ["add", "--event", event, "--action", f"echo {event}"])
         assert len(patched_group.list()) == 3
 
     def test_remove_one_leaves_others(self, runner, patched_group):
@@ -118,6 +120,7 @@ class TestAddRemoveLifecycle:
 # ---------------------------------------------------------------------------
 # list
 # ---------------------------------------------------------------------------
+
 
 class TestList:
     def test_empty_list(self, runner, patched_group):
@@ -152,29 +155,24 @@ class TestList:
 # test (dry-run / fire)
 # ---------------------------------------------------------------------------
 
+
 class TestTestCmd:
     def test_dry_run_shows_match(self, runner, patched_group):
         patched_group.add(event="git:commit", action="echo committed")
-        result = runner.invoke(trigger_group, [
-            "test", "--event", "git:commit"
-        ])
+        result = runner.invoke(trigger_group, ["test", "--event", "git:commit"])
         assert result.exit_code == 0
         assert "1 trigger" in result.output
         assert "echo committed" in result.output
 
     def test_dry_run_no_match(self, runner, patched_group):
         patched_group.add(event="git:push", action="echo push")
-        result = runner.invoke(trigger_group, [
-            "test", "--event", "git:commit"
-        ])
+        result = runner.invoke(trigger_group, ["test", "--event", "git:commit"])
         assert result.exit_code == 0
         assert "0 of" in result.output
 
     def test_dry_run_json(self, runner, patched_group):
         patched_group.add(event="file:changed:*.py", action="echo py")
-        result = runner.invoke(trigger_group, [
-            "test", "--event", "file:changed:main.py", "--json"
-        ])
+        result = runner.invoke(trigger_group, ["test", "--event", "file:changed:main.py", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert len(data) == 1
@@ -184,9 +182,7 @@ class TestTestCmd:
 
     def test_execute_fires_and_logs(self, runner, patched_group):
         patched_group.add(event="git:commit", action="echo fired")
-        result = runner.invoke(trigger_group, [
-            "test", "--event", "git:commit", "--execute"
-        ])
+        result = runner.invoke(trigger_group, ["test", "--event", "git:commit", "--execute"])
         assert result.exit_code == 0
         # Should produce output from the echo command
         assert "fired" in result.output
@@ -197,9 +193,9 @@ class TestTestCmd:
 
     def test_execute_json_contains_output(self, runner, patched_group):
         patched_group.add(event="git:commit", action="echo hello_output")
-        result = runner.invoke(trigger_group, [
-            "test", "--event", "git:commit", "--execute", "--json"
-        ])
+        result = runner.invoke(
+            trigger_group, ["test", "--event", "git:commit", "--execute", "--json"]
+        )
         data = json.loads(result.output)
         assert data[0]["exit_code"] == 0
         assert "hello_output" in data[0]["output"]
@@ -207,35 +203,29 @@ class TestTestCmd:
     def test_file_event_glob_match(self, runner, patched_group):
         patched_group.add(event="file:changed:*.py", action="echo py")
         patched_group.add(event="file:changed:*.md", action="echo md")
-        result = runner.invoke(trigger_group, [
-            "test", "--event", "file:changed:app.py", "--json"
-        ])
+        result = runner.invoke(trigger_group, ["test", "--event", "file:changed:app.py", "--json"])
         data = json.loads(result.output)
         assert len(data) == 1
         assert "echo py" in data[0]["action"]
 
     def test_cost_threshold_match(self, runner, patched_group):
         patched_group.add(event="cost:daily>5", action="echo expensive")
-        result = runner.invoke(trigger_group, [
-            "test", "--event", "cost:daily>10.00", "--json"
-        ])
+        result = runner.invoke(trigger_group, ["test", "--event", "cost:daily>10.00", "--json"])
         data = json.loads(result.output)
         assert len(data) == 1
 
     def test_agent_event_match(self, runner, patched_group):
         patched_group.add(event="agent:register", action="echo registered")
-        result = runner.invoke(trigger_group, [
-            "test", "--event", "agent:register", "--json"
-        ])
+        result = runner.invoke(trigger_group, ["test", "--event", "agent:register", "--json"])
         data = json.loads(result.output)
         assert len(data) == 1
 
     def test_schedule_cron_stored_and_matched(self, runner, patched_group):
         """schedule:cron events are stored and matched by exact string for daemon use."""
         patched_group.add(event="schedule:cron:*/5 * * * *", action="echo cron")
-        result = runner.invoke(trigger_group, [
-            "test", "--event", "schedule:cron:*/5 * * * *", "--json"
-        ])
+        result = runner.invoke(
+            trigger_group, ["test", "--event", "schedule:cron:*/5 * * * *", "--json"]
+        )
         data = json.loads(result.output)
         assert len(data) == 1
 
@@ -243,6 +233,7 @@ class TestTestCmd:
 # ---------------------------------------------------------------------------
 # log
 # ---------------------------------------------------------------------------
+
 
 class TestLog:
     def test_log_empty(self, runner, patched_group):
@@ -282,9 +273,7 @@ class TestLog:
         patched_group.log_fire(t1, exit_code=0, output="a")
         patched_group.log_fire(t2, exit_code=0, output="b")
         patched_group.log_fire(t1, exit_code=0, output="a2")
-        result = runner.invoke(trigger_group, [
-            "log", "--trigger-id", t1.id, "--json"
-        ])
+        result = runner.invoke(trigger_group, ["log", "--trigger-id", t1.id, "--json"])
         data = json.loads(result.output)
         assert all(d["trigger_id"] == t1.id for d in data)
         assert len(data) == 2

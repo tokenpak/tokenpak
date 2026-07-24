@@ -10,6 +10,7 @@ Covers:
   - UPSERT preserves unrelated fields when only one field is updated
   - budget set --session --max-cost delegates to per-session handler
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -78,6 +79,7 @@ def tmp_monitor_db(tmp_path, monkeypatch):
     monkeypatch.setenv("TOKENPAK_DB", db_path)
     # Patch the CLI helper to return this path directly.
     import tokenpak.cli as _cli
+
     monkeypatch.setattr(_cli, "_get_monitor_db_path", lambda: Path(db_path))
     return db_path
 
@@ -97,6 +99,7 @@ def _read_policy(db_path: str, session_id: str) -> dict | None:
 class TestSessionBudgetSet:
     def test_writes_max_cost(self, tmp_monitor_db, capsys):
         from tokenpak.cli import cmd_session_budget_set
+
         args = SimpleNamespace(session="sess-001", max_cost=5.00)
         cmd_session_budget_set(args)
         policy = _read_policy(tmp_monitor_db, "sess-001")
@@ -105,6 +108,7 @@ class TestSessionBudgetSet:
 
     def test_output_line(self, tmp_monitor_db, capsys):
         from tokenpak.cli import cmd_session_budget_set
+
         args = SimpleNamespace(session="sess-002", max_cost=2.50)
         cmd_session_budget_set(args)
         out = capsys.readouterr().out
@@ -114,6 +118,7 @@ class TestSessionBudgetSet:
     def test_budget_set_delegates_when_session_and_max_cost_given(self, tmp_monitor_db, capsys):
         """budget set --session X --max-cost Y must route to per-session handler."""
         from tokenpak.cli import cmd_budget_set
+
         args = SimpleNamespace(
             session="sess-003",
             max_cost=3.00,
@@ -131,6 +136,7 @@ class TestSessionBudgetSet:
 class TestSessionModeSet:
     def test_writes_mode(self, tmp_monitor_db, capsys):
         from tokenpak.cli import cmd_session_mode_set
+
         args = SimpleNamespace(session="sess-010", mode="transparent")
         cmd_session_mode_set(args)
         policy = _read_policy(tmp_monitor_db, "sess-010")
@@ -139,6 +145,7 @@ class TestSessionModeSet:
 
     def test_writes_safe_mode(self, tmp_monitor_db):
         from tokenpak.cli import cmd_session_mode_set
+
         args = SimpleNamespace(session="sess-011", mode="safe")
         cmd_session_mode_set(args)
         policy = _read_policy(tmp_monitor_db, "sess-011")
@@ -146,6 +153,7 @@ class TestSessionModeSet:
 
     def test_writes_aggressive_mode(self, tmp_monitor_db):
         from tokenpak.cli import cmd_session_mode_set
+
         args = SimpleNamespace(session="sess-012", mode="aggressive")
         cmd_session_mode_set(args)
         policy = _read_policy(tmp_monitor_db, "sess-012")
@@ -155,6 +163,7 @@ class TestSessionModeSet:
 class TestSessionRoutePin:
     def test_writes_route_provider(self, tmp_monitor_db, capsys):
         from tokenpak.cli import cmd_session_route_pin
+
         args = SimpleNamespace(session="sess-020", provider="anthropic")
         cmd_session_route_pin(args)
         policy = _read_policy(tmp_monitor_db, "sess-020")
@@ -163,6 +172,7 @@ class TestSessionRoutePin:
 
     def test_output_line(self, tmp_monitor_db, capsys):
         from tokenpak.cli import cmd_session_route_pin
+
         args = SimpleNamespace(session="sess-021", provider="openai")
         cmd_session_route_pin(args)
         out = capsys.readouterr().out
@@ -174,6 +184,7 @@ class TestUpsertPreservesFields:
     def test_mode_update_preserves_max_cost(self, tmp_monitor_db):
         """Setting mode must not null out a previously set max_cost."""
         from tokenpak.cli import cmd_session_budget_set, cmd_session_mode_set
+
         sid = "sess-030"
         cmd_session_budget_set(SimpleNamespace(session=sid, max_cost=7.00))
         cmd_session_mode_set(SimpleNamespace(session=sid, mode="safe"))
@@ -183,6 +194,7 @@ class TestUpsertPreservesFields:
 
     def test_route_update_preserves_mode_and_cost(self, tmp_monitor_db):
         from tokenpak.cli import cmd_session_budget_set, cmd_session_mode_set, cmd_session_route_pin
+
         sid = "sess-031"
         cmd_session_budget_set(SimpleNamespace(session=sid, max_cost=10.00))
         cmd_session_mode_set(SimpleNamespace(session=sid, mode="aggressive"))

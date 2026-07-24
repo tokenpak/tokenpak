@@ -147,6 +147,7 @@ def test_db_at_newer_version_than_code_is_left_alone(tmp_path: Path, require_fts
 
 # ----- v1 → v2 upgrade coverage --------------------------------------------
 
+
 def test_v2_applies_on_top_of_v1_only(tmp_path: Path, require_fts5: None) -> None:
     """A DB seeded at v1 advances to v2 without re-running v1's DDL."""
     db_path = tmp_path / "recall.db"
@@ -161,8 +162,7 @@ def test_v2_applies_on_top_of_v1_only(tmp_path: Path, require_fts5: None) -> Non
         # Persist the v1 schema_version row by hand so the runner doesn't
         # start from 0 the next time around.
         conn.execute(
-            "INSERT OR REPLACE INTO schema_version (id, version, applied_at) "
-            "VALUES (1, 1, ?)",
+            "INSERT OR REPLACE INTO schema_version (id, version, applied_at) VALUES (1, 1, ?)",
             ("2026-05-11T00:00:00Z",),
         )
         conn.execute("COMMIT")
@@ -235,23 +235,17 @@ def test_v3_applies_on_top_of_v2_only(tmp_path: Path, require_fts5: None) -> Non
             for stmt in mig.statements:
                 conn.execute(stmt)
         conn.execute(
-            "INSERT OR REPLACE INTO schema_version (id, version, applied_at) "
-            "VALUES (1, 2, ?)",
+            "INSERT OR REPLACE INTO schema_version (id, version, applied_at) VALUES (1, 2, ?)",
             ("2026-05-11T00:00:00Z",),
         )
         conn.execute("COMMIT")
         # Snapshot the v2-era ``paks`` schema to assert it is byte-stable
         # across the v3 migration.
-        paks_columns_before = [
-            r[1]
-            for r in conn.execute("PRAGMA table_info(paks)").fetchall()
-        ]
+        paks_columns_before = [r[1] for r in conn.execute("PRAGMA table_info(paks)").fetchall()]
         # Smoke-check the v2 state has no v3 tables yet.
         tables_before = {
             r[0]
-            for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).fetchall()
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
         }
     finally:
         conn.close()
@@ -274,8 +268,7 @@ def test_v3_applies_on_top_of_v2_only(tmp_path: Path, require_fts5: None) -> Non
             ).fetchall()
         }
         paks_columns_after = [
-            r[1]
-            for r in store.conn.execute("PRAGMA table_info(paks)").fetchall()
+            r[1] for r in store.conn.execute("PRAGMA table_info(paks)").fetchall()
         ]
     assert {"pak_reason_codes", "pak_risk_flags"}.issubset(tables_after)
     assert {

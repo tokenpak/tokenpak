@@ -364,7 +364,9 @@ def _looks_like_raw_path(text: str) -> bool:
 
 def _classify_value(value: Any, key: str) -> str:
     normalized = key.lower().replace("-", "_")
-    if normalized in _SECRET_VALUE_KEYS or any(part in normalized for part in ("secret", "token", "key", "password")):
+    if normalized in _SECRET_VALUE_KEYS or any(
+        part in normalized for part in ("secret", "token", "key", "password")
+    ):
         return "secret"
     if value is None:
         return "unset"

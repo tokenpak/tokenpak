@@ -15,7 +15,9 @@ except ImportError:
     _HAS_TREESITTER = False
 
 # Default code processor: tree-sitter if available, regex-based otherwise
-_code_processor = TreeSitterProcessor() if _HAS_TREESITTER else CodeProcessor()
+_code_processor: TreeSitterProcessor | CodeProcessor = (
+    TreeSitterProcessor() if _HAS_TREESITTER else CodeProcessor()
+)
 _code_processor_no_ts = CodeProcessor()
 
 # Image processor (optional — graceful fallback if Pillow not installed)
@@ -26,7 +28,9 @@ try:
 except ImportError:  # pragma: no cover
     _image_processor = None
 
-PROCESSORS = {
+_Processor = TreeSitterProcessor | CodeProcessor | DataProcessor | TextProcessor | ImageProcessor
+
+PROCESSORS: dict[str, _Processor | None] = {
     "text": TextProcessor(),
     "code": _code_processor,
     "data": DataProcessor(),
@@ -34,7 +38,7 @@ PROCESSORS = {
 }
 
 
-def get_processor(file_type: str, no_treesitter: bool = False):
+def get_processor(file_type: str, no_treesitter: bool = False) -> _Processor | None:
     """
     Get the appropriate processor for a file type.
 
@@ -47,4 +51,5 @@ def get_processor(file_type: str, no_treesitter: bool = False):
         return _code_processor_no_ts
     return PROCESSORS.get(file_type)
 
-__all__ = ['code', 'code_treesitter', 'data', 'image', 'text']
+
+__all__ = ["code", "code_treesitter", "data", "image", "text"]

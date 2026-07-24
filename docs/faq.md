@@ -15,7 +15,7 @@ It depends on your usage pattern:
 | Long document analysis | High |
 | Codebase search + compressed context | High (with vault indexing) |
 
-Compression only activates above the threshold (default: 4,500 tokens). Small requests pass through unchanged.
+Compression only activates above the threshold (default: 1,500 tokens). Small requests pass through unchanged.
 
 Check your actual savings:
 
@@ -55,7 +55,7 @@ Yes. TokenPak detects the provider from the `Authorization` header format and ro
 
 ### What's the performance overhead?
 
-Minimal. Compression adds 10–50ms to requests that benefit from it (typically those over 4500 tokens). Small requests are passed through with near-zero overhead. Cold start overhead is under 100ms.
+Minimal. Compression adds 10–50ms to requests that benefit from it (typically those over 1,500 tokens). Small requests are passed through with near-zero overhead. Cold start overhead is under 100ms.
 
 ---
 
@@ -139,7 +139,7 @@ If compression is adding too much latency on small requests:
 
 ```bash
 tokenpak config set compression.mode strict
-# Only compress requests over 4500 tokens
+# Strict mode disables compression.
 ```
 
 ### I'm getting 401 Unauthorized errors
@@ -189,7 +189,7 @@ Or watch the stats footer appended to each response:
 
 Normal — compression is only applied when beneficial. By design:
 
-- Requests under the threshold (`compression.threshold_tokens`, default 4500) are passed through
+- Requests under the threshold (`compression.threshold_tokens`, default 1500) are passed through
 - If the compressed version would only save <5% tokens, it's skipped
 - Code blocks are preserved by default (lossy compression on code is risky)
 
@@ -325,7 +325,7 @@ tokenpak budget alert --at 80
 
 ```
 [INFO] TokenPak proxy starting on :8766
-[INFO] Compression: enabled (hybrid mode, threshold=4500 tokens)
+[INFO] Compression: enabled (hybrid mode, threshold=1500 tokens)
 [INFO] Telemetry: active → ~/.tokenpak/telemetry.db
 [INFO] Ready.
 ```

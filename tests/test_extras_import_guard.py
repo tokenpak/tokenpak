@@ -30,7 +30,9 @@ import pytest
 # slim release test gate must skip cleanly there. This test file's purpose
 # (post-demotion guarded-import smoke) is Python-version-independent —
 # running it on 3.11/3.12/3.13 is sufficient coverage of the invariant.
-tomllib = pytest.importorskip("tomllib", reason="tomllib is stdlib in Python 3.11+; this test runs on 3.11/3.12/3.13")
+tomllib = pytest.importorskip(
+    "tomllib", reason="tomllib is stdlib in Python 3.11+; this test runs on 3.11/3.12/3.13"
+)
 
 import types
 import unittest
@@ -49,8 +51,10 @@ def _load_pyproject() -> dict:
 
 
 def _direct_deps(data: dict) -> list[str]:
-    return [d.split("[")[0].split(">=")[0].split("<=")[0].split("==")[0].split(";")[0].strip()
-            for d in data["project"].get("dependencies", [])]
+    return [
+        d.split("[")[0].split(">=")[0].split("<=")[0].split("==")[0].split(";")[0].strip()
+        for d in data["project"].get("dependencies", [])
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -146,8 +150,14 @@ class PyprojectHeavyDepCheck(unittest.TestCase):
 
     def test_full_meta_extra_references_all_feature_extras(self):
         full_deps = self.opt.get("full", [])
-        for name in ("retrieval", "code-compression", "intelligence", "data",
-                     "compression", "integrations-litellm"):
+        for name in (
+            "retrieval",
+            "code-compression",
+            "intelligence",
+            "data",
+            "compression",
+            "integrations-litellm",
+        ):
             found = any(name in d for d in full_deps)
             self.assertTrue(found, f"full meta-extra must reference [{name}]")
 
@@ -155,6 +165,7 @@ class PyprojectHeavyDepCheck(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Class 2 — ImportError guard smoke tests (mock-based, runnable pre-split)
 # ---------------------------------------------------------------------------
+
 
 class ExtrasGuardSmokeTest(unittest.TestCase):
     """Smoke-test that guarded import sites handle missing deps gracefully.
@@ -231,8 +242,7 @@ class ExtrasGuardSmokeTest(unittest.TestCase):
 
         self.assertFalse(
             offenders,
-            "scipy should have no current tokenpak source import sites: "
-            + ", ".join(offenders),
+            "scipy should have no current tokenpak source import sites: " + ", ".join(offenders),
         )
 
     def test_litellm_proxy_returns_error_without_litellm(self):
@@ -261,15 +271,22 @@ class ExtrasGuardSmokeTest(unittest.TestCase):
 
         # _json_error returns {"error": {"status": <N>, "message": <str>}}
         error_block = result.get("error", {})
-        self.assertEqual(error_block.get("status"), 500,
-                         f"Expected 500 error when litellm is absent, got: {result}")
-        self.assertIn("litellm", error_block.get("message", "").lower(),
-                      "Error message should mention litellm")
+        self.assertEqual(
+            error_block.get("status"),
+            500,
+            f"Expected 500 error when litellm is absent, got: {result}",
+        )
+        self.assertIn(
+            "litellm",
+            error_block.get("message", "").lower(),
+            "Error message should mention litellm",
+        )
 
 
 # ---------------------------------------------------------------------------
 # Class 3 — recovery-UX message tests
 # ---------------------------------------------------------------------------
+
 
 class ExtrasRecoveryMessageTest(unittest.TestCase):
     """Assert every heavy-extra guard names the exact `pip install tokenpak[<extra>]`
@@ -312,8 +329,11 @@ class ExtrasRecoveryMessageTest(unittest.TestCase):
             warnings.simplefilter("always")
             mod.LocalVectorRetriever()
         joined = " ".join(str(w.message) for w in caught)
-        self.assertIn("pip install tokenpak[retrieval]", joined,
-                      f"vector_local guard must name the retrieval extra; got: {joined!r}")
+        self.assertIn(
+            "pip install tokenpak[retrieval]",
+            joined,
+            f"vector_local guard must name the retrieval extra; got: {joined!r}",
+        )
 
     def test_span_extractor_warning_names_retrieval_extra(self):
         """span_extractor warns with `pip install tokenpak[retrieval]` at import."""
@@ -322,8 +342,11 @@ class ExtrasRecoveryMessageTest(unittest.TestCase):
         )
         self.assertFalse(mod._CROSS_ENCODER_AVAILABLE)
         joined = " ".join(messages)
-        self.assertIn("pip install tokenpak[retrieval]", joined,
-                      f"span_extractor guard must name the retrieval extra; got: {joined!r}")
+        self.assertIn(
+            "pip install tokenpak[retrieval]",
+            joined,
+            f"span_extractor guard must name the retrieval extra; got: {joined!r}",
+        )
 
     def test_code_treesitter_warning_names_code_compression_extra(self):
         """code_treesitter warns with `pip install tokenpak[code-compression]` at import."""
@@ -332,8 +355,11 @@ class ExtrasRecoveryMessageTest(unittest.TestCase):
         )
         self.assertFalse(mod._TS_AVAILABLE)
         joined = " ".join(messages)
-        self.assertIn("pip install tokenpak[code-compression]", joined,
-                      f"code_treesitter guard must name the code-compression extra; got: {joined!r}")
+        self.assertIn(
+            "pip install tokenpak[code-compression]",
+            joined,
+            f"code_treesitter guard must name the code-compression extra; got: {joined!r}",
+        )
 
     def test_llmlingua_runtime_error_names_compression_extra(self):
         """LLMLinguaEngine.compact raises naming `pip install tokenpak[compression]`."""
@@ -341,12 +367,14 @@ class ExtrasRecoveryMessageTest(unittest.TestCase):
 
         with patch.dict(sys.modules, {"llmlingua": None}):
             engine = LLMLinguaEngine()
-        self.assertFalse(engine._available,
-                         "engine must degrade when llmlingua is absent")
+        self.assertFalse(engine._available, "engine must degrade when llmlingua is absent")
         with self.assertRaises(RuntimeError) as ctx:
             engine.compact("hello world")
-        self.assertIn("pip install tokenpak[compression]", str(ctx.exception),
-                      "LLMLingua runtime error must name the compression extra")
+        self.assertIn(
+            "pip install tokenpak[compression]",
+            str(ctx.exception),
+            "LLMLingua runtime error must name the compression extra",
+        )
 
     def test_litellm_proxy_error_names_integrations_litellm_extra(self):
         """ProxyHandler 500 error names `pip install tokenpak[integrations-litellm]`."""
@@ -369,13 +397,17 @@ class ExtrasRecoveryMessageTest(unittest.TestCase):
             loop.close()
 
         message = result.get("error", {}).get("message", "")
-        self.assertIn("pip install tokenpak[integrations-litellm]", message,
-                      f"litellm proxy guard must name the integrations-litellm extra; got: {message!r}")
+        self.assertIn(
+            "pip install tokenpak[integrations-litellm]",
+            message,
+            f"litellm proxy guard must name the integrations-litellm extra; got: {message!r}",
+        )
 
 
 # ---------------------------------------------------------------------------
 # Standalone runner (no pytest required)
 # ---------------------------------------------------------------------------
+
 
 def _standalone():
 

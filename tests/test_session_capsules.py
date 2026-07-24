@@ -1,7 +1,8 @@
-
 import pytest
 
-pytest.importorskip("tokenpak._internal.memory.session_capsules", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.memory.session_capsules", reason="module not available in current build"
+)
 from tokenpak._internal.memory.session_capsules import (
     REQUIRED_CAPSULE_SECTIONS,
     build_session_capsule,
@@ -78,11 +79,27 @@ def test_retrieval_prioritizes_capsule_high_signal_sections_over_raw_only():
         "raw_transcript_reference": {"source_path": "memory/raw.md", "sha256": "abc"},
     }
 
-    assert capsule_retrieval_score(10.0, rich_capsule) > capsule_retrieval_score(10.0, raw_only_capsule)
+    assert capsule_retrieval_score(10.0, rich_capsule) > capsule_retrieval_score(
+        10.0, raw_only_capsule
+    )
 
     results = [
-        ({"source_path": "raw.md", "block_id": "b", "metadata": {"session_capsule": raw_only_capsule}}, 10.0),
-        ({"source_path": "rich.md", "block_id": "a", "metadata": {"session_capsule": rich_capsule}}, 10.0),
+        (
+            {
+                "source_path": "raw.md",
+                "block_id": "b",
+                "metadata": {"session_capsule": raw_only_capsule},
+            },
+            10.0,
+        ),
+        (
+            {
+                "source_path": "rich.md",
+                "block_id": "a",
+                "metadata": {"session_capsule": rich_capsule},
+            },
+            10.0,
+        ),
     ]
     ranked = sort_retrieval_results(results)
     assert ranked[0][0]["source_path"] == "rich.md"

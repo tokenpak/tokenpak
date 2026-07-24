@@ -12,23 +12,27 @@ import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
+
+AlertPayload = dict[str, object]
 
 try:
     import yaml as _yaml
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> AlertPayload:
         with open(path, "r") as f:
-            return _yaml.safe_load(f) or {}
+            loaded: object = _yaml.safe_load(f) or {}
+            return cast(AlertPayload, loaded) if isinstance(loaded, dict) else {}
 
 except ImportError:
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> AlertPayload:
         import json
 
         try:
             with open(path, "r") as f:
-                return json.load(f)
+                loaded: object = json.load(f)
+                return cast(AlertPayload, loaded) if isinstance(loaded, dict) else {}
         except Exception:
             return {}
 
@@ -59,15 +63,15 @@ class AlertRuleState:
         elapsed_minutes = (time.time() - self.last_fired) / 60
         return elapsed_minutes >= cooldown_minutes
 
-    def update_fired(self, value: float = 0.0):
+    def update_fired(self, value: float = 0.0) -> None:
         """Record that this alert fired."""
         self.last_fired = time.time()
         self.last_value = value
         self.fired_count += 1
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> AlertPayload:
         """Serialize alert to a plain dictionary."""
-        return asdict(self)
+        return cast(AlertPayload, asdict(self))
 
 
 def _get_config_path() -> Path:
@@ -108,7 +112,7 @@ def _get_default_rules() -> list[AlertRule]:
     ]
 
 
-def load_config() -> dict:
+def load_config() -> AlertPayload:
     """Load alert configuration from ~/.tokenpak/config.yaml.
 
     Returns config with 'alerts' key containing rules and settings.
@@ -120,8 +124,9 @@ def load_config() -> dict:
     if config_path.exists():
         try:
             config = _load_yaml(str(config_path))
-            if config and "alerts" in config:
-                return config.get("alerts", {})
+            alerts = config.get("alerts")
+            if isinstance(alerts, dict):
+                return cast(AlertPayload, alerts)
         except Exception:
             pass
 
@@ -141,13 +146,16 @@ def load_state() -> dict[str, AlertRuleState]:
 
     try:
         with open(state_path, "r") as f:
-            data = json.load(f)
+            loaded: object = json.load(f)
+        if not isinstance(loaded, dict):
+            return {}
+        data = cast(dict[str, dict[str, object]], loaded)
         return {
             name: AlertRuleState(
                 name=name,
-                last_fired=entry.get("last_fired"),
-                last_value=entry.get("last_value"),
-                fired_count=entry.get("fired_count", 0),
+                last_fired=cast(Optional[float], entry.get("last_fired")),
+                last_value=cast(Optional[float], entry.get("last_value")),
+                fired_count=cast(int, entry.get("fired_count", 0)),
             )
             for name, entry in data.items()
         }
@@ -155,7 +163,7 @@ def load_state() -> dict[str, AlertRuleState]:
         return {}
 
 
-def save_state(state: dict[str, AlertRuleState]):
+def save_state(state: dict[str, AlertRuleState]) -> None:
     """Persist alert state to ~/.tokenpak/alert_state.json."""
     state_path = _get_state_path()
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -165,31 +173,37 @@ def save_state(state: dict[str, AlertRuleState]):
         json.dump(data, f, indent=2)
 
 
-def _get_proxy_stats() -> dict:
+def _get_proxy_stats() -> AlertPayload:
     """Fetch live stats from proxy."""
     import urllib.request as _urlreq
 
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
     try:
         resp = _urlreq.urlopen(f"http://127.0.0.1:{port}/stats", timeout=2)
-        return json.loads(resp.read())
+        loaded: object = json.loads(resp.read())
+        return cast(AlertPayload, loaded) if isinstance(loaded, dict) else {}
     except Exception:
         return {}
 
 
-def _get_proxy_health() -> dict:
+def _get_proxy_health() -> AlertPayload:
     """Fetch health status from proxy."""
     import urllib.request as _urlreq
 
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
     try:
         resp = _urlreq.urlopen(f"http://127.0.0.1:{port}/health", timeout=2)
-        return json.loads(resp.read())
+        loaded: object = json.loads(resp.read())
+        return cast(AlertPayload, loaded) if isinstance(loaded, dict) else {}
     except Exception:
         return {}
 
 
-def evaluate_rule(rule: AlertRule, stats: dict, health: dict) -> tuple[bool, Optional[float]]:
+def evaluate_rule(
+    rule: AlertRule,
+    stats: AlertPayload,
+    health: AlertPayload,
+) -> tuple[bool, Optional[float]]:
     """Evaluate a single alert rule against current stats.
 
     Args:
@@ -205,8 +219,8 @@ def evaluate_rule(rule: AlertRule, stats: dict, health: dict) -> tuple[bool, Opt
     # Parse simple conditions
     if "cache_hit_rate" in cond:
         cache_stats = _get_proxy_cache_stats() or {}
-        hits = cache_stats.get("cache_hits", 0)
-        misses = cache_stats.get("cache_misses", 0)
+        hits = cast(float, cache_stats.get("cache_hits", 0))
+        misses = cast(float, cache_stats.get("cache_misses", 0))
         total = hits + misses
         value = (hits / total * 100) if total > 0 else 0.0
 
@@ -218,8 +232,8 @@ def evaluate_rule(rule: AlertRule, stats: dict, health: dict) -> tuple[bool, Opt
             return (value <= threshold, value)
 
     elif "error_rate" in cond:
-        requests = stats.get("requests", 0)
-        errors = stats.get("errors", 0)
+        requests = cast(float, stats.get("requests", 0))
+        errors = cast(float, stats.get("errors", 0))
         value = (errors / requests * 100) if requests > 0 else 0.0
 
         if "> " in cond:
@@ -240,14 +254,15 @@ def evaluate_rule(rule: AlertRule, stats: dict, health: dict) -> tuple[bool, Opt
     return (False, None)
 
 
-def _get_proxy_cache_stats() -> dict:
+def _get_proxy_cache_stats() -> AlertPayload:
     """Fetch cache stats from proxy."""
     import urllib.request as _urlreq
 
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
     try:
         resp = _urlreq.urlopen(f"http://127.0.0.1:{port}/cache-stats", timeout=2)
-        return json.loads(resp.read())
+        loaded: object = json.loads(resp.read())
+        return cast(AlertPayload, loaded) if isinstance(loaded, dict) else {}
     except Exception:
         return {}
 
@@ -262,7 +277,7 @@ def check_alerts() -> list[tuple[AlertRule, Optional[float]]]:
     if not config.get("enabled", True):
         return []
 
-    rules_config = config.get("rules", [])
+    rules_config = cast(list[dict[str, object]], config.get("rules", []))
     if not rules_config:
         rules_config = [asdict(r) for r in _get_default_rules()]
 
@@ -274,9 +289,14 @@ def check_alerts() -> list[tuple[AlertRule, Optional[float]]]:
     health = _get_proxy_health()
 
     # Evaluate rules
-    fired = []
+    fired: list[tuple[AlertRule, Optional[float]]] = []
     for rule_dict in rules_config:
-        rule = AlertRule(**rule_dict)
+        rule = AlertRule(
+            name=cast(str, rule_dict["name"]),
+            condition=cast(str, rule_dict["condition"]),
+            message=cast(str, rule_dict["message"]),
+            cooldown_minutes=cast(int, rule_dict.get("cooldown_minutes", 30)),
+        )
 
         # Check if rule should fire
         should_check = True
@@ -302,6 +322,7 @@ def check_alerts() -> list[tuple[AlertRule, Optional[float]]]:
     if fired:
         try:
             from .channels import dispatch
+
             for rule, value in fired:
                 msg = rule.message
                 if value is not None and "{value" in msg:
@@ -318,4 +339,5 @@ def check_alerts() -> list[tuple[AlertRule, Optional[float]]]:
 
     return fired
 
-__all__ = ['channels']
+
+__all__ = ["channels"]

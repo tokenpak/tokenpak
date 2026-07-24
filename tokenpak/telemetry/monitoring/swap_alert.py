@@ -11,6 +11,7 @@ Usage:
     # Call periodically (e.g. every 60s in proxy health loop)
     check_swap_pressure()
 """
+
 import json
 import logging
 import os
@@ -70,9 +71,10 @@ def _get_swap_mb() -> tuple[float, float, float]:
 
     try:
         import psutil
+
         s = psutil.swap_memory()
-        used_mb = s.used / 1024 ** 2
-        total_mb = s.total / 1024 ** 2
+        used_mb = s.used / 1024**2
+        total_mb = s.total / 1024**2
         return used_mb, total_mb, s.percent
     except ImportError:
         return 0.0, 0.0, 0.0
@@ -84,9 +86,8 @@ def _get_telegram_token() -> Optional[str]:
     try:
         with open(config_path) as f:
             cfg = json.load(f)
-        return (
-            cfg.get("channels", {}).get("telegram", {}).get("botToken")
-            or os.environ.get("TELEGRAM_BOT_TOKEN")
+        return cfg.get("channels", {}).get("telegram", {}).get("botToken") or os.environ.get(
+            "TELEGRAM_BOT_TOKEN"
         )
     except Exception:
         return os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -100,11 +101,13 @@ def _send_telegram(message: str) -> bool:
         return False
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = json.dumps({
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML",
-    }).encode()
+    payload = json.dumps(
+        {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "HTML",
+        }
+    ).encode()
 
     try:
         req = urllib.request.Request(

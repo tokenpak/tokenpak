@@ -1,4 +1,5 @@
 """TokenPak vault package — re-exports from agent.vault for compatibility."""
+
 import os as _os
 
 # Canonical path to the vault-editable install root.
@@ -21,4 +22,22 @@ try:
 except ImportError:
     pass
 
-__all__ = ['ast_parser', 'backend_protocol', 'blocks', 'chunk_shapes', 'chunk_shaping', 'health', 'indexer', 'progressive_disclosure', 'query_expansion', 'retrieval', 'scoring', 'search', 'slicer', 'sqlite_backend', 'symbol_extraction', 'symbols', 'watcher']
+__all__ = [
+    "ast_parser",
+    "backend_protocol",
+    "blocks",
+    "chunk_shapes",
+    "chunk_shaping",
+    "health",
+    "indexer",
+    "progressive_disclosure",
+    "query_expansion",
+    "retrieval",
+    "scoring",
+    "search",
+    "slicer",
+    "sqlite_backend",
+    "symbol_extraction",
+    "symbols",
+    "watcher",
+]

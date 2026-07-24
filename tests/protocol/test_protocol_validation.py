@@ -8,7 +8,6 @@ Tests cover:
 - Round-trip: all example files load and validate
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.validator", reason="module not available in current build")
@@ -37,8 +36,8 @@ def validator():
 
 # ── Valid packs ───────────────────────────────────────────────────────────────
 
-class TestValidPacks:
 
+class TestValidPacks:
     def test_minimal_pack_is_valid(self, validator):
         result = validator.validate(VALID_PACK_MINIMAL)
         assert result.valid, f"Expected valid, got errors: {result.errors}"
@@ -54,12 +53,24 @@ class TestValidPacks:
         assert result.valid
 
     def test_all_block_types_accepted(self, validator):
-        types = ["instructions", "code", "knowledge", "memory", "conversation", "evidence", "system"]
+        types = [
+            "instructions",
+            "code",
+            "knowledge",
+            "memory",
+            "conversation",
+            "evidence",
+            "system",
+        ]
         for btype in types:
             pack = {
-                "header": {"version": "1.0", "id": f"pak_{btype}", "created": "2026-03-07T00:00:00Z"},
+                "header": {
+                    "version": "1.0",
+                    "id": f"pak_{btype}",
+                    "created": "2026-03-07T00:00:00Z",
+                },
                 "metadata": {"task": "test", "source": "agent:test"},
-                "blocks": [{"type": btype, "id": "blk", "content": "content"}]
+                "blocks": [{"type": btype, "id": "blk", "content": "content"}],
             }
             result = validator.validate(pack)
             assert result.valid, f"Block type '{btype}' should be valid, got: {result.errors}"
@@ -69,7 +80,9 @@ class TestValidPacks:
             pack = {
                 "header": {"version": "1.0", "id": "pak_pri", "created": "2026-03-07T00:00:00Z"},
                 "metadata": {"task": "test", "source": "agent:test"},
-                "blocks": [{"type": "knowledge", "id": "blk", "content": "content", "priority": priority}]
+                "blocks": [
+                    {"type": "knowledge", "id": "blk", "content": "content", "priority": priority}
+                ],
             }
             result = validator.validate(pack)
             assert result.valid, f"Priority '{priority}' should be valid"
@@ -89,27 +102,43 @@ class TestValidPacks:
             "header": {"version": "1.0", "id": "pak_full", "created": "2026-03-07T00:00:00Z"},
             "metadata": {"task": "test", "source": "agent:a", "target": "agent:b", "tags": ["x"]},
             "blocks": [
-                {"type": "instructions", "id": "sys", "content": "Be helpful.", "priority": "critical"},
-                {"type": "knowledge", "id": "ctx", "content": "Context.", "priority": "high", "quality": 0.9},
+                {
+                    "type": "instructions",
+                    "id": "sys",
+                    "content": "Be helpful.",
+                    "priority": "critical",
+                },
+                {
+                    "type": "knowledge",
+                    "id": "ctx",
+                    "content": "Context.",
+                    "priority": "high",
+                    "quality": 0.9,
+                },
             ],
             "capabilities": {
                 "tools": [{"name": "read", "description": "Read a file", "provider": "local"}],
-                "mcp_servers": [{"uri": "mcp://localhost/fs", "name": "fs"}]
+                "mcp_servers": [{"uri": "mcp://localhost/fs", "name": "fs"}],
             },
             "constraints": {
                 "model": {"requires_tools": True},
-                "guardrails": {"max_cost_usd": 1.0, "timeout_seconds": 60}
+                "guardrails": {"max_cost_usd": 1.0, "timeout_seconds": 60},
             },
-            "state": {"workflow_id": "wf1", "step_index": 0, "resumable": True, "status": "in_progress"},
+            "state": {
+                "workflow_id": "wf1",
+                "step_index": 0,
+                "resumable": True,
+                "status": "in_progress",
+            },
             "provenance": {
                 "source_packs": [],
                 "transforms": [{"type": "enrich", "agent": "agent:a"}],
-                "trust_level": "verified"
+                "trust_level": "verified",
             },
             "policies": {
                 "compaction": {"mode": "balanced", "max_tokens": 8000},
-                "budget": {"total": 8000, "per_block_max": 2000, "reserve_for_output": 2000}
-            }
+                "budget": {"total": 8000, "per_block_max": 2000, "reserve_for_output": 2000},
+            },
         }
         result = validator.validate(pack)
         assert result.valid, f"Full pack errors: {[(e.field, e.message) for e in result.errors]}"
@@ -118,7 +147,7 @@ class TestValidPacks:
         pack = {
             "header": {"version": "1.0", "id": "pak_ids", "created": "2026-03-07T00:00:00Z"},
             "metadata": {"task": "t", "source": "a"},
-            "blocks": [{"type": "knowledge", "id": "my-block.v2_test", "content": "x"}]
+            "blocks": [{"type": "knowledge", "id": "my-block.v2_test", "content": "x"}],
         }
         result = validator.validate(pack)
         assert result.valid
@@ -138,8 +167,8 @@ class TestValidPacks:
 
 # ── Invalid packs ─────────────────────────────────────────────────────────────
 
-class TestInvalidPacks:
 
+class TestInvalidPacks:
     def test_missing_header_is_invalid(self, validator):
         result = validator.validate(INVALID_PACK_MISSING_HEADER)
         assert not result.valid
@@ -175,7 +204,7 @@ class TestInvalidPacks:
         pack = {
             "header": {"version": "1.0", "id": "pak_x", "created": "2026-03-07T00:00:00Z"},
             "metadata": {"source": "agent:x"},
-            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}]
+            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}],
         }
         result = validator.validate(pack)
         assert not result.valid
@@ -185,7 +214,7 @@ class TestInvalidPacks:
         pack = {
             "header": {"version": "1.0", "id": "pak_x", "created": "2026-03-07T00:00:00Z"},
             "metadata": {"task": "test"},
-            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}]
+            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}],
         }
         result = validator.validate(pack)
         assert not result.valid
@@ -195,7 +224,7 @@ class TestInvalidPacks:
         pack = {
             "header": {"version": "1.0", "created": "2026-03-07T00:00:00Z"},
             "metadata": {"task": "t", "source": "a"},
-            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}]
+            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}],
         }
         result = validator.validate(pack)
         assert not result.valid
@@ -204,7 +233,7 @@ class TestInvalidPacks:
         pack = {
             "header": {"version": "1.0", "id": "pak_x"},
             "metadata": {"task": "t", "source": "a"},
-            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}]
+            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}],
         }
         result = validator.validate(pack)
         assert not result.valid
@@ -213,7 +242,7 @@ class TestInvalidPacks:
         pack = {
             "header": {"version": "1.0", "id": "pak_x", "created": "2026-03-07T00:00:00Z"},
             "metadata": {"task": "t", "source": "a"},
-            "blocks": [{"type": "knowledge", "id": "b"}]
+            "blocks": [{"type": "knowledge", "id": "b"}],
         }
         result = validator.validate(pack)
         assert not result.valid
@@ -222,7 +251,7 @@ class TestInvalidPacks:
         pack = {
             "header": {"version": "1.0", "id": "pak_x", "created": "2026-03-07T00:00:00Z"},
             "metadata": {"task": "t", "source": "a"},
-            "blocks": [{"type": "knowledge", "content": "x"}]
+            "blocks": [{"type": "knowledge", "content": "x"}],
         }
         result = validator.validate(pack)
         assert not result.valid
@@ -243,7 +272,7 @@ class TestInvalidPacks:
         pack = {
             "header": {"version": "1.0", "id": "pak_x", "created": "not-a-date"},
             "metadata": {"task": "t", "source": "a"},
-            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}]
+            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}],
         }
         result = validator.validate(pack)
         assert not result.valid
@@ -273,20 +302,23 @@ class TestInvalidPacks:
 
 # ── Warning conditions ────────────────────────────────────────────────────────
 
-class TestWarnings:
 
+class TestWarnings:
     def test_past_expires_generates_warning(self, validator):
         pack = {**VALID_PACK_MINIMAL}
         pack["metadata"] = {**pack["metadata"], "expires": "2020-01-01T00:00:00Z"}
         result = validator.validate(pack)
         # Should be valid (warnings don't fail), but have a warning
         assert result.valid
-        assert any("past" in w.message.lower() or "expired" in w.message.lower() for w in result.warnings)
+        assert any(
+            "past" in w.message.lower() or "expired" in w.message.lower() for w in result.warnings
+        )
 
     def test_per_block_max_exceeds_total_generates_warning(self, validator):
-        pack = {**VALID_PACK_MINIMAL, "policies": {
-            "budget": {"total": 1000, "per_block_max": 2000, "reserve_for_output": 0}
-        }}
+        pack = {
+            **VALID_PACK_MINIMAL,
+            "policies": {"budget": {"total": 1000, "per_block_max": 2000, "reserve_for_output": 0}},
+        }
         result = validator.validate(pack)
         assert result.valid
         assert any("per_block_max" in w.field for w in result.warnings)
@@ -295,7 +327,7 @@ class TestWarnings:
         pack = {
             "header": {"version": "1.99", "id": "pak_future", "created": "2026-03-07T00:00:00Z"},
             "metadata": {"task": "t", "source": "a"},
-            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}]
+            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}],
         }
         result = validator.validate(pack)
         assert result.valid  # minor version = warn but don't fail
@@ -305,7 +337,7 @@ class TestWarnings:
         pack = {
             "header": {"version": "1.0", "id": "pak_x", "created": "2026-03-07T00:00:00Z"},
             "metadata": {"task": "t", "source": "a", "tags": ["foo", "foo"]},
-            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}]
+            "blocks": [{"type": "knowledge", "id": "b", "content": "x"}],
         }
         result = validator.validate(pack)
         assert result.valid
@@ -314,8 +346,8 @@ class TestWarnings:
 
 # ── Verbose / quality hints ───────────────────────────────────────────────────
 
-class TestVerboseHints:
 
+class TestVerboseHints:
     def test_verbose_flags_missing_target(self, validator):
         result = validator.validate(VALID_PACK_MINIMAL, verbose=True)
         assert result.valid
@@ -334,32 +366,37 @@ class TestVerboseHints:
 
 # ── Round-trip: example files ─────────────────────────────────────────────────
 
-class TestExampleFiles:
 
-    @pytest.mark.parametrize("example_file", [
-        "minimal.tokenpak.json",
-        "full.tokenpak.json",
-        "agent_handoff.tokenpak.json",
-        "mcp_enabled.tokenpak.json",
-        "rag_retrieval.tokenpak.json",
-    ])
+class TestExampleFiles:
+    @pytest.mark.parametrize(
+        "example_file",
+        [
+            "minimal.tokenpak.json",
+            "full.tokenpak.json",
+            "agent_handoff.tokenpak.json",
+            "mcp_enabled.tokenpak.json",
+            "rag_retrieval.tokenpak.json",
+        ],
+    )
     def test_example_file_is_valid(self, validator, example_file):
         path = EXAMPLES_DIR / example_file
         if not path.exists():
             pytest.skip(f"Example file not found: {path}")
         result = validator.validate_file(path)
-        assert result.valid, (
-            f"Example '{example_file}' failed validation:\n"
-            + "\n".join(str(e) for e in result.errors)
+        assert result.valid, f"Example '{example_file}' failed validation:\n" + "\n".join(
+            str(e) for e in result.errors
         )
 
-    @pytest.mark.parametrize("example_file", [
-        "minimal.tokenpak.json",
-        "full.tokenpak.json",
-        "agent_handoff.tokenpak.json",
-        "mcp_enabled.tokenpak.json",
-        "rag_retrieval.tokenpak.json",
-    ])
+    @pytest.mark.parametrize(
+        "example_file",
+        [
+            "minimal.tokenpak.json",
+            "full.tokenpak.json",
+            "agent_handoff.tokenpak.json",
+            "mcp_enabled.tokenpak.json",
+            "rag_retrieval.tokenpak.json",
+        ],
+    )
     def test_example_file_is_valid_json(self, example_file):
         path = EXAMPLES_DIR / example_file
         if not path.exists():
@@ -368,13 +405,16 @@ class TestExampleFiles:
             data = json.load(f)
         assert isinstance(data, dict)
 
-    @pytest.mark.parametrize("example_file", [
-        "minimal.tokenpak.json",
-        "full.tokenpak.json",
-        "agent_handoff.tokenpak.json",
-        "mcp_enabled.tokenpak.json",
-        "rag_retrieval.tokenpak.json",
-    ])
+    @pytest.mark.parametrize(
+        "example_file",
+        [
+            "minimal.tokenpak.json",
+            "full.tokenpak.json",
+            "agent_handoff.tokenpak.json",
+            "mcp_enabled.tokenpak.json",
+            "rag_retrieval.tokenpak.json",
+        ],
+    )
     def test_example_file_has_required_sections(self, example_file):
         path = EXAMPLES_DIR / example_file
         if not path.exists():
@@ -389,8 +429,8 @@ class TestExampleFiles:
 
 # ── Schema file ───────────────────────────────────────────────────────────────
 
-class TestSchemaFile:
 
+class TestSchemaFile:
     def test_schema_file_exists(self):
         assert (SCHEMAS_DIR / "tokenpak-v1.0.json").exists()
 

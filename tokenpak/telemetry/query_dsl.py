@@ -119,18 +119,18 @@ def _default_db_path() -> Path:
     return get_db_path("telemetry.db")
 
 
-def _get_conn(db_path=None):
+def _get_conn(db_path: str | Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path or _default_db_path()))
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def _ts_range(days):
+def _ts_range(days: int) -> tuple[float, float]:
     end = time.time()
     return end - days * 86400, end
 
 
-def get_cost_summary(db_path=None, days=30) -> CostSummary:
+def get_cost_summary(db_path: str | Path | None = None, days: int = 30) -> CostSummary:
     """Query aggregated cost summary from the telemetry DB."""
     conn = _get_conn(db_path)
     try:
@@ -163,7 +163,7 @@ def get_cost_summary(db_path=None, days=30) -> CostSummary:
         conn.close()
 
 
-def get_model_usage(db_path=None, days=30) -> list[ModelUsage]:
+def get_model_usage(db_path: str | Path | None = None, days: int = 30) -> list[ModelUsage]:
     """Query per-model token usage from the telemetry DB."""
     conn = _get_conn(db_path)
     try:
@@ -187,7 +187,7 @@ def get_model_usage(db_path=None, days=30) -> list[ModelUsage]:
         conn.close()
 
 
-def get_savings_report(db_path=None, days=30) -> SavingsReport:
+def get_savings_report(db_path: str | Path | None = None, days: int = 30) -> SavingsReport:
     """Query token savings (raw vs compressed) from the telemetry DB.
 
     Only counts savings from proxy-managed routes (where tokenpak actually
@@ -196,6 +196,7 @@ def get_savings_report(db_path=None, days=30) -> SavingsReport:
     client, not by tokenpak.
     """
     import sqlite3
+
     conn = _get_conn(db_path)
     try:
         s, e = _ts_range(days)
@@ -239,7 +240,9 @@ def get_savings_report(db_path=None, days=30) -> SavingsReport:
         conn.close()
 
 
-def get_recent_events(db_path=None, limit=50) -> list[dict]:
+def get_recent_events(
+    db_path: str | Path | None = None, limit: int = 50
+) -> list[dict[str, object]]:
     """Fetch the most recent telemetry events up to limit."""
     conn = _get_conn(db_path)
     try:
@@ -269,7 +272,9 @@ def get_recent_events(db_path=None, limit=50) -> list[dict]:
         conn.close()
 
 
-def get_model_compression_breakdown(db_path=None, days=1) -> list[ModelCompressionBreakdown]:
+def get_model_compression_breakdown(
+    db_path: str | Path | None = None, days: int = 1
+) -> list[ModelCompressionBreakdown]:
     """Query per-model compression ratio breakdown from the telemetry DB.
 
     Joins tp_events with tp_costs and tp_usage to compute per-model compression
@@ -339,7 +344,7 @@ def get_model_compression_breakdown(db_path=None, days=1) -> list[ModelCompressi
         conn.close()
 
 
-def get_daily_trend(db_path=None, days=30) -> list[DailyTrend]:
+def get_daily_trend(db_path: str | Path | None = None, days: int = 30) -> list[DailyTrend]:
     """Fetch daily aggregated usage for trend charts."""
     conn = _get_conn(db_path)
     try:

@@ -42,9 +42,7 @@ class TestDecisionMemoryDB:
     def test_record_decision(self, temp_db):
         """Test recording a decision."""
         record_id = temp_db.record(
-            query="Should we use BM25?",
-            decision="Yes, for <10K blocks",
-            confidence=0.8
+            query="Should we use BM25?", decision="Yes, for <10K blocks", confidence=0.8
         )
 
         assert record_id is not None
@@ -53,10 +51,7 @@ class TestDecisionMemoryDB:
 
     def test_record_decision_defaults(self, temp_db):
         """Test recording with default confidence."""
-        record_id = temp_db.record(
-            query="Test query",
-            decision="Test decision"
-        )
+        record_id = temp_db.record(query="Test query", decision="Test decision")
 
         record = temp_db.get(record_id)
         assert record.confidence == 0.7  # default
@@ -132,10 +127,7 @@ class TestDecisionMemoryDB:
         record_id = temp_db.record("Test", "Decision", confidence=0.7)
 
         success = temp_db.record_outcome(
-            record_id,
-            outcome="Good result",
-            success=True,
-            notes="Worked as expected"
+            record_id, outcome="Good result", success=True, notes="Worked as expected"
         )
 
         assert success is True
@@ -150,10 +142,7 @@ class TestDecisionMemoryDB:
         record_id = temp_db.record("Test", "Decision", confidence=0.7)
 
         success = temp_db.record_outcome(
-            record_id,
-            outcome="Bad result",
-            success=False,
-            notes="Didn't work"
+            record_id, outcome="Bad result", success=False, notes="Didn't work"
         )
 
         assert success is True
@@ -241,7 +230,7 @@ class TestDecisionMemoryDB:
             timestamp="2026-03-27T00:00:00Z",
             outcome="Good",
             success=True,
-            notes="Test note"
+            notes="Test note",
         )
 
         assert record.id == "dec_123"

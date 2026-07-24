@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from datetime import date as Date
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -511,9 +512,9 @@ class RollupEngine:
     # Date-targeted rollup computation (Phase 7H)
     # ------------------------------------------------------------------
 
-    def compute_daily_rollups(self, date) -> int:
+    def compute_daily_rollups(self, date: Date | str) -> int:
         """Compute rollups for a specific calendar date. Idempotent."""
-        date_str = date.isoformat() if hasattr(date, "isoformat") else str(date)
+        date_str = date.isoformat() if isinstance(date, Date) else date
         cur = self._conn.cursor()
         total = 0
         for table, group_field in [
@@ -550,9 +551,9 @@ class RollupEngine:
         self._set_state("last_refresh", str(_now()))
         return total
 
-    def compute_hourly_rollups(self, date) -> int:
+    def compute_hourly_rollups(self, date: Date | str) -> int:
         """Compute hourly rollups for a specific date. Idempotent."""
-        date_str = date.isoformat() if hasattr(date, "isoformat") else str(date)
+        date_str = date.isoformat() if isinstance(date, Date) else date
         cur = self._conn.cursor()
         cur.execute("DELETE FROM tp_rollup_daily_model WHERE date LIKE ?", (f"{date_str}T%",))
         cur.execute(
@@ -583,7 +584,7 @@ class RollupEngine:
         self._conn.commit()
         return total
 
-    def rebuild_all_rollups(self, from_date, to_date) -> dict:
+    def rebuild_all_rollups(self, from_date: Date, to_date: Date) -> dict[str, int]:
         """Rebuild daily rollups for a date range. Returns {dates_processed, total_rows}."""
         from datetime import timedelta
 
@@ -596,7 +597,7 @@ class RollupEngine:
             dates_processed += 1
         return {"dates_processed": dates_processed, "total_rows": total_rows}
 
-    def check_consistency(self, days: int = 7) -> dict:
+    def check_consistency(self, days: int = 7) -> dict[str, object]:
         """Verify rollup totals match raw event aggregates."""
         from datetime import datetime as _dt
         from datetime import timedelta as _td

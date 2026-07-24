@@ -45,6 +45,34 @@ os.environ.setdefault("TOKENPAK_SNAPSHOT_GEN", "1")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = REPO_ROOT / "tokenpak" / "_snapshots" / "public-api.json"
 
+# The script is invoked by path (``python scripts/release_gate/...``), which
+# otherwise places ``scripts/release_gate`` rather than the checkout root at
+# the front of ``sys.path``.  A developer machine with another editable
+# TokenPak checkout could therefore validate or regenerate the wrong package.
+# Anchor imports to the checkout that owns this script before importing any
+# ``tokenpak`` module.
+_repo_root_text = str(REPO_ROOT)
+sys.path[:] = [entry for entry in sys.path if entry != _repo_root_text]
+sys.path.insert(0, _repo_root_text)
+
+
+class SourceProvenanceError(RuntimeError):
+    """Raised when snapshot generation resolves TokenPak outside this tree."""
+
+
+def _assert_source_provenance(package: object) -> None:
+    """Fail closed unless *package* resolves inside this checkout."""
+    origin_text = getattr(package, "__file__", None)
+    if not isinstance(origin_text, str):
+        raise SourceProvenanceError("tokenpak package has no filesystem origin")
+    origin = Path(origin_text).resolve()
+    expected_root = (REPO_ROOT / "tokenpak").resolve()
+    if not origin.is_relative_to(expected_root):
+        raise SourceProvenanceError(
+            f"tokenpak resolved outside checkout: {origin} (expected under {expected_root})"
+        )
+
+
 # Third-party library re-exports that are NOT TokenPak public API. Their capture
 # by the package walk is environment-dependent (present only when an optional
 # extra is installed, e.g. faiss via [retrieval]), which makes the snapshot
@@ -102,9 +130,7 @@ def _format_import_error(e: BaseException, module_name: str = "") -> str:
     if _ABS_PATH_PAREN_RE is None:
         _ABS_PATH_PAREN_RE = re.compile(r"\s*\(/[^)]*\)")
     if _SIDECAR_RE is None:
-        _SIDECAR_RE = re.compile(
-            r"cannot import name '[^']+' from '([a-z_]+_tokenpak)'"
-        )
+        _SIDECAR_RE = re.compile(r"cannot import name '[^']+' from '([a-z_]+_tokenpak)'")
 
     # Walk-site sidecar normalization (transform 3 above).
     #
@@ -169,6 +195,8 @@ def collect_symbols(package_name: str = "tokenpak") -> list[dict[str, str]]:
         pkg = importlib.import_module(package_name)
     except Exception as e:
         return [{"module": package_name, "name": _format_import_error(e, package_name)}]
+    if package_name == "tokenpak":
+        _assert_source_provenance(pkg)
 
     def harvest(mod_name: str, mod) -> None:
         explicit_all = getattr(mod, "__all__", None)

@@ -15,7 +15,7 @@ import http.client
 import json
 import ssl
 import threading
-from typing import Dict
+from typing import Any, Callable, Dict
 from urllib.parse import urlparse
 
 from tokenpak.proxy.config import (
@@ -37,7 +37,10 @@ _ws_active_connections_lock = threading.Lock()
 # Handler
 # ---------------------------------------------------------------------------
 
-async def _ws_handler(websocket, compact_request_body) -> None:
+CompactRequest = Callable[[bytes], tuple[bytes, int, int, int]]
+
+
+async def _ws_handler(websocket: Any, compact_request_body: CompactRequest) -> None:
     """Handle a single WebSocket connection: receive JSON, compress, proxy to Anthropic, stream back.
 
     Args:
@@ -112,7 +115,7 @@ async def _ws_handler(websocket, compact_request_body) -> None:
             pass
 
         # Connect to upstream and stream SSE back (sync — run in executor)
-        def _connect_upstream():
+        def _connect_upstream() -> tuple[http.client.HTTPSConnection, http.client.HTTPResponse]:
             ctx = ssl.create_default_context()
             conn = http.client.HTTPSConnection(upstream_host, timeout=UPSTREAM_TIMEOUT, context=ctx)
             conn.request("POST", upstream_path, body=compressed_body, headers=fwd_headers)
@@ -160,7 +163,10 @@ async def _ws_handler(websocket, compact_request_body) -> None:
 # Server startup
 # ---------------------------------------------------------------------------
 
-def start_ws_server(compact_request_body) -> "threading.Thread | None":
+
+def start_ws_server(
+    compact_request_body: CompactRequest,
+) -> "threading.Thread | None":
     """Start the asyncio WebSocket server in a daemon thread on WS_PORT.
 
     Args:
@@ -175,10 +181,10 @@ def start_ws_server(compact_request_body) -> "threading.Thread | None":
         print(
             "[ws] websockets library not installed — WebSocket server disabled. Run: pip install websockets>=12.0"
         )
-        return None  # type: ignore[return-value]
+        return None
 
     async def _serve() -> None:
-        async def _handler(ws):
+        async def _handler(ws: Any) -> None:
             await _ws_handler(ws, compact_request_body)
 
         try:

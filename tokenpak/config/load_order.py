@@ -110,10 +110,7 @@ def describe() -> list[tuple[int, str, str]]:
     Pure, side-effect-free; suitable for rendering the load-order in
     ``config doctor`` / ``config env`` output and in generated docs.
     """
-    return [
-        (layer.value, layer.name, LAYER_DESCRIPTIONS[layer])
-        for layer in precedence()
-    ]
+    return [(layer.value, layer.name, LAYER_DESCRIPTIONS[layer]) for layer in precedence()]
 
 
 def parse_dotenv(text: str) -> dict[str, str]:
@@ -178,12 +175,12 @@ class LoadOrderResolver:
     The resolver does not write anything and creates no directories.
     """
 
-    environ: Optional[dict] = None
+    environ: Optional[dict[str, str]] = None
     cwd: Optional[Path] = None
     home: Optional[Path] = None
     legacy_home: Optional[Path] = None
     config_lookup: Optional[Callable[[str], Optional[str]]] = None
-    cli_flags: dict = field(default_factory=dict)
+    cli_flags: dict[str, Optional[str]] = field(default_factory=dict)
     openclaw_fallback: Optional[bool] = None
 
     def __post_init__(self) -> None:
@@ -196,28 +193,30 @@ class LoadOrderResolver:
         if self.legacy_home is None:
             self.legacy_home = _paths.legacy_home()
         if self.openclaw_fallback is None:
-            self.openclaw_fallback = _truthy(
-                self.environ.get(OPENCLAW_FALLBACK_FLAG, "")
-            )
+            self.openclaw_fallback = _truthy(self.environ.get(OPENCLAW_FALLBACK_FLAG, ""))
 
     # -- dotenv layer caches -------------------------------------------------
 
     def _project_dotenv(self) -> dict[str, str]:
-        return _read_dotenv(Path(self.cwd) / ".env")
+        assert self.cwd is not None
+        return _read_dotenv(self.cwd / ".env")
 
     def _user_dotenv(self) -> dict[str, str]:
-        return _read_dotenv(Path(self.home) / ".env")
+        assert self.home is not None
+        return _read_dotenv(self.home / ".env")
 
     def _legacy_dotenv(self) -> dict[str, str]:
         # HELD: never read unless the opt-in fallback is explicitly enabled.
         if not self.openclaw_fallback:
             return {}
-        return _read_dotenv(Path(self.legacy_home) / ".env")
+        assert self.legacy_home is not None
+        return _read_dotenv(self.legacy_home / ".env")
 
     # -- resolution ----------------------------------------------------------
 
     def resolve(self, key: str, default: Optional[str] = None) -> Resolution:
         """Resolve ``key`` to a :class:`Resolution` (first layer that hits)."""
+        assert self.environ is not None
         # Layer 1 — CLI flag.
         if key in self.cli_flags and self.cli_flags[key] is not None:
             return Resolution(key, self.cli_flags[key], Layer.CLI_FLAG, True)

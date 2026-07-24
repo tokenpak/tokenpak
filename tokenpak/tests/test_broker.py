@@ -57,14 +57,22 @@ def _prime(broker: Broker, model: str, query: str, n_accepted: int, n_rejected: 
     """Insert synthetic accepted/rejected transactions into the ledger."""
     for _ in range(n_accepted):
         txn = broker._ledger.log_transaction(
-            model=model, query=query, context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model=model,
+            query=query,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
         )
         broker._ledger.record_outcome(txn, accepted=True)
     for _ in range(n_rejected):
         txn = broker._ledger.log_transaction(
-            model=model, query=query, context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model=model,
+            query=query,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
         )
         broker._ledger.record_outcome(txn, accepted=False)
 
@@ -72,6 +80,7 @@ def _prime(broker: Broker, model: str, query: str, n_accepted: int, n_rejected: 
 # ---------------------------------------------------------------------------
 # _load_tiers
 # ---------------------------------------------------------------------------
+
 
 class TestLoadTiers:
     def test_loads_valid_json(self, tiers_file):
@@ -90,6 +99,7 @@ class TestLoadTiers:
 # get_tier
 # ---------------------------------------------------------------------------
 
+
 class TestGetTier:
     def test_known_model(self):
         assert get_tier("claude-haiku-3-5", MODEL_TIERS) == 1
@@ -107,6 +117,7 @@ class TestGetTier:
 # ---------------------------------------------------------------------------
 # cheaper_models / more_capable_models
 # ---------------------------------------------------------------------------
+
 
 class TestModelHelpers:
     def test_cheaper_than_opus(self):
@@ -146,6 +157,7 @@ class TestModelHelpers:
 # RoutingDecision
 # ---------------------------------------------------------------------------
 
+
 class TestRoutingDecision:
     def test_default_badge_empty(self):
         d = RoutingDecision("s", "s", "passthrough", 1.0, "ok")
@@ -160,6 +172,7 @@ class TestRoutingDecision:
 # ---------------------------------------------------------------------------
 # force_model
 # ---------------------------------------------------------------------------
+
 
 class TestForceModel:
     def test_returns_passthrough(self, broker):
@@ -177,6 +190,7 @@ class TestForceModel:
 # ---------------------------------------------------------------------------
 # Confidence gate
 # ---------------------------------------------------------------------------
+
 
 class TestConfidenceGate:
     def test_no_data_passthrough(self, broker):
@@ -200,6 +214,7 @@ class TestConfidenceGate:
 # ---------------------------------------------------------------------------
 # Downgrade
 # ---------------------------------------------------------------------------
+
 
 class TestDowngrade:
     def test_downgrade_when_cheap_model_high_acceptance(self, broker):
@@ -232,6 +247,7 @@ class TestDowngrade:
 # Upgrade
 # ---------------------------------------------------------------------------
 
+
 class TestUpgrade:
     def test_upgrade_high_complexity_low_acceptance(self, broker):
         _prime(broker, "claude-sonnet-4-5", QUERY_CODING, n_accepted=2, n_rejected=3)
@@ -260,6 +276,7 @@ class TestUpgrade:
 # Cooldown
 # ---------------------------------------------------------------------------
 
+
 class TestCooldown:
     def test_cooldown_set_after_rejected_downgrade(self, broker):
         _prime(broker, "claude-haiku-3-5", QUERY_SUMMARIZE, n_accepted=5)
@@ -268,9 +285,12 @@ class TestCooldown:
         assert d.action == "downgrade"
 
         txn = broker._ledger.log_transaction(
-            model="claude-haiku-3-5", query=QUERY_SUMMARIZE,
-            context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model="claude-haiku-3-5",
+            query=QUERY_SUMMARIZE,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
             routing_action="downgrade",
         )
         broker.record_outcome(txn, accepted=False)
@@ -278,9 +298,12 @@ class TestCooldown:
 
     def test_cooldown_not_set_on_accepted_downgrade(self, broker):
         txn = broker._ledger.log_transaction(
-            model="claude-haiku-3-5", query=QUERY_SUMMARIZE,
-            context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model="claude-haiku-3-5",
+            query=QUERY_SUMMARIZE,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
             routing_action="downgrade",
         )
         broker.record_outcome(txn, accepted=True)
@@ -290,6 +313,7 @@ class TestCooldown:
 # ---------------------------------------------------------------------------
 # Thread safety
 # ---------------------------------------------------------------------------
+
 
 class TestThreadSafety:
     def test_concurrent_routes_do_not_raise(self, broker):
@@ -315,6 +339,7 @@ class TestThreadSafety:
 # is_confident
 # ---------------------------------------------------------------------------
 
+
 class TestIsConfident:
     def test_not_confident_no_samples(self, broker):
         assert broker.is_confident("claude-sonnet-4-5", TASK_SUMMARIZE) is False
@@ -332,12 +357,16 @@ class TestIsConfident:
 # record_outcome / Elo
 # ---------------------------------------------------------------------------
 
+
 class TestRecordOutcome:
     def test_accepted_increases_elo(self, broker):
         txn = broker._ledger.log_transaction(
-            model="claude-sonnet-4-5", query=QUERY_SUMMARIZE,
-            context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model="claude-sonnet-4-5",
+            query=QUERY_SUMMARIZE,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
         )
         before = broker._elo.get_elo("claude-sonnet-4-5", TASK_SUMMARIZE)
         broker.record_outcome(txn, accepted=True)
@@ -346,9 +375,12 @@ class TestRecordOutcome:
 
     def test_returns_true_on_valid_txn(self, broker):
         txn = broker._ledger.log_transaction(
-            model="claude-sonnet-4-5", query=QUERY_SUMMARIZE,
-            context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model="claude-sonnet-4-5",
+            query=QUERY_SUMMARIZE,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
         )
         assert broker.record_outcome(txn, accepted=True) is True
 

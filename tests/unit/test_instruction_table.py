@@ -11,7 +11,9 @@ def _long_instruction() -> str:
 
 
 def test_instruction_table_promotes_repeated_block_to_id(tmp_path: Path):
-    table = InstructionTable(path=tmp_path / "instruction_table.json", min_tokens=20, min_occurrences=2)
+    table = InstructionTable(
+        path=tmp_path / "instruction_table.json", min_tokens=20, min_occurrences=2
+    )
     text = _long_instruction()
 
     msgs = [{"role": "system", "content": text}]
@@ -25,7 +27,9 @@ def test_instruction_table_promotes_repeated_block_to_id(tmp_path: Path):
 
 
 def test_instruction_table_expand_restores_original_text(tmp_path: Path):
-    table = InstructionTable(path=tmp_path / "instruction_table.json", min_tokens=20, min_occurrences=2)
+    table = InstructionTable(
+        path=tmp_path / "instruction_table.json", min_tokens=20, min_occurrences=2
+    )
     text = _long_instruction()
     msgs = [{"role": "system", "content": text}]
 
@@ -37,7 +41,9 @@ def test_instruction_table_expand_restores_original_text(tmp_path: Path):
 
 
 def test_instruction_table_respects_context_budget_not_tight(tmp_path: Path):
-    table = InstructionTable(path=tmp_path / "instruction_table.json", min_tokens=20, min_occurrences=2)
+    table = InstructionTable(
+        path=tmp_path / "instruction_table.json", min_tokens=20, min_occurrences=2
+    )
     text = _long_instruction()
     msgs = [{"role": "system", "content": text}]
 

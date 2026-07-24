@@ -35,6 +35,7 @@ from tokenpak.proxy.providers.translator import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _body(d: Dict[str, Any]) -> bytes:
     return json.dumps(d).encode()
 
@@ -42,6 +43,7 @@ def _body(d: Dict[str, Any]) -> bytes:
 # ---------------------------------------------------------------------------
 # F.1 — Provider Detection
 # ---------------------------------------------------------------------------
+
 
 class TestDetectProvider:
     """detect_provider() — all detection layers."""
@@ -116,14 +118,21 @@ class TestDetectProvider:
         assert detect_provider(body=body) == "google"
 
     def test_body_system_messages(self):
-        body = _body({"system": "You are helpful.", "messages": [{"role": "user", "content": "hi"}]})
+        body = _body(
+            {"system": "You are helpful.", "messages": [{"role": "user", "content": "hi"}]}
+        )
         assert detect_provider(body=body) == "anthropic"
 
     def test_body_system_message_in_messages(self):
-        body = _body({
-            "model": "gpt-4o",
-            "messages": [{"role": "system", "content": "Be helpful"}, {"role": "user", "content": "hi"}]
-        })
+        body = _body(
+            {
+                "model": "gpt-4o",
+                "messages": [
+                    {"role": "system", "content": "Be helpful"},
+                    {"role": "user", "content": "hi"},
+                ],
+            }
+        )
         assert detect_provider(body=body) == "openai"
 
     # ── Dict-style input ──────────────────────────────────────────────────
@@ -138,12 +147,19 @@ class TestDetectProvider:
         assert detect_provider(path="/unknown") == "unknown"
 
     def test_empty_body_no_crash(self):
-        assert detect_provider(body=b"not-json") in ("unknown", "anthropic", "openai", "google", "ollama")
+        assert detect_provider(body=b"not-json") in (
+            "unknown",
+            "anthropic",
+            "openai",
+            "google",
+            "ollama",
+        )
 
 
 # ---------------------------------------------------------------------------
 # F.2 — Translation: Anthropic ↔ OpenAI
 # ---------------------------------------------------------------------------
+
 
 class TestTranslateAnthropicOpenAI:
     """translate_request / translate_response: anthropic ↔ openai."""
@@ -305,6 +321,7 @@ class TestTranslateAnthropicOpenAI:
 # F.2 — Translation: Anthropic ↔ Google
 # ---------------------------------------------------------------------------
 
+
 class TestTranslateAnthropicGoogle:
     def test_anthropic_to_google_contents(self):
         ant = {
@@ -366,6 +383,7 @@ class TestTranslateAnthropicGoogle:
 # F.3 — Failover Config
 # ---------------------------------------------------------------------------
 
+
 class TestFailoverConfig:
     def _make_yaml(self, tmp_path: Path, content: str) -> Path:
         p = tmp_path / "config.yaml"
@@ -377,16 +395,21 @@ class TestFailoverConfig:
         assert cfg.enabled is False
 
     def test_disabled_config(self, tmp_path):
-        p = self._make_yaml(tmp_path, """
+        p = self._make_yaml(
+            tmp_path,
+            """
             failover:
               enabled: false
               chain: []
-        """)
+        """,
+        )
         cfg = load_failover_config(p)
         assert cfg.enabled is False
 
     def test_enabled_chain_parsed(self, tmp_path):
-        p = self._make_yaml(tmp_path, """
+        p = self._make_yaml(
+            tmp_path,
+            """
             failover:
               enabled: true
               chain:
@@ -397,7 +420,8 @@ class TestFailoverConfig:
                   model_map:
                     claude-sonnet-4-5: gpt-4o
                   credential_env: OPENAI_API_KEY
-        """)
+        """,
+        )
         cfg = load_failover_config(p)
         assert cfg.enabled is True
         assert len(cfg.chain) == 2
@@ -405,28 +429,34 @@ class TestFailoverConfig:
         assert cfg.chain[1].model_map.get("claude-sonnet-4-5") == "gpt-4o"
 
     def test_credential_skipped_when_env_missing(self, tmp_path):
-        p = self._make_yaml(tmp_path, """
+        p = self._make_yaml(
+            tmp_path,
+            """
             failover:
               enabled: true
               chain:
                 - provider: anthropic
                   model_map: {}
                   credential_env: _TRIX_NO_SUCH_ENV_VAR_XYZ
-        """)
+        """,
+        )
         cfg = load_failover_config(p)
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("_TRIX_NO_SUCH_ENV_VAR_XYZ", None)
             assert cfg.available_chain() == []
 
     def test_credential_available_when_env_set(self, tmp_path):
-        p = self._make_yaml(tmp_path, """
+        p = self._make_yaml(
+            tmp_path,
+            """
             failover:
               enabled: true
               chain:
                 - provider: anthropic
                   model_map: {}
                   credential_env: _TRIX_TEST_CRED_ENV
-        """)
+        """,
+        )
         cfg = load_failover_config(p)
         with patch.dict(os.environ, {"_TRIX_TEST_CRED_ENV": "fake-key"}):
             available = cfg.available_chain()
@@ -434,21 +464,26 @@ class TestFailoverConfig:
             assert available[0].provider == "anthropic"
 
     def test_failover_manager_disabled_yields_nothing(self, tmp_path):
-        p = self._make_yaml(tmp_path, """
+        p = self._make_yaml(
+            tmp_path,
+            """
             failover:
               enabled: false
               chain:
                 - provider: anthropic
                   model_map: {}
                   credential_env: ANTHROPIC_API_KEY
-        """)
+        """,
+        )
         cfg = load_failover_config(p)
         mgr = FailoverManager(cfg)
         results = list(mgr.iter_providers("claude-sonnet-4-5"))
         assert results == []
 
     def test_failover_manager_preferred_comes_first(self, tmp_path):
-        p = self._make_yaml(tmp_path, """
+        p = self._make_yaml(
+            tmp_path,
+            """
             failover:
               enabled: true
               chain:
@@ -458,7 +493,8 @@ class TestFailoverConfig:
                 - provider: openai
                   model_map: {}
                   credential_env: _TRIX_OAI_KEY
-        """)
+        """,
+        )
         cfg = load_failover_config(p)
         with patch.dict(os.environ, {"_TRIX_ANT_KEY": "k1", "_TRIX_OAI_KEY": "k2"}):
             mgr = FailoverManager(cfg)
@@ -467,7 +503,9 @@ class TestFailoverConfig:
             assert results[1].provider == "anthropic"
 
     def test_model_mapping_applied(self, tmp_path):
-        p = self._make_yaml(tmp_path, """
+        p = self._make_yaml(
+            tmp_path,
+            """
             failover:
               enabled: true
               chain:
@@ -475,7 +513,8 @@ class TestFailoverConfig:
                   model_map:
                     claude-sonnet-4-5: gpt-4o-mini
                   credential_env: _TRIX_OAI_KEY
-        """)
+        """,
+        )
         cfg = load_failover_config(p)
         mgr = FailoverManager(cfg)
         assert mgr.map_model("claude-sonnet-4-5", "openai") == "gpt-4o-mini"
@@ -486,6 +525,7 @@ class TestFailoverConfig:
         assert p.exists()
         # Should be parseable
         import yaml
+
         data = yaml.safe_load(p.read_text())
         assert "failover" in data
 

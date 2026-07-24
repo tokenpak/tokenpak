@@ -24,6 +24,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _wait_health(
     port: int,
     timeout: float = 10.0,
@@ -52,6 +53,7 @@ def _get_health(port: int, host: str = "127.0.0.1") -> dict:
 # Test: CLI Smoke Test
 # ---------------------------------------------------------------------------
 
+
 class TestCliServeSmoke:
     """Smoke test for `tokenpak serve` CLI command."""
 
@@ -66,8 +68,9 @@ class TestCliServeSmoke:
         """
         # Use a high random port to avoid conflicts
         import socket
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(('127.0.0.1', 0))
+        sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
         sock.close()
 
@@ -81,15 +84,14 @@ class TestCliServeSmoke:
 
         try:
             # Wait for health endpoint
-            assert _wait_health(port, timeout=10), \
+            assert _wait_health(port, timeout=10), (
                 f"Server did not respond on port {port} within 10s"
+            )
 
             # Verify /health returns 200 + JSON
             health = _get_health(port)
-            assert isinstance(health, dict), \
-                f"Expected JSON dict, got {type(health)}"
-            assert health.get("status") in ("ok", "healthy"), \
-                f"Unexpected health status: {health}"
+            assert isinstance(health, dict), f"Expected JSON dict, got {type(health)}"
+            assert health.get("status") in ("ok", "healthy"), f"Unexpected health status: {health}"
 
         finally:
             # Kill process cleanly
@@ -105,8 +107,9 @@ class TestCliServeSmoke:
         AC2: `tokenpak serve --port <N>` respects the port flag.
         """
         import socket
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(('127.0.0.1', 0))
+        sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
         sock.close()
 
@@ -118,8 +121,9 @@ class TestCliServeSmoke:
         )
 
         try:
-            assert _wait_health(port, timeout=10), \
+            assert _wait_health(port, timeout=10), (
                 f"Server did not respond on specified port {port}"
+            )
             health = _get_health(port)
             assert health is not None
         finally:
@@ -139,11 +143,10 @@ class TestCliServeSmoke:
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 0, \
-            f"Expected exit code 0, got {result.returncode}"
-        assert "usage:" in result.stdout.lower() or \
-               "tokenpak serve" in result.stdout, \
+        assert result.returncode == 0, f"Expected exit code 0, got {result.returncode}"
+        assert "usage:" in result.stdout.lower() or "tokenpak serve" in result.stdout, (
             f"Expected help text in stdout, got: {result.stdout}"
+        )
 
 
 if __name__ == "__main__":

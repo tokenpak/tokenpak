@@ -48,10 +48,7 @@ def _atomic_write(
             expected to wrap as needed (``VaultHealth.repair`` already does).
     """
     target_path = Path(target)
-    tmp = (
-        target_path.parent
-        / f"{target_path.name}.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}"
-    )
+    tmp = target_path.parent / f"{target_path.name}.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}"
 
     is_binary = isinstance(content, (bytes, bytearray))
     mode = "wb" if is_binary else "w"

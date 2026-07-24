@@ -1,4 +1,5 @@
 """tokenpak.cli.commands.install — install/configure tokenpak for Claude Code."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 PROXY_URL = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
 
@@ -34,7 +35,7 @@ def _read_settings() -> Dict[str, Any]:
     if not p.exists():
         return {}
     try:
-        return json.loads(p.read_text())
+        return cast(Dict[str, Any], json.loads(p.read_text()))
     except Exception:
         return {}
 
@@ -119,13 +120,14 @@ WantedBy=default.target
 def run_smoke_test(proxy_url: str = PROXY_URL) -> bool:
     try:
         import urllib.request
+
         with urllib.request.urlopen(f"{proxy_url}/health", timeout=5) as r:
-            return r.status == 200
+            return bool(r.status == 200)
     except Exception:
         return False
 
 
-def run_install_cmd(args) -> None:
+def run_install_cmd(args: Any) -> None:
     mode = getattr(args, "mode", None) or auto_detect_mode()
     proxy_url = getattr(args, "proxy_url", PROXY_URL) or PROXY_URL
     configure_settings(mode=mode, proxy_url=proxy_url)
@@ -154,7 +156,11 @@ def _setup_openclaw_if_present(proxy_url: str) -> None:
         return
 
     configs = result.get("configs", [])
+    if not isinstance(configs, list):
+        return
     for cfg in configs:
+        if not isinstance(cfg, dict):
+            continue
         path = cfg.get("path", "?")
         if cfg.get("error"):
             print(f"  {path}: {cfg['error']}")

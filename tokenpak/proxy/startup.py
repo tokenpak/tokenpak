@@ -91,7 +91,7 @@ def run_startup_checks(port: int) -> Tuple[bool, List[str]]:
             missing.append(dep)
 
     if missing:
-        msg = f"Missing dependencies: {', '.join(missing)}. " f"Run: pip install tokenpak"
+        msg = f"Missing dependencies: {', '.join(missing)}. Run: pip install tokenpak"
         logger.error("startup: %s", msg)
         warnings.append(msg)
         all_ok = False
@@ -116,6 +116,7 @@ def run_startup_checks(port: int) -> Tuple[bool, List[str]]:
     # ------------------------------------------------------------------ #
     try:
         from tokenpak.compression.recipes import get_oss_engine as _get_oss_engine
+
         _get_oss_engine()
         logger.info("startup: OSS compression recipes pre-loaded")
     except Exception as _recipe_exc:

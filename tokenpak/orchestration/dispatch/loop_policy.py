@@ -100,7 +100,9 @@ def resolve_loop_policy(
         return station_override
 
     system = system_default_loop_policy()
-    route_table = route_wall_seconds if route_wall_seconds is not None else ROUTE_WALL_SECOND_DEFAULTS
+    route_table = (
+        route_wall_seconds if route_wall_seconds is not None else ROUTE_WALL_SECOND_DEFAULTS
+    )
 
     if worker_default is not None:
         max_iterations = worker_default.max_iterations

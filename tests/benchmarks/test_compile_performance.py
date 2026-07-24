@@ -41,11 +41,11 @@ from .conftest import make_large_pack, make_medium_pack, make_small_pack
 THRESHOLDS = {
     "small": {
         "p50_ms": 20.0,
-        "p95_ms": 30.0,   # hard CI gate — blocks merge on breach
+        "p95_ms": 30.0,  # hard CI gate — blocks merge on breach
     },
     "medium": {
         "p50_ms": 30.0,
-        "p95_ms": 50.0,   # hard CI gate — blocks merge on breach
+        "p95_ms": 50.0,  # hard CI gate — blocks merge on breach
     },
     "large": {
         "p50_ms": 50.0,
@@ -61,6 +61,7 @@ N_RUNS_LARGE = 50
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _compile_times_ms(pack: ContextPack, n: int) -> List[float]:
     """Run compile() n times on fresh copies; return latencies in ms."""
@@ -114,6 +115,7 @@ def _fmt_stats(times: List[float]) -> str:
 # If not, they fall back to the plain timing helpers above.
 # ---------------------------------------------------------------------------
 
+
 class TestSmallPackBenchmark:
     """Small pack: ~500 tokens, 2-3 blocks, no compaction."""
 
@@ -125,10 +127,16 @@ class TestSmallPackBenchmark:
         def compile_once():
             fresh = ContextPack(budget=pack.budget)
             for b in pack._blocks:
-                fresh.add(PackBlock(
-                    id=b.id, type=b.type, content=b.content,
-                    priority=b.priority, quality=b.quality, max_tokens=b.max_tokens,
-                ))
+                fresh.add(
+                    PackBlock(
+                        id=b.id,
+                        type=b.type,
+                        content=b.content,
+                        priority=b.priority,
+                        quality=b.quality,
+                        max_tokens=b.max_tokens,
+                    )
+                )
             fresh.compile()
 
         benchmark(compile_once)
@@ -146,16 +154,20 @@ class TestSmallPackBenchmark:
         def compile_once():
             fresh = ContextPack(budget=pack.budget)
             for b in pack._blocks:
-                fresh.add(PackBlock(
-                    id=b.id, type=b.type, content=b.content,
-                    priority=b.priority, quality=b.quality, max_tokens=b.max_tokens,
-                ))
+                fresh.add(
+                    PackBlock(
+                        id=b.id,
+                        type=b.type,
+                        content=b.content,
+                        priority=b.priority,
+                        quality=b.quality,
+                        max_tokens=b.max_tokens,
+                    )
+                )
             fresh.compile()
 
         benchmark.pedantic(compile_once, rounds=100, iterations=1)
-        p95_ms = _percentile(
-            [t * 1000.0 for t in benchmark.stats["data"]], 95
-        )
+        p95_ms = _percentile([t * 1000.0 for t in benchmark.stats["data"]], 95)
         assert p95_ms < THRESHOLDS["small"]["p95_ms"], (
             f"Small pack p95={p95_ms:.1f}ms exceeds {THRESHOLDS['small']['p95_ms']}ms hard limit — "
             f"this would block merge"
@@ -173,10 +185,16 @@ class TestMediumPackBenchmark:
         def compile_once():
             fresh = ContextPack(budget=pack.budget)
             for b in pack._blocks:
-                fresh.add(PackBlock(
-                    id=b.id, type=b.type, content=b.content,
-                    priority=b.priority, quality=b.quality, max_tokens=b.max_tokens,
-                ))
+                fresh.add(
+                    PackBlock(
+                        id=b.id,
+                        type=b.type,
+                        content=b.content,
+                        priority=b.priority,
+                        quality=b.quality,
+                        max_tokens=b.max_tokens,
+                    )
+                )
             fresh.compile()
 
         benchmark(compile_once)
@@ -193,22 +211,27 @@ class TestMediumPackBenchmark:
         def compile_once():
             fresh = ContextPack(budget=pack.budget)
             for b in pack._blocks:
-                fresh.add(PackBlock(
-                    id=b.id, type=b.type, content=b.content,
-                    priority=b.priority, quality=b.quality, max_tokens=b.max_tokens,
-                ))
+                fresh.add(
+                    PackBlock(
+                        id=b.id,
+                        type=b.type,
+                        content=b.content,
+                        priority=b.priority,
+                        quality=b.quality,
+                        max_tokens=b.max_tokens,
+                    )
+                )
             fresh.compile()
 
         benchmark.pedantic(compile_once, rounds=100, iterations=1)
-        p95_ms = _percentile(
-            [t * 1000.0 for t in benchmark.stats["data"]], 95
-        )
+        p95_ms = _percentile([t * 1000.0 for t in benchmark.stats["data"]], 95)
         assert p95_ms < THRESHOLDS["medium"]["p95_ms"], (
             f"Medium pack p95={p95_ms:.1f}ms exceeds {THRESHOLDS['medium']['p95_ms']}ms hard limit — "
             f"this would block merge"
         )
 
 
+@pytest.mark.needs_fast_host
 class TestLargePackBenchmark:
     """Large pack: ~50,000 tokens, 50 blocks, heavy compaction to 8,000 (84% reduction)."""
 
@@ -220,10 +243,16 @@ class TestLargePackBenchmark:
         def compile_once():
             fresh = ContextPack(budget=pack.budget)
             for b in pack._blocks:
-                fresh.add(PackBlock(
-                    id=b.id, type=b.type, content=b.content,
-                    priority=b.priority, quality=b.quality, max_tokens=b.max_tokens,
-                ))
+                fresh.add(
+                    PackBlock(
+                        id=b.id,
+                        type=b.type,
+                        content=b.content,
+                        priority=b.priority,
+                        quality=b.quality,
+                        max_tokens=b.max_tokens,
+                    )
+                )
             fresh.compile()
 
         benchmark(compile_once)
@@ -240,16 +269,20 @@ class TestLargePackBenchmark:
         def compile_once():
             fresh = ContextPack(budget=pack.budget)
             for b in pack._blocks:
-                fresh.add(PackBlock(
-                    id=b.id, type=b.type, content=b.content,
-                    priority=b.priority, quality=b.quality, max_tokens=b.max_tokens,
-                ))
+                fresh.add(
+                    PackBlock(
+                        id=b.id,
+                        type=b.type,
+                        content=b.content,
+                        priority=b.priority,
+                        quality=b.quality,
+                        max_tokens=b.max_tokens,
+                    )
+                )
             fresh.compile()
 
         benchmark.pedantic(compile_once, rounds=50, iterations=1)
-        p95_ms = _percentile(
-            [t * 1000.0 for t in benchmark.stats["data"]], 95
-        )
+        p95_ms = _percentile([t * 1000.0 for t in benchmark.stats["data"]], 95)
         assert p95_ms < THRESHOLDS["large"]["p95_ms"], (
             f"Large pack p95={p95_ms:.1f}ms exceeds {THRESHOLDS['large']['p95_ms']}ms hard limit — "
             f"this would block merge"
@@ -260,6 +293,7 @@ class TestLargePackBenchmark:
 # Fallback: plain timing tests (run without pytest-benchmark installed)
 # These are always collected and enforce the same thresholds.
 # ---------------------------------------------------------------------------
+
 
 class TestCompilePerformancePlain:
     """Plain-timing fallback — runs without pytest-benchmark.

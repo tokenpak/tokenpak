@@ -39,7 +39,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 from tokenpak.vault._atomic import _atomic_write
 
@@ -70,7 +70,7 @@ class HealthCheckResult:
     def is_ok(self) -> bool:
         return self.status == IndexStatus.OK
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "status": self.status,
             "index_path": str(self.index_path) if self.index_path else None,
@@ -97,7 +97,7 @@ class RepairResult:
     log_entry: str = ""
     error: Optional[str] = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "success": self.success,
             "files_processed": self.files_processed,
@@ -127,7 +127,7 @@ class VaultHealth:
 
     def __init__(
         self,
-        vault_dir=None,
+        vault_dir: str | Path | None = None,
         stale_seconds: float = DEFAULT_STALE_SECONDS,
     ) -> None:
         if vault_dir is None:
@@ -176,7 +176,7 @@ class VaultHealth:
         """Return status string: OK / STALE / MISSING / CORRUPT."""
         return self.check().status
 
-    def rebuild_index(self) -> dict:
+    def rebuild_index(self) -> dict[str, object]:
         """
         Rebuild the vault index by walking vault_dir.
 
@@ -257,15 +257,20 @@ class VaultHealth:
         self.blocks_dir.mkdir(parents=True, exist_ok=True)
 
         # Load existing index for incremental merge
-        old_blocks: dict = {}
+        old_blocks: dict[str, dict[str, object]] = {}
         if self.index_path.exists():
             try:
-                old_data = json.loads(self.index_path.read_text(encoding="utf-8"))
-                old_blocks = old_data.get("blocks", {})
+                old_data = cast(
+                    dict[str, object],
+                    json.loads(self.index_path.read_text(encoding="utf-8")),
+                )
+                raw_old_blocks = old_data.get("blocks", {})
+                if isinstance(raw_old_blocks, dict):
+                    old_blocks = cast(dict[str, dict[str, object]], raw_old_blocks)
             except Exception:
                 pass
 
-        new_blocks: dict = {}
+        new_blocks: dict[str, dict[str, object]] = {}
         files_processed = 0
         files_skipped = 0
         files_errored = 0
@@ -359,13 +364,12 @@ class VaultHealth:
         # Prune blocks for deleted files (filesystem-source only)
         entries_removed = 0
         for bid in list(new_blocks.keys()):
-            entry = new_blocks.get(bid)
-            if not entry:
-                continue
+            entry = new_blocks[bid]
             src_type = entry.get("source_type", "filesystem")
             if src_type != "filesystem":
                 continue
-            src = self.vault_dir / entry.get("source_path", "")
+            source_path = entry.get("source_path", "")
+            src = self.vault_dir / str(source_path)
             if not src.exists():
                 del new_blocks[bid]
                 entries_removed += 1
@@ -453,14 +457,14 @@ def _make_block_id(rel_path: str) -> str:
     return rel_path.replace("/", ".").replace("\\", ".").lstrip(".")
 
 
-def _parse_frontmatter(content: str) -> dict:
+def _parse_frontmatter(content: str) -> dict[str, str]:
     """Parse YAML frontmatter from a markdown file (fail-silent)."""
     if not content.startswith("---"):
         return {}
     try:
         end = content.index("\n---", 3)
         fm_text = content[3:end].strip()
-        result: dict = {}
+        result: dict[str, str] = {}
         for line in fm_text.splitlines():
             if ":" in line:
                 key, _, val = line.partition(":")

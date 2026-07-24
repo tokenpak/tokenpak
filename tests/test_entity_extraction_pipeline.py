@@ -11,7 +11,10 @@ try:
     from tokenpak.vault.blocks import BlockStore
     from tokenpak.vault.indexer import VaultIndexer
 except ImportError as _exc:
-    pytest.skip(f"tokenpak.extraction symbols not present in slim OSS install: {_exc}", allow_module_level=True)
+    pytest.skip(
+        f"tokenpak.extraction symbols not present in slim OSS install: {_exc}",
+        allow_module_level=True,
+    )
 
 
 def test_extracts_file_paths_correctly():
@@ -38,13 +41,16 @@ def test_extracts_dates_and_normalizes_deadlines():
 
 
 def test_compact_format_is_significantly_smaller_than_raw():
-    raw = "\n".join([
-        "Decision: We will ship v1 this week with staged rollout.",
-        "GET /v1/users/{id}",
-        "TOKENPAK_INJECT_TOP_K=8",
-        "Glossary: Context Window",
-        "Deadline: 2026-04-01",
-    ] * 20)
+    raw = "\n".join(
+        [
+            "Decision: We will ship v1 this week with staged rollout.",
+            "GET /v1/users/{id}",
+            "TOKENPAK_INJECT_TOP_K=8",
+            "Glossary: Context Window",
+            "Deadline: 2026-04-01",
+        ]
+        * 20
+    )
     extractor = EntityExtractor()
     entities = extractor.extract(raw)
     compact = extractor.compact_text(entities)

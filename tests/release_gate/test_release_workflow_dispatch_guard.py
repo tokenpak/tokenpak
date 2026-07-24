@@ -11,6 +11,7 @@ Also confirms the workflow-steps snapshot pins those guards, so a ref-only
 regression trips ``make workflow-steps-check`` (the static CI assertion required
 by the packet acceptance).
 """
+
 from __future__ import annotations
 
 import json
@@ -45,8 +46,7 @@ def test_build_release_publish_require_tag_push_event():
     for job in _GUARDED_JOBS:
         cond = jobs[job].get("if", "")
         assert _PUSH_TERM in cond, (
-            f"job '{job}' is not gated on a real tag-push event "
-            f"(missing `{_PUSH_TERM}`): {cond!r}"
+            f"job '{job}' is not gated on a real tag-push event (missing `{_PUSH_TERM}`): {cond!r}"
         )
         assert _TAG_TERM in cond, f"job '{job}' lost its tag-ref guard: {cond!r}"
 
@@ -65,10 +65,7 @@ def test_workflow_steps_snapshot_pins_dispatch_guards():
     push-event term, so a regenerated snapshot after a ref-only regression
     drifts and `make workflow-steps-check` fails."""
     snap = json.loads(_SNAPSHOT.read_text(encoding="utf-8"))
-    guards = {
-        (g["workflow"], g["job"]): g["if"]
-        for g in snap.get("job_guards", [])
-    }
+    guards = {(g["workflow"], g["job"]): g["if"] for g in snap.get("job_guards", [])}
     for job in _GUARDED_JOBS:
         key = ("release.yml", job)
         assert key in guards, f"workflow-steps snapshot does not pin guard for {key}"

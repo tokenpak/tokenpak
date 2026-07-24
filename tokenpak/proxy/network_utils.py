@@ -7,7 +7,6 @@ and reachability checks for dashboard URL generation.
 
 import socket
 import subprocess
-from typing import Optional
 
 
 def get_local_ip() -> str:
@@ -19,14 +18,15 @@ def get_local_ip() -> str:
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
+        socket_address = s.getsockname()
         s.close()
-        return ip
+        ip = socket_address[0]
+        return ip if isinstance(ip, str) else "localhost"
     except Exception:
         return "localhost"
 
 
-def get_public_ip(timeout: int = 2) -> Optional[str]:
+def get_public_ip(timeout: int = 2) -> str | None:
     """Try to detect the public/external IP address.
 
     Makes a best-effort curl request to ifconfig.me.
@@ -48,7 +48,7 @@ def get_public_ip(timeout: int = 2) -> Optional[str]:
     return None
 
 
-def get_reachable_addresses(port: int, detect_public: bool = True) -> list:
+def get_reachable_addresses(port: int, detect_public: bool = True) -> list[str]:
     """Return list of URLs the user can potentially reach.
 
     Always includes localhost. Adds local network IP if detectable.
@@ -61,7 +61,7 @@ def get_reachable_addresses(port: int, detect_public: bool = True) -> list:
     Returns:
         List of URL strings (without token query param).
     """
-    addresses = []
+    addresses: list[str] = []
 
     # Always include localhost
     addresses.append(f"http://localhost:{port}")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import Any
 
 TOKENPAK_VARS = [
     ("TOKENPAK_PORT", "Proxy listen port"),
@@ -97,26 +98,26 @@ try:
     import click
 
     @click.group("config")
-    def config_cmd():
+    def config_cmd() -> None:
         """Show or set TOKENPAK_* configuration."""
         pass
 
     @config_cmd.command("show")
     @click.option("--verbose", "-v", is_flag=True)
-    def config_show_cmd(verbose):
+    def config_show_cmd(verbose: bool) -> None:
         """Show TOKENPAK_* environment configuration."""
         run(verbose=verbose)
 
     @config_cmd.command("set")
     @click.argument("key")
     @click.argument("value")
-    def config_set_cmd(key, value):
+    def config_set_cmd(key: str, value: str) -> None:
         """Set a persistent config value. Example: tokenpak config set stats_footer true"""
         run_set(key, value)
 
     @config_cmd.command("validate")
     @click.argument("config_file", required=False, default="~/.tokenpak/config.yaml")
-    def config_validate_cmd(config_file):
+    def config_validate_cmd(config_file: str) -> None:
         """Validate a TokenPak config file against the schema."""
         import sys
 
@@ -133,7 +134,7 @@ try:
 
     # Keep bare `tokenpak config` (no subcommand) as an alias for show
     @config_cmd.result_callback()
-    def _default(*args, **kwargs):
+    def _default(*args: Any, **kwargs: Any) -> None:
         pass
 
 except ImportError:

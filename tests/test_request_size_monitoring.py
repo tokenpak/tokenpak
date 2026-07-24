@@ -10,10 +10,11 @@ Tests cover:
 - Singleton pattern
 """
 
-
 import pytest
 
-pytest.importorskip("tokenpak.monitoring.request_size", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.monitoring.request_size", reason="module not available in current build"
+)
 from datetime import datetime
 
 import pytest

@@ -214,9 +214,7 @@ def _make_decision_pak() -> Pak:
         authority=PakAuthority.USER_APPROVED,
         confidence=PakConfidence.HIGH,
         retention=PakRetentionPolicy(ttl=PakRetention.PERSISTENT),
-        anchors=(
-            PakAnchor(anchor_id="a1", source_hash="a" * 64, snippet_available=True),
-        ),
+        anchors=(PakAnchor(anchor_id="a1", source_hash="a" * 64, snippet_available=True),),
         relationships=PakRelationships(supersedes=("pak_old_01",)),
     )
 
@@ -279,7 +277,9 @@ class TestPakPrivacy:
         assert pak.privacy.class_ == PakPrivacyClass.LOCAL_ONLY
 
     def test_explicit_privacy_local_only(self):
-        pak = dataclasses.replace(_make_decision_pak(), privacy=PakPrivacy(class_=PakPrivacyClass.LOCAL_ONLY))
+        pak = dataclasses.replace(
+            _make_decision_pak(), privacy=PakPrivacy(class_=PakPrivacyClass.LOCAL_ONLY)
+        )
         assert pak.privacy.class_ == PakPrivacyClass.LOCAL_ONLY
 
 

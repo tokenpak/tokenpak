@@ -25,7 +25,7 @@ import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from tokenpak._formatting.shell_detect import render_env_var as _env
 
@@ -105,9 +105,9 @@ def _detect_aider() -> Optional[str]:
 
 @dataclass
 class Integration:
-    key: str                # CLI arg: "cursor", "cline", etc.
-    label: str              # Human-readable: "Cursor"
-    kind: str               # "client" (binary/app) | "sdk" (python lib)
+    key: str  # CLI arg: "cursor", "cline", etc.
+    label: str  # Human-readable: "Cursor"
+    kind: str  # "client" (binary/app) | "sdk" (python lib)
     detector: Callable[[], Optional[str]]
     instructions: Callable[[str], str]  # proxy_url -> multi-line instructions
     applier: Optional[Callable[[str], "ApplyResult"]] = None  # None = print-only
@@ -120,12 +120,13 @@ class Integration:
 @dataclass
 class ApplyResult:
     """Outcome of an --apply run for a single client."""
+
     ok: bool
-    summary: str                              # one-line human summary
+    summary: str  # one-line human summary
     changes: list[str] = field(default_factory=list)
-    backup_path: Optional[str] = None         # where the old config was preserved
-    error: Optional[str] = None               # populated when ok=False
-    rollback_cmd: Optional[str] = None        # if ok=True but user wants to revert
+    backup_path: Optional[str] = None  # where the old config was preserved
+    error: Optional[str] = None  # populated when ok=False
+    rollback_cmd: Optional[str] = None  # if ok=True but user wants to revert
 
 
 def _instr_claude_code(proxy_url: str) -> str:
@@ -142,12 +143,12 @@ def _instr_claude_code(proxy_url: str) -> str:
 
 def _instr_cursor(proxy_url: str) -> str:
     return (
-        f"Cursor settings (Cmd+, / Ctrl+, → search \"Base URL\"):\n"
+        f'Cursor settings (Cmd+, / Ctrl+, → search "Base URL"):\n'
         f"    OpenAI Base URL:      {proxy_url}/v1\n"
         f"    Anthropic Base URL:   {proxy_url}\n\n"
         f"Or edit settings.json directly:\n"
-        f"    \"cursor.general.openaiApiKey\":  \"<your key>\",\n"
-        f"    \"cursor.general.openaiBaseUrl\": \"{proxy_url}/v1\"\n\n"
+        f'    "cursor.general.openaiApiKey":  "<your key>",\n'
+        f'    "cursor.general.openaiBaseUrl": "{proxy_url}/v1"\n\n'
         f"Cursor re-reads settings on save — no restart needed."
     )
 
@@ -155,12 +156,12 @@ def _instr_cursor(proxy_url: str) -> str:
 def _instr_cline(proxy_url: str) -> str:
     return (
         f"Cline uses VS Code settings. In the Cline panel (gear icon):\n"
-        f"  1. Provider: \"Anthropic\" (or \"OpenAI Compatible\")\n"
+        f'  1. Provider: "Anthropic" (or "OpenAI Compatible")\n'
         f"  2. Base URL: {proxy_url}\n"
         f"  3. API Key: your existing Anthropic/OpenAI key\n\n"
         f"Or in settings.json:\n"
-        f"    \"cline.apiProvider\": \"anthropic\",\n"
-        f"    \"cline.apiBaseUrl\": \"{proxy_url}\"\n\n"
+        f'    "cline.apiProvider": "anthropic",\n'
+        f'    "cline.apiBaseUrl": "{proxy_url}"\n\n'
         f"Saving reloads Cline automatically."
     )
 
@@ -197,7 +198,7 @@ def _instr_openai_sdk(proxy_url: str) -> str:
     return (
         f"Python OpenAI SDK — override the base_url:\n\n"
         f"    from openai import OpenAI\n"
-        f"    client = OpenAI(base_url=\"{proxy_url}/v1\", api_key=\"<your key>\")\n\n"
+        f'    client = OpenAI(base_url="{proxy_url}/v1", api_key="<your key>")\n\n'
         f"Or env var (picked up automatically):\n"
         f"    {_env('OPENAI_BASE_URL', proxy_url + '/v1')}"
     )
@@ -207,7 +208,7 @@ def _instr_anthropic_sdk(proxy_url: str) -> str:
     return (
         f"Python Anthropic SDK — override base_url:\n\n"
         f"    from anthropic import Anthropic\n"
-        f"    client = Anthropic(base_url=\"{proxy_url}\", api_key=\"<your key>\")\n\n"
+        f'    client = Anthropic(base_url="{proxy_url}", api_key="<your key>")\n\n'
         f"Or env var:\n"
         f"    {_env('ANTHROPIC_BASE_URL', proxy_url)}"
     )
@@ -221,7 +222,7 @@ def _instr_litellm(proxy_url: str) -> str:
         f"      litellm_params:\n"
         f"        model: anthropic/claude-sonnet-4-6\n"
         f"        api_base: {proxy_url}\n\n"
-        f"Or per-call: litellm.completion(model=..., api_base=\"{proxy_url}\")"
+        f'Or per-call: litellm.completion(model=..., api_base="{proxy_url}")'
     )
 
 
@@ -230,7 +231,7 @@ def _instr_codex(proxy_url: str) -> str:
         f"Codex CLI reads OpenAI creds from ~/.codex/auth.json.\n"
         f"Point it at tokenpak with:\n\n"
         f"    {_env('OPENAI_BASE_URL', proxy_url + '/v1')}\n"
-        f"    codex exec \"your prompt\"\n\n"
+        f'    codex exec "your prompt"\n\n'
         f"TokenPak does not edit your Codex config or print credentials for this target."
     )
 
@@ -309,6 +310,7 @@ def _apply_claude_code(proxy_url: str) -> ApplyResult:
         try:
             if bak is not None:
                 from tokenpak.cli.commands.install import restore_backup
+
                 restore_backup(bak)
         except Exception:
             pass
@@ -329,6 +331,7 @@ def _cursor_settings_path() -> Optional[Path]:
     for an app that isn't present.
     """
     import sys as _sys
+
     home = Path.home()
     candidates: list[Path] = []
     if _sys.platform == "darwin":
@@ -373,6 +376,7 @@ def _apply_cursor(proxy_url: str) -> ApplyResult:
             bak = settings_path.with_suffix(".json.bak")
             _shutil.copy2(settings_path, bak)
             import json as _json
+
             try:
                 config = _json.loads(settings_path.read_text(encoding="utf-8"))
                 if not isinstance(config, dict):
@@ -408,18 +412,20 @@ def _apply_cursor(proxy_url: str) -> ApplyResult:
             )
 
         import json as _json2
+
         tmp = settings_path.with_suffix(".json.tmp")
         tmp.write_text(_json2.dumps(config, indent=2), encoding="utf-8")
         os.replace(tmp, settings_path)
 
         rollback = (
-            f"cp {bak} {settings_path}" if bak
+            f"cp {bak} {settings_path}"
+            if bak
             else f"remove cursor.general.openaiBaseUrl / anthropicBaseUrl from {settings_path}"
         )
         return ApplyResult(
             ok=True,
             summary=f"Updated {settings_path} ({len(changes)} key{'s' if len(changes) != 1 else ''}). "
-                    f"Your API key must still be set in Cursor's UI.",
+            f"Your API key must still be set in Cursor's UI.",
             changes=changes,
             backup_path=str(bak) if bak else None,
             rollback_cmd=rollback,
@@ -513,11 +519,15 @@ def _apply_aider(proxy_url: str) -> ApplyResult:
         tmp.write_text(new_text, encoding="utf-8")
         os.replace(tmp, conf)
 
-        rollback = f"cp {bak} {conf}" if bak else f"remove openai-api-base / anthropic-api-base from {conf}"
+        rollback = (
+            f"cp {bak} {conf}"
+            if bak
+            else f"remove openai-api-base / anthropic-api-base from {conf}"
+        )
         return ApplyResult(
             ok=True,
             summary=f"Updated {conf} ({len(changes)} change{'s' if len(changes) != 1 else ''}). "
-                    f"Your API key must still be set (env var or --api-key).",
+            f"Your API key must still be set (env var or --api-key).",
             changes=changes,
             backup_path=str(bak) if bak else None,
             rollback_cmd=rollback,
@@ -566,6 +576,7 @@ def _apply_continue(proxy_url: str) -> ApplyResult:
             bak = config_json.with_suffix(".json.bak")
             _shutil.copy2(config_json, bak)
             import json as _json
+
             try:
                 config = _json.loads(config_json.read_text(encoding="utf-8"))
             except Exception as exc:
@@ -636,12 +647,14 @@ def _apply_continue(proxy_url: str) -> ApplyResult:
 
         # Atomic write
         import json as _json2
+
         tmp = config_json.with_suffix(".json.tmp")
         tmp.write_text(_json2.dumps(config, indent=2), encoding="utf-8")
         os.replace(tmp, config_json)
 
         rollback = (
-            f"cp {bak} {config_json}" if bak
+            f"cp {bak} {config_json}"
+            if bak
             else f"remove the tokenpak-* entries from {config_json}"
         )
         return ApplyResult(
@@ -674,6 +687,7 @@ def _apply_continue(proxy_url: str) -> ApplyResult:
 def _bak_claude_code() -> Optional[Path]:
     try:
         from tokenpak.cli.commands.install import _settings_path
+
         bak = _settings_path().with_suffix(".json.bak")
         return bak if bak.exists() else None
     except Exception:
@@ -706,12 +720,10 @@ def _bak_continue() -> Optional[Path]:
 def _preview_claude_code(proxy_url: str) -> str:
     try:
         from tokenpak.cli.commands.install import _read_settings, _settings_path
+
         settings = _read_settings()
         current = settings.get("env", {}).get("ANTHROPIC_BASE_URL", "(unset)")
-        return (
-            f"  File:  {_settings_path()}\n"
-            f"  env.ANTHROPIC_BASE_URL: {current!r} → {proxy_url!r}"
-        )
+        return f"  File:  {_settings_path()}\n  env.ANTHROPIC_BASE_URL: {current!r} → {proxy_url!r}"
     except Exception:
         return f"  Will set env.ANTHROPIC_BASE_URL={proxy_url} in Claude Code settings.json"
 
@@ -722,12 +734,10 @@ def _preview_cursor(proxy_url: str) -> str:
         return "  Cursor settings not found — will create a new settings.json"
     try:
         import json as _json
+
         config = _json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
         current = config.get("cursor.general.anthropicBaseUrl", "(unset)")
-        return (
-            f"  File:  {p}\n"
-            f"  cursor.general.anthropicBaseUrl: {current!r} → {proxy_url!r}"
-        )
+        return f"  File:  {p}\n  cursor.general.anthropicBaseUrl: {current!r} → {proxy_url!r}"
     except Exception:
         return f"  Will update cursor.general.anthropicBaseUrl in {p}"
 
@@ -764,6 +774,7 @@ def _preview_continue(proxy_url: str) -> str:
 def _verify_claude_code(proxy_url: str) -> tuple[bool, str]:
     try:
         from tokenpak.cli.commands.install import _read_settings
+
         settings = _read_settings()
         got = settings.get("env", {}).get("ANTHROPIC_BASE_URL", "")
         if got == proxy_url:
@@ -779,6 +790,7 @@ def _verify_cursor(proxy_url: str) -> tuple[bool, str]:
         return (False, "Cursor settings.json not found after apply")
     try:
         import json as _json
+
         config = _json.loads(p.read_text(encoding="utf-8"))
         got = config.get("cursor.general.anthropicBaseUrl", "")
         if got == proxy_url:
@@ -810,9 +822,11 @@ def _verify_continue(proxy_url: str) -> tuple[bool, str]:
         return (False, "Continue config.json not found after apply")
     try:
         import json as _json
+
         config = _json.loads(config_json.read_text(encoding="utf-8"))
         tp_models = [
-            m for m in config.get("models", [])
+            m
+            for m in config.get("models", [])
             if isinstance(m, dict) and str(m.get("title", "")).startswith("tokenpak-")
         ]
         if tp_models:
@@ -1037,15 +1051,12 @@ def _resolve_apply_tier(args: argparse.Namespace) -> Optional[str]:
                 return "fleet"
             print("  Cancelled — fleet mode unchanged.")
             return None
-        print(
-            "integrate: --tier fleet requires --yes in non-interactive mode "
-            "(explicit opt-in)."
-        )
+        print("integrate: --tier fleet requires --yes in non-interactive mode (explicit opt-in).")
         return None
     return tier
 
 
-def _render_tier_result(client_key: str, title: str, result) -> str:
+def _render_tier_result(client_key: str, title: str, result: Any) -> str:
     """Compact display block for a tier apply outcome."""
     lines: list[str] = [""]
     lines.append(f"  Permission tier — {client_key}  ({title})")
@@ -1215,7 +1226,9 @@ def _render_listing(proxy_url: str) -> str:
     lines.append("")
     lines.append("  Next step:")
     lines.append("    tokenpak integrate <client>      # show setup instructions")
-    lines.append("    tokenpak integrate --all         # show instructions for every supported client")
+    lines.append(
+        "    tokenpak integrate --all         # show instructions for every supported client"
+    )
     lines.append("")
     return "\n".join(lines)
 
@@ -1277,7 +1290,9 @@ def run_integrate(args: argparse.Namespace) -> int:
     # --revert requires a specific client.
     if revert_mode:
         if not client:
-            print("integrate: --revert requires a specific client (e.g. `tokenpak integrate claude-code --revert`).")
+            print(
+                "integrate: --revert requires a specific client (e.g. `tokenpak integrate claude-code --revert`)."
+            )
             print()
             print(_render_listing(proxy_url))
             return 2
@@ -1297,7 +1312,9 @@ def run_integrate(args: argparse.Namespace) -> int:
 
     # --apply without a specific client is a no-op (ambiguous) — treat as list.
     if apply_mode and not client and not show_all:
-        print("integrate: --apply requires a specific client (e.g. `tokenpak integrate claude-code --apply`).")
+        print(
+            "integrate: --apply requires a specific client (e.g. `tokenpak integrate claude-code --apply`)."
+        )
         print()
         print(_render_listing(proxy_url))
         return 2
@@ -1315,8 +1332,7 @@ def run_integrate(args: argparse.Namespace) -> int:
     if integration is None:
         known = ", ".join(i.key for i in INTEGRATIONS)
         print(
-            f"integrate: unknown client '{client}'. "
-            f"Known clients: {known}",
+            f"integrate: unknown client '{client}'. Known clients: {known}",
         )
         return 2
 
@@ -1345,7 +1361,7 @@ def run_integrate(args: argparse.Namespace) -> int:
                 "SDKs don't have a config file to write — use the snippet above."
                 if integration.kind == "sdk"
                 else "Auto-apply not supported for this client yet — paste the "
-                     "instructions above manually."
+                "instructions above manually."
             )
             print(f"  (--apply: {kind_note})")
             print()
@@ -1354,7 +1370,9 @@ def run_integrate(args: argparse.Namespace) -> int:
             result = integration.applier(proxy_url)
         except Exception as exc:  # pragma: no cover — applier should never raise
             result = ApplyResult(
-                ok=False, summary="applier raised unexpectedly", error=str(exc),
+                ok=False,
+                summary="applier raised unexpectedly",
+                error=str(exc),
             )
         print(_render_apply(integration, result))
         if not result.ok:
@@ -1380,6 +1398,7 @@ def _is_no_tui() -> bool:
     """Return True when --no-tui was stripped from argv."""
     try:
         from tokenpak._cli_core import _no_tui
+
         return _no_tui()
     except Exception:
         return False

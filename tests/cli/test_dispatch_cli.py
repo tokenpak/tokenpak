@@ -77,8 +77,13 @@ def _capture(handler, args) -> tuple[int, str]:
 
 def _run_args(request, **over):
     base = dict(
-        request=request, route=None, autonomy=None, ci=False,
-        dry_run=False, confirm=False, as_json=False,
+        request=request,
+        route=None,
+        autonomy=None,
+        ci=False,
+        dry_run=False,
+        confirm=False,
+        as_json=False,
     )
     base.update(over)
     return argparse.Namespace(**base)
@@ -97,8 +102,18 @@ def _do_run(request, **over):
 
 
 _VERBS = [
-    "run", "status", "inspect", "decisions", "approve", "reject",
-    "pause", "resume", "cancel", "discard-late", "delivery", "receipt",
+    "run",
+    "status",
+    "inspect",
+    "decisions",
+    "approve",
+    "reject",
+    "pause",
+    "resume",
+    "cancel",
+    "discard-late",
+    "delivery",
+    "receipt",
 ]
 
 
@@ -106,12 +121,14 @@ def test_parser_registers_all_verbs():
     parser = _parser()
     # The dispatch subparser action holds the verb choices.
     dispatch_action = next(
-        a for a in parser._subparsers._group_actions  # type: ignore[attr-defined]
+        a
+        for a in parser._subparsers._group_actions  # type: ignore[attr-defined]
         if a.dest == "command"
     )
     dispatch_sub = dispatch_action.choices["dispatch"]
     verb_action = next(
-        a for a in dispatch_sub._subparsers._group_actions  # type: ignore[attr-defined]
+        a
+        for a in dispatch_sub._subparsers._group_actions  # type: ignore[attr-defined]
         if a.dest == "dispatch_action"
     )
     for verb in _VERBS:
@@ -120,10 +137,16 @@ def test_parser_registers_all_verbs():
 
 def test_parse_run_with_flags():
     parser = _parser()
-    ns = parser.parse_args([
-        "dispatch", "run", "do a thing", "--route=code_task",
-        "--autonomy=advisory", "--json",
-    ])
+    ns = parser.parse_args(
+        [
+            "dispatch",
+            "run",
+            "do a thing",
+            "--route=code_task",
+            "--autonomy=advisory",
+            "--json",
+        ]
+    )
     assert ns.request == "do a thing"
     assert ns.route == "code_task"
     assert ns.autonomy == "advisory"
@@ -201,18 +224,14 @@ def _seed_decision(home):
 
 
 def test_decisions_list_empty(home):
-    rc, out = _capture(
-        cmd_dispatch_decisions, argparse.Namespace(job=None, as_json=False)
-    )
+    rc, out = _capture(cmd_dispatch_decisions, argparse.Namespace(job=None, as_json=False))
     assert rc == 0
     assert "empty" in out.lower()
 
 
 def test_decisions_list_and_cards(home):
     job_id, _ = _seed_decision(home)
-    rc, out = _capture(
-        cmd_dispatch_decisions, argparse.Namespace(job=job_id, as_json=False)
-    )
+    rc, out = _capture(cmd_dispatch_decisions, argparse.Namespace(job=job_id, as_json=False))
     assert rc == 0
     assert "Decision Inbox" in out
     assert "Options:" in out
@@ -220,9 +239,7 @@ def test_decisions_list_and_cards(home):
 
 def test_decisions_list_json(home):
     job_id, _ = _seed_decision(home)
-    rc, out = _capture(
-        cmd_dispatch_decisions, argparse.Namespace(job=job_id, as_json=True)
-    )
+    rc, out = _capture(cmd_dispatch_decisions, argparse.Namespace(job=job_id, as_json=True))
     assert rc == 0
     payload = json.loads(out)
     assert payload["count"] >= 1
@@ -235,9 +252,7 @@ def test_decisions_list_json(home):
 def test_decision_scopes_are_job_or_station_only(home):
     """v0.1-alpha decision scopes: job, station — NO branch scope (§13 item 4)."""
     job_id, _ = _seed_decision(home)
-    rc, out = _capture(
-        cmd_dispatch_decisions, argparse.Namespace(job=job_id, as_json=True)
-    )
+    rc, out = _capture(cmd_dispatch_decisions, argparse.Namespace(job=job_id, as_json=True))
     payload = json.loads(out)
     for card in payload["decisions"]:
         assert card["scope"] in {"job", "station"}
@@ -347,22 +362,16 @@ def test_pause_resume_does_not_corrupt_job(home):
     _, _, p = _do_run("write a python function")
     job_id = p["job_id"]
 
-    rc, out = _capture(
-        cmd_dispatch_pause, argparse.Namespace(job_id=job_id, as_json=True)
-    )
+    rc, out = _capture(cmd_dispatch_pause, argparse.Namespace(job_id=job_id, as_json=True))
     assert rc == 0
     assert json.loads(out)["control_state"] == "paused"
 
     # The job is still readable (enum not corrupted) and reports paused control.
-    rc, out = _capture(
-        cmd_dispatch_status, argparse.Namespace(job_id=job_id, as_json=True)
-    )
+    rc, out = _capture(cmd_dispatch_status, argparse.Namespace(job_id=job_id, as_json=True))
     assert rc == 0
     assert json.loads(out)["control_state"] == "paused"
 
-    rc, out = _capture(
-        cmd_dispatch_resume, argparse.Namespace(job_id=job_id, as_json=True)
-    )
+    rc, out = _capture(cmd_dispatch_resume, argparse.Namespace(job_id=job_id, as_json=True))
     assert rc == 0
     assert json.loads(out)["control_state"] == "active"
 
@@ -370,24 +379,18 @@ def test_pause_resume_does_not_corrupt_job(home):
 def test_cancel_job(home):
     _, _, p = _do_run("write a python function")
     job_id = p["job_id"]
-    rc, out = _capture(
-        cmd_dispatch_cancel, argparse.Namespace(job_id=job_id, as_json=True)
-    )
+    rc, out = _capture(cmd_dispatch_cancel, argparse.Namespace(job_id=job_id, as_json=True))
     assert rc == 0
     assert json.loads(out)["status"] == "cancelled"
 
     # status reflects the cancelled state and the job still validates.
-    rc, out = _capture(
-        cmd_dispatch_status, argparse.Namespace(job_id=job_id, as_json=True)
-    )
+    rc, out = _capture(cmd_dispatch_status, argparse.Namespace(job_id=job_id, as_json=True))
     assert rc == 0
     assert json.loads(out)["status"] == "cancelled"
 
 
 def test_cancel_missing_job(home):
-    rc, out = _capture(
-        cmd_dispatch_cancel, argparse.Namespace(job_id="job_nope", as_json=True)
-    )
+    rc, out = _capture(cmd_dispatch_cancel, argparse.Namespace(job_id="job_nope", as_json=True))
     assert rc == 1
     assert json.loads(out)["error"] == "job_not_found"
 
@@ -408,10 +411,15 @@ def test_discard_late_removes_record(home):
 
     led = RunLedger()
     try:
-        led.write_late_result(LateResult(
-            id="late_01", job_id="job_x", station_run_id="stationrun_01",
-            received_at=_NOW, result_hash="abc",
-        ))
+        led.write_late_result(
+            LateResult(
+                id="late_01",
+                job_id="job_x",
+                station_run_id="stationrun_01",
+                received_at=_NOW,
+                result_hash="abc",
+            )
+        )
     finally:
         led.close()
 
@@ -504,20 +512,34 @@ def _seed_receipt(home, *, excerpt: str):
 
     led = RunLedger()
     try:
-        led.write_job(DispatchJob(
-            id="job_rcpt", created_at=_NOW, raw_request="do a thing",
-            detected_intent="code_task", autonomy_mode="dispatch_with_approval",
-            status="delivered",
-        ))
-        led.write_receipt(DispatchReceipt(
-            id="receipt_01", job_id="job_rcpt", run_id="run_01",
-            route_id="route.code_task.v1",
-            stations=[ReceiptStation(
-                station_run_id="stationrun_01", worker_id="worker.builder.default.v1",
-                status="completed", result_payload_excerpt=excerpt,
-            )],
-            final_status="delivered", created_at=_NOW,
-        ))
+        led.write_job(
+            DispatchJob(
+                id="job_rcpt",
+                created_at=_NOW,
+                raw_request="do a thing",
+                detected_intent="code_task",
+                autonomy_mode="dispatch_with_approval",
+                status="delivered",
+            )
+        )
+        led.write_receipt(
+            DispatchReceipt(
+                id="receipt_01",
+                job_id="job_rcpt",
+                run_id="run_01",
+                route_id="route.code_task.v1",
+                stations=[
+                    ReceiptStation(
+                        station_run_id="stationrun_01",
+                        worker_id="worker.builder.default.v1",
+                        status="completed",
+                        result_payload_excerpt=excerpt,
+                    )
+                ],
+                final_status="delivered",
+                created_at=_NOW,
+            )
+        )
     finally:
         led.close()
 
@@ -616,14 +638,26 @@ def test_no_fleet_worker_string_in_any_output(home):
     risk_job = json.loads(jrisk)["job_id"]
 
     # status / inspect / decisions / delivery
-    outputs.append(_capture(cmd_dispatch_status, argparse.Namespace(job_id=job_id, as_json=False))[1])
-    outputs.append(_capture(cmd_dispatch_inspect, argparse.Namespace(job_id=job_id, late=True, as_json=False))[1])
-    outputs.append(_capture(cmd_dispatch_decisions, argparse.Namespace(job=risk_job, as_json=False))[1])
-    outputs.append(_capture(cmd_dispatch_delivery, argparse.Namespace(job_id=job_id, as_json=False))[1])
+    outputs.append(
+        _capture(cmd_dispatch_status, argparse.Namespace(job_id=job_id, as_json=False))[1]
+    )
+    outputs.append(
+        _capture(cmd_dispatch_inspect, argparse.Namespace(job_id=job_id, late=True, as_json=False))[
+            1
+        ]
+    )
+    outputs.append(
+        _capture(cmd_dispatch_decisions, argparse.Namespace(job=risk_job, as_json=False))[1]
+    )
+    outputs.append(
+        _capture(cmd_dispatch_delivery, argparse.Namespace(job_id=job_id, as_json=False))[1]
+    )
 
     # receipt (with a Worker row)
     _seed_receipt(home, excerpt="produced a clean patch")
-    outputs.append(_capture(cmd_dispatch_receipt, argparse.Namespace(job_id="job_rcpt", as_json=False))[1])
+    outputs.append(
+        _capture(cmd_dispatch_receipt, argparse.Namespace(job_id="job_rcpt", as_json=False))[1]
+    )
 
     blob = "\n".join(outputs)
     assert "Fleet Worker" not in blob
@@ -641,7 +675,8 @@ def test_entry_point_help_registers():
     """`python -m tokenpak.cli.main dispatch --help` lists every verb."""
     proc = subprocess.run(
         [sys.executable, "-m", "tokenpak.cli.main", "dispatch", "--help"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert proc.returncode == 0
     for verb in _VERBS:

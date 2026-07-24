@@ -52,7 +52,7 @@ _VERBOSE_PATTERNS: list[tuple[str, str, str]] = [
 
 @dataclass
 class Finding:
-    kind: str            # "whitespace" | "repeated_phrase" | "verbose"
+    kind: str  # "whitespace" | "repeated_phrase" | "verbose"
     summary: str
     evidence: str = ""
     count: int = 1
@@ -218,8 +218,7 @@ def _render(report: OptimizationReport) -> str:
     lines.append("  " + "─" * 40)
     lines.append(f"  Source       {report.source}")
     lines.append(
-        f"  Size         {report.original_chars:,} chars  "
-        f"(~{report.original_tokens:,} tokens)"
+        f"  Size         {report.original_chars:,} chars  (~{report.original_tokens:,} tokens)"
     )
     lines.append("")
     if not report.findings:

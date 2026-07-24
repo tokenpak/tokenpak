@@ -82,7 +82,11 @@ class ValidationGate:
         # case to an advisory warning so the proxy forwards without noise.
         if explicitly_deterministic and not self._has_context_block(payload):
             errors.append("deterministic request missing required context block")
-        elif deterministic_requested and not explicitly_deterministic and not self._has_context_block(payload):
+        elif (
+            deterministic_requested
+            and not explicitly_deterministic
+            and not self._has_context_block(payload)
+        ):
             warnings.append(
                 "intent-driven deterministic request has no context_block (advisory — forwarding)"
             )

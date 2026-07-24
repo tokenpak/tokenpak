@@ -36,9 +36,7 @@ DAY = 24 * HOUR
 
 def _iso(dt: datetime) -> str:
     """Render a UTC datetime in the same Z-suffixed form VDS-01 writes."""
-    return dt.replace(microsecond=0).astimezone(timezone.utc).isoformat().replace(
-        "+00:00", "Z"
-    )
+    return dt.replace(microsecond=0).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _make_cfg(tmp_path: Path, **entry_kwargs) -> vault_config.VaultConfig:
@@ -360,9 +358,7 @@ def test_run_doctor_json_includes_vds03_warning_for_stale_path(tmp_path, monkeyp
     payload = json.loads(json_text)
 
     # At least one VDS-03 path-status check + one summary is recorded.
-    vds03_checks = [
-        c for c in payload["checks"] if c["check"].startswith("vault_path")
-    ]
+    vds03_checks = [c for c in payload["checks"] if c["check"].startswith("vault_path")]
     assert vds03_checks, "VDS-03 checks should be in doctor output"
     assert any(c["status"] == "warn" for c in vds03_checks), (
         f"expected at least one warn for stale path, got {vds03_checks}"
@@ -387,9 +383,7 @@ def test_run_doctor_json_no_paths_registered_does_not_warn(tmp_path, monkeypatch
     last_brace = captured.rfind("\n{")
     payload = json.loads(captured[last_brace + 1 :] if last_brace != -1 else captured)
 
-    vault_paths_checks = [
-        c for c in payload["checks"] if c["check"] == "vault_paths_staleness"
-    ]
+    vault_paths_checks = [c for c in payload["checks"] if c["check"] == "vault_paths_staleness"]
     # Single 'no registered paths' pass record.
     assert len(vault_paths_checks) == 1
     assert vault_paths_checks[0]["status"] == "pass"

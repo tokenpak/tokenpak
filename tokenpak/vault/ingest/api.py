@@ -19,7 +19,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, cast
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -63,7 +63,7 @@ def _write_entry(entry: dict[str, Any]) -> str:
         f.flush()
         os.fsync(f.fileno())
     logger.debug("Wrote entry %s to %s", entry_id, path)
-    return entry_id
+    return cast(str, entry_id)
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +173,7 @@ def create_ingest_app(prefix: str = "") -> Any:
         pass
 
     @app.get("/health")
-    def health():
+    def health() -> dict[str, str]:
         return {"status": "ok", "service": "tokenpak-ingest"}
 
     return app

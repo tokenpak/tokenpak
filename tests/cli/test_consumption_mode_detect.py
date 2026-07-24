@@ -40,17 +40,17 @@ from tokenpak.telemetry.anon_metrics import detect_consumption_mode
 def _clean_env() -> dict:
     """Return os.environ minus the env vars the heuristic looks at."""
     return {
-        k: v
-        for k, v in os.environ.items()
-        if k not in ("CRON_INVOCATION", "TERM_PROGRAM", "TMUX")
+        k: v for k, v in os.environ.items() if k not in ("CRON_INVOCATION", "TERM_PROGRAM", "TMUX")
     }
 
 
 class TestDetectCli:
     def test_plain_terminal_returns_cli(self):
         """Interactive tty with no special env vars → 'cli'."""
-        with mock.patch.dict(os.environ, _clean_env(), clear=True), \
-             mock.patch("sys.stdin") as mock_stdin:
+        with (
+            mock.patch.dict(os.environ, _clean_env(), clear=True),
+            mock.patch("sys.stdin") as mock_stdin,
+        ):
             mock_stdin.isatty.return_value = True
             assert detect_consumption_mode() == "cli"
 
@@ -58,17 +58,17 @@ class TestDetectCli:
 class TestDetectTmux:
     def test_tmux_env_var_set(self):
         """TMUX=… → 'tmux' (overrides interactive tty heuristic)."""
-        with mock.patch.dict(
-            os.environ, {"TMUX": "/tmp/tmux-1000/default,1234,0"}, clear=False
-        ):
+        with mock.patch.dict(os.environ, {"TMUX": "/tmp/tmux-1000/default,1234,0"}, clear=False):
             assert detect_consumption_mode() == "tmux"
 
 
 class TestDetectSdk:
     def test_non_interactive_stdin_returns_sdk(self):
         """Non-tty stdin (claude -p, piped) → 'sdk'."""
-        with mock.patch.dict(os.environ, _clean_env(), clear=True), \
-             mock.patch("sys.stdin") as mock_stdin:
+        with (
+            mock.patch.dict(os.environ, _clean_env(), clear=True),
+            mock.patch("sys.stdin") as mock_stdin,
+        ):
             mock_stdin.isatty.return_value = False
             assert detect_consumption_mode() == "sdk"
 
@@ -77,18 +77,14 @@ class TestDetectIde:
     @pytest.mark.parametrize("term_program", ["vscode", "cursor", "Windsurf"])
     def test_term_program_indicates_ide(self, term_program):
         """TERM_PROGRAM ∈ {vscode, cursor, Windsurf} → 'ide'."""
-        with mock.patch.dict(
-            os.environ, {"TERM_PROGRAM": term_program}, clear=False
-        ):
+        with mock.patch.dict(os.environ, {"TERM_PROGRAM": term_program}, clear=False):
             assert detect_consumption_mode() == "ide"
 
 
 class TestDetectCron:
     def test_cron_invocation_set(self):
         """CRON_INVOCATION=1 → 'cron' (highest priority — checked first)."""
-        with mock.patch.dict(
-            os.environ, {"CRON_INVOCATION": "1"}, clear=False
-        ):
+        with mock.patch.dict(os.environ, {"CRON_INVOCATION": "1"}, clear=False):
             assert detect_consumption_mode() == "cron"
 
 
@@ -116,8 +112,10 @@ class TestDetectNeverRaises:
     """Function contract: never raises, returns empty string on failure."""
 
     def test_returns_string_under_clean_env(self):
-        with mock.patch.dict(os.environ, _clean_env(), clear=True), \
-             mock.patch("sys.stdin") as mock_stdin:
+        with (
+            mock.patch.dict(os.environ, _clean_env(), clear=True),
+            mock.patch("sys.stdin") as mock_stdin,
+        ):
             mock_stdin.isatty.return_value = True
             result = detect_consumption_mode()
         assert isinstance(result, str)

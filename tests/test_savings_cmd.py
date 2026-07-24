@@ -82,10 +82,10 @@ def temp_db(tmp_path):
         " VALUES (?,?,?,?,?)",
         [
             (f"{today} 10:00:00", "claude-sonnet-4-5", 10000, 4000, 0.30),
-            (f"{today} 11:00:00", "claude-sonnet-4-5", 8000,  3200, 0.24),
-            (f"{today} 12:00:00", "gpt-4o",            6000,  2400, 0.18),
+            (f"{today} 11:00:00", "claude-sonnet-4-5", 8000, 3200, 0.24),
+            (f"{today} 12:00:00", "gpt-4o", 6000, 2400, 0.18),
             # Old row (outside 24h but inside 7d and 30d)
-            (f"{old} 10:00:00",  "claude-sonnet-4-5", 5000,  2000, 0.15),
+            (f"{old} 10:00:00", "claude-sonnet-4-5", 5000, 2000, 0.15),
         ],
     )
     conn.commit()
@@ -103,10 +103,10 @@ def test_query_savings_shows_all_four_fields(temp_db):
     with patch("tokenpak.cli.commands.savings._MONITOR_DB", temp_db):
         data = _query_savings(period="24h")
 
-    assert "avg_raw_tokens" in data,       "raw avg missing"
+    assert "avg_raw_tokens" in data, "raw avg missing"
     assert "avg_compressed_tokens" in data, "compressed avg missing"
-    assert "reduction_pct" in data,         "reduction % missing"
-    assert "tokens_saved_total" in data,    "delta (tokens saved) missing"
+    assert "reduction_pct" in data, "reduction % missing"
+    assert "tokens_saved_total" in data, "delta (tokens saved) missing"
 
     # Validate correctness
     # 3 rows today: raw 10000+8000+6000=24000, compressed 4000+3200+2400=9600
@@ -126,7 +126,7 @@ def test_period_flag_7d_includes_older_rows(temp_db):
     """AC3: --period 7d should include more rows than 24h."""
     with patch("tokenpak.cli.commands.savings._MONITOR_DB", temp_db):
         data_24h = _query_savings(period="24h")
-        data_7d  = _query_savings(period="7d")
+        data_7d = _query_savings(period="7d")
 
     assert data_24h["requests"] == 3
     # 7d cutoff: old row is 10 days ago, outside 7d window

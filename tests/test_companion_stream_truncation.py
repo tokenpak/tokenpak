@@ -70,8 +70,7 @@ def monitor_db(tmp_path, monkeypatch) -> Path:
     # this file rather than the user's real ledger.
     conn = sqlite3.connect(str(db))
     conn.execute(
-        "CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, "
-        "model TEXT, padding TEXT)"
+        "CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, padding TEXT)"
     )
     conn.execute(
         "INSERT INTO requests (timestamp, model, padding) VALUES (?, ?, ?)",

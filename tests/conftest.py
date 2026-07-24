@@ -24,6 +24,7 @@ Auto-applied by `_taxonomy_marker_for_path` based on test directory. Explicit
 @pytest.mark.<taxonomy> overrides only when it matches the directory; mismatches
 fail collection with a teaching error message.
 """
+
 import pytest
 
 # Std 30 §5 / Std 02 §13 — directory -> taxonomy marker mapping
@@ -42,7 +43,7 @@ def pytest_addoption(parser):
         "--update-baselines",
         action="store_true",
         default=False,
-        help="Update baseline compression ratios (use after intentional changes)"
+        help="Update baseline compression ratios (use after intentional changes)",
     )
 
 

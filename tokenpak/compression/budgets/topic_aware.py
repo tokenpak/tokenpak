@@ -56,7 +56,7 @@ class TopicSegment:
         """Length in characters."""
         return self.end - self.start
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict[str, int | float | str]:
         """Serialize to dict."""
         return {
             "start": self.start,
@@ -133,8 +133,8 @@ class TopicBoundaryDetector:
         boundaries = sorted(set([0] + boundaries + [len(text)]))
 
         # Build segments and score them
-        segments = []
-        skipped_content = []
+        segments: list[TopicSegment] = []
+        skipped_content: list[str] = []
         skipped_start = 0
 
         for i in range(len(boundaries) - 1):

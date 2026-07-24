@@ -1,4 +1,5 @@
 """Proxy request and response types for the modular proxy architecture."""
+
 from __future__ import annotations
 
 import json
@@ -56,6 +57,7 @@ ROUTE_SDK = "sdk"
 # ---------------------------------------------------------------------------
 # Byte-level system array injection (extracted from proxy.py:5124-5235)
 # ---------------------------------------------------------------------------
+
 
 def _find_system_array_close(body: bytes) -> int:
     """Find the byte offset of the closing ] of the top-level "system" array.

@@ -20,9 +20,7 @@ class WorkerPermissionProfile(DispatchBaseModel):
     read_files: bool = True
     modify_files: ModifyFilesPolicy = ModifyFilesPolicy.POLICY_CONTROLLED
     run_commands: RunCommandsPolicy = RunCommandsPolicy.POLICY_CONTROLLED
-    install_dependencies: bool = Field(
-        default=False, description="v0.1-alpha: always false"
-    )
+    install_dependencies: bool = Field(default=False, description="v0.1-alpha: always false")
 
 
 class DispatchWorker(DispatchBaseModel):
@@ -37,17 +35,13 @@ class DispatchWorker(DispatchBaseModel):
     kind: Literal["tip_worker_profile"] = "tip_worker_profile"
 
     roles: list[str] = Field(default_factory=list, description='e.g. ["builder"]')
-    capabilities: list[str] = Field(
-        default_factory=list, description="registry-bound"
-    )
+    capabilities: list[str] = Field(default_factory=list, description="registry-bound")
 
     system_directives: list[str] = Field(
         default_factory=list, description="base prompt; overlays additively append"
     )
 
-    allowed_tools: list[str] = Field(
-        default_factory=list, description="registry-bound"
-    )
+    allowed_tools: list[str] = Field(default_factory=list, description="registry-bound")
     input_schema: str = Field(description='e.g. "station_input.v1"')
     output_schema: str = Field(description='e.g. "station_result.v1"')
 

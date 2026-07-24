@@ -1,4 +1,3 @@
-
 import pytest
 
 pytest.importorskip("tokenpak.request_explorer", reason="module not available in current build")
@@ -24,7 +23,7 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
 
 def test_load_requests_skips_malformed(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    path.write_text("{bad json}\n{\"id\": \"ok\"}\n")
+    path.write_text('{bad json}\n{"id": "ok"}\n')
     rows = load_requests(path=path)
     assert len(rows) == 1
     assert rows[0]["id"] == "ok"
@@ -39,7 +38,9 @@ def test_get_request_by_id(tmp_path: Path):
 
 
 def test_cache_pct_and_status():
-    view = to_view({"id": "r", "model": "m", "input_tokens": 100, "output_tokens": 10, "cache_read": 25})
+    view = to_view(
+        {"id": "r", "model": "m", "input_tokens": 100, "output_tokens": 10, "cache_read": 25}
+    )
     assert cache_pct(view) == 25.0
     assert status_label(view) == "cached"
 

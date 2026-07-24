@@ -4,6 +4,7 @@ Covers: loading, schema validation, category counts, file matching,
 and per-category sample recipe content checks.
 At least 2 tests per category (10 categories × 2+ = 20+ tests).
 """
+
 from __future__ import annotations
 
 # Allow running from project root
@@ -25,6 +26,7 @@ RECIPES_DIR = Path(__file__).parent.parent / "recipes" / "oss"
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="module")
 def engine() -> CompressionRecipeEngine:
     eng = CompressionRecipeEngine()
@@ -33,6 +35,7 @@ def engine() -> CompressionRecipeEngine:
 
 
 # ─── Schema / loading tests ──────────────────────────────────────────────────
+
 
 def test_recipes_dir_exists():
     assert RECIPES_DIR.exists(), f"recipes/oss dir missing: {RECIPES_DIR}"
@@ -80,9 +83,7 @@ def _write_user_recipe(path: Path, *, name: str, ext: str = ".user") -> None:
                 "pattern": {"match": "extension", "extensions": [ext]},
                 "action": {
                     "compression_hint": 0.42,
-                    "operations": [
-                        {"type": "remove_lines_matching", "pattern": "^DEBUG"}
-                    ],
+                    "operations": [{"type": "remove_lines_matching", "pattern": "^DEBUG"}],
                 },
             },
             sort_keys=False,
@@ -125,6 +126,7 @@ def test_user_recipes_shadow_packaged_names(tmp_path, monkeypatch):
 
 # ─── Category count tests ─────────────────────────────────────────────────────
 
+
 def test_category_general_count(engine):
     assert len(engine.by_category("general")) == 10
 
@@ -151,6 +153,7 @@ def test_category_common_patterns_count(engine):
 
 # ─── GENERAL recipes ─────────────────────────────────────────────────────────
 
+
 def test_gen_whitespace_normalization_exists(engine):
     r = engine.get_recipe("gen-whitespace-normalization")
     assert r is not None
@@ -165,6 +168,7 @@ def test_gen_filler_phrase_removal_has_operation(engine):
 
 
 # ─── PYTHON recipes ──────────────────────────────────────────────────────────
+
 
 def test_py_docstring_to_signature_matches_py(engine):
     r = engine.get_recipe("py-docstring-to-signature")
@@ -186,6 +190,7 @@ def test_py_test_skeleton_matches_py(engine):
 
 
 # ─── JAVASCRIPT recipes ───────────────────────────────────────────────────────
+
 
 def test_js_import_dedup_matches_js_ts(engine):
     r = engine.get_recipe("js-import-dedup")
@@ -211,6 +216,7 @@ def test_ts_interface_extraction_matches_ts(engine):
 
 # ─── MARKDOWN recipes ─────────────────────────────────────────────────────────
 
+
 def test_md_code_block_compression_matches_md(engine):
     r = engine.get_recipe("md-code-block-compression")
     assert r is not None
@@ -225,6 +231,7 @@ def test_md_table_compression_exists(engine):
 
 
 # ─── CONFIG recipes ───────────────────────────────────────────────────────────
+
 
 def test_cfg_json_matches_json(engine):
     r = engine.get_recipe("cfg-json-whitespace-normalization")
@@ -248,6 +255,7 @@ def test_cfg_docker_matches_dockerfile(engine):
 
 
 # ─── COMMON PATTERNS recipes ─────────────────────────────────────────────────
+
 
 def test_cp_stack_trace_matches_content(engine):
     r = engine.get_recipe("cp-stack-trace-trimming")
@@ -277,6 +285,7 @@ def test_cp_html_to_text_matches_html(engine):
 
 # ─── recipes_for_file ordering ───────────────────────────────────────────────
 
+
 def test_recipes_for_file_sorted_by_hint_desc(engine):
     recipes = engine.recipes_for_file("data.csv")
     if len(recipes) >= 2:
@@ -299,6 +308,7 @@ def test_recipes_for_file_html(engine):
 
 # ─── No executable code in recipe files ──────────────────────────────────────
 
+
 def test_no_executable_code_in_yamls():
     """Recipes must be purely declarative — no Python/JS snippets."""
     dangerous = ["exec(", "eval(", "import os", "subprocess", "__import__"]
@@ -313,6 +323,7 @@ def test_no_executable_code_in_yamls():
 
 # ─── CompressionRecipe.from_dict validation ───────────────────────────────────
 
+
 def test_from_dict_missing_field_raises():
     with pytest.raises(ValueError, match="missing field"):
         CompressionRecipe.from_dict(
@@ -324,8 +335,13 @@ def test_from_dict_missing_field_raises():
 def test_from_dict_empty_name_raises():
     with pytest.raises(ValueError, match="empty name"):
         CompressionRecipe.from_dict(
-            {"name": "  ", "category": "general", "description": "d",
-             "pattern": {"match": "any"}, "action": {"operations": []}},
+            {
+                "name": "  ",
+                "category": "general",
+                "description": "d",
+                "pattern": {"match": "any"},
+                "action": {"operations": []},
+            },
             source="test",
         )
 
@@ -337,7 +353,9 @@ def test_from_dict_valid():
             "category": "general",
             "description": "A test recipe",
             "pattern": {"match": "any"},
-            "action": {"operations": [{"type": "regex_replace", "pattern": r"\s+", "replacement": " "}]},
+            "action": {
+                "operations": [{"type": "regex_replace", "pattern": r"\s+", "replacement": " "}]
+            },
         },
         source="test",
     )

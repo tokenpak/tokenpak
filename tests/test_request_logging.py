@@ -12,11 +12,14 @@ Coverage targets:
   - Integration: log_request() module-level helper
   - Performance: logging overhead < 5 ms per call
 """
+
 from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.monitoring.request_logger", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.monitoring.request_logger", reason="module not available in current build"
+)
 import json
 import queue
 import tempfile
@@ -42,6 +45,7 @@ from tokenpak.monitoring.request_logger import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class _CapturingWriter:
     """In-memory writer that captures lines for test assertions."""
@@ -69,6 +73,7 @@ def _make_logger(writer=None, level=LEVEL_DEBUG) -> RequestLogger:
 # ---------------------------------------------------------------------------
 # 1. Request ID generation
 # ---------------------------------------------------------------------------
+
 
 class TestRequestIdGeneration:
     def test_generates_uuid_without_headers(self):
@@ -99,6 +104,7 @@ class TestRequestIdGeneration:
 # 2. JSON serialisation
 # ---------------------------------------------------------------------------
 
+
 class TestRequestLogRecordJson:
     def _make_record(self, **kwargs):
         defaults = dict(
@@ -128,8 +134,14 @@ class TestRequestLogRecordJson:
         r = self._make_record()
         d = r.to_dict()
         for field in [
-            "request_id", "timestamp", "level", "method", "endpoint",
-            "request_body_size", "response_status", "response_body_size",
+            "request_id",
+            "timestamp",
+            "level",
+            "method",
+            "endpoint",
+            "request_body_size",
+            "response_status",
+            "response_body_size",
             "latency_ms",
         ]:
             assert field in d, f"Missing field: {field}"
@@ -158,6 +170,7 @@ class TestRequestLogRecordJson:
 # ---------------------------------------------------------------------------
 # 3. Log level filtering
 # ---------------------------------------------------------------------------
+
 
 class TestLogLevelFiltering:
     def _capture(self, min_level: str) -> tuple[RequestLogger, _CapturingWriter]:
@@ -209,6 +222,7 @@ class TestLogLevelFiltering:
 # 4. File rotation logic
 # ---------------------------------------------------------------------------
 
+
 class TestFileRotation:
     def test_creates_log_file_with_date(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -227,6 +241,7 @@ class TestFileRotation:
             stale = log_dir / "proxy-2020-01-01.log"
             stale.write_text("old log")
             import os
+
             os.utime(stale, (0, 0))  # epoch = very old
             writer = _FileWriter(log_dir=log_dir, retention_days=1)
             writer.write("new entry")
@@ -249,6 +264,7 @@ class TestFileRotation:
 # ---------------------------------------------------------------------------
 # 5. AuditTrail
 # ---------------------------------------------------------------------------
+
 
 class TestAuditTrail:
     def test_records_compile_event(self):
@@ -309,6 +325,7 @@ class TestAuditTrail:
 # 6. Integration: log_request() helper
 # ---------------------------------------------------------------------------
 
+
 class TestLogRequestHelper:
     def test_log_request_does_not_raise(self):
         # Calls the singleton — just verify it doesn't throw
@@ -338,6 +355,7 @@ class TestLogRequestHelper:
 # ---------------------------------------------------------------------------
 # 7. Performance: overhead < 5 ms per log call
 # ---------------------------------------------------------------------------
+
 
 class TestLoggingPerformance:
     def test_log_overhead_under_5ms(self):

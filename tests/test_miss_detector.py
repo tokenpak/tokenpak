@@ -1,6 +1,5 @@
 """Unit tests for miss_detector.py (Part B — Context Miss Detection)."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.miss_detector", reason="module not available in current build")
@@ -22,6 +21,7 @@ from tokenpak.miss_detector import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _gaps_of_type(gaps, signal_type):
     return [g for g in gaps if g.signal_type == signal_type]
 
@@ -29,6 +29,7 @@ def _gaps_of_type(gaps, signal_type):
 # ---------------------------------------------------------------------------
 # EXPLICIT_ASK detection
 # ---------------------------------------------------------------------------
+
 
 class TestExplicitAsk:
     def test_i_dont_have(self):
@@ -73,6 +74,7 @@ class TestExplicitAsk:
 # UNCERTAIN_ANSWER detection
 # ---------------------------------------------------------------------------
 
+
 class TestUncertainAnswer:
     def test_i_think(self):
         response = "I think the function is called login_user."
@@ -116,6 +118,7 @@ class TestUncertainAnswer:
 # MISSING_INFO detection
 # ---------------------------------------------------------------------------
 
+
 class TestMissingInfo:
     def test_i_dont_see(self):
         response = "I don't see a `config.py` file in the provided context."
@@ -156,6 +159,7 @@ class TestMissingInfo:
 # HALLUCINATED_IMPORT detection
 # ---------------------------------------------------------------------------
 
+
 class TestHallucinatedImport:
     def test_import_not_in_context(self):
         response = "import my_custom_module\n\nresult = my_custom_module.run()"
@@ -195,6 +199,7 @@ class TestHallucinatedImport:
 # ---------------------------------------------------------------------------
 # WRONG_SIGNATURE detection
 # ---------------------------------------------------------------------------
+
 
 class TestWrongSignature:
     def test_too_few_args(self):
@@ -240,6 +245,7 @@ class TestWrongSignature:
 # ContextGap dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestContextGap:
     def test_fields_populated(self):
         gap = ContextGap(
@@ -256,8 +262,10 @@ class TestContextGap:
 
     def test_related_blocks_defaults_empty(self):
         gap = ContextGap(
-            query="q", signal_type=SignalType.UNCERTAIN_ANSWER,
-            evidence="I think", timestamp="2026-02-25T00:00:00+00:00",
+            query="q",
+            signal_type=SignalType.UNCERTAIN_ANSWER,
+            evidence="I think",
+            timestamp="2026-02-25T00:00:00+00:00",
         )
         assert gap.related_blocks == []
 
@@ -271,6 +279,7 @@ class TestContextGap:
 # ---------------------------------------------------------------------------
 # Persistence: save_gaps + load_gaps
 # ---------------------------------------------------------------------------
+
 
 class TestGapPersistence:
     def setup_method(self):
@@ -317,18 +326,21 @@ class TestGapPersistence:
 # Retrieval expansion
 # ---------------------------------------------------------------------------
 
+
 class TestRetrievalExpansion:
     def setup_method(self):
         self.tmpdir = tempfile.mkdtemp()
         self.gaps_path = os.path.join(self.tmpdir, "gaps.json")
 
     def _write_gap(self, query):
-        gaps = [ContextGap(
-            query=query,
-            signal_type=SignalType.EXPLICIT_ASK,
-            evidence="I don't have it",
-            timestamp="2026-02-25T00:00:00+00:00",
-        )]
+        gaps = [
+            ContextGap(
+                query=query,
+                signal_type=SignalType.EXPLICIT_ASK,
+                evidence="I don't have it",
+                timestamp="2026-02-25T00:00:00+00:00",
+            )
+        ]
         save_gaps(gaps, self.gaps_path)
 
     def test_expands_on_similar_query(self):
@@ -375,6 +387,7 @@ class TestRetrievalExpansion:
             MockReg.return_value = instance
 
             from tokenpak.cli import cmd_search
+
             cmd_search(args)
 
             # search should have been called with doubled top_k=10

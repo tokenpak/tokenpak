@@ -35,10 +35,11 @@ from tokenpak.adapters.openai import OpenAIAdapter
 
 # ─── Shared helpers ────────────────────────────────────────────────────────
 
+
 def _make_mock_response(body: dict, status_code: int = 200) -> MagicMock:
     """Return a mock requests.Response object."""
     mock_resp = MagicMock()
-    mock_resp.ok = (status_code < 400)
+    mock_resp.ok = status_code < 400
     mock_resp.status_code = status_code
     mock_resp.json.return_value = body
     mock_resp.text = json.dumps(body)
@@ -81,6 +82,7 @@ OPENAI_SUCCESS_RESPONSE = {
 # Exception hierarchy
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestExceptionHierarchy:
     def test_timeout_is_adapter_error(self):
         err = TokenPakTimeoutError("timed out")
@@ -105,6 +107,7 @@ class TestExceptionHierarchy:
 # ═══════════════════════════════════════════════════════════════════════════
 # TokenPakAdapter base
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTokenPakAdapterBase:
     def test_empty_base_url_raises(self):
@@ -145,11 +148,10 @@ class TestTokenPakAdapterBase:
 # AnthropicAdapter
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestAnthropicAdapterPrepareRequest:
     def setup_method(self):
-        self.adapter = AnthropicAdapter(
-            base_url="http://localhost:8767", api_key="sk-ant-test"
-        )
+        self.adapter = AnthropicAdapter(base_url="http://localhost:8767", api_key="sk-ant-test")
 
     def test_valid_request(self):
         req = {
@@ -163,33 +165,41 @@ class TestAnthropicAdapterPrepareRequest:
 
     def test_missing_model_raises(self):
         with pytest.raises(TokenPakConfigError, match="model"):
-            self.adapter.prepare_request({
-                "max_tokens": 100,
-                "messages": [{"role": "user", "content": "x"}],
-            })
+            self.adapter.prepare_request(
+                {
+                    "max_tokens": 100,
+                    "messages": [{"role": "user", "content": "x"}],
+                }
+            )
 
     def test_missing_max_tokens_raises(self):
         with pytest.raises(TokenPakConfigError, match="max_tokens"):
-            self.adapter.prepare_request({
-                "model": "claude-3-5-sonnet-20241022",
-                "messages": [{"role": "user", "content": "x"}],
-            })
+            self.adapter.prepare_request(
+                {
+                    "model": "claude-3-5-sonnet-20241022",
+                    "messages": [{"role": "user", "content": "x"}],
+                }
+            )
 
     def test_empty_messages_raises(self):
         with pytest.raises(TokenPakConfigError, match="non-empty"):
-            self.adapter.prepare_request({
-                "model": "claude-3-5-sonnet-20241022",
-                "max_tokens": 100,
-                "messages": [],
-            })
+            self.adapter.prepare_request(
+                {
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": 100,
+                    "messages": [],
+                }
+            )
 
     def test_invalid_message_structure_raises(self):
         with pytest.raises(TokenPakConfigError, match="role"):
-            self.adapter.prepare_request({
-                "model": "claude-3-5-sonnet-20241022",
-                "max_tokens": 100,
-                "messages": [{"content": "no role"}],
-            })
+            self.adapter.prepare_request(
+                {
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": 100,
+                    "messages": [{"content": "no role"}],
+                }
+            )
 
     def test_stream_default_false(self):
         req = {
@@ -213,9 +223,7 @@ class TestAnthropicAdapterPrepareRequest:
 
 class TestAnthropicAdapterExtractTokens:
     def setup_method(self):
-        self.adapter = AnthropicAdapter(
-            base_url="http://localhost:8767", api_key="sk-ant-test"
-        )
+        self.adapter = AnthropicAdapter(base_url="http://localhost:8767", api_key="sk-ant-test")
 
     def test_full_usage_block(self):
         tokens = self.adapter.extract_tokens(ANTHROPIC_SUCCESS_RESPONSE)
@@ -245,9 +253,7 @@ class TestAnthropicAdapterExtractTokens:
 
 class TestAnthropicAdapterSend:
     def setup_method(self):
-        self.adapter = AnthropicAdapter(
-            base_url="http://localhost:8767", api_key="sk-ant-test"
-        )
+        self.adapter = AnthropicAdapter(base_url="http://localhost:8767", api_key="sk-ant-test")
         self.prepared = {
             "model": "claude-3-5-sonnet-20241022",
             "max_tokens": 100,
@@ -266,6 +272,7 @@ class TestAnthropicAdapterSend:
     @patch("tokenpak.adapters.anthropic._requests")
     def test_timeout_raises_tokenpak_timeout(self, mock_requests):
         import requests as real_requests
+
         mock_requests.exceptions.Timeout = real_requests.exceptions.Timeout
         mock_requests.exceptions.RequestException = real_requests.exceptions.RequestException
         mock_requests.post.side_effect = real_requests.exceptions.Timeout("timed out")
@@ -291,9 +298,7 @@ class TestAnthropicAdapterSend:
 
 class TestAnthropicAdapterParseResponse:
     def setup_method(self):
-        self.adapter = AnthropicAdapter(
-            base_url="http://localhost:8767", api_key="sk-ant-test"
-        )
+        self.adapter = AnthropicAdapter(base_url="http://localhost:8767", api_key="sk-ant-test")
 
     def test_valid_response_passthrough(self):
         result = self.adapter.parse_response(ANTHROPIC_SUCCESS_RESPONSE)
@@ -314,11 +319,10 @@ class TestAnthropicAdapterParseResponse:
 # OpenAIAdapter
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestOpenAIAdapterPrepareRequest:
     def setup_method(self):
-        self.adapter = OpenAIAdapter(
-            base_url="http://localhost:8767", api_key="sk-test"
-        )
+        self.adapter = OpenAIAdapter(base_url="http://localhost:8767", api_key="sk-test")
 
     def test_valid_request(self):
         req = {
@@ -331,9 +335,11 @@ class TestOpenAIAdapterPrepareRequest:
 
     def test_missing_model_raises(self):
         with pytest.raises(TokenPakConfigError, match="model"):
-            self.adapter.prepare_request({
-                "messages": [{"role": "user", "content": "x"}],
-            })
+            self.adapter.prepare_request(
+                {
+                    "messages": [{"role": "user", "content": "x"}],
+                }
+            )
 
     def test_missing_messages_raises(self):
         with pytest.raises(TokenPakConfigError, match="messages"):
@@ -365,17 +371,17 @@ class TestOpenAIAdapterPrepareRequest:
 
     def test_missing_role_in_message_raises(self):
         with pytest.raises(TokenPakConfigError, match="role"):
-            self.adapter.prepare_request({
-                "model": "gpt-4o",
-                "messages": [{"content": "no role"}],
-            })
+            self.adapter.prepare_request(
+                {
+                    "model": "gpt-4o",
+                    "messages": [{"content": "no role"}],
+                }
+            )
 
 
 class TestOpenAIAdapterExtractTokens:
     def setup_method(self):
-        self.adapter = OpenAIAdapter(
-            base_url="http://localhost:8767", api_key="sk-test"
-        )
+        self.adapter = OpenAIAdapter(base_url="http://localhost:8767", api_key="sk-test")
 
     def test_full_usage_block(self):
         tokens = self.adapter.extract_tokens(OPENAI_SUCCESS_RESPONSE)
@@ -390,9 +396,7 @@ class TestOpenAIAdapterExtractTokens:
         assert tokens["total"] == 0
 
     def test_no_cached_tokens_detail(self):
-        response = {
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5}
-        }
+        response = {"usage": {"prompt_tokens": 10, "completion_tokens": 5}}
         tokens = self.adapter.extract_tokens(response)
         assert tokens["cache_read"] == 0
         assert tokens["total"] == 15
@@ -400,9 +404,7 @@ class TestOpenAIAdapterExtractTokens:
 
 class TestOpenAIAdapterParseResponse:
     def setup_method(self):
-        self.adapter = OpenAIAdapter(
-            base_url="http://localhost:8767", api_key="sk-test"
-        )
+        self.adapter = OpenAIAdapter(base_url="http://localhost:8767", api_key="sk-test")
 
     def test_valid_response_passthrough(self):
         result = self.adapter.parse_response(OPENAI_SUCCESS_RESPONSE)
@@ -417,6 +419,7 @@ class TestOpenAIAdapterParseResponse:
 # ═══════════════════════════════════════════════════════════════════════════
 # LangChainAdapter
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestNormaliseMessages:
     def test_human_to_user(self):
@@ -452,9 +455,7 @@ class TestNormaliseMessages:
 
 class TestLangChainAdapterPrepareRequest:
     def setup_method(self):
-        self.adapter = LangChainAdapter(
-            base_url="http://localhost:8767", api_key="sk-test"
-        )
+        self.adapter = LangChainAdapter(base_url="http://localhost:8767", api_key="sk-test")
 
     def test_human_role_normalised(self):
         req = {
@@ -501,9 +502,7 @@ class TestLangChainAdapterPrepareRequest:
 
 class TestLangChainAdapterTokenExtraction:
     def setup_method(self):
-        self.adapter = LangChainAdapter(
-            base_url="http://localhost:8767", api_key="sk-test"
-        )
+        self.adapter = LangChainAdapter(base_url="http://localhost:8767", api_key="sk-test")
 
     def test_extracts_from_anthropic_response(self):
         tokens = self.adapter.extract_tokens(ANTHROPIC_SUCCESS_RESPONSE)
@@ -519,6 +518,7 @@ class TestLangChainAdapterTokenExtraction:
 # ═══════════════════════════════════════════════════════════════════════════
 # LiteLLMAdapter
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestResolveProvider:
     def test_anthropic_prefix(self):
@@ -556,9 +556,7 @@ class TestResolveProvider:
 
 class TestLiteLLMAdapterPrepareRequest:
     def setup_method(self):
-        self.adapter = LiteLLMAdapter(
-            base_url="http://localhost:8767", api_key="sk-test"
-        )
+        self.adapter = LiteLLMAdapter(base_url="http://localhost:8767", api_key="sk-test")
 
     def test_openai_prefix_stripped(self):
         req = {
@@ -579,9 +577,7 @@ class TestLiteLLMAdapterPrepareRequest:
 
     def test_missing_model_raises(self):
         with pytest.raises(TokenPakConfigError, match="model"):
-            self.adapter.prepare_request({
-                "messages": [{"role": "user", "content": "hi"}]
-            })
+            self.adapter.prepare_request({"messages": [{"role": "user", "content": "hi"}]})
 
     def test_missing_messages_raises(self):
         with pytest.raises(TokenPakConfigError, match="messages"):
@@ -598,9 +594,7 @@ class TestLiteLLMAdapterPrepareRequest:
 
 class TestLiteLLMAdapterTokenExtraction:
     def setup_method(self):
-        self.adapter = LiteLLMAdapter(
-            base_url="http://localhost:8767", api_key="sk-test"
-        )
+        self.adapter = LiteLLMAdapter(base_url="http://localhost:8767", api_key="sk-test")
 
     def test_extracts_from_anthropic_response(self):
         tokens = self.adapter.extract_tokens(ANTHROPIC_SUCCESS_RESPONSE)
@@ -615,21 +609,25 @@ class TestLiteLLMAdapterTokenExtraction:
 # Integration smoke test (no network)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestAdapterPipeline:
     """Test the full prepare→send→parse→extract pipeline with mocked HTTP."""
 
     @patch("tokenpak.adapters.openai._requests")
     def test_openai_full_pipeline(self, mock_requests):
         import requests as real_requests
+
         mock_requests.post.return_value = _make_mock_response(OPENAI_SUCCESS_RESPONSE)
         mock_requests.exceptions.Timeout = real_requests.exceptions.Timeout
         mock_requests.exceptions.RequestException = real_requests.exceptions.RequestException
 
         adapter = OpenAIAdapter(base_url="http://localhost:8767", api_key="sk-test")
-        response = adapter.call({
-            "model": "gpt-4o",
-            "messages": [{"role": "user", "content": "Hello"}],
-        })
+        response = adapter.call(
+            {
+                "model": "gpt-4o",
+                "messages": [{"role": "user", "content": "Hello"}],
+            }
+        )
         tokens = adapter.extract_tokens(response)
 
         assert response["object"] == "chat.completion"
@@ -640,16 +638,19 @@ class TestAdapterPipeline:
     @patch("tokenpak.adapters.anthropic._requests")
     def test_anthropic_full_pipeline(self, mock_requests):
         import requests as real_requests
+
         mock_requests.post.return_value = _make_mock_response(ANTHROPIC_SUCCESS_RESPONSE)
         mock_requests.exceptions.Timeout = real_requests.exceptions.Timeout
         mock_requests.exceptions.RequestException = real_requests.exceptions.RequestException
 
         adapter = AnthropicAdapter(base_url="http://localhost:8767", api_key="sk-ant-test")
-        response = adapter.call({
-            "model": "claude-3-5-sonnet-20241022",
-            "max_tokens": 1024,
-            "messages": [{"role": "user", "content": "Hello"}],
-        })
+        response = adapter.call(
+            {
+                "model": "claude-3-5-sonnet-20241022",
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": "Hello"}],
+            }
+        )
         tokens = adapter.extract_tokens(response)
 
         assert response["type"] == "message"

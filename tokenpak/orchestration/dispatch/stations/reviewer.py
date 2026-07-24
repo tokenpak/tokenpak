@@ -232,13 +232,8 @@ class ReviewerStation:
         """
 
         result_schema = ReviewerStationResult.model_json_schema()
-        criteria = [
-            {"id": c.id, "description": c.description}
-            for c in payload.acceptance_criteria
-        ]
-        constraints = [
-            {"id": c.id, "description": c.description} for c in payload.constraints
-        ]
+        criteria = [{"id": c.id, "description": c.description} for c in payload.acceptance_criteria]
+        constraints = [{"id": c.id, "description": c.description} for c in payload.constraints]
         request = {
             "template_id": self.template_id,
             "task": (
@@ -306,8 +301,7 @@ class ReviewerStation:
                 )
             return decoded
         raise ReviewerOutputError(
-            "reviewer client must return a JSON string or a mapping; got "
-            f"{type(raw).__name__}."
+            f"reviewer client must return a JSON string or a mapping; got {type(raw).__name__}."
         )
 
     @staticmethod
@@ -315,9 +309,7 @@ class ReviewerStation:
         try:
             return ReviewerStationResult.model_validate(parsed)
         except ValidationError as exc:
-            raise ReviewerOutputError(
-                f"reviewer output failed schema validation: {exc}"
-            ) from exc
+            raise ReviewerOutputError(f"reviewer output failed schema validation: {exc}") from exc
 
 
 __all__ = [

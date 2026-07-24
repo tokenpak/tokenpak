@@ -21,6 +21,7 @@ from typing import Any, Dict, Iterator
 # StreamUsage dataclass (merged from agent.proxy.streaming)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StreamUsage:
     """Usage metrics extracted from streaming response."""
@@ -40,6 +41,7 @@ class StreamUsage:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def extract_sse_tokens(sse_bytes: bytes) -> Dict[str, int]:
     """
@@ -177,6 +179,7 @@ def iter_sse_events(stream_bytes: bytes) -> Iterator[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # StreamHandler (merged from agent.proxy.streaming)
 # ---------------------------------------------------------------------------
+
 
 class StreamHandler:
     """

@@ -1,4 +1,5 @@
 """Unit tests for tokenpak/config_loader.py"""
+
 import os
 from unittest.mock import patch
 
@@ -19,6 +20,7 @@ def reset_config_cache():
 # ---------------------------------------------------------------------------
 # _deep_get helper
 # ---------------------------------------------------------------------------
+
 
 class TestDeepGet:
     def test_top_level_key(self):
@@ -50,6 +52,7 @@ class TestDeepGet:
 # _bool_env helper
 # ---------------------------------------------------------------------------
 
+
 class TestBoolEnv:
     def test_true_values(self):
         for val in ("1", "true", "yes", "on", "True", "YES", "ON"):
@@ -63,6 +66,7 @@ class TestBoolEnv:
 # ---------------------------------------------------------------------------
 # load_config
 # ---------------------------------------------------------------------------
+
 
 class TestLoadConfig:
     def test_returns_empty_dict_for_missing_file(self, tmp_path):
@@ -119,6 +123,7 @@ class TestLoadConfig:
 # ---------------------------------------------------------------------------
 # get — priority order
 # ---------------------------------------------------------------------------
+
 
 class TestGet:
     def test_env_var_takes_priority(self, tmp_path):
@@ -180,6 +185,7 @@ class TestGet:
 # get_all — defaults and structure
 # ---------------------------------------------------------------------------
 
+
 class TestGetAll:
     def test_returns_dict(self, tmp_path):
         cfg_file = tmp_path / "config.yaml"
@@ -233,12 +239,13 @@ class TestGetAll:
         _cl.load_config(str(cfg_file))
         result = _cl.get_all()
         assert result["compression.enabled"] is True
-        assert result["compression.threshold_tokens"] == 4500
+        assert result["compression.threshold_tokens"] == 1500
 
 
 # ---------------------------------------------------------------------------
 # generate_default_yaml
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateDefaultYaml:
     def test_returns_string(self):
@@ -259,6 +266,7 @@ class TestGenerateDefaultYaml:
 
     def test_is_valid_yaml(self):
         import yaml
+
         result = _cl.generate_default_yaml()
         parsed = yaml.safe_load(result)
         assert isinstance(parsed, dict)

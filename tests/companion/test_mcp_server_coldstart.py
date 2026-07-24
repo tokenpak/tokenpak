@@ -48,9 +48,7 @@ def _run_py(code: str) -> subprocess.CompletedProcess[str]:
 
 
 def _line_after(prefix: str, output: str) -> str:
-    return [ln for ln in output.splitlines() if ln.startswith(prefix)][-1][
-        len(prefix) :
-    ]
+    return [ln for ln in output.splitlines() if ln.startswith(prefix)][-1][len(prefix) :]
 
 
 def test_mcp_server_import_does_not_load_heavy_ml_stack() -> None:

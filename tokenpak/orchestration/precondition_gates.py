@@ -83,11 +83,11 @@ class Gate:
     promoted_at: Optional[float] = None
     description: str = ""
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Gate":
+    def from_dict(cls, d: dict[str, Any]) -> "Gate":
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
@@ -258,15 +258,15 @@ class PreconditionGates:
         }
         self.gates_path.write_text(json.dumps(payload, indent=2))
 
-    def _append_failure(self, record: dict) -> None:
+    def _append_failure(self, record: dict[str, Any]) -> None:
         self.failures_path.parent.mkdir(parents=True, exist_ok=True)
         with self.failures_path.open("a") as fh:
             fh.write(json.dumps(record) + "\n")
 
-    def _load_failures(self) -> List[dict]:
+    def _load_failures(self) -> List[dict[str, Any]]:
         if not self.failures_path.exists():
             return []
-        records = []
+        records: List[dict[str, Any]] = []
         with self.failures_path.open() as fh:
             for line in fh:
                 line = line.strip()
@@ -283,8 +283,7 @@ class PreconditionGates:
         """Manually register a gate for a step."""
         if gate.gate_type not in SUPPORTED_GATE_TYPES:
             raise ValueError(
-                f"Unknown gate type {gate.gate_type!r}. "
-                f"Supported: {sorted(SUPPORTED_GATE_TYPES)}"
+                f"Unknown gate type {gate.gate_type!r}. Supported: {sorted(SUPPORTED_GATE_TYPES)}"
             )
         self._gates.setdefault(gate.step, []).append(gate)
         self._save_gates()

@@ -97,6 +97,7 @@ WHITESPACE_HEAVY = "Line 1\n\n\n\nLine 2\n\t\tIndented\n   Trailing   \nLine 3"
 # 1. Lossless mode
 # ---------------------------------------------------------------------------
 
+
 class TestLosslessMode(unittest.TestCase):
     """lossless mode — whitespace only, deterministic."""
 
@@ -144,6 +145,7 @@ class TestLosslessMode(unittest.TestCase):
 # 2. Balanced mode
 # ---------------------------------------------------------------------------
 
+
 class TestBalancedMode(unittest.TestCase):
     """balanced mode — deterministic, 30–50% reduction target."""
 
@@ -188,6 +190,7 @@ class TestBalancedMode(unittest.TestCase):
 # 3. Aggressive mode
 # ---------------------------------------------------------------------------
 
+
 class TestAggressiveMode(unittest.TestCase):
     """aggressive mode — maximum deterministic compression, 50–70%."""
 
@@ -202,8 +205,9 @@ class TestAggressiveMode(unittest.TestCase):
     def test_more_aggressive_than_balanced(self):
         bal = compact_balanced(SAMPLE_PROSE)
         agg = compact_aggressive(SAMPLE_PROSE)
-        self.assertLess(len(agg), len(bal),
-                        "Aggressive should produce smaller output than balanced")
+        self.assertLess(
+            len(agg), len(bal), "Aggressive should produce smaller output than balanced"
+        )
 
     def test_drops_boilerplate(self):
         text = "All rights reserved.\nPrivacy policy.\nClick here for more details.\n# Header\nReal content here."
@@ -234,6 +238,7 @@ class TestAggressiveMode(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 4. Semantic mode
 # ---------------------------------------------------------------------------
+
 
 class TestSemanticMode(unittest.TestCase):
     """
@@ -274,21 +279,24 @@ class TestSemanticMode(unittest.TestCase):
 # 5. Block-type specific compression
 # ---------------------------------------------------------------------------
 
+
 class TestBlockTypeCompression(unittest.TestCase):
     """Block-type specific per-policy compression overrides."""
 
     def _make_policy(self) -> CompactionPolicy:
-        return CompactionPolicy.from_dict({
-            "compaction": {
-                "mode": "balanced",
-                "max_tokens": 8000,
-                "priority_order": ["instructions", "code", "knowledge"],
-                "per_block_limits": {
-                    "instructions": {"mode": "lossless"},
-                    "code": {"mode": "balanced", "max_tokens": 2000},
-                },
+        return CompactionPolicy.from_dict(
+            {
+                "compaction": {
+                    "mode": "balanced",
+                    "max_tokens": 8000,
+                    "priority_order": ["instructions", "code", "knowledge"],
+                    "per_block_limits": {
+                        "instructions": {"mode": "lossless"},
+                        "code": {"mode": "balanced", "max_tokens": 2000},
+                    },
+                }
             }
-        })
+        )
 
     def test_instructions_use_lossless(self):
         policy = self._make_policy()
@@ -328,6 +336,7 @@ class TestBlockTypeCompression(unittest.TestCase):
 # 6. Policy configuration system
 # ---------------------------------------------------------------------------
 
+
 class TestPolicyConfiguration(unittest.TestCase):
     """CompactionPolicy — construction, serialisation, defaults."""
 
@@ -360,16 +369,18 @@ class TestPolicyConfiguration(unittest.TestCase):
         self.assertEqual(p.per_block_limits["code"].max_tokens, 1500)
 
     def test_to_dict_serialises(self):
-        p = CompactionPolicy.from_dict({
-            "compaction": {
-                "mode": "balanced",
-                "max_tokens": 8000,
-                "priority_order": ["instructions", "code", "knowledge"],
-                "per_block_limits": {
-                    "instructions": {"mode": "lossless"},
-                },
+        p = CompactionPolicy.from_dict(
+            {
+                "compaction": {
+                    "mode": "balanced",
+                    "max_tokens": 8000,
+                    "priority_order": ["instructions", "code", "knowledge"],
+                    "per_block_limits": {
+                        "instructions": {"mode": "lossless"},
+                    },
+                }
             }
-        })
+        )
         d = p.to_dict()
         self.assertIn("compaction", d)
         self.assertEqual(d["compaction"]["mode"], "balanced")

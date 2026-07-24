@@ -2,7 +2,6 @@
 Tests for debug mode toggle and logging.
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak._internal.config", reason="module not available in current build")
@@ -18,6 +17,7 @@ from tokenpak._internal.config import (
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def temp_config(tmp_path, monkeypatch):
@@ -36,6 +36,7 @@ def clean_env(monkeypatch):
 # ─────────────────────────────────────────────────────────────────────────────
 # get_debug_enabled / set_debug_enabled
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestDebugEnabled:
     def test_default_is_false(self, temp_config, clean_env):
@@ -87,6 +88,7 @@ class TestDebugEnabled:
 # debug_log
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestDebugLog:
     def test_no_output_when_disabled(self, temp_config, clean_env, capsys):
         """debug_log produces no output when debug mode is off."""
@@ -118,12 +120,14 @@ class TestDebugLog:
         captured = capsys.readouterr()
         # Should have HH:MM:SS format
         import re
+
         assert re.search(r"\d{2}:\d{2}:\d{2}", captured.err)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI commands
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestDebugCLI:
     def test_cmd_debug_on(self, temp_config, clean_env, capsys):

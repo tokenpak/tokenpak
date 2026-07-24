@@ -47,15 +47,10 @@ _FakeVersionInfo = namedtuple("_FakeVersionInfo", "major minor micro releaseleve
 # A health payload with no failing signals — used by the cases where the
 # proxy should look healthy so the only fail comes from the case under test.
 _HEALTHY_HEALTH = {
-    "compilation_mode": "test",
-    "stats": {"requests": 0},
-    "vault_index": {"available": True, "blocks": 5},
-    "skeleton": {"enabled": True},
-    "shadow_reader": {"enabled": True},
-    "canon": {"enabled": True},
-    "capsule_available": True,
-    "term_resolver": {"enabled": True},
-    "circuit_breakers": {},
+    "status": "ok",
+    "requests_total": 0,
+    "requests_errors": 0,
+    "circuit_breakers": {"enabled": True, "any_open": False, "providers": {}},
 }
 
 
@@ -107,7 +102,11 @@ def test_invalid_config_json_exits_1(doctor_home, monkeypatch):
 def test_open_circuit_breaker_exits_1(doctor_home, monkeypatch):
     _write_config(doctor_home, json.dumps({"version": "1.0", "port": 8766}))
     unhealthy = dict(_HEALTHY_HEALTH)
-    unhealthy["circuit_breakers"] = {"anthropic": {"open": True, "failures": 3}}
+    unhealthy["circuit_breakers"] = {
+        "enabled": True,
+        "any_open": True,
+        "providers": {"anthropic": {"state": "open"}},
+    }
     _stub_health(monkeypatch, unhealthy)
     with pytest.raises(SystemExit) as exc:
         cli_doctor.cmd_doctor(_args())

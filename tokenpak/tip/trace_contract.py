@@ -16,7 +16,7 @@ Design constraints:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, List, Optional
 
 
 @dataclass
@@ -39,7 +39,7 @@ class StageTrace:
     tokens_before: Optional[int] = None
     tokens_after: Optional[int] = None
     latency_ms: Optional[float] = None
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def tokens_saved(self) -> Optional[int]:
         if self.tokens_before is not None and self.tokens_after is not None:
@@ -66,10 +66,10 @@ class SavingsAttribution:
 
     def __post_init__(self) -> None:
         from tokenpak.tip.telemetry_contract import SavingsSource
+
         if self.source not in SavingsSource.ALL:
             raise ValueError(
-                f"Unknown savings source {self.source!r}. "
-                f"Use a SavingsSource constant."
+                f"Unknown savings source {self.source!r}. Use a SavingsSource constant."
             )
         self.credited_to_tokenpak = self.source in SavingsSource.TOKENPAK_MANAGED
 
@@ -150,10 +150,9 @@ class OptimizationTrace:
     def tokenpak_saved_tokens(self) -> int:
         """Total tokens saved by TokenPak-managed stages only."""
         from tokenpak.tip.telemetry_contract import SavingsSource
+
         return sum(
-            s.saved_tokens
-            for s in self.savings
-            if s.source in SavingsSource.TOKENPAK_MANAGED
+            s.saved_tokens for s in self.savings if s.source in SavingsSource.TOKENPAK_MANAGED
         )
 
     def add_stage(self, stage: StageTrace) -> None:

@@ -99,11 +99,14 @@ SAMPLE_CODEX = (
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("tier,mode", [
-    ("strict", "default"),
-    ("standard", "acceptEdits"),
-    ("auto", "bypassPermissions"),
-])
+@pytest.mark.parametrize(
+    "tier,mode",
+    [
+        ("strict", "default"),
+        ("standard", "acceptEdits"),
+        ("auto", "bypassPermissions"),
+    ],
+)
 def test_set_tier_claude_mapping(tmp_home, tier, mode):
     _write_claude_settings(tmp_home, SAMPLE_CLAUDE)
     result = perms.apply_claude_tier(tier)
@@ -120,11 +123,14 @@ def test_set_tier_claude_mapping(tmp_home, tier, mode):
     assert (tmp_home / ".claude" / "settings.json.bak").exists()
 
 
-@pytest.mark.parametrize("tier,approval,sandbox", [
-    ("strict", "on-request", "read-only"),
-    ("standard", "on-request", "workspace-write"),
-    ("auto", "never", "workspace-write"),
-])
+@pytest.mark.parametrize(
+    "tier,approval,sandbox",
+    [
+        ("strict", "on-request", "read-only"),
+        ("standard", "on-request", "workspace-write"),
+        ("auto", "never", "workspace-write"),
+    ],
+)
 def test_set_tier_codex_mapping(tmp_home, tier, approval, sandbox):
     _write_codex_config(tmp_home, SAMPLE_CODEX)
     result = perms.apply_codex_tier(tier)
@@ -161,9 +167,7 @@ def test_set_single_client_leaves_other_alone(tmp_home):
     _write_claude_settings(tmp_home, SAMPLE_CLAUDE)
     codex_p = _write_codex_config(tmp_home, SAMPLE_CODEX)
     before = codex_p.read_text()
-    rc = perms.run_permissions(
-        _ns(permissions_cmd="set", tier="strict", client="claude-code")
-    )
+    rc = perms.run_permissions(_ns(permissions_cmd="set", tier="strict", client="claude-code"))
     assert rc == 0
     assert codex_p.read_text() == before
 
@@ -179,9 +183,7 @@ def test_set_fleet_does_not_modify_client_configs(tmp_home):
     claude_before = (claude_p.read_text(), os.stat(claude_p).st_mtime_ns)
     codex_before = (codex_p.read_text(), os.stat(codex_p).st_mtime_ns)
 
-    rc = perms.run_permissions(
-        _ns(permissions_cmd="set", tier="fleet", client="both", yes=True)
-    )
+    rc = perms.run_permissions(_ns(permissions_cmd="set", tier="fleet", client="both", yes=True))
     assert rc == 0
     assert perms.fleet_mode_enabled() is True
     # mtime + content provably unchanged
@@ -196,18 +198,14 @@ def test_set_fleet_does_not_modify_client_configs(tmp_home):
 
 
 def test_set_fleet_requires_explicit_optin_non_tty(tmp_home, capsys):
-    rc = perms.run_permissions(
-        _ns(permissions_cmd="set", tier="fleet", client="both", yes=False)
-    )
+    rc = perms.run_permissions(_ns(permissions_cmd="set", tier="fleet", client="both", yes=False))
     assert rc == 1
     assert perms.fleet_mode_enabled() is False
     assert "--yes" in capsys.readouterr().err
 
 
 def test_legacy_fleet_rejects_narrow_client_scope(tmp_home, capsys):
-    rc = perms.run_permissions(
-        _ns(permissions_cmd="set", tier="fleet", client="codex", yes=True)
-    )
+    rc = perms.run_permissions(_ns(permissions_cmd="set", tier="fleet", client="codex", yes=True))
     assert rc == 2
     assert perms._get_launcher_mode("codex") == "inherit"
     assert perms._get_launcher_mode("claude-code") == "inherit"
@@ -306,9 +304,7 @@ def test_launcher_mode_round_trip_for_claude(tmp_home):
 
 @pytest.mark.parametrize("mode", ["approval-bypass", "sandbox-bypass"])
 @pytest.mark.parametrize("client", ["claude-code", "both"])
-def test_partial_bypass_rejected_for_claude_atomically(
-    tmp_home, capsys, mode, client
-):
+def test_partial_bypass_rejected_for_claude_atomically(tmp_home, capsys, mode, client):
     perms._set_launcher_modes({"codex": "full-bypass"}, "existing state")
     rc = perms.run_permissions(
         _ns(
@@ -343,9 +339,7 @@ def test_launcher_bypass_requires_yes_non_tty(tmp_home, capsys):
     assert "administrator policy" in captured.err
 
 
-def test_tokenpak_noninteractive_disables_tty_prompt(
-    tmp_home, monkeypatch, capsys
-):
+def test_tokenpak_noninteractive_disables_tty_prompt(tmp_home, monkeypatch, capsys):
     monkeypatch.setenv("TOKENPAK_NONINTERACTIVE", "1")
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
@@ -411,9 +405,7 @@ def test_launcher_yes_keeps_warning_visible(tmp_home, capsys):
         ),
     ],
 )
-def test_launcher_warning_elevates_effective_full_bypass(
-    tmp_home, capsys, config, mode, needle
-):
+def test_launcher_warning_elevates_effective_full_bypass(tmp_home, capsys, config, mode, needle):
     _write_codex_config(tmp_home, config)
     rc = perms.run_permissions(
         _ns(
@@ -482,10 +474,7 @@ def test_show_invalid_launcher_state_uses_launcher_remediation(tmp_home, capsys)
     state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(
-        "[launcher]\n"
-        "fleet_mode = false\n\n"
-        "[launcher.modes]\n"
-        'codex = "future-unrestricted"\n'
+        '[launcher]\nfleet_mode = false\n\n[launcher.modes]\ncodex = "future-unrestricted"\n'
     )
     assert perms.run_permissions(_ns(permissions_cmd="show")) == 0
     out = capsys.readouterr().out
@@ -615,9 +604,7 @@ def test_show_default_rows_exact_shape(tmp_home, capsys):
 
 
 def test_show_json_is_one_schema_versioned_object(tmp_home, capsys):
-    rc = perms.run_permissions(
-        _ns(permissions_cmd="show", as_json=True, quiet=False)
-    )
+    rc = perms.run_permissions(_ns(permissions_cmd="show", as_json=True, quiet=False))
     assert rc == 0
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
@@ -628,9 +615,7 @@ def test_show_json_is_one_schema_versioned_object(tmp_home, capsys):
     assert captured.err == ""
 
 
-def test_cli_main_first_run_json_has_no_welcome_noise(
-    tmp_home, monkeypatch, capsys
-):
+def test_cli_main_first_run_json_has_no_welcome_noise(tmp_home, monkeypatch, capsys):
     from tokenpak import _cli_core
 
     monkeypatch.setattr(
@@ -651,9 +636,7 @@ def test_cli_main_first_run_json_has_no_welcome_noise(
 
 
 def test_show_quiet_suppresses_normal_output(tmp_home, capsys):
-    rc = perms.run_permissions(
-        _ns(permissions_cmd="show", as_json=False, quiet=True)
-    )
+    rc = perms.run_permissions(_ns(permissions_cmd="show", as_json=False, quiet=True))
     assert rc == 0
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -662,9 +645,7 @@ def test_show_quiet_suppresses_normal_output(tmp_home, capsys):
 
 def test_show_quiet_preserves_active_safety_warnings(tmp_home, capsys):
     perms._set_launcher_modes({"codex": "approval-bypass"}, "test")
-    rc = perms.run_permissions(
-        _ns(permissions_cmd="show", as_json=False, quiet=True)
-    )
+    rc = perms.run_permissions(_ns(permissions_cmd="show", as_json=False, quiet=True))
     assert rc == 0
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -672,9 +653,7 @@ def test_show_quiet_preserves_active_safety_warnings(tmp_home, capsys):
     assert "administrator policy" in captured.err
 
 
-def test_launcher_json_write_is_parseable_and_keeps_stderr_warning(
-    tmp_home, capsys
-):
+def test_launcher_json_write_is_parseable_and_keeps_stderr_warning(tmp_home, capsys):
     rc = perms.run_permissions(
         _ns(
             permissions_cmd="launcher",
@@ -792,8 +771,7 @@ def test_bypass_flags_only_in_launcher_files():
             if path not in allowed:
                 offenders.append(str(path))
     assert not offenders, (
-        "bypass flags must only be referenced by the two launcher files; "
-        f"found in: {offenders}"
+        f"bypass flags must only be referenced by the two launcher files; found in: {offenders}"
     )
 
 

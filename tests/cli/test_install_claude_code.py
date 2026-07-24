@@ -180,7 +180,9 @@ def _fake_args(**kwargs):
 
 
 def test_detect_claude_binary_found():
-    with mock.patch("tokenpak.cli.commands.install.shutil.which", return_value="/usr/local/bin/claude"):
+    with mock.patch(
+        "tokenpak.cli.commands.install.shutil.which", return_value="/usr/local/bin/claude"
+    ):
         assert detect_claude_binary() == "/usr/local/bin/claude"
 
 
@@ -305,9 +307,7 @@ def test_smoke_test_pass():
     fake_response.status = 200
     fake_response.__enter__ = mock.MagicMock(return_value=fake_response)
     fake_response.__exit__ = mock.MagicMock(return_value=False)
-    with mock.patch(
-        "urllib.request.urlopen", return_value=fake_response
-    ):
+    with mock.patch("urllib.request.urlopen", return_value=fake_response):
         assert run_smoke_test() is True
 
 
@@ -317,17 +317,13 @@ def test_smoke_test_fail():
     fake_response.status = 502
     fake_response.__enter__ = mock.MagicMock(return_value=fake_response)
     fake_response.__exit__ = mock.MagicMock(return_value=False)
-    with mock.patch(
-        "urllib.request.urlopen", return_value=fake_response
-    ):
+    with mock.patch("urllib.request.urlopen", return_value=fake_response):
         assert run_smoke_test() is False
 
 
 def test_smoke_test_exception():
     """v1.5.2: any exception during urlopen → False."""
-    with mock.patch(
-        "urllib.request.urlopen", side_effect=ConnectionError("refused")
-    ):
+    with mock.patch("urllib.request.urlopen", side_effect=ConnectionError("refused")):
         assert run_smoke_test() is False
 
 
@@ -449,6 +445,7 @@ def test_restore_backup(claude_dir):
     p = claude_dir / "settings.json"
     p.write_text(json.dumps(original, indent=2) + "\n")
     import shutil as _shutil
+
     backup = p.parent / "settings.json.bak"
     _shutil.copy2(p, backup)
     p.write_text('{"env": {"ANTHROPIC_BASE_URL": "new-url"}}\n')

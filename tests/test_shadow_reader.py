@@ -1,6 +1,5 @@
 """Unit tests for shadow_reader.py (Phase 3.5 — Shadow Reader)."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.shadow_reader", reason="module not available in current build")
@@ -21,13 +20,14 @@ from tokenpak.shadow_reader import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _original(n_sentences: int = 5, sentence_len: int = 15) -> str:
     """Generate a simple original text with recognisable key terms."""
     terms = ["authentication", "database", "repository", "connection", "transaction"]
     sentences = []
     for i in range(n_sentences):
         term = terms[i % len(terms)]
-        pad  = " ".join(["word"] * (sentence_len - 3))
+        pad = " ".join(["word"] * (sentence_len - 3))
         sentences.append(f"The {term} module {pad}.")
     return " ".join(sentences)
 
@@ -41,6 +41,7 @@ def _compress(text: str, ratio: float) -> str:
 # ---------------------------------------------------------------------------
 # top_terms
 # ---------------------------------------------------------------------------
+
 
 class TestTopTerms:
     def test_returns_list(self):
@@ -79,26 +80,35 @@ class TestTopTerms:
 # validate — coverage check
 # ---------------------------------------------------------------------------
 
+
 class TestCoverageCheck:
     def test_passes_on_good_compression(self):
-        original   = "word " * 1000
-        compressed = "word " * 300   # 30% — within range
+        original = "word " * 1000
+        compressed = "word " * 300  # 30% — within range
         result = validate(compressed, original, "NARRATIVE")
         assert result.check_scores.get("coverage", 0) > 0
 
     def test_fails_below_min_coverage(self):
-        original   = "word " * 1000
+        original = "word " * 1000
         compressed = "w"  # Near zero — hugely over-compressed
-        result = validate(compressed, original, "NARRATIVE",
-                          checks_config={"coverage": True, "coherence": False, "key_terms": False})
+        result = validate(
+            compressed,
+            original,
+            "NARRATIVE",
+            checks_config={"coverage": True, "coherence": False, "key_terms": False},
+        )
         assert not result.passed
         assert "coverage" in result.reason
 
     def test_fails_above_max_coverage(self):
-        original   = "word " * 100
+        original = "word " * 100
         compressed = original  # Identical — nothing removed
-        result = validate(compressed, original, "NARRATIVE",
-                          checks_config={"coverage": True, "coherence": False, "key_terms": False})
+        result = validate(
+            compressed,
+            original,
+            "NARRATIVE",
+            checks_config={"coverage": True, "coherence": False, "key_terms": False},
+        )
         assert not result.passed
         assert "coverage" in result.reason
 
@@ -107,6 +117,7 @@ class TestCoverageCheck:
 # validate — sentence coherence check
 # ---------------------------------------------------------------------------
 
+
 class TestSentenceCoherenceCheck:
     def test_passes_on_normal_sentences(self):
         compressed = (
@@ -114,15 +125,23 @@ class TestSentenceCoherenceCheck:
             "It verifies credentials against the database. "
             "Tokens are issued upon successful verification."
         )
-        result = validate(compressed, compressed, "NARRATIVE",
-                          checks_config={"coverage": False, "coherence": True, "key_terms": False})
+        result = validate(
+            compressed,
+            compressed,
+            "NARRATIVE",
+            checks_config={"coverage": False, "coherence": True, "key_terms": False},
+        )
         assert "coherence" in result.checks_run
 
     def test_fails_on_very_long_sentence(self):
         # 130-word run-on sentence
         compressed = "word " * 130 + "."
-        result = validate(compressed, compressed + " extra", "NARRATIVE",
-                          checks_config={"coverage": False, "coherence": True, "key_terms": False})
+        result = validate(
+            compressed,
+            compressed + " extra",
+            "NARRATIVE",
+            checks_config={"coverage": False, "coherence": True, "key_terms": False},
+        )
         assert not result.passed
         assert "coherence" in result.reason
 
@@ -130,6 +149,7 @@ class TestSentenceCoherenceCheck:
 # ---------------------------------------------------------------------------
 # validate — key term retention check
 # ---------------------------------------------------------------------------
+
 
 class TestKeyTermRetentionCheck:
     def test_passes_when_terms_present(self):
@@ -145,8 +165,12 @@ class TestKeyTermRetentionCheck:
             "be strong. tokens expire daily. validate all inputs. "
             "credentials are stored securely. authentication is critical."
         )
-        result = validate(compressed, original, "NARRATIVE",
-                          checks_config={"coverage": False, "coherence": False, "key_terms": True})
+        result = validate(
+            compressed,
+            original,
+            "NARRATIVE",
+            checks_config={"coverage": False, "coherence": False, "key_terms": True},
+        )
         assert result.check_scores.get("key_terms", 0) >= MIN_TERM_RETENTION
 
     def test_fails_when_terms_missing(self):
@@ -156,8 +180,12 @@ class TestKeyTermRetentionCheck:
             "authentication database repository connection transaction. "
         )
         compressed = "totally unrelated words about something else entirely."
-        result = validate(compressed, original, "NARRATIVE",
-                          checks_config={"coverage": False, "coherence": False, "key_terms": True})
+        result = validate(
+            compressed,
+            original,
+            "NARRATIVE",
+            checks_config={"coverage": False, "coherence": False, "key_terms": True},
+        )
         assert not result.passed
         assert "key_term" in result.reason
 
@@ -166,23 +194,40 @@ class TestKeyTermRetentionCheck:
 # validate — code block integrity check
 # ---------------------------------------------------------------------------
 
+
 class TestCodeIntegrityCheck:
     def test_passes_with_closed_fences(self):
         # Use a single-line body so no indentation is lost
-        original   = "```python\ndef foo(): return 42\n```\nThis is some documentation text."
+        original = "```python\ndef foo(): return 42\n```\nThis is some documentation text."
         compressed = "```python\ndef foo(): return 42\n```\nDocumentation text."
-        result = validate(compressed, original, "CODE",
-                          checks_config={"coverage": False, "coherence": False,
-                                         "key_terms": False, "code_integrity": True})
+        result = validate(
+            compressed,
+            original,
+            "CODE",
+            checks_config={
+                "coverage": False,
+                "coherence": False,
+                "key_terms": False,
+                "code_integrity": True,
+            },
+        )
         ci = result.check_scores.get("code_integrity")
         assert ci is not None and ci == 1.0
 
     def test_fails_with_unclosed_fence(self):
         original = "```python\ndef foo():\n    pass\n```"
         compressed = "```python\ndef foo(): ..."  # Missing closing ```
-        result = validate(compressed, original, "CODE",
-                          checks_config={"coverage": False, "coherence": False,
-                                         "key_terms": False, "code_integrity": True})
+        result = validate(
+            compressed,
+            original,
+            "CODE",
+            checks_config={
+                "coverage": False,
+                "coherence": False,
+                "key_terms": False,
+                "code_integrity": True,
+            },
+        )
         assert not result.passed
         assert "code_integrity" in result.reason
 
@@ -197,26 +242,43 @@ class TestCodeIntegrityCheck:
 # validate — numeric preservation check
 # ---------------------------------------------------------------------------
 
+
 class TestNumericPreservationCheck:
     def test_passes_when_numbers_unchanged(self):
-        original   = "The budget is $1,200 and the rate is 5.5%."
+        original = "The budget is $1,200 and the rate is 5.5%."
         compressed = "Budget $1,200, rate 5.5%."
-        result = validate(compressed, original, "NUMERIC",
-                          checks_config={"coverage": False, "coherence": False,
-                                         "key_terms": False, "numeric_preservation": True})
+        result = validate(
+            compressed,
+            original,
+            "NUMERIC",
+            checks_config={
+                "coverage": False,
+                "coherence": False,
+                "key_terms": False,
+                "numeric_preservation": True,
+            },
+        )
         assert result.passed
 
     def test_fails_when_number_altered(self):
-        original   = "The limit is 1000 items per day."
+        original = "The limit is 1000 items per day."
         compressed = "The limit is 999 items per day."  # Changed 1000 → 999
-        result = validate(compressed, original, "NUMERIC",
-                          checks_config={"coverage": False, "coherence": False,
-                                         "key_terms": False, "numeric_preservation": True})
+        result = validate(
+            compressed,
+            original,
+            "NUMERIC",
+            checks_config={
+                "coverage": False,
+                "coherence": False,
+                "key_terms": False,
+                "numeric_preservation": True,
+            },
+        )
         assert not result.passed
         assert "numeric" in result.reason
 
     def test_numeric_check_runs_for_legal(self):
-        original   = "Section 42 applies."
+        original = "Section 42 applies."
         compressed = "Section 42 applies."
         result = validate(compressed, original, "LEGAL")
         assert "numeric_preservation" in result.checks_run
@@ -229,6 +291,7 @@ class TestNumericPreservationCheck:
 # ---------------------------------------------------------------------------
 # validate — full pipeline
 # ---------------------------------------------------------------------------
+
 
 class TestValidateIntegration:
     def test_passes_on_reasonable_compression(self):
@@ -256,8 +319,12 @@ class TestValidateIntegration:
         assert isinstance(result.check_scores, dict)
 
     def test_checks_config_disables_check(self):
-        result = validate("tiny.", "huge " * 100, "NARRATIVE",
-                          checks_config={"coverage": False, "coherence": True, "key_terms": False})
+        result = validate(
+            "tiny.",
+            "huge " * 100,
+            "NARRATIVE",
+            checks_config={"coverage": False, "coherence": True, "key_terms": False},
+        )
         assert "coverage" not in result.checks_run
         assert "coherence" in result.checks_run
 
@@ -265,6 +332,7 @@ class TestValidateIntegration:
 # ---------------------------------------------------------------------------
 # apply_fallback
 # ---------------------------------------------------------------------------
+
 
 class TestApplyFallback:
     def setup_method(self):
@@ -279,17 +347,15 @@ class TestApplyFallback:
             "Connection pools are used for efficiency. "
         )
         compressed = "Authentication validates tokens. Database stores credentials."
-        text, action = apply_fallback(compressed, original, "NARRATIVE",
-                                      log_path=self.log)
+        text, action = apply_fallback(compressed, original, "NARRATIVE", log_path=self.log)
         # May pass or fail depending on key terms — just verify it returns something
         assert action in ("kept", "fallback_to_hybrid")
         assert isinstance(text, str) and len(text) > 0
 
     def test_fallback_when_over_compressed(self):
-        original   = "word " * 500
+        original = "word " * 500
         compressed = "w"  # Extremely over-compressed
-        text, action = apply_fallback(compressed, original, "NARRATIVE",
-                                      log_path=self.log)
+        text, action = apply_fallback(compressed, original, "NARRATIVE", log_path=self.log)
         assert action == "fallback_to_hybrid"
         assert text == original
 
@@ -302,7 +368,7 @@ class TestApplyFallback:
         assert "score" in entries[0]
 
     def test_code_fallback_triggers_on_unclosed_fence(self):
-        original   = "```python\ndef foo():\n    pass\n```\nSome text about foo function."
+        original = "```python\ndef foo():\n    pass\n```\nSome text about foo function."
         compressed = "```python\ndef foo(): ..."  # Unclosed fence
         text, action = apply_fallback(compressed, original, "CODE", log_path=self.log)
         assert action == "fallback_to_hybrid"
@@ -312,6 +378,7 @@ class TestApplyFallback:
 # ---------------------------------------------------------------------------
 # get_validation_stats
 # ---------------------------------------------------------------------------
+
 
 class TestValidationStats:
     def setup_method(self):
@@ -329,20 +396,25 @@ class TestValidationStats:
 
     def test_counts_correct(self):
         entries = [
-            {"passed": True,  "score": 0.9, "reason": "ok",       "action": "kept"},
-            {"passed": True,  "score": 0.8, "reason": "ok",       "action": "kept"},
-            {"passed": False, "score": 0.3, "reason": "coverage: over-compressed", "action": "fallback"},
+            {"passed": True, "score": 0.9, "reason": "ok", "action": "kept"},
+            {"passed": True, "score": 0.8, "reason": "ok", "action": "kept"},
+            {
+                "passed": False,
+                "score": 0.3,
+                "reason": "coverage: over-compressed",
+                "action": "fallback",
+            },
         ]
         self._write_entries(entries)
         stats = get_validation_stats(self.log)
         assert stats["total_checked"] == 3
         assert stats["passed"] == 2
         assert stats["failed"] == 1
-        assert abs(stats["fallback_rate"] - 1/3) < 0.01
+        assert abs(stats["fallback_rate"] - 1 / 3) < 0.01
 
     def test_avg_score(self):
         entries = [
-            {"passed": True,  "score": 0.8, "reason": "ok"},
+            {"passed": True, "score": 0.8, "reason": "ok"},
             {"passed": False, "score": 0.4, "reason": "coverage: x"},
         ]
         self._write_entries(entries)

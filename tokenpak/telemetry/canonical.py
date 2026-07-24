@@ -43,7 +43,7 @@ class UsageSource:
     def validate(cls, value: str) -> str:
         """Return *value* if valid, else raise ``ValueError``."""
         if value not in cls._values:
-            raise ValueError(f"Invalid usage_source {value!r}. " f"Must be one of {cls._values}.")
+            raise ValueError(f"Invalid usage_source {value!r}. Must be one of {cls._values}.")
         return value
 
 
@@ -60,7 +60,7 @@ class Confidence:
     def validate(cls, value: str) -> str:
         """Return *value* if valid, else raise ``ValueError``."""
         if value not in cls._values:
-            raise ValueError(f"Invalid confidence {value!r}. " f"Must be one of {cls._values}.")
+            raise ValueError(f"Invalid confidence {value!r}. Must be one of {cls._values}.")
         return value
 
 

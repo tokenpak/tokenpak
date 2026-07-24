@@ -18,6 +18,7 @@ from tokenpak.telemetry.proxy_collector import RequestStats
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def stats_no_failover():
     """Request stats with no failover."""
@@ -73,6 +74,7 @@ def stats_multi_failover():
 # Failover Indicator Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFailoverIndicator:
     """Test the failover_indicator property on RequestStats."""
 
@@ -111,6 +113,7 @@ class TestFailoverIndicator:
 # Footer One-Line Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFooterOneline:
     """Test footer_oneline property includes failover when present."""
 
@@ -133,6 +136,7 @@ class TestFooterOneline:
 # ─────────────────────────────────────────────────────────────────────────────
 # Render Footer Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestRenderFooterWithFailover:
     """Test render_footer_with_failover function."""
@@ -160,6 +164,7 @@ class TestRenderFooterWithFailover:
 # To Dict Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestToDictWithFailover:
     """Test to_dict includes failover fields when present."""
 
@@ -180,6 +185,7 @@ class TestToDictWithFailover:
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestFailoverLogging:
     """Test log_failover_event function."""
@@ -218,6 +224,7 @@ class TestFailoverLogging:
 # ─────────────────────────────────────────────────────────────────────────────
 # Edge Cases
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     """Edge cases and boundary conditions."""

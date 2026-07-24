@@ -1,6 +1,5 @@
 """Tests for calculate_fleet_savings() and calculate_savings_breakdown() in pricing.py."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.pricing", reason="module not available in current build")
@@ -55,9 +54,7 @@ def _make_db(tmp_path, rows):
 
 def _ts(delta_hours=0):
     """Return an ISO timestamp relative to now."""
-    return (datetime.now(timezone.utc) - timedelta(hours=delta_hours)).strftime(
-        "%Y-%m-%dT%H:%M:%S"
-    )
+    return (datetime.now(timezone.utc) - timedelta(hours=delta_hours)).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 # ─── calculate_fleet_savings — empty DB ──────────────────────────────────────
@@ -94,9 +91,15 @@ def test_known_input_haiku_savings(tmp_path):
     pm = result["per_model"][0]
 
     # cost_without = (100K + 50K) / 1M * 0.80 + 10K / 1M * 4.0
-    expected_without = (150_000 / 1_000_000) * rates["input"] + (10_000 / 1_000_000) * rates["output"]
+    expected_without = (150_000 / 1_000_000) * rates["input"] + (10_000 / 1_000_000) * rates[
+        "output"
+    ]
     # cost_with = 100K/1M * 0.80 + 50K/1M * 0.08 + 10K/1M * 4.0
-    expected_with = (100_000 / 1_000_000) * rates["input"] + (50_000 / 1_000_000) * rates["cached"] + (10_000 / 1_000_000) * rates["output"]
+    expected_with = (
+        (100_000 / 1_000_000) * rates["input"]
+        + (50_000 / 1_000_000) * rates["cached"]
+        + (10_000 / 1_000_000) * rates["output"]
+    )
 
     assert abs(pm["cost_without"] - round(expected_without, 4)) < 0.0001
     assert abs(pm["cost"] - round(expected_with, 4)) < 0.0001
@@ -154,7 +157,7 @@ def test_unknown_model_uses_default_rate(tmp_path):
 
 def test_period_24h_excludes_old_rows(tmp_path):
     rows = [
-        (_ts(0), "claude-haiku-4-5", 100_000, 5_000, 50_000, 0, 0),   # recent
+        (_ts(0), "claude-haiku-4-5", 100_000, 5_000, 50_000, 0, 0),  # recent
         (_ts(48), "claude-haiku-4-5", 100_000, 5_000, 50_000, 0, 0),  # old
     ]
     db = _make_db(tmp_path, rows)
@@ -240,7 +243,10 @@ def test_breakdown_sums_to_total(tmp_path):
     db = _make_db(tmp_path, rows)
     result = calculate_fleet_savings(db)
     breakdown = calculate_savings_breakdown(result["per_model"])
-    assert abs(breakdown["total"] - (breakdown["cache_optimization"] + breakdown["token_compression"])) < 0.0001
+    assert (
+        abs(breakdown["total"] - (breakdown["cache_optimization"] + breakdown["token_compression"]))
+        < 0.0001
+    )
 
 
 def test_breakdown_cache_optimization_positive(tmp_path):

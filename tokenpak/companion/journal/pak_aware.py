@@ -115,9 +115,7 @@ def mark_promotion_candidate(
     """
     conn = _connect(db_path)
     try:
-        row = conn.execute(
-            "SELECT metadata_json FROM entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT metadata_json FROM entries WHERE id = ?", (entry_id,)).fetchone()
         if row is None:
             return False
         try:
@@ -194,9 +192,7 @@ def list_promotion_candidates(
     ]
 
 
-def count_promotion_candidates(
-    db_path: Path, *, session_id: Optional[str] = None
-) -> int:
+def count_promotion_candidates(db_path: Path, *, session_id: Optional[str] = None) -> int:
     """Return the number of promotion-candidate entries.
 
     Cheap status-line query — used by ``tokenpak pak status``. No row
@@ -255,9 +251,7 @@ def journal_entry_to_pak_stub(entry: JournalEntryRow) -> Pak:
     pak_id = f"journal:{entry.session_id}:{entry.entry_id}"
     title = f"Journal entry [{entry.entry_type}] @ {_iso_from_ts(entry.timestamp)}"
     summary = (
-        entry.content[:240] + "…"
-        if len(entry.content) > 240
-        else entry.content
+        entry.content[:240] + "…" if len(entry.content) > 240 else entry.content
     ) or f"Empty journal entry (entry_type={entry.entry_type})"
 
     source = PakSource(
@@ -281,9 +275,7 @@ def journal_entry_to_pak_stub(entry: JournalEntryRow) -> Pak:
         status=PakStatus.PROPOSED,
         authority=_authority_for_entry_type(entry.entry_type),
         confidence=PakConfidence.LOW,  # ungraded; daemon may upgrade
-        retention=PakRetentionPolicy(
-            ttl=default_retention_for(PakSubtype.INTERACTION)
-        ),
+        retention=PakRetentionPolicy(ttl=default_retention_for(PakSubtype.INTERACTION)),
     )
 
 

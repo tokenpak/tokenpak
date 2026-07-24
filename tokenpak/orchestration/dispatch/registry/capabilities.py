@@ -47,8 +47,7 @@ class UnknownCapabilityError(ValueError):
         self.unknown = sorted(set(unknown))
         known = ", ".join(sorted(DISPATCH_CAPABILITIES))
         super().__init__(
-            "unknown Dispatch capability string(s): "
-            f"{self.unknown!r}. Known capabilities: {known}."
+            f"unknown Dispatch capability string(s): {self.unknown!r}. Known capabilities: {known}."
         )
 
 

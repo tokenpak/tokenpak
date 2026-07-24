@@ -35,6 +35,7 @@ pytest.importorskip(
 # Helpers to reload the module under different env conditions
 # ---------------------------------------------------------------------------
 
+
 def _reload_module(env_endpoint: str | None) -> types.ModuleType:
     """Reload tokenpak.telemetry.otel_exporter with a given endpoint env var."""
     env = {}
@@ -61,8 +62,8 @@ def _reload_module(env_endpoint: str | None) -> types.ModuleType:
 # 1. OTel disabled → no spans emitted
 # ---------------------------------------------------------------------------
 
-class TestOtelDisabled(unittest.TestCase):
 
+class TestOtelDisabled(unittest.TestCase):
     def setUp(self):
         os.environ.pop("TOKENPAK_OTEL_ENDPOINT", None)
         for key in list(sys.modules):
@@ -107,6 +108,7 @@ class TestOtelDisabled(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 2. OTel enabled → spans & metrics emitted per request
 # ---------------------------------------------------------------------------
+
 
 class TestOtelEnabled(unittest.TestCase):
     """Tests with TOKENPAK_OTEL_ENDPOINT set and OTel SDK mocked."""
@@ -198,8 +200,10 @@ class TestOtelEnabled(unittest.TestCase):
         mock_span.__enter__ = lambda s: mock_span
         mock_tracer.start_as_current_span.return_value = mock_span
 
-        with patch.object(mod, "_tracer", mock_tracer), \
-             patch("opentelemetry.trace.get_tracer", return_value=mock_tracer):
+        with (
+            patch.object(mod, "_tracer", mock_tracer),
+            patch("opentelemetry.trace.get_tracer", return_value=mock_tracer),
+        ):
             mod.record_request(
                 model="claude-3-sonnet",
                 input_tokens=100,
@@ -215,12 +219,16 @@ class TestOtelEnabled(unittest.TestCase):
 
     def test_compression_ratio_recorded(self):
         """Histogram records compression ratio."""
-        mod, mock_tracer, mock_span, mock_counter, mock_histogram = self._get_module_with_mocked_sdk()
+        mod, mock_tracer, mock_span, mock_counter, mock_histogram = (
+            self._get_module_with_mocked_sdk()
+        )
         mod._init()
 
-        with patch.object(mod, "_histogram_compression", mock_histogram), \
-             patch.object(mod, "_tracer", mock_tracer), \
-             patch("opentelemetry.trace.get_tracer", return_value=mock_tracer):
+        with (
+            patch.object(mod, "_histogram_compression", mock_histogram),
+            patch.object(mod, "_tracer", mock_tracer),
+            patch("opentelemetry.trace.get_tracer", return_value=mock_tracer),
+        ):
             mod.record_request(
                 model="gpt-4o",
                 input_tokens=500,
@@ -239,9 +247,11 @@ class TestOtelEnabled(unittest.TestCase):
         mod, mock_tracer, _, mock_counter, _ = self._get_module_with_mocked_sdk()
         mod._init()
 
-        with patch.object(mod, "_counter_cache", mock_counter), \
-             patch.object(mod, "_tracer", mock_tracer), \
-             patch("opentelemetry.trace.get_tracer", return_value=mock_tracer):
+        with (
+            patch.object(mod, "_counter_cache", mock_counter),
+            patch.object(mod, "_tracer", mock_tracer),
+            patch("opentelemetry.trace.get_tracer", return_value=mock_tracer),
+        ):
             mod.record_request(
                 model="claude-3-haiku",
                 input_tokens=100,
@@ -255,8 +265,12 @@ class TestOtelEnabled(unittest.TestCase):
         mock_counter.add.assert_called()
         # Find the call with result=hit
         hit_call = any(
-            kwargs.get("attributes", {}).get("result") == "hit" or
-            (args and isinstance(args[-1] if args else None, dict) and args[-1].get("result") == "hit")
+            kwargs.get("attributes", {}).get("result") == "hit"
+            or (
+                args
+                and isinstance(args[-1] if args else None, dict)
+                and args[-1].get("result") == "hit"
+            )
             for args, kwargs in mock_counter.add.call_args_list
         )
         # At minimum, counter.add was called
@@ -266,9 +280,11 @@ class TestOtelEnabled(unittest.TestCase):
         mod, mock_tracer, _, mock_counter, _ = self._get_module_with_mocked_sdk()
         mod._init()
 
-        with patch.object(mod, "_counter_cache", mock_counter), \
-             patch.object(mod, "_tracer", mock_tracer), \
-             patch("opentelemetry.trace.get_tracer", return_value=mock_tracer):
+        with (
+            patch.object(mod, "_counter_cache", mock_counter),
+            patch.object(mod, "_tracer", mock_tracer),
+            patch("opentelemetry.trace.get_tracer", return_value=mock_tracer),
+        ):
             mod.record_request(
                 model="claude-3-haiku",
                 input_tokens=100,
@@ -291,8 +307,10 @@ class TestOtelEnabled(unittest.TestCase):
         mock_span.__enter__ = lambda s: mock_span
         mock_tracer.start_as_current_span.return_value = mock_span
 
-        with patch.object(mod, "_tracer", mock_tracer), \
-             patch("opentelemetry.trace.get_tracer", return_value=mock_tracer):
+        with (
+            patch.object(mod, "_tracer", mock_tracer),
+            patch("opentelemetry.trace.get_tracer", return_value=mock_tracer),
+        ):
             mod.record_request(
                 model="claude-3-haiku",
                 input_tokens=100,
@@ -317,8 +335,10 @@ class TestOtelEnabled(unittest.TestCase):
         mock_span.__enter__ = lambda s: mock_span
         mock_tracer.start_as_current_span.return_value = mock_span
 
-        with patch.object(mod, "_tracer", mock_tracer), \
-             patch("opentelemetry.trace.get_tracer", return_value=mock_tracer):
+        with (
+            patch.object(mod, "_tracer", mock_tracer),
+            patch("opentelemetry.trace.get_tracer", return_value=mock_tracer),
+        ):
             mod.record_request(
                 model="gpt-4o",
                 input_tokens=300,
@@ -377,14 +397,22 @@ class TestOtelEnabled(unittest.TestCase):
             # Don't mock SDK → ImportError will fire during _init
             # Remove any real opentelemetry if present
             otel_keys = [k for k in sys.modules if k.startswith("opentelemetry")]
-            with patch.dict(sys.modules, {k: None for k in ["opentelemetry",
-                                                              "opentelemetry.sdk",
-                                                              "opentelemetry.sdk.trace",
-                                                              "opentelemetry.sdk.trace.export",
-                                                              "opentelemetry.sdk.metrics",
-                                                              "opentelemetry.sdk.metrics.export",
-                                                              "opentelemetry.exporter.otlp.proto.http.trace_exporter",
-                                                              "opentelemetry.exporter.otlp.proto.http.metric_exporter"]}):
+            with patch.dict(
+                sys.modules,
+                {
+                    k: None
+                    for k in [
+                        "opentelemetry",
+                        "opentelemetry.sdk",
+                        "opentelemetry.sdk.trace",
+                        "opentelemetry.sdk.trace.export",
+                        "opentelemetry.sdk.metrics",
+                        "opentelemetry.sdk.metrics.export",
+                        "opentelemetry.exporter.otlp.proto.http.trace_exporter",
+                        "opentelemetry.exporter.otlp.proto.http.metric_exporter",
+                    ]
+                },
+            ):
                 mod = importlib.import_module("tokenpak.telemetry.otel_exporter")
                 # _init should disable silently
                 try:

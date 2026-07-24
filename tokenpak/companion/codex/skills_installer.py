@@ -38,6 +38,7 @@ import threading
 import time
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Callable, cast
 
 _BUNDLED_SKILLS = Path(__file__).parent / "skills"
 
@@ -111,7 +112,7 @@ def _install_lock(target: Path) -> Iterator[None]:
     """
     lock_path = target.parent / f".{target.name}{_LOCK_SUFFIX}"
     fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o600)
-    release = None
+    release: Callable[[], None] | None = None
     try:
         try:
             import fcntl
@@ -124,11 +125,14 @@ def _install_lock(target: Path) -> Iterator[None]:
             try:
                 import msvcrt
 
-                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+                locking = cast(Callable[[int, int, int], None], getattr(msvcrt, "locking"))
+                lock_blocking = cast(int, getattr(msvcrt, "LK_LOCK"))
+                unlock = cast(int, getattr(msvcrt, "LK_UNLCK"))
+                locking(fd, lock_blocking, 1)
 
                 def release() -> None:  # noqa: E306 - local release closure
                     os.lseek(fd, 0, os.SEEK_SET)
-                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                    locking(fd, unlock, 1)
             except (ImportError, OSError):
                 release = None
         yield

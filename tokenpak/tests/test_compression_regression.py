@@ -14,7 +14,7 @@ Reduced token usage helps with budgets. Budgets are managed by teams.
 Team management of budgets requires careful planning. Careful planning reduces costs.
 Cost reduction helps teams. Teams using compression see cost reductions."""
 
-FIXTURE_MINIMAL = 'Hello world.'
+FIXTURE_MINIMAL = "Hello world."
 
 FIXTURE_CODE_HEAVY = """def compress_data(data):
     return CompressedData(compress_utils.compress(data))
@@ -93,9 +93,7 @@ class TestCompressionRatioBaseline:
         # Create repetitive path content to trigger alias
         long_paths = (FIXTURE_LONG_PATHS + "\n") * 3
 
-        messages = [
-            {"role": "user", "content": long_paths}
-        ]
+        messages = [{"role": "user", "content": long_paths}]
 
         result = pipeline.run(messages)
 
@@ -116,9 +114,7 @@ class TestCompressionEdgeCases:
         """Verify pipeline handles empty messages without crashing."""
         pipeline = CompressionPipeline()
 
-        messages = [
-            {"role": "user", "content": ""}
-        ]
+        messages = [{"role": "user", "content": ""}]
 
         result = pipeline.run(messages)
 
@@ -130,9 +126,7 @@ class TestCompressionEdgeCases:
         """Verify minimal content compresses to itself (no error)."""
         pipeline = CompressionPipeline()
 
-        messages = [
-            {"role": "user", "content": FIXTURE_MINIMAL}
-        ]
+        messages = [{"role": "user", "content": FIXTURE_MINIMAL}]
 
         result = pipeline.run(messages)
 
@@ -221,9 +215,7 @@ class TestCompressionPipelineStages:
         )
 
         long_paths = (FIXTURE_LONG_PATHS + "\n") * 3
-        messages = [
-            {"role": "user", "content": long_paths}
-        ]
+        messages = [{"role": "user", "content": long_paths}]
 
         result = pipeline.run(messages)
 

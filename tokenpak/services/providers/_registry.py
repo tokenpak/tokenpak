@@ -19,15 +19,16 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
-from typing import Callable, Dict, Iterable, Optional
+from collections.abc import Callable, Iterable, Mapping
 
 # A usage parser takes the provider's usage object (already extracted
 # from the response body) and returns a dict conforming to
 # reasoning-usage-v1.schema.json.
-UsageParser = Callable[[Optional[dict]], dict]
+UsageRecord = dict[str, object]
+UsageParser = Callable[[Mapping[str, object] | None], UsageRecord]
 
 
-_REGISTRY: Dict[str, UsageParser] = {}
+_REGISTRY: dict[str, UsageParser] = {}
 
 
 def register_parser(provider_name: str, parser: UsageParser) -> None:
@@ -46,7 +47,7 @@ def list_registered_providers() -> Iterable[str]:
     return tuple(sorted(_REGISTRY))
 
 
-def _unavailable_parser(_usage: Optional[dict]) -> dict:
+def _unavailable_parser(_usage: Mapping[str, object] | None) -> UsageRecord:
     return {
         "input_tokens": None,
         "visible_output_tokens": None,

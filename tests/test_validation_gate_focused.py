@@ -7,7 +7,6 @@ Covers:
 - Fingerprint tracking
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.validation_gate", reason="module not available in current build")
@@ -33,11 +32,7 @@ class TestValidationResult:
 
     def test_result_budget_fields(self):
         """ValidationResult tracks budget info."""
-        result = ValidationResult(
-            valid=True,
-            budget_used=50000,
-            budget_limit=100000
-        )
+        result = ValidationResult(valid=True, budget_used=50000, budget_limit=100000)
         assert result.budget_used == 50000
         assert result.budget_limit == 100000
 
@@ -84,9 +79,7 @@ class TestBudgetValidation:
         gate = ValidationGate(token_budget_cap=100000)
 
         result = gate.validate_request(
-            request_body=b'{}',
-            model="claude-3-opus",
-            input_tokens=50000
+            request_body=b"{}", model="claude-3-opus", input_tokens=50000
         )
         assert result.valid is True
         assert result.budget_used == 50000
@@ -96,9 +89,7 @@ class TestBudgetValidation:
         gate = ValidationGate(token_budget_cap=100000)
 
         result = gate.validate_request(
-            request_body=b'{}',
-            model="claude-3-opus",
-            input_tokens=150000
+            request_body=b"{}", model="claude-3-opus", input_tokens=150000
         )
         assert result.valid is False
         assert any("budget" in err.lower() for err in result.errors)
@@ -108,9 +99,7 @@ class TestBudgetValidation:
         gate = ValidationGate(token_budget_cap=100000)
 
         result = gate.validate_request(
-            request_body=b'{}',
-            model="claude-3-opus",
-            input_tokens=100000
+            request_body=b"{}", model="claude-3-opus", input_tokens=100000
         )
         assert result.valid is True
 
@@ -119,9 +108,7 @@ class TestBudgetValidation:
         gate = ValidationGate(token_budget_cap=0)
 
         result = gate.validate_request(
-            request_body=b'{}',
-            model="claude-3-opus",
-            input_tokens=1000000
+            request_body=b"{}", model="claude-3-opus", input_tokens=1000000
         )
         # Should pass when limit is 0 (disabled)
         assert result.valid is True
@@ -131,9 +118,7 @@ class TestBudgetValidation:
         gate = ValidationGate(token_budget_cap=-1)
 
         result = gate.validate_request(
-            request_body=b'{}',
-            model="claude-3-opus",
-            input_tokens=1000000
+            request_body=b"{}", model="claude-3-opus", input_tokens=1000000
         )
         assert result.valid is True
 
@@ -147,9 +132,7 @@ class TestDryRunValidation:
         payload = {"dry_run": True}
 
         result = gate.validate_request(
-            request_body=json.dumps(payload).encode(),
-            model="claude-3-opus",
-            input_tokens=100000
+            request_body=json.dumps(payload).encode(), model="claude-3-opus", input_tokens=100000
         )
         assert result.dry_run is True
 
@@ -159,9 +142,7 @@ class TestDryRunValidation:
         payload = {"tokenpak": {"dry_run": True}}
 
         result = gate.validate_request(
-            request_body=json.dumps(payload).encode(),
-            model="claude-3-opus",
-            input_tokens=100000
+            request_body=json.dumps(payload).encode(), model="claude-3-opus", input_tokens=100000
         )
         assert result.dry_run is True
 
@@ -171,9 +152,7 @@ class TestDryRunValidation:
         payload = {"metadata": {"dry_run": True}}
 
         result = gate.validate_request(
-            request_body=json.dumps(payload).encode(),
-            model="claude-3-opus",
-            input_tokens=100000
+            request_body=json.dumps(payload).encode(), model="claude-3-opus", input_tokens=100000
         )
         assert result.dry_run is True
 
@@ -183,9 +162,7 @@ class TestDryRunValidation:
         payload = {}
 
         result = gate.validate_request(
-            request_body=json.dumps(payload).encode(),
-            model="claude-3-opus",
-            input_tokens=100000
+            request_body=json.dumps(payload).encode(), model="claude-3-opus", input_tokens=100000
         )
         assert result.dry_run is False
 
@@ -198,10 +175,10 @@ class TestDeterministicValidation:
         gate = ValidationGate()
 
         result = gate.validate_request(
-            request_body=b'{}',
+            request_body=b"{}",
             model="claude-3-opus",
             input_tokens=100000,
-            router_meta={"intent": "query"}
+            router_meta={"intent": "query"},
         )
         # Should not error for deterministic request (no context block check in this path)
         assert result is not None
@@ -212,9 +189,7 @@ class TestDeterministicValidation:
         payload = {"tokenpak": {"deterministic": True}}
 
         result = gate.validate_request(
-            request_body=json.dumps(payload).encode(),
-            model="claude-3-opus",
-            input_tokens=100000
+            request_body=json.dumps(payload).encode(), model="claude-3-opus", input_tokens=100000
         )
         assert result is not None
 
@@ -227,9 +202,7 @@ class TestValidationGateDisabled:
         gate = ValidationGate(enabled=False, token_budget_cap=1)
 
         result = gate.validate_request(
-            request_body=b'{}',
-            model="claude-3-opus",
-            input_tokens=1000000
+            request_body=b"{}", model="claude-3-opus", input_tokens=1000000
         )
         assert result.valid is True
 
@@ -252,9 +225,7 @@ class TestInvalidPayload:
         gate = ValidationGate()
 
         result = gate.validate_request(
-            request_body=b'invalid json {',
-            model="claude-3-opus",
-            input_tokens=100000
+            request_body=b"invalid json {", model="claude-3-opus", input_tokens=100000
         )
         assert result.valid is False
         assert any("JSON" in err for err in result.errors)
@@ -264,9 +235,7 @@ class TestInvalidPayload:
         gate = ValidationGate()
 
         result = gate.validate_request(
-            request_body=b'{}',
-            model="claude-3-opus",
-            input_tokens=50000
+            request_body=b"{}", model="claude-3-opus", input_tokens=50000
         )
         assert result.valid is True
 
@@ -274,9 +243,5 @@ class TestInvalidPayload:
         """Null bytes in input handled."""
         gate = ValidationGate()
 
-        result = gate.validate_request(
-            request_body=b'{}',
-            model="claude-3-opus",
-            input_tokens=0
-        )
+        result = gate.validate_request(request_body=b"{}", model="claude-3-opus", input_tokens=0)
         assert result.valid is True

@@ -76,6 +76,7 @@ def count_tokens(text: str) -> int:
 # 1. TestStablePrefixConstruction
 # ===========================================================================
 
+
 class TestStablePrefixConstruction:
     """Stable prefix must be bit-identical across requests."""
 
@@ -106,13 +107,13 @@ class TestStablePrefixConstruction:
         prefix = build_stable_prefix(system, [])
 
         # The UUID pattern should be stripped
-        assert "abc12345def6-7890-abcd-ef01-234567890abc" not in prefix, \
-            "UUID in stable prefix"
+        assert "abc12345def6-7890-abcd-ef01-234567890abc" not in prefix, "UUID in stable prefix"
 
 
 # ===========================================================================
 # 2. TestVolatileTailSeparation
 # ===========================================================================
+
 
 class TestVolatileTailSeparation:
     """Volatile tail contains only dynamic content."""
@@ -147,6 +148,7 @@ class TestVolatileTailSeparation:
 # ===========================================================================
 # 3. TestDeterministicRetrieval
 # ===========================================================================
+
 
 class TestDeterministicRetrieval:
     """Retrieval injection must be deterministic."""
@@ -225,6 +227,7 @@ class TestDeterministicRetrieval:
 # 4. TestTelemetryRecording
 # ===========================================================================
 
+
 class TestTelemetryRecording:
     """Telemetry accurately tracks cache behaviour."""
 
@@ -233,25 +236,28 @@ class TestTelemetryRecording:
         collector = CacheTelemetryCollector()
 
         for i in range(3):
-            collector.record(CacheMetrics(
-                request_id=f"req_{i}",
+            collector.record(
+                CacheMetrics(
+                    request_id=f"req_{i}",
+                    stable_prefix_tokens=15000,
+                    stable_cached=True,
+                    cache_read_tokens=13500,
+                    total_input_tokens=15000,
+                )
+            )
+
+        collector.record(
+            CacheMetrics(
+                request_id="req_miss",
                 stable_prefix_tokens=15000,
-                stable_cached=True,
-                cache_read_tokens=13500,
+                stable_cached=False,
+                cache_read_tokens=0,
+                cache_miss_reason="timestamp",
                 total_input_tokens=15000,
-            ))
+            )
+        )
 
-        collector.record(CacheMetrics(
-            request_id="req_miss",
-            stable_prefix_tokens=15000,
-            stable_cached=False,
-            cache_read_tokens=0,
-            cache_miss_reason="timestamp",
-            total_input_tokens=15000,
-        ))
-
-        assert collector.hit_rate() == 0.75, \
-            f"Expected hit_rate=0.75, got {collector.hit_rate()}"
+        assert collector.hit_rate() == 0.75, f"Expected hit_rate=0.75, got {collector.hit_rate()}"
         assert collector.total() == 4
         assert collector.hits() == 3
         assert collector.misses() == 1
@@ -260,43 +266,48 @@ class TestTelemetryRecording:
         """Miss reasons are categorized and counted correctly."""
         collector = CacheTelemetryCollector()
 
-        collector.record(CacheMetrics(
-            request_id="req_1",
-            stable_prefix_tokens=15000,
-            stable_cached=False,
-            cache_miss_reason="timestamp",
-            cache_read_tokens=0,
-            total_input_tokens=15000,
-        ))
+        collector.record(
+            CacheMetrics(
+                request_id="req_1",
+                stable_prefix_tokens=15000,
+                stable_cached=False,
+                cache_miss_reason="timestamp",
+                cache_read_tokens=0,
+                total_input_tokens=15000,
+            )
+        )
 
-        collector.record(CacheMetrics(
-            request_id="req_2",
-            stable_prefix_tokens=15000,
-            stable_cached=False,
-            cache_miss_reason="timestamp",
-            cache_read_tokens=0,
-            total_input_tokens=15000,
-        ))
+        collector.record(
+            CacheMetrics(
+                request_id="req_2",
+                stable_prefix_tokens=15000,
+                stable_cached=False,
+                cache_miss_reason="timestamp",
+                cache_read_tokens=0,
+                total_input_tokens=15000,
+            )
+        )
 
-        collector.record(CacheMetrics(
-            request_id="req_3",
-            stable_prefix_tokens=15000,
-            stable_cached=False,
-            cache_miss_reason="retrieval",
-            cache_read_tokens=0,
-            total_input_tokens=15000,
-        ))
+        collector.record(
+            CacheMetrics(
+                request_id="req_3",
+                stable_prefix_tokens=15000,
+                stable_cached=False,
+                cache_miss_reason="retrieval",
+                cache_read_tokens=0,
+                total_input_tokens=15000,
+            )
+        )
 
         reasons = collector.by_miss_reason()
-        assert reasons.get("timestamp") == 2, \
-            f"Timestamp miss count wrong: {reasons}"
-        assert reasons.get("retrieval") == 1, \
-            f"Retrieval miss count wrong: {reasons}"
+        assert reasons.get("timestamp") == 2, f"Timestamp miss count wrong: {reasons}"
+        assert reasons.get("retrieval") == 1, f"Retrieval miss count wrong: {reasons}"
 
 
 # ===========================================================================
 # 5. TestCacheControlMarkers
 # ===========================================================================
+
 
 class TestCacheControlMarkers:
     """Cache control headers placed correctly."""
@@ -319,8 +330,9 @@ class TestCacheControlMarkers:
         assert len(stable_blocks) >= 1, "No block has cache_control"
 
         marked = stable_blocks[-1]
-        assert marked.get("cache_control") == {"type": "ephemeral"}, \
+        assert marked.get("cache_control") == {"type": "ephemeral"}, (
             f"Stable block has wrong cache_control: {marked.get('cache_control')}"
+        )
 
     def test_volatile_tail_not_cached(self):
         """Volatile blocks (after cache boundary) must NOT have cache_control."""
@@ -346,19 +358,20 @@ class TestCacheControlMarkers:
 
         # Find the timestamp block
         volatile_blocks = [
-            b for b in result_system
-            if isinstance(b, dict) and "2026-03-09" in b.get("text", "")
+            b for b in result_system if isinstance(b, dict) and "2026-03-09" in b.get("text", "")
         ]
         assert volatile_blocks, "Volatile block not found in result"
 
         for blk in volatile_blocks:
-            assert "cache_control" not in blk, \
+            assert "cache_control" not in blk, (
                 f"Volatile block should not have cache_control: {blk}"
+            )
 
 
 # ===========================================================================
 # 6. Extended edge-case tests (no-skips, realistic token counts)
 # ===========================================================================
+
 
 class TestStablePrefixEdgeCases:
     """Edge cases for build_stable_prefix."""
@@ -495,8 +508,9 @@ class TestApplyStableCacheControlEdgeCases:
     def test_idempotent_on_already_marked_body(self):
         """apply_stable_cache_control does not double-mark an already marked body."""
         body = _make_body(
-            system=[{"type": "text", "text": "Stable prompt.",
-                      "cache_control": {"type": "ephemeral"}}],
+            system=[
+                {"type": "text", "text": "Stable prompt.", "cache_control": {"type": "ephemeral"}}
+            ],
         )
         result1 = apply_stable_cache_control(body)
         result2 = apply_stable_cache_control(result1)

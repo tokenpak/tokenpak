@@ -15,10 +15,11 @@ Tests for:
 ALL TESTS USE REAL MODULE APIs - verified by reading source code.
 """
 
-
 import pytest
 
-pytest.importorskip("tokenpak.infrastructure.cooldown", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.infrastructure.cooldown", reason="module not available in current build"
+)
 import json
 import tempfile
 import time
@@ -49,15 +50,17 @@ class TestCooldownManager:
         """Test initialization with default file paths."""
         mgr = CooldownManager()
         assert mgr is not None
-        assert hasattr(mgr, 'cooldowns_file')
-        assert hasattr(mgr, 'auth_profiles_file')
+        assert hasattr(mgr, "cooldowns_file")
+        assert hasattr(mgr, "auth_profiles_file")
 
     def test_init_with_custom_paths(self):
         """Test initialization with custom file paths."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_file = Path(tmpdir) / "cooldowns.json"
             auth_profiles_file = Path(tmpdir) / "profiles.json"
-            mgr = CooldownManager(cooldowns_file=cooldowns_file, auth_profiles_file=auth_profiles_file)
+            mgr = CooldownManager(
+                cooldowns_file=cooldowns_file, auth_profiles_file=auth_profiles_file
+            )
             assert mgr.cooldowns_file == cooldowns_file
             assert mgr.auth_profiles_file == auth_profiles_file
 
@@ -76,9 +79,9 @@ class TestCooldownManager:
             cooldowns_file = Path(tmpdir) / "cooldowns.json"
             past_time = time.time() - 3600  # 1 hour ago
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
-            cooldowns_file.write_text(json.dumps({
-                "provider:default": {"cooldownUntil": past_time, "errorCount": 2}
-            }))
+            cooldowns_file.write_text(
+                json.dumps({"provider:default": {"cooldownUntil": past_time, "errorCount": 2}})
+            )
 
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.clear_expired()
@@ -100,9 +103,9 @@ class TestCooldownManager:
             cooldowns_file = Path(tmpdir) / "cooldowns.json"
             future_time = time.time() + 3600  # 1 hour from now
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
-            cooldowns_file.write_text(json.dumps({
-                "test:key": {"cooldownUntil": future_time, "errorCount": 1}
-            }))
+            cooldowns_file.write_text(
+                json.dumps({"test:key": {"cooldownUntil": future_time, "errorCount": 1}})
+            )
 
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.get_active_cooldowns()
@@ -114,9 +117,9 @@ class TestCooldownManager:
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_file = Path(tmpdir) / "cooldowns.json"
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
-            cooldowns_file.write_text(json.dumps({
-                "old:key": {"cooldownUntil": time.time() - 3600, "errorCount": 2}
-            }))
+            cooldowns_file.write_text(
+                json.dumps({"old:key": {"cooldownUntil": time.time() - 3600, "errorCount": 2}})
+            )
 
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             count = mgr.run_cycle()
@@ -153,10 +156,10 @@ class TestClaimIndexer:
 
     def test_claim_evidence_is_dataclass(self):
         """Test ClaimEvidence is properly structured dataclass."""
-        assert hasattr(ClaimEvidence, '__dataclass_fields__')
+        assert hasattr(ClaimEvidence, "__dataclass_fields__")
         # Verify expected fields exist
         fields = ClaimEvidence.__dataclass_fields__
-        assert 'claim' in fields or len(fields) > 0
+        assert "claim" in fields or len(fields) > 0
 
     def test_extract_claims_consistency(self):
         """Test consistency of extraction for same input."""
@@ -173,17 +176,17 @@ class TestPrivacy:
 
     def test_privacy_level_enum_minimal(self):
         """Test PrivacyLevel.MINIMAL exists and has correct value."""
-        assert hasattr(PrivacyLevel, 'MINIMAL')
+        assert hasattr(PrivacyLevel, "MINIMAL")
         assert PrivacyLevel.MINIMAL.value == "minimal"
 
     def test_privacy_level_enum_standard(self):
         """Test PrivacyLevel.STANDARD exists and has correct value."""
-        assert hasattr(PrivacyLevel, 'STANDARD')
+        assert hasattr(PrivacyLevel, "STANDARD")
         assert PrivacyLevel.STANDARD.value == "standard"
 
     def test_privacy_level_enum_full(self):
         """Test PrivacyLevel.FULL exists and has correct value."""
-        assert hasattr(PrivacyLevel, 'FULL')
+        assert hasattr(PrivacyLevel, "FULL")
         assert PrivacyLevel.FULL.value == "full"
 
     def test_apply_privacy_with_minimal(self):
@@ -199,7 +202,7 @@ class TestPrivacy:
             "fingerprint_id": "fp2",
             "total_tokens": 200,
             "segment_count": 10,
-            "segments": [{"type": "code", "tokens": 50}]
+            "segments": [{"type": "code", "tokens": 50}],
         }
         result = apply_privacy(fingerprint, PrivacyLevel.STANDARD)
         assert isinstance(result, dict)
@@ -210,7 +213,7 @@ class TestPrivacy:
             "fingerprint_id": "fp3",
             "total_tokens": 300,
             "segment_count": 15,
-            "segments": [{"type": "text", "tokens": 100}]
+            "segments": [{"type": "text", "tokens": 100}],
         }
         result = apply_privacy(fingerprint, PrivacyLevel.FULL)
         assert isinstance(result, dict)
@@ -245,13 +248,13 @@ class TestPremadeMacros:
     def test_premade_macro_runner_is_object(self):
         """Test PremadeMacroRunner creates proper object."""
         runner = PremadeMacroRunner()
-        assert runner.__class__.__name__ == 'PremadeMacroRunner'
+        assert runner.__class__.__name__ == "PremadeMacroRunner"
 
     def test_premade_macro_runner_has_methods(self):
         """Test PremadeMacroRunner has expected methods."""
         runner = PremadeMacroRunner()
         # Should have methods (check if load exists or has other methods)
-        methods = [m for m in dir(runner) if not m.startswith('_')]
+        methods = [m for m in dir(runner) if not m.startswith("_")]
         assert len(methods) > 0
 
 
@@ -326,13 +329,13 @@ class TestStreamTranslator:
     def test_translate_chunk_done_marker(self):
         """Test translate_chunk with [DONE] marker."""
         translator = StreamingTranslator("anthropic", "openai")
-        result = translator.translate_chunk('data: [DONE]')
+        result = translator.translate_chunk("data: [DONE]")
         assert isinstance(result, list)
 
     def test_translate_stream_iterable(self):
         """Test translate_stream with iterable of lines."""
         translator = StreamingTranslator("anthropic", "openai")
-        lines = iter(['data: {"type": "message_start"}', 'data: [DONE]'])
+        lines = iter(['data: {"type": "message_start"}', "data: [DONE]"])
         result = translator.translate_stream(lines)
         # Should be iterable
         result_list = list(result)
@@ -350,7 +353,7 @@ class TestStatsAPI:
     def test_stats_api_has_route_method(self):
         """Test StatsAPI has route method."""
         stats = StatsAPI()
-        assert hasattr(stats, 'route')
+        assert hasattr(stats, "route")
         assert callable(stats.route)
 
     def test_stats_route_stats_last(self):
@@ -374,8 +377,8 @@ class TestStatsAPI:
 
     def test_stats_api_has_handle_methods(self):
         """Test StatsAPI has static handler methods."""
-        assert hasattr(StatsAPI, 'handle_stats_last')
-        assert hasattr(StatsAPI, 'handle_stats_session')
+        assert hasattr(StatsAPI, "handle_stats_last")
+        assert hasattr(StatsAPI, "handle_stats_session")
         assert callable(StatsAPI.handle_stats_last)
         assert callable(StatsAPI.handle_stats_session)
 
@@ -410,24 +413,28 @@ class TestConfig:
     def test_get_debug_enabled_returns_bool(self):
         """Test debug enabled flag returns boolean."""
         from tokenpak._internal.config import get_debug_enabled
+
         debug = get_debug_enabled()
         assert isinstance(debug, bool)
 
     def test_get_metrics_enabled_returns_bool(self):
         """Test metrics enabled flag returns boolean."""
         from tokenpak._internal.config import get_metrics_enabled
+
         metrics = get_metrics_enabled()
         assert isinstance(metrics, bool)
 
     def test_get_capsule_builder_enabled_returns_bool(self):
         """Test capsule builder enabled flag returns boolean."""
         from tokenpak._internal.config import get_capsule_builder_enabled
+
         capsule = get_capsule_builder_enabled()
         assert isinstance(capsule, bool)
 
     def test_get_stats_footer_enabled_returns_bool(self):
         """Test stats footer enabled flag returns boolean."""
         from tokenpak._internal.config import get_stats_footer_enabled
+
         footer = get_stats_footer_enabled()
         assert isinstance(footer, bool)
 
@@ -443,7 +450,7 @@ class TestDebugLogger:
     def test_debug_logger_has_record_method(self):
         """Test DebugLogger has record context manager."""
         logger = DebugLogger()
-        assert hasattr(logger, 'record')
+        assert hasattr(logger, "record")
         assert callable(logger.record)
 
     def test_record_context_manager(self):
@@ -457,7 +464,7 @@ class TestDebugLogger:
         """Test record has set method."""
         logger = DebugLogger()
         with logger.record() as rec:
-            assert hasattr(rec, 'set')
+            assert hasattr(rec, "set")
             rec.set("test_key", "test_value")
         # Should complete successfully
 
@@ -465,7 +472,7 @@ class TestDebugLogger:
         """Test record has add_step method."""
         logger = DebugLogger()
         with logger.record() as rec:
-            assert hasattr(rec, 'add_step')
+            assert hasattr(rec, "add_step")
             rec.add_step("step1", status="ok")
             rec.add_step("step2", status="ok")
         # Should complete successfully
@@ -474,7 +481,7 @@ class TestDebugLogger:
         """Test record has fail method."""
         logger = DebugLogger()
         with logger.record() as rec:
-            assert hasattr(rec, 'fail')
+            assert hasattr(rec, "fail")
             rec.fail("error message")
         # Should handle failure gracefully
 
@@ -483,7 +490,7 @@ class TestDebugLogger:
         logger = DebugLogger()
         with logger.record() as rec:
             rec.set("msg", "test")
-            assert hasattr(rec, 'to_dict')
+            assert hasattr(rec, "to_dict")
             data = rec.to_dict()
         assert isinstance(data, dict)
 
@@ -509,41 +516,47 @@ class TestCapabilities:
         """Test AgentCapabilities has expected methods."""
         caps = AgentCapabilities()
         # Verify instance is created and is of correct type
-        assert hasattr(caps, '__class__')
-        assert caps.__class__.__name__ == 'AgentCapabilities'
+        assert hasattr(caps, "__class__")
+        assert caps.__class__.__name__ == "AgentCapabilities"
 
     def test_agent_info_class_available(self):
         """Test AgentInfo class is available."""
         from tokenpak.agentic.capabilities import AgentInfo
+
         assert AgentInfo is not None
         # Should be importable and usable
 
     def test_agent_registry_init(self):
         """Test AgentRegistry initialization."""
         from tokenpak.agentic.capabilities import AgentRegistry
+
         registry = AgentRegistry()
         assert isinstance(registry, AgentRegistry)
 
     def test_agent_registry_type(self):
         """Test AgentRegistry has correct type."""
         from tokenpak.agentic.capabilities import AgentRegistry
+
         registry = AgentRegistry()
-        assert registry.__class__.__name__ == 'AgentRegistry'
+        assert registry.__class__.__name__ == "AgentRegistry"
 
     def test_capability_matcher_init(self):
         """Test CapabilityMatcher initialization."""
         from tokenpak.agentic.capabilities import CapabilityMatcher
+
         matcher = CapabilityMatcher()
         assert isinstance(matcher, CapabilityMatcher)
 
     def test_capability_matcher_type(self):
         """Test CapabilityMatcher has correct type."""
         from tokenpak.agentic.capabilities import CapabilityMatcher
+
         matcher = CapabilityMatcher()
-        assert matcher.__class__.__name__ == 'CapabilityMatcher'
+        assert matcher.__class__.__name__ == "CapabilityMatcher"
 
     def test_match_result_class_available(self):
         """Test MatchResult class is available."""
         from tokenpak.agentic.capabilities import MatchResult
+
         assert MatchResult is not None
         # Should be importable and usable

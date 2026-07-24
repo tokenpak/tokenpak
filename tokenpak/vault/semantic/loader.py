@@ -16,24 +16,30 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, cast
 
 # ---------------------------------------------------------------------------
 # YAML loader (stdlib fallback to json for test environments)
 # ---------------------------------------------------------------------------
 try:
-    import yaml as _yaml  # type: ignore
+    import yaml as _yaml
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> dict[object, object]:
         with open(path, "r") as f:
-            return _yaml.safe_load(f)
+            raw = cast(object, _yaml.safe_load(f))
+        if not isinstance(raw, dict):
+            raise SemanticMapError("semantic_map.yaml must be a YAML mapping at root level")
+        return cast(dict[object, object], raw)
 
 except ImportError:  # pragma: no cover
     import json
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> dict[object, object]:
         with open(path, "r") as f:
-            return json.load(f)
+            raw = cast(object, json.load(f))
+        if not isinstance(raw, dict):
+            raise SemanticMapError("semantic_map.yaml must be a JSON mapping at root level")
+        return cast(dict[object, object], raw)
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +112,7 @@ class SemanticMapLoader:
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
-    def _validate(self, raw: dict) -> SemanticMap:
+    def _validate(self, raw: dict[object, object]) -> SemanticMap:
         if not isinstance(raw, dict):
             raise SemanticMapError("semantic_map.yaml must be a YAML mapping at root level")
 
@@ -134,7 +140,7 @@ class SemanticMapLoader:
 
     def _parse_section(
         self,
-        section: dict,
+        section: dict[object, object],
         section_name: str,
     ) -> tuple[Dict[str, CanonicalEntry], Dict[str, str]]:
         """Parse one section (intents or entities) and build alias index."""

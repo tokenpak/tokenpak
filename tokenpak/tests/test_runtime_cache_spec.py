@@ -18,6 +18,7 @@ from tokenpak.core.runtime.providers import Provider
 # CacheMode enum
 # ---------------------------------------------------------------------------
 
+
 class TestCacheModeEnum:
     def test_values(self):
         assert CacheMode.PREFIX_AUTO.value == "prefix_auto"
@@ -39,6 +40,7 @@ class TestFallbackPolicyEnum:
 # ---------------------------------------------------------------------------
 # PROVIDER_CACHE_MODES capability map
 # ---------------------------------------------------------------------------
+
 
 class TestProviderCacheModes:
     def test_anthropic_supports_block_explicit_first(self):
@@ -66,9 +68,17 @@ class TestProviderCacheModes:
         # Every provider that handles LLM completions must have an entry.
         # Embedding-only providers (VOYAGE, JINA) are intentionally absent.
         required = {
-            Provider.ANTHROPIC, Provider.OPENAI, Provider.AZURE_OPENAI,
-            Provider.XAI, Provider.GROQ, Provider.FIREWORKS, Provider.TOGETHER,
-            Provider.CODEX, Provider.GEMINI, Provider.BEDROCK, Provider.UNKNOWN,
+            Provider.ANTHROPIC,
+            Provider.OPENAI,
+            Provider.AZURE_OPENAI,
+            Provider.XAI,
+            Provider.GROQ,
+            Provider.FIREWORKS,
+            Provider.TOGETHER,
+            Provider.CODEX,
+            Provider.GEMINI,
+            Provider.BEDROCK,
+            Provider.UNKNOWN,
         }
         for p in required:
             assert p in PROVIDER_CACHE_MODES, f"{p} missing from PROVIDER_CACHE_MODES"
@@ -77,6 +87,7 @@ class TestProviderCacheModes:
 # ---------------------------------------------------------------------------
 # default_cache_mode
 # ---------------------------------------------------------------------------
+
 
 class TestDefaultCacheMode:
     def test_anthropic_default_is_block_explicit(self):
@@ -98,6 +109,7 @@ class TestDefaultCacheMode:
 # ---------------------------------------------------------------------------
 # CacheSpec dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestCacheSpec:
     def test_defaults(self):
@@ -123,6 +135,7 @@ class TestCacheSpec:
 # ---------------------------------------------------------------------------
 # resolve_cache_mode — the main resolution function
 # ---------------------------------------------------------------------------
+
 
 class TestResolveCacheMode:
     def _spec(self, **kwargs):
@@ -170,16 +183,12 @@ class TestResolveCacheMode:
     # --- provider-level override (priority 2) ---
 
     def test_provider_override_valid_supported_mode(self):
-        spec = CacheSpec(
-            provider_overrides={"anthropic": {"mode": "prefix_auto"}}
-        )
+        spec = CacheSpec(provider_overrides={"anthropic": {"mode": "prefix_auto"}})
         result = resolve_cache_mode(spec, Provider.ANTHROPIC)
         assert result == CacheMode.PREFIX_AUTO
 
     def test_provider_override_invalid_mode_string_falls_through(self):
-        spec = CacheSpec(
-            provider_overrides={"anthropic": {"mode": "nonexistent"}}
-        )
+        spec = CacheSpec(provider_overrides={"anthropic": {"mode": "nonexistent"}})
         # Invalid override value falls through to provider default
         result = resolve_cache_mode(spec, Provider.ANTHROPIC)
         assert result == CacheMode.BLOCK_EXPLICIT
@@ -194,9 +203,7 @@ class TestResolveCacheMode:
         assert result == CacheMode.PREFIX_AUTO
 
     def test_provider_override_only_applies_to_matching_provider(self):
-        spec = CacheSpec(
-            provider_overrides={"anthropic": {"mode": "prefix_auto"}}
-        )
+        spec = CacheSpec(provider_overrides={"anthropic": {"mode": "prefix_auto"}})
         # Override is for anthropic; OpenAI should use its provider default
         result = resolve_cache_mode(spec, Provider.OPENAI)
         assert result == CacheMode.PREFIX_AUTO  # openai default
@@ -249,9 +256,7 @@ class TestResolveCacheMode:
     # --- request_hint overrides all lower priorities ---
 
     def test_request_hint_beats_provider_override(self):
-        spec = CacheSpec(
-            provider_overrides={"anthropic": {"mode": "block_explicit"}}
-        )
+        spec = CacheSpec(provider_overrides={"anthropic": {"mode": "block_explicit"}})
         result = resolve_cache_mode(spec, Provider.ANTHROPIC, "prefix_auto")
         assert result == CacheMode.PREFIX_AUTO
 
@@ -265,9 +270,11 @@ class TestResolveCacheMode:
 # load_cache_spec_from_config
 # ---------------------------------------------------------------------------
 
+
 class TestLoadCacheSpecFromConfig:
     def _make_cfg(self, data: dict):
         """Return a cfg_fn that mimics the tokenpak config accessor."""
+
         def cfg_fn(key, default=None, env_var=None, cast=None):
             val = data.get(key, default)
             if val is None:
@@ -278,6 +285,7 @@ class TestLoadCacheSpecFromConfig:
                 except (ValueError, TypeError):
                     return default
             return val
+
         return cfg_fn
 
     def test_defaults_when_no_config(self):
@@ -325,10 +333,12 @@ class TestLoadCacheSpecFromConfig:
         assert spec.provider_overrides["anthropic"]["mode"] == "prefix_auto"
 
     def test_multiple_provider_overrides(self):
-        cfg = self._make_cfg({
-            "cache.anthropic.mode": "block_explicit",
-            "cache.openai.mode": "prefix_auto",
-        })
+        cfg = self._make_cfg(
+            {
+                "cache.anthropic.mode": "block_explicit",
+                "cache.openai.mode": "prefix_auto",
+            }
+        )
         spec = load_cache_spec_from_config(cfg)
         assert spec.provider_overrides.get("anthropic", {}).get("mode") == "block_explicit"
         assert spec.provider_overrides.get("openai", {}).get("mode") == "prefix_auto"

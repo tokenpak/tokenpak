@@ -1,6 +1,5 @@
 """Tests for error handling infrastructure."""
 
-
 import pytest
 
 # TSR-04c: rename `tokenpak.infrastructure.error_handling` →
@@ -78,9 +77,7 @@ class TestTokenPakError:
     @pytest.mark.skip(reason=SKIP_ERROR_HANDLING_API_DRIFT)
     def test_error_to_dict(self):
         """Test error serialization to dict."""
-        error = TokenPakError(
-            code="TP-E999", message="Test", suggestion="Fix", context="ctx"
-        )
+        error = TokenPakError(code="TP-E999", message="Test", suggestion="Fix", context="ctx")
         d = error.to_dict()
         assert d["error_code"] == "TP-E999"
         assert d["message"] == "Test"
@@ -113,9 +110,7 @@ class TestConfigErrors:
 
     def test_custom_config_validation_suggestion(self):
         """Test custom suggestion in config error."""
-        error = ConfigValidationError(
-            "port", "invalid", suggestion="Use port between 1024-65535"
-        )
+        error = ConfigValidationError("port", "invalid", suggestion="Use port between 1024-65535")
         assert "1024-65535" in error.suggestion
 
 
@@ -278,7 +273,4 @@ class TestErrorMessages:
         error = InvalidAPIKeyError("anthropic")
         suggestion = error.suggestion.lower()
         # Should contain specific action words
-        assert any(
-            word in suggestion
-            for word in ["check", "add", "verify", "configure", "update"]
-        )
+        assert any(word in suggestion for word in ["check", "add", "verify", "configure", "update"])

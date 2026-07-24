@@ -2,6 +2,7 @@
 Reciprocal Rank Fusion (RRF) implementation for combining multiple retrieval result lists.
 No external dependencies.
 """
+
 from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple

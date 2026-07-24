@@ -355,7 +355,7 @@ class CodeProcessor:
         """Count leading spaces."""
         return len(line) - len(line.lstrip())
 
-    def _grab_docstring(self, lines: list, i: int, result: list) -> int:
+    def _grab_docstring(self, lines: list[str], i: int, result: list[str]) -> int:
         """Grab a Python docstring if present."""
         if i >= len(lines):
             return i
@@ -373,7 +373,7 @@ class CodeProcessor:
                 i += 1
         return i
 
-    def _skip_body(self, lines: list, i: int, base_indent: int) -> int:
+    def _skip_body(self, lines: list[str], i: int, base_indent: int) -> int:
         """Skip a Python function/method body."""
         while i < len(lines):
             line = lines[i]
@@ -387,9 +387,9 @@ class CodeProcessor:
 
     def _grab_class_body(
         self,
-        lines: list,
+        lines: list[str],
         i: int,
-        result: list,
+        result: list[str],
         mode: CodeCompactionMode = CodeCompactionMode.CODE_API,
     ) -> int:
         """Extract method signatures from a class body."""
@@ -465,7 +465,7 @@ class CodeProcessor:
 
         return i
 
-    def _skip_braces(self, lines: list, i: int) -> int:
+    def _skip_braces(self, lines: list[str], i: int) -> int:
         """Skip content within braces (JS/TS)."""
         depth = 1
         while i < len(lines) and depth > 0:

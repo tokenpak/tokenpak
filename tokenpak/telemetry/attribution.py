@@ -6,14 +6,58 @@ Uses request headers and metadata to attribute cost savings.
 
 from __future__ import annotations
 
+__all__ = (
+    "AGENT_EMOJI",
+    "AttributionRecord",
+    "AttributionTracker",
+    "detect_source",
+    "format_attribution",
+)
+
+
 import json
 import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
 
 ATTRIBUTION_PATH = Path.home() / ".tokenpak" / "attribution_history.json"
+
+
+class AttributionRecordDict(TypedDict):
+    """JSON-ready attribution record."""
+
+    request_id: str
+    timestamp: float
+    source: str
+    model: str
+    tokens_saved: int
+    cost_saved: float
+    cache_hit: bool
+    compression_pct: float
+
+
+class _SourceAccumulator(TypedDict):
+    requests: int
+    tokens_saved: int
+    cost_saved: float
+    cache_hits: int
+    models: dict[str, int]
+
+
+class SourceRollup(TypedDict):
+    requests: int
+    tokens_saved: int
+    cost_saved: float
+    cache_hit_rate: float
+    top_model: str
+
+
+class ModelRollup(TypedDict):
+    requests: int
+    tokens_saved: int
+    cost_saved: float
 
 
 @dataclass
@@ -29,7 +73,7 @@ class AttributionRecord:
     cache_hit: bool = False
     compression_pct: float = 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> AttributionRecordDict:
         """Convert attribution record to dictionary for JSON serialization.
 
         Returns:
@@ -131,13 +175,13 @@ class AttributionTracker:
         """
         return list(self._records)
 
-    def rollup_by_source(self, since: Optional[float] = None) -> Dict[str, dict]:
+    def rollup_by_source(self, since: Optional[float] = None) -> Dict[str, SourceRollup]:
         """Aggregate stats by source."""
         filtered = self._records
         if since:
             filtered = [r for r in filtered if r.timestamp >= since]
 
-        groups: Dict[str, dict] = defaultdict(
+        groups: defaultdict[str, _SourceAccumulator] = defaultdict(
             lambda: {
                 "requests": 0,
                 "tokens_saved": 0,
@@ -157,7 +201,7 @@ class AttributionTracker:
             g["models"][r.model] += 1
 
         # Compute derived fields
-        result = {}
+        result: dict[str, SourceRollup] = {}
         for src, g in groups.items():
             total = g["requests"]
             top_model = max(g["models"].items(), key=lambda x: x[1])[0] if g["models"] else ""
@@ -171,13 +215,13 @@ class AttributionTracker:
 
         return dict(sorted(result.items(), key=lambda x: -x[1]["cost_saved"]))
 
-    def rollup_by_model(self, since: Optional[float] = None) -> Dict[str, dict]:
+    def rollup_by_model(self, since: Optional[float] = None) -> Dict[str, ModelRollup]:
         """Aggregate stats by model."""
         filtered = self._records
         if since:
             filtered = [r for r in filtered if r.timestamp >= since]
 
-        groups: Dict[str, dict] = defaultdict(
+        groups: defaultdict[str, ModelRollup] = defaultdict(
             lambda: {
                 "requests": 0,
                 "tokens_saved": 0,
@@ -261,21 +305,21 @@ def format_attribution(tracker: AttributionTracker, days: int = 7) -> str:
         "Agent Breakdown:",
     ]
 
-    for src, stats in by_source.items():
-        pct = (stats["cost_saved"] / total_saved * 100) if total_saved > 0 else 0
+    for src, source_stats in by_source.items():
+        pct = (source_stats["cost_saved"] / total_saved * 100) if total_saved > 0 else 0
         # Find emoji
         emoji = "??"
         for key, em in AGENT_EMOJI.items():
             if key in src.lower():
                 emoji = em
                 break
-        lines.append(f"  {emoji} {src:<22} ${stats['cost_saved']:>10.2f} ({pct:.0f}%)")
+        lines.append(f"  {emoji} {src:<22} ${source_stats['cost_saved']:>10.2f} ({pct:.0f}%)")
 
     lines.append("")
     lines.append("Top Models (by savings):")
-    for model, stats in list(by_model.items())[:5]:
-        pct = (stats["cost_saved"] / total_saved * 100) if total_saved > 0 else 0
-        lines.append(f"  {model:<24} ${stats['cost_saved']:>10.2f} ({pct:.0f}%)")
+    for model, model_stats in list(by_model.items())[:5]:
+        pct = (model_stats["cost_saved"] / total_saved * 100) if total_saved > 0 else 0
+        lines.append(f"  {model:<24} ${model_stats['cost_saved']:>10.2f} ({pct:.0f}%)")
 
     # Leakage warning
     leakage = tracker.leakage_pct(since=since)

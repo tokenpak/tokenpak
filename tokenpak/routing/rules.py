@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional
 
 # Try PyYAML first, fall back to a minimal JSON-based store if unavailable.
 try:
-    import yaml as _yaml  # type: ignore
+    import yaml as _yaml
 
     _HAS_YAML = True
 except ImportError:

@@ -102,9 +102,7 @@ class TestFusionQuery:
         result = fusion.query("test")
         # Should have blocks from both
         source_names = {
-            b["provenance"]["source_type"]
-            for b in result["blocks"]
-            if "provenance" in b
+            b["provenance"]["source_type"] for b in result["blocks"] if "provenance" in b
         }
         # Not checking exact sources since metadata handling varies
         assert len(result["blocks"]) > 0
@@ -124,9 +122,7 @@ class TestFusionQuery:
 
 class TestFusionStrategies:
     def test_rank_strategy(self):
-        fusion = MultiIndexFusion(
-            {"a": MockEngine("a", 3)}, strategy="rank", budget=4000
-        )
+        fusion = MultiIndexFusion({"a": MockEngine("a", 3)}, strategy="rank", budget=4000)
         result = fusion.query("test")
         # Blocks should be ordered by quality desc
         qualities = [b["quality"] for b in result["blocks"]]

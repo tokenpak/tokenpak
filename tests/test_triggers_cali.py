@@ -1,9 +1,10 @@
 """Unit tests for TokenPak event trigger framework."""
 
-
 import pytest
 
-pytest.importorskip("tokenpak._internal.triggers.matcher", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.triggers.matcher", reason="module not available in current build"
+)
 
 import pytest
 from tokenpak._internal.triggers.daemon import _parse_interval_seconds
@@ -11,6 +12,7 @@ from tokenpak._internal.triggers.matcher import match_event
 from tokenpak._internal.triggers.store import TriggerStore
 
 # ── Store CRUD ────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def tmp_store(tmp_path):
@@ -68,6 +70,7 @@ def test_log_fire(tmp_store):
 
 # ── Matcher ───────────────────────────────────────────────────────────────────
 
+
 def test_match_exact():
     assert match_event("timer:5m", "timer:5m")
 
@@ -95,6 +98,7 @@ def test_no_match_different_kinds():
 
 # ── Daemon helpers ────────────────────────────────────────────────────────────
 
+
 def test_parse_interval_seconds():
     assert _parse_interval_seconds("30s") == 30
     assert _parse_interval_seconds("5m") == 300
@@ -109,6 +113,7 @@ def test_parse_interval_invalid():
 
 
 # ── Git + Agent Events ────────────────────────────────────────────────────────
+
 
 def test_match_git_push_exact():
     assert match_event("git:push", "git:push")

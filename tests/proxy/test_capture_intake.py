@@ -11,6 +11,7 @@ Covers the structural invariants of `tokenpak/proxy/capture_intake.py`:
 
 No Pro code is imported — the OSS proxy constructs the documented JSON shape.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,6 +23,7 @@ import pytest
 from tokenpak.proxy import capture_intake as ci
 
 # ── Gate: two-factor (operator flag AND opt-in header) ──────────────────────
+
 
 class _Hdrs:
     def __init__(self, mapping):
@@ -52,14 +54,17 @@ def test_header_without_flag_is_inert(monkeypatch):
 
 # ── extract_response_text: read-only, fail-soft ────────────────────────────
 
+
 def test_extract_anthropic_text():
-    body = json.dumps({
-        "content": [
-            {"type": "text", "text": "Hello "},
-            {"type": "tool_use", "name": "x"},
-            {"type": "text", "text": "world"},
-        ]
-    }).encode()
+    body = json.dumps(
+        {
+            "content": [
+                {"type": "text", "text": "Hello "},
+                {"type": "tool_use", "name": "x"},
+                {"type": "text", "text": "world"},
+            ]
+        }
+    ).encode()
     assert ci.extract_response_text(body, "claude-x") == "Hello world"
 
 
@@ -78,9 +83,13 @@ def test_extract_returns_none_on_garbage():
 
 # ── build_capture_payload: the daemon wire contract ────────────────────────
 
+
 def test_payload_required_fields():
     p = ci.build_capture_payload(
-        "some response", model="claude-x", session_id="sess-1", platform="anthropic",
+        "some response",
+        model="claude-x",
+        session_id="sess-1",
+        platform="anthropic",
         captured_at_iso="2026-06-02T00:00:00+00:00",
     )
     # Required keys per CaptureEvent.from_dict
@@ -104,6 +113,7 @@ def test_payload_omits_empty_session():
 
 # ── Stand-in daemon for loopback round-trip ────────────────────────────────
 
+
 class _StandInDaemon:
     """Minimal HTTP server impersonating the Pro daemon's /pak/v1/promote."""
 
@@ -124,12 +134,16 @@ class _StandInDaemon:
                 except Exception:
                     body = {"_unparseable": True}
                 srv_self.received.append(body)
-                srv_self.requests.append({
-                    "path": self.path,
-                    "headers": {k.lower(): v for k, v in self.headers.items()},
-                    "body": body,
-                })
-                payload = json.dumps({"promoted": True, "pak_id": "test-pak", "path": self.path}).encode()
+                srv_self.requests.append(
+                    {
+                        "path": self.path,
+                        "headers": {k.lower(): v for k, v in self.headers.items()},
+                        "body": body,
+                    }
+                )
+                payload = json.dumps(
+                    {"promoted": True, "pak_id": "test-pak", "path": self.path}
+                ).encode()
                 self.send_response(201)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
@@ -176,11 +190,13 @@ def test_forward_to_daemon_round_trip(active_daemon):
 
 def test_forward_noop_when_daemon_unavailable(monkeypatch):
     import tokenpak.licensing.daemon_probe as probe
+
     monkeypatch.setattr(probe, "detect_daemon_state", lambda *a, **k: "unavailable")
     assert ci.forward_to_daemon({"source": "llm_response", "content": "x"}) is None
 
 
 # ── _run_capture: gate → extract → build → forward ─────────────────────────
+
 
 def test_run_capture_end_to_end(monkeypatch, active_daemon):
     monkeypatch.setenv(ci.ENABLE_ENV, "1")
@@ -198,11 +214,13 @@ def test_no_license_channel_egress(monkeypatch, active_daemon):
     """
     monkeypatch.setenv(ci.ENABLE_ENV, "1")
     body = json.dumps({"content": [{"type": "text", "text": "secret answer"}]}).encode()
-    hdrs = _Hdrs({
-        ci.OPTIN_HEADER: "opt-in",
-        "Authorization": "Bearer should-not-leak",
-        "X-TPK-Key": "should-not-leak",
-    })
+    hdrs = _Hdrs(
+        {
+            ci.OPTIN_HEADER: "opt-in",
+            "Authorization": "Bearer should-not-leak",
+            "X-TPK-Key": "should-not-leak",
+        }
+    )
     result = ci._run_capture(hdrs, body, "claude-x")
     assert result is not None and result["status"] == 201
 
@@ -236,6 +254,7 @@ def test_run_capture_noop_without_text(monkeypatch, active_daemon):
 
 
 # ── maybe_forward_capture: non-blocking, fail-silent ───────────────────────
+
 
 def test_maybe_forward_inert_when_disabled(monkeypatch):
     monkeypatch.delenv(ci.ENABLE_ENV, raising=False)

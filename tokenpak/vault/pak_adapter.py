@@ -18,9 +18,10 @@ path; Pak content stays local. Privacy contract tests in
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Protocol
 
 from tokenpak.tip.pak import (
     Pak,
@@ -49,6 +50,12 @@ _FILE_TYPE_TO_SOURCE_TYPE = {
     "text": PakSourceType.FILE,
     "data": PakSourceType.FILE,
 }
+
+
+class _VaultSearch(Protocol):
+    def search(
+        self, query: str, *, top_k: int, min_score: float
+    ) -> Sequence[tuple[Mapping[str, object], float]]: ...
 
 
 def _file_type_to_source_type(file_type: Optional[str]) -> PakSourceType:
@@ -95,7 +102,7 @@ def _iso8601_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _block_created_at(block_dict: dict) -> str:
+def _block_created_at(block_dict: Mapping[str, object]) -> str:
     """Best-effort created-at derivation from the block's content file mtime.
 
     The vault's block dict carries ``_content_file`` (path to the on-disk
@@ -104,7 +111,7 @@ def _block_created_at(block_dict: dict) -> str:
     Falls back to "now" if the file is missing or unreadable.
     """
     cf = block_dict.get("_content_file")
-    if cf:
+    if isinstance(cf, (str, Path)):
         try:
             mtime = Path(cf).stat().st_mtime
             return datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
@@ -141,7 +148,7 @@ def _short_title(source_path: str, block_id: str) -> str:
 
 
 def vault_block_to_pak(
-    block_dict: dict,
+    block_dict: Mapping[str, object],
     *,
     score: Optional[float] = None,
     summary: Optional[str] = None,
@@ -170,10 +177,17 @@ def vault_block_to_pak(
     structurally disjoint from license-payload field prefixes per the
     privacy contract.
     """
-    block_id = block_dict["block_id"]
-    source_path = block_dict.get("source_path") or block_id
-    raw_tokens = int(block_dict.get("raw_tokens") or 0)
-    risk_class = block_dict.get("risk_class") or ""
+    block_id = str(block_dict["block_id"])
+    source_value = block_dict.get("source_path")
+    source_path = str(source_value) if source_value else block_id
+    raw_token_value = block_dict.get("raw_tokens")
+    raw_tokens = (
+        int(raw_token_value)
+        if isinstance(raw_token_value, (str, bytes, bytearray, int, float))
+        else 0
+    )
+    risk_value = block_dict.get("risk_class")
+    risk_class = str(risk_value) if risk_value else ""
 
     pak_id = f"vault:{block_id}"
     title = _short_title(source_path, block_id)
@@ -189,7 +203,9 @@ def vault_block_to_pak(
 
     source = PakSource(
         platform=_PAK_PLATFORM,
-        source_type=_file_type_to_source_type(block_dict.get("file_type")),
+        source_type=_file_type_to_source_type(
+            str(block_dict["file_type"]) if block_dict.get("file_type") else None
+        ),
         created_at=_block_created_at(block_dict),
         source_hash=content_hash or _content_hash_from_block_id(block_id),
     )
@@ -215,7 +231,7 @@ def search_as_paks(
     *,
     top_k: int = 5,
     min_score: float = 2.0,
-    vault_index=None,
+    vault_index: _VaultSearch | None = None,
 ) -> list[Pak]:
     """Search the vault and return results as Vault Paks.
 
@@ -223,29 +239,13 @@ def search_as_paks(
     descending BM25 score, deterministic on ties. Empty list when no
     blocks meet ``min_score`` or no vault index is available.
 
-    ``vault_index`` defaults to the module-level singleton accessor in
-    :mod:`tokenpak.vault.search`; pass an explicit instance for tests or
-    when consuming a non-default index.
+    Pass ``vault_index`` explicitly. When no index is available, the function
+    returns an empty result rather than importing upward into the proxy layer.
 
     This is the read-only Phase 1 surface — no writes, no daemon contact,
     no Pak-store I/O. The Pro daemon's recall resolver (Phase 2) consumes
     these Paks alongside Interaction and Decision Paks for ranking.
     """
-    if vault_index is None:
-        # Lazy import to avoid pulling the vault subsystem into the module
-        # graph for callers that only need the per-block conversion helper.
-        try:
-            from tokenpak.vault.search import get_vault_index  # type: ignore[import-not-found]
-        except ImportError:
-            return []
-        try:
-            vault_index = get_vault_index()
-        except Exception:
-            # Vault unavailable (config error, missing index, etc.) — empty
-            # result is the correct UX ("no relevant Paks → level 0, empty
-            # list").
-            return []
-
     if vault_index is None:
         return []
 

@@ -24,6 +24,7 @@ pytestmark = [pytest.mark.needs_proxy, pytest.mark.needs_webhook]
 # FIXTURES
 # ─────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def api_key():
     """API key from environment."""
@@ -65,6 +66,7 @@ def proxy_url():
 # ─────────────────────────────────────────────────────────────────────────
 # STARTUP & HEALTH TESTS
 # ─────────────────────────────────────────────────────────────────────────
+
 
 class TestProxyStartup:
     """Test proxy startup and health."""
@@ -111,13 +113,18 @@ class TestProxyStartup:
         result = proxy_process.poll()
         # Acceptable: still running or already-running detection (exit 0)
         if result not in (None, 0):
-            stderr_out = proxy_process.stderr.read().decode("utf-8", errors="replace") if proxy_process.stderr else ""
+            stderr_out = (
+                proxy_process.stderr.read().decode("utf-8", errors="replace")
+                if proxy_process.stderr
+                else ""
+            )
             pytest.fail(f"Proxy exited with code {result}. stderr: {stderr_out[:500]}")
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # REQUEST & RESPONSE TESTS
 # ─────────────────────────────────────────────────────────────────────────
+
 
 class TestFirstRequest:
     """Test first user request."""
@@ -195,6 +202,7 @@ class TestFirstRequest:
 # LOG & CLEANUP TESTS
 # ─────────────────────────────────────────────────────────────────────────
 
+
 class TestLogging:
     """Test request logging."""
 
@@ -257,6 +265,7 @@ class TestCleanup:
 # ─────────────────────────────────────────────────────────────────────────
 # INTEGRATION TESTS
 # ─────────────────────────────────────────────────────────────────────────
+
 
 class TestEndToEnd:
     """End-to-end flow tests."""

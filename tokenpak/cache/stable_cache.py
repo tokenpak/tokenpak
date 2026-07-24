@@ -36,6 +36,7 @@ def _make_key(key: Any) -> str:
         return json.dumps(key, sort_keys=True, separators=(",", ":"), default=str)
     return str(key)
 
+
 _DEFAULT_MAX_SIZE = 500
 _DEFAULT_TTL = 24 * 3600  # 24 hours — effectively "stable"
 

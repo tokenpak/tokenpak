@@ -33,6 +33,7 @@ MIN_SAMPLES = 5
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_broker(tmp_path, min_samples=MIN_SAMPLES):
     tiers_file = tmp_path / "model_tiers.json"
     tiers_file.write_text(json.dumps(MODEL_TIERS))
@@ -48,14 +49,22 @@ def _prime(broker, model, query, n_accepted, n_rejected=0):
     """Insert synthetic transactions so broker reaches confidence threshold."""
     for _ in range(n_accepted):
         txn_id = broker._ledger.log_transaction(
-            model=model, query=query, context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model=model,
+            query=query,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
         )
         broker._ledger.record_outcome(txn_id, accepted=True)
     for _ in range(n_rejected):
         txn_id = broker._ledger.log_transaction(
-            model=model, query=query, context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model=model,
+            query=query,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
         )
         broker._ledger.record_outcome(txn_id, accepted=False)
 
@@ -66,7 +75,6 @@ def _prime(broker, model, query, n_accepted, n_rejected=0):
 
 
 class TestEloIntegration:
-
     def test_elo_updates_on_accepted_outcome(self, tmp_path):
         """Elo rating increases when record_outcome(accepted=True) is called."""
         broker = _make_broker(tmp_path)
@@ -76,8 +84,12 @@ class TestEloIntegration:
         assert before == INITIAL_RATING
 
         txn_id = broker._ledger.log_transaction(
-            model=model, query=QUERY_CODING, context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model=model,
+            query=QUERY_CODING,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
         )
         broker.record_outcome(txn_id, accepted=True)
 
@@ -91,8 +103,12 @@ class TestEloIntegration:
 
         before = broker._elo.get_elo(model, "CODING")
         txn_id = broker._ledger.log_transaction(
-            model=model, query=QUERY_CODING, context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=100.0,
+            model=model,
+            query=QUERY_CODING,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=100.0,
         )
         broker.record_outcome(txn_id, accepted=False)
 
@@ -130,8 +146,13 @@ class TestEloIntegration:
 
         # Log the actual downgraded transaction so record_outcome can look it up
         txn_id = broker._ledger.log_transaction(
-            model=cheap, query=QUERY_CODING, context_blocks=[], response="ok",
-            context_tokens=500, latency_ms=80.0, routing_action="downgrade",
+            model=cheap,
+            query=QUERY_CODING,
+            context_blocks=[],
+            response="ok",
+            context_tokens=500,
+            latency_ms=80.0,
+            routing_action="downgrade",
         )
         elo_before = broker._elo.get_elo(cheap, "CODING")
         broker.record_outcome(txn_id, accepted=True)

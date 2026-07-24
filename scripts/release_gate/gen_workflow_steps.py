@@ -124,8 +124,15 @@ def build_snapshot() -> dict:
     workflows_dir = REPO_ROOT / ".github" / "workflows"
     all_steps = []
     all_guards = []
+    seen_paths: set[Path] = set()
     for glob in GUARDED_GLOBS:
         for wf_path in sorted(workflows_dir.glob(glob)):
+            # ``release-rehearsal.yml`` matches both ``release*.yml`` and the
+            # explicit rehearsal glob. A workflow is one ratchet subject even
+            # when several guarded patterns select it.
+            if wf_path in seen_paths:
+                continue
+            seen_paths.add(wf_path)
             data = load_yaml_safe(wf_path)
             if data is None:
                 steps = extract_steps_regex(wf_path)
@@ -180,9 +187,7 @@ def main() -> int:
         # Std 12 §3.3 dispatch-guard ratchet: a changed job `if:` shows up as a
         # removed old guard tuple + an added new one, so a ref-only regression
         # on build/release trips this check.
-        on_disk_guards = {
-            (g["workflow"], g["job"], g["if"]) for g in on_disk.get("job_guards", [])
-        }
+        on_disk_guards = {(g["workflow"], g["job"], g["if"]) for g in on_disk.get("job_guards", [])}
         new_guards = {(g["workflow"], g["job"], g["if"]) for g in snapshot["job_guards"]}
         guard_added = sorted(new_guards - on_disk_guards)
         guard_removed = sorted(on_disk_guards - new_guards)

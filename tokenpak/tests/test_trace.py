@@ -174,9 +174,7 @@ class TestTraceBuilder:
     def test_builder_budget(self):
         """TraceBuilder.budget() sets budget fields."""
         trace = (
-            TraceBuilder()
-            .budget(tier="economy", tokens=4096, reasons=["cost_optimise"])
-            .build()
+            TraceBuilder().budget(tier="economy", tokens=4096, reasons=["cost_optimise"]).build()
         )
         assert trace.budget["tier"] == "economy"
         assert trace.budget["tokens"] == 4096
@@ -221,11 +219,7 @@ class TestTraceBuilder:
 
     def test_builder_packing(self):
         """TraceBuilder.packing() sets packing fields."""
-        trace = (
-            TraceBuilder()
-            .packing(kept_turns=6, dropped_turns=2, inject_tokens=312)
-            .build()
-        )
+        trace = TraceBuilder().packing(kept_turns=6, dropped_turns=2, inject_tokens=312).build()
         assert trace.packing["kept_turns"] == 6
         assert trace.packing["dropped_turns"] == 2
         assert trace.packing["inject_tokens"] == 312
@@ -271,12 +265,7 @@ class TestTraceBuilder:
 
     def test_builder_warn(self):
         """TraceBuilder.warn() appends warnings."""
-        trace = (
-            TraceBuilder()
-            .warn("warning 1")
-            .warn("warning 2")
-            .build()
-        )
+        trace = TraceBuilder().warn("warning 1").warn("warning 2").build()
         assert len(trace.warnings) == 2
         assert "warning 1" in trace.warnings
 
@@ -340,10 +329,7 @@ class TestHeaderAttachment:
     def test_read_trace_header(self):
         """read_trace_header() extracts and decodes a trace."""
         trace = (
-            TraceBuilder()
-            .routing("anthropic", "claude-3-haiku")
-            .budget("economy", 4096)
-            .build()
+            TraceBuilder().routing("anthropic", "claude-3-haiku").budget("economy", 4096).build()
         )
         headers = attach_trace_header({}, trace)
         read_trace = read_trace_header(headers)
@@ -399,10 +385,7 @@ class TestEnvelopeAttachment:
     def test_read_trace_envelope(self):
         """read_trace_envelope() extracts a trace from response."""
         trace = (
-            TraceBuilder()
-            .routing("anthropic", "claude-3-haiku")
-            .budget("economy", 4096)
-            .build()
+            TraceBuilder().routing("anthropic", "claude-3-haiku").budget("economy", 4096).build()
         )
         response = {"choices": [{"message": {"content": "Hello"}}]}
         response_with_trace = attach_trace_envelope(response, trace)
@@ -438,19 +421,13 @@ class TestNoLeakGuard:
 
     def test_assert_no_leak_openai_style_content(self):
         """assert_no_leak() checks OpenAI-style content."""
-        response = {
-            "choices": [
-                {"message": {"content": f"Hello {TRACE_HEADER} world"}}
-            ]
-        }
+        response = {"choices": [{"message": {"content": f"Hello {TRACE_HEADER} world"}}]}
         with pytest.raises(AssertionError, match="Trace marker found"):
             assert_no_leak(response)
 
     def test_assert_no_leak_anthropic_style_content(self):
         """assert_no_leak() checks Anthropic-style content."""
-        response = {
-            "content": [{"type": "text", "text": f"Hello {TRACE_ENVELOPE_KEY} world"}]
-        }
+        response = {"content": [{"type": "text", "text": f"Hello {TRACE_ENVELOPE_KEY} world"}]}
         with pytest.raises(AssertionError, match="Trace marker found"):
             assert_no_leak(response)
 
@@ -512,10 +489,7 @@ class TestRoundTrip:
     def test_envelope_roundtrip(self):
         """Envelopes can be encoded and decoded without loss."""
         original = (
-            TraceBuilder()
-            .routing("openai", "gpt-4", "quality")
-            .budget("unlimited", 8000)
-            .build()
+            TraceBuilder().routing("openai", "gpt-4", "quality").budget("unlimited", 8000).build()
         )
         response = attach_trace_envelope({}, original)
         recovered = read_trace_envelope(response)

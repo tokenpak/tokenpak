@@ -15,6 +15,7 @@ Covers the store-hardening contract:
   - doctor warns when bash hooks are installed without the sqlite3 CLI or
     with missing script paths
 """
+
 from __future__ import annotations
 
 import datetime
@@ -30,12 +31,8 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent.parent
-_CLAUDE_BASH_HOOK = str(
-    _REPO_ROOT / "tokenpak" / "companion" / "hooks" / "pre_send.sh"
-)
-_CODEX_BASH_PRE_SEND = str(
-    _REPO_ROOT / "tokenpak" / "companion" / "codex" / "hooks_pre_send.sh"
-)
+_CLAUDE_BASH_HOOK = str(_REPO_ROOT / "tokenpak" / "companion" / "hooks" / "pre_send.sh")
+_CODEX_BASH_PRE_SEND = str(_REPO_ROOT / "tokenpak" / "companion" / "codex" / "hooks_pre_send.sh")
 _CODEX_BASH_POST_TOOL = str(
     _REPO_ROOT / "tokenpak" / "companion" / "codex" / "hooks_post_tool_use.sh"
 )
@@ -50,6 +47,7 @@ _requires_sqlite3 = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _run_py_hook(hook_input: dict, tmp_path: Path, extra_env: dict | None = None):
     env = os.environ.copy()
@@ -126,6 +124,7 @@ def _legacy_journal_db(db_path: Path) -> None:
 # Connection factory: WAL + busy_timeout everywhere
 # ---------------------------------------------------------------------------
 
+
 def test_connect_applies_wal_and_busy_timeout(tmp_path):
     from tokenpak.companion import _sqlite
 
@@ -188,6 +187,7 @@ def test_hook_created_journal_matches_store_schema(tmp_path):
 # Two concurrent processes writing journal.db lose nothing
 # ---------------------------------------------------------------------------
 
+
 def test_two_processes_concurrent_store_writes_lose_nothing(tmp_path):
     db_path = tmp_path / "journal.db"
     n_per_proc = 20
@@ -226,9 +226,9 @@ def test_two_processes_concurrent_store_writes_lose_nothing(tmp_path):
         assert p.returncode == 0, f"writer process failed: {err.decode()}"
 
     conn = sqlite3.connect(str(db_path))
-    count = conn.execute(
-        "SELECT COUNT(*) FROM entries WHERE session_id = 'proc-race'"
-    ).fetchone()[0]
+    count = conn.execute("SELECT COUNT(*) FROM entries WHERE session_id = 'proc-race'").fetchone()[
+        0
+    ]
     conn.close()
     assert count == 2 * n_per_proc, (
         f"Expected {2 * n_per_proc} rows from 2 concurrent processes, got {count}"
@@ -238,6 +238,7 @@ def test_two_processes_concurrent_store_writes_lose_nothing(tmp_path):
 # ---------------------------------------------------------------------------
 # Dedupe: same event twice -> one row
 # ---------------------------------------------------------------------------
+
 
 def test_store_same_event_twice_one_row(tmp_path):
     from tokenpak.companion.journal.store import JournalStore
@@ -299,6 +300,7 @@ def test_savings_events_dedupe_but_distinct_kept(tmp_path):
 # Cost accounting: one estimate row per (session, day), gate prefers actuals
 # ---------------------------------------------------------------------------
 
+
 def test_estimate_upserts_single_row_per_session_day(tmp_path):
     """Growing transcript across prompts -> the estimate row refreshes in
     place; the daily gate reads the latest estimate, never the summed
@@ -333,9 +335,7 @@ def test_estimate_upserts_single_row_per_session_day(tmp_path):
     tracker = BudgetTracker(db_path=tmp_path / "budget.db", daily_budget=0.0)
     daily = tracker.estimate(input_tokens=0).daily_total_usd
     assert daily == pytest.approx(final_estimate, abs=1e-4)
-    assert daily < sum(per_prompt_costs), (
-        "daily gate must not sum the cumulative estimate series"
-    )
+    assert daily < sum(per_prompt_costs), "daily gate must not sum the cumulative estimate series"
 
 
 def test_daily_gate_prefers_actuals_over_estimates(tmp_path):
@@ -411,6 +411,7 @@ def test_legacy_budget_rows_not_summed_per_prompt(tmp_path):
 # start_session re-entry is non-destructive
 # ---------------------------------------------------------------------------
 
+
 def test_start_session_reentry_preserves_totals(tmp_path):
     from tokenpak.companion.journal.store import JournalStore
 
@@ -419,8 +420,7 @@ def test_start_session_reentry_preserves_totals(tmp_path):
 
     conn = sqlite3.connect(str(tmp_path / "journal.db"))
     conn.execute(
-        "UPDATE sessions SET total_requests = 7, total_cost_usd = 1.25 "
-        "WHERE session_id = 're-sess'"
+        "UPDATE sessions SET total_requests = 7, total_cost_usd = 1.25 WHERE session_id = 're-sess'"
     )
     conn.commit()
     conn.close()
@@ -447,6 +447,7 @@ def test_start_session_reentry_preserves_totals(tmp_path):
 # ---------------------------------------------------------------------------
 # Legacy journal migration is additive and non-destructive
 # ---------------------------------------------------------------------------
+
 
 def test_legacy_journal_migrates_nondestructively(tmp_path):
     db_path = tmp_path / "journal.db"
@@ -479,8 +480,7 @@ def test_legacy_journal_migrates_nondestructively(tmp_path):
         store.add_entry("old-sess", "auto", "new event")
     conn = sqlite3.connect(str(db_path))
     new_count = conn.execute(
-        "SELECT COUNT(*) FROM entries WHERE session_id = 'old-sess' "
-        "AND content = 'new event'"
+        "SELECT COUNT(*) FROM entries WHERE session_id = 'old-sess' AND content = 'new event'"
     ).fetchone()[0]
     conn.close()
     assert new_count == 1
@@ -489,6 +489,7 @@ def test_legacy_journal_migrates_nondestructively(tmp_path):
 # ---------------------------------------------------------------------------
 # Session-binding marker: bash variants write it atomically
 # ---------------------------------------------------------------------------
+
 
 def test_claude_bash_hook_writes_marker(tmp_path):
     transcript = tmp_path / "t.jsonl"
@@ -548,6 +549,7 @@ def test_marker_overwritten_by_newer_session(tmp_path):
 # Codex bash hooks: dedupe key effective via sqlite3 CLI (CI runners)
 # ---------------------------------------------------------------------------
 
+
 @_requires_sqlite3
 def test_codex_post_tool_use_dedupes_identical_events(tmp_path):
     _legacy_journal_db(tmp_path / "journal.db")  # hook must migrate additively
@@ -572,15 +574,14 @@ def test_codex_post_tool_use_dedupes_identical_events(tmp_path):
         "SELECT content, content_hash FROM entries WHERE session_id = 'codex-dedupe'"
     ).fetchall()
     conn.close()
-    assert len(rows) == 2, (
-        f"identical events must collapse, distinct tool uses kept: {rows}"
-    )
+    assert len(rows) == 2, f"identical events must collapse, distinct tool uses kept: {rows}"
     assert all(r[1] for r in rows), "bash writers must populate content_hash"
 
 
 # ---------------------------------------------------------------------------
 # Dropped writes are logged, never silently swallowed
 # ---------------------------------------------------------------------------
+
 
 def test_dropped_journal_write_is_logged(tmp_path):
     """With journal.db exclusively locked longer than the busy timeout, the
@@ -596,8 +597,7 @@ def test_dropped_journal_write_is_logged(tmp_path):
         transcript = tmp_path / "t.jsonl"
         _make_transcript(transcript, 4000)
         result = _run_py_hook(
-            {"session_id": "locked-sess", "transcript_path": str(transcript),
-             "prompt": "p"},
+            {"session_id": "locked-sess", "transcript_path": str(transcript), "prompt": "p"},
             tmp_path=tmp_path,
         )
     finally:
@@ -614,6 +614,7 @@ def test_dropped_journal_write_is_logged(tmp_path):
 # ---------------------------------------------------------------------------
 # Doctor: companion hook integrity warnings
 # ---------------------------------------------------------------------------
+
 
 def _write_claude_hook_settings(home: Path, command: str) -> None:
     settings = {
@@ -638,9 +639,9 @@ def test_doctor_warns_when_sqlite3_missing_with_bash_hooks(tmp_path, monkeypatch
     from tokenpak.cli.commands.doctor import companion_hook_integrity
 
     results = companion_hook_integrity()
-    assert any(
-        status == "warn" and "sqlite3" in message for status, message, _ in results
-    ), f"expected sqlite3 WARN, got {results}"
+    assert any(status == "warn" and "sqlite3" in message for status, message, _ in results), (
+        f"expected sqlite3 WARN, got {results}"
+    )
 
 
 def test_doctor_warns_on_missing_hook_script_path(tmp_path, monkeypatch):
@@ -652,18 +653,16 @@ def test_doctor_warns_on_missing_hook_script_path(tmp_path, monkeypatch):
     from tokenpak.cli.commands.doctor import companion_hook_integrity
 
     results = companion_hook_integrity()
-    assert any(
-        status == "warn" and "missing" in message for status, message, _ in results
-    ), f"expected missing-path WARN, got {results}"
+    assert any(status == "warn" and "missing" in message for status, message, _ in results), (
+        f"expected missing-path WARN, got {results}"
+    )
 
 
 def test_doctor_reads_codex_hooks_config(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     missing = tmp_path / "tokenpak" / "codex" / "hooks_stop.sh"
     codex_cfg = {
-        "hooks": {
-            "Stop": [{"hooks": [{"type": "command", "command": f"bash {missing}"}]}]
-        }
+        "hooks": {"Stop": [{"hooks": [{"type": "command", "command": f"bash {missing}"}]}]}
     }
     (tmp_path / ".codex").mkdir(parents=True)
     (tmp_path / ".codex" / "hooks.json").write_text(json.dumps(codex_cfg))
@@ -672,9 +671,9 @@ def test_doctor_reads_codex_hooks_config(tmp_path, monkeypatch):
     from tokenpak.cli.commands.doctor import companion_hook_integrity
 
     results = companion_hook_integrity()
-    assert any(
-        status == "warn" and "missing" in message for status, message, _ in results
-    ), f"expected missing-path WARN from codex config, got {results}"
+    assert any(status == "warn" and "missing" in message for status, message, _ in results), (
+        f"expected missing-path WARN from codex config, got {results}"
+    )
 
 
 def test_doctor_passes_with_healthy_hooks(tmp_path, monkeypatch):

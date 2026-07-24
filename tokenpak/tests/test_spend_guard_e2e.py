@@ -33,18 +33,19 @@ def tmp_db(tmp_path, monkeypatch):
 def _opus_body(content: str | int = "hi", max_tokens: int = 4000) -> bytes:
     if isinstance(content, int):
         content = "x" * content
-    return json.dumps({
-        "model": "claude-opus-4-7",
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": content}],
-    }).encode()
+    return json.dumps(
+        {
+            "model": "claude-opus-4-7",
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": content}],
+        }
+    ).encode()
 
 
 class TestSmallRequestForwards:
     def test_small_request_passthrough(self, tmp_db):
         cfg, _ = tmp_db
-        out = evaluate(_opus_body("hi", 1000), "claude-opus-4-7", "sess-1", {},
-                       config=cfg)
+        out = evaluate(_opus_body("hi", 1000), "claude-opus-4-7", "sess-1", {}, config=cfg)
         assert out.kind == "forward"
         assert out.body is not None
 
@@ -54,13 +55,11 @@ class TestRunawayBlocks:
         cfg, _ = tmp_db
         # 600K-token user message → blocks
         runaway = _opus_body(740_000, max_tokens=4000)
-        out_block = evaluate(runaway, "claude-opus-4-7", "sess-replay", {},
-                             config=cfg)
+        out_block = evaluate(runaway, "claude-opus-4-7", "sess-replay", {}, config=cfg)
         assert out_block.kind == "block"
         # Approve
         yes = _opus_body("yes")
-        out_replay = evaluate(yes, "claude-opus-4-7", "sess-replay", {},
-                              config=cfg)
+        out_replay = evaluate(yes, "claude-opus-4-7", "sess-replay", {}, config=cfg)
         assert out_replay.kind == "replay"
         # Body must be byte-identical to the original runaway request
         assert out_replay.body == runaway
@@ -68,24 +67,22 @@ class TestRunawayBlocks:
     def test_runaway_blocks_then_cancel(self, tmp_db):
         cfg, _ = tmp_db
         runaway = _opus_body(740_000, max_tokens=4000)
-        out_block = evaluate(runaway, "claude-opus-4-7", "sess-cancel", {},
-                             config=cfg)
+        out_block = evaluate(runaway, "claude-opus-4-7", "sess-cancel", {}, config=cfg)
         assert out_block.kind == "block"
         no = _opus_body("no")
-        out_cancel = evaluate(no, "claude-opus-4-7", "sess-cancel", {},
-                              config=cfg)
+        out_cancel = evaluate(no, "claude-opus-4-7", "sess-cancel", {}, config=cfg)
         assert out_cancel.kind == "cancel"
         # Session unblocked — fresh small request forwards
-        out_after = evaluate(_opus_body("hello"), "claude-opus-4-7",
-                             "sess-cancel", {}, config=cfg)
+        out_after = evaluate(_opus_body("hello"), "claude-opus-4-7", "sess-cancel", {}, config=cfg)
         assert out_after.kind == "forward"
 
     def test_ambiguous_re_prompts(self, tmp_db):
         cfg, _ = tmp_db
         runaway = _opus_body(740_000, max_tokens=4000)
         evaluate(runaway, "claude-opus-4-7", "sess-amb", {}, config=cfg)
-        out = evaluate(_opus_body("I'm thinking about it"), "claude-opus-4-7",
-                       "sess-amb", {}, config=cfg)
+        out = evaluate(
+            _opus_body("I'm thinking about it"), "claude-opus-4-7", "sess-amb", {}, config=cfg
+        )
         assert out.kind == "reprompt"
 
 
@@ -95,10 +92,8 @@ class TestTIPDirectivesE2E:
         # 740K chars / 4 ≈ 185K tokens → in [180K, 200K) → soft block
         # under v1.5.2 defaults (90% ≤ projected_input < 100%). TIP
         # allow=once with sufficient ceiling clears the soft block.
-        body = _opus_body("[TIP: allow=once max=$15] " + "x" * 740_000,
-                          max_tokens=4000)
-        out = evaluate(body, "claude-opus-4-7", "sess-tip-allow", {},
-                       config=cfg)
+        body = _opus_body("[TIP: allow=once max=$15] " + "x" * 740_000, max_tokens=4000)
+        out = evaluate(body, "claude-opus-4-7", "sess-tip-allow", {}, config=cfg)
         assert out.kind == "forward_modified"
         # Forwarded body has [TIP:...] stripped
         forwarded = json.loads(out.body.decode("utf-8"))
@@ -118,8 +113,13 @@ class TestTIPDirectivesE2E:
         cfg, _ = tmp_db
         runaway = _opus_body(740_000)
         evaluate(runaway, "claude-opus-4-7", "sess-tip-cancel", {}, config=cfg)
-        out = evaluate(_opus_body("[TIP: cancel] never mind"), "claude-opus-4-7",
-                       "sess-tip-cancel", {}, config=cfg)
+        out = evaluate(
+            _opus_body("[TIP: cancel] never mind"),
+            "claude-opus-4-7",
+            "sess-tip-cancel",
+            {},
+            config=cfg,
+        )
         assert out.kind == "cancel"
 
 
@@ -127,8 +127,7 @@ class TestHardBlock:
     def test_hard_block_not_bypassed_by_tip(self, tmp_db):
         cfg, _ = tmp_db
         # 4M chars / 4 = 1M tokens, which crosses hard_block_tokens=1M
-        body = _opus_body("[TIP: bypass=on] " + "x" * 4_000_000,
-                          max_tokens=50_000)
+        body = _opus_body("[TIP: bypass=on] " + "x" * 4_000_000, max_tokens=50_000)
         out = evaluate(body, "claude-opus-4-7", "sess-hard", {}, config=cfg)
         assert out.kind == "hard_block"
         payload = json.loads(out.response_body)
@@ -147,8 +146,7 @@ class TestAntiLoop:
         evaluate(runaway, "claude-opus-4-7", "sess-loop-A", {}, config=cfg)
         # Different session, same body — anti-loop kicks in.
         for _ in range(3):
-            out = evaluate(runaway, "claude-opus-4-7", f"sess-loop-{_}", {},
-                           config=cfg)
+            out = evaluate(runaway, "claude-opus-4-7", f"sess-loop-{_}", {}, config=cfg)
             assert out.kind == "block"
         rows = query_recent(cfg.audit_db_path, limit=20)
         events = [r["event_type"] for r in rows]
@@ -161,8 +159,7 @@ class TestConcurrentSessions:
         runaway = _opus_body(740_000, max_tokens=4000)
         evaluate(runaway, "claude-opus-4-7", "sess-A", {}, config=cfg)
         # Session B small request — must still pass.
-        out = evaluate(_opus_body("hi"), "claude-opus-4-7", "sess-B", {},
-                       config=cfg)
+        out = evaluate(_opus_body("hi"), "claude-opus-4-7", "sess-B", {}, config=cfg)
         assert out.kind == "forward"
 
 
@@ -171,8 +168,7 @@ class TestDisabled:
         cfg = SpendGuardConfig()
         cfg.enabled = False
         runaway = _opus_body(4_000_000, max_tokens=50_000)
-        out = evaluate(runaway, "claude-opus-4-7", "sess-disabled", {},
-                       config=cfg)
+        out = evaluate(runaway, "claude-opus-4-7", "sess-disabled", {}, config=cfg)
         assert out.kind == "forward"
         assert out.body == runaway
 
@@ -189,8 +185,7 @@ class TestAuditTrail:
         cfg, db = tmp_db
         runaway = _opus_body(740_000)
         evaluate(runaway, "claude-opus-4-7", "sess-audit2", {}, config=cfg)
-        evaluate(_opus_body("yes"), "claude-opus-4-7", "sess-audit2", {},
-                 config=cfg)
+        evaluate(_opus_body("yes"), "claude-opus-4-7", "sess-audit2", {}, config=cfg)
         rows = query_recent(db, session_id="sess-audit2", limit=10)
         events = [r["event_type"] for r in rows]
         assert "block" in events

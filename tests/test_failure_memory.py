@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.agentic.failure_memory", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.agentic.failure_memory", reason="module not available in current build"
+)
 from pathlib import Path
 
 import pytest
@@ -160,9 +162,7 @@ def test_unknown_error_creates_new_signature(tmp_db: FailureMemoryDB) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_persistence_survives_reload(
-    tmp_path: Path, sig_pg: FailureSignature
-) -> None:
+def test_persistence_survives_reload(tmp_path: Path, sig_pg: FailureSignature) -> None:
     """T6: Signatures written to disk are re-loaded by a new DB instance."""
     storage = tmp_path / "sigs.json"
 
@@ -203,9 +203,7 @@ def test_no_false_match_on_unrelated_error(
 # ---------------------------------------------------------------------------
 
 
-def test_validated_after_n_successes(
-    tmp_db: FailureMemoryDB, sig_pg: FailureSignature
-) -> None:
+def test_validated_after_n_successes(tmp_db: FailureMemoryDB, sig_pg: FailureSignature) -> None:
     """T8: Signature becomes validated after N_VALIDATE_SUCCESSES successes."""
     sig_pg.confidence = 0.5
     tmp_db.add(sig_pg)

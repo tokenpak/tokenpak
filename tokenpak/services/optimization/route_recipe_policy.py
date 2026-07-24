@@ -60,24 +60,26 @@ class RouteClass:
     UNKNOWN = "unknown"
 
 
-ALL_ROUTE_CLASSES: FrozenSet[str] = frozenset({
-    RouteClass.GENERAL_CHAT,
-    RouteClass.STATUS_CHECK,
-    RouteClass.CONFIGURATION_INSPECTION,
-    RouteClass.CODE_GENERATION,
-    RouteClass.CODE_EDIT,
-    RouteClass.CODE_REVIEW,
-    RouteClass.DEBUGGING,
-    RouteClass.TEST_FAILURE,
-    RouteClass.LOG_ANALYSIS,
-    RouteClass.GIT_DIFF_REVIEW,
-    RouteClass.DOCUMENTATION_GENERATION,
-    RouteClass.SUMMARIZATION,
-    RouteClass.RESEARCH,
-    RouteClass.PLANNING,
-    RouteClass.SHELL_COMMAND_ANALYSIS,
-    RouteClass.UNKNOWN,
-})
+ALL_ROUTE_CLASSES: FrozenSet[str] = frozenset(
+    {
+        RouteClass.GENERAL_CHAT,
+        RouteClass.STATUS_CHECK,
+        RouteClass.CONFIGURATION_INSPECTION,
+        RouteClass.CODE_GENERATION,
+        RouteClass.CODE_EDIT,
+        RouteClass.CODE_REVIEW,
+        RouteClass.DEBUGGING,
+        RouteClass.TEST_FAILURE,
+        RouteClass.LOG_ANALYSIS,
+        RouteClass.GIT_DIFF_REVIEW,
+        RouteClass.DOCUMENTATION_GENERATION,
+        RouteClass.SUMMARIZATION,
+        RouteClass.RESEARCH,
+        RouteClass.PLANNING,
+        RouteClass.SHELL_COMMAND_ANALYSIS,
+        RouteClass.UNKNOWN,
+    }
+)
 
 
 class FidelityTier:
@@ -88,13 +90,15 @@ class FidelityTier:
     NO_OPTIMIZE = "no_optimize"
 
 
-ALL_FIDELITY_TIERS: FrozenSet[str] = frozenset({
-    FidelityTier.LOSSLESS_REQUIRED,
-    FidelityTier.SEMANTIC_SAFE,
-    FidelityTier.AGGRESSIVE_OK,
-    FidelityTier.CACHE_RESPONSE_SAFE,
-    FidelityTier.NO_OPTIMIZE,
-})
+ALL_FIDELITY_TIERS: FrozenSet[str] = frozenset(
+    {
+        FidelityTier.LOSSLESS_REQUIRED,
+        FidelityTier.SEMANTIC_SAFE,
+        FidelityTier.AGGRESSIVE_OK,
+        FidelityTier.CACHE_RESPONSE_SAFE,
+        FidelityTier.NO_OPTIMIZE,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -376,18 +380,16 @@ def select_recipes(
         if policy.lossless_required and hint > policy.max_lossless_hint:
             log.debug(
                 "select_recipes: dropping %s (hint=%.2f > max_lossless_hint=%.2f)",
-                name, hint, policy.max_lossless_hint,
+                name,
+                hint,
+                policy.max_lossless_hint,
             )
             continue
         # Only apply ``recipe.matches`` filtering for content-mode recipes;
         # extension/filename/path-pattern modes need a filename and are
         # selected by name from the policy author, not by content sniffing.
         match_mode = str(getattr(recipe, "match_mode", "any") or "any")
-        if (
-            content_sample
-            and match_mode == "content"
-            and hasattr(recipe, "matches")
-        ):
+        if content_sample and match_mode == "content" and hasattr(recipe, "matches"):
             try:
                 if not recipe.matches(content_sample=content_sample):
                     continue
@@ -401,6 +403,7 @@ def _get_default_engine() -> Any:
     """Lazily fetch the OSS recipe engine. Returns None if unavailable."""
     try:
         from tokenpak.compression.recipes import get_oss_engine
+
         return get_oss_engine()
     except Exception as exc:
         log.debug("OSS recipe engine unavailable: %s", exc)
@@ -483,9 +486,7 @@ _SAFE_REWRITERS: Dict[str, Any] = {
 }
 
 
-def _operations_safe_for_route(
-    recipe: Any, lossless_required: bool
-) -> List[str]:
+def _operations_safe_for_route(recipe: Any, lossless_required: bool) -> List[str]:
     """Pick the rewrite operation names this stage is willing to execute.
 
     Lossy operations (e.g. ``regex_replace``, ``deduplicate_lines``) are
@@ -536,9 +537,7 @@ def apply_policy(
             skipped_reason=f"fidelity:{policy.fidelity}",
         )
 
-    recipes = select_recipes(
-        policy, content_sample=text, engine=engine
-    )
+    recipes = select_recipes(policy, content_sample=text, engine=engine)
     if not recipes:
         return CompressionResult(
             text=text,
@@ -549,9 +548,7 @@ def apply_policy(
         )
 
     if spans is None:
-        spans = detect_protected_spans(
-            text, types=policy.protected_span_types or None
-        )
+        spans = detect_protected_spans(text, types=policy.protected_span_types or None)
 
     rewriter_chain: List[Any] = []
     applied_names: List[str] = []

@@ -1,4 +1,5 @@
 """Configuration schema for the Claude Code registry adapter."""
+
 from dataclasses import dataclass
 
 

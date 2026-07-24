@@ -1,9 +1,10 @@
 """Tests for TokenPak Claim/Evidence Indexer."""
 
-
 import pytest
 
-pytest.importorskip("tokenpak._internal.ingest.claim_indexer", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.ingest.claim_indexer", reason="module not available in current build"
+)
 import pytest
 from tokenpak._internal.ingest.claim_indexer import (
     ClaimEvidence,

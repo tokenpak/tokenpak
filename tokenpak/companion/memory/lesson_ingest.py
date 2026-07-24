@@ -49,84 +49,105 @@ def extract_lessons(filepath: str) -> List[Dict[str, Any]]:
 
     # Extract date from filename (YYYY-MM-DD.md)
     filename = os.path.basename(filepath)
-    date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', filename)
-    file_date = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}" if date_match else None
+    date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", filename)
+    file_date = (
+        f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}" if date_match else None
+    )
 
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         content = f.read()
 
     # Split into sections
-    sections = re.split(r'^## ', content, flags=re.MULTILINE)
+    sections = re.split(r"^## ", content, flags=re.MULTILINE)
 
     for section in sections[1:]:  # skip first empty split
-        lines = section.split('\n')
+        lines = section.split("\n")
         section_name = lines[0].strip()
-        section_content = '\n'.join(lines[1:]).strip()
+        section_content = "\n".join(lines[1:]).strip()
 
         # Extract lessons from explicit "Lessons Learned" section
-        if 'lesson' in section_name.lower():
+        if "lesson" in section_name.lower():
             # Each bullet/line in this section is a lesson
-            for line in section_content.split('\n'):
+            for line in section_content.split("\n"):
                 line = line.strip()
-                if line and line.startswith('-'):
-                    lesson_text = line.lstrip('-').strip()
+                if line and line.startswith("-"):
+                    lesson_text = line.lstrip("-").strip()
                     if lesson_text:
-                        lessons.append({
-                            'lesson': lesson_text,
-                            'section': section_name,
-                            'task_id': None,
-                            'timestamp': file_date,
-                            'confidence': 0.9
-                        })
+                        lessons.append(
+                            {
+                                "lesson": lesson_text,
+                                "section": section_name,
+                                "task_id": None,
+                                "timestamp": file_date,
+                                "confidence": 0.9,
+                            }
+                        )
 
         # Extract insights from "Notes" section
-        elif 'note' in section_name.lower():
-            for line in section_content.split('\n'):
+        elif "note" in section_name.lower():
+            for line in section_content.split("\n"):
                 line = line.strip()
-                if line and not line.startswith('#'):
-                    lessons.append({
-                        'lesson': line,
-                        'section': section_name,
-                        'task_id': None,
-                        'timestamp': file_date,
-                        'confidence': 0.7
-                    })
+                if line and not line.startswith("#"):
+                    lessons.append(
+                        {
+                            "lesson": line,
+                            "section": section_name,
+                            "task_id": None,
+                            "timestamp": file_date,
+                            "confidence": 0.7,
+                        }
+                    )
 
         # Extract task completion patterns from task summary sections
-        elif any(x in section_name.lower() for x in ['task', 'work', 'status', 'result']):
+        elif any(x in section_name.lower() for x in ["task", "work", "status", "result"]):
             # Look for patterns like "Task X: description → outcome"
-            task_match = re.search(r'([A-Z]+-[A-Z0-9-]+)[:|\s]+(.+?)(?:→|—|-{2,}|✓|✅)(.*?)(?:\n\n|\n\*\*|$)', section_content, re.DOTALL)
+            task_match = re.search(
+                r"([A-Z]+-[A-Z0-9-]+)[:|\s]+(.+?)(?:→|—|-{2,}|✓|✅)(.*?)(?:\n\n|\n\*\*|$)",
+                section_content,
+                re.DOTALL,
+            )
             if task_match:
                 task_id = task_match.group(1)
                 task_desc = task_match.group(2).strip()
-                task_outcome = task_match.group(3).strip() if task_match.group(3) else ''
+                task_outcome = task_match.group(3).strip() if task_match.group(3) else ""
 
                 # Extract decision/lesson from outcome
                 if task_outcome:
-                    lessons.append({
-                        'lesson': f"Task {task_id}: {task_outcome}",
-                        'section': section_name,
-                        'task_id': task_id,
-                        'timestamp': file_date,
-                        'confidence': 0.8
-                    })
+                    lessons.append(
+                        {
+                            "lesson": f"Task {task_id}: {task_outcome}",
+                            "section": section_name,
+                            "task_id": task_id,
+                            "timestamp": file_date,
+                            "confidence": 0.8,
+                        }
+                    )
 
             # Also extract any bold patterns as insights (e.g., **Action**: ...)
-            bold_patterns = re.findall(r'\*\*([^*]+)\*\*:\s*([^\n]+)', section_content)
+            bold_patterns = re.findall(r"\*\*([^*]+)\*\*:\s*([^\n]+)", section_content)
             for key, value in bold_patterns:
-                if key.lower() in ['lesson', 'insight', 'finding', 'recommendation', 'action', 'result']:
-                    lessons.append({
-                        'lesson': f"{key}: {value}",
-                        'section': section_name,
-                        'task_id': None,
-                        'timestamp': file_date,
-                        'confidence': 0.8
-                    })
+                if key.lower() in [
+                    "lesson",
+                    "insight",
+                    "finding",
+                    "recommendation",
+                    "action",
+                    "result",
+                ]:
+                    lessons.append(
+                        {
+                            "lesson": f"{key}: {value}",
+                            "section": section_name,
+                            "task_id": None,
+                            "timestamp": file_date,
+                            "confidence": 0.8,
+                        }
+                    )
 
     return lessons
 
 
-MARKDOWN_SUFFIXES = ('.md', '.markdown')
+MARKDOWN_SUFFIXES = (".md", ".markdown")
 
 
 def _record_lessons(lessons: List[Dict[str, Any]], db: DecisionMemoryDB, source: str) -> int:
@@ -144,8 +165,8 @@ def _record_lessons(lessons: List[Dict[str, Any]], db: DecisionMemoryDB, source:
         query = f"lesson_{lesson['timestamp']}_{lesson.get('task_id', 'general')}"
         db.record(
             query=query,
-            decision=lesson['lesson'],
-            confidence=lesson['confidence'],
+            decision=lesson["lesson"],
+            confidence=lesson["confidence"],
             notes=f"source: {source}, section: {lesson['section']}",
         )
         count += 1
@@ -219,34 +240,53 @@ def ingest_sources(
 
     if vault_dir:
         vp = os.path.expanduser(vault_dir)
-        packs = os.path.join(vp, '03_AGENT_PACKS')
+        packs = os.path.join(vp, "03_AGENT_PACKS")
         if not os.path.isdir(packs):
-            sources.append({"path": vault_dir, "kind": "vault",
-                            "ingested": 0, "reason": "missing-or-not-vault-schema"})
+            sources.append(
+                {
+                    "path": vault_dir,
+                    "kind": "vault",
+                    "ingested": 0,
+                    "reason": "missing-or-not-vault-schema",
+                }
+            )
         else:
             n = ingest_from_vault(vault_dir, db)
-            sources.append({"path": vault_dir, "kind": "vault", "ingested": n,
-                            "reason": "ok" if n else "present-but-no-matching-files"})
+            sources.append(
+                {
+                    "path": vault_dir,
+                    "kind": "vault",
+                    "ingested": n,
+                    "reason": "ok" if n else "present-but-no-matching-files",
+                }
+            )
             total += n
 
-    for d in (memory_dirs or []):
+    for d in memory_dirs or []:
         ds = str(d)
         dp = os.path.expanduser(ds)
         if not os.path.exists(dp):
-            sources.append({"path": ds, "kind": "memory-dir", "ingested": 0,
-                            "reason": "missing"})
+            sources.append({"path": ds, "kind": "memory-dir", "ingested": 0, "reason": "missing"})
         elif not os.path.isdir(dp):
-            sources.append({"path": ds, "kind": "memory-dir", "ingested": 0,
-                            "reason": "not-a-directory"})
+            sources.append(
+                {"path": ds, "kind": "memory-dir", "ingested": 0, "reason": "not-a-directory"}
+            )
         else:
             n = ingest_from_dir(ds, db)
-            sources.append({"path": ds, "kind": "memory-dir", "ingested": n,
-                            "reason": "ok" if n else "present-but-no-matching-files"})
+            sources.append(
+                {
+                    "path": ds,
+                    "kind": "memory-dir",
+                    "ingested": n,
+                    "reason": "ok" if n else "present-but-no-matching-files",
+                }
+            )
             total += n
 
     if not sources:
-        sources.append({"path": None, "kind": None, "ingested": 0,
-                        "reason": "no-source-configured"})
+        sources.append(
+            {"path": None, "kind": None, "ingested": 0, "reason": "no-source-configured"}
+        )
 
     return {"total": total, "sources": sources}
 
@@ -267,7 +307,7 @@ def ingest_from_vault(vault_dir: str, db: DecisionMemoryDB) -> int:
         Total count of lessons ingested
     """
     vault_dir = os.path.expanduser(vault_dir)
-    memory_dir = os.path.join(vault_dir, '03_AGENT_PACKS')
+    memory_dir = os.path.join(vault_dir, "03_AGENT_PACKS")
 
     total_ingested = 0
 
@@ -276,14 +316,14 @@ def ingest_from_vault(vault_dir: str, db: DecisionMemoryDB) -> int:
 
     # Walk all agent memory directories
     for agent_dir in os.listdir(memory_dir):
-        agent_memory_path = os.path.join(memory_dir, agent_dir, 'memory')
+        agent_memory_path = os.path.join(memory_dir, agent_dir, "memory")
 
         if not os.path.isdir(agent_memory_path):
             continue
 
         # Process all YYYY-MM-DD.md files
         for filename in sorted(os.listdir(agent_memory_path)):
-            if re.match(r'\d{4}-\d{2}-\d{2}\.md$', filename):
+            if re.match(r"\d{4}-\d{2}-\d{2}\.md$", filename):
                 filepath = os.path.join(agent_memory_path, filename)
                 lessons = extract_lessons(filepath)
 
@@ -293,9 +333,9 @@ def ingest_from_vault(vault_dir: str, db: DecisionMemoryDB) -> int:
 
                     record_id = db.record(
                         query=query,
-                        decision=lesson['lesson'],
-                        confidence=lesson['confidence'],
-                        notes=f"source: {agent_dir}/memory/{filename}, section: {lesson['section']}"
+                        decision=lesson["lesson"],
+                        confidence=lesson["confidence"],
+                        notes=f"source: {agent_dir}/memory/{filename}, section: {lesson['section']}",
                     )
 
                     total_ingested += 1
@@ -303,7 +343,7 @@ def ingest_from_vault(vault_dir: str, db: DecisionMemoryDB) -> int:
     return total_ingested
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Simple test
     import sys
 

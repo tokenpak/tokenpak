@@ -37,6 +37,7 @@ from tokenpak.prove.scenario import Scenario, _detect_provider, resolve_scenario
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _minimal_scenario(tmp_path: Path, name: str = "edge-test") -> Scenario:
     """Write a minimal valid .md scenario to *tmp_path* and return it."""
     md = dedent(f"""\
@@ -361,9 +362,7 @@ class TestGracefulTimeoutAndErrorHandling:
         assert errors, "Expected a timeout error recorded in turn result"
         assert any("timeout" in e.lower() or "timed" in e.lower() for e in errors)
 
-    def test_generic_exception_in_turn_recorded_not_raised(
-        self, tmp_path: Path
-    ) -> None:
+    def test_generic_exception_in_turn_recorded_not_raised(self, tmp_path: Path) -> None:
         """A generic network error during a turn is captured in TurnResult.error."""
         import tokenpak.prove.adapter as _adapter
 
@@ -396,12 +395,12 @@ class TestGracefulTimeoutAndErrorHandling:
             via_tokenpak=False,
         )
         arm_result.turns.append(
-            TurnResult(turn_number=1, label="ok turn",
-                       input_tokens=100, output_tokens=50, cost_usd=0.001)
+            TurnResult(
+                turn_number=1, label="ok turn", input_tokens=100, output_tokens=50, cost_usd=0.001
+            )
         )
         arm_result.turns.append(
-            TurnResult(turn_number=2, label="error turn",
-                       error="connection refused")
+            TurnResult(turn_number=2, label="error turn", error="connection refused")
         )
         arm_result.finalize()
 
@@ -409,9 +408,7 @@ class TestGracefulTimeoutAndErrorHandling:
         assert arm_result.total_output_tokens == 50
         assert arm_result.total_cost_usd == pytest.approx(0.001, abs=1e-6)
 
-    def test_turn_error_aborts_remaining_turns_and_records_arm_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_turn_error_aborts_remaining_turns_and_records_arm_error(self, tmp_path: Path) -> None:
         """run_arm stops at the first turn error and records it in ArmResult.error.
 
         This documents the deliberate design: a turn failure (including timeout)

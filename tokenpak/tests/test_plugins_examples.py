@@ -1,6 +1,5 @@
 """Unit tests for tokenpak/plugins/examples/passthrough.py — PassthroughPlugin."""
 
-
 from tokenpak.plugins.base import CompressorPlugin
 from tokenpak.plugins.examples.passthrough import PassthroughPlugin
 

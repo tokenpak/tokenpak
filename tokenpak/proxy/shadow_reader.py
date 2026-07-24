@@ -10,6 +10,8 @@ Allows observing requests WITHOUT executing them. Useful for:
 Shadow mode is PASSIVE: reads requests, logs observations, does NOT modify behavior.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -18,7 +20,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Optional, TypedDict
 
 # ---------------------------------------------------------------------------
 # Config
@@ -62,20 +64,20 @@ class ShadowObservation:
     # Request fields (if mode == "request")
     request_method: Optional[str] = None
     request_path: Optional[str] = None
-    request_headers: Optional[Dict[str, str]] = None
+    request_headers: Optional[dict[str, str]] = None
     request_body_size: Optional[int] = None
     request_model: Optional[str] = None
 
     # Response fields (if mode == "response")
     response_status: Optional[int] = None
-    response_headers: Optional[Dict[str, str]] = None
+    response_headers: Optional[dict[str, str]] = None
     response_body_size: Optional[int] = None
     response_latency_ms: Optional[float] = None
 
     # Metric fields (if mode == "metric")
     metric_name: Optional[str] = None
     metric_value: Optional[float] = None
-    metric_tags: Optional[Dict[str, str]] = field(default_factory=dict)
+    metric_tags: Optional[dict[str, str]] = field(default_factory=dict)
 
     # Analysis fields (populated after observation)
     compression_applicable: Optional[bool] = None
@@ -89,10 +91,17 @@ class ShadowObservation:
 # ---------------------------------------------------------------------------
 
 
+class _ShadowStats(TypedDict):
+    observations_logged: int
+    bytes_written: int
+    flush_count: int
+    last_flush: str | None
+
+
 class ShadowReader:
     """Passive request observer for Phase 3 testing."""
 
-    def __init__(self, shadow_log_path: Path = None):
+    def __init__(self, shadow_log_path: Path | None = None) -> None:
         self.enabled = SHADOW_MODE
         self.log_path = shadow_log_path or SHADOW_LOG_PATH
         self.log_requests = SHADOW_LOG_REQUESTS
@@ -101,13 +110,13 @@ class ShadowReader:
         self.batch_size = SHADOW_BATCH_SIZE
 
         # In-memory buffer (flushed periodically)
-        self._buffer: List[ShadowObservation] = []
+        self._buffer: list[ShadowObservation] = []
         self._buffer_lock = threading.Lock()
-        self._flush_thread = None
+        self._flush_thread: threading.Thread | None = None
         self._stop_flush = threading.Event()
 
         # Statistics
-        self._stats = {
+        self._stats: _ShadowStats = {
             "observations_logged": 0,
             "bytes_written": 0,
             "flush_count": 0,
@@ -124,22 +133,23 @@ class ShadowReader:
         if self.enabled:
             self._start_flush_thread()
 
-    def _start_flush_thread(self):
+    def _start_flush_thread(self) -> None:
         """Start background thread to flush observations every 5 seconds."""
 
-        def flush_loop():
+        def flush_loop() -> None:
             while not self._stop_flush.is_set():
                 time.sleep(5)  # Flush every 5 sec
                 self.flush()
 
-        self._flush_thread = threading.Thread(target=flush_loop, daemon=True)
-        self._flush_thread.start()
+        flush_thread = threading.Thread(target=flush_loop, daemon=True)
+        self._flush_thread = flush_thread
+        flush_thread.start()
 
     def observe_request(
         self,
         method: str,
         path: str,
-        headers: Dict[str, str],
+        headers: dict[str, str],
         body_size: int,
         model: Optional[str] = None,
     ) -> str:
@@ -166,10 +176,10 @@ class ShadowReader:
         self,
         obs_id: str,
         status: int,
-        headers: Dict[str, str],
+        headers: dict[str, str],
         body_size: int,
         latency_ms: float,
-    ):
+    ) -> None:
         """Log outgoing response observation."""
         if not self.enabled or not self.log_responses:
             return
@@ -190,8 +200,8 @@ class ShadowReader:
         self,
         metric_name: str,
         metric_value: float,
-        tags: Optional[Dict[str, str]] = None,
-    ):
+        tags: Optional[dict[str, str]] = None,
+    ) -> None:
         """Log a metric observation."""
         if not self.enabled or not self.log_metrics:
             return
@@ -214,7 +224,7 @@ class ShadowReader:
         gain_tokens: Optional[int] = None,
         cost_change: Optional[float] = None,
         safety_concern: Optional[str] = None,
-    ):
+    ) -> None:
         """Annotate observation with post-processing analysis."""
         if not self.enabled:
             return
@@ -228,14 +238,14 @@ class ShadowReader:
                     obs.safety_concern = safety_concern
                     break
 
-    def _add_to_buffer(self, obs: ShadowObservation):
+    def _add_to_buffer(self, obs: ShadowObservation) -> None:
         """Add observation to buffer. Flush if batch size reached."""
         with self._buffer_lock:
             self._buffer.append(obs)
             if len(self._buffer) >= self.batch_size:
                 self._flush_locked()
 
-    def _flush_locked(self):
+    def _flush_locked(self) -> None:
         """Flush buffer to disk. MUST be called with _buffer_lock held."""
         if not self._buffer:
             return
@@ -253,12 +263,12 @@ class ShadowReader:
         except Exception as e:
             logger.error(f"Shadow flush error: {e}")
 
-    def flush(self):
+    def flush(self) -> None:
         """Explicit flush (thread-safe)."""
         with self._buffer_lock:
             self._flush_locked()
 
-    def _write_observations(self, observations: List[ShadowObservation]):
+    def _write_observations(self, observations: list[ShadowObservation]) -> None:
         """Write observations to JSONL file (non-blocking)."""
         try:
             with open(self.log_path, "a") as f:
@@ -278,12 +288,12 @@ class ShadowReader:
         except Exception as e:
             logger.error(f"Shadow write error: {e}")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, object]:
         """Return shadow reader statistics."""
         with self._stats_lock:
             return dict(self._stats)
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the flush thread cleanly."""
         if self.enabled and self._flush_thread:
             self.flush()  # Final flush
@@ -377,7 +387,7 @@ if __name__ == "__main__":
                     break
                 record = json.loads(line)
                 print(
-                    f"  [{i+1}] {record['mode']:8} id={record['observation_id']} ts={record['timestamp']}"
+                    f"  [{i + 1}] {record['mode']:8} id={record['observation_id']} ts={record['timestamp']}"
                 )
 
 # ---------------------------------------------------------------------------
@@ -386,29 +396,81 @@ if __name__ == "__main__":
 import re as _re
 from dataclasses import dataclass as _dataclass
 from dataclasses import field as _field
-from typing import List as _List
 
 MIN_COVERAGE = 0.5
 MAX_COVERAGE = 1.0
 MIN_TERM_RETENTION = 0.5
 
-_STOP_WORDS = frozenset({
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "shall", "can", "this", "that", "these",
-    "those", "i", "he", "she", "we", "they", "it", "as", "by", "from",
-    "up", "out", "if", "then", "than", "so", "not", "no", "go", "over",
-    "about",
-})
+_STOP_WORDS = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "of",
+        "with",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "this",
+        "that",
+        "these",
+        "those",
+        "i",
+        "he",
+        "she",
+        "we",
+        "they",
+        "it",
+        "as",
+        "by",
+        "from",
+        "up",
+        "out",
+        "if",
+        "then",
+        "than",
+        "so",
+        "not",
+        "no",
+        "go",
+        "over",
+        "about",
+    }
+)
 
 
-def top_terms(text: str, n: int = 10) -> _List[str]:
+def top_terms(text: str, n: int = 10) -> list[str]:
     """Return the *n* most frequent non-stopword tokens (≥3 chars) from *text*."""
     if not text.strip():
         return []
     tokens = _re.findall(r"[a-zA-Z]+", text.lower())
-    freq: dict = {}
+    freq: dict[str, int] = {}
     for tok in tokens:
         if len(tok) >= 3 and tok not in _STOP_WORDS:
             freq[tok] = freq.get(tok, 0) + 1
@@ -419,8 +481,9 @@ def top_terms(text: str, n: int = 10) -> _List[str]:
 @_dataclass
 class ValidationResult:
     """Result of a shadow validation run."""
-    original_terms: _List[str] = _field(default_factory=list)
-    compressed_terms: _List[str] = _field(default_factory=list)
+
+    original_terms: list[str] = _field(default_factory=list)
+    compressed_terms: list[str] = _field(default_factory=list)
     coverage: float = 0.0
     term_retention: float = 0.0
     passed: bool = False
@@ -447,7 +510,7 @@ def validate(original: str, compressed: str, n_terms: int = 10) -> ValidationRes
     )
 
 
-_validation_stats: dict = {"total": 0, "passed": 0, "failed": 0}
+_validation_stats: dict[str, int] = {"total": 0, "passed": 0, "failed": 0}
 
 
 def log_validation_result(result: ValidationResult) -> None:
@@ -458,7 +521,7 @@ def log_validation_result(result: ValidationResult) -> None:
         _validation_stats["failed"] += 1
 
 
-def get_validation_stats() -> dict:
+def get_validation_stats() -> dict[str, int]:
     return dict(_validation_stats)
 
 

@@ -1,14 +1,16 @@
 """tokenpak.sdk.generic — Generic fallback adapter."""
+
 from __future__ import annotations
 
 import json
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 try:
     import requests as _requests
+
     _REQUESTS_AVAILABLE = True
 except ImportError:
     _REQUESTS_AVAILABLE = False
@@ -69,9 +71,7 @@ class GenericAdapter(TokenPakAdapter):
                 f"GenericAdapter.send: request timed out after {self.timeout_s}s."
             ) from exc
         except _requests.exceptions.RequestException as exc:
-            raise TokenPakAdapterError(
-                f"GenericAdapter.send: HTTP transport error: {exc}"
-            ) from exc
+            raise TokenPakAdapterError(f"GenericAdapter.send: HTTP transport error: {exc}") from exc
 
         elapsed_ms = (time.monotonic() - t0) * 1000
         self.logger.info("send complete status=%d elapsed_ms=%.1f", resp.status_code, elapsed_ms)
@@ -94,7 +94,7 @@ class GenericAdapter(TokenPakAdapter):
             )
 
         try:
-            return resp.json()
+            return cast(dict[str, Any], resp.json())
         except Exception as exc:
             raise TokenPakAdapterError(
                 "GenericAdapter.send: response body is not valid JSON."

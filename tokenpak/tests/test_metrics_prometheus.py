@@ -209,6 +209,7 @@ def tmp_db():
     conn.close()
     yield db_path
     import os
+
     os.unlink(db_path)
 
 
@@ -310,9 +311,9 @@ class TestQueryLatencyHistogram:
         assert bucket_dict[0.05] == 0
 
     def test_multiple_latencies(self, monitor_with_db, tmp_db):
-        _insert_request(tmp_db, "m", 200, 50.0, 10, 5, 10)   # 0.05s
+        _insert_request(tmp_db, "m", 200, 50.0, 10, 5, 10)  # 0.05s
         _insert_request(tmp_db, "m", 200, 500.0, 10, 5, 10)  # 0.5s
-        _insert_request(tmp_db, "m", 200, 3000.0, 10, 5, 10) # 3.0s
+        _insert_request(tmp_db, "m", 200, 3000.0, 10, 5, 10)  # 3.0s
         reg = PrometheusRegistry({}, monitor_with_db)
         buckets, count, total = reg._query_latency_histogram()
         assert count == 3

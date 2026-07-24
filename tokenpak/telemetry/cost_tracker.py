@@ -13,7 +13,7 @@ import sqlite3
 import threading
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, cast
 
 
 def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
@@ -64,8 +64,16 @@ class CostTracker:
         summary = tracker.get_summary("day")
     """
 
-    def __init__(self, db_path: str = ":memory:"):
-        self._db_path = str(Path(db_path).expanduser()) if db_path != ":memory:" else db_path
+    def __init__(self, db_path: str | Path | None = ":memory:"):
+        if db_path is None:
+            from tokenpak.core.paths import get_db_path
+
+            resolved_path = get_db_path("cost.db")
+            self._db_path = str(resolved_path)
+        elif str(db_path) == ":memory:":
+            self._db_path = ":memory:"
+        else:
+            self._db_path = str(Path(db_path).expanduser())
         if self._db_path != ":memory:":
             Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
@@ -80,7 +88,7 @@ class CostTracker:
         if not hasattr(self._local, "conn") or self._local.conn is None:
             self._local.conn = sqlite3.connect(self._db_path, check_same_thread=False)
             self._local.conn.row_factory = sqlite3.Row
-        return self._local.conn
+        return cast(sqlite3.Connection, self._local.conn)
 
     def _init_db(self) -> None:
         conn = self._conn()
@@ -88,7 +96,7 @@ class CostTracker:
         conn.commit()
 
     @staticmethod
-    def _period_clause(period: str) -> tuple[str, list]:
+    def _period_clause(period: str) -> tuple[str, list[str]]:
         """Return (WHERE clause fragment, params) for the given period."""
         today = date.today()
         if period == "day":
@@ -150,7 +158,7 @@ class CostTracker:
     # Read
     # -----------------------------------------------------------------------
 
-    def get_summary(self, period: str = "day") -> dict:
+    def get_summary(self, period: str = "day") -> dict[str, Any]:
         """Return summary dict for the given period.
 
         Returns:
@@ -189,7 +197,7 @@ class CostTracker:
             "total_cost_usd": round(float(row["total_cost_usd"]), 6),
         }
 
-    def get_by_model(self, period: str = "day") -> list[dict]:
+    def get_by_model(self, period: str = "day") -> list[dict[str, Any]]:
         """Return per-model breakdown for the given period.
 
         Returns list of dicts, each with:
@@ -241,7 +249,7 @@ _tracker: Optional[CostTracker] = None
 _tracker_lock = threading.Lock()
 
 
-def get_cost_tracker(db_path: str = "~/.tokenpak/cost.db") -> CostTracker:
+def get_cost_tracker(db_path: str | Path | None = "~/.tokenpak/cost.db") -> CostTracker:
     """Return the process-level singleton CostTracker."""
     global _tracker
     if _tracker is None:

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class AuditGenerator:
     """Generate cost breakdowns by model and feature."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     def model_breakdown(

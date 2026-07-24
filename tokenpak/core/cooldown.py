@@ -31,7 +31,10 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import cast
+
+CooldownEntry = dict[str, object]
+CooldownMap = dict[str, CooldownEntry]
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +60,7 @@ class CooldownManager:
         self,
         cooldowns_file: Path = COOLDOWNS_FILE,
         auth_profiles_file: Path = AUTH_PROFILES_FILE,
-    ):
+    ) -> None:
         self.cooldowns_file = cooldowns_file
         self.auth_profiles_file = auth_profiles_file
 
@@ -65,27 +68,44 @@ class CooldownManager:
     # Internal helpers                                                      #
     # ------------------------------------------------------------------ #
 
-    def _load_cooldowns(self) -> Dict:
+    @staticmethod
+    def _decode_entries(raw: str) -> CooldownMap | None:
+        decoded: object = json.loads(raw)
+        if not isinstance(decoded, dict):
+            return None
+        entries: CooldownMap = {}
+        for key, value in decoded.items():
+            if isinstance(key, str) and isinstance(value, dict):
+                entries[key] = cast(CooldownEntry, value)
+        return entries
+
+    @staticmethod
+    def _numeric(value: object, default: float = 0.0) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return default
+        return float(value)
+
+    def _load_cooldowns(self) -> CooldownMap:
         if not self.cooldowns_file.exists():
             return {}
         try:
-            return json.loads(self.cooldowns_file.read_text())
+            return self._decode_entries(self.cooldowns_file.read_text()) or {}
         except (json.JSONDecodeError, OSError):
             return {}
 
-    def _save_cooldowns(self, data: Dict) -> None:
+    def _save_cooldowns(self, data: CooldownMap) -> None:
         self.cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
         self.cooldowns_file.write_text(json.dumps(data, indent=2))
 
-    def _load_auth_profiles(self) -> Optional[Dict]:
+    def _load_auth_profiles(self) -> CooldownMap | None:
         if not self.auth_profiles_file.exists():
             return None
         try:
-            return json.loads(self.auth_profiles_file.read_text())
+            return self._decode_entries(self.auth_profiles_file.read_text())
         except (json.JSONDecodeError, OSError):
             return None
 
-    def _save_auth_profiles(self, data: Dict) -> None:
+    def _save_auth_profiles(self, data: CooldownMap) -> None:
         self.auth_profiles_file.parent.mkdir(parents=True, exist_ok=True)
         self.auth_profiles_file.write_text(json.dumps(data, indent=2))
 
@@ -93,7 +113,7 @@ class CooldownManager:
     # Public API                                                            #
     # ------------------------------------------------------------------ #
 
-    def clear_expired(self) -> List[str]:
+    def clear_expired(self) -> list[str]:
         """Clear cooldowns where cooldownUntil < now (and errorCount is low).
 
         Returns list of cleared profile keys.
@@ -103,12 +123,12 @@ class CooldownManager:
             return []
 
         now = time.time()
-        cleared: List[str] = []
-        updated: Dict = {}
+        cleared: list[str] = []
+        updated: CooldownMap = {}
 
         for key, entry in data.items():
-            cooldown_until = entry.get("cooldownUntil", 0)
-            error_count = entry.get("errorCount", 0)
+            cooldown_until = self._numeric(entry.get("cooldownUntil"))
+            error_count = self._numeric(entry.get("errorCount"))
 
             if not cooldown_until:
                 updated[key] = entry
@@ -125,7 +145,7 @@ class CooldownManager:
 
         return cleared
 
-    def clear_expired_from_profiles(self) -> List[str]:
+    def clear_expired_from_profiles(self) -> list[str]:
         """Clear cooldownUntil fields from auth-profiles.json when expired.
 
         Returns list of cleared profile names.
@@ -135,14 +155,14 @@ class CooldownManager:
             return []
 
         now = time.time()
-        cleared: List[str] = []
+        cleared: list[str] = []
         changed = False
 
         for profile_name, profile in profiles.items():
-            cooldown_until = profile.get("cooldownUntil", 0)
+            cooldown_until = self._numeric(profile.get("cooldownUntil"))
             if not cooldown_until:
                 continue
-            error_count = profile.get("errorCount", 0)
+            error_count = self._numeric(profile.get("errorCount"))
             if cooldown_until < now and error_count < HIGH_ERROR_THRESHOLD:
                 profile.pop("cooldownUntil", None)
                 profile.pop("usageStats", None)
@@ -157,21 +177,21 @@ class CooldownManager:
 
         return cleared
 
-    def get_active_cooldowns(self) -> Dict[str, float]:
+    def get_active_cooldowns(self) -> dict[str, float]:
         """Return map of profile key → seconds remaining for active cooldowns."""
         now = time.time()
-        active: Dict[str, float] = {}
+        active: dict[str, float] = {}
 
         data = self._load_cooldowns()
         for key, entry in data.items():
-            cooldown_until = entry.get("cooldownUntil", 0)
+            cooldown_until = self._numeric(entry.get("cooldownUntil"))
             if cooldown_until and cooldown_until > now:
                 active[key] = cooldown_until - now
 
         profiles = self._load_auth_profiles()
         if isinstance(profiles, dict):
             for name, profile in profiles.items():
-                cooldown_until = profile.get("cooldownUntil", 0)
+                cooldown_until = self._numeric(profile.get("cooldownUntil"))
                 if cooldown_until and cooldown_until > now:
                     active[f"profile:{name}"] = cooldown_until - now
 
@@ -204,13 +224,13 @@ class BackgroundCooldownClearer:
     def __init__(
         self,
         interval: int = 60,
-        manager: Optional[CooldownManager] = None,
+        manager: CooldownManager | None = None,
         enabled: bool = True,
-    ):
+    ) -> None:
         self.interval = interval
         self.manager = manager or CooldownManager()
         self.enabled = enabled
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
 
     async def _loop(self) -> None:
@@ -246,5 +266,6 @@ class BackgroundCooldownClearer:
                 self._task.cancel()
             self._task = None
         logger.info("[tokenpak] BackgroundCooldownClearer stopped")
+
 
 __all__ = ["CooldownManager", "BackgroundCooldownClearer", "HIGH_ERROR_THRESHOLD"]

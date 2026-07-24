@@ -94,9 +94,7 @@ class _FakeTrace:
 
 def test_convert_miss_trace():
     trace = _FakeTrace(hit=False, miss_reason="route_not_cacheable", route="code_edit")
-    record = cache_stage_trace_to_miss_record(
-        "req-10", trace, platform="openclaw", model="gpt-5.5"
-    )
+    record = cache_stage_trace_to_miss_record("req-10", trace, platform="openclaw", model="gpt-5.5")
     assert record is not None
     assert record.reason == "route_not_cacheable"
     assert record.route_class == "code_edit"
@@ -156,8 +154,12 @@ def test_db_insert_and_query_cache_miss():
     # TelemetryDB(":memory:") whose object id() happens to collide with this one.
     with TelemetryDB(":memory:") as db:
         records = [
-            CacheMissRecord("req-1", reason="route_not_cacheable", route_class="code_edit").to_row(),
-            CacheMissRecord("req-2", reason="route_not_cacheable", route_class="code_edit").to_row(),
+            CacheMissRecord(
+                "req-1", reason="route_not_cacheable", route_class="code_edit"
+            ).to_row(),
+            CacheMissRecord(
+                "req-2", reason="route_not_cacheable", route_class="code_edit"
+            ).to_row(),
             CacheMissRecord("req-3", reason="flag_off").to_row(),
         ]
         for row in records:

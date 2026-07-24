@@ -32,9 +32,7 @@ sys.modules.setdefault("tokenpak.vault.ingest.api", MagicMock())
 _fake_capsules = types.ModuleType("tokenpak.companion.memory.session_capsules")
 _fake_capsules.capsule_retrieval_score = lambda score, _capsule: score
 sys.modules.setdefault("tokenpak.companion.memory", types.ModuleType("tokenpak.companion.memory"))
-sys.modules.setdefault(
-    "tokenpak.companion.memory.session_capsules", _fake_capsules
-)
+sys.modules.setdefault("tokenpak.companion.memory.session_capsules", _fake_capsules)
 
 from tokenpak.vault.progressive_disclosure import (  # noqa: E402
     assess_intent,
@@ -99,6 +97,7 @@ Seventh line still no headings.
 """
 
 _TINY_DOC = "# Single\nOnly one line of body."
+
 
 def _token_counter(t):
     return max(1, len(t) // 4)  # simple proxy
@@ -400,8 +399,7 @@ class TestInjectIntegration:
             )
 
         assert tokens_on < tokens_off, (
-            f"Expected progressive disclosure to reduce tokens "
-            f"(on={tokens_on}, off={tokens_off})"
+            f"Expected progressive disclosure to reduce tokens (on={tokens_on}, off={tokens_off})"
         )
 
     def test_injection_full_when_precision_intent(self):

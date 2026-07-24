@@ -29,9 +29,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TELEMETRY_DIR = Path(os.path.expanduser("~/.tokenpak/telemetry"))
 
-TELEMETRY_DIR: Path = Path(
-    os.environ.get("TOKENPAK_TELEMETRY_DIR", str(_DEFAULT_TELEMETRY_DIR))
-)
+TELEMETRY_DIR: Path = Path(os.environ.get("TOKENPAK_TELEMETRY_DIR", str(_DEFAULT_TELEMETRY_DIR)))
 
 # "local" → write JSONL locally (default).
 # "remote" → skip local write (caller relies on reporter.py for remote sync).
@@ -60,7 +58,7 @@ def _cleanup_old_files(telemetry_dir: Path, retention_days: int = RETENTION_DAYS
     try:
         cutoff = datetime.now(timezone.utc).toordinal() - retention_days
         for p in telemetry_dir.glob(f"{FILE_PREFIX}*{FILE_SUFFIX}"):
-            stem = p.stem[len(FILE_PREFIX):]  # "YYYY-MM-DD"
+            stem = p.stem[len(FILE_PREFIX) :]  # "YYYY-MM-DD"
             try:
                 file_date = datetime.strptime(stem, "%Y-%m-%d").toordinal()
             except ValueError:

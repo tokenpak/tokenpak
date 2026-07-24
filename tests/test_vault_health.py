@@ -4,7 +4,6 @@ These tests use the actual VaultHealth interface which stores index at
 vault_dir/.tokenpak/index.json and blocks at vault_dir/.tokenpak/blocks/.
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.vault_health", reason="module not available in current build")
@@ -66,9 +65,13 @@ class TestVaultHealth:
         vault_root = temp_vault["root"]
         index_path = temp_vault["index_path"]
 
-        self._write_index(index_path, {
-            f"block_{i}": {"block_id": f"block_{i}", "source_path": f"notes/note_{i}.md"} for i in range(5)
-        })
+        self._write_index(
+            index_path,
+            {
+                f"block_{i}": {"block_id": f"block_{i}", "source_path": f"notes/note_{i}.md"}
+                for i in range(5)
+            },
+        )
 
         health = VaultHealth(str(vault_root))
         # Fresh index is within threshold — should NOT be stale
@@ -79,12 +82,17 @@ class TestVaultHealth:
         """Test detection of staleness when index mtime is very old."""
         import os
         import time
+
         vault_root = temp_vault["root"]
         index_path = temp_vault["index_path"]
 
-        self._write_index(index_path, {
-            f"block_{i}": {"block_id": f"block_{i}", "source_path": f"notes/note_{i}.md"} for i in range(5)
-        })
+        self._write_index(
+            index_path,
+            {
+                f"block_{i}": {"block_id": f"block_{i}", "source_path": f"notes/note_{i}.md"}
+                for i in range(5)
+            },
+        )
 
         # Age the file to 2 days old
         old_time = time.time() - (2 * 86400)
@@ -140,10 +148,18 @@ class TestVaultHealth:
         blocks = {}
         for i in range(10):
             bid = f"real_{i}"
-            blocks[bid] = {"block_id": bid, "source_path": f"notes/note_{i}.md", "content_hash": "old"}
+            blocks[bid] = {
+                "block_id": bid,
+                "source_path": f"notes/note_{i}.md",
+                "content_hash": "old",
+            }
         for i in range(10, 15):
             bid = f"ghost_{i}"
-            blocks[bid] = {"block_id": bid, "source_path": f"notes/note_{i}.md", "content_hash": "old"}
+            blocks[bid] = {
+                "block_id": bid,
+                "source_path": f"notes/note_{i}.md",
+                "content_hash": "old",
+            }
         self._write_index(index_path, blocks)
 
         health = VaultHealth(str(vault_root))
@@ -167,6 +183,7 @@ class TestVaultHealth:
     def test_missing_blocks_dir_still_checks(self, temp_vault):
         """Test that missing blocks directory doesn't crash health check."""
         import shutil
+
         vault_root = temp_vault["root"]
         index_path = temp_vault["index_path"]
 
@@ -179,7 +196,12 @@ class TestVaultHealth:
         health = VaultHealth(str(vault_root))
         # Should not raise, just report stale or ok
         result = health.check()
-        assert result.status in (IndexStatus.OK, IndexStatus.STALE, IndexStatus.MISSING, IndexStatus.CORRUPT)
+        assert result.status in (
+            IndexStatus.OK,
+            IndexStatus.STALE,
+            IndexStatus.MISSING,
+            IndexStatus.CORRUPT,
+        )
 
     @pytest.mark.quick
     def test_invalid_json_is_corrupt(self, temp_vault):

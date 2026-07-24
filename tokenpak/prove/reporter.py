@@ -9,6 +9,7 @@ or any number of arms (matrix mode).
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional
 
@@ -32,7 +33,7 @@ def format_matrix_report(
     w = 16  # column width for values
 
     lines.append("")
-    lines.append(f"  TokenPak Value Proof — \"{scenario_name}\"")
+    lines.append(f'  TokenPak Value Proof — "{scenario_name}"')
     lines.append("  " + "=" * 70)
 
     n_turns = max((len(a.turns) for a in arms), default=0)
@@ -67,16 +68,56 @@ def format_matrix_report(
     # ── Aggregate metrics ───────────────────────────────────
     baseline = arms[0]
 
-    lines.append(_metric_row("Input tokens", [a.total_input_tokens for a in arms],
-                              baseline.total_input_tokens, label_w, w, fmt="int"))
-    lines.append(_metric_row("Cache-read tokens", [a.total_cache_read_tokens for a in arms],
-                              None, label_w, w, fmt="int"))
-    lines.append(_metric_row("Output tokens", [a.total_output_tokens for a in arms],
-                              baseline.total_output_tokens, label_w, w, fmt="int"))
-    lines.append(_metric_row("Total cost", [a.total_cost_usd for a in arms],
-                              baseline.total_cost_usd, label_w, w, fmt="usd"))
-    lines.append(_metric_row("Total time", [a.total_latency_s for a in arms],
-                              baseline.total_latency_s, label_w, w, fmt="time"))
+    lines.append(
+        _metric_row(
+            "Input tokens",
+            [a.total_input_tokens for a in arms],
+            baseline.total_input_tokens,
+            label_w,
+            w,
+            fmt="int",
+        )
+    )
+    lines.append(
+        _metric_row(
+            "Cache-read tokens",
+            [a.total_cache_read_tokens for a in arms],
+            None,
+            label_w,
+            w,
+            fmt="int",
+        )
+    )
+    lines.append(
+        _metric_row(
+            "Output tokens",
+            [a.total_output_tokens for a in arms],
+            baseline.total_output_tokens,
+            label_w,
+            w,
+            fmt="int",
+        )
+    )
+    lines.append(
+        _metric_row(
+            "Total cost",
+            [a.total_cost_usd for a in arms],
+            baseline.total_cost_usd,
+            label_w,
+            w,
+            fmt="usd",
+        )
+    )
+    lines.append(
+        _metric_row(
+            "Total time",
+            [a.total_latency_s for a in arms],
+            baseline.total_latency_s,
+            label_w,
+            w,
+            fmt="time",
+        )
+    )
 
     lines.append("  " + "-" * (label_w + w * len(arms) + (w if len(arms) > 1 else 0)))
 
@@ -91,14 +132,18 @@ def format_matrix_report(
         lines.append(f"\n  Turn {t_idx + 1}: {label}")
 
         inputs = [t.input_tokens if t else 0 for t in turn_data]
-        lines.append(_metric_row("  Input", inputs, inputs[0] if inputs else 0, label_w, w, fmt="int"))
+        lines.append(
+            _metric_row("  Input", inputs, inputs[0] if inputs else 0, label_w, w, fmt="int")
+        )
 
         caches = [t.cache_read_tokens if t else 0 for t in turn_data]
         if any(c > 0 for c in caches):
             lines.append(_metric_row("  Cached", caches, None, label_w, w, fmt="int"))
 
         outputs = [t.output_tokens if t else 0 for t in turn_data]
-        lines.append(_metric_row("  Output", outputs, outputs[0] if outputs else 0, label_w, w, fmt="int"))
+        lines.append(
+            _metric_row("  Output", outputs, outputs[0] if outputs else 0, label_w, w, fmt="int")
+        )
 
         costs = [t.cost_usd if t else 0 for t in turn_data]
         lines.append(_metric_row("  Cost", costs, costs[0] if costs else 0, label_w, w, fmt="usd"))
@@ -113,8 +158,12 @@ def format_matrix_report(
             highlights.append(f"    {a.arm_name}: {a.total_cache_read_tokens:,} cache-read tokens")
         input_diff = baseline.total_input_tokens - a.total_input_tokens
         if input_diff > 0:
-            pct = input_diff / baseline.total_input_tokens * 100 if baseline.total_input_tokens else 0
-            highlights.append(f"    {a.arm_name}: {input_diff:,} fewer input tokens ({pct:.1f}% compression)")
+            pct = (
+                input_diff / baseline.total_input_tokens * 100 if baseline.total_input_tokens else 0
+            )
+            highlights.append(
+                f"    {a.arm_name}: {input_diff:,} fewer input tokens ({pct:.1f}% compression)"
+            )
         cost_diff = baseline.total_cost_usd - a.total_cost_usd
         if cost_diff > 0:
             pct = cost_diff / baseline.total_cost_usd * 100 if baseline.total_cost_usd else 0
@@ -135,8 +184,8 @@ def format_matrix_report(
 
 # ── Legacy 2-arm wrapper (backwards compat) ─────────────────────────
 
-def format_report(arm_a: ArmResult, arm_b: ArmResult,
-                  scenario_name: str, proof_id: str) -> str:
+
+def format_report(arm_a: ArmResult, arm_b: ArmResult, scenario_name: str, proof_id: str) -> str:
     return format_matrix_report([arm_a, arm_b], scenario_name, proof_id)
 
 
@@ -186,7 +235,7 @@ def save_result(
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _arm_to_dict(arm: ArmResult) -> dict:
+def _arm_to_dict(arm: ArmResult) -> dict[str, object]:
     return {
         "arm_name": arm.arm_name,
         "platform": arm.platform,
@@ -215,8 +264,14 @@ def _arm_to_dict(arm: ArmResult) -> dict:
     }
 
 
-def _metric_row(label: str, values: list, baseline_val, label_w: int,
-                col_w: int, fmt: str = "int") -> str:
+def _metric_row(
+    label: str,
+    values: Sequence[int | float],
+    baseline_val: int | float | None,
+    label_w: int,
+    col_w: int,
+    fmt: str = "int",
+) -> str:
     """Build one row of the comparison table."""
     row = f"  {label:>{label_w}s}"
 

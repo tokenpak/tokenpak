@@ -23,12 +23,12 @@ class Symbol:
     docstring: Optional[str] = None
     qualified_name: str = ""  # module.ClassName.method
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.qualified_name:
             module = Path(self.path).stem
             self.qualified_name = f"{module}.{self.name}"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "name": self.name,
             "kind": self.kind,
@@ -51,7 +51,7 @@ class SymbolTable:
         all_syms = table.all_symbols()
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._symbols: list[Symbol] = []
         self._by_name: dict[str, list[Symbol]] = {}
         self._parser = ASTParser()

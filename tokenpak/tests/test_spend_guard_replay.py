@@ -27,8 +27,12 @@ _BUILDERS = {
 }
 
 
-def _make_pending(store, body=b'original-body-bytes', headers=None,
-                  target_url="https://api.anthropic.com/v1/messages"):
+def _make_pending(
+    store,
+    body=b"original-body-bytes",
+    headers=None,
+    target_url="https://api.anthropic.com/v1/messages",
+):
     return store.store(
         session_id="sess-X",
         body=body,
@@ -47,8 +51,12 @@ class TestPositiveIntentReplay:
         original = b'{"model":"opus","messages":[{"role":"user","content":"original"}]}'
         p = _make_pending(store, body=original)
         out = resolve_pending(
-            store=store, pending=p, intent=Intent.POSITIVE, tip=None,
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            store=store,
+            pending=p,
+            intent=Intent.POSITIVE,
+            tip=None,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out.kind == "replay"
         assert out.body == original  # byte-identical
@@ -61,8 +69,12 @@ class TestPositiveIntentReplay:
         hdrs = {"X-Api-Key": "key123", "anthropic-version": "2023-06-01"}
         p = _make_pending(store, headers=hdrs)
         out = resolve_pending(
-            store=store, pending=p, intent=Intent.POSITIVE, tip=None,
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            store=store,
+            pending=p,
+            intent=Intent.POSITIVE,
+            tip=None,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out.headers == {"anthropic-version": "2023-06-01"}
         assert "X-Api-Key" not in out.headers
@@ -70,22 +82,34 @@ class TestPositiveIntentReplay:
     def test_replay_includes_target_url(self, store):
         p = _make_pending(store, target_url="https://example.com/v1/messages")
         out = resolve_pending(
-            store=store, pending=p, intent=Intent.POSITIVE, tip=None,
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            store=store,
+            pending=p,
+            intent=Intent.POSITIVE,
+            tip=None,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out.target_url == "https://example.com/v1/messages"
 
     def test_replay_consumes_pending(self, store):
         p = _make_pending(store)
         out1 = resolve_pending(
-            store=store, pending=p, intent=Intent.POSITIVE, tip=None,
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            store=store,
+            pending=p,
+            intent=Intent.POSITIVE,
+            tip=None,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out1.kind == "replay"
         # Second attempt — already consumed, falls back to pending_waiting block.
         out2 = resolve_pending(
-            store=store, pending=p, intent=Intent.POSITIVE, tip=None,
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            store=store,
+            pending=p,
+            intent=Intent.POSITIVE,
+            tip=None,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out2.kind == "block"
         assert out2.audit_event == "replay_race"
@@ -95,8 +119,12 @@ class TestNegativeIntentCancel:
     def test_cancel_returns_acknowledgment(self, store):
         p = _make_pending(store)
         out = resolve_pending(
-            store=store, pending=p, intent=Intent.NEGATIVE, tip=None,
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            store=store,
+            pending=p,
+            intent=Intent.NEGATIVE,
+            tip=None,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out.kind == "cancel"
         assert out.http_status == 200
@@ -106,8 +134,12 @@ class TestNegativeIntentCancel:
     def test_cancel_marks_discarded(self, store):
         p = _make_pending(store)
         resolve_pending(
-            store=store, pending=p, intent=Intent.NEGATIVE, tip=None,
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            store=store,
+            pending=p,
+            intent=Intent.NEGATIVE,
+            tip=None,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert store.get_by_session("sess-X") is None
 
@@ -116,8 +148,12 @@ class TestAmbiguousReprompt:
     def test_ambiguous_keeps_pending(self, store):
         p = _make_pending(store)
         out = resolve_pending(
-            store=store, pending=p, intent=Intent.AMBIGUOUS, tip=None,
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            store=store,
+            pending=p,
+            intent=Intent.AMBIGUOUS,
+            tip=None,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out.kind == "reprompt"
         assert out.http_status == 402
@@ -129,9 +165,12 @@ class TestTIPAuthorize:
     def test_tip_allow_once_replays_even_on_ambiguous(self, store):
         p = _make_pending(store)
         out = resolve_pending(
-            store=store, pending=p, intent=Intent.AMBIGUOUS,
+            store=store,
+            pending=p,
+            intent=Intent.AMBIGUOUS,
             tip=TIPDirective(allow_scope="once", max_cost_usd=20.0),
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out.kind == "replay"
 
@@ -140,17 +179,23 @@ class TestTIPAuthorize:
         # intent wins — explicit cancel beats explicit allow.
         p = _make_pending(store)
         out = resolve_pending(
-            store=store, pending=p, intent=Intent.NEGATIVE,
+            store=store,
+            pending=p,
+            intent=Intent.NEGATIVE,
             tip=TIPDirective(allow_scope="once"),
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out.kind == "cancel"
 
     def test_tip_bypass_replays(self, store):
         p = _make_pending(store)
         out = resolve_pending(
-            store=store, pending=p, intent=Intent.AMBIGUOUS,
+            store=store,
+            pending=p,
+            intent=Intent.AMBIGUOUS,
             tip=TIPDirective(bypass=True),
-            cfg=SpendGuardConfig(), builders=_BUILDERS,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
         )
         assert out.kind == "replay"

@@ -21,6 +21,7 @@ from tokenpak.proxy.credential_passthrough import CredentialPassthrough
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def cp() -> CredentialPassthrough:
     """Default CredentialPassthrough (require_auth=True)."""
@@ -36,6 +37,7 @@ def cp_noauth() -> CredentialPassthrough:
 # ---------------------------------------------------------------------------
 # validate_auth — valid cases
 # ---------------------------------------------------------------------------
+
 
 class TestValidateAuthValid:
     def test_bearer_token_passes(self, cp):
@@ -72,6 +74,7 @@ class TestValidateAuthValid:
 # ---------------------------------------------------------------------------
 # validate_auth — missing / malformed cases
 # ---------------------------------------------------------------------------
+
 
 class TestValidateAuthInvalid:
     def test_missing_auth_returns_false(self, cp):
@@ -122,9 +125,12 @@ class TestValidateAuthInvalid:
 # build_forward_headers — per-provider
 # ---------------------------------------------------------------------------
 
+
 class TestBuildForwardHeadersAnthropic:
     def test_auth_forwarded_as_x_api_key(self, cp):
-        hdrs = cp.build_forward_headers({"Authorization": "Bearer sk-ant-abc123"}, provider="anthropic")
+        hdrs = cp.build_forward_headers(
+            {"Authorization": "Bearer sk-ant-abc123"}, provider="anthropic"
+        )
         assert "x-api-key" in hdrs
         assert "sk-ant-abc123" in hdrs["x-api-key"]
 
@@ -133,26 +139,34 @@ class TestBuildForwardHeadersAnthropic:
         assert hdrs.get("x-api-key") == "sk-ant-abc123"
 
     def test_anthropic_version_forwarded(self, cp):
-        hdrs = cp.build_forward_headers({
-            "x-api-key": "sk-ant-abc123",
-            "anthropic-version": "2023-06-01",
-        }, provider="anthropic")
+        hdrs = cp.build_forward_headers(
+            {
+                "x-api-key": "sk-ant-abc123",
+                "anthropic-version": "2023-06-01",
+            },
+            provider="anthropic",
+        )
         assert hdrs.get("anthropic-version") == "2023-06-01"
 
     def test_hop_by_hop_stripped(self, cp):
-        hdrs = cp.build_forward_headers({
-            "x-api-key": "sk-ant-abc123",
-            "Connection": "keep-alive",
-            "Host": "localhost",
-            "Content-Length": "0",
-        }, provider="anthropic")
+        hdrs = cp.build_forward_headers(
+            {
+                "x-api-key": "sk-ant-abc123",
+                "Connection": "keep-alive",
+                "Host": "localhost",
+                "Content-Length": "0",
+            },
+            provider="anthropic",
+        )
         for h in ("Connection", "Host", "Content-Length"):
             assert h not in hdrs
 
 
 class TestBuildForwardHeadersOpenAI:
     def test_auth_forwarded_as_authorization(self, cp):
-        hdrs = cp.build_forward_headers({"Authorization": "Bearer sk-openai-abc"}, provider="openai")
+        hdrs = cp.build_forward_headers(
+            {"Authorization": "Bearer sk-openai-abc"}, provider="openai"
+        )
         assert "Authorization" in hdrs
         assert "sk-openai-abc" in hdrs["Authorization"]
 
@@ -162,18 +176,23 @@ class TestBuildForwardHeadersOpenAI:
         assert "Bearer" in hdrs["Authorization"]
 
     def test_hop_by_hop_stripped(self, cp):
-        hdrs = cp.build_forward_headers({
-            "Authorization": "Bearer sk-openai-abc",
-            "Transfer-Encoding": "chunked",
-            "Keep-Alive": "timeout=5",
-        }, provider="openai")
+        hdrs = cp.build_forward_headers(
+            {
+                "Authorization": "Bearer sk-openai-abc",
+                "Transfer-Encoding": "chunked",
+                "Keep-Alive": "timeout=5",
+            },
+            provider="openai",
+        )
         for h in ("Transfer-Encoding", "Keep-Alive"):
             assert h not in hdrs
 
 
 class TestBuildForwardHeadersGoogle:
     def test_auth_forwarded_as_authorization(self, cp):
-        hdrs = cp.build_forward_headers({"Authorization": "Bearer AIzaSy-abc123"}, provider="google")
+        hdrs = cp.build_forward_headers(
+            {"Authorization": "Bearer AIzaSy-abc123"}, provider="google"
+        )
         assert "Authorization" in hdrs
         assert "AIzaSy-abc123" in hdrs["Authorization"]
 
@@ -183,16 +202,20 @@ class TestBuildForwardHeadersGoogle:
         assert "Bearer" in hdrs["Authorization"]
 
     def test_content_type_forwarded(self, cp):
-        hdrs = cp.build_forward_headers({
-            "Authorization": "Bearer AIzaSy-abc",
-            "Content-Type": "application/json",
-        }, provider="google")
+        hdrs = cp.build_forward_headers(
+            {
+                "Authorization": "Bearer AIzaSy-abc",
+                "Content-Type": "application/json",
+            },
+            provider="google",
+        )
         assert hdrs.get("Content-Type") == "application/json"
 
 
 # ---------------------------------------------------------------------------
 # build_forward_headers — unknown provider raises ValueError
 # ---------------------------------------------------------------------------
+
 
 class TestBuildForwardHeadersUnknownProvider:
     def test_unknown_provider_raises(self, cp):
@@ -212,6 +235,7 @@ class TestBuildForwardHeadersUnknownProvider:
 # mask_for_logging
 # ---------------------------------------------------------------------------
 
+
 class TestMaskForLogging:
     def test_authorization_redacted(self, cp):
         masked = cp.mask_for_logging({"Authorization": "Bearer sk-secret"})
@@ -222,10 +246,12 @@ class TestMaskForLogging:
         assert masked.get("x-api-key") == "[REDACTED]"
 
     def test_safe_headers_pass_through(self, cp):
-        masked = cp.mask_for_logging({
-            "Content-Type": "application/json",
-            "Authorization": "Bearer sk-secret",
-        })
+        masked = cp.mask_for_logging(
+            {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer sk-secret",
+            }
+        )
         assert masked["Content-Type"] == "application/json"
         assert masked["Authorization"] == "[REDACTED]"
 
@@ -234,7 +260,9 @@ class TestMaskForLogging:
 # Import sanity
 # ---------------------------------------------------------------------------
 
+
 def test_import():
     """Acceptance criterion: import works clean with no side effects."""
     from tokenpak.proxy.credential_passthrough import CredentialPassthrough  # noqa: F401
+
     assert CredentialPassthrough is not None

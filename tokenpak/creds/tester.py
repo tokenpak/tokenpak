@@ -31,8 +31,8 @@ _TIMEOUT_SEC = 10
 class TestResult:
     ok: bool
     platform: str
-    detail: str                      # human-readable single-line summary
-    supported: bool = True           # False when the platform has no test impl
+    detail: str  # human-readable single-line summary
+    supported: bool = True  # False when the platform has no test impl
     http_status: Optional[int] = None
 
 

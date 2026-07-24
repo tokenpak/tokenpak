@@ -5,8 +5,13 @@ import pytest
 # Both numpy and trackedge are optional in the slim install. numpy must be
 # skipped FIRST — without it, the previous `import numpy as np` at module top
 # erroured collection on a slim install before the trackedge importorskip ran.
-np = pytest.importorskip("numpy", reason="numpy not installed (optional dep — install via tokenpak[intelligence])")
-trackedge = pytest.importorskip("trackedge.processing.feature_engine", reason="trackedge is a separate project not installed in slim test env")
+np = pytest.importorskip(
+    "numpy", reason="numpy not installed (optional dep — install via tokenpak[intelligence])"
+)
+trackedge = pytest.importorskip(
+    "trackedge.processing.feature_engine",
+    reason="trackedge is a separate project not installed in slim test env",
+)
 
 from trackedge.model.scoring_engine import (
     power_score,
@@ -27,11 +32,10 @@ from trackedge.processing.feature_engine import (
 
 
 class TestFeatures:
-
     def test_speed_score_improving(self):
         horse = {"speed_ratings": [90, 85, 80]}
         result = speed_score(horse)
-        assert result.score == pytest.approx(0.5*90 + 0.3*85 + 0.2*80, abs=0.1)
+        assert result.score == pytest.approx(0.5 * 90 + 0.3 * 85 + 0.2 * 80, abs=0.1)
         assert result.trend == "improving"
 
     def test_speed_score_declining(self):
@@ -155,7 +159,6 @@ class TestFeatures:
 
 
 class TestScoring:
-
     def test_power_score_range(self):
         features = {
             "speed_score": 75,
@@ -229,6 +232,7 @@ class TestScoring:
         race = {"horses": []}
         conf = race_confidence_score(race, {}, {})
         assert conf.level == "Low"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
@@ -308,12 +312,22 @@ class TestPaceMetricsAndSpeed:
             "horses": [
                 {
                     "past_performances": [
-                        {"speedfigur": 70, "distance": 8.0, "class_rating": 40000, "surface": "dirt"},
+                        {
+                            "speedfigur": 70,
+                            "distance": 8.0,
+                            "class_rating": 40000,
+                            "surface": "dirt",
+                        },
                     ]
                 },
                 {
                     "past_performances": [
-                        {"speedfigur": 72, "distance": 8.0, "class_rating": 40000, "surface": "dirt"},
+                        {
+                            "speedfigur": 72,
+                            "distance": 8.0,
+                            "class_rating": 40000,
+                            "surface": "dirt",
+                        },
                     ]
                 },
             ]
@@ -335,18 +349,44 @@ class TestPaceMetricsAndSpeed:
 
         race = {
             "horses": [
-                {"past_performances": [{"speedfigur": 100, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]},
-                {"past_performances": [{"speedfigur": 95, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]},
+                {
+                    "past_performances": [
+                        {
+                            "speedfigur": 100,
+                            "distance": 8.0,
+                            "class_rating": 50000,
+                            "surface": "dirt",
+                        }
+                    ]
+                },
+                {
+                    "past_performances": [
+                        {
+                            "speedfigur": 95,
+                            "distance": 8.0,
+                            "class_rating": 50000,
+                            "surface": "dirt",
+                        }
+                    ]
+                },
             ]
         }
 
         # Very slow horse
-        slow_horse = {"past_performances": [{"speedfigur": 30, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]}
+        slow_horse = {
+            "past_performances": [
+                {"speedfigur": 30, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}
+            ]
+        }
         slow_score = speed_score_field_relative(slow_horse, race)
         assert 20 <= slow_score <= 90
 
         # Very fast horse
-        fast_horse = {"past_performances": [{"speedfigur": 120, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]}
+        fast_horse = {
+            "past_performances": [
+                {"speedfigur": 120, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}
+            ]
+        }
         fast_score = speed_score_field_relative(fast_horse, race)
         assert 20 <= fast_score <= 90
 
@@ -366,4 +406,3 @@ class TestPaceMetricsAndSpeed:
 
         assert len(comparable) == 1
         assert comparable[0]["distance"] == 8.0
-

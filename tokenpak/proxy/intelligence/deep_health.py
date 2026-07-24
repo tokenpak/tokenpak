@@ -217,7 +217,7 @@ def check_memory() -> CheckResult:
     Warns above 85%, errors above 95%.
     """
     try:
-        import psutil  # type: ignore
+        import psutil
 
         vm = psutil.virtual_memory()
         percent = round(vm.percent, 1)
@@ -298,13 +298,13 @@ class DeepHealthChecker:
         index_path: Optional[str] = None,
         provider_timeout: float = 5.0,
         # Injectable overrides for testing
-        _check_anthropic=None,
-        _check_openai=None,
-        _check_database=None,
-        _check_index=None,
-        _check_memory=None,
-        _check_disk=None,
-    ):
+        _check_anthropic: Any = None,
+        _check_openai: Any = None,
+        _check_database: Any = None,
+        _check_index: Any = None,
+        _check_memory: Any = None,
+        _check_disk: Any = None,
+    ) -> None:
         self.db_path = db_path
         self.index_path = index_path
         self.provider_timeout = provider_timeout

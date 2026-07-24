@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Iterable
+from typing import Any, Iterable
 
 from .colors import Color, paint, supports_color
 from .modes import OutputMode
@@ -54,5 +54,5 @@ class OutputFormatter:
     def minimal_line(self, cells: Iterable[str]) -> str:
         return " | ".join(str(c) for c in cells)
 
-    def raw(self, payload: dict) -> str:
+    def raw(self, payload: dict[str, Any]) -> str:
         return json.dumps(payload, indent=2, sort_keys=True)

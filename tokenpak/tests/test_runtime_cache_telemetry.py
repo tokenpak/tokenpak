@@ -11,6 +11,7 @@ from tokenpak.core.runtime.cache_telemetry import CacheTelemetry, ProviderCacheS
 # ProviderCacheStats
 # ---------------------------------------------------------------------------
 
+
 class TestProviderCacheStats:
     def test_defaults(self):
         s = ProviderCacheStats()
@@ -61,6 +62,7 @@ class TestProviderCacheStats:
 # CacheTelemetry — record()
 # ---------------------------------------------------------------------------
 
+
 class TestCacheTelemetryRecord:
     def test_record_hit(self):
         t = CacheTelemetry()
@@ -106,10 +108,24 @@ class TestCacheTelemetryRecord:
 
     def test_record_savings_accumulated(self):
         t = CacheTelemetry()
-        t.record("anthropic", "block_explicit", cache_read_tokens=100, cache_creation_tokens=0, savings_usd=0.01)
-        t.record("anthropic", "block_explicit", cache_read_tokens=200, cache_creation_tokens=0, savings_usd=0.02)
+        t.record(
+            "anthropic",
+            "block_explicit",
+            cache_read_tokens=100,
+            cache_creation_tokens=0,
+            savings_usd=0.01,
+        )
+        t.record(
+            "anthropic",
+            "block_explicit",
+            cache_read_tokens=200,
+            cache_creation_tokens=0,
+            savings_usd=0.02,
+        )
         d = t.to_dict()
-        assert d["by_provider"]["anthropic"]["estimated_savings_usd"] == pytest.approx(0.03, rel=1e-4)
+        assert d["by_provider"]["anthropic"]["estimated_savings_usd"] == pytest.approx(
+            0.03, rel=1e-4
+        )
 
     def test_record_multiple_providers(self):
         t = CacheTelemetry()
@@ -125,6 +141,7 @@ class TestCacheTelemetryRecord:
 # CacheTelemetry — to_dict() totals
 # ---------------------------------------------------------------------------
 
+
 class TestCacheTelemetryToDict:
     def test_empty_totals(self):
         t = CacheTelemetry()
@@ -138,7 +155,13 @@ class TestCacheTelemetryToDict:
 
     def test_totals_aggregation(self):
         t = CacheTelemetry()
-        t.record("anthropic", "block_explicit", cache_read_tokens=100, cache_creation_tokens=0, savings_usd=0.01)
+        t.record(
+            "anthropic",
+            "block_explicit",
+            cache_read_tokens=100,
+            cache_creation_tokens=0,
+            savings_usd=0.01,
+        )
         t.record("openai", "prefix_auto", cache_read_tokens=0, cache_creation_tokens=50)
         d = t.to_dict()
         assert d["totals"]["hits"] == 1
@@ -164,6 +187,7 @@ class TestCacheTelemetryToDict:
 # CacheTelemetry — reset()
 # ---------------------------------------------------------------------------
 
+
 class TestCacheTelemetryReset:
     def test_reset_clears_all_data(self):
         t = CacheTelemetry()
@@ -186,6 +210,7 @@ class TestCacheTelemetryReset:
 # ---------------------------------------------------------------------------
 # CacheTelemetry — static signal extractors
 # ---------------------------------------------------------------------------
+
 
 class TestExtractAnthropicSignals:
     def test_normal_response(self):
@@ -348,6 +373,7 @@ class TestExtractSignalsFromHeaders:
 # Thread safety
 # ---------------------------------------------------------------------------
 
+
 class TestCacheTelemetryThreadSafety:
     def test_concurrent_records(self):
         t = CacheTelemetry()
@@ -356,7 +382,9 @@ class TestCacheTelemetryThreadSafety:
 
         def worker():
             for _ in range(records_per_thread):
-                t.record("anthropic", "block_explicit", cache_read_tokens=1, cache_creation_tokens=0)
+                t.record(
+                    "anthropic", "block_explicit", cache_read_tokens=1, cache_creation_tokens=0
+                )
 
         threads = [threading.Thread(target=worker) for _ in range(n_threads)]
         for th in threads:

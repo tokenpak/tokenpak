@@ -51,14 +51,16 @@ class TestReportGeneration:
         """Test data collection from mock proxy."""
         mock_proxy.side_effect = lambda path, port=None: {
             "/health": {
-                "stats": {"start_time": time.time() - 3600},
                 "status": "ok",
+                "uptime_seconds": 3600,
+                "requests_total": 100,
+                "requests_errors": 0,
             },
             "/stats": {
-                "requests": 100,
-                "errors": 0,
-                "input_tokens": 10000,
-                "saved_tokens": 2000,
+                "session": {
+                    "input_tokens": 10000,
+                    "saved_tokens": 2000,
+                }
             },
             "/cache-stats": {
                 "cache_hits": 80,
@@ -383,7 +385,9 @@ class TestCheckAlertsIntegration:
     @patch("tokenpak.alerts._get_proxy_health")
     @patch("tokenpak.alerts._get_proxy_cache_stats")
     @patch("tokenpak.alerts.save_state")
-    def test_check_alerts_all_clear(self, mock_save, mock_cache, mock_health, mock_stats, mock_config):
+    def test_check_alerts_all_clear(
+        self, mock_save, mock_cache, mock_health, mock_stats, mock_config
+    ):
         """Test when all alerts are clear."""
         mock_config.return_value = {
             "enabled": True,

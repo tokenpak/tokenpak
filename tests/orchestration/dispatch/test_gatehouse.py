@@ -185,9 +185,7 @@ def test_acceptance_criteria_presence_pass():
 
 
 def test_acceptance_criteria_presence_fail_when_empty():
-    res = Gatehouse().check_acceptance_criteria_presence(
-        _manifest(acceptance_criteria=[])
-    )
+    res = Gatehouse().check_acceptance_criteria_presence(_manifest(acceptance_criteria=[]))
     assert not res.passed
 
 
@@ -226,9 +224,7 @@ def test_station_output_schema_fail_injected_validator_rejects():
 
 def test_station_output_schema_ignores_failed_stations():
     # A failed station is not required to carry output.
-    res = Gatehouse().check_station_output_schema(
-        [_station_run(status="failed", payload=None)]
-    )
+    res = Gatehouse().check_station_output_schema([_station_run(status="failed", payload=None)])
     assert res.passed
 
 
@@ -251,9 +247,7 @@ def test_permission_constraints_fail_on_contradiction():
 
 
 def test_delivery_package_completeness_pass():
-    res = Gatehouse().check_delivery_package_completeness(
-        _route(), _full_delivery_fields()
-    )
+    res = Gatehouse().check_delivery_package_completeness(_route(), _full_delivery_fields())
     assert res.passed
 
 

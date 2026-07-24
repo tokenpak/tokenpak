@@ -46,7 +46,10 @@ class TestVendorPathPatterns:
     def test_venv_paths(self):
         """Python venv paths should be detected as vendor."""
         # Pattern requires leading slash before .venv or venv
-        for path in ["project/.venv/lib/python3.9/site-packages/pkg.py", "project/venv/bin/activate"]:
+        for path in [
+            "project/.venv/lib/python3.9/site-packages/pkg.py",
+            "project/venv/bin/activate",
+        ]:
             result = classify_vendor_minified(path)
             assert result.is_vendor is True
 

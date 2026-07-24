@@ -8,6 +8,7 @@ the handler, and asserts on the parsed JSON output.
 
 Integration (JSON-RPC protocol) tests are in test_mcp_server.py.
 """
+
 from __future__ import annotations
 
 import json
@@ -208,7 +209,13 @@ def test_estimate_tokens_large_text_chunks(tmp_path):
 def test_check_budget_returns_required_fields(tmp_path):
     state = _make_state(tmp_path)
     result = json.loads(_handle_check_budget(state, {}))
-    for key in ("session_cost_usd", "daily_cost_usd", "daily_budget_usd", "remaining_usd", "session_requests"):
+    for key in (
+        "session_cost_usd",
+        "daily_cost_usd",
+        "daily_budget_usd",
+        "remaining_usd",
+        "session_requests",
+    ):
         assert key in result, f"missing key: {key}"
 
 
@@ -229,7 +236,9 @@ def test_check_budget_reflects_daily_budget(tmp_path):
 def test_check_budget_daily_totals_from_tracker(tmp_path):
     """Budget handler reports proxy-owned daily totals."""
     state = _make_state(tmp_path)
-    state.budget_tracker.record(input_tokens=1000, output_tokens=500, model="sonnet", session_id="s1")
+    state.budget_tracker.record(
+        input_tokens=1000, output_tokens=500, model="sonnet", session_id="s1"
+    )
     result = json.loads(_handle_check_budget(state, {}))
     assert "daily_cost_usd" in result
     assert "_tokenpak_scope" in result
@@ -365,11 +374,15 @@ def test_journal_read_entry_type_filter(tmp_path):
     _handle_journal_write(state, {"content": "my note"})
 
     # Filter by type 'user'
-    result = json.loads(_handle_journal_read(state, {"session_id": "sess-filter", "entry_type": "user"}))
+    result = json.loads(
+        _handle_journal_read(state, {"session_id": "sess-filter", "entry_type": "user"})
+    )
     assert all(e["type"] == "user" for e in result["entries"])
 
     # Filter by type 'milestone' — should be empty
-    result2 = json.loads(_handle_journal_read(state, {"session_id": "sess-filter", "entry_type": "milestone"}))
+    result2 = json.loads(
+        _handle_journal_read(state, {"session_id": "sess-filter", "entry_type": "milestone"})
+    )
     assert result2["entries"] == []
 
 

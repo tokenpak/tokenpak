@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.ingest.cross_doc", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.ingest.cross_doc", reason="module not available in current build"
+)
 import pytest
 from tokenpak._internal.ingest.cross_doc import (
     AgreementMap,
@@ -172,8 +174,18 @@ class TestSchemaConverter:
     def test_to_dict_keys(self, converter):
         card = converter.convert(PAPER_A, source="x")
         d = card.to_dict()
-        for key in ("source", "title", "authors", "abstract", "key_findings",
-                    "methods", "metrics", "conclusions", "keywords", "metadata"):
+        for key in (
+            "source",
+            "title",
+            "authors",
+            "abstract",
+            "key_findings",
+            "methods",
+            "metrics",
+            "conclusions",
+            "keywords",
+            "metadata",
+        ):
             assert key in d
 
 
@@ -449,9 +461,7 @@ class TestEdgeCases:
         cards = analyzer.normalize(docs)
         report = analyzer.compare(cards, mode="conflict")
         # Duplicate docs should show high agreement, minimal conflicts
-        agreement_count = sum(
-            1 for am in report.agreement_maps if am.status == "agreement"
-        )
+        agreement_count = sum(1 for am in report.agreement_maps if am.status == "agreement")
         # They should agree on most structural fields
         assert agreement_count >= 3
 

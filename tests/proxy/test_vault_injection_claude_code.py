@@ -11,6 +11,7 @@ Tests for CCI-01: Vault context injection wired into Claude Code safe mode.
   (f) Injection budget is respected
   (g) Zero blocks above min_score → no-op (body unchanged)
 """
+
 from __future__ import annotations
 
 import json
@@ -42,6 +43,7 @@ except ModuleNotFoundError:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _body(system=None, messages=None, model="claude-sonnet-4-5", **extra) -> bytes:
     """Build a minimal Anthropic request body as bytes."""
@@ -84,6 +86,7 @@ def _cache_control_index(blocks: list) -> int:
 # (c) inject_with_cache_boundary unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestInjectWithCacheBoundary:
     """Test the core inject_with_cache_boundary helper directly."""
 
@@ -93,7 +96,9 @@ class TestInjectWithCacheBoundary:
             {"type": "text", "text": "You are a helpful assistant."},
         ]
         body = _body(system=original_system)
-        vault_text = "<retrieved_context>\n--- [AGENTS.md] ---\nsome vault content\n</retrieved_context>"
+        vault_text = (
+            "<retrieved_context>\n--- [AGENTS.md] ---\nsome vault content\n</retrieved_context>"
+        )
 
         new_body = inject_with_cache_boundary(body, vault_text)
         blocks = _system_blocks(new_body)
@@ -147,6 +152,7 @@ class TestInjectWithCacheBoundary:
 # (d) Cache hit rate preservation
 # ---------------------------------------------------------------------------
 
+
 class TestCacheHitRatePreservation:
     """(d) inject_with_cache_boundary must not change the stable prefix."""
 
@@ -185,6 +191,7 @@ class TestCacheHitRatePreservation:
 # ---------------------------------------------------------------------------
 # CCI-01 injection stage logic — tested via unit-level simulation
 # ---------------------------------------------------------------------------
+
 
 class _MockVaultIndex:
     """Minimal mock for VAULT_INDEX with controllable compile_injection output."""
@@ -236,8 +243,7 @@ def _run_cci01_stage(
         _cci01_eligible = (
             _cci01_profile.startswith("claude-code-")
             and _cci01_profile != "claude-code-sdk"
-            and os.environ.get("TOKENPAK_VAULT_INJECT", "true").lower()
-            not in ("0", "false", "no")
+            and os.environ.get("TOKENPAK_VAULT_INJECT", "true").lower() not in ("0", "false", "no")
             and prompt_builder_available
             and vault_index.available
         )
@@ -288,8 +294,8 @@ def _run_cci01_stage(
 # (a) Injection happens for claude-code-cli profile
 # ---------------------------------------------------------------------------
 
-class TestCCI01InjectionForCLIProfile:
 
+class TestCCI01InjectionForCLIProfile:
     def test_injection_happens_for_cli_profile(self):
         """(a) claude-code-cli profile → vault blocks injected."""
         body = _body(
@@ -319,8 +325,8 @@ class TestCCI01InjectionForCLIProfile:
 # (b) Injection does NOT happen for claude-code-sdk profile
 # ---------------------------------------------------------------------------
 
-class TestCCI01NoInjectionForSDKProfile:
 
+class TestCCI01NoInjectionForSDKProfile:
     def test_no_injection_for_sdk_profile(self):
         """(b) claude-code-sdk profile → no injection."""
         body = _body(system="Stable prompt.")
@@ -343,12 +349,14 @@ class TestCCI01NoInjectionForSDKProfile:
 # (e) Skip model honored
 # ---------------------------------------------------------------------------
 
-class TestCCI01SkipModel:
 
+class TestCCI01SkipModel:
     def test_haiku_model_skipped(self):
         """(e) Model in INJECT_SKIP_MODELS (haiku) → no injection."""
         body = _body(system="Stable prompt.", model="claude-haiku-4-5-20251001")
-        new_body, session = _run_cci01_stage(body, profile="claude-code-cli", model="claude-haiku-4-5-20251001")
+        new_body, session = _run_cci01_stage(
+            body, profile="claude-code-cli", model="claude-haiku-4-5-20251001"
+        )
 
         assert session.get("vault_blocks_injected", 0) == 0
         assert session.get("_cci01_skip_reason") == "model_skip"
@@ -357,7 +365,9 @@ class TestCCI01SkipModel:
     def test_sonnet_model_not_skipped(self):
         """Sonnet is not in skip list → injection proceeds."""
         body = _body(system="Stable prompt.", model="claude-sonnet-4-5")
-        new_body, session = _run_cci01_stage(body, profile="claude-code-cli", model="claude-sonnet-4-5")
+        new_body, session = _run_cci01_stage(
+            body, profile="claude-code-cli", model="claude-sonnet-4-5"
+        )
 
         assert session.get("vault_blocks_injected", 0) > 0
 
@@ -366,8 +376,8 @@ class TestCCI01SkipModel:
 # (f) Injection budget respected
 # ---------------------------------------------------------------------------
 
-class TestCCI01Budget:
 
+class TestCCI01Budget:
     def test_budget_respected(self):
         """(f) compile_injection is called with correct budget from env/config."""
         budget = 2000
@@ -423,8 +433,8 @@ class TestCCI01Budget:
 # (g) Zero blocks above min_score → no-op
 # ---------------------------------------------------------------------------
 
-class TestCCI01ZeroBlocks:
 
+class TestCCI01ZeroBlocks:
     def test_zero_blocks_returns_body_unchanged(self):
         """(g) compile_injection returns empty text → body unchanged, no telemetry set."""
         empty_index = _MockVaultIndex(injection_text="", tokens=0, sources=[])
@@ -450,9 +460,7 @@ class TestCCI01ZeroBlocks:
     def test_vault_inject_env_zero_skips_injection(self):
         """TOKENPAK_VAULT_INJECT=0 → injection disabled."""
         body = _body(system="Stable prompt.")
-        new_body, session = _run_cci01_stage(
-            body, profile="claude-code-cli", vault_inject_env="0"
-        )
+        new_body, session = _run_cci01_stage(body, profile="claude-code-cli", vault_inject_env="0")
         assert new_body == body
 
 
@@ -460,8 +468,8 @@ class TestCCI01ZeroBlocks:
 # No system prompt → skip
 # ---------------------------------------------------------------------------
 
-class TestCCI01NoSystemPrompt:
 
+class TestCCI01NoSystemPrompt:
     def test_no_injection_without_system_prompt(self):
         """No system prompt in body → injection skipped (no target)."""
         body = _body()  # no system kwarg

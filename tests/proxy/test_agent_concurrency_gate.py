@@ -83,9 +83,7 @@ def test_invalid_config_value_warns_and_falls_back(monkeypatch):
     from tokenpak.proxy import admission
 
     monkeypatch.setattr(admission, "_cfg_absent_marker", None, raising=False)
-    monkeypatch.setattr(
-        "tokenpak.core.config_loader.get", lambda *a, **k: "not-a-number"
-    )
+    monkeypatch.setattr("tokenpak.core.config_loader.get", lambda *a, **k: "not-a-number")
     assert admission._config_max_parallel() == DEFAULT_MAX_PARALLEL
 
 

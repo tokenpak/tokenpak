@@ -71,9 +71,7 @@ def test_upgrade_registered_in_help_registry():
 
     assert commands["upgrade"]["usage"] == "/tokenpak upgrade [--print-url]"
     assert commands["upgrade"]["category"] == "Control"
-    assert help_cmd._ESSENTIAL_COMMANDS["upgrade"] == (
-        "Open the TokenPak Pro upgrade page"
-    )
+    assert help_cmd._ESSENTIAL_COMMANDS["upgrade"] == ("Open the TokenPak Pro upgrade page")
 
 
 def test_upgrade_subparser_dispatches_to_cmd_upgrade():

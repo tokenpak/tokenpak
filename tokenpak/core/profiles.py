@@ -3,11 +3,33 @@
 Predefined configurations for different use cases.
 """
 
-from typing import Any, Dict
+__all__ = (
+    "PROFILES",
+    "apply_profile",
+    "get_profile",
+    "profile_to_yaml",
+)
+
+from typing import Any, Dict, TypedDict
 
 import yaml
 
-PROFILES = {
+
+class ProfileFeature(TypedDict):
+    """Toggle settings for one profile feature."""
+
+    enabled: bool
+
+
+class Profile(TypedDict):
+    """Schema shared by all built-in compression profiles."""
+
+    name: str
+    description: str
+    features: dict[str, ProfileFeature]
+
+
+PROFILES: dict[str, Profile] = {
     "minimal": {
         "name": "minimal",
         "description": "Compression only (safest, ~5% savings)",
@@ -77,7 +99,7 @@ PROFILES = {
 }
 
 
-def get_profile(name: str) -> Dict[str, Any]:
+def get_profile(name: str) -> Profile:
     """Get a profile by name.
 
     Args:
@@ -123,6 +145,8 @@ def profile_to_yaml(name: str, config_base: Dict[str, Any]) -> str:
     Returns:
         YAML string
     """
-    profile = get_profile(name)
     config = apply_profile(name, config_base.copy())
-    return yaml.dump(config, default_flow_style=False, sort_keys=False)
+    rendered = yaml.dump(config, default_flow_style=False, sort_keys=False)
+    if not isinstance(rendered, str):
+        raise TypeError("yaml.dump returned a non-text result")
+    return rendered

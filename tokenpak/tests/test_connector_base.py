@@ -246,10 +246,15 @@ class ConcreteAdapter(SourceAdapter):
     source_type = "test"
 
     def ingest(self, source_id: str, **kwargs):
-        return ("content", Provenance(
-            source_type="test", source_id=source_id,
-            source_version="v1", fetched_at=self._now(),
-        ))
+        return (
+            "content",
+            Provenance(
+                source_type="test",
+                source_id=source_id,
+                source_version="v1",
+                fetched_at=self._now(),
+            ),
+        )
 
     def has_changed(self, source_id: str, cached_version: str, **kwargs) -> bool:
         return cached_version != "v1"

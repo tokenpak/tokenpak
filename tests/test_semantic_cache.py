@@ -20,10 +20,14 @@ from __future__ import annotations
 
 import json
 import time
+from typing import cast
+
+import pytest
 
 from tokenpak.cache.semantic_cache import (
     SemanticCache,
     SemanticCacheConfig,
+    SemanticCacheEntry,
     SemanticCacheLookup,
     _hash,
     _jaccard,
@@ -34,9 +38,13 @@ from tokenpak.cache.semantic_cache import (
 # Fixtures — bytes responses (CCG-15)
 # ---------------------------------------------------------------------------
 
-RESPONSE_A_BYTES = json.dumps({"choices": [{"message": {"content": "Paris"}}], "model": "gpt-4o"}).encode()
-RESPONSE_B_BYTES = json.dumps({"choices": [{"message": {"content": "London"}}], "model": "gpt-4o"}).encode()
-SSE_RESPONSE_BYTES = b"data: {\"type\":\"message_start\"}\n\ndata: {\"type\":\"message_stop\"}\n\n"
+RESPONSE_A_BYTES = json.dumps(
+    {"choices": [{"message": {"content": "Paris"}}], "model": "gpt-4o"}
+).encode()
+RESPONSE_B_BYTES = json.dumps(
+    {"choices": [{"message": {"content": "London"}}], "model": "gpt-4o"}
+).encode()
+SSE_RESPONSE_BYTES = b'data: {"type":"message_start"}\n\ndata: {"type":"message_stop"}\n\n'
 
 
 def make_cache(**kwargs) -> SemanticCache:
@@ -54,12 +62,43 @@ def _store_sse(sc: SemanticCache, query: str, response: bytes = SSE_RESPONSE_BYT
     sc.store(query, response, content_type="text/event-stream; charset=utf-8", wire_format="sse")
 
 
+class TestResponseTypeBoundary:
+    def test_store_rejects_dict_response_before_cache_mutation(self):
+        sc = make_cache()
+
+        with pytest.raises(TypeError, match="response_bytes must be bytes"):
+            sc.store("legacy dict response", cast(bytes, {"content": "response"}))
+
+        assert sc.size() == 0
+
+    def test_lookup_evicts_preexisting_legacy_dict_entry(self, caplog):
+        sc = make_cache()
+        query = "legacy persisted response"
+        normalized = _normalise(query)
+        query_hash = _hash(normalized)
+        sc._store[f"{query_hash}:json"] = SemanticCacheEntry(
+            query_normalized=normalized,
+            query_hash=query_hash,
+            response=cast(bytes, {"content": "legacy"}),
+            content_type="application/json",
+            wire_format="json",
+            created_at=time.monotonic(),
+        )
+
+        with caplog.at_level("WARNING", logger="tokenpak.cache.semantic_cache"):
+            result = sc.lookup(query, expected_format="json")
+
+        assert result.hit is False
+        assert sc.size() == 0
+        assert "evicting old-schema entry" in caplog.text
+
+
 # ===========================================================================
 # 1. Exact duplicate query returns cached response
 # ===========================================================================
 
-class TestExactMatch:
 
+class TestExactMatch:
     def test_exact_query_returns_cached_response(self):
         sc = make_cache()
         query = "What is the capital of France?"
@@ -101,12 +140,14 @@ class TestExactMatch:
 # 2. Near-duplicate above threshold returns cached (Jaccard)
 # ===========================================================================
 
-class TestNearDuplicateHit:
 
+class TestNearDuplicateHit:
     def test_near_duplicate_above_threshold_hits(self):
         sc = make_cache(similarity_threshold=0.80)
         _store_json(sc, "What is the capital city of France?")
-        result = sc.lookup("What is the capital city of France and Germany?", expected_format="json")
+        result = sc.lookup(
+            "What is the capital city of France and Germany?", expected_format="json"
+        )
         assert isinstance(result.hit, bool)
 
     def test_high_overlap_query_hits(self):
@@ -132,8 +173,8 @@ class TestNearDuplicateHit:
 # 3. Below threshold makes fresh LLM call (miss)
 # ===========================================================================
 
-class TestBelowThresholdMiss:
 
+class TestBelowThresholdMiss:
     def test_completely_different_query_misses(self):
         sc = make_cache()
         _store_json(sc, "What is the capital of France?")
@@ -164,8 +205,8 @@ class TestBelowThresholdMiss:
 # 4. TTL expiration works
 # ===========================================================================
 
-class TestTTLExpiration:
 
+class TestTTLExpiration:
     def test_entry_expired_after_ttl(self):
         sc = make_cache(ttl_seconds=1)
         query = "Will this expire?"
@@ -193,8 +234,8 @@ class TestTTLExpiration:
 # 5. Max entries eviction works
 # ===========================================================================
 
-class TestMaxEntriesEviction:
 
+class TestMaxEntriesEviction:
     def test_oldest_entry_evicted_at_capacity(self):
         sc = make_cache(max_entries=3)
         _store_json(sc, "query one", RESPONSE_A_BYTES)
@@ -227,8 +268,8 @@ class TestMaxEntriesEviction:
 # 6. Cache disabled when config says so
 # ===========================================================================
 
-class TestCacheDisabled:
 
+class TestCacheDisabled:
     def test_disabled_cache_always_misses(self):
         sc = make_cache(enabled=False)
         _store_json(sc, "does this matter?")
@@ -247,8 +288,8 @@ class TestCacheDisabled:
 # Extras: normalisation, Jaccard, stats, invalidate
 # ===========================================================================
 
-class TestNormalisation:
 
+class TestNormalisation:
     def test_lowercase(self):
         assert _normalise("QUICK BROWN FOX") == "quick brown fox"
 
@@ -268,7 +309,6 @@ class TestNormalisation:
 
 
 class TestJaccard:
-
     def test_identical_sets(self):
         a = frozenset(["a", "b", "c"])
         assert _jaccard(a, a) == 1.0
@@ -289,7 +329,6 @@ class TestJaccard:
 
 
 class TestStats:
-
     def test_stats_initial(self):
         sc = make_cache()
         s = sc.stats()
@@ -300,7 +339,7 @@ class TestStats:
     def test_stats_after_operations(self):
         sc = make_cache()
         _store_json(sc, "some query")
-        sc.lookup("some query", expected_format="json")        # hit
+        sc.lookup("some query", expected_format="json")  # hit
         sc.lookup("completely different unrelated words here", expected_format="json")  # miss
         s = sc.stats()
         assert s["hits"] == 1
@@ -309,7 +348,6 @@ class TestStats:
 
 
 class TestInvalidate:
-
     def test_invalidate_removes_entry(self):
         sc = make_cache()
         _store_json(sc, "remove me please")

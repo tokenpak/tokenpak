@@ -32,6 +32,7 @@ U2 = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _body(prefix_text: str, tail_text: str = "hello", *, breakpoint: bool = True) -> bytes:
     """A Claude-Code-shaped request: cache_control on the system block."""
     sys_block = {"type": "text", "text": prefix_text}
@@ -40,9 +41,7 @@ def _body(prefix_text: str, tail_text: str = "hello", *, breakpoint: bool = True
     return json.dumps(
         {
             "system": [sys_block],
-            "messages": [
-                {"role": "user", "content": [{"type": "text", "text": tail_text}]}
-            ],
+            "messages": [{"role": "user", "content": [{"type": "text", "text": tail_text}]}],
         }
     ).encode()
 
@@ -61,10 +60,10 @@ def _diag_pair(b1: bytes, b2: bytes) -> CacheMissDiagnosis:
 # Core attribution rules
 # ---------------------------------------------------------------------------
 
+
 def test_uuid_in_changed_prefix_is_blamed():
     """UUID in the cached prefix that changes between requests → 'uuid'."""
-    d = _diag_pair(_body(f"You are helpful. session {U1}"),
-                   _body(f"You are helpful. session {U2}"))
+    d = _diag_pair(_body(f"You are helpful. session {U1}"), _body(f"You are helpful. session {U2}"))
     assert d.reason == "uuid"
     assert d.location == "prefix"
     assert d.value_changed is True
@@ -72,8 +71,10 @@ def test_uuid_in_changed_prefix_is_blamed():
 
 def test_uuid_in_volatile_tail_is_not_blamed():
     """UUID only in the latest user turn (after the breakpoint) → not blamed."""
-    d = _diag_pair(_body("You are helpful. STATIC", tail_text="turn one"),
-                   _body("You are helpful. STATIC", tail_text=f"turn id {U2}"))
+    d = _diag_pair(
+        _body("You are helpful. STATIC", tail_text="turn one"),
+        _body("You are helpful. STATIC", tail_text=f"turn id {U2}"),
+    )
     assert d.reason is None
     assert d.location == "tail"
     assert d.value_changed is False  # prefix unchanged
@@ -111,22 +112,25 @@ def test_no_cache_control_returns_none():
 
 
 def test_changed_timestamp_in_prefix_is_blamed_as_timestamp():
-    d = _diag_pair(_body("Current time: 2026-05-27T10:00:00Z. You are helpful."),
-                   _body("Current time: 2026-05-27T10:05:00Z. You are helpful."))
+    d = _diag_pair(
+        _body("Current time: 2026-05-27T10:00:00Z. You are helpful."),
+        _body("Current time: 2026-05-27T10:05:00Z. You are helpful."),
+    )
     assert d.reason == "timestamp"
     assert d.value_changed is True
 
 
 def test_changed_request_id_literal_in_prefix_is_blamed_as_uuid():
-    d = _diag_pair(_body("ctx request_id=alpha-001. You are helpful."),
-                   _body("ctx request_id=alpha-002. You are helpful."))
+    d = _diag_pair(
+        _body("ctx request_id=alpha-001. You are helpful."),
+        _body("ctx request_id=alpha-002. You are helpful."),
+    )
     assert d.reason == "uuid"
 
 
 def test_changed_prefix_without_volatile_token_is_prefix_drift():
     """Prefix changed but no uuid/timestamp/request_id → 'prefix_drift', not uuid."""
-    d = _diag_pair(_body("You are helpful. mode=alpha"),
-                   _body("You are helpful. mode=beta"))
+    d = _diag_pair(_body("You are helpful. mode=alpha"), _body("You are helpful. mode=beta"))
     assert d.reason == "prefix_drift"
     assert d.value_changed is True
 
@@ -142,6 +146,7 @@ def test_stable_prefix_with_uuid_is_not_blamed():
 # ---------------------------------------------------------------------------
 # Safety: read-only + redaction
 # ---------------------------------------------------------------------------
+
 
 def test_diagnosis_is_read_only_on_body():
     """Byte-preserved invariant: diagnosis must not mutate the request bytes."""
@@ -169,12 +174,11 @@ def test_malformed_body_fails_open():
 # Legacy classifier + scrubber still intact (no regression)
 # ---------------------------------------------------------------------------
 
+
 def test_legacy_classifier_still_works():
     assert classify_cache_miss_reason(b"", False, True, b"") == "schema_tool_change"
     assert (
-        classify_cache_miss_reason(
-            b'{"x":"2026-05-27T10:00:00Z"}', True, False, b""
-        )
+        classify_cache_miss_reason(b'{"x":"2026-05-27T10:00:00Z"}', True, False, b"")
         == "timestamp_poison"
     )
 

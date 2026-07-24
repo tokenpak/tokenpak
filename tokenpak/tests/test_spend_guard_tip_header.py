@@ -112,11 +112,13 @@ class TestNoMatch:
 
 class TestStripFromBody:
     def _body(self, content) -> bytes:
-        return json.dumps({
-            "model": "claude-opus-4-7",
-            "max_tokens": 1000,
-            "messages": [{"role": "user", "content": content}],
-        }).encode()
+        return json.dumps(
+            {
+                "model": "claude-opus-4-7",
+                "max_tokens": 1000,
+                "messages": [{"role": "user", "content": content}],
+            }
+        ).encode()
 
     def test_strip_from_string_content(self):
         body = self._body("[TIP: allow=once] do the thing")
@@ -129,15 +131,20 @@ class TestStripFromBody:
         assert "do the thing" in modified_json["messages"][0]["content"]
 
     def test_strip_from_block_content(self):
-        body = json.dumps({
-            "model": "claude-opus-4-7",
-            "max_tokens": 1000,
-            "messages": [
-                {"role": "user", "content": [
-                    {"type": "text", "text": "[TIP: bypass=on] proceed"},
-                ]},
-            ],
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-opus-4-7",
+                "max_tokens": 1000,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "[TIP: bypass=on] proceed"},
+                        ],
+                    },
+                ],
+            }
+        ).encode()
         d, modified = parse_and_strip_tip_header(body)
         assert d is not None
         assert d.bypass is True

@@ -5,6 +5,7 @@
 Uses a local stub HTTP server instead of httpbin.org to avoid flakiness.
 The stub server records all received requests so tests can assert on them.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,6 +25,7 @@ try:
     from tokenpak.alerts.channels import _load_channel_configs, dispatch_alert
     from tokenpak.alerts.channels.slack import SlackChannel
     from tokenpak.alerts.channels.webhook import WebhookChannel
+
     _ALERTS_AVAILABLE = True
 except ImportError:
     WebhookChannel = None  # type: ignore[assignment,misc]
@@ -250,9 +252,7 @@ class TestChannelRegistry:
         _recorder.pop_all()
         cfg = [{"type": "webhook", "url": f"{stub_server}/registry-test"}]
 
-        with patch(
-            "tokenpak.alerts.channels._load_channel_configs", return_value=cfg
-        ):
+        with patch("tokenpak.alerts.channels._load_channel_configs", return_value=cfg):
             dispatch_alert(event="budget_exceeded", severity="critical", message="Budget hit")
             time.sleep(0.5)  # let the thread deliver
 
@@ -329,15 +329,30 @@ class TestCheckAlertsDispatch:
             cooldown_minutes=0,
         )
 
-        with patch("tokenpak._internal.alerts.load_config", return_value={"enabled": True, "rules": [
-            {"name": "error_spike", "condition": "error_rate > 0.05",
-             "message": "Error rate at {value:.1f}%", "cooldown_minutes": 0}
-        ]}), \
-             patch("tokenpak._internal.alerts.load_state", return_value={}), \
-             patch("tokenpak._internal.alerts.save_state"), \
-             patch("tokenpak._internal.alerts._get_proxy_stats", return_value={"requests": 100, "errors": 20}), \
-             patch("tokenpak._internal.alerts._get_proxy_health", return_value={"status": "ok"}), \
-             patch("tokenpak.alerts.channels._load_channel_configs", return_value=cfg):
+        with (
+            patch(
+                "tokenpak._internal.alerts.load_config",
+                return_value={
+                    "enabled": True,
+                    "rules": [
+                        {
+                            "name": "error_spike",
+                            "condition": "error_rate > 0.05",
+                            "message": "Error rate at {value:.1f}%",
+                            "cooldown_minutes": 0,
+                        }
+                    ],
+                },
+            ),
+            patch("tokenpak._internal.alerts.load_state", return_value={}),
+            patch("tokenpak._internal.alerts.save_state"),
+            patch(
+                "tokenpak._internal.alerts._get_proxy_stats",
+                return_value={"requests": 100, "errors": 20},
+            ),
+            patch("tokenpak._internal.alerts._get_proxy_health", return_value={"status": "ok"}),
+            patch("tokenpak.alerts.channels._load_channel_configs", return_value=cfg),
+        ):
             result = check_alerts()
             time.sleep(0.5)  # allow background thread to deliver
 

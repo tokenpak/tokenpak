@@ -39,7 +39,9 @@ def test_loop_expands_retrieval_on_weak_coverage() -> None:
     def retrieve_fn(**kwargs):
         calls.append((kwargs["tier"], kwargs.get("expand", False)))
         if kwargs.get("expand", False):
-            return [{"text": "Contains MyClass and src/main.py", "score": 1.0, "path": "src/main.py"}]
+            return [
+                {"text": "Contains MyClass and src/main.py", "score": 1.0, "path": "src/main.py"}
+            ]
         return [{"text": "unrelated", "score": 0.01, "path": "a.txt"}]
 
     def pack_fn(chunks, tier):

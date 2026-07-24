@@ -18,6 +18,7 @@ from tokenpak.telemetry.cost import CostEngine, Pricing, calculate_baseline, cal
 # COST MODULE TESTS (40 tests)
 # ─────────────────────────────────────────────────────────────────────────
 
+
 class TestCostCalculations:
     """Test cost calculation accuracy."""
 
@@ -242,6 +243,7 @@ class TestCostCalculations:
 # CACHE MODULE TESTS (40 tests)
 # ─────────────────────────────────────────────────────────────────────────
 
+
 class TestCacheOperations:
     """Test cache set/get/delete operations."""
 
@@ -267,6 +269,7 @@ class TestCacheOperations:
     def test_cache_ttl_valid(self):
         """Cache entry valid within TTL."""
         import time
+
         now = time.time()
         cache_entry = {
             "response": "data",
@@ -280,6 +283,7 @@ class TestCacheOperations:
     def test_cache_ttl_expired(self):
         """Cache entry expired after TTL."""
         import time
+
         now = time.time()
         cache_entry = {
             "response": "data",
@@ -359,16 +363,14 @@ class TestCacheOperations:
     def test_cache_stale_data_cleanup(self):
         """Clean up stale cache entries."""
         import time
+
         now = time.time()
         cache = {
             "old": {"created_at": now - 10000, "ttl": 3600},
             "new": {"created_at": now, "ttl": 3600},
         }
         # Remove expired
-        expired_keys = [
-            k for k, v in cache.items()
-            if now - v["created_at"] >= v["ttl"]
-        ]
+        expired_keys = [k for k, v in cache.items() if now - v["created_at"] >= v["ttl"]]
         for k in expired_keys:
             del cache[k]
         assert "old" not in cache

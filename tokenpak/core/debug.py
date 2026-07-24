@@ -3,12 +3,11 @@
 Consolidated from agent/debug/logger.py and agent/debug/state.py.
 """
 
-
 import json
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, Optional, TypedDict, cast
 
 _DEFAULT_LOG = Path.home() / ".tokenpak" / "debug.log"
 
@@ -18,7 +17,7 @@ class _DebugRecord:
 
     def __init__(self) -> None:
         self.fields: Dict[str, Any] = {}
-        self.pipeline_steps: list = []
+        self.pipeline_steps: list[dict[str, Any]] = []
         self._start = time.monotonic()
         self.error: Optional[str] = None
 
@@ -31,7 +30,7 @@ class _DebugRecord:
     def fail(self, msg: str) -> None:
         self.error = msg
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         elapsed = round((time.monotonic() - self._start) * 1000, 2)
         return {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -63,11 +62,12 @@ class DebugLogger:
                 fh.write(json.dumps(rec.to_dict()) + "\n")
 
 
-
-from pathlib import Path
-from typing import Optional
-
 _DEFAULT_PATH = Path.home() / ".tokenpak" / "debug.json"
+
+
+class _DebugStateData(TypedDict):
+    enabled: bool
+    requests_remaining: int | None
 
 
 class DebugState:
@@ -88,15 +88,15 @@ class DebugState:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _load(self) -> dict:
+    def _load(self) -> _DebugStateData:
         if self._path.exists():
             try:
-                return json.loads(self._path.read_text())
+                return cast(_DebugStateData, json.loads(self._path.read_text()))
             except (json.JSONDecodeError, OSError):
                 pass
         return {"enabled": False, "requests_remaining": None}
 
-    def _save(self, data: dict) -> None:
+    def _save(self, data: _DebugStateData) -> None:
         self._path.write_text(json.dumps(data, indent=2))
 
     # ------------------------------------------------------------------
@@ -137,7 +137,7 @@ class DebugState:
             data["requests_remaining"] = remaining
         self._save(data)
 
-    def status(self) -> dict:
+    def status(self) -> dict[str, bool | int | str | None]:
         """Return a dict suitable for display."""
         data = self._load()
         log_path = Path.home() / ".tokenpak" / "debug.log"

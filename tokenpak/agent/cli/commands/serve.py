@@ -111,6 +111,7 @@ def run_serve_cmd(args) -> None:
     # Start install-level metrics heartbeat in daemon thread (no-op if disabled)
     try:
         from tokenpak.telemetry.install_reporter import schedule_install_heartbeat
+
         schedule_install_heartbeat()
     except Exception:
         pass  # telemetry must never block startup

@@ -1,7 +1,8 @@
-
 import pytest
 
-pytest.importorskip("tokenpak._internal.regression.feature_detector", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.regression.feature_detector", reason="module not available in current build"
+)
 from tokenpak._internal.regression.feature_detector import (
     build_targeted_repair_prompt,
     detect_feature_regressions,
@@ -9,7 +10,9 @@ from tokenpak._internal.regression.feature_detector import (
 
 
 def test_detects_summary_scope_drift():
-    baseline = "We should recommend a low-risk migration plan with phased rollout and rollback checks."
+    baseline = (
+        "We should recommend a low-risk migration plan with phased rollout and rollback checks."
+    )
     candidate = "Completely different proposal about redesigning the UI animation and branding."
 
     report = detect_feature_regressions("summary", candidate, baseline)

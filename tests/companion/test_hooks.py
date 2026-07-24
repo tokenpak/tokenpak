@@ -8,6 +8,7 @@ No Claude Code required.
 Input format (6-field, from COMP-02 probe results):
     session_id, transcript_path, cwd, permission_mode, hook_event_name, prompt
 """
+
 from __future__ import annotations
 
 import json
@@ -59,6 +60,7 @@ def _run_hook(
 # Allow path (exit 0)
 # ---------------------------------------------------------------------------
 
+
 def test_hook_allow_normal_prompt(tmp_path):
     """Normal prompt with no transcript path exits 0 (allow)."""
     result = _run_hook(
@@ -90,6 +92,7 @@ def test_hook_allow_with_session_id(tmp_path):
 # ---------------------------------------------------------------------------
 # Fail-open paths (exit 0)
 # ---------------------------------------------------------------------------
+
 
 def test_hook_empty_stdin_exits_zero(tmp_path):
     """Empty stdin (no JSON) is a fail-open: exits 0."""
@@ -138,6 +141,7 @@ def test_hook_missing_fields_exits_zero(tmp_path):
 # Block path (exit 2)
 # ---------------------------------------------------------------------------
 
+
 def test_hook_blocks_when_over_budget(tmp_path):
     """Hook exits 2 when daily budget is exceeded.
 
@@ -147,12 +151,15 @@ def test_hook_blocks_when_over_budget(tmp_path):
     # Create a minimal transcript JSONL so parse_transcript returns tokens_est > 0
     transcript_path = tmp_path / "session.jsonl"
     transcript_path.write_text(
-        json.dumps({"type": "user", "content": "hello " * 100}) + "\n"
-        + json.dumps({"type": "assistant", "content": "world " * 100}) + "\n"
+        json.dumps({"type": "user", "content": "hello " * 100})
+        + "\n"
+        + json.dumps({"type": "assistant", "content": "world " * 100})
+        + "\n"
     )
 
     # Seed budget DB to exceed the tiny budget
     from tokenpak.companion.budget.tracker import BudgetTracker
+
     tracker = BudgetTracker(
         db_path=tmp_path / "budget.db",
         daily_budget=0.001,
@@ -176,11 +183,10 @@ def test_hook_blocks_when_over_budget(tmp_path):
 def test_hook_block_outputs_json_decision(tmp_path):
     """Blocked hook prints hookSpecificOutput JSON to stdout."""
     transcript_path = tmp_path / "session.jsonl"
-    transcript_path.write_text(
-        json.dumps({"type": "user", "content": "test " * 200}) + "\n"
-    )
+    transcript_path.write_text(json.dumps({"type": "user", "content": "test " * 200}) + "\n")
 
     from tokenpak.companion.budget.tracker import BudgetTracker
+
     tracker = BudgetTracker(db_path=tmp_path / "budget.db", daily_budget=0.001)
     tracker.record(input_tokens=1_000_000, model="sonnet")
 
@@ -204,12 +210,11 @@ def test_hook_block_outputs_json_decision(tmp_path):
 # Show-cost output
 # ---------------------------------------------------------------------------
 
+
 def test_hook_show_cost_writes_to_stderr(tmp_path):
     """With show_cost enabled and a transcript, hook writes estimate to stderr."""
     transcript_path = tmp_path / "session.jsonl"
-    transcript_path.write_text(
-        json.dumps({"type": "user", "content": "hello " * 500}) + "\n"
-    )
+    transcript_path.write_text(json.dumps({"type": "user", "content": "hello " * 500}) + "\n")
 
     result = _run_hook(
         {
@@ -230,9 +235,7 @@ def test_hook_show_cost_writes_to_stderr(tmp_path):
 def test_hook_show_cost_disabled_no_stderr(tmp_path):
     """With show_cost disabled, hook produces no stderr output."""
     transcript_path = tmp_path / "session.jsonl"
-    transcript_path.write_text(
-        json.dumps({"type": "user", "content": "hello " * 500}) + "\n"
-    )
+    transcript_path.write_text(json.dumps({"type": "user", "content": "hello " * 500}) + "\n")
 
     result = _run_hook(
         {
@@ -254,12 +257,11 @@ def test_hook_show_cost_disabled_no_stderr(tmp_path):
 # Python fallback — journal write
 # ---------------------------------------------------------------------------
 
+
 def test_python_hook_writes_journal_entry(tmp_path):
     """Python hook writes a journal entry to journal.db when tokens_est > 0."""
     transcript_path = tmp_path / "session.jsonl"
-    transcript_path.write_text(
-        json.dumps({"type": "user", "content": "hello " * 500}) + "\n"
-    )
+    transcript_path.write_text(json.dumps({"type": "user", "content": "hello " * 500}) + "\n")
 
     result = _run_hook(
         {
@@ -298,6 +300,7 @@ def test_python_hook_six_field_input(tmp_path):
 # Bash hook — runner helper
 # ---------------------------------------------------------------------------
 
+
 def _run_bash_hook(
     hook_input: dict,
     tmp_path: Path,
@@ -332,6 +335,7 @@ def _make_transcript(path: Path, size_bytes: int = 5000) -> Path:
 # ---------------------------------------------------------------------------
 # Bash hook — allow path
 # ---------------------------------------------------------------------------
+
 
 def test_bash_hook_allow_empty_transcript(tmp_path):
     """Bash hook exits 0 when transcript_path is empty (no tokens to estimate)."""
@@ -404,6 +408,7 @@ def test_bash_hook_six_field_input(tmp_path):
 # Bash hook — block path (exit 2)
 # ---------------------------------------------------------------------------
 
+
 def test_bash_hook_blocks_when_over_budget(tmp_path):
     """Bash hook exits 2 when budget is set to a tiny value and transcript is large."""
     transcript_path = tmp_path / "session.jsonl"
@@ -454,9 +459,11 @@ def test_bash_hook_block_stderr_contains_budget_message(tmp_path):
 # Bash hook — stderr format
 # ---------------------------------------------------------------------------
 
+
 def test_bash_hook_stderr_format(tmp_path):
     """Bash hook stderr matches: 'tokenpak: ~N,NNN tokens  est $X.XXXX'."""
     import re
+
     transcript_path = tmp_path / "session.jsonl"
     _make_transcript(transcript_path, size_bytes=200_000)
     hook_input = dict(_SIX_FIELD_INPUT)
@@ -497,6 +504,7 @@ def test_bash_hook_show_cost_disabled_no_stderr(tmp_path):
 # ---------------------------------------------------------------------------
 # Performance: bash < 50ms on 200k transcript
 # ---------------------------------------------------------------------------
+
 
 def test_bash_hook_completes_under_50ms_on_200k(tmp_path):
     """Bash hook completes in < 50ms with a 200k-byte transcript (target: 30ms)."""

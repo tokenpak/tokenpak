@@ -1,55 +1,73 @@
 # TokenPak Quick Start Guide
 
-Get from zero to savings in 5 minutes. Pick your path:
+The proxy reference path targets a first receipt in three commands and five
+minutes. Pick your path:
 
 | Path | Best for |
 |------|----------|
-| [**Proxy Path**](#proxy-path-zero-config-optimization) | Existing apps — drop-in optimization, no code changes |
+| [**Proxy Path**](#proxy-path-first-measured-receipt) | First measured receipt from a real provider request |
 | [**SDK Path**](#sdk-path-protocol-first) | New projects or when you want protocol-level control |
 
 ---
 
-## Proxy Path: Zero-Config Optimization
+## Proxy Path: First Measured Receipt
 
 **You already write prompts. TokenPak compresses them before they hit the API.**
 
-### Minute 1: Install
+The supported reference path is three commands. Before starting, sign in to a
+supported client. The reference path uses Codex OAuth and its selected/default
+model; API keys and explicit model overrides are optional. Run it from a real
+project. Provider use may count against a subscription or incur charges.
+
+### Command 1: Install
 
 ```bash
-pip install tokenpak
+python -m pip install tokenpak
 ```
 
-### Minute 2: Start the proxy
+### Command 2: Start the receipt-enabled proxy
+
+In terminal 1:
 
 ```bash
-tokenpak start
-# → ✅ Proxy running on http://localhost:8766
+tokenpak serve --profile aggressive --stats-footer
 ```
 
-### Minute 3: Point your app at the proxy
+Leave it running. The flags apply only to this proxy process; the receipt is
+printed in this terminal and is not injected into the provider response.
 
-Run the one-shot configurator for your tool:
+### Command 3: Launch the authenticated client
+
+In terminal 2:
 
 ```bash
-tokenpak integrate # list clients + detection status
-tokenpak integrate claude-code --apply # writes ~/.claude/settings.json
-tokenpak integrate cursor --apply # writes Cursor settings.json
-tokenpak integrate continue --apply # writes ~/.continue/config.json
-tokenpak integrate aider --apply # writes ~/.aider.conf.yml
+tokenpak codex
 ```
 
-Every `--apply` backs up the existing config and prints a rollback command.
-For clients without auto-apply (Cline, SDKs), `tokenpak integrate <client>` prints the exact snippet to paste.
+Make a substantive project request, then continue the same topic. A new
+conversation can begin with an ineligible request because it has no historical
+context. Terminal 1 prints the measured before/after receipt for the first
+eligible request. The dollar value is an estimate based on TokenPak's
+model-pricing table. See
+[First Measured Savings Receipt](./first-receipt.md) for the expected output,
+five-minute reference target, and truthful exclusions.
 
-### Minute 4: See your savings
+Short or protected inputs may legitimately save zero. TokenPak preserves
+system/developer policy and the newest two messages. Byte-preserved routes are
+also ineligible for TokenPak compression savings. `tokenpak demo` remains
+useful as an offline fixture, but it does not satisfy a real first-request
+receipt.
+
+### Connect your normal client afterward
 
 ```bash
-tokenpak demo # see compression in action on a sample prompt
-tokenpak cost # view today's spend and tokens saved
-tokenpak status # live snapshot: requests, cache hit rate, models used
+tokenpak integrate # list clients and detection status
 ```
 
-That's it. Every request is now routed through tokenpak.
+Every `tokenpak integrate <client> --apply` operation previews or applies the
+client-specific route, backs up supported config files, and prints rollback
+information. This later integration step is not part of the three-command
+reference receipt path.
 
 ### Editions, security, and compliance
 
@@ -104,7 +122,7 @@ print(pack.compile().report)
 
 ### "I use Claude Code"
 
-Claude Code uses an OpenAI-compatible API. Point it at the proxy:
+Point Claude Code at the proxy:
 
 ```bash
 # Start the proxy
@@ -114,7 +132,10 @@ tokenpak start
 export ANTHROPIC_BASE_URL=http://localhost:8766
 ```
 
-All requests are automatically compressed before reaching Anthropic. No code changes needed.
+Claude Code's supported route is byte-preserved. It can use TokenPak routing and
+telemetry, but it is intentionally not the reference path for proving positive
+TokenPak compression savings. Use the direct eligible request above for that
+receipt.
 
 ### "I use the OpenAI SDK"
 
@@ -168,17 +189,20 @@ Check that your client is pointing at `http://localhost:8766` (not `https://`).
 ### "My API key isn't being forwarded"
 
 TokenPak is a passthrough proxy — it never stores or modifies your credentials. Make sure:
-- Your API key is set in your environment: `export ANTHROPIC_API_KEY='sk-...'`
-- Or pass it directly in your client config
+- An OAuth client is already signed in; or
+- If your chosen SDK/provider uses API keys, its optional key is available to that client.
 
 ### "I'm not seeing any savings"
 
 ```bash
 tokenpak cost --week # check a longer time window
-tokenpak demo # verify compression is working
+tokenpak demo # inspect the offline fixture only
 ```
 
-Short prompts compress less. Savings show up most on long conversations and large document contexts.
+Short prompts compress less, and byte-preserved routes may correctly report zero
+TokenPak compression savings. For a real per-request proof, use the
+[three-command first-receipt path](./first-receipt.md); the demo is not a
+substitute for that receipt.
 
 ### "The proxy started but requests aren't going through"
 

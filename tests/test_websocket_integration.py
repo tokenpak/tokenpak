@@ -13,6 +13,7 @@ Tests:
   6. test_clean_disconnect_cleanup        — unregisters on close, count back to 0
   7. test_max_connections_enforcement     — n+1 connection rejected at limit
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,10 +28,14 @@ import pytest
 
 # websocket_proxy is a standalone external package, not bundled with tokenpak
 # OSS or any of its extras. Skip cleanly so the release test gate stays green.
-pytest.importorskip("websocket_proxy", reason="websocket_proxy is a separate external package not installed in slim test env")
+pytest.importorskip(
+    "websocket_proxy",
+    reason="websocket_proxy is a separate external package not installed in slim test env",
+)
 
 try:
     import websockets
+
     WEBSOCKETS_AVAILABLE = True
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
@@ -44,6 +49,7 @@ from websocket_proxy import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _free_port() -> int:
     """Find an available loopback port."""
@@ -67,6 +73,7 @@ def _wait_for_port(port: int, timeout: float = 5.0) -> bool:
 # ---------------------------------------------------------------------------
 # Test helpers / fixtures
 # ---------------------------------------------------------------------------
+
 
 class EchoServerContext:
     """
@@ -94,9 +101,7 @@ class EchoServerContext:
             async def serve():
                 async with websockets.serve(handler, "127.0.0.1", self.port):
                     ready.set()
-                    await asyncio.get_event_loop().run_in_executor(
-                        None, self._stop_event.wait
-                    )
+                    await asyncio.get_event_loop().run_in_executor(None, self._stop_event.wait)
 
             self._loop.run_until_complete(serve())
 
@@ -115,9 +120,9 @@ class EchoServerContext:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not WEBSOCKETS_AVAILABLE, reason="websockets not installed")
 class TestWebSocketIntegration(unittest.TestCase):
-
     def setUp(self):
         self.server = EchoServerContext()
         self.server.start()
@@ -145,7 +150,9 @@ class TestWebSocketIntegration(unittest.TestCase):
     # 2. Message exchange
     def test_message_exchange(self):
         """Client sends a message and receives an echo response."""
-        payload = json.dumps({"model": "claude-haiku-4-5", "messages": [{"role": "user", "content": "hi"}]})
+        payload = json.dumps(
+            {"model": "claude-haiku-4-5", "messages": [{"role": "user", "content": "hi"}]}
+        )
 
         async def run():
             async with websockets.connect(self.uri) as ws:

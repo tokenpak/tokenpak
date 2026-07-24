@@ -47,7 +47,10 @@ try:
     from tokenpak.compression.salience.router import detect_content_type
     from tokenpak.compression.salience.router import extract as salience_extract
 except ImportError as _exc:
-    pytest.skip(f"tokenpak._internal / Tier 2 modules not present in slim OSS install: {_exc}", allow_module_level=True)
+    pytest.skip(
+        f"tokenpak._internal / Tier 2 modules not present in slim OSS install: {_exc}",
+        allow_module_level=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +58,7 @@ except ImportError as _exc:
 # ---------------------------------------------------------------------------
 
 REALISTIC_SYSTEM_PROMPT = "You are Claude, a helpful AI assistant made by Anthropic."
+
 
 def make_anthropic_request(
     system_text: str = REALISTIC_SYSTEM_PROMPT,
@@ -64,10 +68,12 @@ def make_anthropic_request(
     """Create a realistic Anthropic API request body."""
     messages = []
     for text in user_messages:
-        messages.append({
-            "role": "user",
-            "content": [{"type": "text", "text": text}],
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": text}],
+            }
+        )
     return {
         "model": model,
         "max_tokens": 1024,
@@ -79,6 +85,7 @@ def make_anthropic_request(
 # ---------------------------------------------------------------------------
 # TestErrorNormalizer — Normalize error messages across providers
 # ---------------------------------------------------------------------------
+
 
 class TestErrorNormalizer:
     """Verify ErrorNormalizer standardizes error message text."""
@@ -135,6 +142,7 @@ class TestErrorNormalizer:
 # ---------------------------------------------------------------------------
 # TestBudgetController — Enforce token budgets and tier assignment
 # ---------------------------------------------------------------------------
+
 
 class TestBudgetController:
     """Verify BudgetController assigns tiers and enforces budgets."""
@@ -214,6 +222,7 @@ class TestBudgetController:
 # TestRequestLogger — Log requests with unique IDs
 # ---------------------------------------------------------------------------
 
+
 class TestRequestLogger:
     """Verify RequestLogger generates request IDs and logs."""
 
@@ -253,6 +262,7 @@ class TestRequestLogger:
 # TestCacheRegistry — Singleton cache management
 # ---------------------------------------------------------------------------
 
+
 class TestCacheRegistry:
     """Verify CacheRegistry singleton behavior and metadata tracking."""
 
@@ -260,15 +270,15 @@ class TestCacheRegistry:
         """get_default() returns a VolatileCache."""
         cache = CacheRegistry.get_default()
         assert cache is not None
-        assert hasattr(cache, 'set')
-        assert hasattr(cache, 'get')
+        assert hasattr(cache, "set")
+        assert hasattr(cache, "get")
 
     def test_cache_registry_get_stable(self):
         """get_stable() returns a StableCache."""
         cache = CacheRegistry.get_stable()
         assert cache is not None
-        assert hasattr(cache, 'set')
-        assert hasattr(cache, 'get')
+        assert hasattr(cache, "set")
+        assert hasattr(cache, "get")
 
     def test_cache_registry_get_injection(self):
         """get_injection() returns the injection cache."""
@@ -310,6 +320,7 @@ class TestCacheRegistry:
 # ---------------------------------------------------------------------------
 # TestRetrievalWatchdog — Monitor vault injection quality
 # ---------------------------------------------------------------------------
+
 
 class TestRetrievalWatchdog:
     """Verify RetrievalQualityWatchdog monitors retrieval metrics."""
@@ -359,7 +370,7 @@ class TestRetrievalWatchdog:
         )
         alert = watchdog.observe(poor_record)
         # Alert type depends on watchdog logic, but can be None, str, or alert obj
-        assert alert is None or isinstance(alert, str) or hasattr(alert, '__str__')
+        assert alert is None or isinstance(alert, str) or hasattr(alert, "__str__")
 
     def test_retrieval_watchdog_record_properties(self):
         """QueryRetrievalRecord properties compute correctly."""
@@ -381,6 +392,7 @@ class TestRetrievalWatchdog:
 # ---------------------------------------------------------------------------
 # TestFailureMemory — Record and match failure signatures
 # ---------------------------------------------------------------------------
+
 
 class TestFailureMemory:
     """Verify FailureMemoryDB records and matches failures."""
@@ -460,6 +472,7 @@ class TestFailureMemory:
 # TestSalienceRouter — Content-type aware extraction
 # ---------------------------------------------------------------------------
 
+
 class TestSalienceRouter:
     """Verify SalienceRouter detects content types and extracts salient info."""
 
@@ -495,9 +508,9 @@ def goodbye(name):
 '''
         result = salience_extract(code)
         assert result is not None
-        assert hasattr(result, 'extracted')
-        assert hasattr(result, 'lines_in')
-        assert hasattr(result, 'lines_out')
+        assert hasattr(result, "extracted")
+        assert hasattr(result, "lines_in")
+        assert hasattr(result, "lines_out")
         assert result.lines_in > 0
         assert result.lines_out >= 0
 
@@ -519,6 +532,7 @@ def goodbye(name):
 # ---------------------------------------------------------------------------
 # TestFidelityTiers — Select compression level by complexity/budget
 # ---------------------------------------------------------------------------
+
 
 class TestFidelityTiers:
     """Verify FidelityTiers selects compression level based on budget/complexity."""
@@ -574,6 +588,7 @@ class TestFidelityTiers:
 # ---------------------------------------------------------------------------
 # Integration Tests — Multi-module scenarios
 # ---------------------------------------------------------------------------
+
 
 class TestTier2MultiModuleIntegration:
     """Test interactions between multiple Tier 2 modules."""
@@ -644,6 +659,7 @@ class TestTier2MultiModuleIntegration:
 # Session Dict Verification Tests
 # ---------------------------------------------------------------------------
 
+
 class TestTier2SessionDictEntries:
     """Verify SESSION dict entries are set correctly per module."""
 
@@ -697,7 +713,9 @@ class TestTier2SessionDictEntries:
         if result.reduction_pct > 0:
             SESSION["salience_router_applied"] = 1
 
-        assert "salience_router_applied" in SESSION or SESSION.get("salience_router_applied", 0) >= 0
+        assert (
+            "salience_router_applied" in SESSION or SESSION.get("salience_router_applied", 0) >= 0
+        )
 
     def test_session_dict_fidelity_tier(self):
         """SESSION["fidelity_tier"] is set to selected tier name."""
@@ -705,7 +723,7 @@ class TestTier2SessionDictEntries:
 
         selector = TierSelector()
         tier = selector.select(complexity_score=0.5, budget_remaining=0.5)
-        SESSION["fidelity_tier"] = tier.name if hasattr(tier, 'name') else str(tier)
+        SESSION["fidelity_tier"] = tier.name if hasattr(tier, "name") else str(tier)
 
         assert "fidelity_tier" in SESSION
 
@@ -732,6 +750,7 @@ class TestTier2SessionDictEntries:
 # ---------------------------------------------------------------------------
 # Error Path Tests
 # ---------------------------------------------------------------------------
+
 
 class TestTier2ErrorPaths:
     """Test error handling and malformed input."""

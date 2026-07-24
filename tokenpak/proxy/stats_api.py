@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any, Callable, cast
 
 from tokenpak.telemetry.stats import get_stats_storage
 
@@ -11,7 +12,7 @@ class StatsAPI:
     """Handles HTTP requests for stats endpoints."""
 
     @staticmethod
-    def handle_stats_last() -> tuple[str, dict]:
+    def handle_stats_last() -> tuple[str, dict[str, str]]:
         """Handle GET /stats/last request.
 
         Returns last request stats with session totals.
@@ -22,7 +23,7 @@ class StatsAPI:
         return json.dumps(data), {"Content-Type": "application/json"}
 
     @staticmethod
-    def handle_stats_session() -> tuple[str, dict]:
+    def handle_stats_session() -> tuple[str, dict[str, str]]:
         """Handle GET /stats/session request.
 
         Returns current session stats.
@@ -30,10 +31,11 @@ class StatsAPI:
         storage = get_stats_storage()
         session = storage.get_session()
 
-        return json.dumps(session.to_dict()), {"Content-Type": "application/json"}
+        to_dict = cast(Callable[[], dict[str, Any]], session.to_dict)
+        return json.dumps(to_dict()), {"Content-Type": "application/json"}
 
     @staticmethod
-    def route(path: str) -> tuple[str, dict] | None:
+    def route(path: str) -> tuple[str, dict[str, str]] | None:
         """Route HTTP requests to appropriate handler.
 
         Args:

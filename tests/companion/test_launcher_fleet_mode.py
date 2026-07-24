@@ -82,9 +82,7 @@ def test_claude_fleet_no_duplicate_when_flag_present():
     fleet-enabled launch.
     """
     stream = io.StringIO()
-    out = claude_launcher._apply_fleet_mode(
-        ["claude", CLAUDE_BYPASS], True, stream=stream
-    )
+    out = claude_launcher._apply_fleet_mode(["claude", CLAUDE_BYPASS], True, stream=stream)
     assert out.count(CLAUDE_BYPASS) == 1
     assert CLAUDE_BANNER in stream.getvalue()
 
@@ -207,9 +205,7 @@ def test_codex_default_stays_vanilla():
 
 
 def test_codex_fleet_no_duplicate_with_user_flag():
-    out = codex_launcher._maybe_inject_bypass_flag(
-        [CODEX_BYPASS, "--foo"], env={}, fleet=True
-    )
+    out = codex_launcher._maybe_inject_bypass_flag([CODEX_BYPASS, "--foo"], env={}, fleet=True)
     assert out.count(CODEX_BYPASS) == 1
 
 

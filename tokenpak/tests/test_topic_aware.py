@@ -155,7 +155,8 @@ class TestSegment:
         # Two distinct topics concatenated
         text = (
             "Machine learning trains neural networks on data. "
-            "Backpropagation computes gradients efficiently. " * 5
+            "Backpropagation computes gradients efficiently. "
+            * 5
             + "Gardening involves soil, water, and sunlight. "
             "Plants grow better with fertilizer and pruning. " * 5
         )

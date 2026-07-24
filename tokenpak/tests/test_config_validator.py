@@ -7,6 +7,7 @@ Public API under test:
     ConfigValidator.validate_file(filepath) -> bool
     ConfigValidationError.to_dict() / __str__()
 """
+
 import json
 import os
 import tempfile
@@ -109,7 +110,12 @@ class TestRequiredFields:
     def test_env_var_bypass_each_provider(self, monkeypatch):
         """Each canonical provider env var must satisfy the requirement."""
         for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
-            for clear in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"):
+            for clear in (
+                "ANTHROPIC_API_KEY",
+                "OPENAI_API_KEY",
+                "GOOGLE_API_KEY",
+                "GEMINI_API_KEY",
+            ):
                 monkeypatch.delenv(clear, raising=False)
             monkeypatch.setenv(var, "test-value")
             v = make_validator()
@@ -209,7 +215,9 @@ class TestValueValidation:
 
     def test_provider_url_valid_is_ok(self):
         v = make_validator()
-        errors = v.validate({"api_keys": {}, "provider_urls": {"anthropic": "https://api.anthropic.com"}})
+        errors = v.validate(
+            {"api_keys": {}, "provider_urls": {"anthropic": "https://api.anthropic.com"}}
+        )
         assert not any("provider_urls" in e.field for e in errors)
 
 

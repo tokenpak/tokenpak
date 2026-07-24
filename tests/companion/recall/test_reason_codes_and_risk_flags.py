@@ -76,9 +76,7 @@ class TestReasonCodes:
             got = store.get_pak_reason_codes(pid)
         assert got == [ReasonCodeEntry(reason_code="current_task", weight=1.0)]
 
-    def test_get_returns_sorted_ascending(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_get_returns_sorted_ascending(self, tmp_path: Path, require_fts5: None) -> None:
         """The read helper returns entries in deterministic ascending order."""
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
@@ -142,26 +140,20 @@ class TestReasonCodes:
             store.set_pak_reason_codes(pid, [])
             assert store.get_pak_reason_codes(pid) == []
 
-    def test_unknown_pak_id_returns_empty(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_unknown_pak_id_returns_empty(self, tmp_path: Path, require_fts5: None) -> None:
         """``get`` for an unknown ``pak_id`` returns ``[]``."""
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             _seed_one_pak(store)
             assert store.get_pak_reason_codes("vault://unknown") == []
 
-    def test_blank_pak_id_returns_empty(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_blank_pak_id_returns_empty(self, tmp_path: Path, require_fts5: None) -> None:
         """``get`` with blank/whitespace ``pak_id`` returns ``[]`` (no DB round-trip)."""
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             assert store.get_pak_reason_codes("   ") == []
 
-    def test_set_rejects_empty_pak_id(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_set_rejects_empty_pak_id(self, tmp_path: Path, require_fts5: None) -> None:
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             with pytest.raises(ValueError) as exc:
@@ -171,9 +163,7 @@ class TestReasonCodes:
                 )
         assert "pak_id" in str(exc.value)
 
-    def test_set_rejects_blank_code(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_set_rejects_blank_code(self, tmp_path: Path, require_fts5: None) -> None:
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             pid = _seed_one_pak(store)
@@ -184,9 +174,7 @@ class TestReasonCodes:
                 )
         assert "reason_code" in str(exc.value)
 
-    def test_set_rejects_duplicate_code(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_set_rejects_duplicate_code(self, tmp_path: Path, require_fts5: None) -> None:
         """A duplicate ``reason_code`` within a single call is rejected early."""
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
@@ -215,9 +203,7 @@ class TestReasonCodes:
                 )
         assert "weight" in str(exc.value).lower()
 
-    def test_unknown_pak_id_foreign_key_violation(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_unknown_pak_id_foreign_key_violation(self, tmp_path: Path, require_fts5: None) -> None:
         """Writing for a non-existent ``pak_id`` raises IntegrityError."""
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
@@ -242,13 +228,9 @@ class TestReasonCodes:
                     [ReasonCodeEntry(reason_code="current_task")],
                 )
             # Original row is untouched.
-            assert [e.reason_code for e in store.get_pak_reason_codes(pid)] == [
-                "current_task"
-            ]
+            assert [e.reason_code for e in store.get_pak_reason_codes(pid)] == ["current_task"]
 
-    def test_fk_cascade_on_paks_delete(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_fk_cascade_on_paks_delete(self, tmp_path: Path, require_fts5: None) -> None:
         """Deleting a ``paks`` row cascades to ``pak_reason_codes``."""
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
@@ -290,13 +272,9 @@ class TestRiskFlags:
                 [RiskFlagEntry(risk_flag="mandatory_context_missing", severity="block")],
             )
             got = store.get_pak_risk_flags(pid)
-        assert got == [
-            RiskFlagEntry(risk_flag="mandatory_context_missing", severity="block")
-        ]
+        assert got == [RiskFlagEntry(risk_flag="mandatory_context_missing", severity="block")]
 
-    def test_get_returns_sorted_ascending(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_get_returns_sorted_ascending(self, tmp_path: Path, require_fts5: None) -> None:
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             pid = _seed_one_pak(store)
@@ -339,11 +317,7 @@ class TestRiskFlags:
             )
             store.set_pak_risk_flags(
                 pid,
-                [
-                    RiskFlagEntry(
-                        risk_flag="mandatory_context_missing", severity="block"
-                    )
-                ],
+                [RiskFlagEntry(risk_flag="mandatory_context_missing", severity="block")],
             )
             got = store.get_pak_risk_flags(pid)
         assert [e.risk_flag for e in got] == ["mandatory_context_missing"]
@@ -360,17 +334,13 @@ class TestRiskFlags:
             store.set_pak_risk_flags(pid, [])
             assert store.get_pak_risk_flags(pid) == []
 
-    def test_unknown_pak_id_returns_empty(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_unknown_pak_id_returns_empty(self, tmp_path: Path, require_fts5: None) -> None:
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             _seed_one_pak(store)
             assert store.get_pak_risk_flags("vault://unknown") == []
 
-    def test_set_rejects_unknown_severity(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_set_rejects_unknown_severity(self, tmp_path: Path, require_fts5: None) -> None:
         """A ``severity`` outside ``{info, warn, block}`` is rejected before write."""
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
@@ -382,9 +352,7 @@ class TestRiskFlags:
                 )
         assert "severity" in str(exc.value).lower()
 
-    def test_set_rejects_blank_flag(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_set_rejects_blank_flag(self, tmp_path: Path, require_fts5: None) -> None:
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             pid = _seed_one_pak(store)
@@ -394,9 +362,7 @@ class TestRiskFlags:
                     [RiskFlagEntry(risk_flag="   ", severity="info")],
                 )
 
-    def test_set_rejects_duplicate_flag(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_set_rejects_duplicate_flag(self, tmp_path: Path, require_fts5: None) -> None:
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             pid = _seed_one_pak(store)
@@ -410,9 +376,7 @@ class TestRiskFlags:
                 )
         assert "duplicate" in str(exc.value).lower()
 
-    def test_set_rejects_empty_pak_id(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_set_rejects_empty_pak_id(self, tmp_path: Path, require_fts5: None) -> None:
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             with pytest.raises(ValueError):
@@ -421,9 +385,7 @@ class TestRiskFlags:
                     [RiskFlagEntry(risk_flag="raw_logs_deferred", severity="warn")],
                 )
 
-    def test_unknown_pak_id_foreign_key_violation(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_unknown_pak_id_foreign_key_violation(self, tmp_path: Path, require_fts5: None) -> None:
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             with pytest.raises(sqlite3.IntegrityError):
@@ -432,9 +394,7 @@ class TestRiskFlags:
                     [RiskFlagEntry(risk_flag="raw_logs_deferred", severity="warn")],
                 )
 
-    def test_fk_cascade_on_paks_delete(
-        self, tmp_path: Path, require_fts5: None
-    ) -> None:
+    def test_fk_cascade_on_paks_delete(self, tmp_path: Path, require_fts5: None) -> None:
         db_path = tmp_path / "recall.db"
         with RecallStore.open(db_path) as store:
             pid = _seed_one_pak(store)
@@ -475,11 +435,7 @@ class TestSeverityBlockOssTransparency:
             pid = _seed_one_pak(store)
             store.set_pak_risk_flags(
                 pid,
-                [
-                    RiskFlagEntry(
-                        risk_flag="mandatory_context_missing", severity="block"
-                    )
-                ],
+                [RiskFlagEntry(risk_flag="mandatory_context_missing", severity="block")],
             )
             got = store.get_pak_risk_flags(pid)
         assert len(got) == 1

@@ -42,8 +42,12 @@ def watchdog_with_mocks(tmp_watchdog_dir, monkeypatch):
 
     # Point config paths to temp dir
     monkeypatch.setattr(wd_module, "WATCHDOG_LOG", tmp_watchdog_dir / ".tokenpak" / "watchdog.log")
-    monkeypatch.setattr(wd_module, "COOLDOWNS_FILE", tmp_watchdog_dir / ".tokenpak" / "cooldowns.json")
-    monkeypatch.setattr(wd_module, "AUTH_PROFILES_FILE", tmp_watchdog_dir / ".tokenpak" / "auth-profiles.json")
+    monkeypatch.setattr(
+        wd_module, "COOLDOWNS_FILE", tmp_watchdog_dir / ".tokenpak" / "cooldowns.json"
+    )
+    monkeypatch.setattr(
+        wd_module, "AUTH_PROFILES_FILE", tmp_watchdog_dir / ".tokenpak" / "auth-profiles.json"
+    )
     monkeypatch.setattr(wd_module, "PROXY_PID_FILE", tmp_watchdog_dir / ".tokenpak" / "proxy.pid")
     monkeypatch.setattr(wd_module, "PROXY_PORT", 8766)
     monkeypatch.setattr(wd_module, "HEALTH_CHECK_INTERVAL", 1)
@@ -171,11 +175,12 @@ def test_restart_proxy_kills_and_starts_process(watchdog_with_mocks):
     watchdog = watchdog_with_mocks
     watchdog.restart_count = 0
 
-    with patch("tokenpak.watchdog.subprocess.run") as mock_run, \
-         patch("tokenpak.watchdog.subprocess.Popen") as mock_popen, \
-         patch("tokenpak.watchdog.time.sleep") as mock_sleep, \
-         patch.object(watchdog, "is_proxy_running", side_effect=[False, False, True]):  # Eventually responds
-
+    with (
+        patch("tokenpak.watchdog.subprocess.run") as mock_run,
+        patch("tokenpak.watchdog.subprocess.Popen") as mock_popen,
+        patch("tokenpak.watchdog.time.sleep") as mock_sleep,
+        patch.object(watchdog, "is_proxy_running", side_effect=[False, False, True]),
+    ):  # Eventually responds
         result = watchdog.restart_proxy()
 
         assert result is True
@@ -201,11 +206,12 @@ def test_restart_proxy_respects_exponential_backoff(watchdog_with_mocks):
     watchdog = watchdog_with_mocks
     watchdog.restart_count = 0
 
-    with patch("tokenpak.watchdog.subprocess.run"), \
-         patch("tokenpak.watchdog.subprocess.Popen"), \
-         patch("tokenpak.watchdog.time.sleep") as mock_sleep, \
-         patch.object(watchdog, "is_proxy_running", return_value=False):
-
+    with (
+        patch("tokenpak.watchdog.subprocess.run"),
+        patch("tokenpak.watchdog.subprocess.Popen"),
+        patch("tokenpak.watchdog.time.sleep") as mock_sleep,
+        patch.object(watchdog, "is_proxy_running", return_value=False),
+    ):
         watchdog.restart_proxy()
 
         # First call should have backoff of 2^0 = 1 second (actually uses RESTART_BACKOFF_BASE**0 = 1)
@@ -219,11 +225,12 @@ def test_restart_proxy_increments_counter_on_attempt(watchdog_with_mocks):
     watchdog = watchdog_with_mocks
     watchdog.restart_count = 0
 
-    with patch("tokenpak.watchdog.subprocess.run"), \
-         patch("tokenpak.watchdog.subprocess.Popen"), \
-         patch("tokenpak.watchdog.time.sleep"), \
-         patch.object(watchdog, "is_proxy_running", return_value=False):
-
+    with (
+        patch("tokenpak.watchdog.subprocess.run"),
+        patch("tokenpak.watchdog.subprocess.Popen"),
+        patch("tokenpak.watchdog.time.sleep"),
+        patch.object(watchdog, "is_proxy_running", return_value=False),
+    ):
         watchdog.restart_proxy()
 
         # Counter is incremented during restart attempt
@@ -235,11 +242,12 @@ def test_restart_proxy_resets_counter_on_success(watchdog_with_mocks):
     watchdog = watchdog_with_mocks
     watchdog.restart_count = 2
 
-    with patch("tokenpak.watchdog.subprocess.run"), \
-         patch("tokenpak.watchdog.subprocess.Popen"), \
-         patch("tokenpak.watchdog.time.sleep"), \
-         patch.object(watchdog, "is_proxy_running", return_value=True):
-
+    with (
+        patch("tokenpak.watchdog.subprocess.run"),
+        patch("tokenpak.watchdog.subprocess.Popen"),
+        patch("tokenpak.watchdog.time.sleep"),
+        patch.object(watchdog, "is_proxy_running", return_value=True),
+    ):
         watchdog.restart_proxy()
 
         assert watchdog.restart_count == 0
@@ -259,7 +267,7 @@ def test_check_memory_usage_warns_on_high_memory(watchdog_with_mocks, caplog):
         # Mock ps to return 600MB (600 * 1024 KB)
         mock_run.side_effect = [
             Mock(returncode=0, stdout="12345\n"),  # pgrep result
-            Mock(returncode=0, stdout="614400"),   # ps result: 600MB in KB
+            Mock(returncode=0, stdout="614400"),  # ps result: 600MB in KB
         ]
 
         with caplog.at_level(logging.WARNING):
@@ -276,7 +284,7 @@ def test_check_memory_usage_no_warning_on_low_memory(watchdog_with_mocks, caplog
     with patch("tokenpak.watchdog.subprocess.run") as mock_run:
         mock_run.side_effect = [
             Mock(returncode=0, stdout="12345\n"),  # pgrep result
-            Mock(returncode=0, stdout="256000"),   # ps result: 250MB in KB
+            Mock(returncode=0, stdout="256000"),  # ps result: 250MB in KB
         ]
 
         with caplog.at_level(logging.WARNING):
@@ -363,7 +371,7 @@ def test_check_error_rate_handles_bad_json(watchdog_with_mocks):
     with patch("tokenpak.watchdog.subprocess.run") as mock_run:
         mock_run.return_value = Mock(
             returncode=0,
-            stdout=b'invalid json',
+            stdout=b"invalid json",
         )
 
         # Should not raise
@@ -379,9 +387,10 @@ def test_clear_cooldowns_calls_manager(watchdog_with_mocks, tmp_watchdog_dir):
     """clear_cooldowns delegates to CooldownManager."""
     watchdog = watchdog_with_mocks
 
-    with patch.object(watchdog.cooldown_mgr, "clear_expired", return_value=["key1"]), \
-         patch.object(watchdog.cooldown_mgr, "check_auth_profiles", return_value=[]):
-
+    with (
+        patch.object(watchdog.cooldown_mgr, "clear_expired", return_value=["key1"]),
+        patch.object(watchdog.cooldown_mgr, "check_auth_profiles", return_value=[]),
+    ):
         watchdog.clear_cooldowns()
 
         watchdog.cooldown_mgr.clear_expired.assert_called_once()
@@ -392,9 +401,14 @@ def test_clear_cooldowns_logs_warnings(watchdog_with_mocks, caplog):
     """clear_cooldowns logs warnings from check_auth_profiles."""
     watchdog = watchdog_with_mocks
 
-    with patch.object(watchdog.cooldown_mgr, "clear_expired", return_value=[]), \
-         patch.object(watchdog.cooldown_mgr, "check_auth_profiles", return_value=["profile1 in cooldown for 60s"]):
-
+    with (
+        patch.object(watchdog.cooldown_mgr, "clear_expired", return_value=[]),
+        patch.object(
+            watchdog.cooldown_mgr,
+            "check_auth_profiles",
+            return_value=["profile1 in cooldown for 60s"],
+        ),
+    ):
         with caplog.at_level(logging.INFO):
             watchdog.clear_cooldowns()
 
@@ -462,14 +476,15 @@ def test_run_main_loop_checks_health(watchdog_with_mocks):
     """run() performs health checks in the main loop."""
     watchdog = watchdog_with_mocks
 
-    with patch.object(watchdog, "is_proxy_running", side_effect=[True, True, False]), \
-         patch.object(watchdog, "restart_proxy"), \
-         patch.object(watchdog, "check_memory_usage"), \
-         patch.object(watchdog, "check_error_rate"), \
-         patch.object(watchdog, "clear_cooldowns"), \
-         patch.object(watchdog, "log_stats"), \
-         patch("tokenpak.watchdog.time.sleep") as mock_sleep:
-
+    with (
+        patch.object(watchdog, "is_proxy_running", side_effect=[True, True, False]),
+        patch.object(watchdog, "restart_proxy"),
+        patch.object(watchdog, "check_memory_usage"),
+        patch.object(watchdog, "check_error_rate"),
+        patch.object(watchdog, "clear_cooldowns"),
+        patch.object(watchdog, "log_stats"),
+        patch("tokenpak.watchdog.time.sleep") as mock_sleep,
+    ):
         # Mock KeyboardInterrupt to break out after 3 iterations
         mock_sleep.side_effect = KeyboardInterrupt
 
@@ -483,9 +498,10 @@ def test_run_handles_keyboard_interrupt(watchdog_with_mocks, caplog):
     """run() handles KeyboardInterrupt gracefully."""
     watchdog = watchdog_with_mocks
 
-    with patch.object(watchdog, "is_proxy_running"), \
-         patch("tokenpak.watchdog.time.sleep") as mock_sleep:
-
+    with (
+        patch.object(watchdog, "is_proxy_running"),
+        patch("tokenpak.watchdog.time.sleep") as mock_sleep,
+    ):
         mock_sleep.side_effect = KeyboardInterrupt
 
         with caplog.at_level(logging.INFO):
@@ -532,14 +548,15 @@ def test_proxy_crash_and_recovery_scenario(watchdog_with_mocks):
             return False  # First two checks: not running
         return True  # Third check: running after restart
 
-    with patch.object(watchdog, "is_proxy_running", side_effect=is_running), \
-         patch.object(watchdog, "restart_proxy", return_value=True) as mock_restart, \
-         patch.object(watchdog, "check_memory_usage"), \
-         patch.object(watchdog, "check_error_rate"), \
-         patch.object(watchdog, "clear_cooldowns"), \
-         patch.object(watchdog, "log_stats"), \
-         patch("tokenpak.watchdog.time.sleep") as mock_sleep:
-
+    with (
+        patch.object(watchdog, "is_proxy_running", side_effect=is_running),
+        patch.object(watchdog, "restart_proxy", return_value=True) as mock_restart,
+        patch.object(watchdog, "check_memory_usage"),
+        patch.object(watchdog, "check_error_rate"),
+        patch.object(watchdog, "clear_cooldowns"),
+        patch.object(watchdog, "log_stats"),
+        patch("tokenpak.watchdog.time.sleep") as mock_sleep,
+    ):
         mock_sleep.side_effect = KeyboardInterrupt
 
         watchdog.run()
@@ -552,13 +569,14 @@ def test_high_memory_warning_scenario(watchdog_with_mocks, caplog):
     """Scenario: Proxy uses >500MB memory, watchdog logs warning."""
     watchdog = watchdog_with_mocks
 
-    with patch.object(watchdog, "is_proxy_running", return_value=True), \
-         patch("tokenpak.watchdog.subprocess.run") as mock_run:
-
+    with (
+        patch.object(watchdog, "is_proxy_running", return_value=True),
+        patch("tokenpak.watchdog.subprocess.run") as mock_run,
+    ):
         # Setup: pgrep returns PID, ps returns high memory
         mock_run.side_effect = [
             Mock(returncode=0, stdout="12345\n"),  # pgrep
-            Mock(returncode=0, stdout="614400"),   # ps: 600MB
+            Mock(returncode=0, stdout="614400"),  # ps: 600MB
         ]
 
         with caplog.at_level(logging.WARNING):

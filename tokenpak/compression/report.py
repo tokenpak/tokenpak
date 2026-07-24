@@ -95,7 +95,7 @@ class Decision:
         Returns:
             dict: Serializable representation with action enum converted to string value
         """
-        d: dict = {
+        d: Dict[str, Any] = {
             "block_id": self.block_id,
             "block_type": self.block_type,
             "action": self.action.value,

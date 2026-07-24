@@ -159,7 +159,7 @@ class StatusResponse(BaseModel):
 def _estimate_tokens(text: str) -> int:
     """Quick approximation: ~4 chars per token."""
     try:
-        import tiktoken  # type: ignore
+        import tiktoken
 
         enc = tiktoken.encoding_for_model("gpt-4o")
         return len(enc.encode(text))

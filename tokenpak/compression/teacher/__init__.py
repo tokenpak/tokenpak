@@ -3,12 +3,11 @@
 import warnings as _warnings
 
 _warnings.warn(
-    "tokenpak.compression.teacher — context recipe generation."
-    "This will be removed in v2.0.",
+    "tokenpak.compression.teacher — context recipe generation.This will be removed in v2.0.",
     DeprecationWarning,
     stacklevel=2,
 )
 
 from .builder import TeacherPackBuilder, TeacherPackResult, build_teacher_pack
 
-__all__ = ['TeacherPackBuilder', 'TeacherPackResult', 'build_teacher_pack', 'builder']
+__all__ = ["TeacherPackBuilder", "TeacherPackResult", "build_teacher_pack", "builder"]

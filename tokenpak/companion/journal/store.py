@@ -132,6 +132,7 @@ class JournalStore:
         metadata) event within a session collapses to one row.
         """
         import json
+
         metadata_json = json.dumps(metadata or {}, default=str)
         with self._write_lock:
             conn = self._writer()
@@ -139,8 +140,14 @@ class JournalStore:
                 """INSERT OR IGNORE INTO entries
                    (session_id, timestamp, entry_type, content, metadata_json, content_hash)
                    VALUES (?, ?, ?, ?, ?, ?)""",
-                (session_id, time.time(), entry_type, content, metadata_json,
-                 _db.entry_content_hash(entry_type, content, metadata_json)),
+                (
+                    session_id,
+                    time.time(),
+                    entry_type,
+                    content,
+                    metadata_json,
+                    _db.entry_content_hash(entry_type, content, metadata_json),
+                ),
             )
             conn.commit()
 
@@ -148,9 +155,7 @@ class JournalStore:
         """Retrieve a session record."""
         conn = self._connect()
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
         entry_count = conn.execute(
             "SELECT COUNT(*) FROM entries WHERE session_id = ?", (session_id,)
         ).fetchone()[0]
@@ -179,6 +184,7 @@ class JournalStore:
     ) -> list[JournalEntry]:
         """Retrieve journal entries for a session."""
         import json
+
         conn = self._connect()
         conn.row_factory = sqlite3.Row
         if entry_type:
@@ -241,6 +247,7 @@ class JournalStore:
         Reads from entries table; no caching — caller decides frequency.
         """
         import json
+
         conn = self._connect()
         try:
             rows = conn.execute(
@@ -263,7 +270,9 @@ class JournalStore:
             cost = float(m.get("cost_avoided_usd", 0.0) or 0.0)
             total_tokens += tok
             total_cost += cost
-            bucket = by_tool.setdefault(tool, {"tokens_avoided": 0, "cost_avoided_usd": 0.0, "events": 0})
+            bucket = by_tool.setdefault(
+                tool, {"tokens_avoided": 0, "cost_avoided_usd": 0.0, "events": 0}
+            )
             bucket["tokens_avoided"] += tok
             bucket["cost_avoided_usd"] += cost
             bucket["events"] += 1

@@ -133,36 +133,40 @@ before it is delivered. Cross-project leakage gate, sensitive-Pak block list,
 hydration budget all enforced here."""
 
 # Convenience set for adapters that implement the full MultiPak surface.
-MULTIPAK_CAPABILITIES: frozenset[str] = frozenset({
-    TIP_PAK_CAPTURE,
-    TIP_PAK_INDEX,
-    TIP_PAK_RECALL,
-    TIP_PAK_HYDRATE,
-    TIP_PAK_PROMOTE,
-    TIP_CONTEXT_PACKAGE,
-    TIP_CONTEXT_HANDOFF,
-    TIP_CONTEXT_RESUME,
-    TIP_CONTEXT_COVERAGE,
-    TIP_CONTEXT_POLICY,
-})
+MULTIPAK_CAPABILITIES: frozenset[str] = frozenset(
+    {
+        TIP_PAK_CAPTURE,
+        TIP_PAK_INDEX,
+        TIP_PAK_RECALL,
+        TIP_PAK_HYDRATE,
+        TIP_PAK_PROMOTE,
+        TIP_CONTEXT_PACKAGE,
+        TIP_CONTEXT_HANDOFF,
+        TIP_CONTEXT_RESUME,
+        TIP_CONTEXT_COVERAGE,
+        TIP_CONTEXT_POLICY,
+    }
+)
 
 # --- Aggregated set of all optimization vocabulary labels ---
-ALL_OPTIMIZATION_CAPABILITIES: frozenset[str] = frozenset({
-    TIP_COMPRESSION_V1,
-    TIP_CACHE_PROXY_MANAGED,
-    TIP_CACHE_PROVIDER_AWARE,
-    TIP_CACHE_PROMPT_KEY_PRESERVED,
-    TIP_CACHE_TTL_ORDERING,
-    TIP_CACHE_SEMANTIC_V1,
-    TIP_ROUTE_CLASS_V1,
-    TIP_FIDELITY_POLICY_V1,
-    TIP_TELEMETRY_ATTRIBUTION_V1,
-    TIP_INTENT_CLASSIFICATION_V1,
-    TIP_INTENT_SUGGESTION_V1,
-    TIP_TOOL_SCHEMA_STABILITY_V1,
-    TIP_CAPSULES_V1,
-    *MULTIPAK_CAPABILITIES,
-})
+ALL_OPTIMIZATION_CAPABILITIES: frozenset[str] = frozenset(
+    {
+        TIP_COMPRESSION_V1,
+        TIP_CACHE_PROXY_MANAGED,
+        TIP_CACHE_PROVIDER_AWARE,
+        TIP_CACHE_PROMPT_KEY_PRESERVED,
+        TIP_CACHE_TTL_ORDERING,
+        TIP_CACHE_SEMANTIC_V1,
+        TIP_ROUTE_CLASS_V1,
+        TIP_FIDELITY_POLICY_V1,
+        TIP_TELEMETRY_ATTRIBUTION_V1,
+        TIP_INTENT_CLASSIFICATION_V1,
+        TIP_INTENT_SUGGESTION_V1,
+        TIP_TOOL_SCHEMA_STABILITY_V1,
+        TIP_CAPSULES_V1,
+        *MULTIPAK_CAPABILITIES,
+    }
+)
 
 __all__ = [
     "TIP_COMPRESSION_V1",

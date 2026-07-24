@@ -50,6 +50,7 @@ BLOCK_ID_PREFIX = "claude_transcript"
 # Config
 # ---------------------------------------------------------------------------
 
+
 def default_projects_root() -> Path:
     """Return the Claude Code projects root, honouring ``CLAUDE_PROJECTS_DIR``."""
     override = os.environ.get(ENV_PROJECTS_DIR)
@@ -67,6 +68,7 @@ def is_enabled() -> bool:
 # ---------------------------------------------------------------------------
 # JSONL parsing
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class TranscriptMessage:
@@ -243,6 +245,7 @@ def build_block(project_dir_name: str, session_file: Path) -> Optional[Transcrip
 # Index merge
 # ---------------------------------------------------------------------------
 
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -299,9 +302,7 @@ def index_claude_transcripts(
         if tb is None:
             continue
         rendered = tb.render()
-        content_hash = hashlib.sha256(
-            rendered.encode("utf-8", errors="replace")
-        ).hexdigest()
+        content_hash = hashlib.sha256(rendered.encode("utf-8", errors="replace")).hexdigest()
         bid = tb.block_id
 
         existing = blocks.get(bid)
@@ -324,9 +325,7 @@ def index_claude_transcripts(
             session_size = 0
 
         first_ts = next((m.timestamp for m in tb.messages if m.timestamp), None)
-        last_ts = next(
-            (m.timestamp for m in reversed(tb.messages) if m.timestamp), None
-        )
+        last_ts = next((m.timestamp for m in reversed(tb.messages) if m.timestamp), None)
 
         entry = {
             "block_id": bid,

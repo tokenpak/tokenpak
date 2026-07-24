@@ -16,6 +16,7 @@ No real plugin package is installed: ``importlib.metadata.entry_points`` is
 monkeypatched to yield fake entry points whose ``.load()`` returns a local
 callable.
 """
+
 from __future__ import annotations
 
 import importlib.metadata
@@ -98,6 +99,7 @@ def test_unentitled_gate_stub_exit_code_propagates(monkeypatch):
     This proves the loader routes *to* the plugin's gate; it does not bypass or
     reimplement entitlement enforcement. A non-zero stub code (2) must survive.
     """
+
     def _gated_unentitled(argv):
         # Mirrors the gate's behavior for a user lacking the entitlement.
         print("This command requires an active entitlement.")
@@ -121,9 +123,7 @@ def test_core_verb_not_overridable_by_plugin(monkeypatch):
         return 99
 
     # Register a plugin entry that tries to shadow an existing built-in verb.
-    _patch_entry_points(
-        monkeypatch, [_FakeEntryPoint(core_verb, _plugin_impl)]
-    )
+    _patch_entry_points(monkeypatch, [_FakeEntryPoint(core_verb, _plugin_impl)])
 
     discovered = _cli_core._discover_plugin_commands(force=True)
     # The colliding name must NOT enter the plugin dispatch table.
@@ -146,9 +146,7 @@ def test_argparse_registered_core_verb_not_overridable(monkeypatch):
     assert extra_verb in _cli_core._EXTRA_KNOWN_COMMANDS
     assert extra_verb not in _cli_core._ALL_COMMANDS
 
-    _patch_entry_points(
-        monkeypatch, [_FakeEntryPoint(extra_verb, lambda argv: 77)]
-    )
+    _patch_entry_points(monkeypatch, [_FakeEntryPoint(extra_verb, lambda argv: 77)])
     discovered = _cli_core._discover_plugin_commands(force=True)
     assert extra_verb not in discovered
 
@@ -164,6 +162,7 @@ def test_plugins_disabled_via_env(monkeypatch):
 
 def test_broken_plugin_environment_is_safe(monkeypatch):
     """If entry_points() raises, discovery returns empty and never propagates."""
+
     def _boom(*a, **k):
         raise RuntimeError("entry point backend exploded")
 

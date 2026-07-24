@@ -24,9 +24,9 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 # Severity tiers map onto display sections.
 SEVERITY_HIGH = "high"
@@ -56,12 +56,19 @@ class Recommendation:
     id: str
     severity: str
     title: str
-    evidence: dict = field(default_factory=dict)
+    evidence: dict[str, object] = field(default_factory=dict)
     action: str = ""
     expected: str = ""
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "severity": self.severity,
+            "title": self.title,
+            "evidence": self.evidence,
+            "action": self.action,
+            "expected": self.expected,
+        }
 
 
 @dataclass
@@ -69,14 +76,12 @@ class RecommendationsResult:
     window_hours: int
     generated_at: float
     recommendations: list[Recommendation]
-    filters: dict
+    filters: dict[str, Optional[str]]
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "window_hours": self.window_hours,
-            "generated_at_utc": time.strftime(
-                "%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.generated_at)
-            ),
+            "generated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.generated_at)),
             "filters": self.filters,
             "count": len(self.recommendations),
             "recommendations": [r.to_dict() for r in self.recommendations],
@@ -206,13 +211,13 @@ class _RuleContext:
         cur = self.conn.execute(f"PRAGMA table_info({table})")
         return any(row[1] == column for row in cur.fetchall())
 
-    def event_filter_clause(self) -> tuple[str, list[Any]]:
+    def event_filter_clause(self) -> tuple[str, list[object]]:
         """Return SQL WHERE-fragment for filtering tp_events by window/model/platform.
 
         The clause uses ``e.`` as the table alias for tp_events.
         """
         clauses = ["e.ts >= ?"]
-        params: list[Any] = [self.cutoff]
+        params: list[object] = [self.cutoff]
         if self.model:
             clauses.append("e.model = ?")
             params.append(self.model)
@@ -383,7 +388,7 @@ def _rule_missing_pricing(ctx: _RuleContext) -> list[Recommendation]:
     # `calculate_request_cost` because it transparently falls back to default
     # rates for unknown models, which would mask the gap this rule exists to surface.
     try:
-        from tokenpak.telemetry.pricing_rates import MODEL_RATES  # type: ignore
+        from tokenpak.telemetry.pricing_rates import MODEL_RATES
 
         priced.update(MODEL_RATES.keys())
     except Exception:
@@ -419,9 +424,7 @@ def _rule_schema_instability(ctx: _RuleContext) -> list[Recommendation]:
 
     has_ts = ctx.column_exists("tp_cache_miss_reasons", "timestamp")
     if has_ts:
-        cutoff_iso = time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(ctx.cutoff)
-        )
+        cutoff_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ctx.cutoff))
         cur = ctx.conn.execute(
             """
             SELECT COUNT(*) FROM tp_cache_miss_reasons
@@ -529,10 +532,7 @@ def format_human(result: RecommendationsResult) -> str:
     """Format ``result`` for terminal display."""
     header = f"TokenPak Recommendations — last {result.window_hours}h"
     if not result.recommendations:
-        return (
-            f"{header}\n\n"
-            "No recommendations. Telemetry shows nothing to act on right now.\n"
-        )
+        return f"{header}\n\nNo recommendations. Telemetry shows nothing to act on right now.\n"
 
     sections: dict[str, list[Recommendation]] = {
         SEVERITY_HIGH: [],

@@ -23,8 +23,10 @@ from typing import Optional
 
 _log = logging.getLogger(__name__)
 
+
 def _path() -> Path:
     from tokenpak._paths import home, monitor_db
+
     result = monitor_db(mode="read")
     if result is not None:
         return result
@@ -54,8 +56,7 @@ def session_cumulative_cost(
         # one pseudo-session would over-block, and a model-name
         # pseudo-session (the old fallback) is worse than none.
         _log.debug(
-            "spend_guard.session_state: empty session key — "
-            "skipping session-cumulative check"
+            "spend_guard.session_state: empty session key — skipping session-cumulative check"
         )
         return 0.0
     p = Path(os.path.expanduser(monitor_db_path)) if monitor_db_path else _path()
@@ -65,6 +66,7 @@ def session_cumulative_cost(
     # monitor.db stores timestamp as ISO string. The cutoff_ts above is
     # epoch — convert to ISO for the WHERE clause.
     import datetime as _dt
+
     cutoff_iso = _dt.datetime.fromtimestamp(cutoff_ts).isoformat()
     try:
         conn = sqlite3.connect(str(p), timeout=2.0)

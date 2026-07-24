@@ -8,4 +8,4 @@ except ImportError as e:
         "Install with: pip install tokenpak[server]"
     ) from e
 
-__all__ = ['auth', 'deep_health', 'server']
+__all__ = ["auth", "deep_health", "server"]

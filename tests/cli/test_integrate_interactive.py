@@ -158,6 +158,7 @@ def test_guided_form_cancelled(capsys):
 
 def test_guided_form_apply_failure(capsys):
     """Guided form: applier returns ok=False → exit 1."""
+
     def bad_applier(url: str) -> ApplyResult:
         return ApplyResult(ok=False, summary="disk full", error="ENOSPC")
 
@@ -173,6 +174,7 @@ def test_guided_form_apply_failure(capsys):
 
 def test_guided_form_verify_fail_shown(capsys):
     """Guided form: applier ok but verify fails → shown, still exit 0."""
+
     def bad_verify(url: str) -> tuple[bool, str]:
         return (False, "ANTHROPIC_BASE_URL not found in settings")
 

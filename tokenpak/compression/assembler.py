@@ -17,11 +17,36 @@ Wire format example:
   {"goal":"...","current_task":"...","done":[...],"open":[...],"next":[...]}
 """
 
+__all__ = (
+    "CanonBlockRegistry",
+    "ContextAssembler",
+)
+
 import hashlib
 import json
 import time
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Optional, Protocol, TypedDict, cast
+
+from .evidence_pack import EvidenceItem, EvidencePack
+
+
+class _StateManagerLike(Protocol):
+    def to_wire_format(self) -> str: ...
+
+    def to_wire_section(self) -> str: ...
+
+
+class _BudgeterLike(Protocol):
+    def allocate(
+        self, components: dict[str, dict[str, object]]
+    ) -> dict[str, dict[str, object]]: ...
+
+
+class _ManifestEntry(TypedDict):
+    hash: str
+    version: int
+    updated_at: str
 
 
 class CanonBlockRegistry:
@@ -39,15 +64,15 @@ class CanonBlockRegistry:
         self.blocks_dir = Path(base_dir) / "blocks"
         self.blocks_dir.mkdir(parents=True, exist_ok=True)
         self.manifest_path = self.blocks_dir / "manifest.json"
-        self._manifest: Dict[str, dict] = self._load_manifest()
+        self._manifest: dict[str, _ManifestEntry] = self._load_manifest()
 
     # ── Manifest I/O ─────────────────────────────────────────────────────────
 
-    def _load_manifest(self) -> dict:
+    def _load_manifest(self) -> dict[str, _ManifestEntry]:
         if self.manifest_path.exists():
             try:
                 with open(self.manifest_path, encoding="utf-8") as f:
-                    return json.load(f)
+                    return cast(dict[str, _ManifestEntry], json.load(f))
             except (json.JSONDecodeError, OSError):
                 pass
         return {}
@@ -61,7 +86,7 @@ class CanonBlockRegistry:
     def _content_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
-    def get_or_register(self, block_id: str, content: str) -> Tuple[str, bool]:
+    def get_or_register(self, block_id: str, content: str) -> tuple[str, bool]:
         """
         Register or look up a CANON block.
 
@@ -149,15 +174,15 @@ class ContextAssembler:
         session_dir = self.base_dir / "state"
         session_dir.mkdir(parents=True, exist_ok=True)
         self._session_path = session_dir / f"session_{session_id}.state.json"
-        self._session = self._load_session()
+        self._session: dict[str, object] = self._load_session()
 
     # ── Session I/O ──────────────────────────────────────────────────────────
 
-    def _load_session(self) -> dict:
+    def _load_session(self) -> dict[str, object]:
         if self._session_path.exists():
             try:
                 with open(self._session_path, encoding="utf-8") as f:
-                    return json.load(f)
+                    return cast(dict[str, object], json.load(f))
             except (json.JSONDecodeError, OSError):
                 pass
         return {
@@ -168,15 +193,15 @@ class ContextAssembler:
         }
 
     def _save_session(self) -> None:
-        self._session["turn"] = self._session.get("turn", 0) + 1
+        self._session["turn"] = cast(int, self._session.get("turn", 0)) + 1
         self._session["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         with open(self._session_path, "w", encoding="utf-8") as f:
             json.dump(self._session, f, indent=2)
 
     @property
-    def sent_blocks(self) -> Dict[str, str]:
+    def sent_blocks(self) -> dict[str, str]:
         """Map of {block_id: version_str} for blocks already sent this session."""
-        return self._session.get("sent_blocks", {})
+        return cast(dict[str, str], self._session.setdefault("sent_blocks", {}))
 
     # ── Core API ─────────────────────────────────────────────────────────────
 
@@ -213,14 +238,14 @@ class ContextAssembler:
         )
 
         if should_inline:
-            self._session.setdefault("sent_blocks", {})[block_id] = effective_version
+            self.sent_blocks[block_id] = effective_version
             return f"{block_id}={block_content}"
         else:
             return f"{block_id}=@{block_id}#{effective_version}"
 
     def assemble_context(
         self,
-        required_blocks: Dict[str, Tuple[str, Optional[str]]],
+        required_blocks: dict[str, tuple[str, Optional[str]]],
         save_session: bool = True,
     ) -> str:
         """
@@ -248,12 +273,12 @@ class ContextAssembler:
 
     def assemble_full_payload(
         self,
-        required_blocks: Dict[str, Tuple[str, Optional[str]]],
-        state_manager=None,
-        evidence_pack=None,
+        required_blocks: dict[str, tuple[str, Optional[str]]],
+        state_manager: _StateManagerLike | None = None,
+        evidence_pack: EvidencePack | None = None,
         recent_text: str = "",
         tools_text: str = "",
-        budgeter=None,
+        budgeter: _BudgeterLike | None = None,
     ) -> str:
         """
         Build the complete TPK payload: CANON section + optional STATE_JSON.
@@ -274,7 +299,7 @@ class ContextAssembler:
         """
         # Apply budget constraints before assembling if budgeter provided
         if budgeter is not None and (evidence_pack or recent_text or tools_text):
-            components = {
+            components: dict[str, dict[str, object]] = {
                 "state": {
                     "text": state_manager.to_wire_format() if state_manager else "",
                     "priority": "critical",
@@ -290,14 +315,12 @@ class ContextAssembler:
 
             # Rebuild evidence_pack from trimmed items (if trimmed)
             if evidence_pack and trimmed.get("evidence"):
-                from .evidence_pack import EvidencePack
-
                 new_pack = EvidencePack()
-                new_pack.items = trimmed["evidence"]["items"]
+                new_pack.items = cast(list[EvidenceItem], trimmed["evidence"]["items"])
                 evidence_pack = new_pack
 
-            recent_text = trimmed.get("recent", {}).get("text", recent_text)
-            tools_text = trimmed.get("tools", {}).get("text", tools_text)
+            recent_text = cast(str, trimmed.get("recent", {}).get("text", recent_text))
+            tools_text = cast(str, trimmed.get("tools", {}).get("text", tools_text))
 
         # Build sections
         canon_section = self.assemble_context(required_blocks)
@@ -319,7 +342,7 @@ class ContextAssembler:
 
     # ── Diagnostics ──────────────────────────────────────────────────────────
 
-    def session_summary(self) -> dict:
+    def session_summary(self) -> dict[str, object]:
         """Return current session metadata for logging/debugging."""
         return {
             "session_id": self.session_id,

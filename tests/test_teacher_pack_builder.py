@@ -51,7 +51,9 @@ def test_teacher_builder_validation_reports_missing_and_stale(tmp_path: Path) ->
     _write(source / "Only.md", "No matching tags or intents.")
     _write(commands / "nonmatch.py", "")
 
-    result = build_teacher_pack([str(source)], [str(commands)], str(output), version="v2", default_budget=10)
+    result = build_teacher_pack(
+        [str(source)], [str(commands)], str(output), version="v2", default_budget=10
+    )
     report = json.loads(result.validation_path.read_text(encoding="utf-8"))
 
     assert report["summary"]["missing_source_count"] >= 1

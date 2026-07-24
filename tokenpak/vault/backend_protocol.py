@@ -36,9 +36,13 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any, Dict, List, Protocol, Tuple, runtime_checkable
+from collections.abc import Callable, Mapping
+from typing import Dict, List, Protocol, Tuple, cast, runtime_checkable
 
 logger = logging.getLogger("tokenpak.vault.backend_protocol")
+
+RetrievalRecord = Mapping[str, object]
+RetrievalResult = tuple[RetrievalRecord, float]
 
 # ---------------------------------------------------------------------------
 # RetrievalBackend Protocol (Replace mode)
@@ -79,9 +83,7 @@ class RetrievalBackend(Protocol):
         """
         ...
 
-    def search(
-        self, query: str, top_k: int = 5, min_score: float = 2.0
-    ) -> List[Tuple[dict, float]]:
+    def search(self, query: str, top_k: int = 5, min_score: float = 2.0) -> List[RetrievalResult]:
         """Search for relevant blocks.
 
         Args:
@@ -205,9 +207,7 @@ class RetrievalBackendBase:
     def maybe_reload(self) -> None:
         raise NotImplementedError("Subclasses must implement 'maybe_reload()'")
 
-    def search(
-        self, query: str, top_k: int = 5, min_score: float = 2.0
-    ) -> List[Tuple[dict, float]]:
+    def search(self, query: str, top_k: int = 5, min_score: float = 2.0) -> List[RetrievalResult]:
         raise NotImplementedError("Subclasses must implement 'search()'")
 
     def compile_injection(
@@ -234,8 +234,14 @@ class RetrievalBackendBase:
         source_refs: List[str] = []
 
         for block, score in results:
-            content = block.get("content", "")
-            block_tokens = block.get("raw_tokens", 0) or count_tokens_fn(content)
+            content_value = block.get("content", "")
+            content = content_value if isinstance(content_value, str) else str(content_value)
+            raw_tokens = block.get("raw_tokens", 0)
+            block_tokens = (
+                raw_tokens
+                if isinstance(raw_tokens, int) and raw_tokens > 0
+                else count_tokens_fn(content)
+            )
 
             remaining = budget - tokens_used
             if remaining <= 100:
@@ -247,10 +253,9 @@ class RetrievalBackendBase:
                 content = content[:char_limit].rsplit("\n", 1)[0]
                 block_tokens = count_tokens_fn(content)
 
-            source_path = block.get("source_path", block.get("block_id", "unknown"))
-            injection_parts.append(
-                f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}"
-            )
+            source_value = block.get("source_path", block.get("block_id", "unknown"))
+            source_path = source_value if isinstance(source_value, str) else str(source_value)
+            injection_parts.append(f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}")
             tokens_used += block_tokens
             source_refs.append(source_path)
 
@@ -269,9 +274,7 @@ class RetrievalBackendBase:
 # ---------------------------------------------------------------------------
 
 
-def load_custom_backend(
-    config_value: str, vault_path: str
-) -> Any:
+def load_custom_backend(config_value: str, vault_path: str) -> RetrievalBackend:
     """Load a custom retrieval backend from a ``custom:module.path.ClassName`` config string.
 
     The class is instantiated with ``vault_path`` as the sole argument.
@@ -291,15 +294,11 @@ def load_custom_backend(
         TypeError: If the instantiated class doesn't satisfy the protocol.
     """
     if not config_value.startswith("custom:"):
-        raise ValueError(
-            f"Custom backend config must start with 'custom:', got: {config_value!r}"
-        )
+        raise ValueError(f"Custom backend config must start with 'custom:', got: {config_value!r}")
 
     dotted_path = config_value[7:]  # strip "custom:"
     if "." not in dotted_path:
-        raise ValueError(
-            f"Custom backend must be 'custom:module.ClassName', got: {config_value!r}"
-        )
+        raise ValueError(f"Custom backend must be 'custom:module.ClassName', got: {config_value!r}")
 
     module_path, class_name = dotted_path.rsplit(".", 1)
 
@@ -313,9 +312,7 @@ def load_custom_backend(
     try:
         cls = getattr(mod, class_name)
     except AttributeError as e:
-        raise AttributeError(
-            f"Module '{module_path}' has no class '{class_name}': {e}"
-        ) from e
+        raise AttributeError(f"Module '{module_path}' has no class '{class_name}': {e}") from e
 
     try:
         instance = cls(vault_path)
@@ -344,7 +341,7 @@ def load_custom_backend(
     return instance
 
 
-def load_custom_scorer(config_value: str) -> Any:
+def load_custom_scorer(config_value: str) -> SemanticScorer:
     """Load a custom semantic scorer from a ``custom:module.path.ClassName`` config string.
 
     The class is instantiated with no arguments.
@@ -362,15 +359,11 @@ def load_custom_scorer(config_value: str) -> Any:
         TypeError: If the instantiated class doesn't satisfy the protocol.
     """
     if not config_value.startswith("custom:"):
-        raise ValueError(
-            f"Custom scorer config must start with 'custom:', got: {config_value!r}"
-        )
+        raise ValueError(f"Custom scorer config must start with 'custom:', got: {config_value!r}")
 
     dotted_path = config_value[7:]
     if "." not in dotted_path:
-        raise ValueError(
-            f"Custom scorer must be 'custom:module.ClassName', got: {config_value!r}"
-        )
+        raise ValueError(f"Custom scorer must be 'custom:module.ClassName', got: {config_value!r}")
 
     module_path, class_name = dotted_path.rsplit(".", 1)
 
@@ -384,16 +377,13 @@ def load_custom_scorer(config_value: str) -> Any:
     try:
         cls = getattr(mod, class_name)
     except AttributeError as e:
-        raise AttributeError(
-            f"Module '{module_path}' has no class '{class_name}': {e}"
-        ) from e
+        raise AttributeError(f"Module '{module_path}' has no class '{class_name}': {e}") from e
 
     try:
         instance = cls()
     except TypeError as e:
         raise TypeError(
-            f"Failed to instantiate {class_name}(): {e}. "
-            f"Custom scorers must accept no arguments."
+            f"Failed to instantiate {class_name}(): {e}. Custom scorers must accept no arguments."
         ) from e
 
     if not isinstance(instance, SemanticScorer):
@@ -411,12 +401,12 @@ def load_custom_scorer(config_value: str) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _get_count_tokens_fn():
+def _get_count_tokens_fn() -> Callable[[str], int]:
     """Lazily import the token counting function."""
     try:
         from tokenpak.tokens import count_tokens
 
-        return count_tokens
+        return cast(Callable[[str], int], count_tokens)
     except ImportError:
         # Rough fallback: 4 chars ≈ 1 token
         def _fallback_count(text: str) -> int:

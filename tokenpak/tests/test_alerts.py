@@ -48,7 +48,9 @@ def _make_rule(
     )
 
 
-def _make_state(name: str = "test_rule", last_fired: float | None = None, fired_count: int = 0) -> AlertRuleState:
+def _make_state(
+    name: str = "test_rule", last_fired: float | None = None, fired_count: int = 0
+) -> AlertRuleState:
     return AlertRuleState(name=name, last_fired=last_fired, fired_count=fired_count)
 
 
@@ -65,7 +67,9 @@ class TestAlertRule:
         assert rule.cooldown_minutes == 30
 
     def test_fields_stored_correctly(self):
-        rule = AlertRule(name="foo", condition="error_rate > 0.05", message="hi", cooldown_minutes=15)
+        rule = AlertRule(
+            name="foo", condition="error_rate > 0.05", message="hi", cooldown_minutes=15
+        )
         assert rule.name == "foo"
         assert rule.condition == "error_rate > 0.05"
         assert rule.message == "hi"
@@ -235,7 +239,10 @@ class TestEvaluateRule:
 
     def test_cache_hit_rate_zero_division_safe(self):
         rule = _make_rule(condition="cache_hit_rate < 0.80")
-        with patch("tokenpak.alerts._get_proxy_cache_stats", return_value={"cache_hits": 0, "cache_misses": 0}):
+        with patch(
+            "tokenpak.alerts._get_proxy_cache_stats",
+            return_value={"cache_hits": 0, "cache_misses": 0},
+        ):
             fired, value = evaluate_rule(rule, stats={}, health={})
         # 0/0 → 0.0 hit rate, which is < 80%, so fires
         assert fired is True
@@ -326,8 +333,10 @@ class TestCheckAlerts:
 
     def test_disabled_alerts_returns_empty(self, tmp_path):
         state_file = tmp_path / "alert_state.json"
-        with patch("tokenpak.alerts._get_state_path", return_value=state_file), \
-             patch("tokenpak.alerts.load_config", return_value={"enabled": False}):
+        with (
+            patch("tokenpak.alerts._get_state_path", return_value=state_file),
+            patch("tokenpak.alerts.load_config", return_value={"enabled": False}),
+        ):
             result = check_alerts()
             assert result == []
 
@@ -335,13 +344,19 @@ class TestCheckAlerts:
         state_file = tmp_path / "alert_state.json"
         config = {
             "enabled": True,
-            "rules": [asdict(_make_rule(name="err_spike", condition="error_rate > 0.05", cooldown_minutes=30))],
+            "rules": [
+                asdict(
+                    _make_rule(name="err_spike", condition="error_rate > 0.05", cooldown_minutes=30)
+                )
+            ],
         }
-        with patch("tokenpak.alerts._get_state_path", return_value=state_file), \
-             patch("tokenpak.alerts.load_config", return_value=config), \
-             patch("tokenpak.alerts._get_proxy_stats", return_value={"requests": 100, "errors": 10}), \
-             patch("tokenpak.alerts._get_proxy_health", return_value={"status": "ok"}), \
-             patch("tokenpak.alerts._get_proxy_cache_stats", return_value={}):
+        with (
+            patch("tokenpak.alerts._get_state_path", return_value=state_file),
+            patch("tokenpak.alerts.load_config", return_value=config),
+            patch("tokenpak.alerts._get_proxy_stats", return_value={"requests": 100, "errors": 10}),
+            patch("tokenpak.alerts._get_proxy_health", return_value={"status": "ok"}),
+            patch("tokenpak.alerts._get_proxy_cache_stats", return_value={}),
+        ):
             result = check_alerts()
         assert len(result) == 1
         rule, value = result[0]
@@ -362,13 +377,19 @@ class TestCheckAlerts:
         state_file.write_text(json.dumps(recent_state))
         config = {
             "enabled": True,
-            "rules": [asdict(_make_rule(name="err_spike", condition="error_rate > 0.05", cooldown_minutes=30))],
+            "rules": [
+                asdict(
+                    _make_rule(name="err_spike", condition="error_rate > 0.05", cooldown_minutes=30)
+                )
+            ],
         }
-        with patch("tokenpak.alerts._get_state_path", return_value=state_file), \
-             patch("tokenpak.alerts.load_config", return_value=config), \
-             patch("tokenpak.alerts._get_proxy_stats", return_value={"requests": 100, "errors": 10}), \
-             patch("tokenpak.alerts._get_proxy_health", return_value={"status": "ok"}), \
-             patch("tokenpak.alerts._get_proxy_cache_stats", return_value={}):
+        with (
+            patch("tokenpak.alerts._get_state_path", return_value=state_file),
+            patch("tokenpak.alerts.load_config", return_value=config),
+            patch("tokenpak.alerts._get_proxy_stats", return_value={"requests": 100, "errors": 10}),
+            patch("tokenpak.alerts._get_proxy_health", return_value={"status": "ok"}),
+            patch("tokenpak.alerts._get_proxy_cache_stats", return_value={}),
+        ):
             result = check_alerts()
         assert result == []
 
@@ -376,13 +397,19 @@ class TestCheckAlerts:
         state_file = tmp_path / "alert_state.json"
         config = {
             "enabled": True,
-            "rules": [asdict(_make_rule(name="err_spike", condition="error_rate > 0.05", cooldown_minutes=30))],
+            "rules": [
+                asdict(
+                    _make_rule(name="err_spike", condition="error_rate > 0.05", cooldown_minutes=30)
+                )
+            ],
         }
-        with patch("tokenpak.alerts._get_state_path", return_value=state_file), \
-             patch("tokenpak.alerts.load_config", return_value=config), \
-             patch("tokenpak.alerts._get_proxy_stats", return_value={"requests": 100, "errors": 10}), \
-             patch("tokenpak.alerts._get_proxy_health", return_value={"status": "ok"}), \
-             patch("tokenpak.alerts._get_proxy_cache_stats", return_value={}):
+        with (
+            patch("tokenpak.alerts._get_state_path", return_value=state_file),
+            patch("tokenpak.alerts.load_config", return_value=config),
+            patch("tokenpak.alerts._get_proxy_stats", return_value={"requests": 100, "errors": 10}),
+            patch("tokenpak.alerts._get_proxy_health", return_value={"status": "ok"}),
+            patch("tokenpak.alerts._get_proxy_cache_stats", return_value={}),
+        ):
             check_alerts()
 
         persisted = json.loads(state_file.read_text())
@@ -394,11 +421,16 @@ class TestCheckAlerts:
         state_file = tmp_path / "alert_state.json"
         config = {"enabled": True, "rules": []}
         # Proxy is healthy and error-free → defaults should NOT fire
-        with patch("tokenpak.alerts._get_state_path", return_value=state_file), \
-             patch("tokenpak.alerts.load_config", return_value=config), \
-             patch("tokenpak.alerts._get_proxy_stats", return_value={"requests": 100, "errors": 0}), \
-             patch("tokenpak.alerts._get_proxy_health", return_value={"status": "ok"}), \
-             patch("tokenpak.alerts._get_proxy_cache_stats", return_value={"cache_hits": 95, "cache_misses": 5}):
+        with (
+            patch("tokenpak.alerts._get_state_path", return_value=state_file),
+            patch("tokenpak.alerts.load_config", return_value=config),
+            patch("tokenpak.alerts._get_proxy_stats", return_value={"requests": 100, "errors": 0}),
+            patch("tokenpak.alerts._get_proxy_health", return_value={"status": "ok"}),
+            patch(
+                "tokenpak.alerts._get_proxy_cache_stats",
+                return_value={"cache_hits": 95, "cache_misses": 5},
+            ),
+        ):
             result = check_alerts()
         # All default thresholds should be satisfied (no alerts)
         assert result == []

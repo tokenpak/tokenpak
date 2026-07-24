@@ -185,28 +185,40 @@ class OpenAIResponsesAdapter(FormatAdapter):
         def _tool_name(tool: Dict[str, Any]) -> str:
             if not isinstance(tool, dict):
                 return ""
-            if isinstance(tool.get("name"), str):
-                return tool["name"]
+            name = tool.get("name")
+            if isinstance(name, str):
+                return name
             fn = tool.get("function")
-            if isinstance(fn, dict) and isinstance(fn.get("name"), str):
-                return fn["name"]
+            if isinstance(fn, dict):
+                function_name = fn.get("name")
+                if isinstance(function_name, str):
+                    return function_name
             return ""
 
-        return sorted(copy.deepcopy(tools), key=lambda t: (_tool_name(t), json.dumps(t, sort_keys=True, ensure_ascii=False)))
+        return sorted(
+            copy.deepcopy(tools),
+            key=lambda t: (_tool_name(t), json.dumps(t, sort_keys=True, ensure_ascii=False)),
+        )
 
     def _build_prompt_cache_key(self, canonical: CanonicalRequest) -> str:
-        stable_payload = OrderedDict()
+        stable_payload: OrderedDict[str, Any] = OrderedDict()
         stable_payload["model"] = canonical.model
         stable_payload["instructions"] = copy.deepcopy(canonical.system)
         stable_payload["tools"] = self._stable_tools(canonical.tools or [])
         stable_payload["input_prefix"] = self._stable_message_prefix(canonical.messages)
         stable_payload["input_format"] = canonical.raw_extra.get("_input_format", "message_array")
 
-        for key in sorted(k for k in canonical.raw_extra.keys() if k not in _VOLATILE_EXTRA_KEYS and not k.startswith("_")):
+        for key in sorted(
+            k
+            for k in canonical.raw_extra.keys()
+            if k not in _VOLATILE_EXTRA_KEYS and not k.startswith("_")
+        ):
             stable_payload[key] = copy.deepcopy(canonical.raw_extra[key])
 
         digest = hashlib.sha256(
-            json.dumps(stable_payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            json.dumps(
+                stable_payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
         ).hexdigest()[:32]
         return f"tokenpak:openai-prefix:{digest}"
 

@@ -54,23 +54,25 @@ class SpanType:
     CREDENTIAL_PLACEHOLDER = "credential_placeholder"
 
 
-ALL_SPAN_TYPES: FrozenSet[str] = frozenset({
-    SpanType.FILE_PATH,
-    SpanType.FUNCTION_SIGNATURE,
-    SpanType.CLASS_SIGNATURE,
-    SpanType.COMMAND,
-    SpanType.EXIT_CODE,
-    SpanType.STACK_TRACE_FRAME,
-    SpanType.EXCEPTION_MESSAGE,
-    SpanType.JSON_SCHEMA,
-    SpanType.YAML_KEY,
-    SpanType.CONFIG_VALUE,
-    SpanType.LINE_NUMBER,
-    SpanType.DIFF_HUNK_HEADER,
-    SpanType.DIFF_ADDED_REMOVED_LINES,
-    SpanType.URL,
-    SpanType.CREDENTIAL_PLACEHOLDER,
-})
+ALL_SPAN_TYPES: FrozenSet[str] = frozenset(
+    {
+        SpanType.FILE_PATH,
+        SpanType.FUNCTION_SIGNATURE,
+        SpanType.CLASS_SIGNATURE,
+        SpanType.COMMAND,
+        SpanType.EXIT_CODE,
+        SpanType.STACK_TRACE_FRAME,
+        SpanType.EXCEPTION_MESSAGE,
+        SpanType.JSON_SCHEMA,
+        SpanType.YAML_KEY,
+        SpanType.CONFIG_VALUE,
+        SpanType.LINE_NUMBER,
+        SpanType.DIFF_HUNK_HEADER,
+        SpanType.DIFF_ADDED_REMOVED_LINES,
+        SpanType.URL,
+        SpanType.CREDENTIAL_PLACEHOLDER,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -127,12 +129,8 @@ _RE_EXIT_CODE = re.compile(
 )
 
 # Python `File "x.py", line N, in foo` and JS `at name (x.js:1:1)`.
-_RE_PY_STACK_FRAME = re.compile(
-    r'File\s+"[^"\n]+",\s+line\s+\d+(?:,\s+in\s+\S+)?'
-)
-_RE_JS_STACK_FRAME = re.compile(
-    r"\bat\s+\S[^\n(]*\([^)\n]+:\d+:\d+\)"
-)
+_RE_PY_STACK_FRAME = re.compile(r'File\s+"[^"\n]+",\s+line\s+\d+(?:,\s+in\s+\S+)?')
+_RE_JS_STACK_FRAME = re.compile(r"\bat\s+\S[^\n(]*\([^)\n]+:\d+:\d+\)")
 
 # Python exception line — at start of a line: `<TypeName>(Error|Exception): message`.
 # Lazy quantifier so the suffix anchor (Error/Exception/Warning) wins.
@@ -150,9 +148,7 @@ _RE_JSON_BLOCK = re.compile(r"\{[^{}\n]*\}|\[[^\[\]\n]*\]")
 _RE_YAML_KEY = re.compile(r"^[ \t]*[A-Za-z_][\w.-]*\s*:(?:\s|$)", re.MULTILINE)
 
 # Config-style key=value lines (INI/env style).
-_RE_CONFIG_VALUE = re.compile(
-    r"^[ \t]*[A-Z_][A-Z0-9_]*\s*=\s*[^\n]+", re.MULTILINE
-)
+_RE_CONFIG_VALUE = re.compile(r"^[ \t]*[A-Z_][A-Z0-9_]*\s*=\s*[^\n]+", re.MULTILINE)
 
 # Line numbers — `line 42`, `line: 100`, or `:42:` style references.
 _RE_LINE_NUMBER = re.compile(
@@ -167,9 +163,7 @@ _RE_DIFF_HUNK_HEADER = re.compile(
 )
 
 # Diff content lines: a line beginning with `+` or `-` but not `+++`/`---`.
-_RE_DIFF_CONTENT_LINE = re.compile(
-    r"^[+-](?![+-])[^\n]*", re.MULTILINE
-)
+_RE_DIFF_CONTENT_LINE = re.compile(r"^[+-](?![+-])[^\n]*", re.MULTILINE)
 
 # URL with scheme.
 _RE_URL = re.compile(r"\b[A-Za-z][A-Za-z0-9+\-.]*://[^\s)>\]\"']+")
@@ -183,8 +177,8 @@ _RE_CREDENTIAL_PLACEHOLDER = re.compile(
 )
 
 
-_DETECTORS: Dict[str, re.Pattern] = {}
-_MULTI_DETECTORS: Dict[str, Tuple[re.Pattern, ...]] = {
+_DETECTORS: Dict[str, re.Pattern[str]] = {}
+_MULTI_DETECTORS: Dict[str, Tuple[re.Pattern[str], ...]] = {
     SpanType.FUNCTION_SIGNATURE: (_RE_PY_FUNCTION_SIG, _RE_JS_FUNCTION_SIG),
     SpanType.STACK_TRACE_FRAME: (_RE_PY_STACK_FRAME, _RE_JS_STACK_FRAME),
 }
@@ -211,13 +205,10 @@ def _run_detector(text: str, span_type: str) -> List[ProtectedSpan]:
             for m in pat.finditer(text):
                 out.append(ProtectedSpan(m.start(), m.end(), span_type))
         return out
-    pat = _DETECTORS.get(span_type)
-    if not pat:
+    single_pattern = _DETECTORS.get(span_type)
+    if single_pattern is None:
         return []
-    return [
-        ProtectedSpan(m.start(), m.end(), span_type)
-        for m in pat.finditer(text)
-    ]
+    return [ProtectedSpan(m.start(), m.end(), span_type) for m in single_pattern.finditer(text)]
 
 
 def merge_overlapping(spans: Iterable[ProtectedSpan]) -> List[ProtectedSpan]:
@@ -277,8 +268,8 @@ def text_is_protected(
                 if pat.search(text):
                     return True
             continue
-        pat = _DETECTORS.get(span_type)
-        if pat and pat.search(text):
+        single_pattern = _DETECTORS.get(span_type)
+        if single_pattern is not None and single_pattern.search(text):
             return True
     return False
 
@@ -307,8 +298,8 @@ def rewrite_outside_spans(
     cursor = 0
     for span in spans:
         if span.start > cursor:
-            out.append(rewrite(text[cursor:span.start]))
-        out.append(text[span.start:span.end])
+            out.append(rewrite(text[cursor : span.start]))
+        out.append(text[span.start : span.end])
         cursor = span.end
     if cursor < len(text):
         out.append(rewrite(text[cursor:]))

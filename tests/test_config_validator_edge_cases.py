@@ -9,7 +9,6 @@ Covers:
 - Recovery scenarios
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.config_validator", reason="module not available in current build")
@@ -162,7 +161,7 @@ class TestIntegration:
 
     def test_config_file_reload(self):
         """Config file can be reloaded."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({"api_keys": {"a": "b"}}, f)
             fname = f.name
 
@@ -332,15 +331,7 @@ class TestEdgeCasesCombinations:
 
     def test_deeply_nested_config(self):
         """Deeply nested config structure."""
-        config = {
-            "api_keys": {
-                "nested": {
-                    "deep": {
-                        "key": "sk-value"
-                    }
-                }
-            }
-        }
+        config = {"api_keys": {"nested": {"deep": {"key": "sk-value"}}}}
         # Should handle or reject gracefully
         assert "api_keys" in config
 

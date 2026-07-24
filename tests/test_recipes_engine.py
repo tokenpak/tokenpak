@@ -3,6 +3,7 @@
 Covers all 5 RecipeType rules with ≥15 test cases using synthetic segments
 modelled on real tool_output / retrieval / memory / assistant_context data.
 """
+
 from __future__ import annotations
 
 from tokenpak.compression.recipes import (
@@ -145,9 +146,7 @@ def test_whitespace_collapse_reduces_tokens():
 
 def test_list_dedup_removes_exact_duplicate():
     content = "- apple\n- banana\n- apple\n- cherry"
-    result = engine().apply_recipes(
-        make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP]
-    )
+    result = engine().apply_recipes(make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP])
     lines = [l for l in result.raw_content.split("\n") if l.strip()]
     apple_lines = [l for l in lines if "apple" in l.lower()]
     assert len(apple_lines) == 1
@@ -155,18 +154,14 @@ def test_list_dedup_removes_exact_duplicate():
 
 def test_list_dedup_case_insensitive():
     content = "- Apple\n- APPLE\n- apple"
-    result = engine().apply_recipes(
-        make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP]
-    )
+    result = engine().apply_recipes(make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP])
     lines = [l for l in result.raw_content.split("\n") if l.strip()]
     assert len(lines) == 1
 
 
 def test_list_dedup_removes_three_duplicates():
     content = "- foo\n- bar\n- foo\n- baz\n- foo"
-    result = engine().apply_recipes(
-        make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP]
-    )
+    result = engine().apply_recipes(make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP])
     lines = [l for l in result.raw_content.split("\n") if l.strip()]
     foo_lines = [l for l in lines if "foo" in l.lower()]
     assert len(foo_lines) == 1
@@ -174,9 +169,7 @@ def test_list_dedup_removes_three_duplicates():
 
 def test_list_dedup_preserves_first_occurrence_order():
     content = "- banana\n- apple\n- cherry\n- apple\n- banana"
-    result = engine().apply_recipes(
-        make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP]
-    )
+    result = engine().apply_recipes(make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP])
     lines = [l.strip() for l in result.raw_content.split("\n") if l.strip()]
     assert lines.index("- banana") < lines.index("- apple")
     assert lines.index("- apple") < lines.index("- cherry")
@@ -184,9 +177,7 @@ def test_list_dedup_preserves_first_occurrence_order():
 
 def test_list_dedup_numbered_lists():
     content = "1. step one\n2. step two\n3. step one"
-    result = engine().apply_recipes(
-        make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP]
-    )
+    result = engine().apply_recipes(make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP])
     lines = [l for l in result.raw_content.split("\n") if l.strip()]
     step_one_lines = [l for l in lines if "step one" in l.lower()]
     assert len(step_one_lines) == 1
@@ -194,9 +185,7 @@ def test_list_dedup_numbered_lists():
 
 def test_list_dedup_non_list_lines_untouched():
     content = "intro text\n- item\n\n- item\noutro text"
-    result = engine().apply_recipes(
-        make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP]
-    )
+    result = engine().apply_recipes(make_segment(content, "retrieval"), [RecipeType.LIST_DEDUP])
     assert "intro text" in result.raw_content
     assert "outro text" in result.raw_content
 
@@ -285,18 +274,14 @@ def test_truncate_tail_one_over_threshold():
 
 def test_boilerplate_strip_removes_copyright():
     content = "# Copyright 2024 Acme Corp\nimport os\n"
-    result = engine().apply_recipes(
-        make_segment(content, "memory"), [RecipeType.BOILERPLATE_STRIP]
-    )
+    result = engine().apply_recipes(make_segment(content, "memory"), [RecipeType.BOILERPLATE_STRIP])
     assert "Copyright" not in result.raw_content
     assert "import os" in result.raw_content
 
 
 def test_boilerplate_strip_removes_license_comment():
     content = "# Licensed under Apache 2.0\ndef foo(): pass\n"
-    result = engine().apply_recipes(
-        make_segment(content, "memory"), [RecipeType.BOILERPLATE_STRIP]
-    )
+    result = engine().apply_recipes(make_segment(content, "memory"), [RecipeType.BOILERPLATE_STRIP])
     assert "Licensed" not in result.raw_content
     assert "def foo" in result.raw_content
 

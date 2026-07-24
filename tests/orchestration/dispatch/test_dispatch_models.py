@@ -114,9 +114,7 @@ def _valid_instances() -> dict[str, BaseModel]:
             question="Which approach?",
             reason="ambiguous request",
             risk_level="medium",
-            options=[
-                {"id": "a", "label": "A", "description": "first", "tradeoffs": []}
-            ],
+            options=[{"id": "a", "label": "A", "description": "first", "tradeoffs": []}],
             recommendation={"option_id": "a", "rationale": "simplest"},
             default_action={"option_id": "a"},
             status="pending",

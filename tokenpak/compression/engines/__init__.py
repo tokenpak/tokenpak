@@ -27,4 +27,5 @@ def get_engine(name: str = "heuristic") -> CompactionEngine:
     engine_class = ENGINES.get(name, HeuristicEngine)
     return engine_class()
 
-__all__ = ['base', 'heuristic', 'llmlingua']
+
+__all__ = ["base", "heuristic", "llmlingua"]

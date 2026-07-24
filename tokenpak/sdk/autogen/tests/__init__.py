@@ -1,3 +1,1 @@
-
-
-__all__ = ['test_assistant']
+__all__ = ["test_assistant"]

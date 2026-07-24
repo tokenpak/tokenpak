@@ -127,6 +127,7 @@ def test_default_pipeline_is_singleton_until_reset():
         _get_default_pipeline,
         reset_default_pipeline,
     )
+
     a = _get_default_pipeline()
     b = _get_default_pipeline()
     assert a is b
@@ -139,6 +140,7 @@ def test_custom_registry_does_not_pollute_default(fresh_pipeline):
     fresh_pipeline.register(NoOpStage(name="custom"))
     # Default pipeline starts empty
     from tokenpak.services.optimization.pipeline import _get_default_pipeline
+
     default = _get_default_pipeline()
     assert "custom" not in default.registry
     assert isinstance(default, OptimizationPipeline)

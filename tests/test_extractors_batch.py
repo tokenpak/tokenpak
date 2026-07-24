@@ -24,48 +24,48 @@ class TestCodeExtractor:
 
     def test_extract_python_functions(self, extractor):
         """Test extracting Python function definitions."""
-        code = '''
+        code = """
 def hello():
     return "world"
 
 def add(a, b):
     return a + b
-'''
+"""
         result = extractor.extract(code)
         assert isinstance(result, CodeExtractionResult)
         assert result.functions_found >= 2
 
     def test_extract_imports(self, extractor):
         """Test extracting import statements."""
-        code = '''
+        code = """
 import os
 from pathlib import Path
 import sys
-'''
+"""
         result = extractor.extract(code)
         assert isinstance(result, CodeExtractionResult)
         assert result.imports_found >= 3
 
     def test_extract_from_diff(self, extractor):
         """Test extracting from diff format."""
-        diff = '''
+        diff = """
 +def new_function():
 +    return 42
  def existing():
      pass
 -def removed():
 -    pass
-'''
+"""
         result = extractor.extract(diff)
         assert isinstance(result, CodeExtractionResult)
         assert result.is_diff is True
 
     def test_extract_javascript(self, extractor):
         """Test extracting from JavaScript code."""
-        code = '''
+        code = """
 const greet = () => "hello";
 function add(a, b) { return a + b; }
-'''
+"""
         result = extractor.extract(code)
         assert isinstance(result, CodeExtractionResult)
         assert result.functions_found >= 2
@@ -78,7 +78,7 @@ function add(a, b) { return a + b; }
 
     def test_extract_with_test_functions(self, extractor):
         """Test identifying test functions."""
-        code = '''
+        code = """
 def test_addition():
     assert 1 + 1 == 2
 
@@ -87,7 +87,7 @@ def test_subtraction():
 
 def regular_function():
     return 42
-'''
+"""
         result = extractor.extract(code)
         assert isinstance(result, CodeExtractionResult)
 
@@ -116,20 +116,20 @@ class Greeter:
 
     def test_extract_comments(self, extractor):
         """Test extracting comments."""
-        code = '''
+        code = """
 # This is a comment
 x = 5  # inline comment
 
 # Multi-line comment
 # explaining the code below
 y = 10
-'''
+"""
         result = extractor.extract(code)
         assert isinstance(result, DocExtractionResult)
 
     def test_extract_jsdoc(self, extractor):
         """Test extracting JSDoc comments."""
-        code = '''
+        code = """
 /**
  * Adds two numbers together
  * @param {number} a - First number
@@ -139,26 +139,26 @@ y = 10
 function add(a, b) {
     return a + b;
 }
-'''
+"""
         result = extractor.extract(code)
         assert isinstance(result, DocExtractionResult)
 
     def test_extract_empty_docs(self, extractor):
         """Test extraction with no documentation."""
-        code = 'x = 5\ny = 10\n'
+        code = "x = 5\ny = 10\n"
         result = extractor.extract(code)
         assert isinstance(result, DocExtractionResult)
 
     def test_extract_markdown(self, extractor):
         """Test extracting from markdown documentation."""
-        doc = '''
+        doc = """
 # API Reference
 
 ## get_user(id)
 Fetch a user by ID
 
 Returns: User object
-'''
+"""
         result = extractor.extract(doc)
         assert isinstance(result, DocExtractionResult)
 
@@ -172,31 +172,31 @@ class TestLogExtractor:
 
     def test_extract_log_entries(self, extractor):
         """Test extracting log patterns."""
-        logs = '''
+        logs = """
 [ERROR] Connection failed to localhost:8080
 [INFO] Server started on port 3000
 [WARN] Retry attempt 2/3
 [ERROR] Timeout after 30s
-'''
+"""
         result = extractor.extract(logs)
         assert isinstance(result, LogExtractionResult)
 
     def test_extract_error_patterns(self, extractor):
         """Test identifying error patterns."""
-        logs = '''
+        logs = """
 Error: ENOENT /data/file.txt
 Error: Connection refused
 TypeError: Cannot read property 'x' of undefined
-'''
+"""
         result = extractor.extract(logs)
         assert isinstance(result, LogExtractionResult)
 
     def test_extract_json_logs(self, extractor):
         """Test extracting structured logs."""
-        logs = '''
+        logs = """
 {"level":"error","msg":"Failed to connect","code":500}
 {"level":"info","msg":"Request processed","duration_ms":123}
-'''
+"""
         result = extractor.extract(logs)
         assert isinstance(result, LogExtractionResult)
 
@@ -207,14 +207,14 @@ TypeError: Cannot read property 'x' of undefined
 
     def test_extract_stack_traces(self, extractor):
         """Test extracting stack traces."""
-        logs = '''
+        logs = """
 Traceback (most recent call last):
   File "app.py", line 42, in process
     result = dangerous_func()
   File "lib.py", line 10, in dangerous_func
     raise ValueError("Bad input")
 ValueError: Bad input
-'''
+"""
         result = extractor.extract(logs)
         assert isinstance(result, LogExtractionResult)
 

@@ -8,7 +8,6 @@ Covers:
   - Stats accuracy: token counts, savings %, compile time
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.report", reason="module not available in current build")
@@ -19,6 +18,7 @@ from tokenpak.pack import ContextPack, PackBlock
 from tokenpak.report import Action, CompileReport, Decision
 
 # ── Helpers ───────────────────────────────────────────────────────────────
+
 
 def make_pack(budget: int = 8000, quality_threshold: float = 0.5) -> ContextPack:
     return ContextPack(budget=budget, quality_threshold=quality_threshold)
@@ -31,8 +31,8 @@ def word_content(n: int, word: str = "word") -> str:
 
 # ── 1. Report Generation ──────────────────────────────────────────────────
 
-class TestReportGeneration:
 
+class TestReportGeneration:
     def test_compile_returns_report(self):
         pack = make_pack()
         pack.add(PackBlock(id="sys", type="instructions", content="Hello.", priority="critical"))
@@ -43,7 +43,7 @@ class TestReportGeneration:
     def test_report_has_decisions(self):
         pack = make_pack()
         pack.add(PackBlock(id="sys", type="instructions", content="A block.", priority="critical"))
-        pack.add(PackBlock(id="ctx", type="knowledge",    content="More context.", priority="high"))
+        pack.add(PackBlock(id="ctx", type="knowledge", content="More context.", priority="high"))
         result = pack.compile()
         assert len(result.report.decisions) == 2
 
@@ -65,11 +65,15 @@ class TestReportGeneration:
 
 # ── 2. Decision Actions ───────────────────────────────────────────────────
 
-class TestDecisionActions:
 
+class TestDecisionActions:
     def test_kept_decision_present(self):
         pack = make_pack(budget=8000)
-        pack.add(PackBlock(id="sys", type="instructions", content="System prompt text.", priority="critical"))
+        pack.add(
+            PackBlock(
+                id="sys", type="instructions", content="System prompt text.", priority="critical"
+            )
+        )
         result = pack.compile()
         d = next((d for d in result.report.decisions if d.block_id == "sys"), None)
         assert d is not None
@@ -77,7 +81,9 @@ class TestDecisionActions:
 
     def test_kept_shows_priority(self):
         pack = make_pack(budget=8000)
-        pack.add(PackBlock(id="sys", type="instructions", content="critical block", priority="critical"))
+        pack.add(
+            PackBlock(id="sys", type="instructions", content="critical block", priority="critical")
+        )
         result = pack.compile()
         d = result.report.decisions[0]
         assert d.priority == "critical"
@@ -86,13 +92,15 @@ class TestDecisionActions:
         # Block has 500 tokens worth of content but max_tokens=50
         content = "word " * 500  # ~500 tokens
         pack = make_pack(budget=8000)
-        pack.add(PackBlock(
-            id="api_docs",
-            type="knowledge",
-            content=content,
-            priority="high",
-            max_tokens=50,
-        ))
+        pack.add(
+            PackBlock(
+                id="api_docs",
+                type="knowledge",
+                content=content,
+                priority="high",
+                max_tokens=50,
+            )
+        )
         result = pack.compile()
         d = next(d for d in result.report.decisions if d.block_id == "api_docs")
         assert d.action == Action.COMPACTED
@@ -103,7 +111,11 @@ class TestDecisionActions:
     def test_compacted_shows_method(self):
         content = "data " * 600
         pack = make_pack(budget=8000)
-        pack.add(PackBlock(id="doc", type="knowledge", content=content, priority="medium", max_tokens=100))
+        pack.add(
+            PackBlock(
+                id="doc", type="knowledge", content=content, priority="medium", max_tokens=100
+            )
+        )
         result = pack.compile()
         d = next(d for d in result.report.decisions if d.block_id == "doc")
         assert d.action == Action.COMPACTED
@@ -112,7 +124,9 @@ class TestDecisionActions:
 
     def test_removed_below_quality_threshold(self):
         pack = make_pack(budget=8000, quality_threshold=0.5)
-        pack.add(PackBlock(id="bad", type="evidence", content="Low quality search result.", quality=0.3))
+        pack.add(
+            PackBlock(id="bad", type="evidence", content="Low quality search result.", quality=0.3)
+        )
         result = pack.compile()
         d = next(d for d in result.report.decisions if d.block_id == "bad")
         assert d.action == Action.REMOVED
@@ -148,8 +162,10 @@ class TestDecisionActions:
         critical_content = "critical " * 800
         low_content = "extra " * 800
         pack = make_pack(budget=1000)
-        pack.add(PackBlock(id="crit", type="instructions", content=critical_content, priority="critical"))
-        pack.add(PackBlock(id="extra", type="context",     content=low_content,     priority="low"))
+        pack.add(
+            PackBlock(id="crit", type="instructions", content=critical_content, priority="critical")
+        )
+        pack.add(PackBlock(id="extra", type="context", content=low_content, priority="low"))
         result = pack.compile()
         d_extra = next((d for d in result.report.decisions if d.block_id == "extra"), None)
         assert d_extra is not None
@@ -159,8 +175,8 @@ class TestDecisionActions:
 
 # ── 3. All Decisions Covered ──────────────────────────────────────────────
 
-class TestDecisionCoverage:
 
+class TestDecisionCoverage:
     def _get_decisions(self, result, action):
         return [d for d in result.report.decisions if d.action == action]
 
@@ -168,7 +184,11 @@ class TestDecisionCoverage:
         pack = make_pack(budget=8000)
         ids = ["a", "b", "c", "d"]
         for bid in ids:
-            pack.add(PackBlock(id=bid, type="instructions", content=f"Content of {bid}", priority="medium"))
+            pack.add(
+                PackBlock(
+                    id=bid, type="instructions", content=f"Content of {bid}", priority="medium"
+                )
+            )
         result = pack.compile()
         decision_ids = {d.block_id for d in result.report.decisions}
         for bid in ids:
@@ -176,15 +196,25 @@ class TestDecisionCoverage:
 
     def test_mixed_scenario(self):
         """A realistic compile with all four action types."""
-        long_doc = "knowledge " * 1000   # will be compacted
-        low_qual  = "junk evidence "
-        conv_hist = "message " * 2000    # may truncate
+        long_doc = "knowledge " * 1000  # will be compacted
+        low_qual = "junk evidence "
+        conv_hist = "message " * 2000  # may truncate
 
         pack = make_pack(budget=2000, quality_threshold=0.5)
-        pack.add(PackBlock(id="sys",     type="instructions", content="System prompt",  priority="critical"))
-        pack.add(PackBlock(id="docs",    type="knowledge",    content=long_doc,         priority="high",   max_tokens=200))
-        pack.add(PackBlock(id="search",  type="evidence",     content=low_qual,         priority="medium", quality=0.2))
-        pack.add(PackBlock(id="history", type="conversation", content=conv_hist,        priority="low"))
+        pack.add(
+            PackBlock(id="sys", type="instructions", content="System prompt", priority="critical")
+        )
+        pack.add(
+            PackBlock(
+                id="docs", type="knowledge", content=long_doc, priority="high", max_tokens=200
+            )
+        )
+        pack.add(
+            PackBlock(
+                id="search", type="evidence", content=low_qual, priority="medium", quality=0.2
+            )
+        )
+        pack.add(PackBlock(id="history", type="conversation", content=conv_hist, priority="low"))
 
         result = pack.compile()
         report = result.report
@@ -208,8 +238,8 @@ class TestDecisionCoverage:
 
 # ── 4. Output Formats ─────────────────────────────────────────────────────
 
-class TestOutputFormats:
 
+class TestOutputFormats:
     def _sample_report(self) -> CompileReport:
         decisions = [
             Decision(
@@ -400,19 +430,27 @@ class TestOutputFormats:
 
 # ── 5. Stats Accuracy ─────────────────────────────────────────────────────
 
-class TestStatsAccuracy:
 
+class TestStatsAccuracy:
     def test_input_blocks_count(self):
         pack = make_pack()
         for i in range(5):
-            pack.add(PackBlock(id=f"b{i}", type="instructions", content=f"block {i}", priority="medium"))
+            pack.add(
+                PackBlock(id=f"b{i}", type="instructions", content=f"block {i}", priority="medium")
+            )
         result = pack.compile()
         assert result.report.input_blocks == 5
 
     def test_output_blocks_less_than_input_when_removed(self):
         pack = make_pack(budget=8000)
-        pack.add(PackBlock(id="good", type="instructions", content="Good block.", priority="critical"))
-        pack.add(PackBlock(id="bad",  type="evidence",     content="Bad block.",  priority="medium", quality=0.1))
+        pack.add(
+            PackBlock(id="good", type="instructions", content="Good block.", priority="critical")
+        )
+        pack.add(
+            PackBlock(
+                id="bad", type="evidence", content="Bad block.", priority="medium", quality=0.1
+            )
+        )
         result = pack.compile()
         assert result.report.output_blocks < result.report.input_blocks
 
@@ -466,7 +504,9 @@ class TestStatsAccuracy:
     def test_output_tokens_within_budget(self):
         pack = make_pack(budget=500)
         for i in range(10):
-            pack.add(PackBlock(id=f"b{i}", type="knowledge", content="word " * 200, priority="medium"))
+            pack.add(
+                PackBlock(id=f"b{i}", type="knowledge", content="word " * 200, priority="medium")
+            )
         result = pack.compile()
         # Output tokens should not exceed budget (with some fuzz for char-based estimates)
         assert result.report.output_tokens <= result.report.budget * 1.05
@@ -474,11 +514,15 @@ class TestStatsAccuracy:
 
 # ── 6. Decision Detail Coverage ───────────────────────────────────────────
 
-class TestDecisionDetails:
 
+class TestDecisionDetails:
     def test_kept_decision_has_tokens_after(self):
         pack = make_pack(budget=8000)
-        pack.add(PackBlock(id="sys", type="instructions", content="Some system text.", priority="critical"))
+        pack.add(
+            PackBlock(
+                id="sys", type="instructions", content="Some system text.", priority="critical"
+            )
+        )
         result = pack.compile()
         d = next(d for d in result.report.decisions if d.block_id == "sys")
         assert d.action == Action.KEPT
@@ -487,7 +531,9 @@ class TestDecisionDetails:
     def test_compacted_tokens_before_after(self):
         content = "data " * 500
         pack = make_pack(budget=8000)
-        pack.add(PackBlock(id="docs", type="knowledge", content=content, priority="high", max_tokens=100))
+        pack.add(
+            PackBlock(id="docs", type="knowledge", content=content, priority="high", max_tokens=100)
+        )
         result = pack.compile()
         d = next(d for d in result.report.decisions if d.block_id == "docs")
         assert d.action == Action.COMPACTED

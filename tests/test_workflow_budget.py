@@ -12,11 +12,14 @@ AC coverage:
   AC7  — Never silently truncate
   AC8  — Tests: overspend, underspend, floor, multi-step
 """
+
 from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.agentic.workflow_budget", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.agentic.workflow_budget", reason="module not available in current build"
+)
 import pytest
 from tokenpak.agentic.workflow_budget import (
     CRITICAL_REMAINING_PCT,
@@ -27,6 +30,7 @@ from tokenpak.agentic.workflow_budget import (
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def four_step_budget():
@@ -41,6 +45,7 @@ def three_step_budget():
 
 
 # ── AC1: Tracking total + per-step allocation ─────────────────────────────────
+
 
 class TestAllocationTracking:
     def test_total_is_set(self, four_step_budget):
@@ -78,8 +83,16 @@ class TestAllocationTracking:
 
     def test_snapshot_keys(self, four_step_budget):
         snap = four_step_budget.snapshot()
-        for key in ("total", "remaining", "spent", "pct_remaining",
-                    "pending_steps", "completed_steps", "allocations", "usage"):
+        for key in (
+            "total",
+            "remaining",
+            "spent",
+            "pct_remaining",
+            "pending_steps",
+            "completed_steps",
+            "allocations",
+            "usage",
+        ):
             assert key in snap
 
     def test_snapshot_initial_values(self, four_step_budget):
@@ -90,6 +103,7 @@ class TestAllocationTracking:
 
 
 # ── AC2: Overspend → redistribute remaining proportionally ───────────────────
+
 
 class TestOverspend:
     def test_overspend_reduces_remaining(self, four_step_budget):
@@ -140,7 +154,7 @@ class TestOverspend:
         """Cascading overspend across multiple steps."""
         b = WorkflowBudget(total=3000, steps=["a", "b", "c"])
         b.record_usage("a", 1400)  # overspend by 400; 1600 left for b, c
-        b.record_usage("b", 900)   # overspend by ~100 (b had ~800); 700 left for c
+        b.record_usage("b", 900)  # overspend by ~100 (b had ~800); 700 left for c
         assert b.remaining >= 0
         assert b.step_allocation("c") >= MIN_FLOOR_TOKENS
 
@@ -154,6 +168,7 @@ class TestOverspend:
 
 
 # ── AC3: Underspend → bonus to next priority step ─────────────────────────────
+
 
 class TestUnderspend:
     def test_underspend_increases_remaining(self, four_step_budget):
@@ -210,6 +225,7 @@ class TestUnderspend:
 
 # ── AC4: Min floor ────────────────────────────────────────────────────────────
 
+
 class TestMinFloor:
     def test_default_floor_is_100(self):
         assert MIN_FLOOR_TOKENS == 100
@@ -249,6 +265,7 @@ class TestMinFloor:
 
 # ── AC5: Warn >120% overspend ─────────────────────────────────────────────────
 
+
 class TestWarnThreshold:
     def test_warn_threshold_constant(self):
         assert WARN_OVERSPEND_PCT == 1.20
@@ -283,6 +300,7 @@ class TestWarnThreshold:
 
 
 # ── AC6: Critical <20% remaining ─────────────────────────────────────────────
+
 
 class TestCriticalThreshold:
     def test_critical_threshold_constant(self):
@@ -329,6 +347,7 @@ class TestCriticalThreshold:
 
 # ── AC7: Never silently truncate ──────────────────────────────────────────────
 
+
 class TestNoSilentTruncation:
     def test_raises_on_unknown_step(self, four_step_budget):
         with pytest.raises(KeyError):
@@ -373,6 +392,7 @@ class TestNoSilentTruncation:
 
 
 # ── AC8: Multi-step scenarios ─────────────────────────────────────────────────
+
 
 class TestMultiStep:
     def test_full_workflow_exact_spend(self):

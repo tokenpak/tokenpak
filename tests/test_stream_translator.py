@@ -1,4 +1,5 @@
 """Tests for tokenpak.proxy.providers.stream_translator module."""
+
 from tokenpak.proxy.providers.stream_translator import StreamingTranslator
 
 
@@ -14,11 +15,11 @@ class TestStreamingTranslator:
 
     def test_translator_callable(self):
         translator = StreamingTranslator("openai", "anthropic")
-        assert hasattr(translator, '__class__')
+        assert hasattr(translator, "__class__")
 
     def test_translator_methods_exist(self):
         translator = StreamingTranslator("anthropic", "openai")
-        assert hasattr(translator, 'translate_chunk')
+        assert hasattr(translator, "translate_chunk")
 
     def test_multiple_translators(self):
         t1 = StreamingTranslator("anthropic", "openai")

@@ -106,9 +106,7 @@ def _pid_alive_windows(pid: int) -> bool:
         import ctypes  # noqa: PLC0415 — Windows-only, imported lazily
 
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-        handle = kernel32.OpenProcess(
-            _WINDOWS_PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid)
-        )
+        handle = kernel32.OpenProcess(_WINDOWS_PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
         if not handle:
             return False
         try:

@@ -44,6 +44,7 @@ BASE_PORT = 18766  # test port base — avoid clashing with real serve (8766)
 def _get(url: str, timeout: float = 5.0) -> dict:
     with urllib.request.urlopen(url, timeout=timeout) as r:
         import json
+
         return json.loads(r.read())
 
 
@@ -76,6 +77,7 @@ def _post_json(url: str, payload: dict, timeout: float = 5.0) -> dict:
 # ---------------------------------------------------------------------------
 # 1. --workers N flag works
 # ---------------------------------------------------------------------------
+
 
 class TestWorkersFlag:
     """AC1: --workers N flag is accepted and wired through."""
@@ -113,6 +115,7 @@ class TestWorkersFlag:
         fake_app = object()
 
         import tokenpak.dashboard.app as dashboard_app_mod
+
         monkeypatch.setattr(dashboard_app_mod, "create_combined_app", lambda: fake_app)
 
         from tokenpak.cli.commands.serve import run_serve_cmd
@@ -150,6 +153,7 @@ class TestWorkersFlag:
 # 2. Default workers = CPU count / 2
 # ---------------------------------------------------------------------------
 
+
 class TestDefaultWorkers:
     def test_default_matches_cpu_formula(self):
         from tokenpak.cli.commands.serve import _default_workers
@@ -161,6 +165,7 @@ class TestDefaultWorkers:
         """Even on a 1-core machine the default is at least 1."""
         monkeypatch.setattr(os, "cpu_count", lambda: 1)
         from tokenpak.cli.commands import serve as serve_mod
+
         # Reload to pick up monkeypatched cpu_count
         assert serve_mod._default_workers() == 1
 
@@ -184,6 +189,7 @@ class TestDefaultWorkers:
 # 3 + 4. Workers restart on crash / Graceful shutdown (integration smoke test)
 # ---------------------------------------------------------------------------
 
+
 class TestWorkerLifecycle:
     """
     Smoke-tests that a real multi-worker server starts, serves requests,
@@ -199,10 +205,14 @@ class TestWorkerLifecycle:
         port = BASE_PORT + 10
         proc = subprocess.Popen(
             [
-                sys.executable, "-m", "tokenpak",
+                sys.executable,
+                "-m",
+                "tokenpak",
                 "serve",
-                "--port", str(port),
-                "--workers", "2",
+                "--port",
+                str(port),
+                "--workers",
+                "2",
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -254,6 +264,7 @@ class TestWorkerLifecycle:
 # 5. Telemetry / SQLite WAL mode
 # ---------------------------------------------------------------------------
 
+
 class TestTelemetryWAL:
     def test_storage_uses_wal_mode(self, tmp_path):
         """SQLite storage opens in WAL journal mode (safe for multi-process writers)."""
@@ -304,6 +315,7 @@ class TestTelemetryWAL:
 # ---------------------------------------------------------------------------
 # 6. Argparse integration
 # ---------------------------------------------------------------------------
+
 
 class TestArgparse:
     """Verify that the CLI arg wiring in main.py exposes --workers."""

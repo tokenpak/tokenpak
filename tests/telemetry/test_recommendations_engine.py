@@ -213,9 +213,7 @@ def test_high_unattributed_via_usage_source_high_severity(tmp_path):
     _insert_traces(db_path, n=10, usage_source="unknown")
     engine = RecommendationsEngine(db_path=db_path)
     result = engine.run()
-    rec = next(
-        r for r in result.recommendations if r.id == "attribution.high-unattributed"
-    )
+    rec = next(r for r in result.recommendations if r.id == "attribution.high-unattributed")
     assert rec.severity == SEVERITY_HIGH
     assert rec.evidence["unattributed_pct"] >= 30.0
 
@@ -225,9 +223,7 @@ def test_high_unattributed_medium_severity(tmp_path):
     db_path = _make_db(tmp_path)
     # Mix: 8 known + 2 unknown — pct = 20%, hits medium (>=10) but not high (>=30)
     _insert_traces(db_path, n=8, usage_source="provider", model="gpt-5.5")
-    _insert_traces(
-        db_path, n=2, usage_source="unknown", model="gpt-5.5", ts_offset=0.5
-    )
+    _insert_traces(db_path, n=2, usage_source="unknown", model="gpt-5.5", ts_offset=0.5)
     engine = RecommendationsEngine(db_path=db_path)
     result = engine.run()
     rec = next(
@@ -243,9 +239,7 @@ def test_low_unattributed_does_not_fire(tmp_path):
     _insert_traces(db_path, n=10, usage_source="provider")
     engine = RecommendationsEngine(db_path=db_path)
     result = engine.run()
-    assert "attribution.high-unattributed" not in {
-        r.id for r in result.recommendations
-    }
+    assert "attribution.high-unattributed" not in {r.id for r in result.recommendations}
 
 
 @pytest.mark.skip(reason=SKIP_TIP06_AUTOTABLE_AND_ENGINE_PREFERENCE_DRIFT)
@@ -278,9 +272,7 @@ def test_high_unattributed_prefers_tip06_table_when_present(tmp_path):
 
     engine = RecommendationsEngine(db_path=db_path)
     result = engine.run()
-    rec = next(
-        r for r in result.recommendations if r.id == "attribution.high-unattributed"
-    )
+    rec = next(r for r in result.recommendations if r.id == "attribution.high-unattributed")
     assert rec.severity == SEVERITY_HIGH
     # Falls back to saved_tokens denominator label
     assert rec.evidence["saved_tokens"] == 1000
@@ -297,9 +289,7 @@ def test_missing_pricing_emits_tracking_rec_per_unpriced_model(tmp_path):
     _insert_traces(db_path, n=2, model="phantom-model-y", ts_offset=0.5)
     engine = RecommendationsEngine(db_path=db_path)
     result = engine.run()
-    pricing_recs = [
-        r for r in result.recommendations if r.id.startswith("pricing.missing:")
-    ]
+    pricing_recs = [r for r in result.recommendations if r.id.startswith("pricing.missing:")]
     titles = sorted(r.title for r in pricing_recs)
     # At least the two phantoms should be flagged
     assert any("phantom-model-x" in t for t in titles), titles
@@ -321,9 +311,7 @@ def test_missing_pricing_skips_models_with_catalog_entry(tmp_path):
     conn.close()
     engine = RecommendationsEngine(db_path=db_path)
     result = engine.run()
-    assert "pricing.missing:phantom-priced" not in {
-        r.id for r in result.recommendations
-    }
+    assert "pricing.missing:phantom-priced" not in {r.id for r in result.recommendations}
 
 
 # ---------------------------------------------------------------------------
@@ -356,10 +344,7 @@ def test_schema_instability_fires_when_misses_recent(tmp_path):
         """
     )
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    rows = [
-        (f"r{i}", "semantic", "tool_schema_digest_mismatch", now_iso)
-        for i in range(7)
-    ]
+    rows = [(f"r{i}", "semantic", "tool_schema_digest_mismatch", now_iso) for i in range(7)]
     conn.executemany(
         "INSERT INTO tp_cache_miss_reasons (request_id, cache_type, reason, timestamp) VALUES (?,?,?,?)",
         rows,
@@ -368,9 +353,7 @@ def test_schema_instability_fires_when_misses_recent(tmp_path):
     conn.close()
     engine = RecommendationsEngine(db_path=db_path)
     result = engine.run()
-    rec = next(
-        r for r in result.recommendations if r.id == "cache.schema-instability"
-    )
+    rec = next(r for r in result.recommendations if r.id == "cache.schema-instability")
     assert rec.severity == SEVERITY_MEDIUM
     assert rec.evidence["n_misses"] == 7
 
@@ -391,12 +374,8 @@ def test_schema_instability_skipped_when_misses_old(tmp_path):
         )
         """
     )
-    old_iso = time.strftime(
-        "%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 30 * 3600)
-    )
-    rows = [
-        (f"r{i}", "semantic", "tool_schema_digest_mismatch", old_iso) for i in range(7)
-    ]
+    old_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 30 * 3600))
+    rows = [(f"r{i}", "semantic", "tool_schema_digest_mismatch", old_iso) for i in range(7)]
     conn.executemany(
         "INSERT INTO tp_cache_miss_reasons (request_id, cache_type, reason, timestamp) VALUES (?,?,?,?)",
         rows,
@@ -415,12 +394,8 @@ def test_schema_instability_skipped_when_misses_old(tmp_path):
 
 def test_high_error_rate_fires(tmp_path):
     db_path = _make_db(tmp_path)
-    _insert_traces(
-        db_path, n=8, status="ok", model="gpt-5.5", cache_read=400, ts_offset=0
-    )
-    _insert_traces(
-        db_path, n=2, status="error", model="gpt-5.5", cache_read=400, ts_offset=0.5
-    )
+    _insert_traces(db_path, n=8, status="ok", model="gpt-5.5", cache_read=400, ts_offset=0)
+    _insert_traces(db_path, n=2, status="error", model="gpt-5.5", cache_read=400, ts_offset=0.5)
     engine = RecommendationsEngine(db_path=db_path)
     result = engine.run()
     rec = next(r for r in result.recommendations if r.id == "errors.high-rate")
@@ -465,7 +440,12 @@ def test_results_sorted_by_severity(tmp_path):
         db_path, n=8, status="ok", model="phantom-z", cache_read=0, usage_source="provider"
     )
     _insert_traces(
-        db_path, n=2, status="error", model="phantom-z", cache_read=0, ts_offset=0.5,
+        db_path,
+        n=2,
+        status="error",
+        model="phantom-z",
+        cache_read=0,
+        ts_offset=0.5,
         usage_source="provider",
     )
     engine = RecommendationsEngine(db_path=db_path)

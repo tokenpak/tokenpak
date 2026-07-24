@@ -87,13 +87,19 @@ def _populate_tpk(tpk_home: Path) -> dict:
 def _stub_side_effects(monkeypatch):
     """Stub the codex teardown + pip so tests never touch the real system."""
     monkeypatch.setattr(U, "_teardown_codex", lambda: (U._OUTCOME_NOOP, "codex absent"))
+
     # _run_pip_uninstall is only reached with --yes --hard; default to a no-op
     # that records a benign line.
     def _fake_pip(receipt):
         receipt.lines.append(
-            {"phase": "package", "op": "pip uninstall tokenpak",
-             "outcome": U._OUTCOME_SKIP, "detail": "stubbed"}
+            {
+                "phase": "package",
+                "op": "pip uninstall tokenpak",
+                "outcome": U._OUTCOME_SKIP,
+                "detail": "stubbed",
+            }
         )
+
     monkeypatch.setattr(U, "_run_pip_uninstall", _fake_pip)
 
 
@@ -189,8 +195,16 @@ def test_dry_run_hard_preserves_all_fixtures(isolated_home, capsys):
     rc = U.run_uninstall(hard=True, dry_run=True)
     assert rc == 0
     # EVERYTHING survives a dry-run.
-    for key in ("config", "license", "telemetry", "cache", "mcp_state",
-                "journal", "budget", "capsules"):
+    for key in (
+        "config",
+        "license",
+        "telemetry",
+        "cache",
+        "mcp_state",
+        "journal",
+        "budget",
+        "capsules",
+    ):
         assert paths[key].exists(), f"{key} should survive dry-run"
 
 
@@ -253,8 +267,7 @@ def test_hard_keep_data_retains_everything(isolated_home):
     rc = U.run_uninstall(hard=True, yes=True, keep_data=True)
     assert rc == 0
     # Nothing under the home is removed when --keep-data is set.
-    for key in ("config", "license", "telemetry", "cache",
-                "journal", "budget", "capsules"):
+    for key in ("config", "license", "telemetry", "cache", "journal", "budget", "capsules"):
         assert paths[key].exists(), f"{key} should be retained under --keep-data"
 
 
@@ -317,8 +330,11 @@ def test_receipt_only_reports_real_ops(isolated_home, capsys):
     assert rc == 0
     data = json.loads(capsys.readouterr().out)
     # No operation claims a removal of a path that never existed.
-    removed = [ln for ln in data["operations"] if ln["outcome"] == U._OUTCOME_DONE
-               and ln["op"].startswith("Delete")]
+    removed = [
+        ln
+        for ln in data["operations"]
+        if ln["outcome"] == U._OUTCOME_DONE and ln["op"].startswith("Delete")
+    ]
     assert removed == []
 
 

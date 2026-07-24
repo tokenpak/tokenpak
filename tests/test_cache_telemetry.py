@@ -20,8 +20,10 @@ from tokenpak.cache.telemetry import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _hit(request_id: str = "req_hit", cache_read: int = 13_500,
-         total: int = 15_000, output: int = 512) -> CacheMetrics:
+
+def _hit(
+    request_id: str = "req_hit", cache_read: int = 13_500, total: int = 15_000, output: int = 512
+) -> CacheMetrics:
     return CacheMetrics(
         request_id=request_id,
         stable_prefix_tokens=14_800,
@@ -32,8 +34,9 @@ def _hit(request_id: str = "req_hit", cache_read: int = 13_500,
     )
 
 
-def _miss(request_id: str = "req_miss", reason: str = "timestamp",
-          total: int = 15_000) -> CacheMetrics:
+def _miss(
+    request_id: str = "req_miss", reason: str = "timestamp", total: int = 15_000
+) -> CacheMetrics:
     return CacheMetrics(
         request_id=request_id,
         stable_prefix_tokens=14_800,
@@ -48,8 +51,8 @@ def _miss(request_id: str = "req_miss", reason: str = "timestamp",
 # CacheMetrics unit tests
 # ---------------------------------------------------------------------------
 
-class TestCacheMetrics:
 
+class TestCacheMetrics:
     def test_cache_hit_true_when_read_tokens_positive(self):
         m = _hit(cache_read=1)
         assert m.cache_hit is True
@@ -83,9 +86,15 @@ class TestCacheMetrics:
     def test_to_dict_contains_required_fields(self):
         m = _hit()
         d = m.to_dict()
-        for key in ("request_id", "cache_hit", "cache_hit_ratio",
-                    "cache_miss_reason", "total_input_tokens",
-                    "cache_read_tokens", "cost_saved"):
+        for key in (
+            "request_id",
+            "cache_hit",
+            "cache_hit_ratio",
+            "cache_miss_reason",
+            "total_input_tokens",
+            "cache_read_tokens",
+            "cost_saved",
+        ):
             assert key in d, f"Missing key: {key}"
 
     def test_timestamp_auto_populated(self):
@@ -99,8 +108,8 @@ class TestCacheMetrics:
 # CacheTelemetryCollector unit tests
 # ---------------------------------------------------------------------------
 
-class TestCacheTelemetryCollector:
 
+class TestCacheTelemetryCollector:
     def test_hit_rate_empty_returns_zero(self):
         c = CacheTelemetryCollector()
         assert c.hit_rate() == 0.0
@@ -183,11 +192,18 @@ class TestCacheTelemetryCollector:
         s = c.summary()
 
         required_keys = [
-            "total_requests", "cache_hits", "cache_misses",
-            "hit_rate", "miss_rate", "hit_rate_pct",
-            "avg_cache_ratio", "avg_cache_ratio_pct",
-            "total_cache_read_tokens", "total_input_tokens",
-            "estimated_cost_saved_tokens", "miss_reasons",
+            "total_requests",
+            "cache_hits",
+            "cache_misses",
+            "hit_rate",
+            "miss_rate",
+            "hit_rate_pct",
+            "avg_cache_ratio",
+            "avg_cache_ratio_pct",
+            "total_cache_read_tokens",
+            "total_input_tokens",
+            "estimated_cost_saved_tokens",
+            "miss_reasons",
             "recent_requests",
         ]
         for k in required_keys:
@@ -207,6 +223,7 @@ class TestCacheTelemetryCollector:
     def test_thread_safety_concurrent_records(self):
         """Multiple threads recording simultaneously must not corrupt state."""
         import threading
+
         c = CacheTelemetryCollector()
         errors = []
 
@@ -234,8 +251,8 @@ class TestCacheTelemetryCollector:
 # Module-level singleton tests
 # ---------------------------------------------------------------------------
 
-class TestModuleSingleton:
 
+class TestModuleSingleton:
     def setup_method(self):
         reset_collector()
 

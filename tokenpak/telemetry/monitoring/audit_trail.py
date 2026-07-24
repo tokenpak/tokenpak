@@ -130,7 +130,7 @@ class AuditTrail:
             }
         )
 
-    def record_error(self, *, error_type: str, message: str, **extra) -> None:
+    def record_error(self, *, error_type: str, message: str, **extra: Any) -> None:
         """Record an error that occurred during request processing."""
         event: Dict[str, Any] = {
             "event": "error",

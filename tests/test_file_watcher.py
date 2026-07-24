@@ -22,6 +22,7 @@ from tokenpak.vault.watcher import (
 # WatcherConfig
 # ---------------------------------------------------------------------------
 
+
 class TestWatcherConfig:
     def test_defaults(self, tmp_path):
         cfg = WatcherConfig(watch_paths=[str(tmp_path)])
@@ -48,6 +49,7 @@ class TestWatcherConfig:
 # WatcherStats
 # ---------------------------------------------------------------------------
 
+
 class TestWatcherStats:
     def test_initial_values(self):
         s = WatcherStats()
@@ -64,6 +66,7 @@ class TestWatcherStats:
 # ---------------------------------------------------------------------------
 # _should_ignore
 # ---------------------------------------------------------------------------
+
 
 class TestShouldIgnore:
     def _watcher(self):
@@ -102,6 +105,7 @@ class TestShouldIgnore:
 # _on_fs_event / debounce
 # ---------------------------------------------------------------------------
 
+
 class TestOnFsEvent:
     def test_event_increments_counter(self):
         cfg = WatcherConfig(watch_paths=["/tmp"])
@@ -132,6 +136,7 @@ class TestOnFsEvent:
 # status()
 # ---------------------------------------------------------------------------
 
+
 class TestStatus:
     def test_status_not_running(self, tmp_path):
         cfg = WatcherConfig(watch_paths=[str(tmp_path)])
@@ -148,14 +153,22 @@ class TestStatus:
         cfg = WatcherConfig(watch_paths=[str(tmp_path)])
         w = VaultWatcher(cfg)
         s = w.status()
-        for key in ("running", "watched_paths", "debounce_ms", "uptime_seconds",
-                    "events_received", "reindexes_triggered", "files_reindexed"):
+        for key in (
+            "running",
+            "watched_paths",
+            "debounce_ms",
+            "uptime_seconds",
+            "events_received",
+            "reindexes_triggered",
+            "files_reindexed",
+        ):
             assert key in s
 
 
 # ---------------------------------------------------------------------------
 # start / stop (mocked watchdog)
 # ---------------------------------------------------------------------------
+
 
 class TestStartStop:
     def _make_mock_watchdog(self):
@@ -193,7 +206,9 @@ class TestStartStop:
             assert not w.is_running
 
     def test_start_missing_watchdog_raises(self, tmp_path):
-        with patch.dict("sys.modules", {"watchdog": None, "watchdog.observers": None, "watchdog.events": None}):
+        with patch.dict(
+            "sys.modules", {"watchdog": None, "watchdog.observers": None, "watchdog.events": None}
+        ):
             cfg = WatcherConfig(watch_paths=[str(tmp_path)])
             w = VaultWatcher(cfg)
             with pytest.raises((RuntimeError, ImportError)):
@@ -203,6 +218,7 @@ class TestStartStop:
 # ---------------------------------------------------------------------------
 # _reindex (integration-lite with mocked registry)
 # ---------------------------------------------------------------------------
+
 
 class TestReindex:
     def test_reindex_skips_nonexistent(self, tmp_path):
@@ -237,10 +253,11 @@ class TestReindex:
         # pre-refactor monolith locations. The watcher's `_reindex()` now
         # imports from `tokenpak.core.registry`, `tokenpak.compression.processors`,
         # and `tokenpak.telemetry.tokens`. Patches updated to match.
-        with patch("tokenpak.core.registry.BlockRegistry", return_value=mock_registry), \
-             patch("tokenpak.compression.processors.get_processor", return_value=mock_processor), \
-             patch("tokenpak.telemetry.tokens.count_tokens", return_value=5):
-
+        with (
+            patch("tokenpak.core.registry.BlockRegistry", return_value=mock_registry),
+            patch("tokenpak.compression.processors.get_processor", return_value=mock_processor),
+            patch("tokenpak.telemetry.tokens.count_tokens", return_value=5),
+        ):
             w = VaultWatcher(cfg, on_change=called.append)
             w._reindex([str(f)])
 
@@ -254,8 +271,10 @@ class TestReindex:
         mock_registry = MagicMock()
         mock_registry.has_changed.return_value = False  # no change
 
-        with patch("tokenpak.core.registry.BlockRegistry", return_value=mock_registry), \
-             patch("tokenpak.compression.processors.get_processor", return_value=MagicMock()):
+        with (
+            patch("tokenpak.core.registry.BlockRegistry", return_value=mock_registry),
+            patch("tokenpak.compression.processors.get_processor", return_value=MagicMock()),
+        ):
             w = VaultWatcher(cfg)
             w._reindex([str(f)])
 
@@ -271,9 +290,11 @@ class TestReindex:
         mock_processor = MagicMock()
         mock_processor.process.return_value = "def foo(): pass"
 
-        with patch("tokenpak.core.registry.BlockRegistry", return_value=mock_registry), \
-             patch("tokenpak.compression.processors.get_processor", return_value=mock_processor), \
-             patch("tokenpak.telemetry.tokens.count_tokens", return_value=3):
+        with (
+            patch("tokenpak.core.registry.BlockRegistry", return_value=mock_registry),
+            patch("tokenpak.compression.processors.get_processor", return_value=mock_processor),
+            patch("tokenpak.telemetry.tokens.count_tokens", return_value=3),
+        ):
             w = VaultWatcher(cfg)
             w._reindex([str(f)])
 
@@ -285,28 +306,33 @@ class TestReindex:
 # CLI integration — tokenpak index --watch arg parsing
 # ---------------------------------------------------------------------------
 
+
 class TestCLIWatchArg:
     def test_watch_flag_present_in_parser(self):
         """Ensure the CLI parser accepts --watch without error."""
         from tokenpak.cli import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["index", "/tmp", "--watch"])
         assert args.watch is True
 
     def test_watch_false_by_default(self):
         from tokenpak.cli import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["index", "/tmp"])
         assert args.watch is False
 
     def test_debounce_default(self):
         from tokenpak.cli import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["index", "/tmp", "--watch"])
         assert args.debounce == 500
 
     def test_debounce_custom(self):
         from tokenpak.cli import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["index", "/tmp", "--watch", "--debounce", "250"])
         assert args.debounce == 250
@@ -315,6 +341,7 @@ class TestCLIWatchArg:
 # ---------------------------------------------------------------------------
 # .gitignore and .tokenpakignore support
 # ---------------------------------------------------------------------------
+
 
 class TestIgnoreFiles:
     def test_load_gitignore_patterns(self, tmp_path):
@@ -365,7 +392,9 @@ class TestIgnoreFiles:
 
     def test_missing_ignore_files_ok(self, tmp_path):
         # No .gitignore or .tokenpakignore present — should not raise
-        cfg = WatcherConfig(watch_paths=[str(tmp_path)], use_gitignore=True, use_tokenpakignore=True)
+        cfg = WatcherConfig(
+            watch_paths=[str(tmp_path)], use_gitignore=True, use_tokenpakignore=True
+        )
         w = VaultWatcher(cfg)
         assert w._gitignore_patterns == []
         assert w._tokenpakignore_patterns == []

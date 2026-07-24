@@ -25,6 +25,7 @@ def _patch_config(cfg: dict):
 def _reset_config_cache():
     """Reset the config_loader cache before each test."""
     import tokenpak.core.config_loader as cl
+
     old = cl._config
     cl._config = None
     yield
@@ -34,6 +35,7 @@ def _reset_config_cache():
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _sample_providers_yaml() -> dict:
     """Return a config dict with two custom providers."""
@@ -69,8 +71,8 @@ def _sample_anthropic_provider() -> dict:
 # Tests — load_custom_providers
 # ---------------------------------------------------------------------------
 
-class TestLoadCustomProviders:
 
+class TestLoadCustomProviders:
     def test_loads_valid_providers(self):
         from tokenpak.proxy.custom_providers import load_custom_providers
 
@@ -117,10 +119,14 @@ class TestLoadCustomProviders:
     def test_trailing_slash_stripped(self):
         from tokenpak.proxy.custom_providers import load_custom_providers
 
-        cfg = {"providers": {"test": {
-            "endpoint": "http://localhost:8000/v1/",
-            "format": "openai",
-        }}}
+        cfg = {
+            "providers": {
+                "test": {
+                    "endpoint": "http://localhost:8000/v1/",
+                    "format": "openai",
+                }
+            }
+        }
         with _patch_config(cfg):
             providers = load_custom_providers()
 
@@ -138,10 +144,14 @@ class TestLoadCustomProviders:
     def test_unknown_format_skipped(self):
         from tokenpak.proxy.custom_providers import load_custom_providers
 
-        cfg = {"providers": {"bad": {
-            "endpoint": "http://localhost:8000/v1",
-            "format": "llama-cpp",
-        }}}
+        cfg = {
+            "providers": {
+                "bad": {
+                    "endpoint": "http://localhost:8000/v1",
+                    "format": "llama-cpp",
+                }
+            }
+        }
         with _patch_config(cfg):
             providers = load_custom_providers()
 
@@ -191,13 +201,17 @@ class TestLoadCustomProviders:
     def test_extra_keys_preserved(self):
         from tokenpak.proxy.custom_providers import load_custom_providers
 
-        cfg = {"providers": {"test": {
-            "endpoint": "http://localhost:8000/v1",
-            "format": "openai",
-            "api_key_env": "TEST_KEY",
-            "models": ["llama-3", "mistral-7b"],
-            "max_tokens": 4096,
-        }}}
+        cfg = {
+            "providers": {
+                "test": {
+                    "endpoint": "http://localhost:8000/v1",
+                    "format": "openai",
+                    "api_key_env": "TEST_KEY",
+                    "models": ["llama-3", "mistral-7b"],
+                    "max_tokens": 4096,
+                }
+            }
+        }
         with _patch_config(cfg):
             providers = load_custom_providers()
 
@@ -210,9 +224,13 @@ class TestLoadCustomProviders:
         """When format is omitted, default to openai."""
         from tokenpak.proxy.custom_providers import load_custom_providers
 
-        cfg = {"providers": {"test": {
-            "endpoint": "http://localhost:8000/v1",
-        }}}
+        cfg = {
+            "providers": {
+                "test": {
+                    "endpoint": "http://localhost:8000/v1",
+                }
+            }
+        }
         with _patch_config(cfg):
             providers = load_custom_providers()
 
@@ -223,8 +241,8 @@ class TestLoadCustomProviders:
 # Tests — adapter factory
 # ---------------------------------------------------------------------------
 
-class TestCustomAdapterFactory:
 
+class TestCustomAdapterFactory:
     def _build_registry_with_custom(self, cfg: dict):
         from tokenpak.proxy.adapters import build_default_registry
         from tokenpak.proxy.custom_providers import build_custom_adapters, load_custom_providers
@@ -237,33 +255,23 @@ class TestCustomAdapterFactory:
         return registry, providers, adapters
 
     def test_custom_adapter_registered(self):
-        registry, providers, adapters = self._build_registry_with_custom(
-            _sample_providers_yaml()
-        )
+        registry, providers, adapters = self._build_registry_with_custom(_sample_providers_yaml())
         assert len(adapters) == 2
         formats = registry.list_formats()
         assert "custom-my-local-llm" in formats
         assert "custom-deepseek" in formats
 
     def test_custom_adapter_detects_by_hostname_in_url(self):
-        registry, providers, adapters = self._build_registry_with_custom(
-            _sample_providers_yaml()
-        )
+        registry, providers, adapters = self._build_registry_with_custom(_sample_providers_yaml())
         deepseek_adapter = next(a for a in adapters if "deepseek" in a.source_format)
 
         # Forward-proxy style: full URL in path
-        assert deepseek_adapter.detect(
-            "https://api.deepseek.com/v1/chat/completions", {}, None
-        )
+        assert deepseek_adapter.detect("https://api.deepseek.com/v1/chat/completions", {}, None)
         # Unrelated host should NOT match
-        assert not deepseek_adapter.detect(
-            "https://api.openai.com/v1/chat/completions", {}, None
-        )
+        assert not deepseek_adapter.detect("https://api.openai.com/v1/chat/completions", {}, None)
 
     def test_custom_adapter_detects_by_host_header(self):
-        registry, providers, adapters = self._build_registry_with_custom(
-            _sample_providers_yaml()
-        )
+        registry, providers, adapters = self._build_registry_with_custom(_sample_providers_yaml())
         deepseek_adapter = next(a for a in adapters if "deepseek" in a.source_format)
 
         assert deepseek_adapter.detect(
@@ -273,27 +281,25 @@ class TestCustomAdapterFactory:
         )
 
     def test_custom_adapter_upstream(self):
-        registry, providers, adapters = self._build_registry_with_custom(
-            _sample_providers_yaml()
-        )
+        registry, providers, adapters = self._build_registry_with_custom(_sample_providers_yaml())
         local = next(a for a in adapters if "local" in a.source_format)
         assert local.get_default_upstream() == "http://localhost:8000/v1"
 
     def test_custom_adapter_delegates_normalize(self):
         """Custom adapter normalize/denormalize should work like the delegate."""
-        registry, providers, adapters = self._build_registry_with_custom(
-            _sample_providers_yaml()
-        )
+        registry, providers, adapters = self._build_registry_with_custom(_sample_providers_yaml())
         adapter = adapters[0]  # openai-format custom adapter
 
-        body = json.dumps({
-            "model": "llama-3",
-            "messages": [
-                {"role": "system", "content": "You are helpful."},
-                {"role": "user", "content": "Hello"},
-            ],
-            "stream": False,
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "llama-3",
+                "messages": [
+                    {"role": "system", "content": "You are helpful."},
+                    {"role": "user", "content": "Hello"},
+                ],
+                "stream": False,
+            }
+        ).encode()
 
         canonical = adapter.normalize(body)
         assert canonical.model == "llama-3"
@@ -307,17 +313,13 @@ class TestCustomAdapterFactory:
         assert denormalized["messages"][0]["role"] == "system"
 
     def test_custom_adapter_sse_format(self):
-        registry, providers, adapters = self._build_registry_with_custom(
-            _sample_providers_yaml()
-        )
+        registry, providers, adapters = self._build_registry_with_custom(_sample_providers_yaml())
         adapter = adapters[0]
         assert adapter.get_sse_format() == "openai-sse"
 
     def test_registry_detects_custom_provider_from_url(self):
         """The full registry should route a deepseek URL to the custom adapter."""
-        registry, providers, adapters = self._build_registry_with_custom(
-            _sample_providers_yaml()
-        )
+        registry, providers, adapters = self._build_registry_with_custom(_sample_providers_yaml())
         detected = registry.detect(
             "https://api.deepseek.com/v1/chat/completions",
             {"Host": "api.deepseek.com"},
@@ -333,8 +335,8 @@ class TestCustomAdapterFactory:
 # Tests — provider display string
 # ---------------------------------------------------------------------------
 
-class TestProviderDisplay:
 
+class TestProviderDisplay:
     def test_display_with_custom_providers(self):
         from tokenpak.proxy.adapters import build_default_registry
         from tokenpak.proxy.custom_providers import (
@@ -372,12 +374,13 @@ class TestProviderDisplay:
 # Tests — intercept list integration
 # ---------------------------------------------------------------------------
 
-class TestInterceptIntegration:
 
+class TestInterceptIntegration:
     def test_custom_hostname_added_to_intercept(self):
         """When custom providers are loaded, their hostnames should be
         added to the INTERCEPT_HOSTS set in router.py."""
         import importlib
+
         _router = importlib.import_module("tokenpak.proxy.router")
 
         # Simulate what config.py does at startup

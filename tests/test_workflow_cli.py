@@ -12,11 +12,14 @@ AC coverage:
   AC7 — progress bar rendered in status output
   AC8 — ETA shown for workflows with completed step durations
 """
+
 from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.agentic.workflow", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.agentic.workflow", reason="module not available in current build"
+)
 import json
 import time
 
@@ -32,6 +35,7 @@ from tokenpak._internal.agentic.workflow import (
 from tokenpak.cli.commands.workflow import workflow_cmd
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def tmp_dir(tmp_path):
@@ -51,6 +55,7 @@ def runner():
 def invoke(runner, mgr, args):
     """Invoke workflow_cmd with manager patched to use tmp dir."""
     import tokenpak.cli.commands.workflow as wmod
+
     orig = wmod.get_manager
     wmod.get_manager = lambda: mgr
     try:
@@ -61,6 +66,7 @@ def invoke(runner, mgr, args):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def make_simple_workflow(mgr, name="test-wf", status=None):
     """Create a 3-step workflow."""
@@ -89,6 +95,7 @@ def make_simple_workflow(mgr, name="test-wf", status=None):
 
 
 # ── AC1: list / status ─────────────────────────────────────────────────────────
+
 
 def test_list_empty(runner, mgr):
     result = invoke(runner, mgr, ["list"])
@@ -123,6 +130,7 @@ def test_status_by_prefix(runner, mgr):
 
 # ── AC2: --filter flag ─────────────────────────────────────────────────────────
 
+
 def test_filter_active(runner, mgr):
     wf_active = make_simple_workflow(mgr, name="active-wf", status=WorkflowStatus.RUNNING)
     wf_done = make_simple_workflow(mgr, name="done-wf", status=WorkflowStatus.COMPLETED)
@@ -152,6 +160,7 @@ def test_filter_failed(runner, mgr):
 
 # ── AC3: resume shows plan, --yes skips confirm ────────────────────────────────
 
+
 def test_resume_shows_plan(runner, mgr):
     wf = make_simple_workflow(mgr, name="plan-wf")
     mgr.start(wf.id)
@@ -163,6 +172,7 @@ def test_resume_shows_plan(runner, mgr):
         catch_exceptions=False,
     )
     import tokenpak.cli.commands.workflow as wmod
+
     orig = wmod.get_manager
     wmod.get_manager = lambda: mgr
     try:
@@ -183,6 +193,7 @@ def test_resume_yes_skips_confirm(runner, mgr):
 
 
 # ── AC4: resume from failure ───────────────────────────────────────────────────
+
 
 def test_resume_from_failure(runner, mgr):
     """After a step fails, fix and resume: failed/skipped steps are reset."""
@@ -215,6 +226,7 @@ def test_resume_shows_next_step(runner, mgr):
 
 
 # ── AC5: cancel with cleanup ───────────────────────────────────────────────────
+
 
 def test_cancel_yes_flag(runner, mgr):
     wf = make_simple_workflow(mgr, name="cancel-me")
@@ -251,6 +263,7 @@ def test_cancel_running_step_reported(runner, mgr):
 
 # ── AC6: --json flag ───────────────────────────────────────────────────────────
 
+
 def test_list_json(runner, mgr):
     make_simple_workflow(mgr, name="json-wf")
     result = invoke(runner, mgr, ["list", "--json"])
@@ -271,6 +284,7 @@ def test_status_json(runner, mgr):
 
 # ── AC7: progress bar in status ────────────────────────────────────────────────
 
+
 def test_status_shows_progress_bar(runner, mgr):
     wf = make_simple_workflow(mgr)
     result = invoke(runner, mgr, ["status", wf.id])
@@ -287,6 +301,7 @@ def test_status_shows_step_count(runner, mgr):
 
 
 # ── AC8: ETA shown when steps have durations ──────────────────────────────────
+
 
 def test_eta_shown_for_running_workflow(runner, mgr):
     """When some steps are done (have durations), ETA should appear."""

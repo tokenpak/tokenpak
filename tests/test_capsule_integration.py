@@ -2,7 +2,6 @@
 Tests for capsule builder proxy integration.
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.capsule.builder", reason="module not available in current build")
@@ -25,6 +24,7 @@ from tokenpak.proxy.capsule_integration import (
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def reset_cache():
     """Clear feature flag cache before and after each test."""
@@ -36,28 +36,32 @@ def reset_cache():
 @pytest.fixture
 def simple_body():
     """Simple request body with short messages."""
-    return json.dumps({
-        "model": "claude-sonnet-4-5",
-        "messages": [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"},
-        ]
-    }).encode()
+    return json.dumps(
+        {
+            "model": "claude-sonnet-4-5",
+            "messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi there!"},
+            ],
+        }
+    ).encode()
 
 
 @pytest.fixture
 def long_body():
     """Request body with long messages eligible for capsule compression."""
     long_content = "This is a verbose paragraph. " * 50  # ~1500 chars
-    return json.dumps({
-        "model": "claude-sonnet-4-5",
-        "messages": [
-            {"role": "system", "content": long_content},
-            {"role": "user", "content": long_content},
-            {"role": "assistant", "content": long_content},
-            {"role": "user", "content": "What do you think?"},  # hot window
-        ]
-    }).encode()
+    return json.dumps(
+        {
+            "model": "claude-sonnet-4-5",
+            "messages": [
+                {"role": "system", "content": long_content},
+                {"role": "user", "content": long_content},
+                {"role": "assistant", "content": long_content},
+                {"role": "user", "content": "What do you think?"},  # hot window
+            ],
+        }
+    ).encode()
 
 
 @pytest.fixture
@@ -71,6 +75,7 @@ def mock_trace():
 # ─────────────────────────────────────────────────────────────────────────────
 # Feature Flag Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestFeatureFlag:
     """Test capsule builder feature flag behavior."""
@@ -104,15 +109,14 @@ class TestFeatureFlag:
 # Hook Behavior Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestHookBehavior:
     """Test capsule request hook behavior."""
 
     def test_passthrough_when_disabled(self, simple_body):
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "0"}):
             clear_cache()
-            new_body, sent, raw, protected = capsule_request_hook(
-                simple_body, "claude-sonnet-4-5"
-            )
+            new_body, sent, raw, protected = capsule_request_hook(simple_body, "claude-sonnet-4-5")
             assert new_body == simple_body  # Unchanged
 
     def test_trace_shows_disabled_reason(self, simple_body, mock_trace):
@@ -125,15 +129,12 @@ class TestHookBehavior:
     def test_compresses_when_enabled(self, long_body):
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "1"}):
             clear_cache()
-            new_body, sent, raw, protected = capsule_request_hook(
-                long_body, "claude-sonnet-4-5"
-            )
+            new_body, sent, raw, protected = capsule_request_hook(long_body, "claude-sonnet-4-5")
             # Should be compressed (smaller or have CAPSULE markers)
             data = json.loads(new_body)
             # Check if any message got capsulized
             has_capsule = any(
-                "[CAPSULE" in str(m.get("content", ""))
-                for m in data.get("messages", [])
+                "[CAPSULE" in str(m.get("content", "")) for m in data.get("messages", [])
             )
             assert has_capsule or len(new_body) <= len(long_body)
 
@@ -151,6 +152,7 @@ class TestHookBehavior:
 # ─────────────────────────────────────────────────────────────────────────────
 # Chaining Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestHookChaining:
     """Test chaining with base hooks."""
@@ -190,6 +192,7 @@ class TestHookChaining:
 # Performance Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestPerformance:
     """Test performance characteristics."""
 
@@ -225,6 +228,7 @@ class TestPerformance:
 # Determinism Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestDeterminism:
     """Test deterministic output."""
 
@@ -248,8 +252,9 @@ class TestDeterminism:
 
             # Extract capsule IDs from both results
             import re
-            ids1 = re.findall(r'\[CAPSULE id=(\w+)', result1.decode())
-            ids2 = re.findall(r'\[CAPSULE id=(\w+)', result2.decode())
+
+            ids1 = re.findall(r"\[CAPSULE id=(\w+)", result1.decode())
+            ids2 = re.findall(r"\[CAPSULE id=(\w+)", result2.decode())
 
             assert ids1 == ids2
 
@@ -257,6 +262,7 @@ class TestDeterminism:
 # ─────────────────────────────────────────────────────────────────────────────
 # Error Handling Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestErrorHandling:
     """Test graceful error handling."""
@@ -284,28 +290,36 @@ class TestErrorHandling:
 # Token Estimation Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestTokenEstimation:
     """Test token estimation helper."""
 
     def test_estimates_from_message_content(self):
-        body = json.dumps({
-            "messages": [
-                {"role": "user", "content": "x" * 400}  # 100 tokens approx
-            ]
-        }).encode()
+        body = json.dumps(
+            {
+                "messages": [
+                    {"role": "user", "content": "x" * 400}  # 100 tokens approx
+                ]
+            }
+        ).encode()
 
         tokens = _estimate_tokens(body)
         assert 80 <= tokens <= 120
 
     def test_handles_multipart_content(self):
-        body = json.dumps({
-            "messages": [
-                {"role": "user", "content": [
-                    {"type": "text", "text": "x" * 200},
-                    {"type": "text", "text": "y" * 200},
-                ]}
-            ]
-        }).encode()
+        body = json.dumps(
+            {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "x" * 200},
+                            {"type": "text", "text": "y" * 200},
+                        ],
+                    }
+                ]
+            }
+        ).encode()
 
         tokens = _estimate_tokens(body)
         assert 80 <= tokens <= 120
@@ -320,12 +334,14 @@ class TestTokenEstimation:
 # Server wiring tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestProxyServerWiring:
     """Verify capsule hook is auto-wired into ProxyServer."""
 
     def test_proxy_server_has_capsule_hook_by_default(self):
         """ProxyServer should have a request_hook installed even with no args."""
         from tokenpak.proxy.server import ProxyServer
+
         ps = ProxyServer()
         assert ps.request_hook is not None, "request_hook must be set on ProxyServer"
         assert callable(ps.request_hook), "request_hook must be callable"
@@ -333,6 +349,7 @@ class TestProxyServerWiring:
     def test_proxy_server_hook_is_capsule_hook(self):
         """The default hook should invoke the capsule pipeline and return valid output."""
         from tokenpak.proxy.server import ProxyServer
+
         ps = ProxyServer()
         payload = json.dumps({"messages": [{"role": "user", "content": "hello"}]}).encode()
         result = ps.request_hook(payload, "gpt-4o")
@@ -349,6 +366,7 @@ class TestProxyServerWiring:
     def test_proxy_server_wraps_external_hook(self):
         """An external request_hook passed to ProxyServer should still be invoked."""
         from tokenpak.proxy.server import ProxyServer
+
         called_with = {}
 
         def my_hook(body, model, trace=None):
@@ -364,16 +382,19 @@ class TestProxyServerWiring:
     def test_capsule_hook_enabled_compresses_in_proxy(self):
         """When TOKENPAK_CAPSULE_BUILDER=1, ProxyServer hook should compress large blocks."""
         from tokenpak.proxy.server import ProxyServer
+
         long_text = "This is a very long sentence that goes on and on. " * 20  # >400 chars
         # Place the large block outside the hot window (last 2 msgs) so it qualifies
-        payload = json.dumps({
-            "messages": [
-                {"role": "user", "content": long_text},  # idx 0 — outside hot window
-                {"role": "assistant", "content": "short reply"},
-                {"role": "user", "content": "follow-up question here"},
-                {"role": "assistant", "content": "ok"},  # idx 3 — hot window
-            ]
-        }).encode()
+        payload = json.dumps(
+            {
+                "messages": [
+                    {"role": "user", "content": long_text},  # idx 0 — outside hot window
+                    {"role": "assistant", "content": "short reply"},
+                    {"role": "user", "content": "follow-up question here"},
+                    {"role": "assistant", "content": "ok"},  # idx 3 — hot window
+                ]
+            }
+        ).encode()
 
         clear_cache()
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "1"}):
@@ -383,4 +404,6 @@ class TestProxyServerWiring:
         clear_cache()
 
         assert b"[CAPSULE" in body_out, "capsule envelope should appear in compressed output"
-        assert sent_tokens < raw_tokens, "sent_tokens should be less than raw_tokens after compression"
+        assert sent_tokens < raw_tokens, (
+            "sent_tokens should be less than raw_tokens after compression"
+        )

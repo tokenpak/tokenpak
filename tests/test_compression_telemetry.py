@@ -79,6 +79,7 @@ SKIP_COMPRESSION_TELEMETRY_LEGACY = (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def tmp_log(tmp_path):
     """Return a path inside tmp_path for the JSONL log."""
@@ -94,6 +95,7 @@ def cs(tmp_log):
 # ---------------------------------------------------------------------------
 # 1. Stats increment correctly on success
 # ---------------------------------------------------------------------------
+
 
 class TestStatsOnSuccess:
     def test_requests_total_increments(self, cs):
@@ -136,6 +138,7 @@ class TestStatsOnSuccess:
 # 2. Stats increment errors on failure
 # ---------------------------------------------------------------------------
 
+
 class TestStatsOnFailure:
     def test_errors_incremented_on_error_status(self, cs):
         cs.record_compression("m", 1000, 0, 0.0, 5, "error")
@@ -157,6 +160,7 @@ class TestStatsOnFailure:
 # ---------------------------------------------------------------------------
 # 3. Rolling avg updates (100-request window)
 # ---------------------------------------------------------------------------
+
 
 class TestRollingWindow:
     @pytest.mark.skip(reason=SKIP_COMPRESSION_TELEMETRY_LEGACY)
@@ -188,6 +192,7 @@ class TestRollingWindow:
 # 4. JSONL log file created with correct fields
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skip(reason=SKIP_COMPRESSION_TELEMETRY_LEGACY)
 class TestJSONLFile:
     def test_log_file_created(self, cs, tmp_log):
@@ -198,7 +203,15 @@ class TestJSONLFile:
         cs.record_compression("claude-sonnet-4-6", 4200, 1800, 0.571, 42, "ok")
         line = Path(tmp_log).read_text().strip()
         ev = json.loads(line)
-        for field in ("ts", "model", "input_tokens", "output_tokens", "ratio", "latency_ms", "status"):
+        for field in (
+            "ts",
+            "model",
+            "input_tokens",
+            "output_tokens",
+            "ratio",
+            "latency_ms",
+            "status",
+        ):
             assert field in ev, f"missing field: {field}"
 
     def test_log_values_match_input(self, cs, tmp_log):
@@ -227,6 +240,7 @@ class TestJSONLFile:
 # ---------------------------------------------------------------------------
 # 5. Log rotation at 10MB
 # ---------------------------------------------------------------------------
+
 
 class TestLogRotation:
     @pytest.mark.skip(reason=SKIP_COMPRESSION_TELEMETRY_LEGACY)
@@ -268,6 +282,7 @@ class TestLogRotation:
 # ---------------------------------------------------------------------------
 # 6. CLI output contains expected fields
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skip(reason=SKIP_COMPRESSION_TELEMETRY_LEGACY)
 class TestCLIOutput:
@@ -333,6 +348,7 @@ class TestCLIOutput:
 # 7. Thread safety
 # ---------------------------------------------------------------------------
 
+
 class TestThreadSafety:
     def test_concurrent_records_no_data_loss(self, cs):
         """100 threads each write 1 event; total should be 100."""
@@ -356,9 +372,11 @@ class TestThreadSafety:
 # 8. ProxyServer integration — compression_stats attribute
 # ---------------------------------------------------------------------------
 
+
 class TestProxyServerIntegration:
     def test_proxy_server_has_compression_stats(self):
         from tokenpak.proxy.server import ProxyServer
+
         ps = ProxyServer()
         assert hasattr(ps, "compression_stats")
         assert isinstance(ps.compression_stats, CompressionStats)
@@ -366,6 +384,7 @@ class TestProxyServerIntegration:
     @pytest.mark.skip(reason=SKIP_COMPRESSION_TELEMETRY_LEGACY)
     def test_compression_stats_uses_same_start_time(self):
         from tokenpak.proxy.server import ProxyServer
+
         ps = ProxyServer()
         # Start times should be within 1 second of each other
         cs_start = ps.compression_stats._start_time

@@ -43,10 +43,12 @@ class RoutingError(Exception):
 # Built-in defaults
 # ---------------------------------------------------------------------------
 
+
 def _build_default_routes() -> Dict[str, str]:
     """Build default routes from the dynamic model registry."""
     try:
         from tokenpak.models import get_default_routes
+
         return get_default_routes()
     except ImportError:
         return {}

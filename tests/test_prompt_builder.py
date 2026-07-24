@@ -67,10 +67,12 @@ def test_list_system_last_block_marked():
     data = _parse(result)
     sys_blocks = data["system"]
     assert len(sys_blocks) == 2
-    assert "cache_control" not in sys_blocks[0] or sys_blocks[0].get("cache_control") is None, \
+    assert "cache_control" not in sys_blocks[0] or sys_blocks[0].get("cache_control") is None, (
         "first block should NOT have cache_control"
-    assert sys_blocks[1]["cache_control"] == {"type": "ephemeral"}, \
+    )
+    assert sys_blocks[1]["cache_control"] == {"type": "ephemeral"}, (
         "last block should have cache_control"
+    )
     print("  ✅ TEST 2: multi-block system → last block marked")
 
 
@@ -84,10 +86,8 @@ def test_idempotent_does_not_double_mark():
     twice = apply_stable_cache_control(once)
     data_once = _parse(once)
     data_twice = _parse(twice)
-    assert data_once["system"] == data_twice["system"], \
-        "second application should be idempotent"
-    markers = [b for b in data_twice["system"]
-               if isinstance(b, dict) and b.get("cache_control")]
+    assert data_once["system"] == data_twice["system"], "second application should be idempotent"
+    markers = [b for b in data_twice["system"] if isinstance(b, dict) and b.get("cache_control")]
     assert len(markers) == 1, f"should have exactly 1 cache_control marker, got {len(markers)}"
     print("  ✅ TEST 3: idempotent — no double-marking")
 
@@ -104,11 +104,11 @@ def test_inject_places_volatile_after_cache_boundary():
     sys_blocks = data["system"]
     assert len(sys_blocks) == 2, f"expected 2 blocks (stable + volatile), got {len(sys_blocks)}"
     # First block: static, should have cache_control
-    assert sys_blocks[0]["cache_control"] == {"type": "ephemeral"}, \
+    assert sys_blocks[0]["cache_control"] == {"type": "ephemeral"}, (
         "static block should have cache_control"
+    )
     # Second block: volatile, should NOT have cache_control
-    assert "cache_control" not in sys_blocks[1], \
-        "volatile block should NOT have cache_control"
+    assert "cache_control" not in sys_blocks[1], "volatile block should NOT have cache_control"
     assert volatile in sys_blocks[1]["text"], "volatile text should be in last block"
     print("  ✅ TEST 4: inject places volatile after cache boundary")
 
@@ -120,12 +120,18 @@ def test_classify_detects_volatile_blocks():
     """Blocks with timestamps or vault markers should be classified as volatile."""
     stable_block = {"type": "text", "text": "You are a helpful assistant with access to tools."}
     volatile_block_ts = {"type": "text", "text": "Current time: 2026-03-06T07:00:00Z"}
-    volatile_block_ctx = {"type": "text", "text": "--- [vault/notes.md] (relevance: 3.5) ---\nSome content"}
-    volatile_block_ret = {"type": "text", "text": "<retrieved_context>Some dynamic data</retrieved_context>"}
+    volatile_block_ctx = {
+        "type": "text",
+        "text": "--- [vault/notes.md] (relevance: 3.5) ---\nSome content",
+    }
+    volatile_block_ret = {
+        "type": "text",
+        "text": "<retrieved_context>Some dynamic data</retrieved_context>",
+    }
 
-    stable, volatile = classify_system_blocks([
-        stable_block, volatile_block_ts, volatile_block_ctx, volatile_block_ret
-    ])
+    stable, volatile = classify_system_blocks(
+        [stable_block, volatile_block_ts, volatile_block_ctx, volatile_block_ret]
+    )
     assert len(stable) == 1, f"expected 1 stable block, got {len(stable)}"
     assert len(volatile) == 3, f"expected 3 volatile blocks, got {len(volatile)}"
     assert stable[0]["text"] == stable_block["text"]
@@ -145,14 +151,17 @@ def test_no_system_prompt_returns_unchanged():
     result = apply_stable_cache_control(body)
     data_in = _parse(body)
     data_out = _parse(result)
-    assert "system" not in data_out or not data_out.get("system"), \
+    assert "system" not in data_out or not data_out.get("system"), (
         "no system prompt → body should not gain a system key"
+    )
     # Messages may be annotated with cache_control breakpoints (expected behavior)
     # Verify no messages were dropped or reordered
-    assert len(data_in["messages"]) == len(data_out["messages"]), \
+    assert len(data_in["messages"]) == len(data_out["messages"]), (
         "message count should be unchanged"
-    assert [m["role"] for m in data_in["messages"]] == [m["role"] for m in data_out["messages"]], \
+    )
+    assert [m["role"] for m in data_in["messages"]] == [m["role"] for m in data_out["messages"]], (
         "message roles should be unchanged"
+    )
     print("  ✅ TEST 6: no system prompt → system key absent, message structure preserved")
 
 
@@ -177,9 +186,11 @@ if __name__ == "__main__":
             failed += 1
         except Exception as e:
             print(f"  ❌ {t.__name__}: unexpected error: {e}")
-            import traceback; traceback.print_exc()  # noqa: I001
+            import traceback
+
+            traceback.print_exc()  # noqa: I001
             failed += 1
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Results: {passed}/{len(tests)} passed, {failed} failed")
     if failed:
         sys.exit(1)

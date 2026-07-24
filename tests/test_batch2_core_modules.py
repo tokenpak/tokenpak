@@ -6,10 +6,11 @@ ScriptHooks, StatsAPI, DebugLogger, StreamTranslator modules.
 All tests use REAL module APIs (verified by reading source first).
 """
 
-
 import pytest
 
-pytest.importorskip("tokenpak.infrastructure.cooldown", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.infrastructure.cooldown", reason="module not available in current build"
+)
 import json
 import tempfile
 import time
@@ -41,6 +42,7 @@ from tokenpak.proxy.stats_api import StatsAPI
 # CooldownManager Tests (Real API)
 # ============================================================================
 
+
 class TestCooldownManager:
     """Tests for CooldownManager with REAL methods."""
 
@@ -68,12 +70,9 @@ class TestCooldownManager:
             # Write a cooldown that's not expired yet
             future_time = time.time() + 3600  # 1 hour from now
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
-            cooldowns_file.write_text(json.dumps({
-                "test:key": {
-                    "cooldownUntil": future_time,
-                    "errorCount": 2
-                }
-            }))
+            cooldowns_file.write_text(
+                json.dumps({"test:key": {"cooldownUntil": future_time, "errorCount": 2}})
+            )
 
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.clear_expired()
@@ -87,12 +86,9 @@ class TestCooldownManager:
             # Write a cooldown that IS expired
             past_time = time.time() - 3600  # 1 hour ago
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
-            cooldowns_file.write_text(json.dumps({
-                "test:key": {
-                    "cooldownUntil": past_time,
-                    "errorCount": 2
-                }
-            }))
+            cooldowns_file.write_text(
+                json.dumps({"test:key": {"cooldownUntil": past_time, "errorCount": 2}})
+            )
 
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.clear_expired()
@@ -113,12 +109,9 @@ class TestCooldownManager:
 
             future_time = time.time() + 3600
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
-            cooldowns_file.write_text(json.dumps({
-                "test:key": {
-                    "cooldownUntil": future_time,
-                    "errorCount": 1
-                }
-            }))
+            cooldowns_file.write_text(
+                json.dumps({"test:key": {"cooldownUntil": future_time, "errorCount": 1}})
+            )
 
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             result = mgr.get_active_cooldowns()
@@ -130,12 +123,9 @@ class TestCooldownManager:
         with tempfile.TemporaryDirectory() as tmpdir:
             cooldowns_file = Path(tmpdir) / "cooldowns.json"
             cooldowns_file.parent.mkdir(parents=True, exist_ok=True)
-            cooldowns_file.write_text(json.dumps({
-                "old:key": {
-                    "cooldownUntil": time.time() - 3600,
-                    "errorCount": 2
-                }
-            }))
+            cooldowns_file.write_text(
+                json.dumps({"old:key": {"cooldownUntil": time.time() - 3600, "errorCount": 2}})
+            )
 
             mgr = CooldownManager(cooldowns_file=cooldowns_file)
             count = mgr.run_cycle()
@@ -145,6 +135,7 @@ class TestCooldownManager:
 # ============================================================================
 # ClaimIndexer Tests (Real API)
 # ============================================================================
+
 
 class TestClaimIndexer:
     """Tests for claim indexer with REAL functions."""
@@ -169,10 +160,7 @@ class TestClaimIndexer:
 
     def test_extract_claims_from_document_dict(self):
         """Test extracting from structured document."""
-        doc = {
-            "text": "We identified that the approach is effective.",
-            "section": "Results"
-        }
+        doc = {"text": "We identified that the approach is effective.", "section": "Results"}
         result = extract_claims_from_document(doc)
         assert isinstance(result, list)
 
@@ -188,14 +176,15 @@ class TestClaimIndexer:
         claims = extract_claims_from_text(text)
         if claims:
             claim = claims[0]
-            assert hasattr(claim, 'claim')
-            assert hasattr(claim, 'evidence')
-            assert hasattr(claim, 'confidence')
+            assert hasattr(claim, "claim")
+            assert hasattr(claim, "evidence")
+            assert hasattr(claim, "confidence")
 
 
 # ============================================================================
 # Privacy Tests (Real API)
 # ============================================================================
+
 
 class TestPrivacy:
     """Tests for privacy module with REAL enums."""
@@ -214,11 +203,7 @@ class TestPrivacy:
 
     def test_apply_privacy_full(self):
         """Test apply_privacy with FULL level."""
-        fingerprint = {
-            "fingerprint_id": "fp123",
-            "total_tokens": 1000,
-            "segment_count": 5
-        }
+        fingerprint = {"fingerprint_id": "fp123", "total_tokens": 1000, "segment_count": 5}
         result = apply_privacy(fingerprint, PrivacyLevel.FULL)
         assert isinstance(result, dict)
         assert result["fingerprint_id"] == "fp123"
@@ -229,10 +214,7 @@ class TestPrivacy:
             "fingerprint_id": "fp123",
             "total_tokens": 1000,
             "segment_count": 5,
-            "segments": [
-                {"type": "code", "tokens": 100},
-                {"type": "text", "tokens": 200}
-            ]
+            "segments": [{"type": "code", "tokens": 100}, {"type": "text", "tokens": 200}],
         }
         result = apply_privacy(fingerprint, PrivacyLevel.MINIMAL)
         assert isinstance(result, dict)
@@ -244,10 +226,7 @@ class TestPrivacy:
             "fingerprint_id": "fp123",
             "total_tokens": 1000,
             "segment_count": 5,
-            "segments": [
-                {"type": "code", "tokens": 100},
-                {"type": "text", "tokens": 200}
-            ]
+            "segments": [{"type": "code", "tokens": 100}, {"type": "text", "tokens": 200}],
         }
         result = apply_privacy(fingerprint, PrivacyLevel.STANDARD)
         assert isinstance(result, dict)
@@ -261,6 +240,7 @@ class TestPrivacy:
 # ============================================================================
 # ScriptHooks Tests (Real API)
 # ============================================================================
+
 
 class TestScriptHooks:
     """Tests for script hooks with REAL functions."""
@@ -295,6 +275,7 @@ class TestScriptHooks:
             hook_path = Path(tmpdir) / "test_hook.sh"
             # Just test that install_hook works by checking return type
             from tokenpak._internal.macros.script_hooks import install_hook
+
             # This will use the default hooks dir, so we skip actual installation
             assert install_hook is not None
 
@@ -313,6 +294,7 @@ class TestScriptHooks:
 # ============================================================================
 # StatsAPI Tests (Real API)
 # ============================================================================
+
 
 class TestStatsAPI:
     """Tests for stats API with REAL methods."""
@@ -351,6 +333,7 @@ class TestStatsAPI:
 # ============================================================================
 # DebugLogger Tests (Real API)
 # ============================================================================
+
 
 class TestDebugLogger:
     """Tests for debug logger with REAL context manager."""
@@ -410,6 +393,7 @@ class TestDebugLogger:
 # StreamTranslator Tests (Real API)
 # ============================================================================
 
+
 class TestStreamTranslator:
     """Tests for streaming translator with REAL classes."""
 
@@ -445,13 +429,7 @@ class TestStreamTranslator:
     def test_anthropic_to_openai_message_start(self):
         """Test translating message_start event."""
         translator = _AnthropicToOpenAIStream()
-        event = {
-            "type": "message_start",
-            "message": {
-                "model": "claude-3-sonnet",
-                "id": "msg_123"
-            }
-        }
+        event = {"type": "message_start", "message": {"model": "claude-3-sonnet", "id": "msg_123"}}
         result = translator.translate(event)
         assert result is not None
         assert "assistant" in result

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 try:
     import yaml as _yaml
@@ -22,7 +23,7 @@ except ImportError:
     HAS_JSONSCHEMA = False
 
 
-def load_schema() -> dict:
+def load_schema() -> dict[str, Any]:
     """Load the JSON schema from tokenpak/config/schema.json."""
     # Try both possible locations (tokenpak/config or tokenpak/agent/config)
     possible_paths = [
@@ -35,7 +36,7 @@ def load_schema() -> dict:
     for schema_path in possible_paths:
         if schema_path.exists():
             with open(schema_path, "r") as f:
-                return json.load(f)
+                return cast(dict[str, Any], json.load(f))
 
     raise FileNotFoundError(f"Schema file not found. Tried: {[str(p) for p in possible_paths]}")
 
@@ -157,7 +158,7 @@ try:
     @click.command("validate")
     @click.argument("config_path", type=click.Path(exists=False))
     @click.option("--strict", is_flag=True, help="Fail on any validation error (default: warn)")
-    def validate_config_cmd(config_path, strict):
+    def validate_config_cmd(config_path: str, strict: bool) -> None:
         """Validate a TokenPak configuration file against the schema.
 
         Example:

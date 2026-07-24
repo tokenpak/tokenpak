@@ -44,9 +44,7 @@ logger = logging.getLogger(__name__)
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_LICENSE_SERVER = os.environ.get(
-    "TOKENPAK_LICENSE_SERVER", "http://127.0.0.1:8900"
-)
+DEFAULT_LICENSE_SERVER = os.environ.get("TOKENPAK_LICENSE_SERVER", "http://127.0.0.1:8900")
 DEFAULT_SPOOL_DIR = Path(
     os.environ.get(
         "TOKENPAK_USAGE_SPOOL_DIR",
@@ -67,9 +65,7 @@ class UsageEvent:
     tokens_out: int
     model: str
     ts: str = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z")
+        default_factory=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     )
 
     def to_payload(self) -> dict:
@@ -256,9 +252,7 @@ class UsageMeter:
         tmp_path = self.spool_path.with_suffix(".jsonl.tmp")
         with tmp_path.open("w", encoding="utf-8") as fh:
             for event in events:
-                fh.write(
-                    json.dumps(asdict(event), separators=(",", ":")) + "\n"
-                )
+                fh.write(json.dumps(asdict(event), separators=(",", ":")) + "\n")
         os.replace(tmp_path, self.spool_path)
 
     def _post_event(self, event: UsageEvent) -> bool:

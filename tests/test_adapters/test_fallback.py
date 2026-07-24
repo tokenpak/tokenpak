@@ -26,19 +26,24 @@ from tokenpak.proxy.adapters.registry import AdapterRegistry
 # Helpers / Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _anthropic_body(model: str = "claude-3-5-sonnet-20241022") -> bytes:
-    return json.dumps({
-        "model": model,
-        "messages": [{"role": "user", "content": "hello"}],
-        "max_tokens": 100,
-    }).encode()
+    return json.dumps(
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": "hello"}],
+            "max_tokens": 100,
+        }
+    ).encode()
 
 
 def _openai_body(model: str = "gpt-4o") -> bytes:
-    return json.dumps({
-        "model": model,
-        "messages": [{"role": "user", "content": "hello"}],
-    }).encode()
+    return json.dumps(
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": "hello"}],
+        }
+    ).encode()
 
 
 def _anthropic_headers() -> dict:
@@ -51,6 +56,7 @@ def _openai_headers() -> dict:
 
 class AlwaysFailAdapter(FormatAdapter):
     """Test adapter that always fails detection."""
+
     source_format = "always-fail"
 
     def detect(self, path, headers, body=None) -> bool:
@@ -68,6 +74,7 @@ class AlwaysFailAdapter(FormatAdapter):
 
 class ErrorNormalizeAdapter(FormatAdapter):
     """Adapter that detects but raises on normalize."""
+
     source_format = "error-normalize"
     call_count = 0
 
@@ -87,6 +94,7 @@ class ErrorNormalizeAdapter(FormatAdapter):
 
 class CountingAdapter(FormatAdapter):
     """Adapter that counts detect() calls and always detects."""
+
     source_format = "counting"
 
     def __init__(self):
@@ -120,6 +128,7 @@ class CountingAdapter(FormatAdapter):
 # ---------------------------------------------------------------------------
 # 1. Registry: priority-based detection
 # ---------------------------------------------------------------------------
+
 
 class TestAdapterRegistryPriority:
     """AdapterRegistry.detect() returns first matching adapter by priority."""
@@ -188,6 +197,7 @@ class TestAdapterRegistryPriority:
 # 2. Primary fails → secondary called
 # ---------------------------------------------------------------------------
 
+
 class TestPrimaryAdapterFails:
     """When the primary (high-priority) adapter doesn't match, secondary is used."""
 
@@ -245,6 +255,7 @@ class TestPrimaryAdapterFails:
 # 3. All adapters fail → graceful error
 # ---------------------------------------------------------------------------
 
+
 class TestAllAdaptersFail:
     """When no adapter matches, registry raises RuntimeError gracefully."""
 
@@ -278,6 +289,7 @@ class TestAllAdaptersFail:
 # 4. Partial failures (2/3 adapters succeed detection)
 # ---------------------------------------------------------------------------
 
+
 class TestPartialAdapterFailures:
     """Some adapters fail detection, others succeed — correct one picked."""
 
@@ -310,7 +322,7 @@ class TestPartialAdapterFailures:
         fail = AlwaysFailAdapter()
         fail.source_format = "fail"
 
-        registry.register(fail, priority=500)       # highest but fails
+        registry.register(fail, priority=500)  # highest but fails
         registry.register(high_succeed, priority=200)
         registry.register(low_succeed, priority=50)
 
@@ -337,6 +349,7 @@ class TestPartialAdapterFailures:
 # ---------------------------------------------------------------------------
 # 5. Adapter normalize/denormalize round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestAdapterNormalizeDenormalize:
     """Normalize → denormalize should produce equivalent payloads."""
@@ -376,11 +389,13 @@ class TestAdapterNormalizeDenormalize:
     def test_anthropic_stream_flag_preserved(self):
         """stream:true should survive round-trip."""
         adapter = AnthropicAdapter()
-        body = json.dumps({
-            "model": "claude-3-5-sonnet-20241022",
-            "messages": [{"role": "user", "content": "hi"}],
-            "stream": True,
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-3-5-sonnet-20241022",
+                "messages": [{"role": "user", "content": "hi"}],
+                "stream": True,
+            }
+        ).encode()
 
         canonical = adapter.normalize(body)
         assert canonical.stream is True
@@ -416,18 +431,22 @@ class TestAdapterNormalizeDenormalize:
     def test_inject_system_context_string(self):
         """inject_system_context should include injected text in system prompt."""
         adapter = AnthropicAdapter()
-        body = json.dumps({
-            "model": "claude-3-5-sonnet-20241022",
-            "messages": [{"role": "user", "content": "hi"}],
-            "system": "You are helpful.",
-        }).encode()
+        body = json.dumps(
+            {
+                "model": "claude-3-5-sonnet-20241022",
+                "messages": [{"role": "user", "content": "hi"}],
+                "system": "You are helpful.",
+            }
+        ).encode()
 
         injected = adapter.inject_system_context(body, "## Extra Context\nUse this.")
         result = json.loads(injected)
 
         # system may be string or list depending on adapter internals
         system = result["system"]
-        system_text = system if isinstance(system, str) else " ".join(
-            b.get("text", "") for b in system if isinstance(b, dict)
+        system_text = (
+            system
+            if isinstance(system, str)
+            else " ".join(b.get("text", "") for b in system if isinstance(b, dict))
         )
         assert "## Extra Context" in system_text

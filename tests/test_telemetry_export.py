@@ -34,6 +34,7 @@ _EXPORTER_REMOVED = True
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_storage(*rows: dict) -> TelemetryStorage:
     """Return in-memory TelemetryStorage pre-populated with synthetic rows."""
     storage = TelemetryStorage(":memory:")
@@ -68,7 +69,10 @@ def _row(request_id: str, date: str, tokens_raw: int = 100, tokens_sent: int = 8
 # _parse_date
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skipif(_EXPORTER_REMOVED, reason="TelemetryExporter removed; _parse_date no longer exported")
+
+@pytest.mark.skipif(
+    _EXPORTER_REMOVED, reason="TelemetryExporter removed; _parse_date no longer exported"
+)
 class TestParseDate:
     def test_valid_date(self):
         result = _parse_date("2026-03-01", "start")
@@ -167,6 +171,7 @@ class TestQueryRequests:
 # TelemetryExporter — CSV
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(_EXPORTER_REMOVED, reason="TelemetryExporter removed")
 class TestExportCSV:
     def _exporter(self, *rows):
@@ -232,6 +237,7 @@ class TestExportCSV:
 # TelemetryExporter — JSON
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(_EXPORTER_REMOVED, reason="TelemetryExporter removed")
 class TestExportJSON:
     def _exporter(self, *rows):
@@ -283,14 +289,17 @@ class TestExportJSON:
 # TelemetryExporter — filename
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(_EXPORTER_REMOVED, reason="TelemetryExporter removed")
 class TestFilename:
     def _exp(self):
         return TelemetryExporter(_make_storage())
 
     def test_both_dates(self):
-        assert self._exp().filename("csv", "2026-03-01", "2026-03-25") == \
-            "tokenpak-telemetry-2026-03-01-2026-03-25.csv"
+        assert (
+            self._exp().filename("csv", "2026-03-01", "2026-03-25")
+            == "tokenpak-telemetry-2026-03-01-2026-03-25.csv"
+        )
 
     def test_start_only(self):
         name = self._exp().filename("json", start="2026-03-01")
@@ -311,6 +320,7 @@ class TestFilename:
 # MAX_EXPORT_ROWS guard
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(_EXPORTER_REMOVED, reason="TelemetryExporter removed")
 class TestMaxRows:
     def test_max_rows_constant_exists(self):
@@ -324,6 +334,7 @@ class TestMaxRows:
         with patch("tokenpak.telemetry.export.MAX_EXPORT_ROWS", 3):
             # Re-import to pick up patched constant
             import tokenpak.telemetry.export as mod
+
             original = mod.MAX_EXPORT_ROWS
             mod.MAX_EXPORT_ROWS = 3
             try:

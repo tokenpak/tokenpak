@@ -1,4 +1,5 @@
 """Unit tests for tokenpak/pricing.py"""
+
 import pytest
 
 from tokenpak.telemetry.pricing import (
@@ -14,6 +15,7 @@ from tokenpak.telemetry.pricing import (
 # ---------------------------------------------------------------------------
 # MODEL_RATES / DEFAULT_RATE constants
 # ---------------------------------------------------------------------------
+
 
 class TestModelRates:
     def test_known_models_present(self):
@@ -42,6 +44,7 @@ class TestModelRates:
 # ---------------------------------------------------------------------------
 # get_rates
 # ---------------------------------------------------------------------------
+
 
 class TestGetRates:
     def test_known_model_returns_correct_rates(self):
@@ -75,14 +78,21 @@ class TestGetRates:
 # estimate_savings
 # ---------------------------------------------------------------------------
 
+
 class TestEstimateSavings:
     def test_returns_required_keys(self):
         result = estimate_savings({"tokens_raw": 1000})
         for key in (
-            "compression_tokens_saved", "compression_cost_saved",
-            "cache_hit_rate", "cache_tokens_saved", "cache_cost_saved",
-            "total_tokens_saved", "total_cost_saved",
-            "cost_without_tokenpak", "cost_with_tokenpak", "reduction_percent",
+            "compression_tokens_saved",
+            "compression_cost_saved",
+            "cache_hit_rate",
+            "cache_tokens_saved",
+            "cache_cost_saved",
+            "total_tokens_saved",
+            "total_cost_saved",
+            "cost_without_tokenpak",
+            "cost_with_tokenpak",
+            "reduction_percent",
         ):
             assert key in result, f"Missing key: {key}"
 
@@ -166,6 +176,7 @@ class TestEstimateSavings:
 # calculate_request_cost
 # ---------------------------------------------------------------------------
 
+
 class TestCalculateRequestCost:
     def test_pure_input_tokens(self):
         # 1M input tokens at sonnet $3/M = $3.00
@@ -179,12 +190,16 @@ class TestCalculateRequestCost:
 
     def test_cache_read_tokens_cheaper(self):
         cost_fresh = calculate_request_cost("claude-sonnet-4-5", input_tokens=1_000_000)
-        cost_cached = calculate_request_cost("claude-sonnet-4-5", input_tokens=0, cache_read_tokens=1_000_000)
+        cost_cached = calculate_request_cost(
+            "claude-sonnet-4-5", input_tokens=0, cache_read_tokens=1_000_000
+        )
         assert cost_cached < cost_fresh
 
     def test_cache_creation_tokens_cost(self):
         # cache_creation_tokens cost input_rate * 1.25
-        cost = calculate_request_cost("claude-sonnet-4-5", input_tokens=0, cache_creation_tokens=1_000_000)
+        cost = calculate_request_cost(
+            "claude-sonnet-4-5", input_tokens=0, cache_creation_tokens=1_000_000
+        )
         expected = 3.0 * 1.25
         assert abs(cost - expected) < 0.01
 
@@ -220,6 +235,7 @@ class TestCalculateRequestCost:
 # calculate_request_cost_baseline
 # ---------------------------------------------------------------------------
 
+
 class TestCalculateRequestCostBaseline:
     def test_basic_cost(self):
         cost = calculate_request_cost_baseline("claude-sonnet-4-5", total_input_tokens=1_000_000)
@@ -235,19 +251,22 @@ class TestCalculateRequestCostBaseline:
         assert calculate_request_cost_baseline("claude-haiku-4-5", total_input_tokens=0) == 0.0
 
     def test_returns_float(self):
-        assert isinstance(
-            calculate_request_cost_baseline("gpt-4o", total_input_tokens=1000), float
-        )
+        assert isinstance(calculate_request_cost_baseline("gpt-4o", total_input_tokens=1000), float)
 
     def test_baseline_higher_than_cached_cost(self):
-        baseline = calculate_request_cost_baseline("claude-sonnet-4-5", total_input_tokens=1_000_000)
-        with_cache = calculate_request_cost("claude-sonnet-4-5", input_tokens=0, cache_read_tokens=1_000_000)
+        baseline = calculate_request_cost_baseline(
+            "claude-sonnet-4-5", total_input_tokens=1_000_000
+        )
+        with_cache = calculate_request_cost(
+            "claude-sonnet-4-5", input_tokens=0, cache_read_tokens=1_000_000
+        )
         assert baseline > with_cache
 
 
 # ---------------------------------------------------------------------------
 # get_price
 # ---------------------------------------------------------------------------
+
 
 class TestGetPrice:
     def test_input_price(self):

@@ -171,12 +171,15 @@ class FormatAdapter(ABC):
             parts = []
             for part in content:
                 if isinstance(part, dict):
-                    if isinstance(part.get("text"), str):
-                        parts.append(part["text"])
-                    elif isinstance(part.get("input_text"), str):
-                        parts.append(part["input_text"])
+                    text = part.get("text")
+                    input_text = part.get("input_text")
+                    if isinstance(text, str):
+                        parts.append(text)
+                    elif isinstance(input_text, str):
+                        parts.append(input_text)
             return " ".join(parts)
         if isinstance(content, dict):
-            if isinstance(content.get("text"), str):
-                return content["text"]
+            text = content.get("text")
+            if isinstance(text, str):
+                return text
         return ""

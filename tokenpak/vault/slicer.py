@@ -90,7 +90,7 @@ class SliceRecord:
     content: str
     content_hash: str
     strategy: str
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
     @property
     def tokens_hint(self) -> int:
@@ -120,7 +120,7 @@ def _is_long_content(content: str, threshold_chars: int = 800) -> bool:
 
 def _split_by_heading_pattern(
     content: str,
-    heading_re: re.Pattern,
+    heading_re: re.Pattern[str],
 ) -> list[tuple[str, str]]:
     """Split *content* at every match of *heading_re*.
 

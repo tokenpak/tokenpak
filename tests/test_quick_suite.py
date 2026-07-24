@@ -28,10 +28,12 @@ import pytest
 # 1. Proxy import
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.quick
 def test_proxy_import():
     """TokenPakProxy class imports cleanly."""
     from tokenpak.proxy import TokenPakProxy
+
     assert TokenPakProxy is not None
 
 
@@ -39,12 +41,14 @@ def test_proxy_import():
 def test_proxy_server_import():
     """ProxyServer class imports cleanly."""
     from tokenpak.proxy.server import ProxyServer
+
     assert ProxyServer is not None
 
 
 # ---------------------------------------------------------------------------
 # 2. Config
 # ---------------------------------------------------------------------------
+
 
 # WS-A residual import guard — TSR-01-followup. tokenpak._internal is the
 # closed-source namespace per Std 25 §1.1; tests below probe it. Skip
@@ -53,6 +57,7 @@ def test_proxy_server_import():
 def test_config_returns_dict():
     pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_config
+
     config = get_config()
     assert isinstance(config, dict)
 
@@ -61,6 +66,7 @@ def test_config_returns_dict():
 def test_config_debug_flag_is_bool():
     pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_debug_enabled
+
     assert isinstance(get_debug_enabled(), bool)
 
 
@@ -68,6 +74,7 @@ def test_config_debug_flag_is_bool():
 def test_config_metrics_flag_is_bool():
     pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_metrics_enabled
+
     assert isinstance(get_metrics_enabled(), bool)
 
 
@@ -75,6 +82,7 @@ def test_config_metrics_flag_is_bool():
 def test_config_consistent_across_calls():
     pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_config
+
     c1 = get_config()
     c2 = get_config()
     assert isinstance(c1, dict) and isinstance(c2, dict)
@@ -84,9 +92,11 @@ def test_config_consistent_across_calls():
 # 3. StatsAPI
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.quick
 def test_stats_api_instantiates():
     from tokenpak.proxy.stats_api import StatsAPI
+
     api = StatsAPI()
     assert api is not None
 
@@ -94,6 +104,7 @@ def test_stats_api_instantiates():
 @pytest.mark.quick
 def test_stats_api_two_instances():
     from tokenpak.proxy.stats_api import StatsAPI
+
     a, b = StatsAPI(), StatsAPI()
     assert a is not None and b is not None
 
@@ -102,9 +113,11 @@ def test_stats_api_two_instances():
 # 4. Credential passthrough (pure logic — no network)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.quick
 def test_credential_passthrough_import():
     from tokenpak.proxy.credential_passthrough import CredentialPassthrough
+
     cp = CredentialPassthrough()
     assert cp is not None
 
@@ -134,9 +147,11 @@ def test_credential_passthrough_missing_headers():
 # 5. VaultIndexer (in-memory, no filesystem writes)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.quick
 def test_vault_indexer_import():
     from tokenpak.vault.indexer import VaultIndexer
+
     assert VaultIndexer is not None
 
 
@@ -145,6 +160,7 @@ def test_vault_indexer_instantiates():
     from tokenpak.vault.blocks import BlockStore
     from tokenpak.vault.indexer import VaultIndexer
     from tokenpak.vault.symbols import SymbolTable
+
     idx = VaultIndexer(block_store=BlockStore(":memory:"), symbol_table=SymbolTable())
     assert idx is not None
 
@@ -152,6 +168,7 @@ def test_vault_indexer_instantiates():
 @pytest.mark.quick
 def test_vault_block_store_in_memory():
     from tokenpak.vault.blocks import BlockStore
+
     bs = BlockStore(":memory:")
     assert bs is not None
 
@@ -159,6 +176,7 @@ def test_vault_block_store_in_memory():
 # ---------------------------------------------------------------------------
 # 6. Health endpoint — mock handler (no live server)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.quick
 def test_health_endpoint_mock_200():
@@ -196,6 +214,7 @@ def test_health_response_has_status_key():
 # 7. Savings endpoint — structure test (no DB, no live proxy)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.quick
 def test_savings_cmd_import():
     from tokenpak.cli.commands.savings import (
@@ -203,6 +222,7 @@ def test_savings_cmd_import():
         _query_savings,
         run_savings_cmd,
     )
+
     assert run_savings_cmd is not None
     assert _query_savings is not None
     assert _query_by_model is not None
@@ -225,6 +245,7 @@ def test_savings_payload_structure():
 # 8. Vault index structure (in-memory JSON validation)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.quick
 def test_vault_index_structure_valid(tmp_path: Path):
     """VaultHealth parses a well-formed index.json without errors."""
@@ -246,7 +267,12 @@ def test_vault_index_structure_valid(tmp_path: Path):
 
     vh = VaultHealth(str(vault_root))
     result = vh.check()
-    assert result.status in (IndexStatus.OK, IndexStatus.STALE, IndexStatus.MISSING, IndexStatus.CORRUPT)
+    assert result.status in (
+        IndexStatus.OK,
+        IndexStatus.STALE,
+        IndexStatus.MISSING,
+        IndexStatus.CORRUPT,
+    )
 
 
 @pytest.mark.quick
@@ -268,6 +294,7 @@ def test_vault_index_missing_reports_missing(tmp_path: Path):
 # 9. Proxy credential passthrough — edge cases
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.quick
 def test_credential_bearer_prefix_stripped():
     """Bearer prefix is correctly identified."""
@@ -288,10 +315,12 @@ def test_credential_empty_string_fails():
 # 10. Routing / config edge cases (pure logic)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.quick
 def test_config_debug_default_is_false_or_bool():
     pytest.importorskip("tokenpak._internal", reason="closed-source on slim OSS")
     from tokenpak._internal.config import get_debug_enabled
+
     val = get_debug_enabled()
     assert val in (True, False)
 
@@ -301,4 +330,5 @@ def test_proxy_import_is_idempotent():
     """Multiple imports of the same module return the same class."""
     from tokenpak.proxy import TokenPakProxy as A
     from tokenpak.proxy import TokenPakProxy as B
+
     assert A is B

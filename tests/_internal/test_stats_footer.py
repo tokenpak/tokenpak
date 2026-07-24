@@ -37,6 +37,7 @@ from tokenpak.telemetry.proxy_collector import RequestStats, TelemetryCollector
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_stats(
     tokens_raw: int = 1715,
     tokens_sent: int = 1403,
@@ -59,8 +60,8 @@ def _make_stats(
 # 1. Footer with real compression data
 # ---------------------------------------------------------------------------
 
-class TestFooterWithRealData:
 
+class TestFooterWithRealData:
     def test_oneline_contains_tokens_saved(self):
         stats = _make_stats(tokens_raw=1715, tokens_sent=1403)
         line = render_footer_oneline(stats)
@@ -89,6 +90,7 @@ class TestFooterWithRealData:
 
     def test_multiline_footer_with_session(self):
         from tokenpak.telemetry.proxy_collector import SessionStats
+
         stats = _make_stats()
         session = SessionStats(
             session_requests=5,
@@ -120,21 +122,24 @@ class TestFooterWithRealData:
 # 2. Footer disabled case
 # ---------------------------------------------------------------------------
 
-class TestFooterDisabled:
 
+class TestFooterDisabled:
     def test_get_stats_footer_disabled_by_env_var_zero(self):
         from tokenpak._internal.config import get_stats_footer_enabled
+
         with patch.dict(os.environ, {"TOKENPAK_STATS_FOOTER": "0"}):
             assert get_stats_footer_enabled() is False
 
     def test_get_stats_footer_disabled_by_env_var_false(self):
         from tokenpak._internal.config import get_stats_footer_enabled
+
         with patch.dict(os.environ, {"TOKENPAK_STATS_FOOTER": "false"}):
             assert get_stats_footer_enabled() is False
 
     def test_get_stats_footer_disabled_by_default(self):
         """Without any config or env var, footer is off (opt-in)."""
         from tokenpak._internal.config import get_stats_footer_enabled
+
         env = {k: v for k, v in os.environ.items() if k != "TOKENPAK_STATS_FOOTER"}
         with patch.dict(os.environ, env, clear=True):
             with patch("tokenpak._internal.config._load", return_value={}):
@@ -142,11 +147,13 @@ class TestFooterDisabled:
 
     def test_get_stats_footer_enabled_by_env_var(self):
         from tokenpak._internal.config import get_stats_footer_enabled
+
         with patch.dict(os.environ, {"TOKENPAK_STATS_FOOTER": "1"}):
             assert get_stats_footer_enabled() is True
 
     def test_get_stats_footer_enabled_by_config_file(self):
         from tokenpak._internal.config import get_stats_footer_enabled
+
         env = {k: v for k, v in os.environ.items() if k != "TOKENPAK_STATS_FOOTER"}
         with patch.dict(os.environ, env, clear=True):
             with patch("tokenpak._internal.config._load", return_value={"stats_footer": True}):
@@ -155,6 +162,7 @@ class TestFooterDisabled:
     def test_env_var_overrides_config_file(self):
         """Env var=0 wins even if config file says True."""
         from tokenpak._internal.config import get_stats_footer_enabled
+
         with patch.dict(os.environ, {"TOKENPAK_STATS_FOOTER": "0"}):
             with patch("tokenpak._internal.config._load", return_value={"stats_footer": True}):
                 assert get_stats_footer_enabled() is False
@@ -164,8 +172,8 @@ class TestFooterDisabled:
 # 3. Zero-compression edge case
 # ---------------------------------------------------------------------------
 
-class TestZeroCompression:
 
+class TestZeroCompression:
     def test_oneline_zero_compression_message(self):
         stats = _make_stats(tokens_raw=500, tokens_sent=500, cost_saved=0.0)
         line = render_footer_oneline(stats)
@@ -186,8 +194,8 @@ class TestZeroCompression:
 # 4. TelemetryCollector integration
 # ---------------------------------------------------------------------------
 
-class TestCollectorFooter:
 
+class TestCollectorFooter:
     def test_record_returns_stats_with_footer(self):
         collector = TelemetryCollector()
         stats = collector.record(
@@ -214,12 +222,13 @@ class TestCollectorFooter:
 # 5. config set/get round-trip
 # ---------------------------------------------------------------------------
 
-class TestConfigRoundTrip:
 
+class TestConfigRoundTrip:
     def test_set_and_get_stats_footer_true(self, tmp_path):
         config_file = tmp_path / "config.json"
         with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
             from tokenpak._internal.config import _load, set_config
+
             set_config("stats_footer", True)
             data = _load()
             assert data["stats_footer"] is True
@@ -228,6 +237,7 @@ class TestConfigRoundTrip:
         config_file = tmp_path / "config.json"
         with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
             from tokenpak._internal.config import _load, set_config
+
             set_config("stats_footer", False)
             data = _load()
             assert data["stats_footer"] is False
@@ -236,6 +246,7 @@ class TestConfigRoundTrip:
         config_file = tmp_path / "nonexistent.json"
         with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
             from tokenpak._internal.config import _load
+
             assert _load() == {}
 
     def test_load_returns_empty_on_corrupt_json(self, tmp_path):
@@ -243,4 +254,5 @@ class TestConfigRoundTrip:
         config_file.write_text("NOT JSON {{{")
         with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
             from tokenpak._internal.config import _load
+
             assert _load() == {}

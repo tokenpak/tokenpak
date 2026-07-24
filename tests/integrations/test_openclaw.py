@@ -43,7 +43,7 @@ def _make_openclaw_config(
 ) -> Dict[str, Any]:
     """Return a minimal openclaw.json-style dict."""
     cfg_providers = {}
-    for name in (providers or PROVIDERS):
+    for name in providers or PROVIDERS:
         if double_proxy_providers and name in double_proxy_providers:
             base_url = proxy_base  # WRONG — points to proxy instead of real API
         else:
@@ -54,8 +54,7 @@ def _make_openclaw_config(
     return {
         "providers": cfg_providers,
         "auth_profiles": {
-            name: {"type": "api_key", "key": f"sk-fake-{name}"}
-            for name in (providers or PROVIDERS)
+            name: {"type": "api_key", "key": f"sk-fake-{name}"} for name in (providers or PROVIDERS)
         },
     }
 
@@ -65,7 +64,7 @@ def _provider_real_url(name: str) -> str:
         "anthropic": "https://api.anthropic.com",
         "openai": "https://api.openai.com",
         "google": "https://generativelanguage.googleapis.com",
-        "openai-codex": "https://api.openai.com",
+        "openai-codex": "https://chatgpt.com/backend-api",
     }
     return urls.get(name, f"https://api.{name}.com")
 
@@ -77,6 +76,7 @@ def _tokenpak_name(provider: str) -> str:
 # ---------------------------------------------------------------------------
 # Simulated inject script logic (mirrors what the real inject script does)
 # ---------------------------------------------------------------------------
+
 
 class InjectSimulator:
     """
@@ -152,6 +152,7 @@ class InjectSimulator:
 # Cooldown / rate-limit state simulator
 # ---------------------------------------------------------------------------
 
+
 class ProviderCooldownState:
     """Thread-safe cooldown state mimicking auth-profiles.json usageStats."""
 
@@ -226,9 +227,7 @@ class TestOpenClawIntegration:
         assert len(twice["providers"]) == len(once["providers"])
         # No double-mirror entries like tokenpak-tokenpak-anthropic
         for name in twice["providers"]:
-            assert not name.startswith("tokenpak-tokenpak-"), (
-                f"Double-mirror detected: {name}"
-            )
+            assert not name.startswith("tokenpak-tokenpak-"), f"Double-mirror detected: {name}"
 
     def test_inject_script_fixes_double_proxy(self):
         """Detect and warn when a non-tokenpak provider already points to proxy."""
@@ -409,9 +408,7 @@ class TestRateLimitHandling:
 
         # Each wait should be >= previous (exponential growth)
         for i in range(1, len(waits)):
-            assert waits[i] >= waits[i - 1], (
-                f"Wait time did not increase: {waits}"
-            )
+            assert waits[i] >= waits[i - 1], f"Wait time did not increase: {waits}"
 
     def test_rate_limit_backoff_respects_max_wait(self):
         """RateLimitBackoff never exceeds max_wait."""

@@ -303,8 +303,7 @@ def monitor_db_candidates() -> list[dict[str, Any]]:
         if _is_valid_monitor_db(candidate):
             entry["valid"] = True
             entry["selected"] = (
-                selected_path is not None
-                and candidate.resolve() == selected_path.resolve()
+                selected_path is not None and candidate.resolve() == selected_path.resolve()
             )
             try:
                 conn = sqlite3.connect(str(candidate.resolve()), timeout=2)

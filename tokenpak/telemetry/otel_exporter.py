@@ -4,6 +4,7 @@ Enabled only when TOKENPAK_OTEL_ENDPOINT is set to a non-empty string.
 Gracefully degrades when the opentelemetry SDK is not installed.
 All public functions are safe to call regardless of SDK availability.
 """
+
 from __future__ import annotations
 
 import os
@@ -25,6 +26,7 @@ _initialized: bool = False
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
+
 
 def is_enabled() -> bool:
     """Return True when TOKENPAK_OTEL_ENDPOINT is set to a non-empty string."""
@@ -129,6 +131,7 @@ def record_request(
             if status_code >= 500:
                 try:
                     from opentelemetry.trace import Status, StatusCode
+
                     span.set_status(Status(StatusCode.ERROR))
                 except Exception:
                     pass

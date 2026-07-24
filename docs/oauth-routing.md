@@ -1,156 +1,107 @@
-# OAuth Routing in TokenPak Proxy
+# OAuth Routing in the TokenPak Proxy
 
-TokenPak supports two authentication flavors for LLM providers: **API keys** and **OAuth Bearer tokens** (subscription-based). This document covers how the proxy detects and routes each type, with focus on Codex (subscription OAuth) and Claude Code (OAuth session).
+TokenPak accepts credentials already owned by a supported client. API keys and
+OAuth bearer sessions are both supported; neither is a universal TokenPak
+requirement, and TokenPak does not choose a model on the client's behalf.
 
----
+## Auth-type detection
 
-## Auth Type Detection
-
-The proxy inspects the `Authorization` header to determine auth type before routing:
-
-| Header Pattern | Auth Type | Examples |
+| Header pattern | Classification | Typical use |
 |---|---|---|
-| `x-api-key: <value>` | `apikey` | Anthropic API key |
-| `Authorization: Bearer sk-...` | `apikey` | OpenAI / Anthropic API key |
-| `Authorization: Bearer <non-sk>` | `oauth` | Codex subscription, Claude Code |
-| _(none)_ | `none` | Unauthenticated (rejected) |
+| `x-api-key: <value>` | `apikey` | Anthropic SDK/API client |
+| `Authorization: Bearer sk-...` | `apikey` | OpenAI SDK/API client |
+| `Authorization: Bearer <non-sk>` | `oauth` | Codex or Claude Code subscription session |
+| none | `none` | rejected on provider-bound routes |
 
-**Rule of thumb:** If your Bearer token starts with `sk-`, it's an API key. All other Bearer tokens are treated as OAuth.
+Credential values are used in memory for forwarding and route classification.
+They are not written to receipts, telemetry, or logs.
 
----
+## Codex subscription OAuth
 
-## Provider Routing
+Native Codex sends Responses API requests to its configured
+`openai_base_url`. When TokenPak receives `/v1/responses` with a non-`sk-`
+OAuth bearer, it:
 
-### Codex (OpenAI Subscription OAuth)
+1. classifies the request as `openai-codex`;
+2. decodes the native zstd HTTP entity for safe processing;
+3. preserves the client-supplied model and OAuth session;
+4. rewrites the upstream URL to
+   `https://chatgpt.com/backend-api/codex/responses`; and
+5. forwards ordinary JSON without persisting the credential.
 
-**Endpoint:** `https://api.openai.com/v1/responses` (Responses API)
+The same inbound path with `Bearer sk-...` remains an OpenAI API-key request
+and is forwarded to `https://api.openai.com/v1/responses`. Path alone does not
+misclassify every Responses request as subscription traffic.
 
-Codex subscription models (`gpt-5.1-codex-mini`, `gpt-5.2-codex`, `gpt-5.3-codex`, `gpt-5.3-codex-spark`) use OAuth Bearer tokens — not API keys. The proxy detects Codex via:
-
-1. **Path:** requests to `/v1/responses` → routed to `openai-codex`
-2. **Model name:** body contains `"model": "gpt-5.x-codex..."` → identified as Codex
-
-**Example: Codex via proxy**
-```bash
-# Point your Codex client at the TokenPak proxy:
-export OPENAI_BASE_URL=http://localhost:8766
-
-# Codex authenticates with OAuth Bearer token (from Codex CLI / subscription)
-# The proxy forwards it unchanged to api.openai.com/v1/responses
-```
-
-**Using the Codex CLI with TokenPak:**
-```bash
-# Set proxy as base URL (Codex CLI / SDK)
-OPENAI_BASE_URL=http://localhost:8766 codex "explain this code"
-```
-
-### Claude Code (Anthropic Subscription OAuth)
-
-**Endpoint:** `https://api.anthropic.com/v1/messages`
-
-Claude Code subscription users authenticate with an OAuth Bearer token instead of an API key. The proxy detects this when:
-- Path is `/v1/messages` AND
-- `Authorization: Bearer <non-sk-token>` is present
-
-The provider is still `anthropic` — same endpoint, different auth mechanism.
-
-**Example: Claude Code via proxy**
-```bash
-# Set proxy (Claude Code CLI reads ANTHROPIC_BASE_URL or custom config)
-export ANTHROPIC_BASE_URL=http://localhost:8766
-
-# Claude Code's OAuth session token is forwarded unchanged
-claude "review this PR"
-```
-
-### Standard API Key (Anthropic + OpenAI)
+### Recommended launcher path
 
 ```bash
-# Anthropic API key
-curl http://localhost:8766/v1/messages \
- -H "x-api-key: sk-ant-..." \
- -H "anthropic-version: 2023-06-01" \
- -d '{"model":"claude-sonnet-4-6","messages":[...]}'
-
-# OpenAI API key
-curl http://localhost:8766/v1/chat/completions \
- -H "Authorization: Bearer sk-openai..." \
- -d '{"model":"gpt-4o","messages":[...]}'
+tokenpak serve --profile aggressive --stats-footer  # terminal 1
+tokenpak codex                                      # terminal 2
 ```
 
----
+When the local proxy health check passes, `tokenpak codex` supplies the
+invocation-scoped `openai_base_url` override. Codex keeps ownership of its login
+and selected/default model. If the proxy is unavailable or the user supplied
+an explicit base override, the launcher says that Codex is using its configured
+upstream instead of silently claiming TokenPak routing.
 
-## Auth Flow Diagrams
+No `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, or `--model`
+argument is needed for an already-authenticated Codex session.
 
-### API Key Flow (Static)
-```
-Client ──► Proxy ──► Provider
- │
- ├─ Validate Bearer sk-... or x-api-key present
- ├─ Detect provider from path/body
- ├─ Forward auth header unchanged (ZERO storage)
- └─ Cache keying: ENABLED (key prefix stable)
-```
+## Claude Code OAuth
 
-### OAuth Bearer Flow (Session)
-```
-Client ──► Proxy ──► Provider
- │
- ├─ Detect Bearer <non-sk> → auth_type=oauth
- ├─ Detect provider:
- │ /v1/responses → openai-codex
- │ /v1/messages + non-sk → anthropic (Claude Code OAuth)
- │ /v1/chat/completions → openai
- ├─ Forward OAuth token unchanged (ZERO storage, ZERO logging)
- └─ Cache keying: DISABLED (OAuth tokens may expire mid-session)
+Claude Code subscription users can send a non-`sk-` bearer to `/v1/messages`.
+That route remains Anthropic and forwards the client-owned session unchanged:
+
+```bash
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8766
+claude "review this project"
 ```
 
----
+The supported Claude Code route is byte-preserved. It provides routing and
+telemetry but may correctly show no incremental TokenPak compression savings.
 
-## OAuth-Specific Behaviors
+## Optional API-key clients
 
-### Cache Keying Disabled
+API-key routes remain available when the user chooses a provider or SDK that
+requires one:
 
-OAuth tokens may expire during a session. To prevent stale cached responses from being served after token refresh, the proxy sets `skip_cache_keying=True` for all OAuth requests.
+```bash
+# Anthropic API key — optional Anthropic-specific route
+curl http://127.0.0.1:8766/v1/messages \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model":"your-model","messages":[{"role":"user","content":"hello"}]}'
 
-This means:
-- OAuth requests are still forwarded through compression/cost-tracking
-- Responses are NOT shared across OAuth sessions
-- Each OAuth session gets fresh upstream responses
+# OpenAI API key — optional OpenAI-specific route
+curl http://127.0.0.1:8766/v1/responses \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"model":"your-model","input":"hello"}'
+```
 
-### Token Security
+These are alternatives, not first-run requirements.
 
-The OAuth module upholds the same zero-storage guarantees as the passthrough module:
-- **Zero logging** of token values (even at DEBUG level)
-- **Zero storage** of tokens on disk or in memory beyond request lifetime
-- **Telemetry tags** contain format hints only (`jwt`, `opaque`, `apikey`) — never token values
+## OAuth-specific behavior
 
-### Token Expiry
+- OAuth cache keying is disabled so an expiring session cannot become a stable
+  cross-session response-cache identity.
+- Token refresh remains the client's responsibility. An upstream 401 is
+  returned to the client for re-authentication.
+- Responses compression follows the same safety rules as other formats:
+  system/developer policy and protected instructions are never capsulized, the
+  newest two message items remain hot, and short or nonhistorical requests may
+  correctly be ineligible.
+- TokenPak receipts record measured request deltas and safe route metadata,
+  never bearer values, account IDs, or client session metadata.
 
-The proxy does **not** attempt OAuth token refresh. If an OAuth token expires mid-session:
-1. The upstream provider returns HTTP 401
-2. The proxy forwards the 401 to the client unchanged
-3. The client must re-authenticate and retry
+## Quick reference
 
-Token refresh is the responsibility of the Codex CLI / Claude Code CLI — not the proxy.
-
----
-
-## Limitations
-
-1. **No token refresh** — expired OAuth tokens cause 401s forwarded to client
-2. **No Codex-specific compression** — compression pipeline works the same as other providers; Codex response format differences (Responses API vs Chat Completions) don't affect compression output
-3. **OAuth rate limits** — Codex subscription may have different rate limits than API-key plans; these are enforced by OpenAI, not the proxy
-
----
-
-## Provider Quick Reference
-
-| Provider | Endpoint | Auth | Model Prefix |
+| Client/provider route | Upstream | Auth supplied by | Model selected by |
 |---|---|---|---|
-| Anthropic (API key) | api.anthropic.com/v1/messages | `x-api-key` or `Bearer sk-ant-...` | `claude-` |
-| Anthropic (Claude Code OAuth) | api.anthropic.com/v1/messages | `Bearer <oauth>` | `claude-` |
-| OpenAI (API key) | api.openai.com/v1/chat/completions | `Bearer sk-...` | `gpt-`, `o1`, `o3` |
-| OpenAI Codex (subscription) | api.openai.com/v1/responses | `Bearer <oauth>` | `gpt-5.x-codex*` |
-| Google | generativelanguage.googleapis.com | `Bearer AIza...` | `gemini-` |
+| Codex subscription `/v1/responses` | `chatgpt.com/backend-api/codex/responses` | Codex OAuth session | Codex/user config |
+| OpenAI API-key `/v1/responses` | `api.openai.com/v1/responses` | SDK/client | SDK/user config |
+| Claude Code `/v1/messages` | `api.anthropic.com/v1/messages` | Claude Code OAuth session | Claude Code/user config |
+| Anthropic API-key `/v1/messages` | `api.anthropic.com/v1/messages` | SDK/client | SDK/user config |

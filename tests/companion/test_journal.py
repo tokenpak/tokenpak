@@ -8,6 +8,7 @@ Covers:
 - Updating session end-time
 - Metadata round-trip
 """
+
 from __future__ import annotations
 
 import time

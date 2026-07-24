@@ -38,9 +38,7 @@ class TestMissingAPIKey:
             try:
                 client = Anthropic(api_key=None)
                 # If no raise: verify no valid key is set
-                assert not client.api_key, (
-                    "Expected api_key to be falsy when no key provided"
-                )
+                assert not client.api_key, "Expected api_key to be falsy when no key provided"
             except (ValueError, KeyError, Exception):
                 # Any exception at construction is also acceptable
                 pass

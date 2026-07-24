@@ -40,6 +40,7 @@ from typing import Any, Dict, Generator, List, Optional
 # Vault root resolution
 # ---------------------------------------------------------------------------
 
+
 def _resolve_vault_root() -> Optional[str]:
     """
     Return a readable vault root path or None if unset/unreadable.
@@ -64,8 +65,7 @@ def _resolve_vault_root() -> Optional[str]:
         try:
             data = json.loads(settings_path.read_text())
             vr = (
-                data
-                .get("pluginConfigs", {})
+                data.get("pluginConfigs", {})
                 .get("tokenpak-claude-code", {})
                 .get("vault_root", "")
                 .strip()
@@ -108,6 +108,7 @@ def _shared_index_lock(tokenpak_dir: str) -> Generator[None, None, None]:
     sentinel = os.path.join(tokenpak_dir, ".index.lock")
     try:
         import fcntl as _fcntl
+
         fd = open(sentinel, "a+")  # noqa: WPS515 — create if absent, never truncate
         try:
             _fcntl.flock(fd, _fcntl.LOCK_SH)
@@ -275,6 +276,7 @@ TOOLS: List[Dict[str, Any]] = [
 # Atomic tool handlers
 # ---------------------------------------------------------------------------
 
+
 def _handle_search_corpus(params: Dict[str, Any]) -> Dict[str, Any]:
     """Handler for search_corpus. Lazy-imports VaultIndex."""
     vault_root = _resolve_vault_root()
@@ -421,7 +423,10 @@ def _handle_summarize_related_issues(params: Dict[str, Any]) -> Dict[str, Any]:
 # Composite tool handlers
 # ---------------------------------------------------------------------------
 
-def _build_summary(corpus_results: List[Dict], entities: Dict, related: List[Dict]) -> Dict[str, Any]:
+
+def _build_summary(
+    corpus_results: List[Dict], entities: Dict, related: List[Dict]
+) -> Dict[str, Any]:
     """
     Synthesize a lightweight summary dict from atomic tool outputs.
     No LLM — purely deterministic field assembly.
@@ -563,7 +568,9 @@ def _handle_prepare_review_packet(params: Dict[str, Any]) -> Dict[str, Any]:
 
     policy = CompactionPolicy.default()
     full_context = "\n\n".join(h.get("snippet", "") for h in corpus_hits)
-    compacted_context = policy.compact_block(full_context, block_type="knowledge") if full_context else ""
+    compacted_context = (
+        policy.compact_block(full_context, block_type="knowledge") if full_context else ""
+    )
 
     # 5. Assemble summary (reuse helper)
     summary = _build_summary(corpus_hits, entities, related)
@@ -606,14 +613,13 @@ HANDLERS = {
 # MCP JSON-RPC 2.0 protocol (stdio)
 # ---------------------------------------------------------------------------
 
+
 def _jsonrpc_ok(req_id: Any, result: Any) -> str:
     return json.dumps({"jsonrpc": "2.0", "id": req_id, "result": result})
 
 
 def _jsonrpc_err(req_id: Any, code: int, message: str) -> str:
-    return json.dumps(
-        {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
-    )
+    return json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}})
 
 
 def _dispatch(request: Dict[str, Any]) -> str:
@@ -635,11 +641,7 @@ def _dispatch(request: Dict[str, Any]) -> str:
             # MCP wraps tool results in content array
             return _jsonrpc_ok(
                 req_id,
-                {
-                    "content": [
-                        {"type": "text", "text": json.dumps(result, ensure_ascii=False)}
-                    ]
-                },
+                {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]},
             )
         except Exception as exc:  # noqa: BLE001
             return _jsonrpc_err(req_id, -32000, str(exc))
@@ -677,6 +679,7 @@ def _run_server() -> None:
 # ---------------------------------------------------------------------------
 # Self-test (--self-test)
 # ---------------------------------------------------------------------------
+
 
 def _self_test() -> None:
     """
@@ -743,9 +746,7 @@ def _self_test() -> None:
         result = json.loads(content_text)
         status = result.get("status")
         if no_corpus_mode:
-            assert status == "no-corpus", (
-                f"{tool_name}: expected no-corpus, got {result}"
-            )
+            assert status == "no-corpus", f"{tool_name}: expected no-corpus, got {result}"
             no_corpus_count += 1
             print(f"  [OK] {tool_name}: status=no-corpus", file=sys.stderr)
         else:
@@ -771,13 +772,14 @@ def _self_test() -> None:
     result = json.loads(resp["result"]["content"][0]["text"])
     assert result.get("status") == "ok", f"extract_structured_fields failed: {result}"
     entities = result.get("entities", {})
-    assert entities.get("decisions") or entities.get("deadlines") or entities.get("api_endpoints"), (
-        f"extract_structured_fields returned empty entities: {entities}"
-    )
+    assert (
+        entities.get("decisions") or entities.get("deadlines") or entities.get("api_endpoints")
+    ), f"extract_structured_fields returned empty entities: {entities}"
     print(f"  [OK] extract_structured_fields → entities: {list(entities.keys())}", file=sys.stderr)
 
     # 4. Lazy imports check — compaction.policy must NOT be loaded at module level
     import sys as _sys
+
     assert "tokenpak.compression.budgets.policy" not in _sys.modules or True, (
         "compaction.policy was eagerly imported at module load (lazy import violation)"
     )
@@ -791,6 +793,7 @@ def _self_test() -> None:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main(argv: Optional[List[str]] = None) -> None:
     if argv is None:

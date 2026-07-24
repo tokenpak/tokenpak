@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, cast
 
 # ---------------------------------------------------------------------------
 # SSE line helpers
@@ -43,7 +43,7 @@ def _parse_sse_line(line: str) -> Optional[Dict[str, Any]]:
     if payload == "[DONE]":
         return None
     try:
-        return json.loads(payload)
+        return cast(Dict[str, Any], json.loads(payload))
     except (json.JSONDecodeError, ValueError):
         return None
 
@@ -145,7 +145,7 @@ class _AnthropicToOpenAIStream:
                 "max_tokens": "length",
                 "stop_sequence": "stop",
             }
-            self._finish_reason = finish_map.get(stop_reason, "stop")  # type: ignore
+            self._finish_reason = finish_map.get(stop_reason, "stop")
             # Emit final chunk with finish_reason
             chunk = self._chunk({}, finish_reason=self._finish_reason)
             return _sse_line(chunk)
@@ -479,7 +479,9 @@ class StreamingTranslator:
         self.target = target_provider
         self._impl = self._build_impl(source_provider, target_provider)
 
-    def _build_impl(self, src: str, tgt: str):
+    def _build_impl(
+        self, src: str, tgt: str
+    ) -> _AnthropicToOpenAIStream | _OpenAIToAnthropicStream | _GoogleToAnthropicStream | None:
         if src == tgt:
             return None
         if src == "anthropic" and tgt == "openai":

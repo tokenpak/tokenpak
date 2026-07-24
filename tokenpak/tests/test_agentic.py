@@ -33,11 +33,13 @@ def test_agentic_package_importable():
 
 def test_agentic_exports_error_normalizer():
     from tokenpak.orchestration import ErrorNormalizer
+
     assert callable(ErrorNormalizer)
 
 
 def test_agentic_exports_retry_engine():
     from tokenpak.orchestration import RetryEngine
+
     assert callable(RetryEngine)
 
 
@@ -51,6 +53,7 @@ class TestErrorNormalizerDefaults:
 
     def setup_method(self):
         from tokenpak.orchestration.error_normalizer import ErrorNormalizer
+
         # Use a non-existent path so no external file is loaded
         self.norm = ErrorNormalizer(extra_pattern_path=Path("/nonexistent/path.json"))
 
@@ -103,17 +106,20 @@ class TestErrorNormalizerDefaults:
 class TestErrorNormalizerFallback:
     def test_fallback_signature_static(self):
         from tokenpak.orchestration.error_normalizer import ErrorNormalizer
+
         sig = ErrorNormalizer._fallback_signature("hello world 42")
         assert sig == "HELLO_WORLD_42"
 
     def test_fallback_truncates_at_80(self):
         from tokenpak.orchestration.error_normalizer import ErrorNormalizer
+
         long_msg = "x" * 200
         sig = ErrorNormalizer._fallback_signature(long_msg)
         assert len(sig) <= 80
 
     def test_fallback_collapses_separators(self):
         from tokenpak.orchestration.error_normalizer import ErrorNormalizer
+
         sig = ErrorNormalizer._fallback_signature("a--b__c  d")
         assert "__" not in sig
 
@@ -123,9 +129,13 @@ class TestErrorNormalizerExternalPatterns:
         from tokenpak.orchestration.error_normalizer import ErrorNormalizer
 
         pattern_file = tmp_path / "patterns.json"
-        pattern_file.write_text(json.dumps([
-            {"regex": r"disk full", "normalized_signature": "DISK_FULL"},
-        ]))
+        pattern_file.write_text(
+            json.dumps(
+                [
+                    {"regex": r"disk full", "normalized_signature": "DISK_FULL"},
+                ]
+            )
+        )
         norm = ErrorNormalizer(extra_pattern_path=pattern_file)
         assert norm.normalize("No space left: disk full") == "DISK_FULL"
 
@@ -150,10 +160,14 @@ class TestErrorNormalizerExternalPatterns:
         from tokenpak.orchestration.error_normalizer import ErrorNormalizer
 
         bad_file = tmp_path / "patterns.json"
-        bad_file.write_text(json.dumps([
-            {"regex": r"[invalid((", "normalized_signature": "BROKEN"},
-            {"regex": r"ok pattern", "normalized_signature": "OK_PATTERN"},
-        ]))
+        bad_file.write_text(
+            json.dumps(
+                [
+                    {"regex": r"[invalid((", "normalized_signature": "BROKEN"},
+                    {"regex": r"ok pattern", "normalized_signature": "OK_PATTERN"},
+                ]
+            )
+        )
         norm = ErrorNormalizer(extra_pattern_path=bad_file)
         assert norm.normalize("ok pattern match") == "OK_PATTERN"
 
@@ -166,6 +180,7 @@ class TestErrorNormalizerExternalPatterns:
 class TestFailureSignatureDB:
     def setup_method(self):
         from tokenpak.orchestration.error_normalizer import ErrorNormalizer, FailureSignatureDB
+
         norm = ErrorNormalizer(extra_pattern_path=Path("/nonexistent/path.json"))
         self.db = FailureSignatureDB(normalizer=norm)
 
@@ -215,6 +230,7 @@ class TestFailureSignatureDB:
 class TestExtractHttpStatus:
     def setup_method(self):
         from tokenpak.orchestration.retry import _extract_http_status
+
         self.fn = _extract_http_status
 
     def test_status_code_attribute(self):
@@ -254,6 +270,7 @@ class TestExtractHttpStatus:
 class TestRetryAttempt:
     def test_to_dict_basic(self):
         from tokenpak.orchestration.retry import RetryAttempt
+
         attempt = RetryAttempt(level=0, description="test", error="oops")
         d = attempt.to_dict()
         assert d["level"] == 0
@@ -263,12 +280,14 @@ class TestRetryAttempt:
 
     def test_to_dict_with_http_status(self):
         from tokenpak.orchestration.retry import RetryAttempt
+
         attempt = RetryAttempt(level=1, description="retry", error="429", http_status="429")
         d = attempt.to_dict()
         assert d["http_status"] == "429"
 
     def test_to_dict_no_http_status_key_when_none(self):
         from tokenpak.orchestration.retry import RetryAttempt
+
         attempt = RetryAttempt(level=0, description="x", error="y")
         d = attempt.to_dict()
         assert "http_status" not in d
@@ -282,6 +301,7 @@ class TestRetryAttempt:
 class TestRetryErrors:
     def test_retry_exhausted_error_message(self):
         from tokenpak.orchestration.retry import RetryAttempt, RetryExhaustedError
+
         attempts = [RetryAttempt(0, "a", "e"), RetryAttempt(1, "b", "f")]
         exc = RetryExhaustedError(context={"task_id": "t1"}, partial_state={}, attempts=attempts)
         assert "2 attempts" in str(exc)
@@ -290,6 +310,7 @@ class TestRetryErrors:
 
     def test_immediate_alert_error(self):
         from tokenpak.orchestration.retry import ImmediateAlertError
+
         original = RuntimeError("auth denied")
         exc = ImmediateAlertError(status_code="401", original=original)
         assert exc.status_code == "401"
@@ -305,6 +326,7 @@ class TestRetryErrors:
 class TestRetryEngineInit:
     def test_default_init(self, tmp_path):
         from tokenpak.orchestration.retry import RetryEngine
+
         fn = MagicMock(return_value="ok")
         engine = RetryEngine(fn=fn, context={"task_id": "t1"}, state_dir=tmp_path)
         assert engine.agent_id is not None
@@ -313,6 +335,7 @@ class TestRetryEngineInit:
 
     def test_custom_per_error_merged(self, tmp_path):
         from tokenpak.orchestration.retry import RetryEngine
+
         fn = MagicMock(return_value="ok")
         engine = RetryEngine(
             fn=fn,
@@ -326,6 +349,7 @@ class TestRetryEngineInit:
 
     def test_model_from_context(self, tmp_path):
         from tokenpak.orchestration.retry import RetryEngine
+
         fn = MagicMock(return_value="ok")
         engine = RetryEngine(
             fn=fn,
@@ -339,22 +363,26 @@ class TestRetryEngineInit:
 class TestRetryEngineSuccessPath:
     def test_success_on_first_attempt(self, tmp_path):
         from tokenpak.orchestration.retry import RetryEngine
+
         fn = MagicMock(return_value=42)
-        engine = RetryEngine(fn=fn, context={"task_id": "t1"}, state_dir=tmp_path,
-                             wait_seconds=[0, 0, 0])
+        engine = RetryEngine(
+            fn=fn, context={"task_id": "t1"}, state_dir=tmp_path, wait_seconds=[0, 0, 0]
+        )
         result = engine.run()
         assert result == 42
 
     def test_fn_called_with_context_and_state(self, tmp_path):
         from tokenpak.orchestration.retry import RetryEngine
+
         calls = []
 
         def fn(ctx, state):
             calls.append((ctx, state))
             return "done"
 
-        engine = RetryEngine(fn=fn, context={"task_id": "x"}, state_dir=tmp_path,
-                             wait_seconds=[0, 0, 0])
+        engine = RetryEngine(
+            fn=fn, context={"task_id": "x"}, state_dir=tmp_path, wait_seconds=[0, 0, 0]
+        )
         engine.run()
         assert len(calls) >= 1
         assert calls[0][0]["task_id"] == "x"
@@ -369,8 +397,9 @@ class TestRetryEngineSuccessPath:
             return "ok"
 
         partial = {"progress": 5}
-        engine = RetryEngine(fn=fn, context={}, partial_state=partial, state_dir=tmp_path,
-                             wait_seconds=[0, 0, 0])
+        engine = RetryEngine(
+            fn=fn, context={}, partial_state=partial, state_dir=tmp_path, wait_seconds=[0, 0, 0]
+        )
         engine.run()
         assert received_states[0]["progress"] == 5
 
@@ -427,6 +456,7 @@ class TestRetryEngineEscalation:
 
     def test_model_downgrade_default(self, tmp_path):
         from tokenpak.orchestration.retry import RetryEngine
+
         engine = RetryEngine(fn=MagicMock(), context={}, state_dir=tmp_path)
         chain = engine._model_chain
         # Should return next model in chain
@@ -435,6 +465,7 @@ class TestRetryEngineEscalation:
 
     def test_model_downgrade_at_end_returns_last(self, tmp_path):
         from tokenpak.orchestration.retry import RetryEngine
+
         engine = RetryEngine(fn=MagicMock(), context={}, state_dir=tmp_path)
         last = engine._model_chain[-1]
         result = engine._default_model_downgrade(last)
@@ -442,6 +473,7 @@ class TestRetryEngineEscalation:
 
     def test_provider_switch_default(self, tmp_path):
         from tokenpak.orchestration.retry import RetryEngine
+
         engine = RetryEngine(fn=MagicMock(), context={}, state_dir=tmp_path)
         chain = engine._provider_chain
         next_prov = engine._default_provider_switch(chain[0])
@@ -451,6 +483,7 @@ class TestRetryEngineEscalation:
 class TestRetryEngineState:
     def test_save_and_load_state(self, tmp_path):
         from tokenpak.orchestration.retry import RetryEngine
+
         engine = RetryEngine(
             fn=MagicMock(return_value="ok"),
             context={"task_id": "state-test"},
@@ -472,6 +505,7 @@ class TestRetryEngineState:
 class TestFileLockManager:
     def test_claim_returns_record(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr = FileLockManager(agent_id="test-agent", lock_dir=tmp_path)
         record = mgr.claim("/tmp/fake-file.txt")
         assert record["agent"] == "test-agent"
@@ -480,6 +514,7 @@ class TestFileLockManager:
 
     def test_claim_and_query(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr = FileLockManager(agent_id="test-agent", lock_dir=tmp_path)
         path = "/tmp/test-lock-target.txt"
         mgr.claim(path)
@@ -489,6 +524,7 @@ class TestFileLockManager:
 
     def test_release_removes_lock(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr = FileLockManager(agent_id="test-agent", lock_dir=tmp_path)
         path = "/tmp/test-file-release.txt"
         mgr.claim(path)
@@ -498,11 +534,13 @@ class TestFileLockManager:
 
     def test_release_returns_false_if_no_lock(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr = FileLockManager(agent_id="test-agent", lock_dir=tmp_path)
         assert mgr.release("/tmp/not-locked.txt") is False
 
     def test_conflict_from_different_agent(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager, LockConflictError
+
         mgr_a = FileLockManager(agent_id="agent-a", lock_dir=tmp_path)
         mgr_b = FileLockManager(agent_id="agent-b", lock_dir=tmp_path)
         path = "/tmp/contested.txt"
@@ -512,6 +550,7 @@ class TestFileLockManager:
 
     def test_same_agent_can_re_claim(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         path = "/tmp/same-agent.txt"
         r1 = mgr.claim(path, timeout_s=600)
@@ -520,6 +559,7 @@ class TestFileLockManager:
 
     def test_expired_lock_can_be_stolen(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr_a = FileLockManager(agent_id="agent-a", lock_dir=tmp_path)
         mgr_b = FileLockManager(agent_id="agent-b", lock_dir=tmp_path)
         path = "/tmp/expiring.txt"
@@ -531,6 +571,7 @@ class TestFileLockManager:
 
     def test_prune_expired_removes_stale_locks(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         mgr.claim("/tmp/stale.txt", timeout_s=0)
         time.sleep(0.05)  # ensure it's expired
@@ -539,6 +580,7 @@ class TestFileLockManager:
 
     def test_locks_lists_active_only(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         mgr.claim("/tmp/active-lock.txt", timeout_s=600)
         mgr.claim("/tmp/also-active.txt", timeout_s=600)
@@ -551,6 +593,7 @@ class TestFileLockManager:
 
     def test_suggest_alternatives_excludes_locked(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         mgr.claim("/tmp/locked.txt", timeout_s=600)
         candidates = ["/tmp/locked.txt", "/tmp/free-a.txt", "/tmp/free-b.txt"]
@@ -560,6 +603,7 @@ class TestFileLockManager:
 
     def test_renew_extends_expiry(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager
+
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         path = "/tmp/renewable.txt"
         mgr.claim(path, timeout_s=60)
@@ -569,12 +613,14 @@ class TestFileLockManager:
 
     def test_renew_raises_on_missing_lock(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager, LockExpiredError
+
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         with pytest.raises(LockExpiredError):
             mgr.renew("/tmp/no-such-lock.txt")
 
     def test_renew_raises_when_owned_by_other(self, tmp_path):
         from tokenpak.orchestration.locks import FileLockManager, LockConflictError
+
         mgr_a = FileLockManager(agent_id="agent-a", lock_dir=tmp_path)
         mgr_b = FileLockManager(agent_id="agent-b", lock_dir=tmp_path)
         path = "/tmp/owned-by-a.txt"
@@ -591,18 +637,23 @@ class TestFileLockManager:
 class TestValidationDataClasses:
     def test_validation_check_fields(self):
         from tokenpak.orchestration.validation_framework import ValidationCheck
+
         check = ValidationCheck(name="my_check", passed=True, message="all good")
         assert check.name == "my_check"
         assert check.passed is True
 
     def test_validation_result_summary_pass(self):
         from tokenpak.orchestration.validation_framework import ValidationCheck, ValidationResult
+
         checks = [
             ValidationCheck(name="a", passed=True),
             ValidationCheck(name="b", passed=True),
         ]
         result = ValidationResult(
-            passed=True, checks=checks, confidence=1.0, evidence={},
+            passed=True,
+            checks=checks,
+            confidence=1.0,
+            evidence={},
             validator_name="TestV",
         )
         summary = result.summary()
@@ -611,12 +662,16 @@ class TestValidationDataClasses:
 
     def test_validation_result_summary_fail(self):
         from tokenpak.orchestration.validation_framework import ValidationCheck, ValidationResult
+
         checks = [
             ValidationCheck(name="a", passed=True),
             ValidationCheck(name="b", passed=False, message="broke"),
         ]
         result = ValidationResult(
-            passed=False, checks=checks, confidence=0.5, evidence={},
+            passed=False,
+            checks=checks,
+            confidence=0.5,
+            evidence={},
             validator_name="TestV",
         )
         summary = result.summary()
@@ -625,6 +680,7 @@ class TestValidationDataClasses:
 
     def test_failed_checks_filters_correctly(self):
         from tokenpak.orchestration.validation_framework import ValidationCheck, ValidationResult
+
         checks = [
             ValidationCheck(name="a", passed=True),
             ValidationCheck(name="b", passed=False),
@@ -646,6 +702,7 @@ class TestValidationDataClasses:
 class TestFileStateValidator:
     def test_must_exist_passes(self, tmp_path):
         from tokenpak.orchestration.validation_framework import FileStateValidator
+
         f = tmp_path / "exists.txt"
         f.write_text("hello")
         v = FileStateValidator(must_exist=[str(f)])
@@ -654,18 +711,21 @@ class TestFileStateValidator:
 
     def test_must_exist_fails_when_missing(self, tmp_path):
         from tokenpak.orchestration.validation_framework import FileStateValidator
+
         v = FileStateValidator(must_exist=[str(tmp_path / "missing.txt")])
         result = v.validate({}, {})
         assert not result.passed
 
     def test_must_not_exist_passes_when_absent(self, tmp_path):
         from tokenpak.orchestration.validation_framework import FileStateValidator
+
         v = FileStateValidator(must_not_exist=[str(tmp_path / "absent.txt")])
         result = v.validate({}, {})
         assert result.passed
 
     def test_must_not_exist_fails_when_present(self, tmp_path):
         from tokenpak.orchestration.validation_framework import FileStateValidator
+
         f = tmp_path / "present.txt"
         f.write_text("here")
         v = FileStateValidator(must_not_exist=[str(f)])
@@ -674,6 +734,7 @@ class TestFileStateValidator:
 
     def test_content_pattern_passes_when_matched(self, tmp_path):
         from tokenpak.orchestration.validation_framework import FileStateValidator
+
         f = tmp_path / "log.txt"
         f.write_text("Status: ok\nAll done")
         v = FileStateValidator(content_patterns={str(f): r"Status: ok"})
@@ -682,6 +743,7 @@ class TestFileStateValidator:
 
     def test_content_pattern_fails_when_not_matched(self, tmp_path):
         from tokenpak.orchestration.validation_framework import FileStateValidator
+
         f = tmp_path / "log.txt"
         f.write_text("Status: error")
         v = FileStateValidator(content_patterns={str(f): r"Status: ok"})
@@ -690,12 +752,14 @@ class TestFileStateValidator:
 
     def test_no_checks_configured_vacuously_passes(self):
         from tokenpak.orchestration.validation_framework import FileStateValidator
+
         v = FileStateValidator()
         result = v.validate({}, {})
         assert result.passed
 
     def test_must_be_newer_than_passes(self, tmp_path):
         from tokenpak.orchestration.validation_framework import FileStateValidator
+
         f = tmp_path / "newfile.txt"
         f.write_text("content")
         past_ts = time.time() - 10
@@ -705,6 +769,7 @@ class TestFileStateValidator:
 
     def test_must_be_newer_than_fails_for_old_file(self, tmp_path):
         from tokenpak.orchestration.validation_framework import FileStateValidator
+
         f = tmp_path / "oldfile.txt"
         f.write_text("content")
         future_ts = time.time() + 9999
@@ -721,71 +786,84 @@ class TestFileStateValidator:
 class TestSchemaValidator:
     def test_required_key_present(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({"required_keys": ["status"]})
         result = v.validate({"status": "ok"}, {})
         assert result.passed
 
     def test_required_key_missing(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({"required_keys": ["status"]})
         result = v.validate({}, {})
         assert not result.passed
 
     def test_disallowed_key_absent(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({"disallowed_keys": ["error"]})
         result = v.validate({"status": "ok"}, {})
         assert result.passed
 
     def test_disallowed_key_present(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({"disallowed_keys": ["error"]})
         result = v.validate({"status": "ok", "error": "boom"}, {})
         assert not result.passed
 
     def test_type_check_passes(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({"types": {"count": int}})
         result = v.validate({"count": 5}, {})
         assert result.passed
 
     def test_type_check_fails(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({"types": {"count": int}})
         result = v.validate({"count": "five"}, {})
         assert not result.passed
 
     def test_allowed_values_passes(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({"allowed_values": {"status": ["ok", "pending"]}})
         result = v.validate({"status": "ok"}, {})
         assert result.passed
 
     def test_allowed_values_fails(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({"allowed_values": {"status": ["ok", "pending"]}})
         result = v.validate({"status": "error"}, {})
         assert not result.passed
 
     def test_empty_schema_vacuously_passes(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({})
         result = v.validate({"anything": True}, {})
         assert result.passed
 
     def test_combined_schema(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
-        v = SchemaValidator({
-            "required_keys": ["id", "status"],
-            "types": {"id": int, "status": str},
-            "allowed_values": {"status": ["ok", "fail"]},
-            "disallowed_keys": ["debug"],
-        })
+
+        v = SchemaValidator(
+            {
+                "required_keys": ["id", "status"],
+                "types": {"id": int, "status": str},
+                "allowed_values": {"status": ["ok", "fail"]},
+                "disallowed_keys": ["debug"],
+            }
+        )
         result = v.validate({"id": 1, "status": "ok"}, {})
         assert result.passed
 
     def test_validator_name_property(self):
         from tokenpak.orchestration.validation_framework import SchemaValidator
+
         v = SchemaValidator({})
         assert v.name == "SchemaValidator"
 
@@ -798,6 +876,7 @@ class TestSchemaValidator:
 class TestValidationOrchestrator:
     def test_no_validators_returns_pass(self):
         from tokenpak.orchestration.validation_framework import ValidationOrchestrator
+
         orch = ValidationOrchestrator()
         result = orch.validate_step("deploy", {}, {})
         assert result.passed
@@ -807,6 +886,7 @@ class TestValidationOrchestrator:
             FileStateValidator,
             ValidationOrchestrator,
         )
+
         f = tmp_path / "artifact.txt"
         f.write_text("produced")
         orch = ValidationOrchestrator()
@@ -819,6 +899,7 @@ class TestValidationOrchestrator:
             FileStateValidator,
             ValidationOrchestrator,
         )
+
         orch = ValidationOrchestrator()
         orch.register_step_validator(
             "build", FileStateValidator(must_exist=[str(tmp_path / "missing.txt")])
@@ -831,6 +912,7 @@ class TestValidationOrchestrator:
             SchemaValidator,
             ValidationOrchestrator,
         )
+
         orch = ValidationOrchestrator()
         orch.register_step_validator("check", SchemaValidator({"required_keys": ["x"]}))
         orch.validate_step("check", {"x": 1}, {})
@@ -846,6 +928,7 @@ class TestValidationOrchestrator:
             ValidationError,
             ValidationOrchestrator,
         )
+
         policy = RetryPolicy(max_retries=1, retry_delay_seconds=0, escalate_on_exhaustion=False)
         orch = ValidationOrchestrator(retry_policy=policy)
         orch.register_step_validator("step", SchemaValidator({"required_keys": ["must_have"]}))
@@ -861,6 +944,7 @@ class TestValidationOrchestrator:
             SchemaValidator,
             ValidationOrchestrator,
         )
+
         escalations = []
         policy = RetryPolicy(max_retries=1, retry_delay_seconds=0, escalate_on_exhaustion=True)
         orch = ValidationOrchestrator(
@@ -881,6 +965,7 @@ class TestValidationOrchestrator:
 class TestWorkflowBudget:
     def test_init_basic(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a", "b", "c", "d"])
         assert budget.total == 1000
         assert budget.remaining == 1000
@@ -888,6 +973,7 @@ class TestWorkflowBudget:
 
     def test_even_split_allocation(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a", "b", "c", "d"])
         # Each step gets 250
         assert budget.step_allocation("a") == 250
@@ -895,16 +981,19 @@ class TestWorkflowBudget:
 
     def test_invalid_total_raises(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         with pytest.raises(ValueError):
             WorkflowBudget(total=0, steps=["a"])
 
     def test_empty_steps_raises(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         with pytest.raises(ValueError):
             WorkflowBudget(total=1000, steps=[])
 
     def test_record_usage_updates_remaining(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         budget.record_usage("a", 400)
         assert budget.remaining == 600
@@ -912,6 +1001,7 @@ class TestWorkflowBudget:
 
     def test_record_usage_removes_from_pending(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         budget.record_usage("a", 400)
         assert "a" not in budget.pending_steps
@@ -919,6 +1009,7 @@ class TestWorkflowBudget:
 
     def test_overspend_generates_warning_event(self):
         from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
+
         # warn_pct=1.20 — step uses 121% of its 500-token allocation
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         events = budget.record_usage("a", 610)  # 610 > 500 * 1.20 = 600
@@ -927,6 +1018,7 @@ class TestWorkflowBudget:
 
     def test_no_warning_for_normal_spend(self):
         from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         events = budget.record_usage("a", 400)  # under 500 allocation
         kinds = [e.kind for e in events]
@@ -934,6 +1026,7 @@ class TestWorkflowBudget:
 
     def test_critical_event_when_budget_low(self):
         from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
+
         # Total 100, 4 steps → 25 each. Spend 85 on step a → 15 left (<20%)
         budget = WorkflowBudget(total=100, steps=["a", "b", "c", "d"])
         events = budget.record_usage("a", 85)
@@ -942,6 +1035,7 @@ class TestWorkflowBudget:
 
     def test_exhausted_event_when_budget_zero(self):
         from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
+
         budget = WorkflowBudget(total=100, steps=["a", "b"])
         events = budget.record_usage("a", 100)
         kinds = [e.kind for e in events]
@@ -949,6 +1043,7 @@ class TestWorkflowBudget:
 
     def test_rebalanced_event_on_underspend(self):
         from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         events = budget.record_usage("a", 100)  # underspend by 400
         kinds = [e.kind for e in events]
@@ -956,6 +1051,7 @@ class TestWorkflowBudget:
 
     def test_duplicate_record_raises(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         budget.record_usage("a", 400)
         with pytest.raises(ValueError):
@@ -963,24 +1059,28 @@ class TestWorkflowBudget:
 
     def test_negative_usage_raises(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a"])
         with pytest.raises(ValueError):
             budget.record_usage("a", -5)
 
     def test_unknown_step_raises_key_error(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a"])
         with pytest.raises(KeyError):
             budget.record_usage("z", 100)
 
     def test_unknown_step_allocation_raises_key_error(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a"])
         with pytest.raises(KeyError):
             budget.step_allocation("z")
 
     def test_snapshot_reflects_state(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         budget.record_usage("a", 300)
         snap = budget.snapshot()
@@ -991,11 +1091,13 @@ class TestWorkflowBudget:
 
     def test_step_usage_returns_none_before_record(self):
         from tokenpak.orchestration.workflow_budget import WorkflowBudget
+
         budget = WorkflowBudget(total=1000, steps=["a"])
         assert budget.step_usage("a") is None
 
     def test_is_warning_event(self):
         from tokenpak.orchestration.workflow_budget import BudgetEvent, BudgetEventKind
+
         warn = BudgetEvent(kind=BudgetEventKind.WARNING, step="a", message="test")
         crit = BudgetEvent(kind=BudgetEventKind.CRITICAL, step="a", message="test")
         normal = BudgetEvent(kind=BudgetEventKind.USAGE_RECORDED, step="a", message="test")
@@ -1012,6 +1114,7 @@ class TestWorkflowBudget:
 class TestAgentCapabilities:
     def test_defaults(self):
         from tokenpak.orchestration.capabilities import AgentCapabilities
+
         caps = AgentCapabilities()
         assert caps.gpu is False
         assert caps.memory_gb == 4.0
@@ -1020,6 +1123,7 @@ class TestAgentCapabilities:
 
     def test_to_dict_round_trip(self):
         from tokenpak.orchestration.capabilities import AgentCapabilities
+
         caps = AgentCapabilities(gpu=True, memory_gb=16.0, specialties=["code"])
         d = caps.to_dict()
         restored = AgentCapabilities.from_dict(d)
@@ -1029,6 +1133,7 @@ class TestAgentCapabilities:
 
     def test_from_dict_with_missing_fields_uses_defaults(self):
         from tokenpak.orchestration.capabilities import AgentCapabilities
+
         caps = AgentCapabilities.from_dict({})
         assert caps.gpu is False
         assert caps.memory_gb == 4.0
@@ -1037,6 +1142,7 @@ class TestAgentCapabilities:
 class TestTaskRequirements:
     def test_defaults(self):
         from tokenpak.orchestration.capabilities import TaskRequirements
+
         req = TaskRequirements()
         assert req.requires_gpu is None
         assert req.min_memory_gb is None
@@ -1045,6 +1151,7 @@ class TestTaskRequirements:
 
     def test_to_dict(self):
         from tokenpak.orchestration.capabilities import TaskRequirements
+
         req = TaskRequirements(requires_gpu=True, min_memory_gb=8.0)
         d = req.to_dict()
         assert d["requires_gpu"] is True

@@ -114,18 +114,18 @@ def _is_localhost(client_ip: str) -> bool:
     return False
 
 
-def _extract_authorization(headers: Any) -> Optional[str]:
+def _extract_authorization(headers: object) -> Optional[str]:
     """Return the Authorization header value (case-insensitive) or None."""
     if headers is None:
         return None
     if hasattr(headers, "items"):
         for k, v in headers.items():
-            if isinstance(k, str) and k.lower() == "authorization":
+            if isinstance(k, str) and k.lower() == "authorization" and isinstance(v, str):
                 return v
     if hasattr(headers, "get"):
         for variant in ("Authorization", "authorization", "AUTHORIZATION"):
             v = headers.get(variant)
-            if v:
+            if isinstance(v, str) and v:
                 return v
     return None
 
@@ -237,9 +237,9 @@ def check_proxy_auth(
 
 
 def strip_proxy_auth_for_upstream(
-    fwd_headers: dict,
+    fwd_headers: dict[str, str],
     client_authorization: Optional[str],
-) -> dict:
+) -> dict[str, str]:
     """Remove the proxy auth Bearer token from headers about to leave the proxy.
 
     This protects against the I5 invariant — the Bearer token authenticating

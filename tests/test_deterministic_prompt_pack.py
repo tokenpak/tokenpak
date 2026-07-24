@@ -179,7 +179,9 @@ class TestByteIdentity:
         system_text2 = body2["system"][0]["text"]
 
         # Both should have the same sorted order in the system text
-        assert system_text1 == system_text2, "Tool order should not affect system block (deterministic sorting)"
+        assert system_text1 == system_text2, (
+            "Tool order should not affect system block (deterministic sorting)"
+        )
 
     def test_empty_vs_none_sections(self):
         """Empty string vs omitted section → same output."""
@@ -223,8 +225,9 @@ class TestStableVolatileBoundary:
                 # Verify it's on a stable block (not volatile)
                 text = block.get("text", "")
                 # Should be in policies or tools section
-                assert "# POLICIES" in text or "# TOOLS" in text, \
+                assert "# POLICIES" in text or "# TOOLS" in text, (
                     "cache_control should be on stable block"
+                )
 
         assert cache_marked, "Last stable block should have cache_control marker"
 
@@ -244,8 +247,9 @@ class TestStableVolatileBoundary:
             if isinstance(block, dict):
                 text = block.get("text", "")
                 if "# RETRIEVED_CONTEXT" in text:
-                    assert "cache_control" not in block, \
+                    assert "cache_control" not in block, (
                         "Volatile blocks should not have cache_control"
+                    )
 
     def test_boundary_explicit_separation(self):
         """Stable and volatile sections are clearly separated in output."""
@@ -456,10 +460,7 @@ class TestAcceptanceCriteria:
         body = pack.to_request_body()
 
         # Verify cache_control on stable block
-        stable_marked = any(
-            "cache_control" in b
-            for b in body["system"][:-1]
-        )
+        stable_marked = any("cache_control" in b for b in body["system"][:-1])
         assert stable_marked
 
     def test_criterion_4_feature_enabled(self):

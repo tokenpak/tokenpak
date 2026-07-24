@@ -13,6 +13,7 @@ Covers Kevin's six verification gates (2026-04-28) for
 
 Plus the canonical 7-case smoke set called out in the OAS-11 task spec.
 """
+
 from __future__ import annotations
 
 import json
@@ -281,7 +282,9 @@ class TestGateG3_StaleTtl:
         result = _openclaw_extract({"User-Agent": "openclaw/x"}, b"")
         assert result.attribution_source == ATTRIBUTION_ANONYMOUS_USER_AGENT_ONLY
 
-    def test_env_configurable_ttl(self, tmp_active_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_env_configurable_ttl(
+        self, tmp_active_file: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """OPENCLAW_ACTIVE_TTL_SEC override shrinks the freshness window."""
         monkeypatch.setenv("OPENCLAW_ACTIVE_TTL_SEC", "10")
         # 30s old is within default 300s but stale under 10s override
@@ -320,9 +323,7 @@ class TestGateG4_MalformedFallback:
 class TestGateG5_AttributionAlwaysSet:
     """Every OpenClaw return path sets attribution_source non-empty."""
 
-    def test_attribution_source_never_unknown_for_openclaw(
-        self, tmp_active_file: Path
-    ) -> None:
+    def test_attribution_source_never_unknown_for_openclaw(self, tmp_active_file: Path) -> None:
         """Iterate over every documented failure-mode and the happy path —
         each must produce a PlatformOrigin with attribution_source ∈
         {openclaw_active_session_file, anonymous_user_agent_only}."""
@@ -330,11 +331,19 @@ class TestGateG5_AttributionAlwaysSet:
         scenarios: list[tuple[str, dict | None]] = [
             ("happy-path", _fresh_payload()),
             ("stale", _fresh_payload(age_sec=999)),
-            ("schema-mismatch", {"schema_version": "0.5", "session_uuid": str(_uuid.uuid4()),
-                                 "last_event_ts": time.time()}),
+            (
+                "schema-mismatch",
+                {
+                    "schema_version": "0.5",
+                    "session_uuid": str(_uuid.uuid4()),
+                    "last_event_ts": time.time(),
+                },
+            ),
             ("missing-uuid", {"schema_version": "1.0", "last_event_ts": time.time()}),
-            ("non-uuid", {"schema_version": "1.0", "session_uuid": "xxx",
-                          "last_event_ts": time.time()}),
+            (
+                "non-uuid",
+                {"schema_version": "1.0", "session_uuid": "xxx", "last_event_ts": time.time()},
+            ),
             ("future-ts", _fresh_payload(age_sec=-1000)),
             ("missing-file", None),
         ]
@@ -372,17 +381,16 @@ class TestGateG6_NonOpenclawNoFsAccess:
             "litellm/1.30.0",
         ],
     )
-    def test_no_fs_access_for_non_openclaw_ua(
-        self, tmp_active_file: Path, ua: str
-    ) -> None:
+    def test_no_fs_access_for_non_openclaw_ua(self, tmp_active_file: Path, ua: str) -> None:
         _write_active(tmp_active_file, _fresh_payload())
-        with mock.patch.object(
-            platform_bridge,
-            "_read_active_json",
-            wraps=platform_bridge._read_active_json,
-        ) as read_spy, mock.patch.object(
-            Path, "stat", wraps=Path.stat
-        ) as stat_spy:
+        with (
+            mock.patch.object(
+                platform_bridge,
+                "_read_active_json",
+                wraps=platform_bridge._read_active_json,
+            ) as read_spy,
+            mock.patch.object(Path, "stat", wraps=Path.stat) as stat_spy,
+        ):
             result = _openclaw_extract({"User-Agent": ua} if ua else {}, b"")
 
         assert result is None
@@ -412,9 +420,9 @@ class TestMtimeCache:
             # equals tmp_active_file. First call opens; the next four hit
             # the in-memory cache.
             opens = [
-                c for c in open_spy.mock_calls
-                if c.args and isinstance(c.args[0], Path)
-                and str(c.args[0]) == str(tmp_active_file)
+                c
+                for c in open_spy.mock_calls
+                if c.args and isinstance(c.args[0], Path) and str(c.args[0]) == str(tmp_active_file)
             ]
             assert len(opens) == 1, f"expected 1 active.json open, got {len(opens)}"
 

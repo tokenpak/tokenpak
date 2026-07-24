@@ -81,9 +81,7 @@ class TokenPakOllama:
             **client_kwargs:      Extra kwargs forwarded to ollama.Client().
         """
         if not _OLLAMA_AVAILABLE:
-            raise ImportError(
-                "ollama package is required: pip install tokenpak-local[ollama]"
-            )
+            raise ImportError("ollama package is required: pip install tokenpak-local[ollama]")
         self._host = host
         self._output_fraction = output_fraction
         self._auto_detect = auto_detect_context
@@ -155,9 +153,7 @@ class TokenPakOllama:
     def budget_for(self, model: str) -> int:
         """Return the computed input budget for a model."""
         ctx = self._get_context_length(model)
-        return auto_budget(
-            model, output_fraction=self._output_fraction, context_length=ctx
-        )
+        return auto_budget(model, output_fraction=self._output_fraction, context_length=ctx)
 
     def budget_info(self, model: str) -> Dict[str, Any]:
         """Return full budget breakdown for a model (useful for debugging)."""
@@ -187,9 +183,7 @@ class TokenPakOllama:
                 info = self._client.show(model)
                 # Ollama returns model info in different shapes depending on version
                 if isinstance(info, dict):
-                    ctx = info.get("context_length") or info.get("parameters", {}).get(
-                        "num_ctx"
-                    )
+                    ctx = info.get("context_length") or info.get("parameters", {}).get("num_ctx")
                 else:
                     # Object-style response (newer ollama SDK)
                     ctx = getattr(info, "context_length", None)

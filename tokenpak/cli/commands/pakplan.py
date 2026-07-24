@@ -26,7 +26,18 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict, cast
+
+
+class PakSummary(TypedDict, total=False):
+    """Normalized Pak fields rendered by the CLI."""
+
+    pak_id: str
+    title: str
+    created_at: str
+    reason_codes: list[str]
+    risk_flags: list[str]
+    scoring: str
 
 
 def build_pakplan_parser(sub: Any) -> None:
@@ -41,32 +52,37 @@ def build_pakplan_parser(sub: Any) -> None:
     )
     psub = p.add_subparsers(dest="pakplan_action", required=False)
 
-    p_preview = psub.add_parser(
-        "preview", help="Dry-run preview of what a PAKPlan would surface"
-    )
+    p_preview = psub.add_parser("preview", help="Dry-run preview of what a PAKPlan would surface")
     p_preview.add_argument(
-        "--limit", type=int, default=10,
+        "--limit",
+        type=int,
+        default=10,
         help="Max Paks to surface (default: 10)",
     )
     p_preview.add_argument(
-        "--json", dest="as_json", action="store_true", help="Emit JSON",
+        "--json",
+        dest="as_json",
+        action="store_true",
+        help="Emit JSON",
     )
     p_preview.set_defaults(func=cmd_pakplan_preview)
 
-    p_explain = psub.add_parser(
-        "explain", help="Explain a single Pak's recall metadata"
-    )
+    p_explain = psub.add_parser("explain", help="Explain a single Pak's recall metadata")
     p_explain.add_argument("pak_id", help="Pak id (e.g. pak:abcd1234…)")
     p_explain.add_argument(
-        "--json", dest="as_json", action="store_true", help="Emit JSON",
+        "--json",
+        dest="as_json",
+        action="store_true",
+        help="Emit JSON",
     )
     p_explain.set_defaults(func=cmd_pakplan_explain)
 
-    p_report = psub.add_parser(
-        "report", help="Rollup of recall db + advisory vocab status"
-    )
+    p_report = psub.add_parser("report", help="Rollup of recall db + advisory vocab status")
     p_report.add_argument(
-        "--json", dest="as_json", action="store_true", help="Emit JSON",
+        "--json",
+        dest="as_json",
+        action="store_true",
+        help="Emit JSON",
     )
     p_report.set_defaults(func=cmd_pakplan_report)
 
@@ -80,30 +96,29 @@ def build_pakplan_parser(sub: Any) -> None:
 
 def cmd_pakplan_preview(args: Any) -> int:
     db = _recall_db()
-    rows = _query_paks(db, limit=int(getattr(args, "limit", 10)))
+    rows = _query_paks(db, limit=int(getattr(args, "limit", 10))) if db else []
     paks = [_pak_summary(r) for r in rows]
 
-    payload = {
+    report_payload: dict[str, object] = {
         "scope": "preview",
         "scoring": "not-shipped-in-OSS",
-        "note": (
-            "Beta 1 OSS preview is unscored. Pro Local adds the scorer + "
-            "ranking pipeline."
-        ),
+        "note": ("Beta 1 OSS preview is unscored. Pro Local adds the scorer + ranking pipeline."),
         "recall_db": str(db) if db else None,
         "pak_count": len(paks),
         "paks": paks,
     }
     if getattr(args, "as_json", False):
-        print(json.dumps(payload, indent=2, sort_keys=True))
+        print(json.dumps(report_payload, indent=2, sort_keys=True))
         return 0
 
     print("PAKPlan preview (OSS, unscored)")
     print("───────────────────────────────")
     if not db or not db.exists():
         print(f"ℹ️  No recall db found at {db}")
-        print("   The foundation tables ship in Beta 1 OSS; the capture "
-              "pipeline that populates them is Pro.")
+        print(
+            "   The foundation tables ship in Beta 1 OSS; the capture "
+            "pipeline that populates them is Pro."
+        )
         return 0
     if not paks:
         print(f"ℹ️  Recall db exists at {db} but contains no Paks yet.")
@@ -153,17 +168,16 @@ def cmd_pakplan_explain(args: Any) -> int:
 def cmd_pakplan_report(args: Any) -> int:
     db = _recall_db()
     if not db or not db.exists():
-        payload = {
+        empty_payload: dict[str, object] = {
             "recall_db": str(db) if db else None,
             "present": False,
             "pak_count": 0,
             "reason_code_counts": {},
             "risk_flag_counts": {},
-            "advisory_vocab": {"checked": False,
-                              "note": "no Paks to lint"},
+            "advisory_vocab": {"checked": False, "note": "no Paks to lint"},
         }
         if getattr(args, "as_json", False):
-            print(json.dumps(payload, indent=2, sort_keys=True))
+            print(json.dumps(empty_payload, indent=2, sort_keys=True))
         else:
             print("PAKPlan report")
             print("──────────────")
@@ -181,7 +195,8 @@ def cmd_pakplan_report(args: Any) -> int:
         for r in s.get("risk_flags", []) or []:
             risk_counts[r] = risk_counts.get(r, 0) + 1
 
-    payload = {
+    matches = _advisory_vocab_matches(summaries)
+    payload: dict[str, object] = {
         "recall_db": str(db),
         "present": True,
         "pak_count": len(summaries),
@@ -189,7 +204,7 @@ def cmd_pakplan_report(args: Any) -> int:
         "risk_flag_counts": risk_counts,
         "advisory_vocab": {
             "checked": True,
-            "matches": _advisory_vocab_matches(summaries),
+            "matches": matches,
         },
     }
     if getattr(args, "as_json", False):
@@ -208,7 +223,6 @@ def cmd_pakplan_report(args: Any) -> int:
         print("  risk flags  :")
         for k, v in sorted(risk_counts.items(), key=lambda kv: -kv[1]):
             print(f"    {k:30s} {v}")
-    matches = payload["advisory_vocab"]["matches"]
     print(f"  advisory vocab matches: {len(matches)}")
     return 0
 
@@ -225,7 +239,7 @@ def _recall_db() -> Optional[Path]:
     return _paths.under("companion", "recall.db")
 
 
-def _query_paks(db: Path, *, limit: int) -> list[dict]:
+def _query_paks(db: Path, *, limit: int) -> list[dict[str, object]]:
     """Return up to ``limit`` Pak rows joined with their reasons + risks.
 
     Reason/risk metadata lives in the recall store's ``pak_reason_codes``
@@ -241,33 +255,28 @@ def _query_paks(db: Path, *, limit: int) -> list[dict]:
         return []
     try:
         tables = {
-            r["name"]
-            for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
+            r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
-        pak_table = (
-            "paks" if "paks" in tables
-            else "pak" if "pak" in tables
-            else None
-        )
+        pak_table = "paks" if "paks" in tables else "pak" if "pak" in tables else None
         if pak_table is None:
             return []
-        rows = list(conn.execute(
-            f"SELECT * FROM {pak_table} ORDER BY rowid DESC LIMIT ?", (limit,)
-        ))
-        out: list[dict] = []
+        rows = list(
+            conn.execute(f"SELECT * FROM {pak_table} ORDER BY rowid DESC LIMIT ?", (limit,))
+        )
+        out: list[dict[str, object]] = []
         for r in rows:
-            d = dict(r)
-            d["_reason_codes"] = _join_codes(conn, "pak_reason_codes", d.get("pak_id"))
-            d["_risk_flags"] = _join_codes(conn, "pak_risk_flags", d.get("pak_id"))
+            d = cast(dict[str, object], dict(r))
+            pak_id_value = d.get("pak_id")
+            pak_id = str(pak_id_value) if pak_id_value is not None else None
+            d["_reason_codes"] = _join_codes(conn, "pak_reason_codes", pak_id)
+            d["_risk_flags"] = _join_codes(conn, "pak_risk_flags", pak_id)
             out.append(d)
         return out
     finally:
         conn.close()
 
 
-def _query_pak_by_id(db: Path, pak_id: str) -> Optional[dict]:
+def _query_pak_by_id(db: Path, pak_id: str) -> Optional[dict[str, object]]:
     rows = _query_paks(db, limit=10_000)
     for r in rows:
         if r.get("pak_id") == pak_id:
@@ -279,9 +288,7 @@ def _join_codes(conn: sqlite3.Connection, table: str, pak_id: Optional[str]) -> 
     if not pak_id:
         return []
     try:
-        rows = list(conn.execute(
-            f"SELECT * FROM {table} WHERE pak_id = ?", (pak_id,)
-        ))
+        rows = list(conn.execute(f"SELECT * FROM {table} WHERE pak_id = ?", (pak_id,)))
     except sqlite3.Error:
         return []
     out: list[str] = []
@@ -294,17 +301,31 @@ def _join_codes(conn: sqlite3.Connection, table: str, pak_id: Optional[str]) -> 
     return out
 
 
-def _pak_summary(row: dict) -> dict:
-    return {
-        "pak_id": row.get("pak_id") or row.get("id") or "?",
-        "title": row.get("title") or row.get("name") or "",
-        "created_at": row.get("created_at") or row.get("ts") or "",
-        "reason_codes": row.get("_reason_codes", []),
-        "risk_flags": row.get("_risk_flags", []),
-    }
+def _text_field(row: dict[str, object], *keys: str, default: str = "") -> str:
+    for key in keys:
+        value = row.get(key)
+        if value is not None:
+            return str(value)
+    return default
 
 
-def _advisory_vocab_matches(summaries: list[dict]) -> list[dict]:
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
+
+
+def _pak_summary(row: dict[str, object]) -> PakSummary:
+    return PakSummary(
+        pak_id=_text_field(row, "pak_id", "id", default="?"),
+        title=_text_field(row, "title", "name"),
+        created_at=_text_field(row, "created_at", "ts"),
+        reason_codes=_string_list(row.get("_reason_codes", [])),
+        risk_flags=_string_list(row.get("_risk_flags", [])),
+    )
+
+
+def _advisory_vocab_matches(summaries: list[PakSummary]) -> list[dict[str, str]]:
     """Apply the advisory-vocab lint to Pak titles/summaries.
 
     Beta 1 OSS uses a small embedded list. Future versions read from
@@ -313,12 +334,13 @@ def _advisory_vocab_matches(summaries: list[dict]) -> list[dict]:
     """
     try:
         from tokenpak.companion.recall import vocab as _vocab  # type: ignore[attr-defined]
+
         forbidden = list(getattr(_vocab, "FORBIDDEN", []) or [])
     except Exception:
         forbidden = ["TODO-WIP", "DRAFT-DRAFT", "PLACEHOLDER"]
     if not forbidden:
         return []
-    out: list[dict] = []
+    out: list[dict[str, str]] = []
     for s in summaries:
         text = " ".join(str(s.get(k, "")) for k in ("title", "pak_id"))
         for term in forbidden:

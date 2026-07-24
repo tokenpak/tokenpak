@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.agentic.state_collector", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.agentic.state_collector", reason="module not available in current build"
+)
 import json
 import os
 import time
@@ -81,8 +83,7 @@ def test_combined_state_is_compact(tmp_path):
 
     token_estimate = state.token_estimate()
     assert token_estimate < 500, (
-        f"State exceeds 500-token budget: {token_estimate} tokens\n"
-        f"JSON: {state.to_json()[:300]}..."
+        f"State exceeds 500-token budget: {token_estimate} tokens\nJSON: {state.to_json()[:300]}..."
     )
 
 
@@ -205,5 +206,3 @@ def test_run_handles_missing_command():
     rc, out, err = _run(["this_command_does_not_exist_12345"])
     assert rc != 0
     assert "not found" in err or err != ""
-
-

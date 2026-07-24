@@ -26,6 +26,7 @@ from tokenpak.proxy.server import GracefulShutdown, ProxyServer
 # GracefulShutdown unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestGracefulShutdown:
     """Unit tests for the GracefulShutdown helper."""
 
@@ -143,6 +144,7 @@ class TestGracefulShutdown:
 # ProxyServer integration tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def proxy():
     """Start a proxy on an ephemeral port for integration tests."""
@@ -165,8 +167,10 @@ def _get(port: int, path: str, timeout: float = 5.0):
 
 # ── Criterion: 503 during shutdown ──────────────────────────────────────────
 
+
 class TestShutdownRejects503:
     """New requests return 503 while draining."""
+
     pytestmark = pytest.mark.needs_proxy
 
     def test_503_after_shutdown_begin(self):
@@ -212,8 +216,10 @@ class TestShutdownRejects503:
 
 # ── Criterion: In-flight requests complete normally ──────────────────────────
 
+
 class TestInFlightCompletion:
     """In-flight requests are tracked and allowed to complete."""
+
     pytestmark = pytest.mark.needs_proxy
 
     def test_track_request_increments_inflight(self, proxy):
@@ -247,6 +253,7 @@ class TestInFlightCompletion:
 
 # ── Criterion: Telemetry flushed to disk ────────────────────────────────────
 
+
 class TestTelemetryFlush:
     """Shutdown writes a flush record to the telemetry JSONL file."""
 
@@ -254,6 +261,7 @@ class TestTelemetryFlush:
         log_path = tmp_path / "test_compression_events.jsonl"
 
         from tokenpak.proxy.stats import CompressionStats
+
         stats = CompressionStats(log_path=str(log_path))
 
         record = {
@@ -281,6 +289,7 @@ class TestTelemetryFlush:
         log_path = tmp_path / "nested" / "dir" / "events.jsonl"
 
         from tokenpak.proxy.stats import CompressionStats
+
         stats = CompressionStats(log_path=log_path)
 
         assert stats.flush_shutdown_record({"event": "shutdown"}) is True
@@ -290,6 +299,7 @@ class TestTelemetryFlush:
     def test_flush_shutdown_record_write_failure_is_tolerated(self, tmp_path, capsys):
         """A bad telemetry path must not raise out of the shutdown path."""
         from tokenpak.proxy.stats import CompressionStats
+
         # Point log_path at an existing directory to force an OSError on open.
         stats = CompressionStats(log_path=str(tmp_path))
 
@@ -302,6 +312,7 @@ class TestTelemetryFlush:
         log_path = tmp_path / "events.jsonl"
 
         from tokenpak.proxy.stats import CompressionStats
+
         srv = ProxyServer(host="127.0.0.1", port=18871, shutdown_timeout=1.0)
         # Override compression_stats to use our temp log file
         srv.compression_stats = CompressionStats(log_path=str(log_path))
@@ -317,8 +328,9 @@ class TestTelemetryFlush:
 
         assert log_path.exists(), "Telemetry file should exist after stop()"
         lines = log_path.read_text().strip().splitlines()
-        assert any('"event": "shutdown"' in line for line in lines), \
+        assert any('"event": "shutdown"' in line for line in lines), (
             "Should contain a shutdown event"
+        )
 
         shutdown_events = [json.loads(l) for l in lines if '"shutdown"' in l]
         assert shutdown_events[0]["session_requests"] == 7
@@ -326,6 +338,7 @@ class TestTelemetryFlush:
 
 
 # ── Criterion: Configurable drain timeout ────────────────────────────────────
+
 
 class TestConfigurableTimeout:
     """--shutdown-timeout / TOKENPAK_SHUTDOWN_TIMEOUT is respected."""
@@ -377,8 +390,10 @@ class TestConfigurableTimeout:
 
 # ── Criterion: SIGTERM/SIGINT signal handling ────────────────────────────────
 
+
 class TestSignalHandling:
     """SIGTERM/SIGINT trigger graceful shutdown."""
+
     pytestmark = pytest.mark.needs_proxy
 
     def test_signal_handler_installed_in_main_thread(self):
@@ -417,8 +432,10 @@ class TestSignalHandling:
 
 # ── Health endpoint during shutdown ─────────────────────────────────────────
 
+
 class TestHealthDuringShutdown:
     """Health endpoint reflects shutdown state."""
+
     pytestmark = pytest.mark.needs_proxy
 
     def test_health_shows_shutting_down_status(self, proxy):

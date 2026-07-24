@@ -12,11 +12,14 @@ Covers:
   - Multiple tables in one document
   - Edge cases: empty table, single-column, query fallback
 """
+
 from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.ingest.table_extractor", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.ingest.table_extractor", reason="module not available in current build"
+)
 import pytest
 from tokenpak._internal.ingest.table_extractor import (
     NormalizedTable,
@@ -76,6 +79,7 @@ Carol  35  Berlin
 # Test 1: Markdown table extraction
 # ---------------------------------------------------------------------------
 
+
 class TestMarkdownExtraction:
     def test_basic_extraction(self):
         extractor = TableExtractor()
@@ -105,6 +109,7 @@ class TestMarkdownExtraction:
 # ---------------------------------------------------------------------------
 # Test 2: HTML table extraction
 # ---------------------------------------------------------------------------
+
 
 class TestHTMLExtraction:
     def test_basic_extraction(self):
@@ -137,6 +142,7 @@ class TestHTMLExtraction:
 # Test 3: NormalizedTable serving helpers
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizedTableHelpers:
     @pytest.fixture
     def table(self):
@@ -145,7 +151,7 @@ class TestNormalizedTableHelpers:
             rows=[
                 {"Region": "North", "Sales": "500000", "Units": "1200"},
                 {"Region": "South", "Sales": "320000", "Units": "800"},
-                {"Region": "East",  "Sales": "410000", "Units": "950"},
+                {"Region": "East", "Sales": "410000", "Units": "950"},
             ],
             source_section="Appendix",
             caption="Sales by Region",
@@ -168,7 +174,14 @@ class TestNormalizedTableHelpers:
 
     def test_summary_keys(self, table):
         s = table.summary()
-        for key in ("caption", "source_section", "headers", "row_count", "numeric_columns", "sample_row"):
+        for key in (
+            "caption",
+            "source_section",
+            "headers",
+            "row_count",
+            "numeric_columns",
+            "sample_row",
+        ):
             assert key in s
 
     def test_summary_row_count(self, table):
@@ -184,6 +197,7 @@ class TestNormalizedTableHelpers:
 # ---------------------------------------------------------------------------
 # Test 4: Numeric column detection
 # ---------------------------------------------------------------------------
+
 
 class TestNumericDetection:
     def test_is_numeric_int(self):
@@ -210,7 +224,7 @@ class TestNumericDetection:
         headers = ["Name", "Score", "Rank"]
         rows = [
             {"Name": "Alice", "Score": "95", "Rank": "1"},
-            {"Name": "Bob",   "Score": "82", "Rank": "2"},
+            {"Name": "Bob", "Score": "82", "Rank": "2"},
             {"Name": "Carol", "Score": "78", "Rank": "3"},
         ]
         result = _detect_numeric_columns(headers, rows)
@@ -236,6 +250,7 @@ class TestNumericDetection:
 # Test 5: Plain-text table extraction
 # ---------------------------------------------------------------------------
 
+
 class TestPlainTextExtraction:
     def test_basic_extraction(self):
         extractor = TableExtractor()
@@ -259,6 +274,7 @@ class TestPlainTextExtraction:
 # ---------------------------------------------------------------------------
 # Test 6: Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_no_table_in_text(self):

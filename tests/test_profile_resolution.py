@@ -1,6 +1,5 @@
 """Tests for TOKENPAK_PROFILE named workflow profile resolution."""
 
-
 # ---------------------------------------------------------------------------
 # Profile presets (duplicated here to avoid importing proxy.py at module load)
 # ---------------------------------------------------------------------------
@@ -76,6 +75,7 @@ def _simulate_profile_injection(profile_name: str, env_overrides: dict | None = 
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestProfileResolution:
     def test_safe_profile_sets_safe_mode(self):
         env = _simulate_profile_injection("safe")
@@ -129,7 +129,9 @@ class TestProfileResolution:
         assert env["TOKENPAK_MODE"] == "hybrid", "Explicit env var should override profile"
 
     def test_explicit_threshold_override_wins(self):
-        env = _simulate_profile_injection("aggressive", {"TOKENPAK_COMPACT_THRESHOLD_TOKENS": "9999"})
+        env = _simulate_profile_injection(
+            "aggressive", {"TOKENPAK_COMPACT_THRESHOLD_TOKENS": "9999"}
+        )
         assert env["TOKENPAK_COMPACT_THRESHOLD_TOKENS"] == "9999"
 
     def test_unknown_profile_leaves_env_unchanged(self):
@@ -140,12 +142,16 @@ class TestProfileResolution:
     def test_all_profiles_set_shadow_enabled(self):
         for profile in _PROFILE_PRESETS:
             env = _simulate_profile_injection(profile)
-            assert env.get("TOKENPAK_SHADOW_ENABLED") == "true", f"Profile {profile} should enable shadow reader"
+            assert env.get("TOKENPAK_SHADOW_ENABLED") == "true", (
+                f"Profile {profile} should enable shadow reader"
+            )
 
     def test_all_profiles_set_budget_controller(self):
         for profile in _PROFILE_PRESETS:
             env = _simulate_profile_injection(profile)
-            assert env.get("TOKENPAK_BUDGET_CONTROLLER") == "true", f"Profile {profile} should enable budget controller"
+            assert env.get("TOKENPAK_BUDGET_CONTROLLER") == "true", (
+                f"Profile {profile} should enable budget controller"
+            )
 
     def test_all_profiles_set_trace(self):
         for profile in _PROFILE_PRESETS:
@@ -165,6 +171,7 @@ class TestProfileResolution:
 # Single-source-of-truth guards — the local copy above must never drift from
 # the authoritative table in tokenpak.proxy.config.
 # ---------------------------------------------------------------------------
+
 
 class TestPresetSourceOfTruth:
     def test_local_presets_match_source(self):

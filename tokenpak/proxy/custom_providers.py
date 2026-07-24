@@ -29,17 +29,29 @@ See ``load_custom_providers()`` for the public API.
 
 from __future__ import annotations
 
+__all__ = (
+    "CustomProvider",
+    "build_custom_adapters",
+    "get_provider_display_list",
+    "load_custom_providers",
+)
+
+
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Callable, Mapping, Optional
 from urllib.parse import urlparse
+
+from tokenpak.proxy.adapters.base import FormatAdapter, TokenCounter
+from tokenpak.proxy.adapters.canonical import CanonicalRequest
+from tokenpak.proxy.adapters.registry import AdapterRegistry
 
 logger = logging.getLogger(__name__)
 
 # Supported format names → the source_format value of the built-in adapter
 # that handles normalise/denormalise for that wire format.
-_FORMAT_ALIASES: Dict[str, str] = {
+_FORMAT_ALIASES: dict[str, str] = {
     "openai": "openai-chat",
     "openai-chat": "openai-chat",
     "openai-responses": "openai-responses",
@@ -59,7 +71,7 @@ class CustomProvider:
     format: str  # resolved source_format, e.g. "openai-chat"
     api_key_env: str  # env var name holding the API key
     hostname: str  # extracted from endpoint, e.g. "api.deepseek.com"
-    extra: Dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, object] = field(default_factory=dict)
 
     @property
     def api_key(self) -> Optional[str]:
@@ -73,7 +85,7 @@ class CustomProvider:
         return bool(self.api_key)
 
 
-def load_custom_providers() -> List[CustomProvider]:
+def load_custom_providers() -> list[CustomProvider]:
     """Load custom providers from ``~/.tokenpak/config.yaml``.
 
     Returns a (possibly empty) list of ``CustomProvider`` objects.
@@ -92,22 +104,27 @@ def load_custom_providers() -> List[CustomProvider]:
     if not isinstance(providers_section, dict):
         return []
 
-    result: List[CustomProvider] = []
+    result: list[CustomProvider] = []
     for name, entry in providers_section.items():
         if not isinstance(name, str) or not isinstance(entry, dict):
             logger.warning("custom_providers: skipping invalid entry %r", name)
             continue
 
-        endpoint = entry.get("endpoint", "").strip()
-        if not endpoint:
+        endpoint_value = entry.get("endpoint", "")
+        if not isinstance(endpoint_value, str) or not endpoint_value.strip():
             logger.warning("custom_providers: %s missing 'endpoint', skipping", name)
             continue
+        endpoint = endpoint_value.strip()
 
         # Normalise endpoint -- strip trailing slash for consistency
         endpoint = endpoint.rstrip("/")
 
         # Resolve format
-        raw_format = entry.get("format", "openai").strip().lower()
+        format_value = entry.get("format", "openai")
+        if not isinstance(format_value, str):
+            logger.warning("custom_providers: %s has non-string 'format', skipping", name)
+            continue
+        raw_format = format_value.strip().lower()
         resolved = _FORMAT_ALIASES.get(raw_format)
         if resolved is None:
             logger.warning(
@@ -118,7 +135,11 @@ def load_custom_providers() -> List[CustomProvider]:
             )
             continue
 
-        api_key_env = entry.get("api_key_env", "").strip()
+        api_key_env_value = entry.get("api_key_env", "")
+        if not isinstance(api_key_env_value, str):
+            logger.warning("custom_providers: %s has non-string 'api_key_env', skipping", name)
+            continue
+        api_key_env = api_key_env_value.strip()
 
         # Extract hostname for intercept matching
         parsed = urlparse(endpoint)
@@ -157,7 +178,10 @@ def load_custom_providers() -> List[CustomProvider]:
 # Adapter factory -- creates a FormatAdapter subclass for a custom provider
 # ---------------------------------------------------------------------------
 
-def _make_custom_adapter(provider: CustomProvider):
+
+def _make_custom_adapter(
+    provider: CustomProvider,
+) -> Callable[[FormatAdapter, CustomProvider], FormatAdapter]:
     """Create a FormatAdapter that detects requests to a custom provider's
     hostname and delegates normalise/denormalise to the matching built-in
     format adapter.
@@ -167,14 +191,13 @@ def _make_custom_adapter(provider: CustomProvider):
     (provider endpoint).  Everything else (normalise, denormalise,
     token extraction, SSE format) is delegated to the built-in adapter.
     """
-    from tokenpak.proxy.adapters.base import FormatAdapter
 
     class _CustomProviderAdapter(FormatAdapter):
         """Auto-generated adapter for custom provider '{name}'."""
 
         source_format = f"custom-{provider.name}"
 
-        def __init__(self, delegate: FormatAdapter, cp: CustomProvider):
+        def __init__(self, delegate: FormatAdapter, cp: CustomProvider) -> None:
             self._delegate = delegate
             self._provider = cp
 
@@ -188,10 +211,10 @@ def _make_custom_adapter(provider: CustomProvider):
                 return True
             return False
 
-        def normalize(self, body: bytes):
+        def normalize(self, body: bytes) -> CanonicalRequest:
             return self._delegate.normalize(body)
 
-        def denormalize(self, canonical):
+        def denormalize(self, canonical: CanonicalRequest) -> bytes:
             return self._delegate.denormalize(canonical)
 
         def get_default_upstream(self) -> str:
@@ -200,16 +223,18 @@ def _make_custom_adapter(provider: CustomProvider):
         def get_sse_format(self) -> str:
             return self._delegate.get_sse_format()
 
-        def extract_request_tokens(self, body, token_counter=None):
+        def extract_request_tokens(
+            self, body: bytes, token_counter: TokenCounter | None = None
+        ) -> tuple[str, int]:
             return self._delegate.extract_request_tokens(body, token_counter)
 
-        def extract_response_tokens(self, body, is_sse=False):
+        def extract_response_tokens(self, body: bytes, is_sse: bool = False) -> int:
             return self._delegate.extract_response_tokens(body, is_sse)
 
-        def extract_query_signal(self, body):
+        def extract_query_signal(self, body: bytes) -> str:
             return self._delegate.extract_query_signal(body)
 
-        def inject_system_context(self, body, injection_text):
+        def inject_system_context(self, body: bytes, injection_text: str) -> bytes:
             return self._delegate.inject_system_context(body, injection_text)
 
         def __repr__(self) -> str:
@@ -219,16 +244,14 @@ def _make_custom_adapter(provider: CustomProvider):
                 f"format={self._provider.format!r})"
             )
 
-    _CustomProviderAdapter.__doc__ = (
-        f"Auto-generated adapter for custom provider '{provider.name}'"
-    )
+    _CustomProviderAdapter.__doc__ = f"Auto-generated adapter for custom provider '{provider.name}'"
     return _CustomProviderAdapter
 
 
 def build_custom_adapters(
-    providers: List[CustomProvider],
-    registry,
-) -> List:
+    providers: list[CustomProvider],
+    registry: AdapterRegistry,
+) -> list[FormatAdapter]:
     """Build adapter instances for custom providers and return them.
 
     Args:
@@ -245,11 +268,11 @@ def build_custom_adapters(
         return []
 
     # Build a lookup: source_format -> adapter instance
-    format_lookup: Dict[str, Any] = {}
+    format_lookup: dict[str, FormatAdapter] = {}
     for adapter in registry.adapters():
         format_lookup[adapter.source_format] = adapter
 
-    created = []
+    created: list[FormatAdapter] = []
     for cp in providers:
         delegate = format_lookup.get(cp.format)
         if delegate is None:
@@ -262,7 +285,7 @@ def build_custom_adapters(
             continue
 
         adapter_cls = _make_custom_adapter(cp)
-        adapter_inst = adapter_cls(delegate=delegate, cp=cp)
+        adapter_inst = adapter_cls(delegate, cp)
         # Priority 200 -- below built-in adapters (240-300) but above
         # passthrough (0).  Custom providers should not shadow built-in hosts.
         registry.register(adapter_inst, priority=200)
@@ -277,8 +300,8 @@ def build_custom_adapters(
 
 
 def get_provider_display_list(
-    registry,
-    custom_providers: List[CustomProvider],
+    registry: AdapterRegistry,
+    custom_providers: list[CustomProvider],
 ) -> str:
     """Return a human-readable provider list for the startup banner.
 
@@ -290,7 +313,7 @@ def get_provider_display_list(
         anthropic, openai, google, xai-grok, my-local-llm (custom), deepseek (custom)
     """
     # Built-in adapters (exclude passthrough and custom-* adapters)
-    builtin_names: List[str] = []
+    builtin_names: list[str] = []
     for adapter in registry.adapters():
         fmt = adapter.source_format
         if fmt == "passthrough" or fmt.startswith("custom-"):

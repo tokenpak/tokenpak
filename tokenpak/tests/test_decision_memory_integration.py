@@ -52,17 +52,22 @@ class TestDecisionMemoryIntegration:
             cursor = conn.cursor()
 
             # Check decisions table exists
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='decisions'"
-            )
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='decisions'")
             assert cursor.fetchone() is not None, "decisions table should exist"
 
             # Check columns
             cursor.execute("PRAGMA table_info(decisions)")
             columns = {row[1] for row in cursor.fetchall()}
             expected = {
-                "id", "query_hash", "query", "decision", "confidence",
-                "timestamp", "outcome", "success", "notes"
+                "id",
+                "query_hash",
+                "query",
+                "decision",
+                "confidence",
+                "timestamp",
+                "outcome",
+                "success",
+                "notes",
             }
             assert expected == columns, "Schema columns should match"
 
@@ -82,13 +87,9 @@ class TestDecisionMemoryIntegration:
             query="Should we use HTTP100?",
             decision="Yes, for SSE streams",
             confidence=0.85,
-            notes="Prevents timeout"
+            notes="Prevents timeout",
         )
-        db1.record(
-            query="Max compression time?",
-            decision="5000ms default",
-            confidence=0.90
-        )
+        db1.record(query="Max compression time?", decision="5000ms default", confidence=0.90)
 
         # Create new instance (simulating restart)
         db2 = DecisionMemoryDB(db_path=temp_db)
@@ -106,11 +107,7 @@ class TestDecisionMemoryIntegration:
         db = DecisionMemoryDB(db_path=temp_db)
 
         # Record initial decision
-        record_id = db.record(
-            query="Deploy proxy?",
-            decision="Yes, to production",
-            confidence=0.70
-        )
+        record_id = db.record(query="Deploy proxy?", decision="Yes, to production", confidence=0.70)
 
         # Get initial confidence
         initial_results = db.retrieve(query="Deploy proxy?", top_k=1)
@@ -132,9 +129,7 @@ class TestDecisionMemoryIntegration:
 
         # Record initial decision with high confidence
         record_id = db.record(
-            query="Use aggressive mode?",
-            decision="Yes, compress aggressively",
-            confidence=0.95
+            query="Use aggressive mode?", decision="Yes, compress aggressively", confidence=0.95
         )
 
         # Get initial confidence
@@ -159,11 +154,7 @@ class TestDecisionMemoryIntegration:
         long_query = "What should we do? " * 200  # ~4000 chars
 
         # Record with long query
-        record_id = db.record(
-            query=long_query,
-            decision="Process in chunks",
-            confidence=0.80
-        )
+        record_id = db.record(query=long_query, decision="Process in chunks", confidence=0.80)
 
         # Retrieve using long query
         results = db.retrieve(query=long_query, top_k=5)
@@ -184,7 +175,7 @@ class TestDecisionMemoryIntegration:
                     db.record(
                         query=f"Query from thread {thread_id} iter {i}",
                         decision=f"Decision {thread_id}-{i}",
-                        confidence=0.5 + (i / 100)
+                        confidence=0.5 + (i / 100),
                     )
             except Exception as e:
                 errors.append(e)
@@ -212,11 +203,7 @@ class TestDecisionMemoryIntegration:
         db = DecisionMemoryDB(db_path=temp_db)
 
         # Record initial decision
-        record_id = db.record(
-            query="Test query",
-            decision="Test decision",
-            confidence=0.50
-        )
+        record_id = db.record(query="Test query", decision="Test decision", confidence=0.50)
 
         # Update confidence
         new_confidence = 0.92
@@ -235,11 +222,7 @@ class TestDecisionMemoryIntegration:
         # Record some decisions with varying confidence
         confidences = [0.5, 0.6, 0.7, 0.8, 0.9]
         for i, conf in enumerate(confidences):
-            db.record(
-                query=f"Query {i}",
-                decision=f"Decision {i}",
-                confidence=conf
-            )
+            db.record(query=f"Query {i}", decision=f"Decision {i}", confidence=conf)
 
         # Verify count by querying database
         with sqlite3.connect(temp_db) as conn:
@@ -271,7 +254,7 @@ class TestDecisionMemoryIntegration:
             db.record(
                 query=query,
                 decision=f"Decision {i}",
-                confidence=0.5 + (i * 0.04)  # 0.5 to 0.86
+                confidence=0.5 + (i * 0.04),  # 0.5 to 0.86
             )
 
         # Retrieve with different top_k values
@@ -292,10 +275,7 @@ class TestDecisionMemoryIntegration:
         db = DecisionMemoryDB(db_path=temp_db)
 
         record_id = db.record(
-            query="Dataclass test",
-            decision="Test decision",
-            confidence=0.75,
-            notes="Test notes"
+            query="Dataclass test", decision="Test decision", confidence=0.75, notes="Test notes"
         )
 
         results = db.retrieve(query="Dataclass test", top_k=1)

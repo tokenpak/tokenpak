@@ -26,8 +26,9 @@ from tokenpak.proxy.spend_guard.rolling_caps import (
 
 def _cfg(**overrides) -> RollingCapsConfig:
     base = RollingCapsConfig(
-        enabled=True, window_seconds=3600,
-        per_agent_max_cost_usd=0.0,        # 0 = dimension disabled
+        enabled=True,
+        window_seconds=3600,
+        per_agent_max_cost_usd=0.0,  # 0 = dimension disabled
         per_agent_max_tokens_total=0,
         per_agent_max_cache_read_tokens=0,
         per_fleet_max_cost_usd=10.0,

@@ -1,4 +1,3 @@
-
 import pytest
 
 pytest.importorskip("tokenpak.request_explorer", reason="module not available in current build")
@@ -23,7 +22,6 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
             f.write(json.dumps(row) + "\n")
 
 
-
 def test_load_requests_ignores_bad_lines(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
     path.write_text('{"id": "a"}\nnot-json\n{"id": "b"}\n')
@@ -32,13 +30,11 @@ def test_load_requests_ignores_bad_lines(tmp_path: Path):
     assert rows[0]["id"] == "a"
 
 
-
 def test_get_request_by_id(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
     _write_jsonl(path, [{"id": "a"}, {"id": "b"}])
     assert get_request_by_id("b", path=path)["id"] == "b"
     assert get_request_by_id("missing", path=path) is None
-
 
 
 def test_to_view_and_cache_pct():
@@ -57,7 +53,6 @@ def test_to_view_and_cache_pct():
     assert cache_pct(view) == 25.0
 
 
-
 def test_status_label_cached():
     row = {
         "id": "req1",
@@ -73,7 +68,6 @@ def test_status_label_cached():
     assert status_label(view) == "cached"
 
 
-
 def test_status_label_error():
     row = {
         "id": "req1",
@@ -87,7 +81,6 @@ def test_status_label_error():
     }
     view = to_view(row)
     assert status_label(view) == "error"
-
 
 
 def test_age_label():

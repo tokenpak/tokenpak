@@ -11,6 +11,7 @@ import time
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_db():
     """Create a combined TelemetryDBBase + RollupsMixin instance using :memory:."""
     from tokenpak.telemetry.storage_base import TelemetryDBBase
@@ -22,8 +23,17 @@ def make_db():
     return TestDB(":memory:")
 
 
-def insert_row(db, trace_id: str, provider: str, model: str, agent_id: str,
-               ts: float, tokens: int = 100, cost: float = 0.01, savings: float = 0.001):
+def insert_row(
+    db,
+    trace_id: str,
+    provider: str,
+    model: str,
+    agent_id: str,
+    ts: float,
+    tokens: int = 100,
+    cost: float = 0.01,
+    savings: float = 0.001,
+):
     """Insert synthetic rows into tp_events, tp_usage, tp_costs."""
     cur = db._conn.cursor()
     cur.execute(
@@ -50,21 +60,25 @@ def insert_row(db, trace_id: str, provider: str, model: str, agent_id: str,
 # Test: module import
 # ---------------------------------------------------------------------------
 
+
 class TestModuleImport:
     def test_import_storage_rollups(self):
         """Module imports without error."""
         from tokenpak.telemetry import storage_rollups
+
         assert storage_rollups is not None
 
     def test_rollups_mixin_exists(self):
         """RollupsMixin class is accessible."""
         from tokenpak.telemetry.storage_rollups import RollupsMixin
+
         assert RollupsMixin is not None
 
 
 # ---------------------------------------------------------------------------
 # Test: get_summary
 # ---------------------------------------------------------------------------
+
 
 class TestGetSummary:
     def test_summary_empty_db(self):
@@ -128,6 +142,7 @@ class TestGetSummary:
 # ---------------------------------------------------------------------------
 # Test: get_timeseries
 # ---------------------------------------------------------------------------
+
 
 class TestGetTimeseries:
     def test_timeseries_empty(self):
@@ -196,6 +211,7 @@ class TestGetTimeseries:
 # Test: compute_rollups
 # ---------------------------------------------------------------------------
 
+
 class TestComputeRollups:
     def test_compute_rollups_empty_db(self):
         """compute_rollups on empty DB returns zero counts."""
@@ -233,6 +249,7 @@ class TestComputeRollups:
 # Test: get_rollup_timeseries
 # ---------------------------------------------------------------------------
 
+
 class TestGetRollupTimeseries:
     def test_rollup_timeseries_empty(self):
         """get_rollup_timeseries on empty tables returns empty list."""
@@ -266,6 +283,7 @@ class TestGetRollupTimeseries:
         """get_rollup_timeseries respects since_date filter."""
         db = make_db()
         import datetime
+
         old_ts = time.time() - 86400 * 5
         new_ts = time.time()
         insert_row(db, "t1", "anthropic", "m", "a", old_ts, cost=0.50)

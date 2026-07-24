@@ -31,7 +31,7 @@ Architecture::
 from __future__ import annotations
 
 import threading
-from typing import Dict, Optional, Union
+from typing import Callable, Dict, Optional, Union
 
 from .stable_cache import StableCache
 from .volatile_cache import VolatileCache
@@ -104,10 +104,10 @@ class CacheRegistry:
             return list(cls._registry.keys())
 
     @classmethod
-    def summary(cls) -> dict[str, dict]:
+    def summary(cls) -> dict[str, dict[str, int | str]]:
         """Return a size snapshot for all registered caches."""
         with cls._lock:
-            result = {}
+            result: dict[str, dict[str, int | str]] = {}
             for name, cache in cls._registry.items():
                 result[name] = {
                     "type": type(cache).__name__,
@@ -120,7 +120,7 @@ class CacheRegistry:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _get_or_create(cls, name: str, factory) -> CacheInstance:
+    def _get_or_create(cls, name: str, factory: Callable[[], CacheInstance]) -> CacheInstance:
         with cls._lock:
             if name not in cls._registry:
                 cls._registry[name] = factory()

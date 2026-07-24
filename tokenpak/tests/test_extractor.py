@@ -383,8 +383,14 @@ class TestCompactText:
         compact = extractor.compact_text(result)
         parsed = json.loads(compact)
         expected_keys = {
-            "people", "organizations", "config_keys", "file_paths",
-            "api_endpoints", "decisions", "deadlines", "glossary",
+            "people",
+            "organizations",
+            "config_keys",
+            "file_paths",
+            "api_endpoints",
+            "decisions",
+            "deadlines",
+            "glossary",
         }
         assert expected_keys == set(parsed.keys())
 

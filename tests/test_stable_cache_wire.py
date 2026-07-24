@@ -33,21 +33,25 @@ def _parse(b: bytes) -> dict:
 def _make_proxy_server():
     """Create a ProxyServer without binding a socket (bind_and_activate=False)."""
     from unittest.mock import patch
+
     # Prevent actual TCP socket creation
     with patch("tokenpak.proxy.server._ThreadedHTTPServer") as _mock:
         _mock.return_value = None
         from tokenpak.proxy.server import ProxyServer
+
         ps = ProxyServer.__new__(ProxyServer)
         # Call only the hook-wiring portion of __init__ by invoking it with a stub
         # that skips socket binding.  We can also just instantiate and not call start().
     # Re-import clean to avoid patch bleed
     from tokenpak.proxy.server import ProxyServer as PS
+
     return PS.__new__(PS)
 
 
 # ---------------------------------------------------------------------------
 # Simpler: test hook directly without instantiating the full server
 # ---------------------------------------------------------------------------
+
 
 def _build_hook():
     """Replicate the hook-chain wiring from ProxyServer.__init__."""
@@ -86,7 +90,9 @@ def test_hook_adds_cache_control_to_system_prompt():
     system = data["system"]
     assert isinstance(system, list), "system should be a list"
     cache_marked = [b for b in system if isinstance(b, dict) and b.get("cache_control")]
-    assert len(cache_marked) == 1, f"expected exactly 1 cache_control block, got {len(cache_marked)}"
+    assert len(cache_marked) == 1, (
+        f"expected exactly 1 cache_control block, got {len(cache_marked)}"
+    )
     assert cache_marked[0]["cache_control"] == {"type": "ephemeral"}
     print("  ✅ TEST 1: hook adds cache_control to system prompt")
 
@@ -109,8 +115,9 @@ def test_hook_passthrough_no_system():
     body = _make_body(system=None)
     out_body, *_ = hook(body, "claude-sonnet-4-6")
     data = _parse(out_body)
-    assert "system" not in data or not data.get("system"), \
+    assert "system" not in data or not data.get("system"), (
         "no system prompt → should not gain a system key"
+    )
     print("  ✅ TEST 3: no system prompt → passthrough")
 
 
@@ -148,9 +155,11 @@ if __name__ == "__main__":
             failed += 1
         except Exception as e:
             print(f"  ❌ {t.__name__}: unexpected error: {e}")
-            import traceback; traceback.print_exc()  # noqa: I001
+            import traceback
+
+            traceback.print_exc()  # noqa: I001
             failed += 1
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Results: {passed}/{len(tests)} passed, {failed} failed")
     if failed:
         sys.exit(1)

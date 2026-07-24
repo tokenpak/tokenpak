@@ -255,16 +255,19 @@ class TestDeriveBlockThresholdFallback:
 class TestSelectedModelChangesThreshold:
     """Switching the selected model changes the derived block threshold."""
 
-    @pytest.mark.parametrize("model_id, expected_ctx, expected_block", [
-        ("claude-opus-4-7", 1_000_000, 800_000),
-        ("claude-sonnet-4-6", 1_000_000, 800_000),
-        ("claude-haiku-4-5", 200_000, 160_000),
-        ("gpt-4o", 128_000, 102_400),
-        ("gpt-4.1", 1_047_576, 838_060),
-        ("o1", 200_000, 160_000),
-        ("gemini-2.5-pro", 2_000_000, 1_600_000),
-        ("gemini-1.5-flash", 1_000_000, 800_000),
-    ])
+    @pytest.mark.parametrize(
+        "model_id, expected_ctx, expected_block",
+        [
+            ("claude-opus-4-7", 1_000_000, 800_000),
+            ("claude-sonnet-4-6", 1_000_000, 800_000),
+            ("claude-haiku-4-5", 200_000, 160_000),
+            ("gpt-4o", 128_000, 102_400),
+            ("gpt-4.1", 1_047_576, 838_060),
+            ("o1", 200_000, 160_000),
+            ("gemini-2.5-pro", 2_000_000, 1_600_000),
+            ("gemini-1.5-flash", 1_000_000, 800_000),
+        ],
+    )
     def test_model_switch_updates_block_threshold(self, model_id, expected_ctx, expected_block):
         ctx = get_model_max_context(model_id)
         assert ctx == expected_ctx

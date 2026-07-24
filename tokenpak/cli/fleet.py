@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 
 import yaml
 
@@ -24,7 +24,7 @@ class FleetMachine:
     host: str
     port: int
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -94,7 +94,7 @@ def load_fleet_config() -> List[FleetMachine]:
         return []
 
 
-def save_fleet_config(machines: List[FleetMachine]):
+def save_fleet_config(machines: List[FleetMachine]) -> None:
     """Save machines to fleet.yaml."""
     config_path = _get_fleet_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -110,7 +110,7 @@ def save_fleet_config(machines: List[FleetMachine]):
 
 def _query_machine_aggregate(
     machine: FleetMachine, timeout: float = 3.0, since: Optional[str] = None
-) -> tuple[list[dict], Optional[str]]:
+) -> tuple[list[dict[str, Any]], Optional[str]]:
     """Query per-agent breakdown from /stats/aggregate/local."""
     try:
         url = f"http://{machine.host}:{machine.port}/stats/aggregate/local"
@@ -118,7 +118,7 @@ def _query_machine_aggregate(
             url += f"?since={since}"
         with urllib.request.urlopen(url, timeout=timeout) as resp:
             payload = json.loads(resp.read())
-        return payload.get("rows", []), None
+        return cast(list[dict[str, Any]], payload.get("rows", [])), None
     except urllib.error.URLError as e:
         return [], str(e)
     except Exception as e:
@@ -236,7 +236,7 @@ def _fmt_tokens(n: int) -> str:
         return str(n)
 
 
-def _calc_savings(s: "FleetStats") -> tuple:
+def _calc_savings(s: "FleetStats") -> tuple[float, float, float]:
     """Return (compression_saved_$, cache_saved_$, total_saved_$).
 
     Compression: tokens removed before sending (input - sent) at full input rate.

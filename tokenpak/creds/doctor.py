@@ -30,9 +30,9 @@ DEFAULT_EXPIRY_GRACE = 24 * 60 * 60
 
 @dataclass(frozen=True)
 class Issue:
-    severity: str   # "warn" | "error"
-    subject: str    # "codex-9f05" | "credentials.toml" | ...
-    detail: str     # one-line human-readable explanation
+    severity: str  # "warn" | "error"
+    subject: str  # "codex-9f05" | "credentials.toml" | ...
+    detail: str  # one-line human-readable explanation
 
 
 # ── individual checks ────────────────────────────────────────────────

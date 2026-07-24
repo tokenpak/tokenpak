@@ -45,9 +45,7 @@ import importlib  # noqa: E402
 # The tools package re-exports the apply_patch FUNCTION under the same name as
 # its module, so fetch the module object explicitly (for monkeypatching its
 # internals).
-apply_patch_tool = importlib.import_module(
-    "tokenpak.orchestration.dispatch.tools.apply_patch"
-)
+apply_patch_tool = importlib.import_module("tokenpak.orchestration.dispatch.tools.apply_patch")
 
 from tokenpak.orchestration.dispatch.context.provider import LocalContextProvider  # noqa: E402
 from tokenpak.orchestration.dispatch.dispatch import DispatchRuntime  # noqa: E402
@@ -494,9 +492,7 @@ def test_concurrent_resume_exactly_one_executes(home, tmp_path):
         try:
             results["loser"] = _line(
                 led,
-                FakeWorkerLLM(
-                    [WorkerTurn(result_payload={"ok": 1}, output_schema_valid=True)]
-                ),
+                FakeWorkerLLM([WorkerTurn(result_payload={"ok": 1}, output_schema_valid=True)]),
             ).resume(
                 run_id="run_lease",
                 route=route,
@@ -717,8 +713,13 @@ def test_run_command_launch_failure_finalizes_effect_failed(ledger, tmp_path):
 
 def _run_args(request, **over):
     base = dict(
-        request=request, route=None, autonomy=None, ci=False,
-        dry_run=False, confirm=False, as_json=True,
+        request=request,
+        route=None,
+        autonomy=None,
+        ci=False,
+        dry_run=False,
+        confirm=False,
+        as_json=True,
     )
     base.update(over)
     return argparse.Namespace(**base)
@@ -742,9 +743,7 @@ def _ledger_dir_snapshot(home):
     if not root.exists():
         return None
     return {
-        str(p.relative_to(root)): p.read_bytes()
-        for p in sorted(root.rglob("*"))
-        if p.is_file()
+        str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()
     }
 
 

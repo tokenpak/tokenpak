@@ -13,35 +13,83 @@ Goal tracking system for TokenPak with support for:
 
 from __future__ import annotations
 
+__all__ = (
+    "Goal",
+    "GoalManager",
+    "GoalProgress",
+    "GoalStatus",
+    "GoalType",
+)
+
+
 import json
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional, TypedDict, cast
+
+
+class GoalProgressRecord(TypedDict):
+    """Serialized shape for :class:`GoalProgress`."""
+
+    goal_id: str
+    current_value: float
+    target_value: float
+    progress_percent: float
+    milestone_25_fired: bool
+    milestone_50_fired: bool
+    milestone_75_fired: bool
+    milestone_100_fired: bool
+    pace_status: str
+    pace_alert_fired: bool
+    last_update: float
+
+
+class GoalRecord(TypedDict):
+    """Serialized shape for :class:`Goal`."""
+
+    goal_id: str
+    name: str
+    goal_type: str
+    target_value: float
+    start_date: str
+    end_date: str
+    description: str
+    metric_name: str
+    rolling_window: bool
+    enabled: bool
+    created_at: float
+    metadata: dict[str, object]
+
+
+class GoalConfig(TypedDict):
+    goals: list[GoalRecord]
+
 
 try:
     import yaml as _yaml
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> GoalConfig:
         with open(path, "r") as f:
-            return _yaml.safe_load(f) or {}
+            loaded = _yaml.safe_load(f) or {}
+        return cast(GoalConfig, loaded)
 
-    def _save_yaml(path: str, data: dict):
+    def _save_yaml(path: str, data: GoalConfig) -> None:
         with open(path, "w") as f:
             _yaml.safe_dump(data, f, default_flow_style=False)
 
 except ImportError:
 
-    def _load_yaml(path: str) -> dict:
+    def _load_yaml(path: str) -> GoalConfig:
         try:
             with open(path, "r") as f:
-                return json.load(f)
+                return cast(GoalConfig, json.load(f))
         except Exception:
-            return {}
+            return {"goals": []}
 
-    def _save_yaml(path: str, data: dict):
+    def _save_yaml(path: str, data: GoalConfig) -> None:
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
 
@@ -82,11 +130,23 @@ class GoalProgress:
     pace_alert_fired: bool = False
     last_update: float = field(default_factory=time.time)
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+    def to_dict(self) -> GoalProgressRecord:
+        return GoalProgressRecord(
+            goal_id=self.goal_id,
+            current_value=self.current_value,
+            target_value=self.target_value,
+            progress_percent=self.progress_percent,
+            milestone_25_fired=self.milestone_25_fired,
+            milestone_50_fired=self.milestone_50_fired,
+            milestone_75_fired=self.milestone_75_fired,
+            milestone_100_fired=self.milestone_100_fired,
+            pace_status=self.pace_status,
+            pace_alert_fired=self.pace_alert_fired,
+            last_update=self.last_update,
+        )
 
     @classmethod
-    def from_dict(cls, data: dict) -> GoalProgress:
+    def from_dict(cls, data: GoalProgressRecord) -> GoalProgress:
         return cls(**data)
 
 
@@ -105,13 +165,26 @@ class Goal:
     rolling_window: bool = False  # For weekly pace goals
     enabled: bool = True
     created_at: float = field(default_factory=time.time)
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+    def to_dict(self) -> GoalRecord:
+        return GoalRecord(
+            goal_id=self.goal_id,
+            name=self.name,
+            goal_type=self.goal_type,
+            target_value=self.target_value,
+            start_date=self.start_date,
+            end_date=self.end_date,
+            description=self.description,
+            metric_name=self.metric_name,
+            rolling_window=self.rolling_window,
+            enabled=self.enabled,
+            created_at=self.created_at,
+            metadata=self.metadata,
+        )
 
     @classmethod
-    def from_dict(cls, data: dict) -> Goal:
+    def from_dict(cls, data: GoalRecord) -> Goal:
         return cls(**data)
 
     def days_remaining(self) -> int:
@@ -159,11 +232,11 @@ class GoalManager:
         """
         self.goals_path = Path(goals_path or (Path.home() / ".tokenpak" / "goals.yaml"))
         self.state_path = Path(state_path or (Path.home() / ".tokenpak" / "goal_state.json"))
-        self.goals: Dict[str, Goal] = {}
-        self.progress: Dict[str, GoalProgress] = {}
+        self.goals: dict[str, Goal] = {}
+        self.progress: dict[str, GoalProgress] = {}
         self._load()
 
-    def _load(self):
+    def _load(self) -> None:
         """Load goals and state from disk."""
         # Load goals from YAML
         if self.goals_path.exists():
@@ -179,7 +252,9 @@ class GoalManager:
                 with open(self.state_path, "r") as f:
                     state_data = json.load(f)
                 for goal_id, prog_data in state_data.items():
-                    self.progress[goal_id] = GoalProgress.from_dict(prog_data)
+                    self.progress[goal_id] = GoalProgress.from_dict(
+                        cast(GoalProgressRecord, prog_data)
+                    )
             except Exception:
                 pass
 
@@ -190,7 +265,7 @@ class GoalManager:
                     goal_id=goal_id, target_value=goal.target_value
                 )
 
-    def _save(self):
+    def _save(self) -> None:
         """Persist goals and state to disk."""
         # Ensure parent directories exist
         self.goals_path.parent.mkdir(parents=True, exist_ok=True)
@@ -198,7 +273,7 @@ class GoalManager:
 
         # Save goals to YAML
         goals_list = [goal.to_dict() for goal in self.goals.values()]
-        config = {"goals": goals_list}
+        config = GoalConfig(goals=goals_list)
         _save_yaml(str(self.goals_path), config)
 
         # Save state to JSON
@@ -211,8 +286,8 @@ class GoalManager:
         name: str,
         goal_type: str,
         target_value: float,
-        start_date: str = None,
-        end_date: str = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         description: str = "",
         metric_name: str = "",
         rolling_window: bool = False,
@@ -258,7 +333,7 @@ class GoalManager:
 
         return goal
 
-    def edit_goal(self, goal_id: str, **kwargs) -> Optional[Goal]:
+    def edit_goal(self, goal_id: str, **kwargs: object) -> Optional[Goal]:
         """Edit an existing goal.
 
         Args:
@@ -271,14 +346,27 @@ class GoalManager:
         if goal_id not in self.goals:
             return None
 
+        target_value = kwargs.get("target_value")
+        if target_value is not None and not isinstance(target_value, (int, float)):
+            raise TypeError("target_value must be numeric")
+
         goal = self.goals[goal_id]
         for key, value in kwargs.items():
             if hasattr(goal, key):
-                setattr(goal, key, value)
+                updated_value: object = value
+                if key == "target_value":
+                    if not isinstance(value, (int, float)):
+                        raise TypeError("target_value must be numeric")
+                    updated_value = float(value)
+                setattr(
+                    goal,
+                    key,
+                    updated_value,
+                )
 
         # Update progress target if needed
-        if "target_value" in kwargs:
-            self.progress[goal_id].target_value = kwargs["target_value"]
+        if isinstance(target_value, (int, float)):
+            self.progress[goal_id].target_value = float(target_value)
 
         self._save()
         return goal
@@ -352,7 +440,9 @@ class GoalManager:
         """Retrieve progress for a goal."""
         return self.progress.get(goal_id)
 
-    def list_goals(self, status: str = None, goal_type: str = None) -> List[Goal]:
+    def list_goals(
+        self, status: Optional[str] = None, goal_type: Optional[str] = None
+    ) -> list[Goal]:
         """List all goals, optionally filtered.
 
         Args:
@@ -381,7 +471,7 @@ class GoalManager:
 
         return goals
 
-    def check_milestones(self, goal_id: str) -> List[dict]:
+    def check_milestones(self, goal_id: str) -> list[dict[str, str | int]]:
         """Check and fire milestone alerts for a goal.
 
         Returns:
@@ -394,7 +484,7 @@ class GoalManager:
         goal = self.goals[goal_id]
         percent = progress.progress_percent
 
-        events = []
+        events: list[dict[str, str | int]] = []
 
         # Check milestones
         if percent >= 25 and not progress.milestone_25_fired:
@@ -450,7 +540,7 @@ class GoalManager:
 
         return events
 
-    def check_pace_alerts(self, goal_id: str) -> Optional[dict]:
+    def check_pace_alerts(self, goal_id: str) -> Optional[dict[str, str | int]]:
         """Check and fire pace alert for a goal.
 
         Returns:
@@ -479,7 +569,7 @@ class GoalManager:
 
         return None
 
-    def get_summary_stats(self) -> dict:
+    def get_summary_stats(self) -> dict[str, int | float]:
         """Get summary statistics for all goals.
 
         Returns:

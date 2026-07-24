@@ -26,7 +26,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict, cast
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -90,6 +90,7 @@ class CheckResult(TypedDict):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _http_get(url: str, timeout: int = 4) -> tuple[int, bytes]:
     """Return (status_code, body).  Never raises — on error returns (0, b'')."""
     try:
@@ -106,7 +107,12 @@ def _http_get(url: str, timeout: int = 4) -> tuple[int, bytes]:
         return 0, b""
 
 
-def _http_post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 8) -> tuple[int, bytes]:
+def _http_post_json(
+    url: str,
+    payload: dict[str, Any],
+    headers: dict[str, str] | None = None,
+    timeout: int = 8,
+) -> tuple[int, bytes]:
     """POST JSON payload to url. Returns (status_code, body). Never raises."""
     data = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data, method="POST")
@@ -128,10 +134,10 @@ def _http_post_json(url: str, payload: dict, headers: dict | None = None, timeou
         return 0, b""
 
 
-def _read_claude_settings() -> dict:
+def _read_claude_settings() -> dict[str, Any]:
     """Return parsed ~/.claude/settings.json or {} on any error."""
     try:
-        return json.loads(_claude_settings_path().read_text())
+        return cast(dict[str, Any], json.loads(_claude_settings_path().read_text()))
     except Exception:
         return {}
 
@@ -142,7 +148,10 @@ def _get_configured_proxy_url() -> tuple[str, str]:
     if env_val:
         return env_val, "env"
     settings = _read_claude_settings()
-    settings_url = settings.get("anthropicBaseUrl", "").strip() or settings.get("ANTHROPIC_BASE_URL", "").strip()
+    settings_url = (
+        settings.get("anthropicBaseUrl", "").strip()
+        or settings.get("ANTHROPIC_BASE_URL", "").strip()
+    )
     if settings_url:
         return settings_url, "settings.json"
     return "", "none"
@@ -187,7 +196,7 @@ def _get_canonical_pythonpath_from_unit() -> str | None:
     for line in content.splitlines():
         line = line.strip()
         if line.startswith("Environment=PYTHONPATH="):
-            val = line[len("Environment=PYTHONPATH="):]
+            val = line[len("Environment=PYTHONPATH=") :]
             # Expand %h → home directory (systemd specifier)
             val = val.replace("%h", home_str)
             return val
@@ -208,13 +217,13 @@ def _get_url_from_unit() -> str | None:
     for line in content.splitlines():
         line = line.strip()
         if line.startswith("Environment=ANTHROPIC_BASE_URL="):
-            val = line[len("Environment=ANTHROPIC_BASE_URL="):]
+            val = line[len("Environment=ANTHROPIC_BASE_URL=") :]
             return val.replace("%h", home_str).strip()
     # Fall back: derive from TOKENPAK_PORT
     for line in content.splitlines():
         line = line.strip()
         if line.startswith("Environment=TOKENPAK_PORT="):
-            port = line[len("Environment=TOKENPAK_PORT="):].strip()
+            port = line[len("Environment=TOKENPAK_PORT=") :].strip()
             return f"http://127.0.0.1:{port}"
     return None
 
@@ -232,14 +241,14 @@ def _get_url_from_env_file() -> str | None:
         if line.startswith("#") or not line:
             continue
         if line.startswith("ANTHROPIC_BASE_URL="):
-            return line[len("ANTHROPIC_BASE_URL="):].strip()
+            return line[len("ANTHROPIC_BASE_URL=") :].strip()
     # Fall back to TOKENPAK_PORT
     for line in content.splitlines():
         line = line.strip()
         if line.startswith("#") or not line:
             continue
         if line.startswith("TOKENPAK_PORT="):
-            port = line[len("TOKENPAK_PORT="):].strip()
+            port = line[len("TOKENPAK_PORT=") :].strip()
             return f"http://127.0.0.1:{port}"
     return None
 
@@ -255,6 +264,7 @@ def _normalise_url(url: str) -> str:
 # ---------------------------------------------------------------------------
 # The 8 checks
 # ---------------------------------------------------------------------------
+
 
 def _check_base_url_set() -> CheckResult:
     """Check 1: ANTHROPIC_BASE_URL is set to the proxy URL."""
@@ -287,14 +297,14 @@ def _check_proxy_reachable() -> CheckResult:
     if status_code == 200:
         try:
             data = json.loads(body)
-            mode = data.get("compilation_mode", "unknown")
+            proxy_status = data.get("status", "unknown")
         except Exception:
-            mode = "unknown"
+            proxy_status = "unknown"
         return CheckResult(
             check="proxy_reachable",
             status="pass",
-            message=f"Check 2  Proxy reachable      {health_url} — mode={mode}",
-            detail=f"status={status_code} mode={mode}",
+            message=f"Check 2  Proxy reachable      {health_url} — status={proxy_status}",
+            detail=f"http_status={status_code} proxy_status={proxy_status}",
             remediation="",
         )
     if status_code == 0:
@@ -373,9 +383,7 @@ def _check_active_profile() -> CheckResult:
         except Exception:
             pass
     is_valid_profile = (
-        profile in valid_profiles
-        or override in valid_profiles
-        or proxy_profile in valid_profiles
+        profile in valid_profiles or override in valid_profiles or proxy_profile in valid_profiles
     )
     if is_valid_profile:
         active = profile or proxy_profile or override
@@ -720,10 +728,7 @@ def _check_permission_tiers() -> CheckResult:
         row
         for row in rows
         if "launcher default" in row
-        and any(
-            mode in row
-            for mode in ("approval-bypass", "sandbox-bypass", "full-bypass")
-        )
+        and any(mode in row for mode in ("approval-bypass", "sandbox-bypass", "full-bypass"))
     ]
     if active_modes:
         return CheckResult(
@@ -748,6 +753,7 @@ def _check_permission_tiers() -> CheckResult:
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
+
 
 def run_claude_code_checks(
     output_json: bool = False,
@@ -800,6 +806,7 @@ def print_claude_code_checks(
     try:
         from .doctor import Colors
     except ImportError:
+
         class Colors:  # type: ignore[no-redef]
             GREEN = "\033[92m"
             YELLOW = "\033[93m"
@@ -824,6 +831,7 @@ def print_claude_code_checks(
             "passed": NUM_CHECKS - fail_count,
         }
         import json as _json
+
         print(_json.dumps(out, indent=2))
         return 1 if fail_count > 0 else 0
 

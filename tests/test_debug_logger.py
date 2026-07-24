@@ -14,7 +14,7 @@ class TestDebugLogger:
 
     def test_debug_logger_callable(self):
         logger = DebugLogger()
-        assert hasattr(logger, '__class__')
+        assert hasattr(logger, "__class__")
 
     def test_debug_logger_with_name(self):
         logger = DebugLogger("test_module")
@@ -27,5 +27,5 @@ class TestDebugLogger:
 
     def test_logger_has_methods(self):
         logger = DebugLogger()
-        methods = [m for m in dir(logger) if not m.startswith('_')]
+        methods = [m for m in dir(logger) if not m.startswith("_")]
         assert len(methods) > 0

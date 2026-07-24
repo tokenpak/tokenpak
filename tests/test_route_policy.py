@@ -34,9 +34,16 @@ class TestGetPolicy:
 
     def test_all_routes_have_required_keys(self):
         required_keys = {
-            "auth", "body", "vault_injection", "compaction",
-            "cache_control", "headers", "platform_tag",
-            "cache_poison_removal", "stable_cache_stamps", "cache_cap",
+            "auth",
+            "body",
+            "vault_injection",
+            "compaction",
+            "cache_control",
+            "headers",
+            "platform_tag",
+            "cache_poison_removal",
+            "stable_cache_stamps",
+            "cache_cap",
         }
         for route, policy in ROUTE_POLICIES.items():
             missing = required_keys - set(policy.keys())

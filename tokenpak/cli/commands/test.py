@@ -15,6 +15,12 @@ Only options the user actually has set up are shown.
 
 from __future__ import annotations
 
+__all__ = (
+    "run",
+    "run_test",
+)
+
+
 import hashlib
 import os
 import shutil
@@ -22,17 +28,29 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional, TypedDict
 
 import httpx
 
 from tokenpak._formatting.picker import pick as _shared_pick
 
+if TYPE_CHECKING:
+    from tokenpak.prove.adapter import ArmConfig, ArmResult
+
+
+class Scenario(TypedDict):
+    """One built-in comparison scenario."""
+
+    name: str
+    label: str
+    system: str
+    turns: list[tuple[str, str]]
+
+
 _TEST_HEADER = "\n  \033[1mtokenpak test\033[0m\n"
 
 
-def _pick(title: str, options: list[tuple[str, str]],
-          subtitle: str = "") -> Optional[str]:
+def _pick(title: str, options: list[tuple[str, str]], subtitle: str = "") -> Optional[str]:
     """Thin wrapper around the shared picker with test-command branding."""
     return _shared_pick(title, options, subtitle=subtitle, header=_TEST_HEADER)
 
@@ -41,8 +59,10 @@ def _pick(title: str, options: list[tuple[str, str]],
 # Auto-detection — checks all auth sources, not just env vars
 # ═══════════════════════════════════════════════════════════════════════
 
-# Cache so detection runs once per session, not per picker screen
-_detection_cache: dict = {}
+# Typed caches keep each detection result from being confused with another.
+_proxy_detection_cache: tuple[bool, list[str]] | None = None
+_claude_auth_cache: bool | None = None
+_codex_auth_cache: bool | None = None
 
 
 def _detect_proxy() -> tuple[bool, list[str]]:
@@ -50,62 +70,81 @@ def _detect_proxy() -> tuple[bool, list[str]]:
 
     Returns (is_running, list_of_provider_names).
     """
-    if "proxy" in _detection_cache:
-        return _detection_cache["proxy"]
+    global _proxy_detection_cache
+    if _proxy_detection_cache is not None:
+        return _proxy_detection_cache
 
     proxy_url = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
     try:
         resp = httpx.get(f"{proxy_url}/health", timeout=2.0)
         if resp.status_code != 200:
-            _detection_cache["proxy"] = (False, [])
+            _proxy_detection_cache = (False, [])
             return False, []
         health = resp.json()
-        # circuit_breakers keys are the active providers
-        providers = list(health.get("circuit_breakers", {}).keys())
-        _detection_cache["proxy"] = (True, providers)
+        if not isinstance(health, dict):
+            _proxy_detection_cache = (False, [])
+            return False, []
+        # Providers live below the canonical circuit-breaker envelope.  The
+        # envelope's metadata keys (enabled/any_open) are not providers.
+        breakers = health.get("circuit_breakers")
+        provider_states = breakers.get("providers") if isinstance(breakers, dict) else None
+        providers = (
+            [str(provider) for provider in provider_states]
+            if isinstance(provider_states, dict)
+            else []
+        )
+        _proxy_detection_cache = (True, providers)
         return True, providers
     except Exception:
-        _detection_cache["proxy"] = (False, [])
+        _proxy_detection_cache = (False, [])
         return False, []
 
 
 def _detect_claude_code_auth() -> bool:
     """Check if Claude Code is authenticated."""
-    if "claude_auth" in _detection_cache:
-        return _detection_cache["claude_auth"]
+    global _claude_auth_cache
+    if _claude_auth_cache is not None:
+        return _claude_auth_cache
 
     creds = Path.home() / ".claude" / ".credentials.json"
     if creds.exists():
         try:
             import json as _json
+
             data = _json.loads(creds.read_text())
+            if not isinstance(data, dict):
+                raise ValueError("Claude credentials are not a JSON object")
             # Has OAuth or API key config
             ok = bool(data.get("claudeAiOauth") or data.get("apiKey"))
-            _detection_cache["claude_auth"] = ok
+            _claude_auth_cache = ok
             return ok
         except Exception:
             pass
-    _detection_cache["claude_auth"] = False
+    _claude_auth_cache = False
     return False
 
 
 def _detect_codex_auth() -> bool:
     """Check if Codex is authenticated."""
-    if "codex_auth" in _detection_cache:
-        return _detection_cache["codex_auth"]
+    global _codex_auth_cache
+    if _codex_auth_cache is not None:
+        return _codex_auth_cache
 
     auth_file = Path.home() / ".codex" / "auth.json"
     if auth_file.exists():
         try:
             import json as _json
+
             data = _json.loads(auth_file.read_text())
+            if not isinstance(data, dict):
+                raise ValueError("Codex credentials are not a JSON object")
             # Has API key or OAuth tokens
             ok = bool(data.get("OPENAI_API_KEY") or data.get("tokens"))
-            _detection_cache["codex_auth"] = ok
+            _codex_auth_cache = ok
             return ok
         except Exception:
             pass
-    _detection_cache["codex_auth"] = False
+    _codex_auth_cache = False
     return False
 
 
@@ -150,8 +189,12 @@ def _detect_providers() -> list[tuple[str, str]]:
     # 1. Proxy — knows which providers are routed
     proxy_running, proxy_providers = _detect_proxy()
     if proxy_running:
-        _LABELS = {"anthropic": "Anthropic", "openai": "OpenAI",
-                    "google": "Google (Gemini)", "xai": "xAI (Grok)"}
+        _LABELS = {
+            "anthropic": "Anthropic",
+            "openai": "OpenAI",
+            "google": "Google (Gemini)",
+            "xai": "xAI (Grok)",
+        }
         for p in proxy_providers:
             if p not in found:
                 found[p] = "via proxy"
@@ -167,9 +210,9 @@ def _detect_providers() -> list[tuple[str, str]]:
     # 4. Env vars (direct API keys)
     _ENV_CHECKS = [
         ("anthropic", "ANTHROPIC_API_KEY"),
-        ("openai",    "OPENAI_API_KEY"),
-        ("google",    "GOOGLE_API_KEY"),
-        ("xai",       "XAI_API_KEY"),
+        ("openai", "OPENAI_API_KEY"),
+        ("google", "GOOGLE_API_KEY"),
+        ("xai", "XAI_API_KEY"),
     ]
     for pid, env_var in _ENV_CHECKS:
         if os.environ.get(env_var) and pid not in found:
@@ -180,6 +223,7 @@ def _detect_providers() -> list[tuple[str, str]]:
     if user_cfg.exists():
         try:
             import yaml
+
             data = yaml.safe_load(user_cfg.read_text()) or {}
             for name, cfg in data.get("providers", {}).items():
                 env_key = cfg.get("api_key_env", "")
@@ -188,13 +232,14 @@ def _detect_providers() -> list[tuple[str, str]]:
         except Exception:
             pass
 
-    _LABELS = {"anthropic": "Anthropic", "openai": "OpenAI",
-                "google": "Google (Gemini)", "xai": "xAI (Grok)"}
+    _LABELS = {
+        "anthropic": "Anthropic",
+        "openai": "OpenAI",
+        "google": "Google (Gemini)",
+        "xai": "xAI (Grok)",
+    }
 
-    return [
-        (pid, f"{_LABELS.get(pid, pid)}  ({reason})")
-        for pid, reason in found.items()
-    ]
+    return [(pid, f"{_LABELS.get(pid, pid)}  ({reason})") for pid, reason in found.items()]
 
 
 def _detect_proxy_running() -> bool:
@@ -233,72 +278,102 @@ def _get_models(provider: str) -> list[tuple[str, str]]:
 #   - 10 turns builds growing conversation → cache savings compound
 # ═══════════════════════════════════════════════════════════════════════
 
-_SCENARIOS: dict[str, dict] = {
+_SCENARIOS: dict[str, Scenario] = {
     "coding": {
         "name": "Coding — Config Parser",
         "label": "Coding  (build a config parser — 10 turns)",
         "system": "You are a Python engineer. Keep responses concise (under 200 words). Show code when asked. Use type hints.",
         "turns": [
-            ("Design", (
-                "I need a Python `ConfigManager` class that loads TOML config files, "
-                "supports dotted key access like 'database.host', and can write changes "
-                "back atomically. What should the public API look like? Show the class "
-                "signature with method names and type signatures — no implementation yet."
-            )),
-            ("Init", (
-                "For the `ConfigManager` class with dotted key access and atomic writes "
-                "that we just designed: write the `__init__` method. It should accept a "
-                "file path, load and parse the TOML file, and raise `FileNotFoundError` "
-                "with a clear message if the file doesn't exist."
-            )),
-            ("Get method", (
-                "For our `ConfigManager` class: write the `get(key, default=None)` method. "
-                "It must support dotted keys like 'database.host' by walking nested dicts. "
-                "Return the default if any part of the key path is missing. Include the "
-                "type signature with generics."
-            )),
-            ("Set method", (
-                "For our `ConfigManager` class with dotted key support: write the "
-                "`set(key, value)` method. It should support dotted keys like 'database.host' "
-                "and automatically create intermediate nested dicts when they don't exist. "
-                "Raise `TypeError` if an intermediate key exists but isn't a dict."
-            )),
-            ("Save", (
-                "For our `ConfigManager` class that supports dotted key access: write the "
-                "`save()` method. It must write the config back to the TOML file atomically "
-                "using a temporary file and `os.replace()`. Preserve the original file on "
-                "write failure. Include error handling."
-            )),
-            ("Validate", (
-                "For our `ConfigManager` class with get/set/save: add a `validate(schema)` "
-                "method. The schema is a dict mapping dotted key paths to their expected "
-                "Python types, like `{'database.host': str, 'database.port': int}`. "
-                "Return a list of `(key, expected_type, actual_type)` tuples for violations."
-            )),
-            ("Env override", (
-                "For our `ConfigManager` class with get/set/save/validate: add environment "
-                "variable override support. The `get()` method should first check for an "
-                "env var like `CONFIG_DATABASE_HOST` (uppercase, dots→underscores) before "
-                "falling back to the TOML value. Show the updated `get()` method."
-            )),
-            ("Test get/set", (
-                "For our `ConfigManager` class with dotted key access and env overrides: "
-                "write 4 pytest test functions covering: basic get, dotted key get, "
-                "get with env var override, and set creating nested keys. Use `tmp_path` "
-                "fixture for the TOML file."
-            )),
-            ("Test save", (
-                "For our `ConfigManager` class with atomic save via `os.replace()`: write "
-                "3 pytest tests covering: basic save round-trip (load→set→save→reload), "
-                "save atomicity (file intact after simulated write failure), and validate "
-                "catching a type mismatch."
-            )),
-            ("Docstring", (
-                "For our complete `ConfigManager` class with get/set/save/validate and env "
-                "override support: write a comprehensive module-level docstring covering "
-                "what it does, all public methods with one-line descriptions, the env var "
-                "override convention, and a 5-line usage example."
-            )),
+            (
+                "Design",
+                (
+                    "I need a Python `ConfigManager` class that loads TOML config files, "
+                    "supports dotted key access like 'database.host', and can write changes "
+                    "back atomically. What should the public API look like? Show the class "
+                    "signature with method names and type signatures — no implementation yet."
+                ),
+            ),
+            (
+                "Init",
+                (
+                    "For the `ConfigManager` class with dotted key access and atomic writes "
+                    "that we just designed: write the `__init__` method. It should accept a "
+                    "file path, load and parse the TOML file, and raise `FileNotFoundError` "
+                    "with a clear message if the file doesn't exist."
+                ),
+            ),
+            (
+                "Get method",
+                (
+                    "For our `ConfigManager` class: write the `get(key, default=None)` method. "
+                    "It must support dotted keys like 'database.host' by walking nested dicts. "
+                    "Return the default if any part of the key path is missing. Include the "
+                    "type signature with generics."
+                ),
+            ),
+            (
+                "Set method",
+                (
+                    "For our `ConfigManager` class with dotted key support: write the "
+                    "`set(key, value)` method. It should support dotted keys like 'database.host' "
+                    "and automatically create intermediate nested dicts when they don't exist. "
+                    "Raise `TypeError` if an intermediate key exists but isn't a dict."
+                ),
+            ),
+            (
+                "Save",
+                (
+                    "For our `ConfigManager` class that supports dotted key access: write the "
+                    "`save()` method. It must write the config back to the TOML file atomically "
+                    "using a temporary file and `os.replace()`. Preserve the original file on "
+                    "write failure. Include error handling."
+                ),
+            ),
+            (
+                "Validate",
+                (
+                    "For our `ConfigManager` class with get/set/save: add a `validate(schema)` "
+                    "method. The schema is a dict mapping dotted key paths to their expected "
+                    "Python types, like `{'database.host': str, 'database.port': int}`. "
+                    "Return a list of `(key, expected_type, actual_type)` tuples for violations."
+                ),
+            ),
+            (
+                "Env override",
+                (
+                    "For our `ConfigManager` class with get/set/save/validate: add environment "
+                    "variable override support. The `get()` method should first check for an "
+                    "env var like `CONFIG_DATABASE_HOST` (uppercase, dots→underscores) before "
+                    "falling back to the TOML value. Show the updated `get()` method."
+                ),
+            ),
+            (
+                "Test get/set",
+                (
+                    "For our `ConfigManager` class with dotted key access and env overrides: "
+                    "write 4 pytest test functions covering: basic get, dotted key get, "
+                    "get with env var override, and set creating nested keys. Use `tmp_path` "
+                    "fixture for the TOML file."
+                ),
+            ),
+            (
+                "Test save",
+                (
+                    "For our `ConfigManager` class with atomic save via `os.replace()`: write "
+                    "3 pytest tests covering: basic save round-trip (load→set→save→reload), "
+                    "save atomicity (file intact after simulated write failure), and validate "
+                    "catching a type mismatch."
+                ),
+            ),
+            (
+                "Docstring",
+                (
+                    "For our complete `ConfigManager` class with get/set/save/validate and env "
+                    "override support: write a comprehensive module-level docstring covering "
+                    "what it does, all public methods with one-line descriptions, the env var "
+                    "override convention, and a 5-line usage example."
+                ),
+            ),
         ],
     },
     "planning": {
@@ -306,66 +381,96 @@ _SCENARIOS: dict[str, dict] = {
         "label": "Planning  (design a REST API — 10 turns)",
         "system": "You are a backend architect. Keep responses concise (under 200 words). Be precise and specific.",
         "turns": [
-            ("Resources", (
-                "We're building a bookmark manager REST API. Users can save URLs, organize "
-                "them into collections, and tag them for search. What are the core resources "
-                "and their relationships? List each resource with its key fields and how "
-                "they relate to each other."
-            )),
-            ("Bookmark CRUD", (
-                "For our bookmark manager API with bookmarks, collections, and tags: define "
-                "the CRUD endpoints for the Bookmark resource. Show HTTP method, path, "
-                "request body fields, and response status codes for each endpoint. Bookmarks "
-                "have: url, title, description, collection_id, and tags."
-            )),
-            ("Collections", (
-                "For our bookmark manager API where bookmarks belong to collections: define "
-                "the CRUD endpoints for collections. A collection has a name, description, "
-                "and optional parent_id for nesting. Include an endpoint to list all bookmarks "
-                "in a collection. Show method, path, and key fields."
-            )),
-            ("Tags & search", (
-                "For our bookmark manager API with bookmarks, collections, and tags: design "
-                "the tagging and search endpoints. Tags are simple strings attached to "
-                "bookmarks (many-to-many). Include: add/remove tags, list all tags, search "
-                "bookmarks by tag/title/url with query parameters."
-            )),
-            ("Auth", (
-                "For our bookmark manager API with bookmarks, collections, and tags: how "
-                "should authentication work? We need user isolation (each user sees only "
-                "their own bookmarks). Describe the auth approach: token format, header "
-                "convention, how to get a token, and token expiry strategy."
-            )),
-            ("Errors", (
-                "For our bookmark manager API with auth, bookmarks, collections, and tags: "
-                "define the error response format. All errors should use a consistent JSON "
-                "shape. Show examples for: 401 unauthorized, 404 bookmark not found, and "
-                "422 validation error (missing required field 'url')."
-            )),
-            ("Pagination", (
-                "For our bookmark manager API: how should list endpoints handle pagination? "
-                "We have list-bookmarks, list-collections, list-tags, and search endpoints "
-                "that all need it. Define the query parameters and the response envelope "
-                "with pagination metadata."
-            )),
-            ("Rate limits", (
-                "For our bookmark manager API with auth, CRUD, search, and pagination: "
-                "what rate limits should we enforce? Consider read endpoints (list/get), "
-                "write endpoints (create/update/delete), and the search endpoint separately. "
-                "Give specific numbers per minute and explain the rationale."
-            )),
-            ("Import/export", (
-                "For our bookmark manager API with bookmarks, collections, and tags: design "
-                "a bulk import endpoint that accepts a Netscape bookmark HTML file (the "
-                "standard browser export format) and a bulk export endpoint that produces "
-                "one. Show the endpoints, content types, and key behaviors."
-            )),
-            ("Summary", (
-                "For our complete bookmark manager API with bookmarks, collections, tags, "
-                "search, auth, pagination, rate limits, and import/export: write a one-paragraph "
-                "API overview suitable for developer docs. Cover scope, auth model, key "
-                "design choices, and rate limit policy."
-            )),
+            (
+                "Resources",
+                (
+                    "We're building a bookmark manager REST API. Users can save URLs, organize "
+                    "them into collections, and tag them for search. What are the core resources "
+                    "and their relationships? List each resource with its key fields and how "
+                    "they relate to each other."
+                ),
+            ),
+            (
+                "Bookmark CRUD",
+                (
+                    "For our bookmark manager API with bookmarks, collections, and tags: define "
+                    "the CRUD endpoints for the Bookmark resource. Show HTTP method, path, "
+                    "request body fields, and response status codes for each endpoint. Bookmarks "
+                    "have: url, title, description, collection_id, and tags."
+                ),
+            ),
+            (
+                "Collections",
+                (
+                    "For our bookmark manager API where bookmarks belong to collections: define "
+                    "the CRUD endpoints for collections. A collection has a name, description, "
+                    "and optional parent_id for nesting. Include an endpoint to list all bookmarks "
+                    "in a collection. Show method, path, and key fields."
+                ),
+            ),
+            (
+                "Tags & search",
+                (
+                    "For our bookmark manager API with bookmarks, collections, and tags: design "
+                    "the tagging and search endpoints. Tags are simple strings attached to "
+                    "bookmarks (many-to-many). Include: add/remove tags, list all tags, search "
+                    "bookmarks by tag/title/url with query parameters."
+                ),
+            ),
+            (
+                "Auth",
+                (
+                    "For our bookmark manager API with bookmarks, collections, and tags: how "
+                    "should authentication work? We need user isolation (each user sees only "
+                    "their own bookmarks). Describe the auth approach: token format, header "
+                    "convention, how to get a token, and token expiry strategy."
+                ),
+            ),
+            (
+                "Errors",
+                (
+                    "For our bookmark manager API with auth, bookmarks, collections, and tags: "
+                    "define the error response format. All errors should use a consistent JSON "
+                    "shape. Show examples for: 401 unauthorized, 404 bookmark not found, and "
+                    "422 validation error (missing required field 'url')."
+                ),
+            ),
+            (
+                "Pagination",
+                (
+                    "For our bookmark manager API: how should list endpoints handle pagination? "
+                    "We have list-bookmarks, list-collections, list-tags, and search endpoints "
+                    "that all need it. Define the query parameters and the response envelope "
+                    "with pagination metadata."
+                ),
+            ),
+            (
+                "Rate limits",
+                (
+                    "For our bookmark manager API with auth, CRUD, search, and pagination: "
+                    "what rate limits should we enforce? Consider read endpoints (list/get), "
+                    "write endpoints (create/update/delete), and the search endpoint separately. "
+                    "Give specific numbers per minute and explain the rationale."
+                ),
+            ),
+            (
+                "Import/export",
+                (
+                    "For our bookmark manager API with bookmarks, collections, and tags: design "
+                    "a bulk import endpoint that accepts a Netscape bookmark HTML file (the "
+                    "standard browser export format) and a bulk export endpoint that produces "
+                    "one. Show the endpoints, content types, and key behaviors."
+                ),
+            ),
+            (
+                "Summary",
+                (
+                    "For our complete bookmark manager API with bookmarks, collections, tags, "
+                    "search, auth, pagination, rate limits, and import/export: write a one-paragraph "
+                    "API overview suitable for developer docs. Cover scope, auth model, key "
+                    "design choices, and rate limit policy."
+                ),
+            ),
         ],
     },
     "codebase": {
@@ -373,71 +478,101 @@ _SCENARIOS: dict[str, dict] = {
         "label": "Codebase  (review and fix code — 10 turns)",
         "system": "You are a code reviewer. Keep responses concise (under 200 words). Show code when fixing issues.",
         "turns": [
-            ("Review", (
-                "Review this Python function and list the top 5 issues (bugs, style, "
-                "performance, safety):\n```python\ndef process_users(data):\n"
-                "    result = []\n    for item in data:\n"
-                "        if item['status'] == 'active':\n"
-                "            user = {'name': item['name'], 'email': item['email'],\n"
-                "                    'score': item['score'] * 1.1}\n"
-                "            result.append(user)\n"
-                "    result = sorted(result, key=lambda x: x['score'], reverse=True)\n"
-                "    return result[:10]\n```"
-            )),
-            ("Type hints", (
-                "For the `process_users` function that filters active users, applies a "
-                "1.1x score multiplier, sorts by score, and returns the top 10: add proper "
-                "type hints. Define a TypedDict for the input items and the output items. "
-                "Show the full rewritten function signature."
-            )),
-            ("Comprehension", (
-                "For the `process_users` function that filters active users, computes "
-                "score * 1.1, sorts descending, and returns top 10: rewrite the filter + "
-                "transform as a list comprehension. Keep the sort and slice separate. "
-                "Is this actually faster than the loop? One sentence."
-            )),
-            ("Edge cases", (
-                "For our `process_users` function that filters by status='active' and "
-                "accesses item['score'] and item['email']: what happens if data is None? "
-                "If an item is missing the 'score' key? If 'email' contains None? Add "
-                "defensive handling for each case. Show the updated code."
-            )),
-            ("Extract scoring", (
-                "For our `process_users` function that multiplies score by 1.1: the "
-                "multiplier should be configurable, not hardcoded. Extract it into a "
-                "parameter with a default value. Also, should the scoring logic be its "
-                "own function? Show the refactored code."
-            )),
-            ("Naming", (
-                "For our `process_users` function that filters active users, applies "
-                "score multiplier, sorts by score, and returns top N: the name "
-                "'process_users' is vague. Suggest a better function name and better "
-                "parameter names. Explain your reasoning in one sentence each."
-            )),
-            ("Docstring", (
-                "For our renamed and improved function (formerly `process_users`) that "
-                "filters active users, applies a configurable score multiplier, sorts "
-                "descending by score, and returns the top N: write a Google-style docstring "
-                "with Args, Returns, and Raises sections."
-            )),
-            ("Test happy", (
-                "For our improved `process_users` function with type hints, configurable "
-                "multiplier, top-N, and defensive handling: write 3 pytest tests covering "
-                "normal input (verify filtering + sort + limit), custom multiplier value, "
-                "and the sort order (highest score first)."
-            )),
-            ("Test edge", (
-                "For our improved `process_users` function with defensive handling for "
-                "missing keys and None values: write 3 pytest tests covering empty input "
-                "list, an item missing the 'score' key, and an item with status != 'active' "
-                "being excluded from results."
-            )),
-            ("Final", (
-                "Show the final, complete version of the function (formerly `process_users`) "
-                "with all improvements applied: type hints, TypedDicts, configurable multiplier, "
-                "top-N parameter, defensive handling, better name, and docstring. Just the "
-                "code, no explanation."
-            )),
+            (
+                "Review",
+                (
+                    "Review this Python function and list the top 5 issues (bugs, style, "
+                    "performance, safety):\n```python\ndef process_users(data):\n"
+                    "    result = []\n    for item in data:\n"
+                    "        if item['status'] == 'active':\n"
+                    "            user = {'name': item['name'], 'email': item['email'],\n"
+                    "                    'score': item['score'] * 1.1}\n"
+                    "            result.append(user)\n"
+                    "    result = sorted(result, key=lambda x: x['score'], reverse=True)\n"
+                    "    return result[:10]\n```"
+                ),
+            ),
+            (
+                "Type hints",
+                (
+                    "For the `process_users` function that filters active users, applies a "
+                    "1.1x score multiplier, sorts by score, and returns the top 10: add proper "
+                    "type hints. Define a TypedDict for the input items and the output items. "
+                    "Show the full rewritten function signature."
+                ),
+            ),
+            (
+                "Comprehension",
+                (
+                    "For the `process_users` function that filters active users, computes "
+                    "score * 1.1, sorts descending, and returns top 10: rewrite the filter + "
+                    "transform as a list comprehension. Keep the sort and slice separate. "
+                    "Is this actually faster than the loop? One sentence."
+                ),
+            ),
+            (
+                "Edge cases",
+                (
+                    "For our `process_users` function that filters by status='active' and "
+                    "accesses item['score'] and item['email']: what happens if data is None? "
+                    "If an item is missing the 'score' key? If 'email' contains None? Add "
+                    "defensive handling for each case. Show the updated code."
+                ),
+            ),
+            (
+                "Extract scoring",
+                (
+                    "For our `process_users` function that multiplies score by 1.1: the "
+                    "multiplier should be configurable, not hardcoded. Extract it into a "
+                    "parameter with a default value. Also, should the scoring logic be its "
+                    "own function? Show the refactored code."
+                ),
+            ),
+            (
+                "Naming",
+                (
+                    "For our `process_users` function that filters active users, applies "
+                    "score multiplier, sorts by score, and returns top N: the name "
+                    "'process_users' is vague. Suggest a better function name and better "
+                    "parameter names. Explain your reasoning in one sentence each."
+                ),
+            ),
+            (
+                "Docstring",
+                (
+                    "For our renamed and improved function (formerly `process_users`) that "
+                    "filters active users, applies a configurable score multiplier, sorts "
+                    "descending by score, and returns the top N: write a Google-style docstring "
+                    "with Args, Returns, and Raises sections."
+                ),
+            ),
+            (
+                "Test happy",
+                (
+                    "For our improved `process_users` function with type hints, configurable "
+                    "multiplier, top-N, and defensive handling: write 3 pytest tests covering "
+                    "normal input (verify filtering + sort + limit), custom multiplier value, "
+                    "and the sort order (highest score first)."
+                ),
+            ),
+            (
+                "Test edge",
+                (
+                    "For our improved `process_users` function with defensive handling for "
+                    "missing keys and None values: write 3 pytest tests covering empty input "
+                    "list, an item missing the 'score' key, and an item with status != 'active' "
+                    "being excluded from results."
+                ),
+            ),
+            (
+                "Final",
+                (
+                    "Show the final, complete version of the function (formerly `process_users`) "
+                    "with all improvements applied: type hints, TypedDicts, configurable multiplier, "
+                    "top-N parameter, defensive handling, better name, and docstring. Just the "
+                    "code, no explanation."
+                ),
+            ),
         ],
     },
 }
@@ -448,7 +583,7 @@ _SCENARIOS: dict[str, dict] = {
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _map_platform_to_adapter(platform: str, provider: str, model: str):
+def _map_platform_to_adapter(platform: str, provider: str, model: str) -> list[ArmConfig]:
     """Map user-facing platform to adapter ArmConfigs.
 
     Each platform uses its native execution method:
@@ -465,25 +600,41 @@ def _map_platform_to_adapter(platform: str, provider: str, model: str):
         # Claude Code uses its own OAuth billing (not raw API rate limits).
         # The comparison: native claude vs claude with tokenpak companion.
         arms = [
-            ArmConfig(name="Claude Code", platform="cli",
-                      provider="anthropic", model=model,
-                      cli_command="claude -p"),
-            ArmConfig(name="w/ TokenPak", platform="cli",
-                      provider="anthropic", model=model,
-                      cli_command="tokenpak claude -p",
-                      via_tokenpak=True),
+            ArmConfig(
+                name="Claude Code",
+                platform="cli",
+                provider="anthropic",
+                model=model,
+                cli_command="claude -p",
+            ),
+            ArmConfig(
+                name="w/ TokenPak",
+                platform="cli",
+                provider="anthropic",
+                model=model,
+                cli_command="tokenpak claude -p",
+                via_tokenpak=True,
+            ),
         ]
         return arms
 
     elif platform == "codex":
         arms = [
-            ArmConfig(name="Codex", platform="cli",
-                      provider="openai", model=model,
-                      cli_command="codex exec"),
-            ArmConfig(name="w/ TokenPak", platform="cli",
-                      provider="openai", model=model,
-                      cli_command="tokenpak codex exec",
-                      via_tokenpak=True),
+            ArmConfig(
+                name="Codex",
+                platform="cli",
+                provider="openai",
+                model=model,
+                cli_command="codex exec",
+            ),
+            ArmConfig(
+                name="w/ TokenPak",
+                platform="cli",
+                provider="openai",
+                model=model,
+                cli_command="tokenpak codex exec",
+                via_tokenpak=True,
+            ),
         ]
         return arms
 
@@ -495,16 +646,25 @@ def _map_platform_to_adapter(platform: str, provider: str, model: str):
         has_key = bool(_resolve_api_key(provider, key_env))
 
         if has_key:
-            arms.append(ArmConfig(
-                name="Direct", platform="api",
-                provider=provider, model=model,
-                base_url=reg.get("base_url", ""),
-            ))
+            arms.append(
+                ArmConfig(
+                    name="Direct",
+                    platform="api",
+                    provider=provider,
+                    model=model,
+                    base_url=reg.get("base_url", ""),
+                )
+            )
         if proxy_available:
-            arms.append(ArmConfig(
-                name="w/ TokenPak", platform="proxy",
-                provider=provider, model=model, via_tokenpak=True,
-            ))
+            arms.append(
+                ArmConfig(
+                    name="w/ TokenPak",
+                    platform="proxy",
+                    provider=provider,
+                    model=model,
+                    via_tokenpak=True,
+                )
+            )
         return arms
 
     return []
@@ -516,7 +676,9 @@ def _count_active_sessions() -> dict[str, int]:
     try:
         result = subprocess.run(
             ["pgrep", "-fa", "claude|codex"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         for line in result.stdout.strip().split("\n"):
             if not line.strip():
@@ -540,7 +702,7 @@ def run_test(
     test_id: str,
 ) -> None:
     """Execute the test and display results."""
-    from tokenpak.prove.adapter import ArmResult, TurnResult, run_arm
+    from tokenpak.prove.adapter import TurnResult, run_arm
 
     scenario = _SCENARIOS[test_id]
     arms_cfg = _map_platform_to_adapter(platform, provider, model)
@@ -553,6 +715,7 @@ def run_test(
 
     # Build Turn objects
     from tokenpak.prove.scenario import Turn
+
     turns = [
         Turn(number=i + 1, label=label, prompt=prompt)
         for i, (label, prompt) in enumerate(scenario["turns"])
@@ -572,7 +735,7 @@ def run_test(
     print(f"  Turns:     {n_turns}")
     print(f"  Arms:      {n_arms}")
     for i, a in enumerate(arms_cfg):
-        print(f"    [{i+1}] {a.name}")
+        print(f"    [{i + 1}] {a.name}")
     print(f"  Proof:     {proof_id}")
 
     # ── Launch live display (automatic, no user action needed) ──
@@ -581,6 +744,7 @@ def run_test(
         log_a = log_dir / f"{proof_id}_1.log"
         log_b = log_dir / f"{proof_id}_2.log"
         from tokenpak.prove.display import LiveDisplay
+
         display = LiveDisplay(log_a, log_b)
         display_msg = display.start()
         if display_msg:
@@ -635,12 +799,13 @@ def run_test(
     results_dir = Path.home() / ".tokenpak" / "test" / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
     from tokenpak.prove.reporter import save_result
+
     result_path = save_result(results, scenario["name"], proof_id, results_dir)
     print(f"  Saved: {result_path}")
 
     # Log file paths
     for i in range(n_arms):
-        lf = log_dir / f"{proof_id}_{i+1}.log"
+        lf = log_dir / f"{proof_id}_{i + 1}.log"
         label = arms_cfg[i].name
         print(f"  Log [{label}]: {lf}")
 
@@ -653,9 +818,10 @@ def run_test(
     print()
 
 
-def _format_report(results: list, scenario_name: str, proof_id: str) -> str:
+def _format_report(results: list[ArmResult], scenario_name: str, proof_id: str) -> str:
     """Format comparison report inline."""
     from tokenpak.prove.reporter import format_matrix_report
+
     return format_matrix_report(results, scenario_name, proof_id)
 
 
@@ -664,7 +830,7 @@ def _format_report(results: list, scenario_name: str, proof_id: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def run(args=None) -> None:
+def run(args: object | None = None) -> None:
     """Interactive test command — ``tokenpak test``."""
 
     # ── Step 1: Detect what's available ─────────────────────
@@ -685,8 +851,7 @@ def run(args=None) -> None:
         return
 
     # ── Step 2: Platform picker ─────────────────────────────
-    platform = _pick("Select platform:", platforms,
-                      "Only platforms you have set up are shown.")
+    platform = _pick("Select platform:", platforms, "Only platforms you have set up are shown.")
     if platform is None:
         _clear_exit()
         return
@@ -708,11 +873,15 @@ def run(args=None) -> None:
     if len(filtered) == 1:
         provider = filtered[0][0]
     else:
-        provider = _pick("Select provider:", filtered,
-                          "Only providers with API keys detected are shown.")
-        if provider is None:
+        selected_provider = _pick(
+            "Select provider:",
+            filtered,
+            "Only providers with API keys detected are shown.",
+        )
+        if selected_provider is None:
             _clear_exit()
             return
+        provider = selected_provider
 
     # ── Step 4: Model picker ────────────────────────────────
     models = _get_models(provider)
@@ -721,18 +890,18 @@ def run(args=None) -> None:
         print(f"  No models configured for provider '{provider}'.")
         return
 
-    model = _pick("Select model:", models,
-                   f"Provider: {provider}")
+    model = _pick("Select model:", models, f"Provider: {provider}")
     if model is None:
         _clear_exit()
         return
 
     # ── Step 5: Test picker ─────────────────────────────────
-    test_options = [
-        (tid, info["label"]) for tid, info in _SCENARIOS.items()
-    ]
-    test_id = _pick("Select test:", test_options,
-                     "Each test runs 5 turns to measure savings across a full session.")
+    test_options = [(tid, info["label"]) for tid, info in _SCENARIOS.items()]
+    test_id = _pick(
+        "Select test:",
+        test_options,
+        "Each test runs 5 turns to measure savings across a full session.",
+    )
     if test_id is None:
         _clear_exit()
         return
@@ -777,7 +946,7 @@ def run(args=None) -> None:
     sys.stdout.write(f"    Proxy:      {proxy_status}\n")
     sys.stdout.write(f"    Arms:       {len(arms)}\n")
     for i, a in enumerate(arms):
-        sys.stdout.write(f"      [{i+1}] {a.name}\n")
+        sys.stdout.write(f"      [{i + 1}] {a.name}\n")
     if active_warning:
         sys.stdout.write(active_warning)
     sys.stdout.write("\n")

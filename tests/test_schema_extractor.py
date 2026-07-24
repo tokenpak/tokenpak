@@ -98,6 +98,7 @@ which they baked every morning before the sun rose.
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestMeetingExtraction:
     def setup_method(self):
         self.extractor = SchemaExtractor()
@@ -305,13 +306,16 @@ class TestDetectTypeSmokeTest:
     def setup_method(self):
         self.extractor = SchemaExtractor()
 
-    @pytest.mark.parametrize("text,expected_type", [
-        (MEETING_TEXT, "meeting"),
-        (PR_TEXT, "pull_request"),
-        (BUG_REPORT_TEXT, "bug_report"),
-        (LOG_TEXT, "log_output"),
-        (CONFIG_TEXT, "config_file"),
-    ])
+    @pytest.mark.parametrize(
+        "text,expected_type",
+        [
+            (MEETING_TEXT, "meeting"),
+            (PR_TEXT, "pull_request"),
+            (BUG_REPORT_TEXT, "bug_report"),
+            (LOG_TEXT, "log_output"),
+            (CONFIG_TEXT, "config_file"),
+        ],
+    )
     def test_detect_type(self, text, expected_type):
         doc_type, confidence = self.extractor.detect_type(text)
         assert doc_type == expected_type, (

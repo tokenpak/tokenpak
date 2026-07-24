@@ -173,7 +173,7 @@ class ToolSchemaRegistry:
         with self._lock:
             return self._frozen_hash[:16] if self._frozen_hash else None
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, Any]:
         with self._lock:
             frozen_tools = self._frozen_tools or []
             frozen_text = self._frozen_text or ""
@@ -229,7 +229,7 @@ def get_registry() -> ToolSchemaRegistry:
 # updated only when tool schemas genuinely change.
 
 
-def _get_frozen_tool_schemas() -> list:
+def _get_frozen_tool_schemas() -> list[dict[str, Any]]:
     """Return currently frozen tool schemas (or empty list if not yet initialized)."""
     reg = get_registry()
     with reg._lock:

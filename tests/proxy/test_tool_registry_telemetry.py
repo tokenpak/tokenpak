@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.agent.proxy.tool_schema_registry", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.agent.proxy.tool_schema_registry", reason="module not available in current build"
+)
 import json
 
 import pytest
@@ -21,6 +23,7 @@ from tokenpak.agent.proxy.tool_schema_registry import ToolSchemaRegistry
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_cc_body(tools: list[dict], compact: bool = True) -> bytes:
     """Produce a realistic Claude Code request body with the given tools list.
@@ -101,6 +104,7 @@ _TOOLS_5_REVERSED = list(reversed(_TOOLS_5))
 # Test cases
 # ---------------------------------------------------------------------------
 
+
 class TestToolRegistryTelemetry:
     def test_same_tools_different_order_bytes_saved(self):
         """AC-1: Same tools in different order → byte-identical output, bytes_saved > 0.
@@ -120,7 +124,9 @@ class TestToolRegistryTelemetry:
         new1, changed1 = reg.normalize_request(body1)
         new2, changed2 = reg.normalize_request(body2)
 
-        assert new1 == new2, "Normalized bodies must be byte-identical for same tools in different order"
+        assert new1 == new2, (
+            "Normalized bodies must be byte-identical for same tools in different order"
+        )
         assert reg.bytes_saved > 0, f"Expected bytes_saved > 0, got {reg.bytes_saved}"
         assert not changed2, "Second request with same tool set should not flag schema_changes"
 

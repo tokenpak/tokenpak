@@ -24,6 +24,7 @@ from tokenpak.processors.code import _LARGE_LITERAL_THRESHOLD, CodeCompactionMod
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _sha256_stub(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:8]
 
@@ -143,6 +144,7 @@ class DataLoader:
 # 1. CODE_API: large templates → stub
 # ---------------------------------------------------------------------------
 
+
 class TestCodeAPIMode(unittest.TestCase):
     """CODE_API default mode — large literals become stubs."""
 
@@ -154,7 +156,9 @@ class TestCodeAPIMode(unittest.TestCase):
 
     def test_stub_format_contains_name(self):
         result = cp.process(PY_WITH_LARGE_TEMPLATE, path="page.py")
-        self.assertRegex(result, r"HTML_TEMPLATE = <TEMPLATE:HTML_TEMPLATE lines=\d+ sha256=[0-9a-f]{8}>")
+        self.assertRegex(
+            result, r"HTML_TEMPLATE = <TEMPLATE:HTML_TEMPLATE lines=\d+ sha256=[0-9a-f]{8}>"
+        )
 
     def test_stub_contains_lines_count(self):
         result = cp.process(PY_WITH_LARGE_TEMPLATE, path="page.py")
@@ -185,8 +189,7 @@ class TestCodeAPIMode(unittest.TestCase):
 
     def test_default_mode_is_code_api(self):
         r1 = cp.process(PY_WITH_LARGE_TEMPLATE, path="page.py")
-        r2 = cp.process(PY_WITH_LARGE_TEMPLATE, path="page.py",
-                        mode=CodeCompactionMode.CODE_API)
+        r2 = cp.process(PY_WITH_LARGE_TEMPLATE, path="page.py", mode=CodeCompactionMode.CODE_API)
         self.assertEqual(r1, r2)
 
 
@@ -194,12 +197,14 @@ class TestCodeAPIMode(unittest.TestCase):
 # 2. CODE_WITH_TEMPLATES mode
 # ---------------------------------------------------------------------------
 
+
 class TestCodeWithTemplatesMode(unittest.TestCase):
     """CODE_WITH_TEMPLATES — literal content retained."""
 
     def test_large_template_kept(self):
         result = cp.process(
-            PY_WITH_LARGE_TEMPLATE, path="page.py",
+            PY_WITH_LARGE_TEMPLATE,
+            path="page.py",
             mode=CodeCompactionMode.CODE_WITH_TEMPLATES,
         )
         self.assertIn("<!DOCTYPE html>", result)
@@ -207,14 +212,16 @@ class TestCodeWithTemplatesMode(unittest.TestCase):
 
     def test_css_template_kept(self):
         result = cp.process(
-            PY_WITH_LARGE_TEMPLATE, path="page.py",
+            PY_WITH_LARGE_TEMPLATE,
+            path="page.py",
             mode=CodeCompactionMode.CODE_WITH_TEMPLATES,
         )
         self.assertIn(".container", result)
 
     def test_class_level_template_kept(self):
         result = cp.process(
-            PY_WITH_LARGE_TEMPLATE, path="page.py",
+            PY_WITH_LARGE_TEMPLATE,
+            path="page.py",
             mode=CodeCompactionMode.CODE_WITH_TEMPLATES,
         )
         self.assertIn(".header", result)
@@ -228,6 +235,7 @@ class TestCodeWithTemplatesMode(unittest.TestCase):
 # 3. Import deduplication
 # ---------------------------------------------------------------------------
 
+
 class TestImportDeduplication(unittest.TestCase):
     """Duplicate imports must be dropped."""
 
@@ -235,8 +243,9 @@ class TestImportDeduplication(unittest.TestCase):
         result = cp.process(PY_DUPLICATE_IMPORTS, path="dedup.py")
         lines = result.splitlines()
         import_lines = [l.strip() for l in lines if l.strip().startswith(("import ", "from "))]
-        self.assertEqual(len(import_lines), len(set(import_lines)),
-                         f"Duplicate imports found: {import_lines}")
+        self.assertEqual(
+            len(import_lines), len(set(import_lines)), f"Duplicate imports found: {import_lines}"
+        )
 
     def test_all_unique_imports_kept(self):
         result = cp.process(PY_DUPLICATE_IMPORTS, path="dedup.py")
@@ -254,6 +263,7 @@ class TestImportDeduplication(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 4. Signatures intact and parse-safe
 # ---------------------------------------------------------------------------
+
 
 class TestSignaturesIntact(unittest.TestCase):
     """Function and class signatures must survive compression."""
@@ -299,6 +309,7 @@ class TestSignaturesIntact(unittest.TestCase):
 # 5. Determinism
 # ---------------------------------------------------------------------------
 
+
 class TestDeterminism(unittest.TestCase):
     """Same input must always yield byte-identical output."""
 
@@ -310,10 +321,12 @@ class TestDeterminism(unittest.TestCase):
         self.assertEqual(r2, r3)
 
     def test_code_with_templates_deterministic(self):
-        r1 = cp.process(PY_WITH_LARGE_TEMPLATE, path="page.py",
-                        mode=CodeCompactionMode.CODE_WITH_TEMPLATES)
-        r2 = cp.process(PY_WITH_LARGE_TEMPLATE, path="page.py",
-                        mode=CodeCompactionMode.CODE_WITH_TEMPLATES)
+        r1 = cp.process(
+            PY_WITH_LARGE_TEMPLATE, path="page.py", mode=CodeCompactionMode.CODE_WITH_TEMPLATES
+        )
+        r2 = cp.process(
+            PY_WITH_LARGE_TEMPLATE, path="page.py", mode=CodeCompactionMode.CODE_WITH_TEMPLATES
+        )
         self.assertEqual(r1, r2)
 
     def test_sha256_stub_is_stable(self):
@@ -363,6 +376,7 @@ class TestDeterminism(unittest.TestCase):
 # 6. Edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases(unittest.TestCase):
     """Edge cases and boundary conditions."""
 
@@ -370,7 +384,7 @@ class TestEdgeCases(unittest.TestCase):
         self.assertEqual(cp.process("", path="x.py"), "")
 
     def test_no_templates_no_change(self):
-        src = "import os\n\ndef hello() -> str:\n    \"\"\"Hello.\"\"\"\n    pass\n"
+        src = 'import os\n\ndef hello() -> str:\n    """Hello."""\n    pass\n'
         result = cp.process(src, path="x.py")
         self.assertIn("import os", result)
         self.assertIn("def hello()", result)
@@ -381,7 +395,7 @@ class TestEdgeCases(unittest.TestCase):
         short_literal = 'import os\n\nMSG = """\nline1\nline2\n"""\n'
         result = cp.process(short_literal, path="x.py")
         self.assertNotIn("<TEMPLATE:", result)
-        self.assertIn('MSG', result)
+        self.assertIn("MSG", result)
 
     def test_exactly_at_threshold(self):
         """A literal with exactly _LARGE_LITERAL_THRESHOLD lines is stubbed."""

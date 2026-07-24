@@ -104,6 +104,28 @@ tokenpak doctor # checks Python version, deps, config
 tokenpak status # verify proxy is reachable
 ```
 
+### First measured receipt check
+
+Before treating a local deployment as value-ready, run the supported
+[three-command first-receipt path](first-receipt.md). It uses an existing Codex
+OAuth login and the client's selected/default model. Provider API keys and
+explicit model overrides are optional alternatives, not deployment
+requirements. Real requests may count against a subscription or incur provider
+charges.
+
+```bash
+python -m pip install tokenpak
+tokenpak serve --profile aggressive --stats-footer  # terminal 1; leave running
+tokenpak codex  # terminal 2; make a substantive request, then continue the topic
+```
+
+The proxy prints the measured token receipt to its own standard error; it does
+not inject the receipt into the provider response. The displayed dollar value
+is estimated. A new conversation may begin with an ineligible request; the
+first later eligible request is the proof. Offline demo output,
+short/protected inputs, and byte-preserved routes do not establish a positive
+compression receipt.
+
 ---
 
 ## Configuration
@@ -122,7 +144,7 @@ Default location: `~/.tokenpak/config.json`
  "compression": {
  "enabled": true,
  "level": "balanced",
- "threshold_tokens": 4500
+ "threshold_tokens": 1500
  },
  "budget": {
  "monthly_usd": 100,
@@ -149,10 +171,11 @@ All env vars override config file values. **Env vars take priority.**
 | `TOKENPAK_PORT` | `8766` | Proxy listen port |
 | `TOKENPAK_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` for all interfaces) |
 | `TOKENPAK_MODE` | `hybrid` | Compression mode: `strict`, `hybrid`, `aggressive` |
+| `TOKENPAK_PROFILE` | `balanced` | Workflow profile: `safe`, `balanced`, `aggressive`, `agentic`, `transparent` |
 | `TOKENPAK_COMPACT` | `1` | Master compression switch (`0` to disable) |
-| `TOKENPAK_COMPACT_THRESHOLD_TOKENS` | `4500` | Min tokens before compression activates |
+| `TOKENPAK_COMPACT_THRESHOLD_TOKENS` | `1500` in `balanced` | Min tokens before compression activates |
 | `TOKENPAK_DB` | `~/.tokenpak/monitor.db` | SQLite telemetry database path |
-| `TOKENPAK_STATS_FOOTER` | `0` | Append savings summary to responses |
+| `TOKENPAK_STATS_FOOTER` | `0` | Print per-request savings receipt to proxy stderr |
 | `TOKENPAK_DEBUG` | `0` | Enable debug logging |
 | `TOKENPAK_METRICS_ENABLED` | `0` | Opt-in anonymous usage metrics |
 
@@ -377,7 +400,9 @@ For high throughput, run multiple instances behind a load balancer.
 
 **Requirements when load-balancing:**
 - Replace SQLite telemetry with a shared database (see below)
-- All instances must have the same API keys
+- If the deployment injects provider API keys, all instances must receive the
+  same key set. Client-owned OAuth/session traffic does not require server-side
+  provider keys.
 - Session stickiness is **not required** — TokenPak is stateless per-request
 
 **nginx load balancer config:**
@@ -476,7 +501,9 @@ tokenpak status
 TOKENPAK_COMPACT_THRESHOLD_TOKENS=100 tokenpak serve
 ```
 
-Compression only activates above the token threshold (default: 4,500). Short requests pass through unchanged — this is correct behavior.
+Compression only activates above the active profile's token threshold
+(`balanced`: 1,500). Short requests pass through unchanged — this is correct
+behavior.
 
 ### API key errors
 

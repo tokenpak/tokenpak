@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.enterprise.compliance", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.enterprise.compliance", reason="module not available in current build"
+)
 import csv
 import json
 import sys
@@ -30,6 +32,7 @@ from tokenpak.enterprise.compliance import ComplianceReporter
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def log():
     """In-memory audit log for testing."""
@@ -39,21 +42,32 @@ def log():
 @pytest.fixture
 def log_with_entries(log):
     """Audit log pre-populated with a handful of entries."""
-    log.record("proxy_request", user_id="alice", model="openai/gpt-4o",
-               provider="openai", data_classification="internal")
-    log.record("auth_failure", user_id="mallory", outcome="auth_failure",
-               metadata={"ip": "10.0.0.99"})
+    log.record(
+        "proxy_request",
+        user_id="alice",
+        model="openai/gpt-4o",
+        provider="openai",
+        data_classification="internal",
+    )
+    log.record(
+        "auth_failure", user_id="mallory", outcome="auth_failure", metadata={"ip": "10.0.0.99"}
+    )
     log.record("config_change", user_id="admin", metadata={"key": "retention_days", "value": 60})
-    log.record("proxy_request", user_id="alice", model="anthropic/claude-3-5-sonnet",
-               provider="anthropic", data_classification="confidential")
-    log.record("data_export", user_id="bob", outcome="ok",
-               metadata={"format": "json", "rows": 42})
+    log.record(
+        "proxy_request",
+        user_id="alice",
+        model="anthropic/claude-3-5-sonnet",
+        provider="anthropic",
+        data_classification="confidential",
+    )
+    log.record("data_export", user_id="bob", outcome="ok", metadata={"format": "json", "rows": 42})
     return log
 
 
 # ---------------------------------------------------------------------------
 # AuditLog — basic record / list
 # ---------------------------------------------------------------------------
+
 
 def test_record_returns_id(log):
     entry_id = log.record("proxy_request", user_id="alice")
@@ -107,6 +121,7 @@ def test_count(log_with_entries):
 # AuditLog — metadata
 # ---------------------------------------------------------------------------
 
+
 def test_metadata_round_trip(log):
     meta = {"tokens": 123, "tags": ["a", "b"], "nested": {"k": "v"}}
     log.record("proxy_request", metadata=meta)
@@ -117,6 +132,7 @@ def test_metadata_round_trip(log):
 # ---------------------------------------------------------------------------
 # AuditLog — hash chain integrity
 # ---------------------------------------------------------------------------
+
 
 def test_verify_chain_empty(log):
     ok, errors = log.verify_chain()
@@ -142,6 +158,7 @@ def test_verify_chain_tampered(log_with_entries):
 # ---------------------------------------------------------------------------
 # AuditLog — export (JSON + CSV)
 # ---------------------------------------------------------------------------
+
 
 def test_export_json(log_with_entries, tmp_path):
     out = tmp_path / "audit.json"
@@ -177,6 +194,7 @@ def test_export_empty(log, tmp_path):
 # AuditLog — retention pruning
 # ---------------------------------------------------------------------------
 
+
 def test_prune_old_entries(log):
     log.record("proxy_request", user_id="alice")
     # Force a very old timestamp directly
@@ -198,6 +216,7 @@ def test_prune_keeps_recent(log):
 # AuditLog — summary
 # ---------------------------------------------------------------------------
 
+
 def test_summary_total(log_with_entries):
     stats = log_with_entries.summary()
     assert stats["total"] == 5
@@ -213,13 +232,15 @@ def test_summary_by_action(log_with_entries):
 # ComplianceReporter
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def reporter(tmp_path):
     """ComplianceReporter backed by a temp in-memory audit log."""
     db = str(tmp_path / "audit.db")
     with AuditLog(db) as al:
-        al.record("proxy_request", user_id="alice", model="openai/gpt-4o",
-                  data_classification="internal")
+        al.record(
+            "proxy_request", user_id="alice", model="openai/gpt-4o", data_classification="internal"
+        )
         al.record("auth_failure", user_id="mallory", outcome="auth_failure")
         al.record("config_change", user_id="admin")
     return ComplianceReporter(audit_db=db, organization="Acme Corp")
@@ -286,6 +307,7 @@ def test_report_save_text(reporter, tmp_path):
 # _parse_date helper
 # ---------------------------------------------------------------------------
 
+
 def test_parse_date_iso():
     ts = _parse_date("2026-01-01")
     assert ts > 0
@@ -305,12 +327,14 @@ def test_parse_date_invalid():
 # CLI integration — audit commands
 # ---------------------------------------------------------------------------
 
+
 def _run_cli(*args):
     """Run CLI and capture stdout."""
     import io
     from contextlib import redirect_stdout
 
     from tokenpak.cli import build_parser
+
     parser = build_parser()
     parsed = parser.parse_args(list(args))
     buf = io.StringIO()

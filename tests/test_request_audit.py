@@ -1,6 +1,5 @@
 """Tests for tokenpak.request_audit — per-request savings audit."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.request_audit", reason="module not available in current build")
@@ -124,16 +123,18 @@ class TestRequestAuditor:
         auditor = RequestAuditor(max_recent=100)
         now = time.time()
         for i in range(n):
-            auditor.record(RequestAudit(
-                request_id=f"req-{i}",
-                timestamp=now - (n - i) * 60,
-                model="claude-opus-4-6" if i % 2 == 0 else "claude-haiku-4-5",
-                input_tokens=10000 + i * 1000,
-                sent_input_tokens=8000 + i * 800,
-                cache_read_tokens=5000 if i % 3 == 0 else 0,
-                cache_hit=i % 3 == 0,
-                status=200,
-            ))
+            auditor.record(
+                RequestAudit(
+                    request_id=f"req-{i}",
+                    timestamp=now - (n - i) * 60,
+                    model="claude-opus-4-6" if i % 2 == 0 else "claude-haiku-4-5",
+                    input_tokens=10000 + i * 1000,
+                    sent_input_tokens=8000 + i * 800,
+                    cache_read_tokens=5000 if i % 3 == 0 else 0,
+                    cache_hit=i % 3 == 0,
+                    status=200,
+                )
+            )
         return auditor
 
     def test_record_and_get_recent(self):
@@ -249,8 +250,18 @@ class TestAuditReport:
 
     def test_format_report_multiple(self):
         records = [
-            RequestAudit(model="claude-opus-4-6", input_tokens=5000, sent_input_tokens=4000, timestamp=time.time()),
-            RequestAudit(model="claude-haiku-4-5", input_tokens=3000, sent_input_tokens=2500, timestamp=time.time()),
+            RequestAudit(
+                model="claude-opus-4-6",
+                input_tokens=5000,
+                sent_input_tokens=4000,
+                timestamp=time.time(),
+            ),
+            RequestAudit(
+                model="claude-haiku-4-5",
+                input_tokens=3000,
+                sent_input_tokens=2500,
+                timestamp=time.time(),
+            ),
         ]
         report = format_audit_report(records)
         assert "Request #1" in report

@@ -16,7 +16,7 @@ import urllib.request
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from tokenpak import _paths
 
@@ -164,12 +164,14 @@ def build_ssh_command(
 
 
 def _write_metadata(paths: TunnelPaths, payload: dict[str, Any]) -> None:
-    paths.metadata.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    paths.metadata.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def _load_metadata(path: Path) -> dict[str, Any] | None:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
     except FileNotFoundError:
         return None
     except Exception:
@@ -289,7 +291,9 @@ def _start_ssh_tunnel(
             start_new_session=True,
         )
     except FileNotFoundError as exc:
-        raise DashboardTunnelError("OpenSSH client not found. Install ssh or set TOKENPAK_SSH_BIN.") from exc
+        raise DashboardTunnelError(
+            "OpenSSH client not found. Install ssh or set TOKENPAK_SSH_BIN."
+        ) from exc
 
     time.sleep(0.25)
     if process.poll() is not None:
@@ -396,12 +400,16 @@ def disconnect_dashboard(
     if record is None:
         if not quiet:
             print(f"No dashboard tunnel recorded for {host}.")
-        return DisconnectResult(host=host, target=target, disconnected=False, metadata_removed=False)
+        return DisconnectResult(
+            host=host, target=target, disconnected=False, metadata_removed=False
+        )
 
     control_socket = Path(str(record.get("control_socket") or ""))
     disconnected = _run_ssh_control(str(record.get("target") or target), control_socket, "exit")
     _cleanup_record(record)
-    return DisconnectResult(host=host, target=target, disconnected=disconnected, metadata_removed=True)
+    return DisconnectResult(
+        host=host, target=target, disconnected=disconnected, metadata_removed=True
+    )
 
 
 def _result_payload(result: DashboardTunnelResult) -> dict[str, Any]:
@@ -428,42 +436,44 @@ def _disconnect_payload(result: DisconnectResult) -> dict[str, Any]:
     }
 
 
-def cmd_dashboard_tunnel(args) -> int:
+def cmd_dashboard_tunnel(args: Any) -> int:
     action = getattr(args, "dashboard_action", None)
     json_output = bool(getattr(args, "json_output", False) or getattr(args, "json_export", False))
     try:
         if action == "connect":
-            result = connect_dashboard(
+            connect_result = connect_dashboard(
                 args.host,
                 remote_port=int(getattr(args, "remote_port", DEFAULT_REMOTE_PORT)),
                 local_port=getattr(args, "local_port", "auto"),
                 ssh_user=getattr(args, "ssh_user", None),
                 open_browser=bool(getattr(args, "open_browser", True)),
-                health_timeout=float(getattr(args, "health_timeout", DEFAULT_HEALTH_TIMEOUT_SECONDS)),
+                health_timeout=float(
+                    getattr(args, "health_timeout", DEFAULT_HEALTH_TIMEOUT_SECONDS)
+                ),
             )
             if json_output:
-                print(json.dumps(_result_payload(result), indent=2, sort_keys=True))
+                print(json.dumps(_result_payload(connect_result), indent=2, sort_keys=True))
             else:
-                verb = "already connected" if result.reused else "connected"
+                verb = "already connected" if connect_result.reused else "connected"
                 print(f"Dashboard tunnel {verb}.")
-                print(f"URL: {result.url}")
+                print(f"URL: {connect_result.url}")
                 print(
-                    f"Forward: 127.0.0.1:{result.local_port} -> "
-                    f"{result.target}:127.0.0.1:{result.remote_port}"
+                    f"Forward: 127.0.0.1:{connect_result.local_port} -> "
+                    f"{connect_result.target}:127.0.0.1:{connect_result.remote_port}"
                 )
-                print(f"Control socket: {result.control_socket}")
-                print(f"Disconnect: tokenpak dashboard disconnect {result.host}")
+                print(f"Control socket: {connect_result.control_socket}")
+                print(f"Disconnect: tokenpak dashboard disconnect {connect_result.host}")
             return 0
         if action == "disconnect":
-            result = disconnect_dashboard(
+            disconnect_result = disconnect_dashboard(
                 args.host,
                 ssh_user=getattr(args, "ssh_user", None),
                 quiet=json_output,
             )
             if json_output:
-                print(json.dumps(_disconnect_payload(result), indent=2, sort_keys=True))
-            elif result.metadata_removed:
-                print(f"Dashboard tunnel disconnected for {result.host}.")
+                print(json.dumps(_disconnect_payload(disconnect_result), indent=2, sort_keys=True))
+            elif disconnect_result.metadata_removed:
+                print(f"Dashboard tunnel disconnected for {disconnect_result.host}.")
             return 0
     except DashboardTunnelError as exc:
         if json_output:

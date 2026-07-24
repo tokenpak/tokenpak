@@ -26,6 +26,7 @@ from tokenpak.compression.dictionary import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _msgs(*texts):
     return [{"role": "user", "content": t} for t in texts]
 
@@ -40,17 +41,23 @@ def _dict_with(tmp_path: Path, entries: dict) -> Path:
 # Test 1 — Basic replacement
 # ---------------------------------------------------------------------------
 
+
 def test_basic_replacement(tmp_path):
     """Phrases in the dictionary are replaced with their tokens."""
-    d = _dict_with(tmp_path, {
-        "environment variable configuration mismatch": "ENV_MISMATCH",
-        "authentication token expired": "AUTH_EXPIRED",
-    })
+    d = _dict_with(
+        tmp_path,
+        {
+            "environment variable configuration mismatch": "ENV_MISMATCH",
+            "authentication token expired": "AUTH_EXPIRED",
+        },
+    )
     comp = CompressionDictionary(dict_path=d)
-    result = comp.apply(_msgs(
-        "There was an environment variable configuration mismatch in the pipeline.",
-        "The user got an authentication token expired error.",
-    ))
+    result = comp.apply(
+        _msgs(
+            "There was an environment variable configuration mismatch in the pipeline.",
+            "The user got an authentication token expired error.",
+        )
+    )
     assert result.replacements_made == 2
     assert "ENV_MISMATCH" in result.messages[0]["content"]
     assert "environment variable configuration mismatch" not in result.messages[0]["content"]
@@ -65,6 +72,7 @@ def test_basic_replacement(tmp_path):
 # Test 2 — Case-insensitive mode
 # ---------------------------------------------------------------------------
 
+
 def test_case_insensitive(tmp_path):
     """case_sensitive=False replaces regardless of capitalisation."""
     d = _dict_with(tmp_path, {"connection refused": "CONN_REFUSED"})
@@ -78,12 +86,16 @@ def test_case_insensitive(tmp_path):
 # Test 3 — Longer phrases win over shorter overlaps
 # ---------------------------------------------------------------------------
 
+
 def test_longer_phrase_priority(tmp_path):
     """When two phrases overlap, the longer one should be applied first."""
-    d = _dict_with(tmp_path, {
-        "connection refused": "CONN_REFUSED",
-        "connection refused by remote host": "CONN_REFUSED_REMOTE",
-    })
+    d = _dict_with(
+        tmp_path,
+        {
+            "connection refused": "CONN_REFUSED",
+            "connection refused by remote host": "CONN_REFUSED_REMOTE",
+        },
+    )
     comp = CompressionDictionary(dict_path=d)
     result = comp.apply(_msgs("Got a connection refused by remote host signal."))
     assert "CONN_REFUSED_REMOTE" in result.messages[0]["content"]
@@ -94,6 +106,7 @@ def test_longer_phrase_priority(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 4 — Non-string content passes through unchanged
 # ---------------------------------------------------------------------------
+
 
 def test_non_string_content(tmp_path):
     """Messages with non-string content (None, list) are not modified."""
@@ -111,6 +124,7 @@ def test_non_string_content(tmp_path):
 # Test 5 — Auto-learn threshold
 # ---------------------------------------------------------------------------
 
+
 def test_autolearn_threshold(tmp_path):
     """
     Phrases repeated at or above threshold appear in suggestions;
@@ -127,19 +141,22 @@ def test_autolearn_threshold(tmp_path):
 
     # 2 occurrences — below threshold
     comp.apply(_msgs(phrase, phrase))
-    assert not any(s.phrase == phrase for s in comp.suggestions), \
+    assert not any(s.phrase == phrase for s in comp.suggestions), (
         "Phrase with 2 occurrences should NOT appear in suggestions"
+    )
 
     # 1 more → hits threshold
     comp.apply(_msgs(phrase))
     phrases_in_suggestions = [s.phrase for s in comp.suggestions]
-    assert phrase in phrases_in_suggestions, \
+    assert phrase in phrases_in_suggestions, (
         "Phrase with 3 occurrences should appear in suggestions"
+    )
 
 
 # ---------------------------------------------------------------------------
 # Test 6 — suggest_entries format
 # ---------------------------------------------------------------------------
+
 
 def test_suggest_entries_format(tmp_path):
     """suggest_entries() returns a list of {phrase: token} dicts."""
@@ -159,6 +176,7 @@ def test_suggest_entries_format(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 7 — save_suggestions writes to disk, skips duplicates
 # ---------------------------------------------------------------------------
+
 
 def test_save_suggestions_writes_and_dedupes(tmp_path):
     """save_suggestions() appends new entries and skips existing ones."""
@@ -185,6 +203,7 @@ def test_save_suggestions_writes_and_dedupes(tmp_path):
 # Test 8 — Missing / malformed dict file is handled gracefully
 # ---------------------------------------------------------------------------
 
+
 def test_missing_dict_file(tmp_path):
     """If the dict file doesn't exist, apply() still works (no replacements)."""
     missing = tmp_path / "nonexistent.json"
@@ -207,10 +226,11 @@ def test_malformed_dict_file(tmp_path):
 # Test 9 — DictionaryResult statistics
 # ---------------------------------------------------------------------------
 
+
 def test_result_statistics(tmp_path):
     """tokens_saved_est should be positive when long phrases are replaced."""
     long_phrase = "environment variable configuration mismatch"  # 44 chars
-    short_token = "ENV_MISMATCH"                                  # 12 chars
+    short_token = "ENV_MISMATCH"  # 12 chars
     d = _dict_with(tmp_path, {long_phrase: short_token})
     comp = CompressionDictionary(dict_path=d)
 

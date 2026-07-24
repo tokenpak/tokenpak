@@ -189,7 +189,7 @@ Proxy health and stats.
  "compression": {
  "enabled": true,
  "mode": "hybrid",
- "threshold_tokens": 4500
+ "threshold_tokens": 1500
  },
  "session": {
  "requests": 23,

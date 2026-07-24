@@ -22,7 +22,7 @@ class _AgenticRedirectFinder(importlib.abc.MetaPathFinder):
             return None
 
         # Compute the target module in the orchestration namespace
-        suffix = fullname[len(self._PREFIX):]
+        suffix = fullname[len(self._PREFIX) :]
         target_name = f"tokenpak.orchestration.{suffix}"
 
         return importlib.machinery.ModuleSpec(
@@ -47,8 +47,8 @@ class _AgenticRedirectLoader(importlib.abc.Loader):
         sys.modules[module.__name__] = real
         # Copy all attributes (so the caller's module object works)
         module.__dict__.update(real.__dict__)
-        module.__path__ = getattr(real, '__path__', [])
-        module.__file__ = getattr(real, '__file__', None)
+        module.__path__ = getattr(real, "__path__", [])
+        module.__file__ = getattr(real, "__file__", None)
         module.__spec__ = real.__spec__
 
 

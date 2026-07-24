@@ -27,6 +27,7 @@ Zero external dependencies — stdlib only.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Callable, Optional
 
 
 class Lifecycle(str, Enum):
@@ -86,7 +87,7 @@ def receipt_card(
     rows: list[tuple[str, str]],
     *,
     width: int = 46,
-    paint=None,
+    paint: Optional[Callable[[str, str, bool], str]] = None,
     accent: str = "",
     indent: str = "  ",
 ) -> str:

@@ -65,9 +65,7 @@ from tokenpak.orchestration.dispatch.registry.workers import (
     default_worker_registry,
 )
 
-_PACKAGED_ROUTES_DIR = (
-    Path(rt_mod.__file__).resolve().parent / "registry" / "routes"
-)
+_PACKAGED_ROUTES_DIR = Path(rt_mod.__file__).resolve().parent / "registry" / "routes"
 
 
 # ---------------------------------------------------------------------------
@@ -191,9 +189,7 @@ def test_route_fails_to_bind_when_no_worker_has_capabilities():
     # A worker registry with only a reviewer (no builder) cannot staff a
     # builder station — binding fails, by capability/role, never by id.
     reviewer_only = DispatchWorkerRegistry(
-        {"worker.reviewer.default.v1": default_worker_registry().get(
-            "worker.reviewer.default.v1"
-        )}
+        {"worker.reviewer.default.v1": default_worker_registry().get("worker.reviewer.default.v1")}
     )
     code_route = routes.get("route.code_task.v1")
     assert route_is_bindable(code_route, reviewer_only) is False
@@ -270,9 +266,7 @@ def test_score_route_unbindable_gets_forbidden_penalty():
     intake = FrontDock().intake("Refactor the parser function")
     route = default_route_registry().get("route.code_task.v1")
     reviewer_only = DispatchWorkerRegistry(
-        {"worker.reviewer.default.v1": default_worker_registry().get(
-            "worker.reviewer.default.v1"
-        )}
+        {"worker.reviewer.default.v1": default_worker_registry().get("worker.reviewer.default.v1")}
     )
     score = score_route(route, intake.job, reviewer_only)
     names = [name for name, _ in score.components]
@@ -329,9 +323,7 @@ def test_explicit_unknown_route_yields_decision():
 def test_explicit_route_unstaffable_refused():
     intake = FrontDock().intake("What is a tuple?")
     reviewer_only = DispatchWorkerRegistry(
-        {"worker.reviewer.default.v1": default_worker_registry().get(
-            "worker.reviewer.default.v1"
-        )}
+        {"worker.reviewer.default.v1": default_worker_registry().get("worker.reviewer.default.v1")}
     )
     rt = DispatchRuntime(worker_registry=reviewer_only)
     out = rt.select_route(intake, explicit_route="code_task")
@@ -363,9 +355,7 @@ def test_empty_project_rules_are_a_noop():
 def test_explicit_route_outranks_project_rule():
     intake = FrontDock().intake("What is a tuple?")
     rules = ProjectRules(intent_routes={"quick_answer": "route.doc_task.v1"})
-    out = DispatchRuntime().select_route(
-        intake, explicit_route="code_task", project_rules=rules
-    )
+    out = DispatchRuntime().select_route(intake, explicit_route="code_task", project_rules=rules)
     assert out.precedence_layer == "explicit_route"
     assert out.route.id == "route.code_task.v1"
 
@@ -414,9 +404,7 @@ def test_intent_classification_ambiguous_id_match_falls_through_to_tie_break():
             )
         ],
     )
-    merged = DispatchRouteRegistry(
-        {r.id: r for r in routes.all()} | {second.id: second}
-    )
+    merged = DispatchRouteRegistry({r.id: r for r in routes.all()} | {second.id: second})
     rt = DispatchRuntime(route_registry=merged)
     intake = FrontDock().intake("Refactor the parser function")
     out = rt.select_route(intake)
@@ -445,9 +433,7 @@ def test_intent_classification_unique_match_selected():
             )
         ],
     )
-    merged = DispatchRouteRegistry(
-        {r.id: r for r in routes.all()} | {other.id: other}
-    )
+    merged = DispatchRouteRegistry({r.id: r for r in routes.all()} | {other.id: other})
     rt = DispatchRuntime(route_registry=merged)
     intake = FrontDock().intake("Refactor the parser function")
     out = rt.select_route(intake)
@@ -491,9 +477,7 @@ def test_high_confidence_auto_dispatches_when_autonomy_permits():
 
 
 def test_high_confidence_needs_approval_under_advisory_autonomy():
-    intake = FrontDock().intake(
-        "Refactor the parser function", autonomy_mode=AutonomyMode.ADVISORY
-    )
+    intake = FrontDock().intake("Refactor the parser function", autonomy_mode=AutonomyMode.ADVISORY)
     out = DispatchRuntime().select_route(intake)
     assert out.confidence >= THRESHOLD_AUTO_DISPATCH
     # advisory never auto-dispatches: route is chosen but held for approval.
@@ -608,9 +592,7 @@ def test_llm_suggestion_is_advisory_and_cannot_dispatch_alone():
     """
 
     intake = FrontDock().intake("xyzzy plugh")  # unknown intent
-    client = _MockSuggestClient(
-        {"route_id": "route.quick_answer.v1", "confidence": 95}
-    )
+    client = _MockSuggestClient({"route_id": "route.quick_answer.v1", "confidence": 95})
     rt = DispatchRuntime(suggester=RouteSuggester(client))
     out = rt.select_route(intake)
     # The suggester WAS consulted...
@@ -623,9 +605,7 @@ def test_llm_suggestion_corroborates_deterministic_choice():
     """When the LLM agrees with a deterministic route, it adds a positive nudge."""
 
     intake = FrontDock().intake("Refactor the parser function")
-    client = _MockSuggestClient(
-        {"route_id": "route.code_task.v1", "confidence": 80}
-    )
+    client = _MockSuggestClient({"route_id": "route.code_task.v1", "confidence": 80})
     rt = DispatchRuntime(suggester=RouteSuggester(client))
     out = rt.select_route(intake)
     assert out.route.id == "route.code_task.v1"

@@ -11,6 +11,7 @@ from typing import Optional
 
 SEP = "────────────────────────────────────────"
 
+
 # Reuse monitor DB for spend queries.
 # Resolve via the canonical resolver so this command reads the same store as
 # every other reader. Kept as a module-level constant
@@ -300,7 +301,7 @@ def print_budget_alerts(limit: int = 10, raw: bool = False) -> None:
         return
 
     print(f"  {'Level':<10}{'Triggered':>20}{'% Used':>10}{'Budget/Spent':>25}{'Message':>30}")
-    print(f"  {'-'*10}{'-'*20}{'-'*10}{'-'*25}{'-'*30}")
+    print(f"  {'-' * 10}{'-' * 20}{'-' * 10}{'-' * 25}{'-' * 30}")
     for a in alerts:
         level_emoji = {
             "warning": "⚠ ",
@@ -333,7 +334,7 @@ def print_budget_history(days: int = 30, raw: bool = False) -> None:
         print()
         return
     print(f"  {'Date':<14}{'Requests':>10}{'Spent':>12}{'vs Limit':>12}")
-    print(f"  {'-'*14}{'-'*10}{'-'*12}{'-'*12}")
+    print(f"  {'-' * 14}{'-' * 10}{'-' * 12}{'-' * 12}")
     for r in history:
         if daily_limit:
             pct = r["cost_usd"] / float(daily_limit) * 100
@@ -647,8 +648,7 @@ def print_budget_intelligence(raw: bool = False) -> None:
     print(f"  {'Burn Rate:':<26}{_fmt_cost(burn['daily_avg_7d'])}/day")
     if eta and eta.get("days_remaining") is not None:
         print(
-            f"  {'Budget Depletion ETA:':<26}"
-            f"{eta['days_remaining']:.1f} days ({eta['eta_date']})"
+            f"  {'Budget Depletion ETA:':<26}{eta['days_remaining']:.1f} days ({eta['eta_date']})"
         )
     elif monthly_limit_f:
         print(f"  {'Budget Depletion ETA:':<26}N/A (burn rate too low)")

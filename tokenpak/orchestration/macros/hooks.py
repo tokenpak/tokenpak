@@ -337,11 +337,11 @@ class TriggerRegistry:
         return count
 
 
-def import_os_env():
+def import_os_env() -> dict[str, str]:
     """Import os.environ for subprocess calls."""
     import os
 
-    return os.environ
+    return dict(os.environ)
 
 
 # Module-level registry instance
@@ -414,11 +414,11 @@ def start_file_watcher(paths: Optional[List[str]] = None) -> bool:
         return False
 
     class TriggerEventHandler(FileSystemEventHandler):
-        def on_modified(self, event):
+        def on_modified(self, event: Any) -> None:
             if not event.is_directory:
                 fire_event(EventType.FILE_CHANGED.value, event.src_path)
 
-        def on_created(self, event):
+        def on_created(self, event: Any) -> None:
             if not event.is_directory:
                 fire_event(EventType.FILE_CHANGED.value, event.src_path)
 

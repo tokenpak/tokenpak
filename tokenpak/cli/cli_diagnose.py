@@ -11,7 +11,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 # ---------------------------------------------------------------------------
 # Severity levels
@@ -61,6 +61,7 @@ class DiagResult:
 # Individual checks
 # ---------------------------------------------------------------------------
 
+
 def _check_config(verbose: bool) -> DiagResult:
     """Validate config syntax and required fields using comprehensive validator."""
     config_path = Path.home() / ".tokenpak" / "config.yaml"
@@ -86,7 +87,8 @@ def _check_config(verbose: bool) -> DiagResult:
     try:
         from .cli_validate_config import ConfigValidator
 
-        validator = ConfigValidator()
+        validator_factory = cast(Callable[[], Any], ConfigValidator)
+        validator = validator_factory()
         exit_code, errors, warnings = validator.validate(str(found_path))
 
         # Determine severity based on exit code
@@ -97,7 +99,9 @@ def _check_config(verbose: bool) -> DiagResult:
         elif exit_code == 2:
             severity = WARNING
             msg = f"Config: Valid with warnings ({found_path.name})"
-            detail = f"{len(warnings)} warning(s) — review with: tokenpak validate-config {found_path}"
+            detail = (
+                f"{len(warnings)} warning(s) — review with: tokenpak validate-config {found_path}"
+            )
         else:  # exit_code == 1
             severity = ERROR
             msg = f"Config: Invalid ({found_path.name})"
@@ -161,7 +165,7 @@ def _check_vault_index(verbose: bool) -> DiagResult:
         size_mb = size_bytes / (1024 * 1024)
         mtime = max((f.stat().st_mtime for f in txt_files), default=0) if txt_files else 0
         age_h = (time.time() - mtime) / 3600 if mtime else 0
-        age_str = f"{age_h:.0f} hours ago" if age_h < 48 else f"{age_h/24:.0f} days ago"
+        age_str = f"{age_h:.0f} hours ago" if age_h < 48 else f"{age_h / 24:.0f} days ago"
         sev = WARNING if age_h > 24 else OK
         return DiagResult(
             "vault_index",
@@ -171,7 +175,9 @@ def _check_vault_index(verbose: bool) -> DiagResult:
                 "path": str(blocks_dir),
                 "size_mb": round(size_mb, 2),
                 "block_count": len(txt_files),
-                "last_rebuilt_ts": datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat() if mtime else None,
+                "last_rebuilt_ts": datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+                if mtime
+                else None,
                 "age_hours": round(age_h, 1),
             },
         )
@@ -192,7 +198,7 @@ def _check_vault_index(verbose: bool) -> DiagResult:
         stat = found.stat()
         size_mb = stat.st_size / (1024 * 1024)
         age_h = (time.time() - stat.st_mtime) / 3600
-        age_str = f"{age_h:.0f} hours ago" if age_h < 48 else f"{age_h/24:.0f} days ago"
+        age_str = f"{age_h:.0f} hours ago" if age_h < 48 else f"{age_h / 24:.0f} days ago"
         sev = WARNING if age_h > 24 else OK
         return DiagResult(
             "vault_index",
@@ -202,7 +208,9 @@ def _check_vault_index(verbose: bool) -> DiagResult:
                 "path": str(found),
                 "size_mb": round(size_mb, 2),
                 "block_count": block_count,
-                "last_rebuilt_ts": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                "last_rebuilt_ts": datetime.fromtimestamp(
+                    stat.st_mtime, tz=timezone.utc
+                ).isoformat(),
                 "age_hours": round(age_h, 1),
             },
         )
@@ -260,20 +268,23 @@ def _check_proxy(verbose: bool, port: int) -> DiagResult:
     try:
         resp = _urlreq.urlopen(f"http://127.0.0.1:{port}/health", timeout=2)
         health = json.loads(resp.read())
-        mode = health.get("compilation_mode", "unknown")
+        status = health.get("status", "unknown")
+        requests_total = health.get("requests_total")
         uptime = health.get("uptime_seconds")
         uptime_str = ""
         if uptime is not None:
             h, m = divmod(int(uptime) // 60, 60)
             uptime_str = f", up {h}h {m}m"
+        requests_str = f", {requests_total} requests" if requests_total is not None else ""
         return DiagResult(
             "proxy",
             OK,
-            f"Proxy: Listening on 0.0.0.0:{port} ({mode} mode{uptime_str})",
+            f"Proxy: Listening on 0.0.0.0:{port} (status={status}{requests_str}{uptime_str})",
             data={
                 "port": port,
                 "running": True,
-                "mode": mode,
+                "status": status,
+                "requests_total": requests_total,
                 "uptime_seconds": uptime,
             },
         )
@@ -337,43 +348,49 @@ def _check_permissions(verbose: bool) -> DiagResult:
 
 def _check_disk_space(verbose: bool) -> List[DiagResult]:
     """Warn if free disk space <1 GB in relevant locations."""
-    vault_path = Path(os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))).parent
+    vault_path = Path(
+        os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
+    ).parent
     dirs = {
         "vault": vault_path,
         "home": Path.home(),
     }
     results: List[DiagResult] = []
 
-    seen_devices: set = set()
+    seen_devices: set[str] = set()
     for label, d in dirs.items():
         check_path = d if d.exists() else Path.home()
         try:
             stat = shutil.disk_usage(check_path)
             # Deduplicate by checking if we already covered this mount
-            free_gb = stat.free / (1024 ** 3)
-            total_gb = stat.total / (1024 ** 3)
+            free_gb = stat.free / (1024**3)
+            total_gb = stat.total / (1024**3)
             device_key = str(check_path.resolve())
             if device_key in seen_devices:
                 continue
             seen_devices.add(device_key)
             sev = ERROR if free_gb < 0.5 else (WARNING if free_gb < 1.0 else OK)
-            results.append(DiagResult(
-                "disk_space",
-                sev,
-                f"Disk Space: {free_gb:.1f} GB free at {check_path} ({'⚠️ consider cleanup' if sev != OK else 'OK'})",
-                data={
-                    "path": str(check_path),
-                    "free_gb": round(free_gb, 2),
-                    "total_gb": round(total_gb, 2),
-                },
-            ))
+            results.append(
+                DiagResult(
+                    "disk_space",
+                    sev,
+                    f"Disk Space: {free_gb:.1f} GB free at {check_path} ({'⚠️ consider cleanup' if sev != OK else 'OK'})",
+                    data={
+                        "path": str(check_path),
+                        "free_gb": round(free_gb, 2),
+                        "total_gb": round(total_gb, 2),
+                    },
+                )
+            )
         except Exception as exc:
-            results.append(DiagResult(
-                "disk_space",
-                WARNING,
-                f"Disk Space: Could not check {check_path} — {exc}",
-                data={"path": str(check_path), "error": str(exc)},
-            ))
+            results.append(
+                DiagResult(
+                    "disk_space",
+                    WARNING,
+                    f"Disk Space: Could not check {check_path} — {exc}",
+                    data={"path": str(check_path), "error": str(exc)},
+                )
+            )
 
     return results or [DiagResult("disk_space", WARNING, "Disk Space: No paths checked", data={})]
 
@@ -382,7 +399,8 @@ def _check_disk_space(verbose: bool) -> List[DiagResult]:
 # Main command
 # ---------------------------------------------------------------------------
 
-def cmd_diagnose(args) -> None:
+
+def cmd_diagnose(args: Any) -> None:
     """Run tokenpak diagnose."""
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
     as_json = getattr(args, "json_output", False)
@@ -411,7 +429,9 @@ def cmd_diagnose(args) -> None:
                 "ok": counts[OK],
                 "warnings": counts[WARNING],
                 "errors": counts[ERROR],
-                "overall": "ERROR" if counts[ERROR] > 0 else ("WARNING" if counts[WARNING] > 0 else "OK"),
+                "overall": "ERROR"
+                if counts[ERROR] > 0
+                else ("WARNING" if counts[WARNING] > 0 else "OK"),
             },
             "checks": [r.to_dict() for r in all_results],
         }

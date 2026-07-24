@@ -160,7 +160,9 @@ def test_list_json_output(runner, tmp_store):
 
 def test_remove_existing(runner, tmp_store):
     """remove <id> removes a known trigger and confirms."""
-    add_result = runner.invoke(add_cmd, ["--event", "git:commit", "--action", "make test", "--json"])
+    add_result = runner.invoke(
+        add_cmd, ["--event", "git:commit", "--action", "make test", "--json"]
+    )
     trigger_id = json.loads(add_result.output)["id"]
 
     result = runner.invoke(remove_cmd, [trigger_id])

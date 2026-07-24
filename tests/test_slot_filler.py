@@ -499,33 +499,21 @@ class TestSlotFillerCanonical:
 
     def test_lowercase_intent(self):
         """Test intent is lowercased."""
-        defs = {
-            "test_intent": {
-                "slots": {}
-            }
-        }
+        defs = {"test_intent": {"slots": {}}}
         filler = SlotFiller(definitions=defs)
         result = filler.fill("TEST_INTENT", "text")
         assert result.intent == "test_intent"
 
     def test_dash_to_underscore(self):
         """Test dashes are converted to underscores."""
-        defs = {
-            "test_intent": {
-                "slots": {}
-            }
-        }
+        defs = {"test_intent": {"slots": {}}}
         filler = SlotFiller(definitions=defs)
         result = filler.fill("test-intent", "text")
         assert result.intent == "test_intent"
 
     def test_whitespace_stripped(self):
         """Test leading/trailing whitespace is stripped."""
-        defs = {
-            "test": {
-                "slots": {}
-            }
-        }
+        defs = {"test": {"slots": {}}}
         filler = SlotFiller(definitions=defs)
         result = filler.fill("  test  ", "text")
         assert result.intent == "test"
@@ -701,11 +689,7 @@ class TestSlotFillerEdgeCases:
 
     def test_empty_definitions(self):
         """Test with empty slot definitions."""
-        defs = {
-            "test": {
-                "slots": {}
-            }
-        }
+        defs = {"test": {"slots": {}}}
         filler = SlotFiller(definitions=defs)
         result = filler.fill("test", "some text")
         assert result.slots == {}

@@ -36,6 +36,7 @@ _REQUEST_ID_PATTERN = re.compile(r"\b(?:x-)?request[_-]?id\b", re.IGNORECASE)
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def strip_cache_poisons(body_bytes: bytes) -> bytes:
     """
     Strip dynamic content that breaks prompt-cache hits:
@@ -61,7 +62,7 @@ def strip_cache_poisons(body_bytes: bytes) -> bytes:
                 changed = True
             return text
 
-        def _scrub_content(content):
+        def _scrub_content(content: object) -> object:
             if isinstance(content, str):
                 return _scrub(content)
             if isinstance(content, list):
@@ -206,12 +207,12 @@ class CacheMissDiagnosis:
     All fields are derived metadata safe to log — no raw prompt content.
     """
 
-    reason: Optional[str] = None          # "uuid" | "timestamp" | "prefix_drift" | None
-    location: str = "none"                # "prefix" | "tail" | "none"
-    matched_field: str = ""               # block label, e.g. "system[0]"
-    value_changed: bool = False           # cached prefix differs from prior request
-    breakpoint_index: int = -1            # ordinal of the last cache_control block
-    prefix_fingerprint: str = ""          # hash of the cached-prefix text (for next diff)
+    reason: Optional[str] = None  # "uuid" | "timestamp" | "prefix_drift" | None
+    location: str = "none"  # "prefix" | "tail" | "none"
+    matched_field: str = ""  # block label, e.g. "system[0]"
+    value_changed: bool = False  # cached prefix differs from prior request
+    breakpoint_index: int = -1  # ordinal of the last cache_control block
+    prefix_fingerprint: str = ""  # hash of the cached-prefix text (for next diff)
     prefix_id_hashes: FrozenSet[str] = field(default_factory=frozenset)  # hashed uuids in prefix
 
     def debug_line(self) -> str:
@@ -270,7 +271,7 @@ def diagnose_cache_miss(
         return diag
 
     prefix_segments = segments[: last_bp + 1]
-    tail_segments = segments[last_bp + 1:]
+    tail_segments = segments[last_bp + 1 :]
     prefix_text = "\n".join(t for _l, t, _c in prefix_segments)
     tail_text = "\n".join(t for _l, t, _c in tail_segments)
 
@@ -285,7 +286,7 @@ def diagnose_cache_miss(
         diag.value_changed = diag.prefix_fingerprint != prior_prefix_fingerprint
 
     # Locate any volatile token, recording where it lives (for forensics).
-    def _first_match(label_filter) -> str:
+    def _first_match(label_filter: list[Tuple[str, str, bool]]) -> str:
         for label, text, _cc in label_filter:
             if (
                 _UUID_PATTERN.search(text)
@@ -309,8 +310,7 @@ def diagnose_cache_miss(
         return diag
 
     id_set_changed = (
-        prior_prefix_id_hashes is None
-        or diag.prefix_id_hashes != prior_prefix_id_hashes
+        prior_prefix_id_hashes is None or diag.prefix_id_hashes != prior_prefix_id_hashes
     )
     if prefix_uuids and id_set_changed:
         diag.reason = "uuid"

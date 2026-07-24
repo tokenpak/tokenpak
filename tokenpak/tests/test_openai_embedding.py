@@ -63,16 +63,24 @@ class TestOpenAIEmbeddingAdapterDetect(unittest.TestCase):
         return json.dumps({"model": model, "input": ["test"]}).encode()
 
     def test_detect_text_embedding_3_small(self):
-        self.assertTrue(self.adapter.detect("/v1/embeddings", {}, self._body("text-embedding-3-small")))
+        self.assertTrue(
+            self.adapter.detect("/v1/embeddings", {}, self._body("text-embedding-3-small"))
+        )
 
     def test_detect_text_embedding_3_large(self):
-        self.assertTrue(self.adapter.detect("/v1/embeddings", {}, self._body("text-embedding-3-large")))
+        self.assertTrue(
+            self.adapter.detect("/v1/embeddings", {}, self._body("text-embedding-3-large"))
+        )
 
     def test_detect_text_embedding_ada_002(self):
-        self.assertTrue(self.adapter.detect("/v1/embeddings", {}, self._body("text-embedding-ada-002")))
+        self.assertTrue(
+            self.adapter.detect("/v1/embeddings", {}, self._body("text-embedding-ada-002"))
+        )
 
     def test_detect_false_for_jina_model(self):
-        self.assertFalse(self.adapter.detect("/v1/embeddings", {}, self._body("jina-embeddings-v3")))
+        self.assertFalse(
+            self.adapter.detect("/v1/embeddings", {}, self._body("jina-embeddings-v3"))
+        )
 
     def test_detect_false_for_voyage_model(self):
         self.assertFalse(self.adapter.detect("/v1/embeddings", {}, self._body("voyage-3")))

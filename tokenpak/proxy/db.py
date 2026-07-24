@@ -12,7 +12,7 @@ and the mutation audit write path.
 """
 
 import sqlite3
-from typing import Optional
+from typing import Optional, cast
 
 # Column order for mutation_audit (mirrors CREATE TABLE below)
 MUTATION_AUDIT_COLUMNS: tuple[str, ...] = (
@@ -46,9 +46,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     # ensure the column exists here (additive ALTER TABLE is idempotent via
     # the try/except pattern established by the existing migration helpers).
     try:
-        conn.execute(
-            "ALTER TABLE requests ADD COLUMN session_id TEXT"
-        )
+        conn.execute("ALTER TABLE requests ADD COLUMN session_id TEXT")
     except sqlite3.OperationalError:
         # Column already exists — expected on any DB that has run this before
         pass
@@ -83,12 +81,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE mutation_audit ADD COLUMN {col_def}")
         except sqlite3.OperationalError:
             pass  # column already exists
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ma_session_id  ON mutation_audit(session_id)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ma_request_id  ON mutation_audit(request_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ma_session_id  ON mutation_audit(session_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ma_request_id  ON mutation_audit(request_id)")
 
 
 def insert_mutation_audit(
@@ -112,7 +106,18 @@ def insert_mutation_audit(
              rules_applied, cache_risk, rollback_possible, mode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (request_id, session_id, timestamp, pre_hash, post_hash,
-         rules_applied, cache_risk, rollback_possible, mode),
+        (
+            request_id,
+            session_id,
+            timestamp,
+            pre_hash,
+            post_hash,
+            rules_applied,
+            cache_risk,
+            rollback_possible,
+            mode,
+        ),
     )
-    return cur.lastrowid
+    # SQLite assigns a rowid for this INSERT.  ``lastrowid`` is optional in
+    # the DB-API because statements that do not insert a row leave it unset.
+    return cast(int, cur.lastrowid)

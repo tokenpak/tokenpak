@@ -22,19 +22,19 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Optional
+from collections.abc import Mapping
 
 from tokenpak.services.providers._registry import register_parser
 
 PROVIDER_NAME = "google"
 
 
-def _hash_ref(usage: dict) -> str:
+def _hash_ref(usage: Mapping[str, object]) -> str:
     raw = json.dumps(usage, sort_keys=True).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:12]
 
 
-def parse_usage(usage: Optional[dict]) -> dict:
+def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
     if not isinstance(usage, dict):
         return {
             "input_tokens": None,
@@ -48,12 +48,8 @@ def parse_usage(usage: Optional[dict]) -> dict:
         }
 
     input_tokens = usage.get("promptTokenCount") or usage.get("prompt_token_count")
-    visible_output_tokens = (
-        usage.get("candidatesTokenCount") or usage.get("candidates_token_count")
-    )
-    reasoning_tokens = (
-        usage.get("thoughtsTokenCount") or usage.get("thoughts_token_count")
-    )
+    visible_output_tokens = usage.get("candidatesTokenCount") or usage.get("candidates_token_count")
+    reasoning_tokens = usage.get("thoughtsTokenCount") or usage.get("thoughts_token_count")
     total_tokens = usage.get("totalTokenCount") or usage.get("total_token_count")
 
     total_output_tokens = None
@@ -70,7 +66,9 @@ def parse_usage(usage: Optional[dict]) -> dict:
 
     return {
         "input_tokens": input_tokens if isinstance(input_tokens, int) else None,
-        "visible_output_tokens": visible_output_tokens if isinstance(visible_output_tokens, int) else None,
+        "visible_output_tokens": visible_output_tokens
+        if isinstance(visible_output_tokens, int)
+        else None,
         "reasoning_tokens": reasoning_tokens if isinstance(reasoning_tokens, int) else None,
         "total_output_tokens": total_output_tokens,
         "total_billable_tokens": total_billable_tokens,

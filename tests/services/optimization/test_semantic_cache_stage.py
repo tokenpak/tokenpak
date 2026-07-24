@@ -30,6 +30,7 @@ from tokenpak.services.optimization.trace import OptimizationTrace
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_responses_body(query: str, stream: bool = False) -> bytes:
     payload = {"model": "gpt-4o-mini", "input": query, "stream": stream}
     return json.dumps(payload).encode()
@@ -47,6 +48,7 @@ def _make_ctx(
     has_semantic_cap: bool = True,
 ) -> OptimizationContext:
     """Build a minimal OptimizationContext for cache stage tests."""
+
     class _Adapter:
         capabilities = frozenset({"tip.cache.semantic.v1"}) if has_semantic_cap else frozenset()
 
@@ -264,11 +266,19 @@ def test_cache_hit_similar_query_via_filler_removal():
     fake_response = {"output": [{"text": "OK"}]}
     session = "sess-jaccard-001"
 
-    ctx1 = _make_ctx(_make_responses_body("Can you check the proxy status"), route="status_check", session_id=session)
+    ctx1 = _make_ctx(
+        _make_responses_body("Can you check the proxy status"),
+        route="status_check",
+        session_id=session,
+    )
     stage.apply(ctx1)
     stage.record(ctx1, fake_response)
 
-    ctx2 = _make_ctx(_make_responses_body("Check the proxy status please"), route="status_check", session_id=session)
+    ctx2 = _make_ctx(
+        _make_responses_body("Check the proxy status please"),
+        route="status_check",
+        session_id=session,
+    )
     stage.apply(ctx2)
 
     result = _get_cache_result(ctx2)
@@ -385,5 +395,6 @@ def test_recorded_flag_set_after_record():
 def test_openai_responses_adapter_has_semantic_capability():
     """OpenAIResponsesAdapter declares tip.cache.semantic.v1 after TIP-04 update."""
     from tokenpak.proxy.adapters.openai_responses_adapter import OpenAIResponsesAdapter
+
     adapter = OpenAIResponsesAdapter()
     assert "tip.cache.semantic.v1" in adapter.capabilities

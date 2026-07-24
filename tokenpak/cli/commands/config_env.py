@@ -20,6 +20,8 @@ import json
 import os
 import re
 import sys
+from argparse import Namespace
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -134,17 +136,22 @@ def known_env_keys() -> set[str]:
         from tokenpak.core import config_loader
 
         cfg = config_loader.load_config()
-        chain = (cfg.get("failover") or {}).get("chain") or []
-        for link in chain:
-            env_name = link.get("credential_env")
-            if env_name:
-                keys.add(env_name)
+        failover = cfg.get("failover")
+        if isinstance(failover, dict):
+            chain = failover.get("chain")
+            if isinstance(chain, list):
+                for link in chain:
+                    if not isinstance(link, dict):
+                        continue
+                    env_name = link.get("credential_env")
+                    if isinstance(env_name, str) and env_name:
+                        keys.add(env_name)
     except Exception:
         pass
     return keys
 
 
-def environ_tokenpak_keys(environ: Optional[dict] = None) -> list[str]:
+def environ_tokenpak_keys(environ: Optional[Mapping[str, str]] = None) -> list[str]:
     """All ``TOKENPAK_*`` (and known provider) keys present in the environment."""
     env = environ if environ is not None else os.environ
     present = [k for k in env if k.startswith("TOKENPAK_")]
@@ -165,7 +172,7 @@ class Check:
     message: str
     detail: str = ""
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> dict[str, str]:
         return {
             "id": self.id,
             "check": self.check,
@@ -196,7 +203,7 @@ def _home_rule() -> tuple[Path, str]:
     return home, "canonical"
 
 
-def run_doctor(environ: Optional[dict] = None) -> tuple[list[Check], int]:
+def run_doctor(environ: Optional[Mapping[str, str]] = None) -> tuple[list[Check], int]:
     """Run the read-only config diagnostics. Returns (checks, exit_code).
 
     NEVER writes, chmods, or creates anything. NEVER prints a secret value.
@@ -209,15 +216,15 @@ def run_doctor(environ: Optional[dict] = None) -> tuple[list[Check], int]:
     if rule == "legacy":
         checks.append(
             Check(
-                "D1", "home_resolution", "warn",
+                "D1",
+                "home_resolution",
+                "warn",
                 f"home resolves to legacy path ({home})",
                 "run `tokenpak config migrate` to move to the canonical home",
             )
         )
     else:
-        checks.append(
-            Check("D1", "home_resolution", "ok", f"home = {home} (rule: {rule})")
-        )
+        checks.append(Check("D1", "home_resolution", "ok", f"home = {home} (rule: {rule})"))
 
     # D2 — config file presence + parse.
     config_path = home / "config.yaml"
@@ -233,11 +240,22 @@ def run_doctor(environ: Optional[dict] = None) -> tuple[list[Check], int]:
         except Exception:
             parse_ok = False
         if parse_ok:
-            checks.append(Check("D2", "config_file", "ok", f"config.yaml present + parses ({config_path})"))
+            checks.append(
+                Check("D2", "config_file", "ok", f"config.yaml present + parses ({config_path})")
+            )
         else:
-            checks.append(Check("D2", "config_file", "fail", f"config.yaml present but unparseable ({config_path})"))
+            checks.append(
+                Check(
+                    "D2",
+                    "config_file",
+                    "fail",
+                    f"config.yaml present but unparseable ({config_path})",
+                )
+            )
     else:
-        checks.append(Check("D2", "config_file", "info", "no config.yaml — built-in defaults in effect"))
+        checks.append(
+            Check("D2", "config_file", "info", "no config.yaml — built-in defaults in effect")
+        )
 
     # D3 — effective precedence chain (informational rendering).
     rows = "; ".join(f"{rank}:{name}" for rank, name, _desc in load_order.describe())
@@ -248,22 +266,55 @@ def run_doctor(environ: Optional[dict] = None) -> tuple[list[Check], int]:
     present = environ_tokenpak_keys(env)
     unknown = [k for k in present if k.startswith("TOKENPAK_") and k not in known]
     if present:
-        checks.append(Check("D4", "env_vars", "ok", f"{len(present)} TokenPak/provider env var(s) set", ", ".join(present)))
+        checks.append(
+            Check(
+                "D4",
+                "env_vars",
+                "ok",
+                f"{len(present)} TokenPak/provider env var(s) set",
+                ", ".join(present),
+            )
+        )
     else:
         checks.append(Check("D4", "env_vars", "info", "no TokenPak/provider env vars set"))
     for name in unknown:
         checks.append(
-            Check("D4", "env_var_unknown", "warn", f"unknown TOKENPAK_* name: {name}", "possible typo — honored at runtime but undocumented")
+            Check(
+                "D4",
+                "env_var_unknown",
+                "warn",
+                f"unknown TOKENPAK_* name: {name}",
+                "possible typo — honored at runtime but undocumented",
+            )
         )
 
     # D5 — ANTHROPIC_BASE_URL attach state (read-only).
     base_url = env.get("ANTHROPIC_BASE_URL", "").strip()
     if not base_url:
-        checks.append(Check("D5", "attach_state", "ok", "ANTHROPIC_BASE_URL unset (default upstream / not attached via env)"))
+        checks.append(
+            Check(
+                "D5",
+                "attach_state",
+                "ok",
+                "ANTHROPIC_BASE_URL unset (default upstream / not attached via env)",
+            )
+        )
     elif re.search(r"127\.0\.0\.1|localhost", base_url):
-        checks.append(Check("D5", "attach_state", "ok", "ANTHROPIC_BASE_URL points at a local proxy", base_url))
+        checks.append(
+            Check(
+                "D5", "attach_state", "ok", "ANTHROPIC_BASE_URL points at a local proxy", base_url
+            )
+        )
     else:
-        checks.append(Check("D5", "attach_state", "info", "ANTHROPIC_BASE_URL points at a non-default upstream", base_url))
+        checks.append(
+            Check(
+                "D5",
+                "attach_state",
+                "info",
+                "ANTHROPIC_BASE_URL points at a non-default upstream",
+                base_url,
+            )
+        )
 
     # D6 — .env file hygiene (stat only; names never read for D6 status).
     user_env = home / ".env"
@@ -273,24 +324,46 @@ def run_doctor(environ: Optional[dict] = None) -> tuple[list[Check], int]:
         except OSError:
             mode = None
         if mode is not None and mode & 0o077:
-            checks.append(Check("D6", "dotenv_hygiene", "warn", f"<tpk-home>/.env mode {oct(mode)} is looser than 0600", "tighten with `chmod 600`"))
+            checks.append(
+                Check(
+                    "D6",
+                    "dotenv_hygiene",
+                    "warn",
+                    f"<tpk-home>/.env mode {oct(mode)} is looser than 0600",
+                    "tighten with `chmod 600`",
+                )
+            )
         else:
-            checks.append(Check("D6", "dotenv_hygiene", "ok", "<tpk-home>/.env present with 0600 mode"))
+            checks.append(
+                Check("D6", "dotenv_hygiene", "ok", "<tpk-home>/.env present with 0600 mode")
+            )
     else:
         checks.append(Check("D6", "dotenv_hygiene", "info", "no <tpk-home>/.env"))
 
     # D7 — split-home drift (both canonical + legacy present).
     if _paths.has_canonical() and _paths.has_legacy():
-        checks.append(Check("D7", "boundary_drift", "warn", "both ~/.tpk and ~/.tokenpak present (split-home)", "canonical (~/.tpk) wins; reconcile with `tokenpak config migrate`"))
+        checks.append(
+            Check(
+                "D7",
+                "boundary_drift",
+                "warn",
+                "both ~/.tpk and ~/.tokenpak present (split-home)",
+                "canonical (~/.tpk) wins; reconcile with `tokenpak config migrate`",
+            )
+        )
     else:
-        checks.append(Check("D7", "boundary_drift", "ok", "single TokenPak home (no split-home drift)"))
+        checks.append(
+            Check("D7", "boundary_drift", "ok", "single TokenPak home (no split-home drift)")
+        )
 
     # D8 — schema coverage (info only).
     documented_present = [k for k in present if k in known]
     undocumented_present = [k for k in present if k.startswith("TOKENPAK_") and k not in known]
     checks.append(
         Check(
-            "D8", "schema_coverage", "info",
+            "D8",
+            "schema_coverage",
+            "info",
             f"{len(documented_present)} documented / {len(undocumented_present)} undocumented env var(s) set",
             "",
         )
@@ -301,9 +374,20 @@ def run_doctor(environ: Optional[dict] = None) -> tuple[list[Check], int]:
     return checks, (4 if has_fail else 0)
 
 
-def render_doctor(checks: list[Check], *, as_json: bool, quiet: bool, verbose: bool, home: Path, rule: str, exit_code: int) -> None:
+def render_doctor(
+    checks: list[Check],
+    *,
+    as_json: bool,
+    quiet: bool,
+    verbose: bool,
+    home: Path,
+    rule: str,
+    exit_code: int,
+) -> None:
     if as_json:
-        summary = {s: sum(1 for c in checks if c.status == s) for s in ("ok", "warn", "fail", "info")}
+        summary = {
+            s: sum(1 for c in checks if c.status == s) for s in ("ok", "warn", "fail", "info")
+        }
         out = {
             "home": {"path": str(home), "rule": rule},
             "checks": [c.as_dict() for c in checks],
@@ -314,7 +398,9 @@ def render_doctor(checks: list[Check], *, as_json: bool, quiet: bool, verbose: b
         return
 
     if quiet:
-        worst = next((c for c in checks if c.status == "fail"), None) or next((c for c in checks if c.status == "warn"), None)
+        worst = next((c for c in checks if c.status == "fail"), None) or next(
+            (c for c in checks if c.status == "warn"), None
+        )
         if worst is not None:
             print(f"{_STATUS_GLYPH[worst.status]} {worst.message}")
         return
@@ -333,7 +419,7 @@ def render_doctor(checks: list[Check], *, as_json: bool, quiet: bool, verbose: b
 # ---------------------------------------------------------------------------
 
 
-def run_env_show(*, mask: bool, as_json: bool, environ: Optional[dict] = None) -> int:
+def run_env_show(*, mask: bool, as_json: bool, environ: Optional[Mapping[str, str]] = None) -> int:
     """Print the loaded env vars + which layer each came from (masked by default).
 
     Read-only. ``mask`` (default True) redacts secret-class values. Provenance is
@@ -431,7 +517,7 @@ def write_env_stub(target_dir: Path, *, force: bool = False) -> tuple[bool, Path
 # ---------------------------------------------------------------------------
 
 
-def cmd_config_doctor(args) -> None:
+def cmd_config_doctor(args: Namespace) -> None:
     """`tokenpak config doctor` dispatch."""
     checks, exit_code = run_doctor()
     home, rule = _home_rule()
@@ -447,7 +533,7 @@ def cmd_config_doctor(args) -> None:
     sys.exit(exit_code)
 
 
-def cmd_config_env(args) -> None:
+def cmd_config_env(args: Namespace) -> None:
     """`tokenpak config env` dispatch (loaded env + provenance, masked by default)."""
     # Mask by default; `--show-values` is intentionally NOT offered here (that
     # would belong to a separately-gated path). `--mask/--no-mask` toggles.

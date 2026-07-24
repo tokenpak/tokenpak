@@ -30,7 +30,10 @@ try:
         TopicSegment,
     )
 except ImportError as _exc:
-    pytest.skip(f"tokenpak.compaction symbols not present in slim OSS install: {_exc}", allow_module_level=True)
+    pytest.skip(
+        f"tokenpak.compaction symbols not present in slim OSS install: {_exc}",
+        allow_module_level=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Test data: Multi-topic content

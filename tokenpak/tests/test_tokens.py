@@ -9,6 +9,7 @@ from tokenpak import tokens as tok
 # count_tokens
 # ---------------------------------------------------------------------------
 
+
 class TestCountTokens:
     def test_empty_string_returns_zero(self):
         assert tok.count_tokens("") == 0
@@ -40,8 +41,7 @@ class TestCountTokens:
     def test_fallback_mode_uses_char_estimate(self):
         """When tiktoken unavailable, falls back to len//4."""
         tok.clear_cache()
-        with patch.object(tok, '_FALLBACK_MODE', True), \
-             patch.object(tok, '_ENC', None):
+        with patch.object(tok, "_FALLBACK_MODE", True), patch.object(tok, "_ENC", None):
             result = tok.count_tokens("Hello world!")  # 12 chars → max(1, 12//4)=3
             assert result == max(1, len("Hello world!") // 4)
         tok.clear_cache()
@@ -50,6 +50,7 @@ class TestCountTokens:
 # ---------------------------------------------------------------------------
 # count_tokens_uncached
 # ---------------------------------------------------------------------------
+
 
 class TestCountTokensUncached:
     def test_empty_returns_zero(self):
@@ -62,8 +63,7 @@ class TestCountTokensUncached:
         assert cached == uncached
 
     def test_fallback_path(self):
-        with patch.object(tok, '_FALLBACK_MODE', True), \
-             patch.object(tok, '_ENC', None):
+        with patch.object(tok, "_FALLBACK_MODE", True), patch.object(tok, "_ENC", None):
             result = tok.count_tokens_uncached("abcdefgh")  # 8 chars → max(1,2)=2
             assert result == max(1, len("abcdefgh") // 4)
 
@@ -71,6 +71,7 @@ class TestCountTokensUncached:
 # ---------------------------------------------------------------------------
 # truncate_to_tokens
 # ---------------------------------------------------------------------------
+
 
 class TestTruncateToTokens:
     def test_empty_string_returns_empty(self):
@@ -117,6 +118,7 @@ class TestTruncateToTokens:
 # estimate_tokens
 # ---------------------------------------------------------------------------
 
+
 class TestEstimateTokens:
     def test_empty_returns_zero(self):
         assert tok.estimate_tokens("") == 0
@@ -136,7 +138,7 @@ class TestEstimateTokens:
         # CJK chars are 3 bytes each — estimate should reflect byte length
         cjk = "中文测试"
         result = tok.estimate_tokens(cjk)
-        expected = max(1, len(cjk.encode('utf-8')) // 4)
+        expected = max(1, len(cjk.encode("utf-8")) // 4)
         assert result == expected
 
 
@@ -144,13 +146,14 @@ class TestEstimateTokens:
 # cache_info / clear_cache
 # ---------------------------------------------------------------------------
 
+
 class TestCacheManagement:
     def test_cache_info_returns_namedtuple(self):
         info = tok.cache_info()
-        assert hasattr(info, 'hits')
-        assert hasattr(info, 'misses')
-        assert hasattr(info, 'maxsize')
-        assert hasattr(info, 'currsize')
+        assert hasattr(info, "hits")
+        assert hasattr(info, "misses")
+        assert hasattr(info, "maxsize")
+        assert hasattr(info, "currsize")
 
     def test_clear_cache_resets_currsize(self):
         tok.count_tokens("warm up cache")

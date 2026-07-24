@@ -10,6 +10,7 @@ Tests cover:
   - requests_total increments tracked correctly
   - last_request_at is None before first request, string after
 """
+
 from __future__ import annotations
 
 import os
@@ -25,6 +26,7 @@ from tokenpak.proxy.server import ProxyServer
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_server() -> ProxyServer:
     """Return a ProxyServer instance without starting a socket."""
     return ProxyServer(host="127.0.0.1", port=0)
@@ -33,6 +35,7 @@ def _make_server() -> ProxyServer:
 # ---------------------------------------------------------------------------
 # Field presence
 # ---------------------------------------------------------------------------
+
 
 class TestStatusFields:
     """GET /status returns all required fields."""
@@ -108,6 +111,7 @@ class TestStatusFields:
 # requests_total
 # ---------------------------------------------------------------------------
 
+
 class TestRequestsTotal:
     """requests_total reflects session["requests"] counter."""
 
@@ -125,6 +129,7 @@ class TestRequestsTotal:
 # ---------------------------------------------------------------------------
 # Provider health
 # ---------------------------------------------------------------------------
+
 
 class TestProviderHealth:
     """Provider health values: reachable / unreachable / no-key."""
@@ -205,6 +210,7 @@ class TestProviderHealth:
 # ---------------------------------------------------------------------------
 # Graceful empty state
 # ---------------------------------------------------------------------------
+
 
 class TestGracefulEmptyState:
     """Endpoint works when no providers are configured."""

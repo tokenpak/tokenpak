@@ -7,6 +7,7 @@ from tokenpak.cache.cache_report import format_cache_report
 # Happy path tests
 # ---------------------------------------------------------------------------
 
+
 def test_basic_cache_report():
     """Standard call with all parameters returns expected structure."""
     result = format_cache_report(
@@ -88,6 +89,7 @@ def test_default_parameters():
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 def test_zero_tokens_no_division_error():
     """Empty cache (zero total tokens) should not raise ZeroDivisionError."""
     result = format_cache_report(cache_read_tokens=0, new_input_tokens=0)
@@ -108,7 +110,15 @@ def test_extra_kwargs_ignored():
 def test_return_keys_complete():
     """Returned dict must contain all expected keys."""
     result = format_cache_report()
-    expected_keys = {"turn_id", "hit_tokens", "miss_tokens", "total_tokens", "cache_ratio", "provider", "model"}
+    expected_keys = {
+        "turn_id",
+        "hit_tokens",
+        "miss_tokens",
+        "total_tokens",
+        "cache_ratio",
+        "provider",
+        "model",
+    }
     assert expected_keys.issubset(result.keys())
 
 

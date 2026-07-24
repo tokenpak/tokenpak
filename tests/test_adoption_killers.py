@@ -28,11 +28,21 @@ from tokenpak.report import Action, CompileReport
 
 # ── Shared fixtures ───────────────────────────────────────────────────────
 
+
 def _make_pack(budget: int = 8000) -> ContextPack:
     pack = ContextPack(budget=budget)
-    pack.add(PackBlock(id="sys", type="instructions", content="You are a helpful assistant.", priority="critical"))
+    pack.add(
+        PackBlock(
+            id="sys",
+            type="instructions",
+            content="You are a helpful assistant.",
+            priority="critical",
+        )
+    )
     pack.add(PackBlock(id="docs", type="knowledge", content="word " * 300, priority="high"))
-    pack.add(PackBlock(id="ev", type="evidence", content="result " * 50, priority="medium", quality=0.8))
+    pack.add(
+        PackBlock(id="ev", type="evidence", content="result " * 50, priority="medium", quality=0.8)
+    )
     pack.add(PackBlock(id="hist", type="conversation", content="message " * 100, priority="low"))
     return pack
 
@@ -47,6 +57,7 @@ def _pack_hash(pack: ContextPack) -> str:
 # REQUIREMENT 1: LATENCY — "Compilation Must Feel Free"
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestLatencyRequirement:
     """p50 compile < 20ms, p95 compile < 50ms. Enforced in CI."""
 
@@ -59,14 +70,16 @@ class TestLatencyRequirement:
             # Re-create identical pack each run (same input = cold compile)
             fresh = ContextPack(budget=pack.budget)
             for b in pack._blocks:
-                fresh.add(PackBlock(
-                    id=b.id,
-                    type=b.type,
-                    content=b.content,
-                    priority=b.priority,
-                    quality=b.quality,
-                    max_tokens=b.max_tokens,
-                ))
+                fresh.add(
+                    PackBlock(
+                        id=b.id,
+                        type=b.type,
+                        content=b.content,
+                        priority=b.priority,
+                        quality=b.quality,
+                        max_tokens=b.max_tokens,
+                    )
+                )
             t0 = time.perf_counter()
             fresh.compile()
             times.append((time.perf_counter() - t0) * 1000.0)
@@ -110,9 +123,21 @@ class TestLatencyRequirement:
         large_doc = "token " * 2500  # ~10K tokens worth of content
         pack = ContextPack(budget=8000)
         pack.add(PackBlock(id="sys", type="instructions", content="System.", priority="critical"))
-        pack.add(PackBlock(id="big", type="knowledge", content=large_doc, priority="high", max_tokens=1000))
-        pack.add(PackBlock(id="ev1", type="evidence", content="evidence " * 50, priority="medium", quality=0.9))
-        pack.add(PackBlock(id="ev2", type="evidence", content="evidence " * 50, priority="medium", quality=0.7))
+        pack.add(
+            PackBlock(
+                id="big", type="knowledge", content=large_doc, priority="high", max_tokens=1000
+            )
+        )
+        pack.add(
+            PackBlock(
+                id="ev1", type="evidence", content="evidence " * 50, priority="medium", quality=0.9
+            )
+        )
+        pack.add(
+            PackBlock(
+                id="ev2", type="evidence", content="evidence " * 50, priority="medium", quality=0.7
+            )
+        )
 
         times = self._compile_times_ms(pack)
         p95 = sorted(times)[int(len(times) * 0.95)]
@@ -133,6 +158,7 @@ class TestLatencyRequirement:
 # ═══════════════════════════════════════════════════════════════════════════
 # REQUIREMENT 2: DETERMINISM — "Same Input = Same Output"
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDeterminismRequirement:
     """100 consecutive compiles produce identical output. No exceptions."""
@@ -188,7 +214,11 @@ class TestDeterminismRequirement:
         pack = ContextPack(budget=8000)
         # Multiple same-priority blocks
         for i in range(5):
-            pack.add(PackBlock(id=f"blk{i}", type="knowledge", content=f"content {i} " * 20, priority="medium"))
+            pack.add(
+                PackBlock(
+                    id=f"blk{i}", type="knowledge", content=f"content {i} " * 20, priority="medium"
+                )
+            )
 
         r1 = pack.compile()
         r2 = pack.compile()
@@ -198,8 +228,16 @@ class TestDeterminismRequirement:
     def test_compile_with_quality_filter_deterministic(self):
         """Quality filtering decisions must be deterministic."""
         pack = ContextPack(budget=8000, quality_threshold=0.6)
-        pack.add(PackBlock(id="good", type="evidence", content="good " * 50, priority="medium", quality=0.9))
-        pack.add(PackBlock(id="bad", type="evidence", content="bad " * 50, priority="medium", quality=0.3))
+        pack.add(
+            PackBlock(
+                id="good", type="evidence", content="good " * 50, priority="medium", quality=0.9
+            )
+        )
+        pack.add(
+            PackBlock(
+                id="bad", type="evidence", content="bad " * 50, priority="medium", quality=0.3
+            )
+        )
 
         results = [pack.compile() for _ in range(10)]
         texts = {r.text for r in results}
@@ -213,8 +251,14 @@ class TestDeterminismRequirement:
     def test_no_randomness_in_compile_path(self):
         """Pack with compaction and budget overflow must be deterministic."""
         pack = ContextPack(budget=500)
-        pack.add(PackBlock(id="sys", type="instructions", content="system " * 50, priority="critical"))
-        pack.add(PackBlock(id="big", type="knowledge", content="docs " * 200, priority="high", max_tokens=200))
+        pack.add(
+            PackBlock(id="sys", type="instructions", content="system " * 50, priority="critical")
+        )
+        pack.add(
+            PackBlock(
+                id="big", type="knowledge", content="docs " * 200, priority="high", max_tokens=200
+            )
+        )
         pack.add(PackBlock(id="low", type="context", content="extra " * 300, priority="low"))
 
         first = pack.compile().text
@@ -225,6 +269,7 @@ class TestDeterminismRequirement:
 # ═══════════════════════════════════════════════════════════════════════════
 # REQUIREMENT 3: TRANSPARENCY — "Show Your Work"
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTransparencyRequirement:
     """Every compile produces a full report. Every decision is inspectable."""
@@ -242,9 +287,7 @@ class TestTransparencyRequirement:
         result = pack.compile()
         input_ids = {b.id for b in pack._blocks}
         decision_ids = {d.block_id for d in result.report.decisions}
-        assert input_ids == decision_ids, (
-            f"Blocks without decisions: {input_ids - decision_ids}"
-        )
+        assert input_ids == decision_ids, f"Blocks without decisions: {input_ids - decision_ids}"
 
     def test_every_decision_has_reason(self):
         """Every decision must have a non-empty reason string."""
@@ -263,8 +306,14 @@ class TestTransparencyRequirement:
         assert "summary" in j
         summary = j["summary"]
         required = {
-            "input_blocks", "output_blocks", "input_tokens", "output_tokens",
-            "budget", "savings_percent", "budget_used_percent", "tokens_saved",
+            "input_blocks",
+            "output_blocks",
+            "input_tokens",
+            "output_tokens",
+            "budget",
+            "savings_percent",
+            "budget_used_percent",
+            "tokens_saved",
             "compile_time_ms",
         }
         missing = required - set(summary.keys())
@@ -278,7 +327,14 @@ class TestTransparencyRequirement:
         result = pack.compile()
         j = result.report.to_json()
 
-        required_fields = {"block_id", "block_type", "action", "reason", "tokens_before", "tokens_after"}
+        required_fields = {
+            "block_id",
+            "block_type",
+            "action",
+            "reason",
+            "tokens_before",
+            "tokens_after",
+        }
         for d in j["decisions"]:
             missing = required_fields - set(d.keys())
             assert not missing, f"Decision for '{d.get('block_id')}' missing: {missing}"
@@ -310,7 +366,11 @@ class TestTransparencyRequirement:
     def test_compacted_decision_shows_method(self):
         """COMPACTED decisions must show the compaction method used."""
         pack = ContextPack(budget=8000)
-        pack.add(PackBlock(id="big", type="knowledge", content="word " * 500, priority="high", max_tokens=100))
+        pack.add(
+            PackBlock(
+                id="big", type="knowledge", content="word " * 500, priority="high", max_tokens=100
+            )
+        )
         result = pack.compile()
         d = next(d for d in result.report.decisions if d.block_id == "big")
         assert d.action == Action.COMPACTED
@@ -331,6 +391,7 @@ class TestTransparencyRequirement:
 # ═══════════════════════════════════════════════════════════════════════════
 # REQUIREMENT 4: STACK NEUTRALITY — "Works Everywhere"
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestStackNeutralityRequirement:
     """SDK works without gateway. Outputs compatible with 5+ providers."""
@@ -487,6 +548,7 @@ class TestStackNeutralityRequirement:
         """Import from tokenpak should work with no external services."""
         from tokenpak import ContextPack as CP
         from tokenpak import PackBlock as PB
+
         p = CP(budget=4000)
         p.add(PB(id="t", type="instructions", content="Test.", priority="critical"))
         result = p.compile()
@@ -497,6 +559,7 @@ class TestStackNeutralityRequirement:
 # REQUIREMENT 5: INCREMENTAL ADOPTION — "Use One Feature First"
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestIncrementalAdoptionRequirement:
     """Each level of the adoption ladder works independently."""
 
@@ -505,6 +568,7 @@ class TestIncrementalAdoptionRequirement:
     def test_level1_count_tokens_single_import(self):
         """Level 1: from tokenpak import count_tokens — zero config."""
         from tokenpak import count_tokens as ct
+
         assert callable(ct)
         result = ct("Hello, world!")
         assert isinstance(result, int)
@@ -513,11 +577,13 @@ class TestIncrementalAdoptionRequirement:
     def test_level1_count_tokens_empty_string(self):
         """count_tokens('') should return 0."""
         from tokenpak import count_tokens as ct
+
         assert ct("") == 0
 
     def test_level1_count_tokens_scales_with_content(self):
         """Longer content should have more tokens than shorter."""
         from tokenpak import count_tokens as ct
+
         short = ct("Hi")
         long = ct("This is a much longer sentence with many more words and tokens.")
         assert long > short
@@ -526,6 +592,7 @@ class TestIncrementalAdoptionRequirement:
         """count_tokens must work without ContextPack, PackBlock, or gateway."""
         # Direct import from tokens module — bypasses __init__.py
         from tokenpak.tokens import count_tokens as ct
+
         assert ct("standalone") > 0
 
     # ── Level 2: Simple packing ───────────────────────────────────────
@@ -533,6 +600,7 @@ class TestIncrementalAdoptionRequirement:
     def test_level2_pack_prompt_single_function(self):
         """Level 2: from tokenpak import pack_prompt — one function."""
         from tokenpak import pack_prompt as pp
+
         assert callable(pp)
         result = pp(system="You are helpful.", docs="Some docs here.")
         assert isinstance(result, str)
@@ -541,6 +609,7 @@ class TestIncrementalAdoptionRequirement:
     def test_level2_pack_prompt_with_all_args(self):
         """pack_prompt accepts system, docs, history, budget."""
         from tokenpak import pack_prompt as pp
+
         result = pp(
             system="System instructions.",
             docs="Documentation content.",
@@ -553,6 +622,7 @@ class TestIncrementalAdoptionRequirement:
     def test_level2_pack_prompt_with_only_docs(self):
         """pack_prompt works with only docs (no system or history)."""
         from tokenpak import pack_prompt as pp
+
         result = pp(docs="Just the docs, nothing else.")
         assert "Just the docs" in result
 
@@ -560,6 +630,7 @@ class TestIncrementalAdoptionRequirement:
         """pack_prompt respects the budget parameter."""
         from tokenpak import count_tokens as ct
         from tokenpak import pack_prompt as pp
+
         big_docs = "word " * 5000  # ~5000 tokens
         result = pp(docs=big_docs, budget=500)
         token_count = ct(result)
@@ -569,6 +640,7 @@ class TestIncrementalAdoptionRequirement:
     def test_level2_does_not_require_level3(self):
         """pack_prompt must work without importing ContextPack directly."""
         from tokenpak.pack import pack_prompt as pp
+
         result = pp(system="Hello.")
         assert isinstance(result, str)
 
@@ -577,6 +649,7 @@ class TestIncrementalAdoptionRequirement:
     def test_level3_contextpack_and_packblock(self):
         """Level 3: from tokenpak import TokenPak, Block — core class."""
         from tokenpak import ContextPack, PackBlock
+
         pack = ContextPack()
         pack.add(PackBlock(id="x", type="knowledge", content="Content here.", priority="high"))
         result = pack.compile()
@@ -585,9 +658,22 @@ class TestIncrementalAdoptionRequirement:
     def test_level3_adds_value_over_level2(self):
         """Level 3 adds block-level control (priority, quality, max_tokens)."""
         from tokenpak import ContextPack, PackBlock
+
         pack = ContextPack(budget=8000, quality_threshold=0.6)
-        pack.add(PackBlock(id="high_q", type="evidence", content="High quality.", quality=0.9, priority="medium"))
-        pack.add(PackBlock(id="low_q", type="evidence", content="Low quality.", quality=0.3, priority="medium"))
+        pack.add(
+            PackBlock(
+                id="high_q",
+                type="evidence",
+                content="High quality.",
+                quality=0.9,
+                priority="medium",
+            )
+        )
+        pack.add(
+            PackBlock(
+                id="low_q", type="evidence", content="Low quality.", quality=0.3, priority="medium"
+            )
+        )
         result = pack.compile()
         # Low quality block should be removed
         assert "High quality." in result.text
@@ -596,6 +682,7 @@ class TestIncrementalAdoptionRequirement:
     def test_level3_without_gateway(self):
         """Level 3 must work with no network access or gateway."""
         from tokenpak import ContextPack, PackBlock
+
         pack = ContextPack(budget=4000)
         pack.add(PackBlock(id="a", type="instructions", content="Standalone.", priority="critical"))
         assert pack.compile().text == "Standalone."
@@ -605,6 +692,7 @@ class TestIncrementalAdoptionRequirement:
     def test_level4_compile_with_report(self):
         """Level 4: full compile() returns text + report."""
         from tokenpak import CompileReport, ContextPack, PackBlock
+
         pack = ContextPack(budget=8000)
         pack.add(PackBlock(id="sys", type="instructions", content="System.", priority="critical"))
         result = pack.compile()
@@ -614,9 +702,18 @@ class TestIncrementalAdoptionRequirement:
     def test_level4_adds_value_over_level3(self):
         """Level 4 adds compile reports and observability."""
         from tokenpak import Action, ContextPack, PackBlock
+
         pack = ContextPack(budget=8000, quality_threshold=0.5)
-        pack.add(PackBlock(id="good", type="evidence", content="Good evidence.", quality=0.9, priority="medium"))
-        pack.add(PackBlock(id="bad", type="evidence", content="Bad evidence.", quality=0.1, priority="medium"))
+        pack.add(
+            PackBlock(
+                id="good", type="evidence", content="Good evidence.", quality=0.9, priority="medium"
+            )
+        )
+        pack.add(
+            PackBlock(
+                id="bad", type="evidence", content="Bad evidence.", quality=0.1, priority="medium"
+            )
+        )
         result = pack.compile()
         actions = {d.block_id: d.action for d in result.report.decisions}
         assert actions["good"] == Action.KEPT
@@ -625,8 +722,11 @@ class TestIncrementalAdoptionRequirement:
     def test_level4_full_output_formats(self):
         """Level 4: to_prompt, to_messages, to_anthropic, to_json all work."""
         from tokenpak import ContextPack, PackBlock
+
         pack = ContextPack()
-        pack.add(PackBlock(id="x", type="instructions", content="Full protocol.", priority="critical"))
+        pack.add(
+            PackBlock(id="x", type="instructions", content="Full protocol.", priority="critical")
+        )
         result = pack.compile()
 
         assert isinstance(result.to_prompt(), str)
@@ -639,8 +739,11 @@ class TestIncrementalAdoptionRequirement:
     def test_level5_to_json_serializable(self):
         """Level 5: to_json() produces transferable payload."""
         from tokenpak import ContextPack, PackBlock
+
         pack = ContextPack()
-        pack.add(PackBlock(id="x", type="instructions", content="Wire format.", priority="critical"))
+        pack.add(
+            PackBlock(id="x", type="instructions", content="Wire format.", priority="critical")
+        )
         result = pack.compile()
         payload = json.dumps(result.to_json())
         recovered = json.loads(payload)
@@ -649,8 +752,11 @@ class TestIncrementalAdoptionRequirement:
     def test_level5_adds_value_over_level4(self):
         """Level 5 adds serialization for cross-agent transfer."""
         from tokenpak import ContextPack, PackBlock
+
         pack = ContextPack()
-        pack.add(PackBlock(id="ctx", type="knowledge", content="Context to transfer.", priority="high"))
+        pack.add(
+            PackBlock(id="ctx", type="knowledge", content="Context to transfer.", priority="high")
+        )
         result = pack.compile()
         j = result.to_json()
         # Verify the full report is included in the wire payload
@@ -664,14 +770,17 @@ class TestIncrementalAdoptionRequirement:
         """Level N must not require importing Level N+1 to work."""
         # Level 1 — no ContextPack needed
         from tokenpak.tokens import count_tokens as ct
+
         assert ct("hello") > 0
 
         # Level 2 — no report import needed
         from tokenpak.pack import pack_prompt as pp
+
         assert isinstance(pp(docs="docs"), str)
 
         # Level 3 — no gateway/cloud needed
         from tokenpak.pack import ContextPack, PackBlock
+
         p = ContextPack()
         p.add(PackBlock(id="x", type="instructions", content="Hi.", priority="critical"))
         assert p.compile().text == "Hi."
@@ -685,11 +794,14 @@ class TestIncrementalAdoptionRequirement:
             count_tokens,  # Level 1
             pack_prompt,  # Level 2
         )
+
         # All imports succeeded — adoption ladder is accessible
-        assert all([
-            callable(count_tokens),
-            callable(pack_prompt),
-            ContextPack is not None,
-            PackBlock is not None,
-            CompileReport is not None,
-        ])
+        assert all(
+            [
+                callable(count_tokens),
+                callable(pack_prompt),
+                ContextPack is not None,
+                PackBlock is not None,
+                CompileReport is not None,
+            ]
+        )

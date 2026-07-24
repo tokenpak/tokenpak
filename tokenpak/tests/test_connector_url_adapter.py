@@ -148,8 +148,10 @@ class TestURLAdapterIngest:
         html = b"<html><head><title>Test Page</title></head><body><p>Hello</p></body></html>"
         mock_resp = _make_mock_response(html, etag='"abc123"')
 
-        with patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp), \
-             patch("tokenpak.sources.url_adapter._check_robots", return_value=True):
+        with (
+            patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp),
+            patch("tokenpak.sources.url_adapter._check_robots", return_value=True),
+        ):
             content, prov = self._adapter().ingest("http://example.com/test")
 
         assert "Hello" in content
@@ -161,8 +163,10 @@ class TestURLAdapterIngest:
         html = b"<html><title>X</title><body>hi</body></html>"
         mock_resp = _make_mock_response(html, etag='"etag-value"')
 
-        with patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp), \
-             patch("tokenpak.sources.url_adapter._check_robots", return_value=True):
+        with (
+            patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp),
+            patch("tokenpak.sources.url_adapter._check_robots", return_value=True),
+        ):
             _, prov = self._adapter().ingest("http://example.com/")
 
         assert prov.source_version == "etag-value"
@@ -171,8 +175,10 @@ class TestURLAdapterIngest:
         html = b"<html><title>X</title><body>content</body></html>"
         mock_resp = _make_mock_response(html, etag="")  # No ETag
 
-        with patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp), \
-             patch("tokenpak.sources.url_adapter._check_robots", return_value=True):
+        with (
+            patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp),
+            patch("tokenpak.sources.url_adapter._check_robots", return_value=True),
+        ):
             _, prov = self._adapter().ingest("http://example.com/page")
 
         # Version should be a 64-char hex SHA
@@ -185,8 +191,13 @@ class TestURLAdapterIngest:
                 self._adapter().ingest("http://example.com/protected")
 
     def test_ingest_raises_on_network_error(self):
-        with patch("tokenpak.sources.url_adapter._urlopen_checked", side_effect=Exception("connection refused")), \
-             patch("tokenpak.sources.url_adapter._check_robots", return_value=True):
+        with (
+            patch(
+                "tokenpak.sources.url_adapter._urlopen_checked",
+                side_effect=Exception("connection refused"),
+            ),
+            patch("tokenpak.sources.url_adapter._check_robots", return_value=True),
+        ):
             with pytest.raises(SourceFetchError, match="Failed to fetch"):
                 self._adapter().ingest("http://bad-host.invalid/page")
 
@@ -194,8 +205,10 @@ class TestURLAdapterIngest:
         plain = b"Just plain text content"
         mock_resp = _make_mock_response(plain, content_type="text/plain")
 
-        with patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp), \
-             patch("tokenpak.sources.url_adapter._check_robots", return_value=True):
+        with (
+            patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp),
+            patch("tokenpak.sources.url_adapter._check_robots", return_value=True),
+        ):
             content, prov = self._adapter().ingest("http://example.com/file.txt")
 
         assert "Just plain text content" in content
@@ -206,8 +219,10 @@ class TestURLAdapterIngest:
         html = b"<html><title>T</title><body>x</body></html>"
         mock_resp = _make_mock_response(html)
 
-        with patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp), \
-             patch("tokenpak.sources.url_adapter._check_robots", return_value=True):
+        with (
+            patch("tokenpak.sources.url_adapter._urlopen_checked", return_value=mock_resp),
+            patch("tokenpak.sources.url_adapter._check_robots", return_value=True),
+        ):
             _, prov = self._adapter().ingest("http://example.com/")
 
         assert "T" in prov.fetched_at
@@ -251,6 +266,8 @@ class TestURLAdapterHasChanged:
 
     def test_returns_false_on_fetch_error_during_fallback(self):
         """When HEAD fails and fallback ingest also fails, assume unchanged."""
-        with patch("tokenpak.sources.url_adapter._urlopen_checked", side_effect=Exception("network error")):
+        with patch(
+            "tokenpak.sources.url_adapter._urlopen_checked", side_effect=Exception("network error")
+        ):
             result = self._adapter().has_changed("http://bad.invalid/", "any-version")
         assert result is False

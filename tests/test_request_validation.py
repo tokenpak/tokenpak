@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_anthropic_body(**overrides) -> bytes:
     """Build a minimal valid Anthropic request body."""
     data = {
@@ -69,9 +70,11 @@ def _make_google_body(**overrides) -> bytes:
 # Schema import test
 # ---------------------------------------------------------------------------
 
+
 class TestRequestSchemas(unittest.TestCase):
     def test_anthropic_schema_has_required_fields(self):
         from tokenpak.validation.request_schema import ANTHROPIC_MESSAGE_SCHEMA
+
         required = ANTHROPIC_MESSAGE_SCHEMA.get("required", [])
         self.assertIn("model", required)
         self.assertIn("max_tokens", required)
@@ -79,22 +82,26 @@ class TestRequestSchemas(unittest.TestCase):
 
     def test_openai_schema_has_required_fields(self):
         from tokenpak.validation.request_schema import OPENAI_CHAT_SCHEMA
+
         required = OPENAI_CHAT_SCHEMA.get("required", [])
         self.assertIn("model", required)
         self.assertIn("messages", required)
 
     def test_get_request_schema_returns_anthropic(self):
         from tokenpak.validation.request_schema import ANTHROPIC_MESSAGE_SCHEMA, get_request_schema
+
         schema = get_request_schema("anthropic")
         self.assertEqual(schema["title"], ANTHROPIC_MESSAGE_SCHEMA["title"])
 
     def test_get_request_schema_returns_openai(self):
         from tokenpak.validation.request_schema import OPENAI_CHAT_SCHEMA, get_request_schema
+
         schema = get_request_schema("openai")
         self.assertEqual(schema["title"], OPENAI_CHAT_SCHEMA["title"])
 
     def test_get_request_schema_returns_openai_responses(self):
         from tokenpak.validation.request_schema import OPENAI_RESPONSES_SCHEMA, get_request_schema
+
         schema = get_request_schema("openai-codex")
         self.assertEqual(schema["title"], OPENAI_RESPONSES_SCHEMA["title"])
 
@@ -103,11 +110,13 @@ class TestRequestSchemas(unittest.TestCase):
             GOOGLE_GENERATE_CONTENT_SCHEMA,
             get_request_schema,
         )
+
         schema = get_request_schema("google")
         self.assertEqual(schema["title"], GOOGLE_GENERATE_CONTENT_SCHEMA["title"])
 
     def test_get_request_schema_returns_permissive_for_unknown(self):
         from tokenpak.validation.request_schema import get_request_schema
+
         schema = get_request_schema("unknown-provider")
         # Unknown → no required fields, additionalProperties=True
         self.assertEqual(schema.get("required", []), [])
@@ -117,14 +126,17 @@ class TestRequestSchemas(unittest.TestCase):
 # ValidationResult
 # ---------------------------------------------------------------------------
 
+
 class TestRequestValidationResult(unittest.TestCase):
     def test_bool_true_when_valid(self):
         from tokenpak.validation.request_validator import RequestValidationResult
+
         r = RequestValidationResult(valid=True, provider="anthropic")
         self.assertTrue(bool(r))
 
     def test_bool_false_when_invalid(self):
         from tokenpak.validation.request_validator import RequestValidationResult
+
         r = RequestValidationResult(
             valid=False,
             provider="anthropic",
@@ -134,6 +146,7 @@ class TestRequestValidationResult(unittest.TestCase):
 
     def test_to_error_response_structure(self):
         from tokenpak.validation.request_validator import RequestValidationResult
+
         r = RequestValidationResult(
             valid=False,
             provider="anthropic",
@@ -150,16 +163,22 @@ class TestRequestValidationResult(unittest.TestCase):
 
     def test_to_error_response_hint_contains_provider_path(self):
         from tokenpak.validation.request_validator import RequestValidationResult
-        r = RequestValidationResult(valid=False, provider="anthropic", errors=[{"field": "x", "error": "e"}])
+
+        r = RequestValidationResult(
+            valid=False, provider="anthropic", errors=[{"field": "x", "error": "e"}]
+        )
         payload = r.to_error_response()
         self.assertIn("messages", payload["error"]["hint"])
 
-        r2 = RequestValidationResult(valid=False, provider="openai", errors=[{"field": "x", "error": "e"}])
+        r2 = RequestValidationResult(
+            valid=False, provider="openai", errors=[{"field": "x", "error": "e"}]
+        )
         payload2 = r2.to_error_response()
         self.assertIn("chat-completions", payload2["error"]["hint"])
 
     def test_to_dict(self):
         from tokenpak.validation.request_validator import RequestValidationResult
+
         r = RequestValidationResult(valid=True, provider="openai")
         d = r.to_dict()
         self.assertEqual(d["valid"], True)
@@ -170,9 +189,11 @@ class TestRequestValidationResult(unittest.TestCase):
 # Anthropic validation
 # ---------------------------------------------------------------------------
 
+
 class TestAnthropicValidation(unittest.TestCase):
     def setUp(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         self.validator = RequestValidator(mode="strict")
 
     def test_valid_anthropic_request(self):
@@ -275,9 +296,11 @@ class TestAnthropicValidation(unittest.TestCase):
 # OpenAI validation
 # ---------------------------------------------------------------------------
 
+
 class TestOpenAIValidation(unittest.TestCase):
     def setUp(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         self.validator = RequestValidator(mode="strict")
 
     def test_valid_openai_request(self):
@@ -350,9 +373,11 @@ class TestOpenAIValidation(unittest.TestCase):
 # OpenAI Responses validation
 # ---------------------------------------------------------------------------
 
+
 class TestOpenAIResponsesValidation(unittest.TestCase):
     def setUp(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         self.validator = RequestValidator(mode="strict")
 
     def test_valid_openai_responses_request(self):
@@ -372,9 +397,11 @@ class TestOpenAIResponsesValidation(unittest.TestCase):
 # Google validation
 # ---------------------------------------------------------------------------
 
+
 class TestGoogleValidation(unittest.TestCase):
     def setUp(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         self.validator = RequestValidator(mode="strict")
 
     def test_valid_google_request(self):
@@ -392,62 +419,72 @@ class TestGoogleValidation(unittest.TestCase):
 # Validation modes
 # ---------------------------------------------------------------------------
 
+
 class TestValidationModes(unittest.TestCase):
     def test_off_mode_always_valid(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         v = RequestValidator(mode="off")
         result = v.validate(b'{"totally": "wrong"}', "anthropic")
         self.assertTrue(result.valid)
 
     def test_warn_mode_returns_errors_but_does_not_raise(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         v = RequestValidator(mode="warn")
-        result = v.validate(b'{}', "anthropic")
+        result = v.validate(b"{}", "anthropic")
         # In warn mode, errors are reported but valid=False (caller chooses to forward)
         self.assertFalse(result.valid)
         self.assertGreater(len(result.errors), 0)
 
     def test_strict_mode_returns_invalid_for_bad_request(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         v = RequestValidator(mode="strict")
-        result = v.validate(b'{}', "anthropic")
+        result = v.validate(b"{}", "anthropic")
         self.assertFalse(result.valid)
 
     def test_invalid_mode_raises(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         with self.assertRaises(ValueError):
             RequestValidator(mode="maybe")
 
     def test_validate_bytes_skips_non_messages_endpoints(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         v = RequestValidator(mode="strict")
         # /v1/models is not a messages endpoint — should always pass through
-        result = v.validate_bytes(b'{}', "https://api.anthropic.com/v1/models", "anthropic")
+        result = v.validate_bytes(b"{}", "https://api.anthropic.com/v1/models", "anthropic")
         self.assertTrue(result.valid)
 
     def test_validate_bytes_validates_messages_endpoint(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         v = RequestValidator(mode="strict")
-        result = v.validate_bytes(b'{}', "https://api.anthropic.com/v1/messages", "anthropic")
+        result = v.validate_bytes(b"{}", "https://api.anthropic.com/v1/messages", "anthropic")
         self.assertFalse(result.valid)
 
     def test_validate_bytes_validates_chat_completions(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         v = RequestValidator(mode="strict")
-        result = v.validate_bytes(b'{}', "https://api.openai.com/v1/chat/completions", "openai")
+        result = v.validate_bytes(b"{}", "https://api.openai.com/v1/chat/completions", "openai")
         self.assertFalse(result.valid)
 
     def test_validate_bytes_validates_openai_responses(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         v = RequestValidator(mode="strict")
-        result = v.validate_bytes(b'{}', "https://api.openai.com/v1/responses", "openai-codex")
+        result = v.validate_bytes(b"{}", "https://api.openai.com/v1/responses", "openai-codex")
         self.assertFalse(result.valid)
 
     def test_validate_bytes_validates_google_generate_content(self):
         from tokenpak.validation.request_validator import RequestValidator
+
         v = RequestValidator(mode="strict")
         result = v.validate_bytes(
-            b'{}',
+            b"{}",
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
             "google",
         )
@@ -455,6 +492,7 @@ class TestValidationModes(unittest.TestCase):
 
     def test_get_validation_mode_env_strict(self):
         from tokenpak.validation import request_validator
+
         with patch.dict(os.environ, {"TOKENPAK_REQUEST_VALIDATION": "strict"}):
             # Reset module-level cache
             request_validator._validator = None
@@ -463,6 +501,7 @@ class TestValidationModes(unittest.TestCase):
 
     def test_get_validation_mode_env_off(self):
         from tokenpak.validation import request_validator
+
         with patch.dict(os.environ, {"TOKENPAK_REQUEST_VALIDATION": "off"}):
             request_validator._validator = None
             mode = request_validator.get_validation_mode()
@@ -470,6 +509,7 @@ class TestValidationModes(unittest.TestCase):
 
     def test_get_validation_mode_default_warn(self):
         from tokenpak.validation import request_validator
+
         with patch.dict(os.environ, {}, clear=False):
             env_backup = os.environ.pop("TOKENPAK_REQUEST_VALIDATION", None)
             try:
@@ -485,6 +525,7 @@ class TestValidationModes(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # HTTP 400 proxy integration (mock-based)
 # ---------------------------------------------------------------------------
+
 
 class TestProxyValidationIntegration(unittest.TestCase):
     """Verify that strict mode produces 400 responses via proxy._proxy_to."""
@@ -507,10 +548,13 @@ class TestProxyValidationIntegration(unittest.TestCase):
 
         def _send_response(code):
             sent_responses.append(code)
+
         def _send_header(key, val):
             sent_headers[key] = val
+
         def _end_headers():
             pass
+
         def _write(data):
             sent_body[0] = data
 
@@ -550,6 +594,7 @@ class TestProxyValidationIntegration(unittest.TestCase):
     def test_warn_mode_does_not_reject(self):
         """In warn mode, even an invalid body is forwarded (valid=False but not rejected by proxy)."""
         from tokenpak.validation.request_validator import RequestValidator
+
         v = RequestValidator(mode="warn")
         body = b"{}"
         result = v.validate_bytes(body, "https://api.anthropic.com/v1/messages", "anthropic")
@@ -564,9 +609,11 @@ class TestProxyValidationIntegration(unittest.TestCase):
 # Module-level exports
 # ---------------------------------------------------------------------------
 
+
 class TestModuleExports(unittest.TestCase):
     def test_validation_module_exports(self):
         import tokenpak.validation as tpv
+
         self.assertTrue(hasattr(tpv, "RequestValidator"))
         self.assertTrue(hasattr(tpv, "RequestValidationResult"))
         self.assertTrue(hasattr(tpv, "validate_request"))
@@ -581,6 +628,7 @@ class TestModuleExports(unittest.TestCase):
 
         from tokenpak.validation import request_validator as _rv_mod
         from tokenpak.validation import validate_request
+
         _rv_mod._validator = None
         with patch.dict(os.environ, {"TOKENPAK_REQUEST_VALIDATION": "warn"}):
             result = validate_request(

@@ -26,14 +26,52 @@ Usage::
 
 from __future__ import annotations
 
+__all__ = (
+    "DocumentParser",
+    "DocumentSection",
+    "DocumentStructure",
+    "HeadingNode",
+    "SectionType",
+    "Table",
+)
+
+
 import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Any, List
+from typing import List, Literal, TypedDict
 
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
+
+
+class TableData(TypedDict):
+    headers: list[str]
+    rows: list[dict[str, str]]
+    row_count: int
+
+
+class HeadingTreeEntry(TypedDict):
+    level: int
+    section_type: str
+    word_count: int
+    subsections: dict[str, "HeadingTreeEntry"]
+
+
+class _FlatSection(TypedDict, total=False):
+    level: int
+    heading: str
+    content: str
+    tables: list[TableData]
+    code_blocks: list[str]
+
+
+_HeadingToken = tuple[Literal["heading"], int, str, int]
+_ContentToken = tuple[Literal["content"], str, int]
+_CodeBlockToken = tuple[Literal["code_block"], str, str, int]
+_TableToken = tuple[Literal["table"], TableData, int]
+_ParserToken = _HeadingToken | _ContentToken | _CodeBlockToken | _TableToken
 
 
 @dataclass
@@ -52,7 +90,7 @@ class DocumentSection:
     subsections: List["DocumentSection"] = field(default_factory=list)
     """Nested child sections."""
 
-    tables: List[dict] = field(default_factory=list)
+    tables: List[TableData] = field(default_factory=list)
     """Tables found directly in this section (not sub-sections)."""
 
     citations: List[str] = field(default_factory=list)
@@ -72,7 +110,7 @@ class DocumentSection:
         if self.word_count == 0 and self.content:
             self.word_count = len(self.content.split())
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "heading": self.heading,
             "level": self.level,
@@ -96,13 +134,13 @@ class DocumentStructure:
     sections: List[DocumentSection] = field(default_factory=list)
     """Top-level sections."""
 
-    heading_tree: dict = field(default_factory=dict)
+    heading_tree: dict[str, HeadingTreeEntry] = field(default_factory=dict)
     """Navigable heading hierarchy: {heading: {subsections: [...], level: int}}."""
 
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, str] = field(default_factory=dict)
     """Detected metadata: author, date, type, format."""
 
-    tables: List[dict] = field(default_factory=list)
+    tables: List[TableData] = field(default_factory=list)
     """All tables across the document (flattened)."""
 
     citations: List[str] = field(default_factory=list)
@@ -115,7 +153,7 @@ class DocumentStructure:
         if not self.total_words and self.sections:
             self.total_words = _sum_words(self.sections)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "title": self.title,
             "total_words": self.total_words,
@@ -282,9 +320,9 @@ def _sum_words(sections: list[DocumentSection]) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _build_heading_tree(sections: list[DocumentSection]) -> dict:
+def _build_heading_tree(sections: list[DocumentSection]) -> dict[str, HeadingTreeEntry]:
     """Build a navigable {heading: {level, subsections}} tree."""
-    result: dict[str, Any] = {}
+    result: dict[str, HeadingTreeEntry] = {}
     for sec in sections:
         result[sec.heading] = {
             "level": sec.level,
@@ -317,7 +355,7 @@ def _parse_markdown(text: str) -> DocumentStructure:
     lines = text.splitlines()
     # ---- First pass: identify headings, code fences, table blocks ----
     # Each element: ("heading", level, text, line_no) | ("content", text, line_no)
-    tokens: list[tuple] = []
+    tokens: list[_ParserToken] = []
     i = 0
     in_fence = False
     fence_char = ""
@@ -396,17 +434,17 @@ def _parse_markdown(text: str) -> DocumentStructure:
     return doc
 
 
-def _group_into_sections(tokens: list[tuple]) -> list[DocumentSection]:
+def _group_into_sections(tokens: list[_ParserToken]) -> list[DocumentSection]:
     """Convert flat token list into nested DocumentSection hierarchy."""
     # Build flat list of (level, heading, content_tokens) first
-    flat: list[dict] = []  # {level, heading, content_lines, code_blocks}
+    flat: list[_FlatSection] = []  # {level, heading, content_lines, code_blocks}
 
-    current: dict | None = None
+    current: _FlatSection | None = None
     pending_lines: list[str] = []
     pending_code: list[str] = []
-    pending_tables: list[dict] = []
+    pending_tables: list[TableData] = []
     pre_heading_lines: list[str] = []
-    pre_heading_tables: list[dict] = []
+    pre_heading_tables: list[TableData] = []
     pre_heading_code: list[str] = []
     seen_heading = False
 
@@ -476,7 +514,7 @@ def _group_into_sections(tokens: list[tuple]) -> list[DocumentSection]:
     return _nest_sections(flat)
 
 
-def _nest_sections(flat: list[dict]) -> list[DocumentSection]:
+def _nest_sections(flat: list[_FlatSection]) -> list[DocumentSection]:
     """Turn flat list of {level, heading, content, tables, code_blocks} into tree."""
     if not flat:
         return []
@@ -488,11 +526,12 @@ def _nest_sections(flat: list[dict]) -> list[DocumentSection]:
         level = item.get("level", 1)
         content = item.get("content", "")
         code_blocks = item.get("code_blocks", [])
+        heading = item.get("heading", "")
         citations = _extract_citations(content)
-        section_type = _classify_section(item["heading"], content)
+        section_type = _classify_section(heading, content)
 
         sec = DocumentSection(
-            heading=item["heading"],
+            heading=heading,
             level=level,
             content=content,
             tables=item.get("tables", []),
@@ -516,9 +555,9 @@ def _nest_sections(flat: list[dict]) -> list[DocumentSection]:
     return root_sections
 
 
-def _extract_md_tables(text: str) -> list[dict]:
+def _extract_md_tables(text: str) -> list[TableData]:
     """Extract markdown pipe tables from text, return list of dicts."""
-    tables = []
+    tables: list[TableData] = []
     lines = text.splitlines()
     i = 0
     while i < len(lines):
@@ -536,7 +575,7 @@ def _extract_md_tables(text: str) -> list[dict]:
     return tables
 
 
-def _parse_md_table_block(block: list[str]) -> dict | None:
+def _parse_md_table_block(block: list[str]) -> TableData | None:
     """Parse a markdown table block into a dict with headers + rows."""
     if len(block) < 2:
         return None
@@ -547,7 +586,7 @@ def _parse_md_table_block(block: list[str]) -> dict | None:
     if not headers:
         return None
     # Second line = separator — skip
-    rows = []
+    rows: list[dict[str, str]] = []
     for line in block[2:]:
         cells = [c.strip() for c in line.strip("|").split("|")]
         # Pad or trim to match headers
@@ -582,8 +621,8 @@ def _infer_title(sections: list[DocumentSection], raw: str) -> str:
     return "Untitled"
 
 
-def _collect_tables(sections: list[DocumentSection]) -> list[dict]:
-    result = []
+def _collect_tables(sections: list[DocumentSection]) -> list[TableData]:
+    result: list[TableData] = []
     for sec in sections:
         result.extend(sec.tables)
         result.extend(_collect_tables(sec.subsections))
@@ -605,7 +644,7 @@ def _collect_citations(sections: list[DocumentSection]) -> list[str]:
     return result
 
 
-def _extract_md_metadata(text: str) -> dict:
+def _extract_md_metadata(text: str) -> dict[str, str]:
     """Extract YAML front matter or simple metadata from markdown."""
     meta: dict[str, str] = {}
     lines = text.splitlines()
@@ -636,7 +675,7 @@ class _HTMLStructureParser(HTMLParser):
 
     def __init__(self) -> None:
         super().__init__()
-        self._tokens: list[tuple] = []
+        self._tokens: list[_ParserToken] = []
         self._current_tag: str = ""
         self._current_text: list[str] = []
         self._in_table = False
@@ -648,7 +687,7 @@ class _HTMLStructureParser(HTMLParser):
         self._depth = 0
         self._tag_stack: list[str] = []
 
-    def handle_starttag(self, tag: str, attrs: Any) -> None:
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self._tag_stack.append(tag)
         self._current_tag = tag
         if tag in self.HEADING_TAGS:
@@ -708,11 +747,11 @@ class _HTMLStructureParser(HTMLParser):
         elif self._tag_stack and self._tag_stack[-1] in ("p", "li", "blockquote"):
             self._current_text.append(data)
 
-    def get_tokens(self) -> list[tuple]:
+    def get_tokens(self) -> list[_ParserToken]:
         return self._tokens
 
 
-def _html_table_to_dict(headers: list[str], rows: list[list[str]]) -> dict | None:
+def _html_table_to_dict(headers: list[str], rows: list[list[str]]) -> TableData | None:
     """Convert header list + rows list into normalized dict form."""
     if not rows:
         return None
@@ -722,7 +761,7 @@ def _html_table_to_dict(headers: list[str], rows: list[list[str]]) -> dict | Non
         rows = rows[1:]
     if not headers:
         return None
-    result_rows = []
+    result_rows: list[dict[str, str]] = []
     for row in rows:
         row_padded = row[: len(headers)]
         while len(row_padded) < len(headers):
@@ -770,7 +809,7 @@ _ALL_CAPS_LINE = re.compile(r"^[A-Z][A-Z\s\d\-:,]+$")
 def _parse_plain_text(text: str) -> DocumentStructure:
     """Parse plain text using heuristic heading detection."""
     lines = text.splitlines()
-    tokens: list[tuple] = []
+    tokens: list[_ParserToken] = []
     i = 0
 
     while i < len(lines):
@@ -919,6 +958,10 @@ class DocumentParser:
             total_words=0,
         )
 
+    def _classify_section(self, heading: str, content: str = "") -> "SectionType":
+        """Classify a section using the module's deterministic keyword rules."""
+        return SectionType(_classify_section(heading, content))
+
 
 # ---------------------------------------------------------------------------
 # Public API additions — SectionType, Table, HeadingNode
@@ -940,7 +983,7 @@ class SectionType(str, Enum):
     GENERAL = "general"
 
     @classmethod
-    def _missing_(cls, value):
+    def _missing_(cls, value: object) -> "SectionType":
         return cls.GENERAL
 
 
@@ -960,15 +1003,3 @@ class HeadingNode:
     level: int
     text: str
     children: List["HeadingNode"] = field(default_factory=list)
-
-
-# Patch DocumentParser to expose _classify_section as a method returning SectionType
-_orig_classify = _classify_section
-
-
-def _dp_classify_section(self, heading: str, content: str = "") -> "SectionType":
-    raw = _orig_classify(heading, content)
-    return SectionType(raw)
-
-
-DocumentParser._classify_section = _dp_classify_section

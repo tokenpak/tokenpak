@@ -1,6 +1,5 @@
 """Unit tests for TokenPak cost forecasting module."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.forecast", reason="module not available in current build")
@@ -56,12 +55,9 @@ class TestBurnRateCalculation:
 
         # Record spend over 7 days
         for i in range(7):
-            ts = datetime.combine(today - timedelta(days=6-i), datetime.min.time())
+            ts = datetime.combine(today - timedelta(days=6 - i), datetime.min.time())
             tracker.record_spend(
-                5.0,
-                request_id=f"req-{i:03d}",
-                model="claude-sonnet",
-                timestamp=ts
+                5.0, request_id=f"req-{i:03d}", model="claude-sonnet", timestamp=ts
             )
 
         analysis = get_burn_rate(tracker, window_days=7)
@@ -108,12 +104,12 @@ class TestTrendCalculation:
 
         # Previous 7 days: $10/day = $70 total
         for i in range(7):
-            ts = datetime.combine(today - timedelta(days=13-i), datetime.min.time())
+            ts = datetime.combine(today - timedelta(days=13 - i), datetime.min.time())
             tracker.record_spend(10.0, request_id=f"prev-{i}", timestamp=ts)
 
         # Current 7 days: $12/day = $84 total (20% growth)
         for i in range(7):
-            ts = datetime.combine(today - timedelta(days=6-i), datetime.min.time())
+            ts = datetime.combine(today - timedelta(days=6 - i), datetime.min.time())
             tracker.record_spend(12.0, request_id=f"curr-{i}", timestamp=ts)
 
         trend = _calculate_wow_trend(tracker, current_window=7)
@@ -127,12 +123,12 @@ class TestTrendCalculation:
 
         # Previous 7 days: $20/day = $140 total
         for i in range(7):
-            ts = datetime.combine(today - timedelta(days=13-i), datetime.min.time())
+            ts = datetime.combine(today - timedelta(days=13 - i), datetime.min.time())
             tracker.record_spend(20.0, request_id=f"prev-{i}", timestamp=ts)
 
         # Current 7 days: $15/day = $105 total (25% decrease)
         for i in range(7):
-            ts = datetime.combine(today - timedelta(days=6-i), datetime.min.time())
+            ts = datetime.combine(today - timedelta(days=6 - i), datetime.min.time())
             tracker.record_spend(15.0, request_id=f"curr-{i}", timestamp=ts)
 
         trend = _calculate_wow_trend(tracker, current_window=7)
@@ -224,7 +220,7 @@ class TestDifferentWindowSizes:
 
         # Record $2/day for 30 days
         for i in range(30):
-            ts = datetime.combine(today - timedelta(days=29-i), datetime.min.time())
+            ts = datetime.combine(today - timedelta(days=29 - i), datetime.min.time())
             tracker.record_spend(2.0, request_id=f"req-{i:03d}", timestamp=ts)
 
         analysis = get_burn_rate(tracker, window_days=30)
@@ -241,7 +237,7 @@ class TestDifferentWindowSizes:
 
         # Record $1/day for 90 days
         for i in range(90):
-            ts = datetime.combine(today - timedelta(days=89-i), datetime.min.time())
+            ts = datetime.combine(today - timedelta(days=89 - i), datetime.min.time())
             tracker.record_spend(1.0, request_id=f"req-{i:03d}", timestamp=ts)
 
         analysis = get_burn_rate(tracker, window_days=90)

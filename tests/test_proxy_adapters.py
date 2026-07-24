@@ -32,10 +32,24 @@ class TestAdapterRegistry:
     def test_default_registry_detects_all_known_formats(self):
         reg = build_default_registry()
 
-        assert reg.detect("/v1/messages", {"x-api-key": "k"}, b"{}").source_format == "anthropic-messages"
-        assert reg.detect("/v1/chat/completions", {"Authorization": "Bearer x"}, b"{}").source_format == "openai-chat"
-        assert reg.detect("/v1/responses", {"Authorization": "Bearer x"}, b"{}").source_format == "openai-responses"
-        assert reg.detect("/v1beta/models/gemini-2-flash:generateContent", {"x-goog-api-key": "k"}, b"{}").source_format == "google-generative-ai"
+        assert (
+            reg.detect("/v1/messages", {"x-api-key": "k"}, b"{}").source_format
+            == "anthropic-messages"
+        )
+        assert (
+            reg.detect("/v1/chat/completions", {"Authorization": "Bearer x"}, b"{}").source_format
+            == "openai-chat"
+        )
+        assert (
+            reg.detect("/v1/responses", {"Authorization": "Bearer x"}, b"{}").source_format
+            == "openai-responses"
+        )
+        assert (
+            reg.detect(
+                "/v1beta/models/gemini-2-flash:generateContent", {"x-goog-api-key": "k"}, b"{}"
+            ).source_format
+            == "google-generative-ai"
+        )
         assert reg.detect("/custom/provider", {}, b"{}").source_format == "passthrough"
 
 

@@ -32,10 +32,14 @@ class TestWebhookNotificationHook:
             mock_response.__exit__ = mock.Mock(return_value=None)
             mock_urlopen.return_value = mock_response
 
-            hook("anthropic", "auth-failure-detected", {
-                "consecutive_failures": 3,
-                "timestamp": "2026-03-27T14:10:00Z",
-            })
+            hook(
+                "anthropic",
+                "auth-failure-detected",
+                {
+                    "consecutive_failures": 3,
+                    "timestamp": "2026-03-27T14:10:00Z",
+                },
+            )
 
             # Verify urlopen was called once
             assert mock_urlopen.call_count == 1
@@ -142,10 +146,14 @@ class TestWebhookNotificationHook:
             mock_response.__exit__ = mock.Mock(return_value=None)
             mock_urlopen.return_value = mock_response
 
-            hook("anthropic", "auth-failure-detected", {
-                "consecutive_failures": 2,
-                "timestamp": "2026-03-27T14:10:00Z",
-            })
+            hook(
+                "anthropic",
+                "auth-failure-detected",
+                {
+                    "consecutive_failures": 2,
+                    "timestamp": "2026-03-27T14:10:00Z",
+                },
+            )
 
             payload = json.loads(mock_urlopen.call_args[0][0].data.decode())
             assert "message" in payload
@@ -182,10 +190,13 @@ class TestBuildAlertMessage:
 
     def test_alert_message_with_all_details(self):
         """Happy path: full alert message with all details."""
-        msg = _build_alert_message("anthropic", {
-            "consecutive_failures": 5,
-            "timestamp": "2026-03-27T14:10:00Z",
-        })
+        msg = _build_alert_message(
+            "anthropic",
+            {
+                "consecutive_failures": 5,
+                "timestamp": "2026-03-27T14:10:00Z",
+            },
+        )
 
         assert "TokenPak Auth Failure" in msg
         assert "Anthropic" in msg
@@ -194,9 +205,12 @@ class TestBuildAlertMessage:
 
     def test_alert_message_with_missing_consecutive_failures(self):
         """Alert message should handle missing consecutive_failures gracefully."""
-        msg = _build_alert_message("gemini", {
-            "timestamp": "2026-03-27T14:10:00Z",
-        })
+        msg = _build_alert_message(
+            "gemini",
+            {
+                "timestamp": "2026-03-27T14:10:00Z",
+            },
+        )
 
         assert "TokenPak Auth Failure" in msg
         assert "Gemini" in msg
@@ -204,9 +218,12 @@ class TestBuildAlertMessage:
 
     def test_alert_message_with_missing_timestamp(self):
         """Alert message should handle missing timestamp gracefully."""
-        msg = _build_alert_message("anthropic", {
-            "consecutive_failures": 3,
-        })
+        msg = _build_alert_message(
+            "anthropic",
+            {
+                "consecutive_failures": 3,
+            },
+        )
 
         assert "TokenPak Auth Failure" in msg
         assert "unknown" in msg.lower()
@@ -252,6 +269,7 @@ class TestRegisterAuthAlertHook:
 
     def test_register_custom_callable(self):
         """Should be able to register any callable with correct signature."""
+
         def my_handler(provider: str, event: str, details: dict) -> None:
             pass
 

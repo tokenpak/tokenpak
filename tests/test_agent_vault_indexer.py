@@ -12,6 +12,7 @@ from tokenpak.vault.symbols import SymbolTable
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_indexer() -> VaultIndexer:
     """Create an in-memory VaultIndexer for isolated testing."""
     return VaultIndexer(
@@ -25,6 +26,7 @@ def _make_indexer() -> VaultIndexer:
 # 1. Import smoke test
 # ---------------------------------------------------------------------------
 
+
 def test_import_ok():
     """VaultIndexer can be imported and instantiated."""
     vi = _make_indexer()
@@ -34,6 +36,7 @@ def test_import_ok():
 # ---------------------------------------------------------------------------
 # 2. Index a document by content (no disk read)
 # ---------------------------------------------------------------------------
+
 
 def test_index_file_with_content():
     """index_file with explicit content returns a BlockRecord."""
@@ -48,6 +51,7 @@ def test_index_file_with_content():
 # 3. Retrieve by id via blocks store
 # ---------------------------------------------------------------------------
 
+
 def test_retrieve_by_block_id():
     """Indexed document can be fetched by block_id via the block store."""
     vi = _make_indexer()
@@ -61,6 +65,7 @@ def test_retrieve_by_block_id():
 # ---------------------------------------------------------------------------
 # 4. List indexed documents via blocks.all()
 # ---------------------------------------------------------------------------
+
 
 def test_list_indexed_documents():
     """After indexing multiple files, all() returns all indexed records."""
@@ -84,6 +89,7 @@ def test_list_indexed_documents():
 # 5. Remove / delete a document
 # ---------------------------------------------------------------------------
 
+
 def test_remove_indexed_document():
     """Deleting a block_id removes it from the store."""
     vi = _make_indexer()
@@ -97,6 +103,7 @@ def test_remove_indexed_document():
 # ---------------------------------------------------------------------------
 # 6. Search by keyword — results returned
 # ---------------------------------------------------------------------------
+
 
 def test_search_by_keyword_returns_results():
     """search() returns blocks containing the queried keyword."""
@@ -112,6 +119,7 @@ def test_search_by_keyword_returns_results():
 # 7. Search — empty query returns results or empty list gracefully
 # ---------------------------------------------------------------------------
 
+
 def test_search_empty_query_handled():
     """search('') does not raise; returns a list."""
     vi = _make_indexer()
@@ -123,6 +131,7 @@ def test_search_empty_query_handled():
 # ---------------------------------------------------------------------------
 # 8. Incremental indexing — same content returns same block (no duplicate)
 # ---------------------------------------------------------------------------
+
 
 def test_incremental_index_no_duplicate():
     """Re-indexing unchanged content returns the existing record, not a new one."""
@@ -140,6 +149,7 @@ def test_incremental_index_no_duplicate():
 # ---------------------------------------------------------------------------
 # 9. index_directory — real temp dir
 # ---------------------------------------------------------------------------
+
 
 def test_index_directory_returns_summary(tmp_path: Path):
     """index_directory walks a real dir and returns a well-formed summary dict."""
@@ -163,6 +173,7 @@ def test_index_directory_returns_summary(tmp_path: Path):
 # 10. stats() returns expected keys
 # ---------------------------------------------------------------------------
 
+
 def test_stats_returns_expected_keys():
     """stats() returns a dict with at least total_indexed and total_symbols."""
     vi = _make_indexer()
@@ -177,6 +188,7 @@ def test_stats_returns_expected_keys():
 # 11. Non-existent file without content returns None
 # ---------------------------------------------------------------------------
 
+
 def test_index_nonexistent_file_returns_none():
     """index_file on a missing path with no content returns None gracefully."""
     vi = _make_indexer()
@@ -187,6 +199,7 @@ def test_index_nonexistent_file_returns_none():
 # ---------------------------------------------------------------------------
 # 12. search with top_k limit
 # ---------------------------------------------------------------------------
+
 
 def test_search_top_k_limits_results():
     """search respects top_k parameter."""
@@ -200,6 +213,7 @@ def test_search_top_k_limits_results():
 # ---------------------------------------------------------------------------
 # 13. stats_by_type breakdown
 # ---------------------------------------------------------------------------
+
 
 def test_stats_by_type_breakdown(tmp_path: Path):
     """stats_by_type returns total_files and by_type dict."""
@@ -217,6 +231,7 @@ def test_stats_by_type_breakdown(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # 14. get_by_path on blocks store
 # ---------------------------------------------------------------------------
+
 
 def test_get_by_path():
     """blocks.get_by_path returns the indexed record for a given path."""

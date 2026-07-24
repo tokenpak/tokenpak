@@ -32,6 +32,7 @@ subprocess runs from a throwaway temporary directory (not via the ``-P`` flag,
 which is Python 3.11+ and would break the 3.10 CI leg, and unlike ``-P``/``-I``
 does not isolate the user-site editable install used in local dev).
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -79,10 +80,8 @@ def test_vector_local_import_does_not_load_heavy_ml_stack():
     )
     proc = _run_py(code)
     assert proc.returncode == 0, f"vector_local import raised:\n{proc.stderr}"
-    loaded_line = [
-        ln for ln in proc.stdout.splitlines() if ln.startswith("LOADED:")
-    ][-1]
-    loaded = [m for m in loaded_line[len("LOADED:"):].split(",") if m]
+    loaded_line = [ln for ln in proc.stdout.splitlines() if ln.startswith("LOADED:")][-1]
+    loaded = [m for m in loaded_line[len("LOADED:") :].split(",") if m]
     assert loaded == [], (
         "importing tokenpak.vault.retrieval.vector_local pulled in heavy ML "
         f"modules {loaded}; these must stay lazy so the companion MCP server "

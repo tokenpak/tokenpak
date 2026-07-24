@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import json
 import sys
+from typing import Any
 
 
-def cmd_alerts_test(args) -> None:
+def cmd_alerts_test(args: Any) -> None:
     """Test an alert delivery channel by sending a sample payload."""
     channel = args.channel
     success = False
@@ -17,6 +18,7 @@ def cmd_alerts_test(args) -> None:
             print("❌ --url is required for --channel webhook", file=sys.stderr)
             sys.exit(1)
         from tokenpak.alerts.channels import webhook
+
         request_body = json.loads(
             webhook._build_payload(
                 event="test",
@@ -40,6 +42,7 @@ def cmd_alerts_test(args) -> None:
             print("❌ --webhook is required for --channel slack", file=sys.stderr)
             sys.exit(1)
         from tokenpak.alerts.channels import slack
+
         request_body = {"text": slack._build_text("test", "info", "TokenPak alert delivery test")}
         print(f"→ POSTing to {args.webhook}")
         print(f"  Body: {json.dumps(request_body, indent=2)}")

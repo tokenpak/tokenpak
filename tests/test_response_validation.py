@@ -1,6 +1,5 @@
 """Tests for TokenPak response validation."""
 
-
 import pytest
 
 pytest.importorskip("tokenpak.validation", reason="module not available in current build")
@@ -18,6 +17,7 @@ from tokenpak.validation import (
 )
 
 # ============ Test Fixtures ============
+
 
 @pytest.fixture
 def valid_response():
@@ -65,6 +65,7 @@ def strict_validator():
 
 
 # ============ Valid Response Tests ============
+
 
 class TestValidResponses:
     """Tests for valid responses that should pass validation."""
@@ -121,6 +122,7 @@ class TestValidResponses:
 
 
 # ============ Invalid Response Tests ============
+
 
 class TestInvalidResponses:
     """Tests for invalid responses that should fail validation."""
@@ -204,6 +206,7 @@ class TestInvalidResponses:
 
 # ============ Warning Tests ============
 
+
 class TestWarnings:
     """Tests for validation warnings (non-fatal issues)."""
 
@@ -233,6 +236,7 @@ class TestWarnings:
 
 
 # ============ Edge Cases ============
+
 
 class TestEdgeCases:
     """Tests for edge cases and boundary conditions."""
@@ -271,7 +275,7 @@ class TestEdgeCases:
         minimal_response["error"] = {
             "type": "rate_limit",
             "message": "Too many requests",
-            "code": 429
+            "code": 429,
         }
         minimal_response["status"] = "rate_limited"
         result = validator.validate(minimal_response)
@@ -282,13 +286,14 @@ class TestEdgeCases:
         minimal_response["metadata"] = {
             "provider": "anthropic",
             "region": "us-east-1",
-            "custom": {"nested": "value"}
+            "custom": {"nested": "value"},
         }
         result = validator.validate(minimal_response)
         assert result.valid
 
 
 # ============ Schema Tests ============
+
 
 class TestSchema:
     """Tests for schema access and configuration."""
@@ -309,8 +314,14 @@ class TestSchema:
     def test_schema_has_expected_fields(self):
         """Schema contains all expected field definitions."""
         expected_fields = [
-            "model", "tokens_sent", "tokens_received", "cost",
-            "timestamp", "cached", "compilation_mode", "status"
+            "model",
+            "tokens_sent",
+            "tokens_received",
+            "cost",
+            "timestamp",
+            "cached",
+            "compilation_mode",
+            "status",
         ]
         for field in expected_fields:
             assert field in RESPONSE_SCHEMA["properties"]
@@ -320,9 +331,7 @@ class TestSchema:
         custom_schema = {
             "type": "object",
             "required": ["custom_field"],
-            "properties": {
-                "custom_field": {"type": "string"}
-            }
+            "properties": {"custom_field": {"type": "string"}},
         }
         validator = ResponseValidator(schema=custom_schema)
 
@@ -334,6 +343,7 @@ class TestSchema:
 
 
 # ============ ValidationResult Tests ============
+
 
 class TestValidationResult:
     """Tests for ValidationResult class."""
@@ -360,7 +370,7 @@ class TestValidationResult:
         result = ValidationResult(
             valid=False,
             errors=[{"field": "x", "reason": "bad"}],
-            warnings=[{"field": "y", "reason": "warn"}]
+            warnings=[{"field": "y", "reason": "warn"}],
         )
         d = result.to_dict()
         assert d["valid"] is False
@@ -370,14 +380,27 @@ class TestValidationResult:
 
 # ============ Integration Tests ============
 
+
 class TestIntegration:
     """Integration tests simulating real usage."""
 
     def test_batch_validation(self, validator):
         """Validate a batch of responses."""
         responses = [
-            {"model": "claude-sonnet-4-6", "tokens_sent": 100, "tokens_received": 50, "cost": 0.01, "timestamp": "2026-03-06T15:00:00Z"},
-            {"model": "claude-haiku-4-5", "tokens_sent": 200, "tokens_received": 100, "cost": 0.005, "timestamp": "2026-03-06T15:01:00Z"},
+            {
+                "model": "claude-sonnet-4-6",
+                "tokens_sent": 100,
+                "tokens_received": 50,
+                "cost": 0.01,
+                "timestamp": "2026-03-06T15:00:00Z",
+            },
+            {
+                "model": "claude-haiku-4-5",
+                "tokens_sent": 200,
+                "tokens_received": 100,
+                "cost": 0.005,
+                "timestamp": "2026-03-06T15:01:00Z",
+            },
             {"model": "", "tokens_sent": -1, "cost": "bad"},  # Invalid
         ]
 
@@ -403,10 +426,7 @@ class TestIntegration:
             "latency_ms": 806,
             "compilation_mode": "hybrid",
             "status": "ok",
-            "metadata": {
-                "provider": "anthropic",
-                "vault_blocks_injected": 5
-            }
+            "metadata": {"provider": "anthropic", "vault_blocks_injected": 5},
         }
         result = validator.validate(response)
         assert result.valid

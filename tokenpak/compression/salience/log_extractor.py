@@ -20,14 +20,12 @@ from typing import List, Optional, Set, Tuple
 
 # ── tuneable constants ────────────────────────────────────────────────────
 
-CONTEXT_LINES: int = 20          # lines before/after each error anchor
-MAX_STACK_SIGS: int = 30         # de-dup cap for unique stack signatures
+CONTEXT_LINES: int = 20  # lines before/after each error anchor
+MAX_STACK_SIGS: int = 30  # de-dup cap for unique stack signatures
 
 # ── regex patterns ────────────────────────────────────────────────────────
 
-_ERROR_RE = re.compile(
-    r"\b(?:ERROR|FATAL|CRITICAL|EXCEPTION|SEVERE)\b", re.IGNORECASE
-)
+_ERROR_RE = re.compile(r"\b(?:ERROR|FATAL|CRITICAL|EXCEPTION|SEVERE)\b", re.IGNORECASE)
 _WARN_RE = re.compile(r"\b(?:WARN(?:ING)?)\b", re.IGNORECASE)
 
 # Java / Python / JS stack frames

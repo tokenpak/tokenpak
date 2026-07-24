@@ -11,7 +11,7 @@ import hashlib
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, cast
 
 # ─────────────────────────────────────────────
 # Data models
@@ -40,7 +40,7 @@ class Fingerprint:
     language: Optional[str] = None
     model_hint: Optional[str] = None  # e.g. "gpt-4", "claude-3"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "fingerprint_id": self.fingerprint_id,
             "schema_version": self.schema_version,
@@ -157,7 +157,7 @@ class FingerprintGenerator:
             model_hint=self.model_hint,
         )
 
-    def generate_from_messages(self, messages: list[dict]) -> Fingerprint:
+    def generate_from_messages(self, messages: list[dict[str, object]]) -> Fingerprint:
         """
         Generate a fingerprint from an OpenAI-style messages list.
         Each message becomes typed segments (system/user/assistant).
@@ -167,11 +167,15 @@ class FingerprintGenerator:
         full_text = ""
 
         for msg in messages:
-            role = msg.get("role", "user")
+            role = cast(str, msg.get("role", "user"))
             content = msg.get("content", "")
             if not isinstance(content, str):
                 # Handle content arrays (vision, tool use, etc.)
-                content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
+                content = " ".join(
+                    cast(str, c.get("text", ""))
+                    for c in cast(list[dict[str, object]], content)
+                    if isinstance(c, dict)
+                )
 
             full_text += content + "\n"
             tok = _estimate_tokens(content)

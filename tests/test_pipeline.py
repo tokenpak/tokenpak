@@ -3,6 +3,7 @@
 Covers each extracted stage function and both pipeline paths
 (byte_preserved + full_pipeline).
 """
+
 import json
 
 from tokenpak.proxy.headers import (
@@ -25,6 +26,7 @@ from tokenpak.proxy.route_policy import ROUTE_POLICIES, get_policy
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_request(body_dict=None, headers=None, **kwargs):
     """Build a ProxyRequest with a JSON body."""
@@ -60,7 +62,10 @@ def _body_with_timestamps():
         "model": "claude-sonnet-4-6",
         "max_tokens": 1024,
         "system": [
-            {"type": "text", "text": "Current time: 2026-04-13T14:30:00Z. Request a1b2c3d4-e5f6-7890-abcd-ef1234567890."},
+            {
+                "type": "text",
+                "text": "Current time: 2026-04-13T14:30:00Z. Request a1b2c3d4-e5f6-7890-abcd-ef1234567890.",
+            },
         ],
         "messages": [
             {"role": "user", "content": "What time is it?"},
@@ -76,7 +81,11 @@ def _body_with_cache_control():
         "system": [
             {"type": "text", "text": "System prompt", "cache_control": {"type": "ephemeral"}},
             {"type": "text", "text": "More context", "cache_control": {"type": "ephemeral"}},
-            {"type": "text", "text": "Important", "cache_control": {"type": "ephemeral", "ttl": "1h"}},
+            {
+                "type": "text",
+                "text": "Important",
+                "cache_control": {"type": "ephemeral", "ttl": "1h"},
+            },
         ],
         "messages": [
             {"role": "user", "content": "Hello!"},
@@ -87,6 +96,7 @@ def _body_with_cache_control():
 # ---------------------------------------------------------------------------
 # headers.py tests
 # ---------------------------------------------------------------------------
+
 
 class TestForwardHeaders:
     def test_claude_code_client_auth_forwards_all(self):
@@ -166,6 +176,7 @@ class TestForwardHeaders:
 # stage_cache_poison_removal tests
 # ---------------------------------------------------------------------------
 
+
 class TestStageCachePoisonRemoval:
     def test_scrubs_timestamps_and_uuids(self):
         req = _make_request(_body_with_timestamps())
@@ -203,6 +214,7 @@ class TestStageCachePoisonRemoval:
 # stage_header_forwarding tests
 # ---------------------------------------------------------------------------
 
+
 class TestStageHeaderForwarding:
     def test_openclaw_filters_to_allowlist(self):
         headers = {
@@ -212,9 +224,7 @@ class TestStageHeaderForwarding:
         }
         req = _make_request(headers=headers)
         policy = get_policy(ROUTE_OPENCLAW)
-        req, result = stage_header_forwarding(
-            req, policy, route=ROUTE_OPENCLAW
-        )
+        req, result = stage_header_forwarding(req, policy, route=ROUTE_OPENCLAW)
         assert "x-api-key" in req.headers
         assert "anthropic-version" in req.headers
         assert "user-agent" not in req.headers
@@ -239,6 +249,7 @@ class TestStageHeaderForwarding:
 # ---------------------------------------------------------------------------
 # stage_auth_injection tests
 # ---------------------------------------------------------------------------
+
 
 class TestStageAuthInjection:
     def test_passthrough_skips(self):
@@ -285,6 +296,7 @@ class TestStageAuthInjection:
 # stage_cache_control tests
 # ---------------------------------------------------------------------------
 
+
 class TestStageCacheControl:
     def test_skipped_for_client_managed(self):
         req = _make_request(_sample_body())
@@ -304,6 +316,7 @@ class TestStageCacheControl:
 # ---------------------------------------------------------------------------
 # stage_compaction tests
 # ---------------------------------------------------------------------------
+
 
 class TestStageCompaction:
     def test_disabled_for_byte_preserved(self):
@@ -330,6 +343,7 @@ class TestStageCompaction:
 # ---------------------------------------------------------------------------
 # stage_ttl_hotfix tests
 # ---------------------------------------------------------------------------
+
 
 class TestStageTtlHotfix:
     def test_strips_default_ttl_before_explicit(self):
@@ -371,6 +385,7 @@ class TestStageTtlHotfix:
 # stage_byte_restore tests
 # ---------------------------------------------------------------------------
 
+
 class TestStageByteRestore:
     def test_not_byte_preserved_skips(self):
         req = _make_request(_sample_body())
@@ -382,8 +397,7 @@ class TestStageByteRestore:
     def test_restores_original_when_no_injection(self):
         original = json.dumps(_sample_body()).encode()
         mutated = json.dumps({"mutated": True}).encode()
-        req = ProxyRequest(method="POST", url="https://api.anthropic.com/v1/messages",
-                           body=mutated)
+        req = ProxyRequest(method="POST", url="https://api.anthropic.com/v1/messages", body=mutated)
         policy = get_policy(ROUTE_CLAUDE_CODE)
         req, result = stage_byte_restore(
             req, policy, original_body=original, vault_injection_text=""
@@ -396,13 +410,12 @@ class TestStageByteRestore:
 # process_request (orchestrator) tests
 # ---------------------------------------------------------------------------
 
+
 class TestProcessRequest:
     def test_full_pipeline_route(self):
         req = _make_request(_body_with_timestamps())
         policy = get_policy(ROUTE_OPENCLAW)
-        result = process_request(
-            req, policy, route=ROUTE_OPENCLAW, client_has_auth=False
-        )
+        result = process_request(req, policy, route=ROUTE_OPENCLAW, client_has_auth=False)
         assert isinstance(result, PipelineResult)
         stage_names = [s.name for s in result.stages]
         assert "cache_poison_removal" in stage_names
@@ -416,9 +429,7 @@ class TestProcessRequest:
     def test_passthrough_pipeline_route(self):
         req = _make_request(_sample_body())
         policy = get_policy(ROUTE_CLAUDE_CODE)
-        result = process_request(
-            req, policy, route=ROUTE_CLAUDE_CODE, client_has_auth=True
-        )
+        result = process_request(req, policy, route=ROUTE_CLAUDE_CODE, client_has_auth=True)
         stage_names = [s.name for s in result.stages]
         assert "cache_poison_removal" in stage_names
         assert "vault_injection" in stage_names
@@ -433,18 +444,14 @@ class TestProcessRequest:
     def test_sdk_uses_full_pipeline(self):
         req = _make_request(_sample_body())
         policy = get_policy(ROUTE_SDK)
-        result = process_request(
-            req, policy, route=ROUTE_SDK, client_has_auth=False
-        )
+        result = process_request(req, policy, route=ROUTE_SDK, client_has_auth=False)
         stage_names = [s.name for s in result.stages]
         assert "compaction" in stage_names
 
     def test_policy_drives_stage_skipping(self):
         req = _make_request(_sample_body())
         policy = get_policy(ROUTE_CLAUDE_CODE)
-        result = process_request(
-            req, policy, route=ROUTE_CLAUDE_CODE, client_has_auth=True
-        )
+        result = process_request(req, policy, route=ROUTE_CLAUDE_CODE, client_has_auth=True)
         # Auth should be skipped for passthrough + client_has_auth
         auth_stage = next(s for s in result.stages if s.name == "auth_injection")
         assert auth_stage.skipped
@@ -452,9 +459,7 @@ class TestProcessRequest:
     def test_compaction_skipped_without_compactor(self):
         req = _make_request(_sample_body())
         policy = get_policy(ROUTE_OPENCLAW)
-        result = process_request(
-            req, policy, route=ROUTE_OPENCLAW, compact_fn=None
-        )
+        result = process_request(req, policy, route=ROUTE_OPENCLAW, compact_fn=None)
         compaction = next(s for s in result.stages if s.name == "compaction")
         assert compaction.skipped
         assert compaction.skip_reason == "no_body_or_no_compactor"
@@ -464,12 +469,20 @@ class TestProcessRequest:
 # Route policy integration tests
 # ---------------------------------------------------------------------------
 
+
 class TestRoutePolicyIntegration:
     def test_all_routes_have_required_keys(self):
         required = {
-            "auth", "body", "vault_injection", "compaction",
-            "cache_control", "headers", "platform_tag",
-            "cache_poison_removal", "stable_cache_stamps", "cache_cap",
+            "auth",
+            "body",
+            "vault_injection",
+            "compaction",
+            "cache_control",
+            "headers",
+            "platform_tag",
+            "cache_poison_removal",
+            "stable_cache_stamps",
+            "cache_cap",
         }
         for route_name, policy in ROUTE_POLICIES.items():
             missing = required - set(policy.keys())

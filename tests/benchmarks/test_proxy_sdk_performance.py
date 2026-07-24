@@ -15,6 +15,7 @@ pytestmark = pytest.mark.needs_fast_host
 def _proxy_reachable() -> bool:
     """Return True if tokenpak proxy is reachable on localhost."""
     import os
+
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=1):

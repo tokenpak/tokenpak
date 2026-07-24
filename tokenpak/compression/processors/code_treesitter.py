@@ -10,8 +10,26 @@ Graceful fallback to CodeProcessor if tree-sitter fails to parse.
 Target compression: 3-10x on typical code files.
 """
 
+from __future__ import annotations
+
+__all__ = (
+    "EXTENSION_TO_LANG",
+    "TreeSitterProcessor",
+    "extract",
+    "is_available",
+)
+
+
 import warnings
-from typing import Optional
+from typing import TYPE_CHECKING, Optional, Protocol
+
+if TYPE_CHECKING:
+    from tree_sitter import Node
+
+
+class _FallbackProcessor(Protocol):
+    def process(self, content: str, path: str = "") -> str: ...
+
 
 # Suppress the tree_sitter_languages FutureWarning about old API
 warnings.filterwarnings("ignore", category=FutureWarning, module="tree_sitter")
@@ -64,12 +82,12 @@ def is_available() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _text(node) -> str:
+def _text(node: Node) -> str:
     """Decode a node's source text."""
     return (node.text or b"").decode("utf-8", errors="replace")
 
 
-def _sig_before_body(node, body_types: tuple) -> str:
+def _sig_before_body(node: Node, body_types: tuple[str, ...]) -> str:
     """
     Return node text up to (not including) the first child whose type is in
     body_types.  Used to extract function/class signatures.
@@ -82,7 +100,7 @@ def _sig_before_body(node, body_types: tuple) -> str:
     return src
 
 
-def _first_docstring(block_node) -> Optional[str]:
+def _first_docstring(block_node: Node) -> Optional[str]:
     """
     Return the first docstring from a Python block node, or None.
     A docstring is an expression_statement whose sole child is a string.
@@ -122,7 +140,7 @@ _PY_SKIP = {
 }
 
 
-def _py_format_fn(node, indent: str = "") -> str:
+def _py_format_fn(node: Node, indent: str = "") -> str:
     """Format a Python function_definition: signature + optional docstring + `...`."""
     sig = _sig_before_body(node, _PY_BODY)
     # Add `...` on the line after the signature
@@ -138,7 +156,7 @@ def _py_format_fn(node, indent: str = "") -> str:
     return "\n".join(lines)
 
 
-def _py_format_class(node, indent: str = "") -> str:
+def _py_format_class(node: Node, indent: str = "") -> str:
     """Format a Python class_definition: header + optional docstring + method stubs."""
     sig = _sig_before_body(node, _PY_BODY)
     lines = [f"{indent}{sig.strip()}"]
@@ -192,7 +210,7 @@ def _extract_python(source: str) -> str:
     tree = parser.parse(source.encode())
     root = tree.root_node
 
-    parts = []
+    parts: list[str] = []
 
     for node in root.children:
         nt = node.type
@@ -249,13 +267,13 @@ _JS_CLASS_TYPES = {"class_declaration"}
 _JS_EXPORT_KEEP = {"export_statement"}
 
 
-def _js_format_fn(node, indent: str = "") -> str:
+def _js_format_fn(node: Node, indent: str = "") -> str:
     """Format a JS function_declaration: signature + `{}`."""
     sig = _sig_before_body(node, _JS_BODY)
     return f"{indent}{sig.strip()} {{}}"
 
 
-def _js_format_class(node, indent: str = "") -> str:
+def _js_format_class(node: Node, indent: str = "") -> str:
     """Format a JS class_declaration: header + method stubs."""
     sig = _sig_before_body(node, ("class_body",))
     lines = [f"{indent}{sig.strip()} {{"]
@@ -276,7 +294,7 @@ def _js_format_class(node, indent: str = "") -> str:
     return "\n".join(lines)
 
 
-def _js_format_export(node, indent: str = "") -> str:
+def _js_format_export(node: Node, indent: str = "") -> str:
     """Format an export_statement, drilling into the exported declaration."""
     parts = []
     for child in node.children:
@@ -293,7 +311,7 @@ def _js_format_export(node, indent: str = "") -> str:
     return "\n".join(parts) if parts else f"{indent}{_text(node).strip()}"
 
 
-def _js_format_lexical(node, indent: str = "") -> str:
+def _js_format_lexical(node: Node, indent: str = "") -> str:
     """Format a const/let/var declaration, stripping arrow function bodies."""
     src = _text(node).strip()
     # For arrow functions, strip the body
@@ -362,7 +380,7 @@ _GO_FN_TYPES = {"function_declaration", "method_declaration"}
 _GO_TYPE_TYPES = {"type_declaration"}
 
 
-def _go_format_fn(node) -> str:
+def _go_format_fn(node: Node) -> str:
     """Format a Go function/method: signature + `{}`."""
     sig = _sig_before_body(node, _GO_BODY)
     return f"{sig.strip()} {{}}"
@@ -415,13 +433,13 @@ _RS_FN_TYPES = {"function_item"}
 _RS_IMPL_TYPES = {"impl_item"}
 
 
-def _rs_format_fn(node, indent: str = "") -> str:
+def _rs_format_fn(node: Node, indent: str = "") -> str:
     """Format a Rust function_item: signature + `{}`."""
     sig = _sig_before_body(node, _RS_BODY)
     return f"{indent}{sig.strip()} {{}}"
 
 
-def _rs_format_impl(node) -> str:
+def _rs_format_impl(node: Node) -> str:
     """Format a Rust impl block: header + method stubs."""
     sig = _sig_before_body(node, _RS_IMPL_BODY)
     lines = [f"{sig.strip()} {{"]
@@ -519,7 +537,7 @@ class TreeSitterProcessor:
     Falls back to CodeProcessor on parse failure or unsupported language.
     """
 
-    def __init__(self, fallback=None):
+    def __init__(self, fallback: _FallbackProcessor | None = None) -> None:
         # Import here to avoid circular imports
         from .code import CodeProcessor
 

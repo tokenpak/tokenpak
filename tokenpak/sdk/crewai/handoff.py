@@ -20,9 +20,7 @@ class TokenPakHandoff:
                     budget_remaining -= tokens
                 else:
                     max_chars = int(budget_remaining / self.avg_tokens_per_char)
-                    result[key] = (
-                        value[:max_chars] + "..." if max_chars > 10 else "[truncated]"
-                    )
+                    result[key] = value[:max_chars] + "..." if max_chars > 10 else "[truncated]"
                     budget_remaining = 0
             else:
                 result[key] = value

@@ -19,6 +19,7 @@ from tokenpak.proxy.streaming import StreamHandler
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_sse_event(event_type: str, payload: dict) -> bytes:
     data = json.dumps({"type": event_type, **payload})
     return f"data: {data}\n\n".encode()
@@ -27,6 +28,7 @@ def _make_sse_event(event_type: str, payload: dict) -> bytes:
 # ---------------------------------------------------------------------------
 # Regression test
 # ---------------------------------------------------------------------------
+
 
 def test_streaming_handler_cross_chunk_message_complete():
     """
@@ -84,7 +86,7 @@ def test_streaming_handler_partial_final_line_flushed_by_get_buffer():
     """
     # A complete event line followed by a truncated second line (no newline)
     chunk1 = b'data: {"type": "message_delta", "usage": {"output_tokens": 7}}\n'
-    chunk2 = b'data: [DONE]'  # no trailing newline
+    chunk2 = b"data: [DONE]"  # no trailing newline
 
     handler = StreamHandler()
     handler.process_chunk(chunk1)
@@ -101,6 +103,7 @@ def test_streaming_handler_partial_final_line_flushed_by_get_buffer():
 # stop_reason extraction (response-path observation, read-only)
 # ---------------------------------------------------------------------------
 
+
 def test_extract_sse_stop_reason_from_message_delta():
     from tokenpak.proxy.streaming import _extract_sse_stop_reason
 
@@ -108,8 +111,10 @@ def test_extract_sse_stop_reason_from_message_delta():
         _make_sse_event("message_start", {"message": {"usage": {"input_tokens": 3}}})
         + _make_sse_event(
             "message_delta",
-            {"delta": {"stop_reason": "end_turn", "stop_sequence": None},
-             "usage": {"output_tokens": 9}},
+            {
+                "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                "usage": {"output_tokens": 9},
+            },
         )
         + _make_sse_event("message_stop", {})
         + b"data: [DONE]\n\n"
@@ -123,8 +128,7 @@ def test_extract_sse_stop_reason_refusal_distinguishable():
 
     sse = _make_sse_event(
         "message_delta",
-        {"delta": {"stop_reason": "refusal", "stop_sequence": None},
-         "usage": {"output_tokens": 1}},
+        {"delta": {"stop_reason": "refusal", "stop_sequence": None}, "usage": {"output_tokens": 1}},
     )
     assert _extract_sse_stop_reason(sse) == "refusal"
 

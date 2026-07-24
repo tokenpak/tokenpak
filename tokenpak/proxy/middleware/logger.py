@@ -5,6 +5,8 @@ Supports JSON + human-readable output, async file I/O, configurable levels,
 and daily log rotation.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import logging.handlers
@@ -16,7 +18,7 @@ import uuid
 from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Literal, Optional
+from typing import Literal, Optional
 
 LogLevel = Literal["debug", "info", "warn", "error"]
 Destination = Literal["file", "stdout", "syslog"]
@@ -38,7 +40,7 @@ class LogRecord:
     latency_ms: float
     compression_ratio: Optional[float]
     message: str
-    context: Dict[str, Any]
+    context: dict[str, object]
 
     def to_json(self) -> str:
         """Convert to JSON."""
@@ -81,9 +83,9 @@ class LoggingConfig:
 class AsyncLogger:
     """Asynchronous logger with buffering."""
 
-    def __init__(self, config: LoggingConfig):
+    def __init__(self, config: LoggingConfig) -> None:
         self.config = config
-        self.buffer = deque(maxlen=config.async_buffer_size)
+        self.buffer: deque[LogRecord] = deque(maxlen=config.async_buffer_size)
         self.lock = threading.Lock()
         self.stop_event = threading.Event()
 
@@ -101,7 +103,7 @@ class AsyncLogger:
         self.flush_thread = threading.Thread(target=self._flush_loop, daemon=True)
         self.flush_thread.start()
 
-    def _setup_handler(self):
+    def _setup_handler(self) -> None:
         """Setup logging handler based on destination."""
         formatter = logging.Formatter("%(message)s")
 
@@ -110,7 +112,7 @@ class AsyncLogger:
             os.makedirs(log_dir, exist_ok=True)
 
             # Daily rotation
-            handler = logging.handlers.TimedRotatingFileHandler(
+            handler: logging.Handler = logging.handlers.TimedRotatingFileHandler(
                 os.path.join(log_dir, f"proxy-{datetime.now().strftime('%Y-%m-%d')}.log"),
                 when="midnight",
                 interval=1,
@@ -126,7 +128,7 @@ class AsyncLogger:
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
 
-    def log(self, record: LogRecord):
+    def log(self, record: LogRecord) -> None:
         """Enqueue log record."""
         if not self.config.enabled:
             return
@@ -138,13 +140,13 @@ class AsyncLogger:
         if len(self.buffer) >= self.config.async_buffer_size * 0.8:
             self._flush()
 
-    def _flush_loop(self):
+    def _flush_loop(self) -> None:
         """Periodically flush buffer."""
         while not self.stop_event.is_set():
             time.sleep(self.config.flush_interval_sec)
             self._flush()
 
-    def _flush(self):
+    def _flush(self) -> None:
         """Write buffered records to storage."""
         with self.lock:
             while self.buffer:
@@ -160,7 +162,7 @@ class AsyncLogger:
                 level = getattr(logging, record.level.upper(), logging.INFO)
                 self.logger.log(level, msg)
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop async logging."""
         self.stop_event.set()
         self._flush()
@@ -170,7 +172,7 @@ class AsyncLogger:
 class RequestLogger:
     """Structured request logger."""
 
-    def __init__(self, config: LoggingConfig):
+    def __init__(self, config: LoggingConfig) -> None:
         self.config = config
         self.async_logger = AsyncLogger(config)
 
@@ -185,10 +187,10 @@ class RequestLogger:
         latency_ms: float = 0.0,
         compression_ratio: Optional[float] = None,
         message: str = "",
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, object]] = None,
         level: LogLevel = "info",
         request_id: Optional[str] = None,
-    ):
+    ) -> None:
         """Log a request."""
         if not self.config.enabled:
             return
@@ -214,7 +216,7 @@ class RequestLogger:
 
         self.async_logger.log(record)
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop logging."""
         self.async_logger.stop()
 

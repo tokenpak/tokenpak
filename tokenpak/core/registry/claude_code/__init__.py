@@ -9,6 +9,7 @@ Example::
     from tokenpak.core.registry.claude_code import register
     register()
 """
+
 from tokenpak.core.registry.claude_code.adapter import ClaudeCodeAdapter
 from tokenpak.core.registry.claude_code.config import ClaudeCodeConfig
 

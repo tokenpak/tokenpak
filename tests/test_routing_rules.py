@@ -16,6 +16,7 @@ from tokenpak.routing.rules import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def tmp_routes(tmp_path):
     """Return a RouteStore backed by a temporary file."""
@@ -31,6 +32,7 @@ def engine_with_store(tmp_routes):
 # ---------------------------------------------------------------------------
 # RoutePattern unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestRoutePattern:
     def test_is_empty_when_all_none(self):
@@ -62,6 +64,7 @@ class TestRoutePattern:
 # ---------------------------------------------------------------------------
 # RouteEngine matching tests
 # ---------------------------------------------------------------------------
+
 
 class TestRouteEngine:
     def _rule(self, pattern, target="haiku", priority=100):
@@ -139,8 +142,12 @@ class TestRouteEngine:
 
     def test_priority_ordering_first_wins(self):
         engine = RouteEngine()
-        rule_low = RouteRule(id="a", pattern=RoutePattern(model="gpt-*"), target="cheap", priority=200)
-        rule_high = RouteRule(id="b", pattern=RoutePattern(model="gpt-*"), target="expensive", priority=10)
+        rule_low = RouteRule(
+            id="a", pattern=RoutePattern(model="gpt-*"), target="cheap", priority=200
+        )
+        rule_high = RouteRule(
+            id="b", pattern=RoutePattern(model="gpt-*"), target="expensive", priority=10
+        )
         result = engine.match(model="gpt-4o", prompt="hello", rules=[rule_low, rule_high])
         assert result.target == "expensive"  # lower priority number = higher priority
 
@@ -159,6 +166,7 @@ class TestRouteEngine:
 # ---------------------------------------------------------------------------
 # RouteStore persistence tests
 # ---------------------------------------------------------------------------
+
 
 class TestRouteStore:
     def test_empty_store(self, tmp_routes):
@@ -218,6 +226,7 @@ class TestRouteStore:
 # Helper function tests
 # ---------------------------------------------------------------------------
 
+
 class TestHelpers:
     def test_count_tokens_approx(self):
         text = "a" * 400  # 400 chars → ~100 tokens
@@ -260,6 +269,7 @@ class TestHelpers:
 # match_payload integration
 # ---------------------------------------------------------------------------
 
+
 class TestMatchPayload:
     def test_match_payload_routes_by_model(self, engine_with_store):
         engine, store = engine_with_store
@@ -280,6 +290,7 @@ class TestMatchPayload:
 # ---------------------------------------------------------------------------
 # parse_pattern_args
 # ---------------------------------------------------------------------------
+
 
 class TestParsePatternArgs:
     def test_valid_model(self):

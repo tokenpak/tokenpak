@@ -154,9 +154,7 @@ class TestCodeProcessorPython:
         # Build a triple-quoted literal with >= 5 lines
         body = "\n".join(["line"] * 6)
         content = f'TMPL = """\n{body}\n"""\n'
-        result = self.proc.process(
-            content, path="mod.py", mode=CodeCompactionMode.CODE_API
-        )
+        result = self.proc.process(content, path="mod.py", mode=CodeCompactionMode.CODE_API)
         assert "<TEMPLATE:TMPL" in result
         assert "line\nline" not in result
 
@@ -172,9 +170,7 @@ class TestCodeProcessorPython:
     def test_small_triple_string_always_kept(self):
         # < 5 lines should never be stubbed
         content = 'SHORT = """a\nb\nc"""\n'
-        result = self.proc.process(
-            content, path="mod.py", mode=CodeCompactionMode.CODE_API
-        )
+        result = self.proc.process(content, path="mod.py", mode=CodeCompactionMode.CODE_API)
         assert "<TEMPLATE:" not in result
 
 

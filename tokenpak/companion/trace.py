@@ -432,7 +432,7 @@ def assert_no_leak(response: Dict[str, Any]) -> None:
     def _check_content(text: str, label: str) -> None:
         if TRACE_ENVELOPE_KEY in text or TRACE_HEADER in text:
             raise AssertionError(
-                f"Trace marker found in {label}; " "trace must not appear in assistant content."
+                f"Trace marker found in {label}; trace must not appear in assistant content."
             )
 
     # OpenAI-style: choices[*].message.content

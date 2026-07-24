@@ -78,9 +78,7 @@ class TokenPakOpenAICompat:
             **client_kwargs: Extra kwargs for openai.OpenAI().
         """
         if not _OPENAI_AVAILABLE:
-            raise ImportError(
-                "openai package is required: pip install tokenpak-local[openai]"
-            )
+            raise ImportError("openai package is required: pip install tokenpak-local[openai]")
         self._base_url = base_url
         self._output_fraction = output_fraction
         self._context_length_override = context_length
@@ -132,9 +130,7 @@ class TokenPakOpenAICompat:
             if self._context_length_override
             else get_context_length(model)
         )
-        return auto_budget(
-            model, output_fraction=self._output_fraction, context_length=ctx
-        )
+        return auto_budget(model, output_fraction=self._output_fraction, context_length=ctx)
 
     # ------------------------------------------------------------------
     # Internal helpers

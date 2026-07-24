@@ -2,7 +2,9 @@
 
 import pytest
 
-pytest.importorskip("tokenpak._internal.agentic.precondition_gates", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.agentic.precondition_gates", reason="module not available in current build"
+)
 import os
 import subprocess
 
@@ -19,6 +21,7 @@ from tokenpak._internal.agentic.precondition_gates import (
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def gates_engine(tmp_path):
     """PreconditionGates with isolated tmp paths."""
@@ -30,6 +33,7 @@ def gates_engine(tmp_path):
 
 
 # ── Gate type: env_check ──────────────────────────────────────────────────────
+
 
 def test_env_check_passes_when_vars_set(monkeypatch):
     monkeypatch.setenv("MY_TOKEN", "abc123")
@@ -55,6 +59,7 @@ def test_env_check_multiple_vars_partial_missing(monkeypatch):
 
 # ── Gate type: file_exists ────────────────────────────────────────────────────
 
+
 def test_file_exists_passes(tmp_path):
     f = tmp_path / "required.txt"
     f.write_text("hello")
@@ -76,6 +81,7 @@ def test_file_exists_empty_params():
 
 # ── Gate type: service_running ────────────────────────────────────────────────
 
+
 def test_service_running_passes_via_pgrep():
     """Use a real process known to be running (python3 or pytest process)."""
     # Check that 'init' or 'systemd' or 'bash' is running via pgrep
@@ -94,6 +100,7 @@ def test_service_running_fails_for_nonexistent():
 
 
 # ── Gate type: test_passing ───────────────────────────────────────────────────
+
 
 def test_test_passing_passes(tmp_path):
     passed, reason = _check_test_passing({"command": "true"})
@@ -118,14 +125,22 @@ def test_test_passing_missing_command():
 
 # ── Gate type: diff_clean ─────────────────────────────────────────────────────
 
+
 def test_diff_clean_passes_clean_repo(tmp_path):
     """Create a clean git repo and verify diff_clean passes."""
     subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "--allow-empty", "-m", "init"],
-        cwd=tmp_path, check=True, capture_output=True,
-        env={**os.environ, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "t@t.com",
-             "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "t@t.com"},
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "t@t.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "t@t.com",
+        },
     )
     passed, reason = _check_diff_clean({"path": str(tmp_path)})
     assert passed, reason
@@ -136,9 +151,16 @@ def test_diff_clean_fails_with_uncommitted(tmp_path):
     subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "--allow-empty", "-m", "init"],
-        cwd=tmp_path, check=True, capture_output=True,
-        env={**os.environ, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "t@t.com",
-             "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "t@t.com"},
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "t@t.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "t@t.com",
+        },
     )
     (tmp_path / "dirty.txt").write_text("uncommitted")
     passed, reason = _check_diff_clean({"path": str(tmp_path)})
@@ -148,24 +170,29 @@ def test_diff_clean_fails_with_uncommitted(tmp_path):
 
 # ── PreconditionGates: add / check / remove ───────────────────────────────────
 
+
 def test_add_and_check_env_gate(gates_engine, monkeypatch):
     monkeypatch.setenv("REQUIRED_KEY", "set")
-    gates_engine.add_gate(Gate(
-        step="deploy",
-        gate_type="env_check",
-        params={"vars": ["REQUIRED_KEY"]},
-    ))
+    gates_engine.add_gate(
+        Gate(
+            step="deploy",
+            gate_type="env_check",
+            params={"vars": ["REQUIRED_KEY"]},
+        )
+    )
     passed, reason = gates_engine.check("deploy")
     assert passed
 
 
 def test_gate_blocks_when_condition_unmet(gates_engine, monkeypatch):
     monkeypatch.delenv("UNSET_KEY", raising=False)
-    gates_engine.add_gate(Gate(
-        step="deploy",
-        gate_type="env_check",
-        params={"vars": ["UNSET_KEY"]},
-    ))
+    gates_engine.add_gate(
+        Gate(
+            step="deploy",
+            gate_type="env_check",
+            params={"vars": ["UNSET_KEY"]},
+        )
+    )
     passed, reason = gates_engine.check("deploy")
     assert not passed
     assert "UNSET_KEY" in reason
@@ -178,11 +205,13 @@ def test_no_gates_always_passes(gates_engine):
 
 def test_remove_gate(gates_engine, monkeypatch):
     monkeypatch.delenv("MISSING_VAR", raising=False)
-    gates_engine.add_gate(Gate(
-        step="build",
-        gate_type="env_check",
-        params={"vars": ["MISSING_VAR"]},
-    ))
+    gates_engine.add_gate(
+        Gate(
+            step="build",
+            gate_type="env_check",
+            params={"vars": ["MISSING_VAR"]},
+        )
+    )
     # Gate blocks
     passed, _ = gates_engine.check("build")
     assert not passed
@@ -203,6 +232,7 @@ def test_add_unknown_gate_type_raises(gates_engine):
 
 # ── Persistence ───────────────────────────────────────────────────────────────
 
+
 def test_gates_persist_to_disk(tmp_path, monkeypatch):
     monkeypatch.setenv("PERSIST_VAR", "yes")
     gp = tmp_path / "preconditions.json"
@@ -218,6 +248,7 @@ def test_gates_persist_to_disk(tmp_path, monkeypatch):
 
 
 # ── Auto-promotion ────────────────────────────────────────────────────────────
+
 
 def test_auto_promote_after_threshold(gates_engine, monkeypatch):
     monkeypatch.delenv("AUTO_VAR", raising=False)
@@ -268,6 +299,7 @@ def test_gate_summary(gates_engine, monkeypatch):
 
 # ── list_gates ────────────────────────────────────────────────────────────────
 
+
 def test_list_gates_all(gates_engine):
     gates_engine.add_gate(Gate(step="a", gate_type="diff_clean", params={"path": "."}))
     gates_engine.add_gate(Gate(step="b", gate_type="file_exists", params={"paths": ["/etc/hosts"]}))
@@ -285,23 +317,26 @@ def test_list_gates_filtered(gates_engine):
 
 # ── Workflow integration: gate blocks step instead of counting as failure ──────
 
+
 def test_gate_block_is_not_a_failure(gates_engine, monkeypatch):
     """
     Simulate a workflow runner: if gate blocks, step is skipped, not failed.
     """
     monkeypatch.delenv("WORKFLOW_KEY", raising=False)
-    gates_engine.add_gate(Gate(
-        step="risky_step",
-        gate_type="env_check",
-        params={"vars": ["WORKFLOW_KEY"]},
-    ))
+    gates_engine.add_gate(
+        Gate(
+            step="risky_step",
+            gate_type="env_check",
+            params={"vars": ["WORKFLOW_KEY"]},
+        )
+    )
 
     step_failed = False
     step_skipped = False
 
     passed, reason = gates_engine.check("risky_step")
     if not passed:
-        step_skipped = True   # gate blocked → skip, not failure
+        step_skipped = True  # gate blocked → skip, not failure
     else:
         try:
             raise RuntimeError("step execution error")

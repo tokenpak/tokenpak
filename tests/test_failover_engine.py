@@ -43,18 +43,22 @@ from tokenpak.proxy.failover_engine import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_config(*providers: str) -> FailoverConfig:
     """Build a minimal FailoverConfig with given providers (credentials mocked)."""
     import os
+
     chain = []
     for p in providers:
         env_var = f"MOCK_{p.upper()}_KEY"
         os.environ[env_var] = "mock-key"
-        chain.append(ProviderEntry(
-            provider=p,
-            model_map={"claude-sonnet-4-5": "gpt-4o" if p == "openai" else "claude-sonnet-4-5"},
-            credential_env=env_var,
-        ))
+        chain.append(
+            ProviderEntry(
+                provider=p,
+                model_map={"claude-sonnet-4-5": "gpt-4o" if p == "openai" else "claude-sonnet-4-5"},
+                credential_env=env_var,
+            )
+        )
     return FailoverConfig(enabled=True, chain=chain)
 
 
@@ -71,6 +75,7 @@ def _make_engine(*providers: str) -> FailoverEngine:
 # ---------------------------------------------------------------------------
 # classify_error
 # ---------------------------------------------------------------------------
+
 
 class TestClassifyError:
     def test_429_rate_limit(self):
@@ -107,6 +112,7 @@ class TestClassifyError:
     def test_timeout_name_match(self):
         class ReadTimeoutError(Exception):
             pass
+
         err = classify_error(exception=ReadTimeoutError("read timeout"))
         assert err.error_type == ErrorType.TIMEOUT
 
@@ -122,6 +128,7 @@ class TestClassifyError:
 # ---------------------------------------------------------------------------
 # decide
 # ---------------------------------------------------------------------------
+
 
 class TestDecide:
     def test_rate_limit_switch_with_wait(self):
@@ -156,6 +163,7 @@ class TestDecide:
 # ---------------------------------------------------------------------------
 # CircuitBreaker
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitBreaker:
     def test_starts_available(self):
@@ -237,9 +245,11 @@ class TestCircuitBreaker:
 # FailoverEventLog
 # ---------------------------------------------------------------------------
 
+
 class TestFailoverEventLog:
     def _event(self, orig="anthropic", failover="openai", succeeded=True) -> FailoverEvent:
         from datetime import datetime, timezone
+
         return FailoverEvent(
             timestamp=datetime.now(timezone.utc).isoformat(),
             original_provider=orig,
@@ -290,6 +300,7 @@ class TestFailoverEventLog:
 # ---------------------------------------------------------------------------
 # FailoverEngine — iter_attempts
 # ---------------------------------------------------------------------------
+
 
 class TestFailoverEngineIterAttempts:
     def test_no_failover_config_yields_primary_only(self):
@@ -343,50 +354,53 @@ class TestFailoverEngineIterAttempts:
 # FailoverEngine — handle_error + record_success
 # ---------------------------------------------------------------------------
 
+
 class TestFailoverEngineHandleError:
     def test_rate_limit_returns_continue_with_wait(self):
         engine = _make_engine("anthropic", "openai")
         attempt = ProviderAttempt(
-            provider="anthropic", model="claude-sonnet-4-5",
-            credential_env="MOCK_ANTHROPIC_KEY", is_primary=True,
+            provider="anthropic",
+            model="claude-sonnet-4-5",
+            credential_env="MOCK_ANTHROPIC_KEY",
+            is_primary=True,
         )
         err = classify_error(http_status=429)
-        should_continue, wait = engine.handle_error(
-            attempt, err, "anthropic", "claude-sonnet-4-5"
-        )
+        should_continue, wait = engine.handle_error(attempt, err, "anthropic", "claude-sonnet-4-5")
         assert should_continue
         assert wait == RATE_LIMIT_WAIT_SECONDS
 
     def test_server_error_returns_continue_no_wait(self):
         engine = _make_engine("anthropic", "openai")
         attempt = ProviderAttempt(
-            provider="anthropic", model="claude-sonnet-4-5",
-            credential_env="MOCK_ANTHROPIC_KEY", is_primary=True,
+            provider="anthropic",
+            model="claude-sonnet-4-5",
+            credential_env="MOCK_ANTHROPIC_KEY",
+            is_primary=True,
         )
         err = classify_error(http_status=500)
-        should_continue, wait = engine.handle_error(
-            attempt, err, "anthropic", "claude-sonnet-4-5"
-        )
+        should_continue, wait = engine.handle_error(attempt, err, "anthropic", "claude-sonnet-4-5")
         assert should_continue
         assert wait == 0.0
 
     def test_auth_error_returns_no_continue(self):
         engine = _make_engine("anthropic", "openai")
         attempt = ProviderAttempt(
-            provider="anthropic", model="claude-sonnet-4-5",
-            credential_env="MOCK_ANTHROPIC_KEY", is_primary=True,
+            provider="anthropic",
+            model="claude-sonnet-4-5",
+            credential_env="MOCK_ANTHROPIC_KEY",
+            is_primary=True,
         )
         err = classify_error(http_status=401)
-        should_continue, wait = engine.handle_error(
-            attempt, err, "anthropic", "claude-sonnet-4-5"
-        )
+        should_continue, wait = engine.handle_error(attempt, err, "anthropic", "claude-sonnet-4-5")
         assert not should_continue
 
     def test_failure_increments_circuit(self):
         engine = _make_engine("anthropic", "openai")
         attempt = ProviderAttempt(
-            provider="anthropic", model="claude-sonnet-4-5",
-            credential_env="MOCK_ANTHROPIC_KEY", is_primary=True,
+            provider="anthropic",
+            model="claude-sonnet-4-5",
+            credential_env="MOCK_ANTHROPIC_KEY",
+            is_primary=True,
         )
         err = classify_error(http_status=500)
         for _ in range(CIRCUIT_FAILURE_THRESHOLD):
@@ -420,12 +434,18 @@ class TestFailoverEngineHandleError:
 # normalize_response
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeResponse:
     def test_same_provider_passthrough(self):
-        body = {"id": "msg_123", "type": "message", "role": "assistant",
-                "content": [{"type": "text", "text": "hello"}],
-                "model": "claude-sonnet-4-5", "stop_reason": "end_turn",
-                "usage": {"input_tokens": 10, "output_tokens": 5}}
+        body = {
+            "id": "msg_123",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": "hello"}],
+            "model": "claude-sonnet-4-5",
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+        }
         result = normalize_response(body, "anthropic", "anthropic")
         assert result == body
 
@@ -459,6 +479,7 @@ class TestNormalizeResponse:
 # render_failover_footer
 # ---------------------------------------------------------------------------
 
+
 class TestRenderFailoverFooter:
     def test_basic_format(self):
         footer = render_failover_footer("anthropic", 429, "rate_limit", "openai")
@@ -482,6 +503,7 @@ class TestRenderFailoverFooter:
 # ---------------------------------------------------------------------------
 # Integration: anthropic 429 → openai succeed → anthropic-format response
 # ---------------------------------------------------------------------------
+
 
 class TestIntegrationAnthropicFailover:
     def test_anthropic_429_openai_succeeds(self):
@@ -524,9 +546,7 @@ class TestIntegrationAnthropicFailover:
         assert second_attempt.provider == "openai"
         failover_provider = second_attempt.provider
         final_response = normalize_response(openai_response, "openai", "anthropic")
-        footer = engine.record_success(
-            failover_provider, provider, model, was_failover=True
-        )
+        footer = engine.record_success(failover_provider, provider, model, was_failover=True)
         assert footer is not None
         assert "failover:openai" in footer
 
@@ -565,8 +585,10 @@ class TestIntegrationAnthropicFailover:
 
         # Fail anthropic CIRCUIT_FAILURE_THRESHOLD times
         attempt = ProviderAttempt(
-            provider="anthropic", model=model,
-            credential_env="MOCK_ANTHROPIC_KEY", is_primary=True,
+            provider="anthropic",
+            model=model,
+            credential_env="MOCK_ANTHROPIC_KEY",
+            is_primary=True,
         )
         for _ in range(CIRCUIT_FAILURE_THRESHOLD):
             engine.handle_error(attempt, err, provider, model)
@@ -583,6 +605,7 @@ class TestIntegrationAnthropicFailover:
 # ---------------------------------------------------------------------------
 # Global event log singleton
 # ---------------------------------------------------------------------------
+
 
 class TestGlobalEventLog:
     def test_get_event_log_returns_singleton(self):

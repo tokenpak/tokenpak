@@ -158,10 +158,7 @@ See original session log
         capsule1 = build_session_capsule(text)
         capsule2 = build_session_capsule(text)
 
-        assert (
-            capsule1["session_metadata"]["sha256"]
-            == capsule2["session_metadata"]["sha256"]
-        )
+        assert capsule1["session_metadata"]["sha256"] == capsule2["session_metadata"]["sha256"]
 
     def test_build_capsule_source_path_tracking(self):
         """Test source path is tracked in metadata and reference."""

@@ -75,7 +75,7 @@ class TermResolverConfig:
     max_bytes_per_card: int = 200  # max bytes per card snippet
     enabled: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.top_k = min(self.top_k, 5)  # enforce hard cap
         self.top_k = max(self.top_k, 1)  # enforce minimum
 

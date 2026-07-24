@@ -188,12 +188,8 @@ def test_aggregate_multiple_sources():
     ]
     by_source = aggregate_attributions(attrs)
     assert len(by_source) == 3
-    tp_managed = sum(
-        s.saved_tokens for s in by_source.values() if s.credited_to_tokenpak
-    )
-    non_tp = sum(
-        s.saved_tokens for s in by_source.values() if not s.credited_to_tokenpak
-    )
+    tp_managed = sum(s.saved_tokens for s in by_source.values() if s.credited_to_tokenpak)
+    non_tp = sum(s.saved_tokens for s in by_source.values() if not s.credited_to_tokenpak)
     assert tp_managed == 100
     assert non_tp == 250
 

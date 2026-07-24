@@ -18,6 +18,7 @@ class TestCrewaiIntegration:
         """Verify crewai_tokenpak imports."""
         try:
             import crewai_tokenpak
+
             assert crewai_tokenpak is not None
         except ImportError as e:
             pytest.skip(f"crewai_tokenpak not installed: {e}")
@@ -50,6 +51,7 @@ class TestLangfuseIntegration:
         """Verify langfuse_tokenpak imports."""
         try:
             import langfuse_tokenpak
+
             assert langfuse_tokenpak is not None
         except ImportError as e:
             pytest.skip(f"langfuse_tokenpak not installed: {e}")
@@ -74,11 +76,7 @@ class TestLangfuseIntegration:
             pytest.skip("create_trace not available")
 
         with patch("langfuse.Langfuse") as mock_langfuse:
-            trace = create_trace(
-                name="test_trace",
-                input_tokens=100,
-                output_tokens=50
-            )
+            trace = create_trace(name="test_trace", input_tokens=100, output_tokens=50)
             assert trace is not None
 
     def test_langfuse_metrics_collection(self):
@@ -99,6 +97,7 @@ class TestLlamaIndexIntegration:
         """Verify llamaindex_tokenpak imports."""
         try:
             import llamaindex_tokenpak
+
             assert llamaindex_tokenpak is not None
         except ImportError as e:
             pytest.skip(f"llamaindex_tokenpak not installed: {e}")

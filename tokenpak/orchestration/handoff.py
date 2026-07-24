@@ -23,14 +23,25 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Mapping, Optional, TypeAlias, Union, cast
 
 DEFAULT_HANDOFF_DIR = Path.home() / ".tokenpak" / "handoffs"
 DEFAULT_TTL_HOURS = 24
 REGISTERED_AGENTS = {"cali", "sue", "trix", "kevin"}
+
+JsonValue: TypeAlias = Union[
+    None,
+    bool,
+    int,
+    float,
+    str,
+    list["JsonValue"],
+    dict[str, "JsonValue"],
+]
+JsonObject: TypeAlias = dict[str, JsonValue]
 
 
 class HandoffStatus(str, Enum):
@@ -50,12 +61,22 @@ class ContextRef:
     description: str = ""
     valid: Optional[bool] = None  # set during receive_handoff validation
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+    def to_dict(self) -> JsonObject:
+        return {
+            "type": self.type,
+            "path": self.path,
+            "description": self.description,
+            "valid": self.valid,
+        }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "ContextRef":
-        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+    def from_dict(cls, d: Mapping[str, JsonValue]) -> "ContextRef":
+        return cls(
+            type=cast(str, d["type"]),
+            path=cast(str, d["path"]),
+            description=cast(str, d.get("description", "")),
+            valid=cast(Optional[bool], d.get("valid")),
+        )
 
 
 @dataclass
@@ -79,21 +100,48 @@ class Handoff:
     what_was_done: str = ""
     whats_next: str = ""
     relevant_files: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: JsonObject = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
-        d = asdict(self)
-        d["status"] = self.status.value
-        return d
+    def to_dict(self) -> JsonObject:
+        return {
+            "id": self.id,
+            "from_agent": self.from_agent,
+            "to_agent": self.to_agent,
+            "context_refs": [ref.to_dict() for ref in self.context_refs],
+            "status": self.status.value,
+            "created_at": self.created_at,
+            "expires_at": self.expires_at,
+            "received_at": self.received_at,
+            "applied_at": self.applied_at,
+            "summary": self.summary,
+            "what_was_done": self.what_was_done,
+            "whats_next": self.whats_next,
+            "relevant_files": list(self.relevant_files),
+            "metadata": self.metadata,
+        }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Handoff":
-        d = dict(d)
-        d["status"] = HandoffStatus(d.get("status", "pending"))
-        refs_raw = d.pop("context_refs", [])
-        obj = cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
-        obj.context_refs = [ContextRef.from_dict(r) for r in refs_raw]
-        return obj
+    def from_dict(cls, d: Mapping[str, JsonValue]) -> "Handoff":
+        refs_raw = cast(list[JsonValue], d.get("context_refs", []))
+        return cls(
+            id=cast(str, d["id"]),
+            from_agent=cast(str, d["from_agent"]),
+            to_agent=cast(str, d["to_agent"]),
+            context_refs=[ContextRef.from_dict(cast(JsonObject, ref)) for ref in refs_raw],
+            status=HandoffStatus(cast(str, d.get("status", "pending"))),
+            created_at=cast(float, d.get("created_at", time.time())),
+            expires_at=cast(
+                float,
+                d.get("expires_at", time.time() + DEFAULT_TTL_HOURS * 3600),
+            ),
+            received_at=cast(Optional[float], d.get("received_at")),
+            applied_at=cast(Optional[float], d.get("applied_at")),
+            summary=cast(str, d.get("summary", "")),
+            what_was_done=cast(str, d.get("what_was_done", "")),
+            whats_next=cast(str, d.get("whats_next", "")),
+            relevant_files=cast(List[str], d.get("relevant_files", [])),
+            metadata=cast(JsonObject, d.get("metadata", {})),
+        )
 
     def is_expired(self) -> bool:
         return time.time() > self.expires_at
@@ -152,7 +200,7 @@ class HandoffManager:
         whats_next: str = "",
         relevant_files: Optional[List[str]] = None,
         ttl_hours: float = DEFAULT_TTL_HOURS,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Mapping[str, JsonValue]] = None,
     ) -> Handoff:
         """Create a new handoff and persist it to disk.
 
@@ -183,7 +231,7 @@ class HandoffManager:
             whats_next=whats_next,
             relevant_files=files,
             summary=_generate_summary(what_was_done, whats_next, files),
-            metadata=metadata or {},
+            metadata=dict(metadata or {}),
         )
         self._save(handoff)
         return handoff
@@ -324,9 +372,9 @@ class HandoffBlock:
     type: str
     id: str
     content: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: JsonObject = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> JsonObject:
         return {
             "type": self.type,
             "id": self.id,
@@ -335,12 +383,12 @@ class HandoffBlock:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "HandoffBlock":
+    def from_dict(cls, d: Mapping[str, JsonValue]) -> "HandoffBlock":
         return cls(
-            type=d["type"],
-            id=d["id"],
-            content=d["content"],
-            metadata=d.get("metadata", {}),
+            type=cast(str, d["type"]),
+            id=cast(str, d["id"]),
+            content=cast(str, d["content"]),
+            metadata=cast(JsonObject, d.get("metadata", {})),
         )
 
 
@@ -402,12 +450,13 @@ class TokenPak:
     # Serialization
     # ------------------------------------------------------------------
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> JsonObject:
         return {"blocks": [b.to_dict() for b in self._blocks]}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "TokenPak":
-        blocks = [HandoffBlock.from_dict(b) for b in d.get("blocks", [])]
+    def from_dict(cls, d: Mapping[str, JsonValue]) -> "TokenPak":
+        blocks_raw = cast(list[JsonValue], d.get("blocks", []))
+        blocks = [HandoffBlock.from_dict(cast(JsonObject, block)) for block in blocks_raw]
         return cls(blocks=blocks)
 
     # ------------------------------------------------------------------
@@ -460,14 +509,14 @@ class HandoffWire:
         from_agent: str,
         to_agent: str,
         summary: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Mapping[str, JsonValue]] = None,
         handoff_id: Optional[str] = None,
     ):
         self.pack = pack
         self.from_agent = from_agent
         self.to_agent = to_agent
         self.summary = summary
-        self.metadata = metadata or {}
+        self.metadata = dict(metadata or {})
         self.id = handoff_id or str(uuid.uuid4())
         self.created_at = time.time()
 
@@ -493,25 +542,26 @@ class HandoffWire:
             ValueError: if the version header is missing or unrecognised.
         """
         try:
-            payload = json.loads(wire)
+            payload = cast(JsonObject, json.loads(wire))
         except json.JSONDecodeError as exc:
             raise ValueError(f"Invalid wire format: {exc}") from exc
 
-        version = payload.get("version", "")
+        version = cast(str, payload.get("version", ""))
         if not version.startswith("tokpak-handoff:"):
             raise ValueError(f"Unrecognised wire version: {version!r}")
 
-        pack = TokenPak.from_dict(payload.get("pack", {}))
+        pack = TokenPak.from_dict(cast(JsonObject, payload.get("pack", {})))
         obj = cls(
             pack=pack,
-            from_agent=payload["from_agent"],
-            to_agent=payload["to_agent"],
-            summary=payload.get("summary", ""),
-            metadata=payload.get("metadata", {}),
-            handoff_id=payload.get("id"),
+            from_agent=cast(str, payload["from_agent"]),
+            to_agent=cast(str, payload["to_agent"]),
+            summary=cast(str, payload.get("summary", "")),
+            metadata=cast(JsonObject, payload.get("metadata", {})),
+            handoff_id=cast(Optional[str], payload.get("id")),
         )
-        obj.created_at = payload.get("created_at", time.time())
+        obj.created_at = cast(float, payload.get("created_at", time.time()))
         return obj
 
-    # Convenience alias — from tokenpak import Handoff → Handoff(pack=..., ...)
-    to_dict = lambda self: json.loads(self.to_wire())  # noqa: E731
+    def to_dict(self) -> JsonObject:
+        """Return the wire payload as a JSON-compatible mapping."""
+        return cast(JsonObject, json.loads(self.to_wire()))

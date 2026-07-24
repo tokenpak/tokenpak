@@ -78,7 +78,13 @@ class TestDeepHealthResult(unittest.TestCase):
         from tokenpak.proxy.intelligence.deep_health import CheckResult, DeepHealthResult
 
         checks = {name: CheckResult(status=s) for name, s in statuses.items()}
-        worst = "error" if "error" in statuses.values() else "degraded" if "warning" in statuses.values() else "ok"
+        worst = (
+            "error"
+            if "error" in statuses.values()
+            else "degraded"
+            if "warning" in statuses.values()
+            else "ok"
+        )
         return DeepHealthResult(status=worst, checks=checks, duration_ms=12.5)
 
     def test_http_status_ok_is_200(self):
@@ -304,6 +310,7 @@ class TestCheckMemoryProcMeminfo(unittest.TestCase):
 class TestCheckDisk(unittest.TestCase):
     def _usage(self, total, used):
         import collections
+
         DU = collections.namedtuple("DU", ["total", "used", "free"])
         return DU(total=total, used=used, free=total - used)
 
@@ -388,6 +395,7 @@ class TestCheckProvider(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MISSING_KEY_XYZ", None)
             from tokenpak.proxy.intelligence.deep_health import _check_provider
+
             result = _check_provider("test", "MISSING_KEY_XYZ", "https://x.com", "x-api-key")
         self.assertEqual(result.status, "error")
         self.assertEqual(result.error, "api_key_not_configured")
@@ -400,6 +408,7 @@ class TestCheckProvider(unittest.TestCase):
         mock_resp.__exit__ = MagicMock(return_value=False)
 
         from tokenpak.proxy.intelligence.deep_health import _check_provider
+
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", return_value=mock_resp):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -409,8 +418,11 @@ class TestCheckProvider(unittest.TestCase):
     def test_rate_limited_429_returns_warning(self):
         import urllib.error
 
-        err = urllib.error.HTTPError(url="https://x.com", code=429, msg="Too Many", hdrs=None, fp=None)
+        err = urllib.error.HTTPError(
+            url="https://x.com", code=429, msg="Too Many", hdrs=None, fp=None
+        )
         from tokenpak.proxy.intelligence.deep_health import _check_provider
+
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -420,8 +432,11 @@ class TestCheckProvider(unittest.TestCase):
     def test_auth_failed_401_returns_error(self):
         import urllib.error
 
-        err = urllib.error.HTTPError(url="https://x.com", code=401, msg="Unauthorized", hdrs=None, fp=None)
+        err = urllib.error.HTTPError(
+            url="https://x.com", code=401, msg="Unauthorized", hdrs=None, fp=None
+        )
         from tokenpak.proxy.intelligence.deep_health import _check_provider
+
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -431,8 +446,11 @@ class TestCheckProvider(unittest.TestCase):
     def test_auth_failed_403_returns_error(self):
         import urllib.error
 
-        err = urllib.error.HTTPError(url="https://x.com", code=403, msg="Forbidden", hdrs=None, fp=None)
+        err = urllib.error.HTTPError(
+            url="https://x.com", code=403, msg="Forbidden", hdrs=None, fp=None
+        )
         from tokenpak.proxy.intelligence.deep_health import _check_provider
+
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -442,8 +460,11 @@ class TestCheckProvider(unittest.TestCase):
     def test_other_http_error_returns_error(self):
         import urllib.error
 
-        err = urllib.error.HTTPError(url="https://x.com", code=500, msg="Server Error", hdrs=None, fp=None)
+        err = urllib.error.HTTPError(
+            url="https://x.com", code=500, msg="Server Error", hdrs=None, fp=None
+        )
         from tokenpak.proxy.intelligence.deep_health import _check_provider
+
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -455,6 +476,7 @@ class TestCheckProvider(unittest.TestCase):
 
         err = urllib.error.URLError(reason="Name or service not known")
         from tokenpak.proxy.intelligence.deep_health import _check_provider
+
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -463,6 +485,7 @@ class TestCheckProvider(unittest.TestCase):
 
     def test_timeout_returns_error(self):
         from tokenpak.proxy.intelligence.deep_health import _check_provider
+
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=TimeoutError()):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -513,16 +536,19 @@ class TestCheckAnthropicOpenAIWiring(unittest.TestCase):
 
 def _ok():
     from tokenpak.proxy.intelligence.deep_health import CheckResult
+
     return CheckResult(status="ok")
 
 
 def _warn():
     from tokenpak.proxy.intelligence.deep_health import CheckResult
+
     return CheckResult(status="warning", error="stale")
 
 
 def _err():
     from tokenpak.proxy.intelligence.deep_health import CheckResult
+
     return CheckResult(status="error", error="not_found")
 
 
@@ -544,7 +570,9 @@ class TestDeepHealthCheckerInit(unittest.TestCase):
 
 
 class TestDeepHealthCheckerRun(unittest.TestCase):
-    def _make_checker(self, anthropic_result, openai_result, db_result, index_result, memory_result, disk_result):
+    def _make_checker(
+        self, anthropic_result, openai_result, db_result, index_result, memory_result, disk_result
+    ):
         from tokenpak.proxy.intelligence.deep_health import DeepHealthChecker
 
         return DeepHealthChecker(

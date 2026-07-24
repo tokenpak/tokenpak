@@ -1,9 +1,10 @@
 """Tests for tokenpak._internal.fingerprint.privacy module."""
 
-
 import pytest
 
-pytest.importorskip("tokenpak._internal.fingerprint.privacy", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.fingerprint.privacy", reason="module not available in current build"
+)
 import pytest
 from tokenpak._internal.fingerprint.privacy import PrivacyLevel, apply_privacy
 
@@ -13,13 +14,14 @@ class TestPrivacyLevel:
 
     def test_privacy_levels_exist(self):
         """Test privacy level constants exist."""
-        assert hasattr(PrivacyLevel, 'MINIMAL')
-        assert hasattr(PrivacyLevel, 'STANDARD')
-        assert hasattr(PrivacyLevel, 'FULL')
+        assert hasattr(PrivacyLevel, "MINIMAL")
+        assert hasattr(PrivacyLevel, "STANDARD")
+        assert hasattr(PrivacyLevel, "FULL")
 
     def test_privacy_level_is_enum(self):
         """Test that PrivacyLevel is an enum."""
         from enum import Enum
+
         assert issubclass(PrivacyLevel, Enum)
 
     def test_privacy_level_count(self):

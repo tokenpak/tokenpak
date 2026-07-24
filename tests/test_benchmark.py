@@ -13,7 +13,6 @@ Covers:
   - CLI integration: `tokenpak benchmark` exits 0
 """
 
-
 import pytest
 
 pytest.importorskip("tokenpak.benchmark", reason="module not available in current build")
@@ -34,6 +33,7 @@ from tokenpak.benchmark import (
 # _run_single_compression_test unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestSingleCompressionTest:
     """Unit-level tests for the _run_single_compression_test helper."""
 
@@ -50,9 +50,15 @@ class TestSingleCompressionTest:
             content=s["content"],
         )
         required = {
-            "name", "filename", "file_type",
-            "tokens_before", "tokens_after", "tokens_saved",
-            "compression_ratio_pct", "time_ms", "recipe_hits",
+            "name",
+            "filename",
+            "file_type",
+            "tokens_before",
+            "tokens_after",
+            "tokens_saved",
+            "compression_ratio_pct",
+            "time_ms",
+            "recipe_hits",
         }
         assert required.issubset(result.keys())
 
@@ -89,9 +95,7 @@ class TestSingleCompressionTest:
             file_type=s["file_type"],
             content=s["content"],
         )
-        expected = round(
-            result["tokens_saved"] / max(result["tokens_before"], 1) * 100, 1
-        )
+        expected = round(result["tokens_saved"] / max(result["tokens_before"], 1) * 100, 1)
         assert result["compression_ratio_pct"] == expected
 
     def test_time_ms_is_non_negative(self):
@@ -133,6 +137,7 @@ class TestSingleCompressionTest:
 # BUILTIN_SAMPLES completeness
 # ---------------------------------------------------------------------------
 
+
 class TestBuiltinSamples:
     """Verify the built-in sample set meets task requirements."""
 
@@ -169,6 +174,7 @@ class TestBuiltinSamples:
 # run_compression_benchmark — default / samples mode
 # ---------------------------------------------------------------------------
 
+
 class TestRunCompressionBenchmarkSamples:
     """Tests for run_compression_benchmark using built-in samples."""
 
@@ -200,8 +206,14 @@ class TestRunCompressionBenchmarkSamples:
         run_compression_benchmark(as_json=True)
         data = json.loads(capsys.readouterr().out)
         summary = data["summary"]
-        for key in ("total_tests", "tokens_before", "tokens_after", "tokens_saved",
-                    "overall_compression_pct", "avg_time_ms"):
+        for key in (
+            "total_tests",
+            "tokens_before",
+            "tokens_after",
+            "tokens_saved",
+            "overall_compression_pct",
+            "avg_time_ms",
+        ):
             assert key in summary, f"Missing summary key: {key}"
 
     def test_json_test_count_matches_samples(self, capsys):
@@ -234,14 +246,13 @@ class TestRunCompressionBenchmarkSamples:
 # run_compression_benchmark — file mode
 # ---------------------------------------------------------------------------
 
+
 class TestRunCompressionBenchmarkFile:
     """Tests for run_compression_benchmark using a real file path."""
 
     def _write_tmp_file(self, content: str, suffix: str = ".py") -> Path:
         """Write content to a temp file and return its path."""
-        tmp = tempfile.NamedTemporaryFile(
-            mode="w", suffix=suffix, delete=False, encoding="utf-8"
-        )
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False, encoding="utf-8")
         tmp.write(content)
         tmp.close()
         return Path(tmp.name)
@@ -277,6 +288,7 @@ class TestRunCompressionBenchmarkFile:
 # ---------------------------------------------------------------------------
 # CLI integration test
 # ---------------------------------------------------------------------------
+
 
 class TestCliIntegration:
     """Smoke test the CLI entry point directly."""

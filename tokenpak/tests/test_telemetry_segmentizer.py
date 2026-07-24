@@ -1,6 +1,5 @@
 """Unit tests for telemetry segmentizer — TTL, batch, and merge logic."""
 
-
 import pytest
 
 from tokenpak.telemetry.segmentizer import (
@@ -312,9 +311,7 @@ class TestEdgeCases:
 
     def test_unicode_content(self):
         """Unicode content should be hashed and tokenized correctly."""
-        messages = [
-            {"role": "user", "content": "你好世界 🌍 مرحبا"}
-        ]
+        messages = [{"role": "user", "content": "你好世界 🌍 مرحبا"}]
         segments = segmentize(messages)
 
         assert len(segments) == 1

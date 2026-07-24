@@ -35,13 +35,18 @@ def _run_executor(monkeypatch, tmp_path, model_kwargs):
 
     def fake_run(cmd, **kwargs):
         captured["cmd"] = cmd
-        return _FakeProc(json.dumps({
-            "result": "hello",
-            "usage": {"input_tokens": 3, "output_tokens": 2},
-        }))
+        return _FakeProc(
+            json.dumps(
+                {
+                    "result": "hello",
+                    "usage": {"input_tokens": 3, "output_tokens": 2},
+                }
+            )
+        )
 
-    monkeypatch.setattr(openclaw, "_get_claude_session",
-                        lambda _s: ("00000000-0000-0000-0000-000000000001", True))
+    monkeypatch.setattr(
+        openclaw, "_get_claude_session", lambda _s: ("00000000-0000-0000-0000-000000000001", True)
+    )
     monkeypatch.setattr(openclaw, "_find_claude_binary", lambda: "/fake/claude")
     monkeypatch.setattr(openclaw.subprocess, "run", fake_run)
 
@@ -60,9 +65,7 @@ class TestClaudeCodeBackendModelHandling:
         assert result["model"] == ""
 
     def test_explicit_model_still_passed_and_reported(self, monkeypatch, tmp_path):
-        cmd, result = _run_executor(
-            monkeypatch, tmp_path, {"model": "claude-opus-4-6"}
-        )
+        cmd, result = _run_executor(monkeypatch, tmp_path, {"model": "claude-opus-4-6"})
         idx = cmd.index("--model")
         assert cmd[idx + 1] == "claude-opus-4-6"
         assert result["model"] == "claude-opus-4-6"
@@ -113,15 +116,17 @@ class TestSSEModelEcho:
         return fake.wfile.getvalue().decode()
 
     def test_missing_model_streams_empty_model(self):
-        raw = self._stream({
-            "id": "msg_t1",
-            "content": [{"type": "text", "text": "hi"}],
-            "usage": {"input_tokens": 1, "output_tokens": 1},
-        })
+        raw = self._stream(
+            {
+                "id": "msg_t1",
+                "content": [{"type": "text", "text": "hi"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }
+        )
         start_data = None
         for line in raw.splitlines():
             if line.startswith("data: "):
-                payload = json.loads(line[len("data: "):])
+                payload = json.loads(line[len("data: ") :])
                 if payload.get("type") == "message_start":
                     start_data = payload
                     break
@@ -129,12 +134,14 @@ class TestSSEModelEcho:
         assert start_data["message"]["model"] == ""
 
     def test_known_model_passes_through(self):
-        raw = self._stream({
-            "id": "msg_t2",
-            "model": "claude-haiku-4-5",
-            "content": [{"type": "text", "text": "hi"}],
-            "usage": {"input_tokens": 1, "output_tokens": 1},
-        })
+        raw = self._stream(
+            {
+                "id": "msg_t2",
+                "model": "claude-haiku-4-5",
+                "content": [{"type": "text", "text": "hi"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }
+        )
         assert '"model": "claude-haiku-4-5"' in raw
 
 
@@ -147,10 +154,12 @@ class TestSpendGuardEmptyModel:
     def test_estimator_prices_with_default_rates_without_model_id(self):
         from tokenpak.proxy.spend_guard.estimator import estimate
 
-        body = json.dumps({
-            "messages": [{"role": "user", "content": "hello there"}],
-            "max_tokens": 100,
-        }).encode()
+        body = json.dumps(
+            {
+                "messages": [{"role": "user", "content": "hello there"}],
+                "max_tokens": 100,
+            }
+        ).encode()
         est = estimate(body, "")
         # Cost is still projected (fail-safe: never unpriced) ...
         assert est.projected_cost_usd > 0

@@ -31,6 +31,7 @@ from pathlib import Path
 @dataclass
 class RunResult:
     """Metrics from a single A/B run."""
+
     variant: str  # "vanilla" or "companion"
     task_id: str
     model: str
@@ -122,26 +123,36 @@ def run_variant(
         settings_path = run_dir / "settings.json"
         prompt_path = run_dir / "companion-prompt.md"
 
-        mcp_path.write_text(json.dumps({
-            "mcpServers": {
-                "tokenpak-companion": {
-                    "type": "stdio",
-                    "command": sys.executable,
-                    "args": ["-m", "tokenpak.companion.mcp.server"],
+        mcp_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "tokenpak-companion": {
+                            "type": "stdio",
+                            "command": sys.executable,
+                            "args": ["-m", "tokenpak.companion.mcp.server"],
+                        }
+                    }
                 }
-            }
-        }))
+            )
+        )
 
         hook_cmd = f"{sys.executable} -m tokenpak.companion.hooks.pre_send"
-        settings_path.write_text(json.dumps({
-            "permissions": {"allow": ["mcp__tokenpak-companion__*"]},
-            "hooks": {
-                "UserPromptSubmit": [{
-                    "matcher": "",
-                    "hooks": [{"type": "command", "command": hook_cmd}],
-                }],
-            },
-        }))
+        settings_path.write_text(
+            json.dumps(
+                {
+                    "permissions": {"allow": ["mcp__tokenpak-companion__*"]},
+                    "hooks": {
+                        "UserPromptSubmit": [
+                            {
+                                "matcher": "",
+                                "hooks": [{"type": "command", "command": hook_cmd}],
+                            }
+                        ],
+                    },
+                }
+            )
+        )
 
         prompt_path.write_text(
             "## tokenpak companion\n\n"
@@ -151,21 +162,32 @@ def run_variant(
         )
 
         cmd = [
-            "claude", "-p", task["prompt"],
-            "--mcp-config", str(mcp_path),
-            "--settings", str(settings_path),
-            "--append-system-prompt-file", str(prompt_path),
+            "claude",
+            "-p",
+            task["prompt"],
+            "--mcp-config",
+            str(mcp_path),
+            "--settings",
+            str(settings_path),
+            "--append-system-prompt-file",
+            str(prompt_path),
         ]
 
     # Common flags
-    cmd.extend([
-        "--model", model,
-        "--max-turns", str(task.get("max_turns", 10)),
-        "--output-format", "stream-json",
-        "--verbose",
-        "--include-hook-events",
-        "--permission-mode", "bypassPermissions",
-    ])
+    cmd.extend(
+        [
+            "--model",
+            model,
+            "--max-turns",
+            str(task.get("max_turns", 10)),
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--include-hook-events",
+            "--permission-mode",
+            "bypassPermissions",
+        ]
+    )
 
     # Run
     t0 = time.perf_counter()
@@ -246,27 +268,65 @@ def print_comparison(task_id: str, vanilla: RunResult, companion: RunResult):
             return f"{c}{unit}"
         diff = c - v
         pct = diff / v * 100 if v != 0 else 0
-        arrow = "v" if (diff < 0 and lower_better) or (diff > 0 and not lower_better) else "^" if diff != 0 else "="
+        arrow = (
+            "v"
+            if (diff < 0 and lower_better) or (diff > 0 and not lower_better)
+            else "^"
+            if diff != 0
+            else "="
+        )
         sign = "+" if diff > 0 else ""
         return f"{sign}{diff}{unit} ({sign}{pct:.1f}%) {arrow}"
 
     rows = [
-        ("Input tokens", f"{vanilla.input_tokens:,}", f"{companion.input_tokens:,}",
-         delta(vanilla.input_tokens, companion.input_tokens)),
-        ("Output tokens", f"{vanilla.output_tokens:,}", f"{companion.output_tokens:,}",
-         delta(vanilla.output_tokens, companion.output_tokens)),
-        ("Cache read", f"{vanilla.cache_read_tokens:,}", f"{companion.cache_read_tokens:,}",
-         delta(vanilla.cache_read_tokens, companion.cache_read_tokens, lower_better=False)),
-        ("Cache creation", f"{vanilla.cache_creation_tokens:,}", f"{companion.cache_creation_tokens:,}",
-         delta(vanilla.cache_creation_tokens, companion.cache_creation_tokens)),
-        ("Cost (USD)", f"${vanilla.cost_usd:.4f}", f"${companion.cost_usd:.4f}",
-         delta(vanilla.cost_usd, companion.cost_usd, unit="")),
-        ("Latency (ms)", f"{vanilla.total_ms:.0f}", f"{companion.total_ms:.0f}",
-         delta(vanilla.total_ms, companion.total_ms, unit="ms")),
-        ("Turns", f"{vanilla.num_turns}", f"{companion.num_turns}",
-         delta(vanilla.num_turns, companion.num_turns)),
-        ("Response len", f"{vanilla.response_length:,}", f"{companion.response_length:,}",
-         delta(vanilla.response_length, companion.response_length, lower_better=False)),
+        (
+            "Input tokens",
+            f"{vanilla.input_tokens:,}",
+            f"{companion.input_tokens:,}",
+            delta(vanilla.input_tokens, companion.input_tokens),
+        ),
+        (
+            "Output tokens",
+            f"{vanilla.output_tokens:,}",
+            f"{companion.output_tokens:,}",
+            delta(vanilla.output_tokens, companion.output_tokens),
+        ),
+        (
+            "Cache read",
+            f"{vanilla.cache_read_tokens:,}",
+            f"{companion.cache_read_tokens:,}",
+            delta(vanilla.cache_read_tokens, companion.cache_read_tokens, lower_better=False),
+        ),
+        (
+            "Cache creation",
+            f"{vanilla.cache_creation_tokens:,}",
+            f"{companion.cache_creation_tokens:,}",
+            delta(vanilla.cache_creation_tokens, companion.cache_creation_tokens),
+        ),
+        (
+            "Cost (USD)",
+            f"${vanilla.cost_usd:.4f}",
+            f"${companion.cost_usd:.4f}",
+            delta(vanilla.cost_usd, companion.cost_usd, unit=""),
+        ),
+        (
+            "Latency (ms)",
+            f"{vanilla.total_ms:.0f}",
+            f"{companion.total_ms:.0f}",
+            delta(vanilla.total_ms, companion.total_ms, unit="ms"),
+        ),
+        (
+            "Turns",
+            f"{vanilla.num_turns}",
+            f"{companion.num_turns}",
+            delta(vanilla.num_turns, companion.num_turns),
+        ),
+        (
+            "Response len",
+            f"{vanilla.response_length:,}",
+            f"{companion.response_length:,}",
+            delta(vanilla.response_length, companion.response_length, lower_better=False),
+        ),
         ("Hook fired", "n/a", str(companion.hook_fired), ""),
     ]
 
@@ -320,7 +380,9 @@ def main():
         print(f" {companion.total_ms:.0f}ms, ${companion.cost_usd:.4f}")
 
         print_comparison(task_id, vanilla, companion)
-        all_results.append({"task": task_id, "vanilla": vanilla.__dict__, "companion": companion.__dict__})
+        all_results.append(
+            {"task": task_id, "vanilla": vanilla.__dict__, "companion": companion.__dict__}
+        )
 
     # Summary
     print(f"\n{'=' * 70}")
@@ -340,11 +402,17 @@ def main():
 
     print(f"\n  {'Metric':<22} {'Vanilla':>14} {'Companion':>14} {'Difference':>14}")
     print(f"  {'─' * 22} {'─' * 14} {'─' * 14} {'─' * 14}")
-    print(f"  {'Total cost (USD)':<22} {'${:.4f}'.format(v_cost):>14} {'${:.4f}'.format(c_cost):>14} {'${:.4f}'.format(c_cost - v_cost):>14}")
+    print(
+        f"  {'Total cost (USD)':<22} {'${:.4f}'.format(v_cost):>14} {'${:.4f}'.format(c_cost):>14} {'${:.4f}'.format(c_cost - v_cost):>14}"
+    )
     print(f"  {'Total input tokens':<22} {v_input:>14,} {c_input:>14,} {c_input - v_input:>+14,}")
-    print(f"  {'Total output tokens':<22} {v_output:>14,} {c_output:>14,} {c_output - v_output:>+14,}")
+    print(
+        f"  {'Total output tokens':<22} {v_output:>14,} {c_output:>14,} {c_output - v_output:>+14,}"
+    )
     print(f"  {'Total cache reads':<22} {v_cache:>14,} {c_cache:>14,} {c_cache - v_cache:>+14,}")
-    print(f"  {'Total latency (s)':<22} {v_time / 1000:>14.1f} {c_time / 1000:>14.1f} {(c_time - v_time) / 1000:>+14.1f}")
+    print(
+        f"  {'Total latency (s)':<22} {v_time / 1000:>14.1f} {c_time / 1000:>14.1f} {(c_time - v_time) / 1000:>+14.1f}"
+    )
 
     overhead_pct = ((c_cost - v_cost) / v_cost * 100) if v_cost > 0 else 0
     print(f"\n  Companion cost overhead: {overhead_pct:+.1f}%")

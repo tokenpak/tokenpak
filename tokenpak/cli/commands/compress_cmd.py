@@ -27,7 +27,7 @@ import json
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 
 @dataclass
@@ -38,8 +38,8 @@ class CompressReport:
     original_tokens: int = 0
     compressed_chars: int = 0
     compressed_tokens: int = 0
-    compressed: str = ""            # included in JSON; kept out of text summary unless verbose
-    dedup_turns_removed: int = 0    # non-zero only when input was a messages list
+    compressed: str = ""  # included in JSON; kept out of text summary unless verbose
+    dedup_turns_removed: int = 0  # non-zero only when input was a messages list
 
     @property
     def chars_saved(self) -> int:
@@ -79,11 +79,11 @@ def _try_parse_messages(text: str) -> Optional[list[dict[str, Any]]]:
     if isinstance(data, list) and all(
         isinstance(m, dict) and "role" in m and "content" in m for m in data
     ):
-        return data
+        return cast(list[dict[str, Any]], data)
     if isinstance(data, dict) and isinstance(data.get("messages"), list):
         msgs = data["messages"]
         if all(isinstance(m, dict) and "role" in m and "content" in m for m in msgs):
-            return msgs
+            return cast(list[dict[str, Any]], msgs)
     return None
 
 
@@ -110,6 +110,7 @@ def compress(text: str, source: str = "<stdin>") -> CompressReport:
     if messages is not None:
         try:
             from tokenpak.compression.dedup import dedup_messages
+
             deduped = dedup_messages(messages)
             report.dedup_turns_removed = max(0, len(messages) - len(deduped))
         except Exception:
@@ -137,12 +138,10 @@ def _render_text(report: CompressReport, verbose: bool) -> str:
     lines.append(f"  Source       {report.source}")
     lines.append(f"  Engine       {report.engine}")
     lines.append(
-        f"  Original     {report.original_chars:,} chars  "
-        f"(~{report.original_tokens:,} tokens)"
+        f"  Original     {report.original_chars:,} chars  (~{report.original_tokens:,} tokens)"
     )
     lines.append(
-        f"  Compressed   {report.compressed_chars:,} chars  "
-        f"(~{report.compressed_tokens:,} tokens)"
+        f"  Compressed   {report.compressed_chars:,} chars  (~{report.compressed_tokens:,} tokens)"
     )
     if report.dedup_turns_removed:
         lines.append(f"  Dedup        -{report.dedup_turns_removed} duplicate turn(s) removed")

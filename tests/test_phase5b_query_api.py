@@ -29,7 +29,10 @@ import pytest
 
 # fastapi is an optional dep ([serve]/[telemetry]); skip cleanly when absent
 # so the release test gate stays green without installing tokenpak[full].
-pytest.importorskip("fastapi", reason="fastapi not installed (optional dep — install via tokenpak[serve] or [telemetry])")
+pytest.importorskip(
+    "fastapi",
+    reason="fastapi not installed (optional dep — install via tokenpak[serve] or [telemetry])",
+)
 
 # Ensure project root on path
 import sys
@@ -141,6 +144,7 @@ def _make_segment(trace_id: str, order: int = 0, tokens_raw: int = 300) -> Segme
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _populate_db(db: TelemetryDB, n_traces: int = 120) -> list[str]:
     """Insert n_traces into db. Returns list of trace_ids."""
     trace_ids = []
@@ -202,18 +206,22 @@ def trace_ids(populated_db) -> list[str]:
 # 1. Filter DSL parser tests
 # ---------------------------------------------------------------------------
 
+
 class TestFilterDSL:
     def test_parse_empty(self):
         from tokenpak.telemetry.server import parse_filter
+
         assert parse_filter(None) == {}
         assert parse_filter("") == {}
 
     def test_parse_single(self):
         from tokenpak.telemetry.server import parse_filter
+
         assert parse_filter("provider:anthropic") == {"provider": "anthropic"}
 
     def test_parse_multiple(self):
         from tokenpak.telemetry.server import parse_filter
+
         result = parse_filter("provider:anthropic,model:opus,agent:sue")
         assert result["provider"] == "anthropic"
         assert result["model"] == "opus"
@@ -222,11 +230,13 @@ class TestFilterDSL:
 
     def test_parse_status(self):
         from tokenpak.telemetry.server import parse_filter
+
         result = parse_filter("status:ok")
         assert result.get("status") == "ok"
 
     def test_parse_agent_alias(self):
         from tokenpak.telemetry.server import parse_filter
+
         result = parse_filter("agent:cali")
         # agent should map to agent_id
         assert result.get("agent_id") == "cali" or result.get("agent") == "cali"
@@ -235,6 +245,7 @@ class TestFilterDSL:
 # ---------------------------------------------------------------------------
 # 2. /v1/summary tests
 # ---------------------------------------------------------------------------
+
 
 class TestSummaryEndpoint:
     def test_summary_returns_ok(self, client):
@@ -300,6 +311,7 @@ class TestSummaryEndpoint:
 # ---------------------------------------------------------------------------
 # 3. /v1/timeseries tests
 # ---------------------------------------------------------------------------
+
 
 class TestTimeseriesEndpoint:
     def test_timeseries_ok(self, client):
@@ -387,6 +399,7 @@ class TestTimeseriesEndpoint:
 # 4. /v1/traces tests
 # ---------------------------------------------------------------------------
 
+
 class TestTracesEndpoint:
     def test_traces_ok(self, client):
         """TC-TR01: /v1/traces returns HTTP 200."""
@@ -463,6 +476,7 @@ class TestTracesEndpoint:
 # 5. /v1/trace/:id tests
 # ---------------------------------------------------------------------------
 
+
 class TestTraceDetailEndpoint:
     def test_trace_detail_ok(self, client, trace_ids):
         """TC-TD01: /v1/trace/:id returns full nested trace structure."""
@@ -507,6 +521,7 @@ class TestTraceDetailEndpoint:
 # 6. /v1/trace/:id/segments tests
 # ---------------------------------------------------------------------------
 
+
 class TestTraceSegmentsEndpoint:
     def test_segments_ok(self, client, trace_ids):
         """TC-SEG01: /v1/trace/:id/segments returns HTTP 200."""
@@ -549,6 +564,7 @@ class TestTraceSegmentsEndpoint:
 # 7. /v1/models tests
 # ---------------------------------------------------------------------------
 
+
 class TestModelsEndpoint:
     def test_models_ok(self, client):
         """TC-M01: /v1/models returns HTTP 200."""
@@ -569,13 +585,15 @@ class TestModelsEndpoint:
         model_list = data.get("models", data.get("data", []))
         model_strs = [str(m) for m in model_list]
         for expected_model in MODELS:
-            assert any(expected_model in m for m in model_strs), \
+            assert any(expected_model in m for m in model_strs), (
                 f"{expected_model} not found in models: {model_strs}"
+            )
 
 
 # ---------------------------------------------------------------------------
 # 8. /v1/providers tests
 # ---------------------------------------------------------------------------
+
 
 class TestProvidersEndpoint:
     def test_providers_ok(self, client):
@@ -597,13 +615,15 @@ class TestProvidersEndpoint:
         provider_list = data.get("providers", data.get("data", []))
         provider_strs = [str(p) for p in provider_list]
         for expected in PROVIDERS:
-            assert any(expected in p for p in provider_strs), \
+            assert any(expected in p for p in provider_strs), (
                 f"{expected} not in providers: {provider_strs}"
+            )
 
 
 # ---------------------------------------------------------------------------
 # 9. /v1/exports/trace/:id tests
 # ---------------------------------------------------------------------------
+
 
 class TestExportEndpoint:
     def test_export_ok(self, client, trace_ids):
@@ -638,6 +658,7 @@ class TestExportEndpoint:
 # ---------------------------------------------------------------------------
 # 10. Rollup accuracy tests
 # ---------------------------------------------------------------------------
+
 
 class TestRollupAccuracy:
     def test_rollup_tables_exist(self, populated_db):
@@ -680,7 +701,9 @@ class TestRollupAccuracy:
         for table in rollup_tables:
             cur.execute(f"PRAGMA table_info({table})")
             cols = [row[1] for row in cur.fetchall()]
-            cost_col = next((c for c in cols if "cost" in c.lower() and "baseline" not in c.lower()), None)
+            cost_col = next(
+                (c for c in cols if "cost" in c.lower() and "baseline" not in c.lower()), None
+            )
             if cost_col:
                 cur.execute(f"SELECT SUM({cost_col}) FROM {table}")
                 row = cur.fetchone()
@@ -690,8 +713,9 @@ class TestRollupAccuracy:
 
         if raw_total > 0 and rollup_total > 0:
             pct_diff = abs(raw_total - rollup_total) / raw_total * 100
-            assert pct_diff <= 1.0, \
+            assert pct_diff <= 1.0, (
                 f"Rollup accuracy {pct_diff:.2f}% exceeds 1% threshold. Raw={raw_total:.4f}, Rollup={rollup_total:.4f}"
+            )
 
     def test_rollup_request_count_accuracy(self, populated_db):
         """TC-R04: Spot-check rollup request counts are accurate.
@@ -708,7 +732,9 @@ class TestRollupAccuracy:
         cur.execute(f"PRAGMA table_info({table})")
         cols = [row[1] for row in cur.fetchall()]
         req_col = next((c for c in cols if "request" in c.lower()), None)
-        date_col = next((c for c in ["date", "day_start", "hour_start", "week_start"] if c in cols), None)
+        date_col = next(
+            (c for c in ["date", "day_start", "hour_start", "week_start"] if c in cols), None
+        )
 
         if not req_col or not date_col:
             pytest.skip(f"Rollup table {table} missing request/date columns")
@@ -723,6 +749,7 @@ class TestRollupAccuracy:
 # ---------------------------------------------------------------------------
 # 11. Edge case tests
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_summary_no_filter(self, client):
@@ -774,6 +801,7 @@ class TestEdgeCases:
 # 12. Integration: Query API feeds dashboard (Phase 5C compatibility)
 # ---------------------------------------------------------------------------
 
+
 class TestPhase5CIntegration:
     def test_summary_matches_expected_request_count(self, client, populated_db):
         """TC-I01: /v1/summary total_requests matches tp_events count."""
@@ -788,8 +816,7 @@ class TestPhase5CIntegration:
         api_count = totals.get("total_requests", -1)
 
         # API should return correct count (may differ slightly due to filters)
-        assert api_count == db_count, \
-            f"API total_requests={api_count} != db count={db_count}"
+        assert api_count == db_count, f"API total_requests={api_count} != db count={db_count}"
 
     def test_timeseries_points_for_dashboard(self, client):
         """TC-I02: /v1/timeseries returns data suitable for chart rendering."""

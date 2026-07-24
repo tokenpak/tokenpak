@@ -125,8 +125,14 @@ class TestGoogleAdapterFunctionCalling:
             system="",
             messages=[{"role": "user", "content": "Go"}],
             tools=[
-                {"type": "function", "function": {"name": "fn_a", "parameters": {"type": "object"}}},
-                {"type": "function", "function": {"name": "fn_b", "parameters": {"type": "object"}}},
+                {
+                    "type": "function",
+                    "function": {"name": "fn_a", "parameters": {"type": "object"}},
+                },
+                {
+                    "type": "function",
+                    "function": {"name": "fn_b", "parameters": {"type": "object"}},
+                },
             ],
             generation={},
             stream=False,

@@ -95,13 +95,13 @@ class AlertSettings:
     def _validate(self, cfg: dict[str, Any]) -> dict[str, Any]:
         """Raise ValueError on bad inputs, else return cleaned config."""
 
-        def pct_field(val, name):
+        def pct_field(val: Any, name: str) -> float:
             v = float(val)
             if not (0 <= v <= 500):
                 raise ValueError(f"{name} must be 0-500%")
             return round(v, 2)
 
-        def ms_field(val, name):
+        def ms_field(val: Any, name: str) -> int:
             v = int(val)
             if not (0 <= v <= 60000):
                 raise ValueError(f"{name} must be 0-60000 ms")
@@ -151,7 +151,7 @@ class AlertSettings:
         return out
 
 
-def _deep_merge(base: dict, override: dict) -> dict:
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     result = dict(base)
     for k, v in override.items():
         if isinstance(v, dict) and isinstance(result.get(k), dict):

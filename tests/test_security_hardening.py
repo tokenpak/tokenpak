@@ -321,6 +321,4 @@ def test_compress_content_not_in_logs(validator, caplog):
             json={"content": secret_payload, "model": "gpt-4o"},
         )
     assert resp.status_code == 200
-    assert secret_payload not in caplog.text, (
-        "Request body content must not appear in logs"
-    )
+    assert secret_payload not in caplog.text, "Request body content must not appear in logs"

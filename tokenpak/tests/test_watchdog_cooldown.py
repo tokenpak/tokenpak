@@ -75,7 +75,12 @@ def test_high_error_count_not_cleared_even_if_expired(tmp_path):
     past = time.time() - 60
     write_cooldowns(
         cf,
-        {"anthropic:default": {"cooldownUntil": past, "errorCount": CooldownManager.HIGH_ERROR_THRESHOLD}},
+        {
+            "anthropic:default": {
+                "cooldownUntil": past,
+                "errorCount": CooldownManager.HIGH_ERROR_THRESHOLD,
+            }
+        },
     )
     mgr = CooldownManager(cooldowns_file=cf)
     cleared = mgr.clear_expired()

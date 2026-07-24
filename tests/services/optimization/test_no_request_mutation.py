@@ -102,6 +102,7 @@ def test_observe_mode_with_eligible_true_stage_still_does_not_mutate(env_observe
             return ctx
 
     from tokenpak.services.optimization.pipeline import _get_default_pipeline
+
     pipeline = _get_default_pipeline()
     pipeline.register(_Mutator())
 

@@ -213,7 +213,7 @@ class TestWrapCapsule:
 
     def test_chars_in_out_in_header(self):
         original = "hello"  # 5 chars
-        compressed = "hi"   # 2 chars
+        compressed = "hi"  # 2 chars
         result = _wrap_capsule(original, compressed)
         assert "chars_in=5" in result
         assert "chars_out=2" in result
@@ -326,10 +326,12 @@ class TestCapsuleBuilderEnabled:
 
     def test_two_messages_both_in_hot_window(self, builder):
         long = _long_text()
-        body = _make_body([
-            {"role": "user", "content": long},
-            {"role": "assistant", "content": long},
-        ])
+        body = _make_body(
+            [
+                {"role": "user", "content": long},
+                {"role": "assistant", "content": long},
+            ]
+        )
         new_body, stats = builder.process(body)
         assert new_body == body
         assert stats["blocks_capsulized"] == 0
@@ -337,11 +339,13 @@ class TestCapsuleBuilderEnabled:
     def test_three_messages_first_capsulised(self, builder):
         """3 messages: first is outside hot window (size 2) → should be capsulised."""
         long = _long_text()
-        body = _make_body([
-            {"role": "user", "content": long},       # idx 0 — outside hot window
-            {"role": "assistant", "content": "ok"},  # idx 1 — inside hot window
-            {"role": "user", "content": "hi"},       # idx 2 — inside hot window
-        ])
+        body = _make_body(
+            [
+                {"role": "user", "content": long},  # idx 0 — outside hot window
+                {"role": "assistant", "content": "ok"},  # idx 1 — inside hot window
+                {"role": "user", "content": "hi"},  # idx 2 — inside hot window
+            ]
+        )
         new_body, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 1
         data = json.loads(new_body)
@@ -353,10 +357,12 @@ class TestCapsuleBuilderEnabled:
     def test_hot_window_zero_capsulises_all(self):
         builder = CapsuleBuilder(enabled=True, hot_window=0)
         long = _long_text()
-        body = _make_body([
-            {"role": "user", "content": long},
-            {"role": "assistant", "content": long},
-        ])
+        body = _make_body(
+            [
+                {"role": "user", "content": long},
+                {"role": "assistant", "content": long},
+            ]
+        )
         _, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 2
 
@@ -364,11 +370,13 @@ class TestCapsuleBuilderEnabled:
 
     def test_short_content_not_capsulised(self, builder):
         short = "hello"
-        body = _make_body([
-            {"role": "user", "content": short},
-            {"role": "assistant", "content": "ok"},
-            {"role": "user", "content": "ok"},
-        ])
+        body = _make_body(
+            [
+                {"role": "user", "content": short},
+                {"role": "assistant", "content": "ok"},
+                {"role": "user", "content": "ok"},
+            ]
+        )
         new_body, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 0
 
@@ -391,12 +399,17 @@ class TestCapsuleBuilderEnabled:
     def test_list_content_text_parts_capsulised(self):
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=0)
         long = "word " * 20
-        body = _make_body([
-            {"role": "user", "content": [
-                {"type": "text", "text": long},
-                {"type": "image_url", "url": "http://example.com/img.png"},
-            ]},
-        ])
+        body = _make_body(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": long},
+                        {"type": "image_url", "url": "http://example.com/img.png"},
+                    ],
+                },
+            ]
+        )
         new_body, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 1
         data = json.loads(new_body)
@@ -406,18 +419,25 @@ class TestCapsuleBuilderEnabled:
 
     def test_list_content_non_text_parts_ignored(self):
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=0)
-        body = _make_body([
-            {"role": "user", "content": [
-                {"type": "image_url", "url": "http://example.com/img.png"},
-            ]},
-        ])
+        body = _make_body(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "url": "http://example.com/img.png"},
+                    ],
+                },
+            ]
+        )
         new_body, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 0
 
     # --- Stats correctness ---
 
     def test_stats_duration_ms_present(self, builder):
-        body = _make_body([{"role": "user", "content": "hi"}, {"role": "assistant", "content": "ok"}])
+        body = _make_body(
+            [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "ok"}]
+        )
         _, stats = builder.process(body)
         assert "duration_ms" in stats
         assert isinstance(stats["duration_ms"], float)
@@ -433,10 +453,12 @@ class TestCapsuleBuilderEnabled:
     def test_stats_blocks_count_accumulates(self):
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=0)
         long = "word " * 20
-        body = _make_body([
-            {"role": "user", "content": long},
-            {"role": "assistant", "content": long},
-        ])
+        body = _make_body(
+            [
+                {"role": "user", "content": long},
+                {"role": "assistant", "content": long},
+            ]
+        )
         _, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 2
 
@@ -445,10 +467,12 @@ class TestCapsuleBuilderEnabled:
     def test_output_is_valid_json(self):
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=0)
         long = "word " * 20
-        body = _make_body([
-            {"role": "user", "content": long},
-            {"role": "user", "content": "ok"},
-        ])
+        body = _make_body(
+            [
+                {"role": "user", "content": long},
+                {"role": "user", "content": "ok"},
+            ]
+        )
         new_body, _ = builder.process(body)
         parsed = json.loads(new_body)
         assert "messages" in parsed
@@ -478,10 +502,12 @@ class TestCapsuleBuilderEnabled:
     def test_no_eligible_blocks_returns_original_body(self, builder):
         """When nothing is capsulised the original bytes are returned."""
         short = "hi"
-        body = _make_body([
-            {"role": "user", "content": short},
-            {"role": "assistant", "content": "hello"},
-        ])
+        body = _make_body(
+            [
+                {"role": "user", "content": short},
+                {"role": "assistant", "content": "hello"},
+            ]
+        )
         new_body, stats = builder.process(body)
         assert new_body == body
         assert stats["skip_reason"] == "no_eligible_blocks"
@@ -550,8 +576,8 @@ class TestCapsuleBuilderIntegration:
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=1)
         long = "word " * 20
         messages = [
-            {"role": "user", "content": long},        # idx 0 — outside hot window
-            {"role": "assistant", "content": long},   # idx 1 — outside hot window
+            {"role": "user", "content": long},  # idx 0 — outside hot window
+            {"role": "assistant", "content": long},  # idx 1 — outside hot window
             {"role": "user", "content": "last msg"},  # idx 2 — inside hot window (tail-1)
         ]
         body = _make_body(messages)

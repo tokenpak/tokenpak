@@ -161,7 +161,13 @@ def test_code_task_golden_path(ledger):
     route = _select_code_task(intake)
 
     worker = FakeWorkerLLM(
-        [WorkerTurn(result_payload={"summary": "patch drafted"}, output_schema_valid=True, tokens_used=20)]
+        [
+            WorkerTurn(
+                result_payload={"summary": "patch drafted"},
+                output_schema_valid=True,
+                tokens_used=20,
+            )
+        ]
     )
     reviewer = FakeReviewerLLM("pass")
 
@@ -465,7 +471,9 @@ class CancelDuringTurnWorker:
     def run_turn(self, *, prompt, context, prior_tool_outputs, iteration):
         self._token.cancelled = True  # cancellation arrives DURING the turn
         self.calls += 1
-        return WorkerTurn(result_payload={"late": "output"}, output_schema_valid=True, tokens_used=5)
+        return WorkerTurn(
+            result_payload={"late": "output"}, output_schema_valid=True, tokens_used=5
+        )
 
 
 def test_cancellation_mid_station_captures_late_result(ledger):
@@ -660,7 +668,9 @@ def test_evaluate_stop_success_exit():
         pending_tool_requests=False,
     )
     outcome = evaluate_stop(state, policy)
-    assert outcome.stop_condition is LoopStopCondition.OUTPUT_SCHEMA_VALID_AND_NO_PENDING_TOOL_REQUESTS
+    assert (
+        outcome.stop_condition is LoopStopCondition.OUTPUT_SCHEMA_VALID_AND_NO_PENDING_TOOL_REQUESTS
+    )
 
 
 def test_evaluate_stop_budget_exhausted():
@@ -759,7 +769,13 @@ def test_delivered_run_produces_receipt(ledger):
 
     line = FulfillmentLine(
         worker_llm=FakeWorkerLLM(
-            [WorkerTurn(result_payload={"answer": "SQLite via _paths"}, output_schema_valid=True, tokens_used=10)]
+            [
+                WorkerTurn(
+                    result_payload={"answer": "SQLite via _paths"},
+                    output_schema_valid=True,
+                    tokens_used=10,
+                )
+            ]
         ),
         context_provider=LocalContextProvider(),
         ledger=ledger,
@@ -824,9 +840,7 @@ def test_denied_tool_request_ends_loop_with_policy_violation(ledger):
 
     # ADVISORY denies apply_patch; the worker requests it → loop ends FAILED with
     # a tool_policy_violation stop condition.
-    worker = FakeWorkerLLM(
-        [WorkerTurn(tool_requests=(WorkerToolRequest(tool="apply_patch"),))]
-    )
+    worker = FakeWorkerLLM([WorkerTurn(tool_requests=(WorkerToolRequest(tool="apply_patch"),))])
     line = FulfillmentLine(
         worker_llm=worker,
         context_provider=LocalContextProvider(),

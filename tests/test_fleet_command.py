@@ -54,8 +54,8 @@ class TestFleetConfiguration(unittest.TestCase):
 
             data = {
                 "fleet": [
-                    {"name": "sue", "host": "localhost", "port": 8766},
-                    {"name": "trix", "host": "192.168.1.17", "port": 8766},
+                    {"name": "alpha", "host": "localhost", "port": 8766},
+                    {"name": "beta", "host": "192.168.1.17", "port": 8766},
                 ]
             }
             with open(config_path, "w") as f:
@@ -65,10 +65,10 @@ class TestFleetConfiguration(unittest.TestCase):
                 machines = load_fleet_config()
 
                 self.assertEqual(len(machines), 2)
-                self.assertEqual(machines[0].name, "sue")
+                self.assertEqual(machines[0].name, "alpha")
                 self.assertEqual(machines[0].host, "localhost")
                 self.assertEqual(machines[0].port, 8766)
-                self.assertEqual(machines[1].name, "trix")
+                self.assertEqual(machines[1].name, "beta")
                 self.assertEqual(machines[1].host, "192.168.1.17")
 
     def test_load_fleet_config_legacy_agents_key(self):
@@ -79,7 +79,7 @@ class TestFleetConfiguration(unittest.TestCase):
 
             data = {
                 "agents": [
-                    {"name": "sue", "host": "localhost", "port": 8766},
+                    {"name": "alpha", "host": "localhost", "port": 8766},
                 ]
             }
             with open(config_path, "w") as f:
@@ -88,7 +88,7 @@ class TestFleetConfiguration(unittest.TestCase):
             with patch("tokenpak.fleet._get_fleet_config_path", return_value=config_path):
                 machines = load_fleet_config()
                 self.assertEqual(len(machines), 1)
-                self.assertEqual(machines[0].name, "sue")
+                self.assertEqual(machines[0].name, "alpha")
 
     def test_save_fleet_config(self):
         """AC4: save_fleet_config writes valid YAML."""
@@ -96,8 +96,8 @@ class TestFleetConfiguration(unittest.TestCase):
             config_path = Path(tmpdir) / "fleet.yaml"
 
             machines = [
-                FleetMachine(name="sue", host="localhost", port=8766),
-                FleetMachine(name="trix", host="192.168.1.17", port=8766),
+                FleetMachine(name="alpha", host="localhost", port=8766),
+                FleetMachine(name="beta", host="192.168.1.17", port=8766),
             ]
 
             with patch("tokenpak.fleet._get_fleet_config_path", return_value=config_path):
@@ -111,7 +111,7 @@ class TestFleetConfiguration(unittest.TestCase):
 
             self.assertIn("fleet", loaded)
             self.assertEqual(len(loaded["fleet"]), 2)
-            self.assertEqual(loaded["fleet"][0]["name"], "sue")
+            self.assertEqual(loaded["fleet"][0]["name"], "alpha")
 
     def test_save_and_reload_fleet_config(self):
         """AC5: fleet.yaml is re-readable after saving."""
@@ -143,16 +143,25 @@ class TestFleetRendering(unittest.TestCase):
     def test_render_fleet_table_format(self):
         """AC7: render_fleet_table produces formatted output."""
         stats = [
-            FleetStats(name="sue", requests=100, saved=50000, cache_pct=10.5, compression=98.0, health="✅"),
-            FleetStats(name="trix", requests=50, saved=25000, cache_pct=5.2, compression=95.0, health="✅"),
+            FleetStats(
+                name="alpha",
+                requests=100,
+                saved=50000,
+                cache_pct=10.5,
+                compression=98.0,
+                health="✅",
+            ),
+            FleetStats(
+                name="beta", requests=50, saved=25000, cache_pct=5.2, compression=95.0, health="✅"
+            ),
         ]
 
         output = render_fleet_table(stats)
 
         # Check for key elements in compact format
         self.assertIn("✅", output)  # Health indicator
-        self.assertIn("sue", output)  # Agent name
-        self.assertIn("trix", output)  # Agent name
+        self.assertIn("alpha", output)  # Agent name
+        self.assertIn("beta", output)  # Agent name
         self.assertIn("150", output)  # Total requests (100+50)
         self.assertIn("Fleet:", output)  # Fleet summary
 
@@ -173,7 +182,14 @@ class TestFleetRendering(unittest.TestCase):
     def test_render_fleet_json_format(self):
         """AC9: render_fleet_json produces valid JSON with machines and totals."""
         stats = [
-            FleetStats(name="sue", requests=100, saved=50000, cache_pct=10.0, compression=98.0, health="✅"),
+            FleetStats(
+                name="alpha",
+                requests=100,
+                saved=50000,
+                cache_pct=10.0,
+                compression=98.0,
+                health="✅",
+            ),
         ]
 
         output = render_fleet_json(stats)
@@ -183,15 +199,24 @@ class TestFleetRendering(unittest.TestCase):
         self.assertIn("totals", data)
         self.assertIn("timestamp", data)
         self.assertEqual(len(data["machines"]), 1)
-        self.assertEqual(data["machines"][0]["name"], "sue")
+        self.assertEqual(data["machines"][0]["name"], "alpha")
         self.assertEqual(data["totals"]["requests"], 100)
         self.assertEqual(data["totals"]["saved"], 50000)
 
     def test_render_fleet_compact_format(self):
         """AC10: render_fleet_table with compact=True produces compact output."""
         stats = [
-            FleetStats(name="sue", requests=100, saved=50000, cache_pct=10.5, compression=98.0, health="✅"),
-            FleetStats(name="trix", requests=50, saved=25000, cache_pct=5.2, compression=95.0, health="✅"),
+            FleetStats(
+                name="alpha",
+                requests=100,
+                saved=50000,
+                cache_pct=10.5,
+                compression=98.0,
+                health="✅",
+            ),
+            FleetStats(
+                name="beta", requests=50, saved=25000, cache_pct=5.2, compression=95.0, health="✅"
+            ),
         ]
 
         output = render_fleet_table(stats, compact=True)
@@ -200,7 +225,7 @@ class TestFleetRendering(unittest.TestCase):
         # Compact format: agent lines + fleet summary
         self.assertGreaterEqual(len(lines), 2)
         self.assertIn("✅", lines[0])
-        self.assertIn("sue", lines[0])
+        self.assertIn("alpha", lines[0])
         self.assertIn("reqs", lines[0])
 
 
@@ -340,6 +365,7 @@ class TestFleetLocalhostOnly(unittest.TestCase):
         machines = [FleetMachine(name="local", host="localhost", port=8766)]
 
         from tokenpak.fleet import query_fleet
+
         stats_list = query_fleet(machines)
 
         self.assertEqual(len(stats_list), 1)

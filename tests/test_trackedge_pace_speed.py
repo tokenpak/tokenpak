@@ -4,7 +4,10 @@ import pytest
 
 # trackedge is a separate project not installed in the slim release test env;
 # skip cleanly so the release auto-publish gate doesn't error on collection.
-pytest.importorskip("trackedge.processing.feature_engine", reason="trackedge is a separate project not installed in slim test env")
+pytest.importorskip(
+    "trackedge.processing.feature_engine",
+    reason="trackedge is a separate project not installed in slim test env",
+)
 
 from trackedge.processing.feature_engine import (
     calculate_pace_metrics,
@@ -17,7 +20,6 @@ from trackedge.processing.feature_engine import (
 
 
 class TestComparableRaceFilter:
-
     def test_filter_comparable_races_distance(self):
         """Test comparable race filtering by distance."""
         pps = [
@@ -36,7 +38,6 @@ class TestComparableRaceFilter:
 
 
 class TestPaceMetrics:
-
     def test_calculate_pace_metrics_no_races(self):
         """Test with no past performances."""
         horse = {"past_performances": []}
@@ -63,7 +64,6 @@ class TestPaceMetrics:
 
 
 class TestRacePaceProjection:
-
     def test_race_pace_projection_slow(self):
         """Test slow pace classification."""
         race = {
@@ -122,7 +122,6 @@ class TestRacePaceProjection:
 
 
 class TestPaceFitAdjustment:
-
     def test_pace_fit_early_slow(self):
         """Test early horse boost in slow pace."""
         horse = {"pace_style": "E"}
@@ -151,7 +150,6 @@ class TestPaceFitAdjustment:
 
 
 class TestSpeedScoreFieldRelative:
-
     def test_speed_score_empty_horse(self):
         """Test with no past performances."""
         horse = {"past_performances": []}
@@ -164,13 +162,35 @@ class TestSpeedScoreFieldRelative:
         """Test speed score is bounded 20-90."""
         race = {
             "horses": [
-                {"past_performances": [{"speedfigur": 100, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]},
-                {"past_performances": [{"speedfigur": 95, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]},
+                {
+                    "past_performances": [
+                        {
+                            "speedfigur": 100,
+                            "distance": 8.0,
+                            "class_rating": 50000,
+                            "surface": "dirt",
+                        }
+                    ]
+                },
+                {
+                    "past_performances": [
+                        {
+                            "speedfigur": 95,
+                            "distance": 8.0,
+                            "class_rating": 50000,
+                            "surface": "dirt",
+                        }
+                    ]
+                },
             ]
         }
 
         # Slow horse
-        horse = {"past_performances": [{"speedfigur": 30, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]}
+        horse = {
+            "past_performances": [
+                {"speedfigur": 30, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}
+            ]
+        }
         score = speed_score_field_relative(horse, race)
         assert 20 <= score <= 90
 
@@ -179,8 +199,16 @@ class TestSpeedScoreFieldRelative:
         # Test without race horses, just check neutral case
         race = {"horses": []}
 
-        slow_horse = {"past_performances": [{"speedfigur": 65, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]}
-        fast_horse = {"past_performances": [{"speedfigur": 85, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]}
+        slow_horse = {
+            "past_performances": [
+                {"speedfigur": 65, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}
+            ]
+        }
+        fast_horse = {
+            "past_performances": [
+                {"speedfigur": 85, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}
+            ]
+        }
 
         slow_score = speed_score_field_relative(slow_horse, race)
         fast_score = speed_score_field_relative(fast_horse, race)

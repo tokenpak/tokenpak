@@ -24,8 +24,14 @@ class TestEntityType:
 
     def test_expected_members_exist(self):
         expected = {
-            "PERSON", "ORGANIZATION", "API_ENDPOINT", "DECISION",
-            "DEADLINE", "GLOSSARY_TERM", "CONFIG_KEY", "FILE_PATH",
+            "PERSON",
+            "ORGANIZATION",
+            "API_ENDPOINT",
+            "DECISION",
+            "DEADLINE",
+            "GLOSSARY_TERM",
+            "CONFIG_KEY",
+            "FILE_PATH",
         }
         assert {m.name for m in EntityType} == expected
 
@@ -68,7 +74,9 @@ class TestEntity:
         assert e.confidence == 1.0
 
     def test_custom_confidence(self):
-        e = Entity(type=EntityType.DECISION, value="use postgres", source=self._ref(), confidence=0.9)
+        e = Entity(
+            type=EntityType.DECISION, value="use postgres", source=self._ref(), confidence=0.9
+        )
         assert e.confidence == 0.9
 
     def test_slots_prevents_new_attributes(self):

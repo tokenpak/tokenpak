@@ -84,8 +84,7 @@ def test_healthy_install_all_9_pass(tmp_home, monkeypatch):
     unit_dir.mkdir(parents=True, exist_ok=True)
     canonical_pp = f"{tmp_home}/.local/lib/python3.12/site-packages:{tmp_home}/tokenpak"
     (unit_dir / "tokenpak-proxy.service").write_text(
-        f"[Service]\nEnvironment=PYTHONPATH={canonical_pp}\n"
-        f"Environment=TOKENPAK_PORT=8766\n"
+        f"[Service]\nEnvironment=PYTHONPATH={canonical_pp}\nEnvironment=TOKENPAK_PORT=8766\n"
     )
 
     # tokenpak.env
@@ -101,7 +100,7 @@ def test_healthy_install_all_9_pass(tmp_home, monkeypatch):
 
     def mock_http_get(url, timeout=4):
         if "/health" in url:
-            return 200, json.dumps({"compilation_mode": "hybrid"}).encode()
+            return 200, json.dumps({"status": "ok"}).encode()
         if "/stats" in url:
             return 200, json.dumps({"session": {"active_profile": "balanced"}}).encode()
         if "/v1/sessions" in url:
@@ -118,8 +117,13 @@ def test_healthy_install_all_9_pass(tmp_home, monkeypatch):
 
     with (
         mock.patch("tokenpak.cli.commands.doctor_claude_code._http_get", side_effect=mock_http_get),
-        mock.patch("tokenpak.cli.commands.doctor_claude_code._http_post_json", side_effect=mock_http_post),
-        mock.patch("tokenpak.cli.commands.doctor_claude_code._read_proc_environ", side_effect=mock_proc_environ),
+        mock.patch(
+            "tokenpak.cli.commands.doctor_claude_code._http_post_json", side_effect=mock_http_post
+        ),
+        mock.patch(
+            "tokenpak.cli.commands.doctor_claude_code._read_proc_environ",
+            side_effect=mock_proc_environ,
+        ),
         mock.patch("tokenpak.cli.commands.doctor_claude_code._get_proxy_pid", return_value=pid),
     ):
         fail_count, results = run_claude_code_checks()
@@ -190,7 +194,7 @@ def test_check2_proxy_unreachable(monkeypatch):
 def test_check2_proxy_reachable(monkeypatch):
     """Check 2 passes when proxy returns 200 from /health."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
-    health_body = json.dumps({"compilation_mode": "hybrid"}).encode()
+    health_body = json.dumps({"status": "ok"}).encode()
 
     with mock.patch(
         "tokenpak.cli.commands.doctor_claude_code._http_get", return_value=(200, health_body)
@@ -198,7 +202,7 @@ def test_check2_proxy_reachable(monkeypatch):
         result = _check_proxy_reachable()
 
     assert result["status"] == "pass"
-    assert "hybrid" in result["message"]
+    assert "status=ok" in result["message"]
 
 
 # ---------------------------------------------------------------------------
@@ -267,9 +271,7 @@ def test_check4_profile_via_env(monkeypatch):
     monkeypatch.setenv("TOKENPAK_PROFILE", "balanced")
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
 
-    with mock.patch(
-        "tokenpak.cli.commands.doctor_claude_code._http_get", return_value=(0, b"")
-    ):
+    with mock.patch("tokenpak.cli.commands.doctor_claude_code._http_get", return_value=(0, b"")):
         result = _check_active_profile()
 
     assert result["status"] == "pass"
@@ -335,9 +337,7 @@ def test_check6_sessions_via_endpoint(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
     body = json.dumps({"sessions": [{"id": "abc"}], "total": 3}).encode()
 
-    with mock.patch(
-        "tokenpak.cli.commands.doctor_claude_code._http_get", return_value=(200, body)
-    ):
+    with mock.patch("tokenpak.cli.commands.doctor_claude_code._http_get", return_value=(200, body)):
         result = _check_telemetry_visible()
 
     assert result["status"] == "pass"
@@ -432,9 +432,7 @@ def test_check8_inconsistency_detected(tmp_home, monkeypatch):
     unit_dir = tmp_home / ".config" / "systemd" / "user"
     unit_dir.mkdir(parents=True, exist_ok=True)
     # systemd unit points to port 8766
-    (unit_dir / "tokenpak-proxy.service").write_text(
-        "[Service]\nEnvironment=TOKENPAK_PORT=8766\n"
-    )
+    (unit_dir / "tokenpak-proxy.service").write_text("[Service]\nEnvironment=TOKENPAK_PORT=8766\n")
 
     result = _check_install_consistency()
     assert result["status"] == "fail"
@@ -451,9 +449,7 @@ def test_check8_consistency_ok(tmp_home, monkeypatch):
 
     unit_dir = tmp_home / ".config" / "systemd" / "user"
     unit_dir.mkdir(parents=True, exist_ok=True)
-    (unit_dir / "tokenpak-proxy.service").write_text(
-        "[Service]\nEnvironment=TOKENPAK_PORT=8766\n"
-    )
+    (unit_dir / "tokenpak-proxy.service").write_text("[Service]\nEnvironment=TOKENPAK_PORT=8766\n")
 
     (tmp_home / ".claude").mkdir(parents=True, exist_ok=True)
     (tmp_home / ".claude" / "settings.json").write_text(
@@ -563,11 +559,14 @@ def test_check10_default_pass_with_launcher_rows(tmp_home):
     assert "Legacy full-bypass alias:     disabled" in result["message"]
 
 
-@pytest.mark.parametrize("tier,mode", [
-    ("strict", "default"),
-    ("standard", "acceptEdits"),
-    ("auto", "bypassPermissions"),
-])
+@pytest.mark.parametrize(
+    "tier,mode",
+    [
+        ("strict", "default"),
+        ("standard", "acceptEdits"),
+        ("auto", "bypassPermissions"),
+    ],
+)
 @pytest.mark.parametrize("fleet", [False, True])
 def test_check10_tier_fleet_permutations(tmp_home, tier, mode, fleet):
     """All tier × fleet permutations render correct values and never show
@@ -658,9 +657,7 @@ def test_check10_invalid_launcher_mode_fails_closed(tmp_home):
         "schema_version = 999\n",
     ],
 )
-def test_check10_malformed_launcher_state_is_launcher_failure(
-    tmp_home, state_text
-):
+def test_check10_malformed_launcher_state_is_launcher_failure(tmp_home, state_text):
     state = tmp_home / ".config" / "tokenpak" / "permissions.toml"
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(state_text)

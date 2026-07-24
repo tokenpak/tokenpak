@@ -12,7 +12,7 @@ Returns one of: "anthropic" | "openai" | "google" | "ollama" | "unknown"
 from __future__ import annotations
 
 import json
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 # ---------------------------------------------------------------------------
 # Known path patterns → provider
@@ -70,7 +70,7 @@ _MODEL_PREFIX_MAP: list[tuple[str, str]] = [
 
 
 def detect_provider(
-    request: Union[dict, None] = None,
+    request: Union[dict[str, Any], None] = None,
     *,
     path: str = "",
     headers: Optional[Dict[str, str]] = None,

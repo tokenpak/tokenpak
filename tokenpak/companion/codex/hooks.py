@@ -24,11 +24,28 @@ inside a function body.
 
 from __future__ import annotations
 
+__all__ = (
+    "TOKENPAK_HOOK_MARKER",
+    "ensure_hooks_feature_enabled",
+    "generate_hooks_json",
+    "install_hooks",
+)
+
+
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import TypedDict, cast
+
+HookEntry = dict[str, object]
+HookGroup = dict[str, object]
+
+
+class HooksDocument(TypedDict):
+    hooks: dict[str, list[HookGroup]]
+
 
 _HOOKS_DIR = Path(__file__).parent
 _SESSION_START_HOOK = _HOOKS_DIR / "hooks_session_start.sh"
@@ -42,7 +59,7 @@ TOKENPAK_HOOK_MARKER = "tokenpak"
 
 # Declarative event table — adding an event here is the only code touch
 # needed for install / merge / uninstall to pick it up.
-_TOKENPAK_HOOK_EVENTS: dict[str, dict] = {
+_TOKENPAK_HOOK_EVENTS: dict[str, HookGroup] = {
     "SessionStart": {
         "hooks": [
             {
@@ -95,7 +112,7 @@ _TOKENPAK_HOOK_EVENTS: dict[str, dict] = {
 }
 
 
-def _tokenpak_hook_events() -> dict[str, dict]:
+def _tokenpak_hook_events() -> dict[str, HookGroup]:
     """Return the declarative event table.
 
     Retained as a thin accessor so existing callers (and tests) keep a
@@ -105,7 +122,7 @@ def _tokenpak_hook_events() -> dict[str, dict]:
     return _TOKENPAK_HOOK_EVENTS
 
 
-def generate_hooks_json() -> dict:
+def generate_hooks_json() -> HooksDocument:
     """Build the hooks.json structure matching Codex's documented schema.
 
     Codex expects::
@@ -160,7 +177,10 @@ def _install_hooks(target: str = "global", *, codex_home: Path | None = None) ->
 
     if hooks_path.exists():
         try:
-            existing = json.loads(hooks_path.read_text())
+            loaded: object = json.loads(hooks_path.read_text())
+            if not isinstance(loaded, dict):
+                raise TypeError("hooks.json root must be an object")
+            existing = cast(dict[str, object], loaded)
             merged = _merge_hooks(existing, new_hooks)
         except (json.JSONDecodeError, KeyError, TypeError):
             merged = new_hooks
@@ -171,7 +191,7 @@ def _install_hooks(target: str = "global", *, codex_home: Path | None = None) ->
     return hooks_path
 
 
-def _merge_hooks(existing: dict, new: dict) -> dict:
+def _merge_hooks(existing: dict[str, object], new: HooksDocument) -> HooksDocument:
     """Merge tokenpak hooks into existing hooks.json without clobbering.
 
     Handles both the Codex-native shape
@@ -182,33 +202,40 @@ def _merge_hooks(existing: dict, new: dict) -> dict:
     :data:`TOKENPAK_HOOK_MARKER` in the command string — are preserved.
     """
     existing_hooks = existing.get("hooks")
-    new_hooks = new.get("hooks", {})
+    new_hooks = new["hooks"]
 
-    preserved: dict[str, list[dict]] = {}
+    preserved: dict[str, list[HookGroup]] = {}
 
     if isinstance(existing_hooks, dict):
-        for event, groups in existing_hooks.items():
+        typed_existing_hooks = cast(dict[str, object], existing_hooks)
+        for event, groups in typed_existing_hooks.items():
             if not isinstance(groups, list):
                 continue
-            kept_groups: list[dict] = []
+            kept_groups: list[HookGroup] = []
             for group in groups:
                 if not isinstance(group, dict):
                     continue
-                commands = group.get("hooks", [])
-                non_tokenpak = [
-                    c
-                    for c in commands
-                    if isinstance(c, dict) and TOKENPAK_HOOK_MARKER not in c.get("command", "")
-                ]
+                typed_group = cast(HookGroup, group)
+                commands = typed_group.get("hooks", [])
+                if not isinstance(commands, list):
+                    continue
+                non_tokenpak: list[HookEntry] = []
+                for command_entry in commands:
+                    if not isinstance(command_entry, dict):
+                        continue
+                    typed_entry = cast(HookEntry, command_entry)
+                    command = typed_entry.get("command")
+                    if not isinstance(command, str) or TOKENPAK_HOOK_MARKER not in command:
+                        non_tokenpak.append(typed_entry)
                 if non_tokenpak:
-                    kept = {**group, "hooks": non_tokenpak}
+                    kept = {**typed_group, "hooks": non_tokenpak}
                     kept_groups.append(kept)
             if kept_groups:
                 preserved[event] = kept_groups
     # Legacy array-shaped hooks: we drop them silently (schema mismatch
     # means Codex never ran them anyway).
 
-    merged_hooks: dict[str, list[dict]] = {}
+    merged_hooks: dict[str, list[HookGroup]] = {}
     for event, groups in preserved.items():
         merged_hooks.setdefault(event, []).extend(groups)
     for event, groups in new_hooks.items():

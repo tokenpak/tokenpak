@@ -49,7 +49,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Iterator, List, Optional
+from typing import Any, Iterator, List, Optional, TypedDict, cast
 
 try:  # POSIX-only inter-process file locking
     import fcntl
@@ -62,6 +62,13 @@ except ImportError:  # pragma: no cover - Windows
 logger = logging.getLogger(__name__)
 
 _DEFAULT_PATH = Path.home() / ".tokenpak" / "cache_store.json"
+
+
+class _CacheEntry(TypedDict):
+    """Validated in-memory shape for one persisted cache entry."""
+
+    value: object
+    expires_at: float | None
 
 
 class CacheStore:
@@ -91,11 +98,11 @@ class CacheStore:
     >>> os.unlink(path)
     """
 
-    def __init__(self, path: Optional[os.PathLike | str] = None) -> None:
+    def __init__(self, path: Optional[os.PathLike[str] | str] = None) -> None:
         self._path = Path(path) if path is not None else _DEFAULT_PATH
         self._lock = threading.Lock()
         # In-memory store: key → {"value": ..., "expires_at": float | None}
-        self._data: dict[str, dict] = {}
+        self._data: dict[str, _CacheEntry] = {}
         self._loaded = False
         # Keys deleted locally since the last successful save; consulted by
         # the read-modify-write merge in _save() so a delete in this process
@@ -221,7 +228,11 @@ class CacheStore:
             raw = self._path.read_text(encoding="utf-8")
             parsed = json.loads(raw)
             if isinstance(parsed, dict):
-                self._data = parsed
+                self._data = {
+                    key: cast(_CacheEntry, entry)
+                    for key, entry in parsed.items()
+                    if isinstance(key, str) and isinstance(entry, dict)
+                }
             else:
                 logger.warning("[CacheStore] Unexpected format in %s; resetting.", self._path)
                 self._data = {}
@@ -281,7 +292,7 @@ class CacheStore:
             with self._process_lock():
                 with self._lock:
                     if self._reset_pending:
-                        disk: dict[str, dict] = {}
+                        disk: dict[str, _CacheEntry] = {}
                     else:
                         disk = self._read_disk_for_merge()
                         for key in self._deleted:
@@ -289,11 +300,11 @@ class CacheStore:
                     merged = dict(disk)
                     merged.update(self._data)
                     # Prune expired entries before writing
-                    clean = {
-                        k: v
-                        for k, v in merged.items()
-                        if v.get("expires_at") is None or v["expires_at"] > now
-                    }
+                    clean: dict[str, _CacheEntry] = {}
+                    for key, entry in merged.items():
+                        expires_at = entry.get("expires_at")
+                        if expires_at is None or expires_at > now:
+                            clean[key] = entry
                     self._data = clean
                     payload = json.dumps(clean, indent=2)
 
@@ -323,7 +334,7 @@ class CacheStore:
                 exc,
             )
 
-    def _read_disk_for_merge(self) -> dict[str, dict]:
+    def _read_disk_for_merge(self) -> dict[str, _CacheEntry]:
         """Best-effort fresh read of the on-disk store for the save merge."""
         try:
             parsed = json.loads(self._path.read_text(encoding="utf-8"))
@@ -338,7 +349,11 @@ class CacheStore:
             return {}
         if not isinstance(parsed, dict):
             return {}
-        return {k: v for k, v in parsed.items() if isinstance(v, dict)}
+        return {
+            key: cast(_CacheEntry, entry)
+            for key, entry in parsed.items()
+            if isinstance(key, str) and isinstance(entry, dict)
+        }
 
     # ------------------------------------------------------------------
     # Dunder helpers

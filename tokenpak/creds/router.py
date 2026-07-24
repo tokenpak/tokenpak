@@ -74,8 +74,8 @@ class RouteContext:
 @dataclass(frozen=True)
 class RouteDecision:
     credential: Credential
-    reason: str         # human-readable "why this one"
-    layer: str          # "explicit" | "rule" | "platform-default"
+    reason: str  # human-readable "why this one"
+    layer: str  # "explicit" | "rule" | "platform-default"
 
 
 # ── routes.toml ──────────────────────────────────────────────────────
@@ -90,9 +90,9 @@ class Rule:
     """
 
     cred_id: str
-    callers: tuple[str, ...] = ()       # glob patterns
+    callers: tuple[str, ...] = ()  # glob patterns
     destinations: tuple[str, ...] = ()  # glob patterns against host
-    tags: tuple[str, ...] = ()          # exact match on X-Tokenpak-Tag (future use)
+    tags: tuple[str, ...] = ()  # exact match on X-Tokenpak-Tag (future use)
 
 
 def load_rules(path: Optional[Path] = None) -> list[Rule]:
@@ -132,7 +132,7 @@ def load_rules(path: Optional[Path] = None) -> list[Rule]:
     return rules
 
 
-def _to_tuple(val) -> tuple[str, ...]:
+def _to_tuple(val: object) -> tuple[str, ...]:
     if val is None:
         return ()
     if isinstance(val, str):
@@ -187,8 +187,7 @@ def select(
         if len(matched) > 1:
             sources = ", ".join(m.source for m in matched)
             raise AmbiguousRoute(
-                f"explicit tag {ctx.explicit_tag!r} matches {len(matched)} "
-                f"credentials ({sources})"
+                f"explicit tag {ctx.explicit_tag!r} matches {len(matched)} credentials ({sources})"
             )
         return RouteDecision(matched[0], f"explicit tag {ctx.explicit_tag!r}", "explicit")
 
@@ -211,8 +210,7 @@ def select(
 
     # Layer 3: platform default — match destination_host to a platform via scope_hosts.
     host_matches = [
-        c for c in creds
-        if any(_host_matches(ctx.destination_host, h) for h in c.scope_hosts)
+        c for c in creds if any(_host_matches(ctx.destination_host, h) for h in c.scope_hosts)
     ]
     if not host_matches:
         raise NoRoute(

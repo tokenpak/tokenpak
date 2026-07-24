@@ -57,6 +57,7 @@ import pytest
 # absent — full builds that re-export them exercise normally.
 try:
     import tokenpak.runtime.proxy as _proxy_mod
+
     _required = (
         "_sanitize_headers",
         "_MAX_REQUEST_BYTES",
@@ -67,8 +68,7 @@ try:
     _missing = [s for s in _required if not hasattr(_proxy_mod, s)]
     if _missing:
         raise ImportError(
-            "tokenpak.runtime.proxy missing required security symbols: "
-            + ", ".join(_missing)
+            "tokenpak.runtime.proxy missing required security symbols: " + ", ".join(_missing)
         )
 except ImportError as _exc:
     pytest.skip(
@@ -135,25 +135,27 @@ def _make_mock_handler(
 
 
 class TestRequestSizeLimit(unittest.TestCase):
-
     def _run_size_check(self, content_length: int, limit_bytes: int) -> list:
         """Run the size check logic inline (mirrors proxy._proxy_to size check)."""
         responses = []
         if content_length > limit_bytes:
-            responses.append({
-                "status": 413,
-                "body": {
-                    "error": {
-                        "type": "request_too_large",
-                        "message": f"Request body exceeds limit ({content_length} bytes > {limit_bytes} bytes).",
-                    }
-                },
-            })
+            responses.append(
+                {
+                    "status": 413,
+                    "body": {
+                        "error": {
+                            "type": "request_too_large",
+                            "message": f"Request body exceeds limit ({content_length} bytes > {limit_bytes} bytes).",
+                        }
+                    },
+                }
+            )
         return responses
 
     def test_within_limit_passes(self):
         """Small request passes size check."""
         from tokenpak.runtime.proxy import _MAX_REQUEST_BYTES
+
         assert 100 < _MAX_REQUEST_BYTES  # 100 bytes << 10MB
         resp = self._run_size_check(100, _MAX_REQUEST_BYTES)
         self.assertEqual(resp, [])
@@ -171,6 +173,7 @@ class TestRequestSizeLimit(unittest.TestCase):
             import importlib
 
             import tokenpak.runtime.proxy as proxy_mod
+
             importlib.reload(proxy_mod)
             try:
                 self.assertEqual(proxy_mod._MAX_REQUEST_BYTES, 512)
@@ -196,15 +199,16 @@ class TestRequestSizeLimit(unittest.TestCase):
 
 
 class TestRateLimiting(unittest.TestCase):
-
     def setUp(self):
         """Reset rate buckets before each test."""
         import tokenpak.runtime.proxy as proxy_mod
+
         proxy_mod._rate_buckets.clear()
 
     def test_single_request_passes(self):
         """First request always passes."""
         import tokenpak.runtime.proxy as proxy_mod
+
         with patch.object(proxy_mod, "_RATE_LIMIT_RPM", 60):
             result = proxy_mod._rate_limit_check("10.0.0.1")
         self.assertTrue(result)
@@ -212,6 +216,7 @@ class TestRateLimiting(unittest.TestCase):
     def test_rate_limit_disabled(self):
         """RPM=0 disables rate limiting — all requests pass."""
         import tokenpak.runtime.proxy as proxy_mod
+
         proxy_mod._rate_buckets.clear()
         with patch.object(proxy_mod, "_RATE_LIMIT_RPM", 0):
             for _ in range(200):
@@ -221,6 +226,7 @@ class TestRateLimiting(unittest.TestCase):
     def test_burst_exceeded_blocks(self):
         """Exhausting the token bucket returns False (→ 429)."""
         import tokenpak.runtime.proxy as proxy_mod
+
         proxy_mod._rate_buckets.clear()
         rpm = 5
         ip = "10.0.0.3"
@@ -239,6 +245,7 @@ class TestRateLimiting(unittest.TestCase):
     def test_independent_buckets_per_ip(self):
         """Different IPs have independent buckets."""
         import tokenpak.runtime.proxy as proxy_mod
+
         proxy_mod._rate_buckets.clear()
         rpm = 3
         ip_a, ip_b = "10.0.0.10", "10.0.0.11"
@@ -254,6 +261,7 @@ class TestRateLimiting(unittest.TestCase):
     def test_bucket_refills_over_time(self):
         """Token bucket refills — requests pass after elapsed time."""
         import tokenpak.runtime.proxy as proxy_mod
+
         proxy_mod._rate_buckets.clear()
         rpm = 2
         ip = "10.0.0.20"
@@ -299,7 +307,9 @@ class TestJSONValidation(unittest.TestCase):
 
     def test_valid_request_passes(self):
         """Valid JSON with required fields passes validation."""
-        body = json.dumps({"model": "claude-sonnet-4-5", "messages": [{"role": "user", "content": "Hi"}]}).encode()
+        body = json.dumps(
+            {"model": "claude-sonnet-4-5", "messages": [{"role": "user", "content": "Hi"}]}
+        ).encode()
         result = self._run_validation(body)
         self.assertEqual(result, [])
 
@@ -344,6 +354,7 @@ class TestJSONValidation(unittest.TestCase):
             import importlib
 
             import tokenpak.runtime.proxy as proxy_mod
+
             importlib.reload(proxy_mod)
             try:
                 self.assertTrue(proxy_mod.STRICT_VALIDATION)
@@ -353,6 +364,7 @@ class TestJSONValidation(unittest.TestCase):
     def test_strict_mode_disabled_by_default(self):
         """STRICT_VALIDATION is False by default."""
         import tokenpak.runtime.proxy as proxy_mod
+
         # Default should be False (unless TOKENPAK_STRICT_MODE is set)
         if not os.environ.get("TOKENPAK_STRICT_MODE"):
             self.assertFalse(proxy_mod.STRICT_VALIDATION)
@@ -364,7 +376,6 @@ class TestJSONValidation(unittest.TestCase):
 
 
 class TestHeaderSanitization(unittest.TestCase):
-
     def _sanitize(self, headers: dict) -> dict:
         """Invoke _sanitize_headers from the proxy module."""
         from tokenpak.runtime.proxy import _sanitize_headers
@@ -376,7 +387,9 @@ class TestHeaderSanitization(unittest.TestCase):
 
     def test_proxy_authorization_stripped(self):
         """Proxy-Authorization must not be forwarded upstream."""
-        result = self._sanitize({"Proxy-Authorization": "Bearer secret", "Authorization": "Bearer real"})
+        result = self._sanitize(
+            {"Proxy-Authorization": "Bearer secret", "Authorization": "Bearer real"}
+        )
         self.assertNotIn("Proxy-Authorization", result)
         self.assertIn("Authorization", result)
 
@@ -433,17 +446,20 @@ class TestSanitizeHeadersIntegration(unittest.TestCase):
     def test_sanitize_headers_importable(self):
         """_sanitize_headers is importable from the proxy module."""
         from tokenpak.runtime.proxy import _sanitize_headers
+
         self.assertTrue(callable(_sanitize_headers))
 
     def test_max_request_bytes_importable(self):
         """_MAX_REQUEST_BYTES is set in the proxy module."""
         from tokenpak.runtime.proxy import _MAX_REQUEST_BYTES
+
         self.assertGreater(_MAX_REQUEST_BYTES, 0)
         self.assertLessEqual(_MAX_REQUEST_BYTES, 100 * 1024 * 1024)  # sanity: ≤ 100MB
 
     def test_blocked_headers_set(self):
         """_BLOCKED_FORWARD_HEADERS contains expected dangerous headers."""
         from tokenpak.runtime.proxy import _BLOCKED_FORWARD_HEADERS
+
         for h in ("proxy-authorization", "x-forwarded-for", "x-real-ip", "connection"):
             self.assertIn(h, _BLOCKED_FORWARD_HEADERS)
 

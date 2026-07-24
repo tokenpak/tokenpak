@@ -225,9 +225,7 @@ class TestSend(unittest.TestCase):
     @patch("tokenpak.sdk.anthropic._requests.post")
     def test_send_timeout(self, mock_post):
         """Test that timeout raises TokenPakTimeoutError."""
-        mock_post.side_effect = requests.exceptions.Timeout(
-            "Connection timed out"
-        )
+        mock_post.side_effect = requests.exceptions.Timeout("Connection timed out")
 
         prepared = {
             "model": "claude-3-5-sonnet-20241022",
@@ -304,9 +302,7 @@ class TestSend(unittest.TestCase):
     @patch("tokenpak.sdk.anthropic._requests.post")
     def test_send_request_exception(self, mock_post):
         """Test that generic RequestException raises TokenPakAdapterError."""
-        mock_post.side_effect = requests.exceptions.RequestException(
-            "Connection refused"
-        )
+        mock_post.side_effect = requests.exceptions.RequestException("Connection refused")
 
         prepared = {
             "model": "claude-3-5-sonnet-20241022",

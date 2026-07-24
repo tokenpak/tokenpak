@@ -28,6 +28,7 @@ from tokenpak.proxy.error_response import (
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _parse(body: bytes) -> dict:
     """Parse normalized error bytes as JSON."""
     return json.loads(body.decode("utf-8"))
@@ -36,6 +37,7 @@ def _parse(body: bytes) -> dict:
 # ---------------------------------------------------------------------------
 # Canonical envelope structure
 # ---------------------------------------------------------------------------
+
 
 class TestCanonicalEnvelopeStructure:
     """Verify the canonical error envelope has all required keys."""
@@ -73,6 +75,7 @@ class TestCanonicalEnvelopeStructure:
 # Stateful provider API unsupported payload
 # ---------------------------------------------------------------------------
 
+
 class TestStatefulApiUnsupportedError:
     """Verify the typed payload for explicitly unsupported provider stateful APIs."""
 
@@ -93,9 +96,7 @@ class TestStatefulApiUnsupportedError:
             "surface": "provider-managed conversation memory",
             "support_state": "explicitly_unsupported",
             "remediation": "Use local PAK memory or disable provider-managed memory for this request.",
-            "registry_link": (
-                f"{STATEFUL_SURFACES_REGISTRY}#provider-managed-conversation-memory"
-            ),
+            "registry_link": (f"{STATEFUL_SURFACES_REGISTRY}#provider-managed-conversation-memory"),
         }
 
     def test_custom_registry_link(self):
@@ -116,6 +117,7 @@ class TestStatefulApiUnsupportedError:
 # ---------------------------------------------------------------------------
 # Status-to-error-type mapping
 # ---------------------------------------------------------------------------
+
 
 class TestStatusToErrorType:
     def test_401_maps_to_authentication_error(self):
@@ -156,16 +158,19 @@ class TestStatusToErrorType:
 # Anthropic adapter — error format: {"type": "error", "error": {"type": ..., "message": ...}}
 # ---------------------------------------------------------------------------
 
+
 class TestAnthropicErrorNormalization:
     """Anthropic upstream 4xx/5xx error bodies use the Anthropic Messages error format."""
 
     PROVIDER = "anthropic"
 
     def _make_body(self, err_type: str, message: str) -> bytes:
-        return json.dumps({
-            "type": "error",
-            "error": {"type": err_type, "message": message},
-        }).encode()
+        return json.dumps(
+            {
+                "type": "error",
+                "error": {"type": err_type, "message": message},
+            }
+        ).encode()
 
     def test_401_extracts_message(self):
         body = self._make_body("authentication_error", "Invalid API key.")
@@ -198,6 +203,7 @@ class TestAnthropicErrorNormalization:
 # ---------------------------------------------------------------------------
 # OpenAI adapter — error format: {"error": {"message": ..., "type": ..., "code": ...}}
 # ---------------------------------------------------------------------------
+
 
 class TestOpenAIErrorNormalization:
     """OpenAI upstream 4xx/5xx errors use the OpenAI error object format."""
@@ -247,15 +253,14 @@ class TestOpenAIErrorNormalization:
 # Google/Gemini adapter — error format: {"error": {"code": N, "message": ..., "status": ...}}
 # ---------------------------------------------------------------------------
 
+
 class TestGoogleErrorNormalization:
     """Google upstream 4xx/5xx errors use the Google APIs error object format."""
 
     PROVIDER = "google"
 
     def _make_body(self, code: int, message: str, status: str = "INVALID_ARGUMENT") -> bytes:
-        return json.dumps({
-            "error": {"code": code, "message": message, "status": status}
-        }).encode()
+        return json.dumps({"error": {"code": code, "message": message, "status": status}}).encode()
 
     def test_401_extracts_message(self):
         body = self._make_body(401, "Request had invalid authentication credentials.")
@@ -294,6 +299,7 @@ class TestGoogleErrorNormalization:
 # Grok adapter (xAI) — OpenAI-compatible error format
 # ---------------------------------------------------------------------------
 
+
 class TestGrokErrorNormalization:
     """Grok uses OpenAI-compatible error format."""
 
@@ -321,6 +327,7 @@ class TestGrokErrorNormalization:
 # ---------------------------------------------------------------------------
 # Passthrough adapter — arbitrary upstream bodies
 # ---------------------------------------------------------------------------
+
 
 class TestPassthroughErrorNormalization:
     """Passthrough can return arbitrary error bodies; canonical fallback applies."""
@@ -353,17 +360,24 @@ class TestPassthroughErrorNormalization:
 # Message extraction helper
 # ---------------------------------------------------------------------------
 
+
 class TestExtractMessageFromProviderBody:
     def test_anthropic_nested_error_message(self):
-        body = json.dumps({"type": "error", "error": {"type": "auth", "message": "Bad key."}}).encode()
+        body = json.dumps(
+            {"type": "error", "error": {"type": "auth", "message": "Bad key."}}
+        ).encode()
         assert _extract_message_from_provider_body(body, "anthropic") == "Bad key."
 
     def test_openai_nested_error_message(self):
-        body = json.dumps({"error": {"message": "Rate limit.", "type": "rate_limit_exceeded"}}).encode()
+        body = json.dumps(
+            {"error": {"message": "Rate limit.", "type": "rate_limit_exceeded"}}
+        ).encode()
         assert _extract_message_from_provider_body(body, "openai") == "Rate limit."
 
     def test_google_nested_error_message(self):
-        body = json.dumps({"error": {"code": 401, "message": "Unauthenticated.", "status": "UNAUTHENTICATED"}}).encode()
+        body = json.dumps(
+            {"error": {"code": 401, "message": "Unauthenticated.", "status": "UNAUTHENTICATED"}}
+        ).encode()
         assert _extract_message_from_provider_body(body, "google") == "Unauthenticated."
 
     def test_non_json_returns_none(self):
@@ -385,6 +399,7 @@ class TestExtractMessageFromProviderBody:
 # ---------------------------------------------------------------------------
 # Upstream status code propagation
 # ---------------------------------------------------------------------------
+
 
 class TestUpstreamStatusPropagation:
     """upstream_status in the envelope must always reflect the HTTP status code."""

@@ -167,17 +167,19 @@ def test_pak_roundtrip(tmp_path, monkeypatch, capsys):
     (src / "nested" / "b.md").write_text("# title\n")
 
     out_pak = tmp_path / "out.pak.json"
-    rc = cmd_pak_create(argparse.Namespace(
-        source_dir=str(src),
-        output=str(out_pak),
-        title="rt",
-        objective="roundtrip",
-        summary="",
-        ttl="",
-        continuation_notes="",
-        include_content=True,
-        max_bytes=2_000_000,
-    ))
+    rc = cmd_pak_create(
+        argparse.Namespace(
+            source_dir=str(src),
+            output=str(out_pak),
+            title="rt",
+            objective="roundtrip",
+            summary="",
+            ttl="",
+            continuation_notes="",
+            include_content=True,
+            max_bytes=2_000_000,
+        )
+    )
     assert rc == 0
     assert out_pak.exists()
 
@@ -207,8 +209,7 @@ def test_pak_roundtrip(tmp_path, monkeypatch, capsys):
 
     # export back to a directory and verify file contents survive
     restored = tmp_path / "restored"
-    rc = cmd_pak_export(argparse.Namespace(pak_ref=str(out_pak),
-                                           output=str(restored)))
+    rc = cmd_pak_export(argparse.Namespace(pak_ref=str(out_pak), output=str(restored)))
     assert rc == 0
     assert (restored / "a.txt").read_text() == "hello\n"
     assert (restored / "nested" / "b.md").read_text() == "# title\n"
@@ -219,13 +220,17 @@ def test_pak_import_rejects_checksum_mismatch(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path / "home"))
     tampered = tmp_path / "tampered.pak.json"
-    tampered.write_text(json.dumps({
-        "pak_id": "pak:abcdef",
-        "checksum": "sha256:00" * 32,
-        "schema_version": 1,
-        "pak_type": "context",
-        "anchors": [{"path": "x", "sha256": "deadbeef"}],
-    }))
+    tampered.write_text(
+        json.dumps(
+            {
+                "pak_id": "pak:abcdef",
+                "checksum": "sha256:00" * 32,
+                "schema_version": 1,
+                "pak_type": "context",
+                "anchors": [{"path": "x", "sha256": "deadbeef"}],
+            }
+        )
+    )
     rc = cmd_pak_import(argparse.Namespace(pak_file=str(tampered), force=False))
     assert rc == 1
     err = capsys.readouterr().err
@@ -237,15 +242,18 @@ def test_pak_import_rejects_checksum_mismatch(tmp_path, monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("bad_key", [
-    "",
-    "   ",
-    "abc",  # too short
-    "test",  # placeholder
-    "demo",
-    "ab\x00cd-this-is-long-enough",  # non-printable
-    "***!!!@@@invalid-charset****",
-])
+@pytest.mark.parametrize(
+    "bad_key",
+    [
+        "",
+        "   ",
+        "abc",  # too short
+        "test",  # placeholder
+        "demo",
+        "ab\x00cd-this-is-long-enough",  # non-printable
+        "***!!!@@@invalid-charset****",
+    ],
+)
 def test_activate_rejects_obvious_garbage(bad_key, tmp_path, monkeypatch):
     from tokenpak import licensing as _lic
 

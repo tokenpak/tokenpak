@@ -1,6 +1,6 @@
 """LLMLingua-based compaction engine (ML-powered, higher quality)."""
 
-from typing import Optional
+from typing import Optional, cast
 
 from .base import CompactionEngine, CompactionHints
 
@@ -74,7 +74,7 @@ class LLMLinguaEngine(CompactionEngine):
             drop_consecutive=True,
         )
 
-        return result.get("compressed_prompt", text)
+        return cast(str, result.get("compressed_prompt", text))
 
     def estimate_tokens(self, text: str) -> int:
         """Estimate tokens using the model's tokenizer if available."""

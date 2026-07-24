@@ -15,9 +15,9 @@ from typing import Optional
 # Refresh ownership. The single-owner invariant is what prevents the
 # "refresh token already used" OAuth failure mode — exactly one process
 # must own refresh per credential.
-REFRESH_EXTERNAL = "external"   # a CLI tool owns refresh; tokenpak only reads
-REFRESH_TOKENPAK = "tokenpak"   # tokenpak owns refresh (not MVP)
-REFRESH_NONE = "none"           # static API key; no refresh
+REFRESH_EXTERNAL = "external"  # a CLI tool owns refresh; tokenpak only reads
+REFRESH_TOKENPAK = "tokenpak"  # tokenpak owns refresh (not MVP)
+REFRESH_NONE = "none"  # static API key; no refresh
 
 
 # Credential kinds. Open set; providers may introduce new ones.
@@ -34,16 +34,16 @@ class Credential:
     Re-run discovery to pick up changes (token refresh, new BYOK key).
     """
 
-    id: str                          # stable slug, e.g. "codex-9f05-personal"
-    platform: str                    # "openai" | "anthropic" | "google" | ...
-    kind: str                        # KIND_OAUTH | KIND_API_KEY | KIND_BEARER
-    source: str                      # human-readable origin (path, env var, etc.)
-    provider: str                    # provider module name that found this
+    id: str  # stable slug, e.g. "codex-9f05-personal"
+    platform: str  # "openai" | "anthropic" | "google" | ...
+    kind: str  # KIND_OAUTH | KIND_API_KEY | KIND_BEARER
+    source: str  # human-readable origin (path, env var, etc.)
+    provider: str  # provider module name that found this
     refresh_owner: str = REFRESH_NONE
 
     # Optional metadata — populated when the provider can cheaply extract it.
-    expires_at: Optional[int] = None         # unix seconds; oauth only
-    account_hint: Optional[str] = None       # email / account id for display
+    expires_at: Optional[int] = None  # unix seconds; oauth only
+    account_hint: Optional[str] = None  # email / account id for display
     scope_hosts: tuple[str, ...] = field(default_factory=tuple)
 
     # Where to go for the secret value. Providers interpret this

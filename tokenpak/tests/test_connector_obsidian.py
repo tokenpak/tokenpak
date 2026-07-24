@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for connectors.obsidian — ObsidianConnector."""
 
-
 from tokenpak.sources.base import ConnectorConfig
 from tokenpak.sources.obsidian import ObsidianConnector
 
@@ -103,6 +102,7 @@ class TestDetectObsidianType:
     def setup_method(self):
         # Create a dummy config — not actually used for detection
         import tempfile
+
         self._tmpdir = tempfile.mkdtemp()
         cfg = ConnectorConfig(name="obsidian", source_path=self._tmpdir)
         self.conn = ObsidianConnector(cfg)
@@ -145,6 +145,7 @@ class TestDetectObsidianType:
 class TestExtractLinks:
     def setup_method(self):
         import tempfile
+
         self._tmpdir = tempfile.mkdtemp()
         cfg = ConnectorConfig(name="obsidian", source_path=self._tmpdir)
         self.conn = ObsidianConnector(cfg)
@@ -187,6 +188,7 @@ class TestExtractLinks:
 class TestExtractFrontmatter:
     def setup_method(self):
         import tempfile
+
         self._tmpdir = tempfile.mkdtemp()
         cfg = ConnectorConfig(name="obsidian", source_path=self._tmpdir)
         self.conn = ObsidianConnector(cfg)

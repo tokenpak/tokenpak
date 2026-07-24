@@ -312,7 +312,7 @@ def _detect_intent(query_lower: str, context_lower: str, file_paths: List[str]) 
         return IntentClass.GEN_Q
 
     # Return the intent with highest score
-    return max(scores, key=scores.get)
+    return max(scores, key=lambda intent: scores[intent])
 
 
 def _compute_complexity(query: str, context: str, intent: IntentClass) -> float:

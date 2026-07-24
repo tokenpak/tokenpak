@@ -108,7 +108,9 @@ def test_dashboard_layout_json_contracts_are_read_only(monkeypatch, tmp_path) ->
         assert payload["layout"]["read_only"] is True
         assert payload["layout"]["mutation_controls"] == []
         assert payload["layout"]["sections"]
-        assert all(command["executes_mutation"] is False for command in payload["layout"]["next_commands"])
+        assert all(
+            command["executes_mutation"] is False for command in payload["layout"]["next_commands"]
+        )
 
 
 def test_dashboard_rejects_unknown_layout(monkeypatch, tmp_path) -> None:

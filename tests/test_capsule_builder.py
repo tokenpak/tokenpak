@@ -64,6 +64,7 @@ def _parse_body(body_bytes: bytes) -> Dict[str, Any]:
 # Feature flag
 # ---------------------------------------------------------------------------
 
+
 class TestFeatureFlag:
     def test_disabled_by_default(self):
         cb = CapsuleBuilder()
@@ -99,6 +100,7 @@ class TestFeatureFlag:
 # Determinism
 # ---------------------------------------------------------------------------
 
+
 class TestDeterminism:
     def test_same_input_same_output(self):
         cb = CapsuleBuilder(enabled=True)
@@ -129,6 +131,7 @@ class TestDeterminism:
 # ---------------------------------------------------------------------------
 # Hot window
 # ---------------------------------------------------------------------------
+
 
 class TestHotWindow:
     def test_last_message_never_capsulised(self):
@@ -175,6 +178,7 @@ class TestHotWindow:
 # Min block chars
 # ---------------------------------------------------------------------------
 
+
 class TestMinBlockChars:
     def test_short_block_not_capsulised(self):
         cb = CapsuleBuilder(enabled=True, hot_window=0)
@@ -208,6 +212,7 @@ class TestMinBlockChars:
 # Capsule envelope format
 # ---------------------------------------------------------------------------
 
+
 class TestCapsuleEnvelope:
     def test_envelope_contains_required_fields(self):
         compressed = _compress_text(LONG_TEXT)
@@ -221,6 +226,7 @@ class TestCapsuleEnvelope:
 
     def test_envelope_id_is_8_hex_chars(self):
         import re
+
         compressed = _compress_text(LONG_TEXT)
         envelope = _wrap_capsule(LONG_TEXT, compressed)
         m = re.search(r"id=([0-9a-f]+)", envelope)
@@ -240,6 +246,7 @@ class TestCapsuleEnvelope:
 # ---------------------------------------------------------------------------
 # Stats accuracy
 # ---------------------------------------------------------------------------
+
 
 class TestStats:
     def test_stats_blocks_count_matches(self):
@@ -280,6 +287,7 @@ class TestStats:
 # ---------------------------------------------------------------------------
 # Edge cases / robustness
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_invalid_json_passthrough(self):
@@ -352,14 +360,14 @@ class TestEdgeCases:
 # Performance smoke test
 # ---------------------------------------------------------------------------
 
+
 class TestPerformance:
     def test_typical_payload_under_20ms(self):
         """Smoke-test: typical payload completes in <20ms (p99 target)."""
         cb = CapsuleBuilder(enabled=True, hot_window=2)
         # ~10 historical messages + 2 hot, each ~500 chars
         messages = [
-            {"role": "user" if i % 2 == 0 else "assistant", "content": LONG_TEXT}
-            for i in range(12)
+            {"role": "user" if i % 2 == 0 else "assistant", "content": LONG_TEXT} for i in range(12)
         ]
         body = _make_body(messages)
 
@@ -378,7 +386,9 @@ class TestPerformance:
 # Import sanity
 # ---------------------------------------------------------------------------
 
+
 def test_import():
     from tokenpak.capsule import CapsuleBuilder as CB2  # noqa: F401
     from tokenpak.capsule.builder import CapsuleBuilder  # noqa: F401
+
     assert CapsuleBuilder is CB2

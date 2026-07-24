@@ -57,6 +57,7 @@ os.environ.setdefault("TOKENPAK_COMPACT", "1")
 # Test Classes
 # ===========================
 
+
 class TestToggleCombinations(unittest.TestCase):
     """Test that tokenpak.proxy.py correctly reads all 16 toggle env vars."""
 
@@ -180,9 +181,16 @@ class TestSessionTracking(unittest.TestCase):
         }
         self.assertIsInstance(session, dict)
         expected_keys = {
-            "requests", "input_tokens", "sent_input_tokens", "saved_tokens",
-            "output_tokens", "cost", "compilation_mode", "injected_tokens",
-            "cache_read_tokens", "cache_creation_tokens",
+            "requests",
+            "input_tokens",
+            "sent_input_tokens",
+            "saved_tokens",
+            "output_tokens",
+            "cost",
+            "compilation_mode",
+            "injected_tokens",
+            "cache_read_tokens",
+            "cache_creation_tokens",
         }
         for key in expected_keys:
             self.assertIn(key, session, f"SESSION missing key: {key}")
@@ -245,18 +253,32 @@ class TestSessionTracking(unittest.TestCase):
     def test_session_multiple_fields_all_numeric(self):
         """Test: Key SESSION numeric fields are numbers."""
         session = {
-            "requests": 0, "input_tokens": 0, "sent_input_tokens": 0,
-            "saved_tokens": 0, "protected_tokens": 0, "output_tokens": 0,
-            "cache_read_tokens": 0, "cache_creation_tokens": 0, "errors": 0,
+            "requests": 0,
+            "input_tokens": 0,
+            "sent_input_tokens": 0,
+            "saved_tokens": 0,
+            "protected_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
+            "errors": 0,
         }
         numeric_keys = [
-            "requests", "input_tokens", "sent_input_tokens", "saved_tokens",
-            "protected_tokens", "output_tokens", "cache_read_tokens",
-            "cache_creation_tokens", "errors",
+            "requests",
+            "input_tokens",
+            "sent_input_tokens",
+            "saved_tokens",
+            "protected_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_creation_tokens",
+            "errors",
         ]
         for key in numeric_keys:
             val = session.get(key, 0)
-            self.assertIsInstance(val, (int, float), f"SESSION[{key}] should be numeric, got {type(val)}")
+            self.assertIsInstance(
+                val, (int, float), f"SESSION[{key}] should be numeric, got {type(val)}"
+            )
 
 
 class TestFailOpenBehavior(unittest.TestCase):
@@ -300,6 +322,7 @@ class TestFailOpenBehavior(unittest.TestCase):
 
     def test_vault_index_available_flag(self):
         """Test: Components have 'available' flag for safe checking."""
+
         # Simulate VaultIndex pattern
         class MockVaultIndex:
             def __init__(self):
@@ -332,6 +355,7 @@ class TestFailOpenBehavior(unittest.TestCase):
 
     def test_validation_gate_graceful_degradation(self):
         """Test: Validation gate can safely return None."""
+
         def _get_validation_gate():
             try:
                 # Simulate optional import
@@ -345,6 +369,7 @@ class TestFailOpenBehavior(unittest.TestCase):
 
     def test_monitor_pattern(self):
         """Test: Monitor pattern is always available (fail-open for logging)."""
+
         class MockMonitor:
             def log(self, *args, **kwargs):
                 pass
@@ -355,6 +380,7 @@ class TestFailOpenBehavior(unittest.TestCase):
 
     def test_exception_handler_in_proxy_to(self):
         """Test: Proxy handler has exception handling capability."""
+
         class ProxyHandler:
             def _proxy_to(self):
                 try:
@@ -407,6 +433,7 @@ class TestFailOpenBehavior(unittest.TestCase):
 
     def test_adapter_registry_pattern(self):
         """Test: ADAPTER_REGISTRY always has detect method."""
+
         class MockRegistry:
             def detect(self, path, headers, body):
                 return None
@@ -417,9 +444,11 @@ class TestFailOpenBehavior(unittest.TestCase):
 
     def test_trace_storage_pattern(self):
         """Test: TRACE_STORAGE always has store/get_last methods."""
+
         class MockTraceStorage:
             def store(self, trace):
                 pass
+
             def get_last(self):
                 return None
 
@@ -476,7 +505,12 @@ class TestValidationGateSoftMode(unittest.TestCase):
     def test_validation_gate_soft_mode_behavior(self):
         """Test: When soft mode is on, validation gate logs warning but allows forward."""
         # This is an integration test pattern — verify the config supports this
-        soft_mode = os.environ.get("TOKENPAK_VALIDATION_GATE_SOFT", "1").lower() in ("1", "true", "yes", "on")
+        soft_mode = os.environ.get("TOKENPAK_VALIDATION_GATE_SOFT", "1").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
         # If soft_mode is True, the proxy should log warnings but not block
         self.assertTrue(soft_mode, "Soft mode should be default for safe rollout")
 

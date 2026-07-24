@@ -72,7 +72,7 @@ class AnthropicAdapter(FormatAdapter):
         """
         canonical = self.normalize(body)
         # Volatile injection block — intentionally NO cache_control
-        volatile_block: dict = {"type": "text", "text": injection_text}
+        volatile_block: dict[str, Any] = {"type": "text", "text": injection_text}
 
         # Check if the request already has cache_control with explicit TTL anywhere.
         # If so, don't add new cache_control markers — the client manages ordering.
@@ -80,7 +80,7 @@ class AnthropicAdapter(FormatAdapter):
 
         if isinstance(canonical.system, str):
             if canonical.system:
-                stable_block: dict = {"type": "text", "text": canonical.system}
+                stable_block: dict[str, Any] = {"type": "text", "text": canonical.system}
                 if not has_explicit_ttl:
                     stable_block["cache_control"] = {"type": "ephemeral"}
                 canonical.system = [stable_block, volatile_block]
@@ -104,7 +104,7 @@ class AnthropicAdapter(FormatAdapter):
         return self.denormalize(canonical)
 
     @staticmethod
-    def _body_has_explicit_ttl(canonical) -> bool:
+    def _body_has_explicit_ttl(canonical: CanonicalRequest) -> bool:
         """Check if any block in the request has cache_control with an explicit ttl."""
         for section in [canonical.system or [], canonical.messages or []]:
             items = section if isinstance(section, list) else []

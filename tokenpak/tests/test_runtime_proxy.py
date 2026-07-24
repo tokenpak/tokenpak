@@ -21,6 +21,7 @@ from tokenpak.core.runtime.proxy import (
 # _resolve_session_id
 # ---------------------------------------------------------------------------
 
+
 class TestResolveSessionId:
     def _headers(self, data: dict):
         """Return a plain dict as headers (case-sensitive get)."""
@@ -61,6 +62,7 @@ class TestResolveSessionId:
         # Headers that have no .get() → behaves like no match
         class NoGetHeaders:
             pass
+
         result = _resolve_session_id(NoGetHeaders(), "some-model")
         assert result == "some-model"
 
@@ -68,6 +70,7 @@ class TestResolveSessionId:
 # ---------------------------------------------------------------------------
 # can_compress
 # ---------------------------------------------------------------------------
+
 
 class TestCanCompress:
     def test_transparent_mode_always_false(self):
@@ -95,6 +98,7 @@ class TestCanCompress:
 # ---------------------------------------------------------------------------
 # _prune_mutation_audit
 # ---------------------------------------------------------------------------
+
 
 class TestPruneMutationAudit:
     def _setup_db(self, db_path: str):
@@ -170,6 +174,7 @@ class TestPruneMutationAudit:
 # _write_mutation_audit
 # ---------------------------------------------------------------------------
 
+
 class TestWriteMutationAudit:
     def _setup_db(self, db_path: str):
         conn = sqlite3.connect(db_path)
@@ -212,7 +217,7 @@ class TestWriteMutationAudit:
             conn.close()
             assert row is not None
             # Verify hashes
-            assert row[4] == hashlib.sha256(body_pre).hexdigest()   # pre_hash
+            assert row[4] == hashlib.sha256(body_pre).hexdigest()  # pre_hash
             assert row[5] == hashlib.sha256(body_post).hexdigest()  # post_hash
             # Verify rules_applied stored as JSON
             assert json.loads(row[6]) == ["rule_a", "rule_b"]
@@ -253,6 +258,7 @@ class TestWriteMutationAudit:
 # Monitor subclass
 # ---------------------------------------------------------------------------
 
+
 class TestMonitor:
     def test_init_creates_db_with_extended_schema(self):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -267,7 +273,12 @@ class TestMonitor:
             assert "stable_hash" in col_names
             assert "volatile_hash" in col_names
             # Verify mutation_audit table created
-            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
             assert "mutation_audit" in tables
             assert "cache_invalidator_events" in tables
             conn.close()
@@ -332,12 +343,20 @@ class TestMonitor:
 # SESSION dict structure
 # ---------------------------------------------------------------------------
 
+
 class TestSessionDict:
     def test_required_keys_present(self):
         required = [
-            "requests", "input_tokens", "output_tokens", "cost",
-            "errors", "cache_read_tokens", "cache_creation_tokens",
-            "cache_hits", "cache_misses", "start_time",
+            "requests",
+            "input_tokens",
+            "output_tokens",
+            "cost",
+            "errors",
+            "cache_read_tokens",
+            "cache_creation_tokens",
+            "cache_hits",
+            "cache_misses",
+            "start_time",
         ]
         for key in required:
             assert key in SESSION, f"Missing key: {key}"
@@ -354,6 +373,7 @@ class TestSessionDict:
 # ---------------------------------------------------------------------------
 # _PROFILE_PRESETS — claude-code / transparent profiles
 # ---------------------------------------------------------------------------
+
 
 class TestProfilePresets:
     def test_claude_code_profile_present(self):

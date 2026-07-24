@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import socket
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 DaemonState = Literal["active", "unavailable", "tip_mismatch"]
 
@@ -52,7 +52,7 @@ def sock_info_path() -> Path:
     return _SOCK_INFO_PATH
 
 
-def _read_sock_info(path: Path) -> Optional[dict]:
+def _read_sock_info(path: Path) -> Optional[dict[str, Any]]:
     """Parse the sock-info file. Returns None on any error.
 
     Expected shape:

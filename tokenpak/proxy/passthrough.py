@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
 
 # Back-compat re-export: the canonical CLAUDE_CODE_HEADER_ALLOWLIST now lives in
 # tokenpak.proxy.headers (frozenset). It is re-exported here so the historical
@@ -48,7 +48,7 @@ from tokenpak.proxy.headers import CLAUDE_CODE_HEADER_ALLOWLIST  # noqa: F401
 # CLAUDE_CODE_HEADER_ALLOWLIST lives in tokenpak.proxy.headers (canonical
 # frozenset); do not redeclare it here.
 
-LEGACY_HEADER_ALLOWLIST: tuple = (
+LEGACY_HEADER_ALLOWLIST: tuple[str, ...] = (
     "x-api-key",
     "authorization",
     "anthropic-version",
@@ -56,7 +56,7 @@ LEGACY_HEADER_ALLOWLIST: tuple = (
 )
 
 
-def _classify_route(path: str, headers) -> str:
+def _classify_route(path: str, headers: Any) -> str:
     """Classify an incoming HTTP request as 'claude-code' or 'tokenpak'.
 
     Inspects headers only — no DB access, no network round-trips.

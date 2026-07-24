@@ -77,7 +77,6 @@ def _apply_profile(profile_name: str, env: dict) -> str:
 
 
 class TestProfilePresets(unittest.TestCase):
-
     def test_safe_sets_strict_mode(self):
         env = {}
         _apply_profile("safe", env)
@@ -134,8 +133,11 @@ class TestProfilePresets(unittest.TestCase):
         for profile_name in _PROFILE_PRESETS:
             with self.subTest(profile=profile_name):
                 for key in _MANDATORY_KEYS:
-                    self.assertIn(key, _PROFILE_PRESETS[profile_name],
-                                  f"Profile '{profile_name}' missing key '{key}'")
+                    self.assertIn(
+                        key,
+                        _PROFILE_PRESETS[profile_name],
+                        f"Profile '{profile_name}' missing key '{key}'",
+                    )
 
     def test_default_active_profile_is_balanced(self):
         with patch.dict(os.environ, {}, clear=False):

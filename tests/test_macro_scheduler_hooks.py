@@ -1,9 +1,10 @@
 """Tests for macro scheduler, script hooks, and premade macros (M.2-M.4)."""
 
-
 import pytest
 
-pytest.importorskip("tokenpak._internal.macros.premade_macros", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak._internal.macros.premade_macros", reason="module not available in current build"
+)
 import json
 import os
 import subprocess
@@ -35,6 +36,7 @@ from tokenpak._internal.macros.script_hooks import (
 )
 
 # ── MacroScheduler ─────────────────────────────────────────────────────────────
+
 
 class TestMacroScheduler:
     @pytest.fixture
@@ -103,11 +105,13 @@ class TestMacroScheduler:
 
 # ── Script Hooks ───────────────────────────────────────────────────────────────
 
+
 class TestScriptHooks:
     @pytest.fixture
     def hooks_dir(self, tmp_path, monkeypatch):
         """Patch the hooks directory to a temp dir."""
         import tokenpak._internal.macros.script_hooks as sh
+
         monkeypatch.setattr(sh, "DEFAULT_HOOKS_DIR", tmp_path)
         return tmp_path
 
@@ -159,10 +163,13 @@ class TestScriptHooks:
 
     def test_fire_on_request_context(self, hooks_dir):
         received = {}
+
         def fake_fire(hook_name, context, timeout=30):
             received.update(context)
             return {"success": True, "stdout": "", "stderr": "", "returncode": 0}
+
         import tokenpak._internal.macros.script_hooks as sh
+
         orig = sh.fire_hook
         sh.fire_hook = fake_fire
         try:
@@ -176,10 +183,13 @@ class TestScriptHooks:
     def test_fire_on_response_context(self, hooks_dir):
         received = {}
         import tokenpak._internal.macros.script_hooks as sh
+
         orig = sh.fire_hook
+
         def fake_fire(hook_name, context, timeout=30):
             received.update(context)
             return {"success": True, "stdout": "", "stderr": "", "returncode": 0}
+
         sh.fire_hook = fake_fire
         try:
             fire_on_response("gpt-4", "openai", 1500, 0.045, 823)
@@ -192,10 +202,13 @@ class TestScriptHooks:
     def test_fire_on_budget_alert_pct(self, hooks_dir):
         received = {}
         import tokenpak._internal.macros.script_hooks as sh
+
         orig = sh.fire_hook
+
         def fake_fire(hook_name, context, timeout=30):
             received.update(context)
             return {"success": True, "stdout": "", "stderr": "", "returncode": 0}
+
         sh.fire_hook = fake_fire
         try:
             fire_on_budget_alert("daily", 10.0, 8.5)
@@ -205,6 +218,7 @@ class TestScriptHooks:
 
 
 # ── Premade Macros ─────────────────────────────────────────────────────────────
+
 
 class TestPremadeMacros:
     def test_premade_macros_defined(self):
@@ -221,6 +235,7 @@ class TestPremadeMacros:
 
     def test_install_macro(self, tmp_path, monkeypatch):
         import tokenpak._internal.macros.premade_macros as pm
+
         monkeypatch.setattr(pm, "INSTALL_DIR", tmp_path)
         path = install_macro("morning-standup")
         assert path.exists()

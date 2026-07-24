@@ -150,17 +150,13 @@ class TestGenerateFromMessages:
         assert "user" in types or "system" in types
 
     def test_code_block_inside_message_creates_code_segment(self):
-        msgs = [
-            {"role": "user", "content": "Here is code:\n```python\nprint('hi')\n```"}
-        ]
+        msgs = [{"role": "user", "content": "Here is code:\n```python\nprint('hi')\n```"}]
         fp = self.gen.generate_from_messages(msgs)
         types = [s.type for s in fp.segments]
         assert "code" in types
 
     def test_content_list_handled(self):
-        msgs = [
-            {"role": "user", "content": [{"text": "hello from array"}]}
-        ]
+        msgs = [{"role": "user", "content": [{"text": "hello from array"}]}]
         fp = self.gen.generate_from_messages(msgs)
         assert isinstance(fp, Fingerprint)
 

@@ -125,10 +125,7 @@ class TestGetTimeline:
     def test_get_timeline_limited_to_days(self, tmp_path):
         """get_timeline() respects days limit."""
         history_path = tmp_path / "history.jsonl"
-        entries = [
-            {"date": f"2026-03-{20+i:02d}", "saved_usd": i * 5.0}
-            for i in range(10)
-        ]
+        entries = [{"date": f"2026-03-{20 + i:02d}", "saved_usd": i * 5.0} for i in range(10)]
         history_path.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
 
         result = timeline.get_timeline(days=3, path=history_path)
@@ -273,9 +270,7 @@ class TestRenderChart:
 
     def test_render_chart_steady_classification(self):
         """Consistent data classified as STEADY."""
-        entries = [
-            {"date": f"2026-03-{20+i:02d}", "saved_usd": 10.0} for i in range(5)
-        ]
+        entries = [{"date": f"2026-03-{20 + i:02d}", "saved_usd": 10.0} for i in range(5)]
         result = timeline.render_chart(entries)
         assert "STEADY" in result or "MODERATE" in result
 

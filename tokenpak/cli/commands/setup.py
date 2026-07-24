@@ -1,4 +1,5 @@
 """tokenpak.cli.commands.setup — setup wizard for tokenpak installation."""
+
 from __future__ import annotations
 
 import json
@@ -24,9 +25,7 @@ def detect_openai() -> bool:
 
 def detect_google() -> bool:
     """Detect if Google API key is configured."""
-    return bool(
-        os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-    )
+    return bool(os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"))
 
 
 def configure_claude_code(
@@ -55,7 +54,7 @@ def configure_claude_code(
     return settings
 
 
-def run_setup_cmd(args) -> None:
+def run_setup_cmd(args: Any) -> None:
     claude_dir = getattr(args, "claude_dir", None)
     if claude_dir:
         claude_dir = Path(claude_dir)

@@ -1,13 +1,22 @@
 """tokenpak.vault.ingest — document ingestion pipeline."""
 
+from typing import Any, Callable, Optional
+
+create_ingest_app: Optional[Callable[..., Any]]
+ingest_router: Any
+
 try:
-    from .api import create_ingest_app
-    from .api import router as ingest_router
+    from .api import create_ingest_app as _create_ingest_app
+    from .api import router as _ingest_router
+
+    create_ingest_app = _create_ingest_app
+    ingest_router = _ingest_router
     _INGEST_API_AVAILABLE = True
 except (TypeError, ImportError) as _ingest_init_err:
     # FastAPI/Starlette version incompatibility (e.g. Starlette 1.0 dropped on_startup kwarg)
     # Proxy runs in standalone HTTP mode — ingest API not required for core proxy operation
     import warnings as _warnings
+
     _warnings.warn(
         f"tokenpak.vault.ingest.api unavailable (FastAPI compat): {_ingest_init_err}",
         ImportWarning,
@@ -18,7 +27,21 @@ except (TypeError, ImportError) as _ingest_init_err:
 
 from .disclosure import build_disclosure_payload, choose_disclosure_level, shortlist_sections
 
-__all__ = ['create_ingest_app', 'ingest_router', '_INGEST_API_AVAILABLE', 'choose_disclosure_level', 'shortlist_sections', 'build_disclosure_payload', 'api', 'claim_indexer', 'cross_doc', 'disclosure', 'document_parser', 'schema_converter', 'table_extractor']
+__all__ = [
+    "create_ingest_app",
+    "ingest_router",
+    "_INGEST_API_AVAILABLE",
+    "choose_disclosure_level",
+    "shortlist_sections",
+    "build_disclosure_payload",
+    "api",
+    "claim_indexer",
+    "cross_doc",
+    "disclosure",
+    "document_parser",
+    "schema_converter",
+    "table_extractor",
+]
 
 from .cross_doc import (  # noqa: F401
     CrossDocAnalyzer,

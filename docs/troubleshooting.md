@@ -320,7 +320,7 @@ For example, `port` must be an integer, not a string.
  "mode": "hybrid",
  "compression": {
  "enabled": true,
- "threshold_tokens": 4500
+ "threshold_tokens": 1500
  }
 }
 ```
@@ -328,7 +328,7 @@ For example, `port` must be an integer, not a string.
 Common type mistakes:
 - `"port": "8766"` → should be `"port": 8766`
 - `"enabled": "true"` → should be `"enabled": true`
-- `"threshold_tokens": "4500"` → should be `"threshold_tokens": 4500`
+- `"threshold_tokens": "1500"` → should be `"threshold_tokens": 1500`
 
 ### Cause C: Config file not found
 
@@ -788,7 +788,7 @@ curl -fsS http://127.0.0.1:8766/stats | python3 -m json.tool
 
 ### Cause A: Input below compression threshold
 
-By default, prompts under 4,500 tokens are not compressed (overhead isn't worth it).
+By default, prompts under 1,500 tokens are not compressed (overhead isn't worth it).
 
 **Fix:**
 ```bash

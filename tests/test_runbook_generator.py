@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("tokenpak.agentic.runbook_generator", reason="module not available in current build")
+pytest.importorskip(
+    "tokenpak.agentic.runbook_generator", reason="module not available in current build"
+)
 from pathlib import Path
 
 import pytest

@@ -4,14 +4,114 @@ TokenPak proxy configuration — env vars, feature flags, constants, profiles, u
 Extracted from tokenpak/runtime/proxy.py (L1-607 extraction, phase 1a).
 """
 
+__all__ = (
+    "ACTIVE_PROFILE",
+    "ADAPTER_REGISTRY",
+    "BUDGET_ALERT_THRESHOLD_PCT",
+    "BUDGET_CONTROLLER_ENABLED",
+    "BUDGET_DAILY_LIMIT_USD",
+    "BUDGET_TOTAL_TOKENS",
+    "CACHE_REGISTRY_ENABLED",
+    "CAPSULE_HOT_WINDOW",
+    "CAPSULE_MIN_CHARS",
+    "CHAT_FOOTER_ENABLED",
+    "COMPACT_CACHE_SIZE",
+    "COMPACT_MAX_CHARS",
+    "COMPACT_MAX_TOKENS",
+    "COMPACT_THRESHOLD_TOKENS",
+    "COMPILATION_MODE",
+    "COMPRESSION_DICT_ENABLED",
+    "CUSTOM_PROVIDERS",
+    "DASHBOARD_AUTH_ENABLED",
+    "ENABLE_CAPSULE_BUILDER",
+    "ENABLE_COMPACTION",
+    "ERROR_NORMALIZER_ENABLED",
+    "FAILURE_MEMORY_ENABLED",
+    "FIDELITY_TIERS_ENABLED",
+    "HTTP100_KEEPALIVE_ENABLED",
+    "INJECT_BUDGET",
+    "INJECT_MIN_PROMPT",
+    "INJECT_MIN_SCORE",
+    "INJECT_SKIP_MODELS",
+    "INJECT_TOP_K",
+    "LISTEN_ADDRESS",
+    "MAX_COMPRESSION_TIME_MS",
+    "MONITOR_DB",
+    "MUTATION_AUDIT_TTL_DAYS",
+    "PRECONDITION_GATES_ENABLED",
+    "PREFIX_REGISTRY_ENABLED",
+    "PROVIDER_DISPLAY",
+    "PROXY_AUTH_KEY",
+    "PROXY_PORT",
+    "ProxyConfig",
+    "QUERY_EXPANSION_ENABLED",
+    "QUERY_REWRITER_ENABLED",
+    "REQUEST_LOGGER_ENABLED",
+    "RETRIEVAL_BACKEND",
+    "RETRIEVAL_WATCHDOG_ENABLED",
+    "ROUTER_ENABLED",
+    "SALIENCE_ROUTER_ENABLED",
+    "SEMANTIC_CACHE_ENABLED",
+    "SESSION_CAPSULES_ENABLED",
+    "SHADOW_ENABLED",
+    "SKELETON_ENABLED",
+    "SPEND_GUARD_AUDIT_DB_PATH",
+    "SPEND_GUARD_BLOCK_COST_USD",
+    "SPEND_GUARD_BLOCK_TOKENS",
+    "SPEND_GUARD_DEFAULT_BASIS",
+    "SPEND_GUARD_DEFAULT_CONTEXT_WINDOW_PERCENT",
+    "SPEND_GUARD_DOLLAR_CAP_ENABLED_BY_DEFAULT",
+    "SPEND_GUARD_ENABLED",
+    "SPEND_GUARD_HARD_BLOCK_COST_USD",
+    "SPEND_GUARD_HARD_BLOCK_TOKENS",
+    "SPEND_GUARD_HARD_STOP_CONTEXT_WINDOW_PERCENT",
+    "SPEND_GUARD_PENDING_TTL_SECONDS",
+    "SPEND_GUARD_SESSION_BLOCK_COST_USD",
+    "SPEND_GUARD_SESSION_WINDOW_SECONDS",
+    "SPEND_GUARD_WARN_COST_USD",
+    "SPEND_GUARD_WARN_TOKENS",
+    "STABILITY_SCORER_ENABLED",
+    "STABLE_CACHE_CONTROL_AUTO",
+    "TERM_RESOLVER_ENABLED",
+    "TERM_RESOLVER_MAX_BYTES",
+    "TERM_RESOLVER_TOP_K",
+    "TRACE_ENABLED",
+    "UPSTREAM_ROUTES",
+    "UPSTREAM_TIMEOUT",
+    "VALIDATION_GATE_BUDGET_CAP",
+    "VALIDATION_GATE_ENABLED",
+    "VALIDATION_GATE_SOFT",
+    "VAULT_AUTO_REINDEX_INTERVAL",
+    "VAULT_CACHE_MAX_BYTES",
+    "VAULT_CACHE_PRELOAD",
+    "VAULT_INDEX_PATH",
+    "VAULT_INDEX_RELOAD_INTERVAL",
+    "VAULT_SYNC_INTERVAL",
+    "WS_MAX_CONNECTIONS",
+    "WS_PORT",
+    "build_custom_adapters",
+    "build_default_registry",
+    "get_pool_manager",
+    "get_provider_display_list",
+    "load_custom_providers",
+    "skeleton_active",
+    "skeleton_available",
+)
+
 import json
 import os
 from pathlib import Path
-from typing import Dict
+from typing import TYPE_CHECKING, Callable, Dict, Optional, TypeVar, cast
 
 import urllib3
 
 from tokenpak.proxy.adapters import build_default_registry
+
+if TYPE_CHECKING:
+    from tokenpak.cache.semantic_cache import SemanticCache
+
+_ConfigValue = TypeVar("_ConfigValue")
+_loaded_cfg: Optional[Callable[..., object]]
 
 # ---------------------------------------------------------------------------
 # Config — reads ~/.tokenpak/config.yaml with env var overrides
@@ -19,21 +119,43 @@ from tokenpak.proxy.adapters import build_default_registry
 try:
     import logging as _logging
 
-    from tokenpak.core.config_loader import get as _cfg
-    _logging.getLogger("tokenpak.proxy.config").info("Config: ~/.tokenpak/config.yaml (env vars override)")
+    from tokenpak.core.config_loader import get as _config_get
+
+    _loaded_cfg = _config_get
+    _logging.getLogger("tokenpak.proxy.config").info(
+        "Config: ~/.tokenpak/config.yaml (env vars override)"
+    )
 except ImportError:
     # Fallback: env-only mode (no config_loader available)
-    def _cfg(key, default=None, env_var=None, cast=None):
-        if env_var:
-            val = os.environ.get(env_var)
-            if val is not None:
-                if cast is bool:
-                    return val.lower() in ("1", "true", "yes", "on")
-                return cast(val) if cast else val
-        return default
+    _loaded_cfg = None
 
     import logging as _logging
-    _logging.getLogger("tokenpak.proxy.config").info("Config: env vars only (config_loader not available)")
+
+    _logging.getLogger("tokenpak.proxy.config").info(
+        "Config: env vars only (config_loader not available)"
+    )
+
+
+def _cfg(
+    key: str,
+    default: _ConfigValue,
+    env_var: Optional[str] = None,
+    converter: Optional[Callable[[str], _ConfigValue]] = None,
+) -> _ConfigValue:
+    """Read one typed setting through the full loader or env-only fallback."""
+    if _loaded_cfg is not None:
+        return cast(_ConfigValue, _loaded_cfg(key, default, env_var, converter))
+    if env_var:
+        value = os.environ.get(env_var)
+        if value is not None:
+            if converter is bool:
+                return cast(
+                    _ConfigValue,
+                    value.lower() in ("1", "true", "yes", "on"),
+                )
+            return converter(value) if converter else cast(_ConfigValue, value)
+    return default
+
 
 # ---------------------------------------------------------------------------
 # Named Workflow Profiles — TOKENPAK_PROFILE sets sensible flag bundles
@@ -87,17 +209,23 @@ if ACTIVE_PROFILE in _PROFILE_PRESETS:
         os.environ.setdefault(_pk, _pv)
     _logging.getLogger("tokenpak.proxy.config").info("Profile: %s", ACTIVE_PROFILE)
 else:
-    _logging.getLogger("tokenpak.proxy.config").warning("Unknown TOKENPAK_PROFILE=%r — ignoring", ACTIVE_PROFILE)
+    _logging.getLogger("tokenpak.proxy.config").warning(
+        "Unknown TOKENPAK_PROFILE=%r — ignoring", ACTIVE_PROFILE
+    )
     ACTIVE_PROFILE = "custom"
 
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
 LISTEN_ADDRESS = _cfg("listen_address", "127.0.0.1", "TOKENPAK_BIND_ADDRESS", str)
 PROXY_AUTH_KEY = os.environ.get("TOKENPAK_PROXY_KEY", "")
 DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", False, "TOKENPAK_DASHBOARD_AUTH", bool)
+
+
 def _resolve_monitor_db() -> str:
     from tokenpak._paths import monitor_db as _monitor_db
+
     result = _monitor_db(mode="write")
     return str(result)
+
 
 MONITOR_DB = _resolve_monitor_db()
 BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
@@ -108,14 +236,15 @@ VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
 COMPACT_MAX_CHARS = _cfg("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
 COMPACT_THRESHOLD_TOKENS = _cfg(
-    "compression.threshold_tokens", 1500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int  # Flipped 2026-04-13
+    "compression.threshold_tokens",
+    1500,
+    "TOKENPAK_COMPACT_THRESHOLD_TOKENS",
+    int,  # Flipped 2026-04-13
 )
 # Skip compression for very large payloads — compression savings are marginal (<3%) but
 # synchronous processing adds 10-25s of silence before first SSE chunk, causing client timeouts.
 # Default: skip compression above 50,000 tokens (~200KB). Set to 0 to disable this cap.
-COMPACT_MAX_TOKENS = _cfg(
-    "compression.max_tokens", 50000, "TOKENPAK_COMPACT_MAX_TOKENS", int
-)
+COMPACT_MAX_TOKENS = _cfg("compression.max_tokens", 50000, "TOKENPAK_COMPACT_MAX_TOKENS", int)
 COMPACT_CACHE_SIZE = _cfg("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
 COMPILATION_MODE = _cfg("mode", "hybrid", "TOKENPAK_MODE", str).lower()
 # Auto-apply stable cache control in safe mode (TOKENPAK_MODE=safe)
@@ -134,7 +263,9 @@ SKELETON_ENABLED: bool = _cfg("features.skeleton", True, "TOKENPAK_SKELETON_ENAB
 SHADOW_ENABLED: bool = _cfg("features.shadow_reader", True, "TOKENPAK_SHADOW_ENABLED", bool)
 BUDGET_TOTAL_TOKENS: int = _cfg("budget.total_tokens", 12000, "TOKENPAK_BUDGET_TOTAL", int)
 CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_FOOTER", bool)
-HTTP100_KEEPALIVE_ENABLED: bool = _cfg("features.http100_keepalive", False, "TOKENPAK_HTTP100_KEEPALIVE", bool)
+HTTP100_KEEPALIVE_ENABLED: bool = _cfg(
+    "features.http100_keepalive", False, "TOKENPAK_HTTP100_KEEPALIVE", bool
+)
 
 
 # ---------------------------------------------------------------------------
@@ -180,24 +311,27 @@ def skeleton_active() -> bool:
 # v1.5.2 (Kevin DECISION 2026-05-11 rev 2): default basis is
 # context-window-utilisation %. Dollar bands stay reachable as opt-in
 # profile overrides — see SPEND_GUARD_*_COST_USD knobs below.
-SPEND_GUARD_ENABLED: bool = _cfg(
-    "spend_guard.enabled", True, "TOKENPAK_SPEND_GUARD_ENABLED", bool
-)
+SPEND_GUARD_ENABLED: bool = _cfg("spend_guard.enabled", True, "TOKENPAK_SPEND_GUARD_ENABLED", bool)
 SPEND_GUARD_DEFAULT_BASIS: str = _cfg(
-    "spend_guard.default_basis", "context_window_percent",
-    "TOKENPAK_SPEND_GUARD_DEFAULT_BASIS", str
+    "spend_guard.default_basis", "context_window_percent", "TOKENPAK_SPEND_GUARD_DEFAULT_BASIS", str
 )
 SPEND_GUARD_DEFAULT_CONTEXT_WINDOW_PERCENT: int = _cfg(
-    "spend_guard.default_context_window_percent", 90,
-    "TOKENPAK_SPEND_GUARD_CONTEXT_WINDOW_PERCENT", int
+    "spend_guard.default_context_window_percent",
+    90,
+    "TOKENPAK_SPEND_GUARD_CONTEXT_WINDOW_PERCENT",
+    int,
 )
 SPEND_GUARD_HARD_STOP_CONTEXT_WINDOW_PERCENT: int = _cfg(
-    "spend_guard.hard_stop_context_window_percent", 100,
-    "TOKENPAK_SPEND_GUARD_HARD_STOP_CONTEXT_WINDOW_PERCENT", int
+    "spend_guard.hard_stop_context_window_percent",
+    100,
+    "TOKENPAK_SPEND_GUARD_HARD_STOP_CONTEXT_WINDOW_PERCENT",
+    int,
 )
 SPEND_GUARD_DOLLAR_CAP_ENABLED_BY_DEFAULT: bool = _cfg(
-    "spend_guard.dollar_cap_enabled_by_default", False,
-    "TOKENPAK_SPEND_GUARD_DOLLAR_CAP_ENABLED", bool
+    "spend_guard.dollar_cap_enabled_by_default",
+    False,
+    "TOKENPAK_SPEND_GUARD_DOLLAR_CAP_ENABLED",
+    bool,
 )
 SPEND_GUARD_WARN_TOKENS: int = _cfg(
     "spend_guard.warn_tokens", 100_000, "TOKENPAK_SPEND_GUARD_WARN_TOKENS", int
@@ -222,19 +356,16 @@ SPEND_GUARD_HARD_BLOCK_COST_USD: float = _cfg(
     "spend_guard.hard_block_cost_usd", 0.0, "TOKENPAK_SPEND_GUARD_HARD_BLOCK_COST_USD", float
 )
 SPEND_GUARD_SESSION_BLOCK_COST_USD: float = _cfg(
-    "spend_guard.session_block_cost_usd", 0.0,
-    "TOKENPAK_SPEND_GUARD_SESSION_BLOCK_COST_USD", float
+    "spend_guard.session_block_cost_usd", 0.0, "TOKENPAK_SPEND_GUARD_SESSION_BLOCK_COST_USD", float
 )
 SPEND_GUARD_SESSION_WINDOW_SECONDS: int = _cfg(
-    "spend_guard.session_window_seconds", 3600,
-    "TOKENPAK_SPEND_GUARD_SESSION_WINDOW_SECONDS", int
+    "spend_guard.session_window_seconds", 3600, "TOKENPAK_SPEND_GUARD_SESSION_WINDOW_SECONDS", int
 )
 SPEND_GUARD_PENDING_TTL_SECONDS: int = _cfg(
     "spend_guard.pending_ttl_seconds", 600, "TOKENPAK_SPEND_GUARD_PENDING_TTL", int
 )
 SPEND_GUARD_AUDIT_DB_PATH: str = _cfg(
-    "spend_guard.audit_db_path", "~/.tokenpak/spend_guard.db",
-    "TOKENPAK_SPEND_GUARD_AUDIT_DB", str
+    "spend_guard.audit_db_path", "~/.tokenpak/spend_guard.db", "TOKENPAK_SPEND_GUARD_AUDIT_DB", str
 )
 
 # Tier 1 modules
@@ -244,10 +375,10 @@ SEMANTIC_CACHE_ENABLED: bool = _cfg(
 
 # Semantic cache singleton — instantiated once at module level to prevent per-request
 # memory leak (fix for 2026-03-14 swap exhaustion incident: ~3.9GB after 14h uptime)
-_SEM_CACHE_SINGLETON = None
+_SEM_CACHE_SINGLETON: Optional["SemanticCache"] = None
 
 
-def _get_sem_cache():
+def _get_sem_cache() -> Optional["SemanticCache"]:
     global _SEM_CACHE_SINGLETON
     if _SEM_CACHE_SINGLETON is None and SEMANTIC_CACHE_ENABLED:
         try:
@@ -272,7 +403,10 @@ ERROR_NORMALIZER_ENABLED: bool = _cfg(
     "features.error_normalizer", False, "TOKENPAK_ERROR_NORMALIZER", bool
 )
 BUDGET_CONTROLLER_ENABLED: bool = _cfg(
-    "features.budget_controller", True, "TOKENPAK_BUDGET_CONTROLLER", bool  # Flipped 2026-04-13
+    "features.budget_controller",
+    True,
+    "TOKENPAK_BUDGET_CONTROLLER",
+    bool,  # Flipped 2026-04-13
 )
 REQUEST_LOGGER_ENABLED: bool = _cfg(
     "features.request_logger", False, "TOKENPAK_REQUEST_LOGGER", bool
@@ -322,11 +456,15 @@ try:
     _plugin_registry.discover()
     _loaded = _plugin_registry.get_plugins()
     if _loaded:
-        _logging.getLogger("tokenpak.proxy.config").info("Plugin system: %d plugin(s) loaded", len(_loaded))
+        _logging.getLogger("tokenpak.proxy.config").info(
+            "Plugin system: %d plugin(s) loaded", len(_loaded)
+        )
     else:
         _logging.getLogger("tokenpak.proxy.config").info("Plugin system: no plugins configured")
 except Exception as _plugin_init_err:
-    _logging.getLogger("tokenpak.proxy.config").warning("Plugin system init failed (disabled): %s", _plugin_init_err)
+    _logging.getLogger("tokenpak.proxy.config").warning(
+        "Plugin system init failed (disabled): %s", _plugin_init_err
+    )
     _plugin_registry = None
 
 
@@ -339,7 +477,9 @@ if CACHE_REGISTRY_ENABLED:
         _cache_registry = CacheRegistry()
         _logging.getLogger("tokenpak.proxy.config").info("Cache registry initialized")
     except Exception as _cr_init_err:
-        _logging.getLogger("tokenpak.proxy.config").warning("Cache registry init failed: %s", _cr_init_err)
+        _logging.getLogger("tokenpak.proxy.config").warning(
+            "Cache registry init failed: %s", _cr_init_err
+        )
         CACHE_REGISTRY_ENABLED = False
 
 # Upstream
@@ -352,9 +492,10 @@ QUERY_EXPANSION_ENABLED: bool = _cfg(
 # Legacy pool manager — only used by the monolith proxy.py.
 # The modular proxy uses httpx via connection_pool.py.
 # Lazy-init to avoid creating TCP connections on module import.
-_POOL_MANAGER = None
+_POOL_MANAGER: Optional[urllib3.PoolManager] = None
 
-def get_pool_manager():
+
+def get_pool_manager() -> urllib3.PoolManager:
     """Get or create the urllib3 pool manager (lazy init)."""
     global _POOL_MANAGER
     if _POOL_MANAGER is None:
@@ -366,6 +507,7 @@ def get_pool_manager():
             cert_reqs="CERT_REQUIRED",
         )
     return _POOL_MANAGER
+
 
 # Validation gate
 VALIDATION_GATE_ENABLED: bool = _cfg(
@@ -417,8 +559,8 @@ TERM_RESOLVER_MAX_BYTES: int = _cfg(
     "term_resolver.max_bytes", 200, "TOKENPAK_TERM_RESOLVER_MAX_BYTES", int
 )
 
-_COMPACT_CACHE: dict = {}
-_COMPACT_CACHE_ORDER: list = []
+_COMPACT_CACHE: dict[str, str] = {}
+_COMPACT_CACHE_ORDER: list[str] = []
 
 ADAPTER_REGISTRY = build_default_registry()
 
@@ -440,6 +582,7 @@ def _load_tokenpak_upstream_overrides() -> Dict[str, str]:
         # Post-migration: provider mirrors live in config.yaml now
         try:
             from tokenpak.core.config_loader import load_config
+
             cfg = load_config() or {}
         except ImportError:
             return {}
@@ -564,6 +707,7 @@ PROVIDER_DISPLAY = get_provider_display_list(ADAPTER_REGISTRY, CUSTOM_PROVIDERS)
 # ProxyConfig — convenience wrapper around module-level settings
 # ---------------------------------------------------------------------------
 
+
 class ProxyConfig:
     """
     Read-only configuration object for the TokenPak proxy.
@@ -575,7 +719,7 @@ class ProxyConfig:
         print(cfg.port, cfg.compilation_mode)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.port: int = PROXY_PORT
         self.listen_address: str = LISTEN_ADDRESS
         self.compilation_mode: str = COMPILATION_MODE

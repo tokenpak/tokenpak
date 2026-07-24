@@ -101,7 +101,5 @@ def test_user_install_detection(monkeypatch, tmp_path):
     )
     assert _cli_core._tokenpak_is_user_install() is True
 
-    monkeypatch.setattr(
-        _tp, "__file__", "/usr/lib/python3/dist-packages/tokenpak/__init__.py"
-    )
+    monkeypatch.setattr(_tp, "__file__", "/usr/lib/python3/dist-packages/tokenpak/__init__.py")
     assert _cli_core._tokenpak_is_user_install() is False

@@ -143,7 +143,9 @@ def test_companion_guide_permission_tier_fleet_passes(tmp_path):
         ),
     )
     res = _run_tree(tmp_path)
-    assert res.returncode == 0, f"companion guide permission-tier fleet usage must pass:\n{res.stdout}"
+    assert res.returncode == 0, (
+        f"companion guide permission-tier fleet usage must pass:\n{res.stdout}"
+    )
 
 
 def test_top_level_tests_dir_excluded(tmp_path):
@@ -376,7 +378,9 @@ def test_non_apache_license_section_fails(tmp_path):
     # other SPDX identifiers is a separate Suki/Kevin policy decision.)
     _write(tmp_path, "tokenpak/_meta/note.md", "see MIT §6 for the clause\n")
     res = _run_tree(tmp_path)
-    assert res.returncode == 1, "non-Apache license-section citation must fail (Apache-only allowlist)"
+    assert res.returncode == 1, (
+        "non-Apache license-section citation must fail (Apache-only allowlist)"
+    )
 
 
 def test_pattern_register_parity_with_delta_gate():
@@ -415,7 +419,6 @@ def test_pattern_register_parity_with_delta_gate():
     )
 
 
-
 # Vault-path leak pattern (preserved from public PR #251 — must not regress).
 def test_internal_vault_path_leak_fails(tmp_path):
     # Internal vault paths (~/vault/<NN>_<FOLDER>) must not leak into shipped
@@ -434,9 +437,7 @@ def test_internal_vault_path_leak_fails(tmp_path):
 def test_internal_vault_path_various_numbered_folders_fail(tmp_path):
     # Any two-digit numbered top-level vault folder is internal: 00_kevin,
     # 06_RUNTIME, 03_AGENT_PACKS, ... — all caught by the single path pattern.
-    for i, ref in enumerate(
-        ("~/vault/00_kevin/y.md", "~/vault/06_RUNTIME/scripts/z.sh")
-    ):
+    for i, ref in enumerate(("~/vault/00_kevin/y.md", "~/vault/06_RUNTIME/scripts/z.sh")):
         _write(tmp_path, f"tokenpak/core/v{i}.py", f"# see {ref}\n")
     res = _run_tree(tmp_path)
     assert res.returncode == 1, "all numbered vault folders must fail the gate"
@@ -458,6 +459,4 @@ def test_vault_path_no_false_positive_on_user_surfaces(tmp_path):
         "SUB = '01_PROJECTS'\n",
     )
     res = _run_tree(tmp_path)
-    assert res.returncode == 0, (
-        f"narrow vault pattern must not false-positive:\n{res.stdout}"
-    )
+    assert res.returncode == 0, f"narrow vault pattern must not false-positive:\n{res.stdout}"

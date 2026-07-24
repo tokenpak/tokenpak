@@ -11,6 +11,7 @@ Provides:
 The A3 wire-up task supplies the runtime db_path and session dict; these
 functions accept them as parameters to keep unit tests side-effect-free.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -51,7 +52,8 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
         # Overall stats: cache reads are observed regardless of origin; savings
         # are attributed only to proxy-owned cache markers.  unknown → no
         # tokenpak credit (conservative).
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT
                 COUNT(*) as total_requests,
                 SUM(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END) as cache_hits,
@@ -62,7 +64,9 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
                 COALESCE(SUM(CASE WHEN {origin_expr} = 'unknown' THEN cache_read_tokens ELSE 0 END), 0) as cache_read_unknown
             FROM requests
             WHERE timestamp >= ?
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
         overall = cur.fetchone()
         conn.close()
 
@@ -77,8 +81,8 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
             "cache_read_tokens": overall[2] or 0,
             "cache_creation_tokens": overall[3] or 0,
             "cache_read_by_origin": {
-                "client":  overall[4] or 0,
-                "proxy":   overall[5] or 0,
+                "client": overall[4] or 0,
+                "proxy": overall[5] or 0,
                 "unknown": overall[6] or 0,
             },
             "per_provider": {},
@@ -154,18 +158,14 @@ def _build_cache_stats_payload(
         "miss_reasons": miss_reasons,
         "token_cache_hits": token_cache_hits,
         "token_cache_misses": token_cache_misses,
-
         # Per-provider session stats
         "session_by_provider": session_by_provider,
-
         # Time-windowed stats
         "last_1h": stats_1h,
         "last_24h": stats_24h,
         "last_7d": stats_7d,
-
         # Active providers (for quick reference)
         "active_providers": list(cache_by_provider.keys()) if cache_by_provider else [],
-
         # Timestamp
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from .cache_key import extract_query_text, is_streaming, make_scope_key
 from .cache_policy import get_cache_policy_for_route, is_cache_stage_enabled
@@ -63,20 +63,24 @@ _CACHED_RESPONSE_ATTR = "_tip04_cached_response"
 
 
 def _get_cache_result(ctx: OptimizationContext) -> Optional[CacheStageTrace]:
-    return getattr(ctx, _CACHE_RESULT_ATTR, None)
+    result = getattr(ctx, _CACHE_RESULT_ATTR, None)
+    return result if isinstance(result, CacheStageTrace) else None
 
 
 def _set_cache_result(ctx: OptimizationContext, result: CacheStageTrace) -> None:
     object.__setattr__(ctx, _CACHE_RESULT_ATTR, result)
 
 
-def _set_cached_response(ctx: OptimizationContext, response: dict) -> None:
+def _set_cached_response(ctx: OptimizationContext, response: dict[str, object]) -> None:
     object.__setattr__(ctx, _CACHED_RESPONSE_ATTR, response)
 
 
-def get_cached_response(ctx: OptimizationContext) -> Optional[dict]:
+def get_cached_response(ctx: OptimizationContext) -> Optional[dict[str, object]]:
     """Return the cached response dict set by ``apply()`` on a hit, or None."""
-    return getattr(ctx, _CACHED_RESPONSE_ATTR, None)
+    response = getattr(ctx, _CACHED_RESPONSE_ATTR, None)
+    if not isinstance(response, dict) or not all(isinstance(key, str) for key in response):
+        return None
+    return cast(dict[str, object], response)
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +98,7 @@ class SemanticCacheStage:
     """
 
     name: str = "semantic_cache"
-    required_capabilities: frozenset = frozenset({_TIP_CACHE_SEMANTIC_V1})
+    required_capabilities: frozenset[str] = frozenset({_TIP_CACHE_SEMANTIC_V1})
 
     def __init__(self, env: Optional[Dict[str, str]] = None) -> None:
         self._env = env
@@ -120,7 +124,7 @@ class SemanticCacheStage:
 
         # 2. Adapter capability gate
         adapter = ctx.adapter
-        caps: frozenset = frozenset()
+        caps: frozenset[str] = frozenset()
         if adapter is not None:
             caps = getattr(adapter, "capabilities", frozenset()) or frozenset()
         if _TIP_CACHE_SEMANTIC_V1 not in caps:
@@ -188,13 +192,17 @@ class SemanticCacheStage:
                 if policy.allow_response_reuse and lookup.entry is not None:
                     # entry.response is raw bytes — deserialize to dict
                     try:
-                        cached_dict = json.loads(lookup.entry.response)
+                        decoded = json.loads(lookup.entry.response)
+                        cached_dict = (
+                            cast(dict[str, object], decoded) if isinstance(decoded, dict) else {}
+                        )
                     except Exception:
                         cached_dict = {}
                     _set_cached_response(ctx, cached_dict)
                     _log.info(
                         "[SemanticCacheStage] response-reuse HIT route=%s sim=%.3f",
-                        ctx.route, lookup.similarity,
+                        ctx.route,
+                        lookup.similarity,
                     )
                 elif not policy.allow_response_reuse:
                     # Context-reuse only: hit in cache but won't skip upstream.
@@ -207,7 +215,9 @@ class SemanticCacheStage:
                 trace.miss_reason = _classify_miss_reason(lookup, policy)
                 _log.debug(
                     "[SemanticCacheStage] MISS route=%s reason=%s sim=%.3f",
-                    ctx.route, trace.miss_reason, lookup.similarity,
+                    ctx.route,
+                    trace.miss_reason,
+                    lookup.similarity,
                 )
 
         except Exception as exc:
@@ -218,7 +228,7 @@ class SemanticCacheStage:
         _set_cache_result(ctx, trace)
         return ctx
 
-    def record(self, ctx: OptimizationContext, response: dict) -> None:
+    def record(self, ctx: OptimizationContext, response: dict[str, object]) -> None:
         """Store *response* in the cache for *ctx*'s query (call after upstream).
 
         Only records when the route's policy allows semantic caching and no
@@ -247,7 +257,8 @@ class SemanticCacheStage:
                 cache_result.recorded = True
             _log.debug(
                 "[SemanticCacheStage] recorded response for route=%s scope_prefix=%s",
-                ctx.route, scope_key[:8],
+                ctx.route,
+                scope_key[:8],
             )
         except Exception as exc:
             _log.warning("[SemanticCacheStage] record error: %s", exc)

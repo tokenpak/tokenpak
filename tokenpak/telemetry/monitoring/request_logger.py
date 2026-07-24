@@ -30,8 +30,9 @@ import queue
 import threading
 import uuid
 from datetime import datetime, timezone
+from io import TextIOWrapper
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Protocol
 
 # ---------------------------------------------------------------------------
 # Module-level standard logger (for internal errors only)
@@ -53,6 +54,12 @@ LEVEL_WARN = "warn"
 _LEVEL_ORDER = {LEVEL_DEBUG: 0, LEVEL_INFO: 1, LEVEL_WARN: 2}
 
 
+class _Writer(Protocol):
+    def write(self, line: str) -> None: ...
+
+    def close(self) -> None: ...
+
+
 # ---------------------------------------------------------------------------
 # Config helpers
 # ---------------------------------------------------------------------------
@@ -67,8 +74,12 @@ def _load_logging_config() -> Dict[str, Any]:
         "level": get("logging.level", LEVEL_INFO, "TOKENPAK_LOG_LEVEL", str).lower(),
         "destination": get("logging.destination", "file", "TOKENPAK_LOG_DESTINATION", str).lower(),
         "retention_days": get("logging.retention_days", 30, "TOKENPAK_LOG_RETENTION_DAYS", int),
-        "include_request_body": get("logging.include_request_body", False, "TOKENPAK_LOG_REQUEST_BODY", bool),
-        "include_response_body": get("logging.include_response_body", False, "TOKENPAK_LOG_RESPONSE_BODY", bool),
+        "include_request_body": get(
+            "logging.include_request_body", False, "TOKENPAK_LOG_REQUEST_BODY", bool
+        ),
+        "include_response_body": get(
+            "logging.include_response_body", False, "TOKENPAK_LOG_RESPONSE_BODY", bool
+        ),
     }
     return defaults
 
@@ -184,7 +195,7 @@ class _FileWriter:
         self._retention_days = retention_days
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._current_date: str = ""
-        self._fh = None
+        self._fh: TextIOWrapper | None = None
         self._lock = threading.Lock()
 
     def _rotate(self, today: str) -> None:
@@ -204,7 +215,10 @@ class _FileWriter:
                 self._rotate(today)
                 self._prune_old_logs()
             try:
-                self._fh.write(line + "\n")  # type: ignore[union-attr]
+                file_handle = self._fh
+                if file_handle is None:
+                    raise RuntimeError("request log file is not open")
+                file_handle.write(line + "\n")
             except Exception as exc:
                 _log.warning("request_logger: file write failed: %s", exc)
 
@@ -314,11 +328,11 @@ class RequestLogger:
         self._retention_days: int = int(self._cfg.get("retention_days", 30))
 
         self._writer = self._build_writer()
-        self._queue: queue.Queue = queue.Queue(maxsize=10_000)
+        self._queue: queue.Queue[RequestLogRecord | None] = queue.Queue(maxsize=10_000)
         self._thread = threading.Thread(target=self._worker, daemon=True, name="tokenpak-logger")
         self._thread.start()
 
-    def _build_writer(self):
+    def _build_writer(self) -> _Writer:
         if self._destination == "stdout":
             return _StdoutWriter()
         elif self._destination == "syslog":
@@ -407,7 +421,7 @@ class RequestLogger:
             # Drop silently — logging must never block the proxy
             pass
 
-    def log_dict(self, level: str = LEVEL_INFO, **kwargs) -> None:
+    def log_dict(self, level: str = LEVEL_INFO, **kwargs: Any) -> None:
         """Convenience: log an arbitrary dict (debug/info/warn)."""
         record = RequestLogRecord(
             request_id=kwargs.pop("request_id", str(uuid.uuid4())),

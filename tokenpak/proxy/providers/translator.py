@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -633,7 +633,7 @@ def _openai_to_anthropic_response(data: Dict[str, Any]) -> Dict[str, Any]:
 # Translator dispatch tables
 # ---------------------------------------------------------------------------
 
-_REQUEST_TRANSLATORS = {
+_REQUEST_TRANSLATORS: Dict[Tuple[str, str], Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     ("anthropic", "openai"): _anthropic_to_openai_request,
     ("openai", "anthropic"): _openai_to_anthropic_request,
     ("anthropic", "google"): _anthropic_to_google_request,

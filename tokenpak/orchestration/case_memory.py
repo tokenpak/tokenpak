@@ -81,9 +81,7 @@ class CaseRecord:
     entities: list[str] = field(
         default_factory=list
     )  # search terms: ["BM25", "vault search", "embeddings"]
-    source_blocks: list[str] = field(
-        default_factory=list
-    )  # vault block IDs that informed this
+    source_blocks: list[str] = field(default_factory=list)  # vault block IDs that informed this
     confidence: float = 0.7  # 0.0-1.0, updated by learning loop
     status: str = "active"  # "active" | "superseded" | "rejected" | "experimental"
     superseded_by: Optional[str] = None  # case_id of replacement (if status=superseded)
@@ -96,14 +94,10 @@ class CaseRecord:
     def __post_init__(self) -> None:
         # Validate case_type
         if self.case_type not in CASE_TYPES:
-            raise ValueError(
-                f"case_type must be one of {CASE_TYPES}, got {self.case_type}"
-            )
+            raise ValueError(f"case_type must be one of {CASE_TYPES}, got {self.case_type}")
         # Validate status
         if self.status not in CASE_STATUSES:
-            raise ValueError(
-                f"status must be one of {CASE_STATUSES}, got {self.status}"
-            )
+            raise ValueError(f"status must be one of {CASE_STATUSES}, got {self.status}")
         # Bound confidence
         self.confidence = float(max(_CONF_MIN, min(_CONF_MAX, self.confidence)))
 
@@ -167,9 +161,7 @@ def _load_cases(path: Path) -> dict[str, CaseRecord]:
 def _save_cases(cases: dict[str, CaseRecord], path: Path) -> None:
     """Persist case memory to JSON file."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({k: _case_to_dict(v) for k, v in cases.items()}, indent=2)
-    )
+    path.write_text(json.dumps({k: _case_to_dict(v) for k, v in cases.items()}, indent=2))
 
 
 # ---------------------------------------------------------------------------
@@ -360,9 +352,7 @@ def _get_db() -> CaseMemoryDB:
     return _default_db
 
 
-def search(
-    query: str, case_type: Optional[str] = None, top_k: int = 5
-) -> list[CaseRecord]:
+def search(query: str, case_type: Optional[str] = None, top_k: int = 5) -> list[CaseRecord]:
     """Search the default case memory DB."""
     return _get_db().search(query, case_type, top_k)
 

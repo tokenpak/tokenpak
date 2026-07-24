@@ -146,20 +146,14 @@ def test_truncated_upstream_json_is_retryable_before_output() -> None:
 
 
 def test_extract_tip_plan_id_prefers_headers_then_body() -> None:
+    assert extract_tip_plan_id({"X-TIP-Plan-ID": "from-header"}, b"{}", "req") == "from-header"
     assert (
-        extract_tip_plan_id({"X-TIP-Plan-ID": "from-header"}, b"{}", "req")
-        == "from-header"
-    )
-    assert (
-        extract_tip_plan_id({}, b'{"metadata":{"tip_plan_id":"from-body"}}', "req")
-        == "from-body"
+        extract_tip_plan_id({}, b'{"metadata":{"tip_plan_id":"from-body"}}', "req") == "from-body"
     )
     assert extract_tip_plan_id({}, b"{}", "req") == "tip-plan-req"
 
 
-def test_failed_request_metadata_persists_redacted_recovery_record(
-    tmp_path, monkeypatch
-) -> None:
+def test_failed_request_metadata_persists_redacted_recovery_record(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TOKENPAK_UPSTREAM_RECOVERY_DIR", str(tmp_path))
 
     path = persist_failed_request_metadata(

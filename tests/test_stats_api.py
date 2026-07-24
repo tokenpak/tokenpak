@@ -1,4 +1,5 @@
 """Tests for tokenpak.proxy.stats_api module."""
+
 import pytest
 
 from tokenpak.proxy.stats_api import StatsAPI
@@ -13,7 +14,7 @@ class TestStatsAPI:
     @pytest.mark.quick
     def test_stats_api_callable(self):
         api = StatsAPI()
-        assert hasattr(api, '__class__')
+        assert hasattr(api, "__class__")
 
     @pytest.mark.quick
     def test_stats_api_not_none(self):

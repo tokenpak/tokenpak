@@ -96,58 +96,29 @@ def cmd_doctor(args):
 
         resp = _urlreq.urlopen(f"http://127.0.0.1:{proxy_port}/health", timeout=2)
         proxy_health = json.loads(resp.read())
-        mode = proxy_health.get("compilation_mode", "unknown")
-        reqs = proxy_health.get("stats", {}).get("requests", 0)
-        print(Colors.ok(f"Proxy reachable     port {proxy_port} — {mode} mode, {reqs} requests"))
-        results["pass"] += 1
-
-        # Feature checks
-        for feat, key in [
-            ("Skeleton", "skeleton"),
-            ("Shadow reader", "shadow_reader"),
-            ("Canon", "canon"),
-        ]:
-            data = proxy_health.get(key, {})
-            enabled = data.get("enabled", False) if isinstance(data, dict) else bool(data)
-            if enabled:
-                print(Colors.ok(f"{feat:<20s}enabled"))
-                results["pass"] += 1
-            else:
-                print(Colors.warn(f"{feat:<20s}disabled"))
-                results["warn"] += 1
-
-        capsule = proxy_health.get("capsule_available", False)
-        if not capsule:
-            print(Colors.warn(f"{'Capsule builder':<20s}disabled (set TOKENPAK_CAPSULE_BUILDER=1)"))
-            results["warn"] += 1
-        else:
-            print(Colors.ok(f"{'Capsule builder':<20s}enabled"))
-            results["pass"] += 1
-
-        term = proxy_health.get("term_resolver", {})
-        if not term.get("enabled"):
-            print(
-                Colors.warn(
-                    f"{'Term resolver':<20s}disabled (set TOKENPAK_TERM_RESOLVER_ENABLED=1)"
-                )
+        status = proxy_health.get("status", "unknown")
+        reqs = proxy_health.get("requests_total")
+        errors = proxy_health.get("requests_errors")
+        reqs_text = str(reqs) if reqs is not None else "unavailable"
+        errors_text = str(errors) if errors is not None else "unavailable"
+        print(
+            Colors.ok(
+                f"Proxy reachable     port {proxy_port} — status={status}, "
+                f"{reqs_text} requests, {errors_text} errors"
             )
-            results["warn"] += 1
-        else:
-            print(Colors.ok(f"{'Term resolver':<20s}enabled"))
-            results["pass"] += 1
+        )
+        results["pass"] += 1
 
         # Circuit breakers
         cbs = proxy_health.get("circuit_breakers", {})
-        for name, cb in cbs.items():
-            if cb.get("open"):
-                print(
-                    Colors.fail(
-                        f"Circuit breaker     {name} — OPEN ({cb.get('failures', 0)} failures)"
-                    )
-                )
+        providers = cbs.get("providers", {}) if isinstance(cbs, dict) else {}
+        for name, cb in providers.items():
+            state = cb.get("state", "unknown") if isinstance(cb, dict) else "unknown"
+            if state in ("open", "half_open"):
+                print(Colors.fail(f"Circuit breaker     {name} — {state.upper()}"))
                 results["fail"] += 1
             else:
-                print(Colors.ok(f"Circuit breaker     {name} — closed"))
+                print(Colors.ok(f"Circuit breaker     {name} — {state}"))
                 results["pass"] += 1
 
     except Exception:

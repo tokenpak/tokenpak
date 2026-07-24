@@ -18,7 +18,8 @@ from tokenpak.proxy.spend_guard.rolling_caps import (
 
 def default_cfg(**overrides) -> RollingCapsConfig:
     base = RollingCapsConfig(
-        enabled=True, window_seconds=3600,
+        enabled=True,
+        window_seconds=3600,
         per_agent_max_cost_usd=20.0,
         per_agent_max_tokens_total=5_000_000,
         per_agent_max_cache_read_tokens=4_000_000,
@@ -59,13 +60,21 @@ def test_rolling_cap_2026_05_15_overnight_regression(tmp_monitor_db):
         )
         if breach is not None:
             blocked_at = cycle
-            print(f"  BLOCKED at cycle {cycle}: {breach.cap_dimension} "
-                  f"(used={breach.used:.2f}, cap={breach.cap:.2f})")
+            print(
+                f"  BLOCKED at cycle {cycle}: {breach.cap_dimension} "
+                f"(used={breach.used:.2f}, cap={breach.cap:.2f})"
+            )
             break
         # Not blocked yet — simulate the cycle completing + inserting its row
-        insert_request(tmp_monitor_db, sid, cost=8.0,
-                       input_tokens=865_000, output_tokens=15_000,
-                       cache_read_tokens=5_000_000, seconds_ago=60 - cycle)
+        insert_request(
+            tmp_monitor_db,
+            sid,
+            cost=8.0,
+            input_tokens=865_000,
+            output_tokens=15_000,
+            cache_read_tokens=5_000_000,
+            seconds_ago=60 - cycle,
+        )
     assert blocked_at is not None, "rolling cap should have fired within 5 cycles"
     # Per packet pass criteria: block by cycle ~3
     assert blocked_at <= 3, (
@@ -99,17 +108,24 @@ def test_rolling_cap_2026_05_13_burst_regression(tmp_monitor_db):
         )
         if breach is not None:
             blocked_at = cycle
-            print(f"  BLOCKED at cycle {cycle}: {breach.cap_dimension} "
-                  f"(used={breach.used:.2f}, cap={breach.cap:.2f}, "
-                  f"would_add={breach.projected_add:.2f})")
+            print(
+                f"  BLOCKED at cycle {cycle}: {breach.cap_dimension} "
+                f"(used={breach.used:.2f}, cap={breach.cap:.2f}, "
+                f"would_add={breach.projected_add:.2f})"
+            )
             break
-        insert_request(tmp_monitor_db, sid, cost=35.0,
-                       input_tokens=2_000_000, output_tokens=50_000,
-                       cache_read_tokens=8_000_000, seconds_ago=60 - cycle)
+        insert_request(
+            tmp_monitor_db,
+            sid,
+            cost=35.0,
+            input_tokens=2_000_000,
+            output_tokens=50_000,
+            cache_read_tokens=8_000_000,
+            seconds_ago=60 - cycle,
+        )
     assert blocked_at is not None
     assert blocked_at <= 2, (
-        f"2026-05-13 burst pattern should block within 2 cycles; "
-        f"blocked at cycle {blocked_at}"
+        f"2026-05-13 burst pattern should block within 2 cycles; blocked at cycle {blocked_at}"
     )
 
 
@@ -137,6 +153,7 @@ def test_rolling_cap_supplements_per_session_cap(tmp_monitor_db):
     This test verifies the rolling cap module never touches that field.
     """
     from tokenpak.proxy.spend_guard.policy import SpendGuardConfig
+
     cfg = SpendGuardConfig()
     # Default value should be the legacy 0.0 (disabled by default), and
     # the new rolling-cap defaults should be live and non-zero.

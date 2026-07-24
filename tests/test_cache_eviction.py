@@ -82,7 +82,7 @@ class TestCacheTTLExpiry:
         cache.set("slow_key", "value", ttl_seconds=60.0)
 
         time.sleep(0.1)
-        assert cache.get("fast_key") is None   # expired
+        assert cache.get("fast_key") is None  # expired
         assert cache.get("slow_key") == "value"  # still valid
 
     def test_cache_ttl_eviction_counter(self):
@@ -99,8 +99,7 @@ class TestCacheTTLExpiry:
         cache.set("key", "value")
         # No time.sleep needed — just verify is_expired() is False
         entry = CacheEntry(
-            key="k", value="v", created_at=0.0, last_accessed=0.0,
-            ttl_seconds=None, size_bytes=10
+            key="k", value="v", created_at=0.0, last_accessed=0.0, ttl_seconds=None, size_bytes=10
         )
         assert not entry.is_expired()
 
@@ -122,12 +121,12 @@ class TestCacheMetrics:
         """hit_rate = hits / (hits + misses)."""
         cache = LRUCache(max_size_mb=10.0, ttl_seconds=None)
         cache.set("k", "v")
-        cache.get("k")   # hit
-        cache.get("k")   # hit
-        cache.get("x")   # miss
+        cache.get("k")  # hit
+        cache.get("k")  # hit
+        cache.get("x")  # miss
         assert cache.metrics.hits == 2
         assert cache.metrics.misses == 1
-        assert abs(cache.metrics.hit_rate - 2/3) < 0.01
+        assert abs(cache.metrics.hit_rate - 2 / 3) < 0.01
 
     def test_metrics_dict_keys(self):
         """metrics_dict() returns expected keys."""

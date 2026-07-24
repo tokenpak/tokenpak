@@ -172,10 +172,25 @@ paths:
       operationId: getHealth
       summary: Proxy health check
       description: |
-        Returns the current health of the proxy, including vault index state,
-        router status, circuit breaker state, and session stats.
-        Response is cached for 1 second to reduce overhead.
+        Returns an uncached operational snapshot. Add `?deep=true` for
+        provider, process-memory, and disk diagnostics. Optional measurements
+        are reported as unavailable, never as an invented zero. Loopback
+        clients require no proxy credential. Non-loopback clients must set
+        `TOKENPAK_PROXY_AUTH_TOKEN` on the proxy and send the matching value as
+        `Authorization: Bearer <token>`; when the setting is absent,
+        non-loopback access fails closed with 403.
       tags: [health]
+      security:
+        - ProxyBearerAuth: []
+        - {}
+      parameters:
+        - name: deep
+          in: query
+          required: false
+          description: Include additive provider, process-memory, and disk diagnostics.
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: Proxy is running
@@ -185,20 +200,97 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
               example:
                 status: ok
-                compilation_mode: hybrid
-                vault_index:
-                  available: true
-                  blocks: 2943
-                  path: /home/user/.tokenpak
-                router:
+                uptime_seconds: 3600
+                version: 1.14.0
+                requests_total: 42
+                requests_errors: 0
+                compression_ratio_avg: 0.72
+                is_degraded: false
+                is_shutting_down: false
+                in_flight_requests: 0
+                memory_guard:
+                  enabled: false
+                  state: disabled
+                  thread_alive: false
+                  callback_policy: disabled
+                  configuration:
+                    source: default
+                    mode: "off"
+                    plan_sha256: null
+                    managed_config_path: /home/user/.tokenpak/memory-optimization.json
+                    managed_file_present: false
+                    managed_file_ignored: false
+                    triggering_env: []
+                    warning: null
+                  callbacks:
+                    compact: false
+                    token: false
+                    semantic: false
+                admission:
+                  limit: 16
+                  available: 16
+                  rejected: 0
+                agent_concurrency:
                   enabled: true
-                budget:
-                  enabled: true
-                  total_tokens: 0
-                stats:
-                  requests: 42
-                  saved_tokens: 18500
+                  max_parallel_subagents: 2
+                  effective_cap: 2
+                  degraded_serial: false
+                  in_flight: 0
+                  queued: 0
+                  queue_depth_max: 14
+                  admitted_total: 0
+                  queued_total: 0
+                  rejected_queue_full: 0
+                  rejected_wait_timeout: 0
+                  source: config
+                timestamp: "2026-07-23T19:10:00Z"
+                connection_pool:
+                  http2_enabled: true
+                  active_providers: []
+                  total_requests: 0
+                  reused_connections: 0
+                  new_connections: 0
                   errors: 0
+                  evicted_clients: 0
+                  reuse_rate: 0.0
+                  cleanup_pending_close: 0
+                  cleanup_queued: 0
+                  cleanup_in_progress: 0
+                  cleanup_retrying: 0
+                  cleanup_failures_total: 0
+                  cleanup_worker_start_failures_total: 0
+                  cleanup_completed_total: 0
+                  cleanup_oldest_pending_seconds: 0.0
+                  cleanup_workers_alive: 0
+                  client_slots_used: 0
+                  client_slots_max: 64
+                  client_capacity_rejections_total: 0
+                  cleanup_saturated: false
+                  retired_pending_close: 0
+                circuit_breakers:
+                  enabled: true
+                  any_open: false
+                  providers: {}
+        "401":
+          description: Non-loopback proxy authorization is configured, but the Bearer token is missing, malformed, or incorrect.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  type: unauthorized
+                  message: invalid or missing proxy auth token
+        "403":
+          description: Non-loopback access is forbidden because TOKENPAK_PROXY_AUTH_TOKEN is not configured on the proxy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  type: forbidden
+                  message: non-localhost access requires TOKENPAK_PROXY_AUTH_TOKEN
 
   # ─── Stats ────────────────────────────────────────────────────────────────
 
@@ -507,6 +599,15 @@ paths:
 # ─── Components ─────────────────────────────────────────────────────────────
 
 components:
+  securitySchemes:
+    ProxyBearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Proxy-level token from `TOKENPAK_PROXY_AUTH_TOKEN`. Required only for
+        non-loopback clients. This credential is removed before upstream
+        forwarding and is distinct from provider credentials.
+
   schemas:
 
     # ── LLM passthrough schemas ──────────────────────────────────────────────
@@ -670,40 +771,587 @@ components:
 
     HealthResponse:
       type: object
+      additionalProperties: false
+      required:
+        - status
+        - uptime_seconds
+        - version
+        - requests_total
+        - requests_errors
+        - compression_ratio_avg
+        - is_degraded
+        - is_shutting_down
+        - in_flight_requests
+        - memory_guard
+        - admission
+        - agent_concurrency
+        - timestamp
+        - connection_pool
+        - circuit_breakers
       properties:
         status:
           type: string
-          example: ok
-        compilation_mode:
+          enum: [ok, degraded, shutting_down]
+        uptime_seconds:
+          type: integer
+        version:
           type: string
-          enum: [hybrid, compression-only, passthrough]
-        vault_index:
-          $ref: "#/components/schemas/VaultIndexSummary"
-        router:
-          type: object
-          properties:
-            enabled:
-              type: boolean
-        capsule_available:
+        requests_total:
+          type: integer
+        requests_errors:
+          type: integer
+        compression_ratio_avg:
+          type: number
+        is_degraded:
           type: boolean
-        budget:
-          type: object
-          properties:
-            enabled:
-              type: boolean
-            total_tokens:
-              type: integer
+        is_shutting_down:
+          type: boolean
+        in_flight_requests:
+          type: integer
+          minimum: 0
+        memory_guard:
+          $ref: "#/components/schemas/HealthMemoryGuard"
+        admission:
+          $ref: "#/components/schemas/HealthAdmission"
+        agent_concurrency:
+          $ref: "#/components/schemas/HealthAgentConcurrency"
+        timestamp:
+          type: string
+          format: date-time
+        connection_pool:
+          $ref: "#/components/schemas/HealthConnectionPool"
         circuit_breakers:
+          $ref: "#/components/schemas/HealthCircuitBreakers"
+        providers:
+          description: Present only with `deep=true`.
+          type: array
+          items:
+            $ref: "#/components/schemas/HealthProviderDiagnostic"
+        memory:
+          description: Present only with `deep=true`; unavailable measurements use null plus typed availability metadata.
+          $ref: "#/components/schemas/HealthMemoryMeasurement"
+        disk:
+          description: Present only with `deep=true`.
+          $ref: "#/components/schemas/HealthDiskMeasurement"
+
+    HealthMemoryGuard:
+      oneOf:
+        - $ref: "#/components/schemas/HealthMemoryGuardDisabled"
+        - $ref: "#/components/schemas/HealthMemoryGuardEnabled"
+
+    HealthMemoryGuardDisabled:
+      type: object
+      additionalProperties: false
+      required: [enabled, state, thread_alive, callback_policy, configuration, callbacks]
+      properties:
+        enabled:
+          const: false
+        state:
+          const: disabled
+        thread_alive:
+          const: false
+        callback_policy:
+          const: disabled
+        configuration:
+          $ref: "#/components/schemas/HealthMemoryGuardConfiguration"
+        callbacks:
+          $ref: "#/components/schemas/HealthMemoryGuardCallbacks"
+
+    HealthMemoryGuardEnabled:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - state
+        - thread_alive
+        - callback_policy
+        - configuration
+        - callbacks
+        - checks
+        - measurement_errors
+        - gc_runs
+        - trim_runs
+        - yellow_triggers
+        - red_triggers
+        - sys_low_triggers
+        - suppressed_actions
+        - observed_pressure_checks
+        - compact_evictions
+        - token_evictions
+        - semantic_evictions
+        - peak_rss_mb
+        - last_rss_mb
+        - last_sys_avail_mb
+        - last_level
+        - last_reclaimed_mb
+        - total_reclaimed_mb
+        - pressure_latched
+        - last_error
+        - measurement
+        - thread_ident
+        - stopping
+        - config
+      properties:
+        enabled:
+          const: true
+        state:
+          type: string
+          enum: [created, unsupported, running, start_failed, stopped, stop_timeout, degraded]
+        thread_alive:
+          type: boolean
+        callback_policy:
+          type: string
+          enum: [caller_supplied_eviction_callbacks, gc_trim_only_no_unbounded_disposable_proxy_cache]
+        configuration:
+          $ref: "#/components/schemas/HealthMemoryGuardConfiguration"
+        callbacks:
+          $ref: "#/components/schemas/HealthMemoryGuardCallbacks"
+        checks:
+          type: integer
+          minimum: 0
+        measurement_errors:
+          type: integer
+          minimum: 0
+        gc_runs:
+          type: integer
+          minimum: 0
+        trim_runs:
+          type: integer
+          minimum: 0
+        yellow_triggers:
+          type: integer
+          minimum: 0
+        red_triggers:
+          type: integer
+          minimum: 0
+        sys_low_triggers:
+          type: integer
+          minimum: 0
+        suppressed_actions:
+          type: integer
+          minimum: 0
+        observed_pressure_checks:
+          type: integer
+          minimum: 0
+        compact_evictions:
+          type: integer
+          minimum: 0
+        token_evictions:
+          type: integer
+          minimum: 0
+        semantic_evictions:
+          type: integer
+          minimum: 0
+        peak_rss_mb:
+          type: number
+          minimum: 0
+        last_rss_mb:
+          type: [number, "null"]
+          minimum: 0
+        last_sys_avail_mb:
+          type: [number, "null"]
+          minimum: 0
+        last_level:
+          type: string
+          enum: [UNKNOWN, GREEN, YELLOW, RED, RECOVERY]
+        last_reclaimed_mb:
+          type: number
+          minimum: 0
+        total_reclaimed_mb:
+          type: number
+          minimum: 0
+        pressure_latched:
+          type: boolean
+        last_error:
+          type: [string, "null"]
+        measurement:
+          $ref: "#/components/schemas/HealthMemoryMeasurementSupport"
+        thread_ident:
+          type: [integer, "null"]
+        stopping:
+          type: boolean
+        config:
+          $ref: "#/components/schemas/HealthMemoryGuardRuntimeConfig"
+
+    HealthMemoryGuardConfiguration:
+      type: object
+      additionalProperties: false
+      required:
+        - source
+        - mode
+        - plan_sha256
+        - managed_config_path
+        - managed_file_present
+        - managed_file_ignored
+        - triggering_env
+        - warning
+      properties:
+        source:
+          type: string
+          enum: [default, environment, managed, managed_error]
+        mode:
+          type: string
+          enum: ["off", observe, auto]
+        plan_sha256:
+          type: [string, "null"]
+        managed_config_path:
+          type: [string, "null"]
+        managed_file_present:
+          type: boolean
+        managed_file_ignored:
+          type: boolean
+        triggering_env:
+          type: array
+          items:
+            type: string
+        warning:
+          type: [string, "null"]
+
+    HealthMemoryGuardCallbacks:
+      type: object
+      additionalProperties: false
+      required: [compact, token, semantic]
+      properties:
+        compact:
+          type: boolean
+        token:
+          type: boolean
+        semantic:
+          type: boolean
+
+    HealthMemoryMeasurementSupport:
+      type: object
+      additionalProperties: false
+      required: [supported, platform, source, reason]
+      properties:
+        supported:
+          type: boolean
+        platform:
+          type: string
+        source:
+          type: [string, "null"]
+          enum: [procfs, psutil, null]
+        reason:
+          type: [string, "null"]
+
+    HealthMemoryGuardRuntimeConfig:
+      type: object
+      additionalProperties: false
+      required: [action_mode, target_mb, ceiling_mb, hysteresis_mb, sys_low_mb, check_interval_secs, cooldown_secs]
+      properties:
+        action_mode:
+          type: string
+          enum: [observe, auto]
+        target_mb:
+          type: integer
+          minimum: 0
+        ceiling_mb:
+          type: integer
+          minimum: 0
+        hysteresis_mb:
+          type: integer
+          minimum: 0
+        sys_low_mb:
+          type: integer
+          minimum: 0
+        check_interval_secs:
+          type: number
+          minimum: 0
+        cooldown_secs:
+          type: number
+          minimum: 0
+
+    HealthAdmission:
+      type: object
+      additionalProperties: false
+      required: [limit, available, rejected]
+      properties:
+        limit:
+          type: integer
+          minimum: 0
+        available:
+          type: integer
+          minimum: 0
+        rejected:
+          type: integer
+          minimum: 0
+
+    HealthAgentConcurrency:
+      oneOf:
+        - $ref: "#/components/schemas/HealthAgentConcurrencyDisabled"
+        - $ref: "#/components/schemas/HealthAgentConcurrencyEnabled"
+
+    HealthAgentConcurrencyDisabled:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled:
+          const: false
+
+    HealthAgentConcurrencyEnabled:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - max_parallel_subagents
+        - effective_cap
+        - degraded_serial
+        - in_flight
+        - queued
+        - queue_depth_max
+        - admitted_total
+        - queued_total
+        - rejected_queue_full
+        - rejected_wait_timeout
+        - source
+      properties:
+        enabled:
+          const: true
+        max_parallel_subagents:
+          type: integer
+          minimum: 1
+        effective_cap:
+          type: integer
+          minimum: 1
+        degraded_serial:
+          type: boolean
+        in_flight:
+          type: integer
+          minimum: 0
+        queued:
+          type: integer
+          minimum: 0
+        queue_depth_max:
+          type: integer
+          minimum: 0
+        admitted_total:
+          type: integer
+          minimum: 0
+        queued_total:
+          type: integer
+          minimum: 0
+        rejected_queue_full:
+          type: integer
+          minimum: 0
+        rejected_wait_timeout:
+          type: integer
+          minimum: 0
+        source:
+          type: string
+
+    HealthConnectionPool:
+      type: object
+      additionalProperties: false
+      required:
+        - http2_enabled
+        - active_providers
+        - total_requests
+        - reused_connections
+        - new_connections
+        - errors
+        - evicted_clients
+        - reuse_rate
+        - cleanup_pending_close
+        - cleanup_queued
+        - cleanup_in_progress
+        - cleanup_retrying
+        - cleanup_failures_total
+        - cleanup_worker_start_failures_total
+        - cleanup_completed_total
+        - cleanup_oldest_pending_seconds
+        - cleanup_workers_alive
+        - client_slots_used
+        - client_slots_max
+        - client_capacity_rejections_total
+        - cleanup_saturated
+        - retired_pending_close
+      properties:
+        http2_enabled:
+          type: boolean
+        active_providers:
+          type: array
+          items:
+            type: string
+        total_requests:
+          type: integer
+          minimum: 0
+        reused_connections:
+          type: integer
+          minimum: 0
+        new_connections:
+          type: integer
+          minimum: 0
+        errors:
+          type: integer
+          minimum: 0
+        evicted_clients:
+          type: integer
+          minimum: 0
+        reuse_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+        cleanup_pending_close:
+          type: integer
+          minimum: 0
+        cleanup_queued:
+          type: integer
+          minimum: 0
+        cleanup_in_progress:
+          type: integer
+          minimum: 0
+        cleanup_retrying:
+          type: integer
+          minimum: 0
+        cleanup_failures_total:
+          type: integer
+          minimum: 0
+        cleanup_worker_start_failures_total:
+          type: integer
+          minimum: 0
+        cleanup_completed_total:
+          type: integer
+          minimum: 0
+        cleanup_oldest_pending_seconds:
+          type: number
+          minimum: 0
+        cleanup_workers_alive:
+          type: integer
+          minimum: 0
+        client_slots_used:
+          type: integer
+          minimum: 0
+        client_slots_max:
+          type: integer
+          minimum: 0
+        client_capacity_rejections_total:
+          type: integer
+          minimum: 0
+        cleanup_saturated:
+          type: boolean
+        retired_pending_close:
+          type: integer
+          minimum: 0
+
+    HealthCircuitBreakers:
+      type: object
+      additionalProperties: false
+      required: [enabled, any_open, providers]
+      properties:
+        enabled:
+          type: boolean
+        any_open:
+          type: boolean
+        providers:
           type: object
           additionalProperties:
-            type: object
-            properties:
-              open:
-                type: boolean
-              failures:
-                type: integer
-        stats:
-          $ref: "#/components/schemas/SessionStatsSummary"
+            $ref: "#/components/schemas/HealthCircuitBreakerProvider"
+
+    HealthCircuitBreakerProvider:
+      type: object
+      additionalProperties: false
+      required:
+        - state
+        - failures_in_window
+        - successes_in_window
+        - failure_ratio
+        - failure_threshold
+        - min_failure_ratio
+        - time_until_probe_seconds
+        - total_trips
+        - total_successes
+        - total_failures
+      properties:
+        state:
+          type: string
+          enum: [closed, open, half_open]
+        failures_in_window:
+          type: integer
+          minimum: 0
+        successes_in_window:
+          type: integer
+          minimum: 0
+        failure_ratio:
+          type: number
+          minimum: 0
+          maximum: 1
+        failure_threshold:
+          type: integer
+          minimum: 0
+        min_failure_ratio:
+          type: number
+          minimum: 0
+          maximum: 1
+        time_until_probe_seconds:
+          type: [number, "null"]
+          minimum: 0
+        total_trips:
+          type: integer
+          minimum: 0
+        total_successes:
+          type: integer
+          minimum: 0
+        total_failures:
+          type: integer
+          minimum: 0
+
+    HealthProviderDiagnostic:
+      type: object
+      additionalProperties: false
+      required: [name, status]
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [closed, open, half_open, unknown]
+
+    HealthMemoryMeasurement:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [rss_mb, available]
+          properties:
+            rss_mb:
+              type: number
+              minimum: 0
+            available:
+              const: true
+        - type: object
+          additionalProperties: false
+          required: [rss_mb, available, reason]
+          properties:
+            rss_mb:
+              type: "null"
+            available:
+              const: false
+            reason:
+              type: string
+              enum: [optional_dependency_unavailable, probe_failed]
+
+    HealthDiskMeasurement:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [available_gb, available]
+          properties:
+            available_gb:
+              type: number
+              minimum: 0
+            available:
+              const: true
+        - type: object
+          additionalProperties: false
+          required: [available_gb, available, reason]
+          properties:
+            available_gb:
+              type: "null"
+            available:
+              const: false
+            reason:
+              type: string
+              enum: [probe_failed]
 
     # ── Stats ─────────────────────────────────────────────────────────────────
 
