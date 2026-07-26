@@ -167,6 +167,34 @@ def _wait_for_live_drain(proxy: ProxyProc, remote_port: int, timeout: float = 5.
     pytest.fail(f"proxy did not drain half-closed sockets while live: {last}")
 
 
+def _settled_fd_count(pid: int, *, timeout: float = 5.0) -> int:
+    """Descriptor count after start-up transients have closed.
+
+    `wait_ready()` returns while its own readiness connection is still open, so
+    sampling immediately counts a socket that closes moments later. That made
+    the baseline race: 5 descriptors if read at once, 4 a half-second on. The
+    ceiling below has single-digit headroom, so a one-off baseline decided
+    whether it held — the assertion passed only when it happened to catch the
+    transient, and failed on the runner that did not.
+    """
+    deadline = time.monotonic() + timeout
+    previous = -1
+    while time.monotonic() < deadline:
+        current = len(list(Path(f"/proc/{pid}/fd").iterdir()))
+        if current == previous:
+            return current
+        previous = current
+        time.sleep(0.25)
+    return previous
+
+
+# Descriptors the proxy opens on its first request and then holds: the dated
+# proxy log, monitor.db (opened twice), and its -wal and -shm companions.
+# Enumerated by reading /proc/<pid>/fd link targets, not fitted to a passing
+# run. Session sockets are counted separately as _CAP.
+_POST_BASELINE_FDS = 5
+
+
 def test_half_closed_upstream_sockets_and_fds_plateau_at_session_cap():
     upstream = ThreadingHTTPServer(("127.0.0.1", 0), _HalfCloseUpstreamHandler)
     upstream.connections = set()  # type: ignore[attr-defined]
@@ -180,7 +208,7 @@ def test_half_closed_upstream_sockets_and_fds_plateau_at_session_cap():
     samples: list[tuple[int, int]] = []
     try:
         proxy.wait_ready()
-        baseline_fds = len(list(Path(f"/proc/{proxy.proc.pid}/fd").iterdir()))
+        baseline_fds = _settled_fd_count(proxy.proc.pid)
 
         for round_index in range(_ROUNDS):
             start = round_index * _CAP
@@ -196,10 +224,11 @@ def test_half_closed_upstream_sockets_and_fds_plateau_at_session_cap():
         assert all(0 < count <= _CAP for count in close_wait_counts), samples
         assert max(close_wait_counts) - min(close_wait_counts) <= 1, samples
         assert max(fd_counts) - min(fd_counts) <= 2, samples
-        # Session sockets plus the monitor DB's WAL/SHM descriptors. The
-        # plateau assertion above is the primary leak guard; this absolute
-        # ceiling prevents a stable but unexpectedly large offset.
-        assert max(fd_counts) <= baseline_fds + _CAP + 4, samples
+        # The plateau assertion above is the primary leak guard; this absolute
+        # ceiling prevents a stable but unexpectedly large offset. Both operands
+        # are measured rather than fitted -- see _settled_fd_count and
+        # _POST_BASELINE_FDS.
+        assert max(fd_counts) <= baseline_fds + _CAP + _POST_BASELINE_FDS, samples
 
         health = _health(proxy)
         metrics = health.get("connection_pool", health.get("pool", {}))
