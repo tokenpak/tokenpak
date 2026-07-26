@@ -9,7 +9,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional, TypedDict, cast
 
-_DEFAULT_LOG = Path.home() / ".tokenpak" / "debug.log"
+
+def _default_log() -> Path:
+    from tokenpak import _paths
+
+    return _paths.write_home() / "debug.log"
 
 
 class _DebugRecord:
@@ -45,7 +49,7 @@ class DebugLogger:
     """Write JSONL debug records for each request when debug mode is active."""
 
     def __init__(self, log_path: Optional[Path] = None) -> None:
-        self._path = Path(log_path) if log_path else _DEFAULT_LOG
+        self._path = Path(log_path) if log_path else _default_log()
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
     @contextmanager
@@ -62,7 +66,11 @@ class DebugLogger:
                 fh.write(json.dumps(rec.to_dict()) + "\n")
 
 
-_DEFAULT_PATH = Path.home() / ".tokenpak" / "debug.json"
+def _default_debug_json() -> Path:
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("debug.json")
+    return found if found is not None else _paths.write_home() / "debug.json"
 
 
 class _DebugStateData(TypedDict):
@@ -81,7 +89,7 @@ class DebugState:
     """
 
     def __init__(self, path: Optional[Path] = None) -> None:
-        self._path = Path(path) if path else _DEFAULT_PATH
+        self._path = Path(path) if path else _default_debug_json()
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
@@ -140,7 +148,7 @@ class DebugState:
     def status(self) -> dict[str, bool | int | str | None]:
         """Return a dict suitable for display."""
         data = self._load()
-        log_path = Path.home() / ".tokenpak" / "debug.log"
+        log_path = _default_log()
         log_size = log_path.stat().st_size if log_path.exists() else 0
         remaining = data.get("requests_remaining")
         return {

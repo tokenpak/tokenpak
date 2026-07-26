@@ -152,7 +152,10 @@ def cost_mod(temp_db):
     import tokenpak.cli.commands.cost as cost
 
     importlib.reload(cost)
-    with patch.object(cost, "_MONITOR_DB", temp_db), patch.object(cost, "date", _FrozenDate):
+    with (
+        patch.object(cost, "_monitor_db", lambda: temp_db),
+        patch.object(cost, "date", _FrozenDate),
+    ):
         yield cost
 
 
@@ -166,8 +169,8 @@ def budget_mod(temp_db, tmp_path):
     importlib.reload(budget)
     cfg_path = tmp_path / "budget_config.yaml"
     with (
-        patch.object(budget, "_MONITOR_DB", temp_db),
-        patch.object(budget, "_BUDGET_CONFIG", cfg_path),
+        patch.object(budget, "_monitor_db", lambda: temp_db),
+        patch.object(budget, "_budget_config", lambda: cfg_path),
         patch.object(budget, "date", _FrozenDate),
     ):
         yield budget, cfg_path
@@ -207,7 +210,7 @@ class TestQuerySummary:
             "CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, request_type TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, latency_ms REAL, status_code INTEGER, endpoint TEXT, compilation_mode TEXT, protected_tokens INTEGER, compressed_tokens INTEGER, injected_tokens INTEGER, injected_sources TEXT, cache_read_tokens INTEGER, cache_creation_tokens INTEGER)"
         )
         conn.close()
-        with patch.object(cost, "_MONITOR_DB", str(empty_db)):
+        with patch.object(cost, "_monitor_db", lambda: str(empty_db)):
             result = cost.query_summary("today")
         assert result["requests"] == 0
         assert result["total_cost_usd"] == 0.0
@@ -215,7 +218,7 @@ class TestQuerySummary:
     def test_missing_db_returns_error(self, tmp_path):
         import tokenpak.cli.commands.cost as cost
 
-        with patch.object(cost, "_MONITOR_DB", str(tmp_path / "nonexistent.db")):
+        with patch.object(cost, "_monitor_db", lambda: str(tmp_path / "nonexistent.db")):
             result = cost.query_summary("today")
         assert "error" in result
 
@@ -273,7 +276,7 @@ class TestExportCsv:
             "CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, request_type TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, latency_ms REAL, status_code INTEGER, endpoint TEXT, compilation_mode TEXT, protected_tokens INTEGER, compressed_tokens INTEGER, injected_tokens INTEGER, injected_sources TEXT, cache_read_tokens INTEGER, cache_creation_tokens INTEGER)"
         )
         conn.close()
-        with patch.object(cost, "_MONITOR_DB", str(empty_db)):
+        with patch.object(cost, "_monitor_db", lambda: str(empty_db)):
             output = cost.export_csv_data("today")
         lines = [l for l in output.strip().splitlines() if l]
         assert len(lines) == 1  # header only

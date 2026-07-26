@@ -2,10 +2,17 @@
 
 import os as _os
 
+
 # Canonical path to the vault-editable install root.
 # Transferred from monolith (TPK-CONSOLIDATION-A2a, line 60).
 # Used by the monolith's sys.path fixup and by vault indexer path resolution.
-_VAULT_TOKENPAK: str = _os.path.expanduser("~/.tokenpak/vault")
+def _vault_default() -> str:
+    """Vault directory, resolved at call time across homes."""
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("vault")
+    return str(found if found is not None else _paths.write_home() / "vault")
+
 
 try:
     from tokenpak.vault.query_expansion import (

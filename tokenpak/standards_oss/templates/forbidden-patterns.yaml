@@ -1,0 +1,94 @@
+# Forbidden-pattern register
+#
+# Patterns that must never appear in anything you publish, commit, log, or send to a third-party
+# service — including model context.
+#
+# The `defaults` section ships seeded with patterns that are universal. The `local` section is
+# yours: the terms, identifiers, and formats specific to your work.
+#
+# Referenced by: BS-INFORMATION-SECURITY-ACCESS-AND-CREDENTIALS R6.
+#
+# Two cautions:
+#   1. This register is a detection aid, not a control. Passing it does not mean a document is safe;
+#      it means these specific patterns were absent (GOVERNANCE.md section 7 — `validated`, not
+#      `verified`).
+#   2. The register itself becomes sensitive once you fill in `local`. Store it accordingly.
+
+schema: baseline-standards/forbidden-patterns/1.0
+standards_version: 1.4.0
+
+defaults:
+
+  credentials:
+    - id: private-key-block
+      pattern: '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+      severity: error
+      note: Any private key material.
+
+    - id: aws-access-key-id
+      pattern: '\b(AKIA|ASIA)[0-9A-Z]{16}\b'
+      severity: error
+
+    - id: bearer-token-header
+      pattern: '(?i)authorization:\s*bearer\s+\S+'
+      severity: error
+
+    - id: generic-secret-assignment
+      pattern: '(?i)\b(api[_-]?key|secret|password|passwd|token)\b\s*[:=]\s*["'']?[A-Za-z0-9/+_-]{16,}'
+      severity: error
+      note: Catches most inline credential assignments. Expect false positives on examples.
+
+    - id: connection-string-with-password
+      pattern: '(?i)://[^/\s:]+:[^/\s@]+@'
+      severity: error
+      note: user:password@host in a URL.
+
+  personal_data:
+    - id: email-address
+      pattern: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
+      severity: warning
+      note: >
+        Warning, not error — documentation legitimately contains example addresses. Allowlist your
+        example domains below rather than disabling this.
+
+    - id: private-ip-with-credentials
+      pattern: '(?i)(ssh|ftp|sftp)://[^@\s]+@'
+      severity: warning
+
+  local_paths:
+    - id: home-directory-path
+      pattern: '(?:/home/|/Users/|C:\\Users\\)[A-Za-z0-9._-]+'
+      severity: warning
+      note: >
+        A real home path in published content leaks a username and usually means the document was
+        written from a working session rather than authored for publication.
+
+  placeholders:
+    - id: unresolved-placeholder
+      pattern: 'REPLACE_ME|TODO_BEFORE_PUBLISH|FIXME_BEFORE_PUBLISH'
+      severity: error
+      note: >
+        An unresolved placeholder must never silently become policy or published content
+        (GOVERNANCE.md R28).
+
+allowlist:
+  # Patterns that would otherwise match but are legitimate. Each entry needs a reason — an
+  # unexplained allowlist entry is how a real leak gets permanently excused.
+  - pattern: '@example\.(com|org|net)\b'
+    reason: Reserved example domains; safe by definition.
+  - pattern: '/home/<you>/'
+    reason: Documentation placeholder, deliberately not a real path.
+
+local:
+  # Yours. Typical entries:
+  #   - internal hostnames and service names
+  #   - client names under NDA
+  #   - internal identifier formats (ticket prefixes, account number shapes)
+  #   - unreleased product or project codenames
+  #   - names of people who should not appear in published material
+  #
+  # Example shape:
+  #   - id: internal-hostname
+  #     pattern: '\b[a-z0-9-]+\.internal\.example\b'
+  #     severity: error
+  []

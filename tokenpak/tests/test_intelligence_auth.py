@@ -6,7 +6,7 @@ Covers:
 - LicenseTier enum values and TIER_RATE_LIMITS mapping
 - PIIScrubFilter — redacts API keys/bearer tokens from log records
 - APIKeyValidator — init, env-key loading, register, lookup, validate
-- RateLimiter — allowed/denied paths, window reset, enterprise unlimited
+- RateLimiter — allowed/denied paths, window reset, unlimited-tier path
 - TokenPakAuthMiddleware — bypass paths, 401 auth, 429 rate-limit, 200 pass-through
 
 All external I/O is mocked. No live network or filesystem calls.
@@ -35,8 +35,13 @@ class TestLicenseTier(unittest.TestCase):
     def test_enum_values(self):
         self.assertEqual(self.LicenseTier.FREE.value, "free")
         self.assertEqual(self.LicenseTier.PRO.value, "pro")
-        self.assertEqual(self.LicenseTier.TEAM.value, "team")
-        self.assertEqual(self.LicenseTier.ENTERPRISE.value, "enterprise")
+
+    def test_enum_has_two_tiers_only(self):
+        # The product ships OSS (free) and Pro only.
+        self.assertEqual(
+            {t.value for t in self.LicenseTier},
+            {"free", "pro"},
+        )
 
     def test_tier_rate_limits_free(self):
         self.assertEqual(self.TIER_RATE_LIMITS[self.LicenseTier.FREE], 20)
@@ -44,11 +49,8 @@ class TestLicenseTier(unittest.TestCase):
     def test_tier_rate_limits_pro(self):
         self.assertEqual(self.TIER_RATE_LIMITS[self.LicenseTier.PRO], 100)
 
-    def test_tier_rate_limits_team(self):
-        self.assertEqual(self.TIER_RATE_LIMITS[self.LicenseTier.TEAM], 500)
-
-    def test_tier_rate_limits_enterprise_unlimited(self):
-        self.assertIsNone(self.TIER_RATE_LIMITS[self.LicenseTier.ENTERPRISE])
+    def test_tier_rate_limits_cover_every_tier(self):
+        self.assertEqual(set(self.TIER_RATE_LIMITS), set(self.LicenseTier))
 
     def test_str_subclass(self):
         # LicenseTier(str, Enum) — must be usable as a plain string
@@ -139,11 +141,11 @@ class TestAPIKeyValidatorInit(unittest.TestCase):
     def test_loads_env_keys(self):
         from tokenpak.proxy.intelligence.auth import APIKeyValidator, LicenseTier
 
-        env = {"TOKENPAK_ALLOWED_KEYS": "testkey:pro,teamkey:team"}
+        env = {"TOKENPAK_ALLOWED_KEYS": "testkey:pro,freekey:free"}
         with patch.dict(os.environ, env, clear=False):
             v = APIKeyValidator()
         self.assertEqual(v.lookup("testkey"), LicenseTier.PRO)
-        self.assertEqual(v.lookup("teamkey"), LicenseTier.TEAM)
+        self.assertEqual(v.lookup("freekey"), LicenseTier.FREE)
 
     def test_invalid_tier_in_env_is_skipped(self):
         from tokenpak.proxy.intelligence.auth import APIKeyValidator
@@ -180,8 +182,8 @@ class TestAPIKeyValidatorRegisterLookup(unittest.TestCase):
     def test_register_and_lookup(self):
         from tokenpak.proxy.intelligence.auth import LicenseTier
 
-        self.v.register("k1", LicenseTier.ENTERPRISE)
-        self.assertEqual(self.v.lookup("k1"), LicenseTier.ENTERPRISE)
+        self.v.register("k1", LicenseTier.PRO)
+        self.assertEqual(self.v.lookup("k1"), LicenseTier.PRO)
 
     def test_lookup_unknown_key_returns_none(self):
         self.assertIsNone(self.v.lookup("does_not_exist"))
@@ -232,21 +234,34 @@ class TestAPIKeyValidatorValidate(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestRateLimiterEnterprise(unittest.TestCase):
+class TestRateLimiterUnlimited(unittest.TestCase):
+    """A ``None`` entry in TIER_RATE_LIMITS means unlimited.
+
+    No shipped tier maps to ``None`` today (OSS=20/min, Pro=100/min), so the
+    unlimited branch is exercised by patching the limit table rather than by
+    a tier that no longer exists.
+    """
+
     def setUp(self):
         from tokenpak.proxy.intelligence.auth import LicenseTier, RateLimiter
 
         self.limiter = RateLimiter()
-        self.enterprise = LicenseTier.ENTERPRISE
+        self.tier = LicenseTier.PRO
+        patcher = patch.dict(
+            "tokenpak.proxy.intelligence.auth.TIER_RATE_LIMITS",
+            {LicenseTier.PRO: None},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
-    def test_enterprise_always_allowed(self):
-        allowed, remaining, reset_ts = self.limiter.check("anykey", self.enterprise)
+    def test_unlimited_always_allowed(self):
+        allowed, remaining, reset_ts = self.limiter.check("anykey", self.tier)
         self.assertTrue(allowed)
         self.assertEqual(remaining, 999_999)
 
-    def test_enterprise_allows_many_requests(self):
+    def test_unlimited_allows_many_requests(self):
         for _ in range(1000):
-            allowed, _, _ = self.limiter.check("enterprise_key", self.enterprise)
+            allowed, _, _ = self.limiter.check("unlimited_key", self.tier)
             self.assertTrue(allowed)
 
 
@@ -538,7 +553,7 @@ class TestTokenPakAuthMiddlewareRateLimitHeaders(unittest.TestCase):
         resp = self.client.get("/v1/test", headers={"X-TokenPak-Key": self.key})
         self.assertIn("x-ratelimit-remaining", resp.headers)
 
-    def test_enterprise_shows_unlimited_limit(self):
+    def test_unlimited_tier_shows_unlimited_limit(self):
         from fastapi import FastAPI
         from starlette.testclient import TestClient
 
@@ -549,10 +564,10 @@ class TestTokenPakAuthMiddlewareRateLimitHeaders(unittest.TestCase):
             TokenPakAuthMiddleware,
         )
 
-        ent_key = "enterprise_header_key"
+        ent_key = "unlimited_header_key"
         app2 = FastAPI()
         v2 = APIKeyValidator()
-        v2.register(ent_key, LicenseTier.ENTERPRISE)
+        v2.register(ent_key, LicenseTier.PRO)
         l2 = RateLimiter()
         app2.add_middleware(TokenPakAuthMiddleware, validator=v2, limiter=l2)
 
@@ -561,7 +576,11 @@ class TestTokenPakAuthMiddlewareRateLimitHeaders(unittest.TestCase):
             return {}
 
         c2 = TestClient(app2)
-        resp = c2.get("/v1/test", headers={"X-TokenPak-Key": ent_key})
+        with patch.dict(
+            "tokenpak.proxy.intelligence.auth.TIER_RATE_LIMITS",
+            {LicenseTier.PRO: None},
+        ):
+            resp = c2.get("/v1/test", headers={"X-TokenPak-Key": ent_key})
         self.assertEqual(resp.headers.get("x-ratelimit-limit"), "unlimited")
 
 

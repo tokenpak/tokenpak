@@ -29,7 +29,15 @@ logger = logging.getLogger(__name__)
 # Constants / defaults
 # ─────────────────────────────────────────────
 
-_DEFAULT_CACHE_DIR = Path.home() / ".tokenpak" / "fingerprint_cache"
+
+def _default_cache_dir() -> Path:
+    """Resolved at call time; new caches are written canonically."""
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("fingerprint_cache")
+    return found if found is not None else _paths.write_home() / "fingerprint_cache"
+
+
 _DEFAULT_TTL = 3600  # 1 hour
 _DEFAULT_SERVER = "https://intelligence.tokenpak.ai"
 _SYNC_ENDPOINT = "/v1/fingerprint/sync"
@@ -235,7 +243,7 @@ class FingerprintSync:
             or os.environ.get("TOKENPAK_INTELLIGENCE_URL", _DEFAULT_SERVER)
             or _DEFAULT_SERVER
         ).rstrip("/")
-        self.cache_dir = cache_dir or _DEFAULT_CACHE_DIR
+        self.cache_dir = cache_dir or _default_cache_dir()
         self.ttl = ttl
         self.privacy_level = privacy_level
         self.timeout = timeout

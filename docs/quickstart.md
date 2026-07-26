@@ -71,9 +71,10 @@ reference receipt path.
 
 ### Editions, security, and compliance
 
-The OSS package is the Apache-2.0 local proxy and CLI. Run
-`tokenpak upgrade --print-url` to print the current Pro page, and see
-[multipak.md](./multipak.md) for the shipped OSS/Pro boundary.
+TokenPak ships in two editions: TokenPak, the Apache-2.0 local proxy and
+CLI, and TokenPak Pro. Public Pro enrollment is not open, so there is no
+signup page to visit; see [multipak.md](./multipak.md) for the shipped
+boundary between the two.
 
 For trust review, start with
 [security architecture](./guides/enterprise/security-architecture.md) and

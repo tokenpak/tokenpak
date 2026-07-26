@@ -32,25 +32,17 @@ tokenpak codex           # launches Codex with the companion active
 `tokenpak codex` does the equivalent for Codex, registering the same MCP server
 through `codex mcp add` so it shows up in `codex mcp list`.
 
-### When another Codex session is already running
+### Running more than one Codex session at once
 
-TokenPak normally uses your existing local Codex history. If another Codex
-session still holds that history, TokenPak waits briefly for it to become safe.
-After verified contention, an interactive launch offers a temporary session:
+Run as many as you like. `tokenpak codex` uses your existing local Codex
+history and does not require exclusive access to it, exactly like running
+`codex` directly: Codex keeps its session state in write-ahead-logging SQLite
+databases, which coordinate concurrent readers and a serialized writer across
+processes. TokenPak never opens Codex's local state, so it has no reason to
+serialize your sessions and does not try to.
 
-```text
-Another Codex session is using your shared local history.
-Start a temporary session without that prior history? [y/N]
-```
-
-Choosing **Yes** creates a new temporary history lineage for that invocation.
-It does not attach the prior shared history, replace the normal lineage, or
-change the default for future launches. Choosing **No** or pressing Enter
-preserves the safe refusal. TokenPak does not offer the fallback when inspection
-is incomplete or reports a permission, storage, corruption, or unknown failure.
-
-The temporary session is retention-managed and may remain on disk after Codex
-exits. The prompt is never shown in CI or non-interactive commands.
+Sessions started this way share one history lineage, so each will see work the
+others have committed.
 
 Advanced operators can still select an explicit compatibility mode for
 diagnostics, recovery, or automation:
@@ -62,6 +54,11 @@ TOKENPAK_CODEX_SESSION_MODE=workspace tokenpak codex
 # New internal history for one invocation.
 TOKENPAK_CODEX_SESSION_MODE=isolated tokenpak codex
 ```
+
+Unlike the default, `workspace` allows only one session per project at a time —
+TokenPak generates and provisions that home, so a second concurrent session in
+the same project is refused rather than racing the first one's setup. Use the
+default or `isolated` to run several at once.
 
 The MCP server is the same stdio JSON-RPC program in both cases:
 `python3 -m tokenpak.companion.mcp.server`. Only the discovery mechanism

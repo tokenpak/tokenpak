@@ -28,11 +28,29 @@ import urllib.request
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, Optional, TypedDict, cast
+
+
+def _color_enabled() -> bool:
+    """Whether to emit ANSI, per the shared contract.
+
+    Delegates to ``_formatting.colors.supports_color``, which honours
+    ``NO_COLOR``, ``TOKENPAK_NO_COLOR``, ``FORCE_COLOR`` and ``isatty()``.
+    This module previously defined its own escape constants and emitted them
+    unconditionally, so ``tokenpak doctor`` wrote 27 raw escape sequences into
+    every redirected or piped run — including the "paste your doctor output"
+    bug-report flow that SUPPORT.md asks users to follow.
+    """
+    try:
+        from tokenpak._formatting.colors import supports_color
+
+        return supports_color()
+    except Exception:
+        return False
 
 
 class Colors:
-    """ANSI color codes + emoji markers."""
+    """ANSI color codes + emoji markers, suppressed when color is unsupported."""
 
     GREEN = "\033[92m"
     YELLOW = "\033[93m"
@@ -40,16 +58,22 @@ class Colors:
     RESET = "\033[0m"
 
     @staticmethod
+    def _wrap(ansi: str, glyph: str, text: str, pad: str) -> str:
+        if _color_enabled():
+            return f"{ansi}{glyph}{Colors.RESET}{pad}{text}"
+        return f"{glyph}{pad}{text}"
+
+    @staticmethod
     def ok(text: str) -> str:
-        return f"{Colors.GREEN}✅{Colors.RESET}  {text}"
+        return Colors._wrap(Colors.GREEN, "✅", text, "  ")
 
     @staticmethod
     def warn(text: str) -> str:
-        return f"{Colors.YELLOW}⚠️{Colors.RESET}   {text}"
+        return Colors._wrap(Colors.YELLOW, "⚠️", text, "   ")
 
     @staticmethod
     def fail(text: str) -> str:
-        return f"{Colors.RED}❌{Colors.RESET}  {text}"
+        return Colors._wrap(Colors.RED, "❌", text, "  ")
 
 
 def _proxy_get(path: str, port: int | None = None, timeout: int = 3) -> dict[str, Any] | None:
@@ -69,6 +93,9 @@ _CANONICAL_HEALTH_FIELDS = {
     "status",
     "uptime_seconds",
     "version",
+    # OS pid of the serving process — part of the envelope so the CLI can
+    # verify that a healthy endpoint is the proxy it started.
+    "pid",
     "requests_total",
     "requests_errors",
     "compression_ratio_avg",
@@ -99,6 +126,9 @@ def _validate_canonical_health(payload: dict[str, Any]) -> tuple[bool, str]:
         value = payload.get(field)
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
             return False, f"health {field} is missing or malformed"
+    pid_value = payload.get("pid")
+    if not isinstance(pid_value, int) or isinstance(pid_value, bool) or pid_value <= 0:
+        return False, "health pid is missing or malformed"
     compression = payload.get("compression_ratio_avg")
     if not isinstance(compression, (int, float)) or isinstance(compression, bool):
         return False, "health compression_ratio_avg is missing or malformed"
@@ -285,6 +315,20 @@ def _update_state() -> tuple[str, str | None]:
         return ("unknown", None)
 
 
+def _proxy_owned() -> Optional[bool]:
+    """Whether the answering proxy was started by this install.
+
+    ``None`` when it cannot be determined. Kept separate from
+    :func:`_proxy_state` so an existing caller of that function is unaffected.
+    """
+    try:
+        from tokenpak.cli.commands import menu_status
+
+        return menu_status.snapshot(probe=True).owned
+    except Exception:
+        return None
+
+
 def _proxy_state() -> str:
     """Resolve proxy run-state honestly, reusing the scope#1 cached status source.
 
@@ -324,6 +368,7 @@ def build_lifecycle_summary(
     setup_present: bool,
     route_state: str,
     proxy_state: str,
+    proxy_owned: Optional[bool] = None,
     update_state: str,
     update_latest: str | None = None,
 ) -> str:
@@ -354,19 +399,28 @@ def build_lifecycle_summary(
     elif route_state == "other":
         rows.append(("Routed", "yellow", "other gateway", "Run: tokenpak setup"))
     elif route_state == "not routed":
-        rows.append(("Routed", "yellow", "not routed", "Run: tokenpak setup"))
+        rows.append(("Routed", "yellow", "not routed", "Run: tokenpak integrate"))
     else:  # unknown
         rows.append(("Routed", "yellow", "Unknown", "Check ~/.claude/settings.json"))
 
     # Proxy — running / stopped / starting / unknown.
     if proxy_state == "running":
-        rows.append(("Proxy", "green", "running", ""))
+        if proxy_owned is False:
+            # Something is serving the port, but not a process this install
+            # started — so `tokenpak stop` and `tokenpak restart` will not act
+            # on it. Reporting a green "running" hides that.
+            rows.append(("Proxy", "yellow", "running (not ours)", "Not started by this install"))
+        else:
+            rows.append(("Proxy", "green", "running", ""))
     elif proxy_state == "starting":
         rows.append(("Proxy", "yellow", "starting", "wait for boot to finish"))
     elif proxy_state == "stopped":
-        rows.append(("Proxy", "yellow", "stopped", "Run: tokenpak restart"))
+        # `start`, not `restart`. Telling someone to restart a proxy that has
+        # never run is the same incoherence as setup starting a daemon and
+        # then instructing them to stop it.
+        rows.append(("Proxy", "yellow", "stopped", "Run: tokenpak start"))
     else:  # unknown
-        rows.append(("Proxy", "yellow", "Unknown", "Run: tokenpak restart"))
+        rows.append(("Proxy", "yellow", "Unknown", "Run: tokenpak status"))
 
     # Update — from the cached L1 check only.
     if update_state == "available":
@@ -381,7 +435,10 @@ def build_lifecycle_summary(
     elif update_state == "current":
         rows.append(("Update", "green", "up to date", ""))
     else:  # unknown
-        rows.append(("Update", "green", "Unknown", ""))
+        # A check that did not run is not a pass. This row was green, which
+        # made a silently-swallowed ImportError (undeclared `packaging`) look
+        # like a healthy result.
+        rows.append(("Update", "yellow", "not checked", "Run: tokenpak update --check"))
 
     # --- render ---------------------------------------------------------------
     # The status glyphs (✅/⚠️/❌) and the arrow (→) occupy 2 terminal columns
@@ -630,11 +687,14 @@ def run_doctor(
 
         route_st, _ = _route_state()
         upd_st, upd_latest = _update_state()
+        from tokenpak import _paths as _tp_paths_lc
+
         return build_lifecycle_summary(
             version=_ver,
-            setup_present=(tokenpak_dir / "config.json").exists(),
+            setup_present=_tp_paths_lc.is_configured(),
             route_state=route_st,
             proxy_state=_proxy_state(),
+            proxy_owned=_proxy_owned(),
             update_state=upd_st,
             update_latest=upd_latest,
         )
@@ -654,17 +714,38 @@ def run_doctor(
         print(_lifecycle_panel())
         print()
 
-    counts = {"pass": 0, "warn": 0, "fail": 0}
+    counts = {"pass": 0, "warn": 0, "fail": 0, "expected": 0}
     fixes: list[tuple[str, Path]] = []
     checks: list[dict[str, str]] = []
+
+    # A virgin install used to raise ~10 warnings that were all the same fact
+    # said ten ways: no config, so no proxy, so no traffic, so no monitor.db,
+    # so no error rate and no savings. A first-run user cannot tell which of
+    # those they are supposed to act on, and the honest answer is one action.
+    #
+    # When nothing has been configured yet, checks whose failure is *entailed*
+    # by that are recorded as "expected" rather than "warn": still listed,
+    # still in --json, but not counted against the user and not competing with
+    # the one instruction that resolves them.
+    # Same predicate the lifecycle panel uses, so the panel and the check list
+    # cannot disagree about whether this install has been set up.
+    pre_setup = not _paths.is_configured()
 
     def _record(
         name: str,
         status: str,
         message: str,
         detail: str = "",
+        entailed_by_setup: bool = False,
     ) -> None:
-        """Record a check result and optionally print it."""
+        """Record a check result and optionally print it.
+
+        ``entailed_by_setup`` marks a check that cannot pass before setup has
+        run. Before setup it degrades to "expected"; after setup it is a real
+        warning, because then the cause is something else.
+        """
+        if entailed_by_setup and pre_setup and status == "warn":
+            status = "expected"
         checks.append({"check": name, "status": status, "message": message, "detail": detail})
         counts[status] += 1
         if not output_json:
@@ -672,6 +753,8 @@ def run_doctor(
                 print(Colors.ok(message))
             elif status == "warn":
                 print(Colors.warn(message))
+            elif status == "expected":
+                print(f"   ·  {message}")
             else:
                 print(Colors.fail(message))
             if verbose and detail:
@@ -777,7 +860,8 @@ def run_doctor(
                 _record(
                     "proxy_health",
                     "warn",
-                    f"Proxy not running   port {proxy_port} — start with: tokenpak restart",
+                    f"Proxy not running   port {proxy_port} — start with: tokenpak start",
+                    entailed_by_setup=True,
                 )
         except Exception:
             _record(
@@ -811,7 +895,8 @@ def run_doctor(
         _record(
             "routing",
             "warn",
-            "Routing             Claude Code → TokenPak proxy (not routed) — run: tokenpak setup",
+            "Routing             Claude Code → TokenPak proxy (not routed) — run: tokenpak integrate claude-code",
+            entailed_by_setup=True,
             detail="No ANTHROPIC_BASE_URL in ~/.claude/settings.json (or file absent)",
         )
     else:  # unknown
@@ -856,6 +941,7 @@ def run_doctor(
             "db_rowcount",
             "warn",
             f"Monitor DB          not found — {db_path} (starts populating on first request)",
+            entailed_by_setup=True,
         )
 
     # === Check 3: DB schema version =============================================
@@ -972,20 +1058,41 @@ def run_doctor(
         )
 
     # === Check 6: Trace enabled =================================================
-    trace_enabled = bool(
-        os.environ.get("TOKENPAK_TRACE", "0").strip() not in ("0", "", "false", "False")
-    )
+    # Report the *resolved* setting and say where it came from. Reading
+    # os.environ alone was wrong twice over: proxy config used to setdefault
+    # the whole profile at import, so this printed "enabled (TOKENPAK_TRACE=1)"
+    # for a variable the user never set; and a config-file or profile value
+    # that genuinely enabled tracing was invisible here.
+    active_profile = ""
+    try:
+        from tokenpak.proxy import config as _pxcfg
+
+        trace_enabled = bool(_pxcfg.TRACE_ENABLED)
+        trace_origin = _pxcfg.setting_origin("TOKENPAK_TRACE")
+        active_profile = _pxcfg.ACTIVE_PROFILE
+    except Exception:
+        raw = os.environ.get("TOKENPAK_TRACE", "0").strip()
+        trace_enabled = raw.lower() not in ("0", "", "false")
+        trace_origin = "env" if os.environ.get("TOKENPAK_TRACE") is not None else "default"
+
+    _origin_note = {
+        "env": "TOKENPAK_TRACE in your environment",
+        "profile": f"profile default: {active_profile}" if active_profile else "profile default",
+        "default": "built-in default",
+        "config": "config file",
+    }.get(trace_origin, trace_origin)
+
     if trace_enabled:
         _record(
             "trace_enabled",
             "pass",
-            "Trace mode          enabled (TOKENPAK_TRACE=1)",
+            f"Trace mode          enabled ({_origin_note})",
         )
     else:
         _record(
             "trace_enabled",
             "pass",
-            "Trace mode          disabled (TOKENPAK_TRACE not set — normal)",
+            f"Trace mode          disabled ({_origin_note}) — normal",
         )
 
     # === Check 7: Vault index freshness =========================================
@@ -1047,7 +1154,7 @@ def run_doctor(
             _record(
                 "vault_paths_staleness",
                 "pass",
-                "Vault paths        no registered paths (register with: tokenpak vault add <path>)",
+                "Vault paths        no registered paths (index one with: tokenpak index <path>)",
             )
         else:
             summary = _vds03.summarize(_vds03_findings)
@@ -1157,6 +1264,7 @@ def run_doctor(
             "recent_error_rate",
             "warn",
             "Recent error rate   monitor.db not found",
+            entailed_by_setup=True,
         )
 
     # === Check 9: Token savings summary from last 100 requests ==================
@@ -1213,6 +1321,7 @@ def run_doctor(
             "token_savings",
             "warn",
             "Token savings       monitor.db not found",
+            entailed_by_setup=True,
         )
 
     # === Check 10: Env var conflicts ============================================
@@ -1274,27 +1383,45 @@ def run_doctor(
             f"Python version      {py_version} — requires ≥3.10",
         )
 
-    # Config file
-    config_path = tokenpak_dir / "config.json"
-    if config_path.exists():
+    # Config file — resolved through the shared resolver so this check agrees
+    # with what `tokenpak setup` actually wrote (YAML canonical, JSON accepted
+    # for compatibility) and searches every read home. Looking only for
+    # config.json here is what made doctor say "no config" right after a
+    # successful setup.
+    from tokenpak import _paths as _tp_paths
+
+    config_path = _tp_paths.config_read_path()
+    if config_path is not None:
+        parse_error: str | None = None
         try:
-            with open(config_path) as config_file_handle:
-                json.load(config_file_handle)
+            text = config_path.read_text()
+            if config_path.suffix == ".json":
+                json.loads(text)
+            else:
+                import yaml as _yaml
+
+                _yaml.safe_load(text)
+        except Exception as exc:
+            parse_error = f"{type(exc).__name__}: {exc}"
+        if parse_error is None:
             _record("config_file", "pass", f"Config file         {config_path} — valid")
-        except json.JSONDecodeError:
+        else:
             _record(
                 "config_file",
                 "fail",
-                f"Config file         {config_path} — invalid JSON",
+                f"Config file         {config_path} — could not be parsed",
+                detail=parse_error,
             )
             fixes.append(("reset config", config_path))
     else:
+        expected = _tp_paths.config_write_path()
         _record(
             "config_file",
             "warn",
-            f"Config file         {config_path} — not found",
+            f"Config file         {expected} — not found",
+            detail="Run: tokenpak setup",
         )
-        fixes.append(("create config", config_path))
+        fixes.append(("create config", expected))
 
     # Disk usage
     try:
@@ -1496,7 +1623,12 @@ def run_doctor(
     missing_dirs = [d for d in required_dirs if not d.exists()]
     if missing_dirs:
         missing_names = ", ".join(str(d.name) for d in missing_dirs)
-        _record("required_dirs", "warn", f"Required dirs       missing: {missing_names}")
+        _record(
+            "required_dirs",
+            "warn",
+            f"Required dirs       missing: {missing_names}",
+            entailed_by_setup=True,
+        )
         if fix:
             for d in missing_dirs:
                 d.mkdir(parents=True, exist_ok=True)
@@ -1768,6 +1900,21 @@ def run_doctor(
     warn_s = "s" if counts["warn"] != 1 else ""
     print(f"{counts['fail']} error{err_s}, {counts['warn']} warning{warn_s}.")
 
+    # Before setup, most of what is "wrong" is just not-yet-done. Say that
+    # once, with the single action that resolves it, instead of leaving the
+    # user to work out which of ten warnings they caused.
+    if pre_setup:
+        expected_n = counts["expected"]
+        if expected_n:
+            plural = "s" if expected_n != 1 else ""
+            print(
+                f"\nTokenPak is not set up yet — {expected_n} check{plural} above "
+                f"(marked ·) are waiting on that, not faults."
+            )
+        else:
+            print("\nTokenPak is not set up yet.")
+        print("Run: tokenpak setup")
+
     # === Auto-fix ===============================================================
     if fix and fixes:
         print("\nAuto-fix requested. Fixing issues...")
@@ -1926,7 +2073,13 @@ import subprocess
 
 import yaml
 
-FLEET_CONFIG_FILE = Path.home() / ".tokenpak" / "fleet.yaml"
+
+def _fleet_config_file() -> Path:
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("fleet.yaml")
+    return found if found is not None else _paths.write_home() / "fleet.yaml"
+
 
 DEFAULT_FLEET_CONFIG = {
     "agents": [
@@ -1965,17 +2118,17 @@ class DeployDoctorResult(TypedDict):
 
 def load_fleet_config() -> FleetConfig:
     """Load fleet.yaml; create with defaults if missing."""
-    if FLEET_CONFIG_FILE.exists():
+    if _fleet_config_file().exists():
         try:
-            with open(FLEET_CONFIG_FILE) as f:
+            with open(_fleet_config_file()) as f:
                 data = yaml.safe_load(f)
             if isinstance(data, dict) and isinstance(data.get("agents"), list):
                 return cast(FleetConfig, data)
         except Exception:
             pass
     # Create default
-    FLEET_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(FLEET_CONFIG_FILE, "w") as f:
+    _fleet_config_file().parent.mkdir(parents=True, exist_ok=True)
+    with open(_fleet_config_file(), "w") as f:
         yaml.safe_dump(DEFAULT_FLEET_CONFIG, f, default_flow_style=False)
     return cast(FleetConfig, DEFAULT_FLEET_CONFIG)
 

@@ -3,7 +3,7 @@ Tests for Enterprise policy engine stubs.
 
 Verifies that:
 1. Stub modules are importable and have the right interfaces
-2. Non-Enterprise tier receives graceful upgrade messages
+2. OSS tier receives graceful upgrade messages
 3. CLI command modules are importable and callable
 """
 
@@ -60,7 +60,7 @@ def test_governance_engine_imports():
 
 
 # ---------------------------------------------------------------------------
-# 2. Non-Enterprise tier gets upgrade messages + graceful defaults
+# 2. OSS tier gets upgrade messages + graceful defaults
 # ---------------------------------------------------------------------------
 
 

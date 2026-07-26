@@ -62,19 +62,18 @@ def test_scoped_home_state_paths_and_fleet_untouched(scoped_home):
     assert _paths.under("proxy.pid") == scoped_home / "proxy.pid"
     assert _paths.home() == scoped_home
 
-    # Reloading the watchdog under the scoped home resolves its module-level
-    # runtime-state constants under the scope (they were the pid/log leak sites).
+    # The watchdog resolves its runtime-state paths under the scope. These are
+    # functions now, not module constants — importing the module must not bind
+    # a path, because importing it must not touch the filesystem at all.
     monkey_home = scoped_home
-    wd = importlib.reload(importlib.import_module("tokenpak.proxy.proxy_watchdog"))
+    wd = importlib.import_module("tokenpak.proxy.proxy_watchdog")
     try:
-        assert wd.PROXY_PID_FILE == monkey_home / "proxy.pid"
-        assert wd.WATCHDOG_LOG == monkey_home / "watchdog.log"
-        assert wd.COOLDOWNS_FILE == monkey_home / "cooldowns.json"
-        assert wd.AUTH_PROFILES_FILE == monkey_home / "auth-profiles.json"
+        assert wd.proxy_pid_file() == monkey_home / "proxy.pid"
+        assert wd.watchdog_log() == monkey_home / "watchdog.log"
+        assert wd.cooldowns_file_path() == monkey_home / "cooldowns.json"
+        assert wd.auth_profiles_file() == monkey_home / "auth-profiles.json"
     finally:
-        # Restore module-level constants to the ambient environment.
         os.environ.pop("TOKENPAK_HOME", None)
-        importlib.reload(wd)
 
     # Resolving scoped paths must never touch the fleet home's files.
     fleet = Path.home() / ".tokenpak"

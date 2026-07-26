@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "baseline-standards/controls/1.0",
+  "title": "Control-point registry",
+  "description": "Canonical registry of action classes. See GOVERNANCE.md section 5.",
+  "type": "object",
+  "required": ["schema", "standards_version", "controls"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "baseline-standards/controls/1.0" },
+    "standards_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/control" }
+    }
+  },
+  "$defs": {
+    "actor": { "enum": ["operator", "delegate", "reviewer", "executor", "any"] },
+    "authorizer": { "enum": ["operator", "delegate", "reviewer", "none"] },
+    "control": {
+      "type": "object",
+      "required": [
+        "id", "title", "protected", "protected_category",
+        "reversibility_class", "mode_override_allowed", "baseline"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+\\.[a-z0-9-]+$",
+          "description": "Action class named for effect on the world, not the tool used."
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "protected": { "type": "boolean" },
+        "protected_category": {
+          "enum": ["non-delegable", "human-authorized", "prohibited", null]
+        },
+        "reversibility_class": {
+          "enum": ["reversible", "reversible-with-cost", "irreversible"]
+        },
+        "mode_override_allowed": { "type": "boolean" },
+        "baseline": {
+          "type": "object",
+          "required": [
+            "executor", "authorizer", "authorization_type", "independence_requirement"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "executor": { "$ref": "#/$defs/actor" },
+            "authorizer": { "$ref": "#/$defs/authorizer" },
+            "authorization_type": {
+              "enum": ["explicit", "standing-envelope", "none-required"]
+            },
+            "authorization_timing": {
+              "enum": ["before", "before-and-revalidated", "after-within-sla"]
+            },
+            "independence_requirement": {
+              "enum": ["none", "separate-actor", "independent"]
+            }
+          }
+        },
+        "scope_or_envelope": { "type": "string" },
+        "expiration": { "type": "string" },
+        "required_evidence": { "type": "array", "items": { "type": "string" } },
+        "fallback": { "type": "string" },
+        "enforcement": {
+          "type": "object",
+          "required": ["level"],
+          "additionalProperties": false,
+          "properties": {
+            "level": { "enum": ["procedural", "static", "runtime"] },
+            "mechanism": { "type": "string" }
+          }
+        },
+        "instances": { "type": "array", "items": { "type": "string" } }
+      },
+      "allOf": [
+        {
+          "description": "A protected control must not be profile-overridable (GOVERNANCE.md R11).",
+          "if": { "properties": { "protected": { "const": true } }, "required": ["protected"] },
+          "then": { "properties": { "mode_override_allowed": { "const": false } } }
+        },
+        {
+          "description": "A protected control must declare a category.",
+          "if": { "properties": { "protected": { "const": true } }, "required": ["protected"] },
+          "then": {
+            "properties": {
+              "protected_category": { "enum": ["non-delegable", "human-authorized", "prohibited"] }
+            }
+          }
+        },
+        {
+          "description": "Non-delegable actions are performed by the operator (GOVERNANCE.md 4a).",
+          "if": {
+            "properties": { "protected_category": { "const": "non-delegable" } },
+            "required": ["protected_category"]
+          },
+          "then": {
+            "properties": {
+              "baseline": { "properties": { "executor": { "const": "operator" } } }
+            }
+          }
+        },
+        {
+          "description": "Irreversible or protected controls populate all canonical fields (R18).",
+          "if": {
+            "anyOf": [
+              { "properties": { "protected": { "const": true } }, "required": ["protected"] },
+              {
+                "properties": { "reversibility_class": { "const": "irreversible" } },
+                "required": ["reversibility_class"]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "scope_or_envelope", "expiration", "required_evidence", "fallback", "enforcement"
+            ],
+            "properties": {
+              "baseline": {
+                "required": [
+                  "executor", "authorizer", "authorization_type",
+                  "authorization_timing", "independence_requirement"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

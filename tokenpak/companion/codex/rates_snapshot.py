@@ -16,7 +16,16 @@ from pathlib import Path
 
 from tokenpak.models import get_rates, known_models
 
-DEFAULT_SNAPSHOT_PATH = Path.home() / ".tokenpak" / "companion" / "run" / "model_rates.tsv"
+
+def default_snapshot_path() -> Path:
+    """Snapshot location, resolved at call time.
+
+    Was a module-level constant bound to the legacy home at import, so the
+    path was fixed before any env override could be read.
+    """
+    from tokenpak.companion.config import journal_run_dir
+
+    return journal_run_dir() / "model_rates.tsv"
 
 
 def refresh(path: Path | None = None) -> Path:
@@ -25,7 +34,7 @@ def refresh(path: Path | None = None) -> Path:
     Rate is an integer dollar value — sufficient precision for the
     hook's budget gate (sub-dollar differences don't shift decisions).
     """
-    out_path = path or DEFAULT_SNAPSHOT_PATH
+    out_path = path or default_snapshot_path()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = []
@@ -45,7 +54,7 @@ def refresh(path: Path | None = None) -> Path:
 
 def count(path: Path | None = None) -> int:
     """Return the number of entries in the snapshot (0 if missing)."""
-    out_path = path or DEFAULT_SNAPSHOT_PATH
+    out_path = path or default_snapshot_path()
     if not out_path.exists():
         return 0
     return sum(1 for line in out_path.read_text().splitlines() if line.strip())

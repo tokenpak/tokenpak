@@ -248,14 +248,24 @@ def test_foreign_owner_unreadable_fd_scan_does_not_fail_closed(codex_home, tmp_p
     assert status.diagnostics_complete is True
 
 
-def test_same_owner_known_non_codex_unreadable_fd_is_ignored(codex_home, tmp_path):
+@pytest.mark.parametrize(
+    "name",
+    ["(sd-pam)", "gpg-agent", "tailscaled", "fusermount3", "systemd", "pipewire"],
+)
+def test_same_owner_non_codex_unreadable_fd_is_ignored(codex_home, tmp_path, name):
+    """Readable command evidence without "codex" in it is an answer, not an unknown.
+
+    Every one of these is a same-uid, non-dumpable process found on an
+    ordinary Linux workstation.  Treating them as unknown made a machine-wide
+    scan fail closed and refused access to a home nothing was attached to.
+    """
     db = _make_db(codex_home)
     proc_root = _complete_empty_proc(tmp_path)
     process = _write_synthetic_process(
         proc_root,
         4245,
         uid=db.stat().st_uid,
-        name="(sd-pam)",
+        name=name,
     )
     fd_dir = process / "fd"
     fd_dir.chmod(0)
@@ -266,6 +276,49 @@ def test_same_owner_known_non_codex_unreadable_fd_is_ignored(codex_home, tmp_pat
 
     assert status.locked is False
     assert status.diagnostics_complete is True
+
+
+@pytest.mark.parametrize("name", ["codex", "codex-cli", "/usr/local/bin/codex"])
+def test_same_owner_codex_named_unreadable_fd_still_fails_closed(codex_home, tmp_path, name):
+    """Narrowing the rule must not stop a real Codex session from counting."""
+    db = _make_db(codex_home)
+    proc_root = _complete_empty_proc(tmp_path)
+    process = _write_synthetic_process(
+        proc_root,
+        4246,
+        uid=db.stat().st_uid,
+        name=name,
+    )
+    fd_dir = process / "fd"
+    fd_dir.chmod(0)
+    try:
+        status = sl.probe(codex_home, proc_root=proc_root)
+    finally:
+        fd_dir.chmod(0o700)
+
+    assert status.locked is True
+    assert status.diagnostics_complete is False
+
+
+def test_incomplete_inspection_detail_does_not_claim_lock_evidence(codex_home, tmp_path):
+    """The no-holder/no-evidence branch must not assert evidence it never found."""
+    db = _make_db(codex_home)
+    proc_root = _complete_empty_proc(tmp_path)
+    _write_synthetic_process(
+        proc_root,
+        4247,
+        uid=db.stat().st_uid,
+        with_fd_dir=False,
+    )
+
+    status = sl.probe(codex_home, proc_root=proc_root)
+
+    assert status.locked is True
+    assert status.diagnostics_complete is False
+    assert status.holder_pids == []
+    assert "SQLite lock evidence" not in status.detail
+    assert "no observed holder" in status.detail
+    assert "refusing unsafe access" in status.detail
 
 
 def test_same_owner_benign_process_nonpermission_fd_error_fails_closed(

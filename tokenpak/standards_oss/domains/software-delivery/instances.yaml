@@ -1,0 +1,78 @@
+# Control instances — software-delivery domain module
+#
+# Concrete actions of this domain, mapped onto the spine's control classes.
+# An instance inherits its class's authority and MAY tighten it, never loosen it
+# (domains/README.md M3).
+
+schema: baseline-standards/instances/1.0
+standards_version: 1.4.0
+module: software-delivery
+trigger: work_ships_installable_or_versioned_software
+
+instances:
+
+  - id: software.merge-to-mainline
+    class: integrate.shared-baseline
+    description: Merging a change into the branch others build from.
+
+  - id: software.deploy-to-shared-environment
+    class: integrate.shared-baseline
+    description: Deploying to an environment other people depend on but outside users do not see.
+
+  - id: software.publish-package
+    class: publish.external-irreversible
+    description: >
+      Publishing to a package index or distribution channel. Treat as irreversible: consumers,
+      mirrors, and caches retain copies after any withdrawal.
+
+  - id: software.create-release-tag
+    class: publish.external-irreversible
+    description: >
+      Creating an immutable release marker. Anyone may already have fetched it by the time you
+      reconsider.
+
+  - id: software.delete-or-move-release-tag
+    class: record.history-alter
+    description: >
+      Deleting or repointing a published tag. Consumers who fetched the original now hold something
+      that no longer matches its name. Supersede with a new version instead.
+    tightens:
+      independence_requirement: independent
+
+  - id: software.rewrite-published-history
+    class: record.history-alter
+    description: Force-pushing or rewriting history others have pulled.
+    tightens:
+      independence_requirement: independent
+
+  - id: software.yank-release
+    class: recovery.rollback
+    description: Withdrawing a published release that users may have installed.
+
+  - id: software.weaken-branch-protection
+    class: access.grant-escalation
+    description: >
+      Reducing required checks, approvals, or push restrictions on a protected branch — including
+      temporarily.
+    tightens:
+      expiration: required
+
+  - id: software.rotate-publishing-credential
+    class: access.credential-change
+    description: Changing the credential or token that publishes releases.
+
+  - id: software.transfer-signing-key
+    class: access.key-custody-transfer
+    description: Exporting or transferring a package-signing key or repository ownership.
+
+  - id: software.publish-release-notes
+    class: publish.external-revocable
+    description: Release notes, changelog entries, and announcements. Claims must be substantiated.
+
+  - id: software.accept-dependency
+    class: work.accept
+    description: >
+      Adding or upgrading a third-party dependency. Accepting code you did not write into work you
+      are accountable for.
+    tightens:
+      independence_requirement: separate-actor

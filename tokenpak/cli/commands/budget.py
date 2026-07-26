@@ -15,7 +15,7 @@ SEP = "────────────────────────�
 # Reuse monitor DB for spend queries.
 # Resolve via the canonical resolver so this command reads the same store as
 # every other reader. Kept as a module-level constant
-# (rather than inlined) so tests can patch ``budget._MONITOR_DB``.
+# (rather than inlined) so tests can patch ``budget._monitor_db``.
 def _default_monitor_db() -> str:
     env = os.environ.get("TOKENPAK_DB", "").strip()
     if env:
@@ -31,8 +31,29 @@ def _default_monitor_db() -> str:
         return os.path.expanduser("~/.tpk/monitor.db")
 
 
-_MONITOR_DB = _default_monitor_db()
-_BUDGET_CONFIG = Path("~/.tokenpak/budget_config.yaml").expanduser()
+def _monitor_db() -> str:
+    """Resolve the request store at call time.
+
+    Was a module-level constant, so the path was fixed at import — before any
+    caller could set TOKENPAK_HOME, and pointing at whichever home happened to
+    exist when the module first loaded.
+    """
+    return _default_monitor_db()
+
+
+def _budget_config() -> Path:
+    """Resolve the budget config at call time, across homes.
+
+    Was hardcoded to ``~/.tokenpak/budget_config.yaml``, which ignored both
+    TOKENPAK_HOME and the canonical home, and bound it at import besides.
+    """
+    try:
+        from tokenpak import _paths
+
+        found = _paths.resolve_existing("budget_config.yaml")
+        return found if found is not None else _paths.write_home() / "budget_config.yaml"
+    except Exception:
+        return Path("~/.tpk/budget_config.yaml").expanduser()
 
 
 # ---------------------------------------------------------------------------
@@ -41,17 +62,17 @@ _BUDGET_CONFIG = Path("~/.tokenpak/budget_config.yaml").expanduser()
 
 
 def _load_config() -> dict:
-    if not _BUDGET_CONFIG.exists():
+    if not _budget_config().exists():
         return {}
     try:
         import yaml
 
-        with open(_BUDGET_CONFIG) as f:
+        with open(_budget_config()) as f:
             return yaml.safe_load(f) or {}
     except ImportError:
         # Fallback: simple key: value parser
         data = {}
-        for line in _BUDGET_CONFIG.read_text().splitlines():
+        for line in _budget_config().read_text().splitlines():
             if ":" in line and not line.strip().startswith("#"):
                 k, _, v = line.partition(":")
                 data[k.strip()] = v.strip()
@@ -61,15 +82,15 @@ def _load_config() -> dict:
 
 
 def _save_config(cfg: dict) -> None:
-    _BUDGET_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    _budget_config().parent.mkdir(parents=True, exist_ok=True)
     try:
         import yaml
 
-        with open(_BUDGET_CONFIG, "w") as f:
+        with open(_budget_config(), "w") as f:
             yaml.dump(cfg, f, default_flow_style=False)
     except ImportError:
         lines = [f"{k}: {v}" for k, v in cfg.items()]
-        _BUDGET_CONFIG.write_text("\n".join(lines) + "\n")
+        _budget_config().write_text("\n".join(lines) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +99,7 @@ def _save_config(cfg: dict) -> None:
 
 
 def _connect() -> Optional[sqlite3.Connection]:
-    db = Path(_MONITOR_DB)
+    db = Path(_monitor_db())
     if not db.exists():
         return None
     conn = sqlite3.connect(str(db))

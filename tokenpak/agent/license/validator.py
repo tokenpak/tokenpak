@@ -13,13 +13,11 @@ class LicenseTier(Enum):
 
     FREE = "free"
     PRO = "pro"
-    TEAM = "team"
-    ENTERPRISE = "enterprise"
 
     @classmethod
     def ladder(cls) -> tuple["LicenseTier", ...]:
         """Return license tiers in ascending capability order."""
-        return (cls.FREE, cls.PRO, cls.TEAM, cls.ENTERPRISE)
+        return (cls.FREE, cls.PRO)
 
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, LicenseTier):
@@ -31,6 +29,7 @@ TIER_FEATURES: dict[LicenseTier, list[str]] = {
     LicenseTier.FREE: [],
     LicenseTier.PRO: [
         "ab_testing",
+        "audit_log",
         "cli",
         "compression_advanced",
         "compression_basic",
@@ -39,15 +38,10 @@ TIER_FEATURES: dict[LicenseTier, list[str]] = {
         "model_routing_local",
         "multipak_capture",
         "replay_store",
-    ],
-    LicenseTier.TEAM: [
-        "tokenpak_server",
         "seat_management",
-        "team_analytics",
-    ],
-    LicenseTier.ENTERPRISE: [
-        "audit_log",
         "sla",
+        "team_analytics",
+        "tokenpak_server",
     ],
 }
 

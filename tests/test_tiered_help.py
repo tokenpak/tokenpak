@@ -63,25 +63,34 @@ class TestEssentialHelp:
         assert "--more" in text
         assert "--all" in text
 
-    def test_essential_commands_count(self):
-        """Essential commands list should have exactly 9 commands."""
-        assert len(_ESSENTIAL_COMMANDS) == 9, "Expected exactly 9 essential commands"
+    def test_essential_commands_are_real_visible_commands(self):
+        """Every essential command must exist in the registry and be discoverable.
 
-    def test_essential_commands_are(self):
-        """Verify the correct 9 essential commands are defined."""
-        expected = {
-            "setup",
-            "start",
-            "stop",
-            "status",
-            "cost",
-            "savings",
-            "doctor",
-            "dashboard",
-            "upgrade",
-        }
-        actual = set(_ESSENTIAL_COMMANDS.keys())
-        assert actual == expected, f"Essential commands mismatch. Expected {expected}, got {actual}"
+        Asserted as a property rather than a hardcoded roster: the list is
+        allowed to change, but it may never advertise a verb that does not
+        exist or one that has been deliberately hidden from discovery.
+        """
+        from tokenpak.cli.commands.help import _load_registry
+
+        registry = {cmd["command"]: cmd for cmd in _load_registry()}
+
+        for name in _ESSENTIAL_COMMANDS:
+            assert name in registry, f"Essential command {name!r} is not in the registry"
+            assert registry[name].get("hidden") is not True, (
+                f"Essential command {name!r} is hidden from discovery — "
+                "a hidden verb must not be advertised in beginner help"
+            )
+
+    def test_essential_help_carries_no_enrollment_cta(self):
+        """Beginner help must not advertise a Pro signup path that does not exist."""
+        output = StringIO()
+        with redirect_stdout(output):
+            print_essential_help()
+        text = output.getvalue()
+
+        assert "upgrade" not in text.lower()
+        assert "tokenpak.ai/pro" not in text
+        assert "upgrade" not in _ESSENTIAL_COMMANDS
 
 
 class TestIntermediateHelp:
@@ -101,7 +110,6 @@ class TestIntermediateHelp:
             )
 
         # Check for key intermediate commands
-        assert "watch" in text, "watch command not in --more output"
         assert "logs" in text, "logs command not in --more output"
         assert "config" in text, "config command not in --more output"
 
@@ -110,15 +118,25 @@ class TestIntermediateHelp:
         assert "Configuration:" in text
         assert "Content:" in text
 
-    def test_intermediate_commands_count(self):
-        """Intermediate commands list should have the correct count."""
-        # Should include watch, logs, stats, config, integrate, index, search, demo, restart, version
-        assert len(_INTERMEDIATE_COMMANDS) >= 10, "Expected at least 10 intermediate commands"
+    def test_intermediate_commands_are_supported(self):
+        """Intermediate help may only advertise allowlisted commands.
+
+        Replaces a minimum-count assertion. A count cannot tell ten working
+        commands apart from ten names, and it actively resists removing a verb
+        that turns out not to work — which is how `watch`, whose own help says
+        it is not implemented, stayed advertised here.
+        """
+        from tokenpak.core.registry import beta_surface
+
+        assert _INTERMEDIATE_COMMANDS, "intermediate help must list something"
+        for name in _INTERMEDIATE_COMMANDS:
+            assert beta_surface.is_supported(name), (
+                f"{name!r} is advertised in --more but is not on the beta allowlist"
+            )
 
     def test_intermediate_has_expected_commands(self):
         """Verify expected intermediate commands are defined."""
         expected = {
-            "watch",
             "logs",
             "stats",
             "config",
@@ -328,7 +346,7 @@ class TestAcceptanceCriteria:
 
         # Check key commands are present
         assert "setup" in text  # essential
-        assert "watch" in text  # intermediate
+        assert "logs" in text  # intermediate
 
     def test_criterion_3_all_shows_all_commands(self):
         """✅ tokenpak help --all shows all 93 commands."""

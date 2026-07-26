@@ -52,6 +52,9 @@ def _canonical_health() -> dict[str, object]:
         "timestamp": "2026-07-23T00:00:00Z",
         "connection_pool": {},
         "circuit_breakers": {},
+        # /health reports the serving process's PID so ownership can be
+        # verified rather than inferred from "something answered on the port".
+        "pid": 4242,
     }
 
 

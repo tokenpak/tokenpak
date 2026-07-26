@@ -24,29 +24,60 @@ from tokenpak import _paths  # scoped-home path resolver (honors TOKENPAK_HOME)
 
 # Configuration
 PROXY_PORT = int(os.environ.get("TOKENPAK_PORT", "8766"))
-# Runtime-state paths resolve under TOKENPAK_HOME (falls back to ~/.tokenpak when
-# unset), so a scoped-home proxy cannot clobber the default home's state.
-PROXY_PID_FILE = _paths.under("proxy.pid")
-WATCHDOG_LOG = _paths.under("watchdog.log")
-COOLDOWNS_FILE = _paths.under("cooldowns.json")
-AUTH_PROFILES_FILE = _paths.under("auth-profiles.json")
 HEALTH_CHECK_INTERVAL = 30  # seconds
 STATS_INTERVAL = 3600  # 1 hour
 MAX_RESTART_ATTEMPTS = 5
 RESTART_BACKOFF_BASE = 2  # exponential: 2s, 4s, 8s, 16s, 32s
 
 
-# Setup logging
-WATCHDOG_LOG.parent.mkdir(parents=True, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] [watchdog] %(levelname)s — %(message)s",
-    handlers=[
-        logging.FileHandler(WATCHDOG_LOG),
-        logging.StreamHandler(),
-    ],
-)
+# Runtime-state paths are resolved on use, never at import.
+#
+# These were four module-level constants built from the *read* resolver, and
+# the module then created a directory and opened a log file next to them —
+# all at import. Importing the watchdog therefore wrote to whichever home the
+# read resolver named, and since resolution keys on which home holds state,
+# that single import could hand the installation to the legacy directory
+# permanently. Reading must not create state, and importing a module must not
+# touch the filesystem; both rules were broken by the same eight lines.
+def proxy_pid_file() -> Path:
+    """Where the proxy records its PID."""
+    return _paths.write_under("proxy.pid")
+
+
+def watchdog_log() -> Path:
+    """Where this daemon writes its own log."""
+    return _paths.write_under("watchdog.log")
+
+
+def cooldowns_file_path() -> Path:
+    """Auth cooldown ledger."""
+    return _paths.write_under("cooldowns.json")
+
+
+def auth_profiles_file() -> Path:
+    """Auth profile store the cooldown sweep edits."""
+    return _paths.write_under("auth-profiles.json")
+
+
 logger = logging.getLogger(__name__)
+
+
+def configure_logging() -> None:
+    """Attach the file handler. Called by the entrypoint, not by import.
+
+    Creating the log directory is a side effect the daemon is entitled to; an
+    import is not.
+    """
+    log_path = watchdog_log()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] [watchdog] %(levelname)s — %(message)s",
+        handlers=[
+            logging.FileHandler(log_path),
+            logging.StreamHandler(),
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -70,8 +101,12 @@ class CooldownManager:
 
     HIGH_ERROR_THRESHOLD = 10  # don't clear if errorCount is high (real problem)
 
-    def __init__(self, cooldowns_file: Path = COOLDOWNS_FILE) -> None:
-        self.cooldowns_file = cooldowns_file
+    def __init__(self, cooldowns_file: Path | None = None) -> None:
+        # Resolved here rather than as a default argument: a default is
+        # evaluated once at import, which is the same bug in a second form.
+        self.cooldowns_file = (
+            cooldowns_file if cooldowns_file is not None else cooldowns_file_path()
+        )
 
     def _load(self) -> dict[str, _CooldownEntry]:
         if not self.cooldowns_file.exists():
@@ -131,11 +166,11 @@ class CooldownManager:
 
     def check_auth_profiles(self) -> list[str]:
         """Check auth-profiles.json for profiles with cooldownUntil set. Returns warnings."""
-        if not AUTH_PROFILES_FILE.exists():
+        if not auth_profiles_file().exists():
             return []
 
         try:
-            profiles = json.loads(AUTH_PROFILES_FILE.read_text())
+            profiles = json.loads(auth_profiles_file().read_text())
         except (json.JSONDecodeError, OSError):
             return []
 
@@ -160,7 +195,7 @@ class CooldownManager:
                     warnings.append(f"{profile_name} in cooldown for {remaining}s more")
 
         if changed:
-            AUTH_PROFILES_FILE.write_text(json.dumps(profiles, indent=2))
+            auth_profiles_file().write_text(json.dumps(profiles, indent=2))
 
         return warnings
 
@@ -359,6 +394,7 @@ class ProxyWatchdog:
 
 def main() -> None:
     """Run watchdog daemon."""
+    configure_logging()
     watchdog = ProxyWatchdog()
     watchdog.run()
 

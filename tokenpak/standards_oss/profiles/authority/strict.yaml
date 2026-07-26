@@ -1,0 +1,60 @@
+# Authority profile — strict   [EXAMPLE of tightening]
+#
+# This profile exists to demonstrate that tightening is always available and always allowed.
+# It takes `supervised` and raises independence to `independent` (GOVERNANCE.md section 3a — all four
+# tests) wherever the consequence of a wrong call is external or costly to undo.
+#
+# Copy this pattern for your own tightened profile. You may tighten any value freely and silently;
+# you may not loosen a protected field at all (GOVERNANCE.md R22).
+
+schema: baseline-standards/authority-profile/1.0
+standards_version: 1.4.0
+id: strict
+anchor: independent-verification-for-consequential-decisions
+
+controls:
+
+  work.accept:
+    authorizer: reviewer
+    authorization_type: explicit
+    independence_requirement: independent
+
+  work.scope-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  integrate.shared-baseline:
+    authorizer: reviewer
+    authorization_type: explicit
+    independence_requirement: independent
+
+  publish.external-revocable:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: independent
+
+  commit.external-promise:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: independent
+
+  spend.paid-action:
+    authorizer: none
+    authorization_type: standing-envelope
+    independence_requirement: none
+
+  spend.limit-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  governance.waiver:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: independent
+
+  governance.standard-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: independent

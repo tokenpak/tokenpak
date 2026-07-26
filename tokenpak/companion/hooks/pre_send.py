@@ -36,9 +36,9 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
 
 from tokenpak.companion import _sqlite as _db
+from tokenpak.companion import config as _companion_config
 
 # Model costs (USD per 1M tokens) — inlined to avoid importing tracker module
 _COSTS = {
@@ -160,15 +160,7 @@ def _write_session_marker(session_id: str) -> None:
     server (a separate process) can bind ``state.session_id`` to it. Atomic
     write via tmp+replace. Best-effort; never fails the hook."""
     try:
-        run_dir = (
-            Path(
-                os.environ.get(
-                    "TOKENPAK_COMPANION_JOURNAL_DIR",
-                    str(Path.home() / ".tokenpak" / "companion"),
-                )
-            )
-            / "run"
-        )
+        run_dir = _companion_config.journal_run_dir()
         run_dir.mkdir(parents=True, exist_ok=True)
         # pid-unique temp name so two concurrent hook processes can't
         # interleave writes to the same temp file before the atomic rename.
@@ -189,15 +181,12 @@ def _get_daily_total() -> float:
     """
     import datetime
 
-    db_path = (
-        Path(
-            os.environ.get(
-                "TOKENPAK_COMPANION_JOURNAL_DIR",
-                str(Path.home() / ".tokenpak" / "companion"),
-            )
-        )
-        / "budget.db"
-    )
+    # Read across homes: a pre-canonical install has its spend history in the
+    # legacy tree, and treating "file absent here" as zero spend would open
+    # the budget gate on a user who has already spent.
+    db_path = _companion_config.resolve_journal_file("budget.db")
+    if db_path is None:
+        return 0.0
     try:
         if not db_path.exists():
             return 0.0
@@ -223,15 +212,7 @@ def _journal_savings(
     Uses the canonical journal schema from companion._sqlite (shared with
     JournalStore) — the hook must never carry a divergent DDL copy.
     """
-    db_path = (
-        Path(
-            os.environ.get(
-                "TOKENPAK_COMPANION_JOURNAL_DIR",
-                str(Path.home() / ".tokenpak" / "companion"),
-            )
-        )
-        / "journal.db"
-    )
+    db_path = _companion_config.journal_write_dir() / "journal.db"
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = _db.connect(db_path)
@@ -271,15 +252,7 @@ def _journal_write(session_id: str, tokens_est: int, cost_est: float) -> None:
     Duplicate deliveries of the same event collapse via the content-hash
     UNIQUE index; dropped writes are logged instead of silently passed.
     """
-    db_path = (
-        Path(
-            os.environ.get(
-                "TOKENPAK_COMPANION_JOURNAL_DIR",
-                str(Path.home() / ".tokenpak" / "companion"),
-            )
-        )
-        / "journal.db"
-    )
+    db_path = _companion_config.journal_write_dir() / "journal.db"
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = _db.connect(db_path)
@@ -322,15 +295,7 @@ def _record_cost(session_id: str, tokens_est: int, cost_est: float) -> None:
     """
     import datetime
 
-    db_path = (
-        Path(
-            os.environ.get(
-                "TOKENPAK_COMPANION_JOURNAL_DIR",
-                str(Path.home() / ".tokenpak" / "companion"),
-            )
-        )
-        / "budget.db"
-    )
+    db_path = _companion_config.journal_write_dir() / "budget.db"
     try:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = _db.connect(db_path)

@@ -15,13 +15,22 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 from tokenpak.core.paths import get_db_path as _get_db_path
 
-_MONITOR_DB = str(_get_db_path("monitor.db"))
+
+def _monitor_db() -> str:
+    """Resolve the request store at call time.
+
+    Was a module-level constant, so the path was fixed at import — before any
+    caller could set TOKENPAK_HOME, and pointing at whichever home existed
+    when the module first loaded.
+    """
+    return str(_get_db_path("monitor.db"))
+
 
 SEP = "────────────────────────────────────────"
 
 
 def _connect() -> Optional[sqlite3.Connection]:
-    db = Path(_MONITOR_DB)
+    db = Path(_monitor_db())
     if not db.exists():
         return None
     conn = sqlite3.connect(str(db))
@@ -69,7 +78,7 @@ def query_summary(period: str = "today", model: Optional[str] = None) -> dict:
     """
     conn = _connect()
     if not conn:
-        return {"error": "DB not found", "db": _MONITOR_DB}
+        return {"error": "DB not found", "db": _monitor_db()}
     where, params = _period_clause(period)
     if model:
         where += " AND model = ?"

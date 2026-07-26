@@ -12,10 +12,11 @@ goes through CompanionState methods so it's centralized and testable.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
+
+from tokenpak.companion import config as _companion_config
 
 from ..config import CompanionConfig
 
@@ -31,15 +32,7 @@ def current_session_id() -> str:
     from the hook, so this file is the only channel by which it learns the
     active session id. Returns "" if no marker exists yet."""
     try:
-        run_dir = (
-            Path(
-                os.environ.get(
-                    "TOKENPAK_COMPANION_JOURNAL_DIR",
-                    str(Path.home() / ".tokenpak" / "companion"),
-                )
-            )
-            / "run"
-        )
+        run_dir = _companion_config.journal_run_dir()
         marker = run_dir / "current-session"
         if marker.exists():
             return marker.read_text(encoding="utf-8").strip()

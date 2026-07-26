@@ -230,8 +230,19 @@ class GoalManager:
             goals_path: Path to goals.yaml config file
             state_path: Path to goal_state.json tracking file
         """
-        self.goals_path = Path(goals_path or (Path.home() / ".tokenpak" / "goals.yaml"))
-        self.state_path = Path(state_path or (Path.home() / ".tokenpak" / "goal_state.json"))
+        from tokenpak import _paths
+
+        # Read an existing file wherever it lives; create new state canonically.
+        self.goals_path = Path(
+            goals_path
+            or _paths.resolve_existing("goals.yaml")
+            or (_paths.write_home() / "goals.yaml")
+        )
+        self.state_path = Path(
+            state_path
+            or _paths.resolve_existing("goal_state.json")
+            or (_paths.write_home() / "goal_state.json")
+        )
         self.goals: dict[str, Goal] = {}
         self.progress: dict[str, GoalProgress] = {}
         self._load()

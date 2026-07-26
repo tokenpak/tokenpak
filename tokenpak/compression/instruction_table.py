@@ -30,7 +30,13 @@ class InstructionTable:
         min_occurrences: int = 2,
         manual_entries: dict[str, str] | None = None,
     ) -> None:
-        self.path = Path(path or "~/.tokenpak/instruction_table.json").expanduser()
+        from tokenpak import _paths
+
+        self.path = Path(
+            path
+            or _paths.resolve_existing("instruction_table.json")
+            or (_paths.write_home() / "instruction_table.json")
+        ).expanduser()
         self.min_tokens = max(1, int(min_tokens))
         self.min_occurrences = max(2, int(min_occurrences))
         self.data = self._load()

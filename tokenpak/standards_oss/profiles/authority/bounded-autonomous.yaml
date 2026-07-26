@@ -1,0 +1,66 @@
+# Authority profile — bounded-autonomous
+#
+# Work proceeds on evidence, with batched notification instead of per-action approval.
+#
+# "Bounded" is load-bearing, not branding. Every protected action in GOVERNANCE.md section 4 still
+# requires a human, in this profile exactly as in the others. There is no unbounded profile.
+#
+# Note what does NOT move here, and why:
+#   - work.accept still requires a separate actor. An executor never accepts its own work in any
+#     profile (GOVERNANCE.md R5). Autonomy changes who reviews, not whether review happens.
+#   - commit.external-promise stays with the operator. Autonomy inside your own work is a choice;
+#     making promises to other people on your behalf is not the same thing.
+#   - spend.limit-change stays with the operator. A system that can raise its own ceiling has no
+#     ceiling.
+
+schema: baseline-standards/authority-profile/1.0
+standards_version: 1.4.0
+id: bounded-autonomous
+anchor: evidence-with-notification
+
+controls:
+
+  work.accept:
+    authorizer: reviewer
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  work.scope-change:
+    authorizer: delegate
+    authorization_type: standing-envelope
+    independence_requirement: none
+
+  integrate.shared-baseline:
+    authorizer: delegate
+    authorization_type: standing-envelope
+    independence_requirement: separate-actor
+
+  publish.external-revocable:
+    authorizer: delegate
+    authorization_type: standing-envelope
+    independence_requirement: separate-actor
+
+  commit.external-promise:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  spend.paid-action:
+    authorizer: none
+    authorization_type: standing-envelope
+    independence_requirement: none
+
+  spend.limit-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: none
+
+  governance.waiver:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  governance.standard-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor

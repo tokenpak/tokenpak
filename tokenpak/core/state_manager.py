@@ -38,7 +38,7 @@ def _json_object(value: object) -> StateDict | None:
 
 class StateManager:
     """
-    Manages compact JSON session state for the TokenPak Integration Protocol (TIP).
+    Manages compact JSON session state for the TokenPak Integrity Protocol (TIP).
 
     Persists to: .tpk/state/session_<id>.state.json   (`.tpk/` is the brand-shortform
     on-disk path, frozen by the 2026-05-06 terminology transition; do not rename.

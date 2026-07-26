@@ -25,8 +25,8 @@ from typing import Callable
 
 from ..config import CompanionConfig
 from .mcp_config import SERVER_NAME
-from .rates_snapshot import DEFAULT_SNAPSHOT_PATH
 from .rates_snapshot import count as rates_count
+from .rates_snapshot import default_snapshot_path
 from .skills_installer import (
     _configured_skill_paths,
     _default_skills_root,
@@ -285,7 +285,7 @@ def check_databases() -> "tuple[bool, str]":
 def check_rates_snapshot() -> "tuple[bool, str]":
     n = rates_count()
     if n == 0:
-        return False, f"{DEFAULT_SNAPSHOT_PATH} missing or empty"
+        return False, f"{default_snapshot_path()} missing or empty"
     if n < 10:
         return False, f"only {n} rate entries — registry load may have failed"
     return True, f"{n} model rates in snapshot"

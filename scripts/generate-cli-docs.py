@@ -266,6 +266,13 @@ def generate(stdout_only: bool = False) -> str:
         "",
     ]
 
+    # The published reference documents the supported surface only. Commands
+    # outside the beta allowlist stay reachable but are not advertised here —
+    # a reference page is a promise that what it lists has been verified.
+    from tokenpak.core.registry import beta_surface
+
+    supported = beta_surface.supported_commands()
+
     # Emit commands in _COMMAND_GROUPS order
     documented = set()
 
@@ -274,6 +281,9 @@ def generate(stdout_only: bool = False) -> str:
         lines.append("")
 
         for cmd_name, cmd_desc in commands:
+            if cmd_name not in supported:
+                documented.add(cmd_name)
+                continue
             documented.add(cmd_name)
             if cmd_name in submap:
                 sub_parser = submap[cmd_name]
@@ -294,7 +304,7 @@ def generate(stdout_only: bool = False) -> str:
         lines.append("")
 
     # Catch any parsers not in _COMMAND_GROUPS (shouldn't happen, but be safe)
-    extra = sorted(set(submap) - documented)
+    extra = sorted((set(submap) - documented) & supported)
     if extra:
         lines.append("## Additional Commands")
         lines.append("")

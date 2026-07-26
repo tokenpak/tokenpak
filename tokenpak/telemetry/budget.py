@@ -442,13 +442,27 @@ class BudgetTracker:
 # ---------------------------------------------------------------------------
 
 
-def _budget_config_path() -> Path:
-    return Path("~/.tokenpak/budget_config.yaml").expanduser()
+def _budget_config_read_path() -> Optional[Path]:
+    """Existing budget config in any read home, or ``None``.
+
+    Was hardcoded to ``~/.tokenpak/budget_config.yaml``, which ignored both
+    ``TOKENPAK_HOME`` and the canonical home.
+    """
+    from tokenpak import _paths
+
+    return _paths.resolve_existing("budget_config.yaml")
+
+
+def _budget_config_write_path() -> Path:
+    """Where a new budget config is written: the canonical home, always."""
+    from tokenpak import _paths
+
+    return _paths.write_home() / "budget_config.yaml"
 
 
 def load_budget_config() -> BudgetConfig:
-    p = _budget_config_path()
-    if not p.exists():
+    p = _budget_config_read_path()
+    if p is None or not p.exists():
         return BudgetConfig()
     try:
         with open(p) as f:
@@ -459,10 +473,16 @@ def load_budget_config() -> BudgetConfig:
 
 
 def save_budget_config(cfg: BudgetConfig) -> None:
-    p = _budget_config_path()
+    from tokenpak import _paths
+
+    # Update in place if a config already exists somewhere; otherwise create
+    # it canonically. Never fork state by writing a second copy.
+    p = _budget_config_read_path() or _budget_config_write_path()
+    _paths.ensure_home()
     p.parent.mkdir(parents=True, exist_ok=True)
     with open(p, "w") as f:
         yaml.dump(cfg.to_dict(), f, default_flow_style=False)
+    _paths.secure_file(p)
 
 
 # ---------------------------------------------------------------------------
@@ -473,11 +493,30 @@ _tracker: Optional[BudgetTracker] = None
 
 
 def get_budget_tracker() -> BudgetTracker:
-    """Return process-level singleton budget tracker."""
+    """Return process-level singleton budget tracker.
+
+    The store used to be ``~/.tokenpak/budget.db``, created unconditionally —
+    so ``tokenpak cost`` on a fresh install materialised a database in the
+    *legacy* home before the user had configured anything, pinning the install
+    to a home TokenPak no longer writes to. ``get_db_path`` applies the
+    canonical-write / compatibility-read split.
+    """
     global _tracker
     if _tracker is None:
+        from tokenpak import _paths
+        from tokenpak.core.paths import get_db_path
+
         cfg = load_budget_config()
-        db = Path("~/.tokenpak/budget.db").expanduser()
+        db = get_db_path("budget.db")
+        _paths.ensure_home()
         db.parent.mkdir(parents=True, exist_ok=True)
         _tracker = BudgetTracker(config=cfg, db_path=str(db))
+        # Spend history is the user's own. The enclosing home is 0700, so this
+        # is defence in depth rather than an exposure, but a database of what
+        # someone spent should not be created at the ambient umask.
+        try:
+            if db.exists():
+                _paths.secure_file(db)
+        except Exception:
+            pass
     return _tracker

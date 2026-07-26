@@ -146,7 +146,7 @@ tokenpak tip conformance
 
 ## 5. TIP capability inspection
 
-TokenPak Integration Protocol (TIP) is the open contract layer that
+TokenPak Integrity Protocol (TIP) is the open contract layer that
 adapter providers and platform integrations declare against. List
 every capability label this install knows about:
 
@@ -240,7 +240,7 @@ diff /tmp/my-context/notes.md /tmp/restored/notes.md
 ## 7. License & features
 
 TokenPak ships as a single binary; the Free tier covers the full
-OSS feature set. Pro/Team/Enterprise tiers unlock additional
+OSS feature set. The Pro tier unlocks additional
 capabilities via license activation. List what you have today:
 
 ```bash

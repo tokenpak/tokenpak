@@ -191,6 +191,12 @@ def main(args: list[str] | None = None) -> int:
         env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
         env["CLAUDE_CODE_SKIP_PROMPT_HISTORY"] = "1"
 
+    # Captured before any override: the child inherits a copy of this
+    # environment, so a base URL already exported here routes Claude even when
+    # TokenPak selects no proxy of its own.  Reporting only TokenPak's own
+    # selection would understate where traffic actually goes.
+    inherited_base_url = env.get("ANTHROPIC_BASE_URL")
+
     proxy_url = config.proxy_url
     if not proxy_url:
         default_proxy = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
@@ -221,6 +227,14 @@ def main(args: list[str] | None = None) -> int:
     )
     if proxy_url:
         print(f"     {_DIM}Proxy active \u2192 {proxy_url}{_RESET}", file=sys.stderr)
+    elif inherited_base_url:
+        # TokenPak selected nothing, but the child is still routed. Saying
+        # nothing here reads as a direct connection.
+        print(
+            f"     {_DIM}Routed by inherited ANTHROPIC_BASE_URL \u2192 "
+            f"{inherited_base_url} (not selected by TokenPak){_RESET}",
+            file=sys.stderr,
+        )
     print(file=sys.stderr)
     print(f"     {_DIM}{meme}{_RESET}", file=sys.stderr)
     print(file=sys.stderr)

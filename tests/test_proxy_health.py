@@ -63,6 +63,10 @@ CANONICAL_HEALTH_TOP_LEVEL = {
     "timestamp",
     "connection_pool",
     "circuit_breakers",
+    # The serving process's PID. Lifecycle commands verify ownership against
+    # it rather than inferring "our proxy is up" from the fact that something
+    # answered on the port.
+    "pid",
 }
 
 
@@ -133,7 +137,7 @@ def test_health_required_fields_present(proxy):
 
 @pytest.mark.quick
 def test_health_canonical_wire_contract_is_exact_and_uncached(proxy):
-    """The shipped handler keeps the 15-field/73-static-path basic shape."""
+    """The shipped handler keeps the 16-field/74-static-path basic shape."""
     _, first = _get_health()
 
     assert set(first) == CANONICAL_HEALTH_TOP_LEVEL
@@ -146,7 +150,7 @@ def test_health_canonical_wire_contract_is_exact_and_uncached(proxy):
         for path in _recursive_health_paths(first)
         if not path.startswith("$.circuit_breakers.providers.")
     }
-    assert len(static_paths) == 73
+    assert len(static_paths) == 74
     assert set(first["memory_guard"]) == {
         "enabled",
         "state",

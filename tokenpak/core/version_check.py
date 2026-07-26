@@ -26,8 +26,21 @@ from typing import cast
 
 PROXY_URL = "http://localhost:8766"
 LOCK_FILE = Path.home() / "vault" / "System" / "tokenpak.lock.json"
-TOKENPAK_CFG = Path.home() / ".tokenpak" / "config.json"
-MEMORY_DIR = Path.home() / ".tokenpak" / "data" / "memory"
+
+
+def _tokenpak_cfg() -> Path:
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("config.json")
+    return found if found is not None else _paths.write_home() / "config.json"
+
+
+def _memory_dir() -> Path:
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("data/memory")
+    return found if found is not None else _paths.write_home() / "data" / "memory"
+
 
 # Fields that were removed in past versions
 DEPRECATED_CONFIG_FIELDS = {
@@ -67,9 +80,9 @@ def _load_lock() -> dict[str, object]:
 
 
 def _load_config() -> dict[str, object] | None:
-    if TOKENPAK_CFG.exists():
+    if _tokenpak_cfg().exists():
         try:
-            return _json_object(TOKENPAK_CFG.read_text())
+            return _json_object(_tokenpak_cfg().read_text())
         except Exception:
             return None
     return None
@@ -81,8 +94,8 @@ def _log_warning(message: str) -> None:
         import datetime
 
         today = datetime.date.today().isoformat()
-        mem_path = MEMORY_DIR / f"{today}.md"
-        MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+        mem_path = _memory_dir() / f"{today}.md"
+        _memory_dir().mkdir(parents=True, exist_ok=True)
         existing = mem_path.read_text() if mem_path.exists() else ""
         ts = datetime.datetime.now().strftime("%H:%M")
         if "## Startup Warnings" not in existing:

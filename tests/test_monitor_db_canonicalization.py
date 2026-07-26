@@ -76,10 +76,13 @@ def test_command_default_monitor_db_is_canonical(modname, tmp_path, monkeypatch)
     monkeypatch.delenv("TOKENPAK_DB", raising=False)
 
     mod = importlib.import_module(modname)
-    importlib.reload(mod)
+    # No reload. These resolve at call time, so the current environment is
+    # what they must answer to; reloading first was how the old import-time
+    # constant was made to look dynamic.
+    resolved = mod._monitor_db()
     # No legacy ~/.tokenpak/data default; resolver-backed canonical instead.
-    assert mod._MONITOR_DB.endswith(".tpk/monitor.db")
-    assert ".tokenpak/data/monitor.db" not in mod._MONITOR_DB
+    assert resolved.endswith(".tpk/monitor.db")
+    assert ".tokenpak/data/monitor.db" not in resolved
 
 
 def test_command_monitor_db_respects_env_override(tmp_path, monkeypatch):
@@ -87,9 +90,19 @@ def test_command_monitor_db_respects_env_override(tmp_path, monkeypatch):
     monkeypatch.setenv("TOKENPAK_DB", str(custom))
 
     import tokenpak.cli.commands.budget as budget
+    import tokenpak.cli.commands.optimize as optimize
 
-    importlib.reload(budget)
-    assert budget._MONITOR_DB == str(custom)
+    # Imported once, before the env var was read by anything: a call-time
+    # resolver must still see it. This used to reload the module, which meant
+    # the assertion could not fail for the reason it existed to catch.
+    assert budget._monitor_db() == str(custom)
+    assert optimize._monitor_db() == str(custom)
+
+    # And it must track a *change* to the environment, not just its value at
+    # first call.
+    second = tmp_path / "second.db"
+    monkeypatch.setenv("TOKENPAK_DB", str(second))
+    assert budget._monitor_db() == str(second)
 
 
 def test_doctor_claude_code_paths_are_canonical(tmp_path, monkeypatch):

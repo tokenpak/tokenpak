@@ -26,10 +26,8 @@ import pytest
 
 from tokenpak import licensing
 from tokenpak.licensing import (
-    TIER_ENTERPRISE,
     TIER_FREE,
     TIER_PRO,
-    TIER_TEAM,
     activate,
     daemon_probe,  # noqa: F401  (submodule import for monkeypatch)
     deactivate,
@@ -116,8 +114,9 @@ def test_devshim_env_without_prefix_stays_locked(monkeypatch):
     "key,expected_tier",
     [
         ("TPK-DEVSHIM-PRO-LOCAL-2026", TIER_PRO),
-        ("TPK-DEVSHIM-TEAM-LOCAL-2026", TIER_TEAM),
-        ("TPK-DEVSHIM-ENTERPRISE-LOCAL-2026", TIER_ENTERPRISE),
+        # Retired tier segments are no longer recognized → default to Pro.
+        ("TPK-DEVSHIM-TEAM-LOCAL-2026", TIER_PRO),
+        ("TPK-DEVSHIM-ENTERPRISE-LOCAL-2026", TIER_PRO),
         ("TPK-DEVSHIM-LOCAL-2026", TIER_PRO),  # no tier segment → defaults Pro
     ],
 )

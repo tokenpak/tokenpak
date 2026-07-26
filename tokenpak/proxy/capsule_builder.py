@@ -30,8 +30,6 @@ Or via the feature-flag-aware factory:
 
 from __future__ import annotations
 
-import os
-
 # Re-export the canonical implementation so callers can do:
 #   from tokenpak.proxy.capsule_builder import CapsuleBuilder
 from tokenpak.companion.capsules.builder import (
@@ -73,8 +71,9 @@ def make_capsule_builder(
         An enabled or disabled builder depending on the feature flag.
     """
     from tokenpak.core.config_loader import _bool_env
+    from tokenpak.proxy.config import env_or_profile as _env_or_profile
 
-    enabled = _bool_env(os.environ.get("TOKENPAK_CAPSULE_BUILDER", "0"))
+    enabled = _bool_env(_env_or_profile("TOKENPAK_CAPSULE_BUILDER", "0"))
     return CapsuleBuilder(
         enabled=enabled,
         min_block_chars=min_block_chars,

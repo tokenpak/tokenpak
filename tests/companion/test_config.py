@@ -175,7 +175,16 @@ def test_profile_balanced_no_override():
 # ---------------------------------------------------------------------------
 
 
-def test_run_dir_is_under_home():
-    """run_dir is always inside ~/.tokenpak/companion/run."""
+def test_run_dir_is_under_canonical_home():
+    """run_dir lives beside the journal, in the canonical home — never legacy."""
+    from tokenpak import _paths
+
     cfg = CompanionConfig()
-    assert cfg.run_dir == Path.home() / ".tokenpak" / "companion" / "run"
+    assert cfg.run_dir == _paths.write_home() / "companion" / "run"
+    assert ".tokenpak" not in str(cfg.run_dir)
+
+
+def test_run_dir_follows_journal_dir_override(tmp_path):
+    """An overridden journal location takes its run directory with it."""
+    cfg = CompanionConfig(journal_dir=tmp_path / "elsewhere")
+    assert cfg.run_dir == tmp_path / "elsewhere" / "run"

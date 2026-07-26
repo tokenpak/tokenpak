@@ -52,8 +52,7 @@ def validator():
     v = APIKeyValidator()
     v.register("key-free", LicenseTier.FREE)
     v.register("key-pro", LicenseTier.PRO)
-    v.register("key-team", LicenseTier.TEAM)
-    v.register("key-enterprise", LicenseTier.ENTERPRISE)
+    v.register("key-pro2", LicenseTier.PRO)
     return v
 
 
@@ -92,18 +91,25 @@ def test_valid_pro_key_returns_200(client):
     assert data["rate_limit_per_minute"] == 100
 
 
-def test_valid_team_key_returns_200(client):
-    resp = client.get("/v1/status", headers={"X-TokenPak-Key": "key-team"})
+def test_second_pro_key_returns_200(client):
+    resp = client.get("/v1/status", headers={"X-TokenPak-Key": "key-pro2"})
     assert resp.status_code == 200
-    assert resp.json()["tier"] == "team"
+    assert resp.json()["tier"] == "pro"
 
 
-def test_valid_enterprise_key_returns_200(client):
-    resp = client.get("/v1/status", headers={"X-TokenPak-Key": "key-enterprise"})
+def test_unlimited_tier_reports_unlimited(client):
+    # No shipped tier is unlimited; patch the limit table to cover the path.
+    from unittest.mock import patch
+
+    from tokenpak.proxy.intelligence.auth import LicenseTier
+
+    with patch.dict(
+        "tokenpak.proxy.intelligence.auth.TIER_RATE_LIMITS",
+        {LicenseTier.PRO: None},
+    ):
+        resp = client.get("/v1/status", headers={"X-TokenPak-Key": "key-pro2"})
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["tier"] == "enterprise"
-    assert data["rate_limit_per_minute"] == "unlimited"
+    assert resp.json()["rate_limit_per_minute"] == "unlimited"
 
 
 # ──────────────────────────────────────────────────────────────
@@ -127,16 +133,28 @@ def test_rate_limit_enforced_for_pro(validator):
     assert "Too Many Requests" in r.json()["error"]
 
 
-def test_enterprise_key_never_rate_limited(validator):
-    """Enterprise tier: unlimited — no 429 even after many requests."""
+def test_unlimited_tier_never_rate_limited(validator):
+    """A tier mapped to ``None`` is unlimited — no 429 even after many requests.
+
+    No shipped tier maps to ``None`` (OSS=20/min, Pro=100/min), so the limit
+    table is patched to keep the unlimited path covered.
+    """
+    from unittest.mock import patch
+
+    from tokenpak.proxy.intelligence.auth import LicenseTier
+
     limiter = RateLimiter()
     app = create_app(validator=validator, limiter=limiter)
     c = TestClient(app, raise_server_exceptions=False)
-    headers = {"X-TokenPak-Key": "key-enterprise"}
+    headers = {"X-TokenPak-Key": "key-pro2"}
 
-    for _ in range(200):
-        r = c.get("/v1/status", headers=headers)
-        assert r.status_code == 200
+    with patch.dict(
+        "tokenpak.proxy.intelligence.auth.TIER_RATE_LIMITS",
+        {LicenseTier.PRO: None},
+    ):
+        for _ in range(200):
+            r = c.get("/v1/status", headers=headers)
+            assert r.status_code == 200
 
 
 def test_rate_limit_headers_present_on_success(client):
@@ -214,7 +232,7 @@ def test_budget_missing_content_returns_422(client):
 def test_compress_valid_request_returns_compressed(client):
     resp = client.post(
         "/v1/compress",
-        headers={"X-TokenPak-Key": "key-team"},
+        headers={"X-TokenPak-Key": "key-pro2"},
         json={"content": "The quick brown fox jumps over the lazy dog", "model": "gpt-4o"},
     )
     assert resp.status_code == 200
@@ -228,7 +246,7 @@ def test_compress_valid_request_returns_compressed(client):
 def test_budget_valid_request(client):
     resp = client.post(
         "/v1/budget",
-        headers={"X-TokenPak-Key": "key-team"},
+        headers={"X-TokenPak-Key": "key-pro2"},
         json={"content": "short text", "model": "gpt-4o", "target_tokens": 1000},
     )
     assert resp.status_code == 200

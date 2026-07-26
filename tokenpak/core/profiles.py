@@ -32,7 +32,7 @@ class Profile(TypedDict):
 PROFILES: dict[str, Profile] = {
     "minimal": {
         "name": "minimal",
-        "description": "Compression only (safest, ~5% savings)",
+        "description": "Compression only — the most conservative option",
         "features": {
             "compression": {"enabled": True},
             "semantic_cache": {"enabled": False},
@@ -54,7 +54,7 @@ PROFILES: dict[str, Profile] = {
     },
     "balanced": {
         "name": "balanced",
-        "description": "Compression + smart caching + routing (~30% savings)",
+        "description": "Compression + smart caching + routing (recommended default)",
         "features": {
             "compression": {"enabled": True},
             "semantic_cache": {"enabled": True},
@@ -76,7 +76,7 @@ PROFILES: dict[str, Profile] = {
     },
     "aggressive": {
         "name": "aggressive",
-        "description": "All optimizations enabled (maximum savings, ~40%+)",
+        "description": "All optimizations enabled — most aggressive rewriting",
         "features": {
             "compression": {"enabled": True},
             "semantic_cache": {"enabled": True},

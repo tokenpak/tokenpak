@@ -47,14 +47,17 @@ tokenpak demo
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  TokenPak — Offline Fixture Demo (illustrative)      │
+│  TokenPak — Offline Fixture Demo                     │
 ├──────────────────────────────────────────────────────┤
 │  Scenario              DevOps agent (config + logs)  │
+│  Data source                built-in sample fixture  │
 │  Savings drivers                      dedup + alias  │
 ├──────────────────────────────────────────────────────┤
 │  Original                                747 tokens  │
 │  Compressed                              502 tokens  │
-│  Fewer tokens                            245 tokens  │
+│  Fixture delta                  245 tokens  (32.8%)  │
+│  Fixture cost delta            $0.00073 per fixture  │
+│  Receipt status               not a savings receipt  │
 ├──────────────────────────────────────────────────────┤
 │  Stages: dedup, alias, segmentize, directives        │
 └──────────────────────────────────────────────────────┘

@@ -22,6 +22,7 @@ EXPECTED_TIER_FEATURES = {
     LicenseTier.FREE: [],
     LicenseTier.PRO: [
         "ab_testing",
+        "audit_log",
         "cli",
         "compression_advanced",
         "compression_basic",
@@ -30,15 +31,10 @@ EXPECTED_TIER_FEATURES = {
         "model_routing_local",
         "multipak_capture",
         "replay_store",
-    ],
-    LicenseTier.TEAM: [
-        "tokenpak_server",
         "seat_management",
-        "team_analytics",
-    ],
-    LicenseTier.ENTERPRISE: [
-        "audit_log",
         "sla",
+        "team_analytics",
+        "tokenpak_server",
     ],
 }
 
@@ -58,12 +54,10 @@ def test_ladder_is_ascending_and_totally_ordered() -> None:
     assert ladder == (
         LicenseTier.FREE,
         LicenseTier.PRO,
-        LicenseTier.TEAM,
-        LicenseTier.ENTERPRISE,
     )
-    assert LicenseTier.FREE < LicenseTier.PRO < LicenseTier.TEAM < LicenseTier.ENTERPRISE
+    assert LicenseTier.FREE < LicenseTier.PRO
     assert sorted(reversed(ladder)) == list(ladder)
-    assert LicenseTier.ENTERPRISE >= LicenseTier.TEAM
+    assert LicenseTier.PRO >= LicenseTier.FREE
 
 
 def test_tier_feature_map_is_exact_non_empty_and_string_typed() -> None:
@@ -85,13 +79,13 @@ def test_each_feature_is_introduced_by_exactly_one_tier() -> None:
 @pytest.mark.parametrize(
     ("feature", "expected_tier"),
     [
-        ("tokenpak_server", "team"),
-        ("seat_management", "team"),
-        ("team_analytics", "team"),
+        ("tokenpak_server", "pro"),
+        ("seat_management", "pro"),
+        ("team_analytics", "pro"),
         ("compression_advanced", "pro"),
         ("multipak_capture", "pro"),
-        ("audit_log", "enterprise"),
-        ("sla", "enterprise"),
+        ("audit_log", "pro"),
+        ("sla", "pro"),
         ("unknown_thing", None),
     ],
 )

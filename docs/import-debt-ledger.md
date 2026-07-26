@@ -222,7 +222,6 @@ B, or C. Closing tracker: `BURN-A4-G9`.
 | IMP-075 | `tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.generator` | entrypoint-pipeline-bypass | ⬜ pending | BURN-A4-G9 | ae1e139 |
 | IMP-076 | `tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.privacy` | entrypoint-pipeline-bypass | ⬜ pending | BURN-A4-G9 | ae1e139 |
 | IMP-077 | `tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.sync` | entrypoint-pipeline-bypass | ⬜ pending | BURN-A4-G9 | ae1e139 |
-| IMP-078 | `tokenpak.cli.commands.preview -> tokenpak.compression.core` | entrypoint-pipeline-bypass | ⬜ pending | BURN-A4-G9 | ae1e139 |
 | IMP-079 | `tokenpak.sdk.integrations.claude_code.mcp_server -> tokenpak.compression.budgets.policy` | entrypoint-pipeline-bypass | ⬜ pending | BURN-A4-G9 | ae1e139 |
 | IMP-080 | `tokenpak.sdk.integrations.claude_code.mcp_server -> tokenpak.compression.extraction.extractor` | entrypoint-pipeline-bypass | ⬜ pending | BURN-A4-G9 | ae1e139 |
 | IMP-081 | `tokenpak.sdk.integrations.litellm.formatter -> tokenpak.compression.engines` | entrypoint-pipeline-bypass | ⬜ pending | BURN-A4-G9 | ae1e139 |

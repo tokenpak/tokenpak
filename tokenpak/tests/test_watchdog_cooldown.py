@@ -185,7 +185,7 @@ def test_check_auth_profiles_no_file(tmp_path, monkeypatch):
     """check_auth_profiles returns [] when auth-profiles.json doesn't exist."""
     import tokenpak.proxy.proxy_watchdog as wd_module
 
-    monkeypatch.setattr(wd_module, "AUTH_PROFILES_FILE", tmp_path / "auth-profiles.json")
+    monkeypatch.setattr(wd_module, "auth_profiles_file", lambda: tmp_path / "auth-profiles.json")
     mgr = make_manager(tmp_path)
     assert mgr.check_auth_profiles() == []
 
@@ -197,7 +197,7 @@ def test_check_auth_profiles_active_cooldown_warning(tmp_path, monkeypatch):
     ap = tmp_path / "auth-profiles.json"
     future = time.time() + 3600
     ap.write_text(json.dumps({"profile1": {"cooldownUntil": future, "errorCount": 1}}))
-    monkeypatch.setattr(wd_module, "AUTH_PROFILES_FILE", ap)
+    monkeypatch.setattr(wd_module, "auth_profiles_file", lambda: ap)
 
     mgr = make_manager(tmp_path)
     warnings = mgr.check_auth_profiles()
@@ -215,7 +215,7 @@ def test_check_auth_profiles_clears_expired(tmp_path, monkeypatch):
     ap.write_text(
         json.dumps({"profile1": {"cooldownUntil": past, "errorCount": 1, "someOtherField": True}})
     )
-    monkeypatch.setattr(wd_module, "AUTH_PROFILES_FILE", ap)
+    monkeypatch.setattr(wd_module, "auth_profiles_file", lambda: ap)
 
     mgr = make_manager(tmp_path)
     warnings = mgr.check_auth_profiles()

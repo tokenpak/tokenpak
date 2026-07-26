@@ -156,7 +156,7 @@ Pak content stays local. The license refresh request carries only the license to
 
 ## Phasing
 
-*"TIP" here is the **TokenPak Integration Protocol** — the open contract layer OSS and the Pro daemon negotiate capabilities over (distinct from a `[TIP:]` prompt directive or a Pak).*
+*"TIP" here is the **TokenPak Integrity Protocol** — the open contract layer OSS and the Pro daemon negotiate capabilities over (distinct from a `[TIP:]` prompt directive or a Pak).*
 
 | Phase | Surface | Status |
 |---|---|---|

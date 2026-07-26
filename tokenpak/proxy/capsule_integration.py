@@ -40,7 +40,6 @@ __all__ = (
 
 
 import logging
-import os
 from typing import TYPE_CHECKING, Optional, Protocol, Tuple
 
 if TYPE_CHECKING:
@@ -72,9 +71,11 @@ def _is_capsule_enabled() -> bool:
     if _CAPSULE_BUILDER_ENABLED is not None:
         return _CAPSULE_BUILDER_ENABLED
 
-    # Env var takes precedence
-    env_val = os.environ.get("TOKENPAK_CAPSULE_BUILDER")
-    if env_val is not None:
+    # Env var takes precedence, then the active profile.
+    from tokenpak.proxy.config import env_or_profile as _env_or_profile
+
+    env_val = _env_or_profile("TOKENPAK_CAPSULE_BUILDER", "")
+    if env_val:
         from tokenpak.core.config_loader import _bool_env
 
         _CAPSULE_BUILDER_ENABLED = _bool_env(env_val)

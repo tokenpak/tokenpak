@@ -1,0 +1,22 @@
+# Coverage profile — multi-agent
+#
+# For work where several executors act concurrently against shared resources. Nothing new is
+# selected here; what changes is that concurrency control and records stop being optional practice
+# and become the thing that keeps the work coherent.
+
+schema: baseline-standards/coverage-profile/1.0
+standards_version: 1.4.0
+id: multi-agent
+extends: product-delivery
+
+description: >
+  The complete corpus. Concurrency control, task envelopes, and records are load-bearing at this
+  scale: with several executors, an unrecorded decision is a decision that will be re-made
+  differently by someone else within the hour.
+
+standards: []
+
+mandatory_emphasis:
+  - BS-DELEGATION-SHARED-RESOURCE-AND-CONCURRENCY
+  - BS-DELEGATION-TASK-ENVELOPES-AND-LIFECYCLE
+  - BS-CORE-RECORDS-AND-AUDITABILITY

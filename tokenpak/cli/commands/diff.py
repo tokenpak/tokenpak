@@ -203,11 +203,17 @@ def _get_recent_trace(since: Optional[str] = None) -> Optional[dict[str, Any]]:
     return None
 
 
-def _get_diff_since(since: Optional[str] = None) -> ContextDiff:
-    """Get diff since a specific timestamp or most recent."""
+def _get_diff_since(since: Optional[str] = None) -> Optional[ContextDiff]:
+    """Get diff since a specific timestamp, or ``None`` if no trace source.
+
+    Returning ``None`` rather than an empty diff is the whole point: an empty
+    ``ContextDiff`` renders as "No context changes — all blocks retained",
+    which is a positive factual claim. While trace retrieval is deferred we
+    have no basis for that claim, so the caller must say "unavailable".
+    """
     trace = _get_recent_trace(since=since)
     if trace is None:
-        return _empty_diff()
+        return None
 
     trace_id = trace.get("trace_id", "unknown")
     segments = trace.get("segments", [])
@@ -281,11 +287,25 @@ def print_diff_json(diff: ContextDiff) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run_diff_cmd(args: Any) -> None:
+def run_diff_cmd(args: Any) -> int:
     """Main dispatcher for 'tokenpak diff' subcommand."""
     verbose = getattr(args, "verbose", False)
     raw = getattr(args, "json", False) or getattr(args, "raw", False)
     since = getattr(args, "since", None)
 
     diff = _get_diff_since(since=since)
+    if diff is None:
+        reason = "per-request context traces are not recorded in this build"
+        if raw:
+            print(json.dumps({"state": "unavailable", "reason": reason, "diff": None}, indent=2))
+        else:
+            print("TOKENPAK  |  Context Diff")
+            print(SEP)
+            print()
+            print(f"  Unavailable — {reason}.")
+            print("  This is not a statement that your context was unchanged.")
+            print()
+        return 1
+
     print_diff(diff, verbose=verbose, raw=raw)
+    return 0

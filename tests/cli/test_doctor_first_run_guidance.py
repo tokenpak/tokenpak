@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from io import StringIO
 from unittest.mock import patch
 
@@ -49,7 +50,27 @@ def _find_check(payload: dict, name: str) -> dict:
     raise AssertionError(f"{name} check missing")
 
 
-def test_lifecycle_summary_uses_parser_real_restart_command():
+def _parser_verbs() -> set[str]:
+    """Every subcommand the shipped parser exposes."""
+    from tokenpak._cli_core import build_parser
+
+    names: set[str] = set()
+    for action in build_parser()._actions:
+        if getattr(action, "choices", None):
+            names |= set(action.choices)
+    return names
+
+
+def test_lifecycle_summary_hints_name_commands_the_parser_exposes():
+    """Every hint must be a runnable command, and the right one.
+
+    This asserted the literal "Run: tokenpak restart". The guarantee it was
+    protecting is that the hint names a verb that actually exists — the bug
+    was hints like `tokenpak proxy restart`, which the parser has never had.
+    Pinning the exact string also pinned the wrong advice: a proxy in the
+    `stopped` state has never been started, so `restart` was the wrong verb
+    to suggest. Derive the check from the live parser instead.
+    """
     out = doctor.build_lifecycle_summary(
         version="1.0.0",
         setup_present=True,
@@ -58,7 +79,15 @@ def test_lifecycle_summary_uses_parser_real_restart_command():
         update_state="current",
         update_latest=None,
     )
-    assert "Run: tokenpak restart" in out
+
+    verbs = _parser_verbs()
+    hinted = re.findall(r"Run: tokenpak ([a-z-]+)", out)
+    assert hinted, f"stopped proxy should carry a next-step hint:\n{out}"
+    for verb in hinted:
+        assert verb in verbs, f"hint names `tokenpak {verb}`, which the parser does not expose"
+
+    # A stopped proxy is started, not restarted.
+    assert "Run: tokenpak start" in out, out
     assert "tokenpak proxy " + "restart" not in out
 
 
@@ -117,8 +146,17 @@ def test_doctor_reports_bounded_disk_usage_as_warning(monkeypatch, tmp_path):
     assert "tokenpak maintenance" in check["message"]
 
 
-def test_proxy_health_uses_current_restart_command(monkeypatch, tmp_path):
+def test_proxy_health_hint_names_a_real_command(monkeypatch, tmp_path):
+    """Same guarantee as the lifecycle panel, on the proxy_health check."""
     check = _find_check(_doctor_json(monkeypatch, tmp_path), "proxy_health")
+    message = check["message"]
 
-    assert "tokenpak restart" in check["message"]
-    assert "tokenpak proxy " + "restart" not in check["message"]
+    hinted = re.findall(r"tokenpak ([a-z-]+)", message)
+    assert hinted, f"proxy_health should name a next step: {message!r}"
+    verbs = _parser_verbs()
+    for verb in hinted:
+        assert verb in verbs, f"hint names `tokenpak {verb}`, not a parser command"
+
+    # A proxy that is not running is started, not restarted.
+    assert "tokenpak start" in message, message
+    assert "tokenpak proxy " + "restart" not in message

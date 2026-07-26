@@ -10,7 +10,8 @@ Env vars
 TOKENPAK_COMPANION_ENABLED      Master switch (default: 1)
 TOKENPAK_COMPANION_BUDGET       Daily budget in USD (default: 0 = unlimited)
 TOKENPAK_COMPANION_PROFILE      Preset: lean | balanced | verbose (default: balanced)
-TOKENPAK_COMPANION_JOURNAL_DIR  Journal/capsule storage (default: ~/.tokenpak/companion/)
+TOKENPAK_COMPANION_JOURNAL_DIR  Journal/capsule storage (default: <TOKENPAK_HOME>/companion/,
+                                i.e. ~/.tpk/companion/ — see journal_write_dir())
 TOKENPAK_COMPANION_HOOKS        Enable hook pipeline (default: 1)
 TOKENPAK_COMPANION_MCP          Enable MCP server (default: 1)
 TOKENPAK_COMPANION_SHOW_COST    Show cost estimates in TUI (default: 1)
@@ -35,6 +36,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from tokenpak import _paths
+
+# Companion path resolution lives in :mod:`tokenpak._paths` because the proxy
+# and the CLI both need it and the architecture forbids either importing this
+# package. These names are kept as the companion-facing spelling.
+JOURNAL_DIR_ENV = _paths.COMPANION_DIR_ENV
+journal_write_dir = _paths.companion_write_dir
+journal_read_dirs = _paths.companion_read_dirs
+resolve_journal_file = _paths.companion_file
+journal_run_dir = _paths.companion_run_dir
+
 
 @dataclass
 class CompanionConfig:
@@ -47,7 +59,7 @@ class CompanionConfig:
     enabled: bool = True
     budget_daily_usd: float = 0.0
     profile: str = "balanced"
-    journal_dir: Path = field(default_factory=lambda: Path.home() / ".tokenpak" / "companion")
+    journal_dir: Path = field(default_factory=journal_write_dir)
     hooks_enabled: bool = True
     mcp_enabled: bool = True
     show_cost: bool = True
@@ -70,8 +82,13 @@ class CompanionConfig:
 
     @property
     def run_dir(self) -> Path:
-        """Fixed runtime directory for generated config files (AC5)."""
-        return Path.home() / ".tokenpak" / "companion" / "run"
+        """Runtime directory for generated config files (AC5).
+
+        Derived from this config's own ``journal_dir`` rather than recomputed
+        from the environment, so a caller that overrides the journal location
+        gets its run directory alongside it instead of in the default home.
+        """
+        return self.journal_dir / "run"
 
     @classmethod
     def from_env(cls) -> "CompanionConfig":
@@ -80,12 +97,7 @@ class CompanionConfig:
             enabled=_bool("TOKENPAK_COMPANION_ENABLED", True),
             budget_daily_usd=_float("TOKENPAK_COMPANION_BUDGET", 0.0),
             profile=os.environ.get("TOKENPAK_COMPANION_PROFILE", "balanced"),
-            journal_dir=Path(
-                os.environ.get(
-                    "TOKENPAK_COMPANION_JOURNAL_DIR",
-                    str(Path.home() / ".tokenpak" / "companion"),
-                )
-            ),
+            journal_dir=journal_write_dir(),
             hooks_enabled=_bool("TOKENPAK_COMPANION_HOOKS", True),
             mcp_enabled=_bool("TOKENPAK_COMPANION_MCP", True),
             show_cost=_bool("TOKENPAK_COMPANION_SHOW_COST", True),

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """CLI handlers for `tokenpak license`, `tokenpak plan`, `tokenpak activate`,
-`tokenpak deactivate`. Free-tier today; Pro/Team/Enterprise surface ready.
+`tokenpak deactivate`. Free-tier today; Pro surface ready.
 """
 
 from __future__ import annotations
@@ -10,14 +10,15 @@ import json
 from typing import Any
 
 from tokenpak import licensing as _lic
-from tokenpak.cli.commands.upgrade import DEFAULT_UPGRADE_URL
+from tokenpak.cli.commands.upgrade import upgrade_cta_line
 
 
 def _render_summary(s: dict[str, Any]) -> str:
+    edition = _lic.public_edition(s["tier"])
     lines = [""]
-    lines.append(f"  TOKENPAK license — {s['tier_label']}")
+    lines.append(f"  TOKENPAK license — {edition}")
     lines.append("  " + "─" * 40)
-    lines.append(f"  Tier      {s['tier_label']}")
+    lines.append(f"  Edition   {edition}")
     lines.append(f"  Status    {s['status']}")
     if s.get("email"):
         lines.append(f"  Email     {s['email']}")
@@ -27,22 +28,26 @@ def _render_summary(s: dict[str, Any]) -> str:
         lines.append(f"  Expires   {s['expires_at']}")
     if s.get("has_key"):
         lines.append(f"  Key       stored ({s['license_path']})")
+        # Entitlement tier is metadata about a verified key, shown only when a
+        # key exists. It is not an offering the reader could have chosen.
+        lines.append(f"  Entitlement  {_lic.internal_tier_label(s['tier'])} (from license)")
     else:
-        lines.append("  Key       (none — Free tier)")
-    lines.append("")
-    lines.append(
-        f"  Gated features enabled: {s['enabled_gated_count']} / {s['gated_feature_count']}"
-    )
+        lines.append("  Key       (none)")
     lines.append("")
     if s["tier"] == _lic.TIER_FREE:
-        lines.append("  You are on the Free tier. All Free-tier features are available.")
-        lines.append(f"  Upgrade path: {DEFAULT_UPGRADE_URL}")
+        # Previously "Gated features enabled: 0 / 52", which framed the edition
+        # most users run as zero percent of the product.
+        lines.append(f"  {edition} includes the proxy, compression, vault, dashboard,")
+        lines.append("  and savings tracking. Everything shipped today is available.")
+        cta = upgrade_cta_line()
+        if cta:
+            lines.append(cta)
         lines.append("")
     elif s["status"] == "pending_validation":
         lines.append(
             "  ⏳ Pending validation — license key is stored but the validator "
             "is not yet live.\n"
-            "     Free-tier features remain active in the meantime."
+            f"     {_lic.EDITION_BASE} features remain active in the meantime."
         )
         lines.append("")
     return "\n".join(lines)
@@ -71,23 +76,24 @@ def run_plan(args: argparse.Namespace) -> int:
         print(json.dumps({"current": s, "plans": plans}, indent=2))
         return 0
     print("")
-    print("  TOKENPAK plans")
+    print("  TOKENPAK editions")
     print("  " + "─" * 40)
-    print(f"  You are on:  {s['tier_label']}  (status: {s['status']})")
+    print(f"  You are on:  {_lic.public_edition(s['tier'])}  (status: {s['status']})")
     print("")
-    print("  Available plans:")
+    print("  Editions:")
     for plan in plans:
-        price = plan["price"]
-        suffix = "" if price not in ("unannounced", "") else "  — pricing not yet announced"
-        print(
-            f"    {plan['label']:<11}  {price:<10}  ({plan['feature_count']} gated features){suffix}"
-        )
+        # Price is intentionally omitted rather than shown as "unannounced":
+        # public Pro enrollment is unavailable, so quoting a price field at all
+        # implies a purchase path that does not exist.
+        print(f"    {plan['label']:<14}  ({plan['feature_count']} gated features)")
         if plan["blurb"]:
-            print(f"               {plan['blurb']}")
+            print(f"                    {plan['blurb']}")
+    print("")
+    print("  TokenPak Pro is not publicly available yet.")
     print("")
     print("  Use:")
     print("    tokenpak features            see every feature + entitlement state")
-    print("    tokenpak activate <key>      install a paid license key")
+    print("    tokenpak activate <key>      install a license key you were issued")
     print("")
     return 0
 

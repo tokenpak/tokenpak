@@ -1,0 +1,151 @@
+# Project adoption file — EXAMPLE
+#
+# Copy this to `project-adoption.yaml` in your own copy and fill it in. This is the file that says
+# what YOUR work actually does, who owns it, and where you have tightened the defaults.
+#
+# Everything marked REPLACE_ME must be replaced. Unresolved placeholders fail validation rather
+# than silently becoming policy (GOVERNANCE.md R28).
+
+schema: baseline-standards/project-adoption/1.0
+standards_version: 1.4.0
+
+project:
+  name: REPLACE_ME
+  operator: REPLACE_ME            # the accountable human, by name or contact
+  description: REPLACE_ME
+
+profiles:
+  coverage: starter               # starter | delegated-work | product-delivery | multi-agent
+  authority: supervised           # assisted | supervised | bounded-autonomous | <your own>
+
+# ---------------------------------------------------------------------------
+# Capability declarations — START-HERE.md section 4
+#
+# value: yes | no | unknown.  `unknown` on a capability tied to a protected action BLOCKS that
+# action (GOVERNANCE.md R14). Silence is never evidence of absence — only this file speaks.
+# ---------------------------------------------------------------------------
+capabilities:
+
+  publishes_externally:
+    value: unknown
+    owner: REPLACE_ME
+    evidence: null
+
+  publishes_irreversibly:
+    value: unknown
+    owner: REPLACE_ME
+    evidence: null
+
+  handles_third_party_data:
+    value: unknown
+    owner: REPLACE_ME
+    evidence: null
+
+  holds_credentials_or_keys:
+    value: unknown
+    owner: REPLACE_ME
+    evidence: null
+
+  authorizes_payments:
+    value: unknown
+    owner: REPLACE_ME
+    evidence: null
+
+  enters_legal_agreements:
+    value: unknown
+    owner: REPLACE_ME
+    evidence: null
+
+  delegates_work_to_agents:
+    value: unknown
+    owner: REPLACE_ME
+    evidence: null
+
+  multiple_concurrent_executors:
+    value: unknown
+    owner: REPLACE_ME
+    evidence: null
+
+# ---------------------------------------------------------------------------
+# Your protected actions — GOVERNANCE.md R15
+#
+# The corpus gives you categories. Only you know which concrete actions in your work fall into
+# them. An unnamed protected action is an unprotected one. Delete the examples; write yours.
+# ---------------------------------------------------------------------------
+protected_actions:
+
+  non_delegable:                  # a human performs these
+    - action: REPLACE_ME          # e.g. "signing the annual vendor agreement"
+      control: legal.commitment
+
+  human_authorized:               # an agent may execute, after fresh authorization for the instance
+    - action: REPLACE_ME          # e.g. "sending the quarterly report to the client"
+      control: data.disclose-external
+
+  prohibited:                     # not performed through governed mechanisms at all
+    []
+
+# ---------------------------------------------------------------------------
+# Budgets — BS-DELEGATION-SPEND-AND-RESOURCE-LIMITS
+# ---------------------------------------------------------------------------
+budgets:
+  soft_limit:
+    value: REPLACE_ME
+    unit: REPLACE_ME              # e.g. USD per day, requests per hour, tokens per session
+    on_breach: warn-and-continue
+  hard_limit:
+    value: REPLACE_ME
+    unit: REPLACE_ME
+    on_breach: stop-cleanly
+  measurement_unavailable: stop-cleanly    # fail closed; never "assume within budget"
+
+# ---------------------------------------------------------------------------
+# Escalation — START-HERE.md section 5 step 5
+#
+# The target is not a blocker by default. Say what happens when nobody answers.
+# ---------------------------------------------------------------------------
+escalation:
+  primary_contact: REPLACE_ME
+  method: REPLACE_ME
+  response_window: REPLACE_ME     # e.g. 4h
+  on_no_response: stop-cleanly    # stop-cleanly | proceed-within-envelope
+  proceed_envelope: null          # required if on_no_response is proceed-within-envelope
+  emergency_stop: REPLACE_ME      # how any actor halts everything, right now
+
+# ---------------------------------------------------------------------------
+# Local tightening — GOVERNANCE.md R22
+#
+# You may tighten any value. You may not loosen a protected field, remove a floor, or reduce
+# required evidence. Loosening is a validation error, not a preference.
+# ---------------------------------------------------------------------------
+local_tightening:
+  controls: {}
+  # Example:
+  #   publish.external-revocable:
+  #     independence_requirement: independent
+
+local_requirements: []
+  # Requirements you add that this corpus does not contain. Free-form; yours.
+
+# ---------------------------------------------------------------------------
+# Standing orders — GOVERNANCE.md section 13b
+#
+# Durable instructions about how your work is run. These TAKE PRECEDENCE over this corpus's
+# defaults and recommendations: where a standing order already answers a question, the tooling
+# follows it instead of surfacing the gap again.
+#
+# They do NOT weaken a protected field, a protected category, or a required evidence floor — use
+# local_tightening for that, and note it only tightens (R53).
+#
+# `covers` names the subject the order settles, so tooling can tell when a gap is already answered.
+# ---------------------------------------------------------------------------
+standing_orders: []
+  # Example — an operator who has already settled the licensing question:
+  #
+  # - id: licensing-posture
+  #   covers: licensing
+  #   order: >
+  #     This work is deliberately unlicensed and private. Do not add a licence file and do not
+  #     raise the missing-licence notice again.
+  #   author: REPLACE_ME
+  #   effective: 2026-01-01

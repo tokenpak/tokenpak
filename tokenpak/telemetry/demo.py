@@ -143,11 +143,12 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict[str, Any]:
         }
 
         # Write directly to JSONL file
-        import os
-        from pathlib import Path
 
-        log_dir = os.path.expanduser("~/.tokenpak")
-        log_path = Path(log_dir) / "compression_events.jsonl"
+        from tokenpak.proxy.stats import default_log_path
+
+        # The same sink the proxy writes and the dashboard reads. Hardcoding
+        # the legacy home here meant demo data landed where nothing looked.
+        log_path = default_log_path()
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
         with log_path.open("a", encoding="utf-8") as fh:
@@ -157,7 +158,9 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict[str, Any]:
 
     # Count total events in file
     total_events = 0
-    log_path = Path(os.path.expanduser("~/.tokenpak")) / "compression_events.jsonl"
+    from tokenpak.proxy.stats import default_log_path
+
+    log_path = default_log_path()
     if log_path.exists():
         with log_path.open("r", encoding="utf-8") as fh:
             total_events = sum(1 for _ in fh if _.strip())
@@ -181,11 +184,9 @@ def clear_demo_data() -> dict[str, Any]:
         - deleted_events: number of demo events deleted
         - remaining_events: number of non-demo events kept
     """
-    import os
-    from pathlib import Path
+    from tokenpak.proxy.stats import default_log_path
 
-    log_dir = os.path.expanduser("~/.tokenpak")
-    log_path = Path(log_dir) / "compression_events.jsonl"
+    log_path = default_log_path()
 
     if not log_path.exists():
         return {

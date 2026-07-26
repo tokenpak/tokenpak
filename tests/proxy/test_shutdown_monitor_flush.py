@@ -16,8 +16,32 @@ from __future__ import annotations
 import sqlite3
 from unittest.mock import MagicMock
 
+import pytest
+
+from tokenpak.proxy import monitor as _monitor_mod
 from tokenpak.proxy.monitor import Monitor
 from tokenpak.proxy.server import ProxyServer
+
+
+@pytest.fixture(autouse=True)
+def _isolated_writer():
+    """Start from a writer this test owns.
+
+    The monitor's write queue, worker thread and connection are process
+    globals — one process, one bound database. That is right for the proxy
+    and wrong for a suite where each test wants its own temporary file: this
+    test inherits whatever the preceding several thousand tests left behind,
+    which is why it passed alone and on the whole of tests/proxy/ but failed
+    intermittently in a full run, with flush() reporting success against zero
+    committed rows.
+
+    Stopping the queue on both sides makes the constructor below build a
+    fresh one. This isolates the test; it does not paper over the assertion,
+    which still fails if the drain genuinely does not happen.
+    """
+    _monitor_mod._stop_db_write_queue(timeout=5.0)
+    yield
+    _monitor_mod._stop_db_write_queue(timeout=5.0)
 
 
 def _make_server() -> ProxyServer:

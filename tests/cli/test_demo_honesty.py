@@ -31,6 +31,17 @@ def test_compression_demo_labels_fixture_output(monkeypatch, capsys):
     assert "Fixture delta" in out
     assert "Fixture cost delta" in out
     assert "not a savings receipt" in out
-    assert "receipt-backed savings" in out
     assert "Live Compression Demo" not in out
     assert "Cost saved (est.)" not in out
+
+    # Having labelled its own numbers as fixture data, demo must then point at
+    # the measured path. This asserted the literal "receipt-backed savings",
+    # which pinned one wording of the next-steps block and said nothing about
+    # whether the route it offered was real — the same block also advertised
+    # `tokenpak serve … (zero-config)`, which contradicted setup and doctor.
+    assert "tokenpak setup" in out, "next-steps must start at setup"
+    assert "zero-config" not in out, "there is no zero-config path; setup is required"
+    assert any(verb in out for verb in ("tokenpak savings", "tokenpak cost")), (
+        "next-steps must route to a measured-savings command"
+    )
+    assert "measured" in out, "next-steps must distinguish the measured path from this fixture"

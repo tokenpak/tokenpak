@@ -1,0 +1,435 @@
+# Canonical control-point registry — TokenPak Baseline Standards
+#
+# This file is the single authoritative source for control-point values.
+# Prose standards reference control IDs; they never restate these values (GOVERNANCE.md R3, R26).
+# Human-readable mode tables are GENERATED from this file plus the authority profiles (R17).
+#
+# Control IDs are ACTION CLASSES: named for what the action does to the world, not for the tool
+# that performs it. Domain modules register concrete instances against a class; an instance may
+# tighten its class, never loosen it (R16).
+#
+# Field reference: GOVERNANCE.md section 5.
+# Protected controls (GOVERNANCE.md section 4) carry mode_override_allowed: false and populate all
+# canonical fields (R18). Authority profiles MUST NOT contain entries for them (R20).
+
+schema: baseline-standards/controls/1.0
+standards_version: 1.4.0
+
+# ---------------------------------------------------------------------------
+# Vocabulary used below
+#
+#   executor:                 operator | delegate | reviewer | executor | any
+#   authorizer:               operator | delegate | reviewer | none
+#   authorization_type:       explicit | standing-envelope | none-required
+#   authorization_timing:     before | before-and-revalidated | after-within-sla
+#   independence_requirement: none | separate-actor | independent
+#   reversibility_class:      reversible | reversible-with-cost | irreversible
+#   protected_category:       non-delegable | human-authorized | prohibited | null
+#   enforcement.level:        procedural | static | runtime
+# ---------------------------------------------------------------------------
+
+controls:
+
+  # === Work and acceptance ===================================================
+
+  - id: work.accept
+    title: Accept a deliverable as done
+    description: >
+      Declaring that a unit of work meets its acceptance criteria. Applies to any deliverable
+      class — a decision, document, analysis, code change, configuration change, external
+      communication, or financial action.
+    protected: false
+    protected_category: null
+    reversibility_class: reversible
+    mode_override_allowed: true
+    baseline:
+      executor: any
+      authorizer: reviewer
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: separate-actor
+    required_evidence: [acceptance-criteria-met, evidence-appropriate-to-deliverable-class]
+    fallback: hold-as-proposed
+    enforcement: { level: procedural, mechanism: "acceptance record required before closure" }
+
+  - id: work.scope-change
+    title: Materially change the scope or objective of active work
+    description: >
+      Changing what the work is for, not how it is done. Includes expanding scope beyond the
+      authorized envelope.
+    protected: false
+    protected_category: null
+    reversibility_class: reversible
+    mode_override_allowed: true
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: none
+    required_evidence: [statement-of-what-changed, impact-on-existing-authorizations]
+    fallback: stop-and-escalate
+    enforcement: { level: procedural, mechanism: "decision record" }
+
+  # === Integration and publication ===========================================
+
+  - id: integrate.shared-baseline
+    title: Integrate work into the shared baseline others build on
+    description: >
+      Merging, committing, or otherwise placing work into the state that other actors treat as
+      current. Not externally visible by itself.
+    protected: false
+    protected_category: null
+    reversibility_class: reversible-with-cost
+    mode_override_allowed: true
+    baseline:
+      executor: any
+      authorizer: reviewer
+      authorization_type: explicit
+      authorization_timing: before-and-revalidated
+      independence_requirement: separate-actor
+    required_evidence: [verification-evidence-for-change-class, baseline-state-verified-current]
+    fallback: hold
+    enforcement: { level: procedural, mechanism: "pre-integration re-verification" }
+
+  - id: publish.external-revocable
+    title: Publish externally where the publication can be withdrawn
+    description: >
+      Making something visible outside the operator's control, where withdrawal is possible even
+      if not costless.
+    protected: false
+    protected_category: null
+    reversibility_class: reversible-with-cost
+    mode_override_allowed: true
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: separate-actor
+    required_evidence: [claims-substantiated, content-reviewed]
+    fallback: hold
+    enforcement: { level: procedural, mechanism: "pre-publication review record" }
+
+  - id: publish.external-irreversible
+    title: Publish externally where the publication cannot be recalled
+    description: >
+      Any external release, distribution, or announcement that third parties may retain, mirror,
+      cache, or depend on after withdrawal. Treat recall as impossible whenever you cannot
+      enumerate who holds a copy.
+    protected: true
+    protected_category: human-authorized
+    reversibility_class: irreversible
+    mode_override_allowed: false
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before-and-revalidated
+      independence_requirement: independent
+    scope_or_envelope: single-artifact-identity
+    expiration: invalidated-on-artifact-change
+    required_evidence:
+      [artifact-identity-recorded, verification-evidence-complete, claims-substantiated, rollback-path-known]
+    fallback: stop-and-escalate
+    enforcement: { level: procedural, mechanism: "moment-of-action authorization naming the exact artifact" }
+
+  # === External commitments ==================================================
+
+  - id: commit.external-promise
+    title: Make a commitment to a party outside the operator's control
+    description: >
+      Any statement a third party may reasonably rely on: a date, a capability, a service level,
+      a scope of support. Non-binding commitments are included — reliance is what matters.
+    protected: false
+    protected_category: null
+    reversibility_class: reversible-with-cost
+    mode_override_allowed: true
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: separate-actor
+    required_evidence: [capacity-to-honour-verified, commitment-recorded-verbatim]
+    fallback: stop-and-escalate
+    enforcement: { level: procedural, mechanism: "commitment register entry" }
+
+  - id: legal.commitment
+    title: Agree to legal terms or sign on the operator's behalf
+    protected: true
+    protected_category: non-delegable
+    reversibility_class: irreversible
+    mode_override_allowed: false
+    baseline:
+      executor: operator
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: independent
+    scope_or_envelope: single-instrument
+    expiration: single-use
+    required_evidence: [instrument-text-reviewed, obligations-enumerated]
+    fallback: stop
+    enforcement: { level: procedural, mechanism: "human performs the act; agents may only prepare" }
+
+  # === Money ================================================================
+
+  - id: spend.paid-action
+    title: Incur cost within an established budget
+    protected: false
+    protected_category: null
+    reversibility_class: reversible-with-cost
+    mode_override_allowed: true
+    baseline:
+      executor: any
+      authorizer: none
+      authorization_type: standing-envelope
+      authorization_timing: before
+      independence_requirement: none
+    scope_or_envelope: declared-budget-envelope
+    required_evidence: [budget-declared, measurement-available]
+    fallback: stop-cleanly
+    enforcement: { level: procedural, mechanism: "declared ceiling; fail closed when measurement unavailable" }
+
+  - id: spend.limit-change
+    title: Raise or remove a spend ceiling
+    protected: false
+    protected_category: null
+    reversibility_class: reversible
+    mode_override_allowed: true
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: none
+    expiration: required
+    required_evidence: [current-consumption, reason-for-increase]
+    fallback: deny
+    enforcement: { level: procedural, mechanism: "recorded decision with expiry" }
+
+  - id: finance.payment-authorize
+    title: Authorize movement of money to an established destination
+    protected: true
+    protected_category: human-authorized
+    reversibility_class: irreversible
+    mode_override_allowed: false
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before-and-revalidated
+      independence_requirement: independent
+    scope_or_envelope: single-payment-amount-and-destination
+    expiration: single-use
+    required_evidence: [amount-verified, destination-verified-established, obligation-basis]
+    fallback: stop
+    enforcement: { level: procedural, mechanism: "per-payment authorization; no standing authority" }
+
+  - id: finance.payment-destination-new
+    title: Establish a new destination for money to move to
+    protected: true
+    protected_category: non-delegable
+    reversibility_class: irreversible
+    mode_override_allowed: false
+    baseline:
+      executor: operator
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: independent
+    scope_or_envelope: single-destination
+    expiration: single-use
+    required_evidence: [destination-verified-out-of-band]
+    fallback: stop
+    enforcement: { level: procedural, mechanism: "human performs; out-of-band verification required before proceeding" }
+
+  # === Information ==========================================================
+
+  - id: data.disclose-external
+    title: Disclose data outside its declared boundary
+    protected: true
+    protected_category: human-authorized
+    reversibility_class: irreversible
+    mode_override_allowed: false
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: separate-actor
+    scope_or_envelope: named-recipient-and-dataset
+    expiration: single-use
+    required_evidence: [dataset-classified, recipient-authorized, minimisation-applied]
+    fallback: stop
+    enforcement: { level: procedural, mechanism: "per-disclosure authorization" }
+
+  - id: data.destroy
+    title: Destroy data
+    protected: true
+    protected_category: human-authorized
+    reversibility_class: irreversible
+    mode_override_allowed: false
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before-and-revalidated
+      independence_requirement: separate-actor
+    scope_or_envelope: enumerated-dataset
+    expiration: single-use
+    required_evidence: [retention-obligation-checked, restore-path-confirmed-or-accepted-loss]
+    fallback: stop
+    enforcement: { level: procedural, mechanism: "enumerate before destroying; never pattern-match" }
+
+  - id: access.credential-change
+    title: Create, rotate, or revoke a credential or change an account setting
+    protected: true
+    protected_category: human-authorized
+    reversibility_class: reversible-with-cost
+    mode_override_allowed: false
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: separate-actor
+    scope_or_envelope: named-credential
+    expiration: single-use
+    required_evidence: [blast-radius-known, recovery-path-rehearsed]
+    fallback: stop
+    enforcement: { level: procedural, mechanism: "per-credential authorization" }
+
+  - id: access.key-custody-transfer
+    title: Export or transfer a root credential, signing key, or account ownership
+    protected: true
+    protected_category: non-delegable
+    reversibility_class: irreversible
+    mode_override_allowed: false
+    baseline:
+      executor: operator
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: independent
+    scope_or_envelope: single-key-or-account
+    expiration: single-use
+    required_evidence: [recipient-verified-out-of-band, custody-record-updated]
+    fallback: stop
+    enforcement: { level: procedural, mechanism: "human performs; agents are to be denied access to the material" }
+
+  - id: access.grant-escalation
+    title: Widen an actor's permissions
+    protected: true
+    protected_category: human-authorized
+    reversibility_class: reversible-with-cost
+    mode_override_allowed: false
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: separate-actor
+    scope_or_envelope: named-actor-and-permission
+    expiration: required
+    required_evidence: [reason, narrowest-sufficient-grant-considered]
+    fallback: deny
+    enforcement: { level: procedural, mechanism: "time-bounded grant with recorded expiry" }
+
+  # === Records and recovery =================================================
+
+  - id: record.history-alter
+    title: Alter or delete an existing record
+    description: >
+      Editing, rewriting, or removing something already recorded — a log, a decision, a commit
+      history, an audit entry, a published statement. Correcting forward is not this control;
+      changing the past is.
+    protected: true
+    protected_category: human-authorized
+    reversibility_class: irreversible
+    mode_override_allowed: false
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: independent
+    scope_or_envelope: enumerated-records
+    expiration: single-use
+    required_evidence: [reason-why-forward-correction-insufficient, copy-retained-where-lawful]
+    fallback: correct-forward-instead
+    enforcement: { level: procedural, mechanism: "supersede by default; alteration is the exception" }
+
+  - id: recovery.rollback
+    title: Revert to a prior state where the reversion has external effect
+    protected: true
+    protected_category: human-authorized
+    reversibility_class: reversible-with-cost
+    mode_override_allowed: false
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: separate-actor
+    scope_or_envelope: named-target-state
+    expiration: single-use
+    required_evidence: [reason, target-state-verified-good, effect-on-dependents-considered]
+    fallback: stop-and-escalate
+    enforcement: { level: procedural, mechanism: "supersede-forward preferred over withdrawal" }
+
+  # === Governance ===========================================================
+
+  - id: governance.waiver
+    title: Waive a requirement or gate
+    protected: false
+    protected_category: null
+    reversibility_class: reversible
+    mode_override_allowed: true
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: separate-actor
+    expiration: required
+    required_evidence: [requirement-waived, reason, compensating-control, review-date]
+    fallback: deny
+    enforcement: { level: procedural, mechanism: "waiver record with mandatory expiry; no category crossing" }
+
+  - id: governance.standard-change
+    title: Change the standards themselves
+    protected: false
+    protected_category: null
+    reversibility_class: reversible
+    mode_override_allowed: true
+    baseline:
+      executor: any
+      authorizer: operator
+      authorization_type: explicit
+      authorization_timing: before
+      independence_requirement: separate-actor
+    required_evidence: [change-class, decision-record, superseded-text-preserved]
+    fallback: hold-as-proposal
+    enforcement: { level: procedural, mechanism: "propose to decide to record to supersede" }
+
+  - id: escalation.stop
+    title: Stop work and escalate
+    description: >
+      Halting work in the face of uncertainty, contradiction, or an unauthorized protected action.
+      Available to every actor at all times. Requires no authorization, in any profile. Stopping
+      is never a violation.
+    protected: false
+    protected_category: null
+    reversibility_class: reversible
+    mode_override_allowed: false
+    baseline:
+      executor: any
+      authorizer: none
+      authorization_type: none-required
+      authorization_timing: before
+      independence_requirement: none
+    required_evidence: [reason-recorded]
+    fallback: none-required
+    enforcement: { level: procedural, mechanism: "always available; never penalised" }

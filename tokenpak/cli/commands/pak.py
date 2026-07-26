@@ -533,7 +533,7 @@ def cmd_pak_import(args: Any) -> int:
         return 1
 
     pak_id = payload.get("pak_id") or ("pak:" + actual[len("sha256:") : len("sha256:") + 16])
-    store_dir = _paths.under("paks")
+    store_dir = _paths.write_under("paks")
     store_dir.mkdir(parents=True, exist_ok=True)
     safe_id = pak_id.replace(":", "_").replace("/", "_")
     target = store_dir / f"{safe_id}.pak.json"

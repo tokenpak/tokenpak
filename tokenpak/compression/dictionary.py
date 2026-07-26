@@ -38,7 +38,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-_DEFAULT_DICT_PATH = Path.home() / ".tokenpak" / "compression_dict.json"
+
+def _default_dict_path() -> Path:
+    """Resolved at call time so TOKENPAK_HOME is honoured."""
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("compression_dict.json")
+    return found if found is not None else _paths.write_home() / "compression_dict.json"
+
 
 # Minimum phrase length to be tracked for auto-learn
 _MIN_PHRASE_LEN = 30
@@ -110,7 +117,7 @@ class CompressionDictionary:
         auto_learn_threshold: int = 3,
         auto_learn_min_length: int = _MIN_PHRASE_LEN,
     ) -> None:
-        self._dict_path = Path(dict_path) if dict_path else _DEFAULT_DICT_PATH
+        self._dict_path = Path(dict_path) if dict_path else _default_dict_path()
         self._case_sensitive = case_sensitive
         self._auto_learn_threshold = auto_learn_threshold
         self._auto_learn_min_length = auto_learn_min_length

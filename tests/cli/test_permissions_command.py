@@ -618,11 +618,10 @@ def test_show_json_is_one_schema_versioned_object(tmp_home, capsys):
 def test_cli_main_first_run_json_has_no_welcome_noise(tmp_home, monkeypatch, capsys):
     from tokenpak import _cli_core
 
-    monkeypatch.setattr(
-        _cli_core,
-        "_FIRST_RUN_FLAG",
-        tmp_home / ".tokenpak" / ".seen_intro",
-    )
+    # The marker is resolved at call time through the path resolver rather
+    # than bound to a module constant at import — binding it was what pinned
+    # every install to the legacy home. Set the home; the marker follows.
+    monkeypatch.setenv("TOKENPAK_HOME", str(tmp_home / ".tpk"))
     monkeypatch.setattr(
         sys,
         "argv",

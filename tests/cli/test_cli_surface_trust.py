@@ -48,17 +48,44 @@ def test_unknown_command_prints_to_stderr():
 
 
 def test_help_count_is_truthful():
-    """``tokenpak help`` must advertise a count equal to the live command registry."""
+    """The advertised count must equal the surface ``--all`` actually supports.
+
+    The count used to be measured against the whole registry. It is now
+    measured against the *supported* surface, because that is what the
+    sentence claims — and a number that counts something other than what the
+    words say is the defect this test exists to catch, in either direction.
+    """
     from tokenpak.cli.commands import help as help_mod
 
     code, out, err = _run(["help"])
     assert code == 0
     text = out + err
-    m = re.search(r"all\s+(\d+)\s+commands", text)
-    assert m, "help must advertise an 'all N commands' count"
+    m = re.search(r"all\s+(\d+)\s+supported commands", text)
+    assert m, "help must advertise an 'all N supported commands' count"
     advertised = int(m.group(1))
-    actual = len(help_mod._load_registry())
-    assert advertised == actual, f"help advertises {advertised} but registry has {actual}"
+    actual = len(help_mod.discoverable_commands())
+    assert advertised == actual, f"help advertises {advertised} but {actual} are supported"
+
+
+def test_help_all_lists_every_supported_command():
+    """Every command the count promises must actually appear under --all."""
+    from tokenpak.cli.commands import help as help_mod
+
+    code, out, err = _run(["help", "--all"])
+    assert code == 0
+    text = out + err
+    missing = [
+        cmd["command"] for cmd in help_mod.discoverable_commands() if cmd["command"] not in text
+    ]
+    assert not missing, f"advertised as supported but absent from --all: {missing}"
+
+
+def test_help_all_labels_unsupported_commands():
+    """Commands outside the surface must be labelled, not silently mixed in."""
+    code, out, err = _run(["help", "--all"])
+    assert code == 0
+    text = out + err
+    assert "Outside the supported surface" in text
 
 
 @pytest.mark.xfail(

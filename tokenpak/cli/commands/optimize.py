@@ -24,7 +24,7 @@ PROXY_BASE = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
 
 # Resolve the monitor DB via the canonical resolver so this command reads the
 # same store as every other reader. Kept as a
-# module-level constant so tests can patch ``optimize._MONITOR_DB``.
+# call-time resolver so tests can patch ``optimize._monitor_db``.
 def _default_monitor_db() -> str:
     env = os.environ.get("TOKENPAK_DB", "").strip()
     if env:
@@ -40,7 +40,17 @@ def _default_monitor_db() -> str:
         return os.path.expanduser("~/.tpk/monitor.db")
 
 
-_MONITOR_DB = _default_monitor_db()
+def _monitor_db() -> str:
+    """Resolve the request store at call time.
+
+    Was a module-level constant, so the path was fixed at import — before any
+    caller could set TOKENPAK_HOME or TOKENPAK_DB. The test that covered the
+    env override only passed because it reloaded the module first, which made
+    an import-time binding look dynamic.
+    """
+    return _default_monitor_db()
+
+
 SEP = "────────────────────────────────────────"
 
 from tokenpak.models import get_cheaper_alternative as _get_cheaper_alternative
@@ -69,7 +79,7 @@ def _proxy_get(path: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
 
 
 def _db_connect() -> Optional[sqlite3.Connection]:
-    db = Path(_MONITOR_DB)
+    db = Path(_monitor_db())
     if not db.exists():
         return None
     conn = sqlite3.connect(str(db))

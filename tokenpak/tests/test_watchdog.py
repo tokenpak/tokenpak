@@ -40,15 +40,13 @@ def watchdog_with_mocks(tmp_watchdog_dir, monkeypatch):
     """Create a ProxyWatchdog with mocked paths and logging."""
     import tokenpak.proxy.proxy_watchdog as wd_module
 
-    # Point config paths to temp dir
-    monkeypatch.setattr(wd_module, "WATCHDOG_LOG", tmp_watchdog_dir / ".tokenpak" / "watchdog.log")
-    monkeypatch.setattr(
-        wd_module, "COOLDOWNS_FILE", tmp_watchdog_dir / ".tokenpak" / "cooldowns.json"
-    )
-    monkeypatch.setattr(
-        wd_module, "AUTH_PROFILES_FILE", tmp_watchdog_dir / ".tokenpak" / "auth-profiles.json"
-    )
-    monkeypatch.setattr(wd_module, "PROXY_PID_FILE", tmp_watchdog_dir / ".tokenpak" / "proxy.pid")
+    # Point config paths to temp dir. These resolve on use now, so the fixture
+    # patches the resolvers rather than constants frozen at import.
+    home = tmp_watchdog_dir / ".tokenpak"
+    monkeypatch.setattr(wd_module, "watchdog_log", lambda: home / "watchdog.log")
+    monkeypatch.setattr(wd_module, "cooldowns_file_path", lambda: home / "cooldowns.json")
+    monkeypatch.setattr(wd_module, "auth_profiles_file", lambda: home / "auth-profiles.json")
+    monkeypatch.setattr(wd_module, "proxy_pid_file", lambda: home / "proxy.pid")
     monkeypatch.setattr(wd_module, "PROXY_PORT", 8766)
     monkeypatch.setattr(wd_module, "HEALTH_CHECK_INTERVAL", 1)
 

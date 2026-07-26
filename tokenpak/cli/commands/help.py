@@ -25,7 +25,6 @@ _ESSENTIAL_COMMANDS = {
     "start": "Start the proxy",
     "stop": "Stop the proxy",
     "status": "Health, stats, and savings summary",
-    "upgrade": "Open the TokenPak Pro upgrade page",
     "cost": "API spend and token usage",
     "savings": "What TokenPak saved you",
     "doctor": "Run diagnostics and health checks",
@@ -33,7 +32,6 @@ _ESSENTIAL_COMMANDS = {
 }
 
 _INTERMEDIATE_COMMANDS = {
-    "watch": "Live terminal savings dashboard",
     "logs": "View proxy logs",
     "stats": "Registry and cache statistics",
     "config": "View/edit configuration",
@@ -62,6 +60,27 @@ def _load_registry() -> list[dict[str, Any]]:
         return []
 
 
+def discoverable_commands() -> list[dict[str, Any]]:
+    """Registry entries that default discovery may advertise.
+
+    Filtered by the beta allowlist and by each entry's own ``hidden`` flag.
+    The registry documents commands that have never been exercised
+    end-to-end; advertising them invites a tester to run something whose
+    output nobody has checked.
+
+    ``tokenpak help --all`` deliberately does not use this — see
+    :func:`print_full_help`, which shows everything and labels what is off
+    the supported surface.
+    """
+    from tokenpak.core.registry import beta_surface
+
+    return [
+        cmd
+        for cmd in _load_registry()
+        if cmd.get("hidden") is not True and beta_surface.is_supported(cmd.get("command", ""))
+    ]
+
+
 # ─────────────────────────────────────────────
 # Help output functions
 # ─────────────────────────────────────────────
@@ -80,20 +99,21 @@ def _group_commands(
 
 def print_essential_help() -> None:
     """Print essential commands only (default view for new users)."""
-    n = len(_load_registry())
+    n = len(discoverable_commands())
     print("TokenPak — LLM Proxy with Prompt Packing\n")
     print("Essential Commands:\n")
     for cmd, desc in _ESSENTIAL_COMMANDS.items():
         print(f"  {cmd:<14} {desc}")
     print()
     print("Run `tokenpak help --more` for intermediate commands.")
-    print(f"Run `tokenpak help --all` for all {n} commands.")
+    print(f"Run `tokenpak help --all` for all {n} supported commands.")
+    print("  (--all also lists commands outside the supported surface.)")
     print("Run `tokenpak help <command>` for details on any command.")
 
 
 def print_intermediate_help() -> None:
     """Print essential + intermediate commands."""
-    n = len(_load_registry())
+    n = len(discoverable_commands())
     print("TokenPak — LLM Proxy with Prompt Packing\n")
 
     print("Essential Commands:\n")
@@ -102,9 +122,7 @@ def print_intermediate_help() -> None:
     print()
 
     print("Monitoring:\n")
-    monitoring_cmds = {
-        k: v for k, v in _INTERMEDIATE_COMMANDS.items() if k in ["watch", "logs", "stats"]
-    }
+    monitoring_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items() if k in ["logs", "stats"]}
     for cmd, desc in monitoring_cmds.items():
         print(f"  {cmd:<14} {desc}")
     print()
@@ -127,7 +145,8 @@ def print_intermediate_help() -> None:
         print(f"  {cmd:<14} {desc}")
     print()
 
-    print(f"Run `tokenpak help --all` for all {n} commands.")
+    print(f"Run `tokenpak help --all` for all {n} supported commands.")
+    print("  (--all also lists commands outside the supported surface.)")
     print("Run `tokenpak help <command>` for details on any command.")
 
 
@@ -158,12 +177,22 @@ def _discover_plugin_command_names(known: set[str]) -> list[str]:
 
 
 def print_full_help(tier: Optional[str] = None) -> None:
-    """Print all commands."""
+    """Print the supported surface, then the rest — labelled, not hidden.
+
+    ``--all`` means all. Excluded commands still appear here so nobody has to
+    guess whether a verb exists; what they carry is an explicit note that they
+    are outside the supported surface, so a reader can tell the difference
+    between "this is ready" and "this is reachable".
+    """
+    from tokenpak.core.registry import beta_surface
+
     commands = _load_registry()
-    groups = _group_commands(commands)
+    supported = [c for c in commands if beta_surface.is_supported(c.get("command", ""))]
+    other = [c for c in commands if not beta_surface.is_supported(c.get("command", ""))]
+    groups = _group_commands(supported)
 
     print("TokenPak — LLM Proxy with Prompt Packing\n")
-    print("All Commands:\n")
+    print("Supported Commands:\n")
 
     for group_name, cmds in groups.items():
         print(f"  {group_name}:")
@@ -173,6 +202,14 @@ def print_full_help(tier: Optional[str] = None) -> None:
             aliases = cmd.get("aliases", [])
             alias_str = f"  (alias: {', '.join(aliases)})" if aliases else ""
             print(f"    {name:<16} {desc}{alias_str}")
+        print()
+
+    if other:
+        print("  Outside the supported surface (reachable, not verified for this release):")
+        for cmd in sorted(other, key=lambda c: c.get("command", "")):
+            name = cmd["command"]
+            reason = beta_surface.exclusion_reason(name) or ""
+            print(f"    {name:<16} {reason}")
         print()
 
     known = cast(set[str], {c.get("command") for c in commands})
@@ -188,8 +225,7 @@ def print_full_help(tier: Optional[str] = None) -> None:
 
 def print_minimal_help(tier: Optional[str] = None) -> None:
     """Print one-line compact command list."""
-    commands = _load_registry()
-    names = [c["command"] for c in commands]
+    names = [c["command"] for c in discoverable_commands()]
 
     print("TokenPak  —  available commands:")
     print("  " + "  ".join(names))
@@ -211,9 +247,14 @@ def print_command_help(command_name: str) -> None:
         print("Run `tokenpak help` to see all available commands.")
         sys.exit(1)
 
+    from tokenpak.core.registry import beta_surface
+
     print(f"tokenpak {target['command']}")
     print("─" * 40)
     print(f"  Purpose  : {target.get('description', '')}")
+    _reason = beta_surface.exclusion_reason(target["command"])
+    if _reason:
+        print(f"  Status   : outside the supported surface — {_reason}")
     print(f"  Usage    : {target.get('usage', '')}")
     print()
 

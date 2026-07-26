@@ -64,7 +64,7 @@ class DisconnectResult:
 def tunnel_dir() -> Path:
     """Return and create the dashboard tunnel state directory."""
     _paths.ensure_home()
-    path = _paths.under("tunnels")
+    path = _paths.write_under("tunnels")
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     return path
 

@@ -127,10 +127,24 @@ def test_unlisted_edge_turns_gate_red(tmp_path):
 
 
 def test_unlisted_entrypoint_bypass_turns_gate_red(tmp_path):
-    """The entrypoint boundary contract detects an undeclared direct bypass."""
-    sentinel = "tokenpak.cli.commands.preview -> tokenpak.compression.core"
+    """The entrypoint boundary contract detects an undeclared direct bypass.
+
+    The sentinel is selected from the live config rather than hardcoded. A
+    hardcoded edge makes this test fail whenever that specific debt is burned
+    down — which is the ledger's stated goal — so the test would penalise
+    exactly the change it exists to protect.
+    """
     original = CONFIG_PATH.read_text()
-    assert sentinel in original, "entrypoint bypass sentinel missing from config"
+    candidates = [
+        line.strip()
+        for line in original.splitlines()
+        if line.strip().startswith("tokenpak.cli.commands.") and " -> tokenpak.compression" in line
+    ]
+    if not candidates:
+        pytest.skip("no entrypoint→compression bypass edges remain to sample")
+    sentinel = candidates[0]
+    entrypoint = sentinel.split(" -> ")[0]
+
     mutated_lines = [line for line in original.splitlines() if line.strip() != sentinel]
     mutated_config = tmp_path / ".importlinter"
     mutated_config.write_text("\n".join(mutated_lines) + "\n")
@@ -139,8 +153,8 @@ def test_unlisted_entrypoint_bypass_turns_gate_red(tmp_path):
     assert result.returncode != 0, (
         "entrypoint boundary stayed green with an undeclared direct pipeline import"
     )
-    assert "tokenpak.cli.commands.preview" in result.stdout, (
-        f"failure output does not name the violating entrypoint:\n{result.stdout}"
+    assert entrypoint in result.stdout, (
+        f"failure output does not name the violating entrypoint {entrypoint}:\n{result.stdout}"
     )
 
 

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "baseline-standards/coverage-profile/1.0",
+  "title": "Coverage profile",
+  "description": "Which standards apply. Coverage adds; it never subtracts (GOVERNANCE.md R13).",
+  "type": "object",
+  "required": ["schema", "standards_version", "id", "standards"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "baseline-standards/coverage-profile/1.0" },
+    "standards_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "extends": {
+      "type": ["string", "null"],
+      "description": "Coverage profile this one builds on. Cumulative, never subtractive."
+    },
+    "description": { "type": "string" },
+    "standards": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^BS-[A-Z0-9-]+$" },
+      "description": "Standard IDs added by this profile beyond what it extends."
+    },
+    "mandatory_emphasis": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^BS-[A-Z0-9-]+$" },
+      "description": "Already-selected standards this profile marks as load-bearing at its scale."
+    },
+    "triggers_that_expand_this_profile": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["trigger", "adds_profile"],
+        "additionalProperties": false,
+        "properties": {
+          "trigger": { "type": "string" },
+          "adds_profile": { "type": "string" }
+        }
+      },
+      "description": "Observable conditions that expand coverage. Triggers only ever add."
+    },
+    "note": { "type": "string" }
+  }
+}

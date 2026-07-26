@@ -53,7 +53,10 @@ def default_config_path() -> Path:
     override = os.environ.get("TOKENPAK_VAULT_CONFIG")
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".tokenpak" / "vault.yaml"
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("vault.yaml")
+    return found if found is not None else _paths.write_home() / "vault.yaml"
 
 
 def default_index_path() -> Path:

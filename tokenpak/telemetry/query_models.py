@@ -30,13 +30,29 @@ class ModelUsage:
 
 @dataclass
 class SavingsReport:
-    """Token savings summary comparing raw tokens vs compressed tokens."""
+    """Token savings summary comparing raw tokens vs compressed tokens.
+
+    ``observations`` and ``available`` exist so consumers can tell the three
+    cases apart, which the float fields alone cannot express:
+
+    * ``available=False`` — the telemetry store could not be read (absent or
+      legacy schema). The float fields are meaningless; render "unavailable".
+    * ``available=True, observations=0`` — the store is healthy and empty.
+      Render "not yet measured", never ``0.0%``.
+    * ``available=True, observations>0`` — real measurements. A zero here is a
+      genuine observation of zero savings and may be shown as such.
+
+    Without these, a fresh install reported ``Saved: $0.00 (0.0%)``, which
+    states that TokenPak measured the user's traffic and saved them nothing.
+    """
 
     total_cost: float = 0.0
     estimated_without_compression: float = 0.0
     savings_amount: float = 0.0
     savings_pct: float = 0.0
     cache_hit_rate: float = 0.0
+    observations: int = 0
+    available: bool = True
 
 
 @dataclass

@@ -463,11 +463,23 @@ import pathlib as _pathlib
 import sys as _sys
 import threading as _threading
 
+
 # Canonical compression-events sink. The proxy, the telemetry demo writer,
 # and the dashboard/analytics readers all use compression_events.jsonl;
 # the previous default (compression.log) was never written or read by
 # anything.
-DEFAULT_LOG_PATH = _pathlib.Path.home() / ".tokenpak" / "compression_events.jsonl"
+def default_log_path() -> "_pathlib.Path":
+    """Compression event log, resolved at call time.
+
+    Bound to the legacy home at import, so the proxy appended events to a
+    different tree than the one the CLI reads under TOKENPAK_HOME.
+    """
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("compression_events.jsonl")
+    return found if found is not None else _paths.write_home() / "compression_events.jsonl"
+
+
 MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB
 ROLLING_WINDOW = 1000  # last N events for rolling stats
 
@@ -478,7 +490,12 @@ _compression_lock = _threading.Lock()
 class CompressionStats:
     """Thread-safe compression telemetry collector."""
 
-    def __init__(self, log_path: "str | _pathlib.Path" = DEFAULT_LOG_PATH) -> None:
+    def __init__(self, log_path: "str | _pathlib.Path | None" = None) -> None:
+        # Default resolved here, not in the signature: a default argument is
+        # evaluated once at import, which is how this got pinned to the
+        # legacy home for the life of the process.
+        if log_path is None:
+            log_path = default_log_path()
         self.log_path = _pathlib.Path(log_path)
         self._lock = _threading.Lock()
         self._requests_total = 0

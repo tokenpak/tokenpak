@@ -22,7 +22,7 @@ from typing import cast as _cast
 from .hooks import TOKENPAK_HOOK_MARKER
 from .mcp_config import SERVER_NAME
 from .mcp_config import _unregister as mcp_unregister
-from .rates_snapshot import DEFAULT_SNAPSHOT_PATH
+from .rates_snapshot import default_snapshot_path
 from .skills_installer import _clean_skills_config, uninstall_skills
 
 if _TYPE_CHECKING:
@@ -143,9 +143,25 @@ def clean_agents_md(path: Path | None = None) -> "tuple[bool, str]":
 
 
 def clean_rates_snapshot() -> "tuple[bool, str]":
-    if DEFAULT_SNAPSHOT_PATH.exists():
-        DEFAULT_SNAPSHOT_PATH.unlink()
-        return True, f"removed {DEFAULT_SNAPSHOT_PATH}"
+    # Uninstall must clean every home the snapshot could live in, not only
+    # the canonical one — otherwise a pre-migration install keeps its copy.
+    from tokenpak.companion.config import journal_read_dirs
+
+    removed: list[str] = []
+    candidates = [default_snapshot_path()] + [
+        d / "run" / "model_rates.tsv" for d in journal_read_dirs()
+    ]
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.exists():
+            candidate.unlink()
+            removed.append(key)
+    if removed:
+        return True, "removed " + ", ".join(removed)
     return False, "rates snapshot absent"
 
 

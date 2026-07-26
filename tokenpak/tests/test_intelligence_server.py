@@ -328,18 +328,28 @@ class TestStatusEndpoint(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
 
     def test_status_returns_tier(self):
-        client, key = _make_test_client(key="tierkey", tier="team")
+        client, key = _make_test_client(key="tierkey", tier="pro")
         resp = client.get("/v1/status", headers={"X-TokenPak-Key": key})
-        self.assertEqual(resp.json()["tier"], "team")
+        self.assertEqual(resp.json()["tier"], "pro")
 
     def test_status_returns_rate_limit(self):
         client, key = _make_test_client(key="rlkey", tier="pro")
         resp = client.get("/v1/status", headers={"X-TokenPak-Key": key})
         self.assertEqual(resp.json()["rate_limit_per_minute"], 100)
 
-    def test_status_enterprise_shows_unlimited(self):
-        client, key = _make_test_client(key="entkey", tier="enterprise")
-        resp = client.get("/v1/status", headers={"X-TokenPak-Key": key})
+    def test_status_unlimited_tier_shows_unlimited(self):
+        # No shipped tier is unlimited (OSS=20/min, Pro=100/min); patch the
+        # limit table so the "unlimited" status rendering stays covered.
+        from unittest.mock import patch
+
+        from tokenpak.proxy.intelligence.auth import LicenseTier
+
+        client, key = _make_test_client(key="entkey", tier="pro")
+        with patch.dict(
+            "tokenpak.proxy.intelligence.auth.TIER_RATE_LIMITS",
+            {LicenseTier.PRO: None},
+        ):
+            resp = client.get("/v1/status", headers={"X-TokenPak-Key": key})
         self.assertEqual(resp.json()["rate_limit_per_minute"], "unlimited")
 
     def test_status_unauthenticated_returns_401(self):

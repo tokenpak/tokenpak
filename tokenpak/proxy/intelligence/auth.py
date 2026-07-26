@@ -4,12 +4,18 @@ TokenPak Intelligence Server — API key authentication + rate limiting.
 Key concepts
 ────────────
 * All endpoints require the ``X-TokenPak-Key`` header.
-* Keys are mapped to a tier: free | pro | team | enterprise.
+* Keys are mapped to a tier: free | pro.
 * Rate limits are enforced per-key using a sliding-window token bucket:
     - free        → 20 req/min  (unregistered demo keys)
     - pro         → 100 req/min
-    - team        → 500 req/min
-    - enterprise  → unlimited
+  A ``None`` entry in ``TIER_RATE_LIMITS`` means unlimited; no shipped
+  tier uses it today.
+
+.. note::
+   This server is not currently wired to any console entry point and
+   nothing outside this package imports it. The per-tier request rates
+   above are therefore internal defaults, not a published product limit
+   — revisit them if and when the server ships.
 * On a rate-limit breach the server returns HTTP 429 with
   ``Retry-After`` and ``X-RateLimit-Reset`` headers.
 * PII scrubbing: the logging filter removes bearer tokens and
@@ -29,7 +35,7 @@ Usage
 Environment variables (all optional)
 ──────────────────────────────────────
 TOKENPAK_ALLOWED_KEYS   — comma-separated ``key:tier`` pairs used in tests
-                          and dev (e.g. ``testkey1:pro,testkey2:enterprise``).
+                          and dev (e.g. ``testkey1:pro,testkey2:free``).
                           In production, override ``APIKeyValidator.lookup``.
 """
 
@@ -60,16 +66,12 @@ logger = logging.getLogger(__name__)
 class LicenseTier(str, Enum):
     FREE = "free"
     PRO = "pro"
-    TEAM = "team"
-    ENTERPRISE = "enterprise"
 
 
 # requests per minute, None = unlimited
 TIER_RATE_LIMITS: Dict[LicenseTier, Optional[int]] = {
     LicenseTier.FREE: 20,
     LicenseTier.PRO: 100,
-    LicenseTier.TEAM: 500,
-    LicenseTier.ENTERPRISE: None,
 }
 
 # ──────────────────────────────────────────────────────────────
@@ -190,7 +192,7 @@ class RateLimiter:
         """
         limit = TIER_RATE_LIMITS.get(tier)
         if limit is None:
-            # Enterprise: unlimited
+            # No configured limit for this tier → unlimited
             window_reset = int(time.time()) + self.WINDOW_SECONDS
             return True, 999_999, window_reset
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``tokenpak tip`` CLI subcommand — TokenPak Integration Protocol surface.
+"""``tokenpak tip`` CLI subcommand — TokenPak Integrity Protocol surface.
 
 Beta 1 surface (regression recovery from v1.3.7's ``doctor --conformance``;
 the v1.3.7 ``services/diagnostics/conformance/`` runner was removed in
@@ -54,7 +54,7 @@ def build_tip_parser(sub: Any) -> None:
     """Register the ``tokenpak tip`` subcommand on ``sub``."""
     p_tip = sub.add_parser(
         "tip",
-        help="TokenPak Integration Protocol — validate, inspect, conformance",
+        help="TokenPak Integrity Protocol — validate, inspect, conformance",
         description=(
             "TIP is the protocol layer that adapter providers and "
             "platform integrations declare against. This verb family "

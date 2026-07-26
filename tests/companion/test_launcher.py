@@ -301,13 +301,23 @@ def test_main_proxy_detection_exception_path(tmp_path):
 
     import httpx as _httpx
 
-    with patch.dict(
-        os.environ,
-        {
-            "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
-            "TOKENPAK_COMPANION_PROXY_URL": "",  # no explicit proxy
-        },
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
+                "TOKENPAK_COMPANION_PROXY_URL": "",  # no explicit proxy
+            },
+        ),
+        patch.dict(os.environ, {}, clear=False),
     ):
+        # The launcher passes a copy of the ambient environment to the child, so
+        # an inherited ANTHROPIC_BASE_URL would satisfy the assertion below
+        # without the launcher having set anything.  Anyone running Claude
+        # through TokenPak's own proxy exports exactly that variable, so this
+        # test would fail on the machines it most needs to hold on.  patch.dict
+        # restores the whole mapping on exit, so popping here is scoped.
+        os.environ.pop("ANTHROPIC_BASE_URL", None)
         with patch.object(
             CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)
         ):
@@ -324,6 +334,99 @@ def test_main_proxy_detection_exception_path(tmp_path):
 
     # ANTHROPIC_BASE_URL should NOT be set when httpx raises
     assert "ANTHROPIC_BASE_URL" not in captured_env
+
+
+def test_main_reports_inherited_routing_when_it_selects_no_proxy(tmp_path, capsys):
+    """The banner must not imply a direct connection while the child is routed.
+
+    The launcher hands the child a copy of its own environment, so an
+    ANTHROPIC_BASE_URL exported by the user routes Claude even when TokenPak
+    detects no proxy and selects nothing. Reporting only TokenPak's own
+    selection would leave the operator believing traffic goes straight to the
+    provider — and, if that inherited URL is not TokenPak's proxy, believing
+    the session is being measured when it is not.
+    """
+    run_dir = tmp_path / "run"
+    journal_dir = tmp_path / "journal"
+    inherited = "http://127.0.0.1:9999"
+
+    import httpx as _httpx
+
+    with patch.dict(
+        os.environ,
+        {
+            "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
+            "TOKENPAK_COMPANION_PROXY_URL": "",  # no explicit proxy
+            "ANTHROPIC_BASE_URL": inherited,
+        },
+    ):
+        with patch.object(
+            CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)
+        ):
+            run_dir.mkdir(parents=True, exist_ok=True)
+            with patch("tokenpak.companion.launcher.os.execvpe") as mock_exec:
+                with patch.object(_httpx, "get", side_effect=Exception("connection refused")):
+                    captured_env = {}
+
+                    def capture_exec(cmd, args, env):
+                        captured_env.update(env)
+
+                    mock_exec.side_effect = capture_exec
+                    launcher.main([])
+
+    # The inherited value is passed through untouched — this is a reporting
+    # fix, not a routing change.
+    assert captured_env["ANTHROPIC_BASE_URL"] == inherited
+    err = capsys.readouterr().err
+    assert inherited in err
+    assert "not selected by TokenPak" in err
+    assert "Proxy active" not in err
+
+
+def test_main_does_not_report_inherited_routing_when_it_selects_the_proxy(tmp_path, capsys):
+    """TokenPak's own selection keeps the plain banner, with no second line.
+
+    Detection is stubbed rather than left to the ambient machine: a developer
+    running TokenPak's proxy locally would otherwise decide this test's
+    outcome.
+    """
+    run_dir = tmp_path / "run"
+    journal_dir = tmp_path / "journal"
+    selected = "http://tokenpak-test-proxy:8766"
+
+    import httpx as _httpx
+
+    class _Healthy:
+        status_code = 200
+
+    with patch.dict(
+        os.environ,
+        {
+            "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
+            "TOKENPAK_PROXY_URL": selected,
+            "ANTHROPIC_BASE_URL": "http://127.0.0.1:9999",
+        },
+    ):
+        with patch.object(
+            CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)
+        ):
+            run_dir.mkdir(parents=True, exist_ok=True)
+            with patch("tokenpak.companion.launcher.os.execvpe") as mock_exec:
+                with patch.object(_httpx, "get", return_value=_Healthy()):
+                    captured_env = {}
+
+                    def capture_exec(cmd, args, env):
+                        captured_env.update(env)
+
+                    mock_exec.side_effect = capture_exec
+                    launcher.main([])
+
+    # TokenPak's selection overrides the inherited value, so the single
+    # "Proxy active" line is the whole truth and the second line must not fire.
+    assert captured_env["ANTHROPIC_BASE_URL"] == selected
+    err = capsys.readouterr().err
+    assert f"Proxy active → {selected}" in err
+    assert "not selected by TokenPak" not in err
 
 
 @pytest.mark.skip(reason=SKIP_LAUNCHER_BANNER_TEXT_DRIFT)

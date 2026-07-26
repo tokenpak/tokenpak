@@ -19,7 +19,7 @@ try:
 except ImportError:
     pass
 
-# Future connectors (Pro/Enterprise tier)
+# Future connectors (Pro)
 # - google_drive: Google Drive OAuth connector
 # - notion: Notion API connector
 # - github: GitHub repos/issues/PRs connector

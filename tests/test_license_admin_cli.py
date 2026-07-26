@@ -274,7 +274,7 @@ class TestVerifyCommand:
 
     def test_verify_token_file(self, keypair_files, tmp_path, capsys):
         _, pub_path = keypair_files
-        token = self._make_token(keypair_files, tier="enterprise")
+        token = self._make_token(keypair_files, tier="pro")
         token_file = tmp_path / "license.key"
         token_file.write_text(token)
         parser = build_parser()

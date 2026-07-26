@@ -70,15 +70,6 @@ class PreviewResult(TypedDict):
     duration_ms: float
 
 
-class ModelLeaderboardRow(TypedDict):
-    model: str
-    requests: int
-    cost: float
-    saved: float
-    cache_pct: int
-    compress_pct: float
-
-
 class MonitorModelRow(TypedDict):
     model: str
     requests: int
@@ -285,14 +276,19 @@ def _get_monitor_db_path() -> Optional[Path]:
         return None
 
 
-def _monitor_db_cost(period: str = "daily") -> float:
-    """Return total estimated_cost from monitor.db for the given period."""
+def _monitor_db_cost(period: str = "daily") -> Optional[float]:
+    """Total estimated_cost from monitor.db for *period*, or ``None``.
+
+    ``None`` means no request store exists or it could not be read. That is a
+    different fact from "you spent nothing", and rendering both as $0.0000
+    told a user with no data that we had measured their spend and it was zero.
+    """
     import sqlite3
     from datetime import date, timedelta
 
     db = _get_monitor_db_path()
     if db is None:
-        return 0.0
+        return None
 
     today = date.today()
     if period == "daily":
@@ -313,7 +309,7 @@ def _monitor_db_cost(period: str = "daily") -> float:
         conn.close()
         return total
     except Exception:
-        return 0.0
+        return None
 
 
 def _monitor_db_savings(days: int = 30) -> MonitorSavingsData | None:
@@ -414,6 +410,23 @@ def _monitor_db_models(days: int = 30) -> list[MonitorModelRow]:
 # ── Live Proxy Access ─────────────────────────────────────────────────────────
 
 
+def _proxy_base_url() -> str:
+    """Base URL of this install's proxy.
+
+    Honours TOKENPAK_PROXY_URL, then TOKENPAK_PORT, then the default port.
+    Two callers hardcoded ``http://127.0.0.1:8766`` and consulted only
+    TOKENPAK_PROXY_URL, so on a host running a proxy on the default port,
+    `tokenpak stats` under TOKENPAK_PORT=<other> reported *that* proxy's
+    request count and uptime as the user's own — measured numbers, from
+    somebody else's traffic.
+    """
+    explicit = os.environ.get("TOKENPAK_PROXY_URL", "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+    port = os.environ.get("TOKENPAK_PORT", "8766").strip() or "8766"
+    return f"http://127.0.0.1:{port}"
+
+
 def _proxy_get(path: str, port: Optional[int] = None) -> JsonObject | None:
     """Fetch JSON from running proxy. Returns None if unreachable."""
     import urllib.request as _urlreq
@@ -429,7 +442,25 @@ def _proxy_get(path: str, port: Optional[int] = None) -> JsonObject | None:
 
 # ── Progressive Disclosure ────────────────────────────────────────────────────
 
-_FIRST_RUN_FLAG = Path.home() / ".tokenpak" / ".seen_intro"
+
+#: Name of the first-run marker. Resolved lazily (see ``_first_run_flag``)
+#: rather than bound at import time: a module-level
+#: ``Path.home() / ".tokenpak" / ".seen_intro"`` meant that *any* verb — even
+#: ``tokenpak version`` — created the legacy home before anything else ran,
+#: which pinned path resolution to the legacy directory for the life of the
+#: install and created it at the process umask (0775) instead of 0700.
+def _paths_mod() -> Any:
+    """The canonical path resolver, imported lazily.
+
+    Imported on use so a caller that sets ``TOKENPAK_HOME`` programmatically
+    is not racing a module-level binding.
+    """
+    from tokenpak import _paths
+
+    return _paths
+
+
+_FIRST_RUN_FLAG_NAME = ".seen_intro"
 
 # Commands shown in quick --help (beginner view)
 _QUICK_COMMANDS = ["setup", "start", "demo", "cost", "status"]
@@ -444,7 +475,6 @@ _COMMAND_GROUPS = {
         ("demo", "See compression in action"),
         ("cost", "View API spend"),
         ("status", "Check proxy health"),
-        ("upgrade", "Open the TokenPak Pro upgrade page"),
         ("logs", "Show recent logs"),
     ],
     "Indexing": [
@@ -502,8 +532,8 @@ _COMMAND_GROUPS = {
         ("lock", "File lock management"),
         ("run", "Schedule macro runs"),
         ("replay", "Replay captured sessions"),
-        ("audit", "Audit log surface (Pro/Enterprise)"),
-        ("compliance", "Compliance report surface (Pro/Enterprise)"),
+        ("audit", "Audit log surface (Pro)"),
+        ("compliance", "Compliance report surface (Pro)"),
         ("validate", "Validate JSON files"),
         ("config-check", "Validate config"),
         ("diff", "Show context changes"),
@@ -568,11 +598,28 @@ _EXTRA_KNOWN_COMMANDS = {
 def _core_command_names() -> set[str]:
     """Return the authoritative set of all built-in CLI verb names.
 
-    This is the union of the grouped commands and the argparse/stub commands.
-    Plugin discovery excludes every name in this set so a plugin can never
-    shadow a built-in verb.
+    Derived from the **live parser**, unioned with the hand-maintained lists.
+
+    It used to be the hand-maintained lists alone, and `main()` uses this set
+    to decide whether a verb is real before argparse ever sees it. Two verbs
+    the parser accepts — ``upgrade`` and ``telemetry`` — were missing from
+    those lists, so typing them produced "❌ Unknown command: 'upgrade'  Did
+    you mean: tokenpak update?" while the command sat registered and
+    dispatchable a few frames away. For ``upgrade`` that silently voided the
+    compatibility shim it exists to provide, and misdirected the user to an
+    unrelated verb.
+
+    Plugin discovery also excludes every name in this set, so widening it to
+    the real parser strictly improves the guarantee that a plugin cannot
+    shadow a built-in.
     """
-    return set(_ALL_COMMANDS) | set(_EXTRA_KNOWN_COMMANDS)
+    names = set(_ALL_COMMANDS) | set(_EXTRA_KNOWN_COMMANDS)
+    try:
+        names |= registered_command_names()
+    except Exception:
+        # Never let verb dispatch depend on parser construction succeeding.
+        pass
+    return names
 
 
 def registered_command_names(
@@ -701,16 +748,39 @@ def _suggest_command(unknown: str) -> Optional[str]:
 
 
 def _mark_intro_seen() -> None:
-    """Write the first-run flag so the welcome message shows only once."""
+    """Write the first-run flag so the welcome message shows only once.
+
+    Writes to the canonical home only. This is frequently the first state
+    TokenPak ever creates, so it is also the call that establishes the home
+    directory's permissions — hence ``ensure_home()`` rather than a bare
+    ``mkdir``.
+    """
     try:
-        _FIRST_RUN_FLAG.parent.mkdir(parents=True, exist_ok=True)
-        _FIRST_RUN_FLAG.touch()
+        from tokenpak import _paths
+
+        _paths.ensure_home()
+        marker = _paths.write_home() / _FIRST_RUN_FLAG_NAME
+        marker.touch()
+        # The directory is 0700, but the marker inherits the process umask —
+        # every file TokenPak creates gets an explicit mode so the guarantee
+        # does not depend on how the user's umask happens to be set.
+        _paths.secure_file(marker)
     except Exception:
         pass
 
 
 def _is_first_run() -> bool:
-    return not _FIRST_RUN_FLAG.exists()
+    """True when no home (canonical or legacy) carries the intro marker.
+
+    Reads across both homes so upgrading users are not shown the first-run
+    welcome again.
+    """
+    try:
+        from tokenpak import _paths
+
+        return _paths.resolve_existing(_FIRST_RUN_FLAG_NAME) is None
+    except Exception:
+        return False
 
 
 def _print_quick_help() -> None:
@@ -734,18 +804,13 @@ def _print_quick_help() -> None:
         "\n"
         "Tools:\n"
         "  index        Index a directory for compression\n"
-        "  template     Manage prompt templates\n"
         "  config       Config management (sync, validate, migrate)\n"
         "  dashboard    Real-time health dashboard\n"
         "  doctor       Run diagnostics & auto-fix issues\n"
-        "  fingerprint  Fingerprint sync and cache management\n"
         "  preview      Preview compression dry-run (see token savings)\n"
         "  compress     Compress text/JSON/code directly\n"
-        "  optimize     Optimize prompts for better Prompt Packing efficiency\n"
-        "  last         Show details of last compressed request\n"
         "  vault        Vault index health diagnostic and repair\n"
         "  diff         Show context changes (Pro)\n"
-        "  prune        Prune old audit log entries\n"
         "  version      Show current version\n"
         "\n"
         "Run `tokenpak help` for all commands.\n"
@@ -757,7 +822,7 @@ def _fetch_proxy_uptime(timeout: float = 0.5) -> str:
     try:
         import urllib.request as _urlreq
 
-        proxy_base = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
+        proxy_base = _proxy_base_url()
         with _urlreq.urlopen(f"{proxy_base}/health", timeout=timeout) as _r:
             _hdata = json.loads(_r.read())
         uptime_s = _hdata.get("uptime_seconds")
@@ -820,26 +885,43 @@ def cmd_help(args: CommandArgs) -> None:
 # ── Alias commands ────────────────────────────────────────────────────────────
 
 
-def cmd_init(args: CommandArgs) -> None:
+def cmd_init(args: CommandArgs) -> int:
     """Guided first-run setup wizard: API key, port, vault path."""
-    import json as _json
     import os as _os
     from pathlib import Path as _Path
 
     import click
 
-    config_dir = _Path.home() / ".tokenpak"
-    config_file = config_dir / "config.json"
+    from tokenpak import _paths as _p
+    from tokenpak.cli.exit_codes import EXIT_OK, EXIT_USAGE
+
+    config_dir = _p.write_home()
+    # Canonical writes go to config.yaml. This wrote config.json, which the
+    # rest of the product treats as a *read-compatibility* format — so a user
+    # who ran `init` produced state that `setup` would not have produced and
+    # that nothing else writes.
+    config_file = _p.config_write_path()
+    existing_config = _p.config_read_path()
     env_file = config_dir / ".env"
 
+    # `init` is interactive by nature. Every prompt below aborts on a closed
+    # stdin, and click raises Abort — which surfaced as a raw traceback and a
+    # bare exit 1. Fail once, at the top, with the same contract `setup` uses:
+    # EOF is not an answer.
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        click.echo("`tokenpak init` is interactive and stdin is not a terminal.")
+        click.echo("For a scripted run, use setup, which takes its answers as flags:")
+        click.echo("  tokenpak setup --profile balanced --yes")
+        return EXIT_USAGE
+
     # Non-destructive: warn if already configured
-    if config_file.exists():
+    if existing_config is not None:
         overwrite = click.confirm(
-            f"Config already exists at {config_file}. Overwrite?", default=False
+            f"Config already exists at {existing_config}. Overwrite?", default=False
         )
         if not overwrite:
             click.echo("Init cancelled. Run `tokenpak start` to start the proxy.")
-            return
+            return EXIT_OK
 
     click.echo("\n✨ TokenPak Init — Guided Setup\n")
 
@@ -847,7 +929,9 @@ def cmd_init(args: CommandArgs) -> None:
     click.echo("Step 1/3: API Key")
     click.echo("  Choose how to provide your Anthropic API key:")
     click.echo("  [1] Environment variable (already set, e.g. ANTHROPIC_API_KEY)")
-    click.echo("  [2] Enter key now (saved to ~/.tokenpak/.env)")
+    # Print the resolved path, not a hardcoded ~/.tokenpak/ that is wrong on
+    # every install using TOKENPAK_HOME or the canonical home.
+    click.echo(f"  [2] Enter key now (saved to {env_file})")
 
     key_choice = click.prompt("Choice", type=click.Choice(["1", "2"]), default="1")
 
@@ -880,7 +964,7 @@ def cmd_init(args: CommandArgs) -> None:
         api_key = click.prompt("  Paste your Anthropic API key", hide_input=True).strip()
         if not api_key:
             click.echo("  \u274c API key cannot be empty.")
-            return
+            return EXIT_USAGE
         # Write to .env file
         config_dir.mkdir(parents=True, exist_ok=True)
         env_file.write_text(f"ANTHROPIC_API_KEY={api_key}\n")
@@ -906,7 +990,7 @@ def cmd_init(args: CommandArgs) -> None:
     ).strip()
     vault_path = str(_Path(vault_input).expanduser()) if vault_input else ""
 
-    # ── Write config.json ────────────────────────────────────────────────────
+    # ── Write the canonical config ───────────────────────────────────────────
     config: JsonObject = {
         "version": "1.0",
         "port": port,
@@ -915,10 +999,13 @@ def cmd_init(args: CommandArgs) -> None:
     if vault_path:
         config["vault_path"] = vault_path
 
+    import yaml as _yaml
+
+    _p.ensure_home()
     config_dir.mkdir(parents=True, exist_ok=True)
     with open(config_file, "w") as f:
-        _json.dump(config, f, indent=2)
-    config_file.chmod(0o600)
+        _yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    _p.secure_file(config_file)
 
     # ── Done ─────────────────────────────────────────────────────────────────
     click.echo("\n" + "\u2500" * 50)
@@ -930,37 +1017,59 @@ def cmd_init(args: CommandArgs) -> None:
     click.echo()
     click.echo("Next step:")
     click.echo("   tokenpak start\n")
+    return EXIT_OK
 
 
-def cmd_setup(args: CommandArgs) -> None:
-    """Interactive wizard for first-time TokenPak configuration."""
+def cmd_setup(args: CommandArgs) -> int:
+    """Interactive wizard for first-time TokenPak configuration.
+
+    Scriptable via ``--profile`` / ``--port`` / ``--yes``, because a wizard
+    that can only be driven by a human keyboard cannot be tested in CI or a
+    container — and because EOF must never stand in for an answer.
+    """
     import os
     import subprocess
-    import time
-    from pathlib import Path
 
     import yaml
 
+    from tokenpak import _paths as _tp_paths
+
     from .core.profiles import get_profile
 
-    config_dir = Path.home() / ".tokenpak"
-    config_file = config_dir / "config.yaml"
+    cli_profile = getattr(args, "profile", None)
+    cli_port = getattr(args, "port", None)
+    assume_yes = bool(getattr(args, "yes", False))
+
+    valid_profiles = ("minimal", "balanced", "aggressive")
+    if cli_profile is not None and cli_profile not in valid_profiles:
+        print(f"Error: unknown profile '{cli_profile}'. Choose one of: {', '.join(valid_profiles)}")
+        return 2
+
+    # Writes go to the canonical home; an existing config is honoured wherever
+    # it currently lives so reconfiguring does not silently fork state.
+    config_dir = _tp_paths.write_home()
+    config_file = _tp_paths.config_write_path()
+    existing_config = _tp_paths.config_read_path()
     is_tty = sys.stdin.isatty() and sys.stdout.isatty()
 
     # Check for existing config
-    if config_file.exists():
+    if existing_config is not None:
+        config_file = existing_config
         print(f"Configuration already exists at {config_file}")
-        if not is_tty:
-            print("Non-interactive mode: skipping reconfigure.")
-            return
-        try:
-            response = input("Reconfigure? (yes/no) [no]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print("\nSetup cancelled.")
-            return
-        if response not in ("yes", "y"):
-            print("Setup cancelled.")
-            return
+        if assume_yes:
+            print("Reconfiguring (--yes).")
+        elif not is_tty:
+            print("Non-interactive mode: skipping reconfigure. Pass --yes to overwrite.")
+            return 0
+        else:
+            try:
+                response = input("Reconfigure? (yes/no) [no]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\nSetup cancelled.")
+                return 1
+            if response not in ("yes", "y"):
+                print("Setup cancelled.")
+                return 0
 
     # Detect API keys from environment
     print("\n🔍 Scanning for API keys...\n")
@@ -995,25 +1104,63 @@ def cmd_setup(args: CommandArgs) -> None:
             provider = default_provider
         if provider not in api_keys:
             print(f"Error: no API key was detected for {provider}.")
-            return
+            return 2
     else:
         print("ℹ️  No provider API keys detected — continuing without them.")
         print("   Authenticated clients can use their existing OAuth/session credentials.")
         print("   TokenPak will preserve the client's selected or default model.")
 
-    # Ask for port
-    port_input = input("Port number [8766]: ").strip() if is_tty else ""
-    port = int(port_input) if port_input else 8766
+    # Port precedence: --port, then TOKENPAK_PORT, then the prompt/default.
+    # TOKENPAK_PORT must be honoured here because the port-conflict message
+    # below tells users to re-run with it — an instruction that has to work.
+    try:
+        env_port: Optional[int] = int(os.environ["TOKENPAK_PORT"])
+    except (KeyError, ValueError):
+        env_port = None
+
+    default_port = cli_port or env_port or 8766
+    if cli_port is not None or env_port is not None:
+        port = default_port
+    else:
+        port_input = input(f"Port number [{default_port}]: ").strip() if is_tty else ""
+        try:
+            port = int(port_input) if port_input else default_port
+        except ValueError:
+            print(f"Error: '{port_input}' is not a valid port number.")
+            return 2
 
     # Ask for profile
     print("\nChoose a compression profile:")
-    print("  [1] minimal    — compression only (safest, ~5% savings)")
-    print("  [2] balanced   — compression + caching + routing (recommended, ~30% savings)")
-    print("  [3] aggressive — all modules enabled (maximum savings, ~40%+)")
+    # No savings percentages here. TokenPak cannot know what a given
+    # workload will save before measuring it, and a number printed at the
+    # moment of choice is read as a promise. Savings are reported only
+    # after measurement, with the input and configuration identified.
+    print("  [1] minimal    — compression only; the most conservative option")
+    print("  [2] balanced   — compression + caching + routing (recommended default)")
+    print("  [3] aggressive — all modules enabled; most aggressive rewriting")
+    print()
+    print("  Savings depend on your traffic. Measure yours with `tokenpak savings`")
+    print("  once requests have flowed through the proxy.")
 
-    profile_input = input("\nProfile [2]: ").strip() if is_tty else ""
     profile_map = {"1": "minimal", "2": "balanced", "3": "aggressive"}
-    profile_name = profile_map.get(profile_input, "balanced")
+    if cli_profile is not None:
+        profile_name = cli_profile
+        print(f"\nProfile: {profile_name} (from --profile)")
+    elif is_tty:
+        profile_input = input("\nProfile [2]: ").strip()
+        profile_name = profile_map.get(profile_input, "balanced")
+    else:
+        # EOF is not consent. Previously `tokenpak setup </dev/null` silently
+        # selected "balanced", wrote a config and spawned a background daemon
+        # without a single answered prompt. Non-interactive runs must state
+        # their intent explicitly.
+        print()
+        print("Cannot prompt for a profile: stdin is not a terminal.")
+        print("Re-run with the choice stated explicitly, for example:")
+        print("  tokenpak setup --profile balanced --yes")
+        print()
+        print("Profiles: minimal | balanced | aggressive")
+        return 2
 
     # Build base config
     proxy_config: JsonObject = {"port": port, "host": "localhost"}
@@ -1033,13 +1180,30 @@ def cmd_setup(args: CommandArgs) -> None:
     config["modules"] = profile["features"]
     config["profile"] = profile_name
 
-    # Create config directory and write config
+    # Create config directory (0700) and write config (0600). The config can
+    # carry provider settings, so it must not be group/world readable.
+    _tp_paths.ensure_home()
     config_dir.mkdir(parents=True, exist_ok=True)
     with open(config_file, "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    _tp_paths.secure_file(config_file)
 
     print(f"\n✅ Configuration saved to {config_file}")
     print(f"   Profile: {profile_name} — {profile['description']}")
+
+    # Starting a background daemon is opt-in. Setup used to spawn one
+    # unasked and then tell the user, in its own next-steps, to stop it
+    # before taking a first measured receipt — creating a state it
+    # immediately instructed them to undo. Configuring and running are two
+    # decisions; setup owns the first one.
+    if not bool(getattr(args, "start", False)):
+        print("\nConfigured. No proxy was started.")
+        print("\nNext steps:")
+        print(f"  1. Start it when you want it:  tokenpak start   (port {port})")
+        print("  2. Route your client:          tokenpak integrate")
+        print("  3. Check state any time:       tokenpak status")
+        print("\n  To configure and start in one step: tokenpak setup --start")
+        return 0
 
     # Start the proxy
     print("\n🚀 Starting proxy...\n")
@@ -1049,85 +1213,157 @@ def cmd_setup(args: CommandArgs) -> None:
     # a local in cmd_setup() and earlier `sys.stdin.isatty()` calls at the
     # top of the function would have raised UnboundLocalError.
 
-    # Find proxy — prefer bundled runtime/ first, then canonical proxy.py
-    candidates = [
-        Path(__file__).resolve().parent / "runtime" / "proxy.py",  # bundled (pip install)
-        Path(__file__).resolve().parent.parent / "proxy.py",  # canonical
-        Path.home() / "tokenpak" / "proxy.py",  # canonical home
-    ]
-    proxy_path = None
-    for c in candidates:
-        if c.exists():
-            proxy_path = c
-            break
+    # Launch via the module entrypoint, which is how the proxy actually runs.
+    #
+    # This previously searched for a `proxy.py` file and ran it as a script. The
+    # first candidate it found — `tokenpak/runtime/proxy.py` — is a four-line
+    # compatibility re-export with no `__main__` block, so the child imported it
+    # and exited 0 without ever serving. Setup's auto-start had therefore been
+    # inert, and the old "probe the port, print ✅ either way" logic is exactly
+    # what kept that invisible.
+    launch_cmd = [sys.executable, "-m", "tokenpak.proxy"]
 
-    if not proxy_path:
-        print("Warning: proxy.py not found. Skipping auto-start.")
-        return
+    from tokenpak.core.runtime import lifecycle as _lifecycle
 
-    # Start proxy
+    # Precheck: a listener already on our port means we cannot verify that any
+    # health response is ours. Report the conflict instead of spawning a child
+    # that will die on bind and then claiming the stranger's /health as success.
+    if _lifecycle.port_in_use(port):
+        existing = _lifecycle.snapshot(port)
+        looks_like_tokenpak = bool(existing.health_payload.get("version")) and bool(
+            existing.health_payload.get("status")
+        )
+        print(f"⚠️  Port {port} is already in use.")
+        if existing.running:
+            print("   A TokenPak proxy that this install started is already running there.")
+            print(f"   Config saved to {config_file}. Nothing further to do —")
+            print("   run `tokenpak status` to check it, or `tokenpak restart` to reload.")
+            return 0
+        if looks_like_tokenpak:
+            ver = existing.health_payload.get("version")
+            print(f"   A TokenPak proxy (v{ver}) is already serving that port, but it was")
+            print("   not started by this install, so TokenPak will not manage or stop it.")
+            print("   If that proxy is yours, you are already set up — run `tokenpak status`.")
+            print("   Otherwise pick another port:")
+        else:
+            print("   The listener there did not identify itself as a TokenPak proxy.")
+            print("   TokenPak did NOT start a proxy, and your client is NOT routed.")
+            print("   Free the port, or pick another:")
+        print(f"     TOKENPAK_PORT=<port> tokenpak setup --profile {profile_name} --yes")
+        return 1
+
     env = os.environ.copy()
     env["TOKENPAK_PORT"] = str(port)
+    # Capture the child's stderr so a startup failure can be reported instead of
+    # discarded. DEVNULL here meant a crashing proxy left the user with nothing.
+    startup_log = config_dir / "proxy-startup.log"
+    try:
+        log_handle: Any = open(startup_log, "w")
+    except OSError:
+        log_handle = subprocess.DEVNULL
     proc = subprocess.Popen(
-        [sys.executable, str(proxy_path)],
+        launch_cmd,
         env=env,
-        cwd=str(proxy_path.parent),
         start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
     )
 
-    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
-    pid_path.parent.mkdir(parents=True, exist_ok=True)
-    pid_path.write_text(str(proc.pid))
+    # Verify the child before recording it. The PID file is written only for a
+    # process we have confirmed is alive and serving, so a stale PID cannot be
+    # mistaken later for a running proxy.
+    snap = _lifecycle.await_start(proc, port)
+    if not snap.running:
+        print("❌ Proxy did not start.")
+        for reason in snap.reasons:
+            print(f"   • {reason}")
+        tail = ""
+        try:
+            tail = "".join(startup_log.read_text().splitlines(keepends=True)[-8:]).rstrip()
+        except OSError:
+            pass
+        if tail:
+            print("\n   Last output from the proxy:")
+            for line in tail.splitlines():
+                print(f"     {line}")
+            print(f"\n   Full log: {startup_log}")
+        print(f"\n   Config was saved to {config_file}.")
+        print("   Diagnose with: tokenpak doctor")
+        print("   Retry with:    tokenpak start   (or TOKENPAK_PORT=<port> tokenpak start)")
+        _lifecycle.clear_pid()
+        return 1
 
-    # Wait and verify
-    time.sleep(1.5)
+    _lifecycle.write_pid(proc.pid)
+    stats_data = _proxy_get("/stats", port=port) or {}
+    mode = stats_data.get("compilation_mode")
+    mode_suffix = f" (mode: {mode})" if isinstance(mode, str) and mode else ""
+    print(f"✅ Proxy running on http://localhost:{port}{mode_suffix}  (PID {proc.pid})")
+    if snap.owned is None:
+        print("   Note: this proxy build does not report its PID on /health, so")
+        print("         ownership could not be cross-checked.")
 
-    # Try health check
-    try:
-        import json
-        import urllib.request
-
-        health_resp = urllib.request.urlopen(f"http://localhost:{port}/health", timeout=2)
-        json.loads(health_resp.read().decode())
-        stats_data = _proxy_get("/stats", port=port) or {}
-        mode = stats_data.get("compilation_mode")
-
-        mode_suffix = f" (mode: {mode})" if isinstance(mode, str) and mode else ""
-        print(f"✅ Proxy running on http://localhost:{port}{mode_suffix}")
-    except Exception:
-        print(f"✅ Proxy launched (PID {proc.pid}, port {port})")
-
-    # Success message with next steps
+    # Next steps. Routing state is reported honestly rather than assumed: setup
+    # does not route the client, so telling the user they are done would be a
+    # false claim, and doctor would immediately contradict it.
     print("\nNext steps:")
-    print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
-    print("  2. Run: tokenpak status    (check health)")
-    print("  3. Run: tokenpak savings   (see your ROI)")
-    print("  First measured receipt (stop this background proxy first):")
-    print("    tokenpak stop")
-    print("    https://github.com/tokenpak/tokenpak/blob/main/docs/first-receipt.md")
+    if snap.routed:
+        print(f"  1. Your client is already routed to http://localhost:{port}.")
+    else:
+        print(f"  1. Point your LLM client at http://localhost:{port}")
+        print("     Run `tokenpak integrate` for per-client instructions.")
+    print("  2. Run: tokenpak status    (check health and routing)")
+    print("  3. Run: tokenpak savings   (measured savings, once traffic flows)")
     print()
     print("💡 Quick commands:")
-    print("  tokenpak serve      — start the proxy")
     print("  tokenpak stop       — stop the proxy")
     print("  tokenpak status     — check proxy health")
-    print("  tokenpak savings    — view compression savings")
+    print("  tokenpak doctor     — diagnose setup problems")
     print()
+    return 0
 
 
-def cmd_start(args: CommandArgs) -> None:
-    """Start the proxy on localhost:8766 (launches proxy.py)."""
+def cmd_start(args: CommandArgs) -> int:
+    """Start the proxy on localhost:8766 (launches proxy.py).
+
+    Returns a documented exit code. It previously returned ``None`` on every
+    path, including the ones where the proxy did not start, so a script that
+    ran `tokenpak start && tokenpak status` saw success after a failed boot.
+    """
     import subprocess
 
+    from tokenpak.cli.exit_codes import (
+        EXIT_CORRUPT_STATE,
+        EXIT_NOT_CONFIGURED,
+        EXIT_OK,
+        EXIT_RUNTIME_UNAVAILABLE,
+    )
+    from tokenpak.core.runtime import lifecycle as _lifecycle
+
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
-    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
 
     # Validate config on boot (P1-T5)
-    from tokenpak.core.config_loader import load_config
+    from tokenpak.core.config_loader import config_load_error, load_config
+
+    _config = load_config()
+
+    # A config that exists but cannot be parsed is not a missing config.
+    # Validating the empty dict the loader falls back to produced a confident
+    # and wrong diagnosis — "Required field 'api_keys' is missing" — for a
+    # file whose real problem was a YAML syntax error on line 2.
+    _bad = config_load_error()
+    if _bad is not None:
+        _path, _why = _bad
+        import sys as _sys
+
+        print(f"\n✗ Config file could not be parsed: {_path}", file=_sys.stderr)
+        for _line in str(_why).splitlines():
+            print(f"    {_line}", file=_sys.stderr)
+        print("\nThe file exists but is not valid YAML. Nothing was started.", file=_sys.stderr)
+        print("  • Fix the syntax above, or", file=_sys.stderr)
+        print("  • Move it aside and run 'tokenpak setup' to write a fresh one", file=_sys.stderr)
+        return EXIT_CORRUPT_STATE
 
     try:
-        _config = load_config()
         from tokenpak.core.config_validator import ConfigValidator
 
         validator_factory = cast(Callable[[], ConfigValidator], ConfigValidator)
@@ -1146,29 +1382,50 @@ def cmd_start(args: CommandArgs) -> None:
                 file=_sys.stderr,
             )
             print("  • Or use: tokenpak config-check <file>", file=_sys.stderr)
-            return
+            return EXIT_NOT_CONFIGURED
     except Exception as _e:
         print(f"Warning: Config validation skipped ({_e})")
 
-    # Check if proxy is already responding (covers systemd, manual, PID file)
-    health = _proxy_get("/health", port=port)
-    if health:
+    # One observation of lifecycle state, shared with setup, stop, restart,
+    # status and doctor. These commands previously each decided for themselves
+    # what "running" meant, and they did not agree: start probed the port,
+    # stop read a PID file in a different home than setup wrote it to, so
+    # `tokenpak stop` after `tokenpak setup` reported no proxy was running.
+    snap = _lifecycle.snapshot(port)
+
+    if snap.running:
         stats = _proxy_get("/stats", port=port) or {}
         mode = stats.get("compilation_mode")
-        reqs = health.get("requests_total", "unknown")
+        reqs = snap.health_payload.get("requests_total", "unknown")
         mode_text = f", mode={mode}" if isinstance(mode, str) and mode else ""
         print(f"Proxy already running (port {port}{mode_text}, {reqs} requests).")
-        return
+        return EXIT_OK
 
-    # Check stale PID file
-    if pid_path.exists():
-        try:
-            pid = int(pid_path.read_text().strip())
-            os.kill(pid, 0)
-            print(f"Proxy process exists (PID {pid}) but not responding. Try `tokenpak restart`.")
-            return
-        except (ProcessLookupError, ValueError):
-            pid_path.unlink(missing_ok=True)
+    if snap.health_ok and not snap.pid_alive:
+        # Something is serving that port, but it is not a child we recorded.
+        print(f"A proxy is already answering on port {port}, but this install did not start it.")
+        print("   TokenPak will not manage a process it does not own.")
+        print("   Run `tokenpak status` to inspect it, or choose another port:")
+        print("     TOKENPAK_PORT=<port> tokenpak start")
+        return EXIT_RUNTIME_UNAVAILABLE
+
+    if snap.pid_alive and not snap.health_ok:
+        print(
+            f"Proxy process exists (PID {snap.pid}) but is not answering. Try `tokenpak restart`."
+        )
+        return EXIT_RUNTIME_UNAVAILABLE
+
+    if snap.foreign_listener:
+        print(f"Port {port} is in use by something that is not a TokenPak proxy.")
+        print("   Free the port, or choose another:")
+        print("     TOKENPAK_PORT=<port> tokenpak start")
+        return EXIT_RUNTIME_UNAVAILABLE
+
+    # A PID on file that is not alive is stale — clear it rather than leaving
+    # a record that later reads as a running proxy.
+    recorded_pid, _ = _lifecycle.read_pid()
+    if recorded_pid is not None and not _lifecycle.pid_alive(recorded_pid):
+        _lifecycle.clear_pid()
 
     env = os.environ.copy()
     env["TOKENPAK_PORT"] = str(port)
@@ -1184,7 +1441,7 @@ def cmd_start(args: CommandArgs) -> None:
             print("Error: proxy.py not found. Falling back to legacy server.")
             serve_args = argparse.Namespace(port=port, telemetry=False, ingest=False, workers=1)
             cmd_serve(serve_args)
-            return
+            return EXIT_OK
         proc = subprocess.Popen(
             [sys.executable, str(proxy_path)],
             env=env,
@@ -1202,49 +1459,76 @@ def cmd_start(args: CommandArgs) -> None:
             stderr=subprocess.DEVNULL,
         )
 
-    pid_path.parent.mkdir(parents=True, exist_ok=True)
-    pid_path.write_text(str(proc.pid))
+    # Verify the child before recording it: a PID file written ahead of the
+    # check is a claim we have not earned, and it is what let a dead child be
+    # reported later as a running proxy.
+    started = _lifecycle.await_start(proc, port)
+    if not started.running:
+        print(f"❌ Proxy did not start on port {port}.")
+        for reason in started.reasons:
+            print(f"   • {reason}")
+        print("   Diagnose with: tokenpak doctor")
+        _lifecycle.clear_pid()
+        return EXIT_RUNTIME_UNAVAILABLE
 
-    # Wait briefly and verify
-    import time as _t
-
-    _t.sleep(1.5)
-    health = _proxy_get("/health", port=port)
-    if health:
-        stats = _proxy_get("/stats", port=port) or {}
-        mode = stats.get("compilation_mode")
-        mode_suffix = f" (mode: {mode})" if isinstance(mode, str) and mode else ""
-        print(f"\n✅ Proxy running on http://localhost:{port}{mode_suffix}\n")
-        print("Next steps:")
-        print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
-        print("  2. Run: tokenpak status    (check health)")
-        print("  3. Run: tokenpak savings   (see your ROI)")
-        print()
-        print("💡 First time? Run: tokenpak setup")
+    _lifecycle.write_pid(proc.pid)
+    stats = _proxy_get("/stats", port=port) or {}
+    mode = stats.get("compilation_mode")
+    mode_suffix = f" (mode: {mode})" if isinstance(mode, str) and mode else ""
+    print(f"\n✅ Proxy running on http://localhost:{port}{mode_suffix}  (PID {proc.pid})\n")
+    print("Next steps:")
+    if started.routed:
+        print("  1. Your client is routed to TokenPak.")
     else:
-        print(f"Proxy launched (PID {proc.pid}, port {port}) — waiting for startup...")
-        print("  Run `tokenpak status` to verify.")
+        print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
+    print("  2. Run: tokenpak status    (check health)")
+    print("  3. Run: tokenpak savings   (see measured savings once traffic flows)")
+    from tokenpak import _paths as _p
+
+    if not _p.is_configured():
+        print()
+        print("💡 No config found yet. Run: tokenpak setup")
+    return EXIT_OK
 
 
 def cmd_stop(args: CommandArgs) -> None:
-    """Stop the running proxy."""
+    """Stop the proxy this install started."""
     import signal as _signal
 
-    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
-    if not pid_path.exists():
-        print("No proxy PID file found. Is the proxy running?")
-        print("Tip: run `tokenpak status` to check.")
+    from tokenpak.core.runtime import lifecycle as _lifecycle
+
+    port = int(os.environ.get("TOKENPAK_PORT", "8766"))
+    pid, source = _lifecycle.read_pid()
+
+    if pid is None:
+        print("No proxy PID on record — this install has not started a proxy.")
+        # Distinguish "nothing running" from "running, but not ours". Saying
+        # "is the proxy running?" while something answers on the port is the
+        # kind of answer that sends people in circles.
+        if _lifecycle.port_in_use(port):
+            print(f"   Something is listening on port {port}, but TokenPak did not start it,")
+            print("   so it will not be stopped. Run `tokenpak status` to inspect it.")
+        else:
+            print("   Tip: run `tokenpak status` to check.")
         return
+
+    if not _lifecycle.pid_alive(pid):
+        _lifecycle.clear_pid()
+        print(f"Proxy was not running (stale PID {pid} from {source} removed).")
+        return
+
     try:
-        pid = int(pid_path.read_text().strip())
         os.kill(pid, _signal.SIGTERM)
-        pid_path.unlink(missing_ok=True)
-        print(f"Proxy stopped (PID {pid}).")
     except ProcessLookupError:
-        pid_path.unlink(missing_ok=True)
-        print("Proxy was not running (stale PID removed).")
+        _lifecycle.clear_pid()
+        print(f"Proxy was not running (stale PID {pid} removed).")
+        return
     except Exception as e:
-        print(f"Error stopping proxy: {e}")
+        print(f"Error stopping proxy (PID {pid}): {e}")
+        return
+
+    _lifecycle.clear_pid()
+    print(f"Proxy stopped (PID {pid}).")
 
 
 def cmd_restart(args: CommandArgs) -> None:
@@ -1256,10 +1540,19 @@ def cmd_restart(args: CommandArgs) -> None:
 
 def cmd_logs(args: CommandArgs) -> None:
     """Show recent proxy logs."""
+    from tokenpak import _paths as _p
+
+    # Resolved across homes, and including the startup log setup captures —
+    # a proxy that dies during boot writes there and nowhere else, which is
+    # exactly the case a user runs `tokenpak logs` to understand.
     log_candidates = [
-        Path.home() / ".tokenpak" / "proxy.log",
-        Path("/tmp/tokenpak-proxy.log"),
-    ]
+        c
+        for c in (
+            _p.resolve_existing("proxy.log"),
+            _p.resolve_existing("proxy-startup.log"),
+        )
+        if c is not None
+    ] + [Path("/tmp/tokenpak-proxy.log")]
     lines = getattr(args, "lines", 50)
     for log_path in log_candidates:
         if log_path.exists():
@@ -1715,7 +2008,7 @@ def cmd_stats(args: CommandArgs) -> None:
     try:
         import urllib.request as _urlreq
 
-        proxy_base = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
+        proxy_base = _proxy_base_url()
         with _urlreq.urlopen(f"{proxy_base}/health", timeout=3) as r:
             proxy_data = json.loads(r.read())
     except Exception:
@@ -1740,7 +2033,29 @@ def cmd_stats(args: CommandArgs) -> None:
         uptime_s = None
 
     avg_latency = file_stats["avg_latency_ms"]
-    pct_reduction = round((1.0 - avg_ratio) * 100, 1) if avg_ratio else 0.0
+
+    # A compression ratio or latency of exactly 0 is not something the pipeline
+    # can produce — it means the rolling window holds no observations. Printing
+    # "0.0% token reduction" / "0ms" told users we measured their traffic and
+    # found no benefit. Report the absence instead.
+    from tokenpak.core.contracts import measured as _measured
+    from tokenpak.core.contracts import no_data as _no_data
+
+    # `ratio` is recorded by the proxy as `saved / input_tokens` — a savings
+    # *fraction*, not a compressed/original ratio (see
+    # proxy/server_async.py: `ratio = round(saved / input_tokens, 4)`).
+    # This previously computed `(1 - ratio) * 100`, which turned a measured 1%
+    # saving into a reported "99.4% token reduction".
+    observed = bool(file_stats.get("requests_total")) or bool(avg_ratio)
+    ratio_m = _measured(avg_ratio) if (observed and avg_ratio) else _no_data("no requests observed")
+    latency_m = (
+        _measured(avg_latency) if (observed and avg_latency) else _no_data("no requests observed")
+    )
+    pct_m = (
+        _measured(round(avg_ratio * 100, 1))
+        if (observed and avg_ratio)
+        else _no_data("no requests observed")
+    )
 
     if uptime_s is not None:
         h, rem = divmod(int(uptime_s), 3600)
@@ -1755,8 +2070,8 @@ def cmd_stats(args: CommandArgs) -> None:
                 {
                     "requests_total": requests_total,
                     "requests_errors": requests_errors,
-                    "avg_ratio": avg_ratio,
-                    "avg_latency_ms": avg_latency,
+                    "avg_ratio": ratio_m.to_json(),
+                    "avg_latency_ms": latency_m.to_json(),
                     "uptime": uptime_str,
                 },
                 indent=2,
@@ -1767,8 +2082,14 @@ def cmd_stats(args: CommandArgs) -> None:
     print("TokenPak Compression Stats (last 100 requests)")
     print(SEP)
     print(f"{'Requests:':<17}{requests_total} total, {requests_errors} errors")
-    print(f"{'Avg ratio:':<17}{avg_ratio} ({pct_reduction}% token reduction)")
-    print(f"{'Avg latency:':<17}{avg_latency}ms")
+    if ratio_m.is_measured:
+        print(f"{'Avg savings:':<17}{pct_m.render(fmt='pct')} of input tokens avoided")
+    else:
+        print(f"{'Avg savings:':<17}{ratio_m.render()}")
+    print(
+        f"{'Avg latency:':<17}"
+        f"{latency_m.render(fmt='ms') if latency_m.is_measured else latency_m.render()}"
+    )
     print(f"{'Uptime:':<17}{uptime_str}")
 
 
@@ -1862,7 +2183,7 @@ def _maybe_show_compression_notice(safe: bool) -> None:
         return
     import sys as _sys
 
-    _marker = Path.home() / ".tokenpak" / ".compression-default-notice-shown"
+    _marker = _paths_mod().write_home() / ".compression-default-notice-shown"
     if not _marker.exists():
         print(
             "tokenpak now compresses by default — disable with 'tokenpak serve --safe'",
@@ -1899,7 +2220,7 @@ def cmd_serve(args: CommandArgs) -> None:
 
         from .telemetry.server import create_app
 
-        str(Path.home() / ".tokenpak" / "data" / "session.jsonl")
+        str(_paths_mod().write_home() / "data" / "session.jsonl")
         app = create_app()
         # Phase 5A: register ingest router
         try:
@@ -2227,52 +2548,66 @@ def cmd_preview(args: CommandArgs) -> None:
         # Read from stdin
         text = sys.stdin.read()
 
-    if not text.strip():
-        print("Error: No input provided.")
-        print("Usage: tokenpak preview <text> [--file FILE] [--json|--raw|--verbose]")
-        sys.exit(1)
+    # Measured, not simulated. Every number below comes from running the real
+    # compression pipeline and is contract-checked before display; see
+    # tokenpak/services/preview.py for the invariants.
+    from tokenpak.services.preview import PreviewState, run_preview
 
-    # Simulate compression dry-run
-    # In the real implementation, this would call the compressor pipeline
-    input_tokens = len(text.split())  # Rough estimate
-    output_tokens = max(int(input_tokens * 0.65), 10)  # Approx 35% reduction
-    saved_tokens = input_tokens - output_tokens
+    input_source = args.file if args.file else ("argv" if args.input else "stdin")
+    result = run_preview(text, input_source=input_source)
 
-    result: PreviewResult = {
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "saved_tokens": saved_tokens,
-        "compression_ratio": 1.0 - (output_tokens / max(input_tokens, 1)),
-        "retained_blocks": [
-            {"type": "system_prompt", "tokens": int(output_tokens * 0.3)},
-            {"type": "user_context", "tokens": int(output_tokens * 0.4)},
-        ],
-        "removed_blocks": [
-            {"type": "debug_logs", "tokens": int(saved_tokens * 0.5)},
-            {"type": "duplicate_text", "tokens": int(saved_tokens * 0.5)},
-        ],
-        "flags": ["skeleton_enabled", "cache_ready"],
-        "mode": "hybrid",
-        "duration_ms": 2.3,
+    # --json is a machine-readable contract: it emits JSON on every path,
+    # including failures. A caller parsing stdout must never hit prose.
+    # One code per state, from the documented table. These all exited 1, so a
+    # caller could not tell "you gave me nothing to measure" from "the
+    # compressor failed" — and the --json body already said `no_data` while
+    # the exit code said generic-failure.
+    from tokenpak.cli.exit_codes import (
+        EXIT_FAILURE,
+        EXIT_NO_DATA,
+        EXIT_RUNTIME_UNAVAILABLE,
+    )
+
+    _state_exit = {
+        PreviewState.NO_DATA: EXIT_NO_DATA,
+        PreviewState.UNAVAILABLE: EXIT_RUNTIME_UNAVAILABLE,
+        PreviewState.ERROR: EXIT_FAILURE,
     }
 
-    # Output
     if args.json:
-        print(json.dumps(result, indent=2))
-    elif args.raw:
-        print(f"Input:     {result['input_tokens']:,} tokens")
-        print(f"Output:    {result['output_tokens']:,} tokens")
-        print(
-            f"Saved:     {result['saved_tokens']:,} tokens ({result['compression_ratio'] * 100:.1f}%)"
-        )
+        print(json.dumps(result.to_json(), indent=2))
+        if result.state is not PreviewState.MEASURED:
+            sys.exit(_state_exit[result.state])
+        return
+
+    if result.state is not PreviewState.MEASURED:
+        # No fabricated fallback: say what happened and exit non-zero.
+        label = {
+            PreviewState.NO_DATA: "Nothing to preview",
+            PreviewState.UNAVAILABLE: "Preview unavailable",
+            PreviewState.ERROR: "Preview failed",
+        }[result.state]
+        print(f"{label}: {result.reason}")
+        if result.state is PreviewState.NO_DATA:
+            print("Usage: tokenpak preview <text> [--file FILE] [--json|--raw|--verbose]")
+        sys.exit(_state_exit[result.state])
+
+    inp = result.input_tokens or 0
+    out = result.output_tokens or 0
+    saved = result.saved_tokens or 0
+    ratio = result.compression_ratio or 0.0
+    prov = result.provenance
+
+    if args.raw:
+        print(f"Input:     {inp:,} tokens")
+        print(f"Output:    {out:,} tokens")
+        print(f"Saved:     {saved:,} tokens ({ratio * 100:.1f}%)")
+        print(f"Applied:   {'yes' if result.applied else 'no (compression would expand input)'}")
         print()
-        print("Retained blocks:")
-        for block in result["retained_blocks"]:
-            print(f"  - {block['type']}: {block['tokens']} tokens")
-        print()
-        print("Removed blocks:")
-        for block in result["removed_blocks"]:
-            print(f"  - {block['type']}: {block['tokens']} tokens")
+        print("Blocks:")
+        for block in result.blocks:
+            state = "retained" if block.retained else "removed"
+            print(f"  - {block.block_id} [{block.segment_type}]: {block.raw_chars} chars ({state})")
     else:
         # Pretty format (default)
         mode = resolve_mode(args)
@@ -2280,28 +2615,49 @@ def cmd_preview(args: CommandArgs) -> None:
         print(fmt.header())
         print()
 
-        print(f"  Input:          {result['input_tokens']:,} tokens")
-        print(f"  → Compressed:   {result['output_tokens']:,} tokens")
-        print(
-            f"  Savings:        {result['saved_tokens']:,} tokens ({result['compression_ratio'] * 100:.1f}% reduction)"
-        )
+        print(f"  Input:          {inp:,} tokens")
+        print(f"  → Compressed:   {out:,} tokens")
+        print(f"  Savings:        {saved:,} tokens ({ratio * 100:.1f}% reduction)")
+        if not result.applied:
+            print("  Applied:        no — the original is retained unchanged.")
+            if prov and prov.input_kind == "single_turn":
+                # Do not let a 0% single-turn preview read as "TokenPak does
+                # not work". State honestly where the savings actually come from.
+                print()
+                print("  This input is a single turn. TokenPak's savings come from")
+                print("  redundancy repeated across conversation turns, so there is")
+                print("  little for it to remove here. To measure your own savings,")
+                print("  preview a conversation export (a JSON array of messages,")
+                print("  a provider request body, or JSONL — one message per line),")
+                print("  or run `tokenpak serve` and measure live traffic.")
         print()
 
-        print(f"  Retained blocks ({len(result['retained_blocks'])}):")
-        for block in result["retained_blocks"]:
-            print(f"    • {block['type']:<20} {block['tokens']:>6,} tokens")
-        print()
-
-        print(f"  Removed blocks ({len(result['removed_blocks'])}):")
-        for block in result["removed_blocks"]:
-            print(f"    • {block['type']:<20} {block['tokens']:>6,} tokens")
-        print()
-
-        print(f"  Mode: {result['mode']} | Duration: {result['duration_ms']:.1f}ms")
-
-        if args.verbose:
+        retained = [b for b in result.blocks if b.retained]
+        removed = [b for b in result.blocks if not b.retained]
+        if retained:
+            print(f"  Retained blocks ({len(retained)}):")
+            for block in retained:
+                print(f"    • {block.segment_type:<20} {block.raw_chars:>6,} chars")
             print()
-            print(f"  Flags: {', '.join(result['flags'])}")
+        if removed:
+            print(f"  Removed blocks ({len(removed)}):")
+            for block in removed:
+                print(f"    • {block.segment_type:<20} {block.raw_chars:>6,} chars")
+            print()
+        if not result.blocks:
+            print("  Blocks:         pipeline identified no separable segments")
+            print()
+
+        print(f"  Mode: {prov.mode if prov else 'unknown'} | Duration: {result.duration_ms:.1f}ms")
+
+        if args.verbose and prov:
+            print()
+            print("  Measurement provenance:")
+            print(f"    Input          {prov.input_source} ({prov.input_bytes:,} bytes)")
+            print(f"    Input SHA-256  {prov.input_sha256}")
+            print(f"    Tokenizer      {prov.tokenizer}")
+            print(f"    Stages run     {', '.join(prov.stages_run) or '(none)'}")
+            print(f"    TokenPak       v{prov.tokenpak_version}")
 
 
 def cmd_dashboard(args: CommandArgs) -> int | None:
@@ -2377,7 +2733,9 @@ def _cmd_dashboard_public(args: CommandArgs) -> None:
     new_token = getattr(args, "new_token", False)
 
     # Load or create dashboard token
-    token_path = Path.home() / ".tokenpak" / "dashboard_token"
+    # Read an existing token wherever it lives; mint new ones canonically.
+    _pm = _paths_mod()
+    token_path = _pm.resolve_existing("dashboard_token") or (_pm.write_home() / "dashboard_token")
     if new_token or not token_path.exists():
         import secrets
 
@@ -2454,10 +2812,90 @@ def cmd_diagnose(args: CommandArgs) -> None:
     _run_diagnose(args)
 
 
+#: What each companion wrapper launches, and the binary it needs on PATH.
+_COMPANION_CLIENTS = {
+    "claude": ("Claude Code", "claude"),
+    "codex": ("Codex", "codex"),
+}
+
+#: TokenPak-owned flags per wrapper. Everything else is passed through
+#: verbatim to the client, which is why `--help` had to be intercepted.
+_COMPANION_WRAPPER_FLAGS = {
+    "claude": [("--budget USD", "Daily companion spend ceiling")],
+    "codex": [
+        ("--budget USD", "Daily companion spend ceiling"),
+        ("--install-only", "Provision companion state and exit without launching"),
+        ("--receipt-out PATH", "Write an accounting receipt to PATH"),
+        ("--run-id ID", "Correlation id recorded on the receipt"),
+        ("--receipt-only", "Emit the receipt without launching"),
+    ],
+}
+
+
+def _wants_wrapper_help(tail: list[str]) -> bool:
+    """Whether *tail* is asking for the wrapper's own help.
+
+    Only when help is the first token: `tokenpak codex --help` is a question
+    about TokenPak, while `tokenpak codex exec foo --help` is a question the
+    client should answer. Anything after `--` is the client's business.
+    """
+    return bool(tail) and tail[0] in ("-h", "--help")
+
+
+def _print_companion_wrapper_help(name: str) -> None:
+    """Print TokenPak's own help for a companion wrapper. Creates nothing."""
+    label, binary = _COMPANION_CLIENTS[name]
+    print(f"tokenpak {name} — launch {label} with the TokenPak companion active")
+    print()
+    print(f"Usage: tokenpak {name} [tokenpak flags] [{binary} arguments ...]")
+    print()
+    print(f"Arguments TokenPak does not recognise are passed to `{binary}` verbatim.")
+    print()
+    print("TokenPak flags:")
+    for flag, desc in _COMPANION_WRAPPER_FLAGS[name]:
+        print(f"  {flag:<22} {desc}")
+    print(f"  -h, --help             Show this message ({binary}'s own help: `{binary} --help`)")
+    if name == "codex":
+        print()
+        print("Subcommands:")
+        print("  doctor                 Diagnose the Codex companion installation")
+        print("  uninstall              Remove companion state Codex provisioning created")
+    print()
+    if _which(binary) is None:
+        print(f"Note: `{binary}` was not found on PATH — install {label} before launching.")
+
+
+def _which(binary: str) -> Optional[str]:
+    import shutil
+
+    return shutil.which(binary)
+
+
+def _require_companion_client(name: str) -> None:
+    """Exit with a documented code if the client binary is absent.
+
+    Runs *before* provisioning.
+
+    Provisioning ran first and reported success for a client that was never
+    installed, leaving config, hooks and skill files behind for a binary the
+    user does not have.
+    """
+    from tokenpak.cli.exit_codes import EXIT_MISSING_PREREQUISITE
+
+    label, binary = _COMPANION_CLIENTS[name]
+    if _which(binary) is None:
+        print(
+            f"tokenpak {name}: `{binary}` is not on PATH — install {label} first.",
+            file=sys.stderr,
+        )
+        sys.exit(EXIT_MISSING_PREREQUISITE)
+
+
 def cmd_claude(args: CommandArgs) -> None:
     """Launch Claude Code with tokenpak companion active."""
     import os
 
+    _require_companion_client("claude")
     if getattr(args, "budget", None) is not None:
         os.environ["TOKENPAK_COMPANION_BUDGET"] = str(args.budget)
     from .companion import launch
@@ -2515,6 +2953,11 @@ def cmd_codex(args: CommandArgs) -> None:
         from .companion.codex.uninstall import main as uninstall_main
 
         sys.exit(uninstall_main(forwarded[1:]))
+    # Preflight *after* doctor/uninstall — diagnosing or removing state for an
+    # absent client is legitimate — but before any provisioning. Launching
+    # used to provision 21 files and then fail with an opaque 120 for a binary
+    # the user does not have installed.
+    _require_companion_client("codex")
     if getattr(args, "install_only", False):
         forwarded = ["--install-only", *forwarded]
     if receipt_only:
@@ -2983,15 +3426,11 @@ def _build_stub_parsers(sub: Subparsers) -> None:
     instead of a traceback.
     """
     _STUBS = {
-        "audit": (
-            "Enterprise audit log surface (Pro/Enterprise); see "
-            "docs/guides/enterprise/security-architecture.md"
-        ),
+        "audit": ("Audit log surface (Pro); see docs/guides/enterprise/security-architecture.md"),
         "compliance": (
-            "Compliance report surface (Pro/Enterprise); see "
-            "docs/guides/enterprise/compliance-mapping.md"
+            "Compliance report surface (Pro); see docs/guides/enterprise/compliance-mapping.md"
         ),
-        "watch": "Live terminal savings dashboard (not yet implemented — use `tokenpak dashboard` instead)",
+        "watch": ("Not implemented. Use `tokenpak dashboard` for savings you can look at."),
     }
 
     def _make_stub(name: str, desc: str) -> CommandHandler:
@@ -3008,7 +3447,7 @@ def _build_stub_parsers(sub: Subparsers) -> None:
     # ── License commands (Free OSS tier, Pro-ready surface) ──────────────────
     p_license = sub.add_parser(
         "license",
-        help="Show license and tier info (Free, Pro, Team, Enterprise)",
+        help="Show license and edition info",
     )
     p_license.add_argument(
         "--json", dest="as_json", action="store_true", help="Machine-readable JSON output"
@@ -3034,7 +3473,7 @@ def _build_stub_parsers(sub: Subparsers) -> None:
 
     p_activate = sub.add_parser(
         "activate",
-        help="Store a Pro/Team/Enterprise license key",
+        help="Store a Pro license key",
     )
     p_activate.add_argument("key", nargs="?", default="", help="Your license key")
     p_activate.add_argument("--email", default="", help="Optional email for the license")
@@ -3366,7 +3805,38 @@ def build_parser() -> argparse.ArgumentParser:
     p_init = sub.add_parser("init", help="Guided first-run setup (API key, port, vault path)")
     p_init.set_defaults(func=cmd_init)
 
-    p_setup = sub.add_parser("setup", help="Interactive first-time configuration wizard")
+    p_setup = sub.add_parser(
+        "setup",
+        help="Interactive first-time configuration wizard",
+        description=(
+            "Guided first-run configuration. Prompts interactively when stdin is a "
+            "terminal. For CI, containers, or any scripted run, state the choices "
+            "explicitly: `tokenpak setup --profile balanced --yes`. Setup will not "
+            "assume an answer from a closed stdin."
+        ),
+    )
+    p_setup.add_argument(
+        "--profile",
+        choices=["minimal", "balanced", "aggressive"],
+        default=None,
+        help="Compression profile to use, instead of prompting",
+    )
+    p_setup.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Proxy port to configure (default 8766)",
+    )
+    p_setup.add_argument(
+        "--yes",
+        action="store_true",
+        help="Overwrite an existing config without confirming",
+    )
+    p_setup.add_argument(
+        "--start",
+        action="store_true",
+        help="Also start the proxy after writing config (default: config only)",
+    )
     p_setup.set_defaults(func=cmd_setup)
 
     p_start = sub.add_parser(
@@ -4288,7 +4758,7 @@ def cmd_savings(args: CommandArgs) -> None:
 def cmd_compare(args: CommandArgs) -> None:
     """Show before/after cost comparison for last N requests."""
 
-    from .telemetry.pricing_rates import calculate_request_cost, calculate_request_cost_baseline
+    from .telemetry.pricing_rates import calculate_request_cost_baseline
     from .telemetry.query_dsl import get_recent_events
 
     limit = getattr(args, "last", 1)
@@ -4298,32 +4768,56 @@ def cmd_compare(args: CommandArgs) -> None:
         print("No recent requests found.")
         return
 
-    # Show comparison for each request
+    # This used to invent its own inputs: cache_read was assumed to be 30% of
+    # input ("adjust per actual data"), the request duration defaulted to a
+    # hardcoded 5.1s, and the baseline was priced at flat Opus rates for every
+    # model. It then printed the difference as "💰 Saved: $X (Y% cheaper)".
+    # Every number on the line was constructed, and none was labelled as such.
+    #
+    # What the store actually records per request: model, billed input, billed
+    # output, and the actual cost. There is no per-request cache-read split, so
+    # that comparison is not available and is reported as unavailable rather
+    # than assumed.
+    print("Per-request cost — measured against list-price baseline")
+    print("─" * 56)
+    print()
+
     for idx, evt in enumerate(recent[:limit], 1):
         model = str(evt.get("model") or "unknown")
         input_tokens = _as_int(evt.get("input_tokens"))
         output_tokens = _as_int(evt.get("output_tokens"))
+        actual_cost = evt.get("cost")
 
-        # For this demo, assume cache_read is 30% of input (adjust per actual data)
-        # In production, we'd fetch actual cache_read from tp_usage table
-        cache_read = int(input_tokens * 0.30)
-        sent_input = input_tokens - cache_read
+        print(f"Request #{idx}: {model}")
+        print(f"  Tokens            {input_tokens:,} in / {output_tokens:,} out  (billed)")
 
-        without_cache = calculate_request_cost_baseline(model, input_tokens, output_tokens)
-        with_cache = calculate_request_cost(model, sent_input, cache_read, output_tokens)
-        saved = without_cache - with_cache
-        pct_saved = (saved / without_cache * 100) if without_cache > 0 else 0
+        if input_tokens <= 0 and output_tokens <= 0:
+            print("  Cost              unavailable — no billed token counts recorded")
+            print()
+            continue
 
-        duration_s = getattr(args, "duration_s", 5.1)
-
-        print(f"Request #{idx}: {model} ({duration_s:.1f}s)")
+        baseline = calculate_request_cost_baseline(model, input_tokens, output_tokens)
         print(
-            f"  Without TokenPak: ${without_cache:.2f} ({input_tokens:,} input tokens × ${15 / 1e6:.2e})"
+            f"  List-price basis  ${baseline:.4f}  (computed from billed tokens × published rates)"
         )
-        print(
-            f"  With TokenPak:    ${with_cache:.2f} ({sent_input:,} sent + {cache_read:,} cached)"
-        )
-        print(f"  💰 Saved: ${saved:.2f} ({pct_saved:.0f}% cheaper)")
+
+        if isinstance(actual_cost, (int, float)) and actual_cost >= 0:
+            print(f"  Charged           ${float(actual_cost):.4f}  (measured)")
+            delta = baseline - float(actual_cost)
+            if delta > 0 and baseline > 0:
+                print(
+                    f"  Difference        ${delta:.4f}  ({delta / baseline * 100:.1f}% below basis)"
+                )
+            elif delta < 0:
+                # Never render a negative saving as a saving.
+                print(f"  Difference        ${abs(delta):.4f} above basis")
+            else:
+                print("  Difference        none")
+        else:
+            print("  Charged           unavailable — no cost recorded for this request")
+            print("  Difference        unavailable")
+
+        print("  Cache split       unavailable — not recorded per request")
         print()
 
 
@@ -4340,59 +4834,71 @@ def cmd_leaderboard(args: CommandArgs) -> None:
         print("Run requests through the proxy to gather metrics.")
         return
 
-    # Calculate per-model stats
-    model_stats: list[ModelLeaderboardRow] = []
+    # Every column here used to be a constant.
+    #
+    #   cost         = Opus list price applied to every model, whatever it was
+    #   saved        = cost * 0.35   ("assume 30% cache + 5% compression")
+    #   cache_pct    = 96 / 94 / 98, selected by substring-matching the model name
+    #   compress_pct = 5.1 / 8.2 / 3.2, likewise
+    #
+    # so "🏆 Most Efficient" ranked models by which literal the name matched —
+    # anything that was not opus or sonnet won at 98%, always — and the table
+    # presented all of it as per-model measurement.
+    #
+    # Per-model compression and savings ARE recorded, in tp_costs; this now
+    # reads them. Per-model cache-hit rate is not recorded anywhere, so that
+    # column is gone rather than invented.
+    from .telemetry.pricing_rates import calculate_request_cost_baseline
+    from .telemetry.query_dsl import get_model_compression_breakdown
+
+    measured = {b.model: b for b in get_model_compression_breakdown(days=days)}
+
+    model_stats: list[dict[str, object]] = []
     for u in usage:
         model = u.model or "unknown"
-        cost = (u.total_input_tokens / 1_000_000) * 15 + (u.total_output_tokens / 1_000_000) * 75
-        # Estimate savings (assume 30% cache + 5% compression for demo)
-        estimated_saved = cost * 0.35
-        cache_pct = 96 if "opus" in model.lower() else 94 if "sonnet" in model.lower() else 98
-        compress_pct = 5.1 if "opus" in model.lower() else 8.2 if "sonnet" in model.lower() else 3.2
-
+        cost = calculate_request_cost_baseline(model, u.total_input_tokens, u.total_output_tokens)
+        obs = measured.get(model)
         model_stats.append(
             {
                 "model": model,
                 "requests": u.request_count,
                 "cost": cost,
-                "saved": estimated_saved,
-                "cache_pct": cache_pct,
-                "compress_pct": compress_pct,
+                # None means "not measured", and prints as such. It is never 0.
+                "saved": (obs.savings_amount if obs is not None else None),
+                "tokens_saved": (obs.tokens_saved if obs is not None else None),
             }
         )
 
-    # Sort by cost (highest spender first)
-    model_stats.sort(key=lambda x: x["cost"], reverse=True)
+    model_stats.sort(key=lambda x: cast(float, x["cost"]), reverse=True)
 
-    print("TokenPak Model Leaderboard")
-    print("──────────────────────────")
+    print(f"TokenPak model usage — last {days} day(s)")
+    print("─" * 62)
+    print("Cost is billed tokens priced at published rates. Savings are")
+    print("measured from recorded baselines; blank means not measured.")
     print()
 
-    if model_stats:
-        # Show top 3 insights
-        most_efficient = max(model_stats, key=lambda x: x["cache_pct"])
-        biggest_spender = max(model_stats, key=lambda x: x["cost"])
-        best_compression = max(model_stats, key=lambda x: x["compress_pct"])
-
-        print(
-            f"🏆 Most Efficient:   {most_efficient['model']}  ({most_efficient['cache_pct']}% cached, ${most_efficient['saved'] / most_efficient['requests']:.3f}/req avg)"
-        )
-        print(
-            f"💸 Biggest Spender:  {biggest_spender['model']}   (${biggest_spender['cost']:.2f} today, but ${biggest_spender['saved']:.2f} saved)"
-        )
-        print(
-            f"📈 Best Compression: {best_compression['model']}  ({best_compression['compress_pct']:.1f}% rate)"
-        )
-        print()
-
-    # Table of all models
-    print(
-        f"{'Model':<20} {'Requests':>10} {'Cost':>10} {'Saved':>10} {'Cache%':>8} {'Compress%':>10}"
-    )
-    print("-" * 70)
+    print(f"{'Model':<26} {'Requests':>9} {'Cost':>11} {'Saved':>11}")
+    print("-" * 62)
     for stat in model_stats:
+        saved = stat["saved"]
+        saved_col = f"${saved:>10.4f}" if isinstance(saved, (int, float)) else f"{'—':>11}"
         print(
-            f"{stat['model']:<20} {stat['requests']:>10} ${stat['cost']:>9.2f} ${stat['saved']:>9.2f} {stat['cache_pct']:>7}% {stat['compress_pct']:>9.1f}%"
+            f"{cast(str, stat['model']):<26} {cast(int, stat['requests']):>9} "
+            f"${cast(float, stat['cost']):>10.4f} {saved_col}"
+        )
+
+    # Aggregate savings come from the report that carries the measured-data
+    # contract, so "we could not read the store", "nothing measured yet" and
+    # "measured zero" stay distinguishable.
+    print()
+    if not savings.available:
+        print("Total savings:  unavailable — telemetry store could not be read")
+    elif savings.observations == 0:
+        print("Total savings:  not yet measured — no compression observations recorded")
+    else:
+        print(
+            f"Total savings:  ${savings.savings_amount:.4f} "
+            f"({savings.savings_pct:.1f}%) over {savings.observations:,} observation(s)"
         )
 
 
@@ -5373,7 +5879,15 @@ def cmd_config_migrate(args: CommandArgs) -> None:
 
     from tokenpak.core.config_loader import CONFIG_PATH
 
-    json_path = Path(getattr(args, "config_json", str(Path.home() / ".tokenpak" / "config.json")))
+    # config.json is a read-compatibility format and may sit in either home;
+    # resolve it rather than assuming the legacy one.
+    _pm = _paths_mod()
+    _explicit = getattr(args, "config_json", None)
+    json_path = Path(
+        _explicit
+        if _explicit
+        else (_pm.resolve_existing("config.json") or (_pm.write_home() / "config.json"))
+    )
     dry_run = getattr(args, "dry_run", False)
 
     print("TokenPak Config Migration")
@@ -5620,8 +6134,10 @@ def _build_config_mgmt_parser(sub: Subparsers) -> None:
         "--config-json",
         dest="config_json",
         metavar="FILE",
-        default=str(Path.home() / ".tokenpak" / "config.json"),
-        help="Path to legacy config.json (default: ~/.tokenpak/config.json)",
+        default=None,
+        help=(
+            "Path to legacy config.json (default: resolved across the canonical and legacy homes)"
+        ),
     )
     p_migrate.add_argument(
         "--dry-run",
@@ -5861,6 +6377,14 @@ def main() -> None:
     if raw_cmd == "claude":
         claude_idx = sys.argv.index("claude")
         claude_tail = sys.argv[claude_idx + 1 :]
+        # `tokenpak claude --help` asks about *this* wrapper. Verbatim
+        # passthrough sent it to the client instead, so the user got the
+        # client's help — or, when the client was absent, provisioning ran
+        # for a binary that is not installed. Answer it here, before any
+        # launch path can touch the filesystem.
+        if _wants_wrapper_help(claude_tail):
+            _print_companion_wrapper_help("claude")
+            sys.exit(0)
         # Extract --budget (the only tokenpak-owned flag) if present
         budget = None
         passthrough = []
@@ -5881,7 +6405,11 @@ def main() -> None:
         )
     elif raw_cmd == "codex":
         codex_idx = sys.argv.index("codex")
-        args = _codex_namespace_from_tail(sys.argv[codex_idx + 1 :])
+        codex_tail = sys.argv[codex_idx + 1 :]
+        if _wants_wrapper_help(codex_tail):
+            _print_companion_wrapper_help("codex")
+            sys.exit(0)
+        args = _codex_namespace_from_tail(codex_tail)
     else:
         args = parser.parse_args()
 
@@ -5909,31 +6437,44 @@ def main() -> None:
                 uptime_str = "unknown"
             report = get_savings_report(days=1)
 
-            # Compact savings summary
+            # Compact summary. Bare `tokenpak` is the most-run entrypoint in
+            # the product, so it is the last place that should print a number
+            # nobody measured. It previously printed a hardcoded "5.6%
+            # compression" regardless of the data, and attributed 95% of all
+            # savings to whichever model happened to sort first.
             print(f"TokenPak — {uptime_str} uptime")
-            print(
-                f"💰 ${report.savings_amount:.2f} saved today ({report.savings_pct:.0f}% reduction)"
-            )
+
+            if not report.available:
+                print("💰 Savings unavailable — no readable measurement store.")
+            elif report.observations == 0:
+                print("💰 No measurements yet today — savings appear once traffic flows.")
+            else:
+                print(
+                    f"💰 ${report.savings_amount:.2f} saved today "
+                    f"({report.savings_pct:.0f}% reduction)"
+                )
 
             # Get request count from recent events
             from .telemetry.query_dsl import get_recent_events
 
             recent = get_recent_events(limit=1000)
             req_count = len(recent) if recent else 0
-            cache_hit = report.cache_hit_rate * 100 if report.cache_hit_rate else 0
 
-            print(f"📊 {req_count:,} requests | {cache_hit:.0f}% cache hit | 5.6% compression")
+            traffic = f"📊 {req_count:,} requests"
+            if report.available and report.observations > 0:
+                traffic += f" | {report.cache_hit_rate * 100:.0f}% cache hit"
+                traffic += f" | {report.savings_pct:.1f}% reduction"
+            print(traffic)
 
-            # Top model savings
+            # Top model by observed request count. Reporting which model was
+            # used most is a measurement; splitting the savings total across
+            # models by a fixed fraction was not.
             from .telemetry.query_dsl import get_model_usage
 
             usage = get_model_usage(days=1)
             if usage:
                 top = usage[0]
-                top_saved = report.savings_amount * 0.95  # Estimate top model saved ~95% of total
-                print(
-                    f"🔥 Top: {top.model} saved ${top_saved:.0f} across {top.request_count} requests"
-                )
+                print(f"🔥 Most used: {top.model} across {top.request_count} requests")
 
             print()
             print("Run `tokenpak savings` for full breakdown.")
@@ -6592,11 +7133,20 @@ def cmd_cost(args: CommandArgs) -> None:
 
     # Prefer monitor.db (proxy's live database) over budget tracker
     monitor_total = _monitor_db_cost(period)
-    total = monitor_total if monitor_total > 0 else tracker.total_spent(period)
+    tracked = tracker.total_spent(period)
     label = {"daily": "Today", "weekly": "This week", "monthly": "This month"}[period]
 
     print(f"TokenPak Cost Summary — {label}")
-    print(f"  Spent:  ${total:.4f}")
+    if monitor_total is not None and monitor_total > 0:
+        print(f"  Spent:  ${monitor_total:.4f}")
+    elif tracked > 0:
+        print(f"  Spent:  ${tracked:.4f}")
+    elif monitor_total is None:
+        # No request store at all — nothing has been measured.
+        print("  Spent:  no measurements yet — no request database exists")
+    else:
+        # The store exists and genuinely records no spend for this period.
+        print("  Spent:  $0.0000  (measured: no requests in this period)")
 
     # Show live proxy session cost if available
     stats = _proxy_get("/stats")
@@ -8189,10 +8739,15 @@ def _run_compression_demo() -> None:
     print("│  Stages: " + stages_str + " " * (W - 12 - len(stages_str)) + "│")
     print("└" + "─" * (W - 2) + "┘")
     print()
-    print("  Try it with your own traffic:")
-    print("    tokenpak serve        → start the proxy (zero-config)")
-    print("    tokenpak cost         → track receipt-backed savings")
-    print("    tokenpak demo --list  → browse 50 built-in compression recipes")
+    # These used to open with `tokenpak serve` described as "zero-config",
+    # which contradicted both setup's own instructions and doctor's
+    # "no config → Run: tokenpak setup". The real first step is setup.
+    print("  Measure this on your own traffic:")
+    print("    tokenpak setup        → choose a profile and write config")
+    print("    tokenpak start        → run the proxy")
+    print("    tokenpak integrate    → point your client at it")
+    print("    tokenpak savings      → your measured numbers, once traffic flows")
+    print("    tokenpak demo --list  → browse built-in compression recipes")
     print()
 
 
@@ -8495,11 +9050,13 @@ def cmd_run_cancel(args: CommandArgs) -> None:
 # ── diff: Context diff visualization ─────────────────────────────────────────
 
 
-def cmd_diff(args: CommandArgs) -> None:
+def cmd_diff(args: CommandArgs) -> int:
     """Show context diff: removed, compressed, retained blocks."""
     from tokenpak.cli.commands.diff import run_diff_cmd
 
-    run_diff_cmd(args)
+    # Propagate the exit code: "unavailable" must not exit 0, or scripts read
+    # the absence of a diff as a successful empty diff.
+    return run_diff_cmd(args)
 
 
 def _build_diff_parser(sub: Subparsers) -> None:

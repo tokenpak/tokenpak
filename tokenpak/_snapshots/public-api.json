@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-07-22T01:17:13Z",
-  "package_version": "1.14.0",
+  "generated_at": "2026-07-26T16:01:58Z",
+  "package_version": "1.16.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -901,6 +901,10 @@
     },
     {
       "module": "tokenpak.cli.commands.help",
+      "name": "discoverable_commands"
+    },
+    {
+      "module": "tokenpak.cli.commands.help",
       "name": "print_command_help"
     },
     {
@@ -1029,10 +1033,6 @@
     },
     {
       "module": "tokenpak.cli.commands.license_cmd",
-      "name": "DEFAULT_UPGRADE_URL"
-    },
-    {
-      "module": "tokenpak.cli.commands.license_cmd",
       "name": "run_activate"
     },
     {
@@ -1046,6 +1046,10 @@
     {
       "module": "tokenpak.cli.commands.license_cmd",
       "name": "run_plan"
+    },
+    {
+      "module": "tokenpak.cli.commands.license_cmd",
+      "name": "upgrade_cta_line"
     },
     {
       "module": "tokenpak.cli.commands.maintenance",
@@ -1352,14 +1356,6 @@
       "name": "set_fleet_mode"
     },
     {
-      "module": "tokenpak.cli.commands.preview",
-      "name": "cmd_preview"
-    },
-    {
-      "module": "tokenpak.cli.commands.preview",
-      "name": "register_preview"
-    },
-    {
       "module": "tokenpak.cli.commands.prune",
       "name": "DEFAULT_THRESHOLD"
     },
@@ -1481,10 +1477,6 @@
     },
     {
       "module": "tokenpak.cli.commands.status",
-      "name": "DEFAULT_UPGRADE_URL"
-    },
-    {
-      "module": "tokenpak.cli.commands.status",
       "name": "HAS_CLICK"
     },
     {
@@ -1505,6 +1497,10 @@
     },
     {
       "module": "tokenpak.cli.commands.status",
+      "name": "TAGLINES"
+    },
+    {
+      "module": "tokenpak.cli.commands.status",
       "name": "get_rates"
     },
     {
@@ -1514,6 +1510,10 @@
     {
       "module": "tokenpak.cli.commands.status",
       "name": "run_full"
+    },
+    {
+      "module": "tokenpak.cli.commands.status",
+      "name": "upgrade_cta_line"
     },
     {
       "module": "tokenpak.cli.commands.telemetry",
@@ -1574,6 +1574,10 @@
     {
       "module": "tokenpak.cli.commands.upgrade",
       "name": "resolve_upgrade_url"
+    },
+    {
+      "module": "tokenpak.cli.commands.upgrade",
+      "name": "upgrade_cta_line"
     },
     {
       "module": "tokenpak.cli.commands.validate_config",
@@ -1674,6 +1678,46 @@
     {
       "module": "tokenpak.cli.demo",
       "name": "seed_demo_data"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_CODE_MEANINGS"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_CORRUPT_STATE"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_ENTITLEMENT_REQUIRED"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_FAILURE"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_MISSING_PREREQUISITE"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_NOT_CONFIGURED"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_NO_DATA"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_OK"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_RUNTIME_UNAVAILABLE"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_USAGE"
     },
     {
       "module": "tokenpak.cli.fleet",
@@ -2001,6 +2045,10 @@
     },
     {
       "module": "tokenpak.companion.codex.doctor",
+      "name": "default_snapshot_path"
+    },
+    {
+      "module": "tokenpak.companion.codex.doctor",
       "name": "main"
     },
     {
@@ -2030,26 +2078,6 @@
     {
       "module": "tokenpak.companion.codex.launcher",
       "name": "CompanionConfig"
-    },
-    {
-      "module": "tokenpak.companion.codex.launcher",
-      "name": "FallbackDecision"
-    },
-    {
-      "module": "tokenpak.companion.codex.launcher",
-      "name": "PreflightEvaluation"
-    },
-    {
-      "module": "tokenpak.companion.codex.launcher",
-      "name": "PreflightEvidence"
-    },
-    {
-      "module": "tokenpak.companion.codex.launcher",
-      "name": "PreflightStatus"
-    },
-    {
-      "module": "tokenpak.companion.codex.launcher",
-      "name": "TemporarySessionChoice"
     },
     {
       "module": "tokenpak.companion.codex.launcher",
@@ -2109,6 +2137,10 @@
     },
     {
       "module": "tokenpak.companion.codex.rates_snapshot",
+      "name": "default_snapshot_path"
+    },
+    {
+      "module": "tokenpak.companion.codex.rates_snapshot",
       "name": "get_rates"
     },
     {
@@ -2157,6 +2189,10 @@
     },
     {
       "module": "tokenpak.companion.codex.uninstall",
+      "name": "default_snapshot_path"
+    },
+    {
+      "module": "tokenpak.companion.codex.uninstall",
       "name": "main"
     },
     {
@@ -2178,6 +2214,26 @@
     {
       "module": "tokenpak.companion.config",
       "name": "CompanionConfig"
+    },
+    {
+      "module": "tokenpak.companion.config",
+      "name": "JOURNAL_DIR_ENV"
+    },
+    {
+      "module": "tokenpak.companion.config",
+      "name": "journal_read_dirs"
+    },
+    {
+      "module": "tokenpak.companion.config",
+      "name": "journal_run_dir"
+    },
+    {
+      "module": "tokenpak.companion.config",
+      "name": "journal_write_dir"
+    },
+    {
+      "module": "tokenpak.companion.config",
+      "name": "resolve_journal_file"
     },
     {
       "module": "tokenpak.companion.hooks.pre_send",
@@ -4252,6 +4308,10 @@
       "name": "REFRESH_WINDOW_SECONDS"
     },
     {
+      "module": "tokenpak.core.auth.oauth_manager",
+      "name": "auth_profiles_file"
+    },
+    {
       "module": "tokenpak.core.config",
       "name": "debug_log"
     },
@@ -4293,6 +4353,18 @@
     },
     {
       "module": "tokenpak.core.config_loader",
+      "name": "config_load_error"
+    },
+    {
+      "module": "tokenpak.core.config_loader",
+      "name": "config_read_path"
+    },
+    {
+      "module": "tokenpak.core.config_loader",
+      "name": "config_write_path"
+    },
+    {
+      "module": "tokenpak.core.config_loader",
       "name": "generate_default_yaml"
     },
     {
@@ -4326,6 +4398,54 @@
     {
       "module": "tokenpak.core.config_validator",
       "name": "ConfigValidator"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "DataState"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "Measured"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "error"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "measured"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "no_data"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "unavailable"
+    },
+    {
+      "module": "tokenpak.core.contracts.measured",
+      "name": "DataState"
+    },
+    {
+      "module": "tokenpak.core.contracts.measured",
+      "name": "Measured"
+    },
+    {
+      "module": "tokenpak.core.contracts.measured",
+      "name": "error"
+    },
+    {
+      "module": "tokenpak.core.contracts.measured",
+      "name": "measured"
+    },
+    {
+      "module": "tokenpak.core.contracts.measured",
+      "name": "no_data"
+    },
+    {
+      "module": "tokenpak.core.contracts.measured",
+      "name": "unavailable"
     },
     {
       "module": "tokenpak.core.cooldown",
@@ -4720,6 +4840,46 @@
       "name": "TYPE_CHECKING"
     },
     {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "EXCLUDED"
+    },
+    {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "SUPPORTED"
+    },
+    {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "UNCLASSIFIED"
+    },
+    {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "classify"
+    },
+    {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "excluded_commands"
+    },
+    {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "exclusion_reason"
+    },
+    {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "filter_supported"
+    },
+    {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "is_supported"
+    },
+    {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "policy"
+    },
+    {
+      "module": "tokenpak.core.registry.beta_surface",
+      "name": "supported_commands"
+    },
+    {
       "module": "tokenpak.core.registry.claude_code",
       "name": "ClaudeCodeAdapter"
     },
@@ -4834,6 +4994,54 @@
     {
       "module": "tokenpak.core.runtime.cache_telemetry",
       "name": "ProviderCacheStats"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "DEFAULT_START_TIMEOUT_S"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "LifecycleSnapshot"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "PID_FILENAME"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "await_start"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "clear_pid"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "pid_alive"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "pid_path"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "port_in_use"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "probe_health"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "read_pid"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "snapshot"
+    },
+    {
+      "module": "tokenpak.core.runtime.lifecycle",
+      "name": "write_pid"
     },
     {
       "module": "tokenpak.core.runtime.providers",
@@ -5937,19 +6145,11 @@
     },
     {
       "module": "tokenpak.licensing",
-      "name": "TIER_ENTERPRISE"
-    },
-    {
-      "module": "tokenpak.licensing",
       "name": "TIER_FREE"
     },
     {
       "module": "tokenpak.licensing",
       "name": "TIER_PRO"
-    },
-    {
-      "module": "tokenpak.licensing",
-      "name": "TIER_TEAM"
     },
     {
       "module": "tokenpak.licensing",
@@ -9893,7 +10093,27 @@
     },
     {
       "module": "tokenpak.proxy.proxy_watchdog",
+      "name": "auth_profiles_file"
+    },
+    {
+      "module": "tokenpak.proxy.proxy_watchdog",
+      "name": "configure_logging"
+    },
+    {
+      "module": "tokenpak.proxy.proxy_watchdog",
+      "name": "cooldowns_file_path"
+    },
+    {
+      "module": "tokenpak.proxy.proxy_watchdog",
       "name": "main"
+    },
+    {
+      "module": "tokenpak.proxy.proxy_watchdog",
+      "name": "proxy_pid_file"
+    },
+    {
+      "module": "tokenpak.proxy.proxy_watchdog",
+      "name": "watchdog_log"
     },
     {
       "module": "tokenpak.proxy.request",
@@ -12940,6 +13160,34 @@
       "name": "StageTrace"
     },
     {
+      "module": "tokenpak.services.preview",
+      "name": "PreviewBlock"
+    },
+    {
+      "module": "tokenpak.services.preview",
+      "name": "PreviewInvariantError"
+    },
+    {
+      "module": "tokenpak.services.preview",
+      "name": "PreviewProvenance"
+    },
+    {
+      "module": "tokenpak.services.preview",
+      "name": "PreviewResult"
+    },
+    {
+      "module": "tokenpak.services.preview",
+      "name": "PreviewState"
+    },
+    {
+      "module": "tokenpak.services.preview",
+      "name": "TOKENIZER_ID"
+    },
+    {
+      "module": "tokenpak.services.preview",
+      "name": "run_preview"
+    },
+    {
       "module": "tokenpak.services.providers",
       "name": "UsageParser"
     },
@@ -14565,6 +14813,10 @@
     },
     {
       "module": "tokenpak.telemetry.model_analytics",
+      "name": "default_log_path"
+    },
+    {
+      "module": "tokenpak.telemetry.model_analytics",
       "name": "get_model_pricing"
     },
     {
@@ -15354,6 +15606,10 @@
     {
       "module": "tokenpak.telemetry.query_dsl",
       "name": "SavingsReport"
+    },
+    {
+      "module": "tokenpak.telemetry.query_dsl",
+      "name": "TelemetryUnavailable"
     },
     {
       "module": "tokenpak.telemetry.query_dsl",

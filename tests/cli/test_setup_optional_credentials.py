@@ -22,6 +22,21 @@ def test_setup_continues_without_api_key_or_model_override(monkeypatch, tmp_path
     ):
         monkeypatch.delenv(name, raising=False)
 
+    # Hermetic lifecycle: this test is about credential handling, not about
+    # whether a proxy starts, and the developer machine running the suite may
+    # well have a real proxy on the default port.
+    from tokenpak.core.runtime import lifecycle
+
+    monkeypatch.setattr(lifecycle, "port_in_use", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        lifecycle,
+        "await_start",
+        lambda *_a, **_k: SimpleNamespace(
+            running=True, routed=False, owned=True, reasons=[], pid=4242
+        ),
+    )
+    monkeypatch.setattr(lifecycle, "write_pid", lambda pid: None)
+
     fake_process = SimpleNamespace(pid=4242)
     monkeypatch.setattr("subprocess.Popen", lambda *_a, **_k: fake_process)
     monkeypatch.setattr("time.sleep", lambda *_a, **_k: None)
@@ -32,9 +47,15 @@ def test_setup_continues_without_api_key_or_model_override(monkeypatch, tmp_path
         ),
     )
 
-    _cli_core.cmd_setup(Namespace())
+    # Setup is driven explicitly. EOF used to count as consent: piping
+    # /dev/null selected a profile, wrote config and spawned a daemon with
+    # nothing answered, so this test passed an empty Namespace and got a
+    # fully configured install out of silence.
+    rc = _cli_core.cmd_setup(Namespace(profile="balanced", yes=True, port=None))
+    assert rc == 0
 
-    config = yaml.safe_load((tmp_path / ".tokenpak" / "config.yaml").read_text())
+    # setup writes canonically; the legacy home is read-compatibility only.
+    config = yaml.safe_load((tmp_path / ".tpk" / "config.yaml").read_text())
     assert config["api_keys"] == {}
     assert "provider" not in config["proxy"]
     output = capsys.readouterr().out

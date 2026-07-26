@@ -1,0 +1,24 @@
+# Coverage profile — delegated-work
+#
+# For operators who direct recurring work to other people or to AI agents. This is the profile most
+# TokenPak operators want.
+
+schema: baseline-standards/coverage-profile/1.0
+standards_version: 1.4.0
+id: delegated-work
+extends: starter
+
+description: >
+  Everything in starter, plus how to define who may do what, how a unit of work is bounded, how
+  results are reviewed by someone other than their author, how shared resources are coordinated,
+  and how you handle information that is not yours.
+
+standards:
+  - BS-DELEGATION-ROLES-AND-AUTHORITY
+  - BS-DELEGATION-TASK-ENVELOPES-AND-LIFECYCLE
+  - BS-DELEGATION-INDEPENDENT-REVIEW-AND-ACCEPTANCE
+  - BS-DELEGATION-SHARED-RESOURCE-AND-CONCURRENCY
+  - BS-INFORMATION-CONFIDENTIALITY-RETENTION-AND-DISPOSAL
+  - BS-CONTINUITY-BACKUP-AND-RECOVERY
+  - BS-CONTINUITY-WORKSPACE-AND-FILE-SAFETY
+  - BS-COMMITMENTS-STAKEHOLDER-AND-SUPPORT

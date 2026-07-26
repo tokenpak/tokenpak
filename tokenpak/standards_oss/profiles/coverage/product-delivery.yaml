@@ -1,0 +1,30 @@
+# Coverage profile — product-delivery
+#
+# For work that ships something other people install, run, or depend on — and therefore makes
+# claims, takes on support obligations, and cannot fully recall what it publishes.
+
+schema: baseline-standards/coverage-profile/1.0
+standards_version: 1.4.0
+id: product-delivery
+extends: delegated-work
+
+description: >
+  Everything in delegated-work, plus the obligations that attach once other people depend on your
+  output: what you may claim, what you commit to, how money and contracts are handled, and the
+  full software-delivery domain module.
+
+standards:
+  - BS-COMMITMENTS-EXTERNAL-CLAIMS-AND-EVIDENCE
+  - BS-COMMITMENTS-MONEY-AND-CONTRACTUAL-ACTIONS
+  - BS-SWDEL-CHANGE-AND-CODE-PRACTICE
+  - BS-SWDEL-VERIFICATION-AND-TESTING-EVIDENCE
+  - BS-SWDEL-VERSIONING-COMPATIBILITY-DEPRECATION
+  - BS-SWDEL-INTEGRATION-AND-MERGE-CONTROL
+  - BS-SWDEL-RELEASE-PIPELINE-AND-LOG
+  - BS-SWDEL-ROLLBACK-AND-HOTFIX
+  - BS-SWDEL-DEPENDENCIES-AND-SUPPLY-CHAIN
+  - BS-SWDEL-DOCUMENTATION-AND-PRESENTATION
+
+note: >
+  The software-delivery module is a DOMAIN module. If your product is not software, take this
+  profile without it and author your own module against domains/README.md — the spine is the same.

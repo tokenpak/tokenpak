@@ -5,7 +5,9 @@
 
 ``shared``
     Use the existing user Codex home.  This preserves the pre-isolation
-    behavior and is intentionally single-session when local state is in use.
+    behavior.  Concurrent sessions are supported: Codex's local databases run
+    in write-ahead-logging mode, which coordinates many readers and a
+    serialized writer across processes.
 ``workspace``
     Use a deterministic home derived from the resolved project directory.
 ``isolated``
@@ -17,8 +19,10 @@ to the externally refreshed ``auth.json`` credential; databases, WAL/SHM
 sidecars, history, logs, sessions, and every other runtime file stay behind.
 
 The ``codex.pid`` file is a lifecycle lease, not lock-attribution evidence.
-Actual SQLite holders are discovered from kernel lock and file-descriptor
-state by :mod:`tokenpak.companion.codex.state_lock`.
+When an isolated home is reclaimed, :mod:`tokenpak.companion.codex.state_lock`
+discovers actual SQLite holders from kernel lock and file-descriptor state so
+cleanup never deletes files under a live session.  That check guards deletion
+only; it does not gate launching.
 """
 
 from __future__ import annotations
@@ -2238,8 +2242,20 @@ def _recover_sentinel_temps(
     *,
     dir_fd: int | None,
     proc_root: Path,
+    shared_home: bool = False,
 ) -> None:
-    """Recover only positively identified crash artifacts under the guard."""
+    """Recover only positively identified crash artifacts under the guard.
+
+    ``shared_home`` marks the user's own Codex home, where concurrent sessions
+    are supported.  There, an artifact belonging to a *live* process is not a
+    crash leftover — it is another session mid-handoff, between publishing its
+    transfer marker and adopting the child PID.  Refusing on it would reinstate
+    the serialization this home is explicitly allowed to avoid, on a window
+    every parallel launch passes through.  Such artifacts are left untouched
+    and skipped; ownership is then decided by the main sentinel, which the live
+    session still holds.  A generated home belongs to exactly one session, so a
+    live artifact there remains a hard refusal.
+    """
     getuid = getattr(os, "geteuid", None)
     location = dir_fd if dir_fd is not None else path.parent
     try:
@@ -2293,10 +2309,19 @@ def _recover_sentinel_temps(
             proc_root=proc_root,
         )
         if liveness == _PROCESS_LIVE:
+            if shared_home:
+                # Another live session's handoff marker. Not ours to reclaim,
+                # and not a reason to refuse this launch.
+                continue
             raise HomeInUseError(
                 f"live sentinel recovery artifact claims PID {candidate.pid}: {path.parent / name}"
             )
         if liveness == _PROCESS_UNKNOWN:
+            if shared_home:
+                # Cannot prove the owner is gone, so leave the artifact alone
+                # rather than deleting it or blocking a supported concurrent
+                # launch on unprovable evidence.
+                continue
             raise HomeInUseError(
                 f"incomplete sentinel recovery evidence for PID {candidate.pid}: "
                 f"{path.parent / name}"
@@ -2341,7 +2366,18 @@ def _unlink_sentinel(path: Path, home_fd: int | None) -> None:
 
 
 class SessionLease:
-    """Owner-checked ``codex.pid`` lifecycle lease."""
+    """Owner-checked ``codex.pid`` lifecycle lease.
+
+    The sentinel is a single slot per home, so owning it is inherently
+    exclusive.  That is correct for a home TokenPak generated and may later
+    reclaim, where retention must never delete a directory a live session is
+    using.  It is *not* correct for the user's own shared home: Codex supports
+    concurrent sessions there, and TokenPak neither created that directory nor
+    ever deletes it.  A shared-home launch that finds the slot already held by
+    a live session therefore proceeds without owning it (``owns_sentinel`` is
+    False) instead of refusing, and every mutation below is a no-op for a
+    non-owner so it can never disturb the owner's lease.
+    """
 
     def __init__(
         self,
@@ -2350,11 +2386,13 @@ class SessionLease:
         *,
         proc_root: Path = Path("/proc"),
         home_fd: int | None,
+        owns_sentinel: bool = True,
     ) -> None:
         self.paths = paths
         self.sentinel = sentinel
         self.proc_root = proc_root
         self.home_fd = home_fd
+        self.owns_sentinel = owns_sentinel
         self._released = False
         self._handoff_temp: tuple[str, tuple[int, int], PidSentinel] | None = None
 
@@ -2414,12 +2452,20 @@ class SessionLease:
             raise RuntimeError(f"launcher PID {owner_pid} is not running")
         validated_session_id = _validated_session_id(session_id)
 
-        def claim(sentinel: PidSentinel) -> None:
+        def claim(sentinel: PidSentinel) -> bool:
+            """Take the sentinel; return whether this session owns it.
+
+            False means the shared home's slot is already held by a live
+            session.  Concurrent shared sessions are supported, so this launch
+            runs alongside it rather than refusing; it simply does not own the
+            sentinel and must not mutate it.
+            """
             with _lease_guard(paths.home, home_fd=home_fd):
                 _recover_sentinel_temps(
                     paths.pid_sentinel,
                     dir_fd=home_fd,
                     proc_root=proc_root,
+                    shared_home=paths.mode == MODE_SHARED,
                 )
                 if _sentinel_stat(paths.pid_sentinel, home_fd) is not None:
                     existing = read_pid_sentinel(paths.pid_sentinel, dir_fd=home_fd)
@@ -2442,9 +2488,16 @@ class SessionLease:
                             "refusing unsafe replacement"
                         )
                     if liveness == _PROCESS_LIVE:
-                        raise HomeInUseError(
-                            f"{paths.home} is already claimed by PID {existing.pid}"
-                        )
+                        # A generated home belongs to exactly one session and
+                        # may be reclaimed by retention, so a live claim there
+                        # is still fatal.  The user's own shared home is
+                        # neither, and Codex coordinates concurrent sessions on
+                        # it, so join instead of refusing.
+                        if paths.mode != MODE_SHARED:
+                            raise HomeInUseError(
+                                f"{paths.home} is already claimed by PID {existing.pid}"
+                            )
+                        return False
                     if liveness == _PROCESS_UNKNOWN:
                         raise HomeInUseError(
                             f"incomplete {paths.pid_sentinel} process evidence; "
@@ -2452,6 +2505,7 @@ class SessionLease:
                         )
                     _unlink_sentinel(paths.pid_sentinel, home_fd)
                 _write_sentinel_exclusive(paths.pid_sentinel, sentinel, dir_fd=home_fd)
+                return True
 
         try:
             managed_root = _generated_tokenpak_root(paths.home)
@@ -2474,7 +2528,7 @@ class SessionLease:
                             mode=paths.mode,
                             home=str(paths.home.resolve()),
                         )
-                        claim(sentinel)
+                        owns = claim(sentinel)
                 finally:
                     os.close(root_fd)
             else:
@@ -2487,8 +2541,14 @@ class SessionLease:
                     mode=paths.mode,
                     home=str(paths.home.resolve()),
                 )
-                claim(sentinel)
-            return cls(paths, sentinel, proc_root=proc_root, home_fd=home_fd)
+                owns = claim(sentinel)
+            return cls(
+                paths,
+                sentinel,
+                proc_root=proc_root,
+                home_fd=home_fd,
+                owns_sentinel=owns,
+            )
         except BaseException:
             if home_fd is not None:
                 os.close(home_fd)
@@ -2496,6 +2556,8 @@ class SessionLease:
 
     def begin_transfer(self) -> None:
         """Publish a durable handoff marker before spawning the child."""
+        if not self.owns_sentinel:
+            return
         if self._handoff_temp is not None:
             raise HomeInUseError("PID sentinel handoff is already in progress")
         with self._mutation_guard():
@@ -2512,6 +2574,8 @@ class SessionLease:
 
     def transfer_to(self, pid: int) -> None:
         """Transfer the lease to the spawned child process incarnation."""
+        if not self.owns_sentinel:
+            return
         if self._handoff_temp is None:
             # Compatibility for direct callers; the launcher calls
             # begin_transfer() before Popen to close the spawn window.
@@ -2586,6 +2650,13 @@ class SessionLease:
     def release(self) -> bool:
         """Remove only the still-matching sentinel owned by this session."""
         if self._released:
+            return False
+        if not self.owns_sentinel:
+            # Never touch a sentinel another live session owns; just drop the
+            # pinned descriptor this launch is holding.
+            self._released = True
+            if self.home_fd is not None:
+                os.close(self.home_fd)
             return False
         removed = False
         try:

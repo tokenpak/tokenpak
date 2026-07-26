@@ -1,0 +1,60 @@
+# Authority profile — assisted
+#
+# You approve every substantive action. Agents and delegates draft, prepare, verify, and
+# recommend; you decide.
+#
+# This file sets values ONLY for controls with mode_override_allowed: true.
+# Protected controls (GOVERNANCE.md section 4) are not listed and cannot be set here — the validator
+# rejects any profile that tries (GOVERNANCE.md R20).
+
+schema: baseline-standards/authority-profile/1.0
+standards_version: 1.4.0
+id: assisted
+anchor: operator-approves-all
+
+controls:
+
+  work.accept:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  work.scope-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: none
+
+  integrate.shared-baseline:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  publish.external-revocable:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  commit.external-promise:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  spend.paid-action:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: none
+
+  spend.limit-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: none
+
+  governance.waiver:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  governance.standard-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor

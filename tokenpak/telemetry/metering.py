@@ -2,7 +2,7 @@
 Usage Metering — License-keyed tracking of tokens, requests, and models.
 
 Tracks usage per license_id for daily reporting to license server.
-Enables usage-based pricing for Team/Enterprise tiers.
+Enables usage-based pricing for the Pro tier.
 """
 
 import logging

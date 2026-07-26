@@ -13,7 +13,7 @@ import pytest
 # `_is_visible` is the canonical tier-visibility helper exported by
 # `tokenpak.cli.commands.help` on full / Pro builds; on slim OSS it is
 # not currently exposed. Tests below probe it for OSS / Pro / Team /
-# Enterprise tier filtering. Skip cleanly when absent.
+# Tier-aware filtering. Skip cleanly when absent.
 try:
     from tokenpak.cli.commands.help import _is_visible  # noqa: F401
 except ImportError as _exc:
@@ -159,10 +159,10 @@ class TestFullHelp:
         pro_out = _capture(print_full_help, tier="pro")
         assert "optimize" in pro_out, "Pro command 'optimize' should appear in pro help"
 
-    def test_full_help_enterprise_includes_compliance(self):
+    def test_full_help_pro_includes_compliance(self):
         from tokenpak.cli.commands.help import print_full_help
 
-        ent_out = _capture(print_full_help, tier="enterprise")
+        ent_out = _capture(print_full_help, tier="pro")
         assert "compliance" in ent_out
 
     def test_full_help_has_usage_tip(self):
@@ -250,11 +250,11 @@ class TestUpsellTeaser:
         out = _capture(print_full_help, tier="oss")
         assert "Upgrade" in out or "PRO" in out, "Upsell teaser should appear for OSS tier"
 
-    def test_upsell_not_shown_for_enterprise(self):
+    def test_upsell_not_shown_for_pro(self):
         from tokenpak.cli.commands.help import print_full_help
 
-        out = _capture(print_full_help, tier="enterprise")
-        assert "Upgrade" not in out, "No upsell teaser for Enterprise tier"
+        out = _capture(print_full_help, tier="pro")
+        assert "Upgrade" not in out, "No upsell teaser for Pro tier"
 
     def test_upsell_minimal_no_fluff(self):
         from tokenpak.cli.commands.help import print_full_help

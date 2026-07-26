@@ -511,6 +511,89 @@ def test_pid_sentinel_is_validated_transferred_and_cleaned(
     assert not paths.pid_sentinel.exists()
 
 
+def test_shared_home_lease_admits_parallel_sessions(
+    homes: tuple[Path, Path], tmp_path: Path
+) -> None:
+    """The user's own home is not an exclusive resource.
+
+    Codex coordinates concurrent sessions on it and TokenPak never deletes it,
+    so a second launch joins instead of being refused. The sentinel is a single
+    slot, so only the first session owns it.
+    """
+    _source, tokenpak_home = homes
+    paths = sh.select_paths("shared", tokenpak_home=tokenpak_home)
+    first = sh.SessionLease.acquire(paths, session_id="first")
+    try:
+        assert first.owns_sentinel is True
+        second = sh.SessionLease.acquire(paths, session_id="second")
+        try:
+            assert second.owns_sentinel is False
+            third = sh.SessionLease.acquire(paths, session_id="third")
+            assert third.owns_sentinel is False
+            third.release()
+        finally:
+            second.release()
+        # A non-owner must never remove the live owner's sentinel.
+        assert paths.pid_sentinel.exists()
+        assert sh.read_pid_sentinel(paths.pid_sentinel) == first.sentinel
+    finally:
+        first.release()
+    assert not paths.pid_sentinel.exists()
+
+
+def test_shared_home_admits_a_session_during_another_handoff_window(
+    homes: tuple[Path, Path], tmp_path: Path
+) -> None:
+    """The handoff window must not re-serialize what the lease change opened.
+
+    Between ``begin_transfer()`` and ``transfer_to()`` the owner has published a
+    live transfer marker and released the lease guard across the spawn. A second
+    shared session arriving in that window previously died on ``live sentinel
+    recovery artifact claims PID N`` — a refusal on the exact path every
+    parallel launch passes through. Milliseconds wide, but any scripted fan-out
+    of `tokenpak codex` will land in it.
+    """
+    _source, tokenpak_home = homes
+    paths = sh.select_paths("shared", tokenpak_home=tokenpak_home)
+    owner = sh.SessionLease.acquire(paths, session_id="owner")
+    try:
+        owner.begin_transfer()  # live transfer marker now on disk
+        markers = [name.name for name in paths.home.iterdir() if "transfer" in name.name]
+        assert markers, "fixture precondition: a live transfer marker should exist"
+
+        joiner = sh.SessionLease.acquire(paths, session_id="mid-handoff")
+        try:
+            assert joiner.owns_sentinel is False
+        finally:
+            joiner.release()
+
+        # The joiner must not disturb the owner's in-flight handoff.
+        assert sh.read_pid_sentinel(paths.pid_sentinel) == owner.sentinel
+        assert [name.name for name in paths.home.iterdir() if "transfer" in name.name] == markers
+    finally:
+        owner.release()
+
+
+def test_shared_home_non_owner_lease_never_mutates_the_sentinel(
+    homes: tuple[Path, Path], tmp_path: Path
+) -> None:
+    """Transfer is a no-op for a non-owner, so it cannot hijack the slot."""
+    _source, tokenpak_home = homes
+    paths = sh.select_paths("shared", tokenpak_home=tokenpak_home)
+    owner = sh.SessionLease.acquire(paths, session_id="owner")
+    try:
+        joiner = sh.SessionLease.acquire(paths, session_id="joiner")
+        try:
+            joiner.begin_transfer()
+            joiner.transfer_to(os.getpid())
+            assert sh.read_pid_sentinel(paths.pid_sentinel) == owner.sentinel
+        finally:
+            assert joiner.release() is False
+        assert sh.read_pid_sentinel(paths.pid_sentinel) == owner.sentinel
+    finally:
+        owner.release()
+
+
 def test_live_home_lease_refuses_parallel_owner(homes: tuple[Path, Path], tmp_path: Path) -> None:
     source, tokenpak_home = homes
     paths = sh.select_paths(

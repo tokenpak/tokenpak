@@ -19,8 +19,8 @@ Include the TokenPak version (`tokenpak --version`), reproduction steps, and you
 
 | Version | Supported |
 | ------- | --------- |
-| 1.11.x (latest minor) | ✅ Security fixes |
-| < 1.11 | ❌ Unsupported — please upgrade |
+| 1.15.x (latest minor) | ✅ Security fixes |
+| < 1.15 | ❌ Unsupported — please upgrade |
 
 TokenPak is in beta: security fixes target the **latest public minor release line** unless a security advisory explicitly extends support to an earlier line. This table is checked at each release.
 
@@ -46,6 +46,35 @@ We welcome good-faith security research and will not pursue legal action against
 - do not run denial-of-service, mass-targeting, or data-destruction tests;
 - do not access, modify, or exfiltrate data that isn't theirs;
 - report promptly through the channels above and allow reasonable remediation time before public disclosure.
+
+## Advisories in Integrations You Install Yourself
+
+TokenPak's dependency graph carries neither package below. This note exists because a path we
+document still leads to one, and removing a disclosure whose subject still affects our users would
+be concealment rather than cleanup.
+
+### If you install `crewai` alongside TokenPak
+
+TokenPak previously offered a `crewai` extra. It was removed because crewai requires
+`chromadb~=1.1.0`, and every published chromadb 1.x is covered by CVE-2026-45829
+(pre-authentication code injection) with **no fixed release available upstream**.
+
+**Installing crewai yourself brings exactly the same package.** The advisory left TokenPak's
+lockfile; it did not stop existing. What changed is that it is now your dependency and your choice,
+made with this information rather than inherited silently from us.
+
+What it does and does not mean:
+
+- TokenPak itself never imports or runs chromadb, and the CrewAI adapter under
+  `tokenpak/sdk/crewai/` is context and handoff wrappers with no vector-store code path.
+- The exposure is inherent to running chromadb, typically as a server. If your crewai configuration
+  does not run one, the advisory has no attack surface in your deployment.
+- Nobody can currently pin around it, us included — the constraint is crewai's and there is no fixed
+  version to move to.
+
+We will update this note when a fixed chromadb is published and crewai's constraint permits it. Note
+the advisory range is bounded at `<= 1.5.9`, so a release outside that range is not by itself
+evidence of a fix.
 
 ## Best Practices
 

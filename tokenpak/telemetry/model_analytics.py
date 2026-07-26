@@ -13,7 +13,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, Optional
 
-from tokenpak.proxy.stats import DEFAULT_LOG_PATH, CompressionStats
+from tokenpak.proxy.stats import CompressionStats, default_log_path
 
 # Standard model pricing (USD per million tokens)
 # Canonical source: tokenpak/telemetry/data/pricing_catalog.json
@@ -150,7 +150,7 @@ class ModelAnalyzer:
     """Aggregate compression events by model."""
 
     def __init__(self, log_path: Optional[str] = None):
-        self.log_path = log_path or DEFAULT_LOG_PATH
+        self.log_path = log_path or default_log_path()
         self.stats_by_model: Dict[str, ModelStats] = {}
 
     def load_from_file(self, limit: int = 1000) -> Dict[str, ModelStats]:

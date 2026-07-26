@@ -101,13 +101,18 @@ TERM_RESOLVER_MAX_BYTES: int = _cfg(
 # Prefer the canonical TOKENPAK_CAPSULE_BUILDER name; fall back to the legacy
 # TOKENPAK_CAPSULE_BUILDER_ENABLED name for one release. Both use the shared
 # truthy semantics ({"1","true","yes","on"}, case-insensitive).
-if os.environ.get("TOKENPAK_CAPSULE_BUILDER") is not None:
-    from tokenpak.core.config_loader import _bool_env as _bool_env_cb
-
-    ENABLE_CAPSULE_BUILDER: bool = _bool_env_cb(os.environ["TOKENPAK_CAPSULE_BUILDER"])
+#
+# Read through _cfg rather than os.environ directly. This is evaluated at
+# import, and the active profile supplies this key — when the profile stopped
+# being written into os.environ, a direct read here silently disabled the
+# capsule builder for the `aggressive` profile that enables it.
+if os.environ.get("TOKENPAK_CAPSULE_BUILDER_ENABLED") is not None:
+    ENABLE_CAPSULE_BUILDER: bool = _cfg(
+        "features.capsule_builder", False, "TOKENPAK_CAPSULE_BUILDER_ENABLED", bool
+    )
 else:
     ENABLE_CAPSULE_BUILDER = _cfg(
-        "features.capsule_builder", False, "TOKENPAK_CAPSULE_BUILDER_ENABLED", bool
+        "features.capsule_builder", False, "TOKENPAK_CAPSULE_BUILDER", bool
     )
 CAPSULE_MIN_CHARS: int = _cfg("features.capsule_min_chars", 400, "TOKENPAK_CAPSULE_MIN_CHARS", int)
 CAPSULE_HOT_WINDOW: int = _cfg(

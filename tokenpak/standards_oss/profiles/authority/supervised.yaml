@@ -1,0 +1,60 @@
+# Authority profile — supervised   [DEFAULT]
+#
+# Named decision points route to you or to a designated reviewer. Everything else proceeds and
+# leaves a record.
+#
+# This is the default because it is the posture most operators actually want once the work is
+# larger than one person: you stay in the loop where consequences are external or irreversible,
+# and you stop being a bottleneck everywhere else.
+
+schema: baseline-standards/authority-profile/1.0
+standards_version: 1.4.0
+id: supervised
+anchor: decision-points-routed
+
+controls:
+
+  work.accept:
+    authorizer: reviewer
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  work.scope-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: none
+
+  integrate.shared-baseline:
+    authorizer: reviewer
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  publish.external-revocable:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  commit.external-promise:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  spend.paid-action:
+    authorizer: none
+    authorization_type: standing-envelope
+    independence_requirement: none
+
+  spend.limit-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: none
+
+  governance.waiver:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor
+
+  governance.standard-change:
+    authorizer: operator
+    authorization_type: explicit
+    independence_requirement: separate-actor

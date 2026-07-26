@@ -110,6 +110,10 @@ from tokenpak.proxy.adapters import build_default_registry
 if TYPE_CHECKING:
     from tokenpak.cache.semantic_cache import SemanticCache
 
+    # Supplied at runtime by this module's ``__getattr__`` so resolution — which
+    # creates the home directory — happens on first use rather than at import.
+    MONITOR_DB: str
+
 _ConfigValue = TypeVar("_ConfigValue")
 _loaded_cfg: Optional[Callable[..., object]]
 
@@ -136,24 +140,33 @@ except ImportError:
     )
 
 
+def _coerce(value: str, converter: Optional[Callable[[str], _ConfigValue]]) -> _ConfigValue:
+    """Convert a raw string setting to its declared type."""
+    if converter is bool:
+        return cast(_ConfigValue, value.lower() in ("1", "true", "yes", "on"))
+    return converter(value) if converter else cast(_ConfigValue, value)
+
+
 def _cfg(
     key: str,
     default: _ConfigValue,
     env_var: Optional[str] = None,
     converter: Optional[Callable[[str], _ConfigValue]] = None,
 ) -> _ConfigValue:
-    """Read one typed setting through the full loader or env-only fallback."""
+    """Read one typed setting through the full loader or env-only fallback.
+
+    Precedence, highest first: explicit environment variable, config file,
+    active profile preset, hardcoded default. The profile contributes a
+    *default*, which is why it is folded in here rather than written into
+    ``os.environ`` — see ``_profile_default``.
+    """
+    default = _profile_default(env_var, default, converter)
     if _loaded_cfg is not None:
         return cast(_ConfigValue, _loaded_cfg(key, default, env_var, converter))
     if env_var:
         value = os.environ.get(env_var)
         if value is not None:
-            if converter is bool:
-                return cast(
-                    _ConfigValue,
-                    value.lower() in ("1", "true", "yes", "on"),
-                )
-            return converter(value) if converter else cast(_ConfigValue, value)
+            return _coerce(value, converter)
     return default
 
 
@@ -205,14 +218,106 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
 
 ACTIVE_PROFILE: str = os.environ.get("TOKENPAK_PROFILE", "balanced").lower()
 if ACTIVE_PROFILE in _PROFILE_PRESETS:
-    for _pk, _pv in _PROFILE_PRESETS[ACTIVE_PROFILE].items():
-        os.environ.setdefault(_pk, _pv)
     _logging.getLogger("tokenpak.proxy.config").info("Profile: %s", ACTIVE_PROFILE)
 else:
     _logging.getLogger("tokenpak.proxy.config").warning(
         "Unknown TOKENPAK_PROFILE=%r — ignoring", ACTIVE_PROFILE
     )
     ACTIVE_PROFILE = "custom"
+
+
+def profile_preset() -> dict[str, str]:
+    """The active profile's settings. Empty for an unknown/custom profile."""
+    return dict(_PROFILE_PRESETS.get(ACTIVE_PROFILE, {}))
+
+
+def _profile_default(
+    env_var: Optional[str],
+    default: _ConfigValue,
+    converter: Optional[Callable[[str], _ConfigValue]],
+) -> _ConfigValue:
+    """Fold the active profile in as a default for *env_var*.
+
+    This used to be ``os.environ.setdefault`` over the whole preset at import
+    time, which meant any command that transitively imported proxy config
+    gained ~8 environment variables the user never set. Doctor then reported
+    ``Trace mode enabled (TOKENPAK_TRACE=1)`` for a variable TokenPak had set
+    on itself, and its own env-conflict check was evaluated against the
+    mutated environment — wrong in both directions.
+
+    Folding the preset in as a *default* keeps the documented precedence
+    ("profile is a floor: explicit env always wins") and leaves the process
+    environment as the user left it, so it remains an honest signal of intent.
+    """
+    if not env_var:
+        return default
+    preset = _PROFILE_PRESETS.get(ACTIVE_PROFILE)
+    if not preset or env_var not in preset:
+        return default
+    try:
+        return _coerce(preset[env_var], converter)
+    except (TypeError, ValueError):
+        return default
+
+
+def apply_profile_to_environ() -> list[str]:
+    """Publish the active profile into ``os.environ``. Returns the keys set.
+
+    Call this from the **proxy process entrypoint only**, before the server
+    modules load. Several subsystems — the compilation mode in
+    ``proxy/server``, the capsule builder in ``proxy/vault_bridge`` and
+    ``core/config`` — read these keys straight from the environment rather
+    than through ``_cfg``, so for the process the profile actually configures,
+    the environment has to carry it.
+
+    What must NOT happen is this running at *import* time, which is what it
+    used to do: every CLI verb that transitively imported proxy config gained
+    ~8 variables the user never set, and ``doctor`` then reported them back as
+    the user's own settings and evaluated its env-conflict check against them.
+
+    Existing values are preserved — the profile remains a floor.
+    """
+    preset = _PROFILE_PRESETS.get(ACTIVE_PROFILE)
+    if not preset:
+        return []
+    applied = [k for k in preset if k not in os.environ]
+    for key in applied:
+        os.environ[key] = preset[key]
+    _logging.getLogger("tokenpak.proxy.config").info(
+        "Profile %s applied to environment: %s", ACTIVE_PROFILE, ",".join(applied)
+    )
+    return applied
+
+
+def env_or_profile(env_var: str, default: str) -> str:
+    """Resolve a raw string setting: environment, then profile, then *default*.
+
+    For the handful of call sites that read a profile key straight from
+    ``os.environ`` instead of going through ``_cfg`` — ``ProxyServer``'s
+    compilation mode, the capsule-builder flags. They cannot rely on the
+    profile having been published into the environment, because a caller may
+    construct ``ProxyServer`` directly without going through an entrypoint;
+    the test launcher does exactly that. Resolving here means the profile
+    applies however the server was reached.
+    """
+    value = os.environ.get(env_var)
+    if value is not None:
+        return value
+    return _PROFILE_PRESETS.get(ACTIVE_PROFILE, {}).get(env_var, default)
+
+
+def setting_origin(env_var: str) -> str:
+    """Where *env_var*'s effective value comes from: env, profile, or default.
+
+    Lets a caller distinguish "the user turned this on" from "the profile
+    turns this on" without inspecting a mutated environment.
+    """
+    if os.environ.get(env_var) is not None:
+        return "env"
+    if env_var in _PROFILE_PRESETS.get(ACTIVE_PROFILE, {}):
+        return "profile"
+    return "default"
+
 
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
 LISTEN_ADDRESS = _cfg("listen_address", "127.0.0.1", "TOKENPAK_BIND_ADDRESS", str)
@@ -221,13 +326,30 @@ DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", False, "TOKENPAK_DASHBO
 
 
 def _resolve_monitor_db() -> str:
+    """Resolve the monitor DB for writing, creating its home if needed."""
     from tokenpak._paths import monitor_db as _monitor_db
 
     result = _monitor_db(mode="write")
     return str(result)
 
 
-MONITOR_DB = _resolve_monitor_db()
+def __getattr__(name: str) -> object:
+    """Resolve ``MONITOR_DB`` on first use, not at import.
+
+    This ran at module import and, because write-mode resolution creates the
+    home directory, merely importing the proxy config created ``~/.tpk`` as a
+    side effect. On a machine whose configuration lived in the legacy home
+    that was destructive in effect: creating an empty canonical home flipped
+    config resolution to a directory containing no config, so the proxy
+    silently ran on defaults instead of the user's settings.
+
+    Importing a module must not touch the filesystem.
+    """
+    if name == "MONITOR_DB":
+        return _resolve_monitor_db()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
 BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "80"))
 # mutation_audit TTL — prune rows older than this many days
@@ -572,8 +694,13 @@ def _load_tokenpak_upstream_overrides() -> Dict[str, str]:
     the loaded config.yaml (post-migration).
     Supports current shape at `models.providers` and legacy root `providers`.
     """
-    cfg_path = Path.home() / ".tokenpak" / "config.json"
-    if cfg_path.exists():
+    # Compatibility read: config.json is a read-only legacy format and may
+    # live in either home. Resolved rather than hardcoded so a TOKENPAK_HOME
+    # install is not silently read from ~/.tokenpak.
+    from tokenpak import _paths
+
+    cfg_path = _paths.resolve_existing("config.json")
+    if cfg_path is not None:
         try:
             cfg = json.loads(cfg_path.read_text())
         except Exception:

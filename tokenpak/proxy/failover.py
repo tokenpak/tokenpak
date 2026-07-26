@@ -45,7 +45,18 @@ from typing import Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_CONFIG_PATH = Path(os.path.expanduser("~/.tokenpak/config.yaml"))
+
+def _config_path() -> Path:
+    """Resolve the failover config at call time.
+
+    Was bound to the legacy home at import, so TOKENPAK_HOME could never
+    take effect and a canonical install read a file it never writes.
+    """
+    from tokenpak import _paths
+
+    found = _paths.resolve_existing("config.yaml")
+    return found if found is not None else _paths.write_home() / "config.yaml"
+
 
 # ---------------------------------------------------------------------------
 # Config schema
@@ -105,7 +116,7 @@ def load_failover_config(path: Optional[Path] = None) -> FailoverConfig:
     Returns:
         FailoverConfig (may be disabled if file missing or invalid)
     """
-    cfg_path = path or _CONFIG_PATH
+    cfg_path = path or _config_path()
 
     if not cfg_path.exists():
         return FailoverConfig(enabled=False)
@@ -302,7 +313,7 @@ def write_default_config(path: Optional[Path] = None, overwrite: bool = False) -
     Returns:
         Path the file was written to.
     """
-    cfg_path = path or _CONFIG_PATH
+    cfg_path = path or _config_path()
     if cfg_path.exists() and not overwrite:
         return cfg_path
     cfg_path.parent.mkdir(parents=True, exist_ok=True)

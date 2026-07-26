@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "baseline-standards/project-adoption/1.0",
+  "title": "Project adoption file",
+  "description": "What this operator's work actually does. The normative source for capabilities; detection never overrides it (START-HERE.md section 4).",
+  "type": "object",
+  "required": ["schema", "standards_version", "project", "profiles", "capabilities", "escalation"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "baseline-standards/project-adoption/1.0" },
+    "standards_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "project": {
+      "type": "object",
+      "required": ["name", "operator"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "operator": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "required": ["coverage", "authority"],
+      "additionalProperties": false,
+      "properties": {
+        "coverage": { "type": "string" },
+        "authority": { "type": "string" }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["value", "owner"],
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "enum": ["yes", "no", "unknown"],
+            "description": "unknown on a protected-action capability blocks that action (R14)."
+          },
+          "owner": { "type": "string" },
+          "evidence": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "protected_actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "non_delegable": { "$ref": "#/$defs/actionList" },
+        "human_authorized": { "$ref": "#/$defs/actionList" },
+        "prohibited": { "$ref": "#/$defs/actionList" }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "soft_limit": { "$ref": "#/$defs/limit" },
+        "hard_limit": { "$ref": "#/$defs/limit" },
+        "measurement_unavailable": {
+          "enum": ["stop-cleanly", "warn-and-continue"],
+          "description": "Fail closed is the default. 'warn-and-continue' requires a recorded decision."
+        }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "required": ["primary_contact", "method", "response_window", "on_no_response", "emergency_stop"],
+      "additionalProperties": false,
+      "properties": {
+        "primary_contact": { "type": "string" },
+        "method": { "type": "string" },
+        "response_window": { "type": "string" },
+        "on_no_response": {
+          "enum": ["stop-cleanly", "proceed-within-envelope"],
+          "description": "'Wait indefinitely' is not an option (GOVERNANCE.md R8)."
+        },
+        "proceed_envelope": { "type": ["string", "null"] },
+        "emergency_stop": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "on_no_response": { "const": "proceed-within-envelope" } },
+            "required": ["on_no_response"]
+          },
+          "then": {
+            "properties": { "proceed_envelope": { "type": "string", "minLength": 1 } },
+            "required": ["proceed_envelope"]
+          }
+        }
+      ]
+    },
+    "local_tightening": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "controls": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z]+\\.[a-z0-9-]+$" },
+          "additionalProperties": { "type": "object" }
+        }
+      }
+    },
+    "local_requirements": { "type": "array", "items": { "type": "string" } },
+    "standing_orders": {
+      "type": "array",
+      "description": "Durable operator instructions. Take precedence over corpus defaults and recommendations (GOVERNANCE.md R51). Cannot weaken a protected field or evidence floor (R53).",
+      "items": {
+        "type": "object",
+        "required": ["id", "covers", "order", "author", "effective"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "covers": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Subject this order settles, so tooling knows the gap is already answered."
+          },
+          "order": { "type": "string", "minLength": 1 },
+          "author": { "type": "string", "minLength": 1 },
+          "effective": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "actionList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action", "control"],
+        "additionalProperties": false,
+        "properties": {
+          "action": { "type": "string", "minLength": 1 },
+          "control": { "type": "string", "pattern": "^[a-z]+\\.[a-z0-9-]+$" }
+        }
+      }
+    },
+    "limit": {
+      "type": "object",
+      "required": ["value", "unit", "on_breach"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {},
+        "unit": { "type": "string" },
+        "on_breach": { "enum": ["warn-and-continue", "stop-cleanly", "deny"] }
+      }
+    }
+  }
+}

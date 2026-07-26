@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, cast
 
+from tokenpak import _paths
+
 # ---------------------------------------------------------------------------
 # Severity levels
 # ---------------------------------------------------------------------------
@@ -57,6 +59,28 @@ class DiagResult:
         return d
 
 
+def _effective(env_var: str, default: str) -> str:
+    """Report a setting's effective value and where it came from.
+
+    A diagnostic that prints ``os.environ.get(var, "(default …)")`` answers a
+    different question than the one being asked. The profile supplies several
+    of these settings without writing them into this process's environment —
+    deliberately, so that ``doctor`` does not report profile values back as the
+    user's own — which left this check announcing "(default hybrid)" while an
+    aggressive profile was in force. Naming the origin keeps both facts.
+    """
+    from tokenpak.proxy.config import setting_origin
+
+    origin = setting_origin(env_var)
+    if origin == "env":
+        return cast(str, os.environ[env_var])
+    if origin == "profile":
+        from tokenpak.proxy.config import ACTIVE_PROFILE, profile_preset
+
+        return f"{profile_preset()[env_var]} (from {ACTIVE_PROFILE} profile)"
+    return f"{default} (default)"
+
+
 # ---------------------------------------------------------------------------
 # Individual checks
 # ---------------------------------------------------------------------------
@@ -64,8 +88,8 @@ class DiagResult:
 
 def _check_config(verbose: bool) -> DiagResult:
     """Validate config syntax and required fields using comprehensive validator."""
-    config_path = Path.home() / ".tokenpak" / "config.yaml"
-    alt_path = Path.home() / ".tokenpak" / "config.json"
+    config_path = _paths.under("config.yaml")
+    alt_path = _paths.under("config.json")
 
     # Try YAML first, then JSON
     found_path: Optional[Path] = None
@@ -79,7 +103,7 @@ def _check_config(verbose: bool) -> DiagResult:
             "config",
             WARNING,
             "Config: Not found — using env vars / defaults",
-            detail="Create ~/.tokenpak/config.yaml to customize settings",
+            detail=f"Create {_paths.config_write_path()} to customize settings",
             data={"path": str(config_path), "found": False},
         )
 
@@ -108,8 +132,8 @@ def _check_config(verbose: bool) -> DiagResult:
             detail = f"{len(errors)} error(s) — run: tokenpak validate-config {found_path}"
 
         env_vars = {
-            "TOKENPAK_PORT": os.environ.get("TOKENPAK_PORT", "(default 8766)"),
-            "TOKENPAK_MODE": os.environ.get("TOKENPAK_MODE", "(default hybrid)"),
+            "TOKENPAK_PORT": _effective("TOKENPAK_PORT", "8766"),
+            "TOKENPAK_MODE": _effective("TOKENPAK_MODE", "hybrid"),
             "ANTHROPIC_API_KEY": "***" if os.environ.get("ANTHROPIC_API_KEY") else "(not set)",
         }
 
@@ -153,7 +177,7 @@ def _check_vault_index(verbose: bool) -> DiagResult:
     # Support both json_blocks directory and single index.json
     json_index = index_dir / "index.json"
     blocks_dir = index_dir / "blocks"
-    alt_index = Path.home() / ".tokenpak" / "index.json"
+    alt_index = _paths.resolve_existing("index.json") or _paths.under("index.json")
 
     candidates = [json_index, alt_index]
     found: Optional[Path] = next((p for p in candidates if p.exists()), None)
@@ -317,7 +341,7 @@ def _check_permissions(verbose: bool) -> DiagResult:
     vault_path = os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
     dirs = {
         "vault": Path(vault_path).parent,
-        "cache": Path.home() / ".tokenpak",
+        "cache": _paths.home(),
     }
     errors: List[str] = []
     checked: Dict[str, Any] = {}
@@ -341,7 +365,7 @@ def _check_permissions(verbose: bool) -> DiagResult:
     return DiagResult(
         "permissions",
         OK,
-        "Permissions: Read access OK to vault and ~/.tokenpak",
+        f"Permissions: Read access OK to vault and {_paths.home()}",
         data={"checks": checked},
     )
 

@@ -83,7 +83,7 @@ def tmp_dir(tmp_path):
 def validator():
     v = APIKeyValidator()
     v.register("key-pro", LicenseTier.PRO)
-    v.register("key-enterprise", LicenseTier.ENTERPRISE)
+    v.register("key-pro2", LicenseTier.PRO)
     return v
 
 

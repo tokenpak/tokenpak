@@ -31,15 +31,32 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import cast
+from typing import Optional, cast
 
 CooldownEntry = dict[str, object]
 CooldownMap = dict[str, CooldownEntry]
 
 logger = logging.getLogger(__name__)
 
-COOLDOWNS_FILE = Path.home() / ".tokenpak" / "cooldowns.json"
-AUTH_PROFILES_FILE = Path.home() / ".tokenpak" / "auth-profiles.json"
+
+def cooldowns_file_path() -> Path:
+    """Cooldown ledger, resolved on use rather than pinned at import."""
+    from tokenpak import _paths
+
+    return _paths.write_under("cooldowns.json")
+
+
+def auth_profiles_file_path() -> Path:
+    """Auth-profile store, resolved on use rather than pinned at import.
+
+    Both of these were constants hardcoded to the legacy home. Writing there
+    from a canonical install puts state in a directory the install does not
+    live in, and resolution follows state.
+    """
+    from tokenpak import _paths
+
+    return _paths.write_under("auth-profiles.json")
+
 
 # Don't clear if errorCount is high — likely a real, persistent problem
 HIGH_ERROR_THRESHOLD = 10
@@ -58,11 +75,17 @@ class CooldownManager:
 
     def __init__(
         self,
-        cooldowns_file: Path = COOLDOWNS_FILE,
-        auth_profiles_file: Path = AUTH_PROFILES_FILE,
+        cooldowns_file: Optional[Path] = None,
+        auth_profiles_file: Optional[Path] = None,
     ) -> None:
-        self.cooldowns_file = cooldowns_file
-        self.auth_profiles_file = auth_profiles_file
+        # Resolved here, not as default arguments — a default is evaluated once
+        # at import, which is the pinning this change exists to remove.
+        self.cooldowns_file = (
+            cooldowns_file if cooldowns_file is not None else cooldowns_file_path()
+        )
+        self.auth_profiles_file = (
+            auth_profiles_file if auth_profiles_file is not None else auth_profiles_file_path()
+        )
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                      #

@@ -43,9 +43,63 @@ except ImportError:
             return _as_config_dict(_json.load(f))
 
 
-CONFIG_PATH = Path(
-    os.environ.get("TOKENPAK_CONFIG", str(Path.home() / ".tokenpak" / "config.yaml"))
-)
+def config_read_path() -> Path:
+    """Resolve the config to READ, honouring both homes.
+
+    ``TOKENPAK_CONFIG`` wins outright. Otherwise the canonical home is
+    preferred and the legacy home is accepted, so an install that predates
+    the canonical home keeps working.
+
+    This was a module-level constant bound to ``~/.tokenpak/config.yaml`` at
+    import. ``setup`` writes ``~/.tpk/config.yaml``, so after a successful
+    setup this loader read a file that did not exist and returned ``{}`` —
+    the profile the user chose was never loaded, and ``TOKENPAK_HOME`` had no
+    effect on the proxy at all.
+    """
+    override = os.environ.get("TOKENPAK_CONFIG", "").strip()
+    if override:
+        return Path(override).expanduser()
+    from tokenpak import _paths
+
+    candidates = [base / "config.yaml" for base in _paths.read_candidates()]
+    present = [c for c in candidates if c.exists()]
+    if not present:
+        return _paths.write_home() / "config.yaml"
+
+    # Prefer the first candidate that actually has content. An empty or
+    # whitespace-only file in the preferred home would otherwise shadow a
+    # populated one in a later home, and the user would silently run on
+    # defaults with their real configuration sitting on disk untouched.
+    for candidate in present:
+        try:
+            if candidate.read_text(encoding="utf-8", errors="replace").strip():
+                return candidate
+        except OSError:
+            continue
+    return present[0]
+
+
+def config_write_path() -> Path:
+    """Resolve the config to WRITE. Never the legacy home."""
+    override = os.environ.get("TOKENPAK_CONFIG", "").strip()
+    if override:
+        return Path(override).expanduser()
+    from tokenpak import _paths
+
+    return _paths.write_home() / "config.yaml"
+
+
+def __getattr__(name: str) -> object:
+    """Keep ``CONFIG_PATH`` working for existing callers, but resolved late.
+
+    PEP 562 module ``__getattr__``: the name still reads like a constant at
+    each callsite while actually being evaluated when it is used, so an
+    import that happens before ``TOKENPAK_HOME`` is set cannot freeze the
+    answer.
+    """
+    if name == "CONFIG_PATH":
+        return config_read_path()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _maybe_migrate_json_to_yaml() -> None:
@@ -55,9 +109,13 @@ def _maybe_migrate_json_to_yaml() -> None:
     After writing config.yaml the original is renamed to config.json.migrated
     so it is preserved but no longer picked up by any loader.
     """
-    yaml_path = CONFIG_PATH
-    json_path = CONFIG_PATH.parent / "config.json"
-    migrated_path = CONFIG_PATH.parent / "config.json.migrated"
+    # Migration writes, so it targets the canonical home — but it must find
+    # a legacy config.json to migrate, hence the separate read resolution.
+    yaml_path = config_write_path()
+    from tokenpak import _paths
+
+    json_path = _paths.resolve_existing("config.json") or (yaml_path.parent / "config.json")
+    migrated_path = json_path.with_name("config.json.migrated")
 
     if yaml_path.exists() or not json_path.exists():
         return  # nothing to do
@@ -117,13 +175,34 @@ def _bool_env(val: str) -> bool:
     return val.lower() in ("1", "true", "yes", "on")
 
 
+#: Why the last load produced an empty config, when the reason was not
+#: "there is no config". ``None`` means the last load was clean.
+_load_error: tuple[Path, str] | None = None
+
+
+def config_load_error() -> tuple[Path, str] | None:
+    """The unreadable config path and parse error, or ``None``.
+
+    ``load_config`` returns ``{}`` for both "no config exists" and "the config
+    exists but could not be parsed", and callers could not tell them apart. So
+    ``tokenpak start`` on a config with a YAML syntax error ran validation
+    against an empty dict and told the user their **API key** was missing —
+    a confidently wrong diagnosis pointing at the wrong file — then exited 3
+    ("not configured") for a config that very much existed.
+    """
+    return _load_error
+
+
 def load_config(path: str | None = None) -> ConfigDict:
     """Load config from YAML file. Returns empty dict if file missing.
 
     On first call (no custom *path*), runs automatic JSON-to-YAML migration
     so users never need to run ``tokenpak config migrate`` manually.
+
+    An empty return is ambiguous by design (callers rely on it); consult
+    ``config_load_error()`` to distinguish absent from unreadable.
     """
-    global _config
+    global _config, _load_error
     if _config is not None and path is None:
         return _config
 
@@ -131,11 +210,13 @@ def load_config(path: str | None = None) -> ConfigDict:
     if path is None:
         _maybe_migrate_json_to_yaml()
 
-    config_path = Path(path) if path else CONFIG_PATH
+    config_path = Path(path) if path else config_read_path()
+    _load_error = None
     if config_path.exists():
         try:
             _config = _load_yaml(str(config_path))
-        except Exception:
+        except Exception as exc:
+            _load_error = (config_path, str(exc))
             _config = {}
     else:
         _config = {}

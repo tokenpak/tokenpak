@@ -1,4 +1,12 @@
-"""Tests for tokenpak preview command."""
+# SPDX-License-Identifier: Apache-2.0
+"""CLI plumbing tests for `tokenpak preview`.
+
+Scope is deliberately narrow: argument handling and output-mode wiring.
+Value correctness lives in ``tests/test_preview_semantics.py`` — this file
+previously asserted only that certain keys and labels were present, which is
+why a fabricated implementation passed it for so long. Shape assertions belong
+here, on shape; they must not stand in for semantic coverage.
+"""
 
 import json
 import subprocess
@@ -8,10 +16,10 @@ from pathlib import Path
 
 
 class TestPreviewCommand:
-    """Test preview command functionality."""
+    """Argument plumbing and output modes."""
 
     def test_preview_with_text_input(self):
-        """Test preview with direct text input."""
+        """Positional text input renders the measured summary."""
         result = subprocess.run(
             [sys.executable, "-m", "tokenpak", "preview", "hello world"],
             capture_output=True,
@@ -23,7 +31,7 @@ class TestPreviewCommand:
         assert "Savings:" in result.stdout
 
     def test_preview_json_output(self):
-        """Test preview with JSON output."""
+        """--json emits the measured-result contract."""
         result = subprocess.run(
             [sys.executable, "-m", "tokenpak", "preview", "test data", "--json"],
             capture_output=True,
@@ -31,15 +39,25 @@ class TestPreviewCommand:
         )
         assert result.returncode == 0
         data = json.loads(result.stdout)
-        assert "input_tokens" in data
-        assert "output_tokens" in data
-        assert "saved_tokens" in data
-        assert "compression_ratio" in data
-        assert "retained_blocks" in data
-        assert "removed_blocks" in data
+        assert data["state"] == "measured"
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "saved_tokens",
+            "compression_ratio",
+            "duration_ms",
+            "applied",
+            "blocks",
+            "provenance",
+        ):
+            assert key in data, f"missing contract field {key}"
+        # The simulation's invented fields must not come back.
+        assert "retained_blocks" not in data
+        assert "removed_blocks" not in data
+        assert "flags" not in data
 
     def test_preview_raw_output(self):
-        """Test preview with raw output format."""
+        """--raw prints the flat form with the applied verdict."""
         result = subprocess.run(
             [sys.executable, "-m", "tokenpak", "preview", "test data", "--raw"],
             capture_output=True,
@@ -49,11 +67,11 @@ class TestPreviewCommand:
         assert "Input:" in result.stdout
         assert "Output:" in result.stdout
         assert "Saved:" in result.stdout
-        assert "Retained blocks:" in result.stdout
-        assert "Removed blocks:" in result.stdout
+        assert "Applied:" in result.stdout
+        assert "Blocks:" in result.stdout
 
     def test_preview_with_file(self):
-        """Test preview reading from file."""
+        """--file reads input from disk."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("This is test content for preview")
             temp_path = f.name
@@ -70,8 +88,8 @@ class TestPreviewCommand:
         finally:
             Path(temp_path).unlink()
 
-    def test_preview_verbose_output(self):
-        """Test preview with verbose output."""
+    def test_preview_verbose_shows_measurement_provenance(self):
+        """--verbose must disclose how the measurement was produced."""
         result = subprocess.run(
             [sys.executable, "-m", "tokenpak", "preview", "test", "--verbose"],
             capture_output=True,
@@ -79,15 +97,25 @@ class TestPreviewCommand:
         )
         assert result.returncode == 0
         assert "Mode:" in result.stdout
-        assert "Flags:" in result.stdout
+        assert "Measurement provenance:" in result.stdout
+        assert "Input SHA-256" in result.stdout
+        assert "Tokenizer" in result.stdout
+        assert "Stages run" in result.stdout
 
     def test_preview_no_input_error(self):
-        """Test preview with no input returns error."""
+        """Empty input is reported, not filled in with a fabricated number."""
         result = subprocess.run(
             [sys.executable, "-m", "tokenpak", "preview"],
             input="",
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 1
-        assert "No input provided" in result.stderr or "No input provided" in result.stdout
+        # Each preview state maps to its own documented code, so a caller can
+        # tell "nothing to measure" from "the compressor failed". This asserted
+        # a bare 1, which was the code every non-measured state shared.
+        from tokenpak.cli.exit_codes import EXIT_NO_DATA
+
+        assert result.returncode == EXIT_NO_DATA
+        combined = result.stdout + result.stderr
+        assert "Nothing to preview" in combined
+        assert "input was empty" in combined

@@ -33,7 +33,11 @@ keywords = [
     "routing",
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    # Alpha until a candidate build passes the beta gates end-to-end in
+    # isolated environments. It claimed Production/Stable while `preview`
+    # printed simulated numbers and `setup` reported success for a proxy
+    # that had not started. Moves to "4 - Beta" when that candidate passes.
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
@@ -66,6 +70,11 @@ dependencies = [
     "watchdog>=3.0.0",
     "cryptography>=41.0.0",
     "urllib3>=2.0.0",
+    # Version comparison for `tokenpak update` and doctor's update check. Was
+    # imported unguarded at two callsites while undeclared, which crashed
+    # `tokenpak update` with a bare ModuleNotFoundError traceback and silently
+    # degraded the doctor check to a green "Unknown".
+    "packaging>=23.0",
     # Native Codex sends Responses API request bodies with Content-Encoding:
     # zstd. TokenPak decodes them before inspection/optimization and forwards
     # a standards-compliant uncompressed JSON entity upstream.
@@ -167,9 +176,6 @@ otel = [
     "opentelemetry-exporter-otlp-proto-http>=1.24.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.24.0",
 ]
-crewai = [
-    "crewai>=0.1.0",
-]
 autogen = [
     "pyautogen>=0.2.0",
 ]
@@ -250,6 +256,7 @@ tokenpak = [
     "companion/hooks/*.sh",
     "companion/codex/*.sh",
     "companion/codex/skills/*/SKILL.md",
+    "standards_oss/**/*",
 ]
 
 [tool.setuptools.dynamic]

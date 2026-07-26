@@ -1,16 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Launcher Codex local-database lock preflight (regression-repair packet).
+"""Launcher session selection, provisioning, retention, and supervision.
 
-Pins the in-scope launcher surface restored + hardened by the repair:
-before exec-ing a real launch the launcher preflights Codex's own SQLite
-databases and, on contention, waits/retries with a bounded budget rather
-than letting Codex die on a raw "database is locked" error.
+Concurrent Codex sessions against one home are supported, exactly as they
+are for native ``codex``: Codex's local databases run in write-ahead-logging
+mode, which coordinates readers and a serialized writer across processes.
+The launcher never opens those databases, so it does not gate startup on
+their lock state — see ``test_parallel_sessions_are_not_gated`` below.
 
-The wait loop's seams (prober / esc / sleep / clock / interactive) are
-injected so behavior is deterministic without a real TTY, clock, or key
-input.  Scope note: this does not exercise the ``codex mcp`` / ``codex
-features`` probe-avoidance behavior — that lives in ``hooks.py`` /
-``mcp_config.py``, outside this packet's ``expected_files_changed``.
+Scope note: this does not exercise the ``codex mcp`` / ``codex features``
+behavior — that lives in ``hooks.py`` / ``mcp_config.py``.
 """
 
 from __future__ import annotations
@@ -30,287 +28,8 @@ import pytest
 from tokenpak import _cli_core
 from tokenpak.companion.codex import launcher
 from tokenpak.companion.codex import session_home as sh
-from tokenpak.companion.codex import state_lock as sl
 
-
-def _status(locked=False, stopped=None):
-    stopped = stopped or []
-    holders = stopped if stopped else ([123] if locked else [])
-    return sl.LockStatus(
-        home="/h",
-        db_path="/h/state_5.sqlite",
-        exists=True,
-        locked=locked,
-        holder_pids=holders,
-        stopped_pids=stopped,
-        running_pids=[123] if locked and not stopped else [],
-        detail="lock detail",
-    )
-
-
-def _preflight_result(
-    status=launcher.PreflightStatus.HOLDER_TIMEOUT_LAST_VERIFIED_LIVE,
-    *,
-    diagnostics_complete=True,
-    exit_code=1,
-):
-    return launcher._preflight_evaluation(
-        status=status,
-        diagnostics_complete=diagnostics_complete,
-        holder_pids=(123,) if status is not launcher.PreflightStatus.CLEAR else (),
-        holder_state="running" if status is not launcher.PreflightStatus.CLEAR else "none",
-        detail="test preflight result",
-        remediation="test remediation" if exit_code is not None else None,
-        exit_code=exit_code,
-        diagnostic_epoch="test-epoch",
-    )
-
-
-def _allow_temporary_session_prompt(monkeypatch):
-    monkeypatch.setattr(launcher, "_stdin_is_tty", lambda: True)
-    monkeypatch.delenv("CI", raising=False)
-    monkeypatch.delenv("TOKENPAK_NONINTERACTIVE", raising=False)
-    monkeypatch.setenv("TERM", "xterm-256color")
-
-
-class _Clock:
-    def __init__(self):
-        self.t = 0.0
-
-    def __call__(self):
-        return self.t
-
-    def tick(self, dt):
-        self.t += dt
-
-
-# ── preflight verdicts ─────────────────────────────────────────────────
-
-
-def test_preflight_clear_home_proceeds():
-    result = launcher._preflight_state_lock(
-        prober=lambda: _status(locked=False),
-        interactive=False,
-        sleep=lambda s: None,
-        monotonic=_Clock(),
-    )
-    assert result.is_clear
-    assert result.evidence.status is launcher.PreflightStatus.CLEAR
-    assert result.exit_code is None
-
-
-def test_preflight_stopped_holder_short_circuits(capsys):
-    result = launcher._preflight_state_lock(
-        prober=lambda: _status(locked=True, stopped=[999]),
-        interactive=False,
-        sleep=lambda s: None,
-        monotonic=_Clock(),
-    )
-    assert result.evidence.status is launcher.PreflightStatus.STOPPED_HOLDER
-    assert result.exit_code == 1
-    assert result.fallback_decision.eligible is True
-    err = capsys.readouterr().err
-    assert "locked" in err.lower()
-    # A suspended holder never releases → we do not print the waiting banner.
-    assert "Waiting to connect" not in err
-
-
-def test_preflight_live_holder_clears_within_wait():
-    clock = _Clock()
-    seq = iter([_status(locked=True), _status(locked=True), _status(locked=False)])
-    result = launcher._preflight_state_lock(
-        prober=lambda: next(seq),
-        interactive=False,
-        timeout_s=30,
-        poll_interval_s=0.5,
-        sleep=clock.tick,
-        monotonic=clock,
-    )
-    assert result.is_clear
-
-
-def test_preflight_noninteractive_times_out(capsys):
-    clock = _Clock()
-    result = launcher._preflight_state_lock(
-        prober=lambda: _status(locked=True),
-        interactive=False,
-        timeout_s=2.0,
-        poll_interval_s=0.5,
-        sleep=clock.tick,
-        monotonic=clock,
-    )
-    assert result.evidence.status is launcher.PreflightStatus.HOLDER_TIMEOUT_LAST_VERIFIED_LIVE
-    assert result.exit_code == 1
-    assert result.fallback_decision.eligible is True
-    err = capsys.readouterr().err
-    assert "still locked after" in err
-
-
-def test_preflight_wall_timeout_bounds_a_stuck_probe(capsys):
-    def stuck_probe():
-        time.sleep(0.25)
-        return _status(locked=False)
-
-    started = time.monotonic()
-    result = launcher._preflight_state_lock(
-        prober=stuck_probe,
-        interactive=False,
-        timeout_s=0.05,
-    )
-    elapsed = time.monotonic() - started
-
-    assert result.evidence.status is launcher.PreflightStatus.INSPECTION_INCOMPLETE
-    assert result.exit_code == 1
-    assert result.fallback_decision.eligible is False
-    assert elapsed < 0.15
-    assert "wall-time limit" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize(
-    ("failure", "expected_status"),
-    [
-        (PermissionError("denied"), launcher.PreflightStatus.PERMISSION_ERROR),
-        (OSError(errno.ENOSPC, "full"), launcher.PreflightStatus.STORAGE_ERROR),
-        (RuntimeError("unexpected"), launcher.PreflightStatus.UNKNOWN_FAILURE),
-    ],
-)
-def test_preflight_probe_failures_are_typed_and_never_fallback_eligible(failure, expected_status):
-    result = launcher._preflight_state_lock(
-        prober=lambda: (_ for _ in ()).throw(failure),
-        interactive=False,
-        timeout_s=1,
-    )
-
-    assert result.evidence.status is expected_status
-    assert result.evidence.diagnostics_complete is False
-    assert result.fallback_decision.eligible is False
-    assert result.exit_code == 1
-
-
-def test_preflight_tty_esc_cancels(capsys):
-    clock = _Clock()
-    result = launcher._preflight_state_lock(
-        prober=lambda: _status(locked=True),
-        interactive=True,
-        timeout_s=30,
-        poll_interval_s=0.5,
-        esc_pressed=lambda: True,
-        sleep=clock.tick,
-        monotonic=clock,
-    )
-    assert result.evidence.status is launcher.PreflightStatus.CANCELLED
-    assert result.exit_code == 130
-    assert result.fallback_decision.eligible is False
-    err = capsys.readouterr().err
-    assert "Press Esc to cancel" in err
-    assert "cancelled" in err.lower()
-
-
-def test_preflight_stopped_holder_appears_mid_wait():
-    clock = _Clock()
-    seq = iter([_status(locked=True), _status(locked=True, stopped=[7])])
-    result = launcher._preflight_state_lock(
-        prober=lambda: next(seq),
-        interactive=False,
-        timeout_s=30,
-        poll_interval_s=0.5,
-        sleep=clock.tick,
-        monotonic=clock,
-    )
-    assert result.evidence.status is launcher.PreflightStatus.STOPPED_HOLDER
-    assert result.exit_code == 1
-
-
-def test_preflight_incomplete_result_mid_wait_short_circuits(capsys):
-    clock = _Clock()
-    incomplete = sl.LockStatus(
-        home="/h",
-        db_path="/h/state_5.sqlite",
-        exists=True,
-        locked=True,
-        detail="inspection incomplete",
-        diagnostics_complete=False,
-        incomplete_reasons=["probe_timeout"],
-    )
-    seq = iter([_status(locked=True), incomplete])
-
-    result = launcher._preflight_state_lock(
-        prober=lambda: next(seq),
-        interactive=False,
-        timeout_s=30,
-        poll_interval_s=0.5,
-        sleep=clock.tick,
-        monotonic=clock,
-    )
-
-    assert result.evidence.status is launcher.PreflightStatus.INSPECTION_INCOMPLETE
-    assert result.exit_code == 1
-    assert result.fallback_decision.eligible is False
-    assert "inspection incomplete" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize("answer", ["y", "Y", "yes", "YES"])
-def test_temporary_session_prompt_accepts_explicit_yes(monkeypatch, capsys, answer):
-    _allow_temporary_session_prompt(monkeypatch)
-    monkeypatch.setattr(builtins, "input", lambda: answer)
-
-    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.ACCEPTED
-    err = capsys.readouterr().err
-    assert "shared local history" in err
-    assert "temporary session without that prior history" in err
-    assert "[y/N]" in err
-
-
-@pytest.mark.parametrize("answer", ["", "n", "no", "later"])
-def test_temporary_session_prompt_defaults_to_refusal(monkeypatch, answer):
-    _allow_temporary_session_prompt(monkeypatch)
-    monkeypatch.setattr(builtins, "input", lambda: answer)
-
-    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.DECLINED
-
-
-@pytest.mark.parametrize("env_name", ["CI", "TOKENPAK_NONINTERACTIVE"])
-def test_temporary_session_prompt_never_prompts_automation(monkeypatch, env_name):
-    _allow_temporary_session_prompt(monkeypatch)
-    monkeypatch.setenv(env_name, "1")
-    monkeypatch.setattr(
-        builtins,
-        "input",
-        lambda: (_ for _ in ()).throw(AssertionError("automation was prompted")),
-    )
-
-    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.NOT_AVAILABLE
-
-
-def test_temporary_session_prompt_never_prompts_non_tty_or_dumb_term(monkeypatch):
-    _allow_temporary_session_prompt(monkeypatch)
-    monkeypatch.setattr(
-        builtins,
-        "input",
-        lambda: (_ for _ in ()).throw(AssertionError("suppressed launch was prompted")),
-    )
-
-    monkeypatch.setattr(launcher, "_stdin_is_tty", lambda: False)
-    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.NOT_AVAILABLE
-
-    monkeypatch.setattr(launcher, "_stdin_is_tty", lambda: True)
-    monkeypatch.setenv("TERM", "dumb")
-    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.NOT_AVAILABLE
-
-
-def test_temporary_session_prompt_ctrl_c_cancels(monkeypatch, capsys):
-    _allow_temporary_session_prompt(monkeypatch)
-    monkeypatch.setattr(
-        builtins,
-        "input",
-        lambda: (_ for _ in ()).throw(KeyboardInterrupt()),
-    )
-
-    assert launcher._prompt_for_temporary_session() is launcher.TemporarySessionChoice.CANCELLED
-    assert "cancelled" in capsys.readouterr().err
-
-
-# ── main() wires the preflight before exec, and --install-only skips it ─
+# ── main() session selection, provisioning, and supervision ───────────
 
 
 class _FakeConfig:
@@ -340,7 +59,7 @@ def _stub_session_env(monkeypatch, tmp_path: Path) -> None:
 
 
 def _stub_setup(monkeypatch, tmp_path):
-    """Stub the launcher's setup steps so main() reaches the preflight."""
+    """Stub the launcher's setup steps so main() reaches the launch."""
     from tokenpak.companion.codex import (
         agents_md,
         mcp_config,
@@ -368,245 +87,10 @@ def _stub_setup(monkeypatch, tmp_path):
     monkeypatch.setattr(launcher, "_launcher_mode_state", lambda: ("inherit", None))
 
 
-def test_main_aborts_when_preflight_blocks(monkeypatch, tmp_path):
-    _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: 7)
-    monkeypatch.setattr(
-        launcher,
-        "_prompt_for_temporary_session",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("an untyped preflight result must never offer fallback")
-        ),
-    )
-
-    def _must_not_run(*_args, **_kwargs):
-        raise AssertionError("must not launch when preflight blocks")
-
-    monkeypatch.setattr(launcher, "_run_codex_process", _must_not_run)
-    assert launcher.main([]) == 7
-    assert not (tmp_path / "user" / ".codex" / "codex.pid").exists()
-    assert not list((tmp_path / "tokenpak-home").rglob("codex.pid"))
-
-
-def test_shared_contention_can_use_temporary_session_for_one_invocation(
-    monkeypatch, tmp_path, capsys
-):
-    _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    shared_home = tmp_path / "user" / ".codex"
-    preflight_homes = []
-
-    def block_shared_only(*, home, **_kwargs):
-        preflight_homes.append(Path(home))
-        return _preflight_result() if Path(home) == shared_home else None
-
-    monkeypatch.setattr(launcher, "_preflight_state_lock", block_shared_only)
-    monkeypatch.setattr(
-        launcher,
-        "_prompt_for_temporary_session",
-        lambda: launcher.TemporarySessionChoice.ACCEPTED,
-    )
-    captured = {}
-
-    def fake_run(argv, env, *, on_start=None):
-        captured["argv"] = argv
-        captured["env"] = env
-        assert on_start is not None
-        on_start(os.getpid())
-        return 0, launcher.empty_usage()
-
-    monkeypatch.setattr(launcher, "_run_codex_process", fake_run)
-    monkeypatch.setattr(launcher, "_launcher_mode_state", lambda: ("approval-bypass", None))
-    receipt_path = tmp_path / "fallback-receipt.json"
-
-    assert (
-        launcher.main(
-            [],
-            receipt_out=str(receipt_path),
-            run_id="shared_fallback_receipt",
-        )
-        == 0
-    )
-    assert preflight_homes == [shared_home]
-    assert captured["argv"] == ["codex", "--ask-for-approval", "never"]
-    assert captured["env"]["TOKENPAK_CODEX_SESSION_MODE"] == "isolated"
-    assert captured["env"]["CODEX_HOME"].startswith(
-        str(tmp_path / "tokenpak-home" / "companion" / "codex" / "sessions")
-    )
-    assert os.environ["TOKENPAK_CODEX_SESSION_MODE"] == "shared"
-    assert captured["env"]["TOKENPAK_CODEX_RUN_ID"] == "shared_fallback_receipt"
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    assert receipt["tokenpak_setup"]["session_mode"] == "isolated"
-    assert receipt["tokenpak_setup"]["codex_home"] == captured["env"]["CODEX_HOME"]
-    assert receipt["tokenpak_setup"]["fallback_attempted"] is True
-    assert receipt["tokenpak_setup"]["fallback_result"] == "provisioned"
-    assert receipt["tokenpak_setup"]["selected_session_class"] == "temporary"
-    assert receipt["tokenpak_setup"]["continuity_mode"] == "new_temporary_lineage"
-    assert receipt["tokenpak_setup"]["prior_shared_history_attached"] is False
-    assert (
-        receipt["tokenpak_setup"]["original_preflight_result"]["evidence"]["status"]
-        == "holder_timeout_last_verified_live"
-    )
-    assert "this invocation only" in capsys.readouterr().err
-    assert not list((tmp_path / "tokenpak-home").rglob("codex.pid"))
-
-
-def test_shared_contention_decline_preserves_original_exit(monkeypatch, tmp_path):
-    _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: _preflight_result())
-    monkeypatch.setattr(
-        launcher,
-        "_prompt_for_temporary_session",
-        lambda: launcher.TemporarySessionChoice.DECLINED,
-    )
-
-    assert launcher.main([]) == 1
-    assert not list((tmp_path / "tokenpak-home").rglob("codex.pid"))
-
-
-def test_shared_contention_prompt_cancel_returns_130(monkeypatch, tmp_path):
-    _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: _preflight_result())
-    monkeypatch.setattr(
-        launcher,
-        "_prompt_for_temporary_session",
-        lambda: launcher.TemporarySessionChoice.CANCELLED,
-    )
-
-    assert launcher.main([]) == 130
-    assert not list((tmp_path / "tokenpak-home").rglob("codex.pid"))
-
-
-def test_temporary_session_selection_failure_preserves_typed_original_receipt(
-    monkeypatch, tmp_path
-):
-    _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: _preflight_result())
-    monkeypatch.setattr(
-        launcher,
-        "_prompt_for_temporary_session",
-        lambda: launcher.TemporarySessionChoice.ACCEPTED,
-    )
-    original_select_paths = sh.select_paths
-
-    def select_paths(mode=None, **kwargs):
-        if mode == sh.MODE_ISOLATED:
-            raise ValueError("injected temporary selection failure")
-        return original_select_paths(mode=mode, **kwargs)
-
-    monkeypatch.setattr(sh, "select_paths", select_paths)
-    receipt_path = tmp_path / "selection-failure-receipt.json"
-
-    assert (
-        launcher.main(
-            [],
-            receipt_out=str(receipt_path),
-            run_id="temporary_selection_failure",
-        )
-        == 1
-    )
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    setup = receipt["tokenpak_setup"]
-    assert setup["fallback_result"] == "selection_failed"
-    assert setup["selected_session_class"] == "shared"
-    assert setup["continuity_mode"] == "shared_lineage_not_replaced"
-    assert setup["original_preflight_result"]["evidence"]["status"] == (
-        "holder_timeout_last_verified_live"
-    )
-
-
-def test_temporary_session_provision_failure_records_both_outcomes(monkeypatch, tmp_path):
-    _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: _preflight_result())
-    monkeypatch.setattr(
-        launcher,
-        "_prompt_for_temporary_session",
-        lambda: launcher.TemporarySessionChoice.ACCEPTED,
-    )
-    monkeypatch.setattr(
-        sh,
-        "provision",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("injected temporary provisioning failure")
-        ),
-    )
-    receipt_path = tmp_path / "provision-failure-receipt.json"
-
-    assert (
-        launcher.main(
-            [],
-            receipt_out=str(receipt_path),
-            run_id="temporary_provision_failure",
-        )
-        == 1
-    )
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    setup = receipt["tokenpak_setup"]
-    assert setup["fallback_result"] == "setup_failed"
-    assert setup["selected_session_class"] == "temporary"
-    assert setup["continuity_mode"] == "new_temporary_lineage"
-    assert setup["prior_shared_history_attached"] is False
-    assert setup["original_preflight_result"]["fallback_decision"]["eligible"] is True
-
-
-def test_shared_mode_real_holder_probe_refuses_before_setup(monkeypatch, tmp_path, capsys):
-    _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    database = tmp_path / "user" / ".codex" / "state_77.sqlite"
-    holder = sqlite3.connect(database, isolation_level=None)
-    holder.execute("CREATE TABLE records (id INTEGER)")
-    holder.execute("BEGIN EXCLUSIVE")
-    real_preflight = launcher._preflight_state_lock
-
-    def fast_preflight(**kwargs):
-        clock = _Clock()
-
-        def probe_once():
-            status = sl.probe(kwargs["home"])
-            clock.t = 5.0
-            return status
-
-        return real_preflight(
-            prober=probe_once,
-            interactive=False,
-            timeout_s=5,
-            sleep=lambda _seconds: None,
-            monotonic=clock,
-            home=kwargs["home"],
-        )
-
-    monkeypatch.setattr(launcher, "_preflight_state_lock", fast_preflight)
-    monkeypatch.setattr(
-        launcher.CompanionConfig,
-        "from_env",
-        classmethod(
-            lambda cls: (_ for _ in ()).throw(
-                AssertionError("shared contention must block before setup")
-            )
-        ),
-    )
-    try:
-        assert launcher.main(["--install-only"]) == 1
-        stderr = capsys.readouterr().err
-        assert f"PID {os.getpid()} (running)" in stderr
-        assert "holder PID unavailable" not in stderr
-        assert not (database.parent / "codex.pid").exists()
-    finally:
-        holder.execute("ROLLBACK")
-        holder.close()
-
-
-@pytest.mark.parametrize("platform_id", ["darwin", "win32"])
-def test_shared_mode_existing_database_launches_with_portable_clear_probe(
+@pytest.mark.parametrize("platform_id", ["linux", "darwin", "win32"])
+def test_shared_mode_existing_database_launches_on_every_platform(
     monkeypatch, tmp_path, platform_id
 ):
-    from tokenpak.companion.codex import state_lock
-
     _stub_setup(monkeypatch, tmp_path)
     monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
     database = tmp_path / "user" / ".codex" / "state_77.sqlite"
@@ -614,54 +98,130 @@ def test_shared_mode_existing_database_launches_with_portable_clear_probe(
     connection.execute("CREATE TABLE records (id INTEGER)")
     connection.close()
     monkeypatch.setattr(sys, "platform", platform_id)
-    monkeypatch.setattr(state_lock, "_portable_codex_processes", lambda *_args: ([], True))
 
     assert launcher.main(["--install-only"]) == 0
 
 
-def test_shared_mode_gives_each_reusable_preflight_a_fresh_deadline(monkeypatch, tmp_path):
+def test_parallel_sessions_are_not_gated(monkeypatch, tmp_path):
+    """A second session starts while the first still holds the databases.
+
+    Native ``codex`` supports this — its local state is write-ahead-logging
+    SQLite, which coordinates concurrent processes.  The launcher must not
+    re-impose an exclusivity constraint that Codex itself does not have, so
+    it holds an open write transaction here and still expects a clean start.
+    """
     _stub_setup(monkeypatch, tmp_path)
     monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    calls: list[dict[str, object]] = []
+    database = tmp_path / "user" / ".codex" / "state_77.sqlite"
+    holder = sqlite3.connect(database)
+    holder.execute("PRAGMA journal_mode=WAL")
+    holder.execute("CREATE TABLE records (id INTEGER)")
+    holder.commit()
+    # Keep a live writer attached for the whole launch, the exact condition
+    # the removed preflight used to refuse on.
+    holder.execute("BEGIN IMMEDIATE")
+    holder.execute("INSERT INTO records VALUES (1)")
+    try:
+        assert launcher.main(["--install-only"]) == 0
+    finally:
+        holder.rollback()
+        holder.close()
 
-    def clear_preflight(**kwargs):
-        calls.append(kwargs)
-        assert "deadline" not in kwargs
-        return None
 
-    monkeypatch.setattr(launcher, "_preflight_state_lock", clear_preflight)
+def test_parallel_sessions_are_not_gated_by_the_lifecycle_lease(monkeypatch, tmp_path):
+    """End-to-end guard for the second gate on the same path.
+
+    Removing the database preflight is not sufficient on its own: the
+    ``codex.pid`` lifecycle lease is a single slot, and claiming it
+    exclusively refused a concurrent shared session with "already claimed by
+    PID N" well after the preflight had passed. Hold a live lease on the
+    shared home and require ``main()`` to launch anyway.
+    """
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
+    paths = sh.select_paths(mode="shared", workspace_dir=tmp_path)
+    held = sh.SessionLease.acquire(paths, session_id="already-running")
+    try:
+        assert launcher.main(["--install-only"]) == 0
+        # The concurrent launch must leave the running session's lease intact.
+        assert sh.read_pid_sentinel(paths.pid_sentinel) == held.sentinel
+    finally:
+        held.release()
+
+
+def test_launcher_never_opens_codex_databases(monkeypatch, tmp_path):
+    """Contention is SQLite's to resolve because the launcher is not a reader.
+
+    This is the invariant that makes skipping the gate correct: if the
+    launcher ever starts opening Codex's databases it acquires a stake in
+    their lock state and this whole design has to be revisited.
+    """
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
+    (tmp_path / "user" / ".codex" / "state_77.sqlite").write_bytes(b"")
+    opened: list[object] = []
+    real_connect = sqlite3.connect
+
+    def _tracking_connect(target, *args, **kwargs):
+        opened.append(target)
+        return real_connect(target, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", _tracking_connect)
 
     assert launcher.main(["--install-only"]) == 0
-    assert len(calls) >= 3
+    assert not [target for target in opened if "state_" in str(target)]
 
 
-def test_invalid_mode_fails_before_preflight_or_filesystem_write(monkeypatch, tmp_path):
+def test_retention_uncertainty_output_is_bounded(capsys, tmp_path):
+    """Every uncertain home is preserved; only the report is capped.
+
+    Salvaged from the superseded competing PR, whose diagnosis of the retention
+    output was correct and independent of the launch-gate disagreement: one line
+    per preserved home buries an ordinary launch once several are uncertain.
+    """
+
+    class Cleanup:
+        removed = ()
+        errors = tuple(f"home-{index}: uncertain" for index in range(5))
+
+    class FakeSessionHome:
+        @staticmethod
+        def _generated_tokenpak_root(_home):
+            return tmp_path
+
+        @staticmethod
+        def cleanup_isolated_homes(*_args, **_kwargs):
+            return Cleanup()
+
+    class Paths:
+        home = tmp_path / "selected"
+
+    launcher._run_isolated_retention(
+        FakeSessionHome,
+        Paths(),
+        phase="pre-launch",
+        preserve_home=None,
+    )
+
+    error = capsys.readouterr().err
+    assert "preserved 5 uncertain home(s)" in error
+    assert "home-0" in error and "home-1" in error and "home-2" in error
+    assert "home-3" not in error and "home-4" not in error
+    assert "... 2 more" in error
+
+
+def test_invalid_mode_fails_before_any_filesystem_write(monkeypatch, tmp_path):
     _stub_session_env(monkeypatch, tmp_path)
     monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "automatic")
-    monkeypatch.setattr(
-        launcher,
-        "_preflight_state_lock",
-        lambda **_kwargs: (_ for _ in ()).throw(
-            AssertionError("invalid mode must fail before preflight")
-        ),
-    )
 
     assert launcher.main([]) == 2
     assert not (tmp_path / "tokenpak-home").exists()
 
 
-def test_main_install_only_preflights_and_releases_lease(monkeypatch, tmp_path):
+def test_main_install_only_releases_lease(monkeypatch, tmp_path):
     _stub_setup(monkeypatch, tmp_path)
-    called = {"n": 0}
-
-    def _preflight(**_kwargs):
-        called["n"] += 1
-        return None
-
-    monkeypatch.setattr(launcher, "_preflight_state_lock", _preflight)
     rc = launcher.main(["--install-only"])
     assert rc == 0
-    assert called["n"] == 1
     assert not list((tmp_path / "tokenpak-home").rglob("codex.pid"))
 
 
@@ -670,7 +230,6 @@ def test_shared_install_preserves_existing_config_and_skips_skill_refs(monkeypat
 
     _stub_setup(monkeypatch, tmp_path)
     monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     config = tmp_path / "user" / ".codex" / "config.toml"
     original = config.read_bytes()
     monkeypatch.setattr(
@@ -687,7 +246,6 @@ def test_shared_install_preserves_existing_config_and_skips_skill_refs(monkeypat
 
 def test_main_supervises_when_preflight_clear(monkeypatch, tmp_path, capsys):
     _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     captured = {}
 
     def _fake_run(argv, env, *, on_start=None):
@@ -728,7 +286,6 @@ def test_retention_sweep_precedes_selected_home_creation_for_every_mode(
 ):
     _stub_setup(monkeypatch, tmp_path)
     monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", mode)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     events: list[str] = []
 
     class Cleanup:
@@ -771,7 +328,6 @@ def test_switching_modes_runs_retention_without_another_isolated_launch(
     old = time.time() - sh.RETENTION_MAX_AGE_S - 60
     os.utime(orphan.home, (old, old))
     monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", mode)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
 
     assert launcher.main(["--install-only"]) == 0
     assert not orphan.home.exists()
@@ -779,7 +335,6 @@ def test_switching_modes_runs_retention_without_another_isolated_launch(
 
 def test_storage_pressure_sweep_precedes_failed_provision_retry(monkeypatch, tmp_path):
     _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     source = tmp_path / "user" / ".codex"
     tokenpak_home = tmp_path / "tokenpak-home"
     orphan = sh.select_paths(
@@ -811,7 +366,6 @@ def test_storage_pressure_sweep_precedes_failed_provision_retry(monkeypatch, tmp
 
 def test_storage_pressure_during_home_creation_sweeps_and_retries_once(monkeypatch, tmp_path):
     _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     source = tmp_path / "user" / ".codex"
     tokenpak_home = tmp_path / "tokenpak-home"
     orphan = sh.select_paths(
@@ -868,7 +422,6 @@ def test_shared_mode_pre_sweep_recovers_receipted_quarantine(monkeypatch, tmp_pa
 
     monkeypatch.setattr(sh, "_remove_tree_contents_at", original_remove)
     monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
 
     assert launcher.main(["--install-only"]) == 0
     assert not any(path.name.startswith(sh._RETENTION_QUARANTINE_PREFIX) for path in root.iterdir())
@@ -879,7 +432,6 @@ def test_shared_mode_pre_sweep_recovers_receipted_quarantine(monkeypatch, tmp_pa
 
 def test_post_session_sweep_removes_orphan_created_during_last_child(monkeypatch, tmp_path):
     _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     source = tmp_path / "user" / ".codex"
     tokenpak_home = tmp_path / "tokenpak-home"
     created: list[sh.SessionPaths] = []
@@ -909,7 +461,6 @@ def test_post_session_sweep_removes_orphan_created_during_last_child(monkeypatch
 
 def test_retention_failure_never_masks_child_exit_code(monkeypatch, tmp_path):
     _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     calls = 0
 
     def broken_cleanup(*_args, **_kwargs):
@@ -931,7 +482,6 @@ def test_retention_failure_never_masks_child_exit_code(monkeypatch, tmp_path):
 
 def test_sentinel_release_failure_never_masks_child_exit_code(monkeypatch, tmp_path, capsys):
     _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
 
     def fake_run(_argv, _env, *, on_start=None):
         assert on_start is not None
@@ -1063,7 +613,6 @@ def test_launcher_live_child_transfer_temp_is_preserved_during_concurrent_retent
 
 def test_main_applies_launcher_default_before_launch(monkeypatch, tmp_path, capsys):
     _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     monkeypatch.setattr(
         launcher,
         "_launcher_mode_state",
@@ -1191,7 +740,6 @@ def test_codex_manual_namespace_preserves_receipt_only_flag():
 
 def test_main_receipt_mode_runs_child_and_writes_no_body_receipt(monkeypatch, tmp_path):
     _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     monkeypatch.setattr(launcher, "_fleet_state_enabled", lambda: False)
     captured = {}
 
@@ -1255,7 +803,6 @@ def test_receipt_only_mode_skips_companion_setup_and_writes_no_body_receipt(monk
     monkeypatch.setattr(agents_md, "_install_agents_md", _setup_must_not_run)
     monkeypatch.setattr(skills_installer, "install_skills", _setup_must_not_run)
     monkeypatch.setattr(launcher, "_launcher_mode_state", _setup_must_not_run)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     monkeypatch.setenv("TOKENPAK_COMPANION_PROFILE", "aggressive")
     monkeypatch.setenv("TOKENPAK_MANAGED", "1")
 
@@ -1311,7 +858,6 @@ def test_receipt_only_mode_skips_companion_setup_and_writes_no_body_receipt(monk
 
 def test_json_receipt_mode_extracts_usage_without_storing_body(monkeypatch, tmp_path):
     _stub_setup(monkeypatch, tmp_path)
-    monkeypatch.setattr(launcher, "_preflight_state_lock", lambda **_kwargs: None)
     monkeypatch.setattr(launcher, "_fleet_state_enabled", lambda: False)
 
     class _FakeStdout:

@@ -38,7 +38,20 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-AUTH_PROFILES_FILE = Path.home() / ".tokenpak" / "auth-profiles.json"
+
+def auth_profiles_file() -> Path:
+    """Where the auth-profile store lives, resolved on use.
+
+    This was a module-level constant hardcoded to the legacy home, and
+    ``_save_profiles`` created that directory. On a canonical install it
+    therefore wrote real state into ``~/.tokenpak`` — and once a home holds
+    state, resolution follows it. A refresh could quietly move the whole
+    installation to the legacy path.
+    """
+    from tokenpak import _paths
+
+    return _paths.write_under("auth-profiles.json")
+
 
 # Providers where OAuth auto-refresh is attempted
 OAUTH_PROVIDERS = {"openai-codex", "anthropic"}
@@ -55,10 +68,10 @@ class OAuthRefreshError(Exception):
 
 
 def _load_profiles() -> Dict[str, Any]:
-    if not AUTH_PROFILES_FILE.exists():
+    if not auth_profiles_file().exists():
         return {}
     try:
-        data = json.loads(AUTH_PROFILES_FILE.read_text())
+        data = json.loads(auth_profiles_file().read_text())
         return data if isinstance(data, dict) else {}
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("[tokenpak] OAuthManager: could not load auth-profiles.json: %s", exc)
@@ -66,8 +79,9 @@ def _load_profiles() -> Dict[str, Any]:
 
 
 def _save_profiles(data: Dict[str, Any]) -> None:
-    AUTH_PROFILES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    AUTH_PROFILES_FILE.write_text(json.dumps(data, indent=2))
+    path = auth_profiles_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2))
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +191,7 @@ class OAuthManager:
 
     def __init__(
         self,
-        auth_profiles_file: Path = AUTH_PROFILES_FILE,
+        auth_profiles_file: Optional[Path] = None,
         refresh_window: int = REFRESH_WINDOW_SECONDS,
     ):
         self.auth_profiles_file = auth_profiles_file

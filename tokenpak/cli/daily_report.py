@@ -100,6 +100,17 @@ def _get_savings_report() -> SavingsSummary:
         from tokenpak.telemetry.query_dsl import get_savings_report
 
         report = get_savings_report(days=1)
+        if not report.available or report.observations == 0:
+            # Healthy-and-empty or unreadable store. Either way we have not
+            # measured this user's savings, so we must not print a number for
+            # them. "unknown" is what the formatter renders as "unknown".
+            return {
+                "total_cost": "unknown",
+                "estimated_without_compression": "unknown",
+                "savings_amount": "unknown",
+                "savings_pct": "unknown",
+                "cache_hit_rate": "unknown",
+            }
         return {
             "total_cost": report.total_cost,
             "estimated_without_compression": report.estimated_without_compression,

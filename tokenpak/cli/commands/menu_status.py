@@ -70,6 +70,12 @@ class ProxyStatus:
     state: str  # "running" | "stopped" | "starting" | "unknown"
     cost: Optional[float] = None  # today's spend; None when unknown
     saved: Optional[float] = None  # today's savings; None when unknown
+    #: Whether the answering proxy is one this install started. ``None`` means
+    #: we could not tell. A healthy endpoint alone does not prove ownership —
+    #: that inference is what let setup report success for a dead child while
+    #: an unrelated listener answered the port.
+    owned: Optional[bool] = None
+    pid: Optional[int] = None  # PID on record, when there is one
 
 
 class StatusCache:
@@ -161,7 +167,26 @@ class StatusCache:
             raw_saved = self._stats.get("cost_saved")
             cost = float(raw_cost) if isinstance(raw_cost, (int, float)) else None
             saved = float(raw_saved) if isinstance(raw_saved, (int, float)) else None
-        return ProxyStatus(state=self._health_state, cost=cost, saved=saved)
+
+        # Ownership comes from the same lifecycle observer setup, start, stop
+        # and status use, so doctor and the menu cannot disagree with them
+        # about what is running. These are local checks (a PID file and a
+        # signal-0), so they add no latency to the render loop.
+        owned: Optional[bool] = None
+        pid: Optional[int] = None
+        try:
+            from tokenpak.core.runtime import lifecycle as _lifecycle
+
+            pid, _ = _lifecycle.read_pid()
+            if self._health_state == "running":
+                if pid is None:
+                    owned = False
+                else:
+                    owned = _lifecycle.pid_alive(pid)
+        except Exception:  # noqa: BLE001
+            owned = None
+
+        return ProxyStatus(state=self._health_state, cost=cost, saved=saved, owned=owned, pid=pid)
 
 
 # Module singleton. D5: only the main render loop calls ``snapshot()``; there is

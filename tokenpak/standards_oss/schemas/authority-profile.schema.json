@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "baseline-standards/authority-profile/1.0",
+  "title": "Authority profile",
+  "description": "Who authorizes what. May set values only for controls with mode_override_allowed: true. Cross-file check: a protected control ID appearing here is a validation error (GOVERNANCE.md R20).",
+  "type": "object",
+  "required": ["schema", "standards_version", "id", "controls"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "baseline-standards/authority-profile/1.0" },
+    "standards_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "anchor": { "type": "string", "description": "One-phrase summary of the posture." },
+    "controls": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z]+\\.[a-z0-9-]+$" },
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": false,
+        "properties": {
+          "executor": { "enum": ["operator", "delegate", "reviewer", "executor", "any"] },
+          "authorizer": { "enum": ["operator", "delegate", "reviewer", "none"] },
+          "authorization_type": { "enum": ["explicit", "standing-envelope", "none-required"] },
+          "authorization_timing": {
+            "enum": ["before", "before-and-revalidated", "after-within-sla"]
+          },
+          "independence_requirement": { "enum": ["none", "separate-actor", "independent"] },
+          "scope_or_envelope": { "type": "string" },
+          "expiration": { "type": "string" }
+        }
+      }
+    }
+  }
+}

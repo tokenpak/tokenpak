@@ -170,7 +170,6 @@ ignore_imports =
     tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.generator
     tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.privacy
     tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.sync
-    tokenpak.cli.commands.preview -> tokenpak.compression.core
     tokenpak.sdk.integrations.claude_code.mcp_server -> tokenpak.compression.budgets.policy
     tokenpak.sdk.integrations.claude_code.mcp_server -> tokenpak.compression.extraction.extractor
     tokenpak.sdk.integrations.litellm.formatter -> tokenpak.compression.engines

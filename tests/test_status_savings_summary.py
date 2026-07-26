@@ -105,10 +105,14 @@ def _render(
 
 def test_current_value_traffic_and_cache_sections_are_rendered():
     out = _render(health=_health(), stats=_stats())
-    assert "Value Created (this session)" in out
+    # Runtime and routing lead; savings follow, labelled as measured.
+    assert "Runtime" in out
+    assert "Routing" in out
+    assert "Measured savings (this session)" in out
     assert "Traffic" in out
     assert "Cache activity (observed)" in out
-    assert "Healthy" in out
+    # Runtime state is reported in the Runtime block, not as a trailing verdict.
+    assert out.index("Runtime") < out.index("Measured savings")
 
 
 def test_compression_uses_sent_plus_avoided_tokens_as_denominator():
@@ -191,14 +195,24 @@ def test_removed_health_registry_observation_is_not_invented():
 
 def test_proxy_errors_produce_actionable_health_message():
     out = _render(health=_health(), stats=_stats(errors=2))
-    assert "2 error(s)" in out
+    # Errors are reported in the Runtime block with a runnable next step.
+    assert "Errors" in out
+    assert "2" in out
     assert "tokenpak doctor" in out
 
 
 def test_proxy_unreachable_without_database_fails_gracefully():
     out = _render(health=None, stats=None)
-    assert "Proxy unreachable and no monitor database found" in out
-    assert "tokenpak serve" in out
+    # No database means no measurements — stated as such, never as $0.00.
+    assert "No measurements yet" in out
+    assert "$0.00" not in out
+    # The remediation points at setup, not at the foreground server command.
+    assert "tokenpak setup" in out
+    # Runtime and routing are still reported: that is exactly the state where
+    # a reader needs to know whether the proxy is up and whether anything is
+    # routed to it.
+    assert "Runtime" in out
+    assert "Routing" in out
     assert "Traceback" not in out
 
 
@@ -217,12 +231,12 @@ def test_proxy_unreachable_can_render_historical_database_data():
         ],
     }
     out = _render(health=None, stats=None, historical=historical)
-    assert "Value Created (all time)" in out
+    assert "Measured savings (all time)" in out
     assert "Requests                      2" in out
     assert "Proxy unreachable" in out
 
 
 def test_missing_live_stats_uses_historical_database_data():
     out = _render(health=_health(), stats=None, historical=_historical(requests=0))
-    assert "Value Created (all time)" in out
+    assert "Measured savings" in out
     assert "Traceback" not in out

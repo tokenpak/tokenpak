@@ -12,7 +12,7 @@ every remote request.
 - A second machine (e.g. another developer laptop, a CI runner, a phone) needs
   to hit your local proxy.
 - You are running TokenPak behind a reverse proxy on a non-loopback interface.
-- You are pre-staging for the future Team-tier RBAC work — the same env var
+- You are pre-staging for future multi-user RBAC work — the same env var
   is the v1 entry point.
 
 For pure single-user, single-machine operation no change is required and the
@@ -87,7 +87,7 @@ curl https://your-proxy-host:8766/v1/messages \
 ## Out of scope (today)
 
 - Per-user / multi-tenant RBAC. This is a single shared secret. RBAC is a
-  separate Team-tier initiative built on top of this gate.
+  separate initiative built on top of this gate.
 - Token rotation infrastructure / secret-manager integration. The env var is
   the store; rotate by restart.
 - A CLI subcommand to mint tokens. Operators choose their own generator

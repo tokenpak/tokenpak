@@ -1,6 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Read-only Codex SQLite holder diagnostics for ``CODEX_HOME``.
 
+Scope: this is a guard for *destructive* operations only — uninstalling a Codex
+home and reclaiming an isolated one.  Removing files out from under a live
+Codex session loses data, so those callers need to know whether a session is
+attached.  Launching does **not** use this module: Codex keeps its local state
+in write-ahead-logging SQLite databases, which already coordinate concurrent
+sessions across processes, so a launch has nothing to gate on.
+
 The diagnostic path must not join, copy, checkpoint, or otherwise touch a
 Codex runtime database.  On Linux, the kernel already exposes the evidence we
 need: database file identities, open file descriptors, and advisory byte-range
@@ -28,8 +35,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, cast
 
-# Companion-internal launcher helper (probe/remediation_hint are called by
-# launcher.py, not by end users): export nothing as released public API.
+# Companion-internal helper (probe/remediation_hint are called by uninstall.py
+# and session_home.py, not by end users): export nothing as released public API.
 __all__: list[str] = []
 
 # Retained for callers and older installations.  Discovery itself is dynamic.
@@ -49,11 +56,10 @@ _SQLITE_SHM_DMS = 128
 
 _DEAD_STATES = frozenset({"X", "x", "Z"})
 _STOPPED_STATES = frozenset({"T", "t"})
-_BENIGN_UNREADABLE_PROCESSES = frozenset({"sd-pam"})
 
 # Every probe has structural and wall-clock limits.  The values are generous
 # for a developer workstation but finite so a hostile or damaged procfs/home
-# cannot turn the launcher's 30-second wait into unbounded work.
+# cannot stall an uninstall or a home reclamation indefinitely.
 _MAX_DATABASES = 128
 _MAX_HOME_ENTRIES = 4096
 _MAX_PROCESSES = 65536
@@ -442,18 +448,20 @@ def _codex_process_kind(pid: int, proc_root: Path = _PROC_ROOT) -> bool | None:
     if not all_names:
         return None
     normalized_all = {name for value in all_names if (name := _normalize_process_name(value))}
+    if not normalized_all:
+        return None
     if any("codex" in name for name in normalized_all):
         return True
-    # Generic interpreters and arbitrary readable process names are not proof
-    # that the process cannot own a Codex database.  Only a deliberately tiny
-    # benign allowlist avoids the known non-dumpable desktop-session false
-    # blocker; every other readable name remains unknown and fails closed.
-    normalized_executables = {
-        name for value in executable_names if (name := _normalize_process_name(value))
-    }
-    if normalized_executables and normalized_executables <= _BENIGN_UNREADABLE_PROCESSES:
-        return False
-    return None
+    # Readable command evidence that never mentions Codex is a positive answer,
+    # not an unknown.  ``normalized_all`` spans every argv token, so wrapped
+    # invocations (``bash -c 'codex …'``, ``node …/codex/bin``) still classify
+    # as Codex above.  Treating the remainder as unknown made every same-uid
+    # non-dumpable process on the machine — gpg-agent, tailscaled, fusermount3
+    # — poison a machine-wide scan and fail the whole home closed, which is a
+    # false blocker rather than a safety property.  A real Codex session is
+    # same-uid and dumpable, so the descriptor scan sees it directly; this
+    # branch only ever governs processes whose descriptors we cannot read.
+    return False
 
 
 def _inspection_failure_is_unsafe(
@@ -1200,17 +1208,17 @@ def probe(
         )
 
     if not diagnostics_complete:
+        # No lock evidence and no holder was found — the inspection itself did
+        # not finish.  Say exactly that; claiming lock evidence here would
+        # assert a fact this branch never established.
         return LockStatus(
             home=home,
             db_path=dbs[0],
             exists=True,
             locked=True,
-            detail=_format_lock_detail(
-                [],
-                [],
-                dbs[0].name,
-                diagnostics_complete=False,
-                incomplete_component=_incomplete_component(reasons),
+            detail=(
+                f"{dbs[0].name} has no observed holder, but "
+                f"{_incomplete_component(reasons)} is incomplete, refusing unsafe access"
             ),
             diagnostics_complete=False,
             incomplete_reasons=reasons,
@@ -1249,26 +1257,17 @@ def _format_lock_detail(
 
 
 def remediation_hint(status: LockStatus) -> str:
-    """Return mode-aware guidance for a contended shared home."""
+    """Return guidance for a destructive operation on an attached Codex home."""
     lines = [
-        f"tokenpak: Codex local database is locked: {status.db_path}",
+        f"tokenpak: Codex home is still in use: {status.db_path}",
         f"          {status.detail}",
     ]
     if status.stopped_pids:
         lines.append(
             "          a stopped holder must be resumed and exited normally "
-            "before this shared home is safe"
+            "before this home can be removed"
         )
     elif status.running_pids:
-        lines.append("          finish or close the running session normally before retrying")
-    if not status.diagnostics_complete:
-        lines.append(
-            "          TokenPak cannot safely offer a temporary session until "
-            "the inspection completes"
-        )
-    else:
-        lines.append(
-            "          an interactive launch may choose a temporary session "
-            "without the prior shared history"
-        )
+        lines.append("          close the running Codex session before retrying")
+    lines.append("          refusing to remove files that a live session may still be using")
     return "\n".join(lines)

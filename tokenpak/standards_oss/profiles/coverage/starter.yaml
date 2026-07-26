@@ -1,0 +1,35 @@
+# Coverage profile — starter
+#
+# For anyone beginning, or for work that is small and personal. These eight documents are the
+# onboarding path in START-HERE.md section 6. Everything else waits until it is triggered.
+#
+# Coverage adds; it never subtracts (GOVERNANCE.md R13). Protected-action definitions and the
+# universal invariants remain loaded regardless of this profile.
+
+schema: baseline-standards/coverage-profile/1.0
+standards_version: 1.4.0
+id: starter
+extends: null
+
+description: >
+  The eight foundations: how authority works, what counts as true, what you must not do without
+  authorization, what you must record, how work is accepted, what you may spend, how credentials
+  are handled, and what happens when something goes wrong.
+
+standards:
+  - BS-GOVERNANCE
+  - BS-CORE-TRUTH-AND-EVIDENCE
+  - BS-CORE-RISK-AND-PROTECTED-ACTIONS
+  - BS-CORE-RECORDS-AND-AUDITABILITY
+  - BS-CORE-WORK-INTAKE-AND-ACCEPTANCE
+  - BS-DELEGATION-SPEND-AND-RESOURCE-LIMITS
+  - BS-INFORMATION-SECURITY-ACCESS-AND-CREDENTIALS
+  - BS-CONTINUITY-INCIDENTS-AND-ESCALATION
+
+triggers_that_expand_this_profile:
+  - trigger: work_is_delegated_to_others_or_agents
+    adds_profile: delegated-work
+  - trigger: work_ships_installable_or_versioned_software
+    adds_profile: product-delivery
+  - trigger: multiple_executors_work_concurrently_on_shared_resources
+    adds_profile: multi-agent

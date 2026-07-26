@@ -423,8 +423,8 @@ class TestCostAnalyzeEndpoint:
         resp = client.post("/v1/cost/analyze", json=self._payload())
         assert resp.status_code == 401
 
-    def test_enterprise_key_succeeds(self):
-        client, key = _make_client(LicenseTier.ENTERPRISE)
+    def test_pro_key_succeeds_over_longer_window(self):
+        client, key = _make_client(LicenseTier.PRO)
         resp = client.post(
             "/v1/cost/analyze",
             json=self._payload(n=14),
@@ -536,8 +536,8 @@ class TestCostRecommendationsEndpoint:
         )
         assert resp.status_code == 403
 
-    def test_team_tier_allowed(self):
-        client, key = _make_client(LicenseTier.TEAM)
+    def test_pro_tier_allowed(self):
+        client, key = _make_client(LicenseTier.PRO)
         resp = client.get(
             "/v1/cost/recommendations",
             params={"model": "gpt-4o", "monthly_cost_usd": "50.0"},

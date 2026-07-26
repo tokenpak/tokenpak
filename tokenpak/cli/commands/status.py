@@ -1,10 +1,12 @@
-"""status command — savings-first proxy health & ROI report.
+"""status command — runtime health, routing, and measured savings.
 
-Default output leads with dollar savings (v3 layout).
-Use ``--full`` for legacy technical output.
+Default output leads with runtime state: is the proxy running, is a client
+actually routed through it, and is it operating on context. Savings follow,
+and only as measured figures — an unmeasured plane reports "unavailable"
+rather than a zero that reads like a result.
 
 Modes:
-    tokenpak status             → savings-first (new default)
+    tokenpak status             → runtime-first (default)
     tokenpak status --full      → current technical output (backward compatible)
     tokenpak status --minimal   → one-liner for scripts
     tokenpak status --tip-cache → compact TIP cache attribution surface
@@ -44,10 +46,12 @@ except ImportError:
 _lic: ModuleType | None
 try:
     from tokenpak import licensing as _lic
-    from tokenpak.cli.commands.upgrade import DEFAULT_UPGRADE_URL
+    from tokenpak.cli.commands.upgrade import upgrade_cta_line
 except ImportError:
     _lic = None
-    DEFAULT_UPGRADE_URL = "https://tokenpak.ai/pro"
+
+    def upgrade_cta_line() -> str:  # type: ignore[misc]
+        return ""
 
 
 def _estimate_session_savings(
@@ -65,36 +69,28 @@ def _estimate_session_savings(
 # Meme lines — 28 curated by Kevin, random pick per invocation
 # ---------------------------------------------------------------------------
 
-MEME_LINES = [
-    "Keep my tokens out yo damn prompt.",
-    "Your API bill called. It's crying.",
-    "Caching harder than your ex caches grudges.",
-    "We don't do full price around here.",
-    "Less tokens, more problems solved.",
-    "Your wallet says thanks.",
-    "Built different. Billed different.",
-    "Making Anthropic wonder where the traffic went.",
-    "Every token saved is a token earned.",
-    "Compression: because your prompts are 90% filler.",
-    "Cache hits > cache fits.",
-    "TokenPak: putting tokens on a diet since 2026.",
-    "Your prompt was long. We made it strong.",
-    "Running lean so you don't run broke.",
-    "Saving tokens while you sleep.",
-    "Less input, same output. That's the deal.",
-    "Prompt obesity is a real condition.",
-    "We compress so you don't stress.",
-    "Cache is king. Tokens are pawns.",
-    "Your bill just got TokenPak'd.",
-    "Proxy running. Savings stacking.",
-    "Token diet starts now.",
-    "Why pay full price? We don't.",
-    "Smart routing > dumb spending.",
-    "Compressing prompts. Expanding wallets.",
-    "Vault blocks: loaded. Savings: automatic.",
-    "Turning token waste into token taste.",
-    "Your API provider hates this one trick.",
+TAGLINES = [
+    "Every request measured. Every number sourced.",
+    "Local proxy. Your keys, your machine, your logs.",
+    "No code changes. No cloud. No credentials stored.",
+    "Receipts, not estimates.",
+    "Measure first. Optimize second.",
+    "What you did not send is the saving.",
+    "Compression is reported only where it was applied.",
+    "Routing decisions are logged and replayable.",
+    "Unmeasured is shown as unmeasured, never as zero.",
+    "Your traffic is yours. TokenPak just accounts for it.",
 ]
+
+# The previous list was written in clickbait register — "Your API provider
+# hates this one trick.", "Prompt obesity is a real condition." — and printed
+# directly beneath the spend figures, which is the one place on the surface
+# that has to read as a receipt. Two of the lines also asserted numbers
+# ("90% filler") that no measurement supports.
+#
+# `--no-meme` and this alias stay for compatibility with the flag users and
+# the companion launcher already depend on.
+MEME_LINES = TAGLINES
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -104,8 +100,18 @@ SEP = "────────────────────────�
 
 
 def _free_tier_upgrade_hint() -> Optional[str]:
-    """Return an upgrade hint for Free-tier installs, fail-open on license errors."""
+    """Return an upgrade hint, or ``None`` when no enrollment destination exists.
+
+    Public Pro enrollment is unavailable, so this footer is suppressed by
+    default. It printed on *every* status run and pointed at a URL that returns
+    404, making the most-displayed call-to-action in the product a dead link.
+    ``upgrade_cta_line()`` returns non-empty only when an operator has set
+    ``TOKENPAK_UPGRADE_URL`` for a private cohort.
+    """
     if _lic is None:
+        return None
+    cta = upgrade_cta_line()
+    if not cta:
         return None
     try:
         summary = _lic.summary_for_cli()
@@ -113,7 +119,7 @@ def _free_tier_upgrade_hint() -> Optional[str]:
         return None
     if summary.get("tier") != getattr(_lic, "TIER_FREE", "free"):
         return None
-    return f"  Upgrade to Pro: {DEFAULT_UPGRADE_URL}  (or run `tokenpak upgrade`)"
+    return cta
 
 
 def _print_free_tier_upgrade_hint() -> None:
@@ -137,6 +143,19 @@ DB_DEFAULT = os.environ.get(
 # ---------------------------------------------------------------------------
 # Network / DB helpers
 # ---------------------------------------------------------------------------
+
+
+def _proxy_port(proxy_base: str) -> int:
+    """Port from a proxy base URL, falling back to the configured default."""
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(proxy_base)
+        if parsed.port:
+            return int(parsed.port)
+    except (ValueError, TypeError):
+        pass
+    return int(os.environ.get("TOKENPAK_PORT", "8766"))
 
 
 def _fetch(url: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
@@ -574,6 +593,23 @@ def _empty_tip_attribution(reason: str, db_path: Optional[str] = None) -> Dict[s
     }
 
 
+def _unavailable_line() -> Dict[str, Any]:
+    """A line for which no measurement exists.
+
+    Values are ``None``, never ``0`` — a plane we could not read must not be
+    indistinguishable from a plane that saved nothing.
+    """
+    return {"tokens": None, "usd": None, "status": "unavailable"}
+
+
+def _companion_line(days: int = 0, hours: int = 0) -> Dict[str, Any]:
+    """Companion enrichment line, unavailable when no journal exists."""
+    observed = _query_companion_enrichment(days=days, hours=hours)
+    if observed is None:
+        return _unavailable_line()
+    return _line(*observed)
+
+
 def _line(tokens: int, usd: float) -> Dict[str, Any]:
     """Build a display line with honest observed/not-observed state."""
     tokens_i = max(0, int(tokens or 0))
@@ -668,11 +704,21 @@ def _query_rollup_daily_tip_attribution(
     }
 
 
-def _query_companion_enrichment(days: int = 0, hours: int = 0) -> tuple[int, float]:
-    """Aggregate companion-side prompt savings from the local journal."""
-    journal_path = Path(os.path.expanduser("~/.tokenpak/companion/journal.db"))
-    if not journal_path.exists():
-        return 0, 0.0
+def _query_companion_enrichment(days: int = 0, hours: int = 0) -> Optional[tuple[int, float]]:
+    """Aggregate companion-side prompt savings from the local journal.
+
+    Returns ``None`` when no journal exists in any home — that is *no data*,
+    not a measured zero, and the caller must render it as unavailable rather
+    than as "$0.00 saved". The path is resolved rather than hardcoded: this
+    read was pinned to ``~/.tokenpak/companion/journal.db``, so an install
+    using ``TOKENPAK_HOME`` or the canonical home reported zero prompt-side
+    savings no matter how much the companion had actually saved.
+    """
+    from tokenpak._paths import companion_file
+
+    journal_path = companion_file("journal.db")
+    if journal_path is None:
+        return None
 
     seconds = _window_seconds(days, hours)
     where = "WHERE entry_type = 'companion_savings'"
@@ -696,7 +742,8 @@ def _query_companion_enrichment(days: int = 0, hours: int = 0) -> tuple[int, flo
             except Exception:
                 continue
     except sqlite3.Error:
-        return 0, 0.0
+        # The journal exists but could not be read — unreadable is not zero.
+        return None
     finally:
         conn.close()
     return tokens, usd
@@ -719,9 +766,9 @@ def _query_tip_cache_attribution(
     if conn is None:
         result = _empty_tip_attribution("monitor_db_not_found", db_path)
         result["window"] = _tip_window_label(days, hours)
-        comp_tokens, comp_usd = _query_companion_enrichment(days=days, hours=hours)
-        result["lines"]["companion_enrichment"] = _line(comp_tokens, comp_usd)
-        if comp_tokens or comp_usd:
+        comp_line = _companion_line(days=days, hours=hours)
+        result["lines"]["companion_enrichment"] = comp_line
+        if comp_line["tokens"] or comp_line["usd"]:
             result["available"] = True
             result["source"] = "companion_journal"
         return result
@@ -729,11 +776,11 @@ def _query_tip_cache_attribution(
     try:
         rollup = _query_rollup_daily_tip_attribution(conn, days=days, hours=hours)
         if rollup is not None:
-            comp_tokens, comp_usd = _query_companion_enrichment(days=days, hours=hours)
+            comp_line = _companion_line(days=days, hours=hours)
             # The companion journal is local-entrypoint state; prefer explicit
             # journal rows when present so rollup gaps don't hide prompt-side value.
-            if comp_tokens or comp_usd:
-                rollup["lines"]["companion_enrichment"] = _line(comp_tokens, comp_usd)
+            if comp_line["tokens"] or comp_line["usd"]:
+                rollup["lines"]["companion_enrichment"] = comp_line
             conn.close()
             return rollup
 
@@ -814,7 +861,7 @@ def _query_tip_cache_attribution(
         managed_cache_usd += _cache_savings_usd(model, proxy_tokens)
         compression_usd += _compression_savings_usd(model, comp_tokens)
 
-    companion_tokens, companion_usd = _query_companion_enrichment(days=days, hours=hours)
+    companion_line = _companion_line(days=days, hours=hours)
 
     return {
         "available": True,
@@ -826,7 +873,7 @@ def _query_tip_cache_attribution(
             "platform_cache": _line(platform_tokens, platform_usd),
             "tokenpak_compression": _line(compression_tokens, compression_usd),
             "tokenpak_managed_cache": _line(managed_cache_tokens, managed_cache_usd),
-            "companion_enrichment": _line(companion_tokens, companion_usd),
+            "companion_enrichment": companion_line,
         },
     }
 
@@ -905,6 +952,86 @@ def _print_tip_cache_attribution(
 # ---------------------------------------------------------------------------
 # Savings-first default output (v3 layout)
 # ---------------------------------------------------------------------------
+
+
+def _print_runtime_and_routing(
+    proxy_base: str,
+    *,
+    uptime_s: float,
+    errors: int,
+    requests: int,
+) -> None:
+    """Print the runtime and routing frame that every status view leads with.
+
+    Status leads with whether TokenPak is working, not with what it saved.
+    A savings-first layout answered a question the reader has not asked yet:
+    before "how much did this save me" comes "is it running, is my client
+    actually routed through it, and is it operating on my context". A dollar
+    figure at the top of a report about a proxy that is not running — or is
+    running with nothing routed to it — reads as a claim about a system that
+    is not doing anything.
+
+    The lifecycle observation is the same one setup, start, stop, restart and
+    doctor use, so these commands cannot disagree about what is running.
+    """
+    from tokenpak.core.runtime import lifecycle as _lifecycle
+
+    port = _proxy_port(proxy_base)
+    snap = _lifecycle.snapshot(port)
+
+    def row(label: str, value: object, note: str = "") -> None:
+        line = f"     {label:<16}{str(value):>12}"
+        print(f"{line}   {note}" if note else line)
+
+    print()
+    print("  🚦 Runtime")
+    if snap.running:
+        pid_note = f"PID {snap.pid}" if snap.pid else "PID unknown"
+        row("Proxy", "running", f"port {port}, {pid_note}")
+        if snap.owned is False:
+            row("Ownership", "mismatch", "/health reports a different PID")
+    elif snap.health_ok:
+        row("Proxy", "foreign", f"answering on {port}, not started by this install")
+    elif snap.foreign_listener:
+        row("Proxy", "port taken", f"{port} is in use by another process")
+    elif snap.pid_alive:
+        row("Proxy", "unresponsive", f"PID {snap.pid} is alive but not answering")
+    else:
+        row("Proxy", "not running", f"nothing listening on {port}")
+    # "found" meant "a file is at that path", which reported a config with a
+    # YAML syntax error as healthy — the one state where the user most needs
+    # to be told something is wrong.
+    _cfg_error = None
+    try:
+        from tokenpak.core.config_loader import config_load_error, load_config
+
+        load_config()
+        _cfg_error = config_load_error()
+    except Exception:
+        _cfg_error = None
+
+    if _cfg_error is not None:
+        row("Config", "unreadable", f"{_cfg_error[0]} — not valid YAML")
+    else:
+        row(
+            "Config",
+            "found" if snap.configured else "not found",
+            snap.config_path or "run `tokenpak setup`",
+        )
+    if uptime_s > 0:
+        row("Uptime", _fmt_uptime(uptime_s))
+    if errors > 0:
+        row("Errors", errors, "run `tokenpak doctor`")
+
+    print()
+    print("  🔀 Routing")
+    if snap.routed:
+        row("Client routed", "yes", f"base URL → http://127.0.0.1:{port}")
+    else:
+        row("Client routed", "no", "nothing is sending traffic here")
+        print("       Run `tokenpak integrate` for client-specific instructions.")
+    if requests == 0:
+        row("Requests seen", 0, "no traffic observed yet")
 
 
 def run(
@@ -990,13 +1117,27 @@ def run(
     else:
         # Fall back to DB
         if savings_all.get("error"):
-            print(f"\nTOKENPAK {version}")
+            # No traffic has been recorded. Report runtime and routing anyway —
+            # that is precisely the state where a reader most needs to know
+            # whether the proxy is up and whether anything is pointed at it.
+            # The old output printed a bare error and told the user to run
+            # `tokenpak serve`, which is the foreground server, not the setup
+            # path, and said nothing about why there was no data.
+            print(f"\n  TOKENPAK {version}")
             print(SEP)
+            _print_runtime_and_routing(proxy_base, uptime_s=0.0, errors=0, requests=0)
+            print()
             if savings_all.get("error") == "db_not_found":
-                print("\n  Proxy unreachable and no monitor database found.")
-                print("  Start the proxy with `tokenpak serve`.\n")
+                print("  📊 Measured savings")
+                print("     No measurements yet — no request database exists.")
+                print("     Savings are reported after traffic flows, never estimated.")
+                print()
+                print("     Next: `tokenpak setup` if you have not configured TokenPak,")
+                print("           then point a client at it and run this again.")
             else:
-                print(f"\n  {savings_all['error']}\n")
+                print("  📊 Measured savings")
+                print(f"     unavailable — {savings_all['error']}")
+            print()
             _print_free_tier_upgrade_hint()
             return
         t = savings_all["totals"]
@@ -1066,10 +1207,10 @@ def run(
     companion_tokens_avoided = 0
     companion_usd = 0.0
     try:
-        from pathlib import Path as _P
+        from tokenpak._paths import companion_file
 
-        _companion_db = _P(os.path.expanduser("~/.tokenpak/companion/journal.db"))
-        if _companion_db.exists() and session.get("start_time"):
+        _companion_db = companion_file("journal.db")
+        if _companion_db is not None and session.get("start_time"):
             _since = float(session["start_time"])
             _c = sqlite3.connect(str(_companion_db))
             try:
@@ -1113,7 +1254,9 @@ def run(
     print(f"\n  TOKENPAK {version}")
     print(SEP)
 
-    # --- 1. VALUE CREATED ---
+    _print_runtime_and_routing(proxy_base, uptime_s=uptime_s, errors=errors, requests=total_reqs)
+
+    # --- 3. VALUE CREATED (measured) ---
     # Split honestly: prompt-side (companion, pre-wire) vs wire-side (proxy).
     # Wire-side credits only proxy-caused savings — cache hits placed by the
     # upstream client (byte-preserved passthrough) are shown under Cache as
@@ -1121,7 +1264,17 @@ def run(
     wire_side_usd = tp_compression_usd + proxy_cache_usd
     tp_total_usd = companion_usd + wire_side_usd
     print()
-    print(f"  💰 Value Created ({source_label})")
+    print(f"  💰 Measured savings ({source_label})")
+    if total_reqs == 0 and companion_tokens_avoided == 0:
+        # No requests were observed, so nothing was measured. Printing $0.00
+        # here would be indistinguishable from "measured, and it saved you
+        # nothing" — a claim about a system that has not run yet.
+        print("     No measurements yet — no requests have been observed.")
+        print("     Figures appear here once traffic flows through the proxy.")
+        _print_free_tier_upgrade_hint()
+        if not no_meme:
+            print(f"\n  {random.choice(MEME_LINES)}\n")
+        return
     print(f"     Total saved                {_fmt_cost(tp_total_usd):>10}")
     print(
         f"       Prompt-side (companion)  {_fmt_cost(companion_usd):>10}   {_fmt_num(companion_tokens_avoided)} tokens avoided pre-send"
@@ -1212,10 +1365,9 @@ def run(
         _print_by_source_inline(db_path)
         _print_by_provider_inline(db_path)
 
-    # --- 5. PERFORMANCE ---
+    # --- PERFORMANCE ---
     print()
     print("  ⚡ Performance")
-    uptime_str = _fmt_uptime(uptime_s) if uptime_s > 0 else "n/a"
     latency_str = "n/a"
     if proxy_up and stats:
         avg_lat = session.get("avg_latency_ms", 0)
@@ -1237,17 +1389,14 @@ def run(
                     latency_str = f"{_row[0]:.0f}ms (db)"
         except Exception:
             pass
-    print(f"     Uptime               {uptime_str:>10}")
     print(f"     Proxy overhead       {latency_str:>10}")
 
-    # --- 6. HEALTH ---
-    print()
+    # Runtime state was reported at the top; this line only qualifies the data
+    # source, so a reader knows whether they are looking at a live session or
+    # at history.
     if not proxy_up:
-        print("  ⚠️  Proxy unreachable — showing DB data only")
-    elif errors > 0:
-        print(f"  ⚠️  {errors} error(s) — run `tokenpak doctor`")
-    else:
-        print("  ✅ Healthy")
+        print()
+        print("  ℹ️  Proxy unreachable — figures above come from the local database.")
 
     _print_free_tier_upgrade_hint()
 

@@ -38,10 +38,12 @@ def build_features_parser(sub: Any) -> None:
         action="store_true",
         help="Emit JSON instead of text",
     )
+    from tokenpak.licensing import known_tiers
+
     p.add_argument(
         "--tier",
         default=None,
-        help="Filter to a specific tier: free|pro|team|enterprise",
+        help="Filter to a specific tier: " + "|".join(known_tiers()),
     )
     p.set_defaults(func=cmd_features_list)
 
@@ -101,14 +103,20 @@ def cmd_features_list(args: Any) -> int:
         )
         return 0
 
-    print(f"Active license tier: {active_tier}")
+    # Human output speaks in editions, not internal tiers. This printed the
+    # raw taxonomy — free / pro / team / enterprise — as an "tier" column, so
+    # a reader saw four products, two of which are retired and none of which
+    # Team or Enterprise has ever been purchasable. They are entitlement
+    # metadata on a verified license, and publicly they are simply Pro.
+    # --json keeps the internal names: that surface is for diagnostics.
+    print(f"Edition: {_lic.public_edition(active_tier)}")
     if lic and lic.status:
-        print(f"License status     : {lic.status}")
+        print(f"License status: {lic.status}")
     print("─" * 60)
-    print(f"{'feature':<32} {'tier':<11} {'state':<10}")
-    print(f"{'─' * 32} {'─' * 11} {'─' * 10}")
+    print(f"{'feature':<32} {'requires':<14} {'state':<10}")
+    print(f"{'─' * 32} {'─' * 14} {'─' * 10}")
     for r in rows:
-        print(f"{r['feature']:<32} {r['required_tier']:<11} {r['state']:<10}")
+        print(f"{r['feature']:<32} {_lic.public_edition(r['required_tier']):<14} {r['state']:<10}")
     print()
     print("Use `tokenpak features explain <feature>` for the per-feature reasoning.")
     return 0

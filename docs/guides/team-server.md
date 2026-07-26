@@ -2,7 +2,11 @@
 
 Run a shared TokenPak proxy for your whole team.
 
-The shared server is under active development. This guide documents the planned architecture and configuration. Some features may not yet be available in the current release.
+The shared server is under active development. **This guide describes a planned
+architecture, not a shipped feature.** There is no team-server mode: what exists today is the
+ordinary proxy, which you can bind to a non-loopback address and point several clients at.
+Everything below about per-user attribution, team budget enforcement and the admin dashboard's
+per-user breakdown is design, not behaviour you can rely on in this release.
 
 ---
 
@@ -32,8 +36,11 @@ Agent C ─┘        ↓
 # Install on your server
 pip install tokenpak
 
-# Start in team server mode
-tokenpak serve --team --port 8766 --host 0.0.0.0
+# Bind the proxy to a reachable address. There is no --team flag; the listen
+# address comes from TOKENPAK_BIND_ADDRESS, and it defaults to 127.0.0.1.
+# Exposing it beyond loopback puts your provider credentials behind whatever
+# network controls you place in front of it — see Security below.
+TOKENPAK_BIND_ADDRESS=0.0.0.0 tokenpak serve --port 8766
 
 # Enable admin dashboard
 tokenpak config set dashboard.enabled true
@@ -46,13 +53,14 @@ tokenpak config set dashboard.admin_token "your-admin-secret"
 FROM python:3.11-slim
 RUN pip install tokenpak
 EXPOSE 8766
-CMD ["tokenpak", "serve", "--team", "--host", "0.0.0.0", "--port", "8766"]
+ENV TOKENPAK_BIND_ADDRESS=0.0.0.0
+CMD ["tokenpak", "serve", "--port", "8766"]
 ```
 
 ```bash
 docker run -d \
   -p 8766:8766 \
-  -v ~/.tokenpak:/root/.tokenpak \
+  -v ~/.tpk:/root/.tpk \
   -e TOKENPAK_MODE=hybrid \
   tokenpak/tokenpak:latest
 ```
