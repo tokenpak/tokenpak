@@ -6,6 +6,338 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [1.16.0] — 2026-07-26
+
+> Two **BREAKING** changes — the `crewai` extra is removed and the license tier ladder drops its
+> two top rungs — alongside a large pass over what the CLI reports. Surfaces that printed
+> constructed numbers now print a measurement or say none was taken.
+>
+> **On the version number.** Eleven public symbols are removed, which by strict SemVer calls for a
+> major. This is shipped as a minor on an explicit project ruling, and is recorded here rather
+> than left for you to discover: if you depend on `tokenpak` with `>=1.15,<2.0` or without a pin,
+> read the upgrade notes before taking this one.
+>
+> Measured against 1.15.0 as published, by the project's own snapshot gate
+> (`scripts/release_gate/api_snapshot_diff.py`), the removals are:
+>
+> ```
+> tokenpak.licensing.TIER_TEAM
+> tokenpak.licensing.TIER_ENTERPRISE
+> tokenpak.cli.commands.license_cmd.DEFAULT_UPGRADE_URL
+> tokenpak.cli.commands.status.DEFAULT_UPGRADE_URL
+> tokenpak.cli.commands.preview.cmd_preview          # module removed
+> tokenpak.cli.commands.preview.register_preview     # module removed
+> tokenpak.companion.codex.launcher.FallbackDecision
+> tokenpak.companion.codex.launcher.PreflightEvaluation
+> tokenpak.companion.codex.launcher.PreflightEvidence
+> tokenpak.companion.codex.launcher.PreflightStatus
+> tokenpak.companion.codex.launcher.TemporarySessionChoice
+> ```
+>
+> Only the first two are discussed below as breaking; the rest are internal
+> surfaces the snapshot gate counts as public, and they are listed so the number
+> can be checked rather than taken on trust. `tokenpak preview` itself is
+> unaffected — the command works and is on the supported surface; what moved is
+> the module that registered it.
+
+### Changed
+
+- **BREAKING — the tier ladder is now `free < pro`.** The two tiers above Pro are
+  retired and Pro introduces every feature they used to: `tokenpak_server`,
+  `seat_management`, `team_analytics`, `audit_log` and `sla` all resolve to
+  `pro`. This supersedes the ladder described under 1.15.0 below.
+
+  No license above Pro could be issued, so every feature gated above Pro was
+  unreachable by anyone holding a real license — including `tokenpak_server`,
+  which gates the daemon that the paid tier is defined by. A valid Pro licensee
+  could not run it.
+
+  `required_tier_for` returns `"pro"` for all of the above. The two retired
+  members are gone from the `LicenseTier` enum, so code that names one, or that
+  assumes four rungs, no longer imports; the ladder is available from
+  `LicenseTier.ladder()` and the tier names from
+  `tokenpak.licensing.known_tiers()` rather than being hardcoded.
+
+- The per-key rate-limit table in the (unshipped) intelligence server collapses
+  to `free: 20/min`, `pro: 100/min`.
+
+- **TokenPak advertises only the surface it has verified.** The parser exposed 90
+  commands; the registry documented 56, and nothing reconciled the two — so 34
+  verbs were reachable but undocumented, and some documented verbs had never been
+  run end to end. An explicit beta allowlist
+  (`tokenpak/core/registry/beta_surface.json`) now names the supported set and
+  requires a written reason for every exclusion, paired against the live parser by
+  a test so the surface cannot grow or shrink silently.
+
+  **Excluded is not removed.** Every excluded verb still parses and still runs.
+  What it loses is a place in *default* discovery: `tokenpak help --all` lists it
+  under its own heading with the reason attached, so a reader can tell "this is
+  ready" from "this is reachable". Two verbs were being advertised while broken —
+  `watch`, listed as a "live terminal savings dashboard" while its own help says
+  it is not implemented, and `last`, a stub — and both now say so.
+
+  `tokenpak --help` is default discovery too, and it was a separate
+  hand-maintained list that no test paired against the allowlist. It went on
+  advertising five excluded verbs, `last` among them, described as "Show details
+  of last compressed request" while the command printed a first-run welcome
+  banner. It now lists only supported commands, and a test holds it there.
+  `fingerprint`, `optimize`, `prune` and `template` work and are still reachable;
+  they lost the listing, not the implementation.
+
+- **`tokenpak status` leads with runtime, routing, and context operation; savings
+  follow.** Before "how much did this save me" comes "is it running, is my client
+  actually routed through it, and is it operating on my context". The routing line
+  is new: a running proxy with nothing pointed at it produces no savings and no
+  data, and that state was previously indistinguishable from "working, but idle".
+
+- **One lifecycle observer across `setup`, `start`, `stop`, `restart`, `logs`,
+  `doctor` and the menu.** Each of these previously decided for itself what
+  "running" meant, and they did not agree — after a successful `tokenpak setup`,
+  `tokenpak stop` answered "No proxy PID file found. Is the proxy running?" about
+  a proxy it had just started. `start` now verifies the child before recording
+  its PID and returns documented exit codes; `stop` distinguishes no PID on
+  record, a stale PID it cleared, and a process it signalled; a proxy started by
+  something else is reported as a warning rather than a green "running", because
+  `stop` and `restart` will not act on it.
+
+- **`config.yaml` is canonical; `config.json` is read-compatibility only**, and
+  `doctor` resolves through the shared resolver — so completing setup no longer
+  leaves it reporting "no config" and sending you back to the wizard. An
+  unreadable config is now distinguished from an absent one.
+
+- **`setup` is scriptable** (`--profile`, `--port`, `--yes`) and honours
+  `TOKENPAK_PORT`. EOF is no longer consent: piping `/dev/null` previously
+  selected a profile, wrote config, and spawned a daemon with nothing answered.
+
+- **Public output describes two editions, TokenPak and TokenPak Pro.** The
+  internal entitlement taxonomy still decides what a license unlocks, but tiers
+  above Pro are no longer presented as plans, `plan` no longer prints a price
+  column against rows with no purchase path, and `features` speaks in editions.
+
+- **Package maturity drops from Production/Stable to Alpha.** It claimed
+  Production/Stable while `preview` printed simulated numbers and `setup`
+  reported success for a proxy that had not started.
+
+- **TIP expands to "TokenPak Integrity Protocol", not "Integration Protocol."**
+  The prior expansion invited a transport reading that the specification and the
+  product constitution both explicitly deny. The acronym, the wire contract, the
+  schemas and the version are unchanged — TIP-1.0 remains TIP-1.0. Prose only.
+
+- **`describe_tier()` returns edition names, not tier names.** It now answers
+  "TokenPak" / "TokenPak Pro" where it previously answered "Free" / "Pro",
+  because every caller was rendering it to a user. The tier name is still
+  available from `internal_tier_label()` for diagnostic surfaces that genuinely
+  need it. The signature is unchanged; only the strings differ.
+
+### Added
+
+- `tokenpak.licensing.known_tiers()` — tier names in ascending capability
+  order, so callers rendering a tier list do not hardcode one.
+
+### Fixed
+
+- **`preview` reported numbers nothing had measured.** It computed
+  `output = len(text.split()) * 0.65` and printed four fixed block names
+  unrelated to the input; JSON input with no whitespace reported **-900% savings
+  with negative block counts**. It now runs the real compression pipeline and
+  enforces a result contract — non-negative counts, `saved == input - output`,
+  ratio in [0,1], measured duration, pipeline-assigned block identities, and
+  `applied=false` when compression would expand the input. Provenance is
+  mandatory: input digest, byte length, source, tokenizer id, stages run,
+  version.
+
+  `preview` also accepts conversation input (message array, provider request
+  body, or JSONL), because savings come from redundancy across turns. A
+  single-turn preview reports 0% and says why, rather than implying the product
+  does not work.
+
+- **`stats` displayed a 1% measured saving as "99.4% token reduction."** It
+  reported `(1 - ratio) * 100` while the proxy records `ratio` as `saved/input` —
+  already a savings fraction. It also reported a hardcoded proxy port rather than
+  this install's.
+
+- **Bare `tokenpak` printed a hardcoded "5.6% compression"** regardless of the
+  data, and attributed 95% of all savings to whichever model sorted first. Both
+  are gone: compression is reported from the measurement or not at all, and the
+  model line reports usage, which is what it can observe.
+
+- **A session with zero requests reported "$0.00 saved."** Nothing was measured,
+  so there is nothing to report; it now says that. Removed the ~5%/~30%/~40%
+  savings claims from the profile menu — savings are reported after measurement,
+  not promised at the moment of choice.
+
+- **Auto-start had been inert.** `setup` spawned `runtime/proxy.py`, a four-line
+  re-export with no `__main__` block, so the child exited 0 without serving —
+  and `setup` printed a checkmark on both branches because it probed the port
+  rather than the child, wrote the PID before any check, and never called
+  `poll()`. It now requires a live PID plus a healthy endpoint before claiming
+  success, and captures startup output for diagnosis. `/health` reports `pid` so
+  ownership can be verified rather than inferred from "something answered".
+
+- **No new install used the canonical home.** The first-run marker was bound at
+  import time to `~/.tokenpak/.seen_intro`, so any verb — including `version` —
+  created the legacy directory before anything else ran, pinning resolution to it
+  for the life of the install. Path semantics are now split: reads resolve
+  compatibility-first, writes never target the legacy directory, and
+  `resolve_existing()` searches both.
+
+- **Importing the proxy config created a directory as a side effect.**
+  `proxy/config.MONITOR_DB` resolved at import in write mode, so importing the
+  module created `~/.tpk` — which, on a machine configured in the legacy home,
+  flipped config resolution to a directory containing no config. Resolution now
+  happens on first use, here and in the compression dictionary, instruction
+  table, fingerprint cache, event log, debug log, goals, and vault config.
+
+- **The profile you chose was never loaded.** `core/config_loader.CONFIG_PATH`
+  was a module-level constant bound to `~/.tokenpak/config.yaml` while `setup`
+  writes `~/.tpk/config.yaml`, so the loader read a file that did not exist and
+  returned an empty config — and `TOKENPAK_HOME` had no effect on the proxy at
+  all.
+
+- **The home directory's 0700 guarantee did not hold.** The first-run marker
+  created it at the process umask (0775) and the previous implementation
+  deliberately never re-chmoded. `ensure_home()` now targets the write home and
+  repairs group/world bits; user config is written 0600 and the license file is
+  written owner-only.
+
+- **Reading telemetry no longer creates state or reads another install's.**
+  `status` reported companion savings from a hardcoded legacy path, so an install
+  using `TOKENPAK_HOME` or the canonical home showed `$0.00` prompt-side no
+  matter what the companion had saved. It now resolves across homes and returns
+  "unavailable" rather than zero when no journal exists anywhere.
+
+- **`tokenpak upgrade` opened a URL that returns HTTP 404.** It was in top-level
+  help, beginner help, the command registry, and a footer printed on *every*
+  `tokenpak status` run — so the most-displayed call to action in the product was
+  a dead link. The verb is now a hidden compatibility shim that opens nothing and
+  reports that public Pro enrollment is unavailable; there is no default URL, and
+  `--print-url` exits non-zero rather than printing a fabricated destination.
+
+- **Every verb the parser accepts is now runnable.** `cli/commands/preview.py`
+  imported `Compressor` from `compression.core`, which does not exist, so it
+  would have raised `ImportError`; it is deleted rather than wired. `packaging`
+  was imported unguarded at two undeclared callsites, which crashed `update` with
+  a bare traceback and silently degraded `doctor`'s update check.
+
+- **Companion wrappers answered the wrong question.** `tokenpak claude --help`
+  printed Claude Code's help, not TokenPak's; `tokenpak codex --help` did the
+  same and provisioned 23 files for a client that may not be installed.
+  Launching with the client absent provisioned 21 files and failed with exit
+  120 — a code TokenPak never chose and documented nowhere. A preflight now
+  names the missing prerequisite and exits 4, and `cli/exit_codes.py` defines
+  every code TokenPak assigns.
+
+- **`doctor` emitted 27 raw escape sequences into every piped run**, including
+  the paste-your-output bug-report flow. Its colour output now routes through the
+  shared formatter, which honours `NO_COLOR`, `TOKENPAK_NO_COLOR`, and `isatty`.
+  Two remediation hints that could not work are corrected: `doctor` pointed at
+  `setup` for routing (setup routes no client) and at a vault subcommand that
+  does not exist.
+
+### Removed
+
+- **BREAKING — the `crewai` optional extra.** `pip install tokenpak[crewai]` no longer installs
+  crewai.
+
+  It still *succeeds*, which is the part worth knowing. pip treats an extra a package does not
+  declare as a warning, not an error: the command exits 0 and installs TokenPak without crewai.
+  So the failure does not appear at install time where you would see it — it appears later as an
+  `ImportError` from your own code. If you rely on that extra to pull crewai in, install it
+  yourself.
+
+  It was the only path by which `chromadb` entered the dependency graph, and every published
+  chromadb 1.x is covered by CVE-2026-45829 with no fixed release available — crewai pins
+  `chromadb~=1.1.0`, so there was no version to move to and the constraint was not ours to relax.
+  Carrying an unfixable critical advisory for an integration that is not a focus was the wrong
+  trade, so the extra is gone rather than documented around.
+
+  **No capability is lost.** The CrewAI adapter under `tokenpak/sdk/crewai/` never imported crewai —
+  it is a set of context and handoff wrappers — and it continues to work unchanged. If you use it,
+  install crewai yourself alongside TokenPak:
+
+  ```
+  pip install tokenpak crewai
+  ```
+
+  **Read this before following that line.** Installing crewai yourself brings `chromadb~=1.1.0` and
+  therefore CVE-2026-45829, exactly as the extra did. The advisory left TokenPak's dependency graph;
+  it did not stop existing for anyone who takes this path. See `SECURITY.md` for what that does and
+  does not mean. We would rather say this plainly than let the removal read as a fix it is not.
+
+  This also removes the `json-repair` advisory (GHSA-xf7x-x43h-rpqh), which reached the project only
+  through the same path, and drops the resolved dependency set from 256 packages to 196 — including
+  `uvicorn`'s optional speedups (`httptools`, `uvloop`, `watchfiles`), which chromadb was the sole
+  requester of. Nothing imports them and installs from PyPI never had them.
+
+  **On the absence of a deprecation window.** This project normally requires notice before removing a
+  published surface. Removal here was directed by the project owner on the record, on the grounds
+  that the integration is not a focus and carrying an unfixable critical advisory for it is not a
+  trade worth making. That ruling is what authorises the compressed timeline; it is recorded here
+  rather than left implicit.
+
+### Upgrade notes
+
+`pip install --upgrade tokenpak`. No data migration is required and no stored
+state is rewritten on upgrade.
+
+**Breaking changes.** Two, both listed above:
+
+1. `LicenseTier.TEAM` and `LicenseTier.ENTERPRISE` no longer exist. Code that
+   names either, or that assumes the ladder has four rungs, will not import. Read
+   the ladder from `LicenseTier.ladder()` and the names from
+   `tokenpak.licensing.known_tiers()` instead of hardcoding them. No entitlement
+   is lost: every feature those tiers introduced now resolves to `pro`.
+2. `pip install tokenpak[crewai]` no longer resolves. The CrewAI adapter under
+   `tokenpak/sdk/crewai/` is unaffected and continues to work — it never imported
+   crewai. If you use it, install crewai yourself, and read the security note
+   above and in `SECURITY.md` before you do.
+
+**Migration — where TokenPak keeps its files.** This release repairs path
+resolution that was binding at import time, and the practical effect is that a
+*new* install now uses the canonical home (`~/.tpk`) where previously any command
+— including `tokenpak version` — created the legacy `~/.tokenpak` first and
+pinned resolution to it.
+
+Existing installations are not moved and do not need to act. Reads resolve
+compatibility-first and search both locations, so an install that already lives
+in `~/.tokenpak` keeps working, keeps its journals readable, and keeps its
+configuration. Writes go to the canonical home. If you want a single location,
+`tokenpak home migrate` moves it explicitly. Directory permissions are repaired
+in place on first use: the home becomes `0700` and configuration `0600`, which
+the previous implementation created at the process umask and then deliberately
+never corrected.
+
+**Behaviour you may notice, and should.** Several surfaces that printed numbers
+now print less. `preview`, `stats`, `status`, `diff` and bare `tokenpak` report a
+measurement or state that none was taken; they no longer fall back to a
+constructed figure. A session with no requests reports that nothing was measured
+rather than `$0.00 saved`. `start`, `stop` and `setup` return documented exit
+codes where they previously returned `None` on every path, so a script doing
+`tokenpak start && tokenpak status` will now see a failed boot instead of
+succeeding through it. If you have automation that greps for the old strings or
+relies on exit code 0 from a failed start, it needs a look.
+
+`tokenpak upgrade` no longer opens a URL. Public Pro enrollment is not open, and
+the address it used returns HTTP 404; the verb remains as a shim that says so.
+
+**Rollback:** `pip install tokenpak==1.15.0`. Configuration and stored telemetry
+written by 1.16.0 remain readable by 1.15.0 — the format is unchanged and only
+resolution order and permissions differ. An install that 1.16.0 moved to the
+canonical home is still found by 1.15.0's own compatibility search; if you would
+rather be explicit, set `TOKENPAK_HOME`.
+
+**Known issues.** Package maturity is declared Alpha in this release, down from
+Production/Stable. That is a correction, not a regression: the previous claim was
+made while `preview` printed simulated numbers and `setup` reported success for a
+proxy that had not started. Both are fixed here; the classifier moves back up when
+a candidate passes the beta gates end to end.
+
+**Deprecations.** `config.json` is read-compatibility only — `config.yaml` is
+canonical and is what `setup` writes. The legacy home `~/.tokenpak` remains
+readable and is not scheduled for removal in this release.
+
 ## [1.15.0] — 2026-07-24
 
 > Minor release: a canonical, importable map from paid features to the license

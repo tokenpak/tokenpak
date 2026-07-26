@@ -207,7 +207,7 @@ curl http://localhost:8766/health
 ```json
 {
  "status": "healthy",
- "version": "1.0.0",
+ "version": "1.16.0",
  "uptime_seconds": 3600,
  "request_count": 15000,
  "last_request": "2026-03-10T06:30:00Z"
