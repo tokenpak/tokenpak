@@ -73,11 +73,18 @@ def _create_companion_journal(home: Path) -> None:
         conn.close()
 
 
+def _isolate_tokenpak_home(monkeypatch, home: Path) -> None:
+    """Make HOME-based path tests independent of operator runtime overrides."""
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("TOKENPAK_HOME", raising=False)
+    monkeypatch.delenv("TOKENPAK_COMPANION_JOURNAL_DIR", raising=False)
+
+
 def test_tip_cache_json_has_four_distinct_lanes(tmp_path, monkeypatch):
     """`--json` exposes the TCM-09 attribution lanes with independent values."""
     db = tmp_path / "monitor.db"
     _create_monitor_db(db)
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _isolate_tokenpak_home(monkeypatch, tmp_path)
     _create_companion_journal(tmp_path)
 
     captured = StringIO()
@@ -114,7 +121,7 @@ def test_tip_cache_compact_output_renders_four_lanes(tmp_path, monkeypatch):
     """`tokenpak status --tip-cache` renders a compact human proof surface."""
     db = tmp_path / "monitor.db"
     _create_monitor_db(db)
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _isolate_tokenpak_home(monkeypatch, tmp_path)
     _create_companion_journal(tmp_path)
 
     captured = StringIO()
@@ -161,7 +168,7 @@ def test_tip_cache_prefers_rollup_daily_when_available(tmp_path, monkeypatch):
         conn.commit()
     finally:
         conn.close()
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _isolate_tokenpak_home(monkeypatch, tmp_path)
 
     result = status._query_tip_cache_attribution(db_path=str(db))
 

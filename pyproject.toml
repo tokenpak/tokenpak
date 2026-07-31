@@ -154,7 +154,7 @@ dev = [
     "black>=24.0.0",
     # Formatter output is a release gate; pin it so a tool release cannot turn
     # an unchanged checkout red or silently rewrite the baseline.
-    "ruff==0.15.22",
+    "ruff==0.16.0",
     # Architecture-contract gate (.importlinter) and its contract tests
     # under tests/lint/test_import_contracts.py.
     "import-linter>=2.0",
@@ -261,6 +261,31 @@ tokenpak = [
 
 [tool.setuptools.dynamic]
 version = {attr = "tokenpak.__version__"}
+
+[tool.coverage.run]
+# Test code is not production surface and must not sit in the coverage
+# denominator. `--cov=tokenpak` measures the whole package, which contains an
+# in-package test tree at `tokenpak/tests/`. Those files are never executed —
+# `[tool.pytest.ini_options] testpaths` collects only the top-level `tests/`
+# directory — so every statement in them counted as missed production code.
+#
+# That single directory was 32,005 statements, 40% of the reported coverage
+# gap, understating the measured figure by roughly 12 points.
+#
+# The list below mirrors the `[tool.setuptools.packages.find] exclude` shapes
+# above, deliberately and one-for-one. That is the principle: the coverage
+# denominator is the *distributed* package, so anything packaging excludes from
+# the distribution is excluded from the measurement too. An ad-hoc list drifts;
+# a mirror of the packaging boundary does not.
+#
+# In-package example trees are NOT omitted. Unlike the test trees they are not
+# excluded from the distribution, so they ship and are measured.
+omit = [
+    # One pattern covers all three exclude shapes. `**` is depth-unbounded, which
+    # is what setuptools' `*.tests*` means; an explicit per-depth list silently
+    # caps at whatever depth it was written for and misses trees added deeper.
+    "tokenpak/**/tests/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = [

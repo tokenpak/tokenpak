@@ -312,7 +312,8 @@ def test_cli_preview_json_reports_measured_values(tmp_path):
     assert data["saved_tokens"] > 0
     assert 0.0 <= data["compression_ratio"] <= 1.0
     assert data["duration_ms"] > 0
-    assert data["duration_ms"] != 2.3
+    # The multi-sample unit test above detects the old fixed 2.3ms simulation;
+    # one real CLI measurement may legitimately round to that same value.
     assert data["applied"] is True
     assert data["provenance"]["input_kind"] == "conversation"
     assert data["provenance"]["tokenizer"]

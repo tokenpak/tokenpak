@@ -74,7 +74,12 @@ def test_panel_fresh_install_renders_cleanly():
     assert "Run: tokenpak setup" in out  # setup hint
     assert "not routed" in out
     assert "stopped" in out
-    assert "Unknown" in out  # update probe unknown, not "$0.00"/fabricated
+    # The update probe has not run. What matters is that the panel says so
+    # honestly and offers the next step, rather than fabricating a version or
+    # a number. The wording moved from "Unknown" to "not checked"; the
+    # assertion tracks the intent, not the old string.
+    assert "not checked" in out
+    assert "tokenpak update --check" in out
     # Still a well-formed box.
     assert out.startswith("┌")
     assert out.rstrip().endswith("┘")

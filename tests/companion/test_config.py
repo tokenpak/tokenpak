@@ -32,6 +32,14 @@ def test_default_profile_is_balanced():
     assert cfg.profile == "balanced"
 
 
+def test_default_style_is_standard():
+    """Unchanged launches preserve the host's native response style."""
+    env_clean = {k: v for k, v in os.environ.items() if not k.startswith("TOKENPAK_COMPANION_")}
+    with patch.dict(os.environ, env_clean, clear=True):
+        cfg = CompanionConfig.from_env()
+    assert cfg.style == "standard"
+
+
 def test_default_budget_is_zero():
     """Default daily budget is 0 (unlimited)."""
     env_clean = {k: v for k, v in os.environ.items() if not k.startswith("TOKENPAK_COMPANION_")}
@@ -179,8 +187,16 @@ def test_run_dir_is_under_canonical_home():
     """run_dir lives beside the journal, in the canonical home — never legacy."""
     from tokenpak import _paths
 
-    cfg = CompanionConfig()
-    assert cfg.run_dir == _paths.write_home() / "companion" / "run"
+    # This test exercises the default HOME-based resolution. A developer's
+    # explicit runtime overrides must not redirect its fixture outside the
+    # suite's isolated HOME.
+    with patch.dict(
+        os.environ,
+        {"TOKENPAK_HOME": "", "TOKENPAK_COMPANION_JOURNAL_DIR": ""},
+    ):
+        cfg = CompanionConfig()
+        expected = _paths.write_home() / "companion" / "run"
+    assert cfg.run_dir == expected
     assert ".tokenpak" not in str(cfg.run_dir)
 
 

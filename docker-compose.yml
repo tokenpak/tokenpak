@@ -20,14 +20,14 @@ services:
       TOKENPAK_LOG_LEVEL: "${TOKENPAK_LOG_LEVEL:-info}"
       # Enable Prometheus-compatible metrics endpoint (/metrics)
       TOKENPAK_METRICS_ENABLED: "${TOKENPAK_METRICS_ENABLED:-true}"
-      TOKENPAK_CONFIG: "/home/tokenpak/.tokenpak/config.yaml"
+      TOKENPAK_CONFIG: "/app/config/config.yaml"
 
       # --- Python Settings ---
       PYTHONUNBUFFERED: "1"
 
     volumes:
       # Config file (optional — uses defaults if not present)
-      - ./config/config.yaml:/home/tokenpak/.tokenpak/config.yaml:ro
+      - ./config/config.yaml:/app/config/config.yaml:ro
 
       # Persistent logs (survives container restarts)
       - tokenpak-logs:/app/logs

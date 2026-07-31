@@ -4,9 +4,11 @@
 Unifies the fragmented teardown primitives into one truthful,
 reversible-by-default command.
 
-  --soft  un-route only (reversible via ``tokenpak setup``): restores Claude
-          Code settings, tears down the Codex companion install, stops a
-          running proxy. Leaves config/state/dbs and the package intact.
+  --soft  un-route only: restores Claude Code settings, tears down the
+          Codex companion install, stops a running proxy. Leaves
+          config/state/dbs and the package intact. Reversible — ``tokenpak
+          setup`` re-routes Claude Code; ``tokenpak codex --install-only``
+          restores the Codex companion.
   --hard  soft + purge the resolved TokenPak home (EXCEPT user data:
           companion/journal.db, companion/budget.db, companion/capsules/) +
           offer ``pip uninstall tokenpak`` as the final step.
@@ -31,7 +33,7 @@ import sys
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 # ANSI markers, gated on a TTY so piped/JSON output stays clean.
 _GREEN = "\033[92m"
@@ -277,6 +279,7 @@ _HARD_PURGE_NAMES = (
     "requests.jsonl",
     "pinned_blocks.json",
     "update_check.json",
+    "update_check.lock",
     "fleet.yaml",
     "cache",
     "dispatch",
@@ -495,7 +498,8 @@ def _print_receipt(receipt: Receipt) -> None:
             print(f"  • {r}")
         print()
     if not receipt.hard:
-        print(_c("Re-route any time with: tokenpak setup", _GREEN))
+        print(_c("Re-route Claude Code any time with: tokenpak setup", _GREEN))
+        print(_c("Re-route Codex any time with: tokenpak codex --install-only", _GREEN))
     if receipt.errors:
         print(
             _c(f"{receipt.errors} operation(s) failed — see ❌ lines above.", _RED),
@@ -506,6 +510,44 @@ def _print_receipt(receipt: Receipt) -> None:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+
+def _choose_mode() -> "Optional[str]":
+    """Interactive chooser for a bare ``tokenpak uninstall``.
+
+    Returns "soft", "hard", or None to cancel. EOF and Ctrl-C cancel: a
+    non-answer must never select the more destructive option.
+
+    The prompt this replaces read *"Hard (purge everything)"*, which is not
+    what ``--hard`` does — it deliberately keeps the session journal, the
+    budget history and the saved capsules. A destructive prompt that overstates
+    its own reach teaches the user to distrust the accurate ones, and a user
+    who believed it would think their history was already gone.
+    """
+    print("How much do you want to remove?")
+    print()
+    print(f"  {_c('[1] Un-route', _GREEN)} (recommended) — stop routing your clients through")
+    print("      tokenpak. Configuration, history and saved data are all kept.")
+    print("      Reversible: `tokenpak setup` re-routes Claude Code; Codex")
+    print("      users re-run `tokenpak codex --install-only`.")
+    print()
+    print(f"  {_c('[2] Remove stored state', _YELLOW)} — un-route, then delete")
+    print("      stored state including your configuration, caches, local")
+    print("      databases, saved Paks, templates, cards and license, and")
+    print("      offer to remove the package.")
+    print("      Your session journal, budget history and capsules are KEPT.")
+    print()
+    print("  [q] Cancel")
+    try:
+        choice = input("\nChoose [1/2/q] (default 1): ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+    if choice in ("", "1", "s", "soft"):
+        return "soft"
+    if choice in ("2", "h", "hard"):
+        return "hard"
+    return None
 
 
 def run_uninstall(
@@ -536,24 +578,22 @@ def run_uninstall(
         interactive = sys.stdin.isatty() and sys.stdout.isatty() and not output_json
         if not interactive:
             _emit_error(
-                "specify --soft (un-route, reversible) or --hard (purge everything)",
+                "specify --soft (un-route; keeps everything) or --hard (also "
+                "delete stored state including config, caches, databases, saved "
+                "Paks, templates, cards and license; keeps the session journal, "
+                "budget history and capsules)",
                 output_json,
             )
             return 2
         # Interactive bare invocation: ask, default soft (reversible).
-        try:
-            choice = (
-                input("Soft (un-route, keep config) or Hard (purge everything)? [soft/hard] ")
-                .strip()
-                .lower()
-            )
-        except (EOFError, KeyboardInterrupt):
-            print()
+        chosen = _choose_mode()
+        if chosen is None:
+            _emit_error("aborted — nothing was changed", output_json)
             return 2
-        if choice in ("hard", "h"):
+        if chosen == "hard":
             hard = True
         else:
-            soft = True  # default + any "soft"/empty answer
+            soft = True
 
     # ── HARD safety gate (AC-S1) ────────────────────────────────────────────
     run_pip = hard  # offer/run package removal only under --hard

@@ -28,6 +28,9 @@ class _FakeProc:
 
 def test_pep668_retries_with_break_system_packages(monkeypatch):
     calls = []
+    monkeypatch.setattr(_cli_core.sys, "prefix", "/usr")
+    monkeypatch.setattr(_cli_core.sys, "base_prefix", "/usr")
+    monkeypatch.setattr(_cli_core, "_tokenpak_is_user_install", lambda: False)
 
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
@@ -44,6 +47,7 @@ def test_pep668_retries_with_break_system_packages(monkeypatch):
     # First attempt is plain; only the retry carries --break-system-packages.
     assert "--break-system-packages" not in calls[0]
     assert "--break-system-packages" in calls[1]
+    assert "--user" in calls[1]
     # Always targets the running interpreter and the tokenpak package.
     assert calls[1][:3] == [_cli_core.sys.executable, "-m", "pip"]
     assert calls[1][-1] == "tokenpak"
@@ -65,17 +69,43 @@ def test_clean_success_no_retry(monkeypatch):
     assert "--break-system-packages" not in calls[0]
 
 
-def test_pipx_install_defers_without_calling_pip(monkeypatch):
+def test_pipx_install_uses_pipx_instead_of_venv_pip(monkeypatch):
     monkeypatch.setattr(_cli_core.sys, "prefix", "/home/u/.local/pipx/venvs/tokenpak")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/pipx")
+    calls = []
 
-    def fail_run(cmd, **kwargs):  # pragma: no cover - must not be called
-        raise AssertionError("pip must not run for a pipx-managed install")
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return _FakeProc(0)
 
-    monkeypatch.setattr(subprocess, "run", fail_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     ok, method, detail = _cli_core._pip_upgrade_tokenpak(verbose=False)
 
-    assert ok is False
+    assert ok is True
     assert method == "pipx"
+    assert calls == [["/usr/bin/pipx", "upgrade", "tokenpak"]]
+
+
+def test_pipx_missing_and_failure_are_reported(monkeypatch):
+    monkeypatch.setattr(_cli_core.sys, "prefix", "/home/u/.local/pipx/venvs/tokenpak")
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    assert _cli_core._pip_upgrade_tokenpak(verbose=False) == (
+        False,
+        "pipx",
+        "pipx executable not found on PATH",
+    )
+
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/pipx")
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: _FakeProc(1, stderr="pipx failed"),
+    )
+    assert _cli_core._pip_upgrade_tokenpak(verbose=False) == (
+        False,
+        "pipx",
+        "pipx failed",
+    )
 
 
 def test_non_pep668_failure_surfaces_detail(monkeypatch):
@@ -88,6 +118,23 @@ def test_non_pep668_failure_surfaces_detail(monkeypatch):
     assert ok is False
     assert method == "pip"
     assert "Could not find a version" in detail
+
+
+def test_explicit_update_returns_nonzero_on_package_manager_failure(monkeypatch):
+    monkeypatch.setattr(_cli_core, "_fetch_latest_pypi_version", lambda timeout: "999.0.0")
+    monkeypatch.setattr(_cli_core, "_get_proxy_version", lambda: {"error": "not running"})
+    monkeypatch.setattr(
+        _cli_core,
+        "_pip_upgrade_tokenpak",
+        lambda: (False, "pip", "install failed"),
+    )
+
+    args = type(
+        "Args",
+        (),
+        {"check": False, "force": False, "core_only": False, "dry_run": False},
+    )()
+    assert _cli_core.cmd_update(args) == 1
 
 
 def test_user_install_detection(monkeypatch, tmp_path):

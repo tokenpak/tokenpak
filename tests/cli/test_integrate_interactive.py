@@ -13,6 +13,7 @@ Covers:
 from __future__ import annotations
 
 import argparse
+import io
 import sys
 from typing import Optional
 from unittest.mock import MagicMock, patch
@@ -24,6 +25,7 @@ from tokenpak.cli.commands.integrate import (
     Integration,
     _is_interactive,
     _run_guided_form,
+    _tty_confirm,
     run_integrate,
 )
 
@@ -198,3 +200,57 @@ def test_guided_form_no_verify_fn(capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "tokenpak status" in out
+
+
+# ── Consent boundary ───────────────────────────────────────────────────────
+#
+# Every test above patches _tty_confirm itself, so the real prompt primitive
+# had no coverage. These exercise it directly: an exhausted stdin must never
+# be read as agreement to write a user-owned config file.
+
+
+class _FakeStdin(io.StringIO):
+    """StringIO that reports itself as a TTY, like a pty with no input left."""
+
+    def isatty(self) -> bool:
+        return True
+
+
+@pytest.mark.parametrize("default", [True, False])
+def test_tty_confirm_eof_is_not_consent(default, capsys):
+    """EOF (closed/exhausted stdin) must return False regardless of default."""
+    with patch.object(sys, "stdin", _FakeStdin("")):
+        assert _tty_confirm("Apply configuration?", default=default) is False
+
+
+def test_tty_confirm_bare_enter_still_takes_default(capsys):
+    """A bare Enter is a real answer and must still accept the shown default."""
+    with patch.object(sys, "stdin", _FakeStdin("\n")):
+        assert _tty_confirm("Apply configuration?", default=True) is True
+    with patch.object(sys, "stdin", _FakeStdin("\n")):
+        assert _tty_confirm("Apply configuration?", default=False) is False
+
+
+@pytest.mark.parametrize("answer,expected", [("y", True), ("yes", True), ("n", False)])
+def test_tty_confirm_explicit_answers(answer, expected, capsys):
+    """Explicit answers are unaffected by the EOF fix."""
+    with patch.object(sys, "stdin", _FakeStdin(f"{answer}\n")):
+        assert _tty_confirm("Apply configuration?") is expected
+
+
+def test_noninteractive_env_suppresses_prompt(monkeypatch):
+    """TOKENPAK_NONINTERACTIVE=1 blocks the guided form even on a real TTY."""
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True, raising=False)
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.setenv("TOKENPAK_NONINTERACTIVE", "1")
+    assert _is_interactive() is False
+
+
+def test_ci_env_suppresses_prompt(monkeypatch):
+    """CI=1 blocks the guided form even on a real TTY."""
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True, raising=False)
+    monkeypatch.delenv("TOKENPAK_NONINTERACTIVE", raising=False)
+    monkeypatch.setenv("CI", "1")
+    assert _is_interactive() is False

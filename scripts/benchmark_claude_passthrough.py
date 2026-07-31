@@ -144,6 +144,9 @@ def _validate_passthrough_result(result: Any, body: bytes, headers: dict[str, st
     ]
     if [stage.name for stage in result.stages] != expected_stages:
         raise RuntimeError("Claude Code passthrough did not execute the expected stage sequence")
+    vault_stage = next(stage for stage in result.stages if stage.name == "vault_injection")
+    if vault_stage.skipped or "injection_text" not in vault_stage.details:
+        raise RuntimeError("Claude Code passthrough did not exercise vault injection")
 
 
 def _time_batch(fn: Callable[[], Any], iterations: int) -> float:
@@ -198,7 +201,7 @@ def run_benchmark(
     normalized_round_p50s: list[float] = []
 
     offline_vault_bridge = types.ModuleType("tokenpak.proxy.vault_bridge")
-    offline_vault_bridge.inject_vault_context = _no_vault_result  # type: ignore[attr-defined]
+    offline_vault_bridge._inject_vault_context_with_text = _no_vault_result  # type: ignore[attr-defined]
 
     with (
         mock.patch.dict(sys.modules, {"tokenpak.proxy.vault_bridge": offline_vault_bridge}),

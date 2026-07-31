@@ -45,9 +45,9 @@ Main resolver class that:
 Configuration dataclass for controlling resolution behavior:
 ```python
 config = TermResolverConfig(
-    top_k=3,                  # Max cards to return (capped at 5)
-    max_bytes_per_card=200,   # Truncation limit per snippet
-    enabled=True,             # Feature flag
+    top_k=3,  # Max cards to return (capped at 5)
+    max_bytes_per_card=200,  # Truncation limit per snippet
+    enabled=True,  # Feature flag
 )
 ```
 
@@ -93,6 +93,7 @@ Default: **disabled** (zero overhead, no behavior change)
 # Feature import (safe fallback if unavailable)
 try:
     from tokenpak.agent.semantic import TermResolver, TermResolverConfig
+
     TERM_RESOLVER_AVAILABLE = True
 except ImportError:
     TERM_RESOLVER_AVAILABLE = False
@@ -102,6 +103,7 @@ TERM_RESOLVER = None
 if TERM_RESOLVER_AVAILABLE and TERM_RESOLVER_ENABLED:
     config = TermResolverConfig(...)
     TERM_RESOLVER = TermResolver(config=config)
+
 
 # Updated inject_vault_context() to call term resolver
 def inject_vault_context(body_bytes, adapter=None):
@@ -209,9 +211,9 @@ Expected structure in `term_cards.json`:
 from tokenpak.agent.semantic import resolve_terms
 
 result = resolve_terms("What is compression ratio?")
-print(result.canonical_ids)      # ["compression_ratio"]
-print(result.injection_text)     # Ready for prompt
-print(result.tokens_estimate)    # 45 tokens
+print(result.canonical_ids)  # ["compression_ratio"]
+print(result.injection_text)  # Ready for prompt
+print(result.tokens_estimate)  # 45 tokens
 ```
 
 ### Custom Configuration

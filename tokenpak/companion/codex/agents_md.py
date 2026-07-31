@@ -17,6 +17,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .. import _style
+
 _AGENTS_CONTENT = """\
 # TokenPak Companion
 
@@ -76,9 +78,16 @@ Do not load capsules automatically on every session start.  Only load when:
 """
 
 
-def generate_agents_md() -> str:
-    """Return the AGENTS.md content for TokenPak companion."""
-    return _AGENTS_CONTENT
+def generate_agents_md(style: str | None = None) -> str:
+    """Return the AGENTS.md content for TokenPak companion.
+
+    ``style`` selects the response-style block appended to the section; it
+    defaults to the ``TOKENPAK_COMPANION_STYLE`` environment value, then to
+    ``standard`` (no block) when unset.  The block lands inside the managed
+    section, below a ``##`` heading, so it is replaced and removed with the
+    rest of the section rather than surviving as an orphan.
+    """
+    return _AGENTS_CONTENT + _style.directive(style)
 
 
 def _selected_codex_home(codex_home: Path | None = None) -> Path:
@@ -116,7 +125,7 @@ def _install_agents_md(target: str = "global", *, codex_home: Path | None = None
 
     agents_path.parent.mkdir(parents=True, exist_ok=True)
 
-    new_content = _AGENTS_CONTENT.rstrip() + "\n"
+    new_content = generate_agents_md().rstrip() + "\n"
 
     if agents_path.exists():
         existing = agents_path.read_text()

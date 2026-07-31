@@ -375,7 +375,21 @@ Don't worry if you don't see these — they're Beta 2+ surface.
 
 ## 13. Reporting bugs
 
-Please include:
+### Where to send it
+
+- **Public issues** — <https://github.com/tokenpak/tokenpak/issues>. The primary route, and
+  the best one: other people can find the answer afterwards.
+- **`hello@tokenpak.ai`** — if you were invited directly and would rather not post in public,
+  or the report contains anything from your own workload you would not publish. Same
+  attention as a public issue; the only difference is that it is not indexed.
+- **Security** — `security@tokenpak.ai` only, never a public issue. Anything touching
+  credentials, tokens, or data exposure goes here first.
+
+**What to expect.** Best-effort, as maintainer capacity allows. There is **no guaranteed
+response time at this tier**, and we would rather tell you that than imply otherwise. Reports
+are read; what happens next depends on severity and what else is in flight.
+
+### What to include
 
 1. `tokenpak --version` output.
 2. Your platform (`uname -a` on Linux/macOS).
@@ -383,4 +397,26 @@ Please include:
 4. `tokenpak home path` output (so we know which home is active).
 5. `tokenpak doctor --conformance --json` output (if relevant).
 
-Beta is the time to surface rough edges — your reports are gold.
+Piped or redirected output is plain text automatically, so pasting a redirected log will not
+arrive full of colour codes.
+
+### Known rough edges — not worth reporting
+
+These are already recorded, so you can skip them and we will not waste your time
+re-triaging:
+
+- `tokenpak version` prints a config path under `~/.tokenpak/` and a lock path under
+  `~/vault/System/`. Both are stale strings from an older layout; the state it reports is
+  correct, and the path it names is not where your config lives. `tokenpak doctor` and
+  `tokenpak status` both report the real location.
+- Some commands still create a `~/.tokenpak/` directory alongside the current `~/.tpk/` one,
+  and `TOKENPAK_HOME` does not yet redirect every one of them.
+- `tokenpak status` and `tokenpak doctor` can disagree about how many problems exist. Trust
+  `doctor`.
+- `tokenpak last` is listed under `tokenpak help --all` as excluded; it has no implementation
+  behind it yet.
+
+Anything **not** on that list is worth sending, including things you are unsure about.
+
+Beta is the time to surface rough edges — your reports are gold. The most valuable report is
+not "it crashed"; it is **"you showed me a number and I could not tell where it came from."**

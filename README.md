@@ -81,12 +81,18 @@ Run `tokenpak integrate` to see the full client list with setup guides for each.
 ## Install
 
 ```bash
-pip install tokenpak
+uv tool install tokenpak      # or: pipx install tokenpak
 ```
 
-See [docs/quickstart.md](docs/quickstart.md) for virtual-env setup and per-client configuration.
+Either one installs the `tokenpak` command into its own isolated environment.
+To use TokenPak as a library inside a project, `pip install tokenpak` into an
+activated virtual environment instead.
 
-Requirements: Python 3.10+. No external dependencies for core functionality.
+See [docs/install-guide.md](docs/install-guide.md) for per-installer detail,
+optional extras, and the `externally-managed-environment` (PEP 668) error.
+See [docs/quickstart.md](docs/quickstart.md) for per-client configuration.
+
+Requirements: Python 3.10+.
 
 Exposing the proxy beyond `127.0.0.1`? Set `TOKENPAK_PROXY_AUTH_TOKEN` to a
 shared secret to require `Authorization: Bearer <token>` on remote requests

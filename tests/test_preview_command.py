@@ -119,3 +119,69 @@ class TestPreviewCommand:
         combined = result.stdout + result.stderr
         assert "Nothing to preview" in combined
         assert "input was empty" in combined
+
+
+class TestPreviewInputTruth:
+    """Input handling must never report a confident number for input it did not read.
+
+    Each case here produced a plausible-looking result before: a file path was
+    compressed as prose, a missing file raised a traceback, and malformed JSON
+    was silently measured as text. A wrong number that looks right is worse
+    than an error, because nothing prompts the caller to look again.
+    """
+
+    def test_positional_file_path_is_refused_not_compressed(self):
+        """A path passed positionally must be refused, not measured as text."""
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "conversation.json"
+            target.write_text(json.dumps([{"role": "user", "content": "hello " * 200}]))
+            result = subprocess.run(
+                [sys.executable, "-m", "tokenpak", "preview", str(target)],
+                capture_output=True,
+                text=True,
+            )
+        assert result.returncode != 0
+        assert "--file" in result.stdout
+        # The bug: the path string itself became the measured input.
+        assert "Savings:" not in result.stdout
+
+    def test_missing_file_reports_cleanly(self):
+        """A missing --file target gets a message, not a traceback."""
+        result = subprocess.run(
+            [sys.executable, "-m", "tokenpak", "preview", "--file", "/nonexistent/x.json"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert "Traceback" not in result.stdout + result.stderr
+        assert "No such file" in result.stdout
+
+    def test_malformed_json_is_refused_not_measured_as_text(self):
+        """A .json file that does not parse must not be silently compressed."""
+        with tempfile.TemporaryDirectory() as td:
+            bad = Path(td) / "bad.json"
+            bad.write_text('{"broken": [')
+            result = subprocess.run(
+                [sys.executable, "-m", "tokenpak", "preview", "--file", str(bad)],
+                capture_output=True,
+                text=True,
+            )
+        assert result.returncode != 0
+        assert "not valid JSON" in result.stdout
+        assert "Savings:" not in result.stdout
+
+    def test_valid_file_still_measures(self):
+        """The corrections must not disturb the working path."""
+        with tempfile.TemporaryDirectory() as td:
+            good = Path(td) / "conv.json"
+            ctx = "namespace: production-east\ncluster: eks-prod-1\n" * 4
+            good.write_text(
+                json.dumps([{"role": "user", "content": f"{ctx}\nturn {i}"} for i in range(6)])
+            )
+            result = subprocess.run(
+                [sys.executable, "-m", "tokenpak", "preview", "--file", str(good)],
+                capture_output=True,
+                text=True,
+            )
+        assert result.returncode == 0
+        assert "Savings:" in result.stdout

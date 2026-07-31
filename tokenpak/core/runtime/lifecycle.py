@@ -239,10 +239,26 @@ def write_pid(pid: int) -> Path:
 
 
 def clear_pid() -> None:
-    """Remove PID files from every known home. Never raises."""
+    """Remove PID files from the homes this install may own. Never raises.
+
+    Sweeping every candidate home is right for the ordinary case: a stale PID
+    left in the legacy home should not outlive a restart. It is wrong under an
+    explicit ``TOKENPAK_HOME``, which exists to sandbox — there, sweeping the
+    real homes deletes the operator's live PID file and orphans a proxy this
+    install does not own. `setup` reaches this on its "proxy did not start"
+    branch, and a sandbox is precisely where a start is most likely to fail.
+    """
+    import os
+
     from tokenpak import _paths
 
-    for base in _paths.read_candidates():
+    override = os.environ.get("TOKENPAK_HOME", "").strip()
+    if override:
+        bases = [Path(override).expanduser()]
+    else:
+        bases = _paths.read_candidates()
+
+    for base in bases:
         try:
             (base / PID_FILENAME).unlink(missing_ok=True)
         except OSError:

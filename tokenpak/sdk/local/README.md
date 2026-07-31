@@ -66,7 +66,7 @@ for chunk in client.chat(model="llama3", tokenpak=pack, stream=True):
 response = client.chat(
     model="llama3",
     tokenpak=pack,
-    messages=[{"role": "user", "content": "Where is the Eiffel Tower?"}]
+    messages=[{"role": "user", "content": "Where is the Eiffel Tower?"}],
 )
 ```
 
@@ -74,9 +74,7 @@ response = client.chat(
 
 ```python
 response = client.generate(
-    model="llama3",
-    tokenpak=pack,
-    prompt="Explain the above context in one sentence."
+    model="llama3", tokenpak=pack, prompt="Explain the above context in one sentence."
 )
 print(response["response"])
 ```
@@ -94,7 +92,7 @@ pack.add(Block(type="evidence", content="Context goes here..."))
 response = client.complete(
     model="lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF",
     tokenpak=pack,
-    user_message="What does the context say?"
+    user_message="What does the context say?",
 )
 print(response.choices[0].message.content)
 ```
@@ -119,11 +117,7 @@ client = TokenPakOpenAICompat(
 )
 
 pack = TokenPak(instructions="You are a helpful assistant.")
-response = client.complete(
-    model="my-model",
-    tokenpak=pack,
-    user_message="Hello!"
-)
+response = client.complete(model="my-model", tokenpak=pack, user_message="Hello!")
 ```
 
 ## Auto-Budget
@@ -134,15 +128,15 @@ The core feature: `auto_budget()` computes a safe input token budget from the mo
 from tokenpak_local import auto_budget, get_context_length
 
 # Get context length for any known model
-get_context_length("llama3")       # → 8192
-get_context_length("phi3")         # → 4096
-get_context_length("llama3.1:8b") # → 131072
-get_context_length("mistral")      # → 32768
+get_context_length("llama3")  # → 8192
+get_context_length("phi3")  # → 4096
+get_context_length("llama3.1:8b")  # → 131072
+get_context_length("mistral")  # → 32768
 
 # Compute input budget (default: 75% of context window)
-auto_budget("llama3")       # → 6144  (75% of 8192)
-auto_budget("phi3")         # → 3072  (75% of 4096)
-auto_budget("llama3.1:8b") # → 98304 (75% of 131072)
+auto_budget("llama3")  # → 6144  (75% of 8192)
+auto_budget("phi3")  # → 3072  (75% of 4096)
+auto_budget("llama3.1:8b")  # → 98304 (75% of 131072)
 
 # Custom output fraction
 auto_budget("llama3", output_fraction=0.5)  # → 4096 (50/50 split)
@@ -224,11 +218,7 @@ pack = pack_from_blocks(
 
 # Inference
 client = TokenPakOllama()
-response = client.chat(
-    model="llama3",
-    tokenpak=pack,
-    messages=[{"role": "user", "content": query}]
-)
+response = client.chat(model="llama3", tokenpak=pack, messages=[{"role": "user", "content": query}])
 print(response["message"]["content"])
 ```
 

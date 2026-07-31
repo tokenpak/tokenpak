@@ -29,10 +29,16 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
+import shlex
+import shutil
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any, TextIO
 
+from .._formatting.colors import Color
+from . import _style
 from .config import CompanionConfig
 
 # ---------------------------------------------------------------------------
@@ -173,9 +179,9 @@ def main(args: list[str] | None = None) -> int:
     settings_path = _write_settings(config)
     prompt_path = _write_system_prompt(config)
 
-    _TEAL = "\033[38;2;0;180;170m"
-    _DIM = "\033[2m"
-    _RESET = "\033[0m"
+    _TEAL = Color.TEAL
+    _DIM = Color.DIM
+    _RESET = Color.RESET
 
     mode = config.profile.capitalize()
     budget = f"${config.budget_daily_usd:.2f}/day" if config.budget_daily_usd > 0 else "Unlimited"
@@ -241,8 +247,11 @@ def main(args: list[str] | None = None) -> int:
 
     # Prefix session name with 📦 so tokenpak sessions are visually distinct
     # in terminal tabs. If the user provided --name/-n, prefix their value;
-    # otherwise inject a default name.
-    args = _prefix_session_name(args)
+    # otherwise inject a default name that fits the terminal. The resolved
+    # label is handed to the SessionStart hook so it restores this exact
+    # label after /clear instead of keeping a copy of its own.
+    args, session_label = _resolve_session_name(args)
+    _write_session_title(config, session_label)
 
     # Build claude command
     claude_args = ["claude"]
@@ -297,19 +306,21 @@ def main(args: list[str] | None = None) -> int:
 
 
 _SESSION_PREFIX = "\U0001f4e6"  # 📦
-# ANSI colors for the branded session label. A black background fill is
-# painted across the whole label so it reads as a solid TokenPak chip
-# regardless of the user's terminal background; the trailing reset clears
-# it. Foreground: white "📦 Token", teal "Pak", gray "Claude Companion".
-_LBL_BG_BLACK = "\033[48;2;0;0;0m"  # solid black background fill
-_LBL_TEAL = "\033[38;2;0;180;170m"  # "Pak" — TokenPak teal
-_LBL_WHITE = "\033[38;2;255;255;255m"  # "📦 Token"        — white
-_LBL_GRAY = "\033[38;2;90;94;105m"  # "Claude Companion" — muted gray
-_LBL_RESET = "\033[0m"
-# Default session label shown in the top-HR chat-header. Kept in sync
-# with ``hooks/session_start_name.sh`` so the post-/clear restore
-# matches the launcher's startup label exactly. Real ESC bytes here —
-# they pass through ``os.execvpe`` to ``--name`` as raw argv bytes.
+# Colors for the branded session label, derived from the single palette
+# definition in ``_formatting.colors`` — never write a brand escape inline
+# here, or the label and the rest of the CLI can drift apart. A solid fill is
+# painted across the whole label so it reads as one chip regardless of the
+# user's terminal background; the trailing reset clears it.
+_LBL_BG_BLACK = Color.CHROME_BG
+_LBL_TEAL = Color.TEAL  # "Pak"
+_LBL_WHITE = Color.PAPER  # "📦 Token"
+_LBL_GRAY = Color.LIGHT_GRAY  # "Claude Companion"
+_LBL_RESET = Color.RESET
+# Default session label shown in the chat-header. Real ESC bytes here — they
+# pass through ``os.execvpe`` to ``--name`` as raw argv bytes. The
+# ``SessionStart`` hook re-emits this exact string after a session is
+# re-created; it reads it from the run dir rather than keeping its own copy,
+# so this stays the only definition.
 _DEFAULT_SESSION_LABEL = (
     f"{_LBL_BG_BLACK}"
     f"{_LBL_WHITE} {_SESSION_PREFIX} Token"
@@ -317,28 +328,92 @@ _DEFAULT_SESSION_LABEL = (
     f"{_LBL_GRAY} Claude Companion "
     f"{_LBL_RESET}"
 )
+# Progressively shorter fallbacks for narrow terminals, widest first.
+_SHORT_SESSION_LABEL = (
+    f"{_LBL_BG_BLACK}{_LBL_WHITE}{_SESSION_PREFIX} Token{_LBL_TEAL}Pak{_LBL_RESET}"
+)
+# Columns the host CLI spends on its own chrome around the label (padding
+# plus the minimum rule on either side). Measured against the rendered
+# header, with headroom: below this the header wraps and every row after it
+# is laid out against the wrong width.
+_LABEL_CHROME_COLUMNS = 10
+
+_SGR_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
-def _prefix_session_name(args: list[str]) -> list[str]:
+def _display_width(text: str) -> int:
+    """Columns ``text`` occupies once styling is stripped.
+
+    Wide and fullwidth characters count as two — the same assumption host
+    CLIs make — so a terminal that renders them narrower only ever leaves us
+    with more room than we reserved, never less.
+    """
+    plain = _SGR_RE.sub("", text)
+    width = 0
+    for ch in plain:
+        if unicodedata.combining(ch):
+            continue
+        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return width
+
+
+def _terminal_columns() -> int:
+    """Best available terminal width, defaulting to the conventional 80."""
+    try:
+        return shutil.get_terminal_size(fallback=(80, 24)).columns
+    except Exception:
+        return 80
+
+
+def _session_label_for_width(columns: int | None = None) -> str | None:
+    """Widest branded label that fits, or ``None`` when none does.
+
+    The host CLI does not truncate an over-long session name — it wraps it,
+    which makes the header taller than it accounts for and knocks every row
+    below it onto the wrong line. So we pick a label that fits, or pass no
+    name at all and let the host use its own default.
+    """
+    if columns is None:
+        columns = _terminal_columns()
+    for label in (_DEFAULT_SESSION_LABEL, _SHORT_SESSION_LABEL):
+        if _display_width(label) + _LABEL_CHROME_COLUMNS <= columns:
+            return label
+    return None
+
+
+def _resolve_session_name(args: list[str]) -> tuple[list[str], str | None]:
     """Prefix the Claude Code session name with 📦.
 
     Handles ``--name VALUE``, ``-n VALUE``, and ``--name=VALUE`` forms.
-    If no name flag is present, injects the default branded label
-    (``📦 TokenPak Claude Companion``).
-    Returns a new list (never mutates the input).
+    If no name flag is present, injects the widest branded label that fits
+    the current terminal, and injects nothing when even the short form would
+    overflow.
+
+    Returns a new argv list (never mutates the input) alongside the label
+    that ended up in effect, so the ``SessionStart`` hook can restore that
+    same label — a user-supplied ``--name`` included — rather than assuming
+    the branded default.
     """
     args = list(args)  # shallow copy
     for i, arg in enumerate(args):
         if arg in ("--name", "-n") and i + 1 < len(args):
             args[i + 1] = f"{_SESSION_PREFIX} {args[i + 1]}"
-            return args
+            return args, args[i + 1]
         if arg.startswith("--name="):
             _, val = arg.split("=", 1)
-            args[i] = f"--name={_SESSION_PREFIX} {val}"
-            return args
-    # No name flag found — inject the default branded label
-    args.extend(["--name", _DEFAULT_SESSION_LABEL])
-    return args
+            label = f"{_SESSION_PREFIX} {val}"
+            args[i] = f"--name={label}"
+            return args, label
+    # No name flag found — inject the branded label when it fits.
+    label = _session_label_for_width()
+    if label is not None:
+        args.extend(["--name", label])
+    return args, label
+
+
+def _prefix_session_name(args: list[str]) -> list[str]:
+    """Argv-only view of :func:`_resolve_session_name`."""
+    return _resolve_session_name(args)[0]
 
 
 def _write_mcp_config(config: CompanionConfig) -> str:
@@ -361,6 +436,33 @@ def _write_mcp_config(config: CompanionConfig) -> str:
     return str(path)
 
 
+def _write_session_title(config: CompanionConfig, label: str | None) -> str:
+    """Write the ``SessionStart`` payload the label hook prints.
+
+    Generating this from the Python constant is what keeps the shell hook
+    from carrying a second, hand-copied set of escapes. When no label fits
+    the terminal, the file is removed so the hook emits nothing and the host
+    keeps its own default.
+    """
+    path = config.run_dir / "session_title.json"
+    if label is None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        return str(path)
+    payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "sessionTitle": label,
+        }
+    }
+    # ensure_ascii keeps the ESC bytes as \u001b escapes, which is the only
+    # form valid inside a JSON string.
+    path.write_text(json.dumps(payload, ensure_ascii=True))
+    return str(path)
+
+
 def _write_settings(config: CompanionConfig) -> str:
     """Write the settings overlay with hook configuration and permissions.
 
@@ -380,29 +482,34 @@ def _write_settings(config: CompanionConfig) -> str:
 
     Persistent top-HR session label via ``SessionStart`` hook
     ---------------------------------------------------------
-    The launcher passes ``--name "<ANSI-styled label>"`` at startup,
-    painting ``[ 📦 TokenPak Claude Companion ]`` (teal brackets +
-    ``Pak``, white ``📦 Token``, gray ``Claude Companion``) in the
-    top-HR chat-header — foreground-only, no background fill, so the
-    user's terminal background shows through. But ``--name`` is
-    per-session: ``/clear`` creates a *new* session (new ``session_id``)
-    and the new session inherits no name — the top-HR reverts to
-    default white/gray chrome with no branding.
+    The launcher passes ``--name "<styled label>"`` at startup, painting
+    ``📦 TokenPak Claude Companion`` (white ``📦 Token``, accent ``Pak``,
+    muted ``Claude Companion``) over a solid fill so every glyph keeps
+    contrast against the host's own header chrome. The label is only
+    passed when it fits the current terminal — see
+    :func:`_session_label_for_width`. But ``--name`` is per-session:
+    ``/clear`` creates a *new* session (new ``session_id``) and the new
+    session inherits no name — the top-HR reverts to default white/gray
+    chrome with no branding.
 
     Claude Code's ``SessionStart`` hook fires on session-creation
     events (``startup``, ``clear``, ``resume``, ``compact``). When a
     hook emits ``hookSpecificOutput.sessionTitle``, the TUI uses that
     string for the new session's display label. We register a tiny
-    bash hook (``hooks/session_start_name.sh``) with matcher
-    ``"clear"`` so the label — including its ANSI styling — is
-    reasserted after every ``/clear``. The hook emits ANSI escapes as
-    JSON ``\\u001b`` literals (real ESC bytes are invalid in JSON
-    strings; ``\\u001b`` is the standards-compliant form, decoded back
-    to ESC by the consumer's JSON parser).
+    bash hook (``hooks/session_start_name.sh``) so the label — including
+    its styling — is reasserted after every session re-creation.
 
-    The terminal-tab title (OSC 0 sequence in :func:`main` before
-    ``os.execvpe``) is unrelated — it's a one-shot pre-exec write that
-    Claude Code itself rewrites on its own cadence.
+    The hook does not carry its own copy of the label. :func:`main`
+    writes the resolved label to ``<run_dir>/session_title.json`` before
+    exec and the hook simply prints that file, so the escape sequences
+    have exactly one definition (in ``_formatting.colors``) and the two
+    surfaces cannot drift. Escapes are stored as JSON ``\\u001b``
+    literals — real ESC bytes are invalid in JSON strings — and decoded
+    back to ESC by the consumer's parser. When the file is absent the
+    hook stays silent and the host keeps its own default label.
+
+    The terminal tab title is left to Claude Code, which repaints it on
+    its own render loop; we never emit OSC-0 ourselves.
 
     User overrides win: only injects when the user has not configured
     a ``SessionStart`` entry in their global settings.
@@ -423,11 +530,17 @@ def _write_settings(config: CompanionConfig) -> str:
     else:
         hook_cmd = None
 
-    # SessionStart hook that re-emits the top-HR session label after
-    # /clear. Skipped when the bundled script is missing on this host
-    # (same defensive pattern as pre_send.sh above).
+    # SessionStart hook that re-emits the session label after /clear.
+    # Skipped when the bundled script is missing on this host (same
+    # defensive pattern as pre_send.sh above). The payload path is passed
+    # explicitly so the hook never has to re-derive the run dir.
     session_name_hook = hooks_dir / "session_start_name.sh"
-    session_name_cmd = f"bash {session_name_hook}" if session_name_hook.is_file() else None
+    session_title_path = config.run_dir / "session_title.json"
+    session_name_cmd = (
+        f"bash {shlex.quote(str(session_name_hook))} {shlex.quote(str(session_title_path))}"
+        if session_name_hook.is_file()
+        else None
+    )
 
     settings: dict[str, Any] = {}
     user_settings_path = Path.home() / ".claude" / "settings.json"
@@ -513,7 +626,7 @@ def _write_settings(config: CompanionConfig) -> str:
 
 
 def _write_system_prompt(config: CompanionConfig) -> str:
-    """Write the companion system prompt fragment."""
+    """Write the prompt fragment, adding style guidance only for lean."""
     path = config.run_dir / "companion-prompt.md"
-    path.write_text(_SYSTEM_PROMPT)
+    path.write_text(_SYSTEM_PROMPT + _style.directive(config.style))
     return str(path)

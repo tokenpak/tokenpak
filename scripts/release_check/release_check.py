@@ -30,6 +30,7 @@ temporary tree.
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib.util
 import re
 import subprocess
@@ -275,6 +276,19 @@ def load_literal_baseline() -> set:
     return allowed
 
 
+def _tree_has_tokenpak_literal(tree: ast.AST) -> bool:
+    """Return whether parsed Python contains a legacy-home literal value."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Constant):
+            continue
+        value = node.value
+        if isinstance(value, str) and ".tokenpak" in value:
+            return True
+        if isinstance(value, bytes) and b".tokenpak" in value:
+            return True
+    return False
+
+
 def gate_tokenpak_literal(root: Path, allowed=None) -> GateResult:
     if allowed is None:
         allowed = load_literal_baseline()
@@ -282,6 +296,8 @@ def gate_tokenpak_literal(root: Path, allowed=None) -> GateResult:
     if not pkg.is_dir():
         return GateResult("tokenpak-literal", True, ["no tokenpak/ package tree; skipped"])
     offenders = []
+    unreadable = []
+    parse_failures = []
     for fp in sorted(pkg.rglob("*.py")):
         rel = fp.relative_to(root).as_posix()
         if rel.startswith("tokenpak/tests/"):  # tests are not product code
@@ -289,12 +305,23 @@ def gate_tokenpak_literal(root: Path, allowed=None) -> GateResult:
         if rel in allowed:
             continue
         text = _read(fp)
-        if text and ".tokenpak" in text:
+        if text is None:
+            unreadable.append(rel)
+            continue
+        try:
+            tree = ast.parse(text, filename=rel)
+        except SyntaxError as exc:
+            location = f":{exc.lineno}" if exc.lineno is not None else ""
+            parse_failures.append(f"{rel}{location}: {exc.msg}")
+            continue
+        if _tree_has_tokenpak_literal(tree):
             offenders.append(rel)
-    ok = not offenders
-    msgs = [f"NEW .tokenpak literal outside the legacy baseline: {r}" for r in offenders] or [
-        "no .tokenpak regressions outside the frozen legacy baseline"
-    ]
+    ok = not (offenders or unreadable or parse_failures)
+    msgs = [f"NEW .tokenpak literal outside the legacy baseline: {r}" for r in offenders]
+    msgs.extend(f"cannot read scanned Python source: {r}" for r in unreadable)
+    msgs.extend(f"cannot parse scanned Python source: {r}" for r in parse_failures)
+    if not msgs:
+        msgs = ["no .tokenpak regressions outside the frozen legacy baseline"]
     return GateResult("tokenpak-literal", ok, msgs)
 
 

@@ -3,6 +3,8 @@ name: Identity & language check
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,17 +26,40 @@ jobs:
       - name: Compute changed files
         id: changed
         run: |
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.event.pull_request.head.sha }}"
-          # Only files added or modified in this PR; binary files skipped.
+          set -euo pipefail
+          event="${{ github.event_name }}"
+          case "$event" in
+            pull_request)
+              base="${{ github.event.pull_request.base.sha }}"
+              head="${{ github.event.pull_request.head.sha }}"
+              ;;
+            push)
+              base="${{ github.event.before }}"
+              head="${{ github.event.after }}"
+              ;;
+            *)
+              echo "::error::Unsupported event: $event"
+              exit 1
+              ;;
+          esac
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            echo "::error::Event has no usable base SHA; refusing an empty scan."
+            exit 1
+          fi
+          if [[ -z "$head" || "$head" =~ ^0+$ ]]; then
+            echo "::error::Event has no usable head SHA; refusing an empty scan."
+            exit 1
+          fi
+          # Only files added or modified in this comparison; binary files skipped.
           # The release leak and public-safety scanners are excluded for the
           # same reason this workflow and public-layout-check.yml are: they are
           # full-tree scanners and intentionally contain forbidden-pattern
           # registers plus path-scoped allowlist literals.
-          git diff --name-only --diff-filter=AM "$base" "$head" \
-            | grep -vE "^(packages/tests/|tests/|sdk/dist/|scripts/release_gate/(check_release_leaks|public_safety_scan)\.py|\.github/workflows/identity-language-check\.yml|\.github/workflows/public-layout-check\.yml|\.pre-commit-config\.yaml)" \
+          git diff --name-only --diff-filter=AM "$base" "$head" > all-changed-files.txt
+          grep -vE "^(packages/tests/|tests/|sdk/dist/|scripts/release_gate/(check_release_leaks|public_safety_scan)\.py|\.github/workflows/identity-language-check\.yml|\.github/workflows/public-layout-check\.yml|\.pre-commit-config\.yaml)" all-changed-files.txt \
             | grep -E '\.(md|py|yml|yaml|json|toml|sh|js|ts|tsx)$' \
             > changed-files.txt || true
+          rm all-changed-files.txt
           echo "Changed files (filtered):"
           cat changed-files.txt | sed 's/^/  /'
 

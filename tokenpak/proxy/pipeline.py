@@ -115,21 +115,17 @@ def stage_vault_injection(
         return request, result
 
     try:
-        from tokenpak.proxy.vault_bridge import inject_vault_context
+        from tokenpak.proxy.vault_bridge import _inject_vault_context_with_text
     except ImportError:
         result.skipped = True
         result.skip_reason = "vault_bridge_unavailable"
         return request, result
 
-    # vault_bridge returns (body, tokens, sources) — 3 values.
-    # The monolith version returns 4 (+ raw_injection_text).
-    # Handle both during the migration.
-    ret = inject_vault_context(request.body, adapter=adapter, request=request)
-    if len(ret) == 4:
-        body, injected_tokens, injected_sources, injection_text = ret
-    else:
-        body, injected_tokens, injected_sources = ret
-        injection_text = ""
+    body, injected_tokens, injected_sources, injection_text = _inject_vault_context_with_text(
+        request.body,
+        adapter=adapter,
+        request=request,
+    )
 
     if injection_mode == "byte_splice":
         # Don't apply the JSON-mutated body — save the text for byte splicing
@@ -434,11 +430,10 @@ def stage_byte_restore(
     # Check query length relevance gate
     query_signal = ""
     try:
-        from tokenpak.proxy import vault_bridge
+        from tokenpak.proxy.adapters.utils import extract_query_signal
 
-        extract_query_signal = getattr(vault_bridge, "extract_query_signal")
         query_signal = extract_query_signal(original_body, adapter=adapter)
-    except (ImportError, Exception):
+    except Exception:
         pass
 
     if len(query_signal) < min_query_len:

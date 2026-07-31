@@ -888,15 +888,25 @@ _PRINT_ONLY_KEYS: frozenset[str] = frozenset(
 
 
 def _tty_confirm(prompt: str, default: bool = True) -> bool:
-    """Readline-style [Y/n] prompt. Returns default on empty input."""
+    """Readline-style [Y/n] prompt. Returns the default on a bare Enter.
+
+    EOF is **not** consent. ``readline()`` returns ``""`` at end-of-stream and
+    ``"\\n"`` for a bare Enter; stripping first collapsed the two, so an
+    exhausted stdin (CI runner with a pty, ``tmux send-keys``, an agent
+    harness) read as "user accepted the default" and silently wrote to a
+    user-owned config file. Inspect the raw value before stripping.
+    """
     hint = "[Y/n]" if default else "[y/N]"
     sys.stdout.write(f"\n  {prompt} {hint}: ")
     sys.stdout.flush()
     try:
-        line = sys.stdin.readline().strip().lower()
+        raw = sys.stdin.readline()
     except (EOFError, KeyboardInterrupt):
         return False
-    if not line:
+    if raw == "":  # EOF — no answer was given, so nothing is confirmed.
+        return False
+    line = raw.strip().lower()
+    if not line:  # Bare Enter — accept the default shown in the hint.
         return default
     return line in ("y", "yes")
 
@@ -1405,5 +1415,17 @@ def _is_no_tui() -> bool:
 
 
 def _is_interactive() -> bool:
-    """Return True when both stdin and stdout are TTYs (guided form is possible)."""
-    return sys.stdin.isatty() and sys.stdout.isatty()
+    """Return True when an interactive prompt is permitted.
+
+    A TTY on both streams is necessary but not sufficient: prompting is also
+    forbidden when ``TOKENPAK_NONINTERACTIVE`` is set, under CI, and when
+    ``TERM`` is ``dumb``. Delegates to the canonical bare-invocation gate so
+    the two can never drift apart, falling back to a plain TTY check only if
+    that import is unavailable.
+    """
+    try:
+        from tokenpak._cli_core import _interactive_menu_allowed
+
+        return _interactive_menu_allowed()
+    except Exception:
+        return bool(sys.stdin.isatty() and sys.stdout.isatty())

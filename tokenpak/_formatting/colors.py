@@ -19,10 +19,17 @@ class Color:
     # Retained only for the legacy OutputFormatter "muted" role + its tests.
     DIM = "\033[2m"
     WHITE = "\033[38;2;248;250;252m"  # #F8FAFC primary text
-    # Brand palette (24-bit truecolor) — canonical brand tokens.
-    TEAL = "\033[38;2;0;195;137m"  # tp-accent  #00C389 — identity / selection
+    # Brand palette (24-bit truecolor) — canonical brand tokens. This class is
+    # the single definition for Python/CLI surfaces: derive every brand color
+    # from here rather than writing an escape inline, so a palette change lands
+    # in one place.
+    TEAL = "\033[38;2;0;180;170m"  # tp-accent  #00B4AA — identity / selection
     PASTEL_YELLOW = "\033[38;2;237;224;133m"  # tp-signal-value #EDE085 (provisional) — savings only
     LIGHT_GRAY = "\033[38;2;107;114;128m"  # tp-mute    #6B7280 — secondary / muted text
+    # Runtime-chrome tokens — used only for TokenPak-owned chrome injected into
+    # host CLIs (session labels, statusline segments), never for command output.
+    PAPER = "\033[38;2;255;255;255m"  # wordmark foreground on the chrome fill
+    CHROME_BG = "\033[48;2;0;0;0m"  # solid fill behind chrome, for legibility
     # State colors (not brand tokens — left as-is)
     SUCCESS = "\033[38;2;45;212;191m"  # #2DD4BF
     WARNING = "\033[38;2;250;204;21m"  # #FACC15

@@ -89,8 +89,8 @@ Wrapper for individual messages with budget constraints.
 
 ```python
 msg = TokenPakMessage(role="user", content="...", budget=1000)
-print(msg.content)       # Truncated to budget
-print(msg.token_count)   # Estimated tokens
+print(msg.content)  # Truncated to budget
+print(msg.token_count)  # Estimated tokens
 ```
 
 ### `TokenPakAssistant`

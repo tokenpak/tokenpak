@@ -1236,16 +1236,20 @@ CAPSULE_BUILDER = _LazyAlias(get_capsule_builder)
 # ---------------------------------------------------------------------------
 
 
-def inject_vault_context(
+def _inject_vault_context_with_text(
     body_bytes: bytes,
     adapter: FormatAdapter | None = None,
     *,
     request: ProxyRequest | None = None,
-) -> tuple[bytes, int, list[str]]:
+) -> tuple[bytes, int, list[str], str]:
     """
     Search vault index for relevant context and inject into the system prompt.
     Optionally resolves glossary terms and injects term cards.
-    Returns (new_body_bytes, injected_tokens, source_refs).
+    Returns (new_body_bytes, injected_tokens, source_refs, raw_injection_text).
+
+    This private shape is consumed by the byte-preserved request pipeline. The
+    public :func:`inject_vault_context` wrapper below retains its historical
+    three-value return contract.
     """
     if request is not None:
         body_bytes = request.body
@@ -1263,7 +1267,7 @@ def inject_vault_context(
 
     vault_idx = get_vault_index()
     if not vault_idx.available:
-        return body_bytes, 0, []
+        return body_bytes, 0, [], ""
 
     active_adapter = adapter or _detect_adapter("", {}, body_bytes)
 
@@ -1274,7 +1278,7 @@ def inject_vault_context(
     _t_query_ms = (time.perf_counter() - _t) * 1000
 
     if not query:
-        return body_bytes, 0, []
+        return body_bytes, 0, [], ""
 
     term_resolver = get_term_resolver()
 
@@ -1359,7 +1363,7 @@ def inject_vault_context(
         combined_tokens = tokens_used
 
     if not combined_injection:
-        return body_bytes, 0, []
+        return body_bytes, 0, [], ""
 
     # Apply skeleton extraction to code blocks in injection text (code-body
     # elision when the extractor is available). No fixed savings percentage is
@@ -1374,7 +1378,7 @@ def inject_vault_context(
     try:
         new_body = active_adapter.inject_system_context(body_bytes, combined_injection)
     except Exception:
-        return body_bytes, 0, []
+        return body_bytes, 0, [], ""
     _t_inject_ms = (time.perf_counter() - _t5) * 1000
 
     _total_ms = (time.perf_counter() - _t) * 1000
@@ -1388,4 +1392,24 @@ def inject_vault_context(
         "total": round(_total_ms, 1),
     }
 
-    return new_body, combined_tokens, source_refs
+    return new_body, combined_tokens, source_refs, combined_injection
+
+
+def inject_vault_context(
+    body_bytes: bytes,
+    adapter: FormatAdapter | None = None,
+    *,
+    request: ProxyRequest | None = None,
+) -> tuple[bytes, int, list[str]]:
+    """Search the vault and inject matching context into a request body.
+
+    The three-value return shape is a public compatibility contract. Internal
+    byte-preserved callers that also need the raw injection text use the
+    private helper above.
+    """
+    new_body, injected_tokens, source_refs, _ = _inject_vault_context_with_text(
+        body_bytes,
+        adapter=adapter,
+        request=request,
+    )
+    return new_body, injected_tokens, source_refs

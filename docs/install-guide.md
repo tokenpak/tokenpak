@@ -6,15 +6,38 @@
 - **OS:** Linux, macOS, or Windows
 - **pip:** Version 20.0 or later (usually included with Python)
 
-## Basic Installation
+## Installing the CLI
 
-The simplest way to install TokenPak:
+TokenPak ships a command-line tool, so the most reliable installs put it in its
+own isolated environment and place `tokenpak` on your `PATH`:
 
 ```bash
+uv tool install tokenpak      # if you use uv
+pipx install tokenpak         # if you use pipx
+```
+
+Either one keeps TokenPak's dependencies away from your projects and your
+system Python, and both leave a clean uninstall behind.
+
+### Installing with pip
+
+If you want TokenPak importable inside a specific project, install it with pip
+**into an activated virtual environment**:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
 pip install tokenpak
 ```
 
 This installs the core library with heuristic-based compression.
+
+> **`error: externally-managed-environment`?** Recent Debian, Ubuntu and Fedora
+> ship a Python that refuses `pip install` outside a virtual environment
+> ([PEP 668](https://peps.python.org/pep-0668/)). That error means pip is
+> working as intended. Use `uv tool install tokenpak` or `pipx install
+> tokenpak` above, or activate a virtual environment first. Prefer those to
+> `--break-system-packages`, which writes into your user site and is easy to
+> forget about later.
 
 ## Optional Dependencies
 
@@ -61,9 +84,13 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv ~/my_tokenpak_env
 source ~/my_tokenpak_env/bin/activate
 
-# Install TokenPak with optional feature bundles
-pip install tokenpak[full]
+# Install TokenPak with optional feature bundles.
+# Use `uv pip`, not `pip`: a uv-created venv does not include pip itself.
+uv pip install "tokenpak[full]"
 ```
+
+If you only want the `tokenpak` command rather than an environment you import
+from, `uv tool install tokenpak` is simpler than either option above.
 
 ## Verify Your Installation
 

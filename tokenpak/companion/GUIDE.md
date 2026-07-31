@@ -25,6 +25,7 @@ profile, `.env`, or CI environment.  Values are read once at launch via
 | `TOKENPAK_COMPANION_ENABLED` | `1` | Master switch. Set `0` to disable companion without removing the launcher. |
 | `TOKENPAK_COMPANION_BUDGET` | `0` (unlimited) | Daily budget in USD. Set to e.g. `5.00` to cap daily spend. `0` = no cap. |
 | `TOKENPAK_COMPANION_PROFILE` | `balanced` | Preset profile: `lean`, `balanced`, or `verbose`. Controls prune threshold and cost display. |
+| `TOKENPAK_COMPANION_STYLE` | `standard` | Response style: `lean` or `standard`. `standard` preserves the host's native style; set `lean` to explicitly opt into dense technical markdown that can cut output tokens. Independent of `PROFILE`. |
 | `TOKENPAK_COMPANION_JOURNAL_DIR` | `~/.tokenpak/companion` | Directory for journal database, budget database, and capsule storage. |
 | `TOKENPAK_COMPANION_HOOKS` | `1` | Enable/disable the `UserPromptSubmit` hook pipeline (token estimation, cost journaling, budget gate). |
 | `TOKENPAK_COMPANION_MCP` | `1` | Enable/disable the MCP server. When disabled, no MCP tools are injected. |
@@ -46,6 +47,9 @@ profile, `.env`, or CI environment.  Values are read once at launch via
 export TOKENPAK_COMPANION_BUDGET=5.00
 export TOKENPAK_COMPANION_PROFILE=lean
 tokenpak claude
+
+# Explicitly opt into dense technical markdown
+TOKENPAK_COMPANION_STYLE=lean tokenpak claude
 
 # Custom journal directory (e.g. project-scoped storage)
 export TOKENPAK_COMPANION_JOURNAL_DIR=/my/project/.tokenpak
@@ -339,6 +343,60 @@ The capsule is returned as a Markdown block with sections:
 A capsule is built automatically when the session ends (via the transcript
 parser in `tokenpak.companion.capsules.builder`).  It extracts structure from
 the `.jsonl` transcript without an LLM call — deterministic and free.
+
+---
+
+## Disk footprint and retention
+
+Everything the companion writes outside its package directory lives under the
+journal directory (`~/.tokenpak/companion/` by default, overridable with
+`TOKENPAK_COMPANION_JOURNAL_DIR`).
+
+| Path | Holds | Growth | Auto-pruned |
+|---|---|---|---|
+| `codex/sessions/<id>/` | Per-session Codex home — the isolation boundary for `tokenpak codex` | Tens of MB per session | **Yes** — see caps below |
+| `codex/workspaces/` | Per-workspace Codex state | Moderate | Yes, with its session |
+| `journal.db` | Session and entry history | A few MB | **No** — see below |
+| `recall.db` | Recall index | Small | No |
+| `budget.db` | Spend and budget history | Small | No |
+| `capsules/` | Session capsules (Markdown) | ~2–10 KB each | No |
+| `run/` | Generated launch config — MCP, settings, prompt fragment | Fixed, rewritten each launch | Overwritten |
+
+### Codex session-home retention
+
+Session homes are the largest consumer, so they are the only tree with an
+automatic sweep. Three caps apply, and homes are evicted when **any** is
+exceeded:
+
+| Cap | Value |
+|---|---|
+| Maximum homes retained | 5 |
+| Maximum age | 7 days |
+| Maximum total size | 500 MB |
+
+`tokenpak doctor` reports current usage against all three. The sweep is
+conservative by design: it takes a lock, quarantines before deleting, and
+writes a receipt, so an interrupted sweep never half-deletes a home.
+
+### What is deliberately not auto-pruned
+
+`journal.db` and `capsules/` are the substrate for `journal_read`,
+`load_capsule`, and cross-session recall — they are memory, not cache. Deleting
+them reclaims very little space and permanently removes the history those
+features read. They are left under your control rather than swept.
+
+### Reclaiming space manually
+
+```bash
+tokenpak doctor                      # current usage against every cap
+du -sh ~/.tokenpak/companion/*       # what is actually large
+
+rm -rf ~/.tokenpak/companion/codex/sessions/<id>    # one session home
+rm ~/.tokenpak/companion/budget.db                  # resets spend history
+```
+
+Removing a session home only costs the ability to resume that Codex session.
+Removing `journal.db` or `capsules/` costs recall of past sessions.
 
 ---
 

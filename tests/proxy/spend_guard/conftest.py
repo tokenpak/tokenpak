@@ -55,9 +55,15 @@ def insert_request(
     cache_read_tokens: int = 0,
     seconds_ago: float = 0.0,
 ):
-    """Insert one synthetic monitor row."""
+    """Insert one synthetic monitor row without durability fsync overhead.
+
+    These fixture databases test rolling-cap queries, not crash durability.
+    Disabling synchronous writes prevents high-row-count cases from spending
+    their entire per-test timeout in filesystem journal commits on busy hosts.
+    """
     ts = (dt.datetime.now() - dt.timedelta(seconds=seconds_ago)).isoformat()
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA synchronous = OFF")
     conn.execute(
         """INSERT INTO requests (timestamp, model, request_type, input_tokens,
               output_tokens, estimated_cost, cache_read_tokens, cache_creation_tokens, session_id)

@@ -4,31 +4,38 @@
 # Claude Code fires SessionStart on session-creation events (startup,
 # clear, resume, compact). The launcher passes the branded label via
 # ``--name`` at startup, but ``--name`` is per-session: a /clear creates
-# a new session that inherits no name, so the top-HR chat-header reverts
-# to default chrome.
+# a new session that inherits no name, so the chat-header reverts to
+# default chrome.
 #
-# This hook re-asserts the branded label by emitting
-# ``hookSpecificOutput.sessionTitle``. Real ESC bytes are invalid in
-# JSON strings, so the ANSI escapes are emitted as ``\u001b`` literals —
-# the consumer's JSON parser decodes them back to ESC.
+# This hook re-asserts the label by printing the payload the launcher
+# generated at ``<run_dir>/session_title.json``. It deliberately carries
+# NO copy of the label or of its escape sequences: the colors have a
+# single definition in ``tokenpak/_formatting/colors.py``, the launcher
+# renders the label from that definition, and this hook only replays the
+# result. A second hand-written copy here would drift the moment the
+# palette changed — which is exactly what it used to do.
 #
-# Matcher: registered for ``"clear"`` (and reasonable to extend to
-# ``"resume"`` / ``"compact"``) by the launcher.
+# The file is absent when no label fits the current terminal width, in
+# which case this hook stays silent and Claude Code keeps its own default
+# label. That is the intended narrow-terminal behavior, not an error.
 
-# Branded session label — must stay in sync with
-# ``tokenpak/companion/launcher.py::_DEFAULT_SESSION_LABEL``.
-#
-#   black background        = \u001b[48;2;0;0;0m
-#   teal "Pak"              = \u001b[38;2;0;180;170m
-#   white "📦 Token"         = \u001b[38;2;255;255;255m
-#   gray "Claude Companion" = \u001b[38;2;90;94;105m
-#   reset                   = \u001b[0m
+set -u
 
-cat <<'JSON'
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "sessionTitle": "\u001b[48;2;0;0;0m\u001b[38;2;255;255;255m 📦 Token\u001b[38;2;0;180;170mPak\u001b[38;2;90;94;105m Claude Companion \u001b[0m"
-  }
-}
-JSON
+# Drain stdin so the caller never blocks writing the event payload.
+cat >/dev/null 2>&1 || true
+
+# The launcher registers this hook with the absolute path to the payload
+# as $1. Deriving it here instead would mean re-deriving the run dir, and
+# two plausible-looking defaults exist on disk on long-lived hosts — the
+# argument removes the guess.
+TITLE_FILE="${1:-}"
+if [ -z "$TITLE_FILE" ]; then
+    RUN_DIR="${TOKENPAK_COMPANION_RUN_DIR:-}"
+    [ -n "$RUN_DIR" ] || exit 0
+    TITLE_FILE="$RUN_DIR/session_title.json"
+fi
+
+[ -f "$TITLE_FILE" ] || exit 0
+
+cat "$TITLE_FILE"
+exit 0
