@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-07-26T16:01:58Z",
-  "package_version": "1.16.0",
+  "generated_at": "2026-07-31T07:25:00Z",
+  "package_version": "1.17.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -2278,6 +2278,10 @@
     {
       "module": "tokenpak.companion.journal.store",
       "name": "SessionRecord"
+    },
+    {
+      "module": "tokenpak.companion.launcher",
+      "name": "Color"
     },
     {
       "module": "tokenpak.companion.launcher",

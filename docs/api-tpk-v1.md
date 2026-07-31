@@ -34,7 +34,7 @@ Returns proxy version + uptime + vault status.
 
 ```json
 {
- "version": "1.16.0",
+ "version": "1.17.0",
  "uptime_s": 336.5,
  "vault": { "available": true, "blocks": 13443, "ready": true }
 }
@@ -173,7 +173,7 @@ MCP tool to merge with local companion state.
 
 ```json
 {
- "version": "1.16.0",
+ "version": "1.17.0",
  "uptime_s": 71.4,
  "mode": "hybrid",
  "profile": "balanced",

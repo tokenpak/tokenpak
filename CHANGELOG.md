@@ -8,6 +8,70 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [1.17.0] — 2026-07-31
+
+This minor release adds opt-in update notifications and an explicit lean
+companion-output mode. Standard host output remains the default. It also fixes
+several first-run, configuration, uninstall, proxy, and container-guidance
+paths found by exercising behavior at its user-visible boundary.
+
+### Added
+
+- **Update notifications are available by explicit consent.** Interactive users
+  can opt in to a bodyless package-index metadata check, cached for 24 hours, and
+  choose Update or Skip when a newer release is available. Declining or pressing
+  Enter sends no request. Automatic prompts stay suppressed for machine-readable,
+  CI, non-interactive, server, browser-launching, and long-running commands, and
+  no-network controls remain available. Explicit `tokenpak update --check` checks
+  once without enabling future automatic checks.
+- **Lean companion output is an explicit opt-in.** Set
+  `TOKENPAK_COMPANION_STYLE=lean` to add the shared dense-technical-output
+  directive to Claude and Codex companion launches. Unset and unknown values use
+  `standard`, preserving each host's native output style. Install, reinstall,
+  style switching, and uninstall keep the managed section bounded.
+
+### Fixed
+
+- Vault matches now reach byte-preserved provider requests. Injection text is
+  carried through the pipeline and inserted into the existing system array
+  without reserializing the rest of the request body; the public three-value
+  injection API is unchanged.
+- `tokenpak start --port PORT` now honors the declared flag, with precedence
+  `--port` → `TOKENPAK_PORT` → `8766`.
+- `tokenpak integrate` no longer treats end-of-input as consent, and documented
+  non-interactive controls suppress the prompt instead of writing client config.
+- The uninstall chooser now accurately distinguishes reversible un-routing from
+  stored-state removal, names the retained session journal, budget history, and
+  Paks, and cancels on unknown input rather than selecting the more destructive
+  mode.
+- `TOKENPAK_HOME` now contains setup writes and PID cleanup within the configured
+  home, including symlink-safe target checks. Corrupt config is reported as a
+  distinct state, and preview error JSON uses the documented null-valued shape.
+- `tokenpak preview` now refuses a bare filesystem path instead of measuring the
+  path string, reports missing files without a traceback, and rejects malformed
+  JSON passed with `--file`. `tokenpak config validate` returns a failure status
+  when the requested config cannot be read or validated.
+- Companion session labels now select a form that fits the terminal width instead
+  of wrapping the host header. Their colors come from one palette shared by the
+  launcher and session-start hook.
+
+### Documentation
+
+- Installation guidance now uses `uv tool` or `pipx` for isolated CLI installs,
+  `uv pip` inside a uv-created environment, and safe PEP 668 guidance instead of
+  suggesting a system-package override.
+- Docker and Compose examples now agree on the mounted custom-config path and its
+  matching `TOKENPAK_CONFIG` value, including short and long option forms.
+
+### Compatibility
+
+- No breaking change or deprecation is intended. Standard companion output is
+  preserved unless lean mode is explicitly selected.
+- The public API snapshot reports one additive name,
+  `tokenpak.companion.launcher.Color`, and no removals. **Keep:** the additive
+  launcher re-export remains available in v1.17.0; existing public names and
+  signatures are unchanged.
+
 ## [1.16.0] — 2026-07-26
 
 > Two **BREAKING** changes — the `crewai` extra is removed and the license tier ladder drops its
