@@ -37,27 +37,9 @@ class GoogleDriveConnector(Connector):
         self._start_page_token = None
 
     def connect(self) -> bool:
-        """
-        Establish connection using OAuth2.
-
-        Requires config.auth_token to contain either:
-        - Serialized credentials JSON
-        - Path to credentials file
-        """
-        try:
-            # TODO: Implement
-            # from google.oauth2.credentials import Credentials
-            # from googleapiclient.discovery import build
-            #
-            # creds = Credentials.from_authorized_user_info(
-            #     json.loads(self.config.auth_token)
-            # )
-            # self._service = build('drive', 'v3', credentials=creds)
-            # return True
-            raise NotImplementedError("Google Drive connector not yet implemented")
-        except Exception as e:
-            print(f"Google Drive connection failed: {e}")
-            return False
+        """Fail closed because the Google Drive connector is available in Pro."""
+        print("Pro tier required")
+        return False
 
     def list_files(self, since: Optional[str] = None) -> Iterator[RemoteFile]:
         """

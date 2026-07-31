@@ -22,6 +22,7 @@ class NotionConnector(Connector):
     """
 
     name = "notion"
+    tier = "pro"
 
     NOTION_API_BASE = "https://api.notion.com/v1"
 
@@ -30,32 +31,9 @@ class NotionConnector(Connector):
         self._headers = None
 
     def connect(self) -> bool:
-        """
-        Establish connection using integration token.
-
-        config.auth_token should be the Notion integration token.
-        """
-        if not self.config.auth_token:
-            print("Notion connector requires auth_token (integration token)")
-            return False
-
-        self._headers = {  # type: ignore[assignment]
-            "Authorization": f"Bearer {self.config.auth_token}",
-            "Notion-Version": "2022-06-28",
-            "Content-Type": "application/json",
-        }
-
-        # DEFERRED: Implement connection test
-        # try:
-        #     response = requests.get(
-        #         f"{self.NOTION_API_BASE}/users/me",
-        #         headers=self._headers
-        #     )
-        #     return response.status_code == 200
-        # except Exception as e:
-        #     print(f"Notion connection failed: {e}")
-        #     return False
-        raise NotImplementedError("Notion connector is not yet implemented")
+        """Fail closed because the Notion connector is available in Pro."""
+        print("Pro tier required")
+        return False
 
     def list_files(self, since: Optional[str] = None) -> Iterator[RemoteFile]:
         """

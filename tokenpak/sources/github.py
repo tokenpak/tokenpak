@@ -32,38 +32,9 @@ class GitHubConnector(Connector):
         self._repo = None
 
     def connect(self) -> bool:
-        """
-        Establish connection using PAT.
-
-        config.source_path should be "owner/repo"
-        config.auth_token should be the GitHub PAT
-        """
-        if "/" not in self.config.source_path:
-            print("GitHub connector requires source_path in 'owner/repo' format")
-            return False
-
-        self._owner, self._repo = self.config.source_path.split("/", 1)  # type: ignore[assignment]
-
-        if not self.config.auth_token:
-            print("GitHub connector requires auth_token (PAT)")
-            return False
-
-        self._headers = {  # type: ignore[assignment]
-            "Authorization": f"Bearer {self.config.auth_token}",
-            "Accept": "application/vnd.github.v3+json",
-        }
-
-        # TODO: Implement connection test
-        # try:
-        #     response = requests.get(
-        #         f"{self.GITHUB_API_BASE}/repos/{self._owner}/{self._repo}",
-        #         headers=self._headers
-        #     )
-        #     return response.status_code == 200
-        # except Exception as e:
-        #     print(f"GitHub connection failed: {e}")
-        #     return False
-        raise NotImplementedError("GitHub connector not yet implemented")
+        """Fail closed because the GitHub connector is available in Pro."""
+        print("Pro tier required")
+        return False
 
     def list_files(self, since: Optional[str] = None) -> Iterator[RemoteFile]:
         """
