@@ -6,14 +6,11 @@ Run with: python examples/basic_usage.py
 """
 
 from llamaindex_tokenpak import (
-    TokenPakSynthesizer,
-    TokenPakQueryEngine,
-    TokenPakIndex,
     MultiIndexFusion,
+    TokenPakQueryEngine,
+    TokenPakSynthesizer,
     llamaindex_node_to_block,
-    LlamaBlock,
 )
-
 
 # ---------------------------------------------------------------------------
 # Example 1: Node ↔ Block conversion
@@ -25,7 +22,7 @@ print("=" * 60)
 
 node = {
     "id": "doc_001",
-    "text": "TokenPak is a context compression protocol for LLM pipelines.",
+    "text": "TokenPak is the reference implementation of TIP-1.0 for LLM pipelines.",
     "metadata": {"file_name": "tokenpak_intro.md", "page": 1},
     "score": 0.92,
 }
@@ -84,18 +81,22 @@ print("=" * 60)
 
 class MockEngine:
     """Simulates a LlamaIndex query engine."""
+
     def query(self, q, **kw):
         class Resp:
             source_nodes = [
                 {
-                    "id": f"n{i}", 
+                    "id": f"n{i}",
                     "text": f"Source {i}: " + "evidence text " * 100,
                     "metadata": {"source": f"paper_{i}.pdf"},
                     "score": 0.9 - i * 0.05,
                 }
                 for i in range(6)
             ]
-            def __str__(self): return "Synthesized answer based on sources."
+
+            def __str__(self):
+                return "Synthesized answer based on sources."
+
         return Resp()
 
     async def aquery(self, q, **kw):
@@ -141,15 +142,19 @@ def make_engine(name, node_count=3):
                     }
                     for i in range(node_count)
                 ]
+
             return R()
-        async def aquery(self, q, **kw): return self.query(q)
+
+        async def aquery(self, q, **kw):
+            return self.query(q)
+
     return Eng()
 
 
 indexes = {
     "documentation": make_engine("docs", 4),
-    "codebase":      make_engine("code", 3),
-    "wiki":          make_engine("wiki", 2),
+    "codebase": make_engine("code", 3),
+    "wiki": make_engine("wiki", 2),
 }
 
 fusion = MultiIndexFusion(
@@ -159,7 +164,7 @@ fusion = MultiIndexFusion(
     weights={"documentation": 0.5, "codebase": 0.3, "wiki": 0.2},
 )
 
-pack = fusion.query_as_tokenpak("Explain the TokenPak protocol")
+pack = fusion.query_as_tokenpak("Explain TIP-1.0")
 
 print(f"Strategy:      {pack['metadata']['strategy']}")
 print(f"Indexes:       {', '.join(pack['metadata']['index_names'])}")

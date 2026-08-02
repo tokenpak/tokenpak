@@ -1,8 +1,8 @@
 """Tests for WeaviateAdapter using mock Weaviate client."""
 
-import pytest
-from unittest.mock import MagicMock, patch
-from tokenpak_vectordb import WeaviateAdapter, VectorBlock
+from unittest.mock import MagicMock
+
+from tokenpak_vectordb import VectorBlock, WeaviateAdapter
 
 
 def _make_v4_client(results: list):
@@ -60,7 +60,7 @@ class TestWeaviateAdapterV4:
     def _adapter(self, results=None):
         if results is None:
             results = [
-                {"_id": "uuid-1", "text": "TokenPak protocol", "_certainty": 0.92},
+                {"_id": "uuid-1", "text": "TokenPak implements TIP-1.0", "_certainty": 0.92},
                 {"_id": "uuid-2", "text": "RAG pipeline", "_certainty": 0.78},
             ]
         client = _make_v4_client(results)
@@ -125,7 +125,7 @@ class TestWeaviateAdapterV3:
     def _adapter(self, results=None):
         if results is None:
             results = [
-                {"_id": "id-1", "text": "TokenPak protocol", "_certainty": 0.88},
+                {"_id": "id-1", "text": "TokenPak implements TIP-1.0", "_certainty": 0.88},
                 {"_id": "id-2", "text": "Vector databases", "_certainty": 0.75},
             ]
         client = _make_v3_client(results)

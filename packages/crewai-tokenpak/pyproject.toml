@@ -32,7 +32,6 @@ dev = ["pytest>=7.0", "pytest-asyncio>=0.21.0", "mypy>=1.9.0"]
 
 [project.urls]
 "Homepage" = "https://github.com/tokenpak/crewai-tokenpak"
-"Documentation" = "https://tokenpak.dev/integrations/crewai"
 "Repository" = "https://github.com/tokenpak/crewai-tokenpak.git"
 "Bug Tracker" = "https://github.com/tokenpak/crewai-tokenpak/issues"
 

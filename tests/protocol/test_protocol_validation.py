@@ -1,5 +1,5 @@
 """
-Test vectors for TokenPak Protocol v1.0 validation.
+Test vectors for Pak JSON schema/format v1.0 validation.
 
 Tests cover:
 - Valid packs (minimal, full, all examples)

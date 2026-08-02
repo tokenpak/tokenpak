@@ -4,9 +4,10 @@
 Beta 1 surface (regression recovery from v1.3.7's ``doctor --conformance``;
 the v1.3.7 ``services/diagnostics/conformance/`` runner was removed in
 the modular refactor without a CLI replacement). This command file is
-the new canonical home — TIP contracts live in ``tokenpak.tip.*`` and
-the schemas live in ``tokenpak.tip.schemas/``; this CLI is the thin
-operator surface over them.
+the canonical definitions live in ``tokenpak.core.contracts.*``.  The
+``tokenpak.tip.*`` modules remain compatibility re-exports, while the
+existing schema package remains at ``tokenpak.tip.schemas/``; this CLI is
+the thin operator surface over those stable seams.
 
 Subcommands:
     inspect          List known TIP capability labels grouped by family.
@@ -131,13 +132,13 @@ def run_conformance_checks() -> list[CheckResult]:
 
     # 1. Contracts importable
     try:
-        from tokenpak import tip as _tip  # noqa: F401
+        from tokenpak.core import contracts as _contracts  # noqa: F401
 
         results.append(
             CheckResult(
                 name="contracts.importable",
                 status="PASS",
-                summary="tokenpak.tip package importable",
+                summary="tokenpak.core.contracts package importable",
             )
         )
     except Exception as exc:
@@ -145,7 +146,7 @@ def run_conformance_checks() -> list[CheckResult]:
             CheckResult(
                 name="contracts.importable",
                 status="FAIL",
-                summary="tokenpak.tip not importable",
+                summary="tokenpak.core.contracts not importable",
                 details=str(exc),
             )
         )
@@ -156,7 +157,7 @@ def run_conformance_checks() -> list[CheckResult]:
 
     label_re = re.compile(r"^(tip|ext)\.[a-z0-9._-]+$")
     try:
-        from tokenpak.tip.capabilities import ALL_OPTIMIZATION_CAPABILITIES
+        from tokenpak.core.contracts.capabilities import ALL_OPTIMIZATION_CAPABILITIES
 
         bad = [c for c in ALL_OPTIMIZATION_CAPABILITIES if not label_re.match(c)]
         if not ALL_OPTIMIZATION_CAPABILITIES:
@@ -196,7 +197,7 @@ def run_conformance_checks() -> list[CheckResult]:
 
     # 3. Multipak capability set is a subset of the global set
     try:
-        from tokenpak.tip.capabilities import (
+        from tokenpak.core.contracts.capabilities import (
             ALL_OPTIMIZATION_CAPABILITIES,
             MULTIPAK_CAPABILITIES,
         )
@@ -276,13 +277,13 @@ def run_conformance_checks() -> list[CheckResult]:
 
     # 5. Pak contract importable (prerequisite)
     try:
-        from tokenpak.tip import pak as _pak  # noqa: F401
+        from tokenpak.core.contracts import pak as _pak  # noqa: F401
 
         results.append(
             CheckResult(
                 name="contracts.pak_schema",
                 status="PASS",
-                summary="tokenpak.tip.pak importable",
+                summary="tokenpak.core.contracts.pak importable",
             )
         )
     except Exception as exc:
@@ -290,29 +291,29 @@ def run_conformance_checks() -> list[CheckResult]:
             CheckResult(
                 name="contracts.pak_schema",
                 status="WARN",
-                summary="tokenpak.tip.pak unavailable",
+                summary="tokenpak.core.contracts.pak unavailable",
                 details=str(exc),
             )
         )
 
     # 6. Each per-contract module importable
     for mod in (
-        "cache_contract",
-        "compression_contract",
-        "fidelity_contract",
-        "optimization_contract",
-        "route_contract",
-        "telemetry_contract",
-        "trace_contract",
-        "context_package",
+        "cache",
+        "compression",
+        "fidelity",
+        "optimization",
+        "route",
+        "telemetry",
+        "trace",
+        "context",
     ):
         try:
-            __import__(f"tokenpak.tip.{mod}")
+            __import__(f"tokenpak.core.contracts.{mod}")
             results.append(
                 CheckResult(
                     name=f"contracts.{mod}",
                     status="PASS",
-                    summary=f"tokenpak.tip.{mod} importable",
+                    summary=f"tokenpak.core.contracts.{mod} importable",
                 )
             )
         except Exception as exc:
@@ -320,7 +321,7 @@ def run_conformance_checks() -> list[CheckResult]:
                 CheckResult(
                     name=f"contracts.{mod}",
                     status="FAIL",
-                    summary=f"tokenpak.tip.{mod} unimportable",
+                    summary=f"tokenpak.core.contracts.{mod} unimportable",
                     details=str(exc),
                 )
             )
@@ -362,7 +363,7 @@ def exit_code_for(summary: ConformanceSummary) -> int:
 def cmd_tip_inspect(args: Any) -> int:
     """Print TIP capability labels grouped by family prefix."""
     try:
-        from tokenpak.tip.capabilities import ALL_OPTIMIZATION_CAPABILITIES
+        from tokenpak.core.contracts.capabilities import ALL_OPTIMIZATION_CAPABILITIES
     except Exception as exc:
         print(f"✗ tokenpak tip inspect — cannot import capabilities: {exc}", file=sys.stderr)
         return 2
@@ -621,7 +622,7 @@ adapter integration guide for the additive-only contract.
 from __future__ import annotations
 
 # Declare the TIP capability labels this adapter implements.
-# Use only labels from tokenpak.tip.capabilities (or ext.<vendor>.* for
+# Use only labels from tokenpak.core.contracts.capabilities (or ext.<vendor>.* for
 # vendor extensions). Empty set means "no TIP optimizations supported".
 CAPABILITIES: frozenset[str] = frozenset({{
     # "tip.compression.v1",

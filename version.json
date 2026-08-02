@@ -2,5 +2,5 @@
   "tokenpak_version": "1.17.0",
   "asserted_tip_version": "TIP-1.0",
   "pinned_registry_schema_tag": "schema-2026-07-18",
-  "pinned_docs_revision": "v1.13.0-docs"
+  "pinned_docs_revision": "v1.17.0-docs@a17a0790cdab531d7ee6bf555d2d8d1f122c23f3"
 }

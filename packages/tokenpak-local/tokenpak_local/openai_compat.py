@@ -32,7 +32,7 @@ class TokenPakOpenAICompat:
     """
     TokenPak wrapper for any OpenAI-compatible local LLM server.
 
-    Automatically compiles a TokenPak pack and sets an appropriate token
+    Automatically compiles a Pak and sets an appropriate token
     budget before sending to the local endpoint.
 
     Usage (LM Studio):
@@ -103,11 +103,11 @@ class TokenPakOpenAICompat:
         **kwargs: Any,
     ) -> Any:
         """
-        Send a chat completion request with optional TokenPak pack.
+        Send a chat completion request with an optional Pak.
 
         Args:
             model:        Model name as registered in the local server.
-            tokenpak:     TokenPak pack to compile and inject as system message.
+            tokenpak:     Pak to compile and inject as system message.
             messages:     Additional messages (inserted after system message).
             user_message: Convenience shorthand: adds {"role": "user", "content": ...}.
             stream:       If True, returns a streaming iterator.

@@ -44,7 +44,7 @@ def check_api_key():
         print("Please set one of:")
         print("  export ANTHROPIC_API_KEY='sk-ant-...' (or add to .env)")
         print("  export OPENAI_API_KEY='sk-...' (or add to .env)")
-        print("\n📖 Setup guide: https://docs.tokenpak.dev/getting-started")
+        print("\n📖 Setup guide: https://docs.tokenpak.ai/QUICKSTART/")
         sys.exit(1)
 
 
@@ -63,7 +63,7 @@ def check_proxy(proxy_url):
         print("  tokenpak start\n")
         print("Or with Docker:")
         print("  docker compose up -d\n")
-        print("📖 Troubleshooting: https://docs.tokenpak.dev/troubleshooting")
+        print("📖 Troubleshooting: https://docs.tokenpak.ai/troubleshooting/")
         sys.exit(1)
 
 
@@ -105,7 +105,7 @@ def make_request(proxy_url, provider, api_key, model):
         sys.exit(1)
     except Exception as e:
         print(f"{Color.RED}❌ Network Error: {e}{Color.NC}")
-        print("\n📖 Troubleshooting: https://docs.tokenpak.dev/troubleshooting")
+        print("\n📖 Troubleshooting: https://docs.tokenpak.ai/troubleshooting/")
         sys.exit(1)
 
 
@@ -210,7 +210,7 @@ def main():
         print(f"{Color.GREEN}✅ Cache is working! Try running again to increase savings.{Color.NC}")
     
     print()
-    print(f"{Color.BLUE}📖 Learn more: https://docs.tokenpak.dev{Color.NC}")
+    print(f"{Color.BLUE}📖 Learn more: https://docs.tokenpak.ai/{Color.NC}")
     print(f"{Color.BLUE}💬 Issues & feedback: https://github.com/repliflow/tokenpak/issues{Color.NC}")
     print()
 

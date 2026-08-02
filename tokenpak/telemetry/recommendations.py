@@ -51,7 +51,13 @@ _SECTION_TITLE = {
 
 @dataclass(frozen=True)
 class Recommendation:
-    """A single ranked, evidence-backed recommendation."""
+    """A single ranked, evidence-backed recommendation.
+
+    Telemetry-local DTO: ranked advice, not the canonical per-request TIP
+    recommendation contract, despite the shared historical name. The module
+    path and class name are kept as-is: they are compatibility surface for
+    reflection and default pickle globals across releases.
+    """
 
     id: str
     severity: str

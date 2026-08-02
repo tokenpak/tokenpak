@@ -1,7 +1,7 @@
 {
   "name": "tokenpak",
   "version": "1.0.0",
-  "description": "TokenPak JavaScript/TypeScript SDK — The Context Standard for AI",
+  "description": "TokenPak JavaScript/TypeScript SDK for structured AI context",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

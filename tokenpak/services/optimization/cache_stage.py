@@ -42,9 +42,11 @@ import json
 import logging
 from typing import Any, Dict, Optional, cast
 
+from tokenpak.core.contracts.cache import CacheMissReason
+
 from .cache_key import extract_query_text, is_streaming, make_scope_key
 from .cache_policy import get_cache_policy_for_route, is_cache_stage_enabled
-from .cache_trace import CacheMissReason, CacheStageTrace
+from .cache_trace import CacheStageTrace
 from .context import OptimizationContext
 from .stage import EligibilityResult
 
@@ -172,7 +174,10 @@ class SemanticCacheStage:
         )
 
         if not query_text:
-            trace.miss_reason = CacheMissReason.NO_QUERY_TEXT
+            _log.debug(
+                "[SemanticCacheStage] lookup skipped: no query text route=%s",
+                ctx.route,
+            )
             _set_cache_result(ctx, trace)
             return ctx
 
@@ -206,7 +211,6 @@ class SemanticCacheStage:
                     )
                 elif not policy.allow_response_reuse:
                     # Context-reuse only: hit in cache but won't skip upstream.
-                    trace.miss_reason = "context-reuse-only"
                     _log.debug(
                         "[SemanticCacheStage] context-reuse hit route=%s (response reuse disabled)",
                         ctx.route,
@@ -222,7 +226,6 @@ class SemanticCacheStage:
 
         except Exception as exc:
             trace.hit = False
-            trace.miss_reason = "stage-error"
             _log.warning("[SemanticCacheStage] lookup error: %s", exc, exc_info=True)
 
         _set_cache_result(ctx, trace)

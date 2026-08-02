@@ -1,7 +1,7 @@
 """ASGI proxy endpoint handler for ``/tokenpak``.
 
 Adds a ``/tokenpak`` endpoint to any Starlette/FastAPI app that accepts
-a TokenPak JSON body and forwards a compiled prompt to the configured LLM.
+a Pak JSON body and forwards a compiled prompt to the configured LLM.
 
 Wire format accepted::
 

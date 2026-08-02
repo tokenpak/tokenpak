@@ -1,7 +1,7 @@
 """TokenPak × LiteLLM integration.
 
 Provides:
-- ``TokenPakMiddleware``   — Router middleware that auto-compiles TokenPak packs
+- ``TokenPakMiddleware``   — Router middleware that auto-compiles Paks
 - ``compile_pack``         — Low-level helper: TokenPack → LiteLLM messages
 - ``patch_completion``     — Monkey-patch litellm.completion to accept ``tokenpak=``
 - ``ProxyHandler``         — ASGI handler for ``/tokenpak`` proxy endpoint

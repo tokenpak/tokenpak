@@ -1,7 +1,7 @@
 """
-Node ↔ TokenPak Block conversion utilities for LlamaIndex.
+Node ↔ Pak Block conversion utilities for LlamaIndex.
 
-Converts between LlamaIndex Node format and TokenPak Block format,
+Converts between LlamaIndex Node format and Pak Block format,
 supporting both dict-style nodes and real LlamaIndex TextNode/NodeWithScore
 objects when llama-index-core is installed.
 """
@@ -13,17 +13,17 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Lightweight Block representation (no hard dep on tokenpak-sdk)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class LlamaBlock:
     """
-    Portable Block representation compatible with TokenPak protocol.
+    Portable Block representation compatible with TIP-1.0.
 
-    Maps LlamaIndex node data to TokenPak block semantics:
+    Maps LlamaIndex node data to Pak block semantics:
       - id          → node id
       - content     → node text
       - quality     → retrieval score (0-1)
@@ -31,6 +31,7 @@ class LlamaBlock:
       - metadata    → node metadata
       - provenance  → source info (document, page, etc.)
     """
+
     id: str
     content: str
     block_type: str = "evidence"
@@ -62,7 +63,7 @@ class LlamaBlock:
         }
 
     def to_tokenpak_dict(self) -> Dict[str, Any]:
-        """Export as TokenPak wire format."""
+        """Export in the Pak wire format."""
         return {
             "type": self.block_type,
             "id": self.id,
@@ -83,6 +84,7 @@ Node = LlamaBlock
 # Token estimation
 # ---------------------------------------------------------------------------
 
+
 def _estimate_tokens(text: str) -> int:
     """Estimate token count (1 token ≈ 4 chars). Fast, no imports."""
     return max(1, len(text) // 4)
@@ -98,6 +100,7 @@ def _make_node_id(text: str, metadata: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # LlamaIndex Node → LlamaBlock
 # ---------------------------------------------------------------------------
+
 
 def llamaindex_node_to_block(
     node: Any,

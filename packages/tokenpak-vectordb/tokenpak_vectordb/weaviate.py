@@ -52,7 +52,7 @@ class WeaviateAdapter(VectorDBAdapter):
             client: weaviate.Client (v3) or weaviate.WeaviateClient (v4)
             collection_name: Weaviate class/collection name
             content_field: Property name that holds document text
-            default_block_type: Default TokenPak block type
+            default_block_type: Default Pak block type
             default_limit: Default result limit
             distance_metric: True if Weaviate returns distance (lower=better),
                              False if it returns certainty (higher=better)
@@ -81,7 +81,7 @@ class WeaviateAdapter(VectorDBAdapter):
         Args:
             query: Text query (near_text mode) or embedding vector (near_vector mode)
             limit: Max results
-            block_type: TokenPak block type override
+            block_type: Pak block type override
             mode: "near_text" or "near_vector"
             certainty: Minimum certainty threshold (near_text mode)
             **kwargs: Extra args passed to Weaviate query

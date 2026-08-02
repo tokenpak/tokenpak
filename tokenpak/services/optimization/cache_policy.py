@@ -23,7 +23,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 
-from tokenpak.tip.cache_contract import CachePolicy
+from tokenpak.core.contracts.cache import CachePolicy
 
 ENV_FLAG = "TOKENPAK_SEMANTIC_CACHE_STAGE"
 

@@ -7,9 +7,9 @@ a JSON string) and also stored as ``OptimizationContext.cache_result`` so
 callers in ``proxy/server.py`` can read the hit/miss outcome without parsing the
 stage trace log.
 
-Miss reason vocabulary mirrors ``tokenpak.tip.cache_contract.CacheMissReason``
-(copied inline for import-time safety when the cache contract is not yet on
-this host).
+Miss-reason vocabulary has a single definition in
+``tokenpak.core.contracts.cache.CacheMissReason``.  This module re-exports that
+canonical object to preserve the services-layer import path.
 """
 
 from __future__ import annotations
@@ -17,27 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-# ---------------------------------------------------------------------------
-# Miss-reason vocabulary (mirrors CacheMissReason from cache_contract)
-# ---------------------------------------------------------------------------
-
-
-class CacheMissReason:
-    SEMANTIC_CACHE_DISABLED = "semantic_cache_disabled"
-    ADAPTER_MISSING_CAPABILITY = "adapter_missing_capability"
-    ROUTE_NOT_CACHEABLE = "route_not_cacheable"
-    FIDELITY_LOSSLESS_REQUIRED = "fidelity_lossless_required"
-    STREAMING_NOT_SUPPORTED = "streaming_not_supported"
-    NO_SCOPE_KEY = "no_scope_key"
-    BELOW_SIMILARITY_THRESHOLD = "below_similarity_threshold"
-    TTL_EXPIRED = "ttl_expired"
-    TOOL_SCHEMA_DIGEST_MISMATCH = "tool_schema_digest_mismatch"
-    GENERATION_PARAMS_MISMATCH = "generation_params_mismatch"
-    MODEL_FAMILY_MISMATCH = "model_family_mismatch"
-    SAFETY_POLICY_BYPASS = "safety_policy_bypass"
-    FLAG_OFF = "flag_off"
-    NO_QUERY_TEXT = "no_query_text"
-
+from tokenpak.core.contracts.cache import CacheMissReason
 
 # ---------------------------------------------------------------------------
 # Trace dataclass
@@ -54,7 +34,8 @@ class CacheStageTrace:
 
     # Lookup outcome
     hit: bool = False
-    miss_reason: str = ""  # one of CacheMissReason.*; empty on hit
+    # Canonical CacheMissReason value when a formal miss applies; otherwise empty.
+    miss_reason: str = ""
     strategy: str = "none"  # "exact" | "jaccard" | "none"
     similarity: float = 0.0
     query_hash: str = ""  # first 12 chars of SHA-256 of normalized query

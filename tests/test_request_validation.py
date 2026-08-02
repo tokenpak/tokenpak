@@ -161,20 +161,29 @@ class TestRequestValidationResult(unittest.TestCase):
         self.assertIsInstance(err["details"], list)
         self.assertGreater(len(err["details"]), 0)
 
-    def test_to_error_response_hint_contains_provider_path(self):
+    def test_to_error_response_uses_owned_documentation_url(self):
         from tokenpak.validation.request_validator import RequestValidationResult
 
-        r = RequestValidationResult(
-            valid=False, provider="anthropic", errors=[{"field": "x", "error": "e"}]
-        )
-        payload = r.to_error_response()
-        self.assertIn("messages", payload["error"]["hint"])
+        for provider in ("anthropic", "openai", "openai-codex", "google", "unknown"):
+            with self.subTest(provider=provider):
+                result = RequestValidationResult(
+                    valid=False,
+                    provider=provider,
+                    errors=[{"field": "x", "error": "e"}],
+                )
+                self.assertEqual(
+                    result.to_error_response()["error"]["hint"],
+                    "https://docs.tokenpak.ai/API/",
+                )
 
-        r2 = RequestValidationResult(
-            valid=False, provider="openai", errors=[{"field": "x", "error": "e"}]
+    def test_to_error_response_uses_supplied_documentation_url(self):
+        from tokenpak.validation.request_validator import RequestValidationResult
+
+        result = RequestValidationResult(valid=False, provider="anthropic", errors=[])
+        self.assertEqual(
+            result.to_error_response("https://example.test/request-help")["error"]["hint"],
+            "https://example.test/request-help",
         )
-        payload2 = r2.to_error_response()
-        self.assertIn("chat-completions", payload2["error"]["hint"])
 
     def test_to_dict(self):
         from tokenpak.validation.request_validator import RequestValidationResult

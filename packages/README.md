@@ -62,7 +62,8 @@ twine upload dist/*
 
 ## What is TokenPak?
 
-TokenPak is an open-source LLM proxy and context compression protocol. It helps:
+TokenPak is an open-source local LLM proxy and the reference implementation of
+TIP-1.0. It helps:
 
 - **Reduce costs**: Compress context before it hits the API
 - **Improve quality**: Keep recent context intact
@@ -74,7 +75,7 @@ Learn more: https://github.com/tokenpak/tokenpak
 
 - Issues: https://github.com/tokenpak/tokenpak/issues
 - Discussions: https://github.com/tokenpak/tokenpak/discussions
-- Email: support@tokenpak.dev
+- Support: https://github.com/tokenpak/tokenpak/issues
 
 ## License
 

@@ -12,20 +12,18 @@ Coverage targets:
 
 import json
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from tokenpak.validation.request_validator import (
-    HAS_JSONSCHEMA,
+    VALIDATION_MODES,
     RequestValidationResult,
     RequestValidator,
-    VALIDATION_MODES,
     get_request_validator,
     get_validation_mode,
     validate_request,
 )
-
 
 # ---------------------------------------------------------------------------
 # RequestValidationResult tests
@@ -66,19 +64,37 @@ class TestRequestValidationResult:
         assert resp["error"]["type"] == "validation_error"
         assert resp["error"]["message"] == "Request validation failed"
         assert resp["error"]["details"] == errors
-        assert "messages" in resp["error"]["hint"]  # anthropic path
+        assert resp["error"]["hint"] == "https://docs.tokenpak.ai/API/"
 
     def test_to_error_response_openai_hint(self):
-        """OpenAI provider gets chat-completions hint path."""
+        """OpenAI provider gets the owned API documentation URL."""
         result = RequestValidationResult(valid=False, provider="openai", errors=[])
         resp = result.to_error_response()
-        assert "chat-completions" in resp["error"]["hint"]
+        assert resp["error"]["hint"] == "https://docs.tokenpak.ai/API/"
+
+    def test_to_error_response_codex_hint(self):
+        """Codex provider gets the owned API documentation URL."""
+        result = RequestValidationResult(valid=False, provider="openai-codex", errors=[])
+        resp = result.to_error_response()
+        assert resp["error"]["hint"] == "https://docs.tokenpak.ai/API/"
 
     def test_to_error_response_google_hint(self):
-        """Google provider gets google-generate-content hint path."""
+        """Google provider gets the owned API documentation URL."""
         result = RequestValidationResult(valid=False, provider="google", errors=[])
         resp = result.to_error_response()
-        assert "google-generate-content" in resp["error"]["hint"]
+        assert resp["error"]["hint"] == "https://docs.tokenpak.ai/API/"
+
+    def test_to_error_response_unknown_hint(self):
+        """Unknown providers get the owned API documentation URL."""
+        result = RequestValidationResult(valid=False, provider="unknown", errors=[])
+        resp = result.to_error_response()
+        assert resp["error"]["hint"] == "https://docs.tokenpak.ai/API/"
+
+    def test_to_error_response_supplied_documentation_url(self):
+        """A caller-supplied documentation URL is emitted unchanged."""
+        result = RequestValidationResult(valid=False, provider="anthropic", errors=[])
+        resp = result.to_error_response("https://example.test/request-help")
+        assert resp["error"]["hint"] == "https://example.test/request-help"
 
     def test_to_dict(self):
         """to_dict includes all fields."""

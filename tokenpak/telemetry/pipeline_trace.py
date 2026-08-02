@@ -11,7 +11,13 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class StageTrace:
-    """Trace for a single pipeline stage."""
+    """Trace for a single pipeline stage.
+
+    Demo/telemetry-local DTO with a distinct shape from the canonical TIP
+    stage contract, despite the shared historical name. The module path and
+    class name are kept as-is: they are compatibility surface for reflection
+    and default pickle globals across releases.
+    """
 
     name: str  # capsule, segmentizer, recipe_engine, slot_filler, validation_gate
     enabled: bool

@@ -385,4 +385,10 @@ class CapsuleBuilder:
 
         compressed = _compress_text(text)
         wrapped = _wrap_capsule(text, compressed)
+        if len(wrapped) >= chars_in:
+            # Structure-heavy blocks (headings, bullets, code fences) pass
+            # through the compressor nearly verbatim, so the envelope can
+            # cost more than the compression gains. Never inflate the
+            # request: leave the block untouched.
+            return text, chars_in, chars_in, 0
         return wrapped, chars_in, len(wrapped), 1

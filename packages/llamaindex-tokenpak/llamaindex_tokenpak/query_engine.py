@@ -89,7 +89,7 @@ class TokenPakQueryEngine:
         return self.query(query_str, **kwargs)
 
     # ------------------------------------------------------------------
-    # TokenPak pack export
+    # Pak export
     # ------------------------------------------------------------------
 
     def query_as_tokenpak(
@@ -99,7 +99,7 @@ class TokenPakQueryEngine:
         **kwargs,
     ) -> Dict[str, Any]:
         """
-        Execute query and return a structured TokenPak pack.
+        Execute query and return a structured Pak.
 
         Returns:
             {

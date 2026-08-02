@@ -55,7 +55,7 @@ class ChromaAdapter(VectorDBAdapter):
         Args:
             collection: chromadb.Collection object
             content_field: Metadata key for document text (if not in documents)
-            default_block_type: Default TokenPak block type
+            default_block_type: Default Pak block type
             default_limit: Default result limit
             distance_metric: "l2" (default), "cosine", or "ip" (inner product)
         """
@@ -82,7 +82,7 @@ class ChromaAdapter(VectorDBAdapter):
         Args:
             query: Query embedding (list of floats) or text string
             limit: Max results
-            block_type: TokenPak block type override
+            block_type: Pak block type override
             where: Chroma metadata filter dict
             **kwargs: Extra args passed to collection.query()
 

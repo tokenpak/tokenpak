@@ -1,6 +1,9 @@
-# TokenPak Protocol v1.0 — Quick Reference
+# TIP-1.0 Compatibility Quick Reference — Non-normative
 
-> Full spec: `docs/PROTOCOL.md` · Schema: `schemas/tokenpak-v1.0.json`
+> Historical companion to `docs/PROTOCOL.md`. TIP-1.0 is the TokenPak Integrity
+> Protocol; TokenPak is its reference implementation, and MCP is the external
+> control-plane substrate where applicable. Normative TIP documentation and schemas
+> are owned by the sibling docs and registry repositories.
 
 ---
 

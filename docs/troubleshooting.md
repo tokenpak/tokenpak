@@ -813,8 +813,9 @@ Some prompts (short, unique, no repetition) don't compress well. This is expecte
 
 **Fix:**
 - TokenPak works best on prompts with repeated context, system prompts, or structured data
-- Check `tokenpak demo --list` to see which compression recipes are available
-- Use `tokenpak demo --file <path>` to see which recipes match your content
+- Run `tokenpak demo` to inspect the bundled offline fixture.
+- Use `tokenpak integrate` to list supported client setup guides, then follow
+  the guide for the client and route you are testing.
 
 ---
 

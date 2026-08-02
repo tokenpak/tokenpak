@@ -1,7 +1,7 @@
 /**
  * tokenpak — JavaScript/TypeScript SDK
  *
- * The Context Standard for AI systems.
+ * Structured AI context for TokenPak-compatible workflows.
  *
  * @example
  * import { TokenPak, Block, Policy } from 'tokenpak';
@@ -58,5 +58,5 @@ export { estimateTokens, generateId, nowISO, sanitizeId } from './utils';
 /** SDK version */
 export const VERSION = '1.0.0';
 
-/** TokenPak protocol version */
+/** Pak wire-format version; legacy export name retained for compatibility. */
 export const PROTOCOL_VERSION = '1.0';

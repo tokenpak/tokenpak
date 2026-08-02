@@ -13,6 +13,7 @@ out of the slim core and into named optional extras.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -103,11 +104,26 @@ def test_required_extras_declared():
     )
 
 
+def _resolve_meta_extra(extras: dict, name: str, _seen: frozenset = frozenset()) -> str:
+    """Flatten one extra's requirement strings, following ``tokenpak[...]``
+    self-references (e.g. ``full = ["tokenpak[all]"]``) so the coverage
+    contract still binds through meta-extra indirection."""
+    if name in _seen:
+        return ""
+    parts = []
+    for req in extras.get(name, []):
+        parts.append(req.lower())
+        match = re.fullmatch(r"tokenpak\[([a-z0-9_.,-]+)\]", req.strip().lower())
+        if match:
+            for ref in match.group(1).split(","):
+                parts.append(_resolve_meta_extra(extras, ref, _seen | {name}))
+    return " ".join(parts)
+
+
 def test_full_meta_extra_covers_all_feature_extras():
     """``full`` must pull in every feature extra so the legacy install works."""
     extras = _load()["project"].get("optional-dependencies", {})
-    full = extras.get("full", [])
-    full_str = " ".join(full).lower()
+    full_str = _resolve_meta_extra(extras, "full")
     feature_extras = REQUIRED_EXTRAS - {"full"}
     for name in feature_extras:
         assert name.lower() in full_str, (

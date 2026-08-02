@@ -1,4 +1,4 @@
-"""TokenPak schemas package."""
+"""Core data-model schemas package."""
 
 __all__ = [
     "ArtifactSchema",

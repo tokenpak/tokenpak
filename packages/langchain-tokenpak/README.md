@@ -65,7 +65,8 @@ memory_budget = ctx_mgr.memory_budget()     # 2400
 
 ## What is TokenPak?
 
-TokenPak is an open protocol for AI context optimization. It defines:
+TokenPak is an open-source local product and the reference implementation of
+TIP-1.0. Its integration surface includes:
 
 - **Blocks**: The fundamental unit of context (documents, chunks, messages)
 - **Recipes**: Compression strategies for different content types
@@ -131,7 +132,7 @@ budgets = ctx_mgr.adjust_budget(
 
 ## Conversions
 
-Convert between LangChain Documents and TokenPak Blocks:
+Convert between LangChain Documents and Pak blocks:
 
 ```python
 from langchain_tokenpak import (
@@ -254,13 +255,13 @@ Compressibility varies by content type:
 ## Documentation
 
 - **Docs**: https://github.com/tokenpak/tokenpak
-- **Protocol**: https://tokenpak.dev/protocol
+- **Protocol**: https://docs.tokenpak.ai/protocol/
 
 ## Support
 
 - Issues: https://github.com/tokenpak/tokenpak/issues
 - Discussions: https://github.com/tokenpak/tokenpak/discussions
-- Email: support@tokenpak.dev
+- Support: https://github.com/tokenpak/tokenpak/issues
 
 ## License
 

@@ -3,7 +3,7 @@
 
 Provides the ``CacheMissRecord`` dataclass and aggregation helpers for
 surfacing why semantic cache lookups fail. Miss reasons use the
-``CacheMissReason`` vocabulary from the proxy optimization layer.
+``CacheMissReason`` vocabulary from :mod:`tokenpak.core.contracts.cache`.
 
 These records are persisted to ``tp_cache_miss_reasons`` via TelemetryDB.
 """

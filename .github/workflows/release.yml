@@ -24,6 +24,88 @@ permissions:
   contents: write  # Required for creating releases
 
 jobs:
+  derive-install-shapes:
+    name: Derive canonical install-shape matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.derive.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11 TOML bootstrap
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Derive canonical A8 matrix
+        id: derive
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import tomllib
+
+          def digest(value):
+              return hashlib.sha256(
+                  json.dumps(value, separators=(",", ":"), ensure_ascii=True).encode()
+              ).hexdigest()
+
+          document = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          optional = document.get("project", {}).get("optional-dependencies")
+          config = document.get("tool", {}).get("tokenpak", {}).get("install-shape-matrix")
+          if not isinstance(optional, dict) or not isinstance(config, dict):
+              raise SystemExit("canonical install-shape TOML tables are required")
+          if set(config) != {"schema", "python_versions", "test_runner_requirements", "slim", "dev", "full"}:
+              raise SystemExit("install-shape matrix has missing or unknown fields")
+          if type(config["schema"]) is not int or config["schema"] != 1:
+              raise SystemExit("unsupported install-shape schema")
+          expected = {
+              "python_versions": "4e1a3d878a6cb9904060256e15abcfea94496854b9bddd24f0a99c9e4e4531b4",
+              "test_runner_requirements": "4faca0f0221183f1e151fe4c45cce2eec253f4e54202181eb8f5a1cbdd3fdb76",
+              "leaf_groups": "2511115e1da68f6b6214b2fc6c1c01313af579d9e32157dc9a41d9227c7665b2",
+              "all": "7e9a555ca1a056faa858e021efa3d8aa1bb05e939935d3faaeb7c8d019d9fa07",
+              "full": "37e65d93627f128bebbf77beee73bd6fa2aee817d31e46355ddbb392be9f197a",
+          }
+          for key in ("python_versions", "test_runner_requirements"):
+              if digest(config[key]) != expected[key]:
+                  raise SystemExit(f"unexpected install-shape {key}")
+          leaf_groups = [name for name in optional if name not in {"dev", "all", "full"}]
+          if digest(leaf_groups) != expected["leaf_groups"]:
+              raise SystemExit("optional dependency groups require explicit matrix ratification")
+          for key in ("all", "full"):
+              if digest(optional.get(key)) != expected[key]:
+                  raise SystemExit(f"unexpected {key} meta-extra")
+          expected_shapes = {
+              "slim": ("4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945", "809359a41de82446cca6b27e5d80ccd24abd9e20a98c59347f1d8bf217819491"),
+              "dev": ("891440a764c3873e713182495eab033f69c7becd942e2f79d9294b9f373a6a4c", "854fd124b184b8e68c4d7f409d3cad4f5e43ff56dc2d2ad2cbc590418c94d0b1"),
+              "full": ("e79a3b8a148b06bddf5b5a70083e3a4c039fb21b69f6aa43abb5eb91d0274c2c", "938566330c29069717079aff364a48365b251425d8e83ee35dcb8a0f4ace0b36"),
+          }
+          rows = []
+          for shape, (extras_hash, marker_hash) in expected_shapes.items():
+              entry = config[shape]
+              if not isinstance(entry, dict) or set(entry) != {"product_extras", "marker_selection"}:
+                  raise SystemExit(f"invalid {shape} install-shape table")
+              if digest(entry["product_extras"]) != extras_hash or digest(entry["marker_selection"]) != marker_hash:
+                  raise SystemExit(f"unexpected {shape} install-shape values")
+              for python_version in config["python_versions"]:
+                  rows.append({
+                      "shape": shape,
+                      "python-version": python_version,
+                      "product_extras": json.dumps(entry["product_extras"], separators=(",", ":")),
+                      "test_runner_requirements": json.dumps(config["test_runner_requirements"] if shape == "slim" else [], separators=(",", ":")),
+                      "marker_selection": entry["marker_selection"],
+                  })
+          if len(rows) != 12 or len({json.dumps(row, sort_keys=True) for row in rows}) != 12:
+              raise SystemExit("install-shape matrix must contain twelve unique rows")
+          with pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+              output.write("matrix=" + json.dumps({"include": rows}, separators=(",", ":")) + "\n")
+          PY
+
   # ─────────────────────────────────────────────────────────────────────
   # Step 1: Run tests to ensure tag is release-worthy
   # ─────────────────────────────────────────────────────────────────────
@@ -65,13 +147,12 @@ jobs:
     # Std 30 §4 (R4) collection-error visibility: --continue-on-collection-errors +
     # discrete collection_errors output.
     # Std 30 §5 (R5) test taxonomy markers: -m selection per shape per Std 30 §3.
-    name: Run Tests (shape=${{ matrix.shape }} py=${{ matrix.python-version }})
+    name: Install-shape matrix (shape=${{ matrix.shape }} py=${{ matrix.python-version }})
+    needs: derive-install-shapes
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        shape: [slim, dev, full]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+      matrix: ${{ fromJSON(needs.derive-install-shapes.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -83,35 +164,33 @@ jobs:
       - name: Install (shape=${{ matrix.shape }})
         run: |
           python -m pip install --upgrade pip
-          case "${{ matrix.shape }}" in
-            slim) pip install -e . pytest pytest-asyncio pytest-benchmark pytest-mock ;;
-            dev)  pip install -e ".[dev]" ;;
-            full) pip install -e ".[dev,retrieval,code-compression,intelligence,data,compression]" ;;
-          esac
+          python - '${{ matrix.product_extras }}' '${{ matrix.test_runner_requirements }}' <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          extras = json.loads(sys.argv[1])
+          runner_requirements = json.loads(sys.argv[2])
+          target = "." + ("[" + ",".join(extras) + "]" if extras else "")
+          subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", target])
+          if runner_requirements:
+              subprocess.check_call([sys.executable, "-m", "pip", "install", *runner_requirements])
+          PY
 
       - name: Run tests with collection-error visibility
         id: pytest
         run: |
-          case "${{ matrix.shape }}" in
-            slim) MARKERS="oss" ;;
-            dev)  MARKERS="oss or optional" ;;
-            full) MARKERS="oss or optional or internal" ;;
-          esac
+          MARKER_SELECTION='${{ matrix.marker_selection }}'
           # IMPORTANT: pipe to tee, then capture pytest's exit code via
           # PIPESTATUS[0] — `$?` after a pipe captures TEE's exit (always 0)
           # which would silently swallow test failures. Std 30 §4 (R4) gate
           # depends on this being correct.
           set +e
-          # Quarantine runner-sensitive perf/SLA tests (needs_fast_host) from the
-          # blocking release gate: GitHub-hosted runners cannot meet wall-clock
-          # throughput / p99 SLAs deterministically (e.g. test_load_100rps.py).
-          # Mirrors the ci.yml quarantine (`not needs_fast_host`). Parens are
-          # required — $MARKERS contains `or` and `and` binds tighter than `or`.
-          pytest tests/ \
-            -m "($MARKERS) and not needs_fast_host" \
+          python -m pytest tests/ \
+            -m "$MARKER_SELECTION" \
             --continue-on-collection-errors \
             -q --tb=short \
-            2>&1 | tee pytest-output.log
+            | tee pytest-output.log
           PYTEST_RC=${PIPESTATUS[0]}
           set -e
           COLLECT_ERRORS=$(grep -c "^ERROR collecting" pytest-output.log || true)
@@ -149,7 +228,15 @@ jobs:
       - name: Install dev dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python - <<'PY'
+          import subprocess
+          import sys
+          import tomllib
+
+          extras = tomllib.load(open("pyproject.toml", "rb"))["tool"]["tokenpak"]["install-shape-matrix"]["dev"]["product_extras"]
+          target = "." + ("[" + ",".join(extras) + "]" if extras else "")
+          subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", target])
+          PY
 
       - name: Run make test-chaos
         run: |
@@ -204,7 +291,15 @@ jobs:
         # stable across hosts.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,full,serve,telemetry,tokens,otel]"
+          python - <<'PY'
+          import subprocess
+          import sys
+          import tomllib
+
+          extras = tomllib.load(open("pyproject.toml", "rb"))["tool"]["tokenpak"]["install-shape-matrix"]["full"]["product_extras"]
+          target = "." + ("[" + ",".join(extras) + "]" if extras else "")
+          subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", target])
+          PY
           # python-multipart is required by FastAPI Form/UploadFile imports in
           # vault/ingest/api and similar surfaces; without it the canonical
           # snapshot generation raises IMPORT_ERROR on those modules and the

@@ -58,6 +58,13 @@ from tokenpak.proxy.server import (
 
 
 class TestStageTrace:
+    def test_compatibility_paths_share_proxy_stage_implementation(self):
+        from tokenpak.proxy import StageTrace as PackageStageTrace
+        from tokenpak.proxy.tracing import StageTrace as TracingStageTrace
+
+        assert StageTrace is TracingStageTrace
+        assert StageTrace is PackageStageTrace
+
     def test_to_dict_has_required_fields(self):
         stage = StageTrace(name="compress", input_tokens=100, output_tokens=80, duration_ms=5.0)
         d = stage.to_dict()

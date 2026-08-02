@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import importlib
 import pathlib
+import re
 import sys
 
 import pytest
@@ -148,8 +149,23 @@ class PyprojectHeavyDepCheck(unittest.TestCase):
         found = any("litellm" in d for d in ll_deps)
         self.assertTrue(found, "integrations-litellm extra must list litellm")
 
+    def _resolved_extra_strings(self, name, _seen=frozenset()):
+        """Flatten one extra's requirement strings, following ``tokenpak[...]``
+        self-references (e.g. ``full = ["tokenpak[all]"]``) so the coverage
+        contract still binds through meta-extra indirection."""
+        if name in _seen:
+            return []
+        out = []
+        for req in self.opt.get(name, []):
+            out.append(req.lower())
+            match = re.fullmatch(r"tokenpak\[([a-z0-9_.,-]+)\]", req.strip().lower())
+            if match:
+                for ref in match.group(1).split(","):
+                    out.extend(self._resolved_extra_strings(ref, _seen | {name}))
+        return out
+
     def test_full_meta_extra_references_all_feature_extras(self):
-        full_deps = self.opt.get("full", [])
+        full_deps = self._resolved_extra_strings("full")
         for name in (
             "retrieval",
             "code-compression",

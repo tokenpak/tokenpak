@@ -1,6 +1,6 @@
 {
   "version": "1.1",
-  "generated_at": "2026-07-22T21:16:31Z",
+  "generated_at": "2026-08-01T10:41:09Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"
@@ -41,6 +41,24 @@
       "job": "build-artifacts",
       "id": "",
       "name": "Upload artifacts (rehearsal \u2014 never published)"
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "derive-install-shapes",
+      "id": "",
+      "name": "Checkout"
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "derive-install-shapes",
+      "id": "",
+      "name": "Set up Python 3.11 TOML bootstrap"
+    },
+    {
+      "workflow": "release-rehearsal.yml",
+      "job": "derive-install-shapes",
+      "id": "derive",
+      "name": "Derive canonical A8 matrix"
     },
     {
       "workflow": "release-rehearsal.yml",
@@ -257,6 +275,24 @@
       "job": "chaos-tests",
       "id": "artifact_ref",
       "name": "Sanitize ref name for artifact labels"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "derive-install-shapes",
+      "id": "",
+      "name": "Checkout"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "derive-install-shapes",
+      "id": "",
+      "name": "Set up Python 3.11 TOML bootstrap"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "derive-install-shapes",
+      "id": "derive",
+      "name": "Derive canonical A8 matrix"
     },
     {
       "workflow": "release.yml",

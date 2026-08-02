@@ -32,6 +32,12 @@ paths found by exercising behavior at its user-visible boundary.
 
 ### Fixed
 
+- Capsule compression never inflates a context block. When the capsule
+  envelope would cost more than paragraph compression gains on a
+  structure-heavy block (headings, bullets, and code fences pass through
+  the deterministic compressor verbatim), the block is left untouched, so
+  a capsulized block is always smaller than the original and measured
+  savings are never negative.
 - Vault matches now reach byte-preserved provider requests. Injection text is
   carried through the pipeline and inserted into the existing system array
   without reserializing the rest of the request body; the public three-value

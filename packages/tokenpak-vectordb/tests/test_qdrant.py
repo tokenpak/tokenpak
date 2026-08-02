@@ -1,7 +1,7 @@
 """Tests for QdrantAdapter using mock Qdrant client."""
 
-import pytest
 from unittest.mock import MagicMock
+
 from tokenpak_vectordb import QdrantAdapter, VectorBlock
 
 
@@ -25,7 +25,7 @@ class TestQdrantAdapter:
     def _adapter(self, hits=None, score_metric="cosine"):
         if hits is None:
             hits = [
-                _make_scored_point("1", 0.95, {"text": "TokenPak protocol"}),
+                _make_scored_point("1", 0.95, {"text": "TIP-1.0"}),
                 _make_scored_point("2", 0.80, {"text": "Context compression"}),
                 _make_scored_point("3", 0.65, {"text": "Vector databases"}),
             ]
@@ -66,7 +66,7 @@ class TestQdrantAdapter:
     def test_content_extracted(self):
         adapter, _ = self._adapter()
         blocks = adapter.query_as_blocks([0.1], limit=3)
-        assert blocks[0].content == "TokenPak protocol"
+        assert blocks[0].content == "TIP-1.0"
 
     def test_provenance(self):
         adapter, _ = self._adapter()
@@ -102,6 +102,7 @@ class TestQdrantAdapter:
 
     def test_filter_passed(self):
         from unittest.mock import sentinel
+
         adapter, client = self._adapter()
         f = sentinel.filter
         adapter.query_as_blocks([0.1], query_filter=f)

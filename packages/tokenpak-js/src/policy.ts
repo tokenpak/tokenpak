@@ -4,7 +4,7 @@
  * Defines compaction and budget policies for a TokenPak.
  */
 
-/** Compaction modes per TokenPak schema */
+/** Compaction modes per the Pak JSON schema */
 export type CompactionMode = 'lossless' | 'balanced' | 'aggressive' | 'semantic';
 
 /** Per-block-type compaction override */

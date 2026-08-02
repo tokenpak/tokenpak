@@ -13,6 +13,12 @@ from tokenpak.services.optimization.stage import EligibilityResult, NoOpStage
 from tokenpak.services.optimization.trace import OptimizationTrace
 
 
+def test_package_and_module_trace_exports_preserve_compatibility_identity():
+    from tokenpak.services.optimization import OptimizationTrace as PackageOptimizationTrace
+
+    assert OptimizationTrace is PackageOptimizationTrace
+
+
 @dataclass
 class _RecordingStage:
     """Stage that records every call into a shared list."""

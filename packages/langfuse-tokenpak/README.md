@@ -12,7 +12,7 @@
 Instead of seeing a blob of raw text in Langfuse, you see this:
 
 ```
-TokenPak Pack (3 blocks, 880/8000 tokens)
+Pak (3 blocks, 880/8000 tokens)
 ├── 📋 instructions    [critical]  150 tok
 ├── 📚 knowledge       [high]      420 tok  [compacted]  src:pinecone
 └── 🔍 evidence        [medium]    310 tok
@@ -200,7 +200,6 @@ If Langfuse is not installed or unavailable, all tracing operations silently no-
 
 ## Links
 
-- [TokenPak Docs](https://tokenpak.dev)
+- [TokenPak Docs](https://docs.tokenpak.ai/)
 - [Langfuse Docs](https://langfuse.com/docs)
-- [Integration Guide](https://tokenpak.dev/integrations/langfuse)
 - [PyPI](https://pypi.org/project/langfuse-tokenpak/)

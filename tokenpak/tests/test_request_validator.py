@@ -134,27 +134,32 @@ class TestRequestValidationResult:
         )
         payload = r.to_error_response()
         assert payload["error"]["type"] == "validation_error"
-        assert "messages" in payload["error"]["hint"]
+        assert payload["error"]["hint"] == "https://docs.tokenpak.ai/API/"
 
     def test_to_error_response_openai(self):
         r = RequestValidationResult(valid=False, provider="openai", errors=[])
         payload = r.to_error_response()
-        assert "chat-completions" in payload["error"]["hint"]
+        assert payload["error"]["hint"] == "https://docs.tokenpak.ai/API/"
 
     def test_to_error_response_codex(self):
         r = RequestValidationResult(valid=False, provider="openai-codex", errors=[])
         payload = r.to_error_response()
-        assert "responses" in payload["error"]["hint"]
+        assert payload["error"]["hint"] == "https://docs.tokenpak.ai/API/"
 
     def test_to_error_response_google(self):
         r = RequestValidationResult(valid=False, provider="google", errors=[])
         payload = r.to_error_response()
-        assert "google-generate-content" in payload["error"]["hint"]
+        assert payload["error"]["hint"] == "https://docs.tokenpak.ai/API/"
 
     def test_to_error_response_unknown_provider(self):
         r = RequestValidationResult(valid=False, provider="unknown_xyz", errors=[])
         payload = r.to_error_response()
-        assert "requests" in payload["error"]["hint"]
+        assert payload["error"]["hint"] == "https://docs.tokenpak.ai/API/"
+
+    def test_to_error_response_supplied_documentation_url(self):
+        r = RequestValidationResult(valid=False, provider="anthropic", errors=[])
+        payload = r.to_error_response("https://example.test/request-help")
+        assert payload["error"]["hint"] == "https://example.test/request-help"
 
 
 # ---------------------------------------------------------------------------

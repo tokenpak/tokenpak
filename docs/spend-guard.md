@@ -5,7 +5,7 @@ The **TIP Spend Guard** is TokenPak's proxy-side circuit breaker. It blocks risk
 This is the canonical defense; the older companion-side **advisory budget** is fail-open and stays as a soft hint.
 
 > **Status:** Available since TokenPak v1.5.1.
-> **Authoritative contract:** [Standard 29 — TIP Spend Guard Agent Contract](https://github.com/tokenpak/docs/blob/main/standards/29-spend-guard-agent-contract.md)
+> **Protocol context:** [TIP-1.0 documentation](https://docs.tokenpak.ai/protocol/)
 
 ---
 
@@ -283,7 +283,7 @@ The session window reads from `~/.tokenpak/monitor.db`, which is the proxy's wir
 
 ## See also
 
-- **Standard 29:** [`29-spend-guard-agent-contract.md`](https://github.com/tokenpak/docs/blob/main/standards/29-spend-guard-agent-contract.md) — wire contract.
+- **TIP-1.0 documentation:** [protocol reference](https://docs.tokenpak.ai/protocol/) — public protocol context.
 - **Reference implementation:** `tokenpak/proxy/spend_guard/`
 - **Tests:** `tokenpak/tests/test_spend_guard_*.py` (149 tests including the canonical 2026-05-07 spike-replay).
 - **Initiative record:** the spend-guard OSS initiative record in the project archive.

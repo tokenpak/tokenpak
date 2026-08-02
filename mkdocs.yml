@@ -1,6 +1,6 @@
 site_name: TokenPak
 site_dir: docs_site
-site_url: https://docs.tokenpak.dev
+site_url: https://docs.tokenpak.ai
 site_description: Zero-token operations. Maximum context efficiency.
 site_author: TokenPak Team
 repo_url: https://github.com/tokenpak/tokenpak

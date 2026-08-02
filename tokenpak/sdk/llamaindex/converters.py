@@ -1,7 +1,7 @@
 """
-Node ↔ TokenPak Block conversion utilities for LlamaIndex.
+Node ↔ Pak Block conversion utilities for LlamaIndex.
 
-Converts between LlamaIndex Node format and TokenPak Block format,
+Converts between LlamaIndex Node format and Pak Block format,
 supporting both dict-style nodes and real LlamaIndex TextNode/NodeWithScore
 objects when llama-index-core is installed.
 """
@@ -21,9 +21,9 @@ from typing import Any, Dict, List, Optional
 @dataclass
 class LlamaBlock:
     """
-    Portable Block representation compatible with TokenPak protocol.
+    Portable Block representation compatible with TIP-1.0.
 
-    Maps LlamaIndex node data to TokenPak block semantics:
+    Maps LlamaIndex node data to Pak block semantics:
       - id          → node id
       - content     → node text
       - quality     → retrieval score (0-1)
@@ -63,7 +63,7 @@ class LlamaBlock:
         }
 
     def to_tokenpak_dict(self) -> Dict[str, Any]:
-        """Export as TokenPak wire format."""
+        """Export in the Pak wire format."""
         return {
             "type": self.block_type,
             "id": self.id,

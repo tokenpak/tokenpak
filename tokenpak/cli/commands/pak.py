@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from tokenpak.tip.pak import Pak
+    from tokenpak.core.contracts.pak import Pak
 
 # Tokenpak imports are deferred into handlers to keep `tokenpak --help`
 # fast (these contracts pull in the vault subsystem on import).

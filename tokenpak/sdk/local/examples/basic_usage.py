@@ -193,7 +193,7 @@ def demo_rag_pipeline():
     print("=" * 60)
     mock_sdk, mock_client = _mock_ollama_sdk()
     mock_client.chat.return_value = {
-        "message": {"content": "TokenPak is a context compression protocol for LLMs."}
+        "message": {"content": "TokenPak is the reference implementation of TIP-1.0."}
     }
 
     with patch.dict("sys.modules", {"ollama": mock_sdk}):
@@ -211,7 +211,7 @@ def demo_rag_pipeline():
         # Simulated retrieval results
         query = "What is TokenPak?"
         retrieved_docs = [
-            "TokenPak is an open protocol for compressing context sent to LLMs.",
+            "TokenPak is a local product and the reference implementation of TIP-1.0.",
             "It uses structured blocks to prioritize important information.",
             "TokenPak reduces token usage in typical RAG workloads.",
             "The protocol is model-agnostic and works with any LLM API.",

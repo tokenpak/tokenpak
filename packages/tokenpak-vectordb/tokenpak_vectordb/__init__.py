@@ -1,7 +1,7 @@
 """
 tokenpak-vectordb — TokenPak adapters for vector databases.
 
-Convert vector DB query results directly into TokenPak blocks for seamless
+Convert vector DB query results directly into Pak blocks for seamless
 RAG pipelines.
 
 Supported adapters:
@@ -11,7 +11,7 @@ Supported adapters:
   - ChromaAdapter     → Chroma (chromadb v0.4+)
 
 Core types:
-  - VectorBlock       → portable TokenPak block for retrieval results
+  - VectorBlock       → portable Pak block for retrieval results
   - VectorDBAdapter   → abstract base class
   - BatchQueryResult  → container for batch query results
 

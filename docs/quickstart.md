@@ -84,9 +84,9 @@ model or imply hosted processing by the OSS package.
 
 ---
 
-## SDK Path: Protocol-First
+## SDK Path: TIP-1.0 Compatibility
 
-**Use the TokenPak format with any LLM client — no proxy needed.**
+**Use TIP-1.0-compatible Pak JSON with any LLM client — no proxy needed.**
 
 ### Install
 

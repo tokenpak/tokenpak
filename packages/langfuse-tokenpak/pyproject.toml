@@ -34,7 +34,6 @@ langchain = ["langchain-core>=0.1.0", "langfuse>=2.0.0"]
 
 [project.urls]
 "Homepage" = "https://github.com/tokenpak/langfuse-tokenpak"
-"Documentation" = "https://tokenpak.dev/integrations/langfuse"
 "Repository" = "https://github.com/tokenpak/langfuse-tokenpak.git"
 "Bug Tracker" = "https://github.com/tokenpak/langfuse-tokenpak/issues"
 

@@ -1,5 +1,5 @@
 """
-TokenPak proxy pipeline tracing — StageTrace, PipelineTrace, TraceStorage.
+TokenPak proxy pipeline tracing — proxy-stage, pipeline, and storage DTOs.
 
 Extracted from tokenpak/runtime/proxy.py (L1-607 extraction, phase 1a).
 """
@@ -19,7 +19,13 @@ class _CompressionTimeout(Exception):
 
 @dataclass
 class StageTrace:
-    """Trace for a single pipeline stage."""
+    """Trace for a single pipeline stage.
+
+    Proxy-local DTO, distinct from the canonical TIP ``StageTrace`` contract
+    despite the shared historical name. The module path and class name are
+    kept as-is: they are compatibility surface for reflection and default
+    pickle globals across releases.
+    """
 
     name: str  # capsule, segmentizer, recipe_engine, compaction, vault_injection, validation_gate
     enabled: bool = True

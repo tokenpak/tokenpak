@@ -21,7 +21,7 @@ class _LocalOptimizationContract:
     Exposes the tiny surface the pipeline actually needs: a set of
     capability strings and a couple of context strings (route + platform).
 
-    The upstream contract ships a richer ``tokenpak.tip.optimization_contract.OptimizationContract``
+    The upstream contract ships a richer ``tokenpak.core.contracts.optimization.OptimizationContract``
     with cache/compression/telemetry sub-policies. The pipeline scaffolding
     treats the contract as opaque (``ctx.contract``) so callers can switch
     implementations without changes here.

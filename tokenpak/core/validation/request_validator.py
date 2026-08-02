@@ -75,25 +75,21 @@ class RequestValidationResult:
             f"errors={len(self.errors)})"
         )
 
-    def to_error_response(self, docs_base: str = "https://docs.tokenpak.ai/api") -> Dict[str, Any]:
+    def to_error_response(self, docs_base: str = "https://docs.tokenpak.ai/API/") -> Dict[str, Any]:
         """Build a structured 400 error body (matches OpenAI/Anthropic style).
+
+        Args:
+            docs_base: Exact documentation URL to include in the response.
 
         Returns:
             Dict ready to JSON-serialize as the HTTP response body.
         """
-        provider_path = {
-            "anthropic": "messages",
-            "openai": "chat-completions",
-            "openai-codex": "responses",
-            "google": "google-generate-content",
-        }.get(self.provider, "requests")
-
         return {
             "error": {
                 "type": "validation_error",
                 "message": "Request validation failed",
                 "details": self.errors,
-                "hint": f"{docs_base}/{provider_path}",
+                "hint": docs_base,
             }
         }
 

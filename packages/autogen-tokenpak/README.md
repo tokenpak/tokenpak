@@ -205,4 +205,3 @@ Apache-2.0
 
 For issues, questions, or contributions:
 - GitHub: https://github.com/tokenpak/autogen-tokenpak
-- Docs: https://tokenpak.dev/integrations/autogen

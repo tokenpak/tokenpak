@@ -10301,7 +10301,7 @@ def cmd_fingerprint_clear_cache(args: CommandArgs) -> None:
 
 
 def cmd_validate(args: CommandArgs) -> None:
-    """Validate a TokenPak JSON file against the v1.0 protocol schema."""
+    """Validate a Pak JSON file against the bundled schema v1.0."""
     import json as _json
     import sys as _sys
 
@@ -10315,7 +10315,7 @@ def cmd_validate(args: CommandArgs) -> None:
         _sys.exit(0 if result.valid else 1)
 
     # Human-readable output
-    print("\nTokenPak Validator v1.0")
+    print("\nPak schema validator v1.0")
     print(f"File : {args.file}")
     print("─" * 50)
 
@@ -10333,8 +10333,8 @@ def cmd_validate(args: CommandArgs) -> None:
 
 
 def _build_validate_parser(sub: Subparsers) -> argparse.ArgumentParser:
-    p = sub.add_parser("validate", help="Validate a TokenPak JSON file against the v1.0 schema")
-    p.add_argument("file", help="Path to the .json TokenPak file")
+    p = sub.add_parser("validate", help="Validate a Pak JSON file against the bundled v1.0 schema")
+    p.add_argument("file", help="Path to the .json Pak file")
     p.add_argument(
         "--verbose",
         "-v",

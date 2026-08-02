@@ -29,7 +29,7 @@ pack.add(new Block({
 pack.add(new Block({
   type: 'knowledge',
   id: 'product_docs',
-  content: 'TokenPak is the context standard for AI systems. It helps manage token budgets efficiently.',
+  content: 'TokenPak is the reference implementation of TIP-1.0. It helps manage token budgets efficiently.',
   priority: 'high',
 }));
 

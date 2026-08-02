@@ -1,7 +1,7 @@
 """Tests for PineconeAdapter using mock Pinecone index."""
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 from tokenpak_vectordb import PineconeAdapter, VectorBlock
 
 
@@ -28,7 +28,7 @@ class TestPineconeAdapter:
     def _adapter(self, matches=None):
         if matches is None:
             matches = [
-                _make_match("doc1", 0.95, {"text": "TokenPak is a protocol."}),
+                _make_match("doc1", 0.95, {"text": "TokenPak implements TIP-1.0."}),
                 _make_match("doc2", 0.82, {"text": "RAG pipelines use vector DBs."}),
                 _make_match("doc3", 0.71, {"text": "Context compression matters."}),
             ]
@@ -56,7 +56,7 @@ class TestPineconeAdapter:
     def test_content_extracted(self):
         adapter, _ = self._adapter()
         blocks = adapter.query_as_blocks([0.1], limit=3)
-        assert blocks[0].content == "TokenPak is a protocol."
+        assert blocks[0].content == "TokenPak implements TIP-1.0."
 
     def test_provenance_set(self):
         adapter, _ = self._adapter()

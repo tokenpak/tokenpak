@@ -1,5 +1,5 @@
 """
-tracer.py — TokenPakTracer: high-level Langfuse tracing for TokenPak packs.
+tracer.py — TokenPakTracer: high-level Langfuse tracing for Paks.
 
 Provides a context manager that captures pack compilation metadata and
 uploads it as a structured Langfuse trace with block-level visibility.
@@ -27,7 +27,7 @@ from .analytics import TokenPakAnalytics
 
 class TokenPakTracer:
     """
-    High-level tracer that records TokenPak pack metadata into Langfuse.
+    High-level tracer that records Pak metadata into Langfuse.
 
     Works with any object that has a `.trace()` or `.span()` method matching
     the Langfuse v2 API (i.e., returns a trace/span with `.update()`).
@@ -117,12 +117,12 @@ class TokenPakTracer:
         tags: Optional[List[str]] = None,
     ) -> Generator[Any, None, None]:
         """
-        Context manager that creates a Langfuse trace for a TokenPak pack.
+        Context manager that creates a Langfuse trace for a Pak.
 
         Records block breakdown, token stats, and compression metadata.
 
         Args:
-            pack: A TokenPak pack object (or list of blocks).
+            pack: A Pak object (or list of blocks).
             name: Trace name in Langfuse.
             user_id: Optional Langfuse user_id for the trace.
             session_id: Optional Langfuse session_id for the trace.

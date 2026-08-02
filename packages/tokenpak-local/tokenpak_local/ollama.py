@@ -2,7 +2,7 @@
 ollama.py — TokenPak wrapper for the Ollama Python client.
 
 Provides TokenPakOllama: a thin wrapper around ollama.Client that accepts
-a TokenPak pack, auto-sizes the budget to the model's context window, and
+a Pak, auto-sizes the budget to the model's context window, and
 compiles the pack before calling Ollama.
 
 Requires: pip install tokenpak-local[ollama]
@@ -37,7 +37,7 @@ class TokenPakOllama:
     Ollama client wrapper with automatic TokenPak context compression.
 
     Supports both chat (chat completions) and generate (raw text generation)
-    endpoints. When a TokenPak pack is provided, the budget is automatically
+    endpoints. When a Pak is provided, the budget is automatically
     set based on the model's known context window before compilation.
 
     Usage:
@@ -102,11 +102,11 @@ class TokenPakOllama:
         **kwargs: Any,
     ) -> Union[Dict[str, Any], Iterator[Dict[str, Any]]]:
         """
-        Send a chat request to Ollama, optionally with a TokenPak pack.
+        Send a chat request to Ollama, optionally with a Pak.
 
         Args:
             model:     Ollama model name (e.g. "llama3", "mistral:7b").
-            tokenpak:  TokenPak pack. Budget is auto-set from model context.
+            tokenpak:  Pak. Budget is auto-set from model context.
             messages:  Additional chat messages appended after the system message.
                        If tokenpak is None, messages is used as-is.
             stream:    If True, returns an iterator of response chunks.
@@ -138,7 +138,7 @@ class TokenPakOllama:
 
         Args:
             model:     Ollama model name.
-            tokenpak:  TokenPak pack. Budget auto-set from model context.
+            tokenpak:  Pak. Budget auto-set from model context.
             prompt:    User prompt appended after the TokenPak context.
             stream:    If True, returns an iterator of response chunks.
             **kwargs:  Forwarded to ollama.Client.generate().

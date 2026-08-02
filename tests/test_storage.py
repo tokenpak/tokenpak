@@ -1,4 +1,4 @@
-"""Tests for TokenPak Schema Patch (Phase 7H / PRD fields).
+"""Tests for storage schema fields.
 
 Covers:
 - All new PRD columns present in tp_events, tp_segments, tp_usage, tp_costs, rollups

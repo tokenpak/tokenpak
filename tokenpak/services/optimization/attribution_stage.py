@@ -9,8 +9,8 @@ The AttributionStage is a post-response stage that:
 Feature flag: ``TOKENPAK_ATTRIBUTION_V2`` (default off).
 
 Layering:
-- TIP layer: SavingsSource vocabulary from tokenpak.tip.telemetry_contract
-- TIP layer: SavingsAttribution from tokenpak.tip.trace_contract
+- TIP layer: SavingsSource vocabulary from tokenpak.core.contracts.telemetry
+- TIP layer: SavingsAttribution from tokenpak.core.contracts.trace
 - Services layer: this module — consumes TIP types, operates on canonical context
 - Adapter layer: provider-specific parsing in telemetry/savings.py
 

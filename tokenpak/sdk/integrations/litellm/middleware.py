@@ -42,7 +42,7 @@ from .parser import (
 
 
 class TokenPakMiddleware:
-    """LiteLLM Router middleware that compiles TokenPak packs before sending.
+    """LiteLLM Router middleware that compiles Paks before sending.
 
     Args:
         compaction: Default compaction strategy for all calls.
