@@ -24,7 +24,8 @@ Or via the feature-flag-aware factory:
 
     from tokenpak.proxy.capsule_builder import make_capsule_builder
 
-    builder = make_capsule_builder()  # respects TOKENPAK_CAPSULE_BUILDER env var
+    builder = make_capsule_builder()  # respects TOKENPAK_PAK_BUILDER env var
+                                      # (legacy alias: TOKENPAK_CAPSULE_BUILDER)
     new_body, stats = builder.process(request_body_bytes)
 """
 
@@ -52,8 +53,9 @@ def make_capsule_builder(
     hot_window: int = DEFAULT_HOT_WINDOW,
 ) -> CapsuleBuilder:
     """
-    Factory that reads the ``TOKENPAK_CAPSULE_BUILDER`` env var to decide
-    whether the builder is enabled, then returns a ready-to-use
+    Factory that reads the ``TOKENPAK_PAK_BUILDER`` env var (falling back
+    to the legacy ``TOKENPAK_CAPSULE_BUILDER`` spelling) to decide whether
+    the builder is enabled, then returns a ready-to-use
     :class:`CapsuleBuilder`.
 
     Parameters
@@ -73,7 +75,12 @@ def make_capsule_builder(
     from tokenpak.core.config_loader import _bool_env
     from tokenpak.proxy.config import env_or_profile as _env_or_profile
 
-    enabled = _bool_env(_env_or_profile("TOKENPAK_CAPSULE_BUILDER", "0"))
+    # Canonical flag first; the pre-rebrand spelling stays honored so
+    # existing configs keep working.
+    flag = _env_or_profile("TOKENPAK_PAK_BUILDER", "")
+    if not flag:
+        flag = _env_or_profile("TOKENPAK_CAPSULE_BUILDER", "0")
+    enabled = _bool_env(flag)
     return CapsuleBuilder(
         enabled=enabled,
         min_block_chars=min_block_chars,

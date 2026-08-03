@@ -32,7 +32,7 @@ For each phase:
 ## If session runs out
 
 - Call `journal_write` with: completed phases, remaining phases, any gotchas found.
-- The next session can `load_capsule` to resume exactly where you left off.
+- The next session can `load_pak` to resume exactly where you left off.
 
 ## Key discipline
 
