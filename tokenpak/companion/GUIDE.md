@@ -201,7 +201,8 @@ When the companion is active, Claude Code gains nine MCP tools served by
 |---|---|
 | `estimate_tokens` | Estimate token count for inline text or a file path. Call before including large content to decide if it's worth the cost. |
 | `check_budget` | Return remaining cost budget for this session and today. Call before starting expensive multi-step tasks. |
-| `load_capsule` | Load a memory capsule from a prior session. Omit `session_id` to list the 10 most recent available capsules. |
+| `load_pak` | Load a Pak (TokenPak's compressed context bundle; legacy name: capsule) from a prior session. Omit `session_id` to list the 10 most recent available Paks. |
+| `load_capsule` | Deprecated legacy alias of `load_pak` — same behavior and parameters. Kept so existing configs and hooks continue to work. |
 | `prune_context` | Compress verbose text (large tool outputs, error logs) by keeping the beginning and end and eliding the middle. Default target: 2,000 tokens. |
 | `journal_read` | Read journal entries for the current or a named session. Omit `session_id` to list recent sessions with stats. |
 | `journal_write` | Save a note, decision, or milestone to the current session journal for recall in future sessions. |
@@ -219,9 +220,9 @@ over indexed vault blocks. They are not structured Pak or MultiPak recall.
 { "text": "...", "file_path": "..." }   // one of text or file_path
 ```
 
-**`load_capsule`**
+**`load_pak`** (legacy alias: `load_capsule`)
 ```json
-{ "session_id": "abc123" }   // omit to list available capsules
+{ "session_id": "abc123" }   // omit to list available Paks
 ```
 
 **`prune_context`**
@@ -319,16 +320,16 @@ Capsules are stored as Markdown files in:
 
 Override with `TOKENPAK_COMPANION_JOURNAL_DIR`.
 
-### Listing capsules
+### Listing Paks
 
 ```
-> load_capsule    # omit session_id → lists 10 most recent
+> load_pak    # omit session_id → lists 10 most recent
 ```
 
 ### Loading a capsule
 
 ```
-> load_capsule with session_id "2026-04-14-abc123"
+> load_pak with session_id "2026-04-14-abc123"
 ```
 
 The capsule is returned as a Markdown block with sections:
@@ -359,7 +360,7 @@ journal directory (`~/.tokenpak/companion/` by default, overridable with
 | `journal.db` | Session and entry history | A few MB | **No** — see below |
 | `recall.db` | Recall index | Small | No |
 | `budget.db` | Spend and budget history | Small | No |
-| `capsules/` | Session capsules (Markdown) | ~2–10 KB each | No |
+| `capsules/` | Session Paks (Markdown; legacy dir name) | ~2–10 KB each | No |
 | `run/` | Generated launch config — MCP, settings, prompt fragment | Fixed, rewritten each launch | Overwritten |
 
 ### Codex session-home retention
@@ -381,7 +382,7 @@ writes a receipt, so an interrupted sweep never half-deletes a home.
 ### What is deliberately not auto-pruned
 
 `journal.db` and `capsules/` are the substrate for `journal_read`,
-`load_capsule`, and cross-session recall — they are memory, not cache. Deleting
+`load_pak`, and cross-session recall — they are memory, not cache. Deleting
 them reclaims very little space and permanently removes the history those
 features read. They are left under your control rather than swept.
 
@@ -441,7 +442,7 @@ To clear the daily counter, delete the budget database:
 rm ~/.tokenpak/companion/budget.db
 ```
 
-### `load_capsule` returns no capsules
+### `load_pak` returns no Paks
 
 Capsules are built from the session transcript.  If the transcript file was
 not written (e.g. non-interactive `--print` mode), no capsule is created.

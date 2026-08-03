@@ -120,7 +120,8 @@ def test_mcp_tool_names_survive_every_style(tmp_path, style) -> None:
     for tool in (
         "estimate_tokens",
         "check_budget",
-        "load_capsule",
+        "load_pak",
+        "load_capsule",  # documented legacy alias
         "prune_context",
         "journal_read",
         "journal_write",

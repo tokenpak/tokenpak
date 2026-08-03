@@ -227,6 +227,13 @@ def _handle_prune_context(state: CompanionState, args: dict[str, Any]) -> str:
         return json.dumps({"error": "proxy_unreachable", "detail": resp.get("detail", "")})
     if status >= 400:
         return json.dumps(resp)
+    # Wrap actual reductions in the Pak envelope so compressed content that
+    # re-enters model context is attributable to TokenPak.
+    if isinstance(resp, dict) and resp.get("pruned_text") and resp.get("reduction_pct", 0) > 0:
+        from ..capsules.builder import _wrap_capsule
+
+        resp = dict(resp)
+        resp["pruned_text"] = _wrap_capsule(text, resp["pruned_text"])
     return json.dumps(resp)
 
 
@@ -471,13 +478,27 @@ TOOLS: list[ToolDef] = [
     ),
     ToolDef(
         name="check_budget",
-        description="Check remaining cost budget for this session and today. Call before starting expensive multi-step tasks.",
+        description="Check the remaining TokenPak cost budget for this session and today. Call before starting expensive multi-step tasks.",
         input_schema={"type": "object", "properties": {}},
         handler=_handle_check_budget,
     ),
     ToolDef(
+        name="load_pak",
+        description="Load a TokenPak Pak (Portable AI Knowledge — a compressed context bundle) from a prior session. Call when resuming work or when the user references past sessions. Omit session_id to list available Paks.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session ID to load (omit to list available)",
+                },
+            },
+        },
+        handler=_handle_load_capsule,
+    ),
+    ToolDef(
         name="load_capsule",
-        description="Load a memory capsule from a prior session. Call when resuming work or when the user references past sessions. Omit session_id to list available capsules.",
+        description="Deprecated legacy alias of load_pak (capsule is the pre-rebrand name for a Pak). Prefer load_pak.",
         input_schema={
             "type": "object",
             "properties": {
@@ -491,7 +512,7 @@ TOOLS: list[ToolDef] = [
     ),
     ToolDef(
         name="prune_context",
-        description="Compress verbose text (large tool outputs, error logs) to reduce token usage. Keeps the beginning and end, elides the middle.",
+        description="Compress verbose text (large tool outputs, error logs) with TokenPak to reduce token usage. Keeps the beginning and end, elides the middle.",
         input_schema={
             "type": "object",
             "properties": {
@@ -508,7 +529,7 @@ TOOLS: list[ToolDef] = [
     ),
     ToolDef(
         name="journal_read",
-        description="Read journal entries for this session or a past session. Omit session_id to list recent sessions.",
+        description="Read TokenPak session-journal entries for this session or a past session. Omit session_id to list recent sessions.",
         input_schema={
             "type": "object",
             "properties": {
@@ -531,7 +552,7 @@ TOOLS: list[ToolDef] = [
     ),
     ToolDef(
         name="journal_write",
-        description="Add a note to the current session journal. Use for important decisions, milestones, or context the user might want later.",
+        description="Add a note to the TokenPak session journal. Use for important decisions, milestones, or context the user might want later.",
         input_schema={
             "type": "object",
             "properties": {
@@ -543,7 +564,7 @@ TOOLS: list[ToolDef] = [
     ),
     ToolDef(
         name="session_info",
-        description="Get companion status, session stats, and configuration.",
+        description="Get TokenPak companion status, session stats, and configuration.",
         input_schema={"type": "object", "properties": {}},
         handler=_handle_session_info,
     ),

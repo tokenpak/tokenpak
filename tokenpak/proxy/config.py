@@ -646,6 +646,24 @@ VALIDATION_GATE_SOFT: bool = _cfg(
 VAULT_INDEX_PATH = _cfg(
     "vault.index_path", str(Path.home() / "vault" / ".tokenpak"), "TOKENPAK_VAULT_INDEX", str
 )
+#: Master switch for vault context injection. **Default OFF.**
+#:
+#: Injection is the mechanism that admits retrieved vault content into a request
+#: before it reaches the provider. It is currently non-functional (adapter
+#: resolution starves, so the body is returned unchanged), and repairing it is
+#: therefore an *activation* of an unexercised path, not a bug fix.
+#:
+#: Two controls that protect every other request path do NOT yet cover injected
+#: content: the outbound DLP secret scan and the spend guard both evaluate the
+#: body *before* injection runs. Until they evaluate the body that is actually
+#: sent, enabling this would ship vault content to providers unscanned and
+#: untracked against cost caps.
+#:
+#: Turning this on is a governance decision, not a configuration preference.
+VAULT_INJECTION_ENABLED: bool = _cfg(
+    "features.vault_injection", False, "TOKENPAK_VAULT_INJECTION", bool
+)
+
 INJECT_BUDGET = _cfg("vault.inject_budget", 4000, "TOKENPAK_INJECT_BUDGET", int)
 INJECT_TOP_K = _cfg("vault.inject_top_k", 5, "TOKENPAK_INJECT_TOP_K", int)
 INJECT_MIN_SCORE = _cfg("vault.inject_min_score", 2.0, "TOKENPAK_INJECT_MIN_SCORE", float)

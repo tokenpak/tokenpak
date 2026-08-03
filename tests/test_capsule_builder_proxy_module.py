@@ -77,7 +77,7 @@ class TestCapsuleBuilderViaProxyModule:
         body = json.dumps({"messages": [{"role": "user", "content": long_text}]}).encode()
         out, stats = b.process(body)
         assert stats["blocks_capsulized"] >= 1
-        assert b"[CAPSULE" in out
+        assert b"[PAK" in out
 
     def test_same_class_as_canonical(self):
         """Proxy module re-exports the canonical CapsuleBuilder — same class."""
