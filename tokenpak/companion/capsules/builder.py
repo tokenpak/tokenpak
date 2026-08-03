@@ -2,12 +2,14 @@
 tokenpak.companion.capsules.builder
 ========================
 
-Capsule Builder — context-block compression for the TokenPak proxy pipeline.
+Pak Builder — context-block compression for the TokenPak proxy pipeline.
 
-A **capsule** is a compact, structured representation of a verbose context
-block. The builder identifies large historical message blocks, compresses them
-deterministically, and wraps them in a capsule envelope so the model still
-receives the semantic content at reduced token cost.
+A **Pak** (Portable AI Knowledge — legacy name: capsule) is a compact,
+structured representation of a verbose context block. The builder identifies
+large historical message blocks, compresses them deterministically, and wraps
+them in a Pak envelope so the model still receives the semantic content at
+reduced token cost. Class and module names retain the legacy ``capsule``
+spelling as deprecation aliases; the wire-visible surface is Pak-branded.
 
 Design Principles
 -----------------
@@ -19,17 +21,21 @@ Design Principles
 * **Safe** — if the builder raises for any reason, the caller can fall back
   to the original body unmodified.
 * **Feature-flagged** — disabled by default; opt-in via
-  ``TOKENPAK_CAPSULE_BUILDER=1`` (or the ``enabled`` constructor arg).
+  ``TOKENPAK_PAK_BUILDER=1`` (legacy alias: ``TOKENPAK_CAPSULE_BUILDER=1``,
+  or the ``enabled`` constructor arg).
 
-Capsule Envelope Format
------------------------
+Pak Envelope Format
+-------------------
 ::
 
-    [CAPSULE id=a1b2c3d4 ratio=0.42 chars_in=1200 chars_out=504]
+    [PAK id=a1b2c3d4 ratio=0.42 chars_in=1200 chars_out=504]
     <compressed content>
-    [/CAPSULE]
+    [/PAK]
 
 The envelope is plain text that large-context models handle gracefully.
+Envelopes written before the 2026-07 rebrand used ``[CAPSULE ...]`` /
+``[/CAPSULE]``; stored content carrying the legacy markers is left as-is
+(nothing parses envelopes back — they exist for the model and the user).
 
 Usage
 -----
@@ -54,6 +60,16 @@ from typing import Any, Dict, List, Tuple
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
+# Wire-visible Pak envelope markers. These strings appear verbatim in model
+# context and session transcripts — they are the user-facing TokenPak brand
+# surface, so change them only through the naming-glossary process.
+PAK_MARKER_OPEN_PREFIX = "[PAK "
+PAK_MARKER_CLOSE = "[/PAK]"
+
+# Pre-rebrand envelopes used this prefix; stored content that carries it is
+# valid and is never rewritten on read.
+LEGACY_MARKER_OPEN_PREFIX = "[CAPSULE "
 
 # Minimum character length of a text block before the builder considers
 # compressing it.  Below this threshold the overhead of a capsule envelope
@@ -196,8 +212,10 @@ def _wrap_capsule(original: str, compressed: str) -> str:
     chars_in = len(original)
     chars_out = len(compressed)
     ratio = round(chars_out / chars_in, 3) if chars_in else 1.0
-    header = f"[CAPSULE id={cid} ratio={ratio} chars_in={chars_in} chars_out={chars_out}]"
-    return f"{header}\n{compressed}\n[/CAPSULE]"
+    header = (
+        f"{PAK_MARKER_OPEN_PREFIX}id={cid} ratio={ratio} chars_in={chars_in} chars_out={chars_out}]"
+    )
+    return f"{header}\n{compressed}\n{PAK_MARKER_CLOSE}"
 
 
 # ---------------------------------------------------------------------------
