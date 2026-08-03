@@ -6,7 +6,29 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- **`tokenpak pak create` now writes the canonical Pak schema (`schema_version: 2`).**
+  Created Pak files carry the canonical contract fields (`pak_type`, `source`, `status`,
+  `authority`, `confidence`, `retention`, `privacy`, `relationships`) plus the existing
+  file-form fields (embedded anchor content, `objective`, `continuation_notes`, checksum).
+  The subtype is now the canonical `recall` — previously `create` stamped the deprecated
+  `context` alias, which readers already resolve to `recall`. Field renames within the file
+  form: per-anchor `sha256` → `source_hash` (with new `anchor_id` / `snippet_available`),
+  top-level `ttl` → `ttl_hint`, and `scope.source_root` → top-level `source_root` (`scope`
+  is now the canonical `user`/`project`/`topic` record). The checksum construction is
+  unchanged (sha256 over the sorted-key JSON body, excluding `checksum`/`pak_id`);
+  checksum *values* differ from what v1 would have produced because the body changed.
+
+### Added
+
+- **`tokenpak pak migrate <pak-file> [-o OUT]`** — upgrades a legacy (`schema_version: 1`)
+  Pak file to the canonical schema in place (or to `-o`). The declared checksum is verified
+  before migration, the `pak_id` is preserved, anchor content is unchanged, and the checksum
+  is recomputed over the migrated body. Files already in canonical form are left untouched.
+- Legacy `schema_version: 1` Pak files remain fully readable: `pak inspect`, `pak import`
+  (checksum verification included), and `pak export` all keep working on them unchanged;
+  `inspect` and `import` print a hint pointing at `pak migrate`.
 
 ## [1.17.1] — 2026-08-03
 

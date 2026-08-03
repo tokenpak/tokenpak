@@ -6,6 +6,7 @@ Subcommands:
     inspect <pak-id-or-file>     Show Pak metadata (read-only)
     export  <pak-id-or-file> -o  Extract Pak content + anchors to a directory
     import  <pak-file>           Install a Pak into the local store (OSS)
+    migrate <pak-file> [-o]      Upgrade a legacy Pak file to the canonical schema
     status                       Diagnostic summary (always works)
 
 Beta 1 OSS scope: ``create`` / ``import`` / ``export`` (file form) /
@@ -13,6 +14,15 @@ Beta 1 OSS scope: ``create`` / ``import`` / ``export`` (file form) /
 JSON. Vault Paks are served by the OSS adapter. Encrypted Pak archives,
 the capture pipeline, scoring, recall and PAKPlan-driven preview are
 Pro features and route through the ``tokenpak-paid`` daemon.
+
+File-form schema: ``pak create`` writes ``schema_version: 2`` — the
+canonical Pak wire contract (``tokenpak.tip.pak.Pak``) extended with
+file-form fields (embedded anchor content, ``objective``, ``ttl_hint``,
+``continuation_notes``, ``source_root``, ``token_estimate``, ``skipped``,
+``checksum``). Legacy ``schema_version: 1`` files (which carried the
+deprecated ``context`` subtype alias) remain fully readable by
+``inspect`` / ``import`` / ``export`` and can be upgraded in place with
+``pak migrate``.
 
 Exit codes:
     0  success
@@ -133,6 +143,27 @@ def build_pak_parser(sub: Any) -> None:
         help="Overwrite if a Pak with the same id is already installed",
     )
     p_import.set_defaults(func=cmd_pak_import)
+
+    p_migrate = paksub.add_parser(
+        "migrate",
+        help="Upgrade a legacy Pak file to the canonical schema (OSS)",
+        description=(
+            "Rewrite a legacy (schema_version 1) Pak file in the canonical "
+            "schema_version 2 form: deprecated subtype aliases resolve to "
+            "their canonical names, anchors gain content-hash fields, and "
+            "the checksum is recomputed. The pak_id is preserved and anchor "
+            "content is unchanged. Files already in canonical form are left "
+            "untouched."
+        ),
+    )
+    p_migrate.add_argument("pak_file", help="Path to a Pak file to migrate")
+    p_migrate.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help="Write the migrated Pak here (default: rewrite the file in place)",
+    )
+    p_migrate.set_defaults(func=cmd_pak_migrate)
 
     p_status = paksub.add_parser("status", help="Show MultiPak Pro readiness diagnostics")
     p_status.add_argument("--json", action="store_true", help="Emit JSON instead of text")
@@ -379,12 +410,30 @@ def cmd_pak_create(args: Any) -> int:
     """Package a directory into a Pak JSON file (OSS Beta 1).
 
     The Pak file is JSON with embedded anchor content (when small enough)
-    or path+sha256 references (when --no-include-content or oversized).
+    or path+hash references (when --no-include-content or oversized).
     Pro encryption-at-rest + capture pipeline are additive; plain JSON
     is the OSS substrate.
+
+    Emits ``schema_version: 2``: the canonical Pak wire contract (built
+    through :class:`tokenpak.tip.pak.Pak` so the shape cannot drift from
+    the contract) plus the file-form extension fields. The subtype is the
+    canonical ``recall`` — the ruled resolution of the retired ``context``
+    alias — never a deprecated name.
     """
-    import datetime
     import hashlib
+
+    from tokenpak.tip.pak import (
+        Pak,
+        PakAuthority,
+        PakConfidence,
+        PakRetentionPolicy,
+        PakScope,
+        PakSource,
+        PakSourceType,
+        PakStatus,
+        PakSubtype,
+        default_retention_for,
+    )
 
     src = Path(args.source_dir).expanduser()
     out = Path(args.output).expanduser()
@@ -419,9 +468,14 @@ def cmd_pak_create(args: Any) -> int:
             skipped.append({"path": rel, "reason": f"read_error: {exc}"})
             continue
         sha = hashlib.sha256(data).hexdigest()
+        # Canonical anchor record (anchor_id / source_hash / snippet_available
+        # per the Pak contract) extended with the file-form fields that make
+        # the payload self-contained (path / bytes / content / encoding).
         anchor: dict[str, Any] = {
+            "anchor_id": sha[:16],
+            "source_hash": sha,
+            "snippet_available": False,
             "path": rel,
-            "sha256": sha,
             "bytes": len(data),
         }
         if include_content and len(data) <= max_bytes:
@@ -433,31 +487,49 @@ def cmd_pak_create(args: Any) -> int:
 
                 anchor["content"] = base64.b64encode(data).decode("ascii")
                 anchor["encoding"] = "base64"
+            anchor["snippet_available"] = True
         elif include_content:
             skipped.append({"path": rel, "reason": f"oversized: {len(data)}>{max_bytes}"})
         anchors.append(anchor)
 
-    created_at = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    pak_payload: dict[str, Any] = {
-        "schema_version": 1,
-        "pak_type": "context",
-        "title": title,
-        "objective": args.objective,
-        "summary": args.summary,
-        "ttl": args.ttl,
-        "continuation_notes": getattr(args, "continuation_notes", ""),
-        "created_at": created_at,
-        "scope": {"source_root": str(src)},
-        "anchors": anchors,
-        "skipped": skipped,
-        "token_estimate": _estimate_tokens(anchors),
-    }
-    body_for_hash = json.dumps(
-        {k: v for k, v in pak_payload.items() if k != "checksum"},
-        sort_keys=True,
-    ).encode("utf-8")
-    pak_payload["checksum"] = "sha256:" + hashlib.sha256(body_for_hash).hexdigest()
-    pak_id = "pak:" + pak_payload["checksum"][len("sha256:") : len("sha256:") + 16]
+    created_at = _utc_now_iso()
+    # The retired file-form subtype ("context") is a deprecated alias whose
+    # canonical resolution is "recall" — emit the canonical name so created
+    # Paks never carry a value the contract is migrating away from.
+    subtype = PakSubtype.RECALL
+    core = Pak(
+        pak_id="pak:unassigned",  # replaced below once the checksum exists
+        pak_type=subtype,
+        title=title,
+        summary=args.summary or "",
+        scope=PakScope(),
+        source=PakSource(
+            platform="tokenpak-cli",
+            source_type=PakSourceType.FILE,
+            created_at=created_at,
+            source_hash=_aggregate_source_hash(anchors),
+        ),
+        status=PakStatus.PROPOSED,
+        authority=PakAuthority.FILE_SOURCE,
+        confidence=PakConfidence.HIGH,
+        retention=PakRetentionPolicy(ttl=default_retention_for(subtype)),
+    )
+    pak_payload: dict[str, Any] = core.to_dict()
+    del pak_payload["pak_id"]
+    pak_payload["anchors"] = anchors
+    pak_payload.update(
+        {
+            "schema_version": 2,
+            "objective": args.objective,
+            "ttl_hint": args.ttl,
+            "continuation_notes": getattr(args, "continuation_notes", ""),
+            "source_root": str(src),
+            "skipped": skipped,
+            "token_estimate": _estimate_tokens(anchors),
+        }
+    )
+    pak_payload["checksum"] = _compute_checksum(pak_payload)
+    pak_id = _derive_pak_id(pak_payload["checksum"])
     pak_payload["pak_id"] = pak_id
 
     try:
@@ -489,7 +561,6 @@ def cmd_pak_import(args: Any) -> int:
     encryption-at-rest + capture-pipeline ingest; OSS does the plain
     copy.
     """
-    import hashlib
     import shutil
 
     from tokenpak import _paths
@@ -519,11 +590,7 @@ def cmd_pak_import(args: Any) -> int:
         return 1
 
     declared = payload.get("checksum", "")
-    body_for_hash = json.dumps(
-        {k: v for k, v in payload.items() if k not in ("checksum", "pak_id")},
-        sort_keys=True,
-    ).encode("utf-8")
-    actual = "sha256:" + hashlib.sha256(body_for_hash).hexdigest()
+    actual = _compute_checksum(payload)
     if declared and declared != actual:
         print(
             f"✗ tokenpak pak import — checksum mismatch (declared {declared[:20]}…, "
@@ -532,7 +599,7 @@ def cmd_pak_import(args: Any) -> int:
         )
         return 1
 
-    pak_id = payload.get("pak_id") or ("pak:" + actual[len("sha256:") : len("sha256:") + 16])
+    pak_id = payload.get("pak_id") or _derive_pak_id(actual)
     store_dir = _paths.write_under("paks")
     store_dir.mkdir(parents=True, exist_ok=True)
     safe_id = pak_id.replace(":", "_").replace("/", "_")
@@ -557,8 +624,245 @@ def cmd_pak_import(args: Any) -> int:
             "   checksum computed (Pak carries no declared checksum to "
             f"verify against): {actual[:24]}…"
         )
+    _, is_legacy_form = upgrade_pak_payload(payload)
+    if is_legacy_form:
+        print(f"ℹ️  Legacy Pak schema — upgrade the source file with: tokenpak pak migrate {src}")
     print(f"   inspect with: tokenpak pak inspect {target}")
     return 0
+
+
+def cmd_pak_migrate(args: Any) -> int:
+    """Upgrade a legacy Pak file to the canonical schema (schema_version 2).
+
+    Integrity-gated: when the file declares a checksum it is verified
+    BEFORE migration, so a tampered file cannot be laundered into a fresh
+    valid checksum. The original ``pak_id`` is preserved (store identity
+    survives migration); the checksum is recomputed over the migrated
+    body. Anchor content is carried over unchanged. Files already in
+    canonical form are left untouched.
+    """
+    src = Path(args.pak_file).expanduser()
+    if not src.exists() or not src.is_file():
+        print(f"✗ tokenpak pak migrate — file not found: {src}", file=sys.stderr)
+        return 1
+
+    try:
+        payload = json.loads(src.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"✗ tokenpak pak migrate — cannot parse Pak file: {exc}", file=sys.stderr)
+        return 1
+
+    if not isinstance(payload, dict):
+        print("✗ tokenpak pak migrate — Pak file is not a JSON object", file=sys.stderr)
+        return 1
+
+    declared = payload.get("checksum", "")
+    if declared:
+        actual = _compute_checksum(payload)
+        if declared != actual:
+            print(
+                f"✗ tokenpak pak migrate — checksum mismatch (declared {declared[:20]}…, "
+                f"computed {actual[:20]}…); refusing to migrate a tampered file",
+                file=sys.stderr,
+            )
+            return 1
+
+    upgraded, changed = upgrade_pak_payload(payload)
+    out = Path(args.output).expanduser() if getattr(args, "output", None) else src
+
+    if not changed:
+        if out != src:
+            try:
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_text(json.dumps(upgraded, indent=2))
+            except OSError as exc:
+                print(
+                    f"✗ tokenpak pak migrate — cannot write output: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
+        print(f"✅ Pak already in canonical form — nothing to migrate: {src}")
+        return 0
+
+    new_checksum = _compute_checksum(upgraded)
+    upgraded["checksum"] = new_checksum
+    pak_id = payload.get("pak_id") or _derive_pak_id(new_checksum)
+    upgraded["pak_id"] = pak_id
+
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        # Write-then-replace so an interrupted migration never leaves a
+        # half-written Pak where a valid one used to be.
+        tmp = out.with_name(out.name + ".tmp")
+        tmp.write_text(json.dumps(upgraded, indent=2))
+        tmp.replace(out)
+    except OSError as exc:
+        print(f"✗ tokenpak pak migrate — cannot write output: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"✅ Migrated Pak {pak_id} → {out}")
+    print(f"   subtype : {payload.get('pak_type', '?')} → {upgraded['pak_type']}")
+    print(f"   checksum: {(declared or '(none)')[:24]}… → {new_checksum[:24]}…")
+    print("   pak_id preserved; anchor content unchanged.")
+    return 0
+
+
+def upgrade_pak_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Normalize a Pak payload to the canonical (schema_version 2) file form.
+
+    Pure and idempotent: returns ``(payload_copy, changed)``. Payloads
+    already canonical — ``schema_version >= 2`` files, or canonical wire
+    payloads from ``Pak.to_dict()`` / the vault adapter — come back
+    unchanged with ``changed=False``. Legacy schema_version-1 file-form
+    payloads are upgraded:
+
+    - deprecated subtype aliases resolve to their canonical names
+    - ``scope`` becomes the canonical ``user``/``project``/``topic``
+      record; the legacy ``scope.source_root`` moves to top level
+    - ``ttl`` (free-form hint) is renamed ``ttl_hint`` (the canonical
+      ``retention.ttl`` bucket is a separate, enumerated field)
+    - anchors gain ``anchor_id`` / ``source_hash`` / ``snippet_available``
+      (the legacy per-file ``sha256`` key becomes ``source_hash``)
+    - canonical ``source`` / ``status`` / ``authority`` / ``confidence`` /
+      ``retention`` / ``privacy`` / ``relationships`` records are added
+
+    ``checksum`` and ``pak_id`` are NOT recomputed here — rewriting files
+    is ``pak migrate``'s job (it recomputes the checksum and preserves the
+    original ``pak_id``). Display callers use this purely in memory.
+    """
+    import warnings
+
+    from tokenpak.tip.pak import (
+        PakAuthority,
+        PakConfidence,
+        PakPrivacyClass,
+        PakStatus,
+        PakSubtype,
+        default_retention_for,
+    )
+
+    sv = payload.get("schema_version")
+    if isinstance(sv, int) and sv >= 2:
+        return dict(payload), False
+    if sv is None and (
+        isinstance(payload.get("source"), dict)
+        and payload.get("status") is not None
+        and payload.get("authority") is not None
+    ):
+        # Canonical wire form (``Pak.to_dict()``): no schema_version, but
+        # the canonical sub-records are present. Nothing to upgrade.
+        return dict(payload), False
+
+    up = dict(payload)
+    up["schema_version"] = 2
+
+    raw_type = str(up.get("pak_type") or PakSubtype.RECALL.value)
+    try:
+        with warnings.catch_warnings():
+            # The alias resolution below IS the migration — surfacing the
+            # DeprecationWarning here would warn users for doing the fix.
+            warnings.simplefilter("ignore", DeprecationWarning)
+            subtype = PakSubtype.parse(raw_type)
+        up["pak_type"] = subtype.value
+    except ValueError:
+        # Unknown subtype string: keep it verbatim (receivers fall back
+        # gracefully on unknown subtypes); retention defaults below use
+        # the recall bucket.
+        subtype = PakSubtype.RECALL
+        up["pak_type"] = raw_type
+
+    old_scope = up.get("scope") if isinstance(up.get("scope"), dict) else {}
+    source_root = (old_scope or {}).get("source_root") or up.get("source_root")
+    up["scope"] = {"user": None, "project": None, "topic": None}
+    if source_root:
+        up["source_root"] = str(source_root)
+
+    if "ttl" in up:
+        hint = up.pop("ttl")
+        if hint and not up.get("ttl_hint"):
+            up["ttl_hint"] = hint
+
+    new_anchors: list[dict[str, Any]] = []
+    for a in up.get("anchors") or []:
+        if not isinstance(a, dict):
+            continue
+        na = dict(a)
+        sha = str(na.pop("sha256", "") or na.get("source_hash", "") or "")
+        na["source_hash"] = sha
+        na.setdefault("anchor_id", sha[:16] if sha else str(na.get("path", "")))
+        na.setdefault("snippet_available", na.get("content") is not None)
+        new_anchors.append(na)
+    up["anchors"] = new_anchors
+
+    created_at = up.pop("created_at", None) or _utc_now_iso()
+    up["source"] = {
+        "platform": "tokenpak-cli",
+        "source_type": "file",
+        "created_at": created_at,
+        "source_hash": _aggregate_source_hash(new_anchors),
+    }
+    up.setdefault("status", PakStatus.PROPOSED.value)
+    up.setdefault("authority", PakAuthority.FILE_SOURCE.value)
+    up.setdefault("confidence", PakConfidence.HIGH.value)
+    up.setdefault("retention", {"ttl": default_retention_for(subtype).value})
+    up.setdefault("privacy", {"class": PakPrivacyClass.LOCAL_ONLY.value})
+    up.setdefault(
+        "relationships",
+        {"depends_on": [], "supersedes": [], "related": [], "conflicts_with": []},
+    )
+    return up, True
+
+
+def _compute_checksum(payload: dict[str, Any]) -> str:
+    """Checksum over the Pak body: sha256 of the sorted-key JSON rendering,
+    excluding the ``checksum`` and ``pak_id`` fields themselves.
+
+    This construction is shared by ``create`` (stamping), ``import``
+    (verification) and ``migrate`` (re-stamping) and is unchanged from the
+    schema_version-1 writer — v1 files verify exactly as before.
+    """
+    import hashlib
+
+    body = json.dumps(
+        {k: v for k, v in payload.items() if k not in ("checksum", "pak_id")},
+        sort_keys=True,
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(body).hexdigest()
+
+
+def _derive_pak_id(checksum: str) -> str:
+    """Derive the ``pak:<16-hex>`` id from a ``sha256:...`` checksum."""
+    return "pak:" + checksum[len("sha256:") : len("sha256:") + 16]
+
+
+def _aggregate_source_hash(anchors: list[dict[str, Any]]) -> str:
+    """Deterministic sha256 over the anchor set (path + per-file hash pairs).
+
+    Serves as the canonical ``source.source_hash`` for file-form Paks:
+    stable across runs for identical directory content, independent of
+    embedding choices (content vs reference-only anchors).
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    for a in sorted(anchors, key=lambda a: str(a.get("path", ""))):
+        h.update(str(a.get("path", "")).encode("utf-8"))
+        h.update(b"\x00")
+        h.update(str(a.get("source_hash", "") or a.get("sha256", "")).encode("utf-8"))
+        h.update(b"\x00")
+    return h.hexdigest()
+
+
+def _utc_now_iso() -> str:
+    """UTC timestamp in the file-form's ``...Z`` second-resolution format."""
+    import datetime
+
+    return (
+        datetime.datetime.now(datetime.timezone.utc)
+        .replace(tzinfo=None)
+        .isoformat(timespec="seconds")
+        + "Z"
+    )
 
 
 def _estimate_tokens(anchors: list[dict[str, Any]]) -> int:
@@ -720,64 +1024,65 @@ def _inspect_from_file(path: str, *, as_json: bool) -> int:
 
 
 def _print_pak_text(payload: dict[str, Any]) -> None:
-    """Render a Pak's metadata.
+    """Render a Pak's metadata — one canonical view for every shape.
 
-    Handles two shapes:
-      - Beta 1 OSS file form (``schema_version: 1``, anchors with embedded
-        content, top-level objective/summary/checksum) produced by
-        ``pak create``.
-      - Vault Pak form (``status``/``authority``/``confidence``/``source``
-        sub-objects) produced by the Vault adapter.
+    File-form (schema_version 2) and adapter/wire-form payloads share the
+    canonical field set, so a single renderer covers both; the file-form
+    extension fields print only when present. Legacy schema_version-1
+    payloads are normalized in memory first (the on-disk file is left
+    untouched) and flagged with a ``pak migrate`` hint.
     """
-    print(f"Pak {payload.get('pak_id', '?')}")
+    display, was_legacy = upgrade_pak_payload(payload)
+
+    print(f"Pak {display.get('pak_id', '?')}")
     print("─" * 40)
-    print(f"  type        : {payload.get('pak_type', '?')}")
-    print(f"  title       : {payload.get('title', '')}")
-
-    # Beta 1 file form
-    if payload.get("schema_version") is not None:
-        if payload.get("objective"):
-            print(f"  objective   : {payload['objective']}")
-        if payload.get("ttl"):
-            print(f"  ttl         : {payload['ttl']}")
-        if payload.get("token_estimate") is not None:
-            print(f"  tokens (est): {payload['token_estimate']}")
-        anchors = payload.get("anchors") or []
-        print(f"  anchors     : {len(anchors)}")
-        if payload.get("checksum"):
-            print(f"  checksum    : {payload['checksum'][:32]}…")
-        if payload.get("created_at"):
-            print(f"  created_at  : {payload['created_at']}")
-        scope = payload.get("scope", {}) or {}
-        if scope.get("source_root"):
-            print(f"  source_root : {scope['source_root']}")
-        if payload.get("summary"):
-            print()
-            print("Summary:")
-            print(f"  {payload['summary']}")
-        if payload.get("continuation_notes"):
-            print()
-            print("Continuation notes:")
-            print(f"  {payload['continuation_notes']}")
-        return
-
-    # Vault Pak form
-    print(f"  status      : {payload.get('status', '?')}")
-    print(f"  authority   : {payload.get('authority', '?')}")
-    print(f"  confidence  : {payload.get('confidence', '?')}")
-    src = payload.get("source", {}) or {}
-    print(f"  source      : {src.get('platform', '?')} ({src.get('source_type', '?')})")
-    src_hash = src.get("source_hash", "") or ""
-    print(f"  source_hash : {src_hash[:16]}…" if src_hash else "  source_hash : ")
-    print(f"  created_at  : {src.get('created_at', '?')}")
-    scope = payload.get("scope", {}) or {}
+    print(f"  type        : {display.get('pak_type', '?')}")
+    print(f"  title       : {display.get('title', '')}")
+    if display.get("status") is not None:
+        print(f"  status      : {display.get('status')}")
+    if display.get("authority") is not None:
+        print(f"  authority   : {display.get('authority')}")
+    if display.get("confidence") is not None:
+        print(f"  confidence  : {display.get('confidence')}")
+    src = display.get("source") or {}
+    if isinstance(src, dict) and src:
+        print(f"  source      : {src.get('platform', '?')} ({src.get('source_type', '?')})")
+        src_hash = src.get("source_hash", "") or ""
+        print(f"  source_hash : {src_hash[:16]}…" if src_hash else "  source_hash : ")
+        print(f"  created_at  : {src.get('created_at', '?')}")
+    scope = display.get("scope", {}) or {}
     if scope.get("project"):
         print(f"  project     : {scope['project']}")
-    summary = payload.get("summary", "")
-    if summary:
+
+    # File-form extension fields — present on created/migrated Pak files.
+    if display.get("objective"):
+        print(f"  objective   : {display['objective']}")
+    if display.get("ttl_hint"):
+        print(f"  ttl hint    : {display['ttl_hint']}")
+    if display.get("token_estimate") is not None:
+        print(f"  tokens (est): {display['token_estimate']}")
+    if display.get("schema_version") is not None:
+        anchors = display.get("anchors") or []
+        print(f"  anchors     : {len(anchors)}")
+    if display.get("checksum"):
+        print(f"  checksum    : {display['checksum'][:32]}…")
+    if display.get("source_root"):
+        print(f"  source_root : {display['source_root']}")
+
+    if display.get("summary"):
         print()
         print("Summary:")
-        print(f"  {summary}")
+        print(f"  {display['summary']}")
+    if display.get("continuation_notes"):
+        print()
+        print("Continuation notes:")
+        print(f"  {display['continuation_notes']}")
+    if was_legacy:
+        print()
+        print(
+            "ℹ️  Legacy Pak schema shown in canonical form — upgrade the file "
+            "with: tokenpak pak migrate <pak-file>"
+        )
 
 
 def _emit_pro_required(detail: str, *, as_json: bool) -> int:
@@ -805,8 +1110,11 @@ def _emit_pro_required(detail: str, *, as_json: bool) -> int:
 
 __all__ = [
     "build_pak_parser",
+    "cmd_pak_create",
     "cmd_pak_export",
     "cmd_pak_import",
     "cmd_pak_inspect",
+    "cmd_pak_migrate",
     "cmd_pak_status",
+    "upgrade_pak_payload",
 ]
