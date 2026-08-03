@@ -114,6 +114,33 @@ def test_responses_tip_allow_once_is_parsed_and_stripped():
     assert parsed["input"][2]["type"] == "function_call"
 
 
+def test_responses_tip_uses_latest_user_turn_in_full_history():
+    body = _full_history_approval("[TIP: allow=once] continue")
+
+    directive, stripped = parse_and_strip_tip_header(body)
+
+    assert directive is not None
+    assert directive.allow_scope == "once"
+    parsed = json.loads(stripped)
+    assert parsed["input"][0]["content"][0]["text"] == "original request"
+    assert parsed["input"][2]["content"][0]["text"] == "yes"
+    assert parsed["input"][5]["content"][0]["type"] == "input_image"
+    assert parsed["input"][5]["content"][1]["text"] == "continue"
+    assert parsed["input"][6]["type"] == "reasoning"
+    assert parsed["input"][7]["type"] == "function_call"
+
+
+def test_responses_tip_does_not_reuse_historical_user_directive():
+    parsed = json.loads(_full_history_approval("continue"))
+    parsed["input"][0]["content"][0]["text"] = "[TIP: allow=once] historical"
+    body = json.dumps(parsed, separators=(",", ":")).encode()
+
+    directive, stripped = parse_and_strip_tip_header(body)
+
+    assert directive is None
+    assert stripped is body
+
+
 def test_codex_session_id_precedes_thread_id_with_thread_fallback():
     assert (
         _resolve_session_id(

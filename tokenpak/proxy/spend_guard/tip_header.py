@@ -219,7 +219,11 @@ def parse_and_strip_tip_header(body: bytes) -> tuple[Optional[TIPDirective], byt
         body_json["input"] = rem
         return d, json.dumps(body_json).encode("utf-8")
     if isinstance(inputs, list):
-        for item in inputs:
+        # Codex may send the complete Responses history.  The actionable
+        # directive belongs to the current (last) user turn, not an earlier
+        # user prompt retained in that history.  Within that turn the TIP
+        # contract still applies to its first user-text segment.
+        for item in reversed(inputs):
             if not isinstance(item, dict) or item.get("role") != "user":
                 continue
             content = item.get("content")
@@ -240,7 +244,7 @@ def parse_and_strip_tip_header(body: bytes) -> tuple[Optional[TIPDirective], byt
                         return None, body
                     block["text"] = rem
                     return d, json.dumps(body_json).encode("utf-8")
-            # Only inspect the first Responses user message.
+            # Only inspect the latest Responses user message.
             break
 
     return None, body
