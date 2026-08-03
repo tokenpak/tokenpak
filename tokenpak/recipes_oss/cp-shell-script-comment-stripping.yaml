@@ -1,0 +1,17 @@
+name: cp-shell-script-comment-stripping
+category: common_patterns
+description: Remove comment lines from shell scripts while preserving the shebang line; collapse the blank runs left behind.
+pattern:
+  match: extension
+  extensions:
+  - .sh
+  - .bash
+  - .zsh
+action:
+  operations:
+  - type: regex_replace
+    pattern: '(?m)^\s*#(?!!).*$\n?'
+    replacement: ''
+  - type: remove_empty_lines
+    max_consecutive: 1
+  compression_hint: 0.15

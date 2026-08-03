@@ -1,0 +1,13 @@
+name: cfg-toml-comment-stripping
+category: config
+description: Remove full-line comments and collapse blank runs in TOML files (pyproject.toml, Cargo.toml, and friends).
+pattern:
+  match: extension
+  extensions:
+  - .toml
+action:
+  operations:
+  - type: strip_comments
+  - type: remove_empty_lines
+    max_consecutive: 1
+  compression_hint: 0.15

@@ -1,0 +1,13 @@
+name: go-comment-density-reduction
+category: go
+description: Remove trailing line comments from Go source; full-line comments are kept — Go doc comments and directives (//go:build) live there.
+pattern:
+  match: extension
+  extensions:
+  - .go
+action:
+  operations:
+  - type: regex_replace
+    pattern: '(?m)(\S)[ \t]+//.*$'
+    replacement: '\1'
+  compression_hint: 0.05

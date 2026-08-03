@@ -1,0 +1,30 @@
+name: cfg-lockfile-trimming
+category: config
+description: Compact dependency lock files and shorten integrity hashes — lock files are reference context, never editable content.
+pattern:
+  match: filename
+  filenames:
+  - package-lock.json
+  - yarn.lock
+  - pnpm-lock.yaml
+  - uv.lock
+  - poetry.lock
+  - Cargo.lock
+  - Pipfile.lock
+  - composer.lock
+  - Gemfile.lock
+action:
+  operations:
+  - type: json_compact
+  - type: regex_replace
+    pattern: '(sha(?:1|256|512)-)[A-Za-z0-9+/=]{24,}'
+    replacement: '\1…'
+  - type: regex_replace
+    pattern: '\b[a-f0-9]{40,}\b'
+    replacement: '…'
+  - type: regex_replace
+    pattern: '(?m)^\s*#.*$\n?'
+    replacement: ''
+  - type: remove_empty_lines
+    max_consecutive: 1
+  compression_hint: 0.6

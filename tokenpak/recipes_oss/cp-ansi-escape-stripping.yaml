@@ -1,0 +1,23 @@
+name: cp-ansi-escape-stripping
+category: common_patterns
+description: Strip ANSI escape sequences (colors, cursor movement, OSC titles) from terminal and tool output.
+pattern:
+  match: content
+  keywords:
+  - "\u001B["
+  - "\u001B]"
+action:
+  operations:
+  - type: regex_replace
+    pattern: '\x1b\[[0-9;?]*[ -/]*[@-~]'
+    replacement: ''
+  - type: regex_replace
+    pattern: '\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)'
+    replacement: ''
+  - type: regex_replace
+    pattern: '\x1b[@-_]'
+    replacement: ''
+  - type: regex_replace
+    pattern: '\r+(?=\n)'
+    replacement: ''
+  compression_hint: 0.1

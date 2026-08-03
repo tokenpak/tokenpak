@@ -1,0 +1,16 @@
+name: rs-comment-density-reduction
+category: rust
+description: Remove regular line comments from Rust source; doc comments (/// and //!) are kept — they carry API signal.
+pattern:
+  match: extension
+  extensions:
+  - .rs
+action:
+  operations:
+  - type: regex_replace
+    pattern: '(?m)^\s*//(?![/!]).*$\n?'
+    replacement: ''
+  - type: regex_replace
+    pattern: '(?m)(\S)[ \t]+//(?![/!]).*$'
+    replacement: '\1'
+  compression_hint: 0.08
