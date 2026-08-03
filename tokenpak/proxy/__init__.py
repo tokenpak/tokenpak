@@ -141,7 +141,6 @@ __all__ = [
     "router",
     "routes",
     "server",
-    "server_async",
     "startup",
     "stats",
     "stats_api",
