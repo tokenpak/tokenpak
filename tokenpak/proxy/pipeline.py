@@ -109,9 +109,22 @@ def stage_vault_injection(
     result = StageResult(name="vault_injection")
     injection_mode = policy.get("vault_injection", "disabled")
 
+    # Resolve the route-specific fact before the global default. A route that
+    # never requested injection (or has no body to inject into) must not be
+    # reported as operator-disabled merely because the master switch is OFF.
     if injection_mode == "disabled" or not request.body:
         result.skipped = True
         result.skip_reason = "disabled_or_empty"
+        return request, result
+
+    # Master switch, independent of per-route policy. Read through the module
+    # rather than imported by value so it can be flipped in tests and at runtime
+    # without a restart-ordering dependency.
+    from tokenpak.proxy import config as _cfg_mod
+
+    if not getattr(_cfg_mod, "VAULT_INJECTION_ENABLED", False):
+        result.skipped = True
+        result.skip_reason = "disabled_by_config"
         return request, result
 
     try:
