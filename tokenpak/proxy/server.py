@@ -85,6 +85,7 @@ import uuid
 from collections import OrderedDict, deque
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -144,7 +145,6 @@ from .router import INTERCEPT_HOSTS, ProviderRouter, estimate_cost
 from .startup import format_startup_report, run_startup_checks
 from .stats import CompressionStats
 from .streaming import _extract_sse_stop_reason, extract_sse_tokens
-from .tracing import PipelineTrace, StageTrace, TraceStorage
 from .upstream_retry import (
     UpstreamRetryPolicy,
     UpstreamTruncatedJSONError,
@@ -380,6 +380,78 @@ def _load_codex_credentials() -> tuple[str, str]:
 # Transferred from monolith (TPK-CONSOLIDATION-A2a, lines 7577/7601)
 # ---------------------------------------------------------------------------
 _SD_NOTIFY_SOCKET: str = os.environ.get("NOTIFY_SOCKET", "")
+
+# ---------------------------------------------------------------------------
+# Pipeline trace types
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class StageTrace:
+    """Trace for a single pipeline stage."""
+
+    name: str
+    enabled: bool = True
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tokens_delta: int = 0
+    duration_ms: float = 0.0
+    details: dict[str, object] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, object]:
+        return cast(dict[str, object], asdict(self))
+
+
+@dataclass
+class PipelineTrace:
+    """Complete trace for a single request through the pipeline."""
+
+    request_id: str
+    timestamp: str
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tokens_saved: int = 0
+    cost_saved: float = 0.0
+    total_cost: float = 0.0
+    duration_ms: float = 0.0
+    stages: list[StageTrace] = field(default_factory=list)
+    status: str = "pending"
+
+    def to_dict(self) -> dict[str, object]:
+        d = asdict(self)
+        d["stages"] = [s.to_dict() if hasattr(s, "to_dict") else s for s in self.stages]
+        return cast(dict[str, object], d)
+
+
+class TraceStorage:
+    """Thread-safe storage for recent pipeline traces."""
+
+    def __init__(self, max_traces: int = 10) -> None:
+        self._traces: deque[PipelineTrace] = deque(maxlen=max_traces)
+        self._lock = threading.Lock()
+        self._by_id: dict[str, PipelineTrace] = {}
+
+    def store(self, trace: PipelineTrace) -> None:
+        with self._lock:
+            self._traces.append(trace)
+            self._by_id[trace.request_id] = trace
+            if len(self._by_id) > len(self._traces) * 2:
+                valid_ids = {t.request_id for t in self._traces}
+                self._by_id = {k: v for k, v in self._by_id.items() if k in valid_ids}
+
+    def get_last(self) -> PipelineTrace | None:
+        with self._lock:
+            return self._traces[-1] if self._traces else None
+
+    def get_by_id(self, request_id: str) -> PipelineTrace | None:
+        with self._lock:
+            return self._by_id.get(request_id)
+
+    def get_all(self) -> list[PipelineTrace]:
+        with self._lock:
+            return list(self._traces)
+
 
 # ---------------------------------------------------------------------------
 # Graceful shutdown manager

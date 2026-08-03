@@ -86,29 +86,12 @@ def test_eligible_first_request_produces_positive_measured_receipt(
     )
     try:
         proxy.wait_ready()
-        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-        # The README anchors the fixture in real project context, but its prose
-        # density shifts with normal editing — structure lines (headings,
-        # bullets, code fences) pass through the deterministic compressor
-        # verbatim, so the README alone cannot guarantee a measurable gain.
-        # Append deterministic prose paragraphs, each past the compressor's
-        # paragraph budget, so the fixture always carries compressible
-        # material and stays above the request-size threshold regardless of
-        # README shape.
-        notes: list[str] = []
-        project_context = readme
-        while len(notes) < 2 or len(project_context) < 8_500:
-            notes.append(
-                f"Working note {len(notes) + 1}: this iteration of the "
-                "packing service reworked the request ledger so every "
-                "eligible request records its raw and sent token counts in "
-                "the same row, keeping the receipt arithmetic auditable end "
-                "to end. The change also tightened the footer summary so the "
-                "number a user sees after a request matches the ledger row "
-                "exactly, which keeps the measured-savings claim honest "
-                "under replay."
-            )
-            project_context = f"{readme}\n\n## Project working notes\n\n" + "\n\n".join(notes)
+        project_context = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        # Keep the fixture eligible even when normal README editing moves it
+        # just below the request-size threshold. Repetition remains real project
+        # context and gives the deterministic compressor a measurable target.
+        if len(project_context) < 8_000:
+            project_context = f"{project_context}\n\n{project_context}"
         assert len(project_context) >= 8_000
 
         status, _, body = proxy.post_messages(

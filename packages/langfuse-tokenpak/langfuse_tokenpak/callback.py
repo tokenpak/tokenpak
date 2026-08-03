@@ -42,7 +42,7 @@ class TokenPakCallbackHandler:
         Called when a TokenPak is compiled.
 
         Args:
-            pack: The original Pak object.
+            pack: The original TokenPak pack object.
             compiled: The compiled result (has .blocks, .total_tokens, etc.)
         """
         blocks = getattr(compiled, "blocks", [])
@@ -99,7 +99,7 @@ class TokenPakLangChainCallback:
         self._current_pack_meta: Optional[Dict[str, Any]] = None
 
     def on_tokenpak_pack(self, pack: Any, **kwargs: Any) -> None:
-        """Called when a Pak is compiled in a LangChain step."""
+        """Called when a TokenPak pack is compiled in a LangChain step."""
         blocks = getattr(pack, "blocks", [])
         budget = getattr(pack, "budget", None)
         meta = blocks_to_metadata(blocks, budget=budget)

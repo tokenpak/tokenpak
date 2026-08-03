@@ -141,7 +141,7 @@ class TestTokenPakTracer:
 
         input_data = lf.traces[0].init_kwargs["input"]
         assert "ascii_summary" in input_data
-        assert "Pak (" in input_data["ascii_summary"]
+        assert "TokenPak Pack" in input_data["ascii_summary"]
 
     def test_trace_from_list_of_blocks(self):
         lf = MockLangfuse()

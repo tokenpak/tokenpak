@@ -157,7 +157,7 @@ This checklist ensures a smooth, risk-free deployment of TokenPak v1.0 to produc
   ```
 
 - [ ] Verify documentation site updated
-  - [ ] https://docs.tokenpak.ai/ shows v1.17.0
+  - [ ] https://tokenpak.dev shows v1.0.0
   - [ ] All links working
 
 - [ ] Announce release

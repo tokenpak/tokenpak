@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Pak JSON schema v1.0 validator.
+"""TokenPak Protocol v1.0 Validator.
 
-Validates Pak JSON files against the bundled v1.0 compatibility schema and
-format rules.
+Validates TokenPak JSON files against the v1.0 schema and protocol rules.
 """
 
 from __future__ import annotations
@@ -86,7 +85,7 @@ class ValidationResult:
 
 
 class TokenPakValidator:
-    """Validate Paks against the bundled JSON schema v1.0."""
+    """Validates TokenPak packs against the v1.0 protocol spec."""
 
     SUPPORTED_VERSIONS = {"1.0"}
     BLOCK_TYPES = {

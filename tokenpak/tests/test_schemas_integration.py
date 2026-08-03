@@ -1,4 +1,4 @@
-"""Tests for core data-model schema definitions.
+"""Tests for TokenPak schema definitions.
 
 Covers: schemas/artifact.py, schemas/chunk.py, etc. — schema validation, serialization.
 """

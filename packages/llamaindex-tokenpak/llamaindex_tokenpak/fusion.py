@@ -47,7 +47,7 @@ class MultiIndexFusion:
         result = fusion.query("How does context compression work?")
         print(result["context"])   # compressed, fused context
 
-        # As a Pak
+        # As TokenPak pack
         pack = fusion.query_as_tokenpak("How does context compression work?")
         print(pack["blocks"])      # all compressed evidence blocks
         print(pack["sources"])     # which index each block came from
@@ -119,13 +119,13 @@ class MultiIndexFusion:
 
     def query_as_tokenpak(self, query_str: str, **kwargs) -> Dict[str, Any]:
         """
-        Query all indexes and return a complete Pak payload.
+        Query all indexes and return a complete TokenPak pack.
 
         Returns:
             {
                 "query":    str,
                 "context":  str — formatted, compressed context,
-                "blocks":   List[dict] — compressed evidence blocks (Pak JSON),
+                "blocks":   List[dict] — compressed evidence blocks (tokenpak format),
                 "sources":  Dict[str, int] — blocks contributed per index,
                 "tokens":   Dict — input/output/budget/ratio,
                 "metadata": Dict — fusion strategy, index count, etc.

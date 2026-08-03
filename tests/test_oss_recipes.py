@@ -43,11 +43,11 @@ def test_recipes_dir_exists():
 
 def test_fifty_yaml_files():
     files = list(RECIPES_DIR.glob("*.yaml")) + list(RECIPES_DIR.glob("*.yml"))
-    assert len(files) == 50, f"Expected 50 recipe files, found {len(files)}"
+    assert len(files) == 57, f"Expected 57 recipe files, found {len(files)}"
 
 
 def test_engine_loads_all_fifty(engine):
-    assert len(engine.list_recipes()) == 50
+    assert len(engine.list_recipes()) == 57
 
 
 def test_each_yaml_is_valid_schema():
@@ -70,7 +70,7 @@ def test_no_duplicate_names(engine):
 
 def test_summary_total(engine):
     s = engine.summary()
-    assert s["total"] == 50
+    assert s["total"] == 57
 
 
 def _write_user_recipe(path: Path, *, name: str, ext: str = ".user") -> None:
@@ -101,7 +101,7 @@ def test_default_engine_loads_tokenpak_home_recipes(tmp_path, monkeypatch):
     eng = CompressionRecipeEngine()
 
     assert "zz-user-local" in eng.list_recipes()
-    assert len(eng.list_recipes()) == 51
+    assert len(eng.list_recipes()) == 58
     assert "zz-user-local" in [r.name for r in eng.recipes_for_file("sample.zz")]
 
 
@@ -144,11 +144,11 @@ def test_category_markdown_count(engine):
 
 
 def test_category_config_count(engine):
-    assert len(engine.by_category("config")) == 5
+    assert len(engine.by_category("config")) == 7
 
 
 def test_category_common_patterns_count(engine):
-    assert len(engine.by_category("common_patterns")) == 10
+    assert len(engine.by_category("common_patterns")) == 13
 
 
 # ─── GENERAL recipes ─────────────────────────────────────────────────────────

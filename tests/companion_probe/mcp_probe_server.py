@@ -7,7 +7,7 @@ Tests:
   6. Can MCP tools read external files (transcript, SQLite)?
 
 This is a bare-minimum MCP server using the stdio transport.
-It implements MCP directly (no SDK dependency) to validate
+It implements the MCP protocol directly (no SDK dependency) to validate
 that Claude Code can discover and call tools.
 
 Protocol: JSON-RPC 2.0 over stdio (newline-delimited JSON)

@@ -135,13 +135,12 @@ dispatch = [
     "pydantic>=2.0.0",
     "jsonschema>=4.0.0",
 ]
-# Canonical all-options meta-extra.  The workflow install-shape contract
-# verifies this ordered leaf list before it builds a matrix.
-all = [
-    "tokenpak[retrieval,code-compression,intelligence,data,compression,integrations-litellm,dispatch,tokens,docs,otel,autogen,llamaindex,serve,telemetry]",
+# Convenience meta-extra — `pip install tokenpak[full]` restores the legacy
+# "everything bundled" install behavior for callers who don't want to pick
+# extras individually.
+full = [
+    "tokenpak[retrieval,code-compression,intelligence,data,compression,integrations-litellm,dispatch]",
 ]
-# Compatibility alias for callers of the historical full meta-extra.
-full = ["tokenpak[all]"]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23.0",
@@ -205,26 +204,6 @@ telemetry = [
     "jinja2>=3.1.0",
     "python-multipart>=0.0.9",
 ]
-
-[tool.tokenpak.install-shape-matrix]
-schema = 1
-python_versions = ["3.10", "3.11", "3.12", "3.13"]
-test_runner_requirements = [
-    "pytest>=7.0", "pytest-asyncio>=0.23.0", "pytest-benchmark>=4.0.0",
-    "pytest-mock>=3.12.0", "pytest-timeout>=2.1.0",
-]
-
-[tool.tokenpak.install-shape-matrix.slim]
-product_extras = []
-marker_selection = "oss"
-
-[tool.tokenpak.install-shape-matrix.dev]
-product_extras = ["dev"]
-marker_selection = "oss or optional"
-
-[tool.tokenpak.install-shape-matrix.full]
-product_extras = ["dev", "all"]
-marker_selection = "oss or optional or internal"
 
 [project.urls]
 Homepage = "https://github.com/tokenpak/tokenpak"

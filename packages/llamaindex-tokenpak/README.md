@@ -65,9 +65,7 @@ query_engine = index.as_query_engine()
 
 ## What is TokenPak?
 
-TokenPak is an open-source local product and the reference implementation of
-TIP-1.0. It performs Prompt Packing to fit context blocks within token budgets
-while keeping the highest-priority content intact.
+TokenPak is an open protocol for AI context optimization. It compresses context blocks to fit within token budgets while keeping the highest-priority content intact.
 
 Learn more: https://github.com/tokenpak/tokenpak
 

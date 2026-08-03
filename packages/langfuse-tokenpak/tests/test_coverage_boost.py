@@ -551,5 +551,5 @@ class TestVisualizationCoverageBoost:
         from langfuse_tokenpak.visualization import ascii_block_summary
         
         summary = ascii_block_summary([])
-        assert "Pak (" in summary
+        assert "TokenPak Pack" in summary
         assert "0 blocks" in summary or "Total: 0" in summary

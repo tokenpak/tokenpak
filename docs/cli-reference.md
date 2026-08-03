@@ -401,7 +401,7 @@ Validate JSON files
 
 **Flags:**
 
-- `FILE` — Path to the .json Pak file
+- `FILE` — Path to the .json TokenPak file
 - `--verbose`, `-v` — Show quality hints in addition to errors/warnings
 - `--json` — Output validation result as JSON
 

@@ -230,10 +230,10 @@
       "command": "validate",
       "tier": "oss",
       "category": "Control",
-      "description": "Validate a Pak JSON file",
+      "description": "Validate a TokenPak JSON config file",
       "aliases": [],
       "usage": "/tokenpak validate <file>",
-      "detail": "Parses and validates a Pak JSON file against the bundled v1.0 compatibility schema.",
+      "detail": "Parses and validates a TokenPak JSON file against the current schema.",
       "related": [
         "config",
         "doctor"

@@ -40,7 +40,7 @@ else
     echo "  export ANTHROPIC_API_KEY='sk-ant-...' (or add to .env)"
     echo "  export OPENAI_API_KEY='sk-...' (or add to .env)"
     echo ""
-    echo "📖 Setup guide: https://docs.tokenpak.ai/QUICKSTART/"
+    echo "📖 Setup guide: https://docs.tokenpak.dev/getting-started"
     exit 1
 fi
 
@@ -61,7 +61,7 @@ check_proxy() {
         echo "Or with Docker:"
         echo "  docker compose up -d"
         echo ""
-        echo "📖 Troubleshooting: https://docs.tokenpak.ai/troubleshooting/"
+        echo "📖 Troubleshooting: https://docs.tokenpak.dev/troubleshooting"
         exit 1
     fi
 }
@@ -185,6 +185,6 @@ else
 fi
 
 echo ""
-echo -e "${BLUE}📖 Learn more: https://docs.tokenpak.ai/${NC}"
+echo -e "${BLUE}📖 Learn more: https://docs.tokenpak.dev${NC}"
 echo -e "${BLUE}💬 Issues & feedback: https://github.com/repliflow/tokenpak/issues${NC}"
 echo ""

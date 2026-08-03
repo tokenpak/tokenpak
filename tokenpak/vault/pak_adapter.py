@@ -2,7 +2,7 @@
 """Vault → Pak adapter (Phase 1).
 
 Wraps the existing :class:`tokenpak.vault.retrieval.vault_index.VaultIndex`
-to produce :class:`tokenpak.core.contracts.pak.Pak` instances with subtype
+to produce :class:`tokenpak.tip.pak.Pak` instances with subtype
 :attr:`PakSubtype.VAULT`.
 
 This is a **read-only** adapter — no writes to the vault, no daemon
@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Protocol
 
-from tokenpak.core.contracts.pak import (
+from tokenpak.tip.pak import (
     Pak,
     PakAuthority,
     PakConfidence,
