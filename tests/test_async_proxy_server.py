@@ -349,26 +349,129 @@ def test_async_backpressure_middleware_installed_in_app():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(
-    reason="Async backend (server_async.py) exists but integration into ProxyServer.start() not yet implemented. Sync backend (BaseHTTPRequestHandler) is working correctly."
-)
-def test_start_proxy_uses_async_backend():
-    """start_proxy() must be usable and return a ProxyServer with async backend."""
+def test_async_backend_is_quarantined_not_production(monkeypatch):
+    """`start_proxy()` must NOT select the async backend.
+
+    Replaces a skipped test that asserted the opposite — that `start_proxy()`
+    exposes `_async_thread`. That test encoded an aspiration, was skipped, and so
+    pinned nothing for months while the module continued to present as
+    production-available.
+
+    The async server does not carry the sync path's governance gates: no
+    spend-guard evaluation, no DLP outbound scan, and a narrower `INTERCEPT_HOSTS`
+    set that would leave some provider traffic ungoverned. Wiring it into
+    production would silently bypass cost control and secret scanning.
+
+    This test is the enforcement of that quarantine. It fails the moment the
+    async backend is wired in — which is correct: reviving it is a governance
+    decision with a written contract (see the module docstring), not a code
+    change that should pass CI silently.
+    """
+    from tokenpak.proxy import server_async
     from tokenpak.proxy.server import start_proxy
+
+    assert server_async.EXPERIMENTAL_NOT_PRODUCTION is True, (
+        "server_async is quarantined; flipping EXPERIMENTAL_NOT_PRODUCTION is a "
+        "governance change requiring the revival contract in its module docstring"
+    )
+
+    # Sentinel EVERY entry point into the async stack, not one of them.
+    #
+    # Two earlier versions of this guard were both bypassable. The first asserted
+    # `not hasattr(ps, "_async_thread")` — a name in no product code. The second
+    # sentinelled only `start_async_proxy_in_thread`, and review demonstrated a
+    # reviver wiring uvicorn over `create_async_app()` while the guard passed
+    # green and a real Starlette app was attached to the ProxyServer.
+    #
+    # A guard whose only deliverable is assurance must cover every path, or its
+    # green check is affirmatively misleading — worse than the skipped test it
+    # replaced, because a skipped test is visibly inert while a passing one reads
+    # as coverage.
+    # Capture ownership BEFORE start_proxy and assert the DELTA, not the absolute
+    # value. `_proxy_server_ref` is a module global that `create_async_app()` sets
+    # and nothing ever clears, and `tests/test_proxy_server_async.py` assigns it at
+    # seven sites with save/restore at only one. Asserting `is None` therefore
+    # fires this suite's highest-severity message — "every request bypasses the
+    # spend guard and the DLP outbound scan" — because an unrelated unit test left
+    # a MagicMock behind.
+    #
+    # Reproduced: running that file first makes the absolute-value form FAIL while
+    # the baseline passes. Latent under CI's alphabetical collection, live under
+    # --lf, --ff, explicit ordering, or any future parallel/random plugin.
+    #
+    # The question is "did start_proxy take ownership", which is a delta.
+    _ownership_before = getattr(server_async, "_proxy_server_ref", None)
+
+    _async_entries_called: list[str] = []
+
+    def _sentinel(name):
+        def _fail_fast(*a, **kw):
+            _async_entries_called.append(name)
+            raise AssertionError(f"quarantined async backend was started via {name}()")
+
+        return _fail_fast
+
+    for _entry in ("start_async_proxy_in_thread", "run_async_proxy", "create_async_app"):
+        monkeypatch.setattr(server_async, _entry, _sentinel(_entry), raising=True)
 
     TEMP_PORT = 19867
     ps = start_proxy(host="127.0.0.1", port=TEMP_PORT, blocking=False)
     try:
         _wait_for_port(TEMP_PORT, timeout=8)
-        # Verify it bound successfully by hitting /health on the temp port
         req = urllib.request.Request(f"http://127.0.0.1:{TEMP_PORT}/health")
         with urllib.request.urlopen(req, timeout=5) as resp:
-            assert resp.status == 200
-        assert ps is not None
-        # Async backend should be running (async thread set)
-        assert hasattr(ps, "_async_thread"), "ProxyServer should have _async_thread attribute"
+            assert resp.status == 200, "the sync proxy must still serve /health"
+            resp_headers = dict(resp.headers)
+        resp = type("R", (), {"headers": resp_headers})()
+
+        # OUTCOME assertion — what is actually serving.
+        #
+        # Name sentinels alone cannot work here, and three attempts proved it.
+        # `server_async.__all__` exports ~30 public symbols; review demonstrated a
+        # revival built from `handle_v1_proxy` + `lifespan` + `_proxy_server_ref`
+        # that touched none of the sentinelled names and served real traffic
+        # through uvicorn while this test reported "1 passed". Enumerating names
+        # is whack-a-mole against a module designed to be composable.
+        #
+        # So assert the OUTCOME instead: whatever wired it, the async stack must
+        # not be the thing answering requests. `_proxy_server_ref` is set by the
+        # async app when it takes ownership, and uvicorn identifies itself in the
+        # Server header. Neither can be avoided by a reviver who actually succeeds.
+        assert server_async._proxy_server_ref is _ownership_before, (
+            "start_proxy() changed server_async._proxy_server_ref — the async stack "
+            "took ownership of the ProxyServer, which the quarantine forbids"
+        )
+
+        server_hdr = (resp.headers.get("Server") or "").lower()
+        assert "uvicorn" not in server_hdr, (
+            f"/health is being served by uvicorn (Server: {server_hdr!r}) — the "
+            "quarantined async stack is live and every request bypasses the spend "
+            "guard and the DLP outbound scan"
+        )
+
+        # Name sentinels retained as defence in depth: they give a precise
+        # diagnostic when the revival goes through a known entry point.
+        assert not _async_entries_called, (
+            f"async entry point(s) {_async_entries_called} invoked during start_proxy()"
+        )
     finally:
         ps.stop()
+
+
+def test_async_module_documents_why_it_is_quarantined():
+    """The quarantine must be discoverable from the module, not only from a ruling.
+
+    A decision recorded only in governance is invisible to someone reading the
+    code. This pins the reasoning in place so the next reader learns *why*
+    before deciding to wire it up.
+    """
+    from tokenpak.proxy import server_async
+
+    doc = server_async.__doc__ or ""
+    assert "EXPERIMENTAL, NOT PRODUCTION" in doc
+    assert "Revival contract" in doc
+    for gate in ("spend-guard", "DLP"):
+        assert gate in doc, f"the docstring must state that {gate} is absent on this path"
 
 
 # ---------------------------------------------------------------------------

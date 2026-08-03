@@ -1,6 +1,44 @@
 """
-TokenPak Async Proxy Server (Starlette + uvicorn + httpx)
+TokenPak Async Proxy Server — EXPERIMENTAL, NOT PRODUCTION.
 
+⚠️  This module is quarantined. It is not selected by ``start_proxy()``, not
+    reachable from ``tokenpak serve``, and must not be wired into production
+    request handling. The source is kept available for future work; the
+    repository must not represent it as ready.
+
+Why it is quarantined
+---------------------
+It does not carry the governance gates the synchronous proxy enforces on every
+request. Verified at the time of quarantine and re-verified since:
+
+- no spend-guard evaluation on the async forwarding path;
+- no DLP outbound scan on the async forwarding path;
+- its own ``INTERCEPT_HOSTS`` set, narrower than the router's — Google
+  ``generateContent`` traffic would not be treated as governed;
+- ``should_log`` / ``is_messages`` derived locally rather than from a shared
+  request classification.
+
+Running this in production would silently bypass cost control and secret
+scanning for every request it served.
+
+Revival contract
+----------------
+Before this module may be wired into production selection, ALL of the following
+must hold:
+
+1. It consumes the shared governed-request classification rather than deriving
+   host/endpoint eligibility locally.
+2. Spend guard, DLP, circuit breaker, accounting, byte-fidelity and
+   backend-delegation behaviour are each enforced on the async path.
+3. Sync/async parity tests exist and pass for every gate in (2).
+4. Byte-fidelity tests confirm the async path introduces no JSON
+   re-serialization on byte-preserved routes.
+
+Until then ``EXPERIMENTAL_NOT_PRODUCTION`` below stays ``True``, and the test
+suite pins that.
+
+Architecture (retained for future work)
+---------------------------------------
 Replaces the synchronous BaseHTTPRequestHandler with a fully async ASGI stack:
 - Starlette ASGI app for all HTTP management endpoints and reverse-proxy paths
 - httpx.AsyncClient with connection pooling for upstream forwarding
@@ -25,6 +63,12 @@ Env vars (all optional):
 """
 
 from __future__ import annotations
+
+#: Quarantine flag — see the module docstring's Revival contract.
+#: This module is NOT production-selected. Tooling and tests assert this stays
+#: True until every gate in the revival contract is enforced on the async path.
+#: Flipping it is a governance change, not a code cleanup.
+EXPERIMENTAL_NOT_PRODUCTION = True
 
 __all__ = (
     "ASYNC_UPSTREAM_ACQUIRE_TIMEOUT",
