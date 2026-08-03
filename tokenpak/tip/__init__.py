@@ -1,13 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Legacy compatibility exports for TokenPak's public contracts.
+"""TIP Optimization Contracts — protocol-level vocabulary for the optimization layer.
 
-All contract definitions live in :mod:`tokenpak.core.contracts`. This package
-preserves the former :mod:`tokenpak.tip` import paths by re-exporting those
-canonical objects; the legacy and canonical imports remain object-identical.
-New code should import definitions from their specific
-``tokenpak.core.contracts`` modules instead of this compatibility surface.
+This package defines the shared types, constants, and contracts that
+sit at the TIP/Protocol layer of the optimization architecture:
 
-Legacy exported surface:
+    TIP/Protocol layer  (this package)
+         ↓
+    Proxy layer         (tokenpak/proxy/optimization/)
+         ↓
+    Adapter layer       (tokenpak/proxy/adapters/, tokenpak/agent/adapters/)
+
+Nothing in this package should import from proxy or adapter modules.
+Downstream consumers import from here; this package imports only from
+tokenpak.core (for version/header contracts) and the standard library.
+
+Exported surface:
 
     capabilities        - TIP optimization capability label constants
     route_contract      - OptimizationRouteClass enum (request semantic type)
@@ -21,8 +28,8 @@ Legacy exported surface:
 
 from __future__ import annotations
 
-from tokenpak.core.contracts.cache import CacheMissReason, CachePolicy
-from tokenpak.core.contracts.capabilities import (
+from tokenpak.tip.cache_contract import CacheMissReason, CachePolicy
+from tokenpak.tip.capabilities import (
     ALL_OPTIMIZATION_CAPABILITIES,
     MULTIPAK_CAPABILITIES,
     TIP_CACHE_PROMPT_KEY_PRESERVED,
@@ -49,8 +56,8 @@ from tokenpak.core.contracts.capabilities import (
     TIP_TELEMETRY_ATTRIBUTION_V1,
     TIP_TOOL_SCHEMA_STABILITY_V1,
 )
-from tokenpak.core.contracts.compression import CompressionPolicy, ProtectedSpanType
-from tokenpak.core.contracts.context import (
+from tokenpak.tip.compression_contract import CompressionPolicy, ProtectedSpanType
+from tokenpak.tip.context_package import (
     AnchorBlockPosition,
     ContextLevel,
     ContextPackage,
@@ -63,9 +70,9 @@ from tokenpak.core.contracts.context import (
     context_level_label,
     parse_context_level,
 )
-from tokenpak.core.contracts.fidelity import FidelityPolicy
-from tokenpak.core.contracts.optimization import OptimizationContract
-from tokenpak.core.contracts.pak import (
+from tokenpak.tip.fidelity_contract import FidelityPolicy
+from tokenpak.tip.optimization_contract import OptimizationContract
+from tokenpak.tip.pak import (
     Pak,
     PakAnchor,
     PakAuthority,
@@ -83,9 +90,9 @@ from tokenpak.core.contracts.pak import (
     all_subtypes,
     default_retention_for,
 )
-from tokenpak.core.contracts.route import OptimizationRouteClass
-from tokenpak.core.contracts.telemetry import SavingsSource, TelemetryPolicy
-from tokenpak.core.contracts.trace import (
+from tokenpak.tip.route_contract import OptimizationRouteClass
+from tokenpak.tip.telemetry_contract import SavingsSource, TelemetryPolicy
+from tokenpak.tip.trace_contract import (
     CacheTrace,
     CompressionTrace,
     OptimizationTrace,

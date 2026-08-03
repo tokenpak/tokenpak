@@ -1,15 +1,9 @@
 """Trace models for the optimization pipeline.
 
-These are services-layer observe-only DTOs: they carry just enough information
-for observe-only telemetry. They are deliberately narrower than the canonical
-trace contract (``tokenpak.core.contracts.trace``) and cannot be constructed
-as it — ``to_tip_dict()`` emits a legacy observe-only envelope, not a
-contract-shaped trace.
-
-The class names here intentionally keep their historical public identity:
-the module path and class name are load-bearing compatibility surface for
-reflection and default pickling across releases. They are service-local
-shapes, distinct from the same-named canonical contract classes.
+These are services-layer mirror types: they carry just enough information
+for observe-only telemetry. When the trace contract
+(``tokenpak.tip.trace_contract``) is available the pipeline can also emit a
+contract-shaped trace — see ``trace.to_tip_dict()``.
 """
 
 from __future__ import annotations
@@ -21,10 +15,7 @@ from typing import Any, Dict, List
 
 @dataclass
 class StageTrace:
-    """Per-stage trace entry (service-local observe-only DTO).
-
-    Distinct from the canonical ``tokenpak.core.contracts.trace.StageTrace``
-    despite the shared historical name.
+    """Per-stage trace entry.
 
     name:        stage's machine identifier
     eligible:    eligibility verdict (True/False)
@@ -56,12 +47,7 @@ class StageTrace:
 
 @dataclass
 class OptimizationTrace:
-    """Top-level trace for one request through the pipeline.
-
-    Service-local observe-only DTO. It shares its historical name with the
-    canonical ``tokenpak.core.contracts.trace.OptimizationTrace`` but is a
-    distinct, narrower shape; see ``to_tip_dict`` for the envelope it emits.
-    """
+    """Top-level trace for one request through the pipeline."""
 
     request_id: str
     mode: str = "observe"
@@ -97,20 +83,15 @@ class OptimizationTrace:
         }
 
     def to_tip_dict(self) -> Dict[str, Any]:
-        """Return the legacy observe-only trace envelope.
+        """Return a dict shaped for the canonical trace contract.
 
-        This is NOT the canonical trace contract. The emitted mapping is the
-        same service-local shape as ``to_dict()``; it cannot be used to
-        construct ``tokenpak.core.contracts.trace.OptimizationTrace`` (that
-        contract requires fields such as ``model`` and does not accept
-        ``tip_version``). The ``tip_version`` key is a historical,
-        informational discriminator only — it marks the envelope revision and
-        is added only when the core trace contract is importable; it is not
-        proof of contract constructibility. Emitted keys and values are
-        unchanged for wire compatibility.
+        Falls back to ``to_dict()`` when ``tokenpak.tip`` isn't importable.
+        When the trace contract is available, this is the bridge into the
+        canonical trace schema; the `tip_version` discriminator confirms the
+        shape.
         """
         try:
-            from tokenpak.core.contracts.trace import OptimizationTrace as _TipTrace  # noqa: F401
+            from tokenpak.tip.trace_contract import OptimizationTrace as _TipTrace  # noqa: F401
 
             return {"tip_version": "v1", **self.to_dict()}
         except Exception:
