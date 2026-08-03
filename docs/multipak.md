@@ -58,6 +58,7 @@ MultiPak Pro Phase 1 status
 | `tokenpak pak inspect <pak-id-or-file>` | Vault: ✅, others: ❌ | `--json` for machine output |
 | `tokenpak pak export <pak-id> -o <dir>` | Vault: ✅, others: ❌ | Vault Paks export to `pak.json` |
 | `tokenpak pak import <pak-file>` | ✅ always | Copies a Pak file into the local store with checksum verification |
+| `tokenpak pak migrate <pak-file>` | ✅ always | Upgrades a legacy Pak file to the canonical schema (checksum re-stamped, `pak_id` preserved) |
 | `tokenpak pak status` | ✅ always | Diagnostic; never errors |
 
 **Create and round-trip a Pak (OSS):**
