@@ -19,7 +19,6 @@ __all__ = (
     "PendingStore",
     "SpendGuardConfig",
     "build_block",
-    "build_block_session_identity_unavailable",
     "build_block_store_unavailable",
     "build_cancelled",
     "build_estimate",

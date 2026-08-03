@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-__version__ = "1.18.0"
+__version__ = "1.18.1"
 __author__ = "TokenPak Contributors"
 __license__ = "Apache-2.0"
 __description__ = "Deterministic compression for multi-agent AI workflows"

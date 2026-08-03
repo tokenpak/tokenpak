@@ -27,7 +27,6 @@ __all__ = (
     "PreflightDecision",
     "RiskEstimate",
     "block",
-    "block_session_identity_unavailable",
     "block_store_unavailable",
     "build_rolling_cap_block",
     "cancelled",
