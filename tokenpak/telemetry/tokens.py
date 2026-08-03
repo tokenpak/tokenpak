@@ -54,6 +54,13 @@ def _get_encoder() -> Optional[_Encoder]:
     return _ENC
 
 
+def tokenizer_name() -> Optional[str]:
+    """Name of the live tokenizer, or ``None`` when the chars/4 fallback is
+    active. Callers that report token counts to a user should disclose which
+    estimator produced the number."""
+    return "tiktoken:cl100k_base" if _get_encoder() is not None else None
+
+
 @lru_cache(maxsize=8192)
 def count_tokens(text: str) -> int:
     """

@@ -136,6 +136,7 @@ def test_tools_registry_has_expected_entries():
     assert names == {
         "estimate_tokens",
         "check_budget",
+        "load_pak",
         "load_capsule",
         "prune_context",
         "journal_read",
@@ -149,6 +150,16 @@ def test_tools_registry_has_expected_entries():
 def test_all_tools_have_handler_callable():
     for t in TOOLS:
         assert callable(t.handler), f"{t.name} handler is not callable"
+
+
+def test_load_capsule_is_deprecated_alias_of_load_pak():
+    """The legacy name must dispatch to the same handler as the canonical one,
+    with identical input schema, so existing configs keep working."""
+    by_name = {t.name: t for t in TOOLS}
+    pak, legacy = by_name["load_pak"], by_name["load_capsule"]
+    assert pak.handler is legacy.handler
+    assert pak.input_schema == legacy.input_schema
+    assert "eprecated" in legacy.description and "load_pak" in legacy.description
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +289,25 @@ def test_prune_context_elision_marker_present(tmp_path):
     state = _make_state(tmp_path)
     result = json.loads(_handle_prune_context(state, {"text": text, "max_tokens": 50}))
     assert "elided" in result["pruned_text"]
+
+
+def test_prune_context_reduction_wrapped_in_pak_envelope(tmp_path):
+    """Actual reductions carry the Pak envelope so re-injected content is
+    attributable to TokenPak."""
+    text = "word " * 2200
+    state = _make_state(tmp_path)
+    result = json.loads(_handle_prune_context(state, {"text": text, "max_tokens": 100}))
+    assert result["reduction_pct"] > 0
+    assert result["pruned_text"].startswith("[PAK id=")
+    assert result["pruned_text"].rstrip().endswith("[/PAK]")
+
+
+def test_prune_context_no_reduction_not_enveloped(tmp_path):
+    """Zero-reduction passthrough stays byte-identical — no envelope."""
+    text = "short text"
+    state = _make_state(tmp_path)
+    result = json.loads(_handle_prune_context(state, {"text": text, "max_tokens": 2000}))
+    assert result["pruned_text"] == text
 
 
 # ---------------------------------------------------------------------------

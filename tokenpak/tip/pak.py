@@ -34,7 +34,7 @@ within MultiPak Pro copy and for the acronym definition
 from __future__ import annotations
 
 import warnings
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
 from typing import Any, Iterable, Mapping, Optional
 
@@ -288,21 +288,34 @@ class Pak:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "Pak":
         """Parse a Pak from its wire form. Unknown enum values raise ``ValueError``;
-        deprecated subtype aliases are normalized via :meth:`PakSubtype.parse`."""
+        deprecated subtype aliases are normalized via :meth:`PakSubtype.parse`.
+
+        Unknown *fields* in sub-records are dropped, not raised on: the
+        file-form Pak written by the CLI extends anchor records with
+        embedded content (``path`` / ``bytes`` / ``content`` / ``encoding``),
+        and future minor revisions may extend other sub-records. Receivers
+        parse the canonical projection and ignore extensions gracefully,
+        mirroring the unknown-subtype fallback rule above.
+        """
 
         scope_d = data.get("scope") or {}
         source_d = data["source"]
         privacy_d = data.get("privacy") or {}
         retention_d = data.get("retention") or {}
         relationships_d = data.get("relationships") or {}
-        anchors = tuple(PakAnchor(**a) for a in (data.get("anchors") or ()))
+        scope_known = {f.name for f in fields(PakScope)}
+        anchor_known = {f.name for f in fields(PakAnchor)}
+        anchors = tuple(
+            PakAnchor(**{k: v for k, v in a.items() if k in anchor_known})
+            for a in (data.get("anchors") or ())
+        )
 
         return cls(
             pak_id=data["pak_id"],
             pak_type=PakSubtype.parse(data["pak_type"]),
             title=data["title"],
             summary=data["summary"],
-            scope=PakScope(**scope_d),
+            scope=PakScope(**{k: v for k, v in scope_d.items() if k in scope_known}),
             source=PakSource(
                 platform=source_d["platform"],
                 source_type=PakSourceType(source_d["source_type"]),
@@ -360,6 +373,17 @@ def all_subtypes() -> Iterable[PakSubtype]:
     return iter(PakSubtype)
 
 
+def is_legacy_subtype(value: str) -> bool:
+    """True when ``value`` is a deprecated subtype alias (silent probe).
+
+    Unlike :meth:`PakSubtype.parse` this emits no ``DeprecationWarning`` —
+    it exists so writers and tests can assert "this value must never be
+    emitted" without tripping warning filters. Readers keep resolving
+    aliases via :meth:`PakSubtype.parse` until removal in v3.0.0.
+    """
+    return value.strip().lower() in _LEGACY_SUBTYPE_ALIASES
+
+
 __all__ = [
     "Pak",
     "PakAnchor",
@@ -377,4 +401,5 @@ __all__ = [
     "PakSubtype",
     "all_subtypes",
     "default_retention_for",
+    "is_legacy_subtype",
 ]

@@ -31,7 +31,7 @@ Architecture::
     │                                                 │
     │  mcp/            ← MCP stdio server             │
     │    server.py        tools: estimate_tokens,      │
-    │    tools.py         check_budget, load_capsule,  │
+    │    tools.py         check_budget, load_pak,      │
     │                     prune_context, journal_*     │
     │                                                 │
     │  transcript/     ← Claude Code transcript parser│

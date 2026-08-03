@@ -110,7 +110,12 @@ def test_loader_rejects_nonpositive_capture(tmp_path):
         load_baseline(path)
 
 
-def test_real_scenario_is_offline_and_byte_preserved():
+def test_real_scenario_is_offline_and_byte_preserved(monkeypatch):
+    # The scenario exercises vault injection deliberately; opt in past the
+    # default-off master switch so the byte-preservation property stays tested.
+    import tokenpak.proxy.config as _proxy_cfg
+
+    monkeypatch.setattr(_proxy_cfg, "VAULT_INJECTION_ENABLED", True, raising=False)
     result = run_benchmark(
         samples=3, warmup_samples=1, iterations_per_sample=1, measurement_rounds=1
     )
