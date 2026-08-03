@@ -131,7 +131,7 @@ def test_responses_capsule_preserves_policy_and_compresses_only_history() -> Non
 
     assert result["model"] == "client-selected-model"
     assert result["input"][0]["content"][0]["text"] == policy_text
-    assert "[CAPSULE" in result["input"][1]["content"][0]["text"]
+    assert "[PAK" in result["input"][1]["content"][0]["text"]
     assert result["input"][-1]["content"][0]["text"] == "Continue."
     assert stats["blocks_capsulized"] == 1
     assert _estimate_tokens(sent) < _estimate_tokens(raw)
