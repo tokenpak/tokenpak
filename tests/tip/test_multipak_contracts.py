@@ -3,9 +3,9 @@
 
 Covers the schema contract that the closed-source Pro daemon will consume:
 
-- ``tokenpak.core.contracts.capabilities`` — MultiPak capability constants.
-- ``tokenpak.core.contracts.pak`` — Pak schema, subtype taxonomy, deprecation aliases.
-- ``tokenpak.core.contracts.context`` — Context Package, levels, coverage states.
+- ``tokenpak.tip.capabilities`` — the 10 new MultiPak capability constants.
+- ``tokenpak.tip.pak`` — Pak schema, subtype taxonomy, deprecation aliases.
+- ``tokenpak.tip.context_package`` — Context Package, levels, coverage states.
 
 Standards:
 - ``32-multipak-pro-architecture.md §1.3`` — OSS/Pro boundary.
@@ -24,7 +24,7 @@ import warnings
 
 import pytest
 
-from tokenpak.core.contracts.capabilities import (
+from tokenpak.tip import (
     ALL_OPTIMIZATION_CAPABILITIES,
     MULTIPAK_CAPABILITIES,
     TIP_CONTEXT_COVERAGE,
@@ -37,8 +37,6 @@ from tokenpak.core.contracts.capabilities import (
     TIP_PAK_INDEX,
     TIP_PAK_PROMOTE,
     TIP_PAK_RECALL,
-)
-from tokenpak.core.contracts.context import (
     AnchorBlockPosition,
     ContextLevel,
     ContextPackage,
@@ -47,11 +45,6 @@ from tokenpak.core.contracts.context import (
     CoverageReport,
     CoverageState,
     OrderingHints,
-    PolicyDecision,
-    context_level_label,
-    parse_context_level,
-)
-from tokenpak.core.contracts.pak import (
     Pak,
     PakAnchor,
     PakAuthority,
@@ -66,8 +59,11 @@ from tokenpak.core.contracts.pak import (
     PakSourceType,
     PakStatus,
     PakSubtype,
+    PolicyDecision,
     all_subtypes,
+    context_level_label,
     default_retention_for,
+    parse_context_level,
 )
 
 # ---------------------------------------------------------------------------

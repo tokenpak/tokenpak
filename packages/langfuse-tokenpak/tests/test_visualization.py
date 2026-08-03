@@ -82,7 +82,7 @@ class TestAsciiSummary:
             make_block("knowledge", 420, "high", True, source="pinecone"),
         ]
         out = ascii_block_summary(blocks, budget=8000)
-        assert "Pak (" in out
+        assert "TokenPak Pack" in out
         assert "570/8000 tokens" in out
         assert "[compacted]" in out
         assert "src:pinecone" in out

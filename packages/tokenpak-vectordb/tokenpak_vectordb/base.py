@@ -26,18 +26,18 @@ def _estimate_tokens(text: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# VectorBlock — portable Pak block for vector DB results
+# VectorBlock — portable TokenPak block for vector DB results
 # ---------------------------------------------------------------------------
 
 @dataclass
 class VectorBlock:
     """
-    A Pak block produced from a vector DB retrieval result.
+    A TokenPak block produced from a vector DB retrieval result.
 
-    Maps vector DB concepts to Pak block semantics:
+    Maps vector DB concepts to TokenPak block semantics:
       - id          → result ID from vector DB
       - content     → document text / payload text
-      - block_type  → Pak block type (evidence, knowledge, etc.)
+      - block_type  → TokenPak block type (evidence, knowledge, etc.)
       - quality     → similarity/distance score mapped to 0-1
       - tokens      → estimated token count
       - metadata    → raw metadata from vector DB
@@ -63,7 +63,7 @@ class VectorBlock:
         self.quality = max(0.0, min(1.0, self.quality))
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize to the Pak wire format."""
+        """Serialize to TokenPak wire format."""
         return {
             "id": self.id,
             "type": self.block_type,
@@ -169,7 +169,7 @@ class VectorDBAdapter(ABC):
         Args:
             query: Query embedding (vector) or query string
             limit: Max results (defaults to self.default_limit)
-            block_type: Pak block type (defaults to self.default_block_type)
+            block_type: TokenPak block type (defaults to self.default_block_type)
             **kwargs: Adapter-specific parameters (namespace, collection, filters, etc.)
 
         Returns:

@@ -13,7 +13,7 @@ from tokenpak.agent.agentic.handoff import (
 
 
 class TokenPakHandoff:
-    """Create and consume Pak wire-format handoffs between agents."""
+    """Create and consume TokenPak wire-format handoffs between agents."""
 
     def __init__(self, budget: int = 2000, keep_recent: int = 10, manager: Optional[HandoffManager] = None):
         self.budget = budget

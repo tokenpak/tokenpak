@@ -1,10 +1,8 @@
 # tokenpak-vectordb
 
-> Convert vector DB query results directly into structured Pak blocks.
+> Convert vector DB query results directly into TokenPak blocks.
 
-**tokenpak-vectordb** provides adapters for the most popular vector databases,
-turning retrieval results into structured `VectorBlock` objects compatible
-with TIP-1.0.
+**tokenpak-vectordb** provides adapters for the most popular vector databases, turning retrieval results into structured `VectorBlock` objects compatible with the TokenPak protocol.
 
 ## Why?
 
@@ -14,7 +12,7 @@ results = index.query(embedding, top_k=10)
 context = "\n".join(r.metadata["text"] for r in results.matches)
 prompt = f"Context:\n{context}\n\nQuestion: {query}"
 
-# After: retrieval results become Pak blocks automatically
+# After: retrieval results become TokenPak blocks automatically
 from tokenpak_vectordb import PineconeAdapter
 adapter = PineconeAdapter(index)
 blocks = adapter.query_as_blocks(embedding, top_k=10)
@@ -60,7 +58,7 @@ blocks = adapter.query_as_blocks(query_embedding, top_k=10)
 
 for block in blocks:
     print(f"[{block.quality:.2f}] {block.content[:80]}")
-    # [0.95] TokenPak is the reference implementation of TIP-1.0...
+    # [0.95] TokenPak is a protocol for context compression in RAG pipelines...
 ```
 
 ### Weaviate
@@ -121,7 +119,7 @@ block.tokens      # int  — estimated token count
 block.metadata    # dict — raw metadata from vector DB (content field removed)
 block.provenance  # dict — source attribution with timestamp
 
-block.to_dict()   # serialize to the Pak wire format
+block.to_dict()   # serialize to TokenPak wire format
 block.truncate(n) # return new block with content truncated to n tokens
 ```
 

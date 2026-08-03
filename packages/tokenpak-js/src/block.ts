@@ -1,13 +1,13 @@
 /**
- * block.ts — Pak Block
+ * block.ts — TokenPak Block
  *
- * A Block is the fundamental content unit in a Pak.
+ * A Block is the fundamental content unit in a TokenPak.
  * Each block has a type, unique ID, content, and optional metadata.
  */
 
 import { estimateTokens, generateId, nowISO } from './utils';
 
-/** Valid block types per the bundled Pak JSON schema v1.0. */
+/** Valid block types per TokenPak v1.0 schema */
 export type BlockType =
   | 'instructions'
   | 'code'

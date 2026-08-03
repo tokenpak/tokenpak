@@ -1,17 +1,12 @@
-# TIP-1.0 Compatibility Reference — Non-normative
+# TokenPak Protocol Specification v1.0 — The Context Standard
 
-> **Status:** Historical compatibility reference. TIP-1.0 (the TokenPak
-> Integrity Protocol) is a profile/spec; its normative text and machine-readable
-> schemas live in the docs and registry repositories, respectively.
+> **Status:** Stable · **Version:** 1.0 · **Schema:** `https://tokenpak.dev/schema/v1.0.json`
 
 ---
 
 ## Overview
 
-TIP-1.0 defines TokenPak-compatible headers, metadata, telemetry, capabilities,
-compatibility, and manifests. TokenPak is the product/platform and reference
-implementation of TIP-1.0. MCP is an external control-plane substrate where
-applicable; it is neither TIP nor TokenPak.
+TokenPak is an open, vendor-neutral context packaging format that lets any AI system — agents, LLM pipelines, RAG systems, MCP servers — create and exchange structured context packs. Two completely different systems can exchange TokenPaks without requiring the TokenPak proxy.
 
 **Design goals:**
 - Interoperability: LangChain generates a pack → CrewAI reads it, no glue code
@@ -24,7 +19,7 @@ applicable; it is neither TIP nor TokenPak.
 ## Pack Structure
 
 ```
-TIP-1.0 Context Pak
+TokenPak
  │
  ├─ header (required) Version, ID, timestamp, schema
  ├─ metadata (required) Task, source, target, tags, TTL
@@ -394,8 +389,7 @@ Pre-computed embedding vectors for semantic search and similarity-based compacti
 
 ## Wire Format
 
-Compact text format for bandwidth-efficient transport. All JSON Paks can be
-serialized to and from this legacy wire format.
+Compact text format for bandwidth-efficient transport. All JSON TokenPaks can be serialized to/from wire format.
 
 ```
 TOKENPAK/1.0
@@ -460,7 +454,7 @@ When exchanging packs between systems:
 
 ### Migration Guide (v1.x → v2.0, future)
 
-Future migration guides will be included in [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md).
+Future migration guides will be published at `https://tokenpak.dev/migration/v2.0` and included in `docs/MIGRATION_GUIDE.md`.
 
 ---
 
@@ -499,7 +493,7 @@ A pack is interoperable when:
 
 ### Success Scenario
 
-> A LangChain developer creates a Pak containing skills exposed through MCP.
+> A LangChain developer creates a TokenPak with MCP skills.
 > A CrewAI developer receives it and can use those skills.
 > Neither needs the TokenPak proxy.
 > The pack validates against the schema.
@@ -507,4 +501,4 @@ A pack is interoperable when:
 
 ---
 
-*Historical compatibility reference. Do not treat this page as normative TIP text.*
+*TokenPak Protocol Specification v1.0 — Published 2026-03-07*

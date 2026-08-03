@@ -26,7 +26,7 @@ def test_recipe_list_lists_baked_in_catalog() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "Baked-in Compression Recipes" in result.stdout
-    assert "Total recipes: 50" in result.stdout
+    assert "Total recipes: 57" in result.stdout
     assert "py-docstring-to-signature" in result.stdout
 
 

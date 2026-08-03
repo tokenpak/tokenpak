@@ -76,6 +76,8 @@ RECIPE_SCHEMA: dict[str, Any] = {
         "config",
         "logs",
         "git",
+        "rust",
+        "go",
     ],
 }
 

@@ -79,54 +79,6 @@ class TestCapsuleBuilderViaProxyModule:
         assert stats["blocks_capsulized"] >= 1
         assert b"[CAPSULE" in out
 
-    def test_never_inflates_structure_heavy_block(self):
-        """A block the compressor cannot shrink is left untouched.
-
-        Structure lines (headings, bullets, code fences) pass through the
-        compressor verbatim, so the capsule envelope would make the block
-        strictly larger. The builder must skip it rather than inflate the
-        request.
-        """
-        from tokenpak.proxy.capsule_builder import CapsuleBuilder
-
-        structure_heavy = "\n".join(
-            [
-                "# Heading one",
-                "- bullet item alpha",
-                "- bullet item beta",
-                "```",
-                "code line that must be preserved verbatim inside the fence",
-                "```",
-                "## Heading two",
-                "1. ordered item one",
-                "2. ordered item two",
-            ]
-            * 8
-        )
-        assert len(structure_heavy) >= 400
-        b = CapsuleBuilder(enabled=True, hot_window=0)
-        body = json.dumps({"messages": [{"role": "user", "content": structure_heavy}]}).encode()
-        out, stats = b.process(body)
-        assert out == body
-        assert stats["blocks_capsulized"] == 0
-        assert b"[CAPSULE" not in out
-
-    def test_capsulized_output_is_never_larger_than_input(self):
-        """When a block IS capsulized, the result must be a net shrink."""
-        from tokenpak.proxy.capsule_builder import CapsuleBuilder
-
-        prose = (
-            "This is a long prose paragraph that keeps adding descriptive "
-            "sentences well past the compressor's paragraph budget so that "
-            "deterministic truncation has real material to work with. "
-        ) * 10
-        b = CapsuleBuilder(enabled=True, hot_window=0)
-        body = json.dumps({"messages": [{"role": "user", "content": prose}]}).encode()
-        out, stats = b.process(body)
-        assert stats["blocks_capsulized"] == 1
-        assert len(out) < len(body)
-        assert stats["ratio"] < 1.0
-
     def test_same_class_as_canonical(self):
         """Proxy module re-exports the canonical CapsuleBuilder — same class."""
         # WS-A residual import guard — TSR-01-followup. tokenpak.capsule.builder

@@ -34,7 +34,7 @@ all = ["langchain>=0.1.0"]
 
 [project.urls]
 "Homepage" = "https://github.com/tokenpak/langchain-tokenpak"
-"Documentation" = "https://docs.tokenpak.ai/adapters/langchain/"
+"Documentation" = "https://tokenpak.dev/integrations/langchain"
 "Repository" = "https://github.com/tokenpak/langchain-tokenpak.git"
 "Bug Tracker" = "https://github.com/tokenpak/langchain-tokenpak/issues"
 

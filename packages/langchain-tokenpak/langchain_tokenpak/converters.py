@@ -1,7 +1,7 @@
 """
-Document ↔ Pak block conversion utilities for LangChain.
+Document ↔ TokenPak Block conversion utilities for LangChain.
 
-Converts between LangChain's Document format and the Pak block format
+Converts between LangChain's Document format and TokenPak's Block format
 for seamless integration in RAG pipelines.
 """
 
@@ -11,7 +11,7 @@ from dataclasses import dataclass, asdict
 
 @dataclass
 class Block:
-    """Minimal Pak block representation."""
+    """Minimal Block representation for TokenPak."""
     id: str
     content: str
     metadata: Dict[str, Any]
@@ -21,14 +21,14 @@ class Block:
 
 def langchain_document_to_block(doc: Dict[str, Any], block_id: Optional[str] = None) -> Block:
     """
-    Convert a LangChain Document to a Pak block.
+    Convert a LangChain Document to a TokenPak Block.
 
     Args:
         doc: LangChain Document dict with 'page_content' and 'metadata'
         block_id: Optional custom block ID (auto-generated if not provided)
 
     Returns:
-        Pak block
+        TokenPak Block
     """
     page_content = doc.get("page_content", "")
     metadata = doc.get("metadata", {})
@@ -47,10 +47,10 @@ def langchain_document_to_block(doc: Dict[str, Any], block_id: Optional[str] = N
 
 def block_to_langchain_document(block: Block, **extra_metadata) -> Dict[str, Any]:
     """
-    Convert a Pak block back to LangChain Document format.
+    Convert a TokenPak Block back to LangChain Document format.
 
     Args:
-        block: Pak block
+        block: TokenPak Block
         extra_metadata: Additional metadata to merge
 
     Returns:
@@ -67,10 +67,10 @@ def block_to_langchain_document(block: Block, **extra_metadata) -> Dict[str, Any
 
 
 def langchain_documents_to_blocks(docs: List[Dict[str, Any]]) -> List[Block]:
-    """Batch convert LangChain Documents to Pak blocks."""
+    """Batch convert LangChain Documents to TokenPak Blocks."""
     return [langchain_document_to_block(doc) for doc in docs]
 
 
 def blocks_to_langchain_documents(blocks: List[Block]) -> List[Dict[str, Any]]:
-    """Batch convert Pak blocks to LangChain Documents."""
+    """Batch convert TokenPak Blocks to LangChain Documents."""
     return [block_to_langchain_document(block) for block in blocks]

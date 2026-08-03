@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from tokenpak.core.contracts.pak import (
+from tokenpak.tip.pak import (
     Pak,
     PakAuthority,
     PakConfidence,

@@ -1,7 +1,7 @@
 """
 visualization.py — Block visualization helpers for Langfuse traces.
 
-Provides functions to render Pak block breakdowns as structured
+Provides functions to render TokenPak block breakdowns as structured
 data and ASCII summaries suitable for embedding in trace metadata.
 """
 
@@ -33,7 +33,7 @@ PRIORITY_LABELS = {
 
 def block_to_dict(block: Any) -> Dict[str, Any]:
     """
-    Convert a Pak block to a serializable dict for trace metadata.
+    Convert a TokenPak block to a serializable dict for trace metadata.
 
     Works with both real Block objects and plain dicts.
     """
@@ -118,7 +118,7 @@ def ascii_block_summary(blocks: List[Any], budget: Optional[int] = None) -> str:
     Render an ASCII block summary for embedding in text traces.
 
     Example output:
-        Pak (3 blocks, 880 tokens)
+        TokenPak Pack (3 blocks, 880 tokens)
         ├── 📋 instructions  [critical] 150 tok
         ├── 📚 knowledge     [high]     420 tok  [compacted]
         └── 🔍 evidence      [medium]   310 tok  source:pinecone
@@ -127,7 +127,7 @@ def ascii_block_summary(blocks: List[Any], budget: Optional[int] = None) -> str:
     total = sum(b["tokens"] for b in block_dicts)
     budget_str = f"/{budget}" if budget is not None else ""
 
-    lines = [f"Pak ({len(block_dicts)} blocks, {total}{budget_str} tokens)"]
+    lines = [f"TokenPak Pack ({len(block_dicts)} blocks, {total}{budget_str} tokens)"]
 
     for i, b in enumerate(block_dicts):
         is_last = i == len(block_dicts) - 1

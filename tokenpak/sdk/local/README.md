@@ -41,7 +41,7 @@ pip install tokenpak-local[all]
 ```python
 from tokenpak_local import TokenPakOllama, TokenPak, Block
 
-# Build a Pak
+# Build a TokenPak pack
 pack = TokenPak()
 pack.instructions = "Answer based on the context below."
 pack.add(Block(type="evidence", content="The Eiffel Tower is located in Paris, France."))
@@ -168,7 +168,7 @@ Unknown models default to 4,096. Extend `MODEL_CONTEXT_LENGTHS` for custom model
 
 ### blocks_from_texts
 
-Convert retrieved documents to Pak blocks:
+Convert retrieved documents to TokenPak Blocks:
 
 ```python
 from tokenpak_local import blocks_from_texts

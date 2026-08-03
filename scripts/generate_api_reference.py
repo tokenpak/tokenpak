@@ -15,16 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "tokenpak"
 OUT_FILE = ROOT / "docs" / "API_REFERENCE.md"
 
-# Test and example packages ship inside the source tree but are not public
-# API: without these exclusions the reference renders their doubles (Mock*,
-# Test*, Example*, ...) as documented classes.
-EXCLUDE_DIRS = {"__pycache__", "Projects", "tests", "examples"}
-EXCLUDE_FILES = {"__main__.py", "conftest.py"}
-# Integration-adapter and multi-instance-orchestration modules whose public
-# names carry third-party product identifiers that are masked on public
-# surfaces; they are documented with their integrations, not in the core
-# API reference.
-EXCLUDE_MODULE_PREFIXES = ("tokenpak.cli.fleet", "tokenpak.sdk.openclaw")
+EXCLUDE_DIRS = {"__pycache__", "Projects"}
+EXCLUDE_FILES = {"__main__.py"}
 
 
 @dataclass
@@ -135,16 +127,6 @@ def parse_classes(path: Path) -> list[ClassDoc]:
     tree = ast.parse(text)
     module = path.relative_to(ROOT).with_suffix("").as_posix().replace("/", ".")
     classes: list[ClassDoc] = []
-
-    # Belt-and-suspenders alongside the "tests"/"examples" directory
-    # exclusion: also drop any module qualified as a test or example package
-    # (e.g. a file literally named ``examples.py``), so no ``*.tests.*`` or
-    # ``*.examples.*`` symbol reaches the reference.
-    module_segments = set(module.split("."))
-    if module_segments & {"tests", "examples"}:
-        return classes
-    if module.startswith(EXCLUDE_MODULE_PREFIXES):
-        return classes
 
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):

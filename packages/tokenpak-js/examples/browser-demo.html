@@ -86,7 +86,7 @@
 
     pack
       .add(new Block({ type:'instructions', id:'sys', content:'You are a helpful assistant.', priority:'critical' }))
-      .add(new Block({ type:'knowledge', id:'faq', content:'TokenPak is the reference implementation of TIP-1.0.', priority:'high' }))
+      .add(new Block({ type:'knowledge', id:'faq', content:'TokenPak is the context standard for AI.', priority:'high' }))
       .add(new Block({ type:'conversation', id:'chat', content:'User: What is TokenPak?', priority:'medium' }));
 
     const json = pack.toJSON();

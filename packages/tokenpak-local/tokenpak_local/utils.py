@@ -17,7 +17,7 @@ _SDK_AVAILABLE = False
 
 @dataclass
 class Block:
-    """Minimal Pak block shim."""
+    """Minimal TokenPak Block shim."""
     type: str = "evidence"
     content: str = ""
     quality: float = 1.0
@@ -87,7 +87,7 @@ def blocks_from_texts(
     metadata_list: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> List[Block]:
     """
-    Convert a list of text strings to Pak blocks.
+    Convert a list of text strings to TokenPak Blocks.
 
     Args:
         texts:         Sequence of document texts.

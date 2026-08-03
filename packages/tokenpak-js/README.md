@@ -1,19 +1,19 @@
 # tokenpak
 
-**JavaScript/TypeScript SDK for structured AI context**
+**The Context Standard for AI — JavaScript/TypeScript SDK**
 
 [![npm version](https://badge.fury.io/js/tokenpak.svg)](https://www.npmjs.com/package/tokenpak)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 [![Zero dependencies](https://img.shields.io/badge/dependencies-zero-green)](package.json)
 
-Build, bundle, validate, and transmit structured AI context as [TokenPak](https://tokenpak.ai) — the open protocol for context handoffs between AI systems.
+Build, bundle, validate, and transmit structured AI context as [TokenPak](https://tokenpak.dev) — the open protocol for context handoffs between AI systems.
 
 ## Features
 
 - ✅ **Full TypeScript** — complete type definitions, zero-runtime overhead
 - ✅ **Zero dependencies** — no external packages required at runtime
 - ✅ **Browser + Node.js** — works in Cloudflare Workers, Vercel Edge, Electron, React
-- ✅ **Schema-validated** — implements the [Pak JSON schema v1.0](https://tokenpak.dev/schema/v1.0.json)
+- ✅ **Protocol-compliant** — implements [TokenPak v1.0 schema](https://tokenpak.dev/schema/v1.0.json)
 - ✅ **Budget enforcement** — automatic block dropping by priority when over budget
 - ✅ **Round-trip safe** — serialize/deserialize without data loss
 
@@ -154,7 +154,7 @@ const policy = new Policy({
 
 ### `validate(wire)`
 
-Validate against the bundled Pak JSON schema v1.0.
+Validate against the TokenPak v1.0 schema.
 
 ```typescript
 const { valid, errors } = validate(compiled.toJSON());

@@ -1,7 +1,7 @@
 """Tests for ChromaAdapter using mock Chroma collection."""
 
+import pytest
 from unittest.mock import MagicMock
-
 from tokenpak_vectordb import ChromaAdapter, VectorBlock
 
 
@@ -22,7 +22,7 @@ class TestChromaAdapter:
     def _adapter(self, distance_metric="l2"):
         collection = _make_collection(
             ids=["doc1", "doc2", "doc3"],
-            documents=["TIP-1.0", "RAG pipelines", "Vector DBs"],
+            documents=["TokenPak protocol", "RAG pipelines", "Vector DBs"],
             distances=[0.1, 0.5, 1.2],
         )
         adapter = ChromaAdapter(collection, distance_metric=distance_metric)
@@ -38,7 +38,7 @@ class TestChromaAdapter:
     def test_content_from_documents(self):
         adapter, _ = self._adapter()
         blocks = adapter.query_as_blocks([0.1], limit=3)
-        assert blocks[0].content == "TIP-1.0"
+        assert blocks[0].content == "TokenPak protocol"
 
     def test_l2_quality_mapping(self):
         adapter, _ = self._adapter(distance_metric="l2")

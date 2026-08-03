@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """MCP stdio server for the tokenpak companion.
 
-Implements MCP (JSON-RPC 2.0 over stdio) without external
+Implements the MCP protocol (JSON-RPC 2.0 over stdio) without external
 dependencies.  Claude Code starts this as a child process via --mcp-config.
 
 Usage::

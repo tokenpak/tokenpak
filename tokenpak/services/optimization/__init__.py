@@ -25,15 +25,13 @@ as immutable. Mutation belongs to follow-up tasks and lives
 behind a separate flag.
 """
 
-from tokenpak.core.contracts.cache import CacheMissReason
-
 from .attribution_stage import (
     AttributionStage,
     get_attributions,
     is_attribution_v2_enabled,
 )
 from .cache_stage import SemanticCacheStage, get_cached_response
-from .cache_trace import CacheStageTrace
+from .cache_trace import CacheMissReason, CacheStageTrace
 from .compression_stage import (
     RouteClassCompressionStage,
 )

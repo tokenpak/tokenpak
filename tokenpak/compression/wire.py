@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Pak wire-format generator."""
+"""TokenPak wire format generator."""
 
 import hashlib
 from typing import Any, Dict, List

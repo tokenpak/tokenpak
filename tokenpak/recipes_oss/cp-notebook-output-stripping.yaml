@@ -1,0 +1,20 @@
+name: cp-notebook-output-stripping
+category: common_patterns
+description: Strip base64 image payloads and compact Jupyter notebook JSON — cell sources stay intact, rendered outputs shrink to markers.
+pattern:
+  match: extension
+  extensions:
+  - .ipynb
+action:
+  operations:
+  - type: regex_replace
+    pattern: '("image/(?:png|jpeg|gif|bmp|svg\+xml)":\s*")[A-Za-z0-9+/=\s\\n]{64,}(")'
+    replacement: '\1…\2'
+  - type: regex_replace
+    pattern: '[A-Za-z0-9+/]{512,}={0,2}'
+    replacement: '…'
+  - type: regex_replace
+    pattern: '"execution_count":\s*\d+'
+    replacement: '"execution_count": null'
+  - type: json_compact
+  compression_hint: 0.5

@@ -17,7 +17,7 @@ from datetime import datetime
 
 import pytest
 
-from tokenpak.core.contracts.pak import (
+from tokenpak.tip.pak import (
     Pak,
     PakAuthority,
     PakConfidence,

@@ -5,14 +5,11 @@ Shows how to use each adapter with mock data (no real DB connection needed).
 """
 
 from unittest.mock import MagicMock
-
 from tokenpak_vectordb import (
-    ChromaAdapter,
-    PineconeAdapter,
-    QdrantAdapter,
-    VectorBlock,
-    WeaviateAdapter,
+    PineconeAdapter, WeaviateAdapter, QdrantAdapter, ChromaAdapter,
+    VectorBlock
 )
+
 
 # ============================================================
 # 1. Pinecone Adapter
@@ -24,13 +21,11 @@ print("=" * 60)
 # Mock a Pinecone index
 pinecone_index = MagicMock()
 matches = []
-for i, (score, text) in enumerate(
-    [
-        (0.95, "TokenPak is the reference implementation of TIP-1.0 for RAG pipelines."),
-        (0.87, "Vector databases store embeddings for semantic search."),
-        (0.72, "Context windows limit how much text LLMs can process."),
-    ]
-):
+for i, (score, text) in enumerate([
+    (0.95, "TokenPak is a protocol for context compression in RAG pipelines."),
+    (0.87, "Vector databases store embeddings for semantic search."),
+    (0.72, "Context windows limit how much text LLMs can process."),
+]):
     m = MagicMock()
     m.id = f"doc_{i}"
     m.score = score
@@ -62,12 +57,10 @@ print("=" * 60)
 
 weaviate_client = MagicMock()
 objs = []
-for i, (certainty, text) in enumerate(
-    [
-        (0.91, "LlamaIndex provides retrieval pipelines for RAG."),
-        (0.78, "Weaviate supports hybrid search with BM25 and vectors."),
-    ]
-):
+for i, (certainty, text) in enumerate([
+    (0.91, "LlamaIndex provides retrieval pipelines for RAG."),
+    (0.78, "Weaviate supports hybrid search with BM25 and vectors."),
+]):
     obj = MagicMock()
     obj.properties = {"text": text, "category": "tech"}
     obj.uuid = f"wv-uuid-{i}"
@@ -98,13 +91,11 @@ print("=" * 60)
 
 qdrant_client = MagicMock()
 hits = []
-for i, (score, text) in enumerate(
-    [
-        (0.92, "Qdrant is a high-performance vector search engine."),
-        (0.85, "Approximate nearest neighbor search enables fast retrieval."),
-        (0.70, "Metadata filtering lets you combine keyword and semantic search."),
-    ]
-):
+for i, (score, text) in enumerate([
+    (0.92, "Qdrant is a high-performance vector search engine."),
+    (0.85, "Approximate nearest neighbor search enables fast retrieval."),
+    (0.70, "Metadata filtering lets you combine keyword and semantic search."),
+]):
     h = MagicMock()
     h.id = str(i + 1)
     h.score = score
@@ -165,7 +156,7 @@ print(f"Batch query: {len(queries)} queries")
 print(f"Total blocks returned: {len(result.flat_blocks)}")
 print(f"Elapsed: {result.elapsed_ms:.1f} ms")
 for i, query_blocks in enumerate(result.results):
-    print(f"  Query {i + 1}: {len(query_blocks)} blocks")
+    print(f"  Query {i+1}: {len(query_blocks)} blocks")
 print()
 
 
@@ -178,7 +169,7 @@ print("=" * 60)
 
 block = VectorBlock(
     id="demo-1",
-    content="TokenPak is the reference implementation of TIP-1.0 for RAG pipelines. " * 5,
+    content="TokenPak is a protocol for deterministic context compression in RAG pipelines. " * 5,
     block_type="evidence",
     quality=0.93,
     metadata={"source": "docs"},

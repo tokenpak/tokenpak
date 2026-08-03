@@ -12,8 +12,6 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.core.contracts.telemetry import SavingsSource
-from tokenpak.core.contracts.trace import SavingsAttribution
 from tokenpak.telemetry.savings import (
     SourceSummary,
     aggregate_attributions,
@@ -23,6 +21,8 @@ from tokenpak.telemetry.savings import (
     parse_openai_usage,
 )
 from tokenpak.telemetry.storage import TelemetryDB
+from tokenpak.tip.telemetry_contract import SavingsSource
+from tokenpak.tip.trace_contract import SavingsAttribution
 
 # ---------------------------------------------------------------------------
 # parse_openai_usage

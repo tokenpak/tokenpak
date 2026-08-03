@@ -1,9 +1,6 @@
 # TokenPak — Known Limitations & When NOT to Use
 
-An honest list of what is not yet at production quality in the open-source
-release, and where TokenPak is not the right fit today. Current as of the
-**v1.17.0 release candidate**; publication remains a separate gate. Each entry
-names a **retirement condition** — the concrete signal that removes it.
+An honest list of what isn't yet at production quality in the open-source release, and where TokenPak is *not* the right fit today. Current as of **v1.14.0**. Each entry names a **retirement condition** — the concrete signal that removes it.
 
 ## Activation does not unlock Pro features yet
 
@@ -13,19 +10,13 @@ names a **retirement condition** — the concrete signal that removes it.
 - **Workaround:** none needed for open-source use — every OSS feature works without activation.
 - **Retirement condition:** the Pro signature verifier ships with a production key and `activate` reports a verified entitlement.
 
-## Spend Guard requires explicit configuration and an eligible request
+## Spend Guard is warn-only in the open-source build
 
-- **What this affects:** budget / spend caps on routes that do not reach the
-  configured guard or do not provide enough request information to estimate.
-- **Intentional vs. bug:** intentional fail-safe boundary; unavailable guard
-  state must not be presented as an enforced block.
-- **Current behavior:** the open-source Spend Guard can block configured
-  runaway requests before provider send. When the guard is unavailable or a
-  route is ineligible, it reports that state rather than fabricating a block.
-- **Workaround:** verify the local guard with `tokenpak doctor`, configure the
-  applicable cap, then retry an eligible request through the local proxy.
-- **Retirement condition:** every supported route has explicit, verified guard
-  coverage or its unsupported state is removed from the supported surface.
+- **What this affects:** budget / spend caps in the open-source proxy.
+- **Intentional vs. bug:** intentional (tier boundary).
+- **Current behavior:** the open-source Spend Guard surfaces warnings and reports on spend; the hard-stop "actually block the request" enforcement path is a Pro feature.
+- **Workaround:** use the warnings and reports to monitor spend; set conservative caps and act on the surfaced signals.
+- **Retirement condition:** hard-stop enforcement becomes available in the open-source build, or is documented as permanently Pro-only.
 
 ## `tokenpak setup` has rough edges — prefer `tokenpak home init`
 
@@ -56,10 +47,7 @@ names a **retirement condition** — the concrete signal that removes it.
 TokenPak earns trust by being honest about non-fit. It is **not** the right choice today when:
 
 - **There is nothing to measure or reuse** — a pure byte-pass path (no repeated context to pack, no eligible savings) won't show savings; TokenPak reports "unknown" rather than a fabricated percentage.
-- **You need universal spend enforcement across unsupported routes** — the OSS
-  Spend Guard can block configured, eligible requests before provider send. It
-  cannot fabricate a block when the guard is unavailable or a route is
-  ineligible, so verify coverage for the route you need to enforce.
+- **You need hard spend enforcement in the open-source build** — the OSS Spend Guard warns but does not block; if you require a hard stop, that is a Pro feature today.
 - **You need at-rest encryption of local stores** — the open-source build does not encrypt local cache or telemetry at rest, and plugins run in-process (it is not a sandbox).
 - **You want a managed cloud service** — TokenPak runs locally on your machine, loopback-only; there is no hosted offering in this release.
 

@@ -242,7 +242,7 @@ New options are optional — v0.1 configs work without modification.
 **A:** GitHub Issues: https://github.com/tokenpak/tokenpak/issues
 
 ### Q: Where are the full docs?
-**A:** See `/docs/` in the repo or [docs.tokenpak.ai](https://docs.tokenpak.ai/).
+**A:** See `/docs/` in the repo or https://tokenpak.dev (coming soon)
 
 ---
 

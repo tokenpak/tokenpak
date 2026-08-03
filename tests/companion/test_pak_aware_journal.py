@@ -6,7 +6,7 @@ Interaction Pak is opt-in via the Pro daemon. Phase 1 ships the OSS-side
 read+marker surface — these tests assert the marker round-trips through
 the existing :class:`JournalStore` schema additively (no breaking change),
 the listing helpers respect filtering, and the stub Pak conforms to the
-contract in :mod:`tokenpak.core.contracts.pak`.
+contract in :mod:`tokenpak.tip.pak`.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from tokenpak.companion.journal.pak_aware import (
     mark_promotion_candidate,
 )
 from tokenpak.companion.journal.store import JournalStore
-from tokenpak.core.contracts.pak import (
+from tokenpak.tip.pak import (
     Pak,
     PakAuthority,
     PakConfidence,

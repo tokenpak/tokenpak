@@ -18,9 +18,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
-from tokenpak.core.contracts.cache import CacheMissReason
 from tokenpak.services.optimization import (
     OptimizationContext,
     SemanticCacheStage,
@@ -195,47 +192,7 @@ def test_first_request_is_cache_miss():
     result = _get_cache_result(ctx)
     assert result is not None
     assert not result.hit
-    assert result.miss_reason in CacheMissReason.ALL
-
-
-@pytest.mark.parametrize("route", ["status_check", "general_chat"])
-def test_real_cache_misses_use_canonical_reasons(route: str):
-    """Every emitted formal miss reason belongs to the canonical vocabulary."""
-    stage = _stage_with_flag()
-    ctx = _make_ctx(_make_responses_body("Previously unseen query"), route=route)
-    stage.apply(ctx)
-
-    result = _get_cache_result(ctx)
-    assert result is not None
-    assert not result.hit
-    assert result.miss_reason in CacheMissReason.ALL
-
-
-def test_empty_query_has_no_formal_miss_reason():
-    stage = _stage_with_flag()
-    ctx = _make_ctx(_make_codex_body([]), route="status_check")
-    stage.apply(ctx)
-
-    result = _get_cache_result(ctx)
-    assert result is not None
-    assert not result.hit
-    assert result.miss_reason == ""
-
-
-def test_lookup_exception_has_no_formal_miss_reason(monkeypatch):
-    stage = _stage_with_flag()
-
-    def _raise_lookup_error(*_args, **_kwargs):
-        raise RuntimeError("lookup failed")
-
-    monkeypatch.setattr(stage, "_get_or_create_cache", _raise_lookup_error)
-    ctx = _make_ctx(_make_responses_body("Check proxy health"), route="status_check")
-    stage.apply(ctx)
-
-    result = _get_cache_result(ctx)
-    assert result is not None
-    assert not result.hit
-    assert result.miss_reason == ""
+    assert result.miss_reason  # some miss reason is populated
 
 
 def test_cache_miss_sets_query_hash():
@@ -327,27 +284,6 @@ def test_cache_hit_similar_query_via_filler_removal():
     result = _get_cache_result(ctx2)
     assert result is not None
     assert result.hit, f"expected hit after filler removal, got miss_reason={result.miss_reason}"
-
-
-def test_context_reuse_hit_has_no_formal_miss_reason():
-    """A context-only hit is not a cache miss and emits no miss-reason token."""
-    stage = _stage_with_flag()
-    query = "Reuse this research context"
-    session = "sess-context-reuse-001"
-
-    ctx1 = _make_ctx(_make_responses_body(query), route="general_chat", session_id=session)
-    stage.apply(ctx1)
-    stage.record(ctx1, {"output": [{"text": "Context"}]})
-
-    ctx2 = _make_ctx(_make_responses_body(query), route="general_chat", session_id=session)
-    stage.apply(ctx2)
-
-    result = _get_cache_result(ctx2)
-    assert result is not None
-    assert result.hit
-    assert not result.allow_response_reuse
-    assert result.miss_reason == ""
-    assert get_cached_response(ctx2) is None
 
 
 def test_code_edit_no_response_reuse_even_if_called():

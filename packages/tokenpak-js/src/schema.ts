@@ -1,8 +1,8 @@
 /**
- * schema.ts — Pak Schema Validation
+ * schema.ts — TokenPak Schema Validation
  *
  * Lightweight schema validation without external dependencies.
- * Validates Paks against the bundled JSON schema v1.0 rules.
+ * Validates packs against the TokenPak v1.0 schema rules.
  */
 
 import { WireObject } from './compiled';
@@ -33,7 +33,7 @@ const VALID_COMPACTION_MODES = new Set([
 const ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
 
 /**
- * Validate a wire object against the bundled Pak JSON schema v1.0.
+ * Validate a wire object against the TokenPak v1.0 schema.
  *
  * @example
  * const result = validate(compiled.toJSON());
