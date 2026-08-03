@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-03T03:17:03Z",
+  "generated_at": "2026-08-03T04:23:40Z",
   "package_version": "1.17.1",
   "symbols": [
     {
@@ -4405,11 +4405,283 @@
     },
     {
       "module": "tokenpak.core.contracts",
+      "name": "ALL_OPTIMIZATION_CAPABILITIES"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "AnchorBlockPosition"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "CacheMissReason"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "CachePolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "CacheScopeType"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "CacheTrace"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "CompressionPolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "CompressionTrace"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "ContextLevel"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "ContextPackage"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "ContextScope"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "CoverageConfidence"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "CoverageReport"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "CoverageState"
+    },
+    {
+      "module": "tokenpak.core.contracts",
       "name": "DataState"
     },
     {
       "module": "tokenpak.core.contracts",
+      "name": "FidelityPolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "MULTIPAK_CAPABILITIES"
+    },
+    {
+      "module": "tokenpak.core.contracts",
       "name": "Measured"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "OptimizationContract"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "OptimizationRouteClass"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "OptimizationTrace"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "OrderingHints"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "Pak"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakAnchor"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakAuthority"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakConfidence"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakPrivacy"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakPrivacyClass"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakRelationships"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakRetention"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakRetentionPolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakScope"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakSource"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakSourceType"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakStatus"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PakSubtype"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "PolicyDecision"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "ProtectedSpanType"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "Recommendation"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "SavingsAttribution"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "SavingsSource"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "StageTrace"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CACHE_PROMPT_KEY_PRESERVED"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CACHE_PROVIDER_AWARE"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CACHE_PROXY_MANAGED"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CACHE_SEMANTIC_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CACHE_TTL_ORDERING"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CAPSULES_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_COMPRESSION_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CONTEXT_COVERAGE"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CONTEXT_HANDOFF"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CONTEXT_PACKAGE"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CONTEXT_POLICY"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_CONTEXT_RESUME"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_FIDELITY_POLICY_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_INTENT_CLASSIFICATION_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_INTENT_SUGGESTION_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_PAK_CAPTURE"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_PAK_HYDRATE"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_PAK_INDEX"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_PAK_PROMOTE"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_PAK_RECALL"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_ROUTE_CLASS_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_TELEMETRY_ATTRIBUTION_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TIP_TOOL_SCHEMA_STABILITY_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "TelemetryPolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "all_subtypes"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "context_level_label"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "default_policy_for_route"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "default_retention_for"
     },
     {
       "module": "tokenpak.core.contracts",
@@ -4425,7 +4697,183 @@
     },
     {
       "module": "tokenpak.core.contracts",
+      "name": "parse_context_level"
+    },
+    {
+      "module": "tokenpak.core.contracts",
       "name": "unavailable"
+    },
+    {
+      "module": "tokenpak.core.contracts.cache",
+      "name": "CacheMissReason"
+    },
+    {
+      "module": "tokenpak.core.contracts.cache",
+      "name": "CachePolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts.cache",
+      "name": "CacheScopeType"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "ALL_OPTIMIZATION_CAPABILITIES"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "MULTIPAK_CAPABILITIES"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CACHE_PROMPT_KEY_PRESERVED"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CACHE_PROVIDER_AWARE"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CACHE_PROXY_MANAGED"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CACHE_SEMANTIC_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CACHE_TTL_ORDERING"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CAPSULES_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_COMPRESSION_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CONTEXT_COVERAGE"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CONTEXT_HANDOFF"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CONTEXT_PACKAGE"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CONTEXT_POLICY"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_CONTEXT_RESUME"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_FIDELITY_POLICY_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_INTENT_CLASSIFICATION_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_INTENT_SUGGESTION_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_PAK_CAPTURE"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_PAK_HYDRATE"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_PAK_INDEX"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_PAK_PROMOTE"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_PAK_RECALL"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_ROUTE_CLASS_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_TELEMETRY_ATTRIBUTION_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts.capabilities",
+      "name": "TIP_TOOL_SCHEMA_STABILITY_V1"
+    },
+    {
+      "module": "tokenpak.core.contracts.compression",
+      "name": "CompressionPolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts.compression",
+      "name": "ProtectedSpanType"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "AnchorBlockPosition"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "ContextLevel"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "ContextPackage"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "ContextScope"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "CoverageConfidence"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "CoverageReport"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "CoverageState"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "OrderingHints"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "PolicyDecision"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "context_level_label"
+    },
+    {
+      "module": "tokenpak.core.contracts.context",
+      "name": "parse_context_level"
+    },
+    {
+      "module": "tokenpak.core.contracts.fidelity",
+      "name": "FidelityPolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts.fidelity",
+      "name": "default_policy_for_route"
     },
     {
       "module": "tokenpak.core.contracts.measured",
@@ -4450,6 +4898,110 @@
     {
       "module": "tokenpak.core.contracts.measured",
       "name": "unavailable"
+    },
+    {
+      "module": "tokenpak.core.contracts.optimization",
+      "name": "OptimizationContract"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "Pak"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakAnchor"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakAuthority"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakConfidence"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakPrivacy"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakPrivacyClass"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakRelationships"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakRetention"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakRetentionPolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakScope"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakSource"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakSourceType"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakStatus"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "PakSubtype"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "all_subtypes"
+    },
+    {
+      "module": "tokenpak.core.contracts.pak",
+      "name": "default_retention_for"
+    },
+    {
+      "module": "tokenpak.core.contracts.route",
+      "name": "OptimizationRouteClass"
+    },
+    {
+      "module": "tokenpak.core.contracts.telemetry",
+      "name": "SavingsSource"
+    },
+    {
+      "module": "tokenpak.core.contracts.telemetry",
+      "name": "TelemetryPolicy"
+    },
+    {
+      "module": "tokenpak.core.contracts.trace",
+      "name": "CacheTrace"
+    },
+    {
+      "module": "tokenpak.core.contracts.trace",
+      "name": "CompressionTrace"
+    },
+    {
+      "module": "tokenpak.core.contracts.trace",
+      "name": "OptimizationTrace"
+    },
+    {
+      "module": "tokenpak.core.contracts.trace",
+      "name": "Recommendation"
+    },
+    {
+      "module": "tokenpak.core.contracts.trace",
+      "name": "SavingsAttribution"
+    },
+    {
+      "module": "tokenpak.core.contracts.trace",
+      "name": "StageTrace"
     },
     {
       "module": "tokenpak.core.cooldown",
