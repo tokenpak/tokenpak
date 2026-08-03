@@ -1202,7 +1202,7 @@ def run(
     )
 
     # --- Companion (prompt-side) savings ---
-    # Tokens avoided before the wire via prune_context / load_capsule / etc.
+    # Tokens avoided before the wire via prune_context / load_pak / etc.
     # Lives in the companion's journal.db — separate plane from the proxy.
     companion_tokens_avoided = 0
     companion_usd = 0.0

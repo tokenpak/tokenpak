@@ -733,7 +733,7 @@ def _handle_compress(handler: Any, body: dict[str, Any]) -> None:
         head = text[:head_len].rsplit(" ", 1)[0] if " " in text[:head_len] else text[:head_len]
         tail = text[-tail_len:].split(" ", 1)[-1] if " " in text[-tail_len:] else text[-tail_len:]
         elided = original_chars - len(head) - len(tail)
-        pruned = f"{head}\n\n[... {elided:,} chars elided ...]\n\n{tail}"
+        pruned = f"{head}\n\n[... {elided:,} chars elided by TokenPak ...]\n\n{tail}"
 
     pruned_tokens_est = max(1, len(pruned) // 4)
     tokens_avoided = max(0, original_tokens_est - pruned_tokens_est)
@@ -1033,25 +1033,29 @@ def _handle_tokens_estimate(handler: Any, body: dict[str, Any]) -> None:
         _send_error(handler, 400, "missing_text")
         return
     chars = len(text)
+    # A count produced by the chars/4 fallback is indistinguishable from a
+    # real tokenizer count unless the response says which one ran.
+    estimator = "chars-per-4-heuristic"
     try:
-        from tokenpak.telemetry.tokens import count_tokens
+        from tokenpak.telemetry.tokens import count_tokens, tokenizer_name
 
         CHUNK = 100_000
         if chars <= CHUNK:
             tokens = count_tokens(text)
         else:
             tokens = sum(count_tokens(text[i : i + CHUNK]) for i in range(0, chars, CHUNK))
+        estimator = tokenizer_name() or estimator
     except Exception:
         tokens = max(1, chars // 4)
-    _send_json(
-        handler,
-        200,
-        {
-            "chars": chars,
-            "tokens": int(tokens),
-            "chars_per_token": round(chars / max(1, tokens), 2),
-        },
-    )
+    payload = {
+        "chars": chars,
+        "tokens": int(tokens),
+        "chars_per_token": round(chars / max(1, tokens), 2),
+        "estimator": estimator,
+    }
+    if estimator == "chars-per-4-heuristic":
+        payload["note"] = "approximate — install tokenpak[tokens] for exact counts"
+    _send_json(handler, 200, payload)
 
 
 # ---------------------------------------------------------------------------

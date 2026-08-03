@@ -196,7 +196,8 @@ def test_write_system_prompt_mentions_all_tools(tmp_path):
     for tool in [
         "estimate_tokens",
         "check_budget",
-        "load_capsule",
+        "load_pak",
+        "load_capsule",  # documented legacy alias
         "prune_context",
         "journal_read",
         "journal_write",

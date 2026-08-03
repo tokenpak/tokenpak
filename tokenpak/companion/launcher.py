@@ -146,20 +146,21 @@ def _launcher_mode_banner(
 
 # System prompt fragment injected via --append-system-prompt-file
 _SYSTEM_PROMPT = """\
-## tokenpak companion
+## TokenPak companion
 
-A tokenpak companion is active in this session. You have these MCP tools:
+A TokenPak companion is active in this session. You have these MCP tools:
 
 - **estimate_tokens** — Estimate token count for text or a file. Call before including large content.
-- **check_budget** — Query remaining cost budget for this session and today.
-- **load_capsule** — Load a memory capsule from a prior session (omit session_id to list available).
-- **prune_context** — Compress verbose tool output to reduce token count.
-- **journal_read** — Read session journal entries (omit session_id to list sessions).
-- **journal_write** — Save an important decision, milestone, or note for future sessions.
-- **session_info** — Get companion status and configuration.
+- **check_budget** — Query the remaining TokenPak cost budget for this session and today.
+- **load_pak** — Load a TokenPak Pak (compressed context bundle) from a prior session (omit session_id to list available). Legacy alias: load_capsule.
+- **prune_context** — Compress verbose tool output with TokenPak to reduce token count.
+- **journal_read** — Read TokenPak session-journal entries (omit session_id to list sessions).
+- **journal_write** — Save an important decision, milestone, or note to the TokenPak journal for future sessions.
+- **session_info** — Get TokenPak companion status and configuration.
 
-The companion automatically estimates cost and journals each prompt via hooks.
-You only need to call tools explicitly when optimizing context or managing budget.
+The TokenPak companion automatically estimates cost and journals each prompt via
+hooks. Compressed context it injects is wrapped in `[PAK ...]` envelopes. You
+only need to call tools explicitly when optimizing context or managing budget.
 """
 
 

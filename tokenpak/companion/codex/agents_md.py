@@ -28,12 +28,12 @@ cost, context, and session continuity.
 ## Available MCP tools
 
 - **estimate_tokens** — Check token count before including large content.
-- **check_budget** — Query remaining cost budget for this session and today.
-- **load_capsule** — Load compressed context from a prior session.
-- **prune_context** — Compress verbose tool output to reduce token usage.
-- **journal_read** — Read notes from past sessions.
-- **journal_write** — Save important decisions or milestones.
-- **session_info** — Get companion status and configuration.
+- **check_budget** — Query the remaining TokenPak cost budget for this session and today.
+- **load_pak** — Load a TokenPak Pak (compressed context from a prior session). Legacy alias: load_capsule.
+- **prune_context** — Compress verbose tool output with TokenPak to reduce token usage.
+- **journal_read** — Read notes from past TokenPak sessions.
+- **journal_write** — Save important decisions or milestones to the TokenPak journal.
+- **session_info** — Get TokenPak companion status and configuration.
 
 ## When to use tools
 
@@ -41,8 +41,8 @@ cost, context, and session continuity.
   to decide if the cost is worth it.
 - **Before multi-step tasks**: call `check_budget` to see if there is
   headroom for the full task.
-- **When resuming prior work**: call `load_capsule` to recall context from
-  the previous session rather than re-reading everything.
+- **When resuming prior work**: call `load_pak` to recall the previous
+  session's Pak rather than re-reading everything.
 - **After verbose tool output**: consider calling `prune_context` if the
   output exceeds ~2000 tokens and you only need the summary.
 - **When making architectural decisions**: call `journal_write` to record

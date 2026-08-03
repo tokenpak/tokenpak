@@ -198,8 +198,8 @@ class TestWrapCapsule:
         original = "original content"
         compressed = "short"
         result = _wrap_capsule(original, compressed)
-        assert result.startswith("[CAPSULE id=")
-        assert result.endswith("[/CAPSULE]")
+        assert result.startswith("[PAK id=")
+        assert result.endswith("[/PAK]")
 
     def test_envelope_contains_compressed_content(self):
         result = _wrap_capsule("original", "compressed text")
@@ -349,7 +349,7 @@ class TestCapsuleBuilderEnabled:
         new_body, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 1
         data = json.loads(new_body)
-        assert "[CAPSULE" in data["messages"][0]["content"]
+        assert "[PAK" in data["messages"][0]["content"]
         # Hot window messages untouched
         assert data["messages"][1]["content"] == "ok"
         assert data["messages"][2]["content"] == "hi"
@@ -413,7 +413,7 @@ class TestCapsuleBuilderEnabled:
         new_body, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 1
         data = json.loads(new_body)
-        assert "[CAPSULE" in data["messages"][0]["content"][0]["text"]
+        assert "[PAK" in data["messages"][0]["content"][0]["text"]
         # Non-text parts untouched
         assert data["messages"][0]["content"][1]["url"] == "http://example.com/img.png"
 
@@ -495,7 +495,7 @@ class TestCapsuleBuilderEnabled:
         assert stats["blocks_capsulized"] == 1
         data = json.loads(new_body)
         content = data["messages"][0]["content"]
-        assert "[CAPSULE" in content
+        assert "[PAK" in content
 
     # --- No modification when nothing eligible ---
 
@@ -533,8 +533,8 @@ class TestMaybeCapsulise:
         text = "word " * 20
         new_text, chars_in, chars_out, capsulized = builder._maybe_capsulise(text)
         assert capsulized == 1
-        assert "[CAPSULE" in new_text
-        assert "[/CAPSULE]" in new_text
+        assert "[PAK" in new_text
+        assert "[/PAK]" in new_text
         assert chars_in == len(text)
 
     def test_exact_min_not_capsulised(self):
@@ -568,9 +568,9 @@ class TestCapsuleBuilderIntegration:
         content = data["messages"][0]["content"]
 
         # Header line
-        assert content.startswith("[CAPSULE id=")
+        assert content.startswith("[PAK id=")
         # Footer
-        assert content.strip().endswith("[/CAPSULE]")
+        assert content.strip().endswith("[/PAK]")
 
     def test_multiple_eligible_messages_all_wrapped(self):
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=1)
@@ -584,9 +584,9 @@ class TestCapsuleBuilderIntegration:
         new_body, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 2
         data = json.loads(new_body)
-        assert "[CAPSULE" in data["messages"][0]["content"]
-        assert "[CAPSULE" in data["messages"][1]["content"]
-        assert "[CAPSULE" not in data["messages"][2]["content"]
+        assert "[PAK" in data["messages"][0]["content"]
+        assert "[PAK" in data["messages"][1]["content"]
+        assert "[PAK" not in data["messages"][2]["content"]
 
     def test_extra_fields_preserved_in_payload(self):
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=0)
