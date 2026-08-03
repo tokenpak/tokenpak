@@ -94,7 +94,7 @@ def write_audit(
     """Insert one audit row. Best-effort — never raises into caller."""
     try:
         path = _db_path(audit_db_path)
-        conn = sqlite3.connect(str(path), timeout=2.0)
+        conn = sqlite3.connect(str(path), timeout=5.0)
         try:
             _ensure_schema(conn)
             tip_json = ""
@@ -146,7 +146,7 @@ def query_recent(
 ) -> list[dict[str, Any]]:
     """Read the most recent audit rows. Used by tests and `tokenpak doctor`."""
     path = _db_path(audit_db_path)
-    conn = sqlite3.connect(str(path), timeout=2.0)
+    conn = sqlite3.connect(str(path), timeout=5.0)
     conn.row_factory = sqlite3.Row
     try:
         _ensure_schema(conn)

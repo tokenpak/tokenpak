@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "tip-fidelity-policy.v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/tip-fidelity-policy-v1.json",
   "title": "TIP Fidelity Policy",
   "description": "Content preservation constraint for TIP optimization stages.",
   "type": "string",

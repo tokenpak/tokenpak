@@ -526,7 +526,9 @@ def _write_settings(config: CompanionConfig) -> str:
     if hook_sh.is_file():
         hook_cmd = f"bash {hook_sh}"
     elif hook_py.is_file():
-        hook_cmd = f"python3 {hook_py}"
+        # -P keeps a sibling tokenpak/ directory in the user's cwd from
+        # shadowing the installed package when the bash hook is unavailable.
+        hook_cmd = f"python3 -P {hook_py}"
     else:
         hook_cmd = None
 

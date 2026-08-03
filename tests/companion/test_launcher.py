@@ -126,6 +126,26 @@ def test_write_settings_with_hooks_enabled(tmp_path):
     assert "bash" in hook_cmd
 
 
+def test_write_settings_python_fallback_hook_isolated_mode(tmp_path):
+    """The python3 fallback hook spawn carries -P so a sibling tokenpak/
+    directory in the user's cwd cannot shadow the installed package."""
+    fake_pkg = tmp_path / "pkg"
+    (fake_pkg / "hooks").mkdir(parents=True)
+    (fake_pkg / "hooks" / "pre_send.py").write_text("# fallback hook\n")
+    cfg = CompanionConfig(journal_dir=tmp_path / "journal", hooks_enabled=True)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    with patch.object(launcher, "__file__", str(fake_pkg / "launcher.py")):
+        with patch.object(
+            type(cfg), "run_dir", new_callable=lambda: property(lambda self: run_dir)
+        ):
+            path = launcher._write_settings(cfg)
+    settings = json.loads(Path(path).read_text())
+    hook_cmd = settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+    assert hook_cmd.startswith("python3 -P ")
+    assert "pre_send.py" in hook_cmd
+
+
 def test_write_settings_without_hooks(tmp_path):
     """settings.json has no hooks block when hooks_enabled=False."""
     cfg = CompanionConfig(journal_dir=tmp_path / "journal", hooks_enabled=False)

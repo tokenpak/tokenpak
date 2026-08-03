@@ -147,7 +147,11 @@ You can also configure a client manually:
  selected/default model.
 
 === "Any HTTP client"
- Replace your provider base URL with `http://localhost:8766`.
+ Replace your provider base URL with `http://localhost:8766`, keeping any path
+ suffix your client expects: OpenAI-compatible clients append `/chat/completions`
+ to the base URL, so they need `http://localhost:8766/v1`; Anthropic-native
+ clients append `/v1/messages` themselves, so they use `http://localhost:8766`
+ with no `/v1`.
  TokenPak auto-detects the provider from the `Authorization` header and routes accordingly.
 
 Client-supplied credentials pass through unchanged. TokenPak never stores them.

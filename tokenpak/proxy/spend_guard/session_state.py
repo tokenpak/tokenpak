@@ -69,7 +69,7 @@ def session_cumulative_cost(
 
     cutoff_iso = _dt.datetime.fromtimestamp(cutoff_ts).isoformat()
     try:
-        conn = sqlite3.connect(str(p), timeout=2.0)
+        conn = sqlite3.connect(str(p), timeout=5.0)
         try:
             row = conn.execute(
                 """SELECT COALESCE(SUM(estimated_cost), 0.0)
@@ -109,7 +109,7 @@ def session_cumulative_cost_from_audit(
         return 0.0
     cutoff_ts = time.time() - window_seconds
     try:
-        conn = sqlite3.connect(str(p), timeout=2.0)
+        conn = sqlite3.connect(str(p), timeout=5.0)
         try:
             row = conn.execute(
                 """SELECT COALESCE(SUM(projected_cost_usd), 0.0)

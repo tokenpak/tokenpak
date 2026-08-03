@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "tip-cache-policy.v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/tip-cache-policy-v1.json",
   "title": "TIP Cache Policy",
   "description": "Per-request cache behavior contract for the TIP optimization pipeline.",
   "type": "object",

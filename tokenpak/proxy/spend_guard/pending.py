@@ -72,14 +72,22 @@ def _db_path(audit_db_path: str) -> Path:
     return p
 
 
+# How long a connection queues on a held lock before raising 'database is
+# locked'. Sized for hosts under heavy IO pressure (slow disks, swap churn),
+# where commit fsyncs can stall well past the sqlite default — the guard
+# should wait out a stall rather than fail a request over it. The client is
+# holding an open request, so this stays bounded rather than infinite.
+_BUSY_WAIT_SEC = 20.0
+
+
 def _connect(path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(str(path), timeout=5.0)
+    conn = sqlite3.connect(str(path), timeout=_BUSY_WAIT_SEC)
     conn.row_factory = sqlite3.Row
-    # Wait out short lock contention instead of raising 'database is locked'
+    # Wait out lock contention instead of raising 'database is locked'
     # (the sqlite3 ``timeout`` arg covers most cases; the PRAGMA makes the
     # behavior explicit and applies to statements issued via executescript).
     try:
-        conn.execute("PRAGMA busy_timeout = 5000")
+        conn.execute(f"PRAGMA busy_timeout = {int(_BUSY_WAIT_SEC * 1000)}")
     except sqlite3.Error:
         pass
     # The db holds request metadata — keep it owner-only (0600), like

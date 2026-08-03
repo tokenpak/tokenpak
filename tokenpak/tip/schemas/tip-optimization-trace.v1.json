@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "tip-optimization-trace.v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/tip-optimization-trace-v1.json",
   "title": "TIP Optimization Trace",
   "description": "Per-request optimization trace record for telemetry and recommendations.",
   "type": "object",

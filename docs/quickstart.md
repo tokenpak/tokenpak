@@ -143,10 +143,11 @@ receipt.
 ```python
 from openai import OpenAI
 
-# Change base_url — everything else stays the same
+# Change base_url — everything else stays the same.
+# The /v1 suffix is required: the SDK appends /chat/completions to it.
 client = OpenAI(
  api_key="your-openai-key",
- base_url="http://localhost:8766"
+ base_url="http://localhost:8766/v1"
 )
 
 response = client.chat.completions.create(
@@ -160,10 +161,10 @@ response = client.chat.completions.create(
 ```python
 from langchain_openai import ChatOpenAI
 
-# Point LangChain at the proxy
+# Point LangChain at the proxy (keep the /v1 suffix)
 llm = ChatOpenAI(
  model="gpt-4",
- openai_api_base="http://localhost:8766",
+ openai_api_base="http://localhost:8766/v1",
  openai_api_key="your-key"
 )
 
@@ -172,7 +173,7 @@ response = llm.invoke("Your prompt here")
 
 ### "I use LiteLLM / other frameworks"
 
-Most frameworks support a `base_url` or `api_base` parameter. Set it to `http://localhost:8766`.
+Most frameworks support a `base_url` or `api_base` parameter. For OpenAI-compatible clients (LiteLLM, and most frameworks that append `/chat/completions` themselves), set it to `http://localhost:8766/v1`. For Anthropic-native clients (which append `/v1/messages` themselves), set it to `http://localhost:8766` — no `/v1`.
 
 ---
 
@@ -186,6 +187,8 @@ tokenpak start # start it if not
 ```
 
 Check that your client is pointing at `http://localhost:8766` (not `https://`).
+
+If your first request returns `404 Not Found`, the base URL is missing its `/v1` suffix: OpenAI-compatible clients must use `http://localhost:8766/v1` (Anthropic-native clients use `http://localhost:8766` without `/v1`).
 
 ### "My API key isn't being forwarded"
 

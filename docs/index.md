@@ -45,7 +45,7 @@ pip install tokenpak
 tokenpak serve --port 8766
 ```
 
-Then point your LLM client at `http://localhost:8766`. That's it. See [Getting Started](getting-started.md) for the full walkthrough.
+Then point your LLM client at `http://localhost:8766` (OpenAI-compatible clients: `http://localhost:8766/v1`). That's it. See [Getting Started](getting-started.md) for the full walkthrough.
 
 ---
 

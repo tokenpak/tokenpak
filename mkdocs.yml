@@ -80,6 +80,7 @@ nav:
   - CLI Reference: cli-reference.md
   - Python SDK Reference: API_REFERENCE.md
   - REST API Reference: REST_API.md
+  - TIP Schemas: tip-schemas.md
   - Troubleshooting: troubleshooting.md
   - FAQ: faq.md
   - Deep Dives:
