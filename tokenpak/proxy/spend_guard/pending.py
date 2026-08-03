@@ -227,6 +227,8 @@ class PendingStore:
         ttl_seconds: int = 600,
     ) -> PendingRequest:
         """Insert a new pending request and return it."""
+        if not session_id:
+            raise ValueError("pending requests require a non-empty session id")
         pending_id = "tpg_" + secrets.token_hex(8)
         now = time.time()
         expires_at = now + ttl_seconds
@@ -288,6 +290,8 @@ class PendingStore:
     # -- lookup ------------------------------------------------------------
     def get_by_session(self, session_id: str) -> Optional[PendingRequest]:
         """Most recent pending request for the given session, or None."""
+        if not session_id:
+            return None
         conn = _connect(self.path)
         try:
             _ensure_schema_once(conn, self.path)
@@ -314,21 +318,27 @@ class PendingStore:
         return _row_to_pending(row) if row else None
 
     def recent_block_by_hash(
-        self, request_hash: str, within_seconds: float = 30.0
+        self,
+        request_hash: str,
+        within_seconds: float = 30.0,
+        *,
+        session_id: str,
     ) -> Optional[PendingRequest]:
-        """Anti-loop: was this exact request_hash blocked recently?
+        """Anti-loop: was this request blocked recently in this session?
 
         Returns the most-recent matching row regardless of status (so we can
         return the same block response without re-running the estimator).
         """
+        if not session_id:
+            return None
         conn = _connect(self.path)
         try:
             _ensure_schema_once(conn, self.path)
             row = conn.execute(
                 """SELECT * FROM pending_requests
-                   WHERE request_hash = ? AND created_at > ?
+                   WHERE request_hash = ? AND session_id = ? AND created_at > ?
                    ORDER BY created_at DESC LIMIT 1""",
-                (request_hash, time.time() - within_seconds),
+                (request_hash, session_id, time.time() - within_seconds),
             ).fetchone()
         finally:
             conn.close()

@@ -160,9 +160,9 @@ def parse_tip_header(text: str) -> tuple[Optional[TIPDirective], str]:
 def parse_and_strip_tip_header(body: bytes) -> tuple[Optional[TIPDirective], bytes]:
     """Strip a leading ``[TIP: ...]`` from the FIRST user-text segment.
 
-    Operates on the parsed JSON shape for Anthropic ``/v1/messages``
-    bodies. For other shapes, attempts a leading-prefix strip on the
-    decoded body and re-encodes.
+    Operates on parsed Anthropic ``/v1/messages`` and OpenAI Responses
+    ``/v1/responses`` request shapes. For other shapes, attempts a
+    leading-prefix strip on the decoded body and re-encodes.
 
     Returns ``(directive, modified_body)``. ``modified_body is body``
     when no directive is present (zero-cost path).
@@ -178,9 +178,12 @@ def parse_and_strip_tip_header(body: bytes) -> tuple[Optional[TIPDirective], byt
         d, rem = parse_tip_header(body.decode("utf-8", errors="replace"))
         return d, rem.encode("utf-8") if d else body
 
+    if not isinstance(body_json, dict):
+        return None, body
+
     msgs = body_json.get("messages") or []
     if not isinstance(msgs, list):
-        return None, body
+        msgs = []
 
     # Find the first user message and mutate its content.
     for msg in msgs:
@@ -203,6 +206,42 @@ def parse_and_strip_tip_header(body: bytes) -> tuple[Optional[TIPDirective], byt
                     return d, json.dumps(body_json).encode("utf-8")
         # Only inspect the first user message.
         break
+
+    # OpenAI Responses API: inspect and strip the first user-text segment.
+    # Full-history requests may contain reasoning and tool items; those are
+    # intentionally ignored and preserved byte-for-byte unless a TIP header
+    # is actually found in a user segment.
+    inputs = body_json.get("input")
+    if isinstance(inputs, str):
+        d, rem = parse_tip_header(inputs)
+        if d is None:
+            return None, body
+        body_json["input"] = rem
+        return d, json.dumps(body_json).encode("utf-8")
+    if isinstance(inputs, list):
+        for item in inputs:
+            if not isinstance(item, dict) or item.get("role") != "user":
+                continue
+            content = item.get("content")
+            if isinstance(content, str):
+                d, rem = parse_tip_header(content)
+                if d is None:
+                    return None, body
+                item["content"] = rem
+                return d, json.dumps(body_json).encode("utf-8")
+            if isinstance(content, list):
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") not in ("input_text", "text"):
+                        continue
+                    d, rem = parse_tip_header(str(block.get("text") or ""))
+                    if d is None:
+                        return None, body
+                    block["text"] = rem
+                    return d, json.dumps(body_json).encode("utf-8")
+            # Only inspect the first Responses user message.
+            break
 
     return None, body
 

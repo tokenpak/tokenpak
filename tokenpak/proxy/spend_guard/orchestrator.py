@@ -19,6 +19,7 @@ __all__ = (
     "PendingStore",
     "SpendGuardConfig",
     "build_block",
+    "build_block_session_identity_unavailable",
     "build_block_store_unavailable",
     "build_cancelled",
     "build_estimate",
@@ -40,6 +41,9 @@ from typing import Any, Optional
 
 from .block_response import (
     block as build_block,
+)
+from .block_response import (
+    block_session_identity_unavailable as build_block_session_identity_unavailable,
 )
 from .block_response import (
     block_store_unavailable as build_block_store_unavailable,
@@ -224,7 +228,11 @@ def evaluate(
     # ── Anti-loop: if the same request_hash was blocked very recently,
     #    return the cached block without re-running the estimator.
     h = hash_request(forward_body, model)
-    recent = store.recent_block_by_hash(h, within_seconds=30.0)
+    recent = store.recent_block_by_hash(
+        h,
+        within_seconds=30.0,
+        session_id=session_id,
+    )
     if recent is not None and recent.status in ("pending", "expired", "discarded"):
         _audit(
             cfg,
@@ -473,6 +481,22 @@ def evaluate(
 
     # ── Block → store pending, return block JSON
     _cancel_admission()  # blocked requests never reach the provider
+    if not session_id:
+        _audit(
+            cfg,
+            "block",
+            session_id,
+            decision_str="block_session_identity_unavailable",
+            projected_cost=est.projected_cost_usd,
+            tip=tip_directive,
+        )
+        return GuardOutcome(
+            kind="block",
+            response_body=build_block_session_identity_unavailable(decision),
+            http_status=402,
+            decision=decision,
+            audit_event="block",
+        )
     try:
         pending = store.store(
             session_id=session_id,
