@@ -20,8 +20,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
-from tokenpak.core.contracts.telemetry import SavingsSource
-from tokenpak.core.contracts.trace import SavingsAttribution
+from tokenpak.tip.telemetry_contract import SavingsSource
+from tokenpak.tip.trace_contract import SavingsAttribution
 
 # ---------------------------------------------------------------------------
 # OpenAI usage parsing

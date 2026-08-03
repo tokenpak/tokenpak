@@ -52,7 +52,7 @@ class QdrantAdapter(VectorDBAdapter):
             client: QdrantClient instance
             collection_name: Qdrant collection name
             content_field: Payload field name for document text
-            default_block_type: Default Pak block type
+            default_block_type: Default TokenPak block type
             default_limit: Default result limit
             score_metric: "cosine", "dot", or "euclid"
                           Affects score → quality mapping
@@ -82,7 +82,7 @@ class QdrantAdapter(VectorDBAdapter):
         Args:
             query: Query embedding (list of floats)
             limit: Max results
-            block_type: Pak block type override
+            block_type: TokenPak block type override
             score_threshold: Minimum score threshold
             query_filter: Qdrant Filter object or dict
             with_payload: Whether to fetch payload (must be True for content)

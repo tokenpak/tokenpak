@@ -52,7 +52,7 @@ class PineconeAdapter(VectorDBAdapter):
             index: Pinecone Index object (pinecone.Index or pinecone.data.Index)
             namespace: Pinecone namespace to query (empty = default namespace)
             content_field: Metadata field containing the document text
-            default_block_type: Default Pak block type
+            default_block_type: Default TokenPak block type
             default_limit: Default top_k
         """
         super().__init__(
@@ -79,7 +79,7 @@ class PineconeAdapter(VectorDBAdapter):
         Args:
             query: Query embedding (list of floats)
             limit: top_k (number of results)
-            block_type: Pak block type override
+            block_type: TokenPak block type override
             namespace: Pinecone namespace override
             filter: Pinecone metadata filter dict
             include_metadata: Whether to fetch metadata (must be True for content)
