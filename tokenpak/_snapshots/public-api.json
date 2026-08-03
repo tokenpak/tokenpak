@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-03T03:17:03Z",
-  "package_version": "1.17.1",
+  "generated_at": "2026-08-03T16:10:56Z",
+  "package_version": "1.18.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -1225,6 +1225,10 @@
     },
     {
       "module": "tokenpak.cli.commands.pak",
+      "name": "cmd_pak_create"
+    },
+    {
+      "module": "tokenpak.cli.commands.pak",
       "name": "cmd_pak_export"
     },
     {
@@ -1237,7 +1241,15 @@
     },
     {
       "module": "tokenpak.cli.commands.pak",
+      "name": "cmd_pak_migrate"
+    },
+    {
+      "module": "tokenpak.cli.commands.pak",
       "name": "cmd_pak_status"
+    },
+    {
+      "module": "tokenpak.cli.commands.pak",
+      "name": "upgrade_pak_payload"
     },
     {
       "module": "tokenpak.cli.commands.pakplan",
@@ -1930,6 +1942,18 @@
     {
       "module": "tokenpak.companion.capsules.builder",
       "name": "DEFAULT_MIN_BLOCK_CHARS"
+    },
+    {
+      "module": "tokenpak.companion.capsules.builder",
+      "name": "LEGACY_MARKER_OPEN_PREFIX"
+    },
+    {
+      "module": "tokenpak.companion.capsules.builder",
+      "name": "PAK_MARKER_CLOSE"
+    },
+    {
+      "module": "tokenpak.companion.capsules.builder",
+      "name": "PAK_MARKER_OPEN_PREFIX"
     },
     {
       "module": "tokenpak.companion.capsules.builder",
@@ -7950,10 +7974,6 @@
     {
       "module": "tokenpak.proxy",
       "name": "server"
-    },
-    {
-      "module": "tokenpak.proxy",
-      "name": "server_async"
     },
     {
       "module": "tokenpak.proxy",
@@ -17034,6 +17054,10 @@
     {
       "module": "tokenpak.tip.pak",
       "name": "default_retention_for"
+    },
+    {
+      "module": "tokenpak.tip.pak",
+      "name": "is_legacy_subtype"
     },
     {
       "module": "tokenpak.tip.route_contract",

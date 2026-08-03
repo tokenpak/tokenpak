@@ -30,6 +30,40 @@ This project follows [Semantic Versioning](https://semver.org/).
   (checksum verification included), and `pak export` all keep working on them unchanged;
   `inspect` and `import` print a hint pointing at `pak migrate`.
 
+## [1.18.0] — 2026-08-03
+
+First release under the consolidated release model: the public repository,
+website, and documentation now update at minor and major releases only, and
+each release summarizes every change since the previous public version.
+
+### Added
+
+- **Recipe library.** An OSS recipe collection ships under `recipes/` with its
+  runtime support, giving common optimization setups ready-made starting points.
+- **Public optimization contracts.** The `tokenpak.core.contracts` surface
+  grows a full set of optimization, cache, compression, fidelity, and Pak data
+  contracts, with the TIP surface aligned to them.
+- **Vector-database companion package** (`packages/tokenpak-vectordb`) plus
+  telemetry and SDK surface extensions.
+- **Pak wire markers.** Compression output and the tool surface are branded with
+  `[PAK …]` wire markers (legacy markers remain readable), and the token
+  estimator is disclosed in companion output.
+- **`pak create` emits the canonical Pak schema, and `pak migrate` upgrades
+  legacy payloads** to it.
+- **Vault-injection master switch**, default OFF: enabling context injection is
+  an explicit decision (`TOKENPAK_VAULT_INJECTION`), never a surprise.
+
+### Changed
+
+- The quickstart takes a protocol-first shape, and configuration surfaces align
+  with the shipped documentation state.
+
+### Removed
+
+- **`tokenpak.proxy.server_async`** leaves the declared public surface: the
+  async server was experimental and the package no longer implies it is ready.
+  The supported server path is unchanged.
+
 ## [1.17.1] — 2026-08-03
 
 This patch release fixes proxy, configuration, and launcher paths and makes the
