@@ -101,7 +101,11 @@ class TestAntiLoop:
         body = b'{"model":"opus","messages":[{"role":"user","content":"X"}]}'
         h = hash_request(body, "claude-opus-4-7")
         p = _store_one(store, body=body)
-        recent = store.recent_block_by_hash(h, within_seconds=10.0)
+        recent = store.recent_block_by_hash(
+            h,
+            within_seconds=10.0,
+            session_id="sess-A",
+        )
         assert recent is not None
         assert recent.pending_id == p.pending_id
 
@@ -110,7 +114,11 @@ class TestAntiLoop:
         h = hash_request(body, "claude-opus-4-7")
         _store_one(store, body=body)
         # Window of 0 seconds — should miss.
-        recent = store.recent_block_by_hash(h, within_seconds=0.0)
+        recent = store.recent_block_by_hash(
+            h,
+            within_seconds=0.0,
+            session_id="sess-A",
+        )
         # NB: the row's created_at == now, so created_at > now-0 is False.
         assert recent is None
 
