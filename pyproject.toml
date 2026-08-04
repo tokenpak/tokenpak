@@ -154,7 +154,7 @@ dev = [
     "black>=24.0.0",
     # Formatter output is a release gate; pin it so a tool release cannot turn
     # an unchanged checkout red or silently rewrite the baseline.
-    "ruff==0.16.0",
+    "ruff==0.16.1",
     # Artifact metadata validation is a release gate. Keep Twine in the
     # candidate lock so validation lanes can provision it with hashes and run
     # `twine check` offline against the exact wheel and sdist under review.
