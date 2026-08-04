@@ -98,6 +98,9 @@ def _last_user_text(body: bytes) -> str:
     except Exception:
         return body.decode("utf-8", errors="replace") if body else ""
 
+    if not isinstance(body_json, dict):
+        return ""
+
     msgs = body_json.get("messages") or []
     if isinstance(msgs, list):
         # Walk from the end for the last user-role message
@@ -114,6 +117,31 @@ def _last_user_text(body: bytes) -> str:
                 for blk in content:
                     if isinstance(blk, dict) and blk.get("type") == "text":
                         return str(blk.get("text") or "")
+            break
+
+    # OpenAI Responses API request.  A Codex request can carry the full
+    # interaction history in ``input`` and may end with reasoning or tool
+    # items, so locate the last user-role message rather than assuming the
+    # last input item is user text.
+    inputs = body_json.get("input")
+    if isinstance(inputs, str):
+        return inputs
+    if isinstance(inputs, list):
+        for item in reversed(inputs):
+            if not isinstance(item, dict) or item.get("role") != "user":
+                continue
+            content = item.get("content")
+            if isinstance(content, str):
+                return content
+            if isinstance(content, list):
+                # The approval is the trailing user-text segment.  Accept
+                # both canonical Responses ``input_text`` blocks and the
+                # compatible ``text`` shape used by some clients.
+                for block in reversed(content):
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") in ("input_text", "text"):
+                        return str(block.get("text") or "")
             break
     return ""
 

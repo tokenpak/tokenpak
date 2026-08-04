@@ -688,10 +688,11 @@ def _partition_stable_volatile(body: bytes) -> tuple[bytes, bytes]:
 
 
 def _resolve_session_id(headers: object, model: str) -> str:
-    """Resolve session id with Claude Code priority.
+    """Resolve a stable client session id.
 
     Order: X-Claude-Code-Session-Id (Claude Code) -> X-TokenPak-Session
-    -> model name (last-resort fallback).
+    -> session-id (Codex) -> thread-id (Codex fallback) -> model name
+    (last-resort fallback).
     """
 
     # Case-insensitive header lookup
@@ -713,6 +714,12 @@ def _resolve_session_id(headers: object, model: str) -> str:
     oc_id = _h("X-TokenPak-Session")
     if oc_id:
         return oc_id
+    codex_session_id = _h("session-id")
+    if codex_session_id:
+        return codex_session_id
+    codex_thread_id = _h("thread-id")
+    if codex_thread_id:
+        return codex_thread_id
     return model
 
 

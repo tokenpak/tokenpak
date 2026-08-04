@@ -30,6 +30,19 @@ This project follows [Semantic Versioning](https://semver.org/).
   (checksum verification included), and `pak export` all keep working on them unchanged;
   `inspect` and `import` print a hint pointing at `pak migrate`.
 
+## [1.18.1] — 2026-08-03
+
+This hotfix restores the documented Codex approval path when the Spend Guard
+holds a request before provider send.
+
+### Fixed
+
+- **Codex Spend Guard approvals now resolve safely.** TokenPak recognizes Codex
+  `session-id` and `thread-id` headers, reads strict yes/no intent and leading
+  `[TIP: allow=once]` directives from OpenAI Responses input, and keeps pending
+  requests and anti-loop state isolated per session. Requests without a stable
+  identity remain blocked without creating a global approval row.
+
 ## [1.18.0] — 2026-08-03
 
 First release under the consolidated release model: the public repository,

@@ -153,6 +153,41 @@ def block_store_unavailable(decision: PreflightDecision) -> bytes:
     return json.dumps(payload).encode()
 
 
+def block_session_identity_unavailable(decision: PreflightDecision) -> bytes:
+    """Fail closed when an approvable block has no stable session key.
+
+    Without a client session identifier, persisting a pending request would
+    create a process-wide approval bucket.  The original request remains
+    blocked and no pending row is written.
+    """
+    risk = decision.risk
+    payload = {
+        "error": {
+            "type": ERR_BLOCKED,
+            "message": (
+                "TIP Spend Guard blocked this request before provider send, "
+                "but the client did not provide a stable session identity. "
+                "Reply-to-approve cannot be scoped safely, so this request "
+                "was not stored. Retry the original request with a session "
+                "identifier, or prepend '[TIP: allow=once]' to that request."
+            ),
+            "reason": decision.reason,
+            "threshold_hit": decision.threshold_hit,
+            "projected_input_tokens": risk.projected_input_tokens if risk else None,
+            "projected_output_tokens": risk.projected_output_tokens if risk else None,
+            "projected_cost_usd": risk.projected_cost_usd if risk else None,
+            "cache_hit_ratio": risk.cache_hit_ratio if risk else None,
+            "model": risk.model if risk else None,
+            "pending_id": None,
+            "approval_prompt": None,
+            "approval_prompt_available": False,
+            "retryable": False,
+            "recovery_status": "client_action_required",
+        }
+    }
+    return json.dumps(payload).encode()
+
+
 def pending_waiting(pending: PendingRequest) -> bytes:
     """Subsequent request from a session that already has a pending block."""
     payload = {

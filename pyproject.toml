@@ -155,6 +155,10 @@ dev = [
     # Formatter output is a release gate; pin it so a tool release cannot turn
     # an unchanged checkout red or silently rewrite the baseline.
     "ruff==0.16.0",
+    # Artifact metadata validation is a release gate. Keep Twine in the
+    # candidate lock so validation lanes can provision it with hashes and run
+    # `twine check` offline against the exact wheel and sdist under review.
+    "twine==6.2.0",
     # Architecture-contract gate (.importlinter) and its contract tests
     # under tests/lint/test_import_contracts.py.
     "import-linter>=2.0",
