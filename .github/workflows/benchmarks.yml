@@ -16,7 +16,7 @@ concurrency:
   group: benchmarks-${{ github.ref }}
   cancel-in-progress: true
 
-# The "Post comment on PR" step uses marocchino/sticky-pull-request-comment@v3
+# The "Post comment on PR" step uses a full-SHA pin for the v3 release line
 # which needs `pull-requests: write` to publish a benchmark summary back to
 # the PR. Without this, the step fails with "Resource not accessible by
 # integration" and tanks the whole job even though the actual benchmarks +
@@ -36,10 +36,10 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -58,7 +58,7 @@ jobs:
             > health-contract-inputs.sha256
 
       - name: Upload governed input identities
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: health-contract-inputs-python-${{ matrix.python-version }}
           path: health-contract-inputs.sha256
@@ -68,10 +68,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
@@ -154,7 +154,7 @@ jobs:
 
       # ── Save artifacts ────────────────────────────────────────────────
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: benchmark-results
@@ -166,7 +166,7 @@ jobs:
 
       # Save as new baseline when merging to main
       - name: Save baseline (main branch only)
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         with:
           name: benchmark-baseline
