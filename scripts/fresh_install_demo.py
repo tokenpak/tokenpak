@@ -65,6 +65,27 @@ def run_fresh_install(repo: Path, max_seconds: float) -> float:
         wheels = sorted(wheelhouse.glob("tokenpak-*.whl"))
         if len(wheels) != 1:
             raise FreshInstallError(f"expected one candidate wheel, found {len(wheels)}")
+        candidate = wheels[0]
+
+        # Acquire the candidate's resolved runtime dependencies before the SLA
+        # clock starts.  The gate measures a fresh install and first use, not
+        # public-index latency; the timed install below is deliberately offline
+        # so a slow or transient package mirror cannot manufacture a product
+        # regression.  Resolution still comes from the built wheel metadata,
+        # and a missing dependency remains a hard failure during preparation.
+        _run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "download",
+                "--dest",
+                str(wheelhouse),
+                str(candidate),
+            ],
+            environment=environment,
+            cwd=repo,
+        )
 
         env_dir = root / "venv"
         venv.EnvBuilder(with_pip=True, clear=True).create(env_dir)
@@ -72,7 +93,17 @@ def run_fresh_install(repo: Path, max_seconds: float) -> float:
         python = env_dir / scripts_dir / ("python.exe" if os.name == "nt" else "python")
         install_start = time.monotonic()
         _run(
-            [str(python), "-m", "pip", "install", "--quiet", str(wheels[0])],
+            [
+                str(python),
+                "-m",
+                "pip",
+                "install",
+                "--quiet",
+                "--no-index",
+                "--find-links",
+                str(wheelhouse),
+                str(candidate),
+            ],
             environment=environment,
             cwd=repo,
         )

@@ -61,11 +61,19 @@ class JournalStore:
     def _init_db(self) -> None:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = self._connect()
-        # Canonical schema lives in companion._sqlite — shared with the
-        # pre-send hook so there is exactly one DDL for these tables.
-        _db.ensure_journal_schema(conn)
-        conn.commit()
-        conn.close()
+        try:
+            # Canonical schema lives in companion._sqlite — shared with the
+            # pre-send hook so there is exactly one DDL for these tables.
+            with _db._write_transaction(conn):
+                _db.ensure_journal_schema(conn)
+        finally:
+            conn.close()
+        # The prompt hook persists one atomic write-ahead intent instead of
+        # blocking on two SQLite commits.  A canonical journal reader is a
+        # safe materialisation boundary if the detached worker has not already
+        # drained those intents.  Custom test/store filenames remain isolated.
+        if self._db_path.name == "journal.db":
+            _db.flush_pre_send_events(self._db_path.parent)
 
     def _connect(self) -> sqlite3.Connection:
         """Open the journal DB via the shared companion connection factory

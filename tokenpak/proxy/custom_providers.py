@@ -21,7 +21,7 @@ At proxy startup the loader:
   2. Creates a lightweight adapter per provider (delegates to the matching
      built-in format adapter for normalise/denormalise).
   3. Adds each provider's hostname to the intercept list so requests get
-     the full compression/caching pipeline.
+     the applicable route-policy and telemetry handling.
   4. Registers upstream routes so the proxy knows where to forward.
 
 See ``load_custom_providers()`` for the public API.
@@ -39,15 +39,27 @@ __all__ = (
 
 import logging
 import os
+import re
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable, Mapping, Optional
-from urllib.parse import urlparse
 
 from tokenpak.proxy.adapters.base import FormatAdapter, TokenCounter
 from tokenpak.proxy.adapters.canonical import CanonicalRequest
 from tokenpak.proxy.adapters.registry import AdapterRegistry
+from tokenpak.proxy.router import (
+    _endpoint_identity,
+    _endpoint_parts,
+    _host_header_parts,
+    _normalize_configured_endpoint,
+)
 
 logger = logging.getLogger(__name__)
+
+# Custom adapters match an explicitly configured hostname.  They must be
+# considered before the generic wire-format adapters, whose path predicates
+# (for example ``/v1/chat/completions``) intentionally match many providers.
+CUSTOM_PROVIDER_PRIORITY = 400
 
 # Supported format names → the source_format value of the built-in adapter
 # that handles normalise/denormalise for that wire format.
@@ -60,6 +72,8 @@ _FORMAT_ALIASES: dict[str, str] = {
     "google": "google-generative-ai",
     "google-generative-ai": "google-generative-ai",
 }
+
+_ENV_VAR_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 @dataclass
@@ -75,7 +89,7 @@ class CustomProvider:
 
     @property
     def api_key(self) -> Optional[str]:
-        """Resolve the API key from the environment (never stored in memory)."""
+        """Resolve the API key on demand without retaining it on this object."""
         if not self.api_key_env:
             return None
         return os.environ.get(self.api_key_env)
@@ -84,17 +98,40 @@ class CustomProvider:
     def has_api_key(self) -> bool:
         return bool(self.api_key)
 
+    @property
+    def endpoint_identity(self) -> str:
+        """Normalized scheme, host, and effective port used for routing."""
+        return _endpoint_identity(self.endpoint)
+
+    @property
+    def effective_port(self) -> int:
+        parts = _endpoint_parts(self.endpoint)
+        if parts is None:  # construction is validated by the loader
+            raise ValueError(f"invalid custom-provider endpoint: {self.endpoint!r}")
+        return parts[2]
+
+
+def count_configured_providers() -> int:
+    """Return the number of raw entries under the configured provider map.
+
+    This intentionally counts invalid entries too.  Comparing it with the
+    successfully registered count is how startup and doctor expose a partial
+    load instead of silently presenting skipped configuration as absent.
+    """
+    from tokenpak.core import config_loader as _cl
+
+    cfg = _cl.load_config()
+    providers_section = cfg.get("providers") if isinstance(cfg, dict) else None
+    return len(providers_section) if isinstance(providers_section, dict) else 0
+
 
 def load_custom_providers() -> list[CustomProvider]:
     """Load custom providers from ``~/.tokenpak/config.yaml``.
 
-    Returns a (possibly empty) list of ``CustomProvider`` objects.
-    Never raises -- config errors are logged and the offending entry skipped.
+    Returns a (possibly empty) list of valid ``CustomProvider`` objects.
+    Invalid provider entries are logged and skipped.
     """
-    try:
-        from tokenpak import config_loader as _cl
-    except ImportError:
-        return []
+    from tokenpak.core import config_loader as _cl
 
     cfg = _cl.load_config()
     if not isinstance(cfg, dict):
@@ -105,9 +142,13 @@ def load_custom_providers() -> list[CustomProvider]:
         return []
 
     result: list[CustomProvider] = []
+    seen_endpoints: set[str] = set()
     for name, entry in providers_section.items():
         if not isinstance(name, str) or not isinstance(entry, dict):
             logger.warning("custom_providers: skipping invalid entry %r", name)
+            continue
+        if not name.strip():
+            logger.warning("custom_providers: skipping provider with an empty name")
             continue
 
         endpoint_value = entry.get("endpoint", "")
@@ -116,8 +157,11 @@ def load_custom_providers() -> list[CustomProvider]:
             continue
         endpoint = endpoint_value.strip()
 
-        # Normalise endpoint -- strip trailing slash for consistency
-        endpoint = endpoint.rstrip("/")
+        try:
+            endpoint, endpoint_identity = _normalize_configured_endpoint(endpoint)
+        except ValueError as exc:
+            logger.warning("custom_providers: %s has invalid endpoint: %s; skipping", name, exc)
+            continue
 
         # Resolve format
         format_value = entry.get("format", "openai")
@@ -140,17 +184,25 @@ def load_custom_providers() -> list[CustomProvider]:
             logger.warning("custom_providers: %s has non-string 'api_key_env', skipping", name)
             continue
         api_key_env = api_key_env_value.strip()
-
-        # Extract hostname for intercept matching
-        parsed = urlparse(endpoint)
-        hostname = parsed.hostname or ""
-        if not hostname:
+        if api_key_env and _ENV_VAR_NAME.fullmatch(api_key_env) is None:
             logger.warning(
-                "custom_providers: %s has unparseable endpoint %r, skipping",
+                "custom_providers: %s has invalid 'api_key_env' name %r, skipping",
                 name,
-                endpoint,
+                api_key_env,
             )
             continue
+
+        parts = _endpoint_parts(endpoint)
+        assert parts is not None  # guaranteed by _normalize_configured_endpoint
+        _scheme, hostname, _port = parts
+        if endpoint_identity in seen_endpoints:
+            logger.warning(
+                "custom_providers: %s duplicates configured endpoint %s, skipping",
+                name,
+                endpoint_identity,
+            )
+            continue
+        seen_endpoints.add(endpoint_identity)
 
         # Collect any extra keys the user specified (future-proofing)
         known_keys = {"endpoint", "format", "api_key_env"}
@@ -181,6 +233,9 @@ def load_custom_providers() -> list[CustomProvider]:
 
 def _make_custom_adapter(
     provider: CustomProvider,
+    *,
+    hostname_unique: bool,
+    authority_unique: bool,
 ) -> Callable[[FormatAdapter, CustomProvider], FormatAdapter]:
     """Create a FormatAdapter that detects requests to a custom provider's
     hostname and delegates normalise/denormalise to the matching built-in
@@ -200,16 +255,31 @@ def _make_custom_adapter(
         def __init__(self, delegate: FormatAdapter, cp: CustomProvider) -> None:
             self._delegate = delegate
             self._provider = cp
+            # The custom adapter uses the same wire contract as its delegate.
+            # Copy the declaration explicitly rather than inheriting an
+            # accidental capability set from the base class.
+            self.capabilities = frozenset(delegate.capabilities)
 
         def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
-            # Match by hostname in URL path (forward proxy) or Host header
-            if self._provider.hostname in path:
-                return True
-            lower = {k.lower(): v for k, v in headers.items()}
-            host = lower.get("host", "")
-            if self._provider.hostname in host:
-                return True
-            return False
+            if "://" in path:
+                return _endpoint_identity(path) == self._provider.endpoint_identity
+
+            host_value = next(
+                (str(value) for key, value in headers.items() if str(key).lower() == "host"),
+                "",
+            )
+            host_parts = _host_header_parts(host_value)
+            if host_parts is None:
+                return False
+            hostname, explicit_port = host_parts
+            if hostname != self._provider.hostname:
+                return False
+            if explicit_port is not None:
+                return authority_unique and explicit_port == self._provider.effective_port
+            # A portless Host is safe only when this configured hostname maps
+            # to exactly one custom endpoint. Otherwise the request is
+            # ambiguous and generic wire-format detection must handle it.
+            return hostname_unique
 
         def normalize(self, body: bytes) -> CanonicalRequest:
             return self._delegate.normalize(body)
@@ -261,8 +331,8 @@ def build_custom_adapters(
 
     Returns:
         List of instantiated custom adapter objects (already registered in
-        *registry* with priority 200 -- above passthrough but below built-in
-        providers so built-in detection takes precedence for known hosts).
+        *registry* ahead of generic format adapters).  The custom predicate is
+        hostname-exact, so this precedence cannot capture unrelated traffic.
     """
     if not providers:
         return []
@@ -273,6 +343,10 @@ def build_custom_adapters(
         format_lookup[adapter.source_format] = adapter
 
     created: list[FormatAdapter] = []
+    hostname_counts = Counter(provider.hostname for provider in providers)
+    authority_counts = Counter(
+        (provider.hostname, provider.effective_port) for provider in providers
+    )
     for cp in providers:
         delegate = format_lookup.get(cp.format)
         if delegate is None:
@@ -284,11 +358,13 @@ def build_custom_adapters(
             )
             continue
 
-        adapter_cls = _make_custom_adapter(cp)
+        adapter_cls = _make_custom_adapter(
+            cp,
+            hostname_unique=hostname_counts[cp.hostname] == 1,
+            authority_unique=authority_counts[(cp.hostname, cp.effective_port)] == 1,
+        )
         adapter_inst = adapter_cls(delegate, cp)
-        # Priority 200 -- below built-in adapters (240-300) but above
-        # passthrough (0).  Custom providers should not shadow built-in hosts.
-        registry.register(adapter_inst, priority=200)
+        registry.register(adapter_inst, priority=CUSTOM_PROVIDER_PRIORITY)
         created.append(adapter_inst)
         logger.debug(
             "custom_providers: registered adapter for %s -> %s",
@@ -301,7 +377,7 @@ def build_custom_adapters(
 
 def get_provider_display_list(
     registry: AdapterRegistry,
-    custom_providers: list[CustomProvider],
+    registered_providers: list[CustomProvider],
 ) -> str:
     """Return a human-readable provider list for the startup banner.
 
@@ -320,8 +396,8 @@ def get_provider_display_list(
             continue
         builtin_names.append(fmt)
 
-    # Custom providers
-    custom_names = [f"{cp.name} (custom)" for cp in custom_providers]
+    # Only providers with a successfully registered adapter are displayable.
+    custom_names = [f"{cp.name} (custom)" for cp in registered_providers]
 
     all_names = builtin_names + custom_names
     return ", ".join(all_names) if all_names else "(none)"

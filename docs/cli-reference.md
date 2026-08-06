@@ -432,7 +432,7 @@ Start proxy server
 - `--profile` — Workflow profile for this proxy process (default: TOKENPAK_PROFILE or balanced) — choices: `safe`, `balanced`, `aggressive`, `agentic`, `transparent`
 - `--stats-footer` — Print a per-request token-savings receipt (estimated dollars) in the proxy terminal (default: off)
 - `--shutdown-timeout` — Seconds to wait for in-flight requests to complete before forcing shutdown (default: 30, or TOKENPAK_SHUTDOWN_TIMEOUT env var)
-- `--safe` — Disable compression defaults (restore pre-1.1 passthrough behavior). Equivalent to TOKENPAK_COMPACT=0.
+- `--safe` — Apply legacy safety compatibility settings for this process; does not toggle default HTTP body compaction.
 
 ---
 
@@ -450,8 +450,8 @@ Start proxy server
 Compress a piece of text, JSON, or code using TokenPak's compression.
 Shows token savings and compressed output.
 
-Note: The proxy handles compression automatically for API requests.
-Use this command to test compression on arbitrary content.
+The default HTTP proxy does not invoke this body-compaction path.
+Use this command explicitly to compress arbitrary content.
 
 Example:
   tokenpak compress < myfile.json

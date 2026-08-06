@@ -94,11 +94,12 @@ class TestProfilePresets:
         cfg = _reload_config({})
         assert cfg.ACTIVE_PROFILE == "balanced"
 
-    def test_safe_profile_sets_strict_mode(self):
+    def test_safe_profile_sets_safe_mode(self):
         cfg = _reload_config({"TOKENPAK_PROFILE": "safe"})
         assert cfg.ACTIVE_PROFILE == "safe"
-        # safe profile sets TOKENPAK_MODE=strict → COMPILATION_MODE
-        assert cfg.COMPILATION_MODE == "strict"
+        # Safe is its own conservative mode; request-pipeline eligibility
+        # treats both safe and strict as non-compacting.
+        assert cfg.COMPILATION_MODE == "safe"
 
     def test_aggressive_profile_lowers_threshold(self):
         cfg = _reload_config({"TOKENPAK_PROFILE": "aggressive"})

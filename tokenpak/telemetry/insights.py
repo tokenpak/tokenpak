@@ -451,14 +451,17 @@ class InsightEngine:
             insights.append(
                 Insight(
                     type="warning",
-                    title="Compression appears inactive",
+                    title="No request-body reduction observed",
                     description=(
-                        "Average token reduction is near zero — compression may be bypassed "
-                        "for most requests."
+                        "Average token reduction is near zero. The default HTTP proxy does not "
+                        "compact request bodies; reductions require an explicit helper caller."
                     ),
                     metric="compression_bypass",
                     delta=None,
-                    action="Check TOKENPAK_COMPACT env var and compilation mode setting.",
+                    action=(
+                        "Confirm that the calling integration explicitly invokes "
+                        "a compression helper."
+                    ),
                 )
             )
 

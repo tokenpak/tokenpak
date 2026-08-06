@@ -288,20 +288,25 @@ class TestTelemetryWAL:
 
         db_path = str(tmp_path / "concurrent.db")
         errors = []
+        errors_lock = threading.Lock()
 
         def write_entries(n: int):
-            db = TelemetryDB(db_path)
-            for i in range(n):
-                try:
+            db = None
+            try:
+                db = TelemetryDB(db_path)
+                for i in range(n):
                     db._conn.execute(
                         "INSERT INTO tp_events (trace_id, request_id, event_type, ts, provider) "
                         "VALUES (?, ?, ?, ?, ?)",
                         (f"t-{threading.get_ident()}-{i}", f"r-{i}", "test", float(i), "test"),
                     )
                     db._conn.commit()
-                except Exception as exc:
+            except Exception as exc:
+                with errors_lock:
                     errors.append(exc)
-            db.close()
+            finally:
+                if db is not None:
+                    db.close()
 
         threads = [threading.Thread(target=write_entries, args=(20,)) for _ in range(4)]
         for t in threads:
@@ -310,6 +315,68 @@ class TestTelemetryWAL:
             t.join()
 
         assert not errors, f"Concurrent writes produced errors: {errors}"
+
+        db = TelemetryDB(db_path)
+        try:
+            row_count = db._conn.execute("SELECT COUNT(*) FROM tp_events").fetchone()[0]
+            quick_check = db._conn.execute("PRAGMA quick_check").fetchone()[0]
+        finally:
+            db.close()
+
+        assert row_count == 80
+        assert quick_check == "ok"
+
+    def test_schema_initialization_retries_transient_lock(self, tmp_path, monkeypatch):
+        """A concurrent first opener waits and retries instead of leaking SQLITE_BUSY."""
+        import sqlite3
+
+        from tokenpak.telemetry.storage import TelemetryDB
+
+        real_migrate = TelemetryDB._migrate_schema
+        attempts = 0
+
+        def transient_lock_then_migrate(db):
+            nonlocal attempts
+            attempts += 1
+            if attempts < 3:
+                raise sqlite3.OperationalError("database is locked")
+            return real_migrate(db)
+
+        monkeypatch.setattr(TelemetryDB, "_migrate_schema", transient_lock_then_migrate)
+
+        db = TelemetryDB(str(tmp_path / "retry.db"))
+        db.close()
+
+        assert attempts == 3
+
+    def test_schema_initialization_rolls_back_unexpected_failure(self, tmp_path, monkeypatch):
+        """Base DDL and migrations publish together or not at all."""
+        import sqlite3
+
+        from tokenpak.telemetry.storage import TelemetryDB
+
+        db_path = tmp_path / "rollback.db"
+
+        def fail_after_partial_migration(db):
+            db._conn.execute("CREATE TABLE partial_probe (value TEXT)")
+            raise RuntimeError("synthetic migration failure")
+
+        monkeypatch.setattr(TelemetryDB, "_migrate_schema", fail_after_partial_migration)
+
+        with pytest.raises(RuntimeError, match="synthetic migration failure"):
+            TelemetryDB(str(db_path))
+
+        conn = sqlite3.connect(str(db_path))
+        try:
+            tables = {
+                str(row[0])
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            }
+        finally:
+            conn.close()
+
+        assert "tp_events" not in tables
+        assert "partial_probe" not in tables
 
 
 # ---------------------------------------------------------------------------

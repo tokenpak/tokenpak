@@ -7,8 +7,8 @@ Handles provider detection, cost estimation, and URL construction.
 
 import json
 from dataclasses import dataclass
-from typing import Dict, Optional, cast
-from urllib.parse import urlparse
+from typing import Collection, Dict, Mapping, Optional, cast
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 # Provider base URLs
 PROVIDER_URLS = {
@@ -29,6 +29,115 @@ INTERCEPT_HOSTS = {
     "generativelanguage.googleapis.com",
 }
 
+_DEFAULT_ENDPOINT_PORTS = {"http": 80, "https": 443}
+_SENSITIVE_ENDPOINT_QUERY_KEYS = frozenset(
+    {
+        "access_token",
+        "api_key",
+        "apikey",
+        "authorization",
+        "key",
+        "token",
+    }
+)
+
+
+def _normalize_endpoint_host(hostname: str) -> str:
+    """Normalize a DNS/IP host for endpoint identity comparisons."""
+    normalized = hostname.lower().rstrip(".")
+    if not normalized:
+        return ""
+    try:
+        return normalized.encode("idna").decode("ascii")
+    except UnicodeError:
+        return ""
+
+
+def _endpoint_parts(value: str) -> tuple[str, str, int] | None:
+    """Return ``(scheme, host, effective_port)`` for a safe HTTP endpoint.
+
+    Userinfo and fragments are intentionally excluded from endpoint identity:
+    accepting either would make credentials/log-only material part of routing.
+    """
+    candidate = str(value).strip()
+    if not candidate or any(character.isspace() for character in candidate):
+        return None
+    try:
+        parsed = urlsplit(candidate)
+        scheme = parsed.scheme.lower()
+        hostname = _normalize_endpoint_host(parsed.hostname or "")
+        if (
+            scheme not in _DEFAULT_ENDPOINT_PORTS
+            or not hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or "#" in candidate
+        ):
+            return None
+        port = parsed.port or _DEFAULT_ENDPOINT_PORTS[scheme]
+    except (TypeError, ValueError):
+        return None
+    return scheme, hostname, port
+
+
+def _endpoint_identity(value: str) -> str:
+    """Return normalized ``scheme://host:effective-port`` or ``""``."""
+    parts = _endpoint_parts(value)
+    if parts is None:
+        return ""
+    scheme, hostname, port = parts
+    rendered_host = f"[{hostname}]" if ":" in hostname else hostname
+    return f"{scheme}://{rendered_host}:{port}"
+
+
+def _normalize_configured_endpoint(value: str) -> tuple[str, str]:
+    """Validate and canonicalize a configured custom-provider endpoint.
+
+    The returned pair is ``(canonical_url, endpoint_identity)``. Query
+    parameters are allowed for fixed gateway routing, but credential-shaped
+    parameters are rejected because custom credentials belong in
+    ``api_key_env`` and headers, not URLs that can enter logs.
+    """
+    candidate = str(value).strip()
+    parts = _endpoint_parts(candidate)
+    if parts is None:
+        raise ValueError(
+            "endpoint must be an absolute http(s) URL without userinfo, fragments, or whitespace"
+        )
+    parsed = urlsplit(candidate)
+    scheme, hostname, effective_port = parts
+    for key, _value in parse_qsl(parsed.query, keep_blank_values=True):
+        normalized_key = key.lower().replace("-", "_")
+        if normalized_key in _SENSITIVE_ENDPOINT_QUERY_KEYS:
+            raise ValueError(
+                f"endpoint query parameter {key!r} looks like a credential; use api_key_env"
+            )
+
+    rendered_host = f"[{hostname}]" if ":" in hostname else hostname
+    explicit_port = parsed.port
+    netloc = rendered_host
+    if explicit_port is not None and explicit_port != _DEFAULT_ENDPOINT_PORTS[scheme]:
+        netloc = f"{rendered_host}:{explicit_port}"
+    path = parsed.path.rstrip("/")
+    canonical = urlunsplit((scheme, netloc, path, parsed.query, ""))
+    identity = f"{scheme}://{rendered_host}:{effective_port}"
+    return canonical, identity
+
+
+def _host_header_parts(value: str) -> tuple[str, int | None] | None:
+    """Return normalized host and optional explicit port from a Host value."""
+    candidate = str(value).strip()
+    if not candidate or any(character.isspace() for character in candidate):
+        return None
+    try:
+        parsed = urlsplit(f"//{candidate}")
+        hostname = _normalize_endpoint_host(parsed.hostname or "")
+        if not hostname or parsed.username is not None or parsed.password is not None:
+            return None
+        return hostname, parsed.port
+    except (TypeError, ValueError):
+        return None
+
 
 def _is_codex_oauth_authorization(headers: Dict[str, str]) -> bool:
     """Return true for a supplied OAuth bearer rather than an OpenAI API key.
@@ -44,12 +153,78 @@ def _is_codex_oauth_authorization(headers: Dict[str, str]) -> bool:
     return bool(credential) and not credential.lower().startswith("sk-")
 
 
-def should_intercept(url: str) -> bool:
-    """Return True if the given URL targets a known LLM provider we should intercept."""
-    for host in INTERCEPT_HOSTS:
-        if host in url:
-            return True
-    return False
+def normalize_hostname(value: str) -> str:
+    """Return a lower-case hostname from a URL or Host-header value.
+
+    Ports, userinfo, IPv6 brackets, and a terminal DNS dot are normalized by
+    the parser.  Invalid or hostname-free values return an empty string.
+    """
+    candidate = str(value).strip()
+    if not candidate:
+        return ""
+    try:
+        parsed = urlsplit(
+            candidate if "://" in candidate or candidate.startswith("//") else f"//{candidate}"
+        )
+        return _normalize_endpoint_host(parsed.hostname or "")
+    except (TypeError, ValueError):
+        return ""
+
+
+def request_hostname(path: str, headers: Mapping[str, str]) -> str:
+    """Resolve the destination hostname from absolute-form path or Host."""
+    if "://" in path or path.startswith("//"):
+        hostname = normalize_hostname(path)
+        if hostname:
+            return hostname
+    for key, value in headers.items():
+        if str(key).lower() == "host":
+            return normalize_hostname(str(value))
+    return ""
+
+
+def should_intercept(url: str, hosts: Optional[Collection[str]] = None) -> bool:
+    """Return True only for an exact hostname in *hosts* or the live registry."""
+    hostname = normalize_hostname(url)
+    intercept_hosts = INTERCEPT_HOSTS if hosts is None else hosts
+    return bool(hostname) and hostname in {normalize_hostname(host) for host in intercept_hosts}
+
+
+def _join_upstream_url(base_url: str, request_path: str) -> str:
+    """Join a configured API base and reverse-proxy request path once.
+
+    Fixed base-query fields win on conflicts; non-conflicting request fields
+    are retained. Fragments are rejected because they are client-side URL
+    material and must never be forwarded to an HTTP upstream.
+    """
+    base = urlsplit(base_url)
+    request = urlsplit(request_path)
+    if request.fragment:
+        raise ValueError("request fragments are not valid upstream HTTP targets")
+    base_path = base.path.rstrip("/")
+    incoming_path = request.path or "/"
+
+    if not base_path:
+        joined_path = incoming_path
+    else:
+        # Custom endpoints commonly end in /v1 while clients send a path that
+        # also begins /v1.  Preserve any earlier gateway prefix but do not
+        # duplicate the shared terminal API segment.
+        terminal = "/" + base_path.rsplit("/", 1)[-1]
+        if incoming_path == terminal or incoming_path.startswith(terminal + "/"):
+            joined_path = base_path + incoming_path[len(terminal) :]
+        elif incoming_path == base_path or incoming_path.startswith(base_path + "/"):
+            joined_path = incoming_path
+        else:
+            joined_path = f"{base_path}/{incoming_path.lstrip('/')}"
+
+    base_query = parse_qsl(base.query, keep_blank_values=True)
+    request_query = parse_qsl(request.query, keep_blank_values=True)
+    fixed_keys = {key for key, _value in base_query}
+    merged_query = base_query + [pair for pair in request_query if pair[0] not in fixed_keys]
+    return urlunsplit(
+        (base.scheme, base.netloc, joined_path, urlencode(merged_query, doseq=True), "")
+    )
 
 
 # Default costs for unknown models (used as fallback if registry unavailable)
@@ -80,7 +255,11 @@ class ProviderRouter:
     3. Request body model field
     """
 
-    def __init__(self, custom_urls: Optional[Dict[str, str]] = None):
+    def __init__(
+        self,
+        custom_urls: Optional[Dict[str, str]] = None,
+        custom_hosts: Optional[Dict[str, str]] = None,
+    ):
         """
         Initialize router with optional custom provider URLs.
 
@@ -90,6 +269,59 @@ class ProviderRouter:
         self.provider_urls = {**PROVIDER_URLS}
         if custom_urls:
             self.provider_urls.update(custom_urls)
+        self.custom_endpoints: dict[str, str] = {}
+        authority_candidates: dict[tuple[str, int], set[str]] = {}
+        host_candidates: dict[str, set[str]] = {}
+        for raw_endpoint, provider in (custom_hosts or {}).items():
+            if provider not in self.provider_urls:
+                continue
+            identity = _endpoint_identity(raw_endpoint)
+            if not identity:
+                # Backward-compatible constructor input: callers historically
+                # supplied a bare hostname. Bind it to that provider's own
+                # configured base URL so the route still gains scheme/port
+                # identity instead of falling back to hostname-only matching.
+                base_identity = _endpoint_identity(self.provider_urls[provider])
+                if normalize_hostname(raw_endpoint) != normalize_hostname(
+                    self.provider_urls[provider]
+                ):
+                    continue
+                identity = base_identity
+            parts = _endpoint_parts(identity)
+            if not identity or parts is None:
+                continue
+            _scheme, hostname, port = parts
+            self.custom_endpoints[identity] = provider
+            authority_candidates.setdefault((hostname, port), set()).add(provider)
+            host_candidates.setdefault(hostname, set()).add(provider)
+
+        self._custom_authorities = {
+            authority: next(iter(providers))
+            for authority, providers in authority_candidates.items()
+            if len(providers) == 1
+        }
+        self.custom_hosts = {
+            hostname: next(iter(providers))
+            for hostname, providers in host_candidates.items()
+            if len(providers) == 1
+        }
+
+    def _custom_provider_for_request(self, path: str, headers: Mapping[str, str]) -> str | None:
+        """Resolve a custom route without collapsing distinct endpoint ports."""
+        if "://" in path:
+            return self.custom_endpoints.get(_endpoint_identity(path))
+
+        host_value = next(
+            (str(value) for key, value in headers.items() if str(key).lower() == "host"),
+            "",
+        )
+        host_parts = _host_header_parts(host_value)
+        if host_parts is None:
+            return None
+        hostname, explicit_port = host_parts
+        if explicit_port is not None:
+            return self._custom_authorities.get((hostname, explicit_port))
+        return self.custom_hosts.get(hostname)
 
     def route(
         self,
@@ -130,7 +362,9 @@ class ProviderRouter:
         # Check if it's already a full URL
         if path.startswith("http"):
             parsed = urlparse(path)
-            provider = self._detect_provider_from_host(parsed.netloc)
+            provider = self._custom_provider_for_request(
+                path, headers
+            ) or self._detect_provider_from_host(parsed.netloc)
             model = self._extract_model(body) if body else "unknown"
             from .oauth import analyze_request as _analyze_oauth
 
@@ -147,7 +381,9 @@ class ProviderRouter:
             )
 
         # Reverse proxy mode - determine provider from headers/path
-        provider = self._detect_provider(path, headers, body)
+        provider = self._custom_provider_for_request(path, headers) or self._detect_provider(
+            path, headers, body
+        )
         base_url = self.provider_urls.get(provider, self.provider_urls["anthropic"])
         model = self._extract_model(body) if body else "unknown"
         from .oauth import analyze_request as _analyze_oauth
@@ -157,10 +393,15 @@ class ProviderRouter:
         if provider == "openai-codex" and path.split("?", 1)[0] == "/v1/responses":
             suffix = "?" + path.split("?", 1)[1] if "?" in path else ""
             upstream_path = "/codex/responses" + suffix
+        full_url = (
+            _join_upstream_url(base_url, upstream_path)
+            if provider.startswith("custom-")
+            else base_url + upstream_path
+        )
         return RouteResult(
             provider=provider,
             base_url=base_url,
-            full_url=base_url + upstream_path,
+            full_url=full_url,
             should_intercept=True,  # Reverse proxy always intercepts
             model=model,
             auth_type=_oauth_ctx.auth_type,
@@ -170,14 +411,19 @@ class ProviderRouter:
 
     def _detect_provider_from_host(self, host: str) -> str:
         """Detect provider from hostname."""
-        host_lower = host.lower()
-        if "anthropic" in host_lower:
+        host_lower = normalize_hostname(host)
+        if host_lower == "anthropic.com" or host_lower.endswith(".anthropic.com"):
             return "anthropic"
-        elif "chatgpt" in host_lower:
+        elif host_lower == "chatgpt.com" or host_lower.endswith(".chatgpt.com"):
             return "openai-codex"
-        elif "openai" in host_lower:
+        elif host_lower == "openai.com" or host_lower.endswith(".openai.com"):
             return "openai"
-        elif "googleapis" in host_lower or "google" in host_lower:
+        elif (
+            host_lower == "googleapis.com"
+            or host_lower.endswith(".googleapis.com")
+            or host_lower == "google.com"
+            or host_lower.endswith(".google.com")
+        ):
             return "google"
         return "unknown"
 

@@ -53,11 +53,18 @@ class BudgetTracker:
     def _init_db(self) -> None:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = self._connect()
-        # Canonical schema lives in companion._sqlite — shared with the
-        # pre-send hook so there is exactly one DDL for companion_costs.
-        _db.ensure_costs_schema(conn)
-        conn.commit()
-        conn.close()
+        try:
+            # Canonical schema lives in companion._sqlite — shared with the
+            # pre-send hook so there is exactly one DDL for companion_costs.
+            with _db._write_transaction(conn):
+                _db.ensure_costs_schema(conn)
+        finally:
+            conn.close()
+        # Materialise any prompt-hook write-ahead intents before normal tracker
+        # use.  Replays are idempotent; custom test/store filenames stay
+        # isolated from the canonical journal.db/budget.db pair.
+        if self._db_path.name == "budget.db":
+            _db.flush_pre_send_events(self._db_path.parent)
 
     def _connect(self) -> sqlite3.Connection:
         """Open the budget DB via the shared companion connection factory
@@ -160,10 +167,11 @@ class BudgetTracker:
 
         today = datetime.date.today().isoformat()
         try:
-            conn = self._connect()
-            row = conn.execute(_db.DAILY_SPEND_SQL, (today,)).fetchone()
-            conn.close()
-            return float(row[0] or 0.0) if row else 0.0
+            return _db.daily_spend_with_pending(
+                self._db_path,
+                pending_base_dir=self._db_path.parent,
+                date=today,
+            )
         except Exception:
             return 0.0
 

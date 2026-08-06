@@ -83,7 +83,7 @@ try:
     _NP_AVAILABLE = True
 except ImportError:
     _NP_AVAILABLE = False
-    np = None  # type: ignore[assignment]
+    np = None
 
 try:
     import faiss

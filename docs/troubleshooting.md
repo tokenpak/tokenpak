@@ -330,6 +330,10 @@ Common type mistakes:
 - `"enabled": "true"` → should be `"enabled": true`
 - `"threshold_tokens": "1500"` → should be `"threshold_tokens": 1500`
 
+The compression fields remain type-checked for compatibility. `enabled` does
+not control body compaction in the default HTTP path; `threshold_tokens` is
+used only by explicit `compact_request_body` callers.
+
 ### Cause C: Config file not found
 
 TokenPak looks for config in this order:
@@ -544,20 +548,12 @@ If both times are slow, the provider is slow. TokenPak can't fix upstream latenc
 - Try a different model (Haiku is faster than Opus)
 - Wait for the provider to recover
 
-### Cause B: Compression overhead on large prompts
+### Cause B: An explicit integration performs compression work
 
-Compression processing time scales with input size. For very large prompts (>50K tokens), this can add noticeable latency.
-
-**Fix:**
-```bash
-# Disable compression if latency matters more than cost
-export TOKENPAK_COMPACT=0
-tokenpak serve
-
-# Or increase the compression threshold (only compress large prompts)
-export TOKENPAK_COMPACT_THRESHOLD_TOKENS=10000
-tokenpak serve
-```
+The default HTTP path does not call `compact_request_body`, so changing
+`TOKENPAK_COMPACT` or its threshold on `tokenpak serve` cannot remove latency
+from that helper. If a calling integration invokes the helper explicitly,
+profile that integration and disable or retune the call there.
 
 ### Cause C: Slow disk I/O (affects cache and telemetry)
 
@@ -732,18 +728,9 @@ Same prompts aren't hitting the cache. Cache hit rate is 0% or unexpectedly low.
 # Check cache stats
 curl -fsS http://127.0.0.1:8766/stats | python3 -m json.tool
 
-# Check cache size setting
-echo "Cache size: ${TOKENPAK_COMPACT_CACHE_SIZE:-2000} entries"
 ```
 
-### Cause A: Cache is disabled
-
-**Fix:**
-```bash
-# Enable compression (which includes caching)
-export TOKENPAK_COMPACT=1
-tokenpak serve
-```
+`TOKENPAK_COMPACT` does not enable the proxy cache.
 
 ### Cause B: Prompts have varying metadata
 
@@ -756,12 +743,9 @@ If each request includes timestamps, random IDs, or other changing data in the p
 
 ### Cause C: Cache evicted too quickly (too small)
 
-**Fix:**
-```bash
-# Increase cache size (default: 2000 entries)
-export TOKENPAK_COMPACT_CACHE_SIZE=5000
-tokenpak serve
-```
+`TOKENPAK_COMPACT_CACHE_SIZE` sizes only the explicit compact helper's internal
+text cache; it does not resize the proxy request cache. Inspect the cache
+implementation configured for the affected request path.
 
 See also: [TP-E401: Cache Error](errors.md#tp-e401-cache-error)
 
@@ -771,41 +755,29 @@ See also: [TP-E401: Cache Error](errors.md#tp-e401-cache-error)
 
 ### Problem
 
-Token counts show minimal or no reduction even though compression is enabled.
+Token counts show minimal or no reduction.
 
 ### Diagnose
 
 ```bash
-# Check compression settings
-printenv | grep TOKENPAK_COMPACT
-
-# Run a compression demo to see it in action
-tokenpak demo
-
-# Check stats endpoint for compression ratios
-curl -fsS http://127.0.0.1:8766/stats | python3 -m json.tool
+# Exercise an explicit local compression path
+tokenpak compress --help
 ```
 
-### Cause A: Input below compression threshold
+### Cause A: The default HTTP path has no compact-helper call
 
-By default, prompts under 1,500 tokens are not compressed (overhead isn't worth it).
+This is expected. `TOKENPAK_COMPACT` and `compression.enabled` are retained for
+compatibility but do not toggle proxy request-body compaction.
 
-**Fix:**
-```bash
-# Lower the threshold if you want to compress smaller prompts
-export TOKENPAK_COMPACT_THRESHOLD_TOKENS=1000
-tokenpak serve
-```
+Use `tokenpak compress` explicitly or an integration that explicitly invokes
+`compact_request_body`.
 
-### Cause B: Compression mode is too conservative
+### Cause B: An explicit helper input is below its threshold
 
-**Fix:**
-```bash
-# Try a more aggressive mode
-# Modes: strict (safest) → hybrid (default) → aggressive (maximum savings)
-export TOKENPAK_MODE=aggressive
-tokenpak serve
-```
+`TOKENPAK_COMPACT_THRESHOLD_TOKENS` applies only after an integration calls
+`compact_request_body`. Set it in that integration's process before the proxy
+config module is imported; changing it on a default `tokenpak serve` process
+does not add a call site.
 
 ### Cause C: Content isn't compressible
 
@@ -905,7 +877,8 @@ docker stats --no-stream
 ### Fix
 
 1. Confirm object/cache eviction policy is active.
-2. Limit max in-memory cache size via env/config:
+2. If the heap profile identifies the explicit compact helper's text cache,
+   bound that cache via env/config (this does not resize other proxy caches):
  ```bash
  export TOKENPAK_COMPACT_CACHE_SIZE=2000
  ```
@@ -969,7 +942,8 @@ PY
 - `compressed_bytes`
 - `ratio`
 - `cache_hit`
-- `compression_reason` (e.g., `"below_threshold"`, `"already_compressed"`)
+- `compression_reason` for explicit reduction stages (for example,
+  `"below_threshold"` or `"already_compressed"`)
 
 ---
 
@@ -1032,7 +1006,7 @@ az container show --resource-group <rg> --name tokenpak --query "instanceView.ev
 1. **Is it up?** `curl http://127.0.0.1:8766/health`
 2. **If down:** check startup logs + port / config / dependency / permission issues (sections 1, 5, 13, 14).
 3. **If slow:** inspect latency + CPU/memory + upstream timings (sections 8, 15, 16).
-4. **If compression poor:** verify flags, thresholds, ratios, cache hit rate (sections 11, 12).
+4. **If reduction is absent:** confirm an explicit compression caller exists, then inspect that caller's threshold and evidence (sections 11, 12).
 5. **If cloud-only:** use provider logs/events and fix runtime env/network mismatches (section 18).
 6. **After fix:** validate health, run smoke test, and capture root cause + prevention note.
 

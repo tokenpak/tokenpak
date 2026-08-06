@@ -408,6 +408,26 @@ class TestMonitorTelemetryRowUserId:
     """Asserts the SQLite telemetry row contains hash_token(token) and never
     the raw token, for both the synchronous fallback and async-queue paths."""
 
+    @pytest.fixture(autouse=True)
+    def _isolated_monitor_writer(self):
+        """Give each test sole ownership of the process-global writer state."""
+        from tokenpak.proxy import monitor as monitor_mod
+
+        def cleanup() -> None:
+            monitor_mod._stop_db_write_queue(timeout=5.0)
+            with monitor_mod._DB_LOCK:
+                if monitor_mod._DB_CONNECTION is not None:
+                    try:
+                        monitor_mod._DB_CONNECTION.close()
+                    except Exception:
+                        pass
+                monitor_mod._DB_CONNECTION = None
+                monitor_mod._DB_CONNECTION_PATH = None
+
+        cleanup()
+        yield
+        cleanup()
+
     def _fresh_db(self, tmp_path):
         return str(tmp_path / "monitor.db")
 
@@ -437,23 +457,20 @@ class TestMonitorTelemetryRowUserId:
             conn.close()
         assert "user_id" in cols, f"user_id column missing — got {cols}"
 
-    def _force_sync_path(self, monkeypatch):
-        """Disable the async queue *after* Monitor construction (constructor
-        re-initialises the queue, so patching first is a no-op). Subsequent
-        ``Monitor.log`` calls then take the synchronous-fallback branch — same
-        write semantics, just deterministic for tests."""
+    def _force_sync_path(self):
+        """Stop the owned queue so ``Monitor.log`` takes the sync fallback."""
         from tokenpak.proxy import monitor as monitor_mod
 
-        monkeypatch.setattr(monitor_mod, "_DB_WRITE_QUEUE", None, raising=False)
+        assert monitor_mod._stop_db_write_queue(timeout=5.0)
 
-    def test_log_persists_user_id_hash_sync_path(self, tmp_path, monkeypatch):
+    def test_log_persists_user_id_hash_sync_path(self, tmp_path):
         """Force the synchronous fallback path (no background queue) and
         verify the emitted row's user_id column == hash_token(token) and that
         the raw token never appears anywhere in the row."""
         from tokenpak.proxy.monitor import Monitor as _Monitor
 
         m = _Monitor(self._fresh_db(tmp_path))
-        self._force_sync_path(monkeypatch)
+        self._force_sync_path()
         token = "rotation-secret-AB-1234567890"
         uid = hash_token(token)
         m.log(
@@ -474,12 +491,12 @@ class TestMonitorTelemetryRowUserId:
             if isinstance(v, str):
                 assert token not in v, f"raw token leaked to telemetry column {k!r}: {v!r}"
 
-    def test_log_default_user_id_is_empty_string(self, tmp_path, monkeypatch):
+    def test_log_default_user_id_is_empty_string(self, tmp_path):
         """Localhost / pre-A6 callers do not pass user_id → empty string."""
         from tokenpak.proxy.monitor import Monitor as _Monitor
 
         m = _Monitor(self._fresh_db(tmp_path))
-        self._force_sync_path(monkeypatch)
+        self._force_sync_path()
         m.log(
             model="claude-3-5-sonnet",
             input_tokens=1,

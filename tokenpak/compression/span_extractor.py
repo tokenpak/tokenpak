@@ -39,10 +39,10 @@ try:
         tokens = _enc.encode(text)
         if len(tokens) <= max_tokens:
             return text
-        return _enc.decode(tokens[:max_tokens]) + "..."
+        return cast(str, _enc.decode(tokens[:max_tokens])) + "..."
 
 except ImportError:
-    _enc = None  # type: ignore[assignment]
+    _enc = None
 
     def _count_tokens(text: str) -> int:
         # Rough approximation: 1 token ≈ 4 chars

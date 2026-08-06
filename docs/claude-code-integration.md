@@ -163,7 +163,7 @@ TokenPak detects tmux mode by observing multiple concurrent `X-Claude-Code-Sessi
 - All TUI features
 - **Per-session cost isolation** — each tmux session gets its own cost bucket in the dashboard
 - **Cross-session cache sharing** — sessions share the token cache, so duplicate context isn't re-sent across panes
-- **Compact compression tuned for multi-instance** — threshold lowered to avoid OOM under heavy parallel load
+- **Byte-preserved request bodies** — the legacy compact helper is not applied to Claude Code traffic
 
 ### What to expect
 
@@ -184,7 +184,7 @@ Sessions active: 3
 |---------|-----|
 | tmux profile not auto-detected | Needs ≥2 active sessions; single-session falls back to `claude-code-tui` |
 | Sessions not appearing as separate in dashboard | Each `tmux new-session` must be a fresh shell; re-used shell inherits the same session-id |
-| High memory use under many parallel sessions | Set `TOKENPAK_COMPACT_THRESHOLD_TOKENS=2500` to compress earlier |
+| High memory use under many parallel sessions | Reduce concurrent sessions or inspect cache/session memory; `TOKENPAK_COMPACT_THRESHOLD_TOKENS` does not change Claude Code bodies |
 | Cache shared unintentionally | Expected behavior; set `TOKENPAK_CACHE_SCOPE=session` to isolate |
 
 ---
@@ -377,7 +377,7 @@ TokenPak detects cron/worker mode via the `X-Claude-Code-NonInteractive: 1` head
 - **Budget enforcement** — set `TOKENPAK_BUDGET_DAILY_LIMIT_USD=5` to hard-stop runaway jobs
 - **Cost-per-run logging** — each cron invocation logged with timestamp, tokens, and USD
 - **Vault injection** — cron jobs can draw on vault knowledge (useful for scheduled summaries)
-- **Non-interactive compression** — aggressive token compression by default; cron payloads rarely need context preservation
+- **Byte-preserved transport** — non-interactive Claude request bodies are not passed through the legacy compact helper
 
 ### What to expect
 

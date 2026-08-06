@@ -1,28 +1,32 @@
 # Compression: How It Works
 
-TokenPak intercepts LLM requests on your machine and applies a multi-stage compression pipeline before forwarding them to the provider. The result is semantically equivalent content in fewer tokens.
+TokenPak provides explicit compression APIs and the `tokenpak compress` CLI.
+The built-in default HTTP proxy does not invoke the legacy
+`compact_request_body` helper. Request bodies are transformed only when a
+calling integration explicitly invokes a compression path; Claude Code request
+bodies remain byte-preserved.
 
 ---
 
-## When Compression Runs
+## When the Legacy Helper Runs
 
-Compression only activates when the request exceeds the active profile's token
-threshold (default in the balanced profile: **1,500 tokens**). Requests below
-the threshold are forwarded unchanged — no overhead.
+`compact_request_body` runs only when application code calls it. For those
+explicit calls, `TOKENPAK_COMPACT_THRESHOLD_TOKENS` supplies the minimum input
+size (default in the balanced profile: **1,500 tokens**). Inputs below that
+threshold are returned unchanged.
 
 ```
-Request received
+Explicit helper call
  │
- ├── input_tokens < threshold → passthrough (0ms overhead)
+ ├── input_tokens < threshold → unchanged
  │
  └── input_tokens ≥ threshold → compression pipeline
 ```
 
-Adjust the threshold:
-
-```bash
-TOKENPAK_COMPACT_THRESHOLD_TOKENS=2000 tokenpak serve
-```
+`TOKENPAK_COMPACT` and `compression.enabled` are compatibility-only settings:
+they are parsed and exported, but neither the helper nor the default HTTP path
+uses them as an on/off switch. Changing the threshold on `tokenpak serve` does
+not wire the helper into that path.
 
 ---
 
@@ -117,11 +121,13 @@ class PipelineResult:
 
 ## Compression Modes
 
-| Mode | `TOKENPAK_MODE` | Behavior |
+| Mode | `TOKENPAK_MODE` | Explicit-helper behavior |
 |---|---|---|
-| **Hybrid** (default) | `hybrid` | Compresses when tokens > threshold; skips if below |
-| **Strict** | `strict` | Always compresses, no threshold check |
-| **Aggressive** | `aggressive` | Maximum compression; accepts some quality reduction |
+| **Hybrid** (default) | `hybrid` | Applies eligible helper stages after the threshold check |
+| **Strict** | `strict` | Returns the body unchanged |
+| **Aggressive** | `aggressive` | Allows more eligible helper stages after the threshold check |
+
+These values do not activate compaction in the default HTTP proxy.
 
 ---
 
@@ -231,4 +237,6 @@ Stages: dedup (0 removed) → segmentize (14 blocks) → directives (applied)
 | Pre-compiled regex | 30% faster processing |
 | Batch SQLite WAL writes | 60% faster telemetry |
 
-Compression runs in the request path. On typical payloads it adds **10–50ms**, which is negligible compared to LLM latency (500ms–5s).
+Only explicit callers incur compression work. Benchmark the full calling
+integration with representative inputs; default HTTP proxy latency does not
+include a `compact_request_body` call.

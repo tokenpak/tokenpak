@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """UserPromptSubmit hook — ultra-lean pre-send pipeline.
 
-Performance critical: this runs on EVERY prompt. Must complete in < 100ms.
+Performance critical: this runs on EVERY prompt.  The synchronous path must
+never wait on a SQLite writer lock, WAL checkpoint, or database fsync.  The
+installed bash hook targets < 50ms; this Python fallback is otherwise bounded
+by interpreter startup plus one atomic write-ahead-intent enqueue.
 
 Design choices for speed:
     - No tiktoken (char//4 heuristic is within 3% per stress test)
@@ -10,9 +13,10 @@ Design choices for speed:
     - No heavy imports (stdlib + companion._sqlite, which is itself
       stdlib-only shared SQLite plumbing; the parent packages are already
       imported by the ``-m`` invocation)
-    - Journal write is best-effort, non-blocking; dropped writes are
-      counted in run/dropped-writes.log instead of vanishing silently
-    - Budget check uses direct SQLite query, no ORM
+    - Journal + cost persistence is one crash-replayable atomic intent;
+      SQLite materialisation happens outside the prompt's critical path
+    - Budget check uses a read-only SQLite snapshot plus pending intents,
+      so asynchronous persistence cannot open an under-count window
 
 Pipeline: read stdin → file-size token estimate → budget check → stderr output
 
@@ -89,7 +93,10 @@ def main() -> int:
     cost_est = tokens_est * _DEFAULT_INPUT_RATE / 1_000_000
 
     # Budget check
-    budget = float(os.environ.get("TOKENPAK_COMPANION_BUDGET", "0"))
+    try:
+        budget = float(os.environ.get("TOKENPAK_COMPANION_BUDGET", "0"))
+    except (TypeError, ValueError):
+        budget = 0.0
     daily_total = 0.0
     over_budget = False
 
@@ -133,14 +140,11 @@ def main() -> int:
     # (e.g. some older Claude CLI builds omit it in --print mode).
     if not session_id:
         session_id = f"anon-{os.getpid()}-{int(time.time())}"
-    _journal_write(session_id, tokens_est, cost_est)
-    # Record the pre-send cost estimate into companion_costs so per-session
-    # daily spend is actually tracked (this table is the basis for the budget
-    # gate above and for `tokenpak status` companion cost). Historically these
-    # rows landed with session_id='' because no live writer was wired after a
-    # refactor; this carries the real session_id. Best-effort, never fails the
-    # hook. Recorded AFTER the gate read above, so no double-count this cycle.
-    _record_cost(session_id, tokens_est, cost_est)
+    # Queue the journal entry and cost estimate as ONE atomic intent.  A
+    # detached singleton worker materialises it into both SQLite stores; the
+    # budget reader includes pending intents, so there is no under-count gap.
+    # Recorded AFTER the gate read above, so this cycle is counted exactly once.
+    _queue_pre_send(session_id, tokens_est, cost_est)
 
     # Cost estimate to stderr (visible in TUI)
     if tokens_est > 0 and os.environ.get("TOKENPAK_COMPANION_SHOW_COST", "1") != "0":
@@ -172,7 +176,7 @@ def _write_session_marker(session_id: str) -> None:
 
 
 def _get_daily_total() -> float:
-    """Quick SQLite query for today's truthful spend.
+    """Read today's truthful spend without mutating SQLite.
 
     Per (session, day): sums actual rows when present, otherwise takes the
     latest estimate (companion._sqlite.DAILY_SPEND_SQL) — the gate reads
@@ -184,20 +188,14 @@ def _get_daily_total() -> float:
     # Read across homes: a pre-canonical install has its spend history in the
     # legacy tree, and treating "file absent here" as zero spend would open
     # the budget gate on a user who has already spent.
-    db_path = _companion_config.resolve_journal_file("budget.db")
-    if db_path is None:
-        return 0.0
+    write_dir = _companion_config.journal_write_dir()
+    db_path = _companion_config.resolve_journal_file("budget.db") or (write_dir / "budget.db")
     try:
-        if not db_path.exists():
-            return 0.0
-        conn = _db.connect(db_path)
-        # Additive migration so the kind-aware query works on databases
-        # created before the 'kind' column existed.
-        _db.ensure_costs_schema(conn)
-        today = datetime.date.today().isoformat()
-        row = conn.execute(_db.DAILY_SPEND_SQL, (today,)).fetchone()
-        conn.close()
-        return float(row[0] or 0.0) if row else 0.0
+        return _db.daily_spend_with_pending(
+            db_path,
+            pending_base_dir=write_dir,
+            date=datetime.date.today().isoformat(),
+        )
     except Exception:
         return 0.0
 
@@ -212,108 +210,64 @@ def _journal_savings(
     Uses the canonical journal schema from companion._sqlite (shared with
     JournalStore) — the hook must never carry a divergent DDL copy.
     """
-    db_path = _companion_config.journal_write_dir() / "journal.db"
+    base_dir = _companion_config.journal_write_dir()
+    db_path = base_dir / "journal.db"
     try:
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = _db.connect(db_path)
-        _db.ensure_journal_schema(conn)
+        import datetime
+
+        timestamp = time.time()
         meta = {
             "tool": tool,
             "tokens_avoided": int(max(0, tokens_avoided)),
             "cost_avoided_usd": float(max(0.0, cost_avoided_usd)),
         }
         content = f"{tool}: -{meta['tokens_avoided']:,} tokens (~${meta['cost_avoided_usd']:.4f})"
-        metadata_json = json.dumps(meta)
-        conn.execute(
-            "INSERT OR IGNORE INTO entries "
-            "(session_id, timestamp, entry_type, content, metadata_json, content_hash) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                session_id,
-                time.time(),
-                "companion_savings",
-                content,
-                metadata_json,
-                _db.entry_content_hash("companion_savings", content, metadata_json),
-            ),
+        _db.queue_pre_send_event(
+            base_dir,
+            session_id=session_id,
+            timestamp=timestamp,
+            date=datetime.date.fromtimestamp(timestamp).isoformat(),
+            entry_type="companion_savings",
+            content=content,
+            metadata_json=json.dumps(meta),
+            tokens_est=None,
+            cost_est=None,
         )
-        conn.commit()
-        conn.close()
+        _db.request_async_pre_send_flush(base_dir)
     except Exception as exc:
         _db.note_dropped_write(db_path, "journal_savings", exc)  # never fails the hook
 
 
-def _journal_write(session_id: str, tokens_est: int, cost_est: float) -> None:
-    """Best-effort journal entry — never fails the hook.
+def _queue_pre_send(session_id: str, tokens_est: int, cost_est: float) -> None:
+    """Queue one replayable journal + cost intent; never fail the hook.
 
-    Uses the canonical journal schema from companion._sqlite (shared with
-    JournalStore); the hook historically carried a divergent copy of the
-    entries DDL and whichever process ran first won the schema race.
-    Duplicate deliveries of the same event collapse via the content-hash
-    UNIQUE index; dropped writes are logged instead of silently passed.
-    """
-    db_path = _companion_config.journal_write_dir() / "journal.db"
-    try:
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = _db.connect(db_path)
-        _db.ensure_journal_schema(conn)
-        content = f"pre-send: ~{tokens_est:,} tokens, est ${cost_est:.4f}"
-        metadata_json = json.dumps({"tokens_est": tokens_est, "cost_est": cost_est})
-        conn.execute(
-            "INSERT OR IGNORE INTO entries "
-            "(session_id, timestamp, entry_type, content, metadata_json, content_hash) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                session_id,
-                time.time(),
-                "auto",
-                content,
-                metadata_json,
-                _db.entry_content_hash("auto", content, metadata_json),
-            ),
-        )
-        conn.commit()
-        conn.close()
-    except Exception as exc:
-        _db.note_dropped_write(db_path, "journal_entry", exc)  # never fails the hook
-
-
-def _record_cost(session_id: str, tokens_est: int, cost_est: float) -> None:
-    """Best-effort pre-send cost row — never fails the hook.
-
-    Upserts ONE 'estimate' row per (session, day), refreshed in place to
-    the latest full-transcript estimate. The pre-send token estimate is
-    cumulative (whole transcript // 4), so inserting a row per prompt made
-    a session's rows grow monotonically and the daily gate summed the
-    series — wildly over-counting daily spend. One refreshed row per
-    session is equivalent to recording per-turn deltas against a
-    high-water mark: the day's total equals the sum of true marginal
-    estimates and never exceeds the final transcript estimate.
-
-    Output tokens are unknown pre-send, so only input is recorded; the
-    recording planes contribute 'actual' rows, which the gate prefers.
+    SQLite is intentionally absent from this function.  The atomic intent is
+    the durable handoff to the worker; journal content-hash dedupe and the
+    timestamp-ordered estimate upsert make replay safe if either database
+    commit is interrupted.
     """
     import datetime
 
-    db_path = _companion_config.journal_write_dir() / "budget.db"
+    base_dir = _companion_config.journal_write_dir()
+    db_path = base_dir / "journal.db"
     try:
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = _db.connect(db_path)
-        _db.ensure_costs_schema(conn)
-        conn.execute(
-            _db.COSTS_ESTIMATE_UPSERT_SQL,
-            (
-                time.time(),
-                datetime.date.today().isoformat(),
-                session_id,
-                int(max(0, tokens_est)),
-                round(float(max(0.0, cost_est)), 6),
-            ),
+        timestamp = time.time()
+        content = f"pre-send: ~{tokens_est:,} tokens, est ${cost_est:.4f}"
+        metadata_json = json.dumps({"tokens_est": tokens_est, "cost_est": cost_est})
+        _db.queue_pre_send_event(
+            base_dir,
+            session_id=session_id,
+            timestamp=timestamp,
+            date=datetime.date.fromtimestamp(timestamp).isoformat(),
+            entry_type="auto",
+            content=content,
+            metadata_json=metadata_json,
+            tokens_est=tokens_est,
+            cost_est=cost_est,
         )
-        conn.commit()
-        conn.close()
+        _db.request_async_pre_send_flush(base_dir)
     except Exception as exc:
-        _db.note_dropped_write(db_path, "cost_estimate", exc)  # never fails the hook
+        _db.note_dropped_write(db_path, "pre_send_intent", exc)  # never fails the hook
 
 
 if __name__ == "__main__":

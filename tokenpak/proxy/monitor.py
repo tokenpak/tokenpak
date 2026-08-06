@@ -67,6 +67,8 @@ _DB_QUEUE_LOCK = threading.Lock()
 _DB_QUEUE_MAX_SIZE = 1000
 _DB_BACKGROUND_THREAD: threading.Thread | None = None
 _DB_BACKGROUND_STOP = threading.Event()
+_SCHEMA_INIT_LOCK = threading.Lock()
+_BUDGET_ALERT_LOCK = threading.Lock()
 
 
 def _init_db_write_queue() -> None:
@@ -301,6 +303,20 @@ def _apply_schema_migration(conn: sqlite3.Connection, ddl: str) -> None:
         raise
 
 
+def _apply_missing_schema_migrations(
+    conn: sqlite3.Connection,
+    table: str,
+    migrations: tuple[tuple[str, str], ...],
+) -> None:
+    """Apply only migrations whose target column is absent from *table*."""
+    existing = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+    for column, ddl in migrations:
+        if column in existing:
+            continue
+        _apply_schema_migration(conn, ddl)
+        existing.add(column)
+
+
 def _estimate_bucket_savings_usd(
     model: str | None, compressed_tokens: int, cache_read_tokens: int
 ) -> float:
@@ -349,8 +365,30 @@ class Monitor:
 
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = db_path
-        self._lock = threading.Lock()
-        self._init_db()
+        self._schema_init_connection: sqlite3.Connection | None = None
+        try:
+            # SQLite remains the cross-process arbiter. Serializing schema
+            # setup here avoids making same-process Monitor constructors spend
+            # their busy-timeout budget contending with one another.
+            with _SCHEMA_INIT_LOCK:
+                self._init_db()
+        except BaseException:
+            # A failed schema transaction must not retain a lock or publish a
+            # partially initialized database. Do not rely on implementation-
+            # specific connection finalization to roll it back and close it.
+            conn = self._schema_init_connection
+            if conn is not None:
+                try:
+                    conn.rollback()
+                except sqlite3.Error:
+                    pass
+                try:
+                    conn.close()
+                except sqlite3.Error:
+                    pass
+            raise
+        finally:
+            self._schema_init_connection = None
         # Start background worker on first Monitor creation
         try:
             _init_db_write_queue()
@@ -359,10 +397,16 @@ class Monitor:
 
     def _init_db(self) -> None:
         conn = sqlite3.connect(str(self.db_path))
+        self._schema_init_connection = conn
         # Wait out short lock contention instead of failing migrations at
         # startup (a raced ALTER would otherwise surface as 'database is
         # locked' and abort schema setup).
         conn.execute("PRAGMA busy_timeout=5000")
+        # Batch all schema work into one durable commit. Without an explicit
+        # transaction SQLite autocommits every CREATE/ALTER separately; on
+        # high-latency filesystems a fresh Monitor could spend >30 seconds on
+        # redundant schema fsyncs and trip the release test timeout.
+        conn.execute("BEGIN IMMEDIATE")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -383,11 +427,24 @@ class Monitor:
                 cache_read_tokens INTEGER DEFAULT 0,
                 cache_creation_tokens INTEGER DEFAULT 0,
                 would_have_saved INTEGER DEFAULT 0,
+                cache_origin TEXT DEFAULT 'unknown',
                 user_id TEXT DEFAULT '',
+                cache_creation_ephemeral_1h_tokens INTEGER DEFAULT 0,
+                cache_creation_ephemeral_5m_tokens INTEGER DEFAULT 0,
+                ttl_attribution TEXT DEFAULT NULL,
                 session_id TEXT DEFAULT '',
                 agent_id TEXT DEFAULT '',
                 cycle_id TEXT DEFAULT '',
-                attribution_source TEXT DEFAULT ''
+                attribution_source TEXT DEFAULT '',
+                reasoning_tokens INTEGER DEFAULT NULL,
+                visible_output_tokens INTEGER DEFAULT NULL,
+                total_billable_tokens INTEGER DEFAULT NULL,
+                reasoning_effort TEXT DEFAULT '',
+                reasoning_usage_source TEXT DEFAULT '',
+                provider_usage_ref TEXT DEFAULT '',
+                stream_mode TEXT DEFAULT '',
+                event_transform_applied INTEGER DEFAULT 0,
+                stop_reason TEXT DEFAULT ''
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ts ON requests(timestamp)")
@@ -397,85 +454,85 @@ class Monitor:
         # propagate; swallowing it would silently skip the ALTER, leave the
         # schema behind, and make every INSERT fail with 'no such column'
         # until restart.
-        _apply_schema_migration(
-            conn, "ALTER TABLE requests ADD COLUMN injected_tokens INTEGER DEFAULT 0"
-        )
-        _apply_schema_migration(
-            conn, "ALTER TABLE requests ADD COLUMN injected_sources TEXT DEFAULT ''"
-        )
-        _apply_schema_migration(
-            conn, "ALTER TABLE requests ADD COLUMN cache_read_tokens INTEGER DEFAULT 0"
-        )
-        _apply_schema_migration(
-            conn, "ALTER TABLE requests ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0"
-        )
-        _apply_schema_migration(
-            conn, "ALTER TABLE requests ADD COLUMN would_have_saved INTEGER DEFAULT 0"
-        )
-        _apply_schema_migration(
-            conn, "ALTER TABLE requests ADD COLUMN cache_origin TEXT DEFAULT 'unknown'"
-        )
-        # Anthropic prompt-cache TTL attribution (additive, backward-compatible).
-        # Older rows have NULL/0 here; readers must COALESCE for aggregation.
-        _apply_schema_migration(
+        _apply_missing_schema_migrations(
             conn,
-            "ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_1h_tokens INTEGER DEFAULT 0",
+            "requests",
+            (
+                (
+                    "injected_tokens",
+                    "ALTER TABLE requests ADD COLUMN injected_tokens INTEGER DEFAULT 0",
+                ),
+                (
+                    "injected_sources",
+                    "ALTER TABLE requests ADD COLUMN injected_sources TEXT DEFAULT ''",
+                ),
+                (
+                    "cache_read_tokens",
+                    "ALTER TABLE requests ADD COLUMN cache_read_tokens INTEGER DEFAULT 0",
+                ),
+                (
+                    "cache_creation_tokens",
+                    "ALTER TABLE requests ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0",
+                ),
+                (
+                    "would_have_saved",
+                    "ALTER TABLE requests ADD COLUMN would_have_saved INTEGER DEFAULT 0",
+                ),
+                (
+                    "cache_origin",
+                    "ALTER TABLE requests ADD COLUMN cache_origin TEXT DEFAULT 'unknown'",
+                ),
+                (
+                    "cache_creation_ephemeral_1h_tokens",
+                    "ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_1h_tokens INTEGER DEFAULT 0",
+                ),
+                (
+                    "cache_creation_ephemeral_5m_tokens",
+                    "ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_5m_tokens INTEGER DEFAULT 0",
+                ),
+                (
+                    "ttl_attribution",
+                    "ALTER TABLE requests ADD COLUMN ttl_attribution TEXT DEFAULT NULL",
+                ),
+                ("user_id", "ALTER TABLE requests ADD COLUMN user_id TEXT DEFAULT ''"),
+                (
+                    "reasoning_tokens",
+                    "ALTER TABLE requests ADD COLUMN reasoning_tokens INTEGER DEFAULT NULL",
+                ),
+                (
+                    "visible_output_tokens",
+                    "ALTER TABLE requests ADD COLUMN visible_output_tokens INTEGER DEFAULT NULL",
+                ),
+                (
+                    "total_billable_tokens",
+                    "ALTER TABLE requests ADD COLUMN total_billable_tokens INTEGER DEFAULT NULL",
+                ),
+                (
+                    "reasoning_effort",
+                    "ALTER TABLE requests ADD COLUMN reasoning_effort TEXT DEFAULT ''",
+                ),
+                (
+                    "reasoning_usage_source",
+                    "ALTER TABLE requests ADD COLUMN reasoning_usage_source TEXT DEFAULT ''",
+                ),
+                (
+                    "provider_usage_ref",
+                    "ALTER TABLE requests ADD COLUMN provider_usage_ref TEXT DEFAULT ''",
+                ),
+                ("stream_mode", "ALTER TABLE requests ADD COLUMN stream_mode TEXT DEFAULT ''"),
+                (
+                    "event_transform_applied",
+                    "ALTER TABLE requests ADD COLUMN event_transform_applied INTEGER DEFAULT 0",
+                ),
+                ("agent_id", "ALTER TABLE requests ADD COLUMN agent_id TEXT DEFAULT ''"),
+                ("cycle_id", "ALTER TABLE requests ADD COLUMN cycle_id TEXT DEFAULT ''"),
+                (
+                    "attribution_source",
+                    "ALTER TABLE requests ADD COLUMN attribution_source TEXT DEFAULT ''",
+                ),
+                ("stop_reason", "ALTER TABLE requests ADD COLUMN stop_reason TEXT DEFAULT ''"),
+            ),
         )
-        _apply_schema_migration(
-            conn,
-            "ALTER TABLE requests ADD COLUMN cache_creation_ephemeral_5m_tokens INTEGER DEFAULT 0",
-        )
-        _apply_schema_migration(
-            conn, "ALTER TABLE requests ADD COLUMN ttl_attribution TEXT DEFAULT NULL"
-        )
-        # P0-06 (A6): user_id holds the SHA-256 hex of the proxy auth bearer
-        # token when the proxy auth gate accepted the request via the bearer
-        # path. Empty string for localhost / pre-A6 rows. Hash only — never the
-        # raw token.
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN user_id TEXT DEFAULT ''")
-        # Reasoning-usage columns (Provider-Native Compatibility Foundation,
-        # Packet A 2026-05-16). Populated by the dynamic per-provider parser
-        # registry under tokenpak.services.providers. Null/0 for pre-feature
-        # rows and for providers without reasoning usage surfaces.
-        for _alter in (
-            "ALTER TABLE requests ADD COLUMN reasoning_tokens INTEGER DEFAULT NULL",
-            "ALTER TABLE requests ADD COLUMN visible_output_tokens INTEGER DEFAULT NULL",
-            "ALTER TABLE requests ADD COLUMN total_billable_tokens INTEGER DEFAULT NULL",
-            "ALTER TABLE requests ADD COLUMN reasoning_effort TEXT DEFAULT ''",
-            "ALTER TABLE requests ADD COLUMN reasoning_usage_source TEXT DEFAULT ''",
-            "ALTER TABLE requests ADD COLUMN provider_usage_ref TEXT DEFAULT ''",
-        ):
-            _apply_schema_migration(conn, _alter)
-        # Stream-mode telemetry columns (Provider-Native Compatibility
-        # Foundation, Packet D 2026-05-16). Populated when the stream
-        # translator or byte-passthrough decision path resolves; empty
-        # string for non-streaming or pre-feature rows.
-        for _alter in (
-            "ALTER TABLE requests ADD COLUMN stream_mode TEXT DEFAULT ''",
-            "ALTER TABLE requests ADD COLUMN event_transform_applied INTEGER DEFAULT 0",
-        ):
-            _apply_schema_migration(conn, _alter)
-        # D5 (finishes Fix A): agent/cycle attribution columns on requests.
-        # agent_id <- X-Tokenpak-Agent header; cycle_id <- X-Tokenpak-Cycle
-        # (no caller sets X-Tokenpak-Cycle yet -> '' sentinel, classified
-        # 'unknown', never fabricated). Idempotent — columns may pre-exist
-        # from a peer migration. Telemetry contract: '' sentinel, not NULL.
-        for _alter in (
-            "ALTER TABLE requests ADD COLUMN agent_id TEXT DEFAULT ''",
-            "ALTER TABLE requests ADD COLUMN cycle_id TEXT DEFAULT ''",
-            # attribution_source <- platform-origin extractor (Path C). Non-empty
-            # only when origin is genuinely known; '' sentinel otherwise (never
-            # fabricated). Idempotent — may pre-exist from a peer migration.
-            "ALTER TABLE requests ADD COLUMN attribution_source TEXT DEFAULT ''",
-        ):
-            _apply_schema_migration(conn, _alter)
-        # Provider execution truth: stop_reason observed on the response path
-        # (non-streaming JSON `stop_reason`; SSE `message_delta.delta.stop_reason`).
-        # Makes a refusal returned as HTTP 200 distinguishable from a successful
-        # completion on receipt rows. '' sentinel = not observed (legacy rows,
-        # errored/truncated streams) - never fabricated. Idempotent.
-        _apply_schema_migration(conn, "ALTER TABLE requests ADD COLUMN stop_reason TEXT DEFAULT ''")
-        conn.commit()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -488,7 +545,6 @@ class Monitor:
                 triggered INTEGER DEFAULT 1
             )
         """)
-        conn.commit()
         # Duplicate-alert guard: at most one budget alert per (local day,
         # period). Pre-existing duplicates from the old check-then-insert
         # race are collapsed to the earliest row so the unique index can be
@@ -502,7 +558,6 @@ class Monitor:
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_alerts_day_period "
                 "ON budget_alerts(date(timestamp), period)"
             )
-            conn.commit()
         except sqlite3.OperationalError as exc:
             # Expression indexes need a modern SQLite; without the index the
             # INSERT ... WHERE NOT EXISTS guard still bounds duplicates.
@@ -512,13 +567,13 @@ class Monitor:
             )
 
         # session_id on requests + mutation_audit table
-        try:
-            from tokenpak.proxy.db import ensure_schema as _ccg02_ensure_schema
+        from tokenpak.proxy.db import ensure_schema as _ccg02_ensure_schema
 
-            _ccg02_ensure_schema(conn)
-            conn.commit()
-        except Exception as e:
-            print(f"⚠️  schema migration error (non-fatal): {e}")
+        # Every failure is fatal to this transaction.  Downgrading an
+        # unexpected programming or schema error to a warning would commit a
+        # partially initialized database and defer the failure to later writes.
+        _ccg02_ensure_schema(conn)
+        conn.commit()
 
         # Run migrations to bring DB schema up to current version
         try:
@@ -764,44 +819,53 @@ class Monitor:
             threshold_pct = 80.0
         if daily_limit <= 0:
             return
-        conn = self._read_connection()
-        try:
-            # Rows are stamped with LOCAL time (datetime.now().isoformat());
-            # the day window must be local too. Bare date('now') is UTC and
-            # would read today's spend as $0 for part of every local day.
-            spent = (
-                conn.execute(
-                    "SELECT COALESCE(SUM(estimated_cost), 0) FROM requests "
-                    "WHERE date(timestamp) = date('now', 'localtime')"
-                ).fetchone()[0]
-                or 0.0
-            )
-            total_spent = float(spent) + float(current_cost)
-            if total_spent >= daily_limit * threshold_pct / 100:
-                import datetime as _dt
-
-                # Dedupe: the UNIQUE(date(timestamp), period) index plus
-                # INSERT OR IGNORE collapse concurrent triggers into one row
-                # per local day; the NOT EXISTS guard keeps behavior bounded
-                # even on SQLite builds without expression-index support.
-                conn.execute(
-                    "INSERT OR IGNORE INTO budget_alerts "
-                    "(timestamp, period, budget_usd, spent_usd, pct_used, triggered) "
-                    "SELECT ?, ?, ?, ?, ?, ? "
-                    "WHERE NOT EXISTS (SELECT 1 FROM budget_alerts "
-                    "WHERE date(timestamp) = date('now', 'localtime') AND period = 'daily')",
-                    (
-                        _dt.datetime.now().isoformat(),
-                        "daily",
-                        daily_limit,
-                        total_spent,
-                        round(total_spent / daily_limit * 100, 2),
-                        1,
-                    ),
+        # A deferred SELECT-then-INSERT transaction can deadlock when two
+        # readers both try to upgrade to writers. Serialize all Monitor
+        # instances in this process and claim SQLite's writer slot before
+        # reading; BEGIN IMMEDIATE remains the cross-process arbiter.
+        with _BUDGET_ALERT_LOCK:
+            conn = self._read_connection()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                # Rows are stamped with LOCAL time (datetime.now().isoformat());
+                # the day window must be local too. Bare date('now') is UTC and
+                # would read today's spend as $0 for part of every local day.
+                spent = (
+                    conn.execute(
+                        "SELECT COALESCE(SUM(estimated_cost), 0) FROM requests "
+                        "WHERE date(timestamp) = date('now', 'localtime')"
+                    ).fetchone()[0]
+                    or 0.0
                 )
+                total_spent = float(spent) + float(current_cost)
+                if total_spent >= daily_limit * threshold_pct / 100:
+                    import datetime as _dt
+
+                    # Dedupe: the UNIQUE(date(timestamp), period) index plus
+                    # INSERT OR IGNORE collapse concurrent triggers into one row
+                    # per local day; the NOT EXISTS guard keeps behavior bounded
+                    # even on SQLite builds without expression-index support.
+                    conn.execute(
+                        "INSERT OR IGNORE INTO budget_alerts "
+                        "(timestamp, period, budget_usd, spent_usd, pct_used, triggered) "
+                        "SELECT ?, ?, ?, ?, ?, ? "
+                        "WHERE NOT EXISTS (SELECT 1 FROM budget_alerts "
+                        "WHERE date(timestamp) = date('now', 'localtime') AND period = 'daily')",
+                        (
+                            _dt.datetime.now().isoformat(),
+                            "daily",
+                            daily_limit,
+                            total_spent,
+                            round(total_spent / daily_limit * 100, 2),
+                            1,
+                        ),
+                    )
                 conn.commit()
-        finally:
-            conn.close()
+            except BaseException:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
 
     def get_budget_alert_status(
         self, _daily_limit: float | None = None, _threshold_pct: float | None = None

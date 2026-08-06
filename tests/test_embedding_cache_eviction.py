@@ -15,15 +15,39 @@ writes survive concurrent eviction pressure.
 
 from __future__ import annotations
 
+import os
+import shutil
 import sqlite3
+import tempfile
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from tokenpak.proxy import embedding_cache as ec_module
 from tokenpak.proxy.embedding_cache import _ROW_OVERHEAD_BYTES, EmbeddingCache
+
+
+@pytest.fixture
+def cache_db_path():
+    """Place the correctness fixture on tmpfs when the host provides it.
+
+    ``EmbeddingCache.put`` intentionally exercises real SQLite commits.  On a
+    loaded release-suite host, unrelated ext4 fsync pressure can consume the
+    global 30-second pytest timeout even though this test is not a durability
+    or latency benchmark.  tmpfs keeps the eviction assertions deterministic;
+    platforms without it retain the normal temporary-directory fallback.
+    """
+
+    shm = Path("/dev/shm")
+    base = str(shm) if shm.is_dir() and os.access(shm, os.W_OK) else None
+    home = Path(tempfile.mkdtemp(prefix="tokenpak-embedding-cache-test-", dir=base))
+    try:
+        yield str(home / "emb.db")
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
 
 
 def _row_count(db_path: str) -> int:
@@ -45,9 +69,9 @@ def _logical_bytes(db_path: str) -> int:
         con.close()
 
 
-def test_over_cap_eviction_keeps_newest_rows(tmp_path, monkeypatch) -> None:
+def test_over_cap_eviction_keeps_newest_rows(cache_db_path, monkeypatch) -> None:
     """Only the OLDEST rows go; the newest survive and the cache never empties."""
-    db = str(tmp_path / "emb.db")
+    db = cache_db_path
     cache = EmbeddingCache(db, ttl_days=7, max_mb=1)
 
     # Deterministic, strictly-increasing created_at timestamps.
@@ -83,8 +107,8 @@ def test_over_cap_eviction_keeps_newest_rows(tmp_path, monkeypatch) -> None:
     assert _logical_bytes(db) <= 1 * 1024 * 1024
 
 
-def test_under_cap_puts_never_evict(tmp_path) -> None:
-    db = str(tmp_path / "emb.db")
+def test_under_cap_puts_never_evict(cache_db_path) -> None:
+    db = cache_db_path
     cache = EmbeddingCache(db, ttl_days=7, max_mb=100)
 
     for i in range(10):
@@ -99,9 +123,9 @@ def test_under_cap_puts_never_evict(tmp_path) -> None:
 # eviction purge, each thread retrying transient lock contention, can exceed
 # 30s on a loaded host. The 60s thread joins bound the real hang.
 @pytest.mark.timeout(120)
-def test_concurrent_puts_survive_eviction_pressure(tmp_path) -> None:
+def test_concurrent_puts_survive_eviction_pressure(cache_db_path) -> None:
     """Concurrent writers racing the purge must not error or go cold."""
-    db = str(tmp_path / "emb.db")
+    db = cache_db_path
     cache = EmbeddingCache(db, ttl_days=7, max_mb=1)
     payload = b"y" * (100 * 1024)  # ~100 KB; budget fits ~9 rows
     errors: list[Exception] = []

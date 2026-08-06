@@ -2,8 +2,9 @@
 Smoke tests for the synthetic legacy cost fixture builder (FORENSIC-70-137-184).
 
 Asserts that each builder produces a well-formed SQLite DB with the expected
-tp_events / tp_costs row counts and key shapes.  Does NOT exercise cost.py
-repair logic — that belongs to the parent task's regression suite.
+tp_events / tp_costs row counts and key shapes. Also exercises the file-backed
+legacy tp_costs schema migration; cost.py repair logic belongs to the parent
+task's regression suite.
 """
 
 from __future__ import annotations
@@ -22,6 +23,26 @@ from tests.telemetry.fixtures.legacy_cost_fixtures import (
     build_multi_event_per_trace_db,
     build_multi_pricing_version_db,
 )
+from tokenpak.telemetry.storage import TelemetryDB
+
+_CANONICAL_COST_COLUMNS = {
+    "trace_id",
+    "cost_input",
+    "cost_output",
+    "cost_cache_read",
+    "cost_cache_write",
+    "cost_total",
+    "cost_source",
+    "pricing_version",
+    "baseline_input_tokens",
+    "actual_input_tokens",
+    "output_tokens",
+    "baseline_cost",
+    "actual_cost",
+    "savings_total",
+    "savings_qmd",
+    "savings_tp",
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -160,7 +181,7 @@ def test_legacy_schema_has_actual_cost():
 
 
 def test_legacy_schema_no_cost_total():
-    """Absence of cost_total triggers the DROP+recreate migration path in storage.py."""
+    """Absence of cost_total exercises the additive migration path."""
     conn = build_legacy_schema_db()
     cols = _column_names(conn, "tp_costs")
     assert "cost_total" not in cols, (
@@ -173,6 +194,45 @@ def test_legacy_schema_traces_matched():
     event_ids = {r[0] for r in conn.execute("SELECT trace_id FROM tp_events")}
     cost_ids = {r[0] for r in conn.execute("SELECT trace_id FROM tp_costs")}
     assert event_ids == cost_ids
+
+
+def test_legacy_schema_migration_preserves_rows_and_is_idempotent(tmp_path):
+    legacy = build_legacy_schema_db()
+    db_path = tmp_path / "legacy-telemetry.db"
+    destination = sqlite3.connect(db_path)
+    try:
+        legacy.backup(destination)
+    finally:
+        destination.close()
+        legacy.close()
+
+    def _snapshot():
+        conn = sqlite3.connect(db_path)
+        try:
+            columns = _column_names(conn, "tp_costs")
+            rows = conn.execute(
+                """SELECT trace_id, cost_input, cost_output, actual_cost, cost_total
+                   FROM tp_costs ORDER BY trace_id"""
+            ).fetchall()
+            return columns, rows
+        finally:
+            conn.close()
+
+    with TelemetryDB(db_path):
+        pass
+
+    columns, rows = _snapshot()
+    assert columns == _CANONICAL_COST_COLUMNS
+    assert rows == [
+        ("trace-legacy-001", 0.0004, 0.0006, 0.001, 0.001),
+        ("trace-legacy-002", 0.0004, 0.0006, 0.001, 0.001),
+    ]
+    assert all(actual_cost == cost_total for *_, actual_cost, cost_total in rows)
+
+    with TelemetryDB(db_path):
+        pass
+
+    assert _snapshot() == (columns, rows)
 
 
 # ---------------------------------------------------------------------------

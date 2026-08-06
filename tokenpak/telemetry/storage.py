@@ -36,14 +36,32 @@ from typing import Any, Optional, Union, cast
 
 from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
 
+# Schema setup is rare and process-global serialization avoids first-opener
+# races between threads. SQLite remains the cross-process arbiter; the bounded
+# busy/locked retry in ``_apply_ddl`` covers independent worker processes.
+_SCHEMA_INIT_LOCK = threading.Lock()
+_SCHEMA_INIT_TIMEOUT_SECONDS = 30.0
+_SCHEMA_INIT_MAX_BACKOFF_SECONDS = 0.25
+
+
+def _is_sqlite_busy_or_locked(exc: sqlite3.OperationalError) -> bool:
+    """Return whether *exc* represents transient SQLite lock contention."""
+    code = getattr(exc, "sqlite_errorcode", None)
+    base_code = code & 0xFF if isinstance(code, int) else None
+    if base_code in {
+        getattr(sqlite3, "SQLITE_BUSY", 5),
+        getattr(sqlite3, "SQLITE_LOCKED", 6),
+    }:
+        return True
+    message = str(exc).lower()
+    return "locked" in message or "busy" in message
+
+
 # ---------------------------------------------------------------------------
 # DDL
 # ---------------------------------------------------------------------------
 
 _DDL = """
-PRAGMA journal_mode=WAL;
-PRAGMA foreign_keys=ON;
-
 CREATE TABLE IF NOT EXISTS tp_events (
     trace_id        TEXT NOT NULL,
     request_id      TEXT NOT NULL DEFAULT '',
@@ -282,7 +300,12 @@ class TelemetryDB:
         )
         self._keeper = self._connect()
         self._local.conn = self._keeper
-        self._apply_ddl()
+        try:
+            with _SCHEMA_INIT_LOCK:
+                self._apply_ddl()
+        except Exception:
+            self.close()
+            raise
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -319,10 +342,38 @@ class TelemetryDB:
         return conn
 
     def _apply_ddl(self) -> None:
-        """Create tables and indexes if they don't already exist."""
-        self._conn.executescript(_DDL)
-        self._migrate_schema()
-        self._conn.commit()
+        """Create/migrate the schema atomically, retrying writer contention."""
+        deadline = time.monotonic() + _SCHEMA_INIT_TIMEOUT_SECONDS
+        delay = 0.01
+
+        while True:
+            try:
+                # ``executescript`` otherwise commits before running and each
+                # DDL statement can become independently visible.  Apply
+                # connection pragmas before opening one explicit transaction,
+                # then leave that transaction open through additive migration.
+                self._conn.execute("PRAGMA journal_mode=WAL")
+                self._conn.execute("PRAGMA foreign_keys=ON")
+                self._conn.executescript("BEGIN IMMEDIATE;\n" + _DDL)
+                self._migrate_schema()
+                self._conn.commit()
+                return
+            except sqlite3.OperationalError as exc:
+                try:
+                    self._conn.rollback()
+                except sqlite3.Error:
+                    pass
+                remaining = deadline - time.monotonic()
+                if not _is_sqlite_busy_or_locked(exc) or remaining <= 0:
+                    raise
+                time.sleep(min(delay, remaining))
+                delay = min(delay * 2, _SCHEMA_INIT_MAX_BACKOFF_SECONDS)
+            except BaseException:
+                try:
+                    self._conn.rollback()
+                except sqlite3.Error:
+                    pass
+                raise
 
     def _migrate_schema(self) -> None:
         """Apply schema migrations for existing databases.
@@ -337,37 +388,41 @@ class TelemetryDB:
             """Add *col* to *table* if it doesn't already exist."""
             try:
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
-            except Exception:
-                pass  # Column already exists — safe to ignore
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
 
         # ----------------------------------------------------------------
-        # tp_costs: handle legacy schema that had actual_cost but no cost_total
+        # tp_costs — preserve legacy rows while filling the canonical shape.
         # ----------------------------------------------------------------
         cur.execute("PRAGMA table_info(tp_costs)")
         costs_cols = {row[1]: row for row in cur.fetchall()}
+        had_actual_cost = "actual_cost" in costs_cols
+        cost_total_added = "cost_total" not in costs_cols
 
-        if "actual_cost" in costs_cols and "cost_total" not in costs_cols:
-            cur.execute("DROP TABLE IF EXISTS tp_costs")
-            cur.execute("""
-                CREATE TABLE tp_costs (
-                    trace_id                TEXT NOT NULL PRIMARY KEY,
-                    cost_input              REAL NOT NULL DEFAULT 0,
-                    cost_output             REAL NOT NULL DEFAULT 0,
-                    cost_cache_read         REAL NOT NULL DEFAULT 0,
-                    cost_cache_write        REAL NOT NULL DEFAULT 0,
-                    cost_total              REAL NOT NULL DEFAULT 0,
-                    cost_source             TEXT NOT NULL DEFAULT 'provider',
-                    pricing_version         TEXT NOT NULL DEFAULT 'v1',
-                    baseline_input_tokens   INTEGER NOT NULL DEFAULT 0,
-                    actual_input_tokens     INTEGER NOT NULL DEFAULT 0,
-                    output_tokens           INTEGER NOT NULL DEFAULT 0,
-                    baseline_cost           REAL NOT NULL DEFAULT 0,
-                    actual_cost             REAL NOT NULL DEFAULT 0,
-                    savings_total           REAL NOT NULL DEFAULT 0,
-                    savings_qmd             REAL NOT NULL DEFAULT 0,
-                    savings_tp              REAL NOT NULL DEFAULT 0
-                )
-            """)
+        # SQLite can add these constant-default columns without rebuilding the
+        # table, so historical trace IDs and cost values remain in place.
+        _add_col("tp_costs", "cost_input", "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "cost_output", "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "cost_cache_read", "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "cost_cache_write", "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "cost_total", "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "cost_source", "TEXT NOT NULL DEFAULT 'provider'")
+        _add_col("tp_costs", "pricing_version", "TEXT NOT NULL DEFAULT 'v1'")
+        _add_col("tp_costs", "baseline_input_tokens", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "actual_input_tokens", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "output_tokens", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "baseline_cost", "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "actual_cost", "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "savings_total", "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "savings_qmd", "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "savings_tp", "REAL NOT NULL DEFAULT 0")
+
+        # ``actual_cost`` was the legacy total. Copy it only when this upgrade
+        # introduced ``cost_total``; later opens must leave current values
+        # untouched, making the migration idempotent.
+        if cost_total_added and had_actual_cost:
+            cur.execute("UPDATE tp_costs SET cost_total = COALESCE(actual_cost, 0)")
 
         # ----------------------------------------------------------------
         # tp_events — legacy columns + PRD additions
@@ -400,15 +455,6 @@ class TelemetryDB:
         _add_col("tp_usage", "total_tokens_billed", "INTEGER NOT NULL DEFAULT 0")
         _add_col("tp_usage", "total_tokens_est", "INTEGER NOT NULL DEFAULT 0")
         _add_col("tp_usage", "provider_usage_raw", "TEXT NOT NULL DEFAULT '{}'")
-
-        # ----------------------------------------------------------------
-        # tp_costs — legacy column + PRD additions
-        # ----------------------------------------------------------------
-        _add_col("tp_costs", "baseline_input_tokens", "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_costs", "pricing_version", "TEXT NOT NULL DEFAULT 'v1'")
-        _add_col("tp_costs", "actual_input_tokens", "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_costs", "output_tokens", "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_costs", "actual_cost", "REAL NOT NULL DEFAULT 0")
 
         # ----------------------------------------------------------------
         # Rollup tables — PRD avg_* additions

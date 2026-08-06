@@ -242,6 +242,7 @@ def _calculate_data() -> DailySavingsData:
         pass
 
     # Estimated monthly rate
+    estimated_monthly: float | Literal["unknown"]
     if (
         isinstance(requests, int)
         and requests > 0
@@ -253,7 +254,7 @@ def _calculate_data() -> DailySavingsData:
         daily_savings = savings_amount / max(days_running, 0.1)
         estimated_monthly = daily_savings * 30
     else:
-        estimated_monthly: float | Literal["unknown"] = (
+        estimated_monthly = (
             0.0
             if isinstance(requests, int)
             and isinstance(savings_amount, float)

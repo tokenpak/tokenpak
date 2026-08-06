@@ -73,7 +73,7 @@ def _effective(env_var: str, default: str) -> str:
 
     origin = setting_origin(env_var)
     if origin == "env":
-        return cast(str, os.environ[env_var])
+        return os.environ[env_var]
     if origin == "profile":
         from tokenpak.proxy.config import ACTIVE_PROFILE, profile_preset
 

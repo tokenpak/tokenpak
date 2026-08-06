@@ -168,9 +168,13 @@ class CodeExtractor:
 
         # de-dup test_fns by name (can be detected twice via different regexes)
         seen_test_names: Set[str] = set()
-        test_fns = [
-            (n, b) for n, b in test_fns if not (n in seen_test_names or seen_test_names.add(n))
-        ]  # type: ignore[func-returns-value]
+        unique_test_fns: List[Tuple[str, List[str]]] = []
+        for name, body_lines in test_fns:
+            if name in seen_test_names:
+                continue
+            seen_test_names.add(name)
+            unique_test_fns.append((name, body_lines))
+        test_fns = unique_test_fns
 
         result.changed_functions = [n for n, _ in changed]
         result.test_targets = [n for n, _ in test_fns]

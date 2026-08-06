@@ -86,6 +86,14 @@ def test_scoped_home_state_paths_and_fleet_untouched(scoped_home):
             assert f.stat().st_mtime_ns == snap[1]
 
 
+def test_oauth_manager_default_path_tracks_scoped_home(scoped_home):
+    from tokenpak.core.auth.oauth_manager import OAuthManager
+
+    manager = OAuthManager()
+
+    assert manager.auth_profiles_file == scoped_home / "auth-profiles.json"
+
+
 # ── Test 4: license path scoped under TOKENPAK_HOME / TOKENPAK_LICENSE_FILE ─────
 def test_license_path_scoped(scoped_home, monkeypatch):
     from tokenpak.licensing import _license_path
@@ -114,11 +122,28 @@ def test_no_home_hardcode_for_runtime_state():
     assert not offenders, f"fleet-home hardcodes remain: {offenders}"
 
 
-# ── Test 6 (repro-pin + default preservation): unset TOKENPAK_HOME resolves to
-#    the legacy ~/.tokenpak home (current fleet behavior). ──────────────────────
-def test_default_behavior_preserved_when_home_unset(monkeypatch):
+# ── Test 6: fresh state defaults to canonical; legacy state stays put. ──────
+def test_fresh_default_home_is_canonical(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.delenv("TOKENPAK_HOME", raising=False)
-    if _paths.canonical_home().exists():
-        pytest.skip("~/.tpk present — canonical home active; legacy-default check N/A")
-    assert _paths.home() == Path.home() / ".tokenpak"
-    assert _paths.under("proxy.pid") == Path.home() / ".tokenpak" / "proxy.pid"
+
+    canonical = tmp_path / ".tpk"
+    legacy = tmp_path / ".tokenpak"
+    assert not canonical.exists()
+    assert not legacy.exists()
+    assert _paths.home() == canonical
+    assert _paths.under("proxy.pid") == canonical / "proxy.pid"
+
+
+def test_existing_legacy_home_is_preserved(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.delenv("TOKENPAK_HOME", raising=False)
+
+    legacy = tmp_path / ".tokenpak"
+    legacy.mkdir()
+    (legacy / "config.yaml").write_text("profile: balanced\n", encoding="utf-8")
+
+    assert _paths.home() == legacy
+    assert _paths.under("proxy.pid") == legacy / "proxy.pid"
