@@ -17,8 +17,8 @@
 #     Abbreviating the SHA partly undoes the immutability claim.
 #
 #   • Version tags and branch refs are mutable. A compromised upstream account
-#     can repoint them without changing this repository, so they do not satisfy
-#     the release-artifact integrity contract in Standard 52 §4.5.
+#     can repoint them without changing this repository, so they do not
+#     satisfy this project's release-artifact integrity contract.
 #
 # Exit codes:
 #
