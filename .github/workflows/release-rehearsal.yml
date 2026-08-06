@@ -66,10 +66,10 @@ jobs:
         shape: [slim, dev, full]
         python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -130,8 +130,8 @@ jobs:
       # See REIPO-SNAPGEN-LOG-HYGIENE-01.
       TOKENPAK_SNAPSHOT_GEN: "1"
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
       - name: Install (all extras for canonical snapshot reproduction)
@@ -162,8 +162,8 @@ jobs:
     needs: preflight
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
       - name: Build sdist + wheel for scanning
@@ -175,11 +175,11 @@ jobs:
 
   build-artifacts:
     name: Build sdist + wheel + sdist purity (R9)
-    needs: [install-shape-matrix, release-gate-snapshots, leak-scan]
+    needs: [preflight, install-shape-matrix, release-gate-snapshots, leak-scan]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
       - name: Install build
@@ -199,7 +199,7 @@ jobs:
           fi
           echo "✅  sdist + wheel purity: no _internal/ paths"
       - name: Upload artifacts (rehearsal — never published)
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: rehearsal-dist-${{ needs.preflight.outputs.rehearsal_tag }}
           path: dist/
@@ -210,7 +210,7 @@ jobs:
     # 'refs/tags/rehearsal-*'`) lives on the production release.yml publish
     # step; here we explicitly fail if anyone tries to publish a rehearsal tag.
     name: Publish guard (rehearsal MUST NOT publish)
-    needs: build-artifacts
+    needs: [preflight, build-artifacts]
     runs-on: ubuntu-latest
     steps:
       - name: Refuse to publish rehearsal tag
