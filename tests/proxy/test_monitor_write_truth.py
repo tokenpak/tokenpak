@@ -116,6 +116,9 @@ class _FlakyConnection:
     def commit(self):
         return self._real.commit()
 
+    def rollback(self):
+        return self._real.rollback()
+
     def close(self):
         return self._real.close()
 
@@ -179,10 +182,14 @@ def test_write_row_raises_after_retries_exhausted(tmp_path, monkeypatch):
 
     class _AlwaysLocked:
         attempts = 0
+        rollbacks = 0
 
         def execute(self, *a, **k):
             self.attempts += 1
             raise sqlite3.OperationalError("database is locked")
+
+        def rollback(self):
+            self.rollbacks += 1
 
     locked = _AlwaysLocked()
     monkeypatch.setattr(monitor_module, "_get_db_connection", lambda p: locked)

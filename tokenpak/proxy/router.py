@@ -6,6 +6,7 @@ Handles provider detection, cost estimation, and URL construction.
 """
 
 import json
+import posixpath
 from dataclasses import dataclass
 from typing import Collection, Dict, Mapping, Optional, cast
 from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
@@ -190,6 +191,29 @@ def should_intercept(url: str, hosts: Optional[Collection[str]] = None) -> bool:
     return bool(hostname) and hostname in {normalize_hostname(host) for host in intercept_hosts}
 
 
+def _resolve_request_path(raw_path: str) -> str:
+    """Resolve '.'/'..' segments before any path-scope decision is made.
+
+    A scope or fixed-query decision made against the raw, unresolved path can
+    be silently bypassed: the HTTP client that actually issues the outbound
+    request normalizes dot-segments per RFC 3986 Sec 5.2.4 first, so
+    '/v1/../admin/x' string-prefix-matches a '/v1' scope here while the
+    request that is actually sent resolves to '/admin/x' -- a different,
+    unscoped path, with the path-scoped credential still attached. Deciding
+    scope against the resolved path closes that gap.
+    """
+    if not raw_path.startswith("/"):
+        raw_path = "/" + raw_path
+    resolved = posixpath.normpath(raw_path)
+    if resolved == ".":
+        resolved = "/"
+    if not resolved.startswith("/"):
+        # Unreachable for an absolute input under posixpath.normpath (excess
+        # '..' clamps at root), kept as a defensive fail-closed backstop.
+        raise ValueError(f"request path resolves outside the URL root: {raw_path!r}")
+    return resolved
+
+
 def _join_upstream_url(base_url: str, request_path: str) -> str:
     """Join a configured API base and reverse-proxy request path once.
 
@@ -202,7 +226,7 @@ def _join_upstream_url(base_url: str, request_path: str) -> str:
     if request.fragment:
         raise ValueError("request fragments are not valid upstream HTTP targets")
     base_path = base.path.rstrip("/")
-    incoming_path = request.path or "/"
+    incoming_path = _resolve_request_path(request.path or "/")
 
     if not base_path:
         joined_path = incoming_path

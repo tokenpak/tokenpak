@@ -134,26 +134,38 @@ class BudgetTracker:
             self._session_cost += cost
             self._session_requests += 1
             conn = self._writer()
-            # kind='actual': this plane reports completed-request usage. The
-            # daily gate prefers these rows over the pre-send 'estimate' rows
-            # for the same session so a message is never counted twice.
-            conn.execute(
-                """INSERT INTO companion_costs
-                   (timestamp, date, session_id, model, input_tokens, cached_tokens,
-                    output_tokens, estimated_cost, kind)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'actual')""",
-                (
-                    now,
-                    date_str,
-                    session_id,
-                    model,
-                    input_tokens,
-                    cached_tokens,
-                    output_tokens,
-                    round(cost, 6),
-                ),
-            )
-            conn.commit()
+            try:
+                # kind='actual': this plane reports completed-request usage.
+                # The daily gate prefers these rows over the pre-send
+                # 'estimate' rows for the same session so a message is never
+                # counted twice.
+                conn.execute(
+                    """INSERT INTO companion_costs
+                       (timestamp, date, session_id, model, input_tokens, cached_tokens,
+                        output_tokens, estimated_cost, kind)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'actual')""",
+                    (
+                        now,
+                        date_str,
+                        session_id,
+                        model,
+                        input_tokens,
+                        cached_tokens,
+                        output_tokens,
+                        round(cost, 6),
+                    ),
+                )
+                conn.commit()
+            except Exception:
+                # This connection is cached for the tracker's lifetime. A
+                # failed commit leaves the INSERT staged on its open
+                # transaction; without a rollback it would silently resurface
+                # and merge into a later, unrelated record() call's commit.
+                try:
+                    conn.rollback()
+                except sqlite3.OperationalError:
+                    pass
+                raise
 
     def _get_daily_total(self) -> float:
         """Query today's truthful total from the DB.

@@ -86,6 +86,20 @@ class JournalStore:
             self._write_conn = self._connect()
         return self._write_conn
 
+    @staticmethod
+    def _rollback_cached_writer(conn: sqlite3.Connection) -> None:
+        """Clear a failed write's pending transaction on the cached writer.
+
+        This connection is cached for the store's lifetime. A failed commit
+        leaves its statement(s) staged on that still-open transaction; without
+        a rollback they would silently resurface and merge into a later,
+        unrelated write's commit.
+        """
+        try:
+            conn.rollback()
+        except sqlite3.OperationalError:
+            pass  # best-effort; the next write still gets a clean statement
+
     def start_session(
         self,
         session_id: str,
@@ -101,30 +115,38 @@ class JournalStore:
         """
         with self._write_lock:
             conn = self._writer()
-            conn.execute(
-                """INSERT OR IGNORE INTO sessions
-                   (session_id, started_at, project_dir, model)
-                   VALUES (?, ?, ?, ?)""",
-                (session_id, time.time(), project_dir, model),
-            )
-            conn.execute(
-                """UPDATE sessions
-                   SET project_dir = COALESCE(NULLIF(?, ''), project_dir),
-                       model = COALESCE(NULLIF(?, ''), model)
-                   WHERE session_id = ?""",
-                (project_dir, model, session_id),
-            )
-            conn.commit()
+            try:
+                conn.execute(
+                    """INSERT OR IGNORE INTO sessions
+                       (session_id, started_at, project_dir, model)
+                       VALUES (?, ?, ?, ?)""",
+                    (session_id, time.time(), project_dir, model),
+                )
+                conn.execute(
+                    """UPDATE sessions
+                       SET project_dir = COALESCE(NULLIF(?, ''), project_dir),
+                           model = COALESCE(NULLIF(?, ''), model)
+                       WHERE session_id = ?""",
+                    (project_dir, model, session_id),
+                )
+                conn.commit()
+            except Exception:
+                self._rollback_cached_writer(conn)
+                raise
 
     def end_session(self, session_id: str) -> None:
         """Record session end and update totals."""
         with self._write_lock:
             conn = self._writer()
-            conn.execute(
-                "UPDATE sessions SET ended_at = ? WHERE session_id = ?",
-                (time.time(), session_id),
-            )
-            conn.commit()
+            try:
+                conn.execute(
+                    "UPDATE sessions SET ended_at = ? WHERE session_id = ?",
+                    (time.time(), session_id),
+                )
+                conn.commit()
+            except Exception:
+                self._rollback_cached_writer(conn)
+                raise
 
     def add_entry(
         self,
@@ -144,20 +166,24 @@ class JournalStore:
         metadata_json = json.dumps(metadata or {}, default=str)
         with self._write_lock:
             conn = self._writer()
-            conn.execute(
-                """INSERT OR IGNORE INTO entries
-                   (session_id, timestamp, entry_type, content, metadata_json, content_hash)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    session_id,
-                    time.time(),
-                    entry_type,
-                    content,
-                    metadata_json,
-                    _db.entry_content_hash(entry_type, content, metadata_json),
-                ),
-            )
-            conn.commit()
+            try:
+                conn.execute(
+                    """INSERT OR IGNORE INTO entries
+                       (session_id, timestamp, entry_type, content, metadata_json, content_hash)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        session_id,
+                        time.time(),
+                        entry_type,
+                        content,
+                        metadata_json,
+                        _db.entry_content_hash(entry_type, content, metadata_json),
+                    ),
+                )
+                conn.commit()
+            except Exception:
+                self._rollback_cached_writer(conn)
+                raise
 
     def get_session(self, session_id: str) -> Optional[SessionRecord]:
         """Retrieve a session record."""

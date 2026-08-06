@@ -172,6 +172,7 @@ def _write_row(db_path: DbPath, insert_params: InsertParams) -> None:
     """
     last_exc: sqlite3.OperationalError | None = None
     for attempt in range(_DB_WRITE_RETRY_ATTEMPTS):
+        conn: sqlite3.Connection | None = None
         try:
             with _DB_LOCK:
                 conn = _get_db_connection(db_path)
@@ -182,6 +183,18 @@ def _write_row(db_path: DbPath, insert_params: InsertParams) -> None:
             if not _is_transient_lock_error(exc):
                 raise
             last_exc = exc
+            # A commit-time (as opposed to execute-time) lock error leaves the
+            # just-executed INSERT staged on this connection's still-open
+            # transaction. Retrying without clearing it re-executes on top of
+            # that pending statement, so a later successful commit lands both
+            # -- a silent duplicate row. Roll back before the next attempt so
+            # each retry starts a fresh transaction.
+            if conn is not None:
+                try:
+                    with _DB_LOCK:
+                        conn.rollback()
+                except sqlite3.OperationalError:
+                    pass  # best-effort; the next attempt still gets a clean statement
             if attempt < _DB_WRITE_RETRY_ATTEMPTS - 1:
                 time.sleep(_DB_WRITE_RETRY_BACKOFF_S * (attempt + 1))
     if last_exc is not None:
@@ -250,6 +263,19 @@ def _stop_db_write_queue(timeout: float = 5.0) -> bool:
         _DB_BACKGROUND_STOP.set()
         if thread is not None and thread.is_alive():
             thread.join(timeout=max(0.1, deadline - time.monotonic()))
+        if not drained:
+            # An incomplete drain means the queue we are about to discard
+            # still holds rows the writer never got to. Count them before
+            # they vanish so the drop is visible instead of silent.
+            abandoned = getattr(q, "unfinished_tasks", 0)
+            if abandoned:
+                _record_dropped_row(
+                    "shutdown-drain-incomplete",
+                    RuntimeError(
+                        f"{abandoned} queued row(s) abandoned: drain did not "
+                        f"complete within {timeout}s"
+                    ),
+                )
         _DB_WRITE_QUEUE = None
         _DB_BACKGROUND_THREAD = None
         return drained

@@ -3997,7 +3997,11 @@ class ProxyServer:
         # cannot skip the monitor drain — recorded request rows are the
         # critical data.
         if self.monitor is not None:
-            self.monitor.flush(timeout=5.0)
+            if not self.monitor.flush(timeout=5.0):
+                _logging.getLogger(__name__).warning(
+                    "monitor write queue did not fully drain before shutdown "
+                    "flush timeout; some request rows may still be pending"
+                )
 
         # Delegate to the compression_stats recorder (writes to ~/.tokenpak/compression_events.jsonl)
         self.compression_stats.flush_shutdown_record(shutdown_record)

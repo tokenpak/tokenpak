@@ -526,6 +526,14 @@ def _read_pre_send_events(
     for path in paths:
         try:
             events.append(_parse_pre_send_event(path))
+        except FileNotFoundError:
+            # Multiple flush workers may overlap (see flush_pre_send_events'
+            # own contract): another worker fully materialised and removed
+            # this event between the glob above and this parse. The data was
+            # not lost, it was claimed elsewhere -- not a quarantine-worthy
+            # drop, so this must not fall into the broader OSError branch
+            # below (FileNotFoundError is itself an OSError subclass).
+            continue
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             invalid.append((path, exc))
     return events, invalid
