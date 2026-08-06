@@ -138,12 +138,18 @@ def _request_insert_sql() -> str:
     return f"INSERT INTO requests ({cols}) VALUES ({placeholders})"
 
 
-def _record_dropped_row(reason: str, exc: BaseException) -> None:
-    """Count a lost telemetry row and surface the failure on stderr."""
+def _record_dropped_row(reason: str, exc: BaseException, count: int = 1) -> None:
+    """Count ``count`` lost telemetry row(s) and surface the failure on stderr.
+
+    ``count`` defaults to 1 for the common one-row-per-failure call sites;
+    a batch loss (e.g. an abandoned shutdown-drain queue) passes the real
+    row count so the dropped-row counter reflects it exactly, not just
+    "something was dropped this call".
+    """
     global _DB_DROPPED_ROWS
     with _DB_DROPPED_ROWS_LOCK:
-        _DB_DROPPED_ROWS += 1
-    print(f"[TokenPak] DB write dropped ({reason}): {exc}", file=sys.stderr)
+        _DB_DROPPED_ROWS += count
+    print(f"[TokenPak] DB write dropped ({reason}, {count} row(s)): {exc}", file=sys.stderr)
 
 
 def get_dropped_row_count() -> int:
@@ -267,6 +273,17 @@ def _stop_db_write_queue(timeout: float = 5.0) -> bool:
             # An incomplete drain means the queue we are about to discard
             # still holds rows the writer never got to. Count them before
             # they vanish so the drop is visible instead of silent.
+            #
+            # This read is a best-effort snapshot, not an atomic handoff with
+            # the writer thread: `unfinished_tasks` can still tick down
+            # between `_wait_for_queue_drain`'s deadline check above and this
+            # read if the worker finishes an item in that window, so the
+            # count can under-report a row or two that actually landed. It
+            # cannot over-report, and it is still exact in the common case
+            # (worker already joined or blocked). A perfect count would need
+            # a single lock spanning the worker's `task_done()` and this
+            # read; not attempted here as it would require restructuring the
+            # worker's per-item locking for a narrow residual window.
             abandoned = getattr(q, "unfinished_tasks", 0)
             if abandoned:
                 _record_dropped_row(
@@ -275,6 +292,7 @@ def _stop_db_write_queue(timeout: float = 5.0) -> bool:
                         f"{abandoned} queued row(s) abandoned: drain did not "
                         f"complete within {timeout}s"
                     ),
+                    count=abandoned,
                 )
         _DB_WRITE_QUEUE = None
         _DB_BACKGROUND_THREAD = None

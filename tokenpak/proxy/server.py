@@ -3998,6 +3998,8 @@ class ProxyServer:
         # critical data.
         if self.monitor is not None:
             if not self.monitor.flush(timeout=5.0):
+                import logging as _logging
+
                 _logging.getLogger(__name__).warning(
                     "monitor write queue did not fully drain before shutdown "
                     "flush timeout; some request rows may still be pending"
