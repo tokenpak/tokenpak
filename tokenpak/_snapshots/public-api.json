@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-05T07:22:54Z",
-  "package_version": "1.18.2",
+  "generated_at": "2026-08-07T18:07:43Z",
+  "package_version": "1.18.3",
   "symbols": [
     {
       "module": "tokenpak",
@@ -2325,6 +2325,10 @@
     },
     {
       "module": "tokenpak.companion.mcp.server",
+      "name": "active_tools"
+    },
+    {
+      "module": "tokenpak.companion.mcp.server",
       "name": "current_session_id"
     },
     {
@@ -2346,6 +2350,10 @@
     {
       "module": "tokenpak.companion.mcp.tools",
       "name": "ToolDef"
+    },
+    {
+      "module": "tokenpak.companion.mcp.tools",
+      "name": "active_tools"
     },
     {
       "module": "tokenpak.companion.mcp.tools",

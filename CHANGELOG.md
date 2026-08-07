@@ -6,6 +6,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.18.3] — 2026-08-07
+
+This compatible patch reduces the token overhead the companion itself adds to
+agent sessions and makes the session label robust to host-side control-byte
+sanitization.
+
 ### Changed
 
 - **The `lean` companion profile now advertises only core MCP tools.**
@@ -37,28 +43,40 @@ This project follows [Semantic Versioning](https://semver.org/).
   re-billed as input on every subsequent turn. The heuristic-fallback
   disclosure remains (as `chars/4-approx` plus a brief install hint), and the
   `/tpk/v1/tokens/estimate` HTTP response is unchanged.
+- **Release-workflow and leak-gate hardening.** The delta leak gate consults
+  the canonical pattern-register set, the private-path scan exempts only the
+  exact documented vault-index default segment, and the release workflow
+  quotes its step-output sink and guards its checksum globs.
 
-- **`tokenpak pak create` now writes the canonical Pak schema (`schema_version: 2`).**
-  Created Pak files carry the canonical contract fields (`pak_type`, `source`, `status`,
-  `authority`, `confidence`, `retention`, `privacy`, `relationships`) plus the existing
-  file-form fields (embedded anchor content, `objective`, `continuation_notes`, checksum).
-  The subtype is now the canonical `recall` — previously `create` stamped the deprecated
-  `context` alias, which readers already resolve to `recall`. Field renames within the file
-  form: per-anchor `sha256` → `source_hash` (with new `anchor_id` / `snippet_available`),
-  top-level `ttl` → `ttl_hint`, and `scope.source_root` → top-level `source_root` (`scope`
-  is now the canonical `user`/`project`/`topic` record). The checksum construction is
-  unchanged (sha256 over the sorted-key JSON body, excluding `checksum`/`pak_id`);
-  checksum *values* differ from what v1 would have produced because the body changed.
+### Fixed
 
-### Added
+- **The companion session label is plain text.** The styled label embedded
+  terminal escape bytes in a value rendered by the host CLI; a host update
+  began sanitizing control bytes in that surface, displaying the sequences as
+  literal text. A session name is data rendered by another program — styling
+  now stays on the companion's own terminal streams.
 
-- **`tokenpak pak migrate <pak-file> [-o OUT]`** — upgrades a legacy (`schema_version: 1`)
-  Pak file to the canonical schema in place (or to `-o`). The declared checksum is verified
-  before migration, the `pak_id` is preserved, anchor content is unchanged, and the checksum
-  is recomputed over the migrated body. Files already in canonical form are left untouched.
-- Legacy `schema_version: 1` Pak files remain fully readable: `pak inspect`, `pak import`
-  (checksum verification included), and `pak export` all keep working on them unchanged;
-  `inspect` and `import` print a hint pointing at `pak migrate`.
+### Upgrade
+
+```bash
+python -m pip install --upgrade "tokenpak==1.18.3"
+```
+
+No data migration is required.
+
+### Rollback
+
+```bash
+python -m pip install --upgrade "tokenpak==1.18.2"
+```
+
+### Compatibility
+
+- No breaking change. The Python public-symbol set gains one additive
+  companion helper (`active_tools`); no symbol is removed or changed. HTTP
+  contracts, TIP wire formats, and storage schemas are unchanged.
+- Configurations not opting into the `lean` companion profile see no
+  behavioral change.
 
 ## [1.18.2] — 2026-08-05
 
@@ -108,6 +126,30 @@ hardens local persistence and telemetry shutdown behavior.
   Existing required staging checks remain in force while parity is established.
 - `tokenpak doctor --json` adds a `custom_providers` diagnostic with additive
   `configured`, `registered`, and `error` fields.
+
+### Added
+
+*Addendum recorded 2026-08-07: the following shipped in 1.18.2 but was
+omitted from its changelog at cut time.*
+
+- **`tokenpak pak create` writes the canonical Pak schema (`schema_version: 2`).**
+  Created Pak files carry the canonical contract fields (`pak_type`, `source`, `status`,
+  `authority`, `confidence`, `retention`, `privacy`, `relationships`) plus the existing
+  file-form fields (embedded anchor content, `objective`, `continuation_notes`, checksum).
+  The subtype is the canonical `recall` — previously `create` stamped the deprecated
+  `context` alias, which readers already resolve to `recall`. Field renames within the file
+  form: per-anchor `sha256` → `source_hash` (with new `anchor_id` / `snippet_available`),
+  top-level `ttl` → `ttl_hint`, and `scope.source_root` → top-level `source_root` (`scope`
+  is the canonical `user`/`project`/`topic` record). The checksum construction is
+  unchanged (sha256 over the sorted-key JSON body, excluding `checksum`/`pak_id`);
+  checksum *values* differ from what v1 would have produced because the body changed.
+- **`tokenpak pak migrate <pak-file> [-o OUT]`** — upgrades a legacy (`schema_version: 1`)
+  Pak file to the canonical schema in place (or to `-o`). The declared checksum is verified
+  before migration, the `pak_id` is preserved, anchor content is unchanged, and the checksum
+  is recomputed over the migrated body. Files already in canonical form are left untouched.
+- Legacy `schema_version: 1` Pak files remain fully readable: `pak inspect`, `pak import`
+  (checksum verification included), and `pak export` all keep working on them unchanged;
+  `inspect` and `import` print a hint pointing at `pak migrate`.
 
 ### Upgrade
 
