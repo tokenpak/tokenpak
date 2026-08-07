@@ -61,7 +61,10 @@ RELEASE_PATTERN_SPECS: tuple[PatternSpec, ...] = (
     PatternSpec(
         "private-path",
         "vault-path",
-        r"(?:~|/(?:home|Users)/[A-Za-z0-9._-]+)/(?:vault)(?:/|$)",
+        # The documented vault-index default directory ("/vault/.tokenpak"
+        # under a home directory) is product surface, not a private-path
+        # leak; anything else under a vault directory still matches.
+        r"(?:~|/(?:home|Users)/[A-Za-z0-9._-]+)/vault(?:$|/(?!\.tokenpak(?![\w-])))",
     ),
     PatternSpec(
         "private-path",
