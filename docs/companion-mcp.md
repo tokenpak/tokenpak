@@ -142,8 +142,13 @@ the selected Codex home's `config.toml` (`~/.codex/config.toml` in the default
 ```toml
 [mcp_servers.tokenpak-companion]
 command = "/path/to/python"
-args = ["-m", "tokenpak.companion.mcp.server"]
+args = ["-P", "-m", "tokenpak.companion.mcp.server"]
 ```
+
+On Python 3.11+ the registration includes `-P` (safe-path mode — the same
+cwd-shadowing guard the Claude Code config uses, described above). On Python
+3.10, where the flag does not exist, it is omitted and the args are just
+`["-m", "tokenpak.companion.mcp.server"]`.
 
 Non-default companion settings — a daily budget, a non-default profile, or an
 overridden journal directory — are forwarded as `env` entries on that same
