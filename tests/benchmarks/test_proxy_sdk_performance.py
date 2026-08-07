@@ -39,7 +39,7 @@ def _sdk_compress(payload: str) -> bytes:
     return zlib.compress(payload.encode("utf-8"), level=6)
 
 
-# TSR-06c (2026-05-09): pre-encoded variants used by the throughput-ratio
+# 2026-05-09: pre-encoded variants used by the throughput-ratio
 # test. The original `_proxy_compress` / `_sdk_compress` functions allocate
 # an 84-KB encoded string on every call. With `runs=200` that's 16+ MB of
 # allocations per test, dominated by per-call f-string + utf-8 encoding
@@ -60,7 +60,7 @@ def _sdk_compress_precoded(encoded: bytes) -> bytes:
 def _tokens_per_second(fn, payload: str, runs: int = 200) -> float:
     """Tokens/sec throughput, averaged over `runs` invocations.
 
-    TSR-06b note: bumped from 40 → 200 for stability. The previous count was
+    Stability note: bumped from 40 → 200. The previous count was
     too small to smooth out per-call zlib + OS-scheduling jitter. Locally
     measured variance with runs=40 was ~25% run-to-run; 200 runs typically
     halves that.
@@ -149,9 +149,9 @@ def test_cache_hit_rate() -> None:
 def test_proxy_vs_sdk_throughput_ratio() -> None:
     """Proxy throughput must not be catastrophically lower than SDK throughput.
 
-    TSR-06c update (2026-05-09): pre-encode bytes outside the timing loop
-    ─────────────────────────────────────────────────────────────────────
-    The TSR-06b version of this test (PR #147) timed
+    Update (2026-05-09): pre-encode bytes outside the timing loop
+    ─────────────────────────────────────────────────────────────
+    An earlier version of this test (PR #147) timed
     ``f"proxy|v1|{payload}".encode()`` + ``zlib.compress(...)`` versus
     ``payload.encode()`` + ``zlib.compress(...)`` per iteration. With 200
     iterations of a 4000-token payload (~85 KB), the proxy variant performed
@@ -172,7 +172,8 @@ def test_proxy_vs_sdk_throughput_ratio() -> None:
     actually-shared work. This eliminates the 3.13-specific f-string skew
     and makes the test stable across all 4 supported Python versions.
 
-    Methodology preserved from TSR-06b: pairwise interleaved measurement,
+    Methodology preserved from the earlier stability pass: pairwise
+    interleaved measurement,
     median of 11 pairwise ratios, 0.70 catastrophic-regression threshold.
     """
     payload = _payload()

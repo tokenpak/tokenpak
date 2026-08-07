@@ -1,6 +1,6 @@
 """tests/proxy/test_rate_limit_circuit_breaker.py
 
-Regression tests for TRIX-MTC-06:
+Regression tests for the cost/rate-limit hardening pass:
   - Cost tracking returns cost=0 for non-200 responses (no phantom cost entries)
   - Repeated 429 burst triggers rate-limit circuit breaker
   - Circuit closes after cooldown and requests proceed normally

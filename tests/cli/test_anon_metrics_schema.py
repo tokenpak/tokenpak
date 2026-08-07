@@ -1,10 +1,10 @@
-"""TSR-03 / CCI-21 schema-drift tests.
+"""Anonymous-metrics v1.1 schema-drift tests.
 
 Carved out from `tests/cli/test_metrics_mode_fields.py` so the v1.1
 schema invariants on `MetricsRecord` can be verified independently of
-the closed-source `tokenpak._internal` namespace and the WS-D
+the closed-source `tokenpak._internal` namespace and the
 `detect_consumption_mode` symbol that the parent file guards at module
-level. Both of those route to TSR-04 / TSR-07; neither is needed by
+level. Both of those are tracked separately; neither is needed by
 the pure-schema tests below.
 
 Covered invariants (all unbundled from missing-export / boundary work):
@@ -17,10 +17,10 @@ Covered invariants (all unbundled from missing-export / boundary work):
   - `MetricsStore._ensure_schema()` migrates a v1.0 SQLite database to
     add the new columns (idempotent)
 
-If a future TSR-04 lands `detect_consumption_mode` and a future
-TSR-07 lands the `_internal` boundary fix, the broader test surface
+If future work lands `detect_consumption_mode` and the
+`_internal` boundary fix, the broader test surface
 in `test_metrics_mode_fields.py` becomes observable too. Until then,
-this file alone exercises the canonical CCI-21 schema on slim OSS.
+this file alone exercises the canonical v1.1 schema on slim OSS.
 """
 
 from __future__ import annotations

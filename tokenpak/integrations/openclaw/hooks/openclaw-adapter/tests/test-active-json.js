@@ -21,7 +21,7 @@ const path = require("node:path");
 
 const TEST_HOME = path.join(os.tmpdir(), `openclaw-adapter-test-${process.pid}`);
 process.env.HOME = TEST_HOME;
-process.env.OPENCLAW_AGENT_NAME = "trix-test";
+process.env.OPENCLAW_AGENT_NAME = "sample-agent";
 
 const handler = require(path.join(__dirname, "..", "handler.js"));
 
@@ -44,7 +44,7 @@ const cases = [
       assert.equal(j.session_uuid, VALID_UUID);
       assert.equal(j.last_event, "message:received");
       assert.equal(typeof j.last_event_ts, "number");
-      assert.equal(j.agent, "trix-test");
+      assert.equal(j.agent, "sample-agent");
       assert.ok(j.event_count >= 1);
     },
   },

@@ -1,7 +1,7 @@
 """
 tests/proxy/test_cost.py
 
-Regression test for TRIX-MTC-07 Fix #4:
+Regression test for maintenance fix #4:
   When the cost tracker raises an exception, record_proxy_request() must log at
   ERROR level with a structured message containing model name and token count.
 

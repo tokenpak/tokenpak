@@ -19,7 +19,7 @@ CI-safe.
 Note: current dashboard templates are stub placeholders (no <title> tag on
 most routes). The smoke test checks for valid HTML response (200 + DOCTYPE).
 The <title> check applies only to /dashboard/timeline which has a full template.
-This discrepancy is noted in TRIX-03 submission for follow-up (template work
+This discrepancy is noted for follow-up (template work
 is out of scope per task constraints).
 """
 
@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import pytest
 
-# TSR-04: fastapi/starlette are in the optional `[serve]` / `[telemetry]`
+# fastapi/starlette are in the optional `[serve]` / `[telemetry]`
 # extras (see pyproject.toml). Slim install does not pull them. Without
 # these guards, the test module raises ModuleNotFoundError 13 times at
 # collection-time (one per parametrized case + class-level helpers), each

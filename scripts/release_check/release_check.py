@@ -159,6 +159,40 @@ def _load_release_leak_scanner():
     return module
 
 
+_PATTERN_REGISTER_FALLBACK = frozenset(
+    {
+        "scripts/release_gate/check_release_leaks.py",
+        "scripts/release_gate/public_safety_scan.py",
+    }
+)
+
+
+def _pattern_register_files():
+    """Exact paths of the pattern-register scripts, from the canonical set.
+
+    The structural scanner owns ``_PATTERN_REGISTER_FILES``; consult it so
+    the two registers cannot drift.  A frozen fallback keeps the leak gate
+    itself functional if that module cannot be loaded.
+    """
+    module_name = "_tokenpak_public_safety_scan"
+    module = sys.modules.get(module_name)
+    if module is None:
+        path = HERE.parent / "release_gate" / "public_safety_scan.py"
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, path)
+            if spec is None or spec.loader is None:
+                return _PATTERN_REGISTER_FALLBACK
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+        except (ImportError, OSError, SyntaxError):
+            return _PATTERN_REGISTER_FALLBACK
+    files = getattr(module, "_PATTERN_REGISTER_FILES", None)
+    if not files:
+        return _PATTERN_REGISTER_FALLBACK
+    return frozenset(files) | _PATTERN_REGISTER_FALLBACK
+
+
 def _changed_files(root: Path, base: str):
     try:
         out = subprocess.check_output(
@@ -186,15 +220,17 @@ def gate_leak(root: Path, base=None, changed=None) -> GateResult:
             )
     try:
         scanner = _load_release_leak_scanner()
+        register_files = _pattern_register_files()
         files = []
         for rel in changed:
             if rel.startswith(("tests/", "scripts/release_check/")):
                 continue
-            # The canonical scanner necessarily contains its own forbidden-
-            # pattern register.  Scanning that implementation as authored
-            # public content would self-flag every registered pattern; the
-            # identity workflow applies the same exact-path exclusion.
-            if rel == "scripts/release_gate/check_release_leaks.py":
+            # The pattern-register scripts necessarily contain their own
+            # forbidden-pattern vocabulary.  Scanning those implementations
+            # as authored public content would self-flag every registered
+            # pattern; the identity workflow applies the same exact-path
+            # exclusions.
+            if rel in register_files:
                 continue
             path = root / rel
             if not path.is_file():

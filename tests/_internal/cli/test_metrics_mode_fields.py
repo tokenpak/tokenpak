@@ -1,4 +1,4 @@
-"""CCI-21 — Mode-adoption telemetry schema tests.
+"""Mode-adoption telemetry schema tests.
 
 Verifies that ``MetricsRecord`` includes ``active_profile`` and
 ``consumption_mode``, that ``record_request`` populates them correctly, and
@@ -16,14 +16,13 @@ from unittest import mock
 
 import pytest  # noqa: F401 — kept for downstream pytest fixtures + markers
 
-# TSR-07 / WS-F (2026-05-08) — relocated to tests/_internal/cli/.
+# Relocated to tests/_internal/cli/ on 2026-05-08.
 # Default OSS gate excludes this directory via pyproject.toml
-# `norecursedirs`; the previous TSR-01-followup try/except module-
+# `norecursedirs`; the previous try/except module-
 # level skip is no longer needed.
 #
 # Note: the schema-drift and pure-detect carve-outs from this file
-# (created by TSR-03 and TSR-04 respectively) remain at the public
-# locations:
+# remain at the public locations:
 #   - tests/cli/test_anon_metrics_schema.py — 7 schema invariants
 #   - tests/cli/test_consumption_mode_detect.py — 10 detect cases
 # Those carve-outs continue to verify the public contract on slim OSS.
@@ -312,7 +311,7 @@ class TestModeFieldsSchema:
 
 
 # ---------------------------------------------------------------------------
-# config helpers (CCI-21)
+# config helpers
 # ---------------------------------------------------------------------------
 
 

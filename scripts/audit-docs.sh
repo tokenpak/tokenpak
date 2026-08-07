@@ -38,7 +38,7 @@ echo "  mkdocs   : $MKDOCS_FILE"
 
 # ── Helper: is a file a redirect stub? ───────────────────────────────────────
 # Redirect stubs are single-line files starting with "> This file has"
-# (the CALI-03 canonical redirect pattern).
+# (the canonical redirect pattern).
 is_redirect_stub() {
     local f="$1"
     local line_count

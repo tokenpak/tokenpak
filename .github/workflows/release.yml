@@ -185,7 +185,6 @@ jobs:
     env:
       # Skip first-run RBAC admin bootstrap during snapshot introspection so the
       # ephemeral admin password is never emitted into (public) CI logs.
-      # See REIPO-SNAPGEN-LOG-HYGIENE-01.
       TOKENPAK_SNAPSHOT_GEN: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -364,7 +363,7 @@ jobs:
         run: |
           # SHA256SUMS lives at repo root, NEVER inside dist/.
           # See dist-purity contract on the build job.
-          ( cd dist && sha256sum *.whl *.tar.gz ) > SHA256SUMS
+          ( cd dist && sha256sum -- *.whl *.tar.gz ) > SHA256SUMS
           cat SHA256SUMS
 
       - name: Upload dist artifact (wheels + sdist only)
@@ -408,7 +407,7 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes
         id: notes

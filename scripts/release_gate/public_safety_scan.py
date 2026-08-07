@@ -61,7 +61,13 @@ RELEASE_PATTERN_SPECS: tuple[PatternSpec, ...] = (
     PatternSpec(
         "private-path",
         "vault-path",
-        r"(?:~|/(?:home|Users)/[A-Za-z0-9._-]+)/(?:vault)(?:/|$)",
+        # The documented vault-index default directory ("/vault/.tokenpak"
+        # under a home directory) is product surface, not a private-path
+        # leak. Only the exact ".tokenpak" segment is exempt — followed by
+        # a subpath or a non-segment character (quote, newline, space) —
+        # while segment-extending variants (".tokenpak.d", ".tokenpak-x",
+        # ".tokenpakother") and every other vault path still match.
+        r"(?:~|/(?:home|Users)/[A-Za-z0-9._-]+)/vault(?:$|/(?!\.tokenpak(?![\w.-])))",
     ),
     PatternSpec(
         "private-path",
@@ -180,6 +186,13 @@ _SKIP_DIRS = {".git", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cach
 # They are explicitly treated as non-shipping scanner fixtures for this public
 # safety scanner; in-package tokenpak/tests remains scanned.
 _EXCLUDE_PREFIXES = ("tests/", "packages/tests/", "sdk/dist/")
+
+# The pattern-register scripts definitionally contain the vocabulary they
+# detect; scanning them against their own registers is self-referential.
+_PATTERN_REGISTER_FILES = {
+    "scripts/release_gate/public_safety_scan.py",
+    "scripts/release_gate/check_release_leaks.py",
+}
 
 _MANIFEST_BASENAMES = {
     "RECORD",
@@ -327,6 +340,8 @@ def mask_content(spec: PatternSpec, path: str, text: str) -> str:
 def is_excluded(relpath: str) -> bool:
     relpath = relpath.replace(os.sep, "/")
     if relpath.startswith(_EXCLUDE_PREFIXES):
+        return True
+    if relpath in _PATTERN_REGISTER_FILES:
         return True
     if ".egg-info/" in relpath:
         return True

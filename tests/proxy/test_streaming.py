@@ -1,7 +1,7 @@
 """
 tests/proxy/test_streaming.py
 
-Regression test for TRIX-MTC-07 Fix #3:
+Regression test for maintenance fix #3:
   StreamHandler must correctly assemble SSE messages that span multiple chunks.
 
 Without the fix, a data: line split across two process_chunk() calls would

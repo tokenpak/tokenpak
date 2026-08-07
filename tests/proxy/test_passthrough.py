@@ -1,7 +1,7 @@
 """
 tests/proxy/test_passthrough.py
 
-Regression test for TRIX-MTC-07 Fix #6:
+Regression test for maintenance fix #6:
   PassthroughConfig.__post_init__() must raise ValueError when strip_headers
   and safe_to_log share any element.
 

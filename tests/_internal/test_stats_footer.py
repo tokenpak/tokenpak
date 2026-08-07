@@ -24,9 +24,9 @@ from tokenpak.telemetry.footer import (
     render_footer_oneline,
 )
 
-# TSR-07 / WS-F (2026-05-08) — this file lives in tests/_internal/.
+# Since 2026-05-08 this file lives in tests/_internal/.
 # The directory is excluded from the default OSS pytest collection via
-# pyproject.toml `norecursedirs`, so the prior TSR-01-followup
+# pyproject.toml `norecursedirs`, so the prior
 # `pytest.importorskip("tokenpak._internal")` module-level guard is
 # now redundant and removed. To run, invoke `pytest tests/_internal/`
 # explicitly on an install that provides `tokenpak._internal`

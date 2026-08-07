@@ -1,5 +1,5 @@
 """
-Tests for TRIX-MTC-11: ProxyRequest/ProxyResponse type adoption in pipeline.
+Tests for ProxyRequest/ProxyResponse type adoption in the pipeline.
 
 Verifies that key pipeline functions accept ProxyRequest and that ProxyResponse
 is constructed from upstream responses. Also verifies backward compatibility

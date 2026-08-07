@@ -108,6 +108,29 @@ def test_leak_gate_scans_extensionless_public_files(tmp_path):
     assert not result.ok
 
 
+def test_leak_gate_skips_pattern_register_scripts(tmp_path):
+    # Register-bearing scanner scripts at their canonical relpaths are
+    # self-referential and must be skipped; identical content at any other
+    # path must still be scanned.
+    reg = tmp_path / "scripts" / "release_gate"
+    reg.mkdir(parents=True)
+    body = "PATTERN = 'Tracked in TSR-7'\n"
+    (reg / "public_safety_scan.py").write_text(body, encoding="utf-8")
+    (reg / "check_release_leaks.py").write_text(body, encoding="utf-8")
+    result = rc.gate_leak(
+        tmp_path,
+        changed=[
+            "scripts/release_gate/public_safety_scan.py",
+            "scripts/release_gate/check_release_leaks.py",
+        ],
+    )
+    assert result.ok, result.messages
+
+    (reg / "other_module.py").write_text(body, encoding="utf-8")
+    result = rc.gate_leak(tmp_path, changed=["scripts/release_gate/other_module.py"])
+    assert not result.ok
+
+
 def test_leak_gate_fails_when_changed_file_is_unavailable(tmp_path):
     result = rc.gate_leak(tmp_path, changed=["docs/missing.md"])
     assert not result.ok
