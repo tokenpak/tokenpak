@@ -1,6 +1,6 @@
 {
   "version": "1.1",
-  "generated_at": "2026-07-22T21:16:31Z",
+  "generated_at": "2026-08-07T22:29:46Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"
@@ -435,7 +435,7 @@
     {
       "workflow": "release.yml",
       "job": "release",
-      "if": "${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}"
+      "if": "${{ !cancelled()\n    && github.event_name == 'push'\n    && startsWith(github.ref, 'refs/tags/v')\n    && needs.build.result == 'success'\n    && (needs.publish.result == 'success'\n        || (needs.publish.result == 'skipped'\n            && (contains(github.ref, 'rc') || contains(github.ref, 'alpha') || contains(github.ref, 'beta')))) }}"
     }
   ]
 }

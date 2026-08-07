@@ -379,17 +379,33 @@ jobs:
           path: SHA256SUMS
 
   # ─────────────────────────────────────────────────────────────────────
-  # Step 3: Create GitHub Release with artifacts
+  # Step 4: Create GitHub Release with artifacts
+  # (Defined here but sequenced AFTER the publish job below: a public
+  # Release must never exist before the package is actually on PyPI.)
   # ─────────────────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, publish]
     # Std 12 §3.3 dispatch guard (parity with build/publish): only a real
     # tag-push event may create the GitHub Release. A dispatch-at-tag is
     # rejected by `github.event_name == 'push'`, so it cannot spoof or overwrite
     # a Release for an already-promoted tag.
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    #
+    # Ordering guard: the Release is created only after the publish job has
+    # succeeded — or was skipped for rc/alpha/beta tags, which never publish.
+    # A failed or rejected publish leaves no public Release pointing at
+    # artifacts that do not exist on the index. `!cancelled()` (a status
+    # function) is required so this condition is still evaluated when the
+    # publish job was skipped; the explicit result checks then decide.
+    if: >-
+      ${{ !cancelled()
+          && github.event_name == 'push'
+          && startsWith(github.ref, 'refs/tags/v')
+          && needs.build.result == 'success'
+          && (needs.publish.result == 'success'
+              || (needs.publish.result == 'skipped'
+                  && (contains(github.ref, 'rc') || contains(github.ref, 'alpha') || contains(github.ref, 'beta')))) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -461,12 +477,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ─────────────────────────────────────────────────────────────────────
-  # Step 4: Publish to PyPI (optional, requires OIDC setup)
+  # Step 3: Publish to PyPI (optional, requires OIDC setup)
+  # (Environment-gated; runs BEFORE the GitHub Release is created so the
+  # approval wait cannot open a Release-without-artifacts window.)
   # ─────────────────────────────────────────────────────────────────────
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    needs: release
+    needs: build
     # Std 30 §8 hard guard + non-prerelease only: never publish on rehearsal-*
     # tags, branch pushes, PRs, or rc/alpha/beta tags. Combined into a single
     # condition — GitHub Actions rejects duplicate `if:` per job. (Run
