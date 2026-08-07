@@ -150,17 +150,18 @@ _SYSTEM_PROMPT = """\
 
 A TokenPak companion is active in this session. You have these MCP tools:
 
-- **estimate_tokens** — Estimate token count for text or a file. Call before including large content.
-- **check_budget** — Query the remaining TokenPak cost budget for this session and today.
+- **estimate_tokens** — Estimate token count for text or a file. Reserve for a go/no-go decision on very large content.
+- **check_budget** — Report the remaining TokenPak cost budget for this session and today.
 - **load_pak** — Load a TokenPak Pak (compressed context bundle) from a prior session (omit session_id to list available). Legacy alias: load_capsule.
 - **prune_context** — Compress verbose tool output with TokenPak to reduce token count.
 - **journal_read** — Read TokenPak session-journal entries (omit session_id to list sessions).
 - **journal_write** — Save an important decision, milestone, or note to the TokenPak journal for future sessions.
 - **session_info** — Get TokenPak companion status and configuration.
 
-The TokenPak companion automatically estimates cost and journals each prompt via
-hooks. Compressed context it injects is wrapped in `[PAK ...]` envelopes. You
-only need to call tools explicitly when optimizing context or managing budget.
+The TokenPak companion estimates cost, enforces the budget, and journals each
+prompt automatically via hooks — do not call tools for routine accounting;
+every tool call re-sends the conversation. Compressed context it injects is
+wrapped in `[PAK ...]` envelopes.
 """
 
 

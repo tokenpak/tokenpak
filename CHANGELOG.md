@@ -8,6 +8,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Companion guidance no longer directs agents to spend model turns on
+  accounting.** Cost estimation and budget enforcement happen automatically in
+  the pre-send hook, and session summaries in the stop hook, so the generated
+  Codex `AGENTS.md` section, the Claude launcher system-prompt fragment, and
+  the `estimate_tokens` / `check_budget` MCP tool descriptions now say to
+  reserve explicit tool calls for genuine decisions instead of recommending
+  them before reads and multi-step tasks. Each avoided call saves a full
+  model round-trip that would re-send the whole conversation. The Codex
+  `AGENTS.md` managed section also shrinks to roughly a third of its former
+  size while keeping the complete tool inventory and behavioral rules.
+- **`estimate_tokens` MCP results are compacted.** The tool now returns
+  `tokens`, `chars`, and a short estimator disclosure instead of echoing the
+  full HTTP payload, because tool results persist in the conversation and are
+  re-billed as input on every subsequent turn. The heuristic-fallback
+  disclosure remains (as `chars/4-approx` plus a brief install hint), and the
+  `/tpk/v1/tokens/estimate` HTTP response is unchanged.
+
 - **`tokenpak pak create` now writes the canonical Pak schema (`schema_version: 2`).**
   Created Pak files carry the canonical contract fields (`pak_type`, `source`, `status`,
   `authority`, `confidence`, `retention`, `privacy`, `relationships`) plus the existing

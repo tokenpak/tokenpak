@@ -112,7 +112,19 @@ def _handle_estimate_tokens(state: CompanionState, args: dict[str, Any]) -> str:
         return json.dumps({"error": "proxy_unreachable", "detail": resp.get("detail", "")})
     if status >= 400:
         return json.dumps(resp)
-    return json.dumps(resp)
+    # Tool results persist in the conversation and are re-sent as input on
+    # every later turn, so return only the fields an agent acts on. The
+    # estimator disclosure stays (a heuristic count must not read as a
+    # tokenizer count) but in compact form; the full response remains
+    # available on the HTTP endpoint itself.
+    compact: dict[str, Any] = {k: resp[k] for k in ("tokens", "chars") if k in resp}
+    estimator = resp.get("estimator")
+    if estimator == "chars-per-4-heuristic":
+        compact["estimator"] = "chars/4-approx"
+        compact["note"] = "install tokenpak[tokens] for tokenizer counts"
+    elif estimator:
+        compact["estimator"] = estimator
+    return json.dumps(compact)
 
 
 def _handle_estimate_tokens_legacy_unused(state: CompanionState, args: dict[str, Any]) -> str:
@@ -463,7 +475,7 @@ def _handle_vault_retrieve(state: CompanionState, args: dict[str, Any]) -> str:
 TOOLS: list[ToolDef] = [
     ToolDef(
         name="estimate_tokens",
-        description="Estimate token count for text or a file. Use before reading large files or including verbose context to decide if it's worth the cost.",
+        description="Estimate token count for text or a file. Cost tracking is automatic via hooks — reserve this for a go/no-go decision on very large content, not routine bookkeeping.",
         input_schema={
             "type": "object",
             "properties": {
@@ -478,7 +490,7 @@ TOOLS: list[ToolDef] = [
     ),
     ToolDef(
         name="check_budget",
-        description="Check the remaining TokenPak cost budget for this session and today. Call before starting expensive multi-step tasks.",
+        description="Report the remaining TokenPak cost budget for this session and today. The pre-send hook enforces the budget automatically — call this only when the user asks about budget.",
         input_schema={"type": "object", "properties": {}},
         handler=_handle_check_budget,
     ),

@@ -22,59 +22,27 @@ from .. import _style
 _AGENTS_CONTENT = """\
 # TokenPak Companion
 
-You have access to TokenPak companion tools via MCP. These tools help manage
-cost, context, and session continuity.
+TokenPak companion tools are available via MCP. Cost accounting is automatic
+and out-of-band: a pre-send hook estimates every prompt and blocks over-budget
+requests, and a stop hook records the session summary. Every MCP tool call
+costs a full model round-trip that re-sends the conversation so far — never
+spend one on routine accounting.
 
-## Available MCP tools
-
-- **estimate_tokens** — Check token count before including large content.
-- **check_budget** — Query the remaining TokenPak cost budget for this session and today.
-- **load_pak** — Load a TokenPak Pak (compressed context from a prior session). Legacy alias: load_capsule.
-- **prune_context** — Compress verbose tool output with TokenPak to reduce token usage.
-- **journal_read** — Read notes from past TokenPak sessions.
-- **journal_write** — Save important decisions or milestones to the TokenPak journal.
-- **session_info** — Get TokenPak companion status and configuration.
-
-## When to use tools
-
-- **Before reading large files**: call `estimate_tokens` with the file path
-  to decide if the cost is worth it.
-- **Before multi-step tasks**: call `check_budget` to see if there is
-  headroom for the full task.
-- **When resuming prior work**: call `load_pak` to recall the previous
-  session's Pak rather than re-reading everything.
-- **After verbose tool output**: consider calling `prune_context` if the
-  output exceeds ~2000 tokens and you only need the summary.
-- **When making architectural decisions**: call `journal_write` to record
-  the decision and rationale for future sessions.
-
-## When NOT to load capsules
-
-Do not load capsules automatically on every session start.  Only load when:
-- The user references prior work or a previous session.
-- You need context that would otherwise require re-reading many files.
-- The user explicitly asks to resume.
-
-## Budget awareness
-
-- If `check_budget` shows less than 20% remaining, warn the user before
-  starting expensive operations (large file reads, multi-step refactors).
-- If budget is exceeded, the UserPromptSubmit hook will block the request.
-  Do not attempt to work around budget blocks.
-
-## Context hygiene
-
+- Do NOT call `estimate_tokens`, `check_budget`, or `session_info` as
+  bookkeeping during a task; the hooks already track cost. Reserve
+  `estimate_tokens` for a genuine go/no-go decision on including very large
+  content.
+- `journal_write`: one concise entry for a major decision (no file contents);
+  session summaries are captured automatically at stop.
+- `journal_read` / `load_pak` (legacy alias `load_capsule`): only when
+  resuming prior work the user references — never automatically at session
+  start.
+- `prune_context`: only for verbose output you must keep but do not need in
+  full.
 - Prefer targeted file reads over whole-file reads.
-- Do not include full file contents in journal entries — summarize.
-- When tool output is large, prune it before reasoning over it.
-- Keep journal entries concise: one decision per entry, include rationale.
-
-## Verification
-
-- Verify before claiming completion. Run tests, check builds, confirm the
+- If a prompt is blocked for budget, do not work around the block.
+- Verify before claiming completion: run the tests or build and confirm the
   change actually works.
-- Do not claim a task is done based solely on writing code — confirm it
-  compiles, passes tests, or visibly works.
 """
 
 
