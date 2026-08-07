@@ -94,9 +94,17 @@ jobs:
           esac
           # IMPORTANT: PIPESTATUS[0] captures pytest's exit code, not tee's
           # (tee always exits 0). $? after a pipe would swallow test failures.
+          #
+          # Quarantine runner-sensitive perf/SLA tests (needs_fast_host) from
+          # this install-shape matrix: wall-clock latency assertions flake on
+          # shared hosted runners regardless of threshold. This mirrors the
+          # marker quarantine already applied by every other test workflow;
+          # the benchmarks keep their signal-bearing run in the dedicated
+          # Performance Benchmarks workflow. Parens are required so the
+          # exclusion distributes over the OR'd shape markers.
           set +e
           pytest tests/ \
-            -m "$MARKERS" \
+            -m "($MARKERS) and not needs_fast_host" \
             --continue-on-collection-errors \
             --tb=short -q \
             2>&1 | tee pytest-output.log
