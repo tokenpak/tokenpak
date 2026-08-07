@@ -1,7 +1,7 @@
 """
 tests/proxy/test_router.py
 
-Regression test for TRIX-MTC-07 Fix #5:
+Regression test for maintenance fix #5:
   ProviderRouter.route() must reject requests where the Content-Length header
   does not match the actual body size, raising ValueError.
 

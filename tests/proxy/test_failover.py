@@ -1,7 +1,7 @@
 """
 tests/proxy/test_failover.py
 
-Regression test for TRIX-MTC-07 Fix #1:
+Regression test for maintenance fix #1:
   FailoverManager.iter_providers() must not crash when reload_config() is
   called concurrently from another thread.
 

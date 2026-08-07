@@ -110,7 +110,7 @@ def run_startup_checks(port: int) -> Tuple[bool, List[str]]:
             warnings.append(msg)
 
     # ------------------------------------------------------------------ #
-    # 5. Eager OSS recipe pre-load — TRIX-01 / pmgtm initiative           #
+    # 5. Eager OSS recipe pre-load                                        #
     # Warms the compression recipe engine before the first request arrives #
     # so cold-start latency is not paid by the first user.                 #
     # ------------------------------------------------------------------ #

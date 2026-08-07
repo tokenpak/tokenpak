@@ -154,7 +154,7 @@ def _make_anthropic_payload(history: str) -> bytes:
 
 
 class TestProxyV4Defaults:
-    """Verify TRIX-01 constant flip in proxy.py."""
+    """Verify the default-compression constant flip in proxy.py."""
 
     @pytest.mark.skip(reason=SKIP_COMPACT_THRESHOLD_RAISED_TO_4500)
     def test_compact_threshold_is_1500(self, pv4):

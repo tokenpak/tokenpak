@@ -19,7 +19,7 @@ CI-safe.
 Note: current dashboard templates are stub placeholders (no <title> tag on
 most routes). The smoke test checks for valid HTML response (200 + DOCTYPE).
 The <title> check applies only to /dashboard/timeline which has a full template.
-This discrepancy is noted in TRIX-03 submission for follow-up (template work
+This discrepancy is noted for follow-up (template work
 is out of scope per task constraints).
 """
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CLI surface consistency test (CALI-MTC-01).
+"""CLI surface consistency test.
 
 Asserts that every command shown in `tokenpak --help` is actually registered
 in the argparse parser (exits 0 on `<cmd> --help`).  This prevents phantom

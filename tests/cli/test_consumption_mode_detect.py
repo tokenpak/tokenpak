@@ -1,16 +1,16 @@
-"""TSR-04 / WS-D — `detect_consumption_mode()` exercise tests.
+"""`detect_consumption_mode()` exercise tests.
 
 Carved out from `tests/cli/test_metrics_mode_fields.py` so the
-`detect_consumption_mode()` function (restored in the same TSR-04 PR)
+`detect_consumption_mode()` function (restored in the same PR)
 can be verified independently of the closed-source `tokenpak._internal`
-namespace that the parent file's TSR-01-followup guard requires.
+namespace that the parent file's module-level guard requires.
 
 These tests probe the environment-heuristic logic only. They do not
 record metrics, do not touch the SQLite store, and do not need
 `tokenpak._internal`. The matching `test_record_stores_*_mode` cases
 remain in the parent file (they use the `_record_request` helper,
-which mocks `tokenpak._internal.config.get_metrics_enabled`) and route
-to TSR-07 / WS-F when the boundary policy lands.
+which mocks `tokenpak._internal.config.get_metrics_enabled`) and move
+with the boundary policy when it lands.
 
 Covered modes: cli, tmux, sdk, ide (vscode / cursor / Windsurf), cron.
 TUI is not env-detected — it is provided explicitly by the caller, so
@@ -18,13 +18,13 @@ no detect-test exists for it (the canonical TUI assertion is in the
 parent file's `TestModeTui::test_record_stores_tui_mode`).
 
 Restoration provenance:
-- `27f30ec2fd` / `3a5b63cd58` (2026-04-08, CCI-21) — function shipped
+- `27f30ec2fd` / `3a5b63cd58` (2026-04-08) — function shipped
 - `88d3d9deb0` (2026-04-10, `_internal/` cleanup refactor) — reverted
-  along with the closed-source helpers (same regression as TSR-03's
+  along with the closed-source helpers (same regression as the
   schema fields)
-- TSR-04 (this PR, 2026-05-08) — function restored verbatim from
-  CCI-21; environment heuristics match `tokenpak-status/check.sh`
-  CCI-09 logic; no private API used.
+- 2026-05-08 (this PR) — function restored verbatim from the
+  original change; environment heuristics match `tokenpak-status/check.sh`
+  logic; no private API used.
 """
 
 from __future__ import annotations

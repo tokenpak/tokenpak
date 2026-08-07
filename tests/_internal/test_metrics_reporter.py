@@ -16,9 +16,9 @@ from unittest import mock
 
 import pytest  # noqa: F401 — kept for downstream pytest fixtures + markers
 
-# TSR-07 / WS-F (2026-05-08) — relocated to tests/_internal/.
+# Relocated to tests/_internal/ on 2026-05-08.
 # Default OSS gate excludes this directory via pyproject.toml
-# `norecursedirs`; the previous TSR-01-followup module-level
+# `norecursedirs`; the previous module-level
 # importorskip is no longer needed. See tests/_internal/README.md.
 
 # ---------------------------------------------------------------------------

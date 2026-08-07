@@ -4,7 +4,7 @@ tests/proxy/test_circuit_breaker.py
 Comprehensive unit tests for tokenpak.proxy.circuit_breaker (AC-TEST-CIRCUIT-01).
 
 Sections:
-  A. Regression: reload_config() — TRIX-MTC-07 guard (keep intact)
+  A. Regression: reload_config() — legacy guard (keep intact)
   B. CircuitState enum
   C. CircuitBreakerConfig
   D. CircuitBreaker state machine
@@ -51,7 +51,7 @@ from tokenpak.proxy.circuit_breaker import (
 )
 
 # ===========================================================================
-# A. Regression: reload_config() (TRIX-MTC-07 guard — keep intact)
+# A. Regression: reload_config() (legacy guard — keep intact)
 # ===========================================================================
 
 
