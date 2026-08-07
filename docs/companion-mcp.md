@@ -30,7 +30,8 @@ tokenpak codex           # launches Codex with the companion active
 - a **system-prompt fragment** describing the tools.
 
 `tokenpak codex` does the equivalent for Codex, registering the same MCP server
-through `codex mcp add` so it shows up in `codex mcp list`.
+through `codex mcp add` so it shows up in `codex mcp list`, and installing its
+hook pipeline and an AGENTS.md fragment into the selected Codex home.
 
 ### Running more than one Codex session at once
 
@@ -68,19 +69,36 @@ differs between clients.
 
 | Tool | What it does |
 |---|---|
-| `estimate_tokens` | Estimate token count for text or a file before you include it. |
-| `check_budget` | Remaining cost budget for this session and today. |
+| `estimate_tokens` | Estimate token count for text or a file. Returns a compact result: token and character counts plus a short estimator disclosure. |
+| `check_budget` | Remaining cost budget for this session and today, with an explicit scope note (only TokenPak-routed traffic is counted). |
 | `session_info` | Companion status, session stats, and configuration. |
 | `journal_write` | Add a note to the session journal (decisions, milestones). |
 | `journal_read` | Read journal entries for this or a past session. |
-| `load_capsule` | Load a memory capsule from a prior session. |
+| `load_pak` | Load a Pak (compressed context bundle) from a prior session; omit the session id to list what is available. |
+| `load_capsule` | Deprecated legacy alias of `load_pak` (capsule is the pre-rebrand name for a Pak). |
 | `prune_context` | Compress verbose tool output / logs to cut token usage. |
 | `vault_search` | BM25 search over your indexed vault, top-K with scores. |
 | `vault_retrieve` | Fetch the full content of one vault block by id or path. |
 
-`journal_write` and `prune_context` **mutate** companion state, so on Codex
-they are configured to prompt for approval; the read-shaped tools run without a
-prompt.
+Cost estimation, budget enforcement, and per-prompt journaling all happen
+automatically in the hook pipeline, and every tool call re-sends the
+conversation — so the injected guidance tells the model **not** to call tools
+for routine accounting. `estimate_tokens` is for a go/no-go decision on very
+large content; `check_budget` is for when you actually ask about budget.
+
+On Claude Code, the settings overlay allowlists `mcp__tokenpak-companion__*`,
+so companion tools run without permission prompts. On Codex, the launcher
+writes no per-tool approval policy; Codex's own approval and sandbox settings
+govern tool calls.
+
+### Lean tool profile
+
+Tool schemas are re-sent to the model with every request, so advertising all
+ten tools has a recurring token cost. With `TOKENPAK_COMPANION_PROFILE=lean`,
+`tools/list` advertises only the core tools — `load_pak`, `prune_context`,
+`journal_read`, `journal_write`, `vault_search`, `vault_retrieve` — whose
+value justifies that cost; hooks and the CLI cover the rest out-of-band.
+Dispatch is never filtered: a call to an unadvertised tool still works.
 
 ---
 
@@ -93,8 +111,9 @@ below are the canonical reference so you can confirm what is being registered
 ### Claude Code
 
 `tokenpak claude` writes an MCP config to
-`~/.tokenpak/companion/run/mcp.json` and passes it to Claude Code via
-`--mcp-config`:
+`~/.tpk/companion/run/mcp.json` (the legacy `~/.tokenpak/` home is still
+honored when an older install holds state there; `TOKENPAK_HOME` overrides the
+location) and passes it to Claude Code via `--mcp-config`:
 
 ```json
 {
@@ -116,35 +135,40 @@ below are the canonical reference so you can confirm what is being registered
 
 ### Codex
 
-`tokenpak codex` registers the server with `codex mcp add` and writes an
-explicit policy block into `~/.codex/config.toml`:
+`tokenpak codex` registers the server with `codex mcp add`, which stores it in
+the selected Codex home's `config.toml` (`~/.codex/config.toml` in the default
+`shared` mode):
 
 ```toml
 [mcp_servers.tokenpak-companion]
 command = "/path/to/python"
-args = ["-P", "-m", "tokenpak.companion.mcp.server"]
-startup_timeout_sec = 30
-tool_timeout_sec = 60
-enabled_tools = ["estimate_tokens", "check_budget", "load_capsule", "prune_context", "journal_read", "journal_write", "session_info", "vault_search", "vault_retrieve"]
-default_tools_approval_mode = "auto"
-tool_approvals = { journal_write = "prompt", prune_context = "prompt" }
+args = ["-m", "tokenpak.companion.mcp.server"]
 ```
 
-The companion owns the policy keys (`startup_timeout_sec`, `tool_timeout_sec`,
-`enabled_tools`, `default_tools_approval_mode`, `tool_approvals`) and rewrites
-them whenever you re-run `tokenpak codex`. Everything else in the table:
-`command`, `args`, `env`, is preserved verbatim. `enabled_tools` is generated
-from the canonical tool registry, never hand-maintained.
+Non-default companion settings — a daily budget, a non-default profile, or an
+overridden journal directory — are forwarded as `env` entries on that same
+table so the server subprocess sees them.
+
+Registration is idempotent: when `codex mcp get tokenpak-companion` already
+succeeds, the launcher leaves the existing entry untouched. To regenerate it
+(for example after moving your Python environment), run
+`codex mcp remove tokenpak-companion` and launch `tokenpak codex` again.
+
+The launcher writes no tool policy keys: there is no generated
+`enabled_tools` list and no per-tool approval table. The advertised tool set
+comes from the server's own `tools/list` response at runtime, so it always
+matches the registry — including the lean profile's thinner list.
 
 ---
 
 ## First-run cold start
 
 The MCP server itself starts fast: importing
-`tokenpak.companion.mcp.server` is a sub-second operation, and the heavy,
-optional ML backends (`sentence_transformers` / `transformers` / `torch`) are
-**lazy**. They load only when a retrieval tool is actually called, not at
-server startup.
+`tokenpak.companion.mcp.server` is a sub-second operation. Retrieval does not
+happen in the server process at all — `vault_search`, `vault_retrieve`,
+`prune_context`, and the other proxy-backed tools are thin HTTP calls to the
+local TokenPak proxy, which owns the vault index and any heavy, optional ML
+backends (`sentence_transformers` / `transformers` / `torch`).
 
 Earlier builds imported `sentence_transformers` at module load, which
 transitively pulled in `torch`: a cold import of roughly 13-18 seconds. That
@@ -153,8 +177,8 @@ server as a failed setup even though nothing was actually broken.
 
 ### The durable fix
 
-The retrieval backend is now lazy-loaded. Availability is detected cheaply at
-import, and the model is imported only on first retrieval. A fresh
+Retrieval moved out of the server process entirely: the proxy owns the index,
+and the MCP server carries no heavy imports of its own. A fresh
 `tokenpak claude` or `tokenpak codex` should connect without tripping the
 timeout. No configuration is required to get this behavior; it is the default.
 
@@ -169,9 +193,10 @@ raise Claude Code's MCP startup timeout for that session:
 MCP_TIMEOUT=30000 tokenpak claude
 ```
 
-This is a **workaround, not a fix**: it only widens the connect window. On Codex
-the equivalent cushion (`startup_timeout_sec = 30`) is already written into the
-config block above, so no manual step is needed there.
+This is a **workaround, not a fix**: it only widens the connect window. On
+Codex, the equivalent knob is Codex's own `startup_timeout_sec` setting on the
+server's `config.toml` entry — the launcher does not set it, and the server's
+light startup should not need it.
 
 If you want to skip the MCP server entirely (no tools injected), set:
 
@@ -186,6 +211,9 @@ TOKENPAK_COMPANION_MCP=0 tokenpak claude
 ```bash
 # Companion + environment health (read-only).
 tokenpak doctor
+
+# Codex: end-to-end install verification (registration, hooks, AGENTS.md).
+tokenpak codex doctor
 
 # Codex: confirm the server is registered.
 codex mcp list        # tokenpak-companion should appear
