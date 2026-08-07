@@ -8,11 +8,12 @@ accounts for and lays every row below it out against the wrong width. The
 visible symptoms are mid-word breaks, repeated regions in scrollback, and
 input-box text that stays on screen after being deleted.
 
-**The label must have exactly one definition.** The colors live in
-``tokenpak._formatting.colors``; the launcher renders the label from them and
-writes the result to the run dir; the ``SessionStart`` hook replays that file.
-A hand-written second copy in the shell hook is what previously let the two
-surfaces drift apart.
+**The label must have exactly one definition, and it is plain text.** The
+label is argv data rendered by the host CLI, which owns that surface and
+sanitizes control bytes in it (a 2026-08 host update displays embedded SGR
+sequences as literal text). The launcher writes the label to the run dir; the
+``SessionStart`` hook replays that file. A hand-written second copy in the
+shell hook is what previously let the two surfaces drift apart.
 
 The PTY test at the bottom is the only check that observes what the host CLI
 *actually* renders — everything above it tests our own arithmetic, which is
@@ -34,7 +35,6 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak._formatting.colors import Color
 from tokenpak.companion import launcher
 
 HOOK = Path(launcher.__file__).parent / "hooks" / "session_start_name.sh"
@@ -82,7 +82,7 @@ def test_emoji_counted_as_wide():
     it wide, which is the direction that overflows.
     """
     assert _visible_width("\U0001f4e6") == 2
-    assert _visible_width(launcher._DEFAULT_SESSION_LABEL) == 30
+    assert _visible_width(launcher._DEFAULT_SESSION_LABEL) == 28
 
 
 def test_user_supplied_name_is_prefixed_and_returned():
@@ -112,18 +112,17 @@ def test_hook_carries_no_escape_sequences():
     assert "48;2;" not in body
 
 
-def test_label_derives_from_the_palette_module():
-    """No brand escape may be written inline in the launcher."""
-    assert launcher._LBL_TEAL == Color.TEAL
-    assert launcher._LBL_GRAY == Color.LIGHT_GRAY
-    assert launcher._LBL_WHITE == Color.PAPER
-    assert launcher._LBL_BG_BLACK == Color.CHROME_BG
+def test_labels_are_plain_text():
+    """Session labels are argv data rendered by the host — no control bytes.
 
-
-def test_muted_tone_is_the_palette_tone():
-    """Guards the off-palette gray that used to be pasted in by hand."""
-    assert Color.LIGHT_GRAY == "\033[38;2;107;114;128m"  # tp-mute #6B7280
-    assert Color.TEAL == "\033[38;2;0;180;170m"  # tp-accent #00B4AA
+    A 2026-08 host update began sanitizing control bytes in the session-name
+    surface, displaying embedded SGR sequences as literal ``[38;2;…m`` text.
+    Styling is allowed only on streams the companion writes to a TTY itself.
+    """
+    for label in (launcher._DEFAULT_SESSION_LABEL, launcher._SHORT_SESSION_LABEL):
+        assert "\033" not in label
+        assert SGR.search(label) is None
+        assert label.isprintable()
 
 
 def test_hook_replays_exactly_what_the_launcher_wrote(tmp_path):
