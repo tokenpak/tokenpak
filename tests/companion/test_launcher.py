@@ -265,10 +265,9 @@ def test_main_passes_through_extra_args(tmp_path):
 def test_prefix_session_name_no_flag():
     """When no --name/-n flag is present, injects the default branded label.
 
-    The default label is the ANSI-styled brand label (teal brackets +
-    'TokenPak', white '📦 Token', gray 'Claude Companion'). The 📦 SESSION
-    PREFIX appears inside the brand text but is not the first character —
-    the leading teal-bracket ANSI escape comes first.
+    The default label is plain text ('📦 TokenPak Claude Companion') — the
+    host CLI renders the session name and sanitizes control bytes in it, so
+    no styling is embedded.
     """
     result = launcher._prefix_session_name(["--no-update-notifier"])
     assert "--name" in result

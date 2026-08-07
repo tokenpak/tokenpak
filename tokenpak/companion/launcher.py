@@ -307,32 +307,18 @@ def main(args: list[str] | None = None) -> int:
 
 
 _SESSION_PREFIX = "\U0001f4e6"  # 📦
-# Colors for the branded session label, derived from the single palette
-# definition in ``_formatting.colors`` — never write a brand escape inline
-# here, or the label and the rest of the CLI can drift apart. A solid fill is
-# painted across the whole label so it reads as one chip regardless of the
-# user's terminal background; the trailing reset clears it.
-_LBL_BG_BLACK = Color.CHROME_BG
-_LBL_TEAL = Color.TEAL  # "Pak"
-_LBL_WHITE = Color.PAPER  # "📦 Token"
-_LBL_GRAY = Color.LIGHT_GRAY  # "Claude Companion"
-_LBL_RESET = Color.RESET
-# Default session label shown in the chat-header. Real ESC bytes here — they
-# pass through ``os.execvpe`` to ``--name`` as raw argv bytes. The
-# ``SessionStart`` hook re-emits this exact string after a session is
-# re-created; it reads it from the run dir rather than keeping its own copy,
-# so this stays the only definition.
-_DEFAULT_SESSION_LABEL = (
-    f"{_LBL_BG_BLACK}"
-    f"{_LBL_WHITE} {_SESSION_PREFIX} Token"
-    f"{_LBL_TEAL}Pak"
-    f"{_LBL_GRAY} Claude Companion "
-    f"{_LBL_RESET}"
-)
-# Progressively shorter fallbacks for narrow terminals, widest first.
-_SHORT_SESSION_LABEL = (
-    f"{_LBL_BG_BLACK}{_LBL_WHITE}{_SESSION_PREFIX} Token{_LBL_TEAL}Pak{_LBL_RESET}"
-)
+# Session labels are PLAIN TEXT by design. The label travels as argv data
+# (``--name``) and is rendered by the host CLI, which owns that surface and
+# sanitizes control bytes in it — a 2026-08 host update began displaying
+# embedded SGR sequences as literal ``[38;2;…m`` text in the chat header.
+# Styling belongs only on streams this process writes to a TTY itself (the
+# stderr banner above), never inside data handed to another program to
+# display. The ``SessionStart`` hook re-emits this exact string after a
+# session is re-created; it reads it from the run dir rather than keeping
+# its own copy, so this stays the only definition.
+_DEFAULT_SESSION_LABEL = f"{_SESSION_PREFIX} TokenPak Claude Companion"
+# Shorter fallback for narrow terminals.
+_SHORT_SESSION_LABEL = f"{_SESSION_PREFIX} TokenPak"
 # Columns the host CLI spends on its own chrome around the label (padding
 # plus the minimum rule on either side). Measured against the rendered
 # header, with headroom: below this the header wraps and every row after it
@@ -441,9 +427,9 @@ def _write_session_title(config: CompanionConfig, label: str | None) -> str:
     """Write the ``SessionStart`` payload the label hook prints.
 
     Generating this from the Python constant is what keeps the shell hook
-    from carrying a second, hand-copied set of escapes. When no label fits
-    the terminal, the file is removed so the hook emits nothing and the host
-    keeps its own default.
+    from carrying a second, hand-copied copy of the label. When no label
+    fits the terminal, the file is removed so the hook emits nothing and the
+    host keeps its own default.
     """
     path = config.run_dir / "session_title.json"
     if label is None:
@@ -458,8 +444,8 @@ def _write_session_title(config: CompanionConfig, label: str | None) -> str:
             "sessionTitle": label,
         }
     }
-    # ensure_ascii keeps the ESC bytes as \u001b escapes, which is the only
-    # form valid inside a JSON string.
+    # ensure_ascii keeps any non-ASCII byte in a user-supplied --name value
+    # in escaped form, which is always valid inside a JSON string.
     path.write_text(json.dumps(payload, ensure_ascii=True))
     return str(path)
 
