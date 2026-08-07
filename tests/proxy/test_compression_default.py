@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-# TSR-05y compaction-threshold-raised skip reason (grep-able)
+# Compaction-threshold-raised skip reason (grep-able)
 # ─────────────────────────────────────────────
 # Production raised `COMPACT_THRESHOLD_TOKENS` from 1500 to 4500 (deliberate
 # behavior change to reduce compression on small payloads). Two tests encode
@@ -38,17 +38,17 @@ import pytest
 #     CI: `No compression occurred: sent=2266, original=2266. The explicit
 #     helper threshold may not have taken effect.`
 #
-# This is **NOT TSR-05l overlap** (TSR-05l is the compression-engine
-# regression on 10k+-token payloads dropping from ~80%→~1%; those payloads
-# are well above the new 4500 threshold and still hit the engine). This
-# slice is the deliberate-threshold-bump shape — TSR-02 (API/behavior
-# drift) territory. Same Path B pattern as TSR-05u
-# (`SKIP_FALLBACK_MODEL_RATE_DRIFT`): a hard-coded constant has changed.
+# This is **NOT** the compression-engine regression overlap (that
+# regression is on 10k+-token payloads dropping from ~80%→~1%; those
+# payloads are well above the new 4500 threshold and still hit the
+# engine). This slice is the deliberate-threshold-bump shape — API/
+# behavior-drift territory. Same Path B pattern as
+# `SKIP_FALLBACK_MODEL_RATE_DRIFT`: a hard-coded constant has changed.
 SKIP_COMPACT_THRESHOLD_RAISED_TO_4500 = (
     "Test asserts COMPACT_THRESHOLD_TOKENS == 1500; production raised "
     "the threshold to 4500 (deliberate behavior change). 6kB / 2266-"
-    "token test payload is now below the floor. NOT a TSR-05l overlap "
-    "— belongs to TSR-02 (API drift)."
+    "token test payload is now below the floor. Not the compression-"
+    "engine regression overlap — this is deliberate API drift."
 )
 
 # ---------------------------------------------------------------------------

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import pytest
 
-# TSR-04: fastapi/starlette are in the optional `[serve]` / `[telemetry]`
+# fastapi/starlette are in the optional `[serve]` / `[telemetry]`
 # extras (see pyproject.toml). Slim install does not pull them. Without
 # these guards, the test module raises ModuleNotFoundError 13 times at
 # collection-time (one per parametrized case + class-level helpers), each

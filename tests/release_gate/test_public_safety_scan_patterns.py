@@ -12,7 +12,7 @@ import re
 
 import pytest
 
-from scripts.release_gate.public_safety_scan import RELEASE_PATTERN_SPECS
+from scripts.release_gate.public_safety_scan import RELEASE_PATTERN_SPECS, is_excluded
 
 
 def _compiled(label: str) -> re.Pattern[str]:
@@ -49,6 +49,9 @@ def test_documented_vault_index_default_is_allowed(vault_pattern, text):
         "path: /Users/someone/vault/notes.md",
         "path: ~/vault/.tokenpak-extra",
         "path: ~/vault/.tokenpakother",
+        "path: ~/vault/.tokenpak.d",
+        "path: ~/vault/.tokenpak.old/x",
+        "path: ~/vault/.tokenpak.bak",
     ],
 )
 def test_other_vault_paths_still_match(vault_pattern, text):
@@ -58,3 +61,17 @@ def test_other_vault_paths_still_match(vault_pattern, text):
 def test_private_home_and_tool_state_specs_present():
     labels = {spec.label for spec in RELEASE_PATTERN_SPECS}
     assert {"private-home-path", "vault-path", "private-tool-state-path"} <= labels
+
+
+@pytest.mark.parametrize(
+    "relpath,excluded",
+    [
+        ("scripts/release_gate/public_safety_scan.py", True),
+        ("scripts/release_gate/check_release_leaks.py", True),
+        ("scripts/release_gate/gen_api_snapshot.py", False),
+        ("tests/cli/test_dispatch_cli.py", True),
+        ("tokenpak/core/config_loader.py", False),
+    ],
+)
+def test_pattern_register_files_are_self_exempt(relpath, excluded):
+    assert is_excluded(relpath) is excluded
