@@ -87,12 +87,20 @@ class CompanionState:
 
 @dataclass
 class ToolDef:
-    """MCP tool definition."""
+    """MCP tool definition.
+
+    ``core`` marks tools advertised under the ``lean`` companion profile.
+    Tool schemas are re-sent to the model with every request, so the lean
+    profile advertises only the tools whose value justifies that recurring
+    cost; hooks and the CLI cover the rest out-of-band. Dispatch is never
+    filtered — a call to an unadvertised tool still works.
+    """
 
     name: str
     description: str
     input_schema: dict[str, Any]
     handler: Callable[[CompanionState, dict[str, Any]], str]
+    core: bool = True
 
 
 def _handle_estimate_tokens(state: CompanionState, args: dict[str, Any]) -> str:
@@ -487,16 +495,18 @@ TOOLS: list[ToolDef] = [
             },
         },
         handler=_handle_estimate_tokens,
+        core=False,
     ),
     ToolDef(
         name="check_budget",
         description="Report the remaining TokenPak cost budget for this session and today. The pre-send hook enforces the budget automatically — call this only when the user asks about budget.",
         input_schema={"type": "object", "properties": {}},
         handler=_handle_check_budget,
+        core=False,
     ),
     ToolDef(
         name="load_pak",
-        description="Load a TokenPak Pak (Portable AI Knowledge — a compressed context bundle) from a prior session. Call when resuming work or when the user references past sessions. Omit session_id to list available Paks.",
+        description="Load a TokenPak Pak (compressed context bundle) from a prior session; omit session_id to list available. Use when resuming work the user references.",
         input_schema={
             "type": "object",
             "properties": {
@@ -521,6 +531,7 @@ TOOLS: list[ToolDef] = [
             },
         },
         handler=_handle_load_capsule,
+        core=False,
     ),
     ToolDef(
         name="prune_context",
@@ -579,15 +590,14 @@ TOOLS: list[ToolDef] = [
         description="Get TokenPak companion status, session stats, and configuration.",
         input_schema={"type": "object", "properties": {}},
         handler=_handle_session_info,
+        core=False,
     ),
     ToolDef(
         name="vault_search",
         description=(
-            "Search the indexed vault by BM25 and return top-K matching blocks "
-            "with relevance scores. Use when the user references project docs, "
-            "code, or knowledge stored in the local vault. The proxy also "
-            "auto-injects vault context, but this tool lets you query "
-            "explicitly (e.g. narrowing to a specific concept)."
+            "Search the indexed vault by BM25; returns top-K matching blocks "
+            "with relevance scores. Use when the user references docs, code, "
+            "or knowledge stored in the local vault."
         ),
         input_schema={
             "type": "object",
@@ -623,3 +633,15 @@ TOOLS: list[ToolDef] = [
         handler=_handle_vault_retrieve,
     ),
 ]
+
+
+def active_tools(profile: str) -> list[ToolDef]:
+    """Tools advertised for a companion profile.
+
+    ``lean`` advertises only core tools; every other profile advertises the
+    full registry. Derived from per-tool ``core`` metadata, never a separate
+    name list, so registry changes cannot drift out of sync.
+    """
+    if profile == "lean":
+        return [t for t in TOOLS if t.core]
+    return list(TOOLS)

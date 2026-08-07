@@ -28,6 +28,7 @@ from tokenpak.companion.mcp.tools import (
     _handle_load_capsule,
     _handle_prune_context,
     _handle_session_info,
+    active_tools,
 )
 
 # ---------------------------------------------------------------------------
@@ -162,6 +163,42 @@ def test_load_capsule_is_deprecated_alias_of_load_pak():
     assert pak.handler is legacy.handler
     assert pak.input_schema == legacy.input_schema
     assert "eprecated" in legacy.description and "load_pak" in legacy.description
+
+
+def test_active_tools_lean_advertises_core_only():
+    """Lean drops accounting/diagnostic tools and the deprecated alias from
+    the advertised list; recall, compression, and journal tools survive."""
+    lean = {t.name for t in active_tools("lean")}
+    assert lean == {t.name for t in TOOLS if t.core}
+    assert {"estimate_tokens", "check_budget", "session_info", "load_capsule"}.isdisjoint(lean)
+    assert {"load_pak", "prune_context", "journal_read", "journal_write"} <= lean
+
+
+def test_active_tools_other_profiles_advertise_full_registry():
+    for profile in ("balanced", "verbose", "", "unknown"):
+        assert active_tools(profile) == list(TOOLS)
+
+
+def test_server_tools_list_respects_profile(tmp_path, monkeypatch):
+    """The server's tools/list must advertise the profile-filtered set while
+    dispatch remains unfiltered (a lean session can still call any tool)."""
+    from tokenpak.companion.mcp import server as mcp_server
+
+    sent: list[dict] = []
+    monkeypatch.setattr(mcp_server, "_send", lambda msg: sent.append(msg))
+
+    lean_state = CompanionState(config=CompanionConfig(journal_dir=tmp_path, profile="lean"))
+    mcp_server._handle_tools_list(7, lean_state)
+    assert {t["name"] for t in sent[0]["result"]["tools"]} == {t.name for t in TOOLS if t.core}
+
+    full_state = CompanionState(config=CompanionConfig(journal_dir=tmp_path, profile="balanced"))
+    mcp_server._handle_tools_list(8, full_state)
+    assert {t["name"] for t in sent[1]["result"]["tools"]} == {t.name for t in TOOLS}
+
+    # Dispatch is not profile-gated: a non-core tool still resolves and runs.
+    mcp_server._handle_tools_call(9, {"name": "check_budget", "arguments": {}}, lean_state)
+    assert sent[2]["id"] == 9
+    assert "error" not in sent[2]
 
 
 # ---------------------------------------------------------------------------

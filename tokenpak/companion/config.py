@@ -9,7 +9,10 @@ Env vars
 --------
 TOKENPAK_COMPANION_ENABLED      Master switch (default: 1)
 TOKENPAK_COMPANION_BUDGET       Daily budget in USD (default: 0 = unlimited)
-TOKENPAK_COMPANION_PROFILE      Preset: lean | balanced | verbose (default: balanced)
+TOKENPAK_COMPANION_PROFILE      Preset: lean | balanced | verbose (default: balanced).
+                                lean also advertises only core MCP tools in
+                                tools/list (schemas ride every model request);
+                                dispatch of unadvertised tools still works.
 TOKENPAK_COMPANION_STYLE        Response style: lean | standard (default: standard).
                                 ``lean`` appends a dense-technical-markdown
                                 directive to the host's instructions; ``standard``

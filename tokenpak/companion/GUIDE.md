@@ -194,8 +194,15 @@ never fatal.
 
 ## MCP Tools Reference
 
-When the companion is active, Claude Code gains nine MCP tools served by
+When the companion is active, Claude Code gains the MCP tools below, served by
 `tokenpak.companion.mcp.server`.  The server runs as a stdio MCP process.
+
+Tool schemas are re-sent to the model with every request. Under
+`TOKENPAK_COMPANION_PROFILE=lean` the server advertises only the core tools
+(`load_pak`, `prune_context`, `journal_read`, `journal_write`, `vault_search`,
+`vault_retrieve`); accounting and diagnostic tools stay callable if a client
+invokes them, but their schemas no longer ride every request. Hooks cover
+cost estimation and budget enforcement out-of-band in all profiles.
 
 | Tool | Description |
 |---|---|
