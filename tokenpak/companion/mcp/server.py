@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import sys
 
-from .tools import TOOLS, CompanionState, current_session_id
+from .tools import TOOLS, CompanionState, active_tools, current_session_id
 
 
 def _send(obj: dict) -> None:
@@ -43,7 +43,9 @@ def _handle_initialize(req_id: int | str, state: CompanionState) -> None:
     )
 
 
-def _handle_tools_list(req_id: int | str) -> None:
+def _handle_tools_list(req_id: int | str, state: CompanionState) -> None:
+    # Advertised schemas ride every model request; the lean profile thins
+    # the list to core tools. Dispatch stays unfiltered (see ToolDef.core).
     _send(
         {
             "jsonrpc": "2.0",
@@ -55,7 +57,7 @@ def _handle_tools_list(req_id: int | str) -> None:
                         "description": t.description,
                         "inputSchema": t.input_schema,
                     }
-                    for t in TOOLS
+                    for t in active_tools(state.config.profile)
                 ]
             },
         }
@@ -126,7 +128,7 @@ def main() -> None:
         if method == "initialize":
             _handle_initialize(req_id, state)
         elif method == "tools/list":
-            _handle_tools_list(req_id)
+            _handle_tools_list(req_id, state)
         elif method == "tools/call":
             _handle_tools_call(req_id, req.get("params", {}), state)
         elif req_id is not None:

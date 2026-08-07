@@ -8,6 +8,19 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The `lean` companion profile now advertises only core MCP tools.**
+  Advertised tool schemas are re-sent to the model with every request, so
+  under `TOKENPAK_COMPANION_PROFILE=lean` the MCP server's `tools/list`
+  response includes only the recall, compression, and journal tools
+  (`load_pak`, `prune_context`, `journal_read`, `journal_write`,
+  `vault_search`, `vault_retrieve`). Accounting and diagnostic tools
+  (`estimate_tokens`, `check_budget`, `session_info`) and the deprecated
+  `load_capsule` alias remain fully callable — dispatch is not filtered —
+  but their schemas no longer ride every request; hooks cover cost
+  estimation and budget enforcement out-of-band in all profiles. The
+  `balanced` (default) and `verbose` profiles are unchanged. Two verbose
+  tool descriptions were also shortened.
+
 - **Companion guidance no longer directs agents to spend model turns on
   accounting.** Cost estimation and budget enforcement happen automatically in
   the pre-send hook, and session summaries in the stop hook, so the generated
