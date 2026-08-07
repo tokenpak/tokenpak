@@ -826,6 +826,38 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         pass
 
     # ------------------------------------------------------------------
+    # Response correlation header (X-TokenPak-Request-ID)
+    # ------------------------------------------------------------------
+
+    def handle_one_request(self) -> None:
+        # Reset the correlation id at request ingress so every request on a
+        # keep-alive connection gets its own value (the handler instance is
+        # reused across requests on the same connection).
+        self._tokenpak_request_id: str | None = None
+        super().handle_one_request()
+
+    def _response_request_id(self) -> str:
+        """Return the correlation id stamped on this request's response.
+
+        The forwarding path adopts its existing per-request id (see
+        ``_proxy_to_inner``); every other path lazily mints an opaque
+        uuid4 hex on first use.
+        """
+        rid = getattr(self, "_tokenpak_request_id", None)
+        if not rid:
+            rid = uuid.uuid4().hex
+            self._tokenpak_request_id = rid
+        return rid
+
+    def end_headers(self) -> None:
+        # Stamp the correlation header on every response the proxy returns.
+        # Headers are buffered until this flush, so the header always rides
+        # ahead of any body bytes — including the first chunk of a streaming
+        # (SSE) response. Response bodies are never touched.
+        self.send_header("X-TokenPak-Request-ID", self._response_request_id())
+        super().end_headers()
+
+    # ------------------------------------------------------------------
     # Proxy-level auth gate (P0-06 / A6)
     # ------------------------------------------------------------------
 
@@ -1295,6 +1327,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         t0 = time.time()
         # Request ID: honour X-Request-ID from client, else generate UUID
         _req_id = _new_request_id(dict(self.headers))
+        # Adopt the forwarding request id as this request's response
+        # correlation id so X-TokenPak-Request-ID carries the same value
+        # as the X-Request-ID echoed on forwarded responses.
+        self._tokenpak_request_id = _req_id
         ps = self._ps
         parsed = urlparse(target_url)
 
