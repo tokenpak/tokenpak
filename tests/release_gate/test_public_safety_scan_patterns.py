@@ -33,6 +33,7 @@ def vault_pattern() -> re.Pattern[str]:
         "index_path: ~/vault/.tokenpak",
         "index_path: ~/vault/.tokenpak/index.db",
         'default = "~/vault/.tokenpak"',
+        "vault:\n  index_path: ~/vault/.tokenpak\n  inject_budget: 4000",
     ],
 )
 def test_documented_vault_index_default_is_allowed(vault_pattern, text):

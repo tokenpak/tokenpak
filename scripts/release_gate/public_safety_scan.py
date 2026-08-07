@@ -63,10 +63,11 @@ RELEASE_PATTERN_SPECS: tuple[PatternSpec, ...] = (
         "vault-path",
         # The documented vault-index default directory ("/vault/.tokenpak"
         # under a home directory) is product surface, not a private-path
-        # leak. Only that exact path segment is exempt; every other path
-        # under a vault directory (including ".tokenpak.*" and
-        # ".tokenpak-*" variants) still matches.
-        r"(?:~|/(?:home|Users)/[A-Za-z0-9._-]+)/vault(?:$|/(?!\.tokenpak(?:$|/)))",
+        # leak. Only the exact ".tokenpak" segment is exempt — followed by
+        # a subpath or a non-segment character (quote, newline, space) —
+        # while segment-extending variants (".tokenpak.d", ".tokenpak-x",
+        # ".tokenpakother") and every other vault path still match.
+        r"(?:~|/(?:home|Users)/[A-Za-z0-9._-]+)/vault(?:$|/(?!\.tokenpak(?![\w.-])))",
     ),
     PatternSpec(
         "private-path",
