@@ -51,9 +51,7 @@ def test_register_spawn_omits_safe_path_flag_on_py310(monkeypatch) -> None:
 def test_register_env_vars_precede_separator(monkeypatch) -> None:
     """--env pairs must stay before the -- separator regardless of the
     safe-path flag."""
-    cmd = _capture_register_cmd(
-        monkeypatch, {"TOKENPAK_COMPANION_PROFILE": "lean"}
-    )
+    cmd = _capture_register_cmd(monkeypatch, {"TOKENPAK_COMPANION_PROFILE": "lean"})
     sep = cmd.index("--")
     env_idx = cmd.index("--env")
     assert env_idx < sep
