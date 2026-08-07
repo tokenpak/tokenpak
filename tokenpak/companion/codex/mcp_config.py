@@ -78,6 +78,10 @@ def _register(
         SERVER_NAME,
         "--",
         sys.executable,
+        # -P (Python 3.11+) keeps a tokenpak/ directory in the user's cwd
+        # from shadowing the installed package when Codex spawns the server
+        # — the same safe-path guard the Claude Code MCP config applies.
+        *(("-P",) if sys.version_info >= (3, 11) else ()),
         "-m",
         "tokenpak.companion.mcp.server",
     ]
