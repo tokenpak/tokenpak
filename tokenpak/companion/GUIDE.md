@@ -199,8 +199,8 @@ When the companion is active, Claude Code gains nine MCP tools served by
 
 | Tool | Description |
 |---|---|
-| `estimate_tokens` | Estimate token count for inline text or a file path. Call before including large content to decide if it's worth the cost. |
-| `check_budget` | Return remaining cost budget for this session and today. Call before starting expensive multi-step tasks. |
+| `estimate_tokens` | Estimate token count for inline text or a file path. Cost tracking is automatic via hooks — reserved for go/no-go decisions on very large content, not routine bookkeeping. |
+| `check_budget` | Return remaining cost budget for this session and today. The pre-send hook enforces the budget automatically; agents call this only on explicit user request. |
 | `load_pak` | Load a Pak (TokenPak's compressed context bundle; legacy name: capsule) from a prior session. Omit `session_id` to list the 10 most recent available Paks. |
 | `load_capsule` | Deprecated legacy alias of `load_pak` — same behavior and parameters. Kept so existing configs and hooks continue to work. |
 | `prune_context` | Compress verbose text (large tool outputs, error logs) by keeping the beginning and end and eliding the middle. Default target: 2,000 tokens. |

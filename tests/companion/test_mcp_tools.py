@@ -90,6 +90,8 @@ def fake_proxy(monkeypatch):
                 "tokens": max(1, chars // 4),
                 "chars": chars,
                 "chars_per_token": 4.0,
+                "estimator": "chars-per-4-heuristic",
+                "note": "approximate — install tokenpak[tokens] for exact counts",
             }
         if path == "/tpk/v1/compress":
             text = str(body.get("text", ""))
@@ -172,7 +174,36 @@ def test_estimate_tokens_inline_text(tmp_path):
     result = json.loads(_handle_estimate_tokens(state, {"text": "hello world"}))
     assert result["tokens"] > 0
     assert result["chars"] == len("hello world")
-    assert "chars_per_token" in result
+
+
+def test_estimate_tokens_result_is_compacted(tmp_path):
+    """Tool results persist in conversation context — verbose proxy metadata
+    must be compacted before it reaches the model, while the estimator
+    disclosure survives in short form."""
+    state = _make_state(tmp_path)
+    result = json.loads(_handle_estimate_tokens(state, {"text": "hello world"}))
+    assert "chars_per_token" not in result
+    assert result["estimator"] == "chars/4-approx"
+    assert result["note"] == "install tokenpak[tokens] for tokenizer counts"
+
+
+def test_estimate_tokens_tokenizer_estimator_passes_through(tmp_path, monkeypatch):
+    """A real tokenizer name is passed through unchanged, with no install note."""
+
+    def fake_post(path, body=None, params=None):
+        return 200, {
+            "tokens": 3,
+            "chars": 11,
+            "chars_per_token": 3.67,
+            "estimator": "tiktoken:cl100k_base",
+        }
+
+    monkeypatch.setattr("tokenpak.companion.mcp.tools._proxy_post", fake_post)
+    state = _make_state(tmp_path)
+    result = json.loads(_handle_estimate_tokens(state, {"text": "hello world"}))
+    assert result["estimator"] == "tiktoken:cl100k_base"
+    assert "note" not in result
+    assert "chars_per_token" not in result
 
 
 def test_estimate_tokens_uses_tiktoken(tmp_path):
