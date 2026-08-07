@@ -9,10 +9,9 @@
 #
 # This hook re-asserts the label by printing the payload the launcher
 # generated at ``<run_dir>/session_title.json``. It deliberately carries
-# NO copy of the label or of its escape sequences: the colors have a
-# single definition in ``tokenpak/_formatting/colors.py``, the launcher
-# renders the label from that definition, and this hook only replays the
-# result. A second hand-written copy here would drift the moment the
+# NO copy of the label: the label has a single plain-text definition in
+# the launcher, which writes it to the run dir, and this hook only
+# replays the result. A second hand-written copy here would drift the moment the
 # palette changed — which is exactly what it used to do.
 #
 # The file is absent when no label fits the current terminal width, in

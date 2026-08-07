@@ -427,9 +427,9 @@ def _write_session_title(config: CompanionConfig, label: str | None) -> str:
     """Write the ``SessionStart`` payload the label hook prints.
 
     Generating this from the Python constant is what keeps the shell hook
-    from carrying a second, hand-copied set of escapes. When no label fits
-    the terminal, the file is removed so the hook emits nothing and the host
-    keeps its own default.
+    from carrying a second, hand-copied copy of the label. When no label
+    fits the terminal, the file is removed so the hook emits nothing and the
+    host keeps its own default.
     """
     path = config.run_dir / "session_title.json"
     if label is None:
@@ -444,8 +444,8 @@ def _write_session_title(config: CompanionConfig, label: str | None) -> str:
             "sessionTitle": label,
         }
     }
-    # ensure_ascii keeps the ESC bytes as \u001b escapes, which is the only
-    # form valid inside a JSON string.
+    # ensure_ascii keeps any non-ASCII byte in a user-supplied --name value
+    # in escaped form, which is always valid inside a JSON string.
     path.write_text(json.dumps(payload, ensure_ascii=True))
     return str(path)
 
