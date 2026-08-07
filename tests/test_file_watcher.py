@@ -248,7 +248,7 @@ class TestReindex:
         mock_processor = MagicMock()
         mock_processor.process.return_value = "print('hello')"
 
-        # TSR-05s: import paths follow the modular tree — these previously
+        # Import paths follow the modular tree — these previously
         # patched `tokenpak.{registry,processors,tokens}.*` which were the
         # pre-refactor monolith locations. The watcher's `_reindex()` now
         # imports from `tokenpak.core.registry`, `tokenpak.compression.processors`,

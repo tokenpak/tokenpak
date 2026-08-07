@@ -451,7 +451,7 @@ def _load_codex_credentials() -> tuple[str, str]:
 
 # ---------------------------------------------------------------------------
 # Systemd integration — read sd_notify socket path from environment
-# Transferred from monolith (TPK-CONSOLIDATION-A2a, lines 7577/7601)
+# Transferred from monolith (lines 7577/7601)
 # ---------------------------------------------------------------------------
 _SD_NOTIFY_SOCKET: str = os.environ.get("NOTIFY_SOCKET", "")
 

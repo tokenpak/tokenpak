@@ -1,7 +1,6 @@
 """
 test_coverage_gaps.py — Targeted tests to fill top coverage gaps.
 
-TPK-087: Coverage Gap Analysis
 Files targeted (highest-miss, 0% coverage):
   1. tokenpak/agent/cli/commands/doctor.py  — 291 stmts, 0%
   2. tokenpak/agent/cli/commands/dashboard.py — 242 stmts, 0%
@@ -16,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# WS-A residual import guard — TSR-01-followup.
+# Residual import guard (slim-install surface).
 # `tokenpak.watchdog` (CooldownManager) and `tokenpak.agent.*` are not
 # part of the slim OSS surface. Coverage-gap tests in this file reach
 # into them; skip cleanly when absent. Full installs that ship the

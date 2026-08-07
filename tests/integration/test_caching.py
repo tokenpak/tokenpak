@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-# TSR-05r speculative-contract skip reason (grep-able)
+# Speculative-contract skip reason (grep-able)
 # ─────────────────────────────────────────────
 # Four tests below assert against `CacheManager` API surface that **never
 # existed** in `tokenpak/cache/cache_manager.py` git history:
@@ -29,7 +29,7 @@ import pytest
 #
 # These were added in the "comprehensive integration test suite" sweep
 # (commit 84f4f19b90 / 28a1448d2f) and encoded a speculative contract that
-# never landed in production. Same Path B pattern as TSR-05b's `/ready`
+# never landed in production. Same pattern as the `/ready`
 # endpoint skip — assertions against an intended-but-never-built surface.
 #
 # `test_cache_manual_invalidation` (only uses `cache.clear()`, which DOES
@@ -39,7 +39,7 @@ import pytest
 SKIP_CACHE_MANAGER_SPECULATIVE_API = (
     "Test asserts CacheManager API (ttl= kwarg, invalidate(), get_stats()) "
     "that never existed in cache_manager.py git history. Speculative "
-    "contract — see TSR-05b for the same pattern (Path B skip)."
+    "contract — same pattern as the /ready endpoint skip."
 )
 
 

@@ -1,6 +1,5 @@
 """Tests for request_audit.py and evidence_pack.py modules.
 
-Coverage task: TPK-COV-AUDIT-EVID-001
 Covers:
 - RequestAudit dataclass and properties
 - RequestAuditor tracker class

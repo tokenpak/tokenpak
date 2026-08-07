@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-# WS-A residual import guard — TSR-01-followup.
+# Residual import guard (slim-install surface).
 # tokenpak.recipe_sdk is not part of the slim OSS surface; tests reach
 # into it for scaffold/validate/test/benchmark behavior. PyYAML is also
 # an optional dep used by the recipe fixture writer.

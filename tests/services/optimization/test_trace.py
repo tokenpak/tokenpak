@@ -47,7 +47,7 @@ def test_body_unchanged_false_when_byte_counts_differ():
 
 
 def test_to_tip_dict_includes_version_marker_when_tip_module_present():
-    """If TIP-02 is importable the dict carries a tip_version. Otherwise
+    """If the TIP contract module is importable the dict carries a tip_version. Otherwise
     the function falls back to to_dict() unchanged."""
     t = OptimizationTrace(request_id="r-5")
     d = t.to_tip_dict()

@@ -39,7 +39,7 @@ def temp_registry():
 def populated_registry(temp_registry):
     """Registry with 3 pre-registered agents.
 
-    TSR-05g / WS-E (2026-05-08) — fixture name strings restored. The
+    History (2026-05-08) — fixture name strings restored. The
     test assertions throughout this file use the agent NAMES "beta",
     "alpha", "gamma" (e.g. `assert agent.name == 'alpha'`); at some point
     the fixture's name strings were generalized to "agent-1/2/3" but
@@ -51,8 +51,8 @@ def populated_registry(temp_registry):
     changes.
 
     Note: tests/ is not on the OSS surface; arbitrary test-fixture
-    names are not subject to `feedback_always_dynamic` (which governs
-    production enumerations, not test data).
+    names are fine here (dynamic-enumeration rules govern production
+    code, not test data).
     """
     temp_registry.register(
         "beta",
@@ -169,7 +169,7 @@ class TestAgentRegistry:
         assert id1 != id2
 
     def test_get_agent(self, temp_registry):
-        # TSR-05g — fixture name string aligned with assertion below.
+        # Fixture name string aligned with assertion below.
         agent_id = temp_registry.register("alpha", "host-2", {"memory_gb": 8})
         agent = temp_registry.get(agent_id)
         assert agent is not None

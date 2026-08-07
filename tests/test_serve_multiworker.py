@@ -23,7 +23,7 @@ import urllib.request
 
 import pytest
 
-# WS-A residual import guard — TSR-01-followup.
+# Residual import guard (slim-install surface).
 # `tokenpak serve --workers N` boots uvicorn workers that require
 # fastapi; on slim [dev] install fastapi is absent and serve fails to
 # start. Skip cleanly so the release test gate stays green.

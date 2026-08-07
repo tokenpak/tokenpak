@@ -13,7 +13,6 @@ Usage:
     pytest tests/benchmarks/test_compression_benchmarks.py -v -s  # print table
 
 Generated: 2026-03-24
-Author: Cali (TPK-BENCH-01)
 """
 
 from __future__ import annotations

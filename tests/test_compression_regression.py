@@ -60,7 +60,7 @@ def compress_payload(pipeline, payload):
 class TestCompressionRegression:
     """Regression tests for compression quality.
 
-    Implementation note (TSR-05l, 2026-05-08)
+    Implementation note (2026-05-08)
     ─────────────────────────────────────────
     The compression pipeline's `InstructionTable` stage is a stateful learning
     compressor — content must be observed at least `min_occurrences` (= 2)

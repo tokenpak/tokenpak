@@ -9,8 +9,8 @@ installed package surface — it ships as repo-tooling only.
 What this file pins
 -------------------
 - Each forbidden compound form matches (case-insensitive).
-- Standalone ``basis`` is **not** flagged. This is the explicit
-  Kevin DECISION-PAKPLAN-12.1 / addendum §6.1 nuance: ``basis`` is
+- Standalone ``basis`` is **not** flagged. This is an explicit,
+  documented decision: ``basis`` is
   allowed in normal English ("*on the basis of*", "*the basis for*")
   and only compound forms (``PAKBasis``, ``latent basis``,
   ``representative basis``, ``basis_packet`` / ``basis packet`` /
@@ -94,7 +94,7 @@ def test_forbidden_forms_case_insensitive(script, line: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Standalone ``basis`` — must NOT match (the §6.1 nuance).
+# Standalone ``basis`` — must NOT match (the standalone-basis nuance).
 # ---------------------------------------------------------------------------
 
 
@@ -102,8 +102,8 @@ def test_forbidden_forms_case_insensitive(script, line: str) -> None:
     "line",
     [
         "on the basis of the existing PR review",
-        "the basis for the decision is Suki's audit",
-        "we picked Sue as the basis for routing this PR",
+        "the basis for the decision is the reviewer's audit",
+        "we picked this branch as the basis for routing this PR",
         "rebased onto a stable basis branch",
         "schema 0003 is the basis migration",
     ],
@@ -112,8 +112,8 @@ def test_standalone_basis_not_flagged(script, line: str) -> None:
     """Standalone ``basis`` in normal English must not trigger.
 
     The compound-form regex was authored explicitly to skip this case
-    per Kevin DECISION-PAKPLAN-12.1; if a future revision regresses
-    that choice it should be a same-cycle Kevin re-decision, not a
+    by explicit maintainer decision; if a future revision regresses
+    that choice it should be an explicit re-decision, not a
     silent behaviour change.
     """
     assert script._FORBIDDEN_PATTERN.search(line) is None, (

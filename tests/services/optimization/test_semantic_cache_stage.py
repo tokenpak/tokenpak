@@ -1,4 +1,4 @@
-"""Tests for SemanticCacheStage in the services/optimization layer (TIP-04).
+"""Tests for SemanticCacheStage in the services/optimization layer.
 
 Covers:
 - Hit: safe route repeated query returns cached response.
@@ -10,7 +10,7 @@ Covers:
 - Record: stage.record() stores a response for future hits.
 
 Ported from tests/proxy/test_semantic_cache_openai_responses.py to
-tests/services/optimization/ as part of TIP-04 rework per QA rejection
+tests/services/optimization/ as part of a layering rework per QA rejection
 (needs-rework: move from proxy.optimization to services.optimization).
 """
 
@@ -393,7 +393,7 @@ def test_recorded_flag_set_after_record():
 
 
 def test_openai_responses_adapter_has_semantic_capability():
-    """OpenAIResponsesAdapter declares tip.cache.semantic.v1 after TIP-04 update."""
+    """OpenAIResponsesAdapter declares tip.cache.semantic.v1."""
     from tokenpak.proxy.adapters.openai_responses_adapter import OpenAIResponsesAdapter
 
     adapter = OpenAIResponsesAdapter()

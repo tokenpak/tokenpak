@@ -1,7 +1,7 @@
 """TokenPak Proxy — DB-backed cache statistics aggregation.
 
 Transferred from monolith (packages/core/tokenpak/runtime/proxy.py) as part of
-TPK-CONSOLIDATION-A2c.
+the monolith consolidation.
 
 Provides:
 - _get_cache_stats_by_window(hours, db_path) — per-provider cache stats from SQLite
@@ -109,7 +109,7 @@ def _build_cache_stats_payload(
 ) -> Dict[str, Any]:
     """Build comprehensive cache stats including per-provider breakdowns.
 
-    Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 3723–3788).
+    Transferred from monolith (lines 3723–3788).
     In the modular tree this function is called from the /cache/stats handler
     with explicit parameters rather than reading module-level globals (A3 wires
     these up for the runtime path; tests can pass any session dict).

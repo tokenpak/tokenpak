@@ -27,7 +27,7 @@ from tokenpak.proxy.stats import (
     CompressionStats,
 )
 
-# TSR-05e / WS-E (2026-05-08) — grep-able skip reason for tests that
+# Grep-able skip reason (2026-05-08) for tests that
 # assert against legacy CompressionStats interfaces / event-dict
 # shapes that no longer match the canonical class.
 #
@@ -54,9 +54,9 @@ from tokenpak.proxy.stats import (
 #     in the way the tests expect.
 #
 # All these test assertions were Phase-5-observability speculative
-# additions that never matched the canonical class shape. Same Path B
-# pattern as TSR-05b /ready and TSR-05c /health speculative-schema
-# tests. Per-test/class skip preserves the 11 canonical-shape tests
+# additions that never matched the canonical class shape. Same
+# pattern as the /ready and /health speculative-schema skips.
+# Per-test/class skip preserves the 11 canonical-shape tests
 # (which DO pass against the production class) and skips the 19
 # speculative ones with a grep-able reason.
 SKIP_COMPRESSION_TELEMETRY_LEGACY = (

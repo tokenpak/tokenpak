@@ -39,7 +39,7 @@ def _make_collector(cwd=None, known_good_env=None) -> StateCollector:
 
 def test_collect_git_state_in_real_repo(tmp_path):
     """Git collector returns branch + tracks uncommitted files in a real repo."""
-    # Init a git repo. TSR-05ac: must pass `-c user.email/-c user.name` so the
+    # Init a git repo. Must pass `-c user.email/-c user.name` so the
     # fixture is self-contained — CI runners ship without a global git config,
     # so without these flags `git commit` aborts with "Author identity unknown"
     # and HEAD never gets created. The collector then reports branch=None

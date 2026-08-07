@@ -49,7 +49,7 @@ _proxy_ready: bool = False
 _shutdown_event = threading.Event()
 _active_request_count: int = 0
 
-# TSR-05b / WS-E (2026-05-08) — grep-able skip reason for 3 lifecycle
+# Grep-able skip reason (2026-05-08) for 3 lifecycle
 # tests that probe a legacy `/ready` endpoint. Investigation:
 #   1. The `live_proxy` fixture builds vanilla HTTPServer(addr,
 #      ForwardProxyHandler), which masks the deeper issue: it doesn't
@@ -64,13 +64,13 @@ _active_request_count: int = 0
 #      app_endpoints — but not /ready.
 #   3. Git history (`git log --all -p -G '== "/ready"|"/ready":|/ready"' --all`)
 #      shows /ready never existed as a handled endpoint in any
-#      production file. Only matches were in unrelated TIP-03
+#      production file. Only matches were in unrelated
 #      optimization-policy code and an archived proxy_v4 file deleted
 #      in the 2026-04-09 cleanup.
 # Conclusion: the 3 tests assert against an intended-but-never-built
 # contract. Adding /ready to production would be feature creep based
 # on speculative tests. Rewriting the tests to a new lifecycle API
-# would broaden this slice into API/test-contract redesign (WS-B).
+# would broaden this slice into API/test-contract redesign.
 # Cleanest scoped fix: permanent skip with documented reason. Lifecycle
 # readiness is canonically observable via ProxyServer.shutdown state +
 # the supported /health surface; the 3 covered scenarios remain
@@ -129,7 +129,7 @@ def proxy_port():
 @pytest.fixture
 def live_proxy(proxy_port):
     """Start a proxy server on a free port; mark ready; yield; stop."""
-    # TSR-05 / WS-E (2026-05-08) — Python scope fix. Without `global`,
+    # Python scope fix (2026-05-08). Without `global`,
     # `_proxy_ready = True` below shadows the module-level name with a
     # local assignment, leaving the module global unchanged. Tests that
     # assert `_proxy_ready is True` after this fixture runs see False
@@ -194,7 +194,7 @@ class TestStartup:
 
     def test_ready_flag_initially_false(self):
         """_proxy_ready must be False before server starts."""
-        # TSR-05 / WS-E — Python scope fix (see live_proxy fixture).
+        # Python scope fix (see live_proxy fixture).
         global _proxy_ready
         original = _proxy_ready
         _proxy_ready = False
@@ -229,7 +229,7 @@ class TestShutdown:
     @pytest.mark.needs_proxy
     def test_shutdown_event_clears_ready_flag(self, live_proxy):
         """Simulating shutdown: _proxy_ready → False, _shutdown_event set."""
-        # TSR-05 / WS-E — Python scope fix (see live_proxy fixture).
+        # Python scope fix (see live_proxy fixture).
         global _proxy_ready
         server, port = live_proxy
         # Simulate signal handler
@@ -248,7 +248,7 @@ class TestShutdown:
     @pytest.mark.needs_proxy
     def test_ready_503_during_shutdown(self, live_proxy):
         """GET /ready → 503 during shutdown."""
-        # TSR-05 / WS-E — Python scope fix (see live_proxy fixture).
+        # Python scope fix (see live_proxy fixture).
         global _proxy_ready
         server, port = live_proxy
         _shutdown_event.set()
@@ -284,7 +284,7 @@ class TestShutdown:
     @pytest.mark.needs_proxy
     def test_no_orphan_after_shutdown(self, proxy_port):
         """After server.shutdown(), nothing should be listening on the port."""
-        # TSR-05 / WS-E — Python scope fix (see live_proxy fixture).
+        # Python scope fix (see live_proxy fixture).
         global _proxy_ready
         server = HTTPServer(("127.0.0.1", proxy_port), ForwardProxyHandler)
         _proxy_ready = True
@@ -360,7 +360,7 @@ class TestKillRecovery:
 
     def test_active_count_zero_at_start(self):
         """_active_request_count must be 0 on fresh module state."""
-        # TSR-05 / WS-E — Python scope fix (see live_proxy fixture).
+        # Python scope fix (see live_proxy fixture).
         global _active_request_count
         # Reset to known state
         original = _active_request_count

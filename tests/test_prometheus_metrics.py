@@ -1,4 +1,4 @@
-"""Tests for TokenPak Prometheus metrics exposition (TPK-PROM-01).
+"""Tests for TokenPak Prometheus metrics exposition.
 
 Coverage
 ────────

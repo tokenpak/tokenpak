@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-# TSR-05ae empty-injection-contract drift skip reason (grep-able)
+# Empty-injection-contract drift skip reason (grep-able)
 # ─────────────────────────────────────────────
 # `test_large_content_block_truncated_by_token_budget` asserts
 # `"## Retrieved Context" in injection` after passing a 250 kB single-block
@@ -27,12 +27,12 @@ import pytest
 # The test encodes the OLD contract (always emit header even when no
 # content fits). Production deliberately changed to elide empty-content
 # injections — useful so the LLM doesn't see a "Retrieved Context" header
-# with nothing under it. API drift; same Path B pattern as TSR-05t / TSR-05ab.
+# with nothing under it. API drift; same pattern as the other deliberate-drift skips.
 SKIP_INJECT_NO_HEADER_WHEN_EMPTY = (
     "Test asserts `## Retrieved Context` header in injection. Production "
     "`inject_retrieved_context` now returns ('', 0, []) when no blocks "
     "fit — search.py:173-174 — instead of emitting a header with no "
-    "content. API drift; see TSR-02."
+    "content. API drift; deliberate contract change."
 )
 
 

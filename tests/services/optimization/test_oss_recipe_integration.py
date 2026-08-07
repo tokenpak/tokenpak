@@ -1,4 +1,4 @@
-"""Integration tests that resolve TIP-05 policies against the real
+"""Integration tests that resolve route-class compression policies against the real
 ``recipes/oss/`` registry. Skipped when the engine cannot load.
 """
 

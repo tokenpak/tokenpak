@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# WS-A residual import guard — TSR-01-followup.
+# Residual import guard (slim-install surface).
 # `_is_visible` is the canonical tier-visibility helper exported by
 # `tokenpak.cli.commands.help` on full / Pro builds; on slim OSS it is
 # not currently exposed. Tests below probe it for OSS / Pro / Team /

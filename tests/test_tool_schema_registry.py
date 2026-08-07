@@ -225,7 +225,7 @@ class TestThreadSafety:
 
 class TestSchemaFingerprintStability:
     """
-    TPK-LATENCY-002 — Acceptance criterion:
+    Acceptance criterion:
     Same tools in different order → same fingerprint (no spurious cache invalidation).
     """
 

@@ -396,7 +396,7 @@ class TestRateLimitHandling:
 
     def test_rate_limit_backoff_wait_time_increases(self):
         """RateLimitBackoff wait time grows with each attempt."""
-        # WS-D path restoration — TSR-04. The handlers tree relocated
+        # Path restoration — the handlers tree relocated
         # from tokenpak.handlers/ to tokenpak.proxy.handlers/ in commit
         # 837514caff (2026-04-20). The backwards-compat shim was removed
         # in the subsequent 17-module consolidation refactor
@@ -412,7 +412,7 @@ class TestRateLimitHandling:
 
     def test_rate_limit_backoff_respects_max_wait(self):
         """RateLimitBackoff never exceeds max_wait."""
-        # WS-D path restoration — TSR-04. The handlers tree relocated
+        # Path restoration — the handlers tree relocated
         # from tokenpak.handlers/ to tokenpak.proxy.handlers/ in commit
         # 837514caff (2026-04-20). The backwards-compat shim was removed
         # in the subsequent 17-module consolidation refactor
@@ -426,7 +426,7 @@ class TestRateLimitHandling:
 
     def test_rate_limit_backoff_uses_retry_after(self):
         """Retry-After header value is respected when provided."""
-        # WS-D path restoration — TSR-04. The handlers tree relocated
+        # Path restoration — the handlers tree relocated
         # from tokenpak.handlers/ to tokenpak.proxy.handlers/ in commit
         # 837514caff (2026-04-20). The backwards-compat shim was removed
         # in the subsequent 17-module consolidation refactor

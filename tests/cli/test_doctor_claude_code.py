@@ -1,6 +1,6 @@
 """tests/cli/test_doctor_claude_code.py
 
-Tests for the CCI-12 + CCP-09 Claude Code health checks:
+Tests for the Claude Code health checks:
   tokenpak doctor --claude-code
 
 Coverage:
@@ -497,7 +497,7 @@ def test_normalise_url_localhost():
 
 
 # ---------------------------------------------------------------------------
-# Test 9: Plugin directory check (CCP-09)
+# Test 9: Plugin directory check
 # ---------------------------------------------------------------------------
 
 

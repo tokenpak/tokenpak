@@ -2,7 +2,7 @@
 """api_snapshot_diff.py — diff public-api snapshots between two git refs.
 
 Per Std 30 §6 / R6 (adjacent-removal guard) + Std 21 §11 (`_internal/` refactor
-isolation rule). Used by `make api-snapshot-diff` and by Rei Po Phase 4.9
+isolation rule). Used by `make api-snapshot-diff` and by the release-gate
 adjacent-removal audit.
 
 Usage:

@@ -185,7 +185,7 @@ def test_async_circuit_breakers(async_proxy):
 def test_async_50_concurrent_requests(async_proxy):
     """
     Fire 60 concurrent GET /health requests via threads.
-    All must complete (TSR-06d: timeout widened to accommodate shared CI
+    All must complete (timeout widened to accommodate shared CI
     runner scheduling stalls). The test's intent — verify the proxy
     handles 60 concurrent /health requests without deadlocking or
     serializing — does not require the original 5s budget; the

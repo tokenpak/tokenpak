@@ -1,4 +1,4 @@
-"""Unit tests for route-class compression policy (TIP-05)."""
+"""Unit tests for route-class compression policy."""
 
 from __future__ import annotations
 

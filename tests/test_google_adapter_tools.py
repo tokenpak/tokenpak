@@ -9,7 +9,7 @@ import pytest
 from tokenpak.proxy.adapters import GoogleGenerativeAIAdapter
 from tokenpak.proxy.adapters.canonical import CanonicalRequest
 
-# TSR-05i / WS-E (2026-05-08) — grep-able skip reason for tests that
+# Grep-able skip reason (2026-05-08) for tests that
 # assert behaviors the canonical GoogleGenerativeAIAdapter never had:
 #   - Production accepts `$ref` and `["string","integer"]` multi-type
 #     unions silently (no ValueError raised) — tests expect raise.
@@ -320,7 +320,7 @@ class TestGoogleAdapterFunctionCalling:
             raw_extra={},
             source_format="google-generative-ai",
         )
-        # TSR-05i — regex updated to match canonical error message
+        # Regex updated to match canonical error message
         # ("Cannot translate tool to Google functionDeclarations:
         # unrecognized format..."). Earlier version expected
         # "unrecognized tool format" verbatim; canonical phrasing is

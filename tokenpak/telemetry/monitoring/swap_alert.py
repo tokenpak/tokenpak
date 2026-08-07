@@ -29,7 +29,7 @@ SWAP_ALERT_COOLDOWN_S: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_COOLDOWN_S"
 TELEGRAM_CHAT_ID: str = os.environ.get("TOKENPAK_ALERT_CHAT_ID", "")
 HOSTNAME: str = os.environ.get("TOKENPAK_ALERT_HOSTNAME", os.uname().nodename)
 
-# ── Additional thresholds — transferred from monolith (TPK-CONSOLIDATION-A2a) ──
+# ── Additional thresholds — transferred from monolith ──
 # TOKENPAK_SWAP_WARN_MB: lower warn threshold (process-level swap pressure check)
 SWAP_PRESSURE_THRESHOLD_MB: int = int(os.environ.get("TOKENPAK_SWAP_WARN_MB", "600"))
 # TOKENPAK_SWAP_ALERT_MB: higher threshold for Telegram alert (system-wide swap)

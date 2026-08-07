@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Cache cost multipliers — per-provider cache read/creation pricing
-# Transferred from monolith (TPK-CONSOLIDATION-A2a)
-# Source: Provider pricing docs (see CACHE-P4-002 task)
+# Transferred from monolith
+# Source: Provider pricing docs
 # read = fraction of input cost for cached tokens
 # creation = multiplier on input cost for cache write (Anthropic only has surcharge)
 # ---------------------------------------------------------------------------

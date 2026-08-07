@@ -94,7 +94,7 @@ class TestParseDate:
 # TelemetryStorage.query_requests
 # ---------------------------------------------------------------------------
 #
-# TSR-05j / WS-E (2026-05-08) — class-level skip. `query_requests`
+# Class-level skip (2026-05-08). `query_requests`
 # was part of the never-implemented TelemetryExporter (per the
 # `_EXPORTER_REMOVED` flag at the top of this file). The current
 # `TelemetryStorage` (alias for `TelemetryDB`) doesn't expose

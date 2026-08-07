@@ -1,4 +1,4 @@
-"""CCI-02: Tool schema registry verification + telemetry surfacing tests.
+"""Tool schema registry verification + telemetry surfacing tests.
 
 AC-1: Two identical Claude Code requests (same tools, different ordering)
       → registry normalizes both to byte-identical → bytes_saved > 0.

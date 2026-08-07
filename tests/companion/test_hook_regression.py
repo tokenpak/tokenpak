@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-# TSR-05ab deliberate-contract-change skip reason (grep-able)
+# Deliberate-contract-change skip reason (grep-able)
 # ─────────────────────────────────────────────
 # `test_silent_failure_zero_token_skips_journal` asserts the old hook
 # contract: "0-byte transcript → tokens_est=0 → journal entry NOT written".
@@ -39,15 +39,15 @@ import pytest
 # The comment explicitly states this is intentional. Test now asserts
 # `len(rows) == 0` but production writes one row → assertion fails.
 #
-# This is **deliberate API/behavior drift**, not a regression. Belongs to
-# TSR-02 (API drift). Same Path B pattern as TSR-05t (deprecated `tokenpak
-# savings` wire format) and TSR-05aa (banner-text drift). The 9 live tests
+# This is **deliberate API/behavior drift**, not a regression. Same
+# pattern as the deprecated `tokenpak savings` wire-format skip and the
+# banner-text-drift skip. The 9 live tests
 # in this file (allow-path journal, budget gating, concurrent writes,
 # off-by-one boundary) remain meaningful guards.
 SKIP_HOOK_ALWAYS_JOURNALS_BY_DESIGN = (
     "Test asserts old contract: 0-token → skip journal. Production "
     "deliberately changed to always-journal (pre_send.py:113-114 explicit "
-    "comment). API drift — see TSR-02."
+    "comment). API drift, not a regression."
 )
 
 

@@ -4,7 +4,7 @@ import os as _os
 
 
 # Canonical path to the vault-editable install root.
-# Transferred from monolith (TPK-CONSOLIDATION-A2a, line 60).
+# Transferred from the legacy monolith (line 60).
 # Used by the monolith's sys.path fixup and by vault indexer path resolution.
 def _vault_default() -> str:
     """Vault directory, resolved at call time across homes."""

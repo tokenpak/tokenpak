@@ -3,7 +3,7 @@ tests/test_semantic_cache.py
 
 Unit tests for tokenpak.cache.semantic_cache.
 
-CCG-15: Updated to use the bytes-based API (response: bytes, content_type, wire_format).
+Uses the bytes-based API (response: bytes, content_type, wire_format).
 
 Covers all acceptance criteria:
   1. Exact duplicate query returns cached response
@@ -13,7 +13,7 @@ Covers all acceptance criteria:
   5. Max entries eviction works
   6. Cache disabled when config says so
   + extras: normalisation, Jaccard math, stats, invalidate
-  + CCG-15: wire-format matching, old-schema invalidation
+  + wire-format matching, old-schema invalidation
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from tokenpak.cache.semantic_cache import (
 )
 
 # ---------------------------------------------------------------------------
-# Fixtures — bytes responses (CCG-15)
+# Fixtures — bytes responses
 # ---------------------------------------------------------------------------
 
 RESPONSE_A_BYTES = json.dumps(
@@ -116,7 +116,7 @@ class TestExactMatch:
         _store_json(sc, query)
         sc.lookup(query, expected_format="json")
         sc.lookup(query, expected_format="json")
-        # CCG-15: composite key = query_hash:wire_format
+        # Composite key = query_hash:wire_format
         _key = f"{_hash(_normalise(query))}:json"
         assert sc._store[_key].hit_count == 2
 

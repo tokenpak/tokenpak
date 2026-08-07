@@ -1,4 +1,4 @@
-"""Tests for TIP-06 cache miss reason tracking.
+"""Tests for cache miss reason tracking.
 
 Covers:
 - CacheMissRecord construction and serialization

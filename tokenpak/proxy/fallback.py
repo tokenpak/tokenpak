@@ -1,9 +1,9 @@
 """
 tokenpak.proxy.fallback — API key pool, upstream routing, and key failover.
 
-Extracted from runtime/proxy.py (L608-811) as part of TPK-RESTRUCTURE-002.
+Extracted from runtime/proxy.py (L608-811) during the proxy modularization.
 Circuit breakers, rate limiting, header sanitizing, and error helpers were
-separated into proxy/circuit_breaker.py (TPK-RESTRUCTURE-003).
+separated into proxy/circuit_breaker.py.
 """
 
 from __future__ import annotations
@@ -316,7 +316,7 @@ class FallbackChain:
 
 
 # ---------------------------------------------------------------------------
-# Exponential backoff — transferred from monolith (TPK-CONSOLIDATION-A2a)
+# Exponential backoff — transferred from monolith
 # ---------------------------------------------------------------------------
 import logging as _logging
 import random as _random_module

@@ -1,7 +1,7 @@
 """Adapter abstraction utilities — module-level wrappers around the adapter registry.
 
 Transferred from monolith (packages/core/tokenpak/runtime/proxy.py lines 3348–3399)
-as part of TPK-CONSOLIDATION-A2c (Section 2.6 Adapter abstraction).
+as part of the monolith consolidation (Section 2.6 Adapter abstraction).
 
 Provides module-level functions that delegate to the per-format adapter instances:
 

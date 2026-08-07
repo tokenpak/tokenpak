@@ -50,8 +50,8 @@ def test_proxy_server_import():
 # ---------------------------------------------------------------------------
 
 
-# WS-A residual import guard — TSR-01-followup. tokenpak._internal is the
-# closed-source namespace per Std 25 §1.1; tests below probe it. Skip
+# Residual import guard (slim-install surface). tokenpak._internal is the
+# closed-source namespace; tests below probe it. Skip
 # them cleanly on slim OSS install — full installs exercise normally.
 @pytest.mark.quick
 def test_config_returns_dict():

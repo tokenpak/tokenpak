@@ -24,21 +24,21 @@ from pathlib import Path
 
 import pytest
 
-# TSR-05p schema-drift skip reason (grep-able)
+# Schema-drift skip reason (grep-able)
 # ─────────────────────────────────────────────
-# CCG-15 changed the SemanticCache response contract: stored responses must be
-# `bytes` (the raw upstream wire response) rather than the in-memory `dict`
-# shape these tests use. Calling `cache.store(req, response_dict)` now
-# triggers eviction-on-read with the warning "[SemanticCache] CCG-15:
-# evicting old-schema entry … (response was dict, now requires bytes) — cache
-# will rebuild", so the subsequent `lookup()` misses and `assert hit is True`
+# A schema change altered the SemanticCache response contract: stored
+# responses must be `bytes` (the raw upstream wire response) rather than the
+# in-memory `dict` shape these tests use. Calling `cache.store(req,
+# response_dict)` now triggers eviction-on-read with an "evicting old-schema
+# entry … (response was dict, now requires bytes) — cache will rebuild"
+# warning, so the subsequent `lookup()` misses and `assert hit is True`
 # fails. Five tests below pass dict-shape responses to `store()` and assert a
-# subsequent hit; that is the dropped pre-CCG-15 contract.
+# subsequent hit; that is the dropped pre-change contract.
 #
 # Rewriting these to encode bytes responses (e.g. `json.dumps(resp).encode()`)
-# is **schema-drift work and belongs to TSR-03**, not TSR-05 (real test bugs).
-# Same Path B pattern as TSR-05m (#126): skip with a grep-able reason that
-# points to the right initiative bucket.
+# is deferred schema-drift work, not a real test bug.
+# Same pattern as #126: skip with a grep-able reason that
+# points at the drift.
 #
 # The 21 live tests in this file (TestSemanticCacheIntegration miss-on-empty
 # and toggle-disabled, full TestPrefixRegistryIntegration,
@@ -47,9 +47,9 @@ import pytest
 # response contract.
 SKIP_CCG15_DICT_RESPONSE_DROPPED_BY_BYTES_CONTRACT = (
     "Test calls `cache.store(req, dict)` and asserts a subsequent hit. "
-    "CCG-15 changed the SemanticCache response contract to require `bytes`; "
+    "The SemanticCache response contract changed to require `bytes`; "
     "dict-shape entries are evicted on read. Rewriting to bytes responses "
-    "is schema-drift work — see TSR-03."
+    "is deferred schema-drift work."
 )
 
 # Direct module imports (per acceptance criteria #5)

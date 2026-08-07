@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for `tokenpak recommendations` CLI command (TIP-07)."""
+"""Tests for `tokenpak recommendations` CLI command."""
 
 from __future__ import annotations
 
