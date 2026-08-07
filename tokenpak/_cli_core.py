@@ -4803,6 +4803,7 @@ def cmd_savings(args: CommandArgs) -> None:
     mode = resolve_mode(args)
     fmt = OutputFormatter("Savings", mode=mode, minimal=getattr(args, "minimal", False))
     days = getattr(args, "days", 30)
+    as_json = getattr(args, "as_json", False)
 
     # Try monitor.db first (proxy's live data source)
     monitor_data = _monitor_db_savings(days=days)
@@ -4819,7 +4820,7 @@ def cmd_savings(args: CommandArgs) -> None:
         estimated_without = actual + savings_amount
         savings_pct = (savings_amount / estimated_without * 100) if estimated_without > 0 else 0
 
-        if mode == OutputMode.RAW:
+        if mode == OutputMode.RAW or as_json:
             print(
                 json.dumps(
                     {
@@ -4859,7 +4860,7 @@ def cmd_savings(args: CommandArgs) -> None:
 
     report = get_savings_report(days=days)
 
-    if mode == OutputMode.RAW:
+    if mode == OutputMode.RAW or as_json:
         print(fmt.raw({"section": "savings", "days": days, **report.__dict__}))
         return
 
@@ -5160,6 +5161,12 @@ def _build_usage_parser(sub: Subparsers) -> None:
 def _build_savings_parser(sub: Subparsers) -> None:
     p_savings = sub.add_parser("savings", help="Show savings summary")
     p_savings.add_argument("--days", type=int, default=30, help="Rolling window in days")
+    p_savings.add_argument(
+        "--json",
+        dest="as_json",
+        action="store_true",
+        help="Emit machine-readable JSON output",
+    )
     p_savings.set_defaults(func=cmd_savings)
 
 
