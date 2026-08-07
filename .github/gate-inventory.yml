@@ -18,7 +18,7 @@ files:
   license-check.yml: e64a9e214bda3e783ee845ae331f8b06b1e7135b1d66246ee6a1b1fe5550bbcd
   public-baseline-scan.yml: 4e8cd3f24ebd2b7289053dcbb3250cf5365764eb5cc557893e0dc06a272d27e5
   public-layout-check.yml: 1423f30b12a78b46d7da8763f9a2f04052e95955754a94f3fc75fe151cabe965
-  release-rehearsal.yml: 9dcfd977da8fc90dbb2cfb105aba755870fc9147556774c94deb191ab7d2a5e9
+  release-rehearsal.yml: bdf170479b4440ec66fbc57eea6b08be65ae1b6b38ffe5eb15b49711349d3608
   release.yml: 2bd019510a3eb7526f6bd3dc4cfcf8cf3bad164ec15f0d3b04f2b8ed6f26b633
   repo-hygiene.yml: 2a4bae4a40c2ba946446c4046076061f0c2ee7c343bc30dd93fc77c0ffcdf6fe
   risk-selected-ci.yml: 5015d98af22930b87172eb34bb188ffcfd8618b6a674d41bf1ae4a34e63a09ec
