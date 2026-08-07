@@ -575,6 +575,7 @@ Show compression savings summary.
 **Flags:**
 
 - `--days` — Rolling window in days (default: 30)
+- `--json` — Emit machine-readable JSON output
 
 ### `tokenpak vault`
 
