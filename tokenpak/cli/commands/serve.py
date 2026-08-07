@@ -40,11 +40,11 @@ def _default_workers() -> int:
 
 
 def _apply_safe_defaults() -> None:
-    """Restore pre-1.1 passthrough defaults atomically (--safe flag).
+    """Apply the legacy ``--safe`` compatibility settings atomically.
 
-    Sets the four compression-related env vars to their old values BEFORE
-    any proxy modules are imported so that all downstream config reads see
-    the legacy behavior.
+    ``TOKENPAK_COMPACT`` is retained as a no-op compatibility value; its
+    threshold remains available to explicit legacy helper callers. Neither
+    controls default HTTP request-body compaction.
     """
     os.environ["TOKENPAK_COMPACT"] = "0"
     os.environ["TOKENPAK_COMPACT_THRESHOLD_TOKENS"] = "4500"
@@ -53,31 +53,17 @@ def _apply_safe_defaults() -> None:
 
 
 def _maybe_show_compression_notice(safe: bool) -> None:
-    """Emit first-run compression default notice to stderr (once per install)."""
-    if safe:
-        return
-    import pathlib
-
-    _marker = pathlib.Path.home() / ".tokenpak" / ".compression-default-notice-shown"
-    if not _marker.exists():
-        print(
-            "tokenpak now compresses by default — disable with 'tokenpak serve --safe'",
-            file=sys.stderr,
-        )
-        try:
-            _marker.parent.mkdir(parents=True, exist_ok=True)
-            _marker.touch()
-        except OSError:
-            pass  # non-fatal — notice will repeat on next start
+    """Compatibility no-op: the default HTTP path does not compact bodies."""
+    _ = safe
 
 
 def run_serve_cmd(args) -> None:
     """Start the TokenPak ingest API server."""
-    # --safe: restore legacy passthrough defaults BEFORE any proxy imports
+    # --safe: apply legacy compatibility settings BEFORE any proxy imports.
     if getattr(args, "safe", False):
         _apply_safe_defaults()
 
-    # First-run compression notice (stderr only, once per install)
+    # Retained as an internal compatibility seam; it intentionally emits nothing.
     _maybe_show_compression_notice(safe=getattr(args, "safe", False))
 
     try:

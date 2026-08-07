@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = ROOT / "Makefile"
 CORE_MARKERS = "not integration and not chaos and not slow and not needs_fast_host"
+APPLICABLE_MARKERS = "not needs_fast_host"
 
 
 def _target_prerequisites(name: str) -> set[str]:
@@ -42,7 +43,7 @@ def test_release_check_maps_every_local_umbrella_gate():
     assert _target_prerequisites("release-check") == {
         "release-check-baseline",
         "format-check",
-        "test",
+        "test-release-applicable",
         "test-quick",
         "lint-imports",
         "fresh-install-demo",
@@ -72,12 +73,15 @@ def test_a3_python_defaults_to_the_release_environment_but_can_be_pinned_separat
     assert "$(A3_PYTHON) scripts/release_audit.py mypy" in _target_block("audit-mypy")
 
 
-def test_complete_suite_is_a_fail_closed_umbrella_prerequisite():
+def test_release_applicable_suite_is_a_fail_closed_umbrella_prerequisite():
     text = MAKEFILE.read_text(encoding="utf-8")
-    test_block = _target_block("test")
+    test_block = _target_block("test-release-applicable")
     release_block = _target_block("release-check")
-    assert "$(PYTEST) tests/ -q --tb=short" in test_block
-    assert "test" in _target_prerequisites("release-check")
+    assert f"RELEASE_APPLICABLE_MARKERS := {APPLICABLE_MARKERS}" in text
+    assert '$(PYTEST) tests/ -m "$(RELEASE_APPLICABLE_MARKERS)" -q --tb=short' in test_block
+    assert "test-release-applicable" in _target_prerequisites("release-check")
+    for correctness_partition in ("integration", "chaos", "slow"):
+        assert f"not {correctness_partition}" not in APPLICABLE_MARKERS
     assert "A1-A7" in release_block
 
 

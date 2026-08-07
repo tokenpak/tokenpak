@@ -406,10 +406,10 @@ def _resolve_session_name(args: list[str]) -> tuple[list[str], str | None]:
             args[i] = f"--name={label}"
             return args, label
     # No name flag found — inject the branded label when it fits.
-    label = _session_label_for_width()
-    if label is not None:
-        args.extend(["--name", label])
-    return args, label
+    default_label = _session_label_for_width()
+    if default_label is not None:
+        args.extend(["--name", default_label])
+    return args, default_label
 
 
 def _prefix_session_name(args: list[str]) -> list[str]:

@@ -70,6 +70,7 @@ def _run_hook(
     env["TOKENPAK_NO_THREADS"] = "1"
     env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(tmp_path)
     env["TOKENPAK_COMPANION_SHOW_COST"] = "1"
+    env["TOKENPAK_COMPANION_ASYNC_FLUSH"] = "0"
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
@@ -81,6 +82,12 @@ def _run_hook(
         cwd=_REPO_ROOT,
         env=env,
     )
+
+
+def _flush_hook_events(tmp_path: Path) -> int:
+    from tokenpak.companion import _sqlite
+
+    return _sqlite.flush_pre_send_events(tmp_path)
 
 
 def _make_transcript(path: Path, size_bytes: int = 5000) -> Path:
@@ -128,6 +135,7 @@ def test_silent_failure_journal_written_on_allow(tmp_path):
     )
     assert result.returncode == 0, f"Hook failed: {result.stderr}"
 
+    assert _flush_hook_events(tmp_path) == 1
     journal_db = tmp_path / "journal.db"
     assert journal_db.exists(), "journal.db not written (silent failure)"
     conn = sqlite3.connect(str(journal_db))
@@ -274,6 +282,36 @@ def test_budget_zero_disables_gate(tmp_path):
     assert result.returncode == 0, "Budget=0 must disable the gate, not block everything"
 
 
+def test_budget_gate_counts_prior_unflushed_intent(tmp_path):
+    """Async persistence cannot create a budget under-count window."""
+    transcript_path = tmp_path / "session.jsonl"
+    _make_transcript(transcript_path, size_bytes=8000)
+
+    first = _run_hook(
+        {
+            "session_id": "pending-budget-session",
+            "transcript_path": str(transcript_path),
+            "prompt": "first prompt",
+        },
+        tmp_path=tmp_path,
+        extra_env={"TOKENPAK_COMPANION_BUDGET": "1"},
+    )
+    assert first.returncode == 0
+    assert not (tmp_path / "budget.db").exists(), "test requires an unflushed intent"
+
+    second = _run_hook(
+        {
+            "session_id": "second-session",
+            "transcript_path": str(transcript_path),
+            "prompt": "must see pending spend",
+        },
+        tmp_path=tmp_path,
+        extra_env={"TOKENPAK_COMPANION_BUDGET": "0.001"},
+    )
+    assert second.returncode == 2
+    assert "budget exceeded" in second.stderr
+
+
 def test_budget_block_seeded_daily_total_exceeds(tmp_path):
     """Seeded DB daily_total > budget: hook must block regardless of transcript size.
 
@@ -340,6 +378,7 @@ def test_concurrent_journal_writes_no_data_loss(tmp_path):
     exit_codes = [r.returncode for r in results]
     assert all(c == 0 for c in exit_codes), f"Some concurrent hooks failed: exit codes {exit_codes}"
 
+    assert _flush_hook_events(tmp_path) == n_workers
     journal_db = tmp_path / "journal.db"
     assert journal_db.exists(), "journal.db not created by concurrent hooks"
     conn = sqlite3.connect(str(journal_db))
@@ -387,6 +426,7 @@ def test_concurrent_journal_writes_correct_entry_count(tmp_path):
     exit_codes = [r.returncode for r in results]
     assert all(c == 0 for c in exit_codes), f"Hook failures: {exit_codes}"
 
+    assert _flush_hook_events(tmp_path) == n_writes
     journal_db = tmp_path / "journal.db"
     conn = sqlite3.connect(str(journal_db))
     count = conn.execute(
@@ -543,6 +583,7 @@ def test_error_code_malformed_input_does_not_exit_nonzero(tmp_path):
         env = os.environ.copy()
         env["TOKENPAK_NO_THREADS"] = "1"
         env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(tmp_path)
+        env["TOKENPAK_COMPANION_ASYNC_FLUSH"] = "0"
         result = subprocess.run(
             [sys.executable, "-m", "tokenpak.companion.hooks.pre_send"],
             input=payload,

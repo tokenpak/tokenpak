@@ -12,10 +12,14 @@ Validates:
 import json
 import os
 import subprocess
+import sys
 import time
+from pathlib import Path
 
 import pytest
 import requests
+
+from tests.proxy._proxy_subprocess import free_port
 
 pytestmark = [pytest.mark.needs_proxy, pytest.mark.needs_webhook]
 
@@ -34,33 +38,85 @@ def api_key():
     return key
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
 @pytest.fixture
-def proxy_process():
-    """Start proxy in background subprocess."""
-    # Start proxy
+def proxy_port():
+    """Allocate a test-only loopback port instead of touching the live proxy."""
+
+    return free_port()
+
+
+@pytest.fixture
+def proxy_url(proxy_port):
+    """URL of the isolated candidate proxy."""
+
+    return f"http://127.0.0.1:{proxy_port}"
+
+
+@pytest.fixture
+def proxy_process(tmp_path, proxy_port, proxy_url):
+    """Start the candidate proxy with isolated state and a bounded readiness gate.
+
+    The historical fixture resolved the host-level ``tokenpak`` executable,
+    which exercised the installed production version and default live port
+    rather than the candidate under test.  Use pytest's interpreter, a fresh
+    home/database, and a random loopback port so the receipt belongs to this
+    worktree and cannot collide with an operator-owned proxy.
+    """
+
+    test_home = tmp_path / "tpk-home"
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONPATH": str(REPO_ROOT),
+        "TOKENPAK_DB": str(test_home / "monitor.db"),
+        "TOKENPAK_HOME": str(test_home),
+        "TOKENPAK_PORT": str(proxy_port),
+        "TOKENPAK_SPEND_GUARD_ENABLED": "0",
+    }
     proc = subprocess.Popen(
-        ["tokenpak", "start"],
+        [sys.executable, "-m", "tokenpak.proxy.server"],
+        cwd=REPO_ROOT,
+        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
 
-    # Wait for startup
-    time.sleep(2)
+    deadline = time.monotonic() + 30
+    ready = False
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            break
+        try:
+            response = requests.get(f"{proxy_url}/health", timeout=0.5)
+            if response.status_code == 200:
+                ready = True
+                break
+        except requests.RequestException:
+            pass
+        time.sleep(0.1)
+
+    if not ready:
+        if proc.poll() is None:
+            proc.terminate()
+            proc.wait(timeout=5)
+        stderr_out = proc.stderr.read().decode("utf-8", errors="replace") if proc.stderr else ""
+        pytest.fail(
+            f"isolated candidate proxy did not become ready on {proxy_url}; "
+            f"exit={proc.returncode}; stderr={stderr_out[:1000]}"
+        )
 
     yield proc
 
-    # Cleanup
-    try:
+    if proc.poll() is None:
         proc.terminate()
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-
-
-@pytest.fixture
-def proxy_url():
-    """Proxy URL."""
-    return "http://127.0.0.1:8000"
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -73,12 +129,9 @@ class TestProxyStartup:
 
     @pytest.mark.integration
     def test_proxy_starts(self, proxy_process):
-        """Proxy process starts without error (or detects already-running proxy)."""
-        # Acceptable outcomes:
-        #   - Still running (poll() is None) — proxy launched fresh
-        #   - Exited 0 — proxy already running, start reported it and exited cleanly
+        """The isolated candidate proxy remains alive after readiness."""
         result = proxy_process.poll()
-        assert result in (None, 0), f"Proxy exited with error code: {result}"
+        assert result is None, f"Proxy exited with error code: {result}"
 
     def test_health_check_endpoint_exists(self, proxy_url):
         """Health check endpoint accessible."""
@@ -97,22 +150,24 @@ class TestProxyStartup:
         assert timeout > 0
         # Retry logic up to timeout
         start = time.time()
+        healthy = False
         while time.time() - start < timeout:
             try:
                 response = requests.get(f"{proxy_url}/health", timeout=1)
                 if response.status_code == 200:
+                    healthy = True
                     break
-            except Exception:
+            except requests.RequestException:
                 pass
             time.sleep(0.5)
+        assert healthy, f"proxy health did not become ready within {timeout}s"
 
     @pytest.mark.integration
     def test_proxy_stderr_no_startup_errors(self, proxy_process):
         """Proxy startup has no critical errors in stderr."""
         time.sleep(1)
         result = proxy_process.poll()
-        # Acceptable: still running or already-running detection (exit 0)
-        if result not in (None, 0):
+        if result is not None:
             stderr_out = (
                 proxy_process.stderr.read().decode("utf-8", errors="replace")
                 if proxy_process.stderr

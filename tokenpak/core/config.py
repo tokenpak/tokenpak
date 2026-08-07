@@ -46,7 +46,7 @@ def _config_json_path() -> Path:
     return resolved
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     # Back-compat (PEP 562): CONFIG_PATH stays importable but resolves freshly
     # per access through the canonical home resolver.
     if name == "CONFIG_PATH":

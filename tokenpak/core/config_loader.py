@@ -547,6 +547,8 @@ pro:
 
 # Custom providers — register any OpenAI/Anthropic/Google-compatible endpoint.
 # Each entry becomes a routable provider with full compression/caching pipeline.
+# A models list is optional. api_key_env is resolved only for the outbound
+# request and never overrides a credential supplied by the client.
 # providers:
 #   my-local-llm:
 #     endpoint: http://localhost:8000/v1

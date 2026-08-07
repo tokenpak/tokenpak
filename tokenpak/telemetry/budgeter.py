@@ -29,7 +29,7 @@ Usage:
 import copy
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 try:
     import tiktoken
@@ -43,7 +43,7 @@ try:
         tokens = _enc.encode(text)
         if len(tokens) <= max_tokens:
             return text
-        return _enc.decode(tokens[:max_tokens]) + "..."
+        return cast(str, _enc.decode(tokens[:max_tokens])) + "..."
 
 except ImportError:
 

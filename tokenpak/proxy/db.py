@@ -45,11 +45,9 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     # CREATE TABLE IF NOT EXISTS is handled by Monitor._init_db; we only
     # ensure the column exists here (additive ALTER TABLE is idempotent via
     # the try/except pattern established by the existing migration helpers).
-    try:
+    request_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(requests)")}
+    if "session_id" not in request_columns:
         conn.execute("ALTER TABLE requests ADD COLUMN session_id TEXT")
-    except sqlite3.OperationalError:
-        # Column already exists — expected on any DB that has run this before
-        pass
 
     # ── mutation_audit table (10-column schema) ────────────────────
     conn.execute(
@@ -69,18 +67,18 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     # Migration: add new columns to existing tables that have the old schema
-    for col_def in (
-        "pre_hash TEXT",
-        "post_hash TEXT",
-        "rules_applied TEXT",
-        "cache_risk TEXT",
-        "rollback_possible INTEGER",
-        "mode TEXT",
+    mutation_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(mutation_audit)")}
+    for column, col_def in (
+        ("pre_hash", "pre_hash TEXT"),
+        ("post_hash", "post_hash TEXT"),
+        ("rules_applied", "rules_applied TEXT"),
+        ("cache_risk", "cache_risk TEXT"),
+        ("rollback_possible", "rollback_possible INTEGER"),
+        ("mode", "mode TEXT"),
     ):
-        try:
+        if column not in mutation_columns:
             conn.execute(f"ALTER TABLE mutation_audit ADD COLUMN {col_def}")
-        except sqlite3.OperationalError:
-            pass  # column already exists
+            mutation_columns.add(column)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ma_session_id  ON mutation_audit(session_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ma_request_id  ON mutation_audit(request_id)")
 

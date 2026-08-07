@@ -116,6 +116,9 @@ class _FlakyConnection:
     def commit(self):
         return self._real.commit()
 
+    def rollback(self):
+        return self._real.rollback()
+
     def close(self):
         return self._real.close()
 
@@ -179,10 +182,14 @@ def test_write_row_raises_after_retries_exhausted(tmp_path, monkeypatch):
 
     class _AlwaysLocked:
         attempts = 0
+        rollbacks = 0
 
         def execute(self, *a, **k):
             self.attempts += 1
             raise sqlite3.OperationalError("database is locked")
+
+        def rollback(self):
+            self.rollbacks += 1
 
     locked = _AlwaysLocked()
     monkeypatch.setattr(monitor_module, "_get_db_connection", lambda p: locked)
@@ -373,6 +380,59 @@ def test_apply_schema_migration_raises_on_other_operational_errors():
         )
 
 
+def test_monitor_schema_failure_rolls_back_and_releases_lock(tmp_path, monkeypatch):
+    """A failed ancillary migration cannot commit a partial Monitor schema."""
+    from tokenpak.proxy import db as proxy_db
+
+    db = tmp_path / "monitor.db"
+
+    def _locked(_conn):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(proxy_db, "ensure_schema", _locked)
+
+    with pytest.raises(sqlite3.OperationalError, match="locked"):
+        Monitor(db_path=str(db))
+
+    # Reopening with a zero wait proves the failed constructor released its
+    # write lock. The enclosing BEGIN IMMEDIATE must also have rolled back all
+    # earlier CREATE/ALTER statements instead of publishing a partial schema.
+    conn = sqlite3.connect(str(db), timeout=0.0)
+    try:
+        tables = {
+            str(row[0])
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+    finally:
+        conn.close()
+    assert "requests" not in tables
+
+
+def test_monitor_unexpected_schema_failure_is_not_downgraded(tmp_path, monkeypatch):
+    """Unexpected ancillary-schema failures also abort the full transaction."""
+    from tokenpak.proxy import db as proxy_db
+
+    db = tmp_path / "monitor.db"
+
+    def _unexpected(_conn):
+        raise RuntimeError("synthetic schema implementation failure")
+
+    monkeypatch.setattr(proxy_db, "ensure_schema", _unexpected)
+
+    with pytest.raises(RuntimeError, match="synthetic schema implementation failure"):
+        Monitor(db_path=str(db))
+
+    conn = sqlite3.connect(str(db), timeout=0.0)
+    try:
+        tables = {
+            str(row[0])
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+    finally:
+        conn.close()
+    assert "requests" not in tables
+
+
 # ---------------------------------------------------------------------------
 # B6 — budget alert dedupe (unique key + INSERT OR IGNORE)
 # ---------------------------------------------------------------------------
@@ -404,6 +464,34 @@ def test_budget_alert_single_row_under_concurrent_triggers(tmp_path):
 
     # A later same-day trigger is also deduped.
     mon._check_budget_alert(current_cost=100.0, _daily_limit=10.0, _threshold_pct=80.0)
+    assert _row_count(db, "budget_alerts") == 1
+
+
+def test_budget_alert_single_row_across_monitor_instances(tmp_path):
+    db = tmp_path / "monitor.db"
+    monitors = [Monitor(db_path=str(db)), Monitor(db_path=str(db))]
+    barrier = threading.Barrier(len(monitors))
+    errors = []
+
+    def _fire(mon):
+        try:
+            barrier.wait(timeout=5)
+            mon._check_budget_alert(
+                current_cost=100.0,
+                _daily_limit=10.0,
+                _threshold_pct=80.0,
+            )
+        except Exception as exc:  # pragma: no cover - failure diagnostics
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_fire, args=(mon,)) for mon in monitors]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert not errors
+    assert all(not thread.is_alive() for thread in threads)
     assert _row_count(db, "budget_alerts") == 1
 
 

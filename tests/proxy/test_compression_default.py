@@ -1,12 +1,15 @@
 """tests/proxy/test_compression_default.py
 
-AC-1.1 Verification — compression activates on default settings (TRIX-01 / pmgtm).
+AC-1.1 Verification — explicit compact-helper defaults.
 
 Tests that after the default-flip:
   - COMPACT_THRESHOLD_TOKENS is 1500 (was 4500 pre-flip)
-  - ENABLE_COMPACTION is True
+  - ENABLE_COMPACTION still parses as True for compatibility
   - BUDGET_CONTROLLER_ENABLED is True (was False pre-flip)
-  - A 6 kB payload triggers measurable token reduction via compact_request_body
+  - A direct compact_request_body call can reduce a 6 kB payload
+
+These tests exercise the helper explicitly; they do not prove that the default
+HTTP proxy calls it or that ENABLE_COMPACTION controls that path.
 """
 
 from __future__ import annotations
@@ -32,8 +35,8 @@ import pytest
 #   - `TestCompressionFires::test_6kb_payload_compressed` builds a ~2266-
 #     token payload and expects compression to fire. With the new 4500
 #     threshold, 2266-token payloads are below the floor — no compression.
-#     CI: `No compression occurred: sent=2266, original=2266. Threshold
-#     or ENABLE_COMPACTION flip may not have taken effect.`
+#     CI: `No compression occurred: sent=2266, original=2266. The explicit
+#     helper threshold may not have taken effect.`
 #
 # This is **NOT TSR-05l overlap** (TSR-05l is the compression-engine
 # regression on 10k+-token payloads dropping from ~80%→~1%; those payloads
@@ -161,7 +164,7 @@ class TestProxyV4Defaults:
         )
 
     def test_enable_compaction_is_true(self, pv4):
-        """ENABLE_COMPACTION must be True by default."""
+        """ENABLE_COMPACTION keeps its compatibility default."""
         assert pv4.ENABLE_COMPACTION is True
 
     def test_budget_controller_enabled_is_true(self, pv4):
@@ -177,7 +180,7 @@ class TestProxyV4Defaults:
 
 
 class TestCompressionFires:
-    """Verify that a 6kB payload is actually compressed under default settings."""
+    """Verify an explicit helper call against the default config values."""
 
     def test_6kb_payload_size(self):
         """Payload fixture must be >= 6000 bytes."""
@@ -188,8 +191,8 @@ class TestCompressionFires:
     def test_6kb_payload_compressed(self, pv4):
         """
         compact_request_body must return sent_tokens < original_tokens for a 6kB payload
-        sent to the /v1/messages endpoint (Anthropic format), proving compression is active
-        at the default 1500-token threshold.
+        in Anthropic format, proving the directly invoked helper uses the 1500-token
+        threshold. This is not a default HTTP call-site test.
         """
         payload = _make_anthropic_payload(_LONG_HISTORY)
 
@@ -206,7 +209,7 @@ class TestCompressionFires:
         )
         assert sent_tokens < original_tokens, (
             f"No compression occurred: sent={sent_tokens}, original={original_tokens}. "
-            "Threshold or ENABLE_COMPACTION flip may not have taken effect."
+            "The explicit helper threshold may not have taken effect."
         )
 
         reduction_pct = (original_tokens - sent_tokens) / original_tokens * 100

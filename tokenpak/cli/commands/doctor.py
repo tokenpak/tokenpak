@@ -656,6 +656,23 @@ def companion_hook_integrity() -> "list[tuple[str, str, str]]":
     return results
 
 
+def _custom_provider_counts() -> tuple[int | None, int | None, str]:
+    """Return configured/registered custom-provider counts without fabricating."""
+    try:
+        from tokenpak.proxy.config import (
+            CUSTOM_PROVIDER_CONFIGURED_COUNT,
+            CUSTOM_PROVIDER_REGISTERED_COUNT,
+        )
+
+        return (
+            int(CUSTOM_PROVIDER_CONFIGURED_COUNT),
+            int(CUSTOM_PROVIDER_REGISTERED_COUNT),
+            "",
+        )
+    except Exception as exc:
+        return None, None, f"custom-provider registration inspection failed: {exc}"
+
+
 def run_doctor(
     fix: bool = False,
     output_json: bool = False,
@@ -793,6 +810,45 @@ def run_doctor(
             "home_boundary",
             "pass",
             f"~/.tpk/ boundary    {tokenpak_dir}",
+        )
+
+    # === Check 0b: custom-provider registration truth ===========================
+    custom_configured, custom_registered, custom_provider_error = _custom_provider_counts()
+    custom_provider_summary: dict[str, int | str | None] = {
+        "configured": custom_configured,
+        "registered": custom_registered,
+        "error": custom_provider_error or None,
+    }
+    if custom_provider_error:
+        _record(
+            "custom_providers",
+            "warn",
+            "Custom providers    registration state unavailable",
+            detail=custom_provider_error,
+        )
+    elif custom_configured is None or custom_registered is None:
+        _record(
+            "custom_providers",
+            "warn",
+            "Custom providers    registration state unavailable",
+            detail="Configured and registered counts could not be resolved.",
+        )
+    elif custom_registered < custom_configured:
+        _record(
+            "custom_providers",
+            "warn",
+            f"Custom providers    {custom_registered}/{custom_configured} registered",
+            detail=(
+                f"{custom_configured - custom_registered} configured provider(s) were skipped; "
+                "inspect startup warnings and validate endpoint/format entries."
+            ),
+        )
+    else:
+        _record(
+            "custom_providers",
+            "pass",
+            f"Custom providers    {custom_registered}/{custom_configured} registered",
+            detail="Configured and successfully registered custom-provider counts agree.",
         )
 
     # === Check 1: Canonical proxy health ========================================
@@ -1888,6 +1944,7 @@ def run_doctor(
         exit_code = 2 if counts["fail"] > 0 else (1 if counts["warn"] > 0 else 0)
         output = {
             "summary": counts,
+            "custom_providers": custom_provider_summary,
             "checks": checks,
             "exit_code": exit_code,
         }

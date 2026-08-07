@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from .report import Action, CompileReport, Decision
 
@@ -49,7 +49,7 @@ try:
         tokens = _enc.encode(text)
         if len(tokens) <= max_tokens:
             return text
-        return _enc.decode(tokens[:max_tokens]) + "..."
+        return cast(str, _enc.decode(tokens[:max_tokens])) + "..."
 
 except ImportError:
 

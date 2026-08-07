@@ -43,6 +43,9 @@ def _run_hook(
     env["TOKENPAK_COMPANION_ENABLED"] = "1"
     env["TOKENPAK_NO_THREADS"] = "1"
     env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(tmp_path)
+    # Tests materialise queued intents explicitly where persistence is under
+    # assertion; never let detached workers race a temporary directory.
+    env["TOKENPAK_COMPANION_ASYNC_FLUSH"] = "0"
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
@@ -54,6 +57,12 @@ def _run_hook(
         cwd=_REPO_ROOT,
         env=env,
     )
+
+
+def _flush_hook_events(tmp_path: Path) -> int:
+    from tokenpak.companion import _sqlite
+
+    return _sqlite.flush_pre_send_events(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +286,7 @@ def test_python_hook_writes_journal_entry(tmp_path):
     )
     assert result.returncode == 0
 
+    assert _flush_hook_events(tmp_path) == 1
     journal_db = tmp_path / "journal.db"
     assert journal_db.exists(), "journal.db not written"
     conn = sqlite3.connect(str(journal_db))

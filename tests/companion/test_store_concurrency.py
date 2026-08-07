@@ -54,6 +54,7 @@ def _run_py_hook(hook_input: dict, tmp_path: Path, extra_env: dict | None = None
     env["TOKENPAK_COMPANION_ENABLED"] = "1"
     env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(tmp_path)
     env["TOKENPAK_COMPANION_BUDGET"] = "0"
+    env["TOKENPAK_COMPANION_ASYNC_FLUSH"] = "0"
     env["PYTHONPATH"] = str(_REPO_ROOT)
     if extra_env:
         env.update(extra_env)
@@ -66,6 +67,12 @@ def _run_py_hook(hook_input: dict, tmp_path: Path, extra_env: dict | None = None
         cwd=str(_REPO_ROOT),
         env=env,
     )
+
+
+def _flush_py_hook_events(tmp_path: Path) -> int:
+    from tokenpak.companion import _sqlite
+
+    return _sqlite.flush_pre_send_events(tmp_path)
 
 
 def _run_bash_hook(script: str, hook_input: dict, tmp_path: Path):
@@ -134,6 +141,172 @@ def test_connect_applies_wal_and_busy_timeout(tmp_path):
     conn.close()
 
 
+def test_write_transaction_batches_schema_and_commit(tmp_path):
+    from tokenpak.companion import _sqlite
+
+    conn = _sqlite.connect(tmp_path / "transaction.db")
+    trace: list[str] = []
+    conn.set_trace_callback(trace.append)
+    try:
+        with _sqlite._write_transaction(conn):
+            conn.execute("CREATE TABLE sample (value TEXT)")
+            conn.execute("INSERT INTO sample VALUES ('ok')")
+    finally:
+        conn.close()
+
+    statements = [statement.strip().upper() for statement in trace]
+    assert statements.count("BEGIN IMMEDIATE") == 1
+    assert statements.count("COMMIT") == 1
+
+
+def test_write_transaction_rolls_back_schema_on_failure(tmp_path):
+    from tokenpak.companion import _sqlite
+
+    db_path = tmp_path / "rollback.db"
+    conn = _sqlite.connect(db_path)
+    try:
+        with pytest.raises(RuntimeError, match="abort schema"):
+            with _sqlite._write_transaction(conn):
+                conn.execute("CREATE TABLE partial (value TEXT)")
+                raise RuntimeError("abort schema")
+        tables = {
+            str(row[0])
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+    finally:
+        conn.close()
+    assert "partial" not in tables
+
+
+def test_write_transaction_rolls_back_commit_failure():
+    from tokenpak.companion import _sqlite
+
+    class _FailingCommit:
+        rolled_back = False
+
+        def execute(self, statement):
+            assert statement == "BEGIN IMMEDIATE"
+
+        def commit(self):
+            raise sqlite3.OperationalError("commit failed")
+
+        def rollback(self):
+            self.rolled_back = True
+
+    conn = _FailingCommit()
+    with pytest.raises(sqlite3.OperationalError, match="commit failed"):
+        with _sqlite._write_transaction(conn):
+            pass
+    assert conn.rolled_back
+
+
+def _queue_test_pre_send_event(tmp_path: Path, *, timestamp: float = 100.0) -> Path:
+    from tokenpak.companion import _sqlite
+
+    return _sqlite.queue_pre_send_event(
+        tmp_path,
+        session_id="queued-session",
+        timestamp=timestamp,
+        date=datetime.date.today().isoformat(),
+        entry_type="auto",
+        content="pre-send: ~100 tokens, est $0.0100",
+        metadata_json='{"tokens_est":100,"cost_est":0.01}',
+        tokens_est=100,
+        cost_est=0.01,
+    )
+
+
+def test_pre_send_intent_counts_before_flush_and_materialises_atomically(tmp_path):
+    from tokenpak.companion import _sqlite
+
+    event_path = _queue_test_pre_send_event(tmp_path)
+    assert event_path.is_file()
+    assert not (tmp_path / "journal.db").exists()
+    assert not (tmp_path / "budget.db").exists()
+
+    today = datetime.date.today().isoformat()
+    assert _sqlite.daily_spend_with_pending(tmp_path / "budget.db", tmp_path, today) == 0.01
+    assert _sqlite.flush_pre_send_events(tmp_path) == 1
+    assert not event_path.exists()
+
+    conn = sqlite3.connect(str(tmp_path / "journal.db"))
+    try:
+        journal_count = conn.execute(
+            "SELECT COUNT(*) FROM entries WHERE session_id = 'queued-session'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    conn = sqlite3.connect(str(tmp_path / "budget.db"))
+    try:
+        cost_row = conn.execute(
+            "SELECT input_tokens, estimated_cost, kind FROM companion_costs "
+            "WHERE session_id = 'queued-session'"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert journal_count == 1
+    assert cost_row == (100, 0.01, "estimate")
+
+
+def test_partial_two_store_flush_retains_and_replays_intent(tmp_path, monkeypatch):
+    from tokenpak.companion import _sqlite
+
+    event_path = _queue_test_pre_send_event(tmp_path)
+    real_connect = _sqlite.connect
+
+    def fail_budget(path, **kwargs):
+        if Path(path).name == "budget.db":
+            raise sqlite3.OperationalError("injected budget open failure")
+        return real_connect(path, **kwargs)
+
+    monkeypatch.setattr(_sqlite, "connect", fail_budget)
+    assert _sqlite.flush_pre_send_events(tmp_path) == 0
+    assert event_path.exists(), "intent must survive a journal-only partial commit"
+
+    monkeypatch.setattr(_sqlite, "connect", real_connect)
+    assert _sqlite.flush_pre_send_events(tmp_path) == 1
+    conn = sqlite3.connect(str(tmp_path / "journal.db"))
+    try:
+        journal_count = conn.execute(
+            "SELECT COUNT(*) FROM entries WHERE session_id = 'queued-session'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    conn = sqlite3.connect(str(tmp_path / "budget.db"))
+    try:
+        cost_count = conn.execute(
+            "SELECT COUNT(*) FROM companion_costs WHERE session_id = 'queued-session'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert journal_count == 1
+    assert cost_count == 1
+
+
+def test_estimate_upsert_cannot_regress_to_older_event(tmp_path):
+    from tokenpak.companion import _sqlite
+
+    conn = _sqlite.connect(tmp_path / "budget.db")
+    try:
+        with _sqlite._write_transaction(conn):
+            _sqlite.ensure_costs_schema(conn)
+            conn.execute(
+                _sqlite.COSTS_ESTIMATE_UPSERT_SQL,
+                (200.0, "2026-08-05", "ordered", 200, 0.02),
+            )
+            conn.execute(
+                _sqlite.COSTS_ESTIMATE_UPSERT_SQL,
+                (100.0, "2026-08-05", "ordered", 100, 0.01),
+            )
+        row = conn.execute(
+            "SELECT timestamp, input_tokens, estimated_cost FROM companion_costs "
+            "WHERE session_id = 'ordered'"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row == (200.0, 200, 0.02)
+
+
 def test_journal_store_db_is_wal(tmp_path):
     from tokenpak.companion.journal.store import JournalStore
 
@@ -168,6 +341,7 @@ def test_hook_created_journal_matches_store_schema(tmp_path):
         tmp_path=hook_dir,
     )
     assert result.returncode == 0
+    assert _flush_py_hook_events(hook_dir) == 1
 
     from tokenpak.companion.journal.store import JournalStore
 
@@ -268,6 +442,7 @@ def test_hook_rerun_same_event_dedupes(tmp_path):
     for _ in range(2):
         result = _run_py_hook(hook_input, tmp_path=tmp_path)
         assert result.returncode == 0
+    assert _flush_py_hook_events(tmp_path) == 2
 
     conn = sqlite3.connect(str(tmp_path / "journal.db"))
     journal_rows = conn.execute(
@@ -318,6 +493,7 @@ def test_estimate_upserts_single_row_per_session_day(tmp_path):
         assert result.returncode == 0
         tokens = size // 4 + len("p") // 4
         per_prompt_costs.append(tokens * 3.0 / 1_000_000)
+    assert _flush_py_hook_events(tmp_path) == len(sizes)
 
     conn = sqlite3.connect(str(tmp_path / "budget.db"))
     rows = conn.execute(
@@ -583,10 +759,13 @@ def test_codex_post_tool_use_dedupes_identical_events(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_dropped_journal_write_is_logged(tmp_path):
-    """With journal.db exclusively locked longer than the busy timeout, the
-    hook must still exit 0 (fail-open) but the drop must be visible in
-    run/dropped-writes.log and on stderr."""
+def test_locked_flush_is_logged_and_intent_replays(tmp_path):
+    """A locked DB never stalls or loses the prompt-path intent.
+
+    The hook queues and exits without touching SQLite.  A materialiser that
+    exceeds the busy timeout logs the failed attempt and retains the intent;
+    once the lock clears, replay commits it exactly once.
+    """
     from tokenpak.companion.journal.store import JournalStore
 
     JournalStore(db_path=tmp_path / "journal.db")  # create schema first
@@ -600,15 +779,27 @@ def test_dropped_journal_write_is_logged(tmp_path):
             {"session_id": "locked-sess", "transcript_path": str(transcript), "prompt": "p"},
             tmp_path=tmp_path,
         )
+        assert result.returncode == 0, "hook must stay fail-open under lock"
+        assert _flush_py_hook_events(tmp_path) == 0
+        pending = list((tmp_path / "run" / "pre-send-pending").glob("*.json"))
+        assert len(pending) == 1, "failed materialisation must retain its replay intent"
     finally:
         blocker.rollback()
         blocker.close()
 
-    assert result.returncode == 0, "hook must stay fail-open under lock"
-    log = tmp_path / "run" / "dropped-writes.log"
-    assert log.exists(), "dropped write must be recorded in dropped-writes.log"
-    assert "journal_entry" in log.read_text()
-    assert "dropped" in result.stderr
+    log = tmp_path / "run" / "deferred-writes.log"
+    assert log.exists(), "failed flush must be recorded in deferred-writes.log"
+    assert "pending_journal_flush" in log.read_text()
+
+    assert _flush_py_hook_events(tmp_path) == 1
+    conn = sqlite3.connect(str(tmp_path / "journal.db"))
+    try:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM entries WHERE session_id = 'locked-sess'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert count == 1
 
 
 # ---------------------------------------------------------------------------

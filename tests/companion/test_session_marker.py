@@ -59,6 +59,7 @@ def test_session_marker_never_raises(tmp_path, monkeypatch):
 
 def _run_hook(monkeypatch, payload: dict) -> int:
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
+    monkeypatch.setenv("TOKENPAK_COMPANION_ASYNC_FLUSH", "0")
     return pre_send.main()
 
 

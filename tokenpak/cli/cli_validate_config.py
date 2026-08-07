@@ -42,6 +42,9 @@ from typing import Any, Optional, TypedDict
 
 import yaml
 
+from tokenpak.proxy.custom_providers import _ENV_VAR_NAME, _FORMAT_ALIASES
+from tokenpak.proxy.router import _normalize_configured_endpoint
+
 
 class ConfigError:
     """Represents a single config error or warning."""
@@ -384,11 +387,31 @@ class ConfigValidator:
             )
             return
 
-        # Validate each provider
+        # Validate each provider and reject only true endpoint-identity
+        # duplicates. The same hostname on distinct effective ports is a
+        # supported pair of independently routable providers.
+        endpoint_owners: dict[str, str] = {}
         for provider_name, provider_config in providers.items():
-            self._validate_provider(provider_name, provider_config)
+            endpoint_identity = self._validate_provider(provider_name, provider_config)
+            if endpoint_identity is None:
+                continue
+            prior_owner = endpoint_owners.get(endpoint_identity)
+            if prior_owner is not None:
+                self.errors.append(
+                    ConfigError(
+                        line=self._get_line(f"providers.{provider_name}.endpoint"),
+                        field=f"providers.{provider_name}.endpoint",
+                        message=(
+                            f"Provider '{provider_name}' duplicates endpoint identity "
+                            f"already used by '{prior_owner}'"
+                        ),
+                        suggestion="Use a distinct scheme, hostname, or effective port",
+                    )
+                )
+            else:
+                endpoint_owners[endpoint_identity] = provider_name
 
-    def _validate_provider(self, name: str, config: dict[str, Any]) -> None:
+    def _validate_provider(self, name: str, config: dict[str, Any]) -> str | None:
         """Validate a single provider."""
         if not isinstance(config, dict):
             self.errors.append(
@@ -399,10 +422,57 @@ class ConfigValidator:
                     suggestion=f"{name}: {{ models: ['claude-3-sonnet'] }}",
                 )
             )
-            return
+            return None
 
-        # Check required fields
-        if "models" not in config:
+        is_routable_custom = "endpoint" in config
+        endpoint_identity: str | None = None
+        if is_routable_custom:
+            endpoint = config.get("endpoint")
+            if not isinstance(endpoint, str):
+                self.errors.append(
+                    ConfigError(
+                        line=self._get_line(f"providers.{name}.endpoint"),
+                        field=f"providers.{name}.endpoint",
+                        message="'endpoint' must be an absolute http(s) URL string",
+                        suggestion="endpoint: https://api.example.com/v1",
+                    )
+                )
+            else:
+                try:
+                    _canonical_endpoint, endpoint_identity = _normalize_configured_endpoint(
+                        endpoint
+                    )
+                except ValueError as exc:
+                    self.errors.append(
+                        ConfigError(
+                            line=self._get_line(f"providers.{name}.endpoint"),
+                            field=f"providers.{name}.endpoint",
+                            message=f"Invalid custom-provider endpoint: {exc}",
+                            suggestion=(
+                                "Use http(s) without userinfo, fragments, or credential query "
+                                "parameters"
+                            ),
+                        )
+                    )
+
+            format_value = config.get("format", "openai")
+            if (
+                not isinstance(format_value, str)
+                or format_value.strip().lower() not in _FORMAT_ALIASES
+            ):
+                self.errors.append(
+                    ConfigError(
+                        line=self._get_line(f"providers.{name}.format"),
+                        field=f"providers.{name}.format",
+                        message=f"Provider '{name}' has an unsupported wire format",
+                        suggestion=f"Use one of: {', '.join(sorted(_FORMAT_ALIASES))}",
+                    )
+                )
+
+        # Built-in model catalogs require an explicit model list. Routable
+        # custom providers discover/accept models upstream, so the list is
+        # optional; when supplied it still receives the same type checks.
+        if "models" not in config and not is_routable_custom:
             self.errors.append(
                 ConfigError(
                     line=self._get_line(f"providers.{name}"),
@@ -411,7 +481,7 @@ class ConfigValidator:
                     suggestion=f"Add 'models: [...]' to {name} provider",
                 )
             )
-        else:
+        elif "models" in config:
             models = config["models"]
             if not isinstance(models, list):
                 self.errors.append(
@@ -432,8 +502,42 @@ class ConfigValidator:
                     )
                 )
 
-        # Check if API key is available (env var or config)
-        if "api_key" not in config:
+        if is_routable_custom:
+            api_key_env = config.get("api_key_env", "")
+            if not isinstance(api_key_env, str) or (
+                api_key_env and _ENV_VAR_NAME.fullmatch(api_key_env.strip()) is None
+            ):
+                self.errors.append(
+                    ConfigError(
+                        line=self._get_line(f"providers.{name}.api_key_env"),
+                        field=f"providers.{name}.api_key_env",
+                        message="'api_key_env' must be a valid environment-variable name",
+                        suggestion="api_key_env: MY_PROVIDER_API_KEY",
+                    )
+                )
+            elif api_key_env.strip() and not os.environ.get(api_key_env.strip()):
+                self.warnings.append(
+                    ConfigError(
+                        line=self._get_line(f"providers.{name}.api_key_env"),
+                        field=f"providers.{name}.api_key_env",
+                        message=f"Environment variable {api_key_env.strip()} is not set",
+                        suggestion=(
+                            f"Set {api_key_env.strip()} or supply a credential on each request"
+                        ),
+                        is_warning=True,
+                    )
+                )
+            if "api_key" in config:
+                self.warnings.append(
+                    ConfigError(
+                        line=self._get_line(f"providers.{name}.api_key"),
+                        field=f"providers.{name}.api_key",
+                        message="Inline api_key is not consumed by routable custom providers",
+                        suggestion="Move the secret to an environment variable named by api_key_env",
+                        is_warning=True,
+                    )
+                )
+        elif "api_key" not in config:
             env_var = f"{name.upper()}_API_KEY"
             if not os.environ.get(env_var):
                 self.warnings.append(
@@ -445,6 +549,7 @@ class ConfigValidator:
                         is_warning=True,
                     )
                 )
+        return endpoint_identity
 
     def _validate_cache(self, cache: dict[str, Any]) -> None:
         """Validate cache section."""

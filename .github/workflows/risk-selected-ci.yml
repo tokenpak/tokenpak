@@ -1,0 +1,612 @@
+name: Risk-selected CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Exact ancestor commit for delta trust and secret scans
+        required: true
+        type: string
+
+concurrency:
+  group: risk-selected-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Changed-surface classifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      base: ${{ steps.range.outputs.base }}
+      head: ${{ steps.range.outputs.head }}
+      classifier_ok: ${{ steps.classify.outputs.classifier_ok }}
+      python_proxy: ${{ steps.classify.outputs.python_proxy }}
+      packaging_dependencies: ${{ steps.classify.outputs.packaging_dependencies }}
+      migration_storage: ${{ steps.classify.outputs.migration_storage }}
+      pricing_billing: ${{ steps.classify.outputs.pricing_billing }}
+      docs_claims: ${{ steps.classify.outputs.docs_claims }}
+      javascript_sdk: ${{ steps.classify.outputs.javascript_sdk }}
+      workflow_release: ${{ steps.classify.outputs.workflow_release }}
+      unknown: ${{ steps.classify.outputs.unknown }}
+      shared_core: ${{ steps.classify.outputs.shared_core }}
+      large_diff: ${{ steps.classify.outputs.large_diff }}
+      multi_surface: ${{ steps.classify.outputs.multi_surface }}
+      full_conservative: ${{ steps.classify.outputs.full_conservative }}
+      run_python_proxy: ${{ steps.classify.outputs.run_python_proxy }}
+      run_full_python: ${{ steps.classify.outputs.run_full_python }}
+      run_integration_chaos: ${{ steps.classify.outputs.run_integration_chaos }}
+      run_determinism_benchmarks: ${{ steps.classify.outputs.run_determinism_benchmarks }}
+      run_packaging_dependencies: ${{ steps.classify.outputs.run_packaging_dependencies }}
+      run_migration_storage: ${{ steps.classify.outputs.run_migration_storage }}
+      run_pricing_billing: ${{ steps.classify.outputs.run_pricing_billing }}
+      run_docs_claims: ${{ steps.classify.outputs.run_docs_claims }}
+      run_javascript_sdk: ${{ steps.classify.outputs.run_javascript_sdk }}
+      run_workflow_release: ${{ steps.classify.outputs.run_workflow_release }}
+    steps:
+      - name: Checkout exact change head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+
+      - name: Resolve exact comparison range
+        id: range
+        shell: bash
+        run: |
+          set -euo pipefail
+          event="${{ github.event_name }}"
+          head="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          if [[ "$event" == "pull_request" ]]; then
+            # A PR base tip can advance without being present in the feature
+            # head.  The merge base is the exact ancestor that owns the PR
+            # delta; comparing the two tips would also pull unrelated base-side
+            # commits into classification and trust scans.
+            base_tip="${{ github.event.pull_request.base.sha }}"
+            base="$(git merge-base "$base_tip" "$head")"
+          elif [[ "$event" == "push" ]]; then
+            base="${{ github.event.before }}"
+            if [[ -z "$base" || "$base" == "0000000000000000000000000000000000000000" ]]; then
+              base="$(git rev-parse "${head}^")"
+            fi
+          else
+            # Manual dispatches must name their exact audit range.  Guessing a
+            # base (or using base == head) would make the enforcing delta
+            # public-safety, license, and secret scans silently inspect zero
+            # incoming commits.
+            base="${{ inputs.base_sha }}"
+            if [[ -z "$base" || "$base" == "$head" ]]; then
+              echo "manual dispatch requires base_sha to name a distinct ancestor of $head" >&2
+              exit 1
+            fi
+            if [[ ! "$base" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "manual dispatch base_sha must be one full commit SHA" >&2
+              exit 1
+            fi
+          fi
+          git cat-file -e "${base}^{commit}"
+          git cat-file -e "${head}^{commit}"
+          if ! git merge-base --is-ancestor "$base" "$head"; then
+            echo "comparison base $base is not an ancestor of head $head" >&2
+            exit 1
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+
+      - name: Classify changed surfaces
+        id: classify
+        shell: bash
+        run: |
+          set +e
+          classifier_args=()
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            classifier_args+=(--force-full-conservative)
+          fi
+          python3 scripts/ci/classify_changes.py \
+            --base "${{ steps.range.outputs.base }}" \
+            --head "${{ steps.range.outputs.head }}" \
+            --output-json ci-selection.json \
+            --github-output "$GITHUB_OUTPUT" \
+            "${classifier_args[@]}"
+          rc=$?
+          if [[ $rc -ne 0 ]]; then
+            python3 scripts/ci/classify_changes.py \
+              --base "${{ steps.range.outputs.base }}" \
+              --head "${{ steps.range.outputs.head }}" \
+              --output-json ci-selection.json \
+              --github-output "$GITHUB_OUTPUT" \
+              --fallback-error "classifier exited with status $rc"
+          fi
+          exit 0
+
+      - name: Display selection summary
+        run: python3 -m json.tool ci-selection.json
+
+      - name: Upload selection contract
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: risk-selected-ci-contract
+          path: ci-selection.json
+          retention-days: 30
+
+  trust_baseline:
+    name: Always-on trust baseline
+    needs: changes
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact change head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.changes.outputs.head || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install trust-test dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Structural identity, layout, and repository hygiene
+        env:
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+        run: |
+          python3 scripts/ci/trust_baseline.py \
+            --base "${{ needs.changes.outputs.base }}" \
+            --head "${{ needs.changes.outputs.head }}" \
+            --branch "$BRANCH_NAME"
+
+      - name: Always-on release trust gates
+        run: python3 scripts/release_check/release_check.py
+
+      - name: Enforcing changed-file public-safety scan
+        run: |
+          python3 scripts/release_gate/public_safety_scan.py \
+            --paths-from changed-files.txt \
+            --root . \
+            --profile release \
+            --annotation error
+
+      - name: Full-tree public baseline scan
+        run: |
+          python3 scripts/release_gate/public_safety_scan.py \
+            --git-tracked . \
+            --profile baseline \
+            --annotation warning \
+            --recommended
+
+      - name: License declaration policy
+        run: |
+          python3 scripts/release_gate/license_policy_scan.py \
+            --paths-from changed-files.txt \
+            --root . \
+            --ledger decisions/ledger/license.md \
+            --annotation error
+
+      - name: Trust conformance
+        run: |
+          python3 -m scripts.release_gate.trust_conformance \
+            --scope public --mode enforcing --json | tee trust-conformance.json
+
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.18.4"
+          GITLEAKS_SHA256: "ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d"
+        run: |
+          set -euo pipefail
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL "$url" -o /tmp/gitleaks.tar.gz
+          printf '%s  %s\n' "$GITLEAKS_SHA256" /tmp/gitleaks.tar.gz | sha256sum --check -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan incoming commits for secrets
+        run: |
+          gitleaks detect \
+            --source . \
+            --log-opts="${{ needs.changes.outputs.base }}..${{ needs.changes.outputs.head }}" \
+            --redact --no-banner --exit-code 1 \
+            --report-format sarif --report-path gitleaks-report.sarif
+
+      - name: Upload trust evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: risk-selected-trust-baseline
+          path: |
+            trust-baseline.json
+            trust-conformance.json
+            gitleaks-report.sarif
+          if-no-files-found: warn
+          retention-days: 30
+
+  python_proxy:
+    name: Python and proxy affected partitions
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_python_proxy == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install development shape
+        run: python -m pip install -e ".[dev]"
+      - name: Run Python and proxy partitions
+        run: |
+          python -m pytest \
+            tokenpak/tests/test_custom_providers.py \
+            tokenpak/tests/test_proxy_config.py \
+            tests/proxy/ tests/config/ tests/services/ \
+            -q --tb=short \
+            --continue-on-collection-errors \
+            -m "not integration and not chaos and not slow and not needs_fast_host"
+
+  full_python:
+    name: Full Python matrix (${{ matrix.python-version }})
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_full_python == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install development shape
+        run: python -m pip install -e ".[dev]"
+      - name: Run full applicable Python suite
+        run: |
+          python -m pytest tests/ -q --tb=short \
+            --continue-on-collection-errors \
+            -m "not integration and not chaos and not slow and not needs_fast_host"
+
+  integration_chaos:
+    name: Integration, chaos, and slow correctness
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_integration_chaos == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install development shape
+        run: python -m pip install -e ".[dev]"
+      - name: Run integration, chaos, and slow partitions
+        env:
+          TOKENPAK_TEST_MODE: "1"
+        run: |
+          python -m pytest tests/ -q --tb=short \
+            --continue-on-collection-errors \
+            -m "(integration or chaos or slow) and not needs_fast_host"
+
+  determinism_benchmarks:
+    name: Determinism and claim contracts
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_determinism_benchmarks == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install development shape
+        run: python -m pip install -e ".[dev]"
+      - name: Run deterministic compilation checks
+        shell: bash
+        run: |
+          set +e
+          python -m pytest tests/determinism/ -q --tb=short \
+            --continue-on-collection-errors
+          rc=$?
+          if [[ $rc -eq 5 ]]; then
+            echo "No determinism tests collected for this install shape."
+            exit 0
+          fi
+          exit $rc
+      - name: Run health and public-claim contracts
+        run: |
+          python -m pytest \
+            tests/benchmarks/test_health_benchmark_contract.py \
+            tests/benchmarks/test_headline_claim.py \
+            -q --tb=short --continue-on-collection-errors
+
+  packaging_dependencies:
+    name: Packaging, dependency, and install integrity
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_packaging_dependencies == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install packaging tools
+        run: |
+          python -m pip install -e ".[dev]" build pip-audit "setuptools>=64" "uv==0.9.30"
+      - name: Verify lock and dependency tree
+        run: |
+          uv lock --check
+          python -m pip_audit --strict .
+      - name: Build and validate metadata
+        run: |
+          python -m build
+          python -m twine check dist/*
+      - name: Verify artifact contents and slim install
+        run: |
+          python scripts/check-dist-contents.py
+          bash scripts/slim-install-smoke.sh
+      - name: Upload candidate distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: risk-selected-distributions
+          path: dist/*
+          retention-days: 30
+
+  migration_storage:
+    name: Migration and storage integrity
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_migration_storage == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install full validation shape
+        run: python -m pip install -e ".[dev,full]"
+      - name: Run migration guards
+        run: |
+          python scripts/check_schema_version.py
+          python scripts/check_config_migration.py
+          python scripts/release_gate/migration_multihop.py
+      - name: Run storage partitions
+        run: |
+          python -m pytest tests/config/ tests/telemetry/ -q --tb=short \
+            --continue-on-collection-errors \
+            -m "not slow and not needs_fast_host"
+
+  pricing_billing:
+    name: Pricing, billing, and entitlement invariants
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_pricing_billing == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install full validation shape
+        run: python -m pip install -e ".[dev,full]"
+      - name: Run monetary-surface invariants
+        run: |
+          python -m pytest \
+            tests/cost/ tests/license/ tests/licensing/ tests/proxy/spend_guard/ \
+            -q --tb=short --continue-on-collection-errors \
+            -m "not slow and not needs_fast_host"
+      - name: Run release trust baseline
+        run: python scripts/release_check/release_check.py
+
+  docs_claims:
+    name: Documentation, links, and public claims
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_docs_claims == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install documentation shape
+        run: python -m pip install -e ".[dev,docs]"
+      - name: Build documentation strictly
+        run: |
+          bash scripts/audit-docs.sh --release-gate
+          mkdocs build --strict
+          bash scripts/check-cli-docs.sh
+      - name: Run docs and headline-claim tests
+        run: |
+          python -m pytest \
+            tests/docs/ tests/benchmarks/test_headline_claim.py \
+            -q --tb=short --continue-on-collection-errors
+
+  javascript_sdk:
+    name: JavaScript SDK frozen install and audit (${{ matrix.package-name }})
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_javascript_sdk == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package-name: sdk
+            package-directory: sdk
+            lockfile: sdk/package-lock.json
+          - package-name: tokenpak-js
+            package-directory: packages/tokenpak-js
+            lockfile: packages/tokenpak-js/package-lock.json
+    defaults:
+      run:
+        working-directory: ${{ matrix.package-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22.18.0"
+          cache: npm
+          cache-dependency-path: ${{ matrix.lockfile }}
+      - name: Verify manifest and lock exist
+        run: test -f package.json && test -f package-lock.json
+      - name: Frozen dependency install
+        run: npm ci
+      - name: Build and typecheck
+        run: npm run build
+      - name: Run SDK tests
+        run: npm test -- --runInBand
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  workflow_release:
+    name: Workflow and release self-tests
+    needs: changes
+    if: ${{ always() && needs.changes.outputs.run_workflow_release == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.25.x"
+          cache: false
+      - name: Install development shape
+        run: python -m pip install -e ".[dev]"
+      - name: Validate workflow syntax and action pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed_workflows < <(
+            git diff --name-only --diff-filter=ACMRTUXB \
+              "${{ needs.changes.outputs.base }}" \
+              "${{ needs.changes.outputs.head }}" -- \
+              '.github/workflows/*.yml' '.github/workflows/*.yaml'
+          )
+          if [[ ${#changed_workflows[@]} -eq 0 ]]; then
+            changed_workflows=(.github/workflows/risk-selected-ci.yml)
+          fi
+          go run github.com/rhysd/actionlint/cmd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca \
+            -color "${changed_workflows[@]}"
+          bash scripts/check-action-pins.sh
+      - name: Verify workflow inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          for workflow in .github/workflows/*.yml; do
+            name="$(basename "$workflow")"
+            expected="$(awk -v key="$name" '$1 == key ":" {print $2}' .github/gate-inventory.yml)"
+            actual="$(sha256sum "$workflow" | awk '{print $1}')"
+            test -n "$expected"
+            test "$expected" = "$actual"
+          done
+      - name: Run workflow and release guard tests
+        run: |
+          python -m pytest tests/release_gate/ tests/release_check/ tests/ci/ \
+            -q --tb=short --continue-on-collection-errors
+          python scripts/release_gate/gen_workflow_steps.py --check
+          python scripts/release_check/release_check.py
+
+  ci_required:
+    name: Risk-selected CI required
+    needs:
+      - changes
+      - trust_baseline
+      - python_proxy
+      - full_python
+      - integration_chaos
+      - determinism_benchmarks
+      - packaging_dependencies
+      - migration_storage
+      - pricing_billing
+      - docs_claims
+      - javascript_sdk
+      - workflow_release
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact change head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.changes.outputs.head || github.sha }}
+      - name: Verify every selected job
+        env:
+          CLASSIFIER_OK: ${{ needs.changes.outputs.classifier_ok }}
+          FULL_CONSERVATIVE: ${{ needs.changes.outputs.full_conservative }}
+          UNKNOWN: ${{ needs.changes.outputs.unknown }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          TRUST_BASELINE_RESULT: ${{ needs.trust_baseline.result }}
+          SELECTED_PYTHON_PROXY: ${{ needs.changes.outputs.run_python_proxy }}
+          RESULT_PYTHON_PROXY: ${{ needs.python_proxy.result }}
+          SELECTED_FULL_PYTHON: ${{ needs.changes.outputs.run_full_python }}
+          RESULT_FULL_PYTHON: ${{ needs.full_python.result }}
+          SELECTED_INTEGRATION_CHAOS: ${{ needs.changes.outputs.run_integration_chaos }}
+          RESULT_INTEGRATION_CHAOS: ${{ needs.integration_chaos.result }}
+          SELECTED_DETERMINISM_BENCHMARKS: ${{ needs.changes.outputs.run_determinism_benchmarks }}
+          RESULT_DETERMINISM_BENCHMARKS: ${{ needs.determinism_benchmarks.result }}
+          SELECTED_PACKAGING_DEPENDENCIES: ${{ needs.changes.outputs.run_packaging_dependencies }}
+          RESULT_PACKAGING_DEPENDENCIES: ${{ needs.packaging_dependencies.result }}
+          SELECTED_MIGRATION_STORAGE: ${{ needs.changes.outputs.run_migration_storage }}
+          RESULT_MIGRATION_STORAGE: ${{ needs.migration_storage.result }}
+          SELECTED_PRICING_BILLING: ${{ needs.changes.outputs.run_pricing_billing }}
+          RESULT_PRICING_BILLING: ${{ needs.pricing_billing.result }}
+          SELECTED_DOCS_CLAIMS: ${{ needs.changes.outputs.run_docs_claims }}
+          RESULT_DOCS_CLAIMS: ${{ needs.docs_claims.result }}
+          SELECTED_JAVASCRIPT_SDK: ${{ needs.changes.outputs.run_javascript_sdk }}
+          RESULT_JAVASCRIPT_SDK: ${{ needs.javascript_sdk.result }}
+          SELECTED_WORKFLOW_RELEASE: ${{ needs.changes.outputs.run_workflow_release }}
+          RESULT_WORKFLOW_RELEASE: ${{ needs.workflow_release.result }}
+        run: python3 scripts/ci/verify_selected_jobs.py

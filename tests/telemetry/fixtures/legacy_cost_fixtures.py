@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS tp_costs (
 """
 
 # Legacy schema: tp_costs has actual_cost but NOT cost_total.
-# This shape triggers the DROP + recreate path in storage.py:349-370.
+# This shape exercises the additive, row-preserving migration in storage.py.
 _LEGACY_DDL = """\
 CREATE TABLE IF NOT EXISTS tp_events (
     trace_id        TEXT NOT NULL,
@@ -256,9 +256,9 @@ def build_legacy_schema_db() -> sqlite3.Connection:
     """Legacy-schema DB: tp_costs has actual_cost but NO cost_total column.
 
     Two traces have both tp_events and tp_costs rows in the pre-migration
-    schema.  The storage.py migration path (lines 349-370) drops and
-    recreates tp_costs when it detects this shape; copy/verify/rollback tests
-    must prove byte/value/count equivalence before and after that migration.
+    schema. The storage migration must add the canonical columns in place,
+    preserve both rows and their original values, and seed cost_total from
+    actual_cost.
     """
     conn = _legacy_conn()
     for i in range(1, 3):

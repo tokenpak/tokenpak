@@ -9,14 +9,21 @@ How to connect any LLM client to TokenPak.
 TokenPak acts as an HTTP proxy between your LLM client and the provider API:
 
 ```
-Your Client → http://localhost:8766 → [Compress] → Provider API → [Stats] → Your Client
+Your Client → http://localhost:8766 → [Route / Optional Packing] → Provider API
+                                      └──────── Local Stats ────────┘
 ```
 
 1. Your client sends a normal API request to `localhost:8766`
-2. TokenPak compresses the prompt (if beneficial)
-3. The compressed request is forwarded to the real provider
+2. TokenPak applies route policy and any explicitly enabled request hook
+3. The resulting request is forwarded to the real provider
 4. The response comes back unchanged by the receipt display
 5. Cost and token data are recorded locally
+
+The built-in default HTTP path does not call the legacy
+`compact_request_body` helper. `TOKENPAK_COMPACT` and
+`compression.enabled` therefore do not toggle proxy body compaction. The
+`TOKENPAK_COMPACT_THRESHOLD_TOKENS` value is read only when an integration
+explicitly calls that helper. Claude Code request bodies remain byte-preserved.
 
 The proxy receives the provider credential header only to forward the request;
 it does not persist or log that credential. Anthropic normally uses
@@ -49,11 +56,11 @@ tokenpak serve \
 
 | Profile | When to use |
 |---------|-------------|
-| `safe` | Conservative operation; not a positive compression-receipt path |
-| `balanced` | Normal balance of compression and latency (default) |
-| `aggressive` | Maximum eligible compression; used by the reference receipt path |
+| `safe` | Conservative operation; no legacy compact-helper invocation |
+| `balanced` | Default routing and telemetry profile |
+| `aggressive` | Enables eligible explicit packing features used by the reference receipt path |
 | `agentic` | Longer-context agent workflows |
-| `transparent` | Compatibility passthrough; no positive compression receipt expected |
+| `transparent` | Compatibility passthrough; no body-reduction receipt expected |
 
 ---
 
@@ -171,17 +178,18 @@ Use different upstream URLs per provider:
 
 ---
 
-## Compression Configuration
+## Legacy Compact-Helper Configuration
 
-Select a supported workflow profile for one proxy process with `--profile`.
-Environment variables remain available for explicit operator overrides:
+The following compatibility settings remain accepted so existing config does
+not break:
 
-```bash
-TOKENPAK_COMPACT_THRESHOLD_TOKENS=2000 \
-  tokenpak serve --profile balanced
-```
+- `TOKENPAK_COMPACT` / `compression.enabled` are parsed and exported but have
+  no consumer in the default HTTP path.
+- `TOKENPAK_COMPACT_THRESHOLD_TOKENS` sets the threshold only for code that
+  explicitly calls `compact_request_body`.
 
-Leaving both controls unset preserves the normal `balanced` profile.
+Neither setting activates proxy body compaction. Select `--profile` for the
+profile's other route-policy and feature settings.
 
 ---
 
@@ -215,9 +223,9 @@ Override any config value with env vars:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TOKENPAK_PORT` | `8766` | Proxy listen port |
-| `TOKENPAK_MODE` | `hybrid` | Compression mode |
-| `TOKENPAK_COMPACT` | `1` | Master compression switch (0/1) |
-| `TOKENPAK_COMPACT_THRESHOLD_TOKENS` | `1500` in `balanced` | Min tokens to trigger compression |
+| `TOKENPAK_MODE` | `hybrid` | Request-policy mode used by eligible explicit stages |
+| `TOKENPAK_COMPACT` | `1` | Legacy compatibility value; no default-HTTP effect |
+| `TOKENPAK_COMPACT_THRESHOLD_TOKENS` | `1500` in `balanced` | Threshold for explicit `compact_request_body` callers only |
 | `TOKENPAK_DB` | `~/.tokenpak/monitor.db` | Database path |
 | `TOKENPAK_PROFILE` | `balanced` | Workflow profile used by the proxy |
 | `TOKENPAK_STATS_FOOTER` | `0` | Print per-request receipt to proxy stderr |
@@ -252,16 +260,16 @@ tokenpak doctor
 # Checks port binding, config, firewall
 ```
 
-**Requests not being compressed:**
-```bash
-tokenpak status --full
-# Look for: compression: enabled | mode: hybrid
-```
+**`TOKENPAK_COMPACT` does not change proxy request bodies:** This is expected.
+The default HTTP path does not call the legacy compact helper. Use
+`tokenpak compress` for explicit, local compaction or an integration that
+explicitly invokes `compact_request_body`; lowering the threshold on
+`tokenpak serve` does not activate that path.
 
 **Higher latency than expected:**
 ```bash
-# Try strict mode (skips compression on small requests)
-tokenpak config set proxy.mode strict
+# Compare with the conservative profile for one process
+tokenpak serve --profile safe
 ```
 
 **API key errors:**

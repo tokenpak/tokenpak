@@ -53,6 +53,11 @@ def auth_profiles_file() -> Path:
     return _paths.write_under("auth-profiles.json")
 
 
+def _default_auth_profiles_file() -> Path:
+    """Resolve the default lazily so scoped homes and test overrides stay live."""
+    return auth_profiles_file()
+
+
 # Providers where OAuth auto-refresh is attempted
 OAUTH_PROVIDERS = {"openai-codex", "anthropic"}
 
@@ -194,7 +199,9 @@ class OAuthManager:
         auth_profiles_file: Optional[Path] = None,
         refresh_window: int = REFRESH_WINDOW_SECONDS,
     ):
-        self.auth_profiles_file = auth_profiles_file
+        self.auth_profiles_file = (
+            auth_profiles_file if auth_profiles_file is not None else _default_auth_profiles_file()
+        )
         self.refresh_window = refresh_window
 
     def get_expiring_profiles(self) -> List[tuple[str, Dict[str, Any], float]]:

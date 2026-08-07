@@ -50,7 +50,7 @@ try:
 except ImportError:
     _lic = None
 
-    def upgrade_cta_line() -> str:  # type: ignore[misc]
+    def upgrade_cta_line() -> str:
         return ""
 
 

@@ -22,7 +22,7 @@ class _ClosedSocket:
         return None
 
 
-def _doctor_json(monkeypatch, tmp_path) -> dict:
+def _prepare_doctor(monkeypatch, tmp_path) -> None:
     fake_home = tmp_path / "home"
     tokenpak_home = fake_home / ".tpk"
     tokenpak_home.mkdir(parents=True)
@@ -35,12 +35,23 @@ def _doctor_json(monkeypatch, tmp_path) -> dict:
     monkeypatch.setattr(doctor.socket, "socket", lambda *_a, **_k: _ClosedSocket())
     monkeypatch.setattr("tokenpak.creds.doctor.run", lambda *a, **k: [])
 
+
+def _doctor_json(monkeypatch, tmp_path) -> dict:
+    _prepare_doctor(monkeypatch, tmp_path)
     captured = StringIO()
     with patch("sys.stdout", captured):
         doctor.run_doctor(output_json=True)
     text = captured.getvalue()
     start = text.rfind("\n{")
     return json.loads(text[start + 1 :] if start != -1 else text)
+
+
+def _doctor_human(monkeypatch, tmp_path) -> str:
+    _prepare_doctor(monkeypatch, tmp_path)
+    captured = StringIO()
+    with patch("sys.stdout", captured):
+        doctor.run_doctor()
+    return captured.getvalue()
 
 
 def _find_check(payload: dict, name: str) -> dict:
@@ -110,6 +121,30 @@ def test_doctor_treats_missing_api_keys_as_optional_for_oauth(monkeypatch, tmp_p
     assert "optional" in check["message"]
     assert "OAuth/session auth" in check["message"]
     assert "direct provider key" in check["detail"]
+
+
+def test_doctor_json_exposes_partial_custom_provider_registration(monkeypatch, tmp_path):
+    monkeypatch.setattr(doctor, "_custom_provider_counts", lambda: (2, 1, ""))
+
+    payload = _doctor_json(monkeypatch, tmp_path)
+    check = _find_check(payload, "custom_providers")
+
+    assert payload["custom_providers"] == {
+        "configured": 2,
+        "registered": 1,
+        "error": None,
+    }
+    assert check["status"] == "warn"
+    assert "1/2 registered" in check["message"]
+    assert "1 configured provider(s) were skipped" in check["detail"]
+
+
+def test_doctor_human_exposes_custom_provider_counts(monkeypatch, tmp_path):
+    monkeypatch.setattr(doctor, "_custom_provider_counts", lambda: (2, 1, ""))
+
+    output = _doctor_human(monkeypatch, tmp_path)
+
+    assert "Custom providers    1/2 registered" in output
 
 
 def test_disk_usage_probe_stops_at_entry_limit(tmp_path):

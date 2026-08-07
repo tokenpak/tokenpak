@@ -34,6 +34,11 @@ Overall statistics summary.
 }
 ```
 
+The `compression.enabled`, `mode`, and `threshold_tokens` fields in this legacy
+status example report compatibility configuration. They do not indicate that
+the default HTTP path compacts request bodies; that path does not call
+`compact_request_body`.
+
 ---
 
 ### `GET /v1/telemetry/sessions`
@@ -184,7 +189,7 @@ Proxy health and stats.
 ```json
 {
  "status": "ok",
- "version": "1.18.1",
+ "version": "1.18.2",
  "uptime_seconds": 86400,
  "compression": {
  "enabled": true,
@@ -212,7 +217,7 @@ Detailed health check.
  "database": "ok",
  "index": "ok",
  "compression_pipeline": "ok",
- "version": "1.18.1"
+ "version": "1.18.2"
 }
 ```
 

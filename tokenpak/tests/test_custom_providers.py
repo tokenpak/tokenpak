@@ -276,8 +276,19 @@ class TestCustomAdapterFactory:
 
         assert deepseek_adapter.detect(
             "/v1/chat/completions",
-            {"Host": "api.deepseek.com"},
+            {"Host": "api.deepseek.com:443"},
             None,
+        )
+
+    def test_custom_adapter_rejects_hostname_substrings(self):
+        registry, providers, adapters = self._build_registry_with_custom(_sample_providers_yaml())
+        deepseek_adapter = next(a for a in adapters if "deepseek" in a.source_format)
+
+        assert not deepseek_adapter.detect(
+            "https://notapi.deepseek.com/v1/chat/completions", {}, None
+        )
+        assert not deepseek_adapter.detect(
+            "/v1/chat/completions", {"Host": "notapi.deepseek.com"}, None
         )
 
     def test_custom_adapter_upstream(self):
@@ -325,10 +336,7 @@ class TestCustomAdapterFactory:
             {"Host": "api.deepseek.com"},
             None,
         )
-        # Should match custom-deepseek (or the openai-chat adapter, both are
-        # correct since deepseek uses OpenAI format). The important thing is
-        # that it doesn't fall through to passthrough.
-        assert detected.source_format != "passthrough"
+        assert detected.source_format == "custom-deepseek"
 
 
 # ---------------------------------------------------------------------------
@@ -386,8 +394,7 @@ class TestInterceptIntegration:
         # Simulate what config.py does at startup
         _router.INTERCEPT_HOSTS.add("api.deepseek.com")
         try:
-            # should_intercept checks if any host in INTERCEPT_HOSTS is
-            # a substring of the URL
+            # should_intercept compares the parsed hostname exactly.
             assert _router.should_intercept("https://api.deepseek.com/v1/chat/completions")
             # Unrelated URL should not match
             assert not _router.should_intercept("https://api.example.com/v1/chat/completions")

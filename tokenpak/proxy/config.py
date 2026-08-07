@@ -173,6 +173,8 @@ def _cfg(
 # ---------------------------------------------------------------------------
 # Named Workflow Profiles — TOKENPAK_PROFILE sets sensible flag bundles
 # Profile is a floor: explicit env vars always win (setdefault semantics)
+# Selecting a profile does not activate body compaction in the default HTTP
+# proxy path.
 # ---------------------------------------------------------------------------
 _PROFILE_PRESETS: dict[str, dict[str, str]] = {
     "safe": {
@@ -355,8 +357,14 @@ BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "
 # mutation_audit TTL — prune rows older than this many days
 MUTATION_AUDIT_TTL_DAYS: int = int(os.environ.get("TOKENPAK_MUTATION_AUDIT_TTL_DAYS", "30"))
 VAULT_SYNC_INTERVAL = 60
+# Legacy compatibility surface. ``compression.enabled`` / ``TOKENPAK_COMPACT``
+# are still loaded and exported, but the default HTTP proxy path does not read
+# this value and does not invoke ``compact_request_body``. Keep the setting so
+# existing configuration continues to parse without implying runtime control.
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
 COMPACT_MAX_CHARS = _cfg("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
+# Used only by explicit ``compact_request_body`` callers; it is not an
+# activation threshold for default HTTP proxy requests.
 COMPACT_THRESHOLD_TOKENS = _cfg(
     "compression.threshold_tokens",
     1500,
@@ -820,32 +828,49 @@ UPSTREAM_ROUTES = _build_upstream_routes()
 # ---------------------------------------------------------------------------
 from tokenpak.proxy.custom_providers import (
     build_custom_adapters,
+    count_configured_providers,
     get_provider_display_list,
     load_custom_providers,
 )
 
 CUSTOM_PROVIDERS = load_custom_providers()
+_custom_adapters = build_custom_adapters(CUSTOM_PROVIDERS, ADAPTER_REGISTRY)
+_registered_formats = {adapter.source_format for adapter in _custom_adapters}
+REGISTERED_CUSTOM_PROVIDERS = [
+    provider for provider in CUSTOM_PROVIDERS if f"custom-{provider.name}" in _registered_formats
+]
+CUSTOM_PROVIDER_CONFIGURED_COUNT = count_configured_providers()
+CUSTOM_PROVIDER_REGISTERED_COUNT = len(REGISTERED_CUSTOM_PROVIDERS)
+CUSTOM_PROVIDER_ROUTES = {
+    adapter.source_format: adapter.get_default_upstream() for adapter in _custom_adapters
+}
+CUSTOM_PROVIDER_HOSTS = {
+    # The historical constant name is retained for compatibility, but keys are
+    # now full normalized endpoints. ProviderRouter derives exact
+    # scheme/host/effective-port identity and still accepts legacy bare-host
+    # constructor input from embedders.
+    provider.endpoint: f"custom-{provider.name}"
+    for provider in REGISTERED_CUSTOM_PROVIDERS
+}
 
-if CUSTOM_PROVIDERS:
-    # Register adapter instances (modifies ADAPTER_REGISTRY in-place)
-    _custom_adapters = build_custom_adapters(CUSTOM_PROVIDERS, ADAPTER_REGISTRY)
-
+if REGISTERED_CUSTOM_PROVIDERS:
     # Add custom provider hostnames to the router intercept list
     from tokenpak.proxy.router import INTERCEPT_HOSTS as _INTERCEPT_HOSTS
 
-    for _cp in CUSTOM_PROVIDERS:
+    for _cp in REGISTERED_CUSTOM_PROVIDERS:
         _INTERCEPT_HOSTS.add(_cp.hostname)
 
-    # Add upstream routes for custom adapters
-    for _cp in CUSTOM_PROVIDERS:
-        _route_key = f"custom-{_cp.name}"
-        UPSTREAM_ROUTES[_route_key] = _cp.endpoint
+    # Use the upstream selected by each successfully registered adapter.
+    UPSTREAM_ROUTES.update(CUSTOM_PROVIDER_ROUTES)
 
-    _custom_names = ", ".join(cp.name for cp in CUSTOM_PROVIDERS)
-    _logging.getLogger("tokenpak.proxy.config").info("Custom providers: %s", _custom_names)
+_logging.getLogger("tokenpak.proxy.config").info(
+    "Custom providers: %d registered / %d configured",
+    CUSTOM_PROVIDER_REGISTERED_COUNT,
+    CUSTOM_PROVIDER_CONFIGURED_COUNT,
+)
 
 # Build the display string for startup banners
-PROVIDER_DISPLAY = get_provider_display_list(ADAPTER_REGISTRY, CUSTOM_PROVIDERS)
+PROVIDER_DISPLAY = get_provider_display_list(ADAPTER_REGISTRY, REGISTERED_CUSTOM_PROVIDERS)
 
 
 # ---------------------------------------------------------------------------
@@ -868,6 +893,8 @@ class ProxyConfig:
         self.port: int = PROXY_PORT
         self.listen_address: str = LISTEN_ADDRESS
         self.compilation_mode: str = COMPILATION_MODE
+        # Compatibility-only for the default HTTP proxy path; see the module
+        # constant above.
         self.enable_compaction: bool = ENABLE_COMPACTION
         self.upstream_routes: Dict[str, str] = UPSTREAM_ROUTES
         self.upstream_timeout: int = UPSTREAM_TIMEOUT
@@ -878,6 +905,11 @@ class ProxyConfig:
         self.enable_capsule_builder: bool = ENABLE_CAPSULE_BUILDER
         self.adapter_registry = ADAPTER_REGISTRY
         self.custom_providers = CUSTOM_PROVIDERS
+        self.registered_custom_providers = REGISTERED_CUSTOM_PROVIDERS
+        self.custom_provider_configured_count: int = CUSTOM_PROVIDER_CONFIGURED_COUNT
+        self.custom_provider_registered_count: int = CUSTOM_PROVIDER_REGISTERED_COUNT
+        self.custom_provider_routes: Dict[str, str] = CUSTOM_PROVIDER_ROUTES
+        self.custom_provider_hosts: Dict[str, str] = CUSTOM_PROVIDER_HOSTS
         self.provider_display: str = PROVIDER_DISPLAY
 
     def __repr__(self) -> str:
