@@ -19,7 +19,7 @@ files:
   public-baseline-scan.yml: 4e8cd3f24ebd2b7289053dcbb3250cf5365764eb5cc557893e0dc06a272d27e5
   public-layout-check.yml: 1423f30b12a78b46d7da8763f9a2f04052e95955754a94f3fc75fe151cabe965
   release-rehearsal.yml: 9dcfd977da8fc90dbb2cfb105aba755870fc9147556774c94deb191ab7d2a5e9
-  release.yml: 99eb2948599284c2d162ac4ce15d92ccd7adc0fb1450ee7b7af3efef1ec02df7
+  release.yml: 2bd019510a3eb7526f6bd3dc4cfcf8cf3bad164ec15f0d3b04f2b8ed6f26b633
   repo-hygiene.yml: 2a4bae4a40c2ba946446c4046076061f0c2ee7c343bc30dd93fc77c0ffcdf6fe
   risk-selected-ci.yml: 5015d98af22930b87172eb34bb188ffcfd8618b6a674d41bf1ae4a34e63a09ec
   secret-scan.yml: 27e18d447e55e645f75c990034c3a5d4385249000bf2225112eb49e0755158f8

@@ -363,7 +363,7 @@ jobs:
         run: |
           # SHA256SUMS lives at repo root, NEVER inside dist/.
           # See dist-purity contract on the build job.
-          ( cd dist && sha256sum *.whl *.tar.gz ) > SHA256SUMS
+          ( cd dist && sha256sum -- *.whl *.tar.gz ) > SHA256SUMS
           cat SHA256SUMS
 
       - name: Upload dist artifact (wheels + sdist only)
@@ -407,7 +407,7 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes
         id: notes
