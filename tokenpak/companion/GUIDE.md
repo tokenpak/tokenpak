@@ -380,6 +380,7 @@ journal directory (`~/.tokenpak/companion/` by default, overridable with
 | `codex/sessions/<id>/` | Per-session Codex home — the isolation boundary for `tokenpak codex` | Tens of MB per session | **Yes** — see caps below |
 | `codex/workspaces/` | Per-workspace Codex state | Moderate | Yes, with its session |
 | `journal.db` | Session and entry history | A few MB | **No** — see below |
+| `journal.db.nonempty` | First-entry marker read by the pre-send hook's recall hint (an initialized-empty journal never hints) | Zero bytes | No |
 | `recall.db` | Recall index | Small | No |
 | `budget.db` | Spend and budget history | Small | No |
 | `capsules/` | Session Paks (Markdown; legacy dir name) | ~2–10 KB each | No |

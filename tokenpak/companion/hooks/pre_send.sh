@@ -83,14 +83,17 @@ if [ -n "$SESSION_ID" ]; then
 fi
 
 # A prior-work reference gets one deterministic retrieval hint when a local
-# recall store exists. Pattern matching and store checks are bash builtins;
-# no proxy/model round-trip or no-match subprocess is added to the hot path.
+# recall store holds content. Pattern matching and store checks are bash
+# builtins; no proxy/model round-trip or no-match subprocess is added to the
+# hot path. The journal check reads the first-entry marker the journal store
+# maintains (journal.db.nonempty), not the database file itself — a
+# schema-initialized but empty database must NOT trigger the hint.
 RECALL_HINT=""
 PROMPT_LOWER="${PROMPT,,}"
 case "$PROMPT_LOWER" in
     *previous*|*prior*|*decided*|*last\ session*|*adr-*)
         JOURNAL_DIR="${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}"
-        if [ -s "$JOURNAL_DIR/journal.db" ]; then
+        if [ -f "$JOURNAL_DIR/journal.db.nonempty" ]; then
             RECALL_HINT="Prior work is referenced; retrieve native memory or journal/Paks before answering."
         elif [ -d "$JOURNAL_DIR/capsules" ]; then
             shopt -s nullglob

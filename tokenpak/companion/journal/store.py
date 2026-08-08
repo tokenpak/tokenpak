@@ -184,6 +184,16 @@ class JournalStore:
             except Exception:
                 self._rollback_cached_writer(conn)
                 raise
+        # First-entry marker: lets the pure-bash pre-send hook distinguish an
+        # initialized-empty store from one holding recallable content without
+        # parsing SQLite. Advisory — if it cannot be written, the recall hint
+        # simply stays off.
+        marker = Path(f"{self._db_path}.nonempty")
+        if not marker.exists():
+            try:
+                marker.touch()
+            except OSError:
+                pass
 
     def get_session(self, session_id: str) -> Optional[SessionRecord]:
         """Retrieve a session record."""
