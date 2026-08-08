@@ -74,6 +74,15 @@ class JournalStore:
             conn.close()
         if has_rows:
             self._touch_nonempty_marker()
+        # The prompt hook persists one atomic write-ahead intent instead of
+        # blocking on two SQLite commits.  A canonical journal reader is a
+        # safe materialisation boundary if the detached worker has not already
+        # drained those intents.  Custom test/store filenames remain isolated.
+        # This flush is unconditional on open — it must run for empty stores
+        # too, and it stays out of _touch_nonempty_marker so add_entry does
+        # not flush per write.
+        if self._db_path.name == "journal.db":
+            _db.flush_pre_send_events(self._db_path.parent)
 
     def _touch_nonempty_marker(self) -> None:
         """Advisory zero-byte marker the pre-send hook reads in pure bash.
@@ -86,12 +95,6 @@ class JournalStore:
                 marker.touch()
             except OSError:
                 pass
-        # The prompt hook persists one atomic write-ahead intent instead of
-        # blocking on two SQLite commits.  A canonical journal reader is a
-        # safe materialisation boundary if the detached worker has not already
-        # drained those intents.  Custom test/store filenames remain isolated.
-        if self._db_path.name == "journal.db":
-            _db.flush_pre_send_events(self._db_path.parent)
 
     def _connect(self) -> sqlite3.Connection:
         """Open the journal DB via the shared companion connection factory
