@@ -152,11 +152,14 @@ A TokenPak companion is active in this session. You have these MCP tools:
 
 - **estimate_tokens** — Estimate token count for text or a file. Reserve for a go/no-go decision on very large content.
 - **check_budget** — Report the remaining TokenPak cost budget for this session and today.
-- **load_pak** — Load a TokenPak Pak (compressed context bundle) from a prior session (omit session_id to list available). Legacy alias: load_capsule.
+- **load_pak** — Batch prior-session Paks and optional journals; omit IDs to list available. Legacy alias: load_capsule.
 - **prune_context** — Compress verbose tool output with TokenPak to reduce token count.
 - **journal_read** — Read TokenPak session-journal entries (omit session_id to list sessions).
 - **journal_write** — Save an important decision, milestone, or note to the TokenPak journal for future sessions.
 - **session_info** — Get TokenPak companion status and configuration.
+
+For prior work, retrieve before answering. Prefer available native memory;
+otherwise batch journal/Paks. Persist each fact once.
 
 The TokenPak companion estimates cost, enforces the budget, and journals each
 prompt automatically via hooks — do not call tools for routine accounting;

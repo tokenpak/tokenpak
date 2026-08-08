@@ -889,3 +889,27 @@ def test_doctor_passes_when_no_hooks_installed(tmp_path, monkeypatch):
 
     results = companion_hook_integrity()
     assert results and all(status == "pass" for status, _, _ in results), results
+
+
+def test_opening_empty_journal_store_drains_queued_pre_send_intents(tmp_path):
+    """Regression: JournalStore.__init__ must reach the unconditional
+    materialisation boundary even when the canonical journal is empty —
+    the first-entry-marker upgrade backfill must not make the open-time
+    flush conditional on existing rows."""
+    from tokenpak.companion.journal.store import JournalStore
+
+    event_path = _queue_test_pre_send_event(tmp_path)
+    assert event_path.is_file()
+    assert not (tmp_path / "journal.db").exists()
+
+    JournalStore(tmp_path / "journal.db")
+
+    assert not event_path.exists(), "open must drain queued intents on an empty store"
+    conn = sqlite3.connect(str(tmp_path / "journal.db"))
+    try:
+        journal_count = conn.execute(
+            "SELECT COUNT(*) FROM entries WHERE session_id = 'queued-session'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert journal_count == 1
