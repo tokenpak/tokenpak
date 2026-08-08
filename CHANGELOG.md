@@ -6,6 +6,37 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.18.5] — 2026-08-08
+
+This compatible patch reduces companion recall overhead and locks the
+stability of companion-injected surfaces.
+
+### Changed
+- Companion prior-work recall can batch multiple sessions in one call:
+  `load_pak` (and its legacy alias `load_capsule`) accepts `session_ids`
+  (up to 10) and `include_journal`, returning per-session journal digests
+  and Pak content together. Single-session and listing behavior is
+  unchanged.
+- Companion guidance surfaces (system prompt, agent setup document, tool
+  descriptions) now steer retrieval-before-answering, preferring native
+  memory surfaces ahead of Pak retrieval.
+- The pre-send hook emits one deterministic hint (25 tokens or fewer) when
+  a prompt references prior work and the local journal or Pak store holds
+  content. An initialized-empty store never hints. The journal store
+  maintains a zero-byte `journal.db.nonempty` marker for this check and
+  backfills it when opening a store created before this release.
+
+### Added
+- Conformance tests locking companion-injected surfaces: byte-stability
+  across renders and profiles, and replace-not-accumulate envelope
+  behavior across sequential turns.
+
+### Compatibility
+- No public API symbols added, removed, or changed (snapshot verified:
+  4634 symbols, version field only). The new MCP tool parameters are
+  optional; existing calls behave identically. Proxy request and response
+  bodies remain byte-preserved.
+
 ## [1.18.4] — 2026-08-08
 
 This compatible patch adds machine-readable output to `savings`, stamps a
