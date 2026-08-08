@@ -116,6 +116,25 @@ def test_first_entry_writes_nonempty_marker(tmp_path):
     assert marker.exists(), "first entry must create the marker"
 
 
+def test_reopening_populated_store_backfills_marker(tmp_path):
+    """A store populated before the marker existed (upgrade state) backfills
+    it on the next open, so pre-upgrade journals are not treated as empty."""
+    db_path = tmp_path / "journal.db"
+    store = JournalStore(db_path)
+    store.add_entry("session-a", "decision", "pre-upgrade entry")
+    marker = tmp_path / "journal.db.nonempty"
+    marker.unlink()
+    JournalStore(db_path)
+    assert marker.exists(), "re-opening a populated store must backfill the marker"
+
+
+def test_reopening_empty_store_does_not_create_marker(tmp_path):
+    db_path = tmp_path / "journal.db"
+    JournalStore(db_path)
+    JournalStore(db_path)
+    assert not (tmp_path / "journal.db.nonempty").exists()
+
+
 def test_no_match_path_adds_no_search_subprocess():
     script = HOOK.read_text()
     hint_block = script[

@@ -66,8 +66,26 @@ class JournalStore:
             # pre-send hook so there is exactly one DDL for these tables.
             with _db._write_transaction(conn):
                 _db.ensure_journal_schema(conn)
+            # Upgrade path: a store populated before the marker existed must
+            # backfill it here, or the pre-send hook would treat it as empty
+            # until the next entry lands.
+            has_rows = bool(conn.execute("SELECT EXISTS(SELECT 1 FROM entries)").fetchone()[0])
         finally:
             conn.close()
+        if has_rows:
+            self._touch_nonempty_marker()
+
+    def _touch_nonempty_marker(self) -> None:
+        """Advisory zero-byte marker the pre-send hook reads in pure bash.
+
+        Failure to write it only suppresses the recall hint.
+        """
+        marker = Path(f"{self._db_path}.nonempty")
+        if not marker.exists():
+            try:
+                marker.touch()
+            except OSError:
+                pass
         # The prompt hook persists one atomic write-ahead intent instead of
         # blocking on two SQLite commits.  A canonical journal reader is a
         # safe materialisation boundary if the detached worker has not already
@@ -186,14 +204,8 @@ class JournalStore:
                 raise
         # First-entry marker: lets the pure-bash pre-send hook distinguish an
         # initialized-empty store from one holding recallable content without
-        # parsing SQLite. Advisory — if it cannot be written, the recall hint
-        # simply stays off.
-        marker = Path(f"{self._db_path}.nonempty")
-        if not marker.exists():
-            try:
-                marker.touch()
-            except OSError:
-                pass
+        # parsing SQLite.
+        self._touch_nonempty_marker()
 
     def get_session(self, session_id: str) -> Optional[SessionRecord]:
         """Retrieve a session record."""
