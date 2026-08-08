@@ -189,7 +189,7 @@ Proxy health and stats.
 ```json
 {
  "status": "ok",
- "version": "1.18.4",
+ "version": "1.18.5",
  "uptime_seconds": 86400,
  "compression": {
  "enabled": true,
@@ -217,7 +217,7 @@ Detailed health check.
  "database": "ok",
  "index": "ok",
  "compression_pipeline": "ok",
- "version": "1.18.4"
+ "version": "1.18.5"
 }
 ```
 
