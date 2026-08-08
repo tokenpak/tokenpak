@@ -5,8 +5,6 @@ Targets uncovered lines in:
 - analytics.py: reset() method
 - callback.py: on_chain_error, on_llm_start, on_llm_end, LlamaIndex callbacks
 - tracer.py: various edge cases and branches
-
-Task: TPK-COV-LANGFUSE-001
 """
 
 import pytest

@@ -1,7 +1,6 @@
 """
 Tests for TokenPak compaction module coverage gaps.
 
-Task: TPK-COV-COMPACT-001
 Target: Additional coverage for uncovered paths in:
   - policy.py: TopicAwarePolicy serialization, per_topic_limits, compact_block_with_topics
   - topic_aware.py: TopicSegment properties, edge cases, skipped content merging

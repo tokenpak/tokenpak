@@ -66,7 +66,7 @@ def _estimate_session_savings(
 
 
 # ---------------------------------------------------------------------------
-# Meme lines — 28 curated by Kevin, random pick per invocation
+# Meme lines — 28 curated entries, random pick per invocation
 # ---------------------------------------------------------------------------
 
 TAGLINES = [
@@ -228,7 +228,7 @@ def _get_version() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Fleet savings calculation (inline — TPK-SAVINGS-001 not yet available)
+# Fleet savings calculation (inline — no shared savings helper available yet)
 # ---------------------------------------------------------------------------
 
 

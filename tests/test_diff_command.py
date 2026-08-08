@@ -7,22 +7,22 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# TSR-05v Pro-tier speculative-contract skip reason (grep-able)
+# Pro-tier speculative-contract skip reason (grep-able)
 # ─────────────────────────────────────────────
 # Tests below patch `tokenpak.infrastructure.license_activation.is_pro`
 # — that path never existed in OSS:
 #   - `git log -S 'def is_pro' -- tokenpak/`         → 0 hits
 #   - `find tokenpak -path '*/infrastructure/*'`     → 0 results
 # Pro-tier license activation lives in the closed-source `tokenpak-paid`
-# daemon per Std 25; OSS doesn't carry an `is_pro` symbol. Speculative
-# contract — same Path B pattern as TSR-05u (#134) on the same patch
-# path, TSR-05r (#131) `CacheManager.get_stats`, and TSR-05b (#116)
-# `/ready` endpoint.
+# daemon; OSS doesn't carry an `is_pro` symbol. Speculative
+# contract — same pattern as the skips in #134 (same patch
+# path), #131 (`CacheManager.get_stats`), and #116 (the
+# `/ready` endpoint).
 SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS = (
     "Test patches `tokenpak.infrastructure.license_activation.is_pro` "
     "— that path never existed in OSS (Pro-tier license activation "
-    "lives in closed-source tokenpak-paid per Std 25). Speculative "
-    "contract; same Path B pattern as TSR-05u / TSR-05r / TSR-05b."
+    "lives in the closed-source Pro daemon). Speculative "
+    "contract; same pattern as the other never-existed-surface skips."
 )
 
 

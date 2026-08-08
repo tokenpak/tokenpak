@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-# TSR-05t deprecated-command skip reason (grep-able)
+# Deprecated-command skip reason (grep-able)
 # ─────────────────────────────────────────────
 # `tokenpak savings` is now deprecated. `run_savings_cmd()` emits a
 # deprecation banner followed by `tokenpak status`'s default view:

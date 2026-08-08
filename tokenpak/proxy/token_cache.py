@@ -1,7 +1,7 @@
 """
 tokenpak.proxy.token_cache — LRU token count cache + counters.
 
-Extracted from runtime/proxy.py (L1143-1176, L6260-6270) as part of TPK-RESTRUCTURE-004.
+Extracted from runtime/proxy.py (L1143-1176, L6260-6270) during the proxy modularization.
 """
 
 from typing import Any, Dict

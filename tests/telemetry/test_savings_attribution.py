@@ -1,4 +1,4 @@
-"""Tests for TIP-06 savings attribution model.
+"""Tests for the savings attribution model.
 
 Covers:
 - SavingsAttribution source vocabulary enforcement

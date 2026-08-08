@@ -2,7 +2,7 @@
 tokenpak.proxy.vault_bridge — VaultIndex (BM25 search), global singletons,
 and startup initialization for vault retrieval, term resolver, and capsule builder.
 
-Extracted from runtime/proxy.py (L1177-1498) as part of TPK-RESTRUCTURE-004.
+Extracted from runtime/proxy.py (L1177-1498) during the proxy modularization.
 """
 
 from __future__ import annotations

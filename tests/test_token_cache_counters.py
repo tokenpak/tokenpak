@@ -1,6 +1,5 @@
 """
 Test: token_cache_hits and token_cache_misses appear in SESSION and increment correctly.
-TPK-STATS-CACHE-CTR — Cali 2026-03-27
 """
 
 from functools import lru_cache

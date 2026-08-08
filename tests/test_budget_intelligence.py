@@ -8,16 +8,15 @@ from unittest.mock import patch
 
 import pytest
 
-# TSR-05w Pro-tier speculative-contract skip reason (grep-able)
+# Pro-tier speculative-contract skip reason (grep-able)
 # ─────────────────────────────────────────────
-# 3rd recurrence in the WS-E sweep — same pattern as TSR-05u (#134) and
-# TSR-05v (#135). Tests below patch
+# 3rd recurrence of this pattern (see #134 and #135). Tests below patch
 # `tokenpak.infrastructure.license_activation.is_pro` — that path never
 # existed in OSS:
 #   - `git log -S 'def is_pro' -- tokenpak/`         → 0 hits
 #   - `find tokenpak -path '*/infrastructure/*'`     → 0 results
 # Pro-tier license activation lives in the closed-source `tokenpak-paid`
-# daemon per Std 25; OSS doesn't carry an `is_pro` symbol.
+# daemon; OSS doesn't carry an `is_pro` symbol.
 #
 # If a 4th recurrence appears, this should be promoted to a project-wide
 # pytest marker (e.g. `@pytest.mark.requires_tokenpak_paid`) registered
@@ -25,8 +24,8 @@ import pytest
 SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS = (
     "Test patches `tokenpak.infrastructure.license_activation.is_pro` "
     "— that path never existed in OSS (Pro-tier license activation "
-    "lives in closed-source tokenpak-paid per Std 25). Speculative "
-    "contract; same Path B pattern as TSR-05u / TSR-05v / TSR-05r / TSR-05b."
+    "lives in the closed-source Pro daemon). Speculative "
+    "contract; same pattern as the other never-existed-surface skips."
 )
 
 

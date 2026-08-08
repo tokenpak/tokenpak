@@ -27,7 +27,7 @@ import urllib.request
 
 import pytest
 
-# WS-A residual import guard — TSR-01-followup.
+# Residual import guard (slim-install surface).
 # psutil is an optional dep used by the legacy proxy server's resource
 # probes; on slim [dev] install it is absent and the proxy.server import
 # chain raises ModuleNotFoundError. Skip cleanly so the release test

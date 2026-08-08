@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CCG-13 — GET /metrics/dashboard sessions panel tests.
+"""GET /metrics/dashboard sessions panel tests.
 
 Tests the _handle_metrics_dashboard() handler by exercising the query
 helper logic directly against a temporary SQLite database.  No running

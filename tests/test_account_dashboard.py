@@ -1,4 +1,4 @@
-"""Tests for account-scoped dashboard (WS-8).
+"""Tests for account-scoped dashboard.
 
 Coverage:
   - License detection (key_id extraction)

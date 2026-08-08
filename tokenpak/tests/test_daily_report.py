@@ -526,7 +526,7 @@ class TestGenerateReport:
 
 
 # ---------------------------------------------------------------------------
-# New tests: per-model compression breakdown (TPK-RPT-COMPRESSION-MODEL)
+# New tests: per-model compression breakdown
 # ---------------------------------------------------------------------------
 
 _SAMPLE_ROWS = [

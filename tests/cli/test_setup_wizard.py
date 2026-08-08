@@ -2,7 +2,7 @@
 
 Tests for ``tokenpak setup`` wizard (tokenpak/cli/commands/setup.py).
 
-History (TSR-02b alignment, 2026-05-08): the original test file specified
+History (test-suite alignment continuation, 2026-05-08): the original test file specified
 a richer setup wizard than current production carries — the spec asserted
 ``yes=`` kwarg on ``configure_claude_code`` for prompt-skip control,
 ``(changed: bool)`` return contract for idempotency, ``settings.bak.*``
@@ -18,7 +18,7 @@ complete"). Current production in ``tokenpak/cli/commands/setup.py``
                         claude_dir) -> Dict             (NO backup, NO `(changed,)` return)
   run_setup_cmd(args) -> None                          (NO setup-complete output)
 
-Per TSR-02b (#106 initiative, Phase 2 continuation), tests have been split:
+Per the test-suite alignment sweep (#106 initiative, Phase 2 continuation), tests have been split:
 
   • Pure-alignment cases (production canonical was acceptable) are kept
     and updated to call current signatures / mock current detection
@@ -29,7 +29,7 @@ Per TSR-02b (#106 initiative, Phase 2 continuation), tests have been split:
     — that production lacks) are marked ``pytest.skip(reason="...")``
     with grep-able ``SKIP_*`` constants citing the feature gap.
     Restoration of these features is feature work tracked under #106
-    follow-up; opening that work is out of TSR-02b scope.
+    follow-up; opening that work is out of scope for the alignment sweep.
 
 Coverage retained for current production:
   1. detect_claude_code (present/absent — Path-or-None)

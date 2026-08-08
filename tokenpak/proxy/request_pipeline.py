@@ -768,7 +768,7 @@ def _resolve_cycle_id(headers: object) -> str:
 
 # ---------------------------------------------------------------------------
 # Budget controller — enforce per-bucket token limits
-# Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 2070–2082)
+# Transferred from monolith (lines 2070–2082)
 # ---------------------------------------------------------------------------
 
 

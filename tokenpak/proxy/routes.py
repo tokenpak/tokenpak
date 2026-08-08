@@ -1,7 +1,7 @@
 """
 tokenpak.proxy.routes — GET route handlers, ingest handlers, and static-file servers.
 
-Extracted from proxy/server.py as part of TPK-RESTRUCTURE-012.
+Extracted from proxy/server.py during the proxy modularization.
 Provides a mixin class (ProxyRoutesMixin) with:
 
   GET handlers (called by ForwardProxyHandler.do_GET):

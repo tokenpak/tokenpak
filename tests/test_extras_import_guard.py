@@ -1,8 +1,8 @@
-"""TIP7-002: Install-footprint extras split — validation checker.
+"""Install-footprint extras split — validation checker.
 
 Two test classes:
 1. PyprojectHeavyDepCheck — asserts heavy packages are absent from
-   [project.dependencies] after TIP7-001 lands. Run this as the
+   [project.dependencies] after the extras-split change lands. Run this as the
    post-demotion gate to confirm the pyproject change is correct.
 2. ExtrasGuardSmokeTest — asserts guarded import sites still import or
    fail gracefully when the dep is absent. Uses unittest.mock.patch so no
@@ -61,7 +61,7 @@ def _direct_deps(data: dict) -> list[str]:
 # Class 1 — pyproject.toml post-demotion gate
 # ---------------------------------------------------------------------------
 
-# Packages that MUST NOT appear in [project.dependencies] after TIP7-001.
+# Packages that MUST NOT appear in [project.dependencies] after the extras split.
 FORBIDDEN_IN_CORE = {
     "sentence-transformers": "tokenpak[retrieval]",
     "tree-sitter-languages": "tokenpak[code-compression]",
@@ -71,7 +71,7 @@ FORBIDDEN_IN_CORE = {
     "litellm": "tokenpak[integrations-litellm]",
 }
 
-# Packages that MUST appear in [project.optional-dependencies] after TIP7-001.
+# Packages that MUST appear in [project.optional-dependencies] after the extras split.
 REQUIRED_EXTRAS = {
     "retrieval": ["sentence-transformers"],
     "code-compression": ["tree-sitter-languages"],
@@ -86,10 +86,10 @@ REQUIRED_EXTRAS = {
 class PyprojectHeavyDepCheck(unittest.TestCase):
     """Asserts pyproject.toml matches the target extras structure.
 
-    These tests FAIL before TIP7-001 merges (expected — see validation matrix
-    §7 for the pre-demotion baseline). They are the pass/fail gate for QA.
-    Mark with @unittest.skip("pre-TIP7-001") if you need to run the suite
-    before Trix's change lands.
+    These tests FAIL before the extras-split change merges (expected — see
+    the validation matrix for the pre-demotion baseline). They are the
+    pass/fail gate for QA. Mark with @unittest.skip("pre-extras-split") if
+    you need to run the suite before that change lands.
     """
 
     @classmethod
@@ -174,7 +174,7 @@ class ExtrasGuardSmokeTest(unittest.TestCase):
     unittest.mock.patch to simulate an ImportError from the heavy dep and
     then reimport the module under test to verify behaviour.
 
-    All tests should pass both before and after TIP7-001. They validate that
+    All tests should pass both before and after the extras split. They validate that
     the graceful-degradation pattern works correctly.
     """
 

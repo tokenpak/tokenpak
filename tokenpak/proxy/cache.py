@@ -1,6 +1,6 @@
 """TokenPak Proxy Cache — LRU eviction with TTL support + cache savings estimation.
 
-Extended in TPK-CONSOLIDATION-A2c with:
+Extended during the monolith consolidation with:
 - estimate_cache_savings() — USD saved from prompt-cache hits (was MISSING from modular tree)
 
 
@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 
 # ---------------------------------------------------------------------------
 # Cache savings estimation
-# Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 3287–3326)
+# Transferred from monolith (lines 3287–3326)
 # CACHE_COST_MULTIPLIERS lives in telemetry/cost.py (added in A2a);
 # Model costs loaded from dynamic registry (zero heavy deps).
 # ---------------------------------------------------------------------------

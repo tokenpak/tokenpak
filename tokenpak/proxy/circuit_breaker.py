@@ -5,7 +5,7 @@ rate limiting, header sanitizing, and error enrichment helpers.
 Also contains the OOP CircuitBreaker / CircuitBreakerRegistry classes
 merged from the legacy agent proxy circuit breaker.
 
-Extracted from runtime/proxy.py (L812-1146) as part of TPK-RESTRUCTURE-003.
+Extracted from runtime/proxy.py (L812-1146) during the proxy modularization.
 """
 
 from __future__ import annotations

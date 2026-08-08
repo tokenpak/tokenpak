@@ -39,7 +39,7 @@ from tokenpak.proxy.server import ForwardProxyHandler
 _proxy_ready: bool = False
 _shutdown_event = _threading.Event()
 
-# TSR-05c / WS-E (2026-05-08) — grep-able skip reasons for two
+# Grep-able skip reasons (2026-05-08) for two
 # speculative-contract test classes in this file.
 #
 # Investigation summary:
@@ -58,7 +58,7 @@ _shutdown_event = _threading.Event()
 #      `components` / `suggestions`). Git history shows the
 #      speculative shape never existed in any production version.
 #   3. The 8 TestReadiness tests probe GET /ready, which is not a
-#      handled route — same finding as TSR-05b for test_lifecycle.py.
+#      handled route — same finding as the /ready skip in test_lifecycle.py.
 #
 # Resolution: tests that match the canonical production /health
 # schema (status field present, version, timestamp, no-auth, response
@@ -113,7 +113,7 @@ _HEALTH_TEST_PORT = 19777
 def proxy_server():
     """Spin up proxy server on an ephemeral port for all tests.
 
-    TSR-05c / WS-E fixture fix (2026-05-08): the previous version built
+    Fixture fix (2026-05-08): the previous version built
     a vanilla HTTPServer without setting `server.proxy_server` — the
     back-reference that ForwardProxyHandler.do_GET requires (it does
     `ps = self.server.proxy_server` at proxy/server.py:541). First-
@@ -239,7 +239,7 @@ class TestHealthSchema:
 class TestHealthStates:
     """Validate healthy/degraded/critical state transitions.
 
-    TSR-05c (2026-05-08): every test in this class asserts against
+    History (2026-05-08): every test in this class asserts against
     the speculative `healthy/degraded/critical` status enum and/or
     the never-existed `suggestions` field. Class-level skip until a
     future redesign decides whether to surface suggestions through
@@ -353,10 +353,10 @@ class TestHealthStates:
 class TestReadiness:
     """Validate /ready lifecycle probe.
 
-    TSR-05c (2026-05-08): every test in this class probes GET /ready,
+    History (2026-05-08): every test in this class probes GET /ready,
     which has never been a handled route in the modular proxy
     (do_GET handles /health, /status, /metrics, etc., but not
-    /ready). Same finding as TSR-05b in test_lifecycle.py. Class-
+    /ready). Same finding as the /ready skip in test_lifecycle.py. Class-
     level skip; lifecycle readiness is canonically observable via
     ProxyServer.shutdown.is_shutting_down + the /health endpoint.
     """

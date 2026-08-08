@@ -1,4 +1,4 @@
-"""TokenPak Proxy — Input Sanitization & Rate Limiting Tests (TPK-SEC-01).
+"""TokenPak Proxy — Input Sanitization & Rate Limiting Tests.
 
 Coverage
 ────────
@@ -47,7 +47,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# WS-A residual import guard — TSR-01-followup.
+# Residual import guard (slim-install surface).
 # tokenpak.runtime.proxy is the canonical proxy module on slim OSS, but
 # the security/sanitization helpers (`_sanitize_headers`,
 # `_MAX_REQUEST_BYTES`, `_BLOCKED_FORWARD_HEADERS`, `_rate_buckets`,

@@ -7,7 +7,7 @@ Provides a /ws endpoint on WS_PORT (default 8767) that:
   - Forwards to Anthropic upstream with streaming
   - Streams SSE chunks back as text frames
 
-Extracted from tokenpak/runtime/proxy.py (TPK-RESTRUCTURE-008).
+Extracted from tokenpak/runtime/proxy.py during the proxy modularization.
 """
 
 import asyncio

@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# WS-A residual import guard — TSR-01-followup.
+# Residual import guard (slim-install surface).
 # Despite the file's own claim that opentelemetry is mocked, the actual
 # import chain through `tokenpak.telemetry.otel_exporter` does
 # `import opentelemetry.trace` etc. unconditionally on the production

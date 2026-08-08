@@ -1,6 +1,6 @@
 """tests/proxy/test_forecast.py
 
-CCI-11: Unit tests for POST /v1/messages/forecast (AC2-compliant response).
+Unit tests for POST /v1/messages/forecast (AC2-compliant response).
 
 Tests the forecast_endpoint module and the AC2-specified response shape:
   {estimated_cost_usd, input_tokens, cached_tokens, ttfb_estimate_ms,

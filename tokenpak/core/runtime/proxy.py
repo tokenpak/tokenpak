@@ -2,7 +2,7 @@
 tokenpak.core.runtime.proxy — compatibility shim
 
 The old monolithic proxy.py that lived here has been deleted as part of the
-TPK-CONSOLIDATION-B1 cleanup.  This shim re-exports canonical symbols from
+monolith-consolidation cleanup.  This shim re-exports canonical symbols from
 their new modular locations and provides inline implementations for items
 that have not yet been extracted to the modular tree.
 

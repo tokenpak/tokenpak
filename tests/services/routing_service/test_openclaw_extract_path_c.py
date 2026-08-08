@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""OAS-11 — Path C proxy-side reader tests.
+"""Path C proxy-side reader tests.
 
-Covers Kevin's six verification gates (2026-04-28) for
+Covers the six verification gates (2026-04-28) for
 ``tokenpak.services.routing_service._openclaw_extract``:
 
 * **G1** — User-Agent gate: only ``openclaw*`` UAs trigger an active.json read.
@@ -11,7 +11,7 @@ Covers Kevin's six verification gates (2026-04-28) for
 * **G5** — ``attribution_source`` is ALWAYS set on every OpenClaw return.
 * **G6** — Non-OpenClaw UAs return ``None`` BEFORE any filesystem access.
 
-Plus the canonical 7-case smoke set called out in the OAS-11 task spec.
+Plus the canonical 7-case smoke set called out in the original task spec.
 """
 
 from __future__ import annotations
@@ -169,7 +169,7 @@ class TestCanonicalSmokeSet:
 
 
 # ---------------------------------------------------------------------------
-# Kevin's verification gates G1–G6
+# Verification gates G1–G6
 # ---------------------------------------------------------------------------
 
 

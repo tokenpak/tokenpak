@@ -1,7 +1,7 @@
 """
 TokenPak Monitor — SQLite telemetry, request logging, budget tracking.
 
-Extracted from runtime/proxy.py (Phase 1f of TPK-RESTRUCTURE).
+Extracted from runtime/proxy.py (Phase 1f of the proxy modularization).
 Original location: class Monitor (lines 2320-3204) + SQLite helpers (lines 2248-2319).
 """
 

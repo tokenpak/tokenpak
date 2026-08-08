@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-# WS-A residual import guard — TSR-01-followup.
+# Residual import guard (slim-install surface).
 # tokenpak.tokens is referenced transitively from the replay CLI imports
 # (via tokenpak.cli's lazy module wiring); it is not part of the slim
 # OSS surface. Skip cleanly when absent.

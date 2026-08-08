@@ -204,7 +204,7 @@ def test_handoff_wire_metadata():
 
 
 def test_crewai_prepare_receive_wire(tmp_path):
-    # WS-A residual import guard — TSR-01-followup. crewai_tokenpak is an
+    # Residual import guard (slim-install surface). crewai_tokenpak is an
     # optional companion package; only the 3 crewai-specific tests in this
     # file need it. Other handoff-protocol tests run normally.
     crewai_tokenpak = pytest.importorskip(
@@ -269,7 +269,7 @@ def test_crewai_unknown_agents_no_crash(tmp_path):
 def _autogen_assistant_unavailable() -> bool:
     """True iff autogen_tokenpak.TokenPakAssistant cannot be imported.
 
-    WS-D guard refinement — TSR-04. The previous `@skipif` checked only
+    Guard refinement — the previous `@skipif` checked only
     that the `autogen_tokenpak` package was installed; it didn't catch
     the case where the package is installed but the `TokenPakAssistant`
     symbol is not re-exported (because the optional `tokenpak_agents`

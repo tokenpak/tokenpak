@@ -1,7 +1,7 @@
 """TokenPak Proxy Cache Pipeline.
 
 Transferred from monolith (packages/core/tokenpak/runtime/proxy.py) as part of
-TPK-CONSOLIDATION-A2c.  Contains per-provider cache injection, parsing helpers,
+the monolith consolidation.  Contains per-provider cache injection, parsing helpers,
 and the Anthropic auto-cache mode selector.
 
 Provides:

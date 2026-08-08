@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-# TSR-05u skip reasons (grep-able)
+# Skip reasons (grep-able)
 # ─────────────────────────────────────────────
 # Two unrelated failure modes; one skip-reason each:
 #
@@ -19,26 +19,26 @@ import pytest
 #    The model registry's fallback resolution has since changed — actual
 #    is `0.0105` (≈ input=3.00 / output=15.00). Updating the constant
 #    would just re-encode whatever the registry happens to return today;
-#    the right home is the registry's own contract test. Belongs to
-#    TSR-02 (API/behavior drift).
+#    the right home is the registry's own contract test. Deferred
+#    API/behavior-drift work.
 #
 # 2. `test_json_output_is_valid` patches
 #    `tokenpak.infrastructure.license_activation.is_pro` — that path
 #    never existed in OSS (`git log -S 'def is_pro' -- tokenpak/` 0
 #    hits; no `tokenpak/infrastructure/`). Pro-tier license activation
-#    lives in the closed-source `tokenpak-paid` daemon per Std 25; OSS
+#    lives in the closed-source Pro daemon; OSS
 #    doesn't carry an `is_pro` symbol. Speculative contract — same
-#    shape as TSR-05r (`CacheManager.get_stats`) and TSR-05b (`/ready`).
+#    shape as the `CacheManager.get_stats` and `/ready` skips.
 SKIP_FALLBACK_MODEL_RATE_DRIFT = (
     "Test hard-codes pre-drift fallback per-token rates "
     "(input=1.00, output=3.00); model registry now resolves unknown "
-    "models to different rates. Belongs to TSR-02 (API drift)."
+    "models to different rates. Deferred API-drift work."
 )
 SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS = (
     "Test patches `tokenpak.infrastructure.license_activation.is_pro` "
     "— that path never existed in OSS (Pro-tier license activation "
-    "lives in closed-source tokenpak-paid per Std 25). Speculative "
-    "contract; same Path B pattern as TSR-05b / TSR-05r."
+    "lives in the closed-source Pro daemon). Speculative "
+    "contract; same pattern as the other never-existed-surface skips."
 )
 
 

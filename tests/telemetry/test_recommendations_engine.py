@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for tokenpak.telemetry.recommendations (TIP-07)."""
+"""Tests for tokenpak.telemetry.recommendations."""
 
 from __future__ import annotations
 
@@ -23,11 +23,11 @@ from tokenpak.telemetry.recommendations import (
 )
 from tokenpak.telemetry.storage import TelemetryDB
 
-# TSR-05q API-drift skip reason (grep-able)
+# API-drift skip reason (grep-able)
 # ─────────────────────────────────────────────
 # Two production changes have moved past these tests:
 #
-# 1. `TelemetryDB.__init__` now auto-creates the TIP-06 tables
+# 1. `TelemetryDB.__init__` now auto-creates the attribution tables
 #    (`tp_savings_attribution`, `tp_cache_miss_reasons`) on every DB open.
 #    Tests #3/#4/#5 manually `CREATE TABLE` (without IF NOT EXISTS) → fail
 #    with `sqlite3.OperationalError: table … already exists`. Even with
@@ -37,7 +37,7 @@ from tokenpak.telemetry.storage import TelemetryDB
 #    insufficient.
 #
 # 2. `_rule_high_unattributed` in `tokenpak/telemetry/recommendations.py`
-#    now prefers the TIP-06 `tp_savings_attribution` table whenever it
+#    now prefers the `tp_savings_attribution` table whenever it
 #    exists — and post-(1) it always exists. Empty table → `total=0` →
 #    rule returns `[]`. The legacy `tp_usage`-based fallback path that
 #    tests #1/#2 exercise is therefore unreachable. They fail with
@@ -45,23 +45,23 @@ from tokenpak.telemetry.storage import TelemetryDB
 #    `attribution.high-unattributed` recommendation never fires.
 #
 # Both are real API/behavior drifts in production; the tests encode the
-# pre-TIP-06 contract. Rewriting them to populate `tp_savings_attribution`
+# earlier contract. Rewriting them to populate `tp_savings_attribution`
 # directly (with the divergent prod schema) and to skip the manual CREATE
-# is **API-drift work and belongs to TSR-02**, not TSR-05 (real test bugs).
-# Same Path B pattern as TSR-05m / TSR-05p: skip with a grep-able reason
-# that points to the right initiative bucket.
+# is deferred API-drift work, not a real test bug.
+# Same pattern as the other drift skips: a grep-able reason
+# that points at the drift.
 #
 # The 18 live tests in this file (zero-cache-lookups rule, missing-pricing
 # rule, schema-instability skipped paths, low-unattributed-does-not-fire,
 # engine-empty cases, formatters) are unaffected — they don't depend on
 # the dropped fallback path or the manual table-creation shape.
 SKIP_TIP06_AUTOTABLE_AND_ENGINE_PREFERENCE_DRIFT = (
-    "Test predates TIP-06 auto-creation of `tp_savings_attribution` / "
+    "Test predates auto-creation of `tp_savings_attribution` / "
     "`tp_cache_miss_reasons` in TelemetryDB and the engine's preference "
     "for the attribution table over the tp_usage fallback. Either the "
     "manual CREATE TABLE conflicts with auto-creation, or the engine "
     "no longer reaches the legacy fallback path. Rewriting to the "
-    "TIP-06 contract is API-drift work — see TSR-02."
+    "current contract is deferred API-drift work."
 )
 
 
@@ -246,7 +246,7 @@ def test_low_unattributed_does_not_fire(tmp_path):
 def test_high_unattributed_prefers_tip06_table_when_present(tmp_path):
     db_path = _make_db(tmp_path)
     _insert_traces(db_path, n=10, usage_source="provider")  # no usage-source signal
-    # Simulate TIP-06 attribution table directly: 60% saved tokens are unknown.
+    # Simulate the attribution table directly: 60% saved tokens are unknown.
     conn = sqlite3.connect(str(db_path))
     conn.execute(
         """

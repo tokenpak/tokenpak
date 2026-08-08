@@ -12,7 +12,7 @@ from tokenpak.services.optimization.contract_builder import (
 
 def test_empty_inputs_produce_empty_capability_set():
     contract = build_contract()
-    # Either TIP-02 contract or local stub — both expose .has()
+    # Either the TIP contract module or the local stub — both expose .has()
     assert contract.has("anything") is False
 
 
@@ -33,7 +33,7 @@ def test_adapter_without_capabilities_attr_is_empty():
 
 
 def test_route_and_platform_propagate_to_local_stub():
-    # Force the local stub by passing nothing TIP-02-shaped.
+    # Force the local stub by passing nothing TIP-contract-shaped.
     contract = build_contract(
         platform="claude-code",
         route="claude-code",
@@ -45,7 +45,7 @@ def test_route_and_platform_propagate_to_local_stub():
         # Route policy is preserved in extras.
         assert contract.extras.get("policy", {}).get("body") == "byte_preserved"
     else:
-        # If TIP-02 is importable in this workspace the contract just needs
+        # If the TIP contract module is importable in this workspace the contract just needs
         # to expose .has(); we can't introspect its private fields safely.
         assert hasattr(contract, "has")
 

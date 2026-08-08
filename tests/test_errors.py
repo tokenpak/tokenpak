@@ -2,7 +2,7 @@
 
 import pytest
 
-# TSR-04c: rename `tokenpak.infrastructure.error_handling` →
+# Rename note: `tokenpak.infrastructure.error_handling` →
 # `tokenpak.core.error_handling`. The old path was a documentation/refactor
 # artifact that never landed (or got removed in a subsequent module-layout
 # pass). The `pytest.importorskip` against the old path was silently
@@ -23,22 +23,21 @@ from tokenpak.core.error_handling import (
     format_error,
 )
 
-# TSR-04c: API drift on 7 of the 21 tests below. The original
+# API drift on 7 of the 21 tests below. The original
 # `tokenpak.infrastructure.error_handling` constructors accepted `code=`
 # kwargs and `retry_after_seconds=`; the renamed-and-refactored
 # `tokenpak.core.error_handling` uses different signatures (e.g.
 # `TokenPakError(message, detail=None, error_type=None)` with
 # `error_code` as a class attribute, not a constructor arg). Restoring
-# the dropped contracts is TSR-02 (API drift) territory, not TSR-04
-# coverage. Skip the 7 with a grep-able reason; the 14 still-valid
+# the dropped contracts is deferred API-drift territory, not
+# coverage work. Skip the 7 with a grep-able reason; the 14 still-valid
 # tests provide enough coverage of `tokenpak/core/error_handling.py`
 # to push the file past the 50% Tier-1 gate.
 SKIP_ERROR_HANDLING_API_DRIFT = (
     "Test asserts pre-rename `tokenpak.infrastructure.error_handling` "
     "constructor signatures (code= / retry_after_seconds= / TP-Exxx "
     "format prefix). The canonical OSS module is `tokenpak.core."
-    "error_handling`; signatures changed during the rename. API drift — "
-    "see TSR-02."
+    "error_handling`; signatures changed during the rename. API drift."
 )
 
 

@@ -2,7 +2,7 @@
 
 Tests for ``tokenpak install --claude-code`` (tokenpak/cli/commands/install.py).
 
-History (TSR-02 alignment, 2026-05-08): the original test file specified a
+History (test-suite alignment, 2026-05-08): the original test file specified a
 richer installer than current production carries — the spec asserted
 ``dry_run`` support across configure/install/smoke entry points, a
 ``(changed, backup)`` tuple return from ``configure_settings``, timestamped
@@ -17,7 +17,7 @@ in ``tokenpak/cli/commands/install.py`` (1.5.2) ships a thinner shim:
 (no validation), profile names ``balanced/aggressive/safe/agentic``,
 ``auto_detect_mode`` reading ``TERM_PROGRAM``.
 
-Per TSR-02 (`#106` initiative, Phase 2), tests have been split:
+Per the test-suite alignment sweep (`#106` initiative, Phase 2), tests have been split:
 
   • Pure-alignment cases (production canonical was acceptable) are kept
     and updated to call current signatures / assert current return shapes.
@@ -28,7 +28,7 @@ Per TSR-02 (`#106` initiative, Phase 2), tests have been split:
     restoration tracked separately")``. They are NOT deleted, so the
     spec stays in source as a record of intended behavior. Restoration
     of these features is a separate feature ticket; opening that work
-    is out of TSR-02 scope.
+    is out of scope for the alignment sweep.
 
 Coverage retained for current production:
   1. detect_claude_binary (found/not-found)

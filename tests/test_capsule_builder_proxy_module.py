@@ -81,7 +81,7 @@ class TestCapsuleBuilderViaProxyModule:
 
     def test_same_class_as_canonical(self):
         """Proxy module re-exports the canonical CapsuleBuilder — same class."""
-        # WS-A residual import guard — TSR-01-followup. tokenpak.capsule.builder
+        # Residual import guard (slim-install surface). tokenpak.capsule.builder
         # is the canonical home; on slim [dev] install (without the full
         # capsule namespace) this re-export check can't run.
         pytest.importorskip(

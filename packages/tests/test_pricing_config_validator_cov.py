@@ -6,8 +6,6 @@ Tests:
               calculate_request_cost_baseline, get_price, edge cases
 - config_validator.py: ConfigValidationError, ConfigValidator.validate,
                        type/value/path validation, edge cases
-
-Task: TPK-COV-PRICE-CFG-001
 """
 
 import os

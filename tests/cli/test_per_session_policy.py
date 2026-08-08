@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """tests/cli/test_per_session_policy.py
 
-CCG-12: Unit tests for per-session policy CLI commands.
+Unit tests for per-session policy CLI commands.
 
 Covers:
   - cmd_session_budget_set writes max_cost to session_policies
@@ -20,15 +20,15 @@ from types import SimpleNamespace
 
 import pytest
 
-# TSR-04 module-level skip — superseded design (grep-able)
+# Module-level skip — superseded design (grep-able)
 # ─────────────────────────────────────────────
-# CCG-12 (db0f08c6e5, 2026-04-10) shipped a proxy-side per-session policy
+# Commit db0f08c6e5 (2026-04-10) shipped a proxy-side per-session policy
 # feature: a `session_policies` SQLite table + three CLI commands
 # (`cmd_session_budget_set`, `cmd_session_mode_set`, `cmd_session_route_pin`)
 # + `_lookup_session_policy()` / `_get_session_spend()` helpers in proxy.py.
 #
 # That whole feature has since been **removed from production** in favor of
-# the companion-side advisory budget (per Std 32, Glossary 08 entry
+# the companion-side advisory budget (see the glossary entry
 # "advisory budget (companion)" — "stored in ~/.tokenpak/companion/budget.db").
 # Verification:
 #   - `grep -rn 'session_policies' tokenpak/`           → 0 results
@@ -43,13 +43,13 @@ import pytest
 #
 # Skipping the entire module is correct: the contract is gone by design,
 # not regressed. The advisory-budget path has its own tests under
-# `tests/companion/`. Same Path B pattern as TSR-05t (deprecated `tokenpak
-# savings`) — superseded API/wire-format, not a real test bug.
+# `tests/companion/`. Same pattern as the deprecated `tokenpak
+# savings` skip — superseded API/wire-format, not a real test bug.
 pytest.skip(
-    "CCG-12 per-session policy feature superseded by companion advisory "
-    "budget (Std 32 / Glossary 08). Production removed `cmd_session_*` "
+    "Per-session policy feature superseded by the companion advisory "
+    "budget. Production removed `cmd_session_*` "
     "and `session_policies` table; this test asserts a contract that no "
-    "longer exists. See TSR-04 / #106.",
+    "longer exists. See #106.",
     allow_module_level=True,
 )
 

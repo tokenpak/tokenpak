@@ -1,4 +1,4 @@
-"""Tests for TPK-PERF-SWAP-002: swap pressure monitoring in proxy /stats.
+"""Tests for swap pressure monitoring in proxy /stats.
 
 Tests:
 1. get_swap_mb() parses VmSwap correctly from a /proc mock

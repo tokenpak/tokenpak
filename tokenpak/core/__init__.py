@@ -3,7 +3,7 @@
 import os as _os
 
 # Directory containing this package's source files.
-# Transferred from monolith (TPK-CONSOLIDATION-A2a, line 61).
+# Transferred from the legacy monolith (line 61).
 # Useful for path resolution relative to the installed package location.
 _SCRIPT_DIR: str = _os.path.dirname(_os.path.abspath(__file__))
 

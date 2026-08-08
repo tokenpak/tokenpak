@@ -1,5 +1,5 @@
 """
-Tests for CCI-01: Vault context injection wired into Claude Code safe mode.
+Tests for vault context injection wired into Claude Code safe mode.
 
 7 test cases:
   (a) Injection happens for claude-code-cli profile
@@ -189,7 +189,7 @@ class TestCacheHitRatePreservation:
 
 
 # ---------------------------------------------------------------------------
-# CCI-01 injection stage logic — tested via unit-level simulation
+# Injection-stage logic — tested via unit-level simulation
 # ---------------------------------------------------------------------------
 
 
@@ -217,7 +217,7 @@ def _run_cci01_stage(
     prompt_builder_available: bool = True,
 ) -> tuple[bytes, dict]:
     """
-    Simulate the CCI-01 injection stage in isolation.
+    Simulate the vault-injection stage in isolation.
     Returns (new_body, session_dict).
     """
     if vault_index is None:
@@ -238,7 +238,7 @@ def _run_cci01_stage(
         INJECT_MIN_SCORE = float(os.environ.get("TOKENPAK_INJECT_MIN_SCORE", "2.0"))
         INJECT_SKIP_MODELS = os.environ.get("TOKENPAK_INJECT_SKIP_MODELS", "haiku")
 
-        # --- Replicate CCI-01 logic ---
+        # --- Replicate the injection-stage logic ---
         _cci01_profile = session.get("active_profile", "")
         _cci01_eligible = (
             _cci01_profile.startswith("claude-code-")
@@ -337,7 +337,7 @@ class TestCCI01NoInjectionForSDKProfile:
         assert new_body == body, "Body must be unchanged for sdk profile"
 
     def test_no_injection_for_non_cc_profile(self):
-        """Non-Claude-Code profile (e.g. balanced) → no injection via CCI-01 path."""
+        """Non-Claude-Code profile (e.g. balanced) → no injection via the vault-injection path."""
         body = _body(system="Stable prompt.")
         new_body, session = _run_cci01_stage(body, profile="balanced")
 

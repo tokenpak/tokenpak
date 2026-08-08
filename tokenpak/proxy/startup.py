@@ -148,7 +148,7 @@ def format_startup_report(warnings: List[str], all_ok: bool) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Config validation — transferred from monolith (TPK-CONSOLIDATION-A2a)
+# Config validation — transferred from monolith
 # ---------------------------------------------------------------------------
 import os as _os
 
