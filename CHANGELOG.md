@@ -6,6 +6,55 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.18.4] — 2026-08-08
+
+This compatible patch adds machine-readable output to `savings`, stamps a
+request-correlation header on every proxy response, closes a release-pipeline
+ordering gap and a CI flake source, extends the interpreter safe-path guard to
+the Codex registration, refreshes the companion MCP documentation, and retires
+historical internal-reference debt from code comments.
+
+### Added
+- `tokenpak savings --json` emits a machine-readable savings document,
+  matching the JSON support `recommendations` already had. The empty state is
+  a well-formed document with exit 0; human-readable output is unchanged.
+- The proxy now sets an `X-TokenPak-Request-ID` header on every response —
+  non-streaming, streaming (set before the first chunk), and proxy-generated
+  errors. On forwarded requests it carries the same correlation value as the
+  existing `X-Request-ID` echo (client-supplied value honored, otherwise a
+  generated opaque id). Response bodies remain byte-preserved.
+
+### Fixed
+- The Codex MCP server registration now spawns the interpreter in safe-path
+  mode (`-P`, applied on Python 3.11+ where the flag exists) so a `tokenpak/`
+  directory in the working directory cannot shadow the installed package —
+  the same guard the Claude Code MCP config and hook spawns already apply.
+  Existing registrations are untouched; re-register to pick up the guard.
+
+### Changed
+- Release workflow: the GitHub Release is now created only after the package
+  publish succeeds (or is skipped for rc/alpha/beta tags), closing the window
+  where a public Release could exist before artifacts were on the index.
+- The install-shape rehearsal matrix now excludes timing-sensitive benchmark
+  assertions (the same marker quarantine every other test workflow applies);
+  benchmarks keep their dedicated nightly workflow.
+- Companion MCP setup documentation refreshed to current behavior: tool
+  registry, lean profile advertising, config shapes, and the Codex
+  registration example including the version-gated safe-path flag.
+- Historical internal tracking references in comments and docstrings replaced
+  with descriptive text across 89 files (verified behavior-neutral).
+
+### Upgrade
+- `pip install --upgrade tokenpak`. No schema, config, or state migrations.
+
+### Rollback
+- `pip install tokenpak==1.18.3`. No state cleanup required.
+
+### Compatibility
+- No importable API symbols added or removed (snapshot-verified: 4634 symbols
+  unchanged). The new CLI flag and response header are additive surfaces;
+  existing invocations and clients are unaffected.
+
 ## [1.18.3] — 2026-08-07
 
 This compatible patch reduces the token overhead the companion itself adds to
