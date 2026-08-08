@@ -149,6 +149,17 @@ Notes:
 
 ## Memory sources — bring your own knowledge base
 
+### Choose one recall store
+
+| Situation | Preferred store |
+|---|---|
+| The host already retains session or project memory | Native memory |
+| Cross-tool handoff or a host without native memory | Journal / Pak |
+
+Before answering about prior work, retrieve it. Batch related Pak IDs with
+`include_journal` when journal context is needed. Persist each fact in one
+store only; do not duplicate the same briefing across native memory and a Pak.
+
 The companion can surface lessons from your own Markdown notes, not just its
 built-in memory schema. Any folder of `.md` / `.markdown` files works (scanned
 recursively) — no special directory layout is required.
@@ -208,7 +219,7 @@ cost estimation and budget enforcement out-of-band in all profiles.
 |---|---|
 | `estimate_tokens` | Estimate token count for inline text or a file path. Cost tracking is automatic via hooks — reserved for go/no-go decisions on very large content, not routine bookkeeping. |
 | `check_budget` | Return remaining cost budget for this session and today. The pre-send hook enforces the budget automatically; agents call this only on explicit user request. |
-| `load_pak` | Load a Pak (TokenPak's compressed context bundle; legacy name: capsule) from a prior session. Omit `session_id` to list the 10 most recent available Paks. |
+| `load_pak` | Load one or more Paks from prior sessions. Use `session_ids` with `include_journal` to retrieve related context together; omit IDs to list available Paks. |
 | `load_capsule` | Deprecated legacy alias of `load_pak` — same behavior and parameters. Kept so existing configs and hooks continue to work. |
 | `prune_context` | Compress verbose text (large tool outputs, error logs) by keeping the beginning and end and eliding the middle. Default target: 2,000 tokens. |
 | `journal_read` | Read journal entries for the current or a named session. Omit `session_id` to list recent sessions with stats. |
@@ -230,6 +241,10 @@ over indexed vault blocks. They are not structured Pak or MultiPak recall.
 **`load_pak`** (legacy alias: `load_capsule`)
 ```json
 { "session_id": "abc123" }   // omit to list available Paks
+```
+
+```json
+{ "session_ids": ["abc123", "def456"], "include_journal": true }
 ```
 
 **`prune_context`**

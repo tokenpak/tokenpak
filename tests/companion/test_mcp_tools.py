@@ -418,6 +418,54 @@ def test_load_capsule_missing_session_returns_error(tmp_path):
     assert "error" in result
 
 
+def test_load_pak_legacy_single_session_result_is_byte_stable(tmp_path, monkeypatch):
+    expected = "## Session Capsule: legacy\nDecisions: unchanged"
+
+    def fake_get(path, params=None):
+        assert path == "/tpk/v1/capsules/legacy"
+        return 200, {"content": expected}
+
+    monkeypatch.setattr("tokenpak.companion.mcp.tools._proxy_get", fake_get)
+    assert _handle_load_capsule(_make_state(tmp_path), {"session_id": "legacy"}) == expected
+
+
+def test_load_pak_batches_paks_and_journals_in_one_result(tmp_path, monkeypatch):
+    def fake_get(path, params=None):
+        target = path.rsplit("/", 1)[-1]
+        if "/journal/" in path:
+            return 200, {"session_id": target, "entries": [{"content": f"note-{target}"}]}
+        return 200, {"content": f"pak-{target}"}
+
+    monkeypatch.setattr("tokenpak.companion.mcp.tools._proxy_get", fake_get)
+    result = _handle_load_capsule(
+        _make_state(tmp_path, session_id="caller"),
+        {"session_ids": ["a", "b", "c"], "include_journal": True},
+    )
+    for target in ("a", "b", "c"):
+        assert f"[Journal: {target}]" in result
+        assert f"note-{target}" in result
+        assert f"[Pak: {target}]" in result
+        assert f"pak-{target}" in result
+
+
+def test_load_pak_batch_rejects_invalid_or_oversized_ids(tmp_path):
+    state = _make_state(tmp_path)
+    invalid = json.loads(_handle_load_capsule(state, {"session_ids": "not-an-array"}))
+    non_string = json.loads(_handle_load_capsule(state, {"session_ids": ["valid", 7]}))
+    empty = json.loads(_handle_load_capsule(state, {"session_ids": ["valid", " "]}))
+    oversized = json.loads(
+        _handle_load_capsule(state, {"session_ids": [str(index) for index in range(11)]})
+    )
+    invalid_journal = json.loads(
+        _handle_load_capsule(state, {"session_ids": ["valid"], "include_journal": "true"})
+    )
+    assert "array" in invalid["error"]
+    assert "non-empty strings" in non_string["error"]
+    assert "non-empty strings" in empty["error"]
+    assert "at most 10" in oversized["error"]
+    assert "boolean" in invalid_journal["error"]
+
+
 # ---------------------------------------------------------------------------
 # journal_write / journal_read — round-trip
 # ---------------------------------------------------------------------------
