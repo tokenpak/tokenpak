@@ -34,9 +34,9 @@ spend one on routine accounting.
   content.
 - `journal_write`: one concise entry for a major decision (no file contents);
   session summaries are captured automatically at stop.
-- `journal_read` / `load_pak` (legacy alias `load_capsule`): only when
-  resuming prior work the user references — never automatically at session
-  start.
+- For prior work, retrieve before answering. Prefer available native memory;
+  otherwise batch via `load_pak` (`load_capsule`); use `journal_read` only for
+  targeted follow-up. Persist each fact once.
 - `prune_context`: only for verbose output you must keep but do not need in
   full.
 - Prefer targeted file reads over whole-file reads.

@@ -17,16 +17,18 @@ INPUT=$(cat)
 if command -v jq >/dev/null 2>&1; then
     _TP_FIELDS=()
     mapfile -t _TP_FIELDS < <(
-        printf '%s' "$INPUT" | jq -r '(.transcript_path // ""), (.session_id // ""), (.model // "")' 2>/dev/null
+        printf '%s' "$INPUT" | jq -r '(.transcript_path // ""), (.session_id // ""), (.model // ""), (.prompt // "" | gsub("[\\r\\n]"; " "))' 2>/dev/null
     )
     TRANSCRIPT="${_TP_FIELDS[0]:-}"
     SESSION_ID="${_TP_FIELDS[1]:-}"
     MODEL="${_TP_FIELDS[2]:-}"
+    PROMPT="${_TP_FIELDS[3]:-}"
 else
     # Portable sed extraction (no -P flag needed)
     TRANSCRIPT=$(echo "$INPUT" | sed -n 's/.*"transcript_path"\s*:\s*"\([^"]*\)".*/\1/p')
     SESSION_ID=$(echo "$INPUT" | sed -n 's/.*"session_id"\s*:\s*"\([^"]*\)".*/\1/p')
     MODEL=$(echo "$INPUT" | sed -n 's/.*"model"\s*:\s*"\([^"]*\)".*/\1/p')
+    PROMPT=$(echo "$INPUT" | sed -n 's/.*"prompt"\s*:\s*"\([^"]*\)".*/\1/p')
 fi
 
 _tp_block_budget() {
@@ -80,6 +82,30 @@ if [ -n "$SESSION_ID" ]; then
     fi
 fi
 
+# A prior-work reference gets one deterministic retrieval hint when a local
+# recall store holds content. Pattern matching and store checks are bash
+# builtins; no proxy/model round-trip or no-match subprocess is added to the
+# hot path. The journal check reads the first-entry marker the journal store
+# maintains (journal.db.nonempty), not the database file itself — a
+# schema-initialized but empty database must NOT trigger the hint.
+RECALL_HINT=""
+PROMPT_LOWER="${PROMPT,,}"
+case "$PROMPT_LOWER" in
+    *previous*|*prior*|*decided*|*last\ session*|*adr-*)
+        JOURNAL_DIR="${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}"
+        if [ -f "$JOURNAL_DIR/journal.db.nonempty" ]; then
+            RECALL_HINT="Prior work is referenced; retrieve native memory or journal/Paks before answering."
+        elif [ -d "$JOURNAL_DIR/capsules" ]; then
+            shopt -s nullglob
+            _TP_PAK_FILES=("$JOURNAL_DIR"/capsules/*.md)
+            shopt -u nullglob
+            if [ "${#_TP_PAK_FILES[@]}" -gt 0 ]; then
+                RECALL_HINT="Prior work is referenced; retrieve native memory or journal/Paks before answering."
+            fi
+        fi
+        ;;
+esac
+
 # Token estimation from file size (instant via stat)
 TOKENS=0
 if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
@@ -87,7 +113,10 @@ if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
     TOKENS=$((FILE_SIZE / 4))
 fi
 
-[ "$TOKENS" -eq 0 ] && exit 0
+if [ "$TOKENS" -eq 0 ]; then
+    [ -n "$RECALL_HINT" ] && printf '%s\n' "$RECALL_HINT"
+    exit 0
+fi
 
 # Format token count with thousands separators (pure bash)
 TOKENS_FMT="$TOKENS"
@@ -203,5 +232,7 @@ if [ -n "$SESSION_ID" ]; then
         } &
     fi
 fi
+
+[ -n "$RECALL_HINT" ] && printf '%s\n' "$RECALL_HINT"
 
 exit 0

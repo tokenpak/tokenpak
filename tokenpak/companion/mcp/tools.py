@@ -203,32 +203,88 @@ def _handle_check_budget(state: CompanionState, args: dict[str, Any]) -> str:
 def _handle_load_capsule(state: CompanionState, args: dict[str, Any]) -> str:
     """Load / list memory capsules via proxy /tpk/v1/capsules*."""
     session_id = str(args.get("session_id", "")).strip()
-    if not session_id:
-        status, body = _proxy_get("/tpk/v1/capsules", {"limit": 10})
+    raw_session_ids = args.get("session_ids")
+    raw_include_journal = args.get("include_journal", False)
+    if not isinstance(raw_include_journal, bool):
+        return json.dumps({"error": "include_journal must be a boolean"})
+    include_journal = raw_include_journal
+
+    # Preserve the legacy single-session and list responses byte-for-byte.
+    if raw_session_ids is None and not include_journal:
+        if not session_id:
+            status, body = _proxy_get("/tpk/v1/capsules", {"limit": 10})
+            if status == 0:
+                return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
+            if status >= 400:
+                return json.dumps(body)
+            return json.dumps(body, indent=2)
+
+        # Carry the CALLER's session_id so the proxy can attribute the
+        # load_capsule savings event to the right session journal.
+        params = {}
+        if state.session_id:
+            params["caller_session_id"] = state.session_id
+        status, body = _proxy_get(
+            f"/tpk/v1/capsules/{_url_parse.quote(session_id, safe='')}",
+            params,
+        )
         if status == 0:
             return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
         if status >= 400:
             return json.dumps(body)
-        return json.dumps(body, indent=2)
-
-    # Carry the CALLER's session_id so the proxy can attribute the
-    # load_capsule savings event to the right session journal.
-    params = {}
-    if state.session_id:
-        params["caller_session_id"] = state.session_id
-    status, body = _proxy_get(
-        f"/tpk/v1/capsules/{_url_parse.quote(session_id, safe='')}",
-        params,
-    )
-    if status == 0:
-        return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
-    if status >= 400:
+        # Preserve the old behavior of returning the capsule CONTENT as a bare
+        # string when a specific session was requested.
+        if isinstance(body, dict) and "content" in body:
+            return body["content"]
         return json.dumps(body)
-    # Preserve the old behavior of returning the capsule CONTENT as a bare
-    # string when a specific session was requested.
-    if isinstance(body, dict) and "content" in body:
-        return body["content"]
-    return json.dumps(body)
+
+    if raw_session_ids is not None and not isinstance(raw_session_ids, list):
+        return json.dumps({"error": "session_ids must be an array of strings"})
+    if raw_session_ids is not None and not all(
+        isinstance(value, str) and value.strip() for value in raw_session_ids
+    ):
+        return json.dumps({"error": "session_ids must contain non-empty strings"})
+    if raw_session_ids is not None and len(raw_session_ids) > 10:
+        return json.dumps({"error": "session_ids supports at most 10 sessions"})
+
+    requested_ids = [session_id] if session_id else []
+    for value in raw_session_ids or []:
+        candidate = value.strip()
+        if candidate and candidate not in requested_ids:
+            requested_ids.append(candidate)
+    if not requested_ids:
+        return json.dumps({"error": "provide session_id or session_ids for batched retrieval"})
+    if len(requested_ids) > 10:
+        return json.dumps({"error": "session_ids supports at most 10 sessions"})
+
+    sections: list[str] = []
+    if include_journal:
+        for target in requested_ids:
+            status, body = _proxy_get(
+                f"/tpk/v1/journal/{_url_parse.quote(target, safe='')}",
+                {"limit": 20},
+            )
+            if status == 0:
+                body = {"error": "proxy_unreachable", "detail": body.get("detail", "")}
+            sections.append(
+                f"[Journal: {target}]\n"
+                + json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+            )
+
+    caller_params = {"caller_session_id": state.session_id} if state.session_id else {}
+    for target in requested_ids:
+        status, body = _proxy_get(
+            f"/tpk/v1/capsules/{_url_parse.quote(target, safe='')}",
+            caller_params,
+        )
+        if status == 0:
+            body = {"error": "proxy_unreachable", "detail": body.get("detail", "")}
+        if status < 400 and isinstance(body, dict) and "content" in body:
+            content = str(body["content"])
+        else:
+            content = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+        sections.append(f"[Pak: {target}]\n{content}")
+    return "\n\n".join(sections)
 
 
 def _handle_prune_context(state: CompanionState, args: dict[str, Any]) -> str:
@@ -506,13 +562,24 @@ TOOLS: list[ToolDef] = [
     ),
     ToolDef(
         name="load_pak",
-        description="Load a TokenPak Pak (compressed context bundle) from a prior session; omit session_id to list available. Use when resuming work the user references.",
+        description="Load prior work from one or more Paks. Pass session_ids and include_journal to retrieve what you need together; omit IDs to list available Paks.",
         input_schema={
             "type": "object",
             "properties": {
                 "session_id": {
                     "type": "string",
                     "description": "Session ID to load (omit to list available)",
+                },
+                "session_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 10,
+                    "description": "Session IDs to load together",
+                },
+                "include_journal": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include each requested session's journal digest",
                 },
             },
         },
@@ -527,6 +594,17 @@ TOOLS: list[ToolDef] = [
                 "session_id": {
                     "type": "string",
                     "description": "Session ID to load (omit to list available)",
+                },
+                "session_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 10,
+                    "description": "Session IDs to load together",
+                },
+                "include_journal": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include each requested session's journal digest",
                 },
             },
         },
