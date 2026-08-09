@@ -29,6 +29,8 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
+from tests.proxy._proxy_subprocess import free_port
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -568,7 +570,7 @@ class TestMultiAgent:
 
         # run_startup_checks returns (bool, list[str])
         # Passing an unused port to avoid conflicts
-        ok, warnings = run_startup_checks(port=19999)
+        ok, warnings = run_startup_checks(port=free_port())
         # Should return a tuple (may warn about port or deps)
         assert isinstance(ok, bool)
         assert isinstance(warnings, list)

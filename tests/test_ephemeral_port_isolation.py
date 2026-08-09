@@ -98,6 +98,15 @@ def _bound_port_expression(call: ast.Call) -> ast.AST | None:
     return None
 
 
+def _startup_check_port_expression(call: ast.Call) -> ast.AST | None:
+    if _call_name(call) != "run_startup_checks":
+        return None
+    for keyword in call.keywords:
+        if keyword.arg == "port":
+            return keyword.value
+    return call.args[0] if call.args else None
+
+
 def _fixed_subprocess_port(call: ast.Call, constants: dict[str, int]) -> int | None:
     if _call_name(call) not in {"Popen", "run", "check_call", "check_output"}:
         return None
@@ -123,6 +132,8 @@ def test_proxy_spawning_tests_do_not_use_fixed_ports() -> None:
                 continue
             port = _resolve_int(_bound_port_expression(node), constants)
             if port is None:
+                port = _resolve_int(_startup_check_port_expression(node), constants)
+            if port is None:
                 port = _fixed_subprocess_port(node, constants)
             if port not in (None, 0):
                 violations.append(f"{path.relative_to(test_root)}:{node.lineno}: port {port}")
@@ -131,6 +142,28 @@ def test_proxy_spawning_tests_do_not_use_fixed_ports() -> None:
         "fixed test listener ports can collide across concurrent suites; use port 0 "
         "for stdlib servers or tests.proxy._proxy_subprocess.free_port():\n" + "\n".join(violations)
     )
+
+
+def test_port_guard_detects_fixed_startup_check_ports() -> None:
+    """Regression: startup checks bind their supplied port in production."""
+    tree = ast.parse(
+        """
+STARTUP_PORT = 19999
+run_startup_checks(19998)
+run_startup_checks(port=STARTUP_PORT)
+run_startup_checks(port=free_port())
+"""
+    )
+    constants = _module_int_constants(tree)
+    startup_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and _call_name(node) == "run_startup_checks"
+    ]
+
+    assert [
+        _resolve_int(_startup_check_port_expression(call), constants) for call in startup_calls
+    ] == [19998, 19999, None]
 
 
 def test_two_proxy_fixtures_can_run_concurrently() -> None:
