@@ -23,6 +23,7 @@ import pytest
 
 pytestmark = pytest.mark.needs_proxy
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy.server import ProxyServer
 
 # ---------------------------------------------------------------------------
@@ -30,18 +31,27 @@ from tokenpak.proxy.server import ProxyServer
 # ---------------------------------------------------------------------------
 
 
+_PROXY_PORT: int | None = None
+
+
 @pytest.fixture(scope="module")
 def proxy():
     """Start a proxy server on an ephemeral port for all tests in this module."""
-    server = ProxyServer(host="127.0.0.1", port=18766)
+    global _PROXY_PORT
+    server = ProxyServer(host="127.0.0.1", port=free_port())
+    _PROXY_PORT = server.port
     server.start(blocking=False)
     time.sleep(0.1)  # brief settle
     yield server
     server.stop()
 
 
-def _get_health(port: int = 18766, *, path: str = "/health") -> tuple[int, dict]:
+def _get_health(port: int | None = None, *, path: str = "/health") -> tuple[int, dict]:
     """Hit /health and return (status_code, response_dict)."""
+    if port is None:
+        if _PROXY_PORT is None:
+            raise RuntimeError("proxy fixture has not selected its ephemeral port")
+        port = _PROXY_PORT
     req = urllib.request.Request(f"http://127.0.0.1:{port}{path}")
     with urllib.request.urlopen(req, timeout=5) as resp:
         return resp.status, json.loads(resp.read())
@@ -514,7 +524,7 @@ def test_health_uptime_grows(proxy):
 
 def test_health_loopback_no_auth_required(proxy):
     """Loopback health access stays available without an Authorization header."""
-    req = urllib.request.Request("http://127.0.0.1:18766/health")
+    req = urllib.request.Request(f"http://127.0.0.1:{proxy.port}/health")
     # Explicitly do NOT set Authorization
     with urllib.request.urlopen(req, timeout=5) as resp:
         assert resp.status == 200
@@ -526,7 +536,7 @@ def test_health_loopback_no_auth_required(proxy):
 
 
 def test_health_content_type_json(proxy):
-    req = urllib.request.Request("http://127.0.0.1:18766/health")
+    req = urllib.request.Request(f"http://127.0.0.1:{proxy.port}/health")
     with urllib.request.urlopen(req, timeout=5) as resp:
         ct = resp.headers.get("Content-Type", "")
         assert resp.status == 200

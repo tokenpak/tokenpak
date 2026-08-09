@@ -82,12 +82,8 @@ def test_injected_envelopes_replace_not_accumulate_across_sequential_turns():
     history is byte-identical across turns (stable capsule id); per-turn
     injected size is bounded by a scenario constant.
 
-    Known limitation, found while authoring this test: an envelope that
-    RE-ENTERS ``process`` as message content (e.g. a resent tool result that
-    itself contains a ``[PAK ...]`` envelope) is re-compressed and re-wrapped
-    today. Per this conformance packet's own instruction that a real
-    instability found here is filed as its own defect packet rather than
-    fixed inline, that defect is tracked separately in the governance queue.
+    A separate regression below covers the other production topology, where
+    a returned Pak envelope itself re-enters ``process`` on later turns.
     """
     builder = CapsuleBuilder(enabled=True, min_block_chars=64, hot_window=2)
     base_block = "historical analysis of the migration plan " * 20
@@ -117,3 +113,35 @@ def test_injected_envelopes_replace_not_accumulate_across_sequential_turns():
                 "unchanged history must re-derive the identical envelope, not grow"
             )
         previous_envelope = wrapped
+
+
+def test_reingested_pak_envelope_is_byte_identical_at_every_turn():
+    """Regression: a resent Pak tool result must never be wrapped again."""
+    builder = CapsuleBuilder(enabled=True, min_block_chars=64, hot_window=2)
+    original = "historical migration analysis " * 24
+    envelope = _wrap_capsule(original, "migration analysis summary")
+    history: list[dict] = [
+        {"role": "user", "content": envelope},
+        {"role": "user", "content": "initial follow-up"},
+        {"role": "assistant", "content": "initial answer"},
+    ]
+    body = json.dumps({"messages": history}, ensure_ascii=False).encode()
+
+    for turn in range(TURNS):
+        out, stats = builder.process(body)
+        serialized = out.decode()
+
+        assert out == body
+        assert stats["blocks_capsulized"] == 0
+        assert stats["chars_out"] == stats["chars_in"]
+        assert serialized.count("[PAK ") == 1
+        assert serialized.count("[/PAK]") == 1
+        assert json.loads(out)["messages"][0]["content"] == envelope
+
+        history.extend(
+            [
+                {"role": "user", "content": f"follow-up question {turn}"},
+                {"role": "assistant", "content": f"short answer {turn}"},
+            ]
+        )
+        body = json.dumps({"messages": history}, ensure_ascii=False).encode()

@@ -23,6 +23,7 @@ import urllib.request
 
 import pytest
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
@@ -422,7 +423,7 @@ def proxy_with_cb():
     """Start a proxy for integration tests."""
     # Reset global registry to fresh state with fast config
     _reset_registry_for_testing(_fast_config(failure_threshold=3, recovery_timeout=0.1))
-    server = ProxyServer(host="127.0.0.1", port=19877)
+    server = ProxyServer(host="127.0.0.1", port=free_port())
     server.start(blocking=False)
     time.sleep(0.1)
     yield server
@@ -439,23 +440,23 @@ class TestHealthEndpointCircuitBreakers:
     pytestmark = pytest.mark.needs_proxy
 
     def test_health_has_circuit_breakers_key(self, proxy_with_cb):
-        _, data = _get(19877, "/health")
+        _, data = _get(proxy_with_cb.port, "/health")
         assert "circuit_breakers" in data
 
     def test_health_circuit_breakers_has_enabled(self, proxy_with_cb):
-        _, data = _get(19877, "/health")
+        _, data = _get(proxy_with_cb.port, "/health")
         cb = data["circuit_breakers"]
         assert "enabled" in cb
         assert isinstance(cb["enabled"], bool)
 
     def test_health_circuit_breakers_has_any_open(self, proxy_with_cb):
-        _, data = _get(19877, "/health")
+        _, data = _get(proxy_with_cb.port, "/health")
         cb = data["circuit_breakers"]
         assert "any_open" in cb
         assert isinstance(cb["any_open"], bool)
 
     def test_health_circuit_breakers_has_providers(self, proxy_with_cb):
-        _, data = _get(19877, "/health")
+        _, data = _get(proxy_with_cb.port, "/health")
         cb = data["circuit_breakers"]
         assert "providers" in cb
         assert isinstance(cb["providers"], dict)
@@ -463,7 +464,7 @@ class TestHealthEndpointCircuitBreakers:
     def test_health_any_open_false_when_all_closed(self, proxy_with_cb):
         # Reset global registry (no open circuits)
         _reset_registry_for_testing(_fast_config())
-        _, data = _get(19877, "/health")
+        _, data = _get(proxy_with_cb.port, "/health")
         assert data["circuit_breakers"]["any_open"] is False
 
 
@@ -476,20 +477,20 @@ class TestCircuitBreakersEndpoint:
     pytestmark = pytest.mark.needs_proxy
 
     def test_circuit_breakers_endpoint_returns_200(self, proxy_with_cb):
-        status, _ = _get(19877, "/circuit-breakers")
+        status, _ = _get(proxy_with_cb.port, "/circuit-breakers")
         assert status == 200
 
     def test_circuit_breakers_endpoint_has_enabled(self, proxy_with_cb):
-        _, data = _get(19877, "/circuit-breakers")
+        _, data = _get(proxy_with_cb.port, "/circuit-breakers")
         assert "enabled" in data
 
     def test_circuit_breakers_endpoint_has_circuit_breakers(self, proxy_with_cb):
-        _, data = _get(19877, "/circuit-breakers")
+        _, data = _get(proxy_with_cb.port, "/circuit-breakers")
         assert "circuit_breakers" in data
         assert isinstance(data["circuit_breakers"], dict)
 
     def test_circuit_breakers_endpoint_content_type(self, proxy_with_cb):
-        req = urllib.request.Request("http://127.0.0.1:19877/circuit-breakers")
+        req = urllib.request.Request(f"http://127.0.0.1:{proxy_with_cb.port}/circuit-breakers")
         with urllib.request.urlopen(req, timeout=5) as resp:
             ct = resp.headers.get("Content-Type", "")
             assert "application/json" in ct

@@ -31,6 +31,7 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy.connection_pool import (
     ConnectionPool,
     PoolConfig,
@@ -458,7 +459,7 @@ def test_proxy_server_has_connection_pool():
 
 @pytest.mark.needs_proxy
 def test_proxy_server_health_includes_pool_metrics():
-    server = ProxyServer(host="127.0.0.1", port=28800)
+    server = ProxyServer(host="127.0.0.1", port=free_port())
     server.start(blocking=False)
     time.sleep(0.05)
     try:

@@ -398,6 +398,9 @@ class CapsuleBuilder:
         """
         chars_in = len(text)
 
+        if text.lstrip().startswith(PAK_MARKER_OPEN_PREFIX):
+            return text, chars_in, chars_in, 0
+
         if chars_in < self._min_block_chars:
             return text, chars_in, chars_in, 0
 

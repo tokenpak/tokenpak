@@ -20,6 +20,7 @@ import urllib.request
 
 import pytest
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy.server import GracefulShutdown, ProxyServer
 
 # ---------------------------------------------------------------------------
@@ -148,7 +149,7 @@ class TestGracefulShutdown:
 @pytest.fixture(scope="module")
 def proxy():
     """Start a proxy on an ephemeral port for integration tests."""
-    srv = ProxyServer(host="127.0.0.1", port=18890, shutdown_timeout=5.0)
+    srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=5.0)
     srv.start(blocking=False)
     time.sleep(0.15)
     yield srv
@@ -175,18 +176,18 @@ class TestShutdownRejects503:
 
     def test_503_after_shutdown_begin(self):
         """Directly begin shutdown and verify management of 503 state."""
-        srv = ProxyServer(host="127.0.0.1", port=18891, shutdown_timeout=1.0)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=1.0)
         srv.start(blocking=False)
         time.sleep(0.1)
 
         # Confirm healthy
-        status, data = _get(18891, "/health")
+        status, data = _get(srv.port, "/health")
         assert status == 200
         assert data["is_shutting_down"] is False
 
         # Begin shutdown
         srv.shutdown.begin()
-        status, data = _get(18891, "/health")
+        status, data = _get(srv.port, "/health")
         assert data["is_shutting_down"] is True
         assert data["status"] == "shutting_down"
 
@@ -200,7 +201,7 @@ class TestShutdownRejects503:
         When shutdown is active, proxied GET requests (paths starting with 'http')
         return 503 with Retry-After header.
         """
-        srv = ProxyServer(host="127.0.0.1", port=18892, shutdown_timeout=1.0)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=1.0)
         srv.start(blocking=False)
         time.sleep(0.1)
 
@@ -227,7 +228,7 @@ class TestInFlightCompletion:
         assert proxy.shutdown.in_flight_count() == 0
 
     def test_concurrent_requests_tracked(self):
-        srv = ProxyServer(host="127.0.0.1", port=18870, shutdown_timeout=5.0)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=5.0)
         srv.start(blocking=False)
         time.sleep(0.1)
 
@@ -313,7 +314,7 @@ class TestTelemetryFlush:
 
         from tokenpak.proxy.stats import CompressionStats
 
-        srv = ProxyServer(host="127.0.0.1", port=18871, shutdown_timeout=1.0)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=1.0)
         # Override compression_stats to use our temp log file
         srv.compression_stats = CompressionStats(log_path=str(log_path))
         srv.start(blocking=False)
@@ -344,27 +345,27 @@ class TestConfigurableTimeout:
     """--shutdown-timeout / TOKENPAK_SHUTDOWN_TIMEOUT is respected."""
 
     def test_default_timeout_is_30(self):
-        srv = ProxyServer(host="127.0.0.1", port=18872)
+        srv = ProxyServer(host="127.0.0.1", port=free_port())
         assert srv.shutdown_timeout == 30.0
 
     def test_explicit_timeout_parameter(self):
-        srv = ProxyServer(host="127.0.0.1", port=18873, shutdown_timeout=15.0)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=15.0)
         assert srv.shutdown_timeout == 15.0
 
     def test_env_var_sets_timeout(self, monkeypatch):
         monkeypatch.setenv("TOKENPAK_SHUTDOWN_TIMEOUT", "45")
-        srv = ProxyServer(host="127.0.0.1", port=18874)
+        srv = ProxyServer(host="127.0.0.1", port=free_port())
         assert srv.shutdown_timeout == 45.0
 
     def test_explicit_param_overrides_env(self, monkeypatch):
         monkeypatch.setenv("TOKENPAK_SHUTDOWN_TIMEOUT", "99")
-        srv = ProxyServer(host="127.0.0.1", port=18875, shutdown_timeout=10.0)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=10.0)
         assert srv.shutdown_timeout == 10.0
 
     @pytest.mark.needs_proxy
     def test_drain_timeout_actually_used(self):
         """Drain times out at shutdown_timeout, not earlier or much later."""
-        srv = ProxyServer(host="127.0.0.1", port=18876, shutdown_timeout=0.3)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=0.3)
 
         # Put a fake request in-flight (never completes)
         blocker = threading.Event()
@@ -401,12 +402,12 @@ class TestSignalHandling:
         _handle_signal is wired to SIGTERM/SIGINT.
         We verify the handler attribute exists and is callable.
         """
-        srv = ProxyServer(host="127.0.0.1", port=18877, shutdown_timeout=1.0)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=1.0)
         assert callable(srv._handle_signal)
 
     def test_handle_signal_begins_shutdown(self):
         """Calling _handle_signal directly triggers shutdown."""
-        srv = ProxyServer(host="127.0.0.1", port=18878, shutdown_timeout=0.1)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=0.1)
         srv.start(blocking=False)
         time.sleep(0.1)
 
@@ -420,7 +421,7 @@ class TestSignalHandling:
         assert srv.shutdown.is_shutting_down
 
     def test_handle_signal_sigint_also_works(self):
-        srv = ProxyServer(host="127.0.0.1", port=18879, shutdown_timeout=0.1)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=0.1)
         srv.start(blocking=False)
         time.sleep(0.1)
 
@@ -440,7 +441,7 @@ class TestHealthDuringShutdown:
 
     def test_health_shows_shutting_down_status(self, proxy):
         # Proxy fixture is not in shutdown — verify baseline
-        status, data = _get(18890, "/health")
+        status, data = _get(proxy.port, "/health")
         assert status == 200
         assert "is_shutting_down" in data
         assert data["is_shutting_down"] is False
@@ -448,12 +449,12 @@ class TestHealthDuringShutdown:
         assert data["in_flight_requests"] == 0
 
     def test_health_status_field_during_shutdown(self):
-        srv = ProxyServer(host="127.0.0.1", port=18880, shutdown_timeout=1.0)
+        srv = ProxyServer(host="127.0.0.1", port=free_port(), shutdown_timeout=1.0)
         srv.start(blocking=False)
         time.sleep(0.1)
 
         srv.shutdown.begin()
-        status, data = _get(18880, "/health")
+        status, data = _get(srv.port, "/health")
 
         assert status == 200
         assert data["status"] == "shutting_down"

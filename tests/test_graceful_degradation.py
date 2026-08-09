@@ -15,6 +15,7 @@ from __future__ import annotations
 import threading
 from unittest.mock import patch
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy.degradation import (
     DegradationEventType,
     DegradationTracker,
@@ -107,10 +108,11 @@ class TestStartupChecks:
 
     def test_startup_checks_never_raise(self):
         """Even on a broken system, startup checks must not raise."""
+        port = free_port()
         with patch("tokenpak.proxy.startup.socket.socket") as mock_sock:
             mock_sock.side_effect = OSError("socket creation failed")
             # Should not raise
-            all_ok, warnings = run_startup_checks(9999)
+            all_ok, warnings = run_startup_checks(port)
             assert isinstance(all_ok, bool)
             assert isinstance(warnings, list)
 
