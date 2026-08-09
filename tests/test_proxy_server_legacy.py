@@ -39,6 +39,7 @@ pytest.importorskip(
 
 pytestmark = pytest.mark.needs_proxy
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy.server import (
     GracefulShutdown,
     PipelineTrace,
@@ -359,24 +360,25 @@ class TestAutoDetectUpstream:
 
 class TestProxyServerInit:
     def test_default_init(self):
-        ps = ProxyServer(host="127.0.0.1", port=19000)
+        port = free_port()
+        ps = ProxyServer(host="127.0.0.1", port=port)
         assert ps.host == "127.0.0.1"
-        assert ps.port == 19000
+        assert ps.port == port
 
     def test_compilation_mode_default(self):
-        ps = ProxyServer(host="127.0.0.1", port=19001)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         assert ps.compilation_mode in ("hybrid", "strict", "aggressive")
 
     def test_compilation_mode_override(self):
-        ps = ProxyServer(host="127.0.0.1", port=19002, compilation_mode="strict")
+        ps = ProxyServer(host="127.0.0.1", port=free_port(), compilation_mode="strict")
         assert ps.compilation_mode == "strict"
 
     def test_shutdown_timeout_default(self):
-        ps = ProxyServer(host="127.0.0.1", port=19003)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         assert ps.shutdown_timeout > 0
 
     def test_session_initialized(self):
-        ps = ProxyServer(host="127.0.0.1", port=19005)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         assert ps.session["requests"] == 0
         assert ps.session["errors"] == 0
 
@@ -388,7 +390,7 @@ class TestProxyServerInit:
 
 @pytest.fixture(scope="module")
 def proxy():
-    server = ProxyServer(host="127.0.0.1", port=19100)
+    server = ProxyServer(host="127.0.0.1", port=free_port())
     server.start(blocking=False)
     time.sleep(0.15)
     yield server
@@ -499,7 +501,7 @@ class TestProxyServerEndpoints:
 class TestProxyServerShutdown:
     def test_graceful_shutdown(self):
         """Server can start and stop cleanly."""
-        ps = ProxyServer(host="127.0.0.1", port=19200)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         ps.start(blocking=False)
         time.sleep(0.1)
         ps.stop()
@@ -507,7 +509,7 @@ class TestProxyServerShutdown:
 
     def test_stop_is_idempotent(self):
         """Calling stop twice should not crash."""
-        ps = ProxyServer(host="127.0.0.1", port=19201)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         ps.start(blocking=False)
         time.sleep(0.05)
         ps.stop()
@@ -518,7 +520,7 @@ class TestProxyServerShutdown:
 
     def test_health_during_shutdown(self):
         """Health endpoint returns shutting_down status during graceful shutdown."""
-        ps = ProxyServer(host="127.0.0.1", port=19202)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         ps.start(blocking=False)
         time.sleep(0.1)
         ps.shutdown.begin()
@@ -552,12 +554,12 @@ class TestProxyServerAdditionalEndpoints:
 
     def test_shutdown_rejects_proxied_requests(self):
         """While shutting down, proxied HTTP requests get 503."""
-        ps = ProxyServer(host="127.0.0.1", port=19300)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         ps.start(blocking=False)
         time.sleep(0.1)
         ps.shutdown.begin()
         # Health should still work
-        status, data = _get("http://127.0.0.1:19300/health")
+        status, data = _get(f"http://127.0.0.1:{ps.port}/health")
         assert status == 200
         assert data.get("status") in ("shutting_down", "ok", "degraded")
         ps.stop()
@@ -570,29 +572,29 @@ class TestProxyServerAdditionalEndpoints:
 
 class TestProxyServerMethods:
     def test_health_compression_ratio_empty(self):
-        ps = ProxyServer(host="127.0.0.1", port=19401)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         result = ps.health()
         assert result["compression_ratio_avg"] == 0.0
 
     def test_health_in_flight_requests_zero(self):
-        ps = ProxyServer(host="127.0.0.1", port=19402)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         result = ps.health()
         assert result["in_flight_requests"] == 0
 
     def test_health_timestamp_present(self):
-        ps = ProxyServer(host="127.0.0.1", port=19403)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         result = ps.health()
         assert "timestamp" in result
         assert "Z" in result["timestamp"]
 
     def test_session_stats_zero_division_safe(self):
         """session_stats() with no input tokens doesn't crash."""
-        ps = ProxyServer(host="127.0.0.1", port=19404)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         result = ps.session_stats()
         assert result["avg_savings_pct"] == 0.0
 
     def test_stats_includes_compilation_mode(self):
-        ps = ProxyServer(host="127.0.0.1", port=19405)
+        ps = ProxyServer(host="127.0.0.1", port=free_port())
         result = ps.stats()
         assert "compilation_mode" in result
 
@@ -621,7 +623,7 @@ def _make_mock_response(
 @pytest.fixture(scope="module")
 def mocked_proxy():
     """ProxyServer with mocked connection pool for testing proxy forwarding."""
-    server = ProxyServer(host="127.0.0.1", port=19500)
+    server = ProxyServer(host="127.0.0.1", port=free_port())
     server.start(blocking=False)
     time.sleep(0.15)
     yield server
@@ -794,7 +796,7 @@ def upstream_server():
 @pytest.fixture(scope="module")
 def forwarding_proxy(upstream_server):
     """ProxyServer that forwards to the mock upstream."""
-    ps = ProxyServer(host="127.0.0.1", port=19600)
+    ps = ProxyServer(host="127.0.0.1", port=free_port())
     ps.start(blocking=False)
     time.sleep(0.15)
     yield ps, upstream_server
@@ -1116,7 +1118,7 @@ def sse_upstream():
 
 @pytest.fixture(scope="module")
 def sse_proxy(sse_upstream):
-    ps = ProxyServer(host="127.0.0.1", port=19700)
+    ps = ProxyServer(host="127.0.0.1", port=free_port())
     ps.start(blocking=False)
     time.sleep(0.15)
     yield ps, sse_upstream

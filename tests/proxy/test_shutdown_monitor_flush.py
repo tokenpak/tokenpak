@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy import monitor as _monitor_mod
 from tokenpak.proxy.monitor import Monitor
 from tokenpak.proxy.server import ProxyServer
@@ -46,7 +47,7 @@ def _isolated_writer():
 
 def _make_server() -> ProxyServer:
     # Port is never bound — start() is not called in this test.
-    return ProxyServer(host="127.0.0.1", port=18991)
+    return ProxyServer(host="127.0.0.1", port=free_port())
 
 
 def _row_count(db_path, table: str = "requests") -> int:

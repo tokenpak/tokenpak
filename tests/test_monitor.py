@@ -174,7 +174,8 @@ class TestCostCalc(unittest.TestCase):
 class TestMonitorServer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = ThreadedHTTPServer(("127.0.0.1", 18767), MonitorHandler)
+        cls.server = ThreadedHTTPServer(("127.0.0.1", 0), MonitorHandler)
+        cls.port = cls.server.server_address[1]
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         time.sleep(0.2)
@@ -184,7 +185,7 @@ class TestMonitorServer(unittest.TestCase):
         cls.server.shutdown()
 
     def _get(self, path):
-        url = f"http://127.0.0.1:18767{path}"
+        url = f"http://127.0.0.1:{self.port}{path}"
         with urllib.request.urlopen(url, timeout=5) as r:
             return r.status, r.read().decode()
 

@@ -27,6 +27,7 @@ import pytest
 
 pytestmark = pytest.mark.needs_proxy
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy.server import ProxyServer
 
 # ---------------------------------------------------------------------------
@@ -95,18 +96,16 @@ def mock_upstream():
 # Proxy fixture
 # ---------------------------------------------------------------------------
 
-PROXY_PORT = 18867  # chosen not to clash with other test suites
-
 
 @pytest.fixture(scope="module")
 def proxy(mock_upstream):
-    """Start a real ProxyServer on PROXY_PORT; stop after tests."""
+    """Start a real ProxyServer on an ephemeral port; stop after tests."""
     upstream_host, upstream_port = mock_upstream
     mock_upstream_url = f"http://{upstream_host}:{upstream_port}"
 
-    server = ProxyServer(host="127.0.0.1", port=PROXY_PORT)
+    server = ProxyServer(host="127.0.0.1", port=free_port())
     server.start(blocking=False)
-    _wait_for_port(PROXY_PORT)
+    _wait_for_port(server.port)
     yield server, mock_upstream_url
     server.stop()
 
@@ -119,8 +118,8 @@ def proxy(mock_upstream):
 class TestProxyStartup:
     def test_proxy_health_ok(self, proxy):
         """Proxy must start and report healthy at /health."""
-        _, _ = proxy
-        req = urllib.request.Request(f"http://127.0.0.1:{PROXY_PORT}/health")
+        server, _ = proxy
+        req = urllib.request.Request(f"http://127.0.0.1:{server.port}/health")
         with urllib.request.urlopen(req, timeout=5) as resp:
             assert resp.status == 200
             data = json.loads(resp.read())
@@ -133,7 +132,8 @@ class TestProxyStartup:
 
     def test_proxy_is_listening(self, proxy):
         """Proxy TCP port must be accepting connections after start."""
-        _wait_for_port(PROXY_PORT)  # will raise if not reachable
+        server, _ = proxy
+        _wait_for_port(server.port)  # will raise if not reachable
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +144,7 @@ class TestProxyStartup:
 class TestProxyForwarding:
     def test_proxy_forwards_post_to_upstream(self, proxy):
         """POST to proxy with full target URL must be forwarded to mock upstream."""
-        _, mock_url = proxy
+        server, mock_url = proxy
 
         # Build a minimal Anthropic-style request body
         request_body = json.dumps(
@@ -158,7 +158,7 @@ class TestProxyForwarding:
         # Send through proxy using full URL form (proxy mode)
         target_url = f"{mock_url}/v1/messages"
         req = urllib.request.Request(
-            f"http://127.0.0.1:{PROXY_PORT}/",
+            f"http://127.0.0.1:{server.port}/",
             data=request_body,
             method="POST",
             headers={
@@ -170,7 +170,7 @@ class TestProxyForwarding:
         # Patch the target to go to mock upstream via direct proxy_to
         # We test the routed path via /v1/messages endpoint
         req2 = urllib.request.Request(
-            f"http://127.0.0.1:{PROXY_PORT}/v1/messages",
+            f"http://127.0.0.1:{server.port}/v1/messages",
             data=request_body,
             method="POST",
             headers={
@@ -237,15 +237,15 @@ class TestCompressionPipeline:
 
         server = ProxyServer(
             host="127.0.0.1",
-            port=18868,
+            port=free_port(),
             request_hook=mock_hook,
         )
         server.start(blocking=False)
-        _wait_for_port(18868)
+        _wait_for_port(server.port)
 
         try:
             # Health check
-            req = urllib.request.Request("http://127.0.0.1:18868/health")
+            req = urllib.request.Request(f"http://127.0.0.1:{server.port}/health")
             with urllib.request.urlopen(req, timeout=5) as resp:
                 assert resp.status == 200
 
@@ -256,7 +256,7 @@ class TestCompressionPipeline:
 
     def test_large_request_triggers_compression_path(self, proxy):
         """Large message body (>1k tokens) should go through compression code path."""
-        _, _ = proxy
+        server, _ = proxy
 
         # Build a large request body to exercise the compression pipeline
         large_content = "The quick brown fox jumps over the lazy dog. " * 200  # ~900 words
@@ -276,7 +276,7 @@ class TestCompressionPipeline:
 
         # Send to /v1/messages — even if upstream is unreachable, proxy won't crash
         req = urllib.request.Request(
-            f"http://127.0.0.1:{PROXY_PORT}/v1/messages",
+            f"http://127.0.0.1:{server.port}/v1/messages",
             data=request_body,
             method="POST",
             headers={
@@ -308,11 +308,11 @@ class TestZeroConfigStartup:
             for k in env_backup:
                 os.environ.pop(k, None)
 
-            server = ProxyServer(host="127.0.0.1", port=18869)
+            server = ProxyServer(host="127.0.0.1", port=free_port())
             server.start(blocking=False)
             try:
-                _wait_for_port(18869)
-                req = urllib.request.Request("http://127.0.0.1:18869/health")
+                _wait_for_port(server.port)
+                req = urllib.request.Request(f"http://127.0.0.1:{server.port}/health")
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     assert resp.status == 200
             finally:

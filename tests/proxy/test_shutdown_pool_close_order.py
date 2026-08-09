@@ -19,13 +19,14 @@ import threading
 import time
 from unittest.mock import MagicMock
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy.connection_pool import ConnectionPool, PoolConfig
 from tokenpak.proxy.server import ProxyServer
 
 
 def _make_server(**kwargs) -> ProxyServer:
     # Port is never bound — start() is not called in these tests.
-    return ProxyServer(host="127.0.0.1", port=18999, **kwargs)
+    return ProxyServer(host="127.0.0.1", port=free_port(), **kwargs)
 
 
 def _record_calls(ps: ProxyServer, order: list) -> None:

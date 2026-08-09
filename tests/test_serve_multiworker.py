@@ -23,6 +23,8 @@ import urllib.request
 
 import pytest
 
+from tests.proxy._proxy_subprocess import free_port
+
 # Residual import guard (slim-install surface).
 # `tokenpak serve --workers N` boots uvicorn workers that require
 # fastapi; on slim [dev] install fastapi is absent and serve fails to
@@ -202,7 +204,7 @@ class TestWorkerLifecycle:
     @pytest.fixture
     def serve_proc(self, tmp_path):
         """Start `tokenpak serve --workers 2` as a subprocess, yield it, then terminate."""
-        port = BASE_PORT + 10
+        port = free_port()
         proc = subprocess.Popen(
             [
                 sys.executable,

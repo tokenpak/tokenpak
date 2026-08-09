@@ -35,6 +35,7 @@ import pytest
 
 pytestmark = pytest.mark.needs_proxy
 
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy import server as proxy_server_module
 from tokenpak.proxy.circuit_breaker import get_circuit_breaker_registry
 from tokenpak.proxy.server import (
@@ -83,8 +84,6 @@ class TestClientDisconnectClassification:
 # End-to-end tests — threaded server + stub upstream
 # ---------------------------------------------------------------------------
 
-PROXY_PORT = 18971
-
 # Mutable stub behavior, set per-test.
 _stub_state = {"status": 200, "delay": 0.0, "body": b'{"ok": true}'}
 
@@ -121,12 +120,12 @@ def stub_upstream():
 
 @pytest.fixture(scope="module")
 def proxy():
-    server = ProxyServer(host="127.0.0.1", port=PROXY_PORT)
+    server = ProxyServer(host="127.0.0.1", port=free_port())
     server.start(blocking=False)
     deadline = time.time() + 8
     while time.time() < deadline:
         try:
-            s = socket.create_connection(("127.0.0.1", PROXY_PORT), timeout=0.5)
+            s = socket.create_connection(("127.0.0.1", server.port), timeout=0.5)
             s.close()
             break
         except OSError:
@@ -166,8 +165,8 @@ def breaker_spy(monkeypatch, stub_upstream):
     registry._breakers.pop("127.0.0.1", None)
 
 
-def _proxy_request(stub_port: int, body: bytes) -> tuple:
-    conn = http.client.HTTPConnection("127.0.0.1", PROXY_PORT, timeout=20)
+def _proxy_request(proxy_port: int, stub_port: int, body: bytes) -> tuple:
+    conn = http.client.HTTPConnection("127.0.0.1", proxy_port, timeout=20)
     conn.request(
         "POST",
         f"http://127.0.0.1:{stub_port}/v1/messages",
@@ -198,7 +197,7 @@ class TestBreakerPolarityEndToEnd:
         self, proxy, stub_upstream, breaker_spy
     ):
         _stub_state.update(status=503, delay=0.0, body=b'{"error": "overloaded"}')
-        status, _ = _proxy_request(stub_upstream, _REQ_BODY)
+        status, _ = _proxy_request(proxy.port, stub_upstream, _REQ_BODY)
 
         assert status == 503
         assert "127.0.0.1" in breaker_spy["failure"], (
@@ -210,7 +209,7 @@ class TestBreakerPolarityEndToEnd:
 
     def test_upstream_200_records_provider_success(self, proxy, stub_upstream, breaker_spy):
         _stub_state.update(status=200, delay=0.0, body=b'{"ok": true}')
-        status, _ = _proxy_request(stub_upstream, _REQ_BODY)
+        status, _ = _proxy_request(proxy.port, stub_upstream, _REQ_BODY)
 
         assert status == 200
         assert "127.0.0.1" in breaker_spy["success"]
@@ -228,7 +227,7 @@ class TestBreakerPolarityEndToEnd:
         ps = proxy
         errors_before = ps.session["errors"]
 
-        s = socket.create_connection(("127.0.0.1", PROXY_PORT), timeout=10)
+        s = socket.create_connection(("127.0.0.1", proxy.port), timeout=10)
         raw = (
             f"POST http://127.0.0.1:{stub_upstream}/v1/messages HTTP/1.1\r\n"
             f"Host: 127.0.0.1:{stub_upstream}\r\n"

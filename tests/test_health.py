@@ -106,7 +106,7 @@ def _reset_circuits():
 # Fixture — start the proxy server once for the module
 # ---------------------------------------------------------------------------
 
-_HEALTH_TEST_PORT = 19777
+_HEALTH_TEST_PORT: int | None = None
 
 
 @pytest.fixture(scope="module")
@@ -127,13 +127,15 @@ def proxy_server():
 
     from tokenpak.proxy.server import ProxyServer
 
+    global _HEALTH_TEST_PORT
+    server = HTTPServer(("127.0.0.1", 0), ForwardProxyHandler)
+    _HEALTH_TEST_PORT = server.server_address[1]
+
     # Construct a real ProxyServer to back the handler. ProxyServer.__init__
     # is side-effect-light (no port bind, no signal handlers); .start() is
     # what binds the listener — we don't call .start() here because the
-    # fixture binds its own HTTPServer below.
+    # fixture owns the already-bound HTTPServer above.
     ps = ProxyServer(host="127.0.0.1", port=_HEALTH_TEST_PORT)
-
-    server = HTTPServer(("127.0.0.1", _HEALTH_TEST_PORT), ForwardProxyHandler)
     server.proxy_server = ps  # canonical back-reference (proxy/server.py:2569)
 
     # Compat shim — the old monolith's _proxy_ready / _shutdown_event

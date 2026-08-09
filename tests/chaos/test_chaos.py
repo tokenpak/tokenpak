@@ -29,18 +29,11 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.proxy._proxy_subprocess import free_port
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-CHAOS_PORT_BASE = 19800  # base port for chaos tests (avoid conflicts)
-
-_port_counter = [0]
-
-
-def _next_port() -> int:
-    _port_counter[0] += 1
-    return CHAOS_PORT_BASE + _port_counter[0]
 
 
 def _wait_for_port(port: int, timeout: float = 5.0) -> bool:
@@ -54,17 +47,6 @@ def _wait_for_port(port: int, timeout: float = 5.0) -> bool:
         except OSError:
             time.sleep(0.05)
     return False
-
-
-def _port_is_free(port: int) -> bool:
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(("127.0.0.1", port))
-        s.close()
-        return True
-    except OSError:
-        return False
 
 
 # ===========================================================================
@@ -88,7 +70,7 @@ class TestProxyLifecycle:
         # Startup checks should complete without raising. Startup resolves its
         # home via tokenpak._paths, so point TOKENPAK_HOME at the corrupt config dir.
         with patch.dict(os.environ, {"TOKENPAK_HOME": str(config_dir)}):
-            ok, warnings = run_startup_checks(port=_next_port())
+            ok, warnings = run_startup_checks(port=free_port())
             # Should return structured result, not crash
             assert isinstance(ok, bool)
             assert isinstance(warnings, list)
@@ -98,7 +80,7 @@ class TestProxyLifecycle:
         from tokenpak.proxy.startup import run_startup_checks
 
         # Steal a port
-        stolen_port = _next_port()
+        stolen_port = free_port()
         holder = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         holder.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         holder.bind(("127.0.0.1", stolen_port))
@@ -118,19 +100,15 @@ class TestProxyLifecycle:
         """Startup checks succeed when port is free and deps are installed."""
         from tokenpak.proxy.startup import run_startup_checks
 
-        free_port = _next_port()
-        # Ensure port is actually free
-        while not _port_is_free(free_port):
-            free_port = _next_port()
-
-        ok, warnings = run_startup_checks(port=free_port)
-        assert ok is True, f"Expected startup OK on free port {free_port}: {warnings}"
+        port = free_port()
+        ok, warnings = run_startup_checks(port=port)
+        assert ok is True, f"Expected startup OK on free port {port}: {warnings}"
 
     def test_server_stop_is_idempotent(self):
         """Calling stop() twice on ProxyServer does not raise."""
         from tokenpak.proxy.server import ProxyServer
 
-        server = ProxyServer(host="127.0.0.1", port=_next_port())
+        server = ProxyServer(host="127.0.0.1", port=free_port())
         # stop without start should not crash
         server.stop()
         server.stop()  # second call must also be safe
@@ -139,9 +117,7 @@ class TestProxyLifecycle:
         """ProxyServer.start(blocking=False) returns quickly and server is reachable."""
         from tokenpak.proxy.server import ProxyServer
 
-        port = _next_port()
-        while not _port_is_free(port):
-            port = _next_port()
+        port = free_port()
 
         server = ProxyServer(host="127.0.0.1", port=port)
         try:

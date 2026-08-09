@@ -22,6 +22,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
+from tests.proxy._proxy_subprocess import free_port
+
 pytestmark = pytest.mark.needs_proxy
 
 # Force async backend for all tests in this module
@@ -33,19 +35,16 @@ os.environ.setdefault("TOKENPAK_CONCURRENCY", "200")
 # Fixture: start async proxy on an ephemeral port
 # ---------------------------------------------------------------------------
 
-ASYNC_PORT = 19766
-_BASE = f"http://127.0.0.1:{ASYNC_PORT}"
-
 
 @pytest.fixture(scope="module")
 def async_proxy():
     """Start the async proxy and yield; tear down after module tests complete."""
     from tokenpak.proxy.server import ProxyServer
 
-    server = ProxyServer(host="127.0.0.1", port=ASYNC_PORT)
+    server = ProxyServer(host="127.0.0.1", port=free_port())
     server.start(blocking=False)
     # Give uvicorn a moment to bind
-    _wait_for_port(ASYNC_PORT, timeout=8)
+    _wait_for_port(server.port, timeout=8)
     yield server
     server.stop()
 
@@ -62,8 +61,8 @@ def _wait_for_port(port: int, timeout: float = 10.0):
     raise RuntimeError(f"Port {port} did not become available within {timeout}s")
 
 
-def _get(path: str) -> tuple[int, dict]:
-    url = _BASE + path
+def _get(proxy, path: str) -> tuple[int, dict]:
+    url = f"http://127.0.0.1:{proxy.port}{path}"
     req = urllib.request.Request(url)
     with urllib.request.urlopen(req, timeout=10) as resp:
         return resp.status, json.loads(resp.read())
@@ -85,18 +84,18 @@ REQUIRED_HEALTH_FIELDS = {
 
 
 def test_async_health_200(async_proxy):
-    status, data = _get("/health")
+    status, data = _get(async_proxy, "/health")
     assert status == 200
 
 
 def test_async_health_fields(async_proxy):
-    _, data = _get("/health")
+    _, data = _get(async_proxy, "/health")
     missing = REQUIRED_HEALTH_FIELDS - data.keys()
     assert not missing, f"Missing /health fields: {missing}"
 
 
 def test_async_health_status_ok(async_proxy):
-    _, data = _get("/health")
+    _, data = _get(async_proxy, "/health")
     assert data["status"] == "ok"
 
 
@@ -106,7 +105,7 @@ def test_async_health_status_ok(async_proxy):
 
 
 def test_async_stats_200(async_proxy):
-    status, data = _get("/stats")
+    status, data = _get(async_proxy, "/stats")
     assert status == 200
     assert "session" in data or "compilation_mode" in data
 
@@ -117,7 +116,7 @@ def test_async_stats_200(async_proxy):
 
 
 def test_async_stats_last_200(async_proxy):
-    status, data = _get("/stats/last")
+    status, data = _get(async_proxy, "/stats/last")
     assert status == 200
 
 
@@ -127,7 +126,7 @@ def test_async_stats_last_200(async_proxy):
 
 
 def test_async_stats_session(async_proxy):
-    status, data = _get("/stats/session")
+    status, data = _get(async_proxy, "/stats/session")
     assert status == 200
     assert "session_requests" in data
 
@@ -138,7 +137,7 @@ def test_async_stats_session(async_proxy):
 
 
 def test_async_traces(async_proxy):
-    status, data = _get("/traces")
+    status, data = _get(async_proxy, "/traces")
     assert status == 200
     assert "traces" in data
     assert "count" in data
@@ -150,7 +149,7 @@ def test_async_traces(async_proxy):
 
 
 def test_async_trace_last(async_proxy):
-    status, data = _get("/trace/last")
+    status, data = _get(async_proxy, "/trace/last")
     assert status == 200
     # Either a real trace or an error (no traces yet)
     assert "error" in data or "request_id" in data
@@ -162,7 +161,7 @@ def test_async_trace_last(async_proxy):
 
 
 def test_async_degradation(async_proxy):
-    status, data = _get("/degradation")
+    status, data = _get(async_proxy, "/degradation")
     assert status == 200
 
 
@@ -172,7 +171,7 @@ def test_async_degradation(async_proxy):
 
 
 def test_async_circuit_breakers(async_proxy):
-    status, data = _get("/circuit-breakers")
+    status, data = _get(async_proxy, "/circuit-breakers")
     assert status == 200
     assert "circuit_breakers" in data or "enabled" in data
 
@@ -202,7 +201,7 @@ def test_async_50_concurrent_requests(async_proxy):
 
     def _one_request():
         try:
-            status, _ = _get("/health")
+            status, _ = _get(async_proxy, "/health")
             with lock:
                 results.append(status)
         except Exception as exc:
@@ -241,7 +240,7 @@ def test_async_health_overhead_under_10ms(async_proxy):
     times = []
     for _ in range(5):
         t0 = time.monotonic()
-        _get("/health")
+        _get(async_proxy, "/health")
         times.append((time.monotonic() - t0) * 1000)
     median_ms = sorted(times)[len(times) // 2]
     assert median_ms < BUDGET_MS, (
@@ -414,7 +413,7 @@ def test_async_backend_is_quarantined_not_production(monkeypatch):
     for _entry in ("start_async_proxy_in_thread", "run_async_proxy", "create_async_app"):
         monkeypatch.setattr(server_async, _entry, _sentinel(_entry), raising=True)
 
-    TEMP_PORT = 19867
+    TEMP_PORT = free_port()
     ps = start_proxy(host="127.0.0.1", port=TEMP_PORT, blocking=False)
     try:
         _wait_for_port(TEMP_PORT, timeout=8)
@@ -491,7 +490,7 @@ def test_health_responsive_during_load(async_proxy):
         barrier.wait()
         for _ in range(3):
             try:
-                _get("/health")
+                _get(async_proxy, "/health")
                 time.sleep(0.01)
             except Exception:
                 pass
@@ -501,7 +500,7 @@ def test_health_responsive_during_load(async_proxy):
         for _ in range(5):
             t0 = time.monotonic()
             try:
-                _get("/health")
+                _get(async_proxy, "/health")
                 health_times.append((time.monotonic() - t0) * 1000)
             except Exception:
                 health_times.append(9999)
@@ -528,7 +527,10 @@ def test_health_responsive_during_load(async_proxy):
 
 def test_async_404_on_unknown_route(async_proxy):
     try:
-        urllib.request.urlopen(_BASE + "/nonexistent-endpoint-xyzzy", timeout=5)
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{async_proxy.port}/nonexistent-endpoint-xyzzy",
+            timeout=5,
+        )
     except urllib.error.HTTPError as exc:
         assert exc.code == 404
     except Exception:
@@ -543,7 +545,7 @@ def test_async_404_on_unknown_route(async_proxy):
 def test_async_proxy_start_stop_cycle():
     from tokenpak.proxy.server import ProxyServer
 
-    CYCLE_PORT = 19868
+    CYCLE_PORT = free_port()
     ps = ProxyServer(host="127.0.0.1", port=CYCLE_PORT)
     ps.start(blocking=False)
     _wait_for_port(CYCLE_PORT, timeout=8)
