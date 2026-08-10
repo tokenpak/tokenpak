@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-08T22:44:53Z",
+  "generated_at": "2026-08-10T17:27:59Z",
   "package_version": "1.18.5",
   "symbols": [
     {
@@ -4445,6 +4445,22 @@
     },
     {
       "module": "tokenpak.core.contracts",
+      "name": "SESSION_ECONOMICS_SCHEMA_VERSION"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "SessionEconomics"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "SessionEconomicsContractError"
+    },
+    {
+      "module": "tokenpak.core.contracts",
+      "name": "UnsupportedSessionEconomicsVersion"
+    },
+    {
+      "module": "tokenpak.core.contracts",
       "name": "error"
     },
     {
@@ -4482,6 +4498,106 @@
     {
       "module": "tokenpak.core.contracts.measured",
       "name": "unavailable"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "BindingConstraint"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "BurnSlope"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "CacheState"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "CostBasis"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "CostValue"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "Coverage"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "DriftState"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "Forecast"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "ForecastStatus"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "GuardState"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "IntervalEstimate"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "ModelRef"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "NumericValue"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "PriceFreshness"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "RateProvenance"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "Runway"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "RunwayStatus"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "SCHEMA_VERSION"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "SessionEconomics"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "SessionEconomicsContractError"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "SessionFacts"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "SessionRef"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "SessionState"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "UnsupportedSessionEconomicsVersion"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics",
+      "name": "ValueState"
     },
     {
       "module": "tokenpak.core.cooldown",
