@@ -171,7 +171,7 @@ def _require_value_object(value: object, expected_type: type[object], path: str)
 
 
 def _number(value: object, path: str) -> Number:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if type(value) not in (int, float):
         raise SessionEconomicsContractError(f"{path} must be numeric")
     if not math.isfinite(float(value)) or value < 0:
         raise SessionEconomicsContractError(f"{path} must be finite and non-negative")
@@ -179,7 +179,7 @@ def _number(value: object, path: str) -> Number:
 
 
 def _string(value: object, path: str) -> str:
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise SessionEconomicsContractError(f"{path} must be a string")
     if any(unicodedata.category(character) == "Cs" for character in value):
         raise SessionEconomicsContractError(f"{path} must contain valid Unicode scalar values")
@@ -217,6 +217,15 @@ def _input_string(value: object, path: str, *, default: str = "") -> str:
     if value is _MISSING:
         return default
     return _string(value, path)
+
+
+def _require_unit(unit: str, expected: str, path: str) -> None:
+    """Reject explicit units that contradict an enclosing field's dimension."""
+
+    if unit not in ("", expected):
+        raise SessionEconomicsContractError(
+            f"{path}.unit must be {expected!r} when specified"
+        )
 
 
 def _timestamp(value: str, path: str) -> None:
@@ -454,6 +463,7 @@ class SessionFacts(_FinalValueObject):
         ):
             value = getattr(self, name)
             _require_value_object(value, NumericValue, f"facts.{name}")
+            _require_unit(value.unit, "tokens", f"facts.{name}")
             if value.state is ValueState.ESTIMATED:
                 raise SessionEconomicsContractError(f"facts.{name} cannot use estimated state")
         _require_value_object(self.cost_usd, CostValue, "facts.cost_usd")
@@ -529,11 +539,7 @@ class SessionRef(_FinalValueObject):
             raise SessionEconomicsContractError(
                 f"{self.identity_state.value} session identity must be null"
             )
-        if (
-            isinstance(self.turns_observed, bool)
-            or not isinstance(self.turns_observed, int)
-            or self.turns_observed < 0
-        ):
+        if type(self.turns_observed) is not int or self.turns_observed < 0:
             raise SessionEconomicsContractError(
                 "session.turns_observed must be a non-negative integer"
             )
@@ -555,7 +561,7 @@ class SessionRef(_FinalValueObject):
     def from_dict(cls, raw: Mapping[str, Any]) -> "SessionRef":
         data = _as_mapping(raw, "session")
         turns = data.get("turns_observed")
-        if isinstance(turns, bool) or not isinstance(turns, int):
+        if type(turns) is not int:
             raise SessionEconomicsContractError(
                 "session.turns_observed must be a non-negative integer"
             )
@@ -585,16 +591,19 @@ class SessionState(_FinalValueObject):
     cache_state: CacheState
 
     def __post_init__(self) -> None:
-        for name in (
-            "context_tokens",
-            "base_tokens",
-            "context_growth_ewma",
-            "burn_tokens_per_turn",
-            "burn_usd_per_turn",
-            "idle_seconds",
-            "cache_ttl_seconds",
-        ):
-            _require_value_object(getattr(self, name), NumericValue, f"state.{name}")
+        units = {
+            "context_tokens": "tokens",
+            "base_tokens": "tokens",
+            "context_growth_ewma": "tokens/turn",
+            "burn_tokens_per_turn": "tokens/turn",
+            "burn_usd_per_turn": "usd/turn",
+            "idle_seconds": "seconds",
+            "cache_ttl_seconds": "seconds",
+        }
+        for name, unit in units.items():
+            value = getattr(self, name)
+            _require_value_object(value, NumericValue, f"state.{name}")
+            _require_unit(value.unit, unit, f"state.{name}")
         _require_enum(self.burn_slope, BurnSlope, "state.burn_slope")
         _require_enum(self.cache_state, CacheState, "state.cache_state")
 
@@ -645,7 +654,7 @@ class Runway(_FinalValueObject):
         _require_enum(self.guard_state, GuardState, "runway.guard_state")
         _optional_string(self.reason, "runway.reason")
         if self.status is RunwayStatus.AVAILABLE:
-            if isinstance(self.turns, bool) or not isinstance(self.turns, int) or self.turns < 0:
+            if type(self.turns) is not int or self.turns < 0:
                 raise SessionEconomicsContractError(
                     "available runway requires non-negative integer turns"
                 )
@@ -758,11 +767,7 @@ class Coverage(_FinalValueObject):
                 raise SessionEconomicsContractError(
                     "forecast.coverage.observed must be between 0 and 1"
                 )
-        if (
-            isinstance(self.history_n, bool)
-            or not isinstance(self.history_n, int)
-            or self.history_n < 0
-        ):
+        if type(self.history_n) is not int or self.history_n < 0:
             raise SessionEconomicsContractError(
                 "forecast.coverage.history_n must be a non-negative integer"
             )
@@ -779,7 +784,7 @@ class Coverage(_FinalValueObject):
     def from_dict(cls, raw: Mapping[str, Any]) -> "Coverage":
         data = _as_mapping(raw, "forecast.coverage")
         history_n = data.get("history_n", 0)
-        if isinstance(history_n, bool) or not isinstance(history_n, int):
+        if type(history_n) is not int:
             raise SessionEconomicsContractError(
                 "forecast.coverage.history_n must be a non-negative integer"
             )
@@ -809,18 +814,24 @@ class Forecast(_FinalValueObject):
 
     def __post_init__(self) -> None:
         _require_enum(self.status, ForecastStatus, "forecast.status")
-        for name in (
-            "remaining_tokens_likely_50",
-            "remaining_cost_usd_likely_50",
-            "expected_turns",
-        ):
-            _require_value_object(getattr(self, name), IntervalEstimate, f"forecast.{name}")
-        for name in (
-            "remaining_tokens_ceiling_90",
-            "remaining_cost_usd_ceiling_90",
-            "predicted_block_probability",
-        ):
-            _require_value_object(getattr(self, name), NumericValue, f"forecast.{name}")
+        interval_units = {
+            "remaining_tokens_likely_50": "tokens",
+            "remaining_cost_usd_likely_50": "usd",
+            "expected_turns": "turns",
+        }
+        for name, unit in interval_units.items():
+            value = getattr(self, name)
+            _require_value_object(value, IntervalEstimate, f"forecast.{name}")
+            _require_unit(value.unit, unit, f"forecast.{name}")
+        numeric_units = {
+            "remaining_tokens_ceiling_90": "tokens",
+            "remaining_cost_usd_ceiling_90": "usd",
+            "predicted_block_probability": "probability",
+        }
+        for name, unit in numeric_units.items():
+            value = getattr(self, name)
+            _require_value_object(value, NumericValue, f"forecast.{name}")
+            _require_unit(value.unit, unit, f"forecast.{name}")
         _require_value_object(self.coverage, Coverage, "forecast.coverage")
         _optional_string(self.reason, "forecast.reason")
         token_predictions = (

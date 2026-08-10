@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import FrozenInstanceError, replace
 
 import pytest
@@ -58,6 +59,40 @@ class _EqualityMimic:
 
     def __eq__(self, other: object) -> bool:
         return other == self.value
+
+
+class _InvisibleString(str):
+    def __iter__(self):
+        return iter("visible-to-validator")
+
+
+class _FakeTimestamp(str):
+    def replace(self, old: str, new: str) -> str:
+        return "2026-08-09T23:00:00+00:00"
+
+
+class _NegativeInt(int):
+    def __lt__(self, other: object) -> bool:
+        return False
+
+
+class _InvertedLow(int):
+    def __gt__(self, other: object) -> bool:
+        return False
+
+
+class _LowCeiling(int):
+    def __lt__(self, other: object) -> bool:
+        return False
+
+
+class _HighProbability(float):
+    def __gt__(self, other: object) -> bool:
+        return False
+
+
+class _IntegerSubclass(int):
+    pass
 
 
 def _available_contract() -> SessionEconomics:
@@ -161,6 +196,117 @@ def test_observed_zero_is_not_missing() -> None:
         "unit": "tokens",
     }
     assert NumericValue.from_dict(value.to_dict()) == value
+
+
+@pytest.mark.parametrize(
+    "path,expected_unit",
+    [
+        (("facts", "input_tokens"), "tokens"),
+        (("facts", "output_tokens"), "tokens"),
+        (("facts", "cache_read_tokens"), "tokens"),
+        (("facts", "cache_write_tokens"), "tokens"),
+        (("state", "context_tokens"), "tokens"),
+        (("state", "base_tokens"), "tokens"),
+        (("state", "context_growth_ewma"), "tokens/turn"),
+        (("state", "burn_tokens_per_turn"), "tokens/turn"),
+        (("state", "burn_usd_per_turn"), "usd/turn"),
+        (("state", "idle_seconds"), "seconds"),
+        (("state", "cache_ttl_seconds"), "seconds"),
+        (("forecast", "remaining_tokens_likely_50"), "tokens"),
+        (("forecast", "remaining_tokens_ceiling_90"), "tokens"),
+        (("forecast", "remaining_cost_usd_likely_50"), "usd"),
+        (("forecast", "remaining_cost_usd_ceiling_90"), "usd"),
+        (("forecast", "expected_turns"), "turns"),
+        (("forecast", "predicted_block_probability"), "probability"),
+    ],
+)
+def test_wire_fields_reject_contradictory_units(
+    path: tuple[str, str], expected_unit: str
+) -> None:
+    payload = _available_contract().to_dict()
+    target = payload[path[0]][path[1]]
+    target["unit"] = "contradictory"
+
+    with pytest.raises(
+        SessionEconomicsContractError,
+        match=rf"unit must be '{expected_unit}'",
+    ):
+        SessionEconomics.from_dict(payload)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        pytest.param(
+            lambda contract: replace(
+                contract,
+                facts=replace(
+                    contract.facts,
+                    input_tokens=replace(contract.facts.input_tokens, unit="usd"),
+                ),
+            ),
+            id="input-tokens-as-usd",
+        ),
+        pytest.param(
+            lambda contract: replace(
+                contract,
+                forecast=replace(
+                    contract.forecast,
+                    expected_turns=replace(contract.forecast.expected_turns, unit="minutes"),
+                ),
+            ),
+            id="expected-turns-as-minutes",
+        ),
+        pytest.param(
+            lambda contract: replace(
+                contract,
+                forecast=replace(
+                    contract.forecast,
+                    predicted_block_probability=replace(
+                        contract.forecast.predicted_block_probability,
+                        unit="tokens",
+                    ),
+                ),
+            ),
+            id="probability-as-tokens",
+        ),
+    ],
+)
+def test_direct_construction_rejects_contradictory_field_units(
+    mutator: Callable[[SessionEconomics], object],
+) -> None:
+    with pytest.raises(SessionEconomicsContractError, match="unit must be"):
+        mutator(_available_contract())
+
+
+def test_v1_payloads_may_omit_units_when_field_name_implies_dimension() -> None:
+    payload = _available_contract().to_dict()
+    paths = [
+        ("facts", "input_tokens"),
+        ("facts", "output_tokens"),
+        ("facts", "cache_read_tokens"),
+        ("facts", "cache_write_tokens"),
+        ("state", "context_tokens"),
+        ("state", "base_tokens"),
+        ("state", "context_growth_ewma"),
+        ("state", "burn_tokens_per_turn"),
+        ("state", "burn_usd_per_turn"),
+        ("state", "idle_seconds"),
+        ("state", "cache_ttl_seconds"),
+        ("forecast", "remaining_tokens_likely_50"),
+        ("forecast", "remaining_tokens_ceiling_90"),
+        ("forecast", "remaining_cost_usd_likely_50"),
+        ("forecast", "remaining_cost_usd_ceiling_90"),
+        ("forecast", "expected_turns"),
+        ("forecast", "predicted_block_probability"),
+    ]
+    for parent, field in paths:
+        payload[parent][field].pop("unit")
+
+    restored = SessionEconomics.from_dict(payload)
+
+    assert restored.facts.input_tokens.unit == ""
+    assert restored.forecast.expected_turns.unit == ""
 
 
 @pytest.mark.parametrize("state", [ValueState.NO_DATA, ValueState.UNAVAILABLE, ValueState.ERROR])
@@ -376,6 +522,58 @@ def test_turn_count_requires_a_non_negative_integer(turns: object) -> None:
             turns_observed=turns,  # type: ignore[arg-type]
             model=ModelRef("provider/model"),
         )
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        pytest.param(
+            lambda contract: replace(
+                contract.session,
+                turns_observed=_IntegerSubclass(contract.session.turns_observed),
+            ),
+            id="session-turns",
+        ),
+        pytest.param(
+            lambda contract: replace(
+                contract.runway,
+                turns=_IntegerSubclass(contract.runway.turns or 0),
+            ),
+            id="runway-turns",
+        ),
+        pytest.param(
+            lambda contract: replace(
+                contract.forecast.coverage,
+                history_n=_IntegerSubclass(contract.forecast.coverage.history_n),
+            ),
+            id="coverage-history",
+        ),
+    ],
+)
+def test_direct_integer_count_fields_reject_int_subclasses(
+    mutator: Callable[[SessionEconomics], object],
+) -> None:
+    with pytest.raises(SessionEconomicsContractError, match="non-negative integer"):
+        mutator(_available_contract())
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("session", "turns_observed"),
+        ("runway", "turns"),
+        ("forecast", "coverage", "history_n"),
+    ],
+)
+def test_wire_integer_count_fields_reject_int_subclasses(path: tuple[str, ...]) -> None:
+    payload = _available_contract().to_dict()
+    target = payload
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = _IntegerSubclass(target[path[-1]])
+
+    with pytest.raises(SessionEconomicsContractError, match="non-negative integer"):
+        SessionEconomics.from_dict(payload)
 
 
 def test_available_forecast_requires_range_ceiling_and_turns() -> None:
@@ -651,6 +849,101 @@ def test_visible_unicode_identifiers_are_preserved_without_normalization(visible
 def test_direct_construction_rejects_unknown_enum_members(factory, field: str) -> None:
     with pytest.raises(SessionEconomicsContractError, match=field):
         factory()
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        pytest.param(
+            lambda contract: replace(
+                contract,
+                facts=replace(
+                    contract.facts,
+                    cost_usd=CostValue(
+                        ValueState.ESTIMATED,
+                        0.42,
+                        CostBasis.RATE_CARD,
+                        rate_provenance=RateProvenance(
+                            catalog_version=_InvisibleString("\u200b"),
+                            effective_at="2026-08-09T00:00:00Z",
+                            source=_InvisibleString("\ufeff"),
+                            freshness=PriceFreshness.FRESH,
+                        ),
+                    ),
+                ),
+            ),
+            id="invisible-string-rate-provenance",
+        ),
+        pytest.param(
+            lambda contract: replace(
+                contract,
+                as_of=_FakeTimestamp("not-a-timestamp"),
+            ),
+            id="string-subclass-timestamp",
+        ),
+        pytest.param(
+            lambda contract: replace(
+                contract,
+                facts=replace(
+                    contract.facts,
+                    input_tokens=NumericValue.observed(
+                        _NegativeInt(-1),
+                        source="provider-usage",
+                    ),
+                ),
+            ),
+            id="negative-int-subclass",
+        ),
+        pytest.param(
+            lambda contract: replace(
+                contract,
+                forecast=replace(
+                    contract.forecast,
+                    remaining_tokens_likely_50=IntervalEstimate(
+                        ValueState.ESTIMATED,
+                        _InvertedLow(22_001),
+                        22_000,
+                        source="conformal-replay",
+                    ),
+                ),
+            ),
+            id="inverted-interval-int-subclass",
+        ),
+        pytest.param(
+            lambda contract: replace(
+                contract,
+                forecast=replace(
+                    contract.forecast,
+                    remaining_tokens_ceiling_90=NumericValue.estimated(
+                        _LowCeiling(1),
+                        source="conformal-replay",
+                    ),
+                ),
+            ),
+            id="low-ceiling-int-subclass",
+        ),
+        pytest.param(
+            lambda contract: replace(
+                contract,
+                forecast=replace(
+                    contract.forecast,
+                    predicted_block_probability=NumericValue.estimated(
+                        _HighProbability(2.0),
+                        source="held-out-replay",
+                    ),
+                ),
+            ),
+            id="high-probability-float-subclass",
+        ),
+    ],
+)
+def test_public_construction_rejects_primitive_subclass_bypasses(
+    mutator: Callable[[SessionEconomics], object],
+) -> None:
+    """Regression: primitive subclasses cannot bypass validation and break round trips."""
+
+    with pytest.raises(SessionEconomicsContractError):
+        mutator(_available_contract())
 
 
 @pytest.mark.parametrize(
