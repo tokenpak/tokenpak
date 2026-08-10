@@ -52,6 +52,14 @@ def _interval(low: float, high: float, *, unit: str) -> IntervalEstimate:
     )
 
 
+class _EqualityMimic:
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        return other == self.value
+
+
 def _available_contract() -> SessionEconomics:
     return SessionEconomics(
         as_of="2026-08-09T23:00:00Z",
@@ -287,6 +295,49 @@ def test_schema_version_mismatch_is_explicit(version: object) -> None:
     payload = _available_contract().to_dict()
     payload["schema_version"] = version
     with pytest.raises(UnsupportedSessionEconomicsVersion, match="unsupported schema_version"):
+        SessionEconomics.from_dict(payload)
+
+
+@pytest.mark.parametrize("via_from_dict", [False, True])
+def test_schema_version_rejects_non_string_equality_mimic(via_from_dict: bool) -> None:
+    version = _EqualityMimic(SCHEMA_VERSION)
+    with pytest.raises(UnsupportedSessionEconomicsVersion, match="unsupported schema_version"):
+        if via_from_dict:
+            payload = _available_contract().to_dict()
+            payload["schema_version"] = version
+            SessionEconomics.from_dict(payload)
+        else:
+            replace(_available_contract(), schema_version=version)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "path,wire_value",
+    [
+        (("facts", "input_tokens", "state"), "observed"),
+        (("facts", "cost_usd", "state"), "estimated"),
+        (("facts", "cost_usd", "basis"), "rate_card"),
+        (("facts", "cost_usd", "rate_provenance", "freshness"), "fresh"),
+        (("session", "identity_state"), "observed"),
+        (("state", "burn_slope"), "up"),
+        (("state", "cache_state"), "warm"),
+        (("runway", "status"), "available"),
+        (("runway", "binding_constraint"), "budget"),
+        (("runway", "guard_state"), "amber"),
+        (("forecast", "status"), "available"),
+        (("forecast", "remaining_tokens_likely_50", "state"), "estimated"),
+        (("forecast", "coverage", "drift_state"), "stable"),
+    ],
+)
+def test_from_dict_rejects_non_string_enum_equality_mimics(
+    path: tuple[str, ...], wire_value: str
+) -> None:
+    payload = _available_contract().to_dict()
+    target = payload
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = _EqualityMimic(wire_value)
+
+    with pytest.raises(SessionEconomicsContractError, match="must be one of"):
         SessionEconomics.from_dict(payload)
 
 

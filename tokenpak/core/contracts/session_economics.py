@@ -146,10 +146,12 @@ def _as_mapping(value: object, path: str) -> Mapping[str, Any]:
 
 
 def _enum(enum_type: type[Enum], value: object, path: str) -> Any:
+    allowed = ", ".join(item.value for item in enum_type)
+    if type(value) is not str:
+        raise SessionEconomicsContractError(f"{path} must be one of: {allowed}")
     try:
         return enum_type(value)
     except (TypeError, ValueError) as exc:
-        allowed = ", ".join(item.value for item in enum_type)
         raise SessionEconomicsContractError(f"{path} must be one of: {allowed}") from exc
 
 
@@ -953,7 +955,7 @@ class SessionEconomics(_FinalValueObject):
                 expected_type,
                 f"session economics.{name}",
             )
-        if self.schema_version != SCHEMA_VERSION:
+        if type(self.schema_version) is not str or self.schema_version != SCHEMA_VERSION:
             raise UnsupportedSessionEconomicsVersion(
                 f"unsupported schema_version {self.schema_version!r}; expected {SCHEMA_VERSION!r}"
             )
@@ -1005,7 +1007,7 @@ class SessionEconomics(_FinalValueObject):
     def from_dict(cls, raw: Mapping[str, Any]) -> "SessionEconomics":
         data = _as_mapping(raw, "session economics")
         version = data.get("schema_version")
-        if version != SCHEMA_VERSION:
+        if type(version) is not str or version != SCHEMA_VERSION:
             raise UnsupportedSessionEconomicsVersion(
                 f"unsupported schema_version {version!r}; expected {SCHEMA_VERSION!r}"
             )
