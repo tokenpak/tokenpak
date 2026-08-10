@@ -223,9 +223,7 @@ def _require_unit(unit: str, expected: str, path: str) -> None:
     """Reject explicit units that contradict an enclosing field's dimension."""
 
     if unit not in ("", expected):
-        raise SessionEconomicsContractError(
-            f"{path}.unit must be {expected!r} when specified"
-        )
+        raise SessionEconomicsContractError(f"{path}.unit must be {expected!r} when specified")
 
 
 def _timestamp(value: str, path: str) -> None:

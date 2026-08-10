@@ -220,9 +220,7 @@ def test_observed_zero_is_not_missing() -> None:
         (("forecast", "predicted_block_probability"), "probability"),
     ],
 )
-def test_wire_fields_reject_contradictory_units(
-    path: tuple[str, str], expected_unit: str
-) -> None:
+def test_wire_fields_reject_contradictory_units(path: tuple[str, str], expected_unit: str) -> None:
     payload = _available_contract().to_dict()
     target = payload[path[0]][path[1]]
     target["unit"] = "contradictory"
