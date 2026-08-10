@@ -473,6 +473,100 @@ def test_whitespace_only_identifiers_are_rejected(factory, match: str) -> None:
         factory()
 
 
+@pytest.mark.parametrize("format_only", ["\u200b", "\ufeff", "\u200b\ufeff"])
+@pytest.mark.parametrize(
+    "factory",
+    [
+        lambda value: NumericValue.observed(1, source=value),
+        lambda value: NumericValue.error(value),
+        lambda value: ModelRef(value),
+        lambda value: ModelRef("provider/model", value),
+        lambda value: SessionRef(
+            value,
+            ValueState.OBSERVED,
+            1,
+            ModelRef("provider/model"),
+        ),
+        lambda value: RateProvenance(
+            catalog_version=value,
+            effective_at="2026-08-09T00:00:00Z",
+            source="provider-rate-card",
+            freshness=PriceFreshness.FRESH,
+        ),
+        lambda value: RateProvenance(
+            catalog_version="catalog-1",
+            effective_at="2026-08-09T00:00:00Z",
+            source=value,
+            freshness=PriceFreshness.FRESH,
+        ),
+        lambda value: CostValue(
+            ValueState.OBSERVED,
+            1,
+            CostBasis.PROVIDER_BILL,
+            source=value,
+        ),
+        lambda value: IntervalEstimate(ValueState.ESTIMATED, 1, 2, source=value),
+        lambda value: Coverage(method=value),
+    ],
+)
+def test_format_only_identifiers_are_rejected(factory, format_only: str) -> None:
+    with pytest.raises(SessionEconomicsContractError):
+        factory(format_only)
+
+
+@pytest.mark.parametrize(
+    "factory,field",
+    [
+        (lambda: NumericValue("bogus"), "numeric value.state"),
+        (lambda: RateProvenance(freshness="bogus"), "rate_provenance.freshness"),
+        (lambda: CostValue("bogus"), "cost_usd.state"),
+        (
+            lambda: CostValue(ValueState.UNAVAILABLE, basis="bogus"),
+            "cost_usd.basis",
+        ),
+        (
+            lambda: SessionRef(None, "bogus", 0, ModelRef("provider/model")),
+            "session.identity_state",
+        ),
+        (lambda: replace(_available_contract().state, burn_slope="bogus"), "state.burn_slope"),
+        (lambda: replace(_available_contract().state, cache_state="bogus"), "state.cache_state"),
+        (
+            lambda: Runway(
+                "bogus",
+                None,
+                BindingConstraint.UNKNOWN,
+                GuardState.UNKNOWN,
+            ),
+            "runway.status",
+        ),
+        (
+            lambda: Runway(
+                RunwayStatus.UNAVAILABLE,
+                None,
+                "bogus",
+                GuardState.UNKNOWN,
+            ),
+            "runway.binding_constraint",
+        ),
+        (
+            lambda: Runway(
+                RunwayStatus.UNAVAILABLE,
+                None,
+                BindingConstraint.UNKNOWN,
+                "bogus",
+            ),
+            "runway.guard_state",
+        ),
+        (lambda: IntervalEstimate("bogus"), "interval.state"),
+        (lambda: Coverage(drift_state="bogus"), "forecast.coverage.drift_state"),
+        (lambda: replace(_available_contract().forecast, status="bogus"), "forecast.status"),
+    ],
+)
+def test_direct_construction_rejects_unknown_enum_members(factory, field: str) -> None:
+    with pytest.raises(SessionEconomicsContractError, match=field):
+        factory()
+
+
 @pytest.mark.parametrize("field,value", [("id", 123), ("effort", ["high"]), ("effort", None)])
 def test_model_reference_rejects_non_string_values(field: str, value: object) -> None:
     payload = _available_contract().to_dict()
