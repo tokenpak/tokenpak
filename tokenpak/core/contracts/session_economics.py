@@ -158,7 +158,7 @@ def _enum(enum_type: type[Enum], value: object, path: str) -> Any:
 def _require_enum(value: object, enum_type: type[Enum], path: str) -> None:
     """Reject raw or unknown values on direct value-object construction."""
 
-    if not isinstance(value, enum_type):
+    if type(value) is not enum_type:
         allowed = ", ".join(str(item.value) for item in enum_type)
         raise SessionEconomicsContractError(f"{path} must be one of: {allowed}")
 

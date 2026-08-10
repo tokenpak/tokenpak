@@ -61,6 +61,20 @@ class _EqualityMimic:
         return other == self.value
 
 
+class _EnumClassSpoof:
+    def __init__(self, enum_type: type, value: str) -> None:
+        self._enum_type = enum_type
+        self._value = value
+
+    @property
+    def __class__(self) -> type:
+        return self._enum_type
+
+    @property
+    def value(self) -> str:
+        return self._value
+
+
 class _InvisibleString(str):
     def __iter__(self):
         return iter("visible-to-validator")
@@ -847,6 +861,14 @@ def test_visible_unicode_identifiers_are_preserved_without_normalization(visible
 def test_direct_construction_rejects_unknown_enum_members(factory, field: str) -> None:
     with pytest.raises(SessionEconomicsContractError, match=field):
         factory()
+
+
+def test_direct_construction_rejects_enum_class_spoofs() -> None:
+    spoof = _EnumClassSpoof(ValueState, ValueState.OBSERVED.value)
+    assert isinstance(spoof, ValueState)
+
+    with pytest.raises(SessionEconomicsContractError, match="numeric value.state"):
+        NumericValue(spoof)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
