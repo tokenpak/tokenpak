@@ -473,7 +473,22 @@ def test_whitespace_only_identifiers_are_rejected(factory, match: str) -> None:
         factory()
 
 
-@pytest.mark.parametrize("format_only", ["\u200b", "\ufeff", "\u200b\ufeff"])
+@pytest.mark.parametrize(
+    "format_only",
+    [
+        "\u034f",
+        "\u115f",
+        "\u1160",
+        "\u180b",
+        "\u200b",
+        "\u2800",
+        "\u3164",
+        "\ufeff",
+        "\uffa0",
+        "\U000e0100",
+        "\u200b\ufeff",
+    ],
+)
 @pytest.mark.parametrize(
     "factory",
     [
@@ -512,6 +527,26 @@ def test_whitespace_only_identifiers_are_rejected(factory, match: str) -> None:
 def test_format_only_identifiers_are_rejected(factory, format_only: str) -> None:
     with pytest.raises(SessionEconomicsContractError):
         factory(format_only)
+
+
+def test_isolated_surrogate_is_rejected_from_truth_bearing_strings() -> None:
+    with pytest.raises(SessionEconomicsContractError, match="valid Unicode scalar values"):
+        RateProvenance(
+            catalog_version="\ud800",
+            effective_at="2026-08-09T00:00:00Z",
+            source="provider-rate-card",
+            freshness=PriceFreshness.FRESH,
+        )
+
+
+@pytest.mark.parametrize(
+    "visible",
+    ["café", "cafe\u0301", "モデル", "model\u200b", "🚀\ufe0f"],
+)
+def test_visible_unicode_identifiers_are_preserved_without_normalization(visible: str) -> None:
+    reference = ModelRef(visible)
+    assert reference.id == visible
+    assert reference.to_dict()["id"] == visible
 
 
 @pytest.mark.parametrize(
@@ -565,6 +600,64 @@ def test_format_only_identifiers_are_rejected(factory, format_only: str) -> None
 def test_direct_construction_rejects_unknown_enum_members(factory, field: str) -> None:
     with pytest.raises(SessionEconomicsContractError, match=field):
         factory()
+
+
+@pytest.mark.parametrize(
+    "value_object",
+    [
+        NumericValue,
+        RateProvenance,
+        CostValue,
+        SessionFacts,
+        ModelRef,
+        SessionRef,
+        SessionState,
+        Runway,
+        IntervalEstimate,
+        Coverage,
+        Forecast,
+        SessionEconomics,
+    ],
+)
+def test_contract_value_objects_cannot_bypass_validation_by_subclassing(
+    value_object: type,
+) -> None:
+    with pytest.raises(TypeError, match="does not support subclassing"):
+        type(f"Forged{value_object.__name__}", (value_object,), {})
+
+
+def test_rate_card_cost_rejects_duck_typed_provenance() -> None:
+    class ForgedRate:
+        complete = True
+        freshness = PriceFreshness.FRESH
+
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "catalog_version": None,
+                "effective_at": None,
+                "source": None,
+                "freshness": "fresh",
+            }
+
+    with pytest.raises(SessionEconomicsContractError, match="validated RateProvenance"):
+        CostValue(
+            ValueState.ESTIMATED,
+            1,
+            CostBasis.RATE_CARD,
+            rate_provenance=ForgedRate(),  # type: ignore[arg-type]
+        )
+
+
+def test_session_facts_rejects_duck_typed_numeric_value() -> None:
+    class ForgedNumeric:
+        state = ValueState.OBSERVED
+
+        def to_dict(self) -> dict[str, object]:
+            return {"state": "observed", "value": 1, "source": "forged"}
+
+    facts = _available_contract().facts
+    with pytest.raises(SessionEconomicsContractError, match="validated NumericValue"):
+        replace(facts, input_tokens=ForgedNumeric())  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("field,value", [("id", 123), ("effort", ["high"]), ("effort", None)])

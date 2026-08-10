@@ -24,6 +24,15 @@ from typing import Any, Mapping, Union
 Number = Union[int, float]
 SCHEMA_VERSION = "session-economics/1"
 _MISSING = object()
+_NON_RENDERING_SYMBOLS = frozenset(
+    {
+        0x115F,  # HANGUL CHOSEONG FILLER
+        0x1160,  # HANGUL JUNGSEONG FILLER
+        0x2800,  # BRAILLE PATTERN BLANK
+        0x3164,  # HANGUL FILLER
+        0xFFA0,  # HALFWIDTH HANGUL FILLER
+    }
+)
 
 
 class SessionEconomicsContractError(ValueError):
@@ -32,6 +41,26 @@ class SessionEconomicsContractError(ValueError):
 
 class UnsupportedSessionEconomicsVersion(SessionEconomicsContractError):
     """Raised when a consumer receives an unsupported schema version."""
+
+
+class _FinalValueObject:
+    """Prevent public contract objects from bypassing validation through subclasses."""
+
+    _tokenpak_final_value_object = False
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        final_base = next(
+            (
+                base
+                for base in cls.__bases__
+                if base.__dict__.get("_tokenpak_final_value_object", False)
+            ),
+            None,
+        )
+        if final_base is not None:
+            raise TypeError(f"{final_base.__name__} does not support subclassing")
+        cls._tokenpak_final_value_object = True
 
 
 class ValueState(str, Enum):
@@ -132,6 +161,13 @@ def _require_enum(value: object, enum_type: type[Enum], path: str) -> None:
         raise SessionEconomicsContractError(f"{path} must be one of: {allowed}")
 
 
+def _require_value_object(value: object, expected_type: type[object], path: str) -> None:
+    """Reject duck-typed or subclassed objects at direct-construction boundaries."""
+
+    if type(value) is not expected_type:
+        raise SessionEconomicsContractError(f"{path} must be a validated {expected_type.__name__}")
+
+
 def _number(value: object, path: str) -> Number:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise SessionEconomicsContractError(f"{path} must be numeric")
@@ -143,14 +179,20 @@ def _number(value: object, path: str) -> Number:
 def _string(value: object, path: str) -> str:
     if not isinstance(value, str):
         raise SessionEconomicsContractError(f"{path} must be a string")
+    if any(unicodedata.category(character) == "Cs" for character in value):
+        raise SessionEconomicsContractError(f"{path} must contain valid Unicode scalar values")
     return value
 
 
 def _has_visible_text(value: str) -> bool:
-    """Return whether a string contains more than spacing/control formatting."""
+    """Return whether a string contains at least one rendering base character."""
 
     return any(
-        not (character.isspace() or unicodedata.category(character) in {"Cc", "Cf"})
+        not (
+            character.isspace()
+            or unicodedata.category(character)[0] in {"C", "M", "Z"}
+            or ord(character) in _NON_RENDERING_SYMBOLS
+        )
         for character in value
     )
 
@@ -176,6 +218,7 @@ def _input_string(value: object, path: str, *, default: str = "") -> str:
 
 
 def _timestamp(value: str, path: str) -> None:
+    value = _string(value, path)
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (TypeError, ValueError) as exc:
@@ -185,7 +228,7 @@ def _timestamp(value: str, path: str) -> None:
 
 
 @dataclass(frozen=True)
-class NumericValue:
+class NumericValue(_FinalValueObject):
     """Numeric fact or estimate with explicit unavailable states."""
 
     state: ValueState
@@ -259,7 +302,7 @@ class NumericValue:
 
 
 @dataclass(frozen=True)
-class RateProvenance:
+class RateProvenance(_FinalValueObject):
     """Catalog identity and freshness for a rate-card estimate."""
 
     catalog_version: str | None = None
@@ -275,6 +318,8 @@ class RateProvenance:
                 raise SessionEconomicsContractError(
                     f"rate_provenance.{name} must be a string or null"
                 )
+            if value is not None:
+                _string(value, f"rate_provenance.{name}")
             if value is not None and not _has_visible_text(value):
                 raise SessionEconomicsContractError(
                     f"rate_provenance.{name} must be non-empty when present"
@@ -313,7 +358,7 @@ class RateProvenance:
 
 
 @dataclass(frozen=True)
-class CostValue:
+class CostValue(_FinalValueObject):
     """USD value with a basis that prevents stale-rate false precision."""
 
     state: ValueState
@@ -326,6 +371,11 @@ class CostValue:
     def __post_init__(self) -> None:
         _require_enum(self.state, ValueState, "cost_usd.state")
         _require_enum(self.basis, CostBasis, "cost_usd.basis")
+        _require_value_object(
+            self.rate_provenance,
+            RateProvenance,
+            "cost_usd.rate_provenance",
+        )
         _optional_string(self.source, "cost_usd.source")
         _optional_string(self.reason, "cost_usd.reason")
         has_value = self.state in {ValueState.OBSERVED, ValueState.ESTIMATED}
@@ -386,7 +436,7 @@ class CostValue:
 
 
 @dataclass(frozen=True)
-class SessionFacts:
+class SessionFacts(_FinalValueObject):
     input_tokens: NumericValue
     output_tokens: NumericValue
     cache_read_tokens: NumericValue
@@ -401,8 +451,10 @@ class SessionFacts:
             "cache_write_tokens",
         ):
             value = getattr(self, name)
+            _require_value_object(value, NumericValue, f"facts.{name}")
             if value.state is ValueState.ESTIMATED:
                 raise SessionEconomicsContractError(f"facts.{name} cannot use estimated state")
+        _require_value_object(self.cost_usd, CostValue, "facts.cost_usd")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -426,7 +478,7 @@ class SessionFacts:
 
 
 @dataclass(frozen=True)
-class ModelRef:
+class ModelRef(_FinalValueObject):
     id: str
     effort: str = "unknown"
 
@@ -449,7 +501,7 @@ class ModelRef:
 
 
 @dataclass(frozen=True)
-class SessionRef:
+class SessionRef(_FinalValueObject):
     id: str | None
     identity_state: ValueState
     turns_observed: int
@@ -458,9 +510,12 @@ class SessionRef:
 
     def __post_init__(self) -> None:
         _require_enum(self.identity_state, ValueState, "session.identity_state")
+        _require_value_object(self.model, ModelRef, "session.model")
         _optional_string(self.reason, "session.reason")
-        if self.id is not None and not isinstance(self.id, str):
-            raise SessionEconomicsContractError("session.id must be a string or null")
+        if self.id is not None:
+            if not isinstance(self.id, str):
+                raise SessionEconomicsContractError("session.id must be a string or null")
+            _string(self.id, "session.id")
         if self.identity_state is ValueState.ESTIMATED:
             raise SessionEconomicsContractError("session identity cannot be estimated")
         if self.identity_state is ValueState.OBSERVED:
@@ -516,7 +571,7 @@ class SessionRef:
 
 
 @dataclass(frozen=True)
-class SessionState:
+class SessionState(_FinalValueObject):
     context_tokens: NumericValue
     base_tokens: NumericValue
     context_growth_ewma: NumericValue
@@ -528,6 +583,16 @@ class SessionState:
     cache_state: CacheState
 
     def __post_init__(self) -> None:
+        for name in (
+            "context_tokens",
+            "base_tokens",
+            "context_growth_ewma",
+            "burn_tokens_per_turn",
+            "burn_usd_per_turn",
+            "idle_seconds",
+            "cache_ttl_seconds",
+        ):
+            _require_value_object(getattr(self, name), NumericValue, f"state.{name}")
         _require_enum(self.burn_slope, BurnSlope, "state.burn_slope")
         _require_enum(self.cache_state, CacheState, "state.cache_state")
 
@@ -561,7 +626,7 @@ class SessionState:
 
 
 @dataclass(frozen=True)
-class Runway:
+class Runway(_FinalValueObject):
     status: RunwayStatus
     turns: int | None
     binding_constraint: BindingConstraint
@@ -623,7 +688,7 @@ class Runway:
 
 
 @dataclass(frozen=True)
-class IntervalEstimate:
+class IntervalEstimate(_FinalValueObject):
     state: ValueState
     low: Number | None = None
     high: Number | None = None
@@ -675,7 +740,7 @@ class IntervalEstimate:
 
 
 @dataclass(frozen=True)
-class Coverage:
+class Coverage(_FinalValueObject):
     method: str | None = None
     observed: float | None = None
     history_n: int = 0
@@ -729,7 +794,7 @@ class Coverage:
 
 
 @dataclass(frozen=True)
-class Forecast:
+class Forecast(_FinalValueObject):
     status: ForecastStatus
     remaining_tokens_likely_50: IntervalEstimate
     remaining_tokens_ceiling_90: NumericValue
@@ -742,6 +807,19 @@ class Forecast:
 
     def __post_init__(self) -> None:
         _require_enum(self.status, ForecastStatus, "forecast.status")
+        for name in (
+            "remaining_tokens_likely_50",
+            "remaining_cost_usd_likely_50",
+            "expected_turns",
+        ):
+            _require_value_object(getattr(self, name), IntervalEstimate, f"forecast.{name}")
+        for name in (
+            "remaining_tokens_ceiling_90",
+            "remaining_cost_usd_ceiling_90",
+            "predicted_block_probability",
+        ):
+            _require_value_object(getattr(self, name), NumericValue, f"forecast.{name}")
+        _require_value_object(self.coverage, Coverage, "forecast.coverage")
         _optional_string(self.reason, "forecast.reason")
         token_predictions = (
             self.remaining_tokens_likely_50.state,
@@ -850,7 +928,7 @@ class Forecast:
 
 
 @dataclass(frozen=True)
-class SessionEconomics:
+class SessionEconomics(_FinalValueObject):
     """Immutable shared session-economics payload."""
 
     as_of: str
@@ -863,6 +941,18 @@ class SessionEconomics:
     schema_version: str = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        for name, expected_type in (
+            ("session", SessionRef),
+            ("facts", SessionFacts),
+            ("state", SessionState),
+            ("runway", Runway),
+            ("forecast", Forecast),
+        ):
+            _require_value_object(
+                getattr(self, name),
+                expected_type,
+                f"session economics.{name}",
+            )
         if self.schema_version != SCHEMA_VERSION:
             raise UnsupportedSessionEconomicsVersion(
                 f"unsupported schema_version {self.schema_version!r}; expected {SCHEMA_VERSION!r}"
