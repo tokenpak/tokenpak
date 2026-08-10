@@ -14,10 +14,22 @@ from tokenpak.core.contracts.measured import (
     no_data,
     unavailable,
 )
+from tokenpak.core.contracts.session_economics import (
+    SCHEMA_VERSION as SESSION_ECONOMICS_SCHEMA_VERSION,
+)
+from tokenpak.core.contracts.session_economics import (
+    SessionEconomics,
+    SessionEconomicsContractError,
+    UnsupportedSessionEconomicsVersion,
+)
 
 __all__ = [
     "DataState",
     "Measured",
+    "SESSION_ECONOMICS_SCHEMA_VERSION",
+    "SessionEconomics",
+    "SessionEconomicsContractError",
+    "UnsupportedSessionEconomicsVersion",
     "error",
     "measured",
     "no_data",

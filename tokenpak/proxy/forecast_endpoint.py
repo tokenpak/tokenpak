@@ -1,8 +1,11 @@
 """
 tokenpak.proxy.forecast_endpoint — POST /v1/messages/forecast implementation.
 
-Estimates cost, token counts, and cache hit likelihood for a request body
-identical to /v1/messages WITHOUT forwarding to the upstream API.
+Estimates cost, token counts, and cache hit likelihood for one request body
+identical to /v1/messages WITHOUT forwarding to the upstream API.  This is a
+request forecast, not the versioned remaining-session economics contract; both
+surfaces intentionally coexist without relabeling or nesting one inside the
+other.
 
 AC2-compliant response shape:
   {
