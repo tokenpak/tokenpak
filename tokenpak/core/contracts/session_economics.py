@@ -22,6 +22,7 @@ from typing import Any, Mapping, Union
 
 Number = Union[int, float]
 SCHEMA_VERSION = "session-economics/1"
+_MISSING = object()
 
 
 class SessionEconomicsContractError(ValueError):
@@ -130,6 +131,18 @@ def _number(value: object, path: str) -> Number:
     return value
 
 
+def _string(value: object, path: str) -> str:
+    if not isinstance(value, str):
+        raise SessionEconomicsContractError(f"{path} must be a string")
+    return value
+
+
+def _input_string(value: object, path: str, *, default: str = "") -> str:
+    if value is _MISSING:
+        return default
+    return _string(value, path)
+
+
 def _timestamp(value: str, path: str) -> None:
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -151,6 +164,8 @@ class NumericValue:
     unit: str = ""
 
     def __post_init__(self) -> None:
+        for name in ("source", "confidence", "reason", "unit"):
+            _string(getattr(self, name), f"numeric value.{name}")
         has_value = self.state in {ValueState.OBSERVED, ValueState.ESTIMATED}
         if has_value:
             _number(self.value, "numeric value")
@@ -203,10 +218,10 @@ class NumericValue:
         return cls(
             state=_enum(ValueState, data.get("state"), "numeric value.state"),
             value=data.get("value"),
-            source=str(data.get("source") or ""),
-            confidence=str(data.get("confidence") or ""),
-            reason=str(data.get("reason") or ""),
-            unit=str(data.get("unit") or ""),
+            source=_input_string(data.get("source", _MISSING), "numeric value.source"),
+            confidence=_input_string(data.get("confidence", _MISSING), "numeric value.confidence"),
+            reason=_input_string(data.get("reason", _MISSING), "numeric value.reason"),
+            unit=_input_string(data.get("unit", _MISSING), "numeric value.unit"),
         )
 
 
@@ -243,7 +258,7 @@ class RateProvenance:
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any] | None) -> "RateProvenance":
-        data = _as_mapping(raw or {}, "rate_provenance")
+        data = _as_mapping({} if raw is None else raw, "rate_provenance")
         return cls(
             catalog_version=data.get("catalog_version"),
             effective_at=data.get("effective_at"),
@@ -268,6 +283,8 @@ class CostValue:
     rate_provenance: RateProvenance = field(default_factory=RateProvenance)
 
     def __post_init__(self) -> None:
+        _string(self.source, "cost_usd.source")
+        _string(self.reason, "cost_usd.reason")
         has_value = self.state in {ValueState.OBSERVED, ValueState.ESTIMATED}
         if has_value:
             _number(self.value, "cost_usd.value")
@@ -319,8 +336,8 @@ class CostValue:
                 data.get("basis", CostBasis.UNKNOWN.value),
                 "cost_usd.basis",
             ),
-            source=str(data.get("source") or ""),
-            reason=str(data.get("reason") or ""),
+            source=_input_string(data.get("source", _MISSING), "cost_usd.source"),
+            reason=_input_string(data.get("reason", _MISSING), "cost_usd.reason"),
             rate_provenance=RateProvenance.from_dict(data.get("rate_provenance")),
         )
 
@@ -360,6 +377,8 @@ class ModelRef:
     effort: str = "unknown"
 
     def __post_init__(self) -> None:
+        _string(self.id, "session.model.id")
+        _string(self.effort, "session.model.effort")
         if not self.id:
             raise SessionEconomicsContractError("session.model.id must be non-empty")
         if not self.effort:
@@ -372,8 +391,10 @@ class ModelRef:
     def from_dict(cls, raw: Mapping[str, Any]) -> "ModelRef":
         data = _as_mapping(raw, "session.model")
         return cls(
-            id=str(data.get("id") or ""),
-            effort=str(data.get("effort") or "unknown"),
+            id=_input_string(data.get("id", _MISSING), "session.model.id"),
+            effort=_input_string(
+                data.get("effort", _MISSING), "session.model.effort", default="unknown"
+            ),
         )
 
 
@@ -386,6 +407,7 @@ class SessionRef:
     reason: str = ""
 
     def __post_init__(self) -> None:
+        _string(self.reason, "session.reason")
         if self.id is not None and not isinstance(self.id, str):
             raise SessionEconomicsContractError("session.id must be a string or null")
         if self.identity_state is ValueState.ESTIMATED:
@@ -438,7 +460,7 @@ class SessionRef:
             ),
             turns_observed=turns,
             model=ModelRef.from_dict(data.get("model")),
-            reason=str(data.get("reason") or ""),
+            reason=_input_string(data.get("reason", _MISSING), "session.reason"),
         )
 
 
@@ -492,6 +514,7 @@ class Runway:
     reason: str = ""
 
     def __post_init__(self) -> None:
+        _string(self.reason, "runway.reason")
         if self.status is RunwayStatus.AVAILABLE:
             if isinstance(self.turns, bool) or not isinstance(self.turns, int) or self.turns < 0:
                 raise SessionEconomicsContractError(
@@ -503,6 +526,10 @@ class Runway:
                 )
         elif self.turns is not None:
             raise SessionEconomicsContractError(f"{self.status.value} runway turns must be null")
+        if self.guard_state is GuardState.HARD_STOP and self.turns not in {None, 0}:
+            raise SessionEconomicsContractError(
+                "hard_stop runway cannot report positive remaining turns"
+            )
         if self.status is RunwayStatus.ERROR and not self.reason:
             raise SessionEconomicsContractError("error runway requires a reason")
 
@@ -529,7 +556,7 @@ class Runway:
                 "runway.binding_constraint",
             ),
             guard_state=_enum(GuardState, data.get("guard_state"), "runway.guard_state"),
-            reason=str(data.get("reason") or ""),
+            reason=_input_string(data.get("reason", _MISSING), "runway.reason"),
         )
 
 
@@ -543,6 +570,8 @@ class IntervalEstimate:
     unit: str = ""
 
     def __post_init__(self) -> None:
+        for name in ("source", "reason", "unit"):
+            _string(getattr(self, name), f"interval.{name}")
         if self.state is ValueState.ESTIMATED:
             low = _number(self.low, "interval.low")
             high = _number(self.high, "interval.high")
@@ -576,9 +605,9 @@ class IntervalEstimate:
             state=_enum(ValueState, data.get("state"), "interval.state"),
             low=data.get("low"),
             high=data.get("high"),
-            source=str(data.get("source") or ""),
-            reason=str(data.get("reason") or ""),
-            unit=str(data.get("unit") or ""),
+            source=_input_string(data.get("source", _MISSING), "interval.source"),
+            reason=_input_string(data.get("reason", _MISSING), "interval.reason"),
+            unit=_input_string(data.get("unit", _MISSING), "interval.unit"),
         )
 
 
@@ -590,6 +619,8 @@ class Coverage:
     drift_state: DriftState = DriftState.UNKNOWN
 
     def __post_init__(self) -> None:
+        if self.method is not None:
+            _string(self.method, "forecast.coverage.method")
         if self.observed is not None:
             value = _number(self.observed, "forecast.coverage.observed")
             if value > 1:
@@ -646,6 +677,7 @@ class Forecast:
     reason: str = ""
 
     def __post_init__(self) -> None:
+        _string(self.reason, "forecast.reason")
         token_predictions = (
             self.remaining_tokens_likely_50.state,
             self.remaining_tokens_ceiling_90.state,
@@ -668,6 +700,30 @@ class Forecast:
             if len(cost_states) != 1:
                 raise SessionEconomicsContractError(
                     "forecast cost range and ceiling must share one state"
+                )
+            assert self.remaining_tokens_likely_50.high is not None
+            assert self.remaining_tokens_ceiling_90.value is not None
+            if self.remaining_tokens_ceiling_90.value < self.remaining_tokens_likely_50.high:
+                raise SessionEconomicsContractError(
+                    "90% token ceiling must not be below the likely-50 high"
+                )
+            if self.remaining_cost_usd_likely_50.state is ValueState.ESTIMATED:
+                assert self.remaining_cost_usd_likely_50.high is not None
+                assert self.remaining_cost_usd_ceiling_90.value is not None
+                if (
+                    self.remaining_cost_usd_ceiling_90.value
+                    < self.remaining_cost_usd_likely_50.high
+                ):
+                    raise SessionEconomicsContractError(
+                        "90% cost ceiling must not be below the likely-50 high"
+                    )
+            if (
+                not self.coverage.method
+                or self.coverage.observed is None
+                or self.coverage.history_n <= 0
+            ):
+                raise SessionEconomicsContractError(
+                    "available forecast requires observed coverage and positive history"
                 )
             probability = self.predicted_block_probability
             if probability.state is ValueState.ESTIMATED:
@@ -724,7 +780,7 @@ class Forecast:
             predicted_block_probability=NumericValue.from_dict(
                 data.get("predicted_block_probability")
             ),
-            reason=str(data.get("reason") or ""),
+            reason=_input_string(data.get("reason", _MISSING), "forecast.reason"),
         )
 
 
@@ -798,13 +854,17 @@ class SessionEconomics:
             raise UnsupportedSessionEconomicsVersion(
                 f"unsupported schema_version {version!r}; expected {SCHEMA_VERSION!r}"
             )
-        if data.get("advisory") is not None:
+        if "advisory" not in data:
+            raise SessionEconomicsContractError(
+                "OSS session economics requires explicit advisory: null"
+            )
+        if data["advisory"] is not None:
             raise SessionEconomicsContractError(
                 "OSS session economics cannot accept a non-null advisory"
             )
         return cls(
             schema_version=version,
-            as_of=str(data.get("as_of") or ""),
+            as_of=_input_string(data.get("as_of", _MISSING), "as_of"),
             session=SessionRef.from_dict(data.get("session")),
             facts=SessionFacts.from_dict(data.get("facts")),
             state=SessionState.from_dict(data.get("state")),

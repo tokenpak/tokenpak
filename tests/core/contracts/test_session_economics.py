@@ -297,6 +297,13 @@ def test_non_null_advisory_is_rejected() -> None:
         SessionEconomics.from_dict(payload)
 
 
+def test_missing_advisory_is_rejected() -> None:
+    payload = _available_contract().to_dict()
+    del payload["advisory"]
+    with pytest.raises(SessionEconomicsContractError, match="explicit advisory: null"):
+        SessionEconomics.from_dict(payload)
+
+
 def test_missing_session_identity_remains_explicit() -> None:
     session = SessionRef(
         id=None,
@@ -334,6 +341,48 @@ def test_available_forecast_requires_range_ceiling_and_turns() -> None:
         )
 
 
+def test_token_ceiling_cannot_be_below_likely_range() -> None:
+    forecast = _available_contract().forecast
+    with pytest.raises(SessionEconomicsContractError, match="token ceiling"):
+        replace(
+            forecast,
+            remaining_tokens_ceiling_90=NumericValue.estimated(
+                21_999, source="conformal-replay", unit="tokens"
+            ),
+        )
+
+
+def test_cost_ceiling_cannot_be_below_likely_range() -> None:
+    forecast = _available_contract().forecast
+    with pytest.raises(SessionEconomicsContractError, match="cost ceiling"):
+        replace(
+            forecast,
+            remaining_cost_usd_ceiling_90=NumericValue.estimated(
+                0.719, source="fresh-rate-derived", unit="usd"
+            ),
+        )
+
+
+def test_hard_stop_cannot_report_positive_runway() -> None:
+    runway = _available_contract().runway
+    with pytest.raises(SessionEconomicsContractError, match="hard_stop runway"):
+        replace(runway, guard_state=GuardState.HARD_STOP, turns=1)
+
+
+@pytest.mark.parametrize(
+    "coverage",
+    [
+        Coverage(observed=0.51, history_n=40),
+        Coverage(method="adaptive-conformal", history_n=40),
+        Coverage(method="adaptive-conformal", observed=0.51, history_n=0),
+    ],
+)
+def test_available_forecast_requires_observed_coverage(coverage: Coverage) -> None:
+    forecast = _available_contract().forecast
+    with pytest.raises(SessionEconomicsContractError, match="observed coverage"):
+        replace(forecast, coverage=coverage)
+
+
 def test_unavailable_forecast_cannot_hide_cost_prediction() -> None:
     with pytest.raises(SessionEconomicsContractError, match="cannot carry predictions"):
         Forecast(
@@ -353,6 +402,28 @@ def test_unavailable_forecast_cannot_hide_cost_prediction() -> None:
 def test_rate_provenance_rejects_non_string_identity() -> None:
     with pytest.raises(SessionEconomicsContractError, match="must be a string or null"):
         RateProvenance(catalog_version=1)  # type: ignore[arg-type]
+
+
+def test_numeric_provenance_rejects_structured_source() -> None:
+    payload = _available_contract().to_dict()
+    payload["facts"]["input_tokens"]["source"] = {"name": "provider-usage"}
+    with pytest.raises(SessionEconomicsContractError, match="source must be a string"):
+        SessionEconomics.from_dict(payload)
+
+
+@pytest.mark.parametrize("field,value", [("id", 123), ("effort", ["high"]), ("effort", None)])
+def test_model_reference_rejects_non_string_values(field: str, value: object) -> None:
+    payload = _available_contract().to_dict()
+    payload["session"]["model"][field] = value
+    with pytest.raises(SessionEconomicsContractError, match=f"model.{field} must be a string"):
+        SessionEconomics.from_dict(payload)
+
+
+def test_rate_provenance_rejects_non_object_payload() -> None:
+    payload = _available_contract().to_dict()
+    payload["facts"]["cost_usd"]["rate_provenance"] = []
+    with pytest.raises(SessionEconomicsContractError, match="rate_provenance must be an object"):
+        SessionEconomics.from_dict(payload)
 
 
 def test_as_of_requires_timezone() -> None:
