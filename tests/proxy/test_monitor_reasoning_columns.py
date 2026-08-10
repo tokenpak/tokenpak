@@ -16,6 +16,9 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
+import pytest
+
+import tokenpak.proxy.monitor as monitor_module
 from tokenpak.proxy.monitor import Monitor
 
 EXPECTED_REASONING_COLUMNS = {
@@ -45,6 +48,18 @@ EXPECTED_PROVIDER_USAGE_COLUMNS = {
     "cost_basis",
     "pricing_source",
 }
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _retire_module_writer():
+    """Do not leak this module's process-global writer into later suites."""
+    yield
+    assert monitor_module._stop_db_write_queue(timeout=20.0)
+    with monitor_module._DB_LOCK:
+        if monitor_module._DB_CONNECTION is not None:
+            monitor_module._DB_CONNECTION.close()
+        monitor_module._DB_CONNECTION = None
+        monitor_module._DB_CONNECTION_PATH = None
 
 
 def _columns(db_path: Path) -> set:

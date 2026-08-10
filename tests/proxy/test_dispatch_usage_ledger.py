@@ -919,6 +919,10 @@ def test_real_proxy_marks_normalized_error_bodies_as_transformed(tmp_path, monke
             assert [status for status, _ in responses] == [418, 418]
             assert all(body != _RAW_ERROR_BODY for _, body in responses)
             assert proxy.monitor is not None
+            # The response body can reach the client before the request
+            # handler's finally block retires its in-flight lease and queues
+            # telemetry. Drain that owned boundary before flushing the writer.
+            assert proxy.shutdown.wait_for_drain(timeout=20.0)
             assert proxy.monitor.flush(timeout=20.0)
             with sqlite3.connect(str(db)) as conn:
                 rows = conn.execute(
