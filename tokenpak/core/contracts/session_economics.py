@@ -137,6 +137,20 @@ def _string(value: object, path: str) -> str:
     return value
 
 
+def _non_blank_string(value: object, path: str) -> str:
+    result = _string(value, path)
+    if not result.strip():
+        raise SessionEconomicsContractError(f"{path} must be non-empty")
+    return result
+
+
+def _optional_string(value: object, path: str) -> str:
+    result = _string(value, path)
+    if result and not result.strip():
+        raise SessionEconomicsContractError(f"{path} must not be whitespace-only")
+    return result
+
+
 def _input_string(value: object, path: str, *, default: str = "") -> str:
     if value is _MISSING:
         return default
@@ -165,11 +179,11 @@ class NumericValue:
 
     def __post_init__(self) -> None:
         for name in ("source", "confidence", "reason", "unit"):
-            _string(getattr(self, name), f"numeric value.{name}")
+            _optional_string(getattr(self, name), f"numeric value.{name}")
         has_value = self.state in {ValueState.OBSERVED, ValueState.ESTIMATED}
         if has_value:
             _number(self.value, "numeric value")
-            if not self.source:
+            if not self.source.strip():
                 raise SessionEconomicsContractError(
                     f"{self.state.value} numeric value requires source provenance"
                 )
@@ -177,7 +191,7 @@ class NumericValue:
             raise SessionEconomicsContractError(
                 f"{self.state.value} numeric value must serialize as null"
             )
-        if self.state is ValueState.ERROR and not self.reason:
+        if self.state is ValueState.ERROR and not self.reason.strip():
             raise SessionEconomicsContractError("error numeric value requires a reason")
 
     @classmethod
@@ -241,12 +255,19 @@ class RateProvenance:
                 raise SessionEconomicsContractError(
                     f"rate_provenance.{name} must be a string or null"
                 )
+            if value is not None and not value.strip():
+                raise SessionEconomicsContractError(
+                    f"rate_provenance.{name} must be non-empty when present"
+                )
         if self.effective_at:
             _timestamp(self.effective_at, "rate_provenance.effective_at")
 
     @property
     def complete(self) -> bool:
-        return bool(self.catalog_version and self.effective_at and self.source)
+        return all(
+            value is not None and bool(value.strip())
+            for value in (self.catalog_version, self.effective_at, self.source)
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -283,8 +304,8 @@ class CostValue:
     rate_provenance: RateProvenance = field(default_factory=RateProvenance)
 
     def __post_init__(self) -> None:
-        _string(self.source, "cost_usd.source")
-        _string(self.reason, "cost_usd.reason")
+        _optional_string(self.source, "cost_usd.source")
+        _optional_string(self.reason, "cost_usd.reason")
         has_value = self.state in {ValueState.OBSERVED, ValueState.ESTIMATED}
         if has_value:
             _number(self.value, "cost_usd.value")
@@ -292,7 +313,7 @@ class CostValue:
             raise SessionEconomicsContractError(f"{self.state.value} cost must serialize as null")
 
         if self.state is ValueState.OBSERVED:
-            if self.basis is not CostBasis.PROVIDER_BILL or not self.source:
+            if self.basis is not CostBasis.PROVIDER_BILL or not self.source.strip():
                 raise SessionEconomicsContractError(
                     "observed cost requires provider_bill basis and source"
                 )
@@ -309,7 +330,7 @@ class CostValue:
             raise SessionEconomicsContractError(
                 f"{self.basis.value} cost basis cannot carry numeric USD"
             )
-        if self.state is ValueState.ERROR and not self.reason:
+        if self.state is ValueState.ERROR and not self.reason.strip():
             raise SessionEconomicsContractError("error cost requires a reason")
 
     def to_dict(self) -> dict[str, Any]:
@@ -350,6 +371,17 @@ class SessionFacts:
     cache_write_tokens: NumericValue
     cost_usd: CostValue
 
+    def __post_init__(self) -> None:
+        for name in (
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+        ):
+            value = getattr(self, name)
+            if value.state is ValueState.ESTIMATED:
+                raise SessionEconomicsContractError(f"facts.{name} cannot use estimated state")
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "input_tokens": self.input_tokens.to_dict(),
@@ -377,12 +409,8 @@ class ModelRef:
     effort: str = "unknown"
 
     def __post_init__(self) -> None:
-        _string(self.id, "session.model.id")
-        _string(self.effort, "session.model.effort")
-        if not self.id:
-            raise SessionEconomicsContractError("session.model.id must be non-empty")
-        if not self.effort:
-            raise SessionEconomicsContractError("session.model.effort must be non-empty")
+        _non_blank_string(self.id, "session.model.id")
+        _non_blank_string(self.effort, "session.model.effort")
 
     def to_dict(self) -> dict[str, str]:
         return {"id": self.id, "effort": self.effort}
@@ -407,13 +435,13 @@ class SessionRef:
     reason: str = ""
 
     def __post_init__(self) -> None:
-        _string(self.reason, "session.reason")
+        _optional_string(self.reason, "session.reason")
         if self.id is not None and not isinstance(self.id, str):
             raise SessionEconomicsContractError("session.id must be a string or null")
         if self.identity_state is ValueState.ESTIMATED:
             raise SessionEconomicsContractError("session identity cannot be estimated")
         if self.identity_state is ValueState.OBSERVED:
-            if not self.id:
+            if self.id is None or not self.id.strip():
                 raise SessionEconomicsContractError(
                     "observed session identity requires a non-empty id"
                 )
@@ -429,7 +457,7 @@ class SessionRef:
             raise SessionEconomicsContractError(
                 "session.turns_observed must be a non-negative integer"
             )
-        if self.identity_state is ValueState.ERROR and not self.reason:
+        if self.identity_state is ValueState.ERROR and not self.reason.strip():
             raise SessionEconomicsContractError("error session identity requires a reason")
 
     def to_dict(self) -> dict[str, Any]:
@@ -514,7 +542,7 @@ class Runway:
     reason: str = ""
 
     def __post_init__(self) -> None:
-        _string(self.reason, "runway.reason")
+        _optional_string(self.reason, "runway.reason")
         if self.status is RunwayStatus.AVAILABLE:
             if isinstance(self.turns, bool) or not isinstance(self.turns, int) or self.turns < 0:
                 raise SessionEconomicsContractError(
@@ -530,7 +558,7 @@ class Runway:
             raise SessionEconomicsContractError(
                 "hard_stop runway cannot report positive remaining turns"
             )
-        if self.status is RunwayStatus.ERROR and not self.reason:
+        if self.status is RunwayStatus.ERROR and not self.reason.strip():
             raise SessionEconomicsContractError("error runway requires a reason")
 
     def to_dict(self) -> dict[str, Any]:
@@ -571,19 +599,19 @@ class IntervalEstimate:
 
     def __post_init__(self) -> None:
         for name in ("source", "reason", "unit"):
-            _string(getattr(self, name), f"interval.{name}")
+            _optional_string(getattr(self, name), f"interval.{name}")
         if self.state is ValueState.ESTIMATED:
             low = _number(self.low, "interval.low")
             high = _number(self.high, "interval.high")
             if low > high:
                 raise SessionEconomicsContractError("interval.low must not exceed interval.high")
-            if not self.source:
+            if not self.source.strip():
                 raise SessionEconomicsContractError("estimated interval requires source provenance")
         elif self.low is not None or self.high is not None:
             raise SessionEconomicsContractError(f"{self.state.value} interval bounds must be null")
         if self.state is ValueState.OBSERVED:
             raise SessionEconomicsContractError("forecast interval cannot be observed")
-        if self.state is ValueState.ERROR and not self.reason:
+        if self.state is ValueState.ERROR and not self.reason.strip():
             raise SessionEconomicsContractError("error interval requires a reason")
 
     def to_dict(self) -> dict[str, Any]:
@@ -620,7 +648,7 @@ class Coverage:
 
     def __post_init__(self) -> None:
         if self.method is not None:
-            _string(self.method, "forecast.coverage.method")
+            _non_blank_string(self.method, "forecast.coverage.method")
         if self.observed is not None:
             value = _number(self.observed, "forecast.coverage.observed")
             if value > 1:
@@ -677,7 +705,7 @@ class Forecast:
     reason: str = ""
 
     def __post_init__(self) -> None:
-        _string(self.reason, "forecast.reason")
+        _optional_string(self.reason, "forecast.reason")
         token_predictions = (
             self.remaining_tokens_likely_50.state,
             self.remaining_tokens_ceiling_90.state,
@@ -740,7 +768,7 @@ class Forecast:
             raise SessionEconomicsContractError(
                 f"{self.status.value} forecast cannot carry predictions"
             )
-        if self.status is ForecastStatus.ERROR and not self.reason:
+        if self.status is ForecastStatus.ERROR and not self.reason.strip():
             raise SessionEconomicsContractError("error forecast requires a reason")
 
     def to_dict(self) -> dict[str, Any]:

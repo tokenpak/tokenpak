@@ -411,6 +411,68 @@ def test_numeric_provenance_rejects_structured_source() -> None:
         SessionEconomics.from_dict(payload)
 
 
+@pytest.mark.parametrize(
+    "field",
+    ["input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"],
+)
+def test_session_facts_reject_estimated_token_values(field: str) -> None:
+    facts = _available_contract().facts
+    with pytest.raises(SessionEconomicsContractError, match=f"facts.{field} cannot use estimated"):
+        replace(
+            facts,
+            **{field: NumericValue.estimated(1, source="synthetic", unit="tokens")},
+        )
+
+
+@pytest.mark.parametrize(
+    "factory,match",
+    [
+        (lambda: NumericValue.observed(1, source=" \t"), "source must not be whitespace-only"),
+        (lambda: ModelRef(" \t"), "model.id must be non-empty"),
+        (lambda: ModelRef("provider/model", " \t"), "model.effort must be non-empty"),
+        (
+            lambda: SessionRef(" \t", ValueState.OBSERVED, 1, ModelRef("provider/model")),
+            "observed session identity requires a non-empty id",
+        ),
+        (
+            lambda: RateProvenance(
+                catalog_version=" \t",
+                effective_at="2026-08-09T00:00:00Z",
+                source="provider-rate-card",
+                freshness=PriceFreshness.FRESH,
+            ),
+            "catalog_version must be non-empty",
+        ),
+        (
+            lambda: RateProvenance(
+                catalog_version="catalog-1",
+                effective_at="2026-08-09T00:00:00Z",
+                source=" \t",
+                freshness=PriceFreshness.FRESH,
+            ),
+            "source must be non-empty",
+        ),
+        (
+            lambda: CostValue(
+                ValueState.OBSERVED,
+                1,
+                CostBasis.PROVIDER_BILL,
+                source=" \t",
+            ),
+            "cost_usd.source must not be whitespace-only",
+        ),
+        (
+            lambda: IntervalEstimate(ValueState.ESTIMATED, 1, 2, source=" \t"),
+            "interval.source must not be whitespace-only",
+        ),
+        (lambda: Coverage(method=" \t"), "coverage.method must be non-empty"),
+    ],
+)
+def test_whitespace_only_identifiers_are_rejected(factory, match: str) -> None:
+    with pytest.raises(SessionEconomicsContractError, match=match):
+        factory()
+
+
 @pytest.mark.parametrize("field,value", [("id", 123), ("effort", ["high"]), ("effort", None)])
 def test_model_reference_rejects_non_string_values(field: str, value: object) -> None:
     payload = _available_contract().to_dict()
