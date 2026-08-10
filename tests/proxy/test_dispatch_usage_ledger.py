@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 import tokenpak.proxy.server as server_module
+from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy.monitor import Monitor
 from tokenpak.proxy.router import ProviderRouter, estimate_cost
 from tokenpak.proxy.server import (
@@ -171,7 +172,7 @@ def _start_test_proxy(
         return http_server_type((address[0], 0), handler)
 
     monkeypatch.setattr(server_module, "_ThreadedHTTPServer", bind_ephemeral)
-    proxy = ProxyServer(host="127.0.0.1", port=1)
+    proxy = ProxyServer(host="127.0.0.1", port=free_port())
     proxy.router = ProviderRouter(
         custom_urls={provider: upstream_base},
         custom_hosts={upstream_base: provider},
@@ -652,7 +653,7 @@ def test_real_proxy_persists_equivalent_usage_without_rewriting_responses(
         return http_server_type((address[0], 0), handler)
 
     monkeypatch.setattr(server_module, "_ThreadedHTTPServer", bind_ephemeral)
-    proxy = ProxyServer(host="127.0.0.1", port=1)
+    proxy = ProxyServer(host="127.0.0.1", port=free_port())
     proxy.router = ProviderRouter(
         custom_urls={"anthropic": upstream_base},
         custom_hosts={upstream_base: "anthropic"},
