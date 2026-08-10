@@ -138,35 +138,7 @@ def test_write_row_retries_transient_lock_then_succeeds(tmp_path, monkeypatch):
     monkeypatch.setattr(monitor_module, "_get_db_connection", lambda p: flaky)
     monkeypatch.setattr(monitor_module, "_DB_WRITE_RETRY_BACKOFF_S", 0.001)
 
-    params = (
-        datetime.now().isoformat(),
-        "claude-sonnet-4-6",
-        "chat",
-        1,
-        1,
-        0.0,
-        1,
-        200,
-        "test",
-        "",
-        0,
-        0,
-        0,
-        "",
-        0,
-        0,
-        0,
-        "proxy",
-        "",
-        0,
-        0,
-        None,
-        "",
-        "",
-        "",
-        "",
-        "",
-    )
+    params = _request_insert_params()
     before = monitor_module.get_dropped_row_count()
     monitor_module._write_row(str(db), params)
 
@@ -753,35 +725,36 @@ def _create_requests_table_for_insert(db_path):
 
 
 def _request_insert_params(*, stop_reason=""):
-    return (
-        datetime.now().isoformat(),
-        "claude-sonnet-4-6",
-        "chat",
-        10,
-        5,
-        0.0,
-        1,
-        200,
-        "test",
-        "",
-        0,
-        0,
-        0,
-        "",
-        0,
-        0,
-        0,
-        "proxy",
-        "",
-        0,
-        0,
-        None,
-        "",
-        "",
-        "",
-        "",
-        stop_reason,
+    values = dict.fromkeys(monitor_module._REQUEST_INSERT_COLUMNS)
+    values.update(
+        timestamp=datetime.now().isoformat(),
+        model="claude-sonnet-4-6",
+        request_type="chat",
+        input_tokens=10,
+        output_tokens=5,
+        estimated_cost=0.0,
+        latency_ms=1,
+        status_code=200,
+        endpoint="test",
+        compilation_mode="",
+        protected_tokens=0,
+        compressed_tokens=0,
+        injected_tokens=0,
+        injected_sources="",
+        cache_read_tokens=0,
+        cache_creation_tokens=0,
+        would_have_saved=0,
+        cache_origin="proxy",
+        user_id="",
+        cache_creation_ephemeral_1h_tokens=0,
+        cache_creation_ephemeral_5m_tokens=0,
+        session_id="",
+        agent_id="",
+        cycle_id="",
+        attribution_source="",
+        stop_reason=stop_reason,
     )
+    return tuple(values[name] for name in monitor_module._REQUEST_INSERT_COLUMNS)
 
 
 def test_log_persists_stop_reason(tmp_path):
