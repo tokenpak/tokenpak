@@ -1,11 +1,12 @@
 """
-tokenpak.proxy.forecast_endpoint — POST /v1/messages/forecast implementation.
+Local request-forecast and session-economics endpoint builders.
 
 Estimates cost, token counts, and cache hit likelihood for one request body
 identical to /v1/messages WITHOUT forwarding to the upstream API.  This is a
 request forecast, not the versioned remaining-session economics contract; both
 surfaces intentionally coexist without relabeling or nesting one inside the
-other.
+other. ``POST /v1/messages/session-economics`` reads only completed local
+ledger rows and never forwards a provider request.
 
 AC2-compliant response shape:
   {
@@ -27,7 +28,13 @@ import json
 import sqlite3
 import threading
 from collections import deque
+from datetime import datetime
+from typing import TYPE_CHECKING as _TYPE_CHECKING
 from typing import Any, Union
+
+if _TYPE_CHECKING:
+    from tokenpak.core.contracts.session_economics import RateProvenance, SessionEconomics
+    from tokenpak.proxy.spend_guard.policy import SpendGuardConfig
 
 # ---------------------------------------------------------------------------
 # Rolling latency buffer (shared with server.py via import)
@@ -251,3 +258,42 @@ def build_forecast_response(
             "cache_creates_estimate": cache_creates_estimate,
         },
     }
+
+
+def _build_session_economics_response(
+    session_id: str,
+    db_path: Union[str, object],
+    *,
+    model_hint: str = "",
+    now: datetime | None = None,
+    spend_guard_config: SpendGuardConfig | None = None,
+    rate_provenance: RateProvenance | None = None,
+    rolling_usage: object = None,
+) -> SessionEconomics:
+    """Build the versioned deterministic session-economics value object.
+
+    ``None`` for ``rolling_usage`` means live canonical resolution.  Tests
+    may pass a mapping to replay a frozen rolling-cap snapshot without any
+    clock, process, or provider dependency.
+    """
+    from tokenpak.proxy.session_forecast import _build_session_economics
+
+    monitor_db_path = None if db_path is None else str(db_path)
+    if rolling_usage is None:
+        return _build_session_economics(
+            session_id,
+            monitor_db_path=monitor_db_path,
+            model_hint=model_hint,
+            now=now,
+            spend_guard_config=spend_guard_config,
+            rate_provenance=rate_provenance,
+        )
+    return _build_session_economics(
+        session_id,
+        monitor_db_path=monitor_db_path,
+        model_hint=model_hint,
+        now=now,
+        spend_guard_config=spend_guard_config,
+        rate_provenance=rate_provenance,
+        rolling_usage=rolling_usage,
+    )

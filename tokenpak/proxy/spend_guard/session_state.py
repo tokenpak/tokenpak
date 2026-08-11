@@ -18,10 +18,81 @@ import logging
 import os
 import sqlite3
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 _log = logging.getLogger(__name__)
+
+
+_SESSION_LEDGER_COLUMNS = (
+    "id",
+    "timestamp",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "estimated_cost",
+    "status_code",
+    "cache_read_tokens",
+    "cache_creation_tokens",
+    "ttl_attribution",
+    "session_id",
+    "agent_id",
+    "reasoning_effort",
+    "provider_usage_ref",
+    "provider_usage_provider",
+    "provider_input_tokens",
+    "provider_output_tokens",
+    "provider_cache_read_tokens",
+    "provider_cache_creation_tokens",
+    "provider_usage_source",
+    "provider_usage_confidence",
+    "cost_basis",
+    "pricing_source",
+)
+
+
+@dataclass(frozen=True)
+class _SessionLedgerRow:
+    """One completed monitor-ledger request used by session economics.
+
+    Values intentionally retain SQLite nullability.  The economics engine,
+    rather than this storage adapter, decides whether a nullable series is
+    observed, unavailable, or erroneous.
+    """
+
+    id: int
+    timestamp: object
+    model: object
+    input_tokens: object
+    output_tokens: object
+    estimated_cost: object
+    status_code: object
+    cache_read_tokens: object
+    cache_creation_tokens: object
+    ttl_attribution: object
+    session_id: object
+    agent_id: object
+    reasoning_effort: object
+    provider_usage_ref: object
+    provider_usage_provider: object
+    provider_input_tokens: object
+    provider_output_tokens: object
+    provider_cache_read_tokens: object
+    provider_cache_creation_tokens: object
+    provider_usage_source: object
+    provider_usage_confidence: object
+    cost_basis: object
+    pricing_source: object
+
+
+@dataclass(frozen=True)
+class _SessionLedgerRead:
+    """Truth-preserving outcome of a completed-session ledger read."""
+
+    state: str
+    rows: tuple[_SessionLedgerRow, ...] = ()
+    reason: str = ""
 
 
 def _path() -> Path:
@@ -127,4 +198,77 @@ def session_cumulative_cost_from_audit(
         return 0.0
 
 
-__all__ = ["session_cumulative_cost", "session_cumulative_cost_from_audit"]
+def _read_completed_session_rows(
+    session_id: str,
+    *,
+    monitor_db_path: Optional[str] = None,
+) -> _SessionLedgerRead:
+    """Read completed request rows for one stable session identity.
+
+    A missing database/table is a legitimate ``no_data`` state on a fresh
+    install.  A present but incompatible or unreadable ledger is ``error``;
+    it must never be represented as an empty, zero-cost session.  Recorded
+    HTTP responses in the 2xx-5xx range are completed events.  Rows without
+    a completed response code remain outside the turn ledger.
+    """
+    if not isinstance(session_id, str) or not session_id.strip():
+        return _SessionLedgerRead("no_data", reason="stable session identity is missing")
+
+    p = Path(os.path.expanduser(monitor_db_path)) if monitor_db_path else _path()
+    if not p.exists():
+        return _SessionLedgerRead("no_data", reason="monitor ledger does not exist")
+
+    conn: sqlite3.Connection | None = None
+    try:
+        conn = sqlite3.connect(str(p), timeout=5.0)
+        conn.row_factory = sqlite3.Row
+        table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'requests'"
+        ).fetchone()
+        if table is None:
+            return _SessionLedgerRead("no_data", reason="monitor ledger has no requests table")
+
+        available = {str(row[1]) for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
+        missing = sorted(set(_SESSION_LEDGER_COLUMNS) - available)
+        if missing:
+            return _SessionLedgerRead(
+                "error",
+                reason="monitor ledger schema is missing columns: " + ", ".join(missing),
+            )
+
+        columns = ", ".join(_SESSION_LEDGER_COLUMNS)
+        raw_rows = conn.execute(
+            f"SELECT {columns} FROM requests "
+            "WHERE session_id = ? AND status_code BETWEEN 200 AND 599 "
+            "ORDER BY timestamp ASC, id ASC",
+            (session_id.strip(),),
+        ).fetchall()
+        if not raw_rows:
+            return _SessionLedgerRead("no_data", reason="session has no completed request rows")
+
+        rows = tuple(
+            _SessionLedgerRow(**{column: row[column] for column in _SESSION_LEDGER_COLUMNS})
+            for row in raw_rows
+        )
+        return _SessionLedgerRead("observed", rows=rows)
+    except sqlite3.Error as exc:
+        _log.warning("spend_guard.session_state: session ledger read failed: %s", exc)
+        return _SessionLedgerRead(
+            "error",
+            reason=f"monitor ledger read failed: {type(exc).__name__}: {exc}",
+        )
+    except Exception as exc:
+        _log.warning("spend_guard.session_state: unexpected session ledger failure: %s", exc)
+        return _SessionLedgerRead(
+            "error",
+            reason=f"unexpected monitor ledger failure: {type(exc).__name__}: {exc}",
+        )
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+__all__ = [
+    "session_cumulative_cost",
+    "session_cumulative_cost_from_audit",
+]
