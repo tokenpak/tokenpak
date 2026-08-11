@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from queue import Empty, Queue
+from queue import Empty, Full, Queue
 from typing import TypedDict
 
 DbPath = str | os.PathLike[str]
@@ -73,17 +73,25 @@ _BUDGET_ALERT_LOCK = threading.Lock()
 
 def _init_db_write_queue() -> None:
     """Initialize the database write queue and background thread."""
-    global _DB_WRITE_QUEUE, _DB_BACKGROUND_THREAD
+    global _DB_WRITE_QUEUE, _DB_BACKGROUND_THREAD, _DB_BACKGROUND_STOP
     with _DB_QUEUE_LOCK:
         if _DB_WRITE_QUEUE is None:
-            _DB_WRITE_QUEUE = Queue(maxsize=_DB_QUEUE_MAX_SIZE)
-            _DB_BACKGROUND_STOP.clear()
-            _DB_BACKGROUND_THREAD = threading.Thread(
+            queue: Queue[DbWorkItem | None] = Queue(maxsize=_DB_QUEUE_MAX_SIZE)
+            # A stop event belongs to one writer generation. Reusing and
+            # clearing a process-global Event can revive a writer whose prior
+            # bounded stop timed out, leaving two threads to consume the next
+            # generation's queue.
+            stop_event = threading.Event()
+            thread = threading.Thread(
                 target=_db_writer_worker,
+                args=(queue, stop_event),
                 daemon=True,
                 name="TokenPak-DB-Writer",
             )
-            _DB_BACKGROUND_THREAD.start()
+            _DB_WRITE_QUEUE = queue
+            _DB_BACKGROUND_STOP = stop_event
+            _DB_BACKGROUND_THREAD = thread
+            thread.start()
 
 
 # Write durability: bounded retry on transient lock errors before a row is
@@ -128,6 +136,25 @@ _REQUEST_INSERT_COLUMNS = (
     "cycle_id",
     "attribution_source",
     "stop_reason",
+    "reasoning_tokens",
+    "visible_output_tokens",
+    "total_billable_tokens",
+    "reasoning_effort",
+    "reasoning_usage_source",
+    "provider_usage_ref",
+    "provider_usage_provider",
+    "provider_input_tokens",
+    "provider_output_tokens",
+    "provider_cache_read_tokens",
+    "provider_cache_creation_tokens",
+    "provider_usage_source",
+    "provider_usage_confidence",
+    "reasoning_effort_source",
+    "reasoning_effort_raw",
+    "cost_basis",
+    "pricing_source",
+    "stream_mode",
+    "event_transform_applied",
 )
 
 
@@ -208,30 +235,34 @@ def _write_row(db_path: DbPath, insert_params: InsertParams) -> None:
     raise RuntimeError("database write retries exhausted without an exception")
 
 
-def _db_writer_worker() -> None:
-    """Background worker thread that drains the DB write queue."""
-    while not _DB_BACKGROUND_STOP.is_set():
+def _db_writer_worker(queue: Queue[DbWorkItem | None], stop_event: threading.Event) -> None:
+    """Drain one immutable queue generation in a background thread."""
+    while True:
         try:
-            # Block for up to 1 second waiting for items
-            queue = _DB_WRITE_QUEUE
-            if queue is None:
-                return
+            # The queue and stop event are captured by this generation. A
+            # timed-out predecessor must never follow mutable module globals
+            # into a replacement generation.
             work_item = queue.get(timeout=1.0)
+        except Empty:
+            if stop_event.is_set():
+                return
+            continue
+        try:
             if work_item is None:  # Poison pill to stop
-                queue.task_done()
-                break
+                return
 
             db_path, insert_params = work_item
             try:
                 _write_row(db_path, insert_params)
             except Exception as e:
                 _record_dropped_row("async-writer", e)
-            finally:
-                queue.task_done()
-        except Empty:
-            continue
         except Exception as e:
             print(f"[TokenPak] DB worker error: {e}", file=sys.stderr)
+        finally:
+            # Every successful get(), including a poison pill or malformed
+            # item, must retire exactly one unfinished task. Otherwise flush()
+            # can wait forever on work no thread still owns.
+            queue.task_done()
 
 
 def _wait_for_queue_drain(q: Queue[DbWorkItem | None], deadline: float) -> bool:
@@ -256,36 +287,31 @@ def _stop_db_write_queue(timeout: float = 5.0) -> bool:
     with _DB_QUEUE_LOCK:
         q = _DB_WRITE_QUEUE
         thread = _DB_BACKGROUND_THREAD
+        stop_event = _DB_BACKGROUND_STOP
         if q is None:
             return True
         deadline = time.monotonic() + timeout
+        poison_enqueued = False
         try:
             q.put(None, timeout=max(0.0, timeout / 2.0))  # poison pill
-        except Exception:
-            # Queue full and stayed full: stop the worker after its current
-            # item instead of blocking shutdown forever.
-            _DB_BACKGROUND_STOP.set()
+            poison_enqueued = True
+        except Full:
+            # Queue full and stayed full: the generation-owned event makes the
+            # worker exit once it has drained the rows it already owns.
+            pass
+        stop_event.set()
         drained = _wait_for_queue_drain(q, deadline)
-        _DB_BACKGROUND_STOP.set()
         if thread is not None and thread.is_alive():
-            thread.join(timeout=max(0.1, deadline - time.monotonic()))
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        stopped = thread is None or not thread.is_alive()
         if not drained:
-            # An incomplete drain means the queue we are about to discard
-            # still holds rows the writer never got to. Count them before
-            # they vanish so the drop is visible instead of silent.
-            #
-            # This read is a best-effort snapshot, not an atomic handoff with
-            # the writer thread: `unfinished_tasks` can still tick down
-            # between `_wait_for_queue_drain`'s deadline check above and this
-            # read if the worker finishes an item in that window, so the
-            # count can under-report a row or two that actually landed. It
-            # cannot over-report, and it is still exact in the common case
-            # (worker already joined or blocked). A perfect count would need
-            # a single lock spanning the worker's `task_done()` and this
-            # read; not attempted here as it would require restructuring the
-            # worker's per-item locking for a narrow residual window.
-            abandoned = getattr(q, "unfinished_tasks", 0)
-            if abandoned:
+            # A live timed-out generation retains its private queue and keeps
+            # draining; those rows are pending, not proven dropped. Only a
+            # stopped generation with unfinished row items has confirmed
+            # abandonment. Never count the internal poison pill as a row.
+            unfinished = getattr(q, "unfinished_tasks", 0)
+            abandoned = max(0, unfinished - int(poison_enqueued))
+            if abandoned and stopped:
                 _record_dropped_row(
                     "shutdown-drain-incomplete",
                     RuntimeError(
@@ -296,7 +322,7 @@ def _stop_db_write_queue(timeout: float = 5.0) -> bool:
                 )
         _DB_WRITE_QUEUE = None
         _DB_BACKGROUND_THREAD = None
-        return drained
+        return drained and stopped
 
 
 def _get_db_connection(db_path: DbPath) -> sqlite3.Connection:
@@ -319,7 +345,13 @@ def _get_db_connection(db_path: DbPath) -> sqlite3.Connection:
             requested_path,
             check_same_thread=False,  # Required for ThreadedHTTPServer
         )
-        _DB_CONNECTION.execute("PRAGMA journal_mode=WAL")
+        mode_row = _DB_CONNECTION.execute("PRAGMA journal_mode").fetchone()
+        if mode_row is None or str(mode_row[0]).lower() != "wal":
+            # Direct _write_row() callers may supply a database that was not
+            # initialized through Monitor. Normal Monitor databases enter WAL
+            # synchronously in _init_db(), keeping this mode transition out of
+            # the background durability/flush boundary.
+            _DB_CONNECTION.execute("PRAGMA journal_mode=WAL")
         _DB_CONNECTION.execute("PRAGMA synchronous=NORMAL")
         _DB_CONNECTION.execute("PRAGMA busy_timeout=5000")
         _DB_CONNECTION_PATH = requested_path
@@ -446,6 +478,12 @@ class Monitor:
         # startup (a raced ALTER would otherwise surface as 'database is
         # locked' and abort schema setup).
         conn.execute("PRAGMA busy_timeout=5000")
+        # Journal-mode transitions can wait on filesystem/SQLite locks. Own
+        # that transition synchronously with schema initialization instead of
+        # deferring it to the first background write, where it can make a
+        # bounded flush time out with an otherwise healthy queue.
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
         # Batch all schema work into one durable commit. Without an explicit
         # transaction SQLite autocommits every CREATE/ALTER separately; on
         # high-latency filesystems a fresh Monitor could spend >30 seconds on
@@ -486,6 +524,17 @@ class Monitor:
                 reasoning_effort TEXT DEFAULT '',
                 reasoning_usage_source TEXT DEFAULT '',
                 provider_usage_ref TEXT DEFAULT '',
+                provider_usage_provider TEXT DEFAULT '',
+                provider_input_tokens INTEGER DEFAULT NULL,
+                provider_output_tokens INTEGER DEFAULT NULL,
+                provider_cache_read_tokens INTEGER DEFAULT NULL,
+                provider_cache_creation_tokens INTEGER DEFAULT NULL,
+                provider_usage_source TEXT DEFAULT '',
+                provider_usage_confidence TEXT DEFAULT '',
+                reasoning_effort_source TEXT DEFAULT '',
+                reasoning_effort_raw TEXT DEFAULT '',
+                cost_basis TEXT DEFAULT '',
+                pricing_source TEXT DEFAULT '',
                 stream_mode TEXT DEFAULT '',
                 event_transform_applied INTEGER DEFAULT 0,
                 stop_reason TEXT DEFAULT ''
@@ -562,6 +611,50 @@ class Monitor:
                 (
                     "provider_usage_ref",
                     "ALTER TABLE requests ADD COLUMN provider_usage_ref TEXT DEFAULT ''",
+                ),
+                (
+                    "provider_usage_provider",
+                    "ALTER TABLE requests ADD COLUMN provider_usage_provider TEXT DEFAULT ''",
+                ),
+                (
+                    "provider_input_tokens",
+                    "ALTER TABLE requests ADD COLUMN provider_input_tokens INTEGER DEFAULT NULL",
+                ),
+                (
+                    "provider_output_tokens",
+                    "ALTER TABLE requests ADD COLUMN provider_output_tokens INTEGER DEFAULT NULL",
+                ),
+                (
+                    "provider_cache_read_tokens",
+                    "ALTER TABLE requests ADD COLUMN provider_cache_read_tokens INTEGER DEFAULT NULL",
+                ),
+                (
+                    "provider_cache_creation_tokens",
+                    "ALTER TABLE requests ADD COLUMN provider_cache_creation_tokens INTEGER DEFAULT NULL",
+                ),
+                (
+                    "provider_usage_source",
+                    "ALTER TABLE requests ADD COLUMN provider_usage_source TEXT DEFAULT ''",
+                ),
+                (
+                    "provider_usage_confidence",
+                    "ALTER TABLE requests ADD COLUMN provider_usage_confidence TEXT DEFAULT ''",
+                ),
+                (
+                    "reasoning_effort_source",
+                    "ALTER TABLE requests ADD COLUMN reasoning_effort_source TEXT DEFAULT ''",
+                ),
+                (
+                    "reasoning_effort_raw",
+                    "ALTER TABLE requests ADD COLUMN reasoning_effort_raw TEXT DEFAULT ''",
+                ),
+                (
+                    "cost_basis",
+                    "ALTER TABLE requests ADD COLUMN cost_basis TEXT DEFAULT ''",
+                ),
+                (
+                    "pricing_source",
+                    "ALTER TABLE requests ADD COLUMN pricing_source TEXT DEFAULT ''",
                 ),
                 ("stream_mode", "ALTER TABLE requests ADD COLUMN stream_mode TEXT DEFAULT ''"),
                 (
@@ -672,6 +765,25 @@ class Monitor:
         cycle_id: str = "",
         attribution_source: str = "",
         stop_reason: str = "",
+        reasoning_tokens: int | None = None,
+        visible_output_tokens: int | None = None,
+        total_billable_tokens: int | None = None,
+        reasoning_effort: str = "",
+        reasoning_usage_source: str = "",
+        provider_usage_ref: str = "",
+        provider_usage_provider: str = "",
+        provider_input_tokens: int | None = None,
+        provider_output_tokens: int | None = None,
+        provider_cache_read_tokens: int | None = None,
+        provider_cache_creation_tokens: int | None = None,
+        provider_usage_source: str = "",
+        provider_usage_confidence: str = "",
+        reasoning_effort_source: str = "",
+        reasoning_effort_raw: str = "",
+        cost_basis: str = "",
+        pricing_source: str = "",
+        stream_mode: str = "",
+        event_transform_applied: bool = False,
     ) -> None:
         # ``session_id`` is the resolved Claude Code / TokenPak session id
         # (``_resolve_session_id``). Empty string when no session header was
@@ -711,14 +823,36 @@ class Monitor:
             cycle_id or "",
             attribution_source or "",
             stop_reason or "",
+            reasoning_tokens,
+            visible_output_tokens,
+            total_billable_tokens,
+            reasoning_effort or "",
+            reasoning_usage_source or "",
+            provider_usage_ref or "",
+            provider_usage_provider or "",
+            provider_input_tokens,
+            provider_output_tokens,
+            provider_cache_read_tokens,
+            provider_cache_creation_tokens,
+            provider_usage_source or "",
+            provider_usage_confidence or "",
+            reasoning_effort_source or "",
+            reasoning_effort_raw or "",
+            cost_basis or "",
+            pricing_source or "",
+            stream_mode or "",
+            int(bool(event_transform_applied)),
         )
         _queued = False
         try:
-            queue = _DB_WRITE_QUEUE
-            if queue is None:
-                raise RuntimeError("database write queue is not initialized")
-            queue.put_nowait((self.db_path, insert_params))
-            _queued = True
+            # Serialize admission with stop/init so no row can land behind a
+            # poison pill or enter a generation after its stop was requested.
+            with _DB_QUEUE_LOCK:
+                queue = _DB_WRITE_QUEUE
+                if queue is None or _DB_BACKGROUND_STOP.is_set():
+                    raise RuntimeError("database write queue is not accepting rows")
+                queue.put_nowait((self.db_path, insert_params))
+                _queued = True
         except (NameError, Exception):
             # Queue full / uninitialized / stopped: write synchronously through
             # the SAME guarded path the async writer uses (persistent
@@ -753,10 +887,13 @@ class Monitor:
         Returns True when the write queue fully drained within ``timeout``
         seconds. Does not stop the background writer; safe to call any time.
         """
-        q = _DB_WRITE_QUEUE
+        with _DB_QUEUE_LOCK:
+            q = _DB_WRITE_QUEUE
+            thread = _DB_BACKGROUND_THREAD
         if q is None:
             return True
-        return _wait_for_queue_drain(q, time.monotonic() + timeout)
+        drained = _wait_for_queue_drain(q, time.monotonic() + timeout)
+        return drained and thread is not None and thread.is_alive()
 
     def stop(self, timeout: float = 5.0) -> bool:
         """Drain queued writes and stop the background writer thread.

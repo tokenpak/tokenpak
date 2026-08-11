@@ -33,13 +33,27 @@ from tokenpak.services.providers._registry import register_parser
 PROVIDER_NAME = "anthropic"
 
 
+def _count(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
 def _hash_ref(usage: Mapping[str, object]) -> str:
     raw = json.dumps(usage, sort_keys=True).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:12]
 
 
 def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
-    if not isinstance(usage, dict):
+    if not isinstance(usage, Mapping) or not any(
+        _count(usage.get(field)) is not None
+        for field in (
+            "input_tokens",
+            "output_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+            "reasoning_tokens",
+            "thinking_tokens",
+        )
+    ):
         return {
             "input_tokens": None,
             "visible_output_tokens": None,
@@ -51,27 +65,36 @@ def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
             "provider_usage_ref": None,
         }
 
-    input_tokens = usage.get("input_tokens")
-    output_tokens = usage.get("output_tokens")
-    reasoning_tokens = usage.get("reasoning_tokens")
-    if reasoning_tokens is None and isinstance(output_tokens, int):
-        thinking = usage.get("thinking_tokens")
-        if isinstance(thinking, int):
-            reasoning_tokens = thinking
+    input_tokens = _count(usage.get("input_tokens"))
+    output_tokens = _count(usage.get("output_tokens"))
+    cache_creation_tokens = _count(usage.get("cache_creation_input_tokens"))
+    cache_read_tokens = _count(usage.get("cache_read_input_tokens"))
+    reasoning_tokens = _count(usage.get("reasoning_tokens"))
+    if reasoning_tokens is None:
+        reasoning_tokens = _count(usage.get("thinking_tokens"))
 
     visible_output_tokens = None
-    if isinstance(output_tokens, int) and isinstance(reasoning_tokens, int):
+    if output_tokens is not None and reasoning_tokens is not None:
         visible_output_tokens = max(output_tokens - reasoning_tokens, 0)
 
-    total_output_tokens = output_tokens if isinstance(output_tokens, int) else None
+    total_output_tokens = output_tokens
     total_billable_tokens = None
-    if isinstance(input_tokens, int) and isinstance(total_output_tokens, int):
-        total_billable_tokens = input_tokens + total_output_tokens
+    if input_tokens is not None and total_output_tokens is not None:
+        # Anthropic reports cache-read/cache-creation input separately from
+        # ordinary input_tokens. All three classes are billable (at different
+        # rates), so the unit total must include them without relabeling the
+        # provider's raw input_tokens field.
+        total_billable_tokens = (
+            input_tokens
+            + total_output_tokens
+            + (cache_creation_tokens or 0)
+            + (cache_read_tokens or 0)
+        )
 
     return {
-        "input_tokens": input_tokens if isinstance(input_tokens, int) else None,
+        "input_tokens": input_tokens,
         "visible_output_tokens": visible_output_tokens,
-        "reasoning_tokens": reasoning_tokens if isinstance(reasoning_tokens, int) else None,
+        "reasoning_tokens": reasoning_tokens,
         "total_output_tokens": total_output_tokens,
         "total_billable_tokens": total_billable_tokens,
         "reasoning_effort": None,
@@ -80,4 +103,9 @@ def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
     }
 
 
-register_parser(PROVIDER_NAME, parse_usage)
+register_parser(
+    PROVIDER_NAME,
+    parse_usage,
+    input_tokens_include_cache=False,
+    cost_policy="catalog_rate_estimate",
+)

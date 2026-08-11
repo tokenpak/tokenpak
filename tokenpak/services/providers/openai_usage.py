@@ -37,13 +37,34 @@ from tokenpak.services.providers._registry import register_parser
 PROVIDER_NAME = "openai"
 
 
+def _count(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _first_count(usage: Mapping[str, object], *names: str) -> int | None:
+    for name in names:
+        value = _count(usage.get(name))
+        if value is not None:
+            return value
+    return None
+
+
 def _hash_ref(usage: Mapping[str, object]) -> str:
     raw = json.dumps(usage, sort_keys=True).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:12]
 
 
 def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
-    if not isinstance(usage, dict):
+    if not isinstance(usage, Mapping) or not any(
+        _count(usage.get(field)) is not None
+        for field in (
+            "prompt_tokens",
+            "completion_tokens",
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+        )
+    ):
         return {
             "input_tokens": None,
             "visible_output_tokens": None,
@@ -55,33 +76,39 @@ def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
             "provider_usage_ref": None,
         }
 
-    input_tokens = usage.get("prompt_tokens")
-    completion_tokens = usage.get("completion_tokens")
-    total_tokens = usage.get("total_tokens")
+    input_tokens = _first_count(usage, "prompt_tokens", "input_tokens")
+    completion_tokens = _first_count(usage, "completion_tokens", "output_tokens")
+    total_tokens = _count(usage.get("total_tokens"))
 
-    details = usage.get("completion_tokens_details") or {}
-    reasoning_tokens = details.get("reasoning_tokens") if isinstance(details, dict) else None
+    details = usage.get("completion_tokens_details") or usage.get("output_tokens_details") or {}
+    reasoning_tokens = (
+        _count(details.get("reasoning_tokens")) if isinstance(details, Mapping) else None
+    )
 
     visible_output_tokens = None
-    if isinstance(completion_tokens, int) and isinstance(reasoning_tokens, int):
+    if completion_tokens is not None and reasoning_tokens is not None:
         visible_output_tokens = max(completion_tokens - reasoning_tokens, 0)
 
-    total_output_tokens = completion_tokens if isinstance(completion_tokens, int) else None
+    total_output_tokens = completion_tokens
 
     total_billable_tokens = None
-    if isinstance(total_tokens, int):
+    if total_tokens is not None:
         total_billable_tokens = total_tokens
-    elif isinstance(input_tokens, int) and isinstance(total_output_tokens, int):
+    elif input_tokens is not None and total_output_tokens is not None:
         total_billable_tokens = input_tokens + total_output_tokens
 
-    reasoning_effort = usage.get("reasoning_effort")
-    if reasoning_effort not in {"low", "medium", "high"}:
-        reasoning_effort = None
+    raw_reasoning_effort = usage.get("reasoning_effort")
+    reasoning_effort = (
+        raw_reasoning_effort
+        if isinstance(raw_reasoning_effort, str)
+        and raw_reasoning_effort in {"low", "medium", "high"}
+        else None
+    )
 
     return {
-        "input_tokens": input_tokens if isinstance(input_tokens, int) else None,
+        "input_tokens": input_tokens,
         "visible_output_tokens": visible_output_tokens,
-        "reasoning_tokens": reasoning_tokens if isinstance(reasoning_tokens, int) else None,
+        "reasoning_tokens": reasoning_tokens,
         "total_output_tokens": total_output_tokens,
         "total_billable_tokens": total_billable_tokens,
         "reasoning_effort": reasoning_effort,
@@ -90,4 +117,17 @@ def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
     }
 
 
-register_parser(PROVIDER_NAME, parse_usage)
+register_parser(
+    PROVIDER_NAME,
+    parse_usage,
+    input_tokens_include_cache=True,
+    cost_policy="catalog_rate_estimate",
+)
+# Codex subscription traffic uses the same Responses usage contract but may
+# carry the router's more specific provider slug.
+register_parser(
+    "openai-codex",
+    parse_usage,
+    input_tokens_include_cache=True,
+    cost_policy="subscription_billed_unknown",
+)

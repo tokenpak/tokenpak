@@ -20,22 +20,13 @@ Covers:
 
 from __future__ import annotations
 
+import builtins
 import json
 import threading
 import time
 import urllib.request
 
 import pytest
-
-# Residual import guard (slim-install surface).
-# psutil is an optional dep used by the legacy proxy server's resource
-# probes; on slim [dev] install it is absent and the proxy.server import
-# chain raises ModuleNotFoundError. Skip cleanly so the release test
-# gate stays green; full installs exercise normally.
-pytest.importorskip(
-    "psutil",
-    reason="psutil is an optional dep used by the legacy proxy server",
-)
 
 pytestmark = pytest.mark.needs_proxy
 
@@ -52,6 +43,35 @@ from tokenpak.proxy.server import (
     _new_session,
     auto_detect_upstream,
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def isolated_legacy_monitor_db(tmp_path_factory):
+    """Keep real legacy-proxy requests off the process default monitor DB."""
+    import tokenpak.proxy.config as proxy_config
+    import tokenpak.proxy.monitor as monitor_module
+
+    db_path = tmp_path_factory.mktemp("legacy-proxy-monitor") / "monitor.db"
+    missing = object()
+    previous = vars(proxy_config).get("MONITOR_DB", missing)
+    proxy_config.MONITOR_DB = str(db_path)
+    try:
+        yield db_path
+    finally:
+        # Module-scoped proxy fixtures have stopped by this point. Retire the
+        # process-global writer they used so later test modules inherit no
+        # queue, thread, or cached connection from this suite.
+        assert monitor_module._stop_db_write_queue(timeout=20.0)
+        with monitor_module._DB_LOCK:
+            if monitor_module._DB_CONNECTION is not None:
+                monitor_module._DB_CONNECTION.close()
+            monitor_module._DB_CONNECTION = None
+            monitor_module._DB_CONNECTION_PATH = None
+        if previous is missing:
+            delattr(proxy_config, "MONITOR_DB")
+        else:
+            proxy_config.MONITOR_DB = previous
+
 
 # ---------------------------------------------------------------------------
 # StageTrace
@@ -410,6 +430,10 @@ def _get(url: str) -> tuple[int, dict | str]:
 
 
 class TestProxyServerHealth:
+    def test_monitor_uses_isolated_test_database(self, proxy, isolated_legacy_monitor_db):
+        assert proxy.monitor is not None
+        assert str(proxy.monitor.db_path) == str(isolated_legacy_monitor_db)
+
     def test_health_returns_ok(self, proxy):
         status, data = _get(f"http://127.0.0.1:{proxy.port}/health")
         assert status == 200
@@ -442,6 +466,25 @@ class TestProxyServerHealth:
     def test_health_method_deep(self, proxy):
         result = proxy.health(deep=True)
         assert isinstance(result, dict)
+
+    def test_health_deep_without_psutil_reports_unavailable(self, proxy, monkeypatch):
+        """The optional memory probe must not disable the legacy server suite."""
+        real_import = builtins.__import__
+
+        def _without_psutil(name, *args, **kwargs):
+            if name == "psutil":
+                raise ImportError("synthetic slim-install psutil absence")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _without_psutil)
+        result = proxy.health(deep=True)
+
+        assert result["memory"] == {
+            "rss_mb": None,
+            "available": False,
+            "reason": "optional_dependency_unavailable",
+        }
+        assert result["disk"]["available"] is True
 
 
 class TestProxyServerStats:

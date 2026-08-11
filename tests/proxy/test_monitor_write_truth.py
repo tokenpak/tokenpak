@@ -52,6 +52,14 @@ def _row_count(db_path, table="requests"):
         conn.close()
 
 
+def _journal_mode(db_path):
+    conn = sqlite3.connect(str(db_path))
+    try:
+        return str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower()
+    finally:
+        conn.close()
+
+
 def _insert_request(
     db_path,
     *,
@@ -138,35 +146,7 @@ def test_write_row_retries_transient_lock_then_succeeds(tmp_path, monkeypatch):
     monkeypatch.setattr(monitor_module, "_get_db_connection", lambda p: flaky)
     monkeypatch.setattr(monitor_module, "_DB_WRITE_RETRY_BACKOFF_S", 0.001)
 
-    params = (
-        datetime.now().isoformat(),
-        "claude-sonnet-4-6",
-        "chat",
-        1,
-        1,
-        0.0,
-        1,
-        200,
-        "test",
-        "",
-        0,
-        0,
-        0,
-        "",
-        0,
-        0,
-        0,
-        "proxy",
-        "",
-        0,
-        0,
-        None,
-        "",
-        "",
-        "",
-        "",
-        "",
-    )
+    params = _request_insert_params()
     before = monitor_module.get_dropped_row_count()
     monitor_module._write_row(str(db), params)
 
@@ -269,6 +249,11 @@ def test_writer_routes_interleaved_rows_to_each_monitor_database(tmp_path):
     second_db = tmp_path / "second.db"
     first = Monitor(db_path=str(first_db))
     second = Monitor(db_path=str(second_db))
+    # WAL is a schema/startup invariant, not deferred work in the background
+    # durability boundary. A lazy transition here previously stalled the
+    # writer beyond flush's bound under concurrent executor I/O.
+    assert _journal_mode(first_db) == "wal"
+    assert _journal_mode(second_db) == "wal"
 
     # Construct both monitors before enqueueing.  The first row opens the
     # cached writer connection for first_db; the second row must switch that
@@ -290,6 +275,45 @@ def test_new_monitor_restarts_worker_after_stop(tmp_path):
     _log_minimal(mon2)
     assert mon2.flush(timeout=10.0) is True
     assert _row_count(db) == 1
+
+
+def test_timed_out_stop_cannot_revive_previous_writer_generation(tmp_path, monkeypatch):
+    """A replacement writer must not clear a timed-out predecessor's stop signal."""
+    old = Monitor(db_path=str(tmp_path / "old.db"))
+    entered_write = threading.Event()
+    release_write = threading.Event()
+    replacement_written = threading.Event()
+
+    def _controlled_write(db_path, _params):
+        if str(db_path).endswith("old.db"):
+            entered_write.set()
+            assert release_write.wait(timeout=5.0)
+            return
+        replacement_written.set()
+
+    monkeypatch.setattr(monitor_module, "_write_row", _controlled_write)
+    _log_minimal(old, endpoint="old-generation")
+    assert entered_write.wait(timeout=2.0)
+    old_thread = monitor_module._DB_BACKGROUND_THREAD
+    old_stop_event = monitor_module._DB_BACKGROUND_STOP
+
+    assert old.stop(timeout=0.02) is False
+    assert old_thread is not None and old_thread.is_alive()
+    assert old_stop_event.is_set()
+
+    replacement = Monitor(db_path=str(tmp_path / "replacement.db"))
+    assert monitor_module._DB_BACKGROUND_STOP is not old_stop_event
+    assert not monitor_module._DB_BACKGROUND_STOP.is_set()
+
+    release_write.set()
+    old_thread.join(timeout=2.0)
+    assert not old_thread.is_alive()
+
+    _log_minimal(replacement, endpoint="replacement-generation")
+    assert replacement_written.wait(timeout=2.0)
+    assert replacement.flush(timeout=5.0) is True
+    assert _row_count(tmp_path / "old.db") == 0
+    assert _row_count(tmp_path / "replacement.db") == 0
 
 
 # ---------------------------------------------------------------------------
@@ -753,35 +777,36 @@ def _create_requests_table_for_insert(db_path):
 
 
 def _request_insert_params(*, stop_reason=""):
-    return (
-        datetime.now().isoformat(),
-        "claude-sonnet-4-6",
-        "chat",
-        10,
-        5,
-        0.0,
-        1,
-        200,
-        "test",
-        "",
-        0,
-        0,
-        0,
-        "",
-        0,
-        0,
-        0,
-        "proxy",
-        "",
-        0,
-        0,
-        None,
-        "",
-        "",
-        "",
-        "",
-        stop_reason,
+    values = dict.fromkeys(monitor_module._REQUEST_INSERT_COLUMNS)
+    values.update(
+        timestamp=datetime.now().isoformat(),
+        model="claude-sonnet-4-6",
+        request_type="chat",
+        input_tokens=10,
+        output_tokens=5,
+        estimated_cost=0.0,
+        latency_ms=1,
+        status_code=200,
+        endpoint="test",
+        compilation_mode="",
+        protected_tokens=0,
+        compressed_tokens=0,
+        injected_tokens=0,
+        injected_sources="",
+        cache_read_tokens=0,
+        cache_creation_tokens=0,
+        would_have_saved=0,
+        cache_origin="proxy",
+        user_id="",
+        cache_creation_ephemeral_1h_tokens=0,
+        cache_creation_ephemeral_5m_tokens=0,
+        session_id="",
+        agent_id="",
+        cycle_id="",
+        attribution_source="",
+        stop_reason=stop_reason,
     )
+    return tuple(values[name] for name in monitor_module._REQUEST_INSERT_COLUMNS)
 
 
 def test_log_persists_stop_reason(tmp_path):

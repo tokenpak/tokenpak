@@ -29,13 +29,37 @@ from tokenpak.services.providers._registry import register_parser
 PROVIDER_NAME = "google"
 
 
+def _count(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _first_count(usage: Mapping[str, object], *names: str) -> int | None:
+    for name in names:
+        value = _count(usage.get(name))
+        if value is not None:
+            return value
+    return None
+
+
 def _hash_ref(usage: Mapping[str, object]) -> str:
     raw = json.dumps(usage, sort_keys=True).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:12]
 
 
 def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
-    if not isinstance(usage, dict):
+    if not isinstance(usage, Mapping) or not any(
+        _count(usage.get(field)) is not None
+        for field in (
+            "promptTokenCount",
+            "prompt_token_count",
+            "candidatesTokenCount",
+            "candidates_token_count",
+            "thoughtsTokenCount",
+            "thoughts_token_count",
+            "totalTokenCount",
+            "total_token_count",
+        )
+    ):
         return {
             "input_tokens": None,
             "visible_output_tokens": None,
@@ -47,29 +71,27 @@ def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
             "provider_usage_ref": None,
         }
 
-    input_tokens = usage.get("promptTokenCount") or usage.get("prompt_token_count")
-    visible_output_tokens = usage.get("candidatesTokenCount") or usage.get("candidates_token_count")
-    reasoning_tokens = usage.get("thoughtsTokenCount") or usage.get("thoughts_token_count")
-    total_tokens = usage.get("totalTokenCount") or usage.get("total_token_count")
+    input_tokens = _first_count(usage, "promptTokenCount", "prompt_token_count")
+    visible_output_tokens = _first_count(usage, "candidatesTokenCount", "candidates_token_count")
+    reasoning_tokens = _first_count(usage, "thoughtsTokenCount", "thoughts_token_count")
+    total_tokens = _first_count(usage, "totalTokenCount", "total_token_count")
 
     total_output_tokens = None
-    if isinstance(visible_output_tokens, int) and isinstance(reasoning_tokens, int):
+    if visible_output_tokens is not None and reasoning_tokens is not None:
         total_output_tokens = visible_output_tokens + reasoning_tokens
-    elif isinstance(visible_output_tokens, int):
+    elif visible_output_tokens is not None:
         total_output_tokens = visible_output_tokens
 
     total_billable_tokens = None
-    if isinstance(total_tokens, int):
+    if total_tokens is not None:
         total_billable_tokens = total_tokens
-    elif isinstance(input_tokens, int) and isinstance(total_output_tokens, int):
+    elif input_tokens is not None and total_output_tokens is not None:
         total_billable_tokens = input_tokens + total_output_tokens
 
     return {
-        "input_tokens": input_tokens if isinstance(input_tokens, int) else None,
-        "visible_output_tokens": visible_output_tokens
-        if isinstance(visible_output_tokens, int)
-        else None,
-        "reasoning_tokens": reasoning_tokens if isinstance(reasoning_tokens, int) else None,
+        "input_tokens": input_tokens,
+        "visible_output_tokens": visible_output_tokens,
+        "reasoning_tokens": reasoning_tokens,
         "total_output_tokens": total_output_tokens,
         "total_billable_tokens": total_billable_tokens,
         "reasoning_effort": None,
@@ -78,4 +100,9 @@ def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
     }
 
 
-register_parser(PROVIDER_NAME, parse_usage)
+register_parser(
+    PROVIDER_NAME,
+    parse_usage,
+    input_tokens_include_cache=True,
+    cost_policy="catalog_rate_estimate",
+)
