@@ -20,18 +20,32 @@ from __future__ import annotations
 import importlib
 import pkgutil
 from collections.abc import Callable, Iterable, Mapping
+from typing import Literal
 
 # A usage parser takes the provider's usage object (already extracted
 # from the response body) and returns a dict conforming to
 # reasoning-usage-v1.schema.json.
 UsageRecord = dict[str, object]
 UsageParser = Callable[[Mapping[str, object] | None], UsageRecord]
+CostPolicy = Literal[
+    "catalog_rate_estimate",
+    "subscription_billed_unknown",
+    "route_unknown",
+]
 
 
 _REGISTRY: dict[str, UsageParser] = {}
+_INPUT_TOKENS_INCLUDE_CACHE: dict[str, bool] = {}
+_COST_POLICIES: dict[str, CostPolicy] = {}
 
 
-def register_parser(provider_name: str, parser: UsageParser) -> None:
+def register_parser(
+    provider_name: str,
+    parser: UsageParser,
+    *,
+    input_tokens_include_cache: bool | None = None,
+    cost_policy: CostPolicy = "route_unknown",
+) -> None:
     """Register a usage parser under a provider name.
 
     Idempotent: re-registering the same name overwrites silently. Callers
@@ -40,7 +54,20 @@ def register_parser(provider_name: str, parser: UsageParser) -> None:
     """
     if not provider_name:
         raise ValueError("provider_name must be non-empty")
+    if input_tokens_include_cache is not None and not isinstance(input_tokens_include_cache, bool):
+        raise TypeError("input_tokens_include_cache must be bool or None")
+    if cost_policy not in {
+        "catalog_rate_estimate",
+        "subscription_billed_unknown",
+        "route_unknown",
+    }:
+        raise ValueError(f"unsupported cost policy: {cost_policy!r}")
     _REGISTRY[provider_name] = parser
+    if input_tokens_include_cache is None:
+        _INPUT_TOKENS_INCLUDE_CACHE.pop(provider_name, None)
+    else:
+        _INPUT_TOKENS_INCLUDE_CACHE[provider_name] = input_tokens_include_cache
+    _COST_POLICIES[provider_name] = cost_policy
 
 
 def list_registered_providers() -> Iterable[str]:
@@ -69,6 +96,27 @@ def get_usage_parser(provider_name: str) -> UsageParser:
     provider is unrecognized.
     """
     return _REGISTRY.get(provider_name, _unavailable_parser)
+
+
+def get_input_tokens_include_cache(provider_name: str) -> bool | None:
+    """Return whether a provider's input count already includes cache classes.
+
+    ``None`` means the provider did not declare the accounting semantic, so
+    consumers must not substitute the provider input count into priced totals.
+    Keeping this metadata beside parser registration preserves the closed
+    reasoning-usage-v1 object while avoiding provider-name branches in callers.
+    """
+    return _INPUT_TOKENS_INCLUDE_CACHE.get(provider_name)
+
+
+def get_cost_policy(provider_name: str) -> CostPolicy:
+    """Return the provider-declared cost treatment.
+
+    Unknown and dynamically added providers default to ``route_unknown`` so a
+    parser registration alone can never turn a route-card estimate into an
+    exact-spend claim.
+    """
+    return _COST_POLICIES.get(provider_name, "route_unknown")
 
 
 def _discover() -> None:

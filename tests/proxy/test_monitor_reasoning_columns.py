@@ -16,6 +16,9 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
+import pytest
+
+import tokenpak.proxy.monitor as monitor_module
 from tokenpak.proxy.monitor import Monitor
 
 EXPECTED_REASONING_COLUMNS = {
@@ -31,6 +34,32 @@ EXPECTED_STREAM_COLUMNS = {
     "stream_mode",
     "event_transform_applied",
 }
+
+EXPECTED_PROVIDER_USAGE_COLUMNS = {
+    "provider_usage_provider",
+    "provider_input_tokens",
+    "provider_output_tokens",
+    "provider_cache_read_tokens",
+    "provider_cache_creation_tokens",
+    "provider_usage_source",
+    "provider_usage_confidence",
+    "reasoning_effort_source",
+    "reasoning_effort_raw",
+    "cost_basis",
+    "pricing_source",
+}
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _retire_module_writer():
+    """Do not leak this module's process-global writer into later suites."""
+    yield
+    assert monitor_module._stop_db_write_queue(timeout=20.0)
+    with monitor_module._DB_LOCK:
+        if monitor_module._DB_CONNECTION is not None:
+            monitor_module._DB_CONNECTION.close()
+        monitor_module._DB_CONNECTION = None
+        monitor_module._DB_CONNECTION_PATH = None
 
 
 def _columns(db_path: Path) -> set:
@@ -49,6 +78,7 @@ def test_fresh_monitor_db_has_reasoning_and_stream_columns():
         cols = _columns(db_path)
         assert EXPECTED_REASONING_COLUMNS <= cols
         assert EXPECTED_STREAM_COLUMNS <= cols
+        assert EXPECTED_PROVIDER_USAGE_COLUMNS <= cols
 
 
 def test_existing_db_without_columns_gets_columns_added():
@@ -74,6 +104,7 @@ def test_existing_db_without_columns_gets_columns_added():
         cols = _columns(db_path)
         assert EXPECTED_REASONING_COLUMNS <= cols
         assert EXPECTED_STREAM_COLUMNS <= cols
+        assert EXPECTED_PROVIDER_USAGE_COLUMNS <= cols
 
 
 def test_migration_is_idempotent():
@@ -84,3 +115,4 @@ def test_migration_is_idempotent():
         cols = _columns(db_path)
         assert EXPECTED_REASONING_COLUMNS <= cols
         assert EXPECTED_STREAM_COLUMNS <= cols
+        assert EXPECTED_PROVIDER_USAGE_COLUMNS <= cols

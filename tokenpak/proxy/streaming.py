@@ -14,6 +14,7 @@ Merged from proxy/ and agent.proxy/.
 import io
 import json
 import zlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Dict, Iterator
 
@@ -43,6 +44,56 @@ class StreamUsage:
 # ---------------------------------------------------------------------------
 
 
+def _extract_sse_usage(sse_bytes: bytes) -> dict[str, object] | None:
+    """Return the provider's cumulative usage object from an SSE copy.
+
+    The stream itself is never rewritten. Anthropic splits usage between
+    ``message_start`` and ``message_delta``; OpenAI Responses puts the final
+    object under ``response.completed.response.usage``; Gemini uses
+    ``usageMetadata``. Later cumulative values win while fields emitted only
+    at stream start are retained.
+    """
+    merged: dict[str, object] = {}
+    found = False
+    for event in iter_sse_events(sse_bytes):
+        if not isinstance(event, Mapping):
+            continue
+
+        candidates: list[object] = []
+        if event.get("type") == "message_start":
+            message = event.get("message")
+            if isinstance(message, Mapping):
+                candidates.append(message.get("usage"))
+
+        candidates.extend((event.get("usage"), event.get("usageMetadata")))
+        response = event.get("response")
+        if isinstance(response, Mapping):
+            candidates.extend((response.get("usage"), response.get("usageMetadata")))
+
+        for candidate in candidates:
+            if isinstance(candidate, Mapping):
+                merged.update({str(key): value for key, value in candidate.items()})
+                found = True
+    return merged if found else None
+
+
+def _usage_int(usage: Mapping[str, object], *names: str) -> int | None:
+    for name in names:
+        value = usage.get(name)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    return None
+
+
+def _sse_data_payload(line: str) -> str | None:
+    """Return an SSE data payload, accepting the optional post-colon space."""
+    line = line.strip()
+    if not line.startswith("data:"):
+        return None
+    payload = line[5:]
+    return payload[1:] if payload.startswith(" ") else payload
+
+
 def extract_sse_tokens(sse_bytes: bytes) -> Dict[str, int]:
     """
     Extract token usage metrics from raw SSE stream bytes.
@@ -68,52 +119,45 @@ def extract_sse_tokens(sse_bytes: bytes) -> Dict[str, int]:
         "cache_creation_ephemeral_1h_input_tokens": 0,
         "cache_creation_ephemeral_5m_input_tokens": 0,
     }
-    try:
-        text = sse_bytes.decode("utf-8", errors="replace")
-        for line in text.split("\n"):
-            line = line.strip()
-            if not line.startswith("data: "):
-                continue
-            data_str = line[6:]
-            if data_str == "[DONE]":
-                continue
-            try:
-                event = json.loads(data_str)
-            except json.JSONDecodeError:
-                continue
+    usage = _extract_sse_usage(sse_bytes)
+    if usage is None:
+        return result
 
-            # Anthropic: cache tokens arrive in message_start
-            if event.get("type") == "message_start":
-                usage = event.get("message", {}).get("usage", {})
-                if "cache_read_input_tokens" in usage:
-                    result["cache_read_input_tokens"] = usage["cache_read_input_tokens"]
-                if "cache_creation_input_tokens" in usage:
-                    result["cache_creation_input_tokens"] = usage["cache_creation_input_tokens"]
-                # Per-TTL breakdown (extended cache); additive, defaults stay 0
-                # if the sub-object or fields are absent.
-                cc = usage.get("cache_creation")
-                if isinstance(cc, dict):
-                    if "ephemeral_1h_input_tokens" in cc:
-                        result["cache_creation_ephemeral_1h_input_tokens"] = (
-                            cc["ephemeral_1h_input_tokens"] or 0
-                        )
-                    if "ephemeral_5m_input_tokens" in cc:
-                        result["cache_creation_ephemeral_5m_input_tokens"] = (
-                            cc["ephemeral_5m_input_tokens"] or 0
-                        )
+    output_tokens = _usage_int(
+        usage,
+        "output_tokens",
+        "completion_tokens",
+        "candidatesTokenCount",
+        "candidates_token_count",
+    )
+    if output_tokens is not None:
+        result["output_tokens"] = output_tokens
 
-            # Anthropic: output tokens arrive in message_delta
-            if event.get("type") == "message_delta":
-                usage = event.get("usage", {})
-                if "output_tokens" in usage:
-                    result["output_tokens"] = usage["output_tokens"]
+    cache_read_tokens = _usage_int(
+        usage,
+        "cache_read_input_tokens",
+        "cachedContentTokenCount",
+        "cached_content_token_count",
+    )
+    if cache_read_tokens is None:
+        details = usage.get("input_tokens_details") or usage.get("prompt_tokens_details")
+        if isinstance(details, Mapping):
+            cache_read_tokens = _usage_int(details, "cached_tokens")
+    if cache_read_tokens is not None:
+        result["cache_read_input_tokens"] = cache_read_tokens
 
-            # OpenAI: completion_tokens in usage block
-            if "usage" in event and "completion_tokens" in event.get("usage", {}):
-                result["output_tokens"] = event["usage"]["completion_tokens"]
+    cache_creation_tokens = _usage_int(usage, "cache_creation_input_tokens")
+    if cache_creation_tokens is not None:
+        result["cache_creation_input_tokens"] = cache_creation_tokens
 
-    except Exception as e:
-        print(f"  ⚠️ SSE parse error: {e}")
+    cache_creation = usage.get("cache_creation")
+    if isinstance(cache_creation, Mapping):
+        one_hour = _usage_int(cache_creation, "ephemeral_1h_input_tokens")
+        five_minutes = _usage_int(cache_creation, "ephemeral_5m_input_tokens")
+        if one_hour is not None:
+            result["cache_creation_ephemeral_1h_input_tokens"] = one_hour
+        if five_minutes is not None:
+            result["cache_creation_ephemeral_5m_input_tokens"] = five_minutes
 
     return result
 
@@ -132,11 +176,10 @@ def _extract_sse_stop_reason(sse_bytes: bytes) -> str:
     stop_reason = ""
     try:
         text = sse_bytes.decode("utf-8", errors="replace")
-        for line in text.split("\n"):
-            line = line.strip()
-            if not line.startswith("data: "):
+        for line in text.splitlines():
+            data_str = _sse_data_payload(line)
+            if data_str is None:
                 continue
-            data_str = line[6:]
             if data_str == "[DONE]":
                 continue
             try:
@@ -163,11 +206,10 @@ _extract_sse_tokens = extract_sse_tokens
 def iter_sse_events(stream_bytes: bytes) -> Iterator[Dict[str, Any]]:
     """Yield parsed JSON events from raw SSE bytes."""
     text = stream_bytes.decode("utf-8", errors="replace")
-    for line in text.split("\n"):
-        line = line.strip()
-        if not line.startswith("data: "):
+    for line in text.splitlines():
+        data_str = _sse_data_payload(line)
+        if data_str is None:
             continue
-        data_str = line[6:]
         if data_str == "[DONE]":
             continue
         try:
