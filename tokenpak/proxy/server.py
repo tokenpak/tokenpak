@@ -1269,6 +1269,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.wfile.write(_resp)
         elif self.path.split("?")[0] == "/v1/messages/count_tokens":
             self._handle_count_tokens()
+        elif self.path.split("?")[0] == "/v1/messages/session-economics":
+            self._handle_session_economics()
         elif self.path.split("?")[0] == "/v1/messages/forecast":
             self._handle_cost_forecast()
         elif self.path.startswith("/v1/messages/"):
@@ -3115,6 +3117,82 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(resp_body)
+
+    def _handle_session_economics(self) -> None:
+        """Serve deterministic completed-session economics without upstream I/O."""
+        from tokenpak._paths import monitor_db
+        from tokenpak.proxy.forecast_endpoint import _build_session_economics_response
+        from tokenpak.proxy.request_pipeline import _resolve_session_id
+
+        def _send_err(
+            message: str,
+            *,
+            status: int = 400,
+            error_type: str = "invalid_request_error",
+        ) -> None:
+            body = json.dumps(
+                {"error": {"type": error_type, "message": message}},
+                separators=(",", ":"),
+            ).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            _send_err("Content-Length must be an integer")
+            return
+        raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+        try:
+            payload = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+            _send_err("Request body is not valid JSON")
+            return
+        if not isinstance(payload, dict):
+            _send_err("Request body must be a JSON object")
+            return
+
+        body_session = payload.get("session_id", "")
+        if not isinstance(body_session, str):
+            _send_err("session_id must be a string when provided")
+            return
+        model_hint = payload.get("model", "")
+        if not isinstance(model_hint, str):
+            _send_err("model must be a string when provided")
+            return
+
+        header_session = _resolve_session_id(self.headers, "").strip()
+        body_session = body_session.strip()
+        if header_session and body_session and header_session != body_session:
+            _send_err("session_id conflicts with the stable session header")
+            return
+        session_id = header_session or body_session
+
+        try:
+            economics = _build_session_economics_response(
+                session_id,
+                monitor_db(mode="read"),
+                model_hint=model_hint,
+            )
+            response_body = economics.to_json().encode()
+        except Exception:
+            logger.exception("session-economics local ledger evaluation failed")
+            _send_err(
+                "Session economics could not be computed from the local ledger",
+                status=500,
+                error_type="api_error",
+            )
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response_body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(response_body)
 
     def _handle_claude_code_backend(self, body: bytes) -> None:
         """Route request through Claude Code CLI (subscription billing).
