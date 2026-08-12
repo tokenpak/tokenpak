@@ -179,6 +179,56 @@ Replay a session with optional overrides.
 
 ---
 
+## Session Economics
+
+### `POST /v1/messages/session-economics`
+
+Build a versioned session-economics snapshot from completed local request
+ledger rows. This endpoint never forwards a provider request.
+
+Supply the stable session identity in `X-Claude-Code-Session-Id` or as
+`session_id` in the JSON body. If both are present, they must match. `model` is
+an optional hint when the ledger does not identify a model unambiguously.
+
+**Request body:**
+
+```json
+{
+ "session_id": "session-abc",
+ "model": "claude-sonnet-4-5"
+}
+```
+
+**Selected response fields:**
+
+```json
+{
+ "schema_version": "session-economics/1",
+ "as_of": "2026-08-12T00:00:00Z",
+ "session": {
+   "id": "session-abc",
+   "identity_state": "observed",
+   "turns_observed": 12,
+   "model": {"id": "claude-sonnet-4-5", "effort": "unknown"}
+ },
+ "runway": {
+   "status": "available",
+   "turns": 8,
+   "binding_constraint": "context_soft",
+   "guard_state": "amber"
+ },
+ "advisory": null
+}
+```
+
+The full immutable response also includes truth-preserving `facts`, `state`,
+and `forecast` objects. Missing measurements use explicit `no_data`,
+`unavailable`, or `error` states and `null` values; they are never represented
+as measured zero. Runway can be `learning`, `unavailable`, or `error` when the
+local facts are insufficient or invalid.
+
+---
+
 ## Proxy Status
 
 ### `GET /v1/status`
@@ -189,7 +239,7 @@ Proxy health and stats.
 ```json
 {
  "status": "ok",
- "version": "1.18.5",
+ "version": "1.19.0",
  "uptime_seconds": 86400,
  "compression": {
  "enabled": true,
@@ -236,7 +286,7 @@ is configured, a missing, malformed, or incorrect Bearer value is rejected with
 {
  "status": "ok",
  "uptime_seconds": 3600,
- "version": "1.18.5",
+ "version": "1.19.0",
  "requests_total": 42,
  "requests_errors": 0,
  "compression_ratio_avg": 0.72,
@@ -385,7 +435,7 @@ Detailed health check (legacy).
  "database": "ok",
  "index": "ok",
  "compression_pipeline": "ok",
- "version": "1.18.5"
+ "version": "1.19.0"
 }
 ```
 
