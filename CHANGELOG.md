@@ -6,6 +6,61 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.19.0] — 2026-08-12
+
+This backward-compatible minor release adds a versioned session-economics
+contract and a deterministic runway view while preserving unknown usage and
+pricing facts instead of inventing certainty.
+
+### Added
+
+- The immutable `session-economics/1` contract exposes session facts, measured
+  values, estimates, provenance, forecasts, guard state, and runway through 29
+  additive Python symbols. Value states distinguish measured, estimated,
+  unavailable, and error results; existing public symbols are unchanged.
+- The proxy exposes `/v1/messages/session-economics`, a deterministic local
+  view of session runway that does not call a model provider. Context soft and
+  hard limits, request or dollar budgets, and rolling caps are evaluated
+  conservatively; the binding constraint is reported explicitly.
+- Provider usage ledgers retain the source and quality of token-usage facts
+  supplied by supported providers. Missing usage remains unknown rather than
+  being coerced to zero.
+
+### Fixed
+
+- Re-ingesting an already wrapped Pak envelope preserves a single stable
+  envelope instead of nesting another wrapper around it.
+- Proxy monitor writers now keep their database association and lifecycle
+  stable across concurrent requests and shutdown flushing.
+- Proxy test fixtures use isolated ephemeral ports, preventing unrelated test
+  processes from colliding on fixed listeners.
+
+### Upgrade
+
+```bash
+python -m pip install --upgrade "tokenpak==1.19.0"
+```
+
+No configuration migration is required.
+
+### Rollback
+
+```bash
+python -m pip install --upgrade "tokenpak==1.18.5"
+```
+
+The release introduces no destructive state migration. Artifact-level upgrade
+and rollback verification is part of the release gate.
+
+### Compatibility
+
+- The public API snapshot contains 4,663 symbols: 29 additive
+  session-economics exports and zero removals relative to v1.18.5.
+- Existing proxy request and response routes remain compatible. The new
+  endpoint and Python contract are additive, and unknown or insufficient facts
+  produce explicit learning, unavailable, or error states instead of fabricated
+  numeric values.
+
 ## [1.18.5] — 2026-08-08
 
 This compatible patch reduces companion recall overhead and locks the

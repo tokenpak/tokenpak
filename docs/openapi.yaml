@@ -134,6 +134,51 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
 
+  /v1/messages/session-economics:
+    post:
+      operationId: getSessionEconomics
+      summary: Session economics from the local ledger
+      description: |
+        Builds the immutable `session-economics/1` response from completed
+        local request-ledger rows. Missing measurements remain explicitly
+        unavailable rather than being coerced to zero. **No upstream API call
+        is made.**
+
+        Supply a stable session id in `X-Claude-Code-Session-Id` or in the
+        request body. If both are supplied, they must match.
+      tags: [passthrough]
+      parameters:
+        - name: X-Claude-Code-Session-Id
+          in: header
+          required: false
+          description: Stable session id used to select completed ledger rows.
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionEconomicsRequest"
+            example:
+              session_id: session-abc
+              model: claude-sonnet-4-5
+      responses:
+        "200":
+          description: Versioned session economics derived from local facts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionEconomicsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          description: Local ledger evaluation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /v1/chat/completions:
     post:
       operationId: createChatCompletion
@@ -201,7 +246,7 @@ paths:
               example:
                 status: ok
                 uptime_seconds: 3600
-                version: 1.18.5
+                version: 1.19.0
                 requests_total: 42
                 requests_errors: 0
                 compression_ratio_avg: 0.72
@@ -678,6 +723,62 @@ components:
               type: integer
               description: Estimated tokens that will create new cache entries (from cache_control hints).
               example: 0
+
+    SessionEconomicsRequest:
+      type: object
+      description: Optional selectors for a completed local session.
+      properties:
+        session_id:
+          type: string
+          description: Stable session id; must match the stable session header when both are present.
+        model:
+          type: string
+          description: Optional model hint for ambiguous local ledger data.
+
+    SessionEconomicsResponse:
+      type: object
+      description: Immutable, truth-preserving session-economics/1 response.
+      required: [schema_version, as_of, session, facts, state, runway, forecast, advisory]
+      properties:
+        schema_version:
+          type: string
+          const: session-economics/1
+        as_of:
+          type: string
+          format: date-time
+        session:
+          type: object
+          description: Stable identity, observed turn count, and model reference.
+        facts:
+          type: object
+          description: Provider usage and cost facts with availability and provenance states.
+        state:
+          type: object
+          description: Context, burn, cache, and idle state derived from completed turns.
+        runway:
+          type: object
+          required: [status, turns, binding_constraint, guard_state]
+          properties:
+            status:
+              type: string
+              enum: [available, learning, unavailable, error]
+            turns:
+              type: [integer, "null"]
+              minimum: 0
+            binding_constraint:
+              type: string
+              enum: [budget, context_soft, context_hard, rolling_cap, unknown]
+            guard_state:
+              type: string
+              enum: [allow, amber, soft_block, hard_stop, unknown]
+            reason:
+              type: string
+        forecast:
+          type: object
+          description: Remaining-token, remaining-cost, turn, coverage, and block-probability estimates.
+        advisory:
+          type: "null"
+          description: Always null in the open-source response.
 
     AnthropicMessagesResponse:
       type: object
