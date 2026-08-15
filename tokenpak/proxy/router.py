@@ -509,9 +509,7 @@ class ProviderRouter:
         if auth.lower().startswith("bearer "):
             if "google" in path.lower():
                 return "google"
-            if path.split("?", 1)[0] == "/v1/models" and _is_codex_oauth_authorization(
-                headers
-            ):
+            if path.split("?", 1)[0] == "/v1/models" and _is_codex_oauth_authorization(headers):
                 # Model-catalog listing with a subscription OAuth bearer.
                 # The API-platform models endpoint rejects subscription
                 # scope, so list from the ChatGPT backend catalog instead.

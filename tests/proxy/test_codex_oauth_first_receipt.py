@@ -84,9 +84,7 @@ def test_oauth_model_refresh_forwards_subscription_catalog(monkeypatch) -> None:
     handler.do_GET()
 
     assert replies == []
-    assert proxied == [
-        ("https://chatgpt.com/backend-api/codex/models?client_version=test", "GET")
-    ]
+    assert proxied == [("https://chatgpt.com/backend-api/codex/models?client_version=test", "GET")]
 
 
 def test_anthropic_oauth_model_refresh_keeps_local_stub(monkeypatch) -> None:
