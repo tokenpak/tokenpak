@@ -1190,15 +1190,21 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path.startswith("/v1/models"):
             route = ps.router.route(path, dict(self.headers))
-            if route.auth_type == "oauth":
-                # The OpenAI /v1/models endpoint requires API-platform scope,
-                # which a Codex subscription OAuth session does not carry.
-                # Native Codex already has a bundled model catalog, so report
-                # that this upstream source contributed no additional models
-                # instead of forwarding the bearer to an incompatible API-key
-                # endpoint and surfacing a misleading 403.
+            if route.auth_type == "oauth" and route.provider != "openai-codex":
+                # A subscription OAuth bearer cannot list API-platform
+                # models, and this request matched no subscription catalog
+                # route. Report that this upstream source contributed no
+                # additional models instead of forwarding the bearer to an
+                # incompatible endpoint and surfacing a misleading 403.
                 self._send_json({"models": []})
                 return
+            # Codex subscription sessions reach here with the router's
+            # catalog rewrite (the ChatGPT backend model catalog) and the
+            # caller's own credential. Newer Codex clients require a
+            # non-empty catalog from their configured provider before the
+            # interactive UI proceeds, so an empty stub would park them at
+            # startup; the forwarded catalog keeps schema and model set
+            # current without the proxy maintaining its own copy.
             self._proxy_to(route.full_url, "GET")
             return
         if path.startswith("http"):
