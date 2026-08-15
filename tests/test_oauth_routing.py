@@ -289,6 +289,60 @@ class TestProviderRouterCodex:
         assert result.auth_type == AUTH_TYPE_OAUTH
         assert result.skip_cache_keying is True
 
+    def test_routes_oauth_models_to_codex_catalog(self):
+        """A subscription OAuth bearer lists models from the ChatGPT backend
+        catalog (query string preserved) instead of the API-platform
+        endpoint, which rejects subscription scope."""
+        result = self.router.route(
+            path="/v1/models?client_version=0.147.0",
+            headers={"Authorization": f"Bearer {JWT_OAUTH}"},
+        )
+        assert result.provider == "openai-codex"
+        assert result.base_url == "https://chatgpt.com/backend-api"
+        assert result.full_url == (
+            "https://chatgpt.com/backend-api/codex/models?client_version=0.147.0"
+        )
+        assert result.auth_type == AUTH_TYPE_OAUTH
+
+    def test_routes_oauth_models_without_query(self):
+        result = self.router.route(
+            path="/v1/models",
+            headers={"Authorization": f"Bearer {OPAQUE_OAUTH}"},
+        )
+        assert result.provider == "openai-codex"
+        assert result.full_url == "https://chatgpt.com/backend-api/codex/models"
+
+    def test_routes_api_key_models_to_openai_api(self):
+        result = self.router.route(
+            path="/v1/models",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+        )
+        assert result.provider == "openai"
+        assert result.full_url == "https://api.openai.com/v1/models"
+        assert result.auth_type == AUTH_TYPE_APIKEY
+
+    def test_anthropic_bearer_models_never_rerouted(self):
+        """An OAuth bearer accompanied by Anthropic headers must keep the
+        Anthropic route — the credential must never be forwarded to the
+        ChatGPT backend."""
+        result = self.router.route(
+            path="/v1/models",
+            headers={
+                "Authorization": f"Bearer {OPAQUE_OAUTH}",
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        assert result.provider == "anthropic"
+
+    def test_models_subpath_not_rerouted(self):
+        """Only the exact catalog path is rewritten; model-scoped subpaths
+        keep their existing routing."""
+        result = self.router.route(
+            path="/v1/models/gemini-pro:streamGenerateContent",
+            headers={"Authorization": f"Bearer {OPAQUE_OAUTH}"},
+        )
+        assert result.provider != "openai-codex"
+
     def test_routes_anthropic_messages_unchanged(self):
         result = self.router.route(
             path="/v1/messages",

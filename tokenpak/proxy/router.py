@@ -417,6 +417,9 @@ class ProviderRouter:
         if provider == "openai-codex" and path.split("?", 1)[0] == "/v1/responses":
             suffix = "?" + path.split("?", 1)[1] if "?" in path else ""
             upstream_path = "/codex/responses" + suffix
+        elif provider == "openai-codex" and path.split("?", 1)[0] == "/v1/models":
+            suffix = "?" + path.split("?", 1)[1] if "?" in path else ""
+            upstream_path = "/codex/models" + suffix
         full_url = (
             _join_upstream_url(base_url, upstream_path)
             if provider.startswith("custom-")
@@ -506,6 +509,13 @@ class ProviderRouter:
         if auth.lower().startswith("bearer "):
             if "google" in path.lower():
                 return "google"
+            if path.split("?", 1)[0] == "/v1/models" and _is_codex_oauth_authorization(
+                headers
+            ):
+                # Model-catalog listing with a subscription OAuth bearer.
+                # The API-platform models endpoint rejects subscription
+                # scope, so list from the ChatGPT backend catalog instead.
+                return "openai-codex"
             return "openai"
 
         # Default to Anthropic (most common reverse-proxy use case)
