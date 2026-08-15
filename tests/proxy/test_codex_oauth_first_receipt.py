@@ -52,7 +52,7 @@ def test_native_codex_zstd_request_is_decoded_for_processing() -> None:
     assert decoded == payload
 
 
-def _models_handler(monkeypatch, authorization: str):
+def _models_handler(monkeypatch, authorization: str, extra_headers: dict | None = None):
     from tokenpak.proxy import app_endpoints
 
     monkeypatch.setattr(app_endpoints, "try_handle_get", lambda _handler: False)
@@ -64,13 +64,40 @@ def _models_handler(monkeypatch, authorization: str):
         )
     )
     handler.path = "/v1/models?client_version=test"
-    handler.headers = {"Authorization": authorization}
+    handler.headers = {"Authorization": authorization, **(extra_headers or {})}
     handler._enforce_proxy_auth = lambda: True
     return handler
 
 
-def test_oauth_model_refresh_uses_bundled_catalog_without_api_scope(monkeypatch) -> None:
+def test_oauth_model_refresh_forwards_subscription_catalog(monkeypatch) -> None:
+    """A subscription OAuth bearer lists models from the ChatGPT backend
+    catalog with the caller's own credential. Newer native clients require
+    a non-empty catalog from their configured provider before the
+    interactive UI proceeds, so the former local empty stub parked them at
+    startup."""
     handler = _models_handler(monkeypatch, "Bearer oauth-session-token")
+    replies: list[object] = []
+    proxied: list[tuple[str, str]] = []
+    handler._send_json = replies.append
+    handler._proxy_to = lambda url, method: proxied.append((url, method))
+
+    handler.do_GET()
+
+    assert replies == []
+    assert proxied == [
+        ("https://chatgpt.com/backend-api/codex/models?client_version=test", "GET")
+    ]
+
+
+def test_anthropic_oauth_model_refresh_keeps_local_stub(monkeypatch) -> None:
+    """An OAuth bearer accompanied by Anthropic headers must keep the local
+    empty-stub reply — the credential is never forwarded to the ChatGPT
+    backend."""
+    handler = _models_handler(
+        monkeypatch,
+        "Bearer oauth-session-token",
+        {"anthropic-version": "2023-06-01"},
+    )
     replies: list[object] = []
     proxied: list[tuple[str, str]] = []
     handler._send_json = replies.append

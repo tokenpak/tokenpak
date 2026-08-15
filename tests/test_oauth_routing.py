@@ -342,6 +342,14 @@ class TestProviderRouterCodex:
             headers={"Authorization": f"Bearer {OPAQUE_OAUTH}"},
         )
         assert result.provider != "openai-codex"
+        # A subpath that reaches the bearer branch itself must also stay
+        # off the catalog route — pins the exact-path match directly.
+        result = self.router.route(
+            path="/v1/models/gpt-5",
+            headers={"Authorization": f"Bearer {OPAQUE_OAUTH}"},
+        )
+        assert result.provider == "openai"
+        assert result.full_url == "https://api.openai.com/v1/models/gpt-5"
 
     def test_routes_anthropic_messages_unchanged(self):
         result = self.router.route(
