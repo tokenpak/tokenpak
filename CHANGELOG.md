@@ -6,6 +6,28 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.19.1] — 2026-08-15
+
+This patch release fixes interactive Codex clients (0.147 and newer) stalling
+at startup when routed through the local proxy with a subscription sign-in.
+
+### Fixed
+
+- The proxy's `/v1/models` endpoint now forwards subscription-authenticated
+  model-catalog requests to the subscription backend with the caller's own
+  credential, instead of returning an empty catalog. Newer interactive Codex
+  clients require a non-empty model list from their configured provider before
+  the session proceeds; against the previous empty reply they parked at the
+  model-availability step and silently re-polled. Verified end to end: an
+  interactive 0.147.0 client against the fixed proxy lists the full catalog
+  and starts normally, and non-interactive `exec` runs (which were never
+  affected) continue to work unchanged.
+- Credential routing for catalog requests is strict: requests carrying
+  Anthropic headers keep their existing route and reply, API-key clients still
+  list from the platform endpoint, and no credential is ever forwarded to a
+  backend of a different provider. Regression tests pin each of these paths at
+  both the routing and handler layers.
+
 ## [1.19.0] — 2026-08-12
 
 This backward-compatible minor release adds a versioned session-economics
