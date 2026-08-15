@@ -39,6 +39,7 @@ from typing import Any, TextIO
 
 from .._formatting.colors import Color
 from . import _style
+from ._python_spawn import python_spawn_prefix
 from .config import CompanionConfig
 
 # ---------------------------------------------------------------------------
@@ -409,16 +410,16 @@ def _prefix_session_name(args: list[str]) -> list[str]:
 
 def _write_mcp_config(config: CompanionConfig) -> str:
     """Write the MCP server configuration to fixed run_dir."""
+    python_prefix = python_spawn_prefix()
     mcp_data = {
         "mcpServers": {
             "tokenpak-companion": {
                 "type": "stdio",
-                "command": sys.executable,
-                # -P keeps the launch directory off sys.path so a ``tokenpak``
-                # dir/symlink in the cwd can't shadow the installed package
-                # (which would resolve it as a namespace package and drop
-                # ``__version__``, crashing the server on import).
-                "args": ["-P", "-m", "tokenpak.companion.mcp.server"],
+                "command": python_prefix[0],
+                # -P on Python 3.11+ keeps the launch directory off sys.path
+                # so a ``tokenpak`` dir/symlink in the cwd can't shadow the
+                # installed package. Python 3.10 does not recognize the flag.
+                "args": [*python_prefix[1:], "-m", "tokenpak.companion.mcp.server"],
             }
         }
     }
@@ -517,9 +518,9 @@ def _write_settings(config: CompanionConfig) -> str:
     if hook_sh.is_file():
         hook_cmd = f"bash {hook_sh}"
     elif hook_py.is_file():
-        # -P keeps a sibling tokenpak/ directory in the user's cwd from
-        # shadowing the installed package when the bash hook is unavailable.
-        hook_cmd = f"python3 -P {hook_py}"
+        # Use the same interpreter that is running the launcher. Safe-path
+        # mode is included only when that interpreter supports it (3.11+).
+        hook_cmd = shlex.join([*python_spawn_prefix(), str(hook_py)])
     else:
         hook_cmd = None
 

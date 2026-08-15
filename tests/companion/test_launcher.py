@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -89,7 +90,8 @@ def test_write_mcp_config_structure(tmp_path):
     server = mcp_data["mcpServers"]["tokenpak-companion"]
     assert server["type"] == "stdio"
     assert server["command"] == sys.executable
-    assert server["args"] == ["-P", "-m", "tokenpak.companion.mcp.server"]
+    safe_path = ["-P"] if sys.version_info >= (3, 11) else []
+    assert server["args"] == [*safe_path, "-m", "tokenpak.companion.mcp.server"]
 
 
 def test_write_mcp_config_uses_safe_python_path(tmp_path):
@@ -101,9 +103,34 @@ def test_write_mcp_config_uses_safe_python_path(tmp_path):
     with patch.object(type(cfg), "run_dir", new_callable=lambda: property(lambda self: run_dir)):
         launcher._write_mcp_config(cfg)
     server = json.loads((run_dir / "mcp.json").read_text())["mcpServers"]["tokenpak-companion"]
-    assert "-P" in server["args"]
-    # -P must precede -m to take effect for the module launch.
-    assert server["args"].index("-P") < server["args"].index("-m")
+    if sys.version_info >= (3, 11):
+        assert "-P" in server["args"]
+        # -P must precede -m to take effect for the module launch.
+        assert server["args"].index("-P") < server["args"].index("-m")
+    else:
+        assert "-P" not in server["args"]
+
+
+@pytest.mark.parametrize(
+    ("version_info", "expected_args"),
+    [
+        ((3, 10, 13, "final", 0), ["-m", "tokenpak.companion.mcp.server"]),
+        ((3, 11, 0, "final", 0), ["-P", "-m", "tokenpak.companion.mcp.server"]),
+    ],
+)
+def test_write_mcp_config_version_gates_safe_path_flag(
+    tmp_path, monkeypatch, version_info, expected_args
+):
+    """Claude MCP config remains runnable on 3.10 and isolated on 3.11+."""
+    cfg = CompanionConfig(journal_dir=tmp_path / "journal")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    monkeypatch.setattr(sys, "version_info", version_info)
+    with patch.object(type(cfg), "run_dir", new_callable=lambda: property(lambda self: run_dir)):
+        launcher._write_mcp_config(cfg)
+    server = json.loads((run_dir / "mcp.json").read_text())["mcpServers"]["tokenpak-companion"]
+    assert server["command"] == sys.executable
+    assert server["args"] == expected_args
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +154,7 @@ def test_write_settings_with_hooks_enabled(tmp_path):
 
 
 def test_write_settings_python_fallback_hook_isolated_mode(tmp_path):
-    """The python3 fallback hook spawn carries -P so a sibling tokenpak/
-    directory in the user's cwd cannot shadow the installed package."""
+    """The fallback uses the launcher interpreter and safe-path mode when supported."""
     fake_pkg = tmp_path / "pkg"
     (fake_pkg / "hooks").mkdir(parents=True)
     (fake_pkg / "hooks" / "pre_send.py").write_text("# fallback hook\n")
@@ -142,8 +168,65 @@ def test_write_settings_python_fallback_hook_isolated_mode(tmp_path):
             path = launcher._write_settings(cfg)
     settings = json.loads(Path(path).read_text())
     hook_cmd = settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
-    assert hook_cmd.startswith("python3 -P ")
-    assert "pre_send.py" in hook_cmd
+    expected_prefix = [sys.executable]
+    if sys.version_info >= (3, 11):
+        expected_prefix.append("-P")
+    assert shlex.split(hook_cmd) == [*expected_prefix, str(fake_pkg / "hooks" / "pre_send.py")]
+
+
+@pytest.mark.parametrize(
+    ("version_info", "expected_safe_path"),
+    [
+        ((3, 10, 13, "final", 0), False),
+        ((3, 11, 0, "final", 0), True),
+    ],
+)
+def test_write_settings_python_fallback_version_gates_safe_path(
+    tmp_path, monkeypatch, version_info, expected_safe_path
+):
+    """The fallback hook uses the exact launcher interpreter on 3.10/3.11+."""
+    fake_pkg = tmp_path / "package with spaces"
+    (fake_pkg / "hooks").mkdir(parents=True)
+    hook_py = fake_pkg / "hooks" / "pre_send.py"
+    hook_py.write_text("# fallback hook\n")
+    executable = str(tmp_path / "python runtime" / "python3")
+    monkeypatch.setattr(sys, "executable", executable)
+    monkeypatch.setattr(sys, "version_info", version_info)
+    cfg = CompanionConfig(journal_dir=tmp_path / "journal", hooks_enabled=True)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    with patch.object(launcher, "__file__", str(fake_pkg / "launcher.py")):
+        with patch.object(
+            type(cfg), "run_dir", new_callable=lambda: property(lambda self: run_dir)
+        ):
+            path = launcher._write_settings(cfg)
+    settings = json.loads(Path(path).read_text())
+    hook_cmd = settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+    expected = [executable, str(hook_py)]
+    if expected_safe_path:
+        expected.insert(1, "-P")
+    assert shlex.split(hook_cmd) == expected
+
+
+def test_write_settings_python_fallback_handles_empty_sys_executable(tmp_path, monkeypatch):
+    """An embedded empty sys.executable keeps the compatible python3 fallback."""
+    fake_pkg = tmp_path / "pkg"
+    (fake_pkg / "hooks").mkdir(parents=True)
+    hook_py = fake_pkg / "hooks" / "pre_send.py"
+    hook_py.write_text("# fallback hook\n")
+    monkeypatch.setattr(sys, "executable", "")
+    monkeypatch.setattr(sys, "version_info", (3, 12, 0, "final", 0))
+    cfg = CompanionConfig(journal_dir=tmp_path / "journal", hooks_enabled=True)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    with patch.object(launcher, "__file__", str(fake_pkg / "launcher.py")):
+        with patch.object(
+            type(cfg), "run_dir", new_callable=lambda: property(lambda self: run_dir)
+        ):
+            path = launcher._write_settings(cfg)
+    settings = json.loads(Path(path).read_text())
+    hook_cmd = settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+    assert shlex.split(hook_cmd) == ["python3", str(hook_py)]
 
 
 def test_write_settings_without_hooks(tmp_path):
