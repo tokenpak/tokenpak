@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-15T16:43:21Z",
+  "generated_at": "2026-08-16T04:22:42Z",
   "package_version": "1.19.1",
   "symbols": [
     {
@@ -2149,6 +2149,10 @@
     },
     {
       "module": "tokenpak.companion.codex.mcp_config",
+      "name": "python_spawn_prefix"
+    },
+    {
+      "module": "tokenpak.companion.codex.mcp_config",
       "name": "register"
     },
     {
@@ -2314,6 +2318,10 @@
     {
       "module": "tokenpak.companion.launcher",
       "name": "main"
+    },
+    {
+      "module": "tokenpak.companion.launcher",
+      "name": "python_spawn_prefix"
     },
     {
       "module": "tokenpak.companion.mcp.server",
