@@ -25,6 +25,9 @@ instead of racing package publication.
 - Release metadata now records the two interpreter-prefix helper exports added
   by the launcher compatibility repair. The public API snapshot contains 4,665
   symbols, with two additive helpers and zero removals relative to v1.19.1.
+- Release validation now carries pinned build frontend and backend versions in
+  the frozen development environment, keeping offline artifact receipts
+  independent of unrecorded host tooling.
 
 ### Upgrade
 

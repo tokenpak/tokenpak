@@ -159,6 +159,11 @@ dev = [
     # candidate lock so validation lanes can provision it with hashes and run
     # `twine check` offline against the exact wheel and sdist under review.
     "twine==6.2.0",
+    # The build frontend and backend are also release gates. Pin both in the
+    # candidate lock so offline validation does not depend on an unrecorded
+    # host package or a network-enabled PEP 517 build environment.
+    "build==1.5.0",
+    "setuptools==84.0.0",
     # Architecture-contract gate (.importlinter) and its contract tests
     # under tests/lint/test_import_contracts.py.
     "import-linter>=2.0",
