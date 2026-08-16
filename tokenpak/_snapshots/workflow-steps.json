@@ -1,6 +1,6 @@
 {
   "version": "1.1",
-  "generated_at": "2026-08-07T22:29:46Z",
+  "generated_at": "2026-08-16T03:53:33Z",
   "guarded_globs": [
     "release*.yml",
     "release-rehearsal.yml"
@@ -377,6 +377,12 @@
       "job": "release-gate-snapshots",
       "id": "",
       "name": "workflow-steps-check (Std 30 \u00a713.3 R11)"
+    },
+    {
+      "workflow": "release.yml",
+      "job": "site-sync",
+      "id": "",
+      "name": "Dispatch release-synced event to site"
     },
     {
       "workflow": "release.yml",

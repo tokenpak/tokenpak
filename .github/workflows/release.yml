@@ -1,13 +1,14 @@
 name: Release TokenPak
 
 on:
-  # Manual-dispatch entry point for pre-tag preflight runs against any branch
-  # (typically `main` immediately before pushing a tag). The dispatch uses the
-  # same test → build → dist-purity assert → checksum job graph as a real tag
-  # push; only the publish-to-PyPI job is skipped (see the publish job's `if:`).
+  # Manual-dispatch entry point for branch-ref preflight runs. A branch dispatch
+  # runs the test, chaos, release-gate snapshot, and leak-scan jobs. Tag-only
+  # build, publish, GitHub Release, and site-sync jobs skip, so a green branch
+  # run is not evidence for those surfaces. Never dispatch this workflow at a
+  # tag ref; real releases are triggered only by a tag push.
   # Use:
   #   gh workflow run "Release TokenPak" --ref main
-  # Then verify the run is green before `git push <tag>`.
+  # Then verify only the branch-safe jobs above before `git push <tag>`.
   workflow_dispatch:
   push:
     tags:
@@ -475,6 +476,36 @@ jobs:
             SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Notify the public site only after the package and GitHub Release exist.
+  # Manual and daily site-sync fallbacks remain available when no token is set.
+  site-sync:
+    name: Notify site of published release
+    runs-on: ubuntu-latest
+    needs: release
+    permissions:
+      contents: read
+    steps:
+      - name: Dispatch release-synced event to site
+        env:
+          GH_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::SITE_REPO_TOKEN is not configured; site release sync will use its manual or daily fallback."
+            exit 0
+          fi
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            repos/tokenpak/site/dispatches \
+            -f event_type=release-synced \
+            -f "client_payload[tag_name]=${RELEASE_TAG}" \
+            -f "client_payload[release_sha]=${RELEASE_SHA}"
 
   # ─────────────────────────────────────────────────────────────────────
   # Step 3: Publish to PyPI (optional, requires OIDC setup)
