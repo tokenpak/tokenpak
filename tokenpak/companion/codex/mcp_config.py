@@ -18,6 +18,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from .._python_spawn import python_spawn_prefix
+
 if TYPE_CHECKING:
     from tokenpak.companion.config import CompanionConfig
 
@@ -77,11 +79,10 @@ def _register(
         "add",
         SERVER_NAME,
         "--",
-        sys.executable,
-        # -P (Python 3.11+) keeps a tokenpak/ directory in the user's cwd
-        # from shadowing the installed package when Codex spawns the server
-        # — the same safe-path guard the Claude Code MCP config applies.
-        *(("-P",) if sys.version_info >= (3, 11) else ()),
+        # -P (Python 3.11+) keeps a tokenpak/ directory in the user's cwd from
+        # shadowing the installed package. The shared helper also preserves
+        # Python 3.10 compatibility across the Claude and Codex launchers.
+        *python_spawn_prefix(),
         "-m",
         "tokenpak.companion.mcp.server",
     ]
