@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-16T04:22:42Z",
-  "package_version": "1.19.1",
+  "generated_at": "2026-08-16T16:06:28Z",
+  "package_version": "1.19.2",
   "symbols": [
     {
       "module": "tokenpak",
@@ -12149,7 +12149,7 @@
     },
     {
       "module": "tokenpak.sdk.crewai.examples.basic_usage",
-      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'crewai_tokenpak'>"
+      "name": "<IMPORT_ERROR: ModuleNotFoundError: No module named 'tokenpak.agent.agentic'>"
     },
     {
       "module": "tokenpak.sdk.crewai.handoff",

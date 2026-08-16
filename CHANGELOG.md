@@ -6,6 +6,45 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.19.2] — 2026-08-16
+
+This backward-compatible patch keeps companion launches working on Python 3.10
+and makes post-release site synchronization follow the completed GitHub Release
+instead of racing package publication.
+
+### Fixed
+
+- Companion MCP configuration and fallback-hook launches now build their child
+  interpreter command from the exact running Python executable. The `-P`
+  safe-path flag is used only on Python 3.11 and newer, so supported Python 3.10
+  installations no longer fail on an unavailable interpreter option.
+- Successful release runs now notify the site only after the GitHub Release is
+  complete, include the released tag and commit metadata, and keep the existing
+  scheduled/manual synchronization fallback when cross-repository credentials
+  are unavailable.
+- Release metadata now records the two interpreter-prefix helper exports added
+  by the launcher compatibility repair. The public API snapshot contains 4,665
+  symbols, with two additive helpers and zero removals relative to v1.19.1.
+- Release validation now carries pinned build frontend and backend versions in
+  the frozen development environment, keeping offline artifact receipts
+  independent of unrecorded host tooling.
+
+### Upgrade
+
+```bash
+python -m pip install --upgrade "tokenpak==1.19.2"
+```
+
+No configuration migration is required.
+
+### Rollback
+
+```bash
+python -m pip install --upgrade "tokenpak==1.19.1"
+```
+
+This release introduces no destructive state or schema migration.
+
 ## [1.19.1] — 2026-08-15
 
 This patch release fixes interactive Codex clients (0.147 and newer) stalling
