@@ -58,7 +58,7 @@ def _run_site_sync_step(
         "{\n"
         "  printf 'CALL\\0'\n"
         "  printf '%s\\0' \"$@\"\n"
-        "} >> \"$GH_CALL_LOG\"\n",
+        '} >> "$GH_CALL_LOG"\n',
         encoding="utf-8",
     )
     fake_gh.chmod(0o755)
