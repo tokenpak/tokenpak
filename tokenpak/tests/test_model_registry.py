@@ -39,9 +39,9 @@ class TestKnownModels:
 
     def test_haiku_4_5_rates(self):
         rates = get_rates("claude-haiku-4-5")
-        assert rates["input"] == 0.8
-        assert rates["output"] == 4.0
-        assert rates["cached"] == 0.08
+        assert rates["input"] == 1.0
+        assert rates["output"] == 5.0
+        assert rates["cached"] == 0.10
 
     def test_gpt_4o_rates(self):
         rates = get_rates("gpt-4o")
@@ -93,10 +93,11 @@ class TestUnknownModels:
         assert result == "claude-opus-4-7@latest"
 
     def test_sonnet_5_0_rates(self):
-        """A future Sonnet release should get Sonnet-family pricing."""
+        """A Sonnet 5 dot-release prefix-matches the explicit sonnet-5 seed row
+        (specific pricing wins over generic Sonnet-family pricing)."""
         rates = get_rates("claude-sonnet-5-0")
-        assert rates["input"] == 3.0
-        assert rates["output"] == 15.0
+        assert rates["input"] == 2.0
+        assert rates["output"] == 10.0
 
     def test_sonnet_5_0_tier(self):
         assert get_tier("claude-sonnet-5-0") == 2
@@ -194,9 +195,11 @@ class TestTranslation:
         assert result == "claude-sonnet-4-6@20260101"
 
     def test_unknown_model_bedrock(self):
-        """Family template generates a bedrock translation for unknown models."""
-        result = translate_model("claude-sonnet-5-0", "bedrock")
-        assert result == "anthropic.claude-sonnet-5-0-v1:0"
+        """Family template generates a bedrock translation for unknown models
+        (a genuinely unseeded id — claude-sonnet-5-0 now prefix-matches the
+        explicit sonnet-5 seed row instead, see TestKnownModels.test_sonnet_5_0_rates)."""
+        result = translate_model("claude-sonnet-6-0", "bedrock")
+        assert result == "anthropic.claude-sonnet-6-0-v1:0"
 
     def test_no_translation(self):
         """Pass-through when no translation exists."""
@@ -325,9 +328,9 @@ class TestRegressionValues:
 
     def test_haiku_4_5_matches_old_companion(self):
         rates = get_rates("claude-haiku-4-5")
-        assert rates["input"] == 0.8
-        assert rates["output"] == 4.0
-        assert rates["cached"] == 0.08
+        assert rates["input"] == 1.0
+        assert rates["output"] == 5.0
+        assert rates["cached"] == 0.10
 
     def test_gpt_4o_matches_old_catalog(self):
         costs = get_model_costs("gpt-4o")
