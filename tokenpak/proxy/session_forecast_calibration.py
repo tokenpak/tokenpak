@@ -172,7 +172,7 @@ class _CorpusEntry:
 _CACHE_LOCK = threading.Lock()
 #: db_path -> (fingerprint, corpus entries). Bounded small; process-local.
 _CORPUS_CACHE: dict[str, tuple[tuple[int, int], tuple[_CorpusEntry, ...]]] = {}
-#: (db_path, fingerprint, cell key, participant signature) -> readiness.
+#: (db_path, cell key, cell signature, pool signature) -> readiness.
 _READINESS_CACHE: dict[tuple, CellReadiness] = {}
 _CORPUS_CACHE_MAX = 4
 _READINESS_CACHE_MAX = 32
@@ -185,7 +185,9 @@ def _ledger_fingerprint(conn: sqlite3.Connection) -> tuple[int, int]:
 
 def _connect_ro(path: str) -> sqlite3.Connection:
     """Read-only open: an absent file errors instead of being created."""
-    return sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5.0)
+    from urllib.parse import quote
+
+    return sqlite3.connect(f"file:{quote(path)}?mode=ro", uri=True, timeout=5.0)
 
 
 def _parse_corpus(conn: sqlite3.Connection) -> tuple[_CorpusEntry, ...]:
@@ -223,7 +225,9 @@ def _parse_corpus(conn: sqlite3.Connection) -> tuple[_CorpusEntry, ...]:
             )
         )
     entries.sort(key=lambda e: e.session.ended_at)
-    # Bound memory ahead of the per-call finished filter; newest win.
+    # Bound memory ahead of the per-call finished filter; newest win. This is
+    # a semantics choice, not a cache artifact: cached and fresh parses share
+    # this exact truncation, so they can never diverge from each other.
     return tuple(entries[-(MAX_SESSIONS * 3) :])
 
 
@@ -463,16 +467,22 @@ class _ReplayMeasurement:
 
 
 def _pool_near_table(pool_sessions: Sequence[HistorySession]) -> list[list[float]]:
-    pool_by_k: list[list[float]] = [[] for _ in range(KMAX + 1)]
+    """Per-turn-index pool sample lists in DEPLOYED (session-major) order.
+
+    Order matters here and nowhere else in the replay: ``_pooled`` borrows an
+    order-sensitive prefix of the pool list, so the replay must assemble pool
+    samples in exactly the order the live ``_band_for`` path produces —
+    session-major, turn-order within a session — or it silently measures a
+    different estimator than the one deployed. (Train/calibration lists only
+    feed order-insensitive quantiles.) The equivalence regression test pins
+    band-level equality against the live path on a pooled corpus.
+    """
+    near: list[list[float]] = [[] for _ in range(KMAX + 1)]
     for s in pool_sessions:
         for sk, y in _session_kys(s):
-            pool_by_k[min(sk, KMAX)].append(y)
-    near: list[list[float]] = [[] for _ in range(KMAX + 1)]
-    for k in range(1, KMAX + 1):
-        row: list[float] = []
-        for b in range(max(1, k - K_WINDOW), min(KMAX, k + K_WINDOW) + 1):
-            row.extend(pool_by_k[b])
-        near[k] = row
+            bucket = min(sk, KMAX)
+            for k in range(max(1, bucket - K_WINDOW), min(KMAX, bucket + K_WINDOW) + 1):
+                near[k].append(y)
     return near
 
 

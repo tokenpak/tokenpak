@@ -400,3 +400,27 @@ def test_drift_refit_shifts_the_emitted_band(monkeypatch):
     assert recent_band.hi_y > full_band.hi_y
     emitted_hi = forecast.remaining_tokens_likely_50.high
     assert emitted_hi == round(25000.0 * (math.exp(recent_band.hi_y) - 1.0))
+
+
+def test_replay_bands_equal_the_deployed_path_on_pooled_corpora():
+    """QA equivalence pin: the one-pass replay's band table must produce
+    exactly the bands the live per-query path produces — on POOLED corpora,
+    where the order-sensitive pooling borrow can silently diverge."""
+    cell = _corpus(60, seed=51)
+    pool = _corpus(100, seed=52, model="model-b")
+    pool_near = cal._pool_near_table(pool)
+    compared = 0
+    diverged = 0
+    for i in range(max(cal.MIN_CELL_SESSIONS // 2, 6), len(cell), cal.WF_BLOCK):
+        step = cal._StepBands(cell[:i], pool_near)
+        for k in range(1, cal.KMAX + 1):
+            for target, one_sided in ((cal.TARGET_50, False), (cal.TARGET_90, True)):
+                fast = step.band(k, target, one_sided=one_sided)
+                live = cal._band_for(cell[:i], pool, k, target, one_sided=one_sided)
+                compared += 1
+                if (fast is None) != (live is None):
+                    diverged += 1
+                elif fast is not None and (fast.lo_y != live.lo_y or fast.hi_y != live.hi_y):
+                    diverged += 1
+    assert compared > 200
+    assert diverged == 0, f"{diverged}/{compared} band queries diverge from the live path"
