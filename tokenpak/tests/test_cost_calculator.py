@@ -23,9 +23,9 @@ class TestGetRates:
     def test_known_model_returns_correct_rates(self):
         """Known models should return their specific rates."""
         rates = get_rates("claude-haiku-4-5")
-        assert rates["input"] == 0.80
-        assert rates["cached"] == 0.08
-        assert rates["output"] == 4.0
+        assert rates["input"] == 1.00
+        assert rates["cached"] == 0.10
+        assert rates["output"] == 5.0
 
     def test_unknown_model_returns_default(self):
         """Unknown models should fall back to DEFAULT_RATE."""
@@ -71,17 +71,17 @@ class TestGetPrice:
     def test_input_price(self):
         """Input direction should return correct rate."""
         price = get_price("claude-haiku-4-5", "input")
-        assert price == 0.80
+        assert price == 1.00
 
     def test_output_price(self):
         """Output direction should return correct rate."""
         price = get_price("claude-haiku-4-5", "output")
-        assert price == 4.0
+        assert price == 5.0
 
     def test_cached_price(self):
         """Cached direction should return correct rate."""
         price = get_price("claude-haiku-4-5", "cached")
-        assert price == 0.08
+        assert price == 0.10
 
     def test_default_direction_is_input(self):
         """Default direction (no arg) should return input rate."""
@@ -105,17 +105,17 @@ class TestCalculateRequestCost:
 
     def test_input_tokens_only(self):
         """Input tokens only should calculate correctly."""
-        # haiku input = $0.80/M tokens
-        # 1_000_000 input tokens = $0.80
+        # haiku input = $1.00/M tokens
+        # 1_000_000 input tokens = $1.00
         cost = calculate_request_cost("claude-haiku-4-5", input_tokens=1_000_000)
-        assert cost == pytest.approx(0.80, rel=1e-4)
+        assert cost == pytest.approx(1.00, rel=1e-4)
 
     def test_output_tokens_only(self):
         """Output tokens only should calculate correctly."""
-        # haiku output = $4.00/M tokens
-        # 1_000_000 output tokens = $4.00
+        # haiku output = $5.00/M tokens
+        # 1_000_000 output tokens = $5.00
         cost = calculate_request_cost("claude-haiku-4-5", input_tokens=0, output_tokens=1_000_000)
-        assert cost == pytest.approx(4.00, rel=1e-4)
+        assert cost == pytest.approx(5.00, rel=1e-4)
 
     def test_cache_read_is_cheaper_than_input(self):
         """Cache read tokens should cost less than equivalent input tokens."""
@@ -171,13 +171,13 @@ class TestCalculateRequestCostBaseline:
     def test_baseline_input_tokens(self):
         """Baseline for 1M input tokens matches model's input rate."""
         cost = calculate_request_cost_baseline("claude-haiku-4-5", 1_000_000, 0)
-        assert cost == pytest.approx(0.80, rel=1e-4)
+        assert cost == pytest.approx(1.00, rel=1e-4)
 
     def test_baseline_output_tokens(self):
         """Baseline includes output token cost."""
-        # haiku output = $4.00/M
+        # haiku output = $5.00/M
         cost = calculate_request_cost_baseline("claude-haiku-4-5", 0, 1_000_000)
-        assert cost == pytest.approx(4.00, rel=1e-4)
+        assert cost == pytest.approx(5.00, rel=1e-4)
 
     def test_baseline_higher_than_cached_cost(self):
         """Baseline (no cache) should cost more than cached request."""
@@ -206,9 +206,9 @@ class TestEstimateSavings:
         """Compression savings should reflect tokens_saved."""
         stats = {"tokens_raw": 100_000, "tokens_saved": 30_000}
         result = estimate_savings(stats, model="claude-haiku-4-5")
-        # haiku input = $0.80/M, 30k tokens = $0.024
+        # haiku input = $1.00/M, 30k tokens = $0.03
         assert result["compression_tokens_saved"] == 30_000
-        assert result["compression_cost_saved"] == pytest.approx(0.024, rel=1e-3)
+        assert result["compression_cost_saved"] == pytest.approx(0.03, rel=1e-3)
 
     def test_cache_savings_calculated(self):
         """Cache savings should reflect cache_read_tokens."""
@@ -246,4 +246,4 @@ class TestEstimateSavings:
         stats = {"tokens_raw": 1_000_000, "tokens_saved": 0, "model": "claude-haiku-4-5"}
         result = estimate_savings(stats)
         # No savings, cost should reflect haiku rate
-        assert result["cost_without_tokenpak"] == pytest.approx(0.80, rel=1e-3)
+        assert result["cost_without_tokenpak"] == pytest.approx(1.00, rel=1e-3)

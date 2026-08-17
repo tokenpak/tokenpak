@@ -290,7 +290,7 @@ class TestGetPrice:
         assert price == DEFAULT_RATE["output"]
 
     def test_haiku_input_price(self):
-        assert get_price("claude-haiku-4-5", "input") == 0.80
+        assert get_price("claude-haiku-4-5", "input") == 1.00
 
     def test_opus_input_price(self):
         assert get_price("claude-opus-4-5", "input") == 15.0

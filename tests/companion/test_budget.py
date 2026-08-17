@@ -47,10 +47,10 @@ def test_estimate_opus_1m_input(tmp_path):
 
 
 def test_estimate_haiku_1m_input(tmp_path):
-    """1M input tokens at haiku rate = $0.80."""
+    """1M input tokens at haiku rate = $1.00."""
     t = _tracker(tmp_path)
     est = t.estimate(input_tokens=1_000_000, model="claude-haiku-4-5")
-    assert est.estimated_cost_usd == pytest.approx(0.80, abs=1e-6)
+    assert est.estimated_cost_usd == pytest.approx(1.00, abs=1e-6)
 
 
 def test_estimate_zero_tokens(tmp_path):
@@ -88,10 +88,10 @@ def test_estimate_cache_read_10pct_opus(tmp_path):
 
 
 def test_estimate_cache_read_10pct_haiku(tmp_path):
-    """Cached tokens at haiku rate = 10% of $0.80 = $0.08/1M."""
+    """Cached tokens at haiku rate = 10% of $1.00 = $0.10/1M."""
     t = _tracker(tmp_path)
     est = t.estimate(input_tokens=1_000_000, cached_tokens=1_000_000, model="claude-haiku-4-5")
-    assert est.estimated_cost_usd == pytest.approx(0.08, abs=1e-6)
+    assert est.estimated_cost_usd == pytest.approx(0.10, abs=1e-6)
 
 
 def test_estimate_mixed_fresh_and_cached(tmp_path):

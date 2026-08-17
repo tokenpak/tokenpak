@@ -1,14 +1,16 @@
 {
   "_meta": {
-    "version": "v3",
+    "version": "v4",
     "description": "Unified model registry seed data — costs are USD per 1,000,000 tokens",
-    "updated": "2026-04-16",
+    "updated": "2026-08-17",
     "notes": [
       "This is the single source of truth for model metadata across tokenpak",
       "Family rules in _families.py handle unknown models automatically",
       "Explicit entries here override family-inferred values",
       "cache_read/cache_write: null means provider does not support prompt caching",
-      "context_windows: max input-context tokens (provider Models API max_input_tokens); omit a model rather than guessing — consumers fall back to a static threshold for unknowns"
+      "context_windows: max input-context tokens (provider Models API max_input_tokens); omit a model rather than guessing — consumers fall back to a static threshold for unknowns",
+      "cache_write is the standard (short-lived) cache-write multiplier only; providers offering a longer-lived cache-write tier at a different multiplier are not represented by this single field",
+      "2026-08-17 refresh: current-generation Anthropic rows (sonnet-5, opus-5, fable-5) and the haiku-4-5 correction were verified against the official Anthropic pricing/model docs on that date; see the refresh PR body for the exact source URLs"
     ]
   },
   "provider_cache_multipliers": {
@@ -24,6 +26,7 @@
   },
   "context_windows": {
     "claude-fable-5": 1000000,
+    "claude-opus-5": 1000000,
     "claude-opus-4-8": 1000000,
     "claude-opus-4-7": 1000000,
     "claude-opus-4-6": 1000000,
@@ -35,6 +38,7 @@
     "claude-sonnet-4": 200000,
     "claude-haiku-4-5": 200000,
     "claude-haiku-4": 200000,
+    "claude-haiku-3-5": 200000,
     "claude-3-7-sonnet": 200000,
     "claude-3-5-sonnet": 200000,
     "claude-3-5-haiku": 200000,
@@ -64,6 +68,36 @@
     "gemini-1.5-flash": 1000000
   },
   "models": {
+    "claude-fable-5": {
+      "provider": "anthropic",
+      "tier": 4,
+      "input": 10.00,
+      "output": 50.00,
+      "cache_read": 1.00,
+      "cache_write": 12.50,
+      "translations": {},
+      "aliases": []
+    },
+    "claude-opus-5": {
+      "provider": "anthropic",
+      "tier": 4,
+      "input": 5.00,
+      "output": 25.00,
+      "cache_read": 0.50,
+      "cache_write": 6.25,
+      "translations": {},
+      "aliases": []
+    },
+    "claude-sonnet-5": {
+      "provider": "anthropic",
+      "tier": 2,
+      "input": 2.00,
+      "output": 10.00,
+      "cache_read": 0.20,
+      "cache_write": 2.50,
+      "translations": {},
+      "aliases": []
+    },
     "claude-opus-4-6": {
       "provider": "anthropic",
       "tier": 4,
@@ -116,10 +150,10 @@
     "claude-haiku-4-5": {
       "provider": "anthropic",
       "tier": 1,
-      "input": 0.80,
-      "output": 4.00,
-      "cache_read": 0.08,
-      "cache_write": 1.00,
+      "input": 1.00,
+      "output": 5.00,
+      "cache_read": 0.10,
+      "cache_write": 1.25,
       "translations": {},
       "aliases": []
     },
