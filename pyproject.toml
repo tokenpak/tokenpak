@@ -158,7 +158,7 @@ dev = [
     # Artifact metadata validation is a release gate. Keep Twine in the
     # candidate lock so validation lanes can provision it with hashes and run
     # `twine check` offline against the exact wheel and sdist under review.
-    "twine==6.2.0",
+    "twine==7.0.0",
     # The build frontend and backend are also release gates. Pin both in the
     # candidate lock so offline validation does not depend on an unrecorded
     # host package or a network-enabled PEP 517 build environment.
