@@ -1092,8 +1092,18 @@ def _build_session_economics(
         cache_write_tokens=_fact_total(turns, "provider_cache_creation_tokens"),
         cost_usd=cost,
     )
-    forecast_status = ForecastStatus.LEARNING if len(turns) >= 1 else ForecastStatus.UNAVAILABLE
-    forecast_reason = "remaining-task forecast is not implemented"
+    forecast = _calibrated_or_fallback(
+        monitor_db_path=monitor_db_path,
+        as_of=as_of,
+        session_id=stable_id,
+        model=model,
+        effort=effort,
+        turns=turns,
+        state=state,
+        runway=runway,
+        facts=facts,
+        token_burns=token_burns,
+    )
     return SessionEconomics(
         as_of=as_of.isoformat(),
         session=SessionRef(
@@ -1105,9 +1115,86 @@ def _build_session_economics(
         facts=facts,
         state=state,
         runway=runway,
-        forecast=_empty_forecast(forecast_status, forecast_reason),
+        forecast=forecast,
         advisory=None,
     )
+
+
+def _calibrated_or_fallback(
+    *,
+    monitor_db_path: str | None,
+    as_of: datetime,
+    session_id: str,
+    model: str,
+    effort: str,
+    turns: Sequence[_Turn],
+    state: SessionState,
+    runway: Runway,
+    facts: SessionFacts,
+    token_burns: Sequence[float] | None,
+) -> Forecast:
+    """Calibrated forecast with a guaranteed honest fallback.
+
+    Every failure mode degrades to an explicit ``learning``/``unavailable``
+    forecast — the deterministic facts, state, and runway a caller already
+    has must never be lost to a forecasting error.
+    """
+    if not turns:
+        return _empty_forecast(ForecastStatus.UNAVAILABLE, "session has no completed turns")
+    try:
+        from tokenpak.proxy.session_forecast_calibration import build_calibrated_forecast
+
+        spent = float(sum(token_burns)) if token_burns else 0.0
+        if spent <= 0:
+            # Provider-normalized counts are preferred, but their absence must
+            # not zero the forecast base: fall back to the raw ledger counts —
+            # the same symmetry the calibration corpus reader uses.
+            spent = float(
+                sum(
+                    sum(
+                        float(v)
+                        for v in (
+                            turn.row.input_tokens,
+                            turn.row.output_tokens,
+                            turn.row.cache_read_tokens,
+                            turn.row.cache_creation_tokens,
+                        )
+                        if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0
+                    )
+                    for turn in turns
+                )
+            )
+        burn = (
+            float(state.burn_tokens_per_turn.value)
+            if state.burn_tokens_per_turn.state is ValueState.OBSERVED
+            and state.burn_tokens_per_turn.value is not None
+            else None
+        )
+        rate = None
+        if (
+            facts.cost_usd.state is ValueState.ESTIMATED
+            and facts.cost_usd.value is not None
+            and spent > 0
+        ):
+            rate = float(facts.cost_usd.value) / spent
+        return build_calibrated_forecast(
+            monitor_db_path=monitor_db_path,
+            now=as_of,
+            session_id=session_id,
+            model=model,
+            effort=effort,
+            turn_index=len(turns),
+            spent_tokens=spent,
+            runway=runway,
+            burn_tokens_per_turn=burn,
+            session_blended_usd_rate=rate,
+        )
+    except Exception:
+        logger.exception("calibrated session forecast failed; degrading to learning")
+        return _empty_forecast(
+            ForecastStatus.LEARNING,
+            "learning: calibrated forecast unavailable this evaluation",
+        )
 
 
 __all__: list[str] = []

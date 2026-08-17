@@ -150,3 +150,35 @@ def learning_payload() -> dict[str, Any]:
 
 def no_data_payload() -> dict[str, Any]:
     return copy.deepcopy(NO_DATA_PAYLOAD)
+
+
+def available_payload() -> dict[str, Any]:
+    """LEARNING_PAYLOAD upgraded to an available calibrated forecast."""
+    payload = copy.deepcopy(LEARNING_PAYLOAD)
+    src = "walk-forward split-conformal empirical quantiles (48 sessions)"
+    payload["forecast"] = {
+        "status": "available",
+        "remaining_tokens_likely_50": {
+            "state": "estimated",
+            "low": 40000,
+            "high": 160000,
+            "source": src,
+        },
+        "remaining_tokens_ceiling_90": {"state": "estimated", "value": 320000, "source": src},
+        "remaining_cost_usd_likely_50": {
+            "state": "estimated",
+            "low": 0.41,
+            "high": 1.64,
+            "source": src,
+        },
+        "remaining_cost_usd_ceiling_90": {"state": "estimated", "value": 3.28, "source": src},
+        "expected_turns": {"state": "estimated", "low": 2, "high": 9, "source": src},
+        "coverage": {
+            "method": "walk-forward split-conformal empirical-quantile v1",
+            "observed": 0.52,
+            "history_n": 48,
+            "drift_state": "stable",
+        },
+        "predicted_block_probability": {"state": "estimated", "value": 0.08, "source": src},
+    }
+    return payload

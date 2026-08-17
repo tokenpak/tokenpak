@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-17T15:29:59Z",
+  "generated_at": "2026-08-17T17:38:33Z",
   "package_version": "1.19.3",
   "symbols": [
     {
@@ -10766,6 +10766,50 @@
     {
       "module": "tokenpak.proxy.server_extra.websocket_proxy",
       "name": "decompress_chunk"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "COMPLETION_IDLE_SECONDS"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "CellReadiness"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "HistorySession"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "KMAX"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "MIN_CELL_SESSIONS"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "MIN_SCORED_POINTS"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "PRIOR_VERSION"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "build_calibrated_forecast"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "cell_readiness"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "read_history"
+    },
+    {
+      "module": "tokenpak.proxy.session_forecast_calibration",
+      "name": "walk_forward_coverage"
     },
     {
       "module": "tokenpak.proxy.shadow_hook",

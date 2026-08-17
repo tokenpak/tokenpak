@@ -174,3 +174,39 @@ def test_enabled_env_var_wins(monkeypatch):
     assert status_mod._session_economics_enabled() is False
     monkeypatch.setenv("TOKENPAK_STATUS_SESSION_ECONOMICS", "true")
     assert status_mod._session_economics_enabled() is True
+
+
+# ---------------------------------------------------------------------------
+# Calibrated (available) forecast rendering
+# ---------------------------------------------------------------------------
+
+
+def test_line_available_forecast_shows_range_and_ceiling():
+    from tests.session_economics_fixtures import available_payload
+
+    econ = SessionEconomics.from_dict(available_payload())
+    line = render_line(econ)
+    assert "left ~40k–160k" in line
+    assert "90% ≤ ~320k" in line
+    assert "forecast learning" not in line
+
+
+def test_block_available_forecast_reports_calibration_metadata():
+    from tests.session_economics_fixtures import available_payload
+
+    econ = SessionEconomics.from_dict(available_payload())
+    block = render_block(econ)
+    assert "remaining ~40k–160k tokens" in block
+    assert "90% ceiling ~320k" in block
+    assert "turns ~2–9" in block
+    assert "forecast cost  ~$0.41–$1.64" in block
+    assert "measured coverage 52%" in block
+    assert "history 48 sessions" in block
+    assert "block risk ~8%" in block
+
+
+def test_available_fixture_round_trips_canonically():
+    from tests.session_economics_fixtures import available_payload
+
+    econ = SessionEconomics.from_dict(available_payload())
+    assert SessionEconomics.from_dict(econ.to_dict()).to_json() == econ.to_json()
