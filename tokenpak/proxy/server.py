@@ -3127,7 +3127,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def _handle_session_economics(self) -> None:
         """Serve deterministic completed-session economics without upstream I/O."""
         from tokenpak._paths import monitor_db
-        from tokenpak.proxy.forecast_endpoint import _build_session_economics_response
+        from tokenpak.proxy.forecast_endpoint import (
+            _build_session_economics_response,
+            resolve_default_session_id,
+        )
         from tokenpak.proxy.request_pipeline import _resolve_session_id
 
         def _send_err(
@@ -3177,11 +3180,38 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         session_id = header_session or body_session
 
+        # Optional frozen evaluation time. This is a deterministic-replay
+        # surface: it changes only the clock the payload is evaluated at
+        # (as_of, idle, freshness), never what the ledger contains. The
+        # non-self-metering regression suite depends on it to prove that
+        # reads across a process restart are value-identical.
+        now_field = payload.get("now")
+        frozen_now: datetime | None = None
+        if now_field is not None:
+            if not isinstance(now_field, str):
+                _send_err("now must be an ISO-8601 timestamp string when provided")
+                return
+            try:
+                frozen_now = datetime.fromisoformat(now_field.replace("Z", "+00:00"))
+            except ValueError:
+                _send_err("now must be an ISO-8601 timestamp string when provided")
+                return
+            if frozen_now.tzinfo is None:
+                _send_err("now must include a timezone")
+                return
+
+        db_path = monitor_db(mode="read")
+        selection_note = ""
+        if not session_id:
+            # Proxy-owned default: latest completed non-empty ledger session.
+            session_id, selection_note = resolve_default_session_id(db_path)
+
         try:
             economics = _build_session_economics_response(
                 session_id,
-                monitor_db(mode="read"),
+                db_path,
                 model_hint=model_hint,
+                now=frozen_now,
             )
             response_body = economics.to_json().encode()
         except Exception:
@@ -3197,6 +3227,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(response_body)))
         self.send_header("Access-Control-Allow-Origin", "*")
+        if selection_note:
+            # Provenance for the proxy-owned default-session selection rides
+            # a header so the JSON body stays exactly the canonical contract.
+            self.send_header("X-TokenPak-Session-Selection", selection_note)
         self.end_headers()
         self.wfile.write(response_body)
 

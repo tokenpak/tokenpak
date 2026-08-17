@@ -70,6 +70,7 @@ differs between clients.
 | Tool | What it does |
 |---|---|
 | `estimate_tokens` | Estimate token count for text or a file. Returns a compact result: token and character counts plus a short estimator disclosure. |
+| `session_economics` | Deterministic session trip-computer read: spent tokens/cost, burn, binding runway, guard state, forecast availability. Facts and explicit unknowns only. |
 | `check_budget` | Remaining cost budget for this session and today, with an explicit scope note (only TokenPak-routed traffic is counted). |
 | `session_info` | Companion status, session stats, and configuration. |
 | `journal_write` | Add a note to the session journal (decisions, milestones). |

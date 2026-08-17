@@ -218,6 +218,7 @@ cost estimation and budget enforcement out-of-band in all profiles.
 | Tool | Description |
 |---|---|
 | `estimate_tokens` | Estimate token count for inline text or a file path. Cost tracking is automatic via hooks — reserved for go/no-go decisions on very large content, not routine bookkeeping. |
+| `session_economics` | Read the deterministic session trip-computer: spent tokens/cost, burn, binding runway, guard state, and forecast availability. Read-only facts and explicit unknowns — no recommendations. |
 | `check_budget` | Return remaining cost budget for this session and today. The pre-send hook enforces the budget automatically; agents call this only on explicit user request. |
 | `load_pak` | Load one or more Paks from prior sessions. Use `session_ids` with `include_journal` to retrieve related context together; omit IDs to list available Paks. |
 | `load_capsule` | Deprecated legacy alias of `load_pak` — same behavior and parameters. Kept so existing configs and hooks continue to work. |

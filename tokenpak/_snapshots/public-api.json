@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-17T13:14:10Z",
+  "generated_at": "2026-08-17T15:29:59Z",
   "package_version": "1.19.3",
   "symbols": [
     {
@@ -4606,6 +4606,14 @@
     {
       "module": "tokenpak.core.contracts.session_economics",
       "name": "ValueState"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics_renderer",
+      "name": "render_block"
+    },
+    {
+      "module": "tokenpak.core.contracts.session_economics_renderer",
+      "name": "render_line"
     },
     {
       "module": "tokenpak.core.cooldown",
@@ -9514,6 +9522,10 @@
     {
       "module": "tokenpak.proxy.forecast_endpoint",
       "name": "estimate_ttfb_ms"
+    },
+    {
+      "module": "tokenpak.proxy.forecast_endpoint",
+      "name": "resolve_default_session_id"
     },
     {
       "module": "tokenpak.proxy.handlers",

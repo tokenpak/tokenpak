@@ -171,6 +171,37 @@ def _handle_estimate_tokens_legacy_unused(state: CompanionState, args: dict[str,
     )
 
 
+def _handle_session_economics(state: CompanionState, args: dict[str, Any]) -> str:
+    """Read-only deterministic trip-computer state via the proxy endpoint.
+
+    Session selection: an explicit ``session_id`` argument wins; otherwise
+    the state's bound session (refreshed from the active-session marker
+    before each dispatch) is used; otherwise an empty id lets the proxy
+    fall back to the latest completed ledger session. The response is
+    validated against the shared contract before being returned, and the
+    returned string is the canonical contract JSON — identical values to
+    the status and dashboard surfaces by construction. This tool never
+    calls a provider and never writes anything.
+    """
+    session_id = str(args.get("session_id", "") or "").strip()
+    if not session_id:
+        session_id = state.session_id or current_session_id()
+    body: dict[str, Any] = {}
+    if session_id:
+        body["session_id"] = session_id
+    status, resp = _proxy_post("/v1/messages/session-economics", body)
+    if status == 0:
+        return json.dumps({"error": "proxy_unreachable", "detail": resp.get("detail", "")})
+    if status >= 400:
+        return json.dumps(resp)
+    try:
+        from tokenpak.core.contracts.session_economics import SessionEconomics
+
+        return SessionEconomics.from_dict(resp).to_json()
+    except Exception as exc:
+        return json.dumps({"error": "invalid_session_economics_payload", "detail": str(exc)})
+
+
 def _handle_check_budget(state: CompanionState, args: dict[str, Any]) -> str:
     """Check remaining budget via proxy /tpk/v1/budget."""
     status, body = _proxy_get("/tpk/v1/budget")
@@ -551,6 +582,21 @@ TOOLS: list[ToolDef] = [
             },
         },
         handler=_handle_estimate_tokens,
+        core=False,
+    ),
+    ToolDef(
+        name="session_economics",
+        description="Read the deterministic session trip-computer: spent tokens/cost, burn, binding runway, guard state, and forecast availability. Read-only; facts and explicit unknowns only — no recommendations.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session to read (omit for the active/most recent session)",
+                },
+            },
+        },
+        handler=_handle_session_economics,
         core=False,
     ),
     ToolDef(
