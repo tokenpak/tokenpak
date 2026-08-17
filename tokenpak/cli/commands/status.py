@@ -170,6 +170,104 @@ def _fetch(url: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _session_economics_enabled() -> bool:
+    """Whether default human surfaces render the session-economics display.
+
+    ``status.session_economics.enabled`` defaults to true; ``false``
+    suppresses only the default human status/dashboard display. Explicit
+    reads (``status --json`` and the companion tool) stay available so the
+    toggle never hides data from a caller who asked for it.
+    """
+    try:
+        from tokenpak.core import config_loader
+
+        return bool(
+            config_loader.get(
+                "status.session_economics.enabled",
+                True,
+                env_var="TOKENPAK_STATUS_SESSION_ECONOMICS",
+                cast=bool,
+            )
+        )
+    except Exception:
+        return True
+
+
+def _fetch_session_economics(proxy_base: str) -> tuple[Optional[Any], str]:
+    """Fetch and validate the session-economics contract from the local proxy.
+
+    Thin adapter: session selection happens inside the proxy (explicit id →
+    active marker → latest completed ledger session), and the payload is
+    validated with ``SessionEconomics.from_dict()`` before any projection.
+    Returns ``(economics, reason)`` — ``None`` economics with a reason when
+    the surface is honestly unavailable (proxy down, invalid payload).
+    """
+    url = f"{proxy_base}/v1/messages/session-economics"
+    req = urllib.request.Request(
+        url,
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            payload = json.loads(r.read())
+    except Exception:
+        return None, "proxy not reachable"
+    if not isinstance(payload, dict):
+        return None, "proxy returned a non-object payload"
+    try:
+        from tokenpak.core.contracts.session_economics import SessionEconomics
+
+        return SessionEconomics.from_dict(payload), ""
+    except Exception as exc:
+        return None, f"payload failed contract validation: {exc}"
+
+
+def _print_session_economics_line(proxy_base: str) -> None:
+    """Default one-line surface (gated by the config toggle)."""
+    if not _session_economics_enabled():
+        return
+    economics, reason = _fetch_session_economics(proxy_base)
+    print()
+    if economics is None:
+        print(f"  📟 session economics: unavailable ({reason})")
+        return
+    from tokenpak.core.contracts.session_economics_renderer import render_line
+
+    print(f"  📟 {render_line(economics)}")
+
+
+def _print_session_economics_block(proxy_base: str) -> None:
+    """Full block surface (gated by the config toggle)."""
+    if not _session_economics_enabled():
+        return
+    economics, reason = _fetch_session_economics(proxy_base)
+    print()
+    if economics is None:
+        print("📟  Session economics")
+        print(f"    unavailable ({reason})")
+        return
+    from tokenpak.core.contracts.session_economics_renderer import render_block
+
+    block_lines = render_block(economics).splitlines()
+    print(f"📟  {block_lines[0]}")
+    for line in block_lines[1:]:
+        print(f"  {line}")
+
+
+def _session_economics_json(proxy_base: str) -> Dict[str, Any]:
+    """Machine-readable form: the canonical contract dict, or honest absence.
+
+    Always produced — the config toggle suppresses only default human
+    display, never an explicit ``--json`` read.
+    """
+    economics, reason = _fetch_session_economics(proxy_base)
+    if economics is None:
+        return {"unavailable": True, "reason": reason}
+    return economics.to_dict()
+
+
 def _get_db_path() -> str:
     """Resolve the monitor DB path via the canonical resolver.
 
@@ -1126,6 +1224,7 @@ def run(
             print(f"\n  TOKENPAK {version}")
             print(SEP)
             _print_runtime_and_routing(proxy_base, uptime_s=0.0, errors=0, requests=0)
+            _print_session_economics_line(proxy_base)
             print()
             if savings_all.get("error") == "db_not_found":
                 print("  📊 Measured savings")
@@ -1255,6 +1354,7 @@ def run(
     print(SEP)
 
     _print_runtime_and_routing(proxy_base, uptime_s=uptime_s, errors=errors, requests=total_reqs)
+    _print_session_economics_line(proxy_base)
 
     # --- 3. VALUE CREATED (measured) ---
     # Split honestly: prompt-side (companion, pre-wire) vs wire-side (proxy).
@@ -1644,6 +1744,7 @@ def _run_json(
             "all_time": savings_all if not savings_all.get("error") else None,
         },
         "tip_cache": tip_cache,
+        "session_economics": _session_economics_json(proxy_base),
         "meme_lines": MEME_LINES,
     }
     print(json.dumps(output, indent=2, default=str))
@@ -1835,6 +1936,8 @@ def run_full(
                 detail = ev.get("detail", "")
                 recovered = "✅" if ev.get("recovered") else "❌"
                 print(f"  {recovered} [{ts}] {etype}: {detail[:70]}")
+
+    _print_session_economics_block(proxy_base)
 
     print(SEP_LEGACY)
     if is_degraded is True:

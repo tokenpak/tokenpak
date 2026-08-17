@@ -260,6 +260,46 @@ def build_forecast_response(
     }
 
 
+def resolve_default_session_id(db_path: Union[str, object, None]) -> tuple[str, str]:
+    """Resolve the proxy-owned default session for the economics endpoint.
+
+    Selection order is fixed by the surface contract: an explicit id and the
+    caller's active-session marker are resolved by the caller; when neither
+    exists, the proxy — and only the proxy — falls back to the most recent
+    session that has at least one completed, non-empty ledger row. Surfaces
+    must never issue rival SQLite queries for this.
+
+    Returns ``(session_id, reason)``. An empty ``session_id`` means there is
+    no defaultable session; ``reason`` then says why, and the caller passes
+    the empty identity through so the payload reports an explicit
+    no-data/unavailable state instead of inventing one.
+    """
+    if db_path is None:
+        return "", "monitor ledger is not configured"
+    path = str(db_path)
+    try:
+        conn = sqlite3.connect(path, timeout=5.0)
+        try:
+            table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'requests'"
+            ).fetchone()
+            if table is None:
+                return "", "monitor ledger has no requests table"
+            row = conn.execute(
+                "SELECT session_id FROM requests "
+                "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+                "AND status_code BETWEEN 200 AND 599 "
+                "ORDER BY timestamp DESC, id DESC LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        return "", f"monitor ledger read failed: {type(exc).__name__}"
+    if row is None or not str(row[0]).strip():
+        return "", "no completed session rows exist yet"
+    return str(row[0]).strip(), "latest completed ledger session"
+
+
 def _build_session_economics_response(
     session_id: str,
     db_path: Union[str, object],

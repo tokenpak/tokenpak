@@ -96,6 +96,57 @@ def _http_get(path: str, port: int | None = None, timeout: float = 3.0) -> Optio
         return None
 
 
+def _http_post(
+    path: str, body: Dict[str, Any], port: int | None = None, timeout: float = 3.0
+) -> Optional[Dict[str, Any]]:
+    """POST JSON to a proxy endpoint. Returns the JSON object or None."""
+    port = _proxy_port() if port is None else port
+    try:
+        url = f"http://127.0.0.1:{port}{path}"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read())
+            if isinstance(payload, dict):
+                return payload
+            return None
+    except Exception:
+        return None
+
+
+def _collect_session_economics(port: int) -> Dict[str, Any]:
+    """Fetch + validate the session-economics contract; honest absence otherwise.
+
+    Thin adapter over the proxy-owned endpoint and the shared contract —
+    no duplicate calculation, no rival ledger query. The returned value is
+    either the canonical validated contract dict or an explicit
+    ``{"unavailable": true, "reason": ...}``.
+    """
+    payload = _http_post("/v1/messages/session-economics", {}, port=port)
+    if payload is None:
+        return {"unavailable": True, "reason": "proxy not reachable"}
+    try:
+        from tokenpak.core.contracts.session_economics import SessionEconomics
+
+        return SessionEconomics.from_dict(payload).to_dict()
+    except Exception as exc:
+        return {"unavailable": True, "reason": f"payload failed contract validation: {exc}"}
+
+
+def _session_economics_display_enabled() -> bool:
+    """Default human dashboard display gate (config-off hides display only)."""
+    try:
+        from tokenpak.cli.commands.status import _session_economics_enabled
+
+        return _session_economics_enabled()
+    except Exception:
+        return True
+
+
 def _proxy_start_time() -> Optional[float]:
     """Best-effort proxy start time from the canonical pid-file mtime."""
     pid_file = _proxy_pid_file()
@@ -210,6 +261,52 @@ def _source_item(label: str, source: Dict[str, Any]) -> Dict[str, Any]:
         source=str(source.get("kind", "source")),
         detail=source.get("detail"),
     )
+
+
+def _session_economics_items(economics: Dict[str, Any]) -> list[Dict[str, Any]]:
+    """Project the validated contract dict into read-only layout items.
+
+    Presentation only — values come straight from the contract; the one-line
+    text is the shared renderer's, so status and dashboard cannot diverge.
+    """
+    if economics.get("unavailable"):
+        return [
+            _layout_item(
+                "Session economics",
+                state="unavailable",
+                source="session_economics",
+                detail=str(economics.get("reason", "")),
+            )
+        ]
+    try:
+        from tokenpak.core.contracts.session_economics import SessionEconomics
+        from tokenpak.core.contracts.session_economics_renderer import render_line
+
+        line = render_line(SessionEconomics.from_dict(economics))
+    except Exception:
+        line = "session economics: unavailable (render failed)"
+    runway = economics.get("runway", {})
+    forecast = economics.get("forecast", {})
+    return [
+        _layout_item(
+            "Trip computer",
+            state="measured",
+            source="session_economics",
+            value=line,
+        ),
+        _layout_item(
+            "Guard state",
+            state="measured",
+            source="session_economics",
+            value=str(runway.get("guard_state", "unknown")),
+        ),
+        _layout_item(
+            "Forecast",
+            state="measured",
+            source="session_economics",
+            value=str(forecast.get("status", "unknown")),
+        ),
+    ]
 
 
 def _layout_section(name: str, title: str, items: list[Dict[str, Any]]) -> Dict[str, Any]:
@@ -418,6 +515,17 @@ def _build_layout_payload(snapshot: Dict[str, Any], layout: str) -> Dict[str, An
                     _measure_item("Compression", spend["compression_percent"]),
                 ],
             ),
+            *(
+                [
+                    _layout_section(
+                        "session_economics",
+                        "Session Economics",
+                        _session_economics_items(snapshot["session_economics"]),
+                    )
+                ]
+                if _session_economics_display_enabled()
+                else []
+            ),
             _layout_section(
                 "state_sources",
                 "State Sources",
@@ -501,6 +609,14 @@ def collect_dashboard_snapshot(layout: str = "home") -> Dict[str, Any]:
             available=fleet_config_path.exists(),
         ),
     }
+
+    session_economics = _collect_session_economics(port)
+
+    sources["session_economics"] = _source(
+        "http",
+        "/v1/messages/session-economics",
+        available=not session_economics.get("unavailable", False),
+    )
 
     warnings: list[str] = []
     if health is None:
@@ -613,6 +729,7 @@ def collect_dashboard_snapshot(layout: str = "home") -> Dict[str, Any]:
                 req_data, ("compression_mode",), source="proxy_stats", missing_state="unknown"
             ),
         },
+        "session_economics": session_economics,
         "debug": {
             "tokenpak_home": str(_paths.home()),
             "legacy_home_active": _paths.is_legacy(),

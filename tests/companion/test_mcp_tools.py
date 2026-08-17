@@ -138,6 +138,7 @@ def test_tools_registry_has_expected_entries():
     names = {t.name for t in TOOLS}
     assert names == {
         "estimate_tokens",
+        "session_economics",
         "check_budget",
         "load_pak",
         "load_capsule",

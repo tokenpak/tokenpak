@@ -83,14 +83,31 @@ class ProxyProc:
         }
         if extra_env:
             env.update(extra_env)
-        self._stdout_f = open(self.stdout_path, "wb")
-        self._stderr_f = open(self.stderr_path, "wb")
+        self._env = env
+        self._launch()
+
+    def _launch(self) -> None:
+        """(Re)start the subprocess with the current env/home/db."""
+        self._stdout_f = open(self.stdout_path, "ab")
+        self._stderr_f = open(self.stderr_path, "ab")
         self.proc = subprocess.Popen(
             [sys.executable, str(LAUNCHER)],
-            env=env,
+            env=self._env,
             stdout=self._stdout_f,
             stderr=self._stderr_f,
         )
+
+    def restart(self, timeout: float = STARTUP_TIMEOUT) -> None:
+        """Stop the process and relaunch it on the SAME home and database.
+
+        This is the persistence-proof path: a fresh throwaway home would
+        prove nothing about surviving state. The port is re-used; stop()
+        closes the listener so the new process can bind it again.
+        """
+        self.stop()
+        self._env["TOKENPAK_PORT"] = str(self.port)
+        self._launch()
+        self.wait_ready(timeout=timeout)
 
     # -- lifecycle ---------------------------------------------------------
 
