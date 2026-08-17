@@ -6,6 +6,68 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.20.0] — 2026-08-17
+
+This backward-compatible minor release adds a deterministic session trip
+computer to the default read surfaces, layers a calibrated
+remaining-consumption forecast on top of it, and refreshes the model pricing
+catalog for the current Claude model generation.
+
+### Added
+
+- A deterministic session trip computer renders on every default read
+  surface: a one-line and full-block status rendering, a dashboard section
+  and snapshot field, and a read-only tool shared by both supported agent
+  clients. All surfaces are thin adapters over one validated contract and one
+  shared renderer, and the proxy selects a default session automatically
+  when none is supplied. A restart-proof regression suite verifies the new
+  surfaces change no provider bytes and no accounting inputs across a full
+  process restart.
+- A calibrated remaining-consumption forecast layers onto the trip computer:
+  a dependency-free split-conformal quantile engine over finished local
+  sessions produces a central 50% remaining-token range, a one-sided 90%
+  ceiling, an expected-turn range, measured walk-forward coverage with drift
+  awareness, and a guard-aligned block probability. Cold cells render an
+  honest learning state instead of a number; stale or unknown rates leave
+  USD unavailable while token ranges stay intact.
+
+### Fixed
+
+- The model pricing catalog now prices the current Claude model
+  generation — Fable 5, Opus 5, and Sonnet 5 — with matching context
+  windows, and corrects a Haiku pricing row that had been seeded as a
+  byte-identical copy of an older model's rates. A new catalog-integrity
+  test suite makes this class of staleness CI-detectable going forward
+  without hardcoding a model-name enumeration: every model the proxy serves
+  by default must resolve to explicit priced data with a known context
+  window, and every served model must carry positive pricing.
+
+### Upgrade
+
+```bash
+python -m pip install --upgrade "tokenpak==1.20.0"
+```
+
+No configuration migration is required.
+
+### Rollback
+
+```bash
+python -m pip install --upgrade "tokenpak==1.19.3"
+```
+
+The release introduces no destructive state migration. Artifact-level
+upgrade and rollback verification is part of the release gate.
+
+### Compatibility
+
+- The public API snapshot contains 4,679 symbols: 14 additive session
+  trip-computer exports (a new `tokenpak.proxy.session_forecast_calibration`
+  module plus three additions on existing modules) and zero removals
+  relative to v1.19.3.
+- No existing public symbol is removed or reclassified. No breaking changes
+  are introduced.
+
 ## [1.19.3] — 2026-08-17
 
 This backward-compatible patch repairs the release gate itself and supersedes

@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-17T18:10:13Z",
-  "package_version": "1.19.3",
+  "generated_at": "2026-08-17T22:52:00Z",
+  "package_version": "1.20.0",
   "symbols": [
     {
       "module": "tokenpak",
