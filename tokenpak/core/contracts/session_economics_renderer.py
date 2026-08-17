@@ -111,7 +111,17 @@ def render_line(economics: SessionEconomics) -> str:
     else:
         parts.append(f"runway {runway.status.value}")
     parts.append(f"guard {runway.guard_state.value}")
-    parts.append(f"forecast {economics.forecast.status.value}")
+    forecast = economics.forecast
+    if (
+        forecast.status is ForecastStatus.AVAILABLE
+        and forecast.remaining_tokens_likely_50.state is ValueState.ESTIMATED
+    ):
+        parts.append(
+            f"left {_interval(forecast.remaining_tokens_likely_50)} "
+            f"(90% ≤ {_numeric(forecast.remaining_tokens_ceiling_90)})"
+        )
+    else:
+        parts.append(f"forecast {forecast.status.value}")
     return "session economics: " + " · ".join(parts)
 
 
@@ -181,6 +191,28 @@ def render_block(economics: SessionEconomics) -> str:
             f"remaining {_interval(forecast.remaining_tokens_likely_50)} tokens "
             f"(90% ceiling {_numeric(forecast.remaining_tokens_ceiling_90)}) · "
             f"turns {_interval(forecast.expected_turns)}"
+        )
+        if forecast.remaining_cost_usd_likely_50.state is ValueState.ESTIMATED:
+            lines.append(
+                "  forecast cost  "
+                f"~${float(forecast.remaining_cost_usd_likely_50.low):.2f}–"
+                f"${float(forecast.remaining_cost_usd_likely_50.high):.2f} "
+                f"(90% ≤ ${float(forecast.remaining_cost_usd_ceiling_90.value):.2f})"
+            )
+        coverage = forecast.coverage
+        observed = (
+            f"{coverage.observed * 100.0:.0f}%" if coverage.observed is not None else "unmeasured"
+        )
+        block_prob = forecast.predicted_block_probability
+        block_text = (
+            f" · block risk ~{float(block_prob.value) * 100.0:.0f}%"
+            if block_prob.state is ValueState.ESTIMATED and block_prob.value is not None
+            else ""
+        )
+        lines.append(
+            "  calibration    "
+            f"measured coverage {observed} · history {coverage.history_n} sessions · "
+            f"{coverage.drift_state.value}{block_text}"
         )
     else:
         lines.append(f"  forecast       {forecast.status.value}{_reason(forecast.reason)}")
