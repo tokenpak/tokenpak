@@ -191,9 +191,7 @@ def _handle_session_economics(state: CompanionState, args: dict[str, Any]) -> st
         body["session_id"] = session_id
     status, resp = _proxy_post("/v1/messages/session-economics", body)
     if status == 0:
-        return json.dumps(
-            {"error": "proxy_unreachable", "detail": resp.get("detail", "")}
-        )
+        return json.dumps({"error": "proxy_unreachable", "detail": resp.get("detail", "")})
     if status >= 400:
         return json.dumps(resp)
     try:
@@ -201,9 +199,7 @@ def _handle_session_economics(state: CompanionState, args: dict[str, Any]) -> st
 
         return SessionEconomics.from_dict(resp).to_json()
     except Exception as exc:
-        return json.dumps(
-            {"error": "invalid_session_economics_payload", "detail": str(exc)}
-        )
+        return json.dumps({"error": "invalid_session_economics_payload", "detail": str(exc)})
 
 
 def _handle_check_budget(state: CompanionState, args: dict[str, Any]) -> str:

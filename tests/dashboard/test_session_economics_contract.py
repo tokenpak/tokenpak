@@ -87,9 +87,7 @@ def test_home_layout_section_present_when_enabled(monkeypatch):
     snapshot = dashboard_mod.collect_dashboard_snapshot("home")
     names = [s["name"] for s in snapshot["layout"]["sections"]]
     assert "session_economics" in names
-    section = next(
-        s for s in snapshot["layout"]["sections"] if s["name"] == "session_economics"
-    )
+    section = next(s for s in snapshot["layout"]["sections"] if s["name"] == "session_economics")
     values = {item["label"]: item for item in section["items"]}
     assert "session economics:" in str(values["Trip computer"]["value"])
     assert values["Guard state"]["value"] == "allow"

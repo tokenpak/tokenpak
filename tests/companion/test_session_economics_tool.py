@@ -85,9 +85,7 @@ def test_no_binding_lets_proxy_default(monkeypatch):
 
 def test_proxy_unreachable_is_honest(monkeypatch):
     monkeypatch.setattr(tools_mod, "_proxy_post", lambda *a, **k: (0, {"detail": "down"}))
-    out = json.loads(
-        tools_mod._handle_session_economics(tools_mod.CompanionState(), {})
-    )
+    out = json.loads(tools_mod._handle_session_economics(tools_mod.CompanionState(), {}))
     assert out["error"] == "proxy_unreachable"
 
 
@@ -95,9 +93,7 @@ def test_invalid_payload_is_rejected_not_projected(monkeypatch):
     monkeypatch.setattr(
         tools_mod, "_proxy_post", lambda *a, **k: (200, {"schema_version": "bogus/9"})
     )
-    out = json.loads(
-        tools_mod._handle_session_economics(tools_mod.CompanionState(), {})
-    )
+    out = json.loads(tools_mod._handle_session_economics(tools_mod.CompanionState(), {}))
     assert out["error"] == "invalid_session_economics_payload"
 
 
@@ -107,7 +103,5 @@ def test_error_status_passes_through(monkeypatch):
         "_proxy_post",
         lambda *a, **k: (500, {"error": {"type": "api_error", "message": "x"}}),
     )
-    out = json.loads(
-        tools_mod._handle_session_economics(tools_mod.CompanionState(), {})
-    )
+    out = json.loads(tools_mod._handle_session_economics(tools_mod.CompanionState(), {}))
     assert out["error"]["type"] == "api_error"

@@ -104,10 +104,7 @@ def render_line(economics: SessionEconomics) -> str:
         f"in {_numeric(facts.input_tokens)}",
         f"out {_numeric(facts.output_tokens)}",
         f"cost {_cost(facts.cost_usd)}",
-        (
-            f"burn {_numeric(state.burn_tokens_per_turn)}/turn "
-            f"{_SLOPE_MARK[state.burn_slope]}"
-        ),
+        (f"burn {_numeric(state.burn_tokens_per_turn)}/turn {_SLOPE_MARK[state.burn_slope]}"),
     ]
     if runway.status is RunwayStatus.AVAILABLE:
         parts.append(f"runway {runway.turns} turns ({runway.binding_constraint.value})")
@@ -130,8 +127,10 @@ def render_block(economics: SessionEconomics) -> str:
     if session.identity_state is not ValueState.OBSERVED:
         word = _STATE_WORD.get(session.identity_state, session.identity_state.value)
         lines.append(f"  session        {word}{_reason(session.reason)}")
-        lines.append(f"  forecast       {economics.forecast.status.value}"
-                     f"{_reason(economics.forecast.reason)}")
+        lines.append(
+            f"  forecast       {economics.forecast.status.value}"
+            f"{_reason(economics.forecast.reason)}"
+        )
         lines.append("  legend         plain=observed  ~=estimate  words=no value")
         return "\n".join(lines)
 
@@ -140,15 +139,16 @@ def render_block(economics: SessionEconomics) -> str:
     runway = economics.runway
     forecast = economics.forecast
 
-    lines.append(f"  session        {session.id} · {session.model.id}"
-                 f" ({session.model.effort}) · {session.turns_observed} turns")
+    lines.append(
+        f"  session        {session.id} · {session.model.id}"
+        f" ({session.model.effort}) · {session.turns_observed} turns"
+    )
     lines.append(
         "  spent          "
         f"in {_numeric(facts.input_tokens)} · out {_numeric(facts.output_tokens)} · "
         f"cache r/w {_numeric(facts.cache_read_tokens)}/{_numeric(facts.cache_write_tokens)}"
     )
-    lines.append(f"  cost           {_cost(facts.cost_usd)}"
-                 f"{_reason(facts.cost_usd.reason)}")
+    lines.append(f"  cost           {_cost(facts.cost_usd)}{_reason(facts.cost_usd.reason)}")
     lines.append(
         "  context        "
         f"{_numeric(state.context_tokens)} tokens · base {_numeric(state.base_tokens)} · "

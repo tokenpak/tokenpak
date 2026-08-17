@@ -139,9 +139,7 @@ def test_default_line_suppressed_when_disabled(monkeypatch, capsys):
 
 def test_default_line_renders_when_enabled(monkeypatch, capsys, learning_econ):
     monkeypatch.setattr(status_mod, "_session_economics_enabled", lambda: True)
-    monkeypatch.setattr(
-        status_mod, "_fetch_session_economics", lambda _base: (learning_econ, "")
-    )
+    monkeypatch.setattr(status_mod, "_fetch_session_economics", lambda _base: (learning_econ, ""))
     status_mod._print_session_economics_line("http://127.0.0.1:8766")
     out = capsys.readouterr().out
     assert render_line(learning_econ) in out
@@ -155,9 +153,7 @@ def test_block_suppressed_when_disabled(monkeypatch, capsys):
 
 def test_json_ignores_display_toggle(monkeypatch, learning_econ):
     monkeypatch.setattr(status_mod, "_session_economics_enabled", lambda: False)
-    monkeypatch.setattr(
-        status_mod, "_fetch_session_economics", lambda _base: (learning_econ, "")
-    )
+    monkeypatch.setattr(status_mod, "_fetch_session_economics", lambda _base: (learning_econ, ""))
     payload = status_mod._session_economics_json("http://127.0.0.1:8766")
     assert payload == learning_econ.to_dict()
     assert payload["schema_version"] == "session-economics/1"

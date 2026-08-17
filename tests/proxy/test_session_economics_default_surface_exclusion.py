@@ -50,6 +50,7 @@ def _subprocess_extra_env() -> dict[str, str]:
         path = f"{path}{__import__('os').pathsep}{user_site}"
     return {"PYTHONPATH": path}
 
+
 _FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 _JSON_BODY = (_FIXTURES_DIR / "json_response_messages.json").read_bytes()
 
@@ -86,9 +87,7 @@ def _requests_rows(db_path: Path) -> list[tuple]:
     """The full completed-row input set the economics engine reads."""
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
     try:
-        return conn.execute(
-            "SELECT * FROM requests ORDER BY timestamp ASC, id ASC"
-        ).fetchall()
+        return conn.execute("SELECT * FROM requests ORDER BY timestamp ASC, id ASC").fetchall()
     finally:
         conn.close()
 
@@ -141,9 +140,7 @@ def test_restart_equality_and_default_surface_exclusion(upstream, monkeypatch):
         baseline_upstream_calls = len(upstream.bodies)
 
         # -- pre-restart canonical read under frozen evaluation time --
-        code, _, econ_before = _post_economics(
-            proxy, {"session_id": _SESSION, "now": _FROZEN_NOW}
-        )
+        code, _, econ_before = _post_economics(proxy, {"session_id": _SESSION, "now": _FROZEN_NOW})
         assert code == 200
         parsed = json.loads(econ_before)
         assert parsed["session"]["id"] == _SESSION
@@ -153,9 +150,7 @@ def test_restart_equality_and_default_surface_exclusion(upstream, monkeypatch):
         proxy.restart()
 
         # -- 1) endpoint read: value-identical canonical JSON --
-        code, _, econ_after = _post_economics(
-            proxy, {"session_id": _SESSION, "now": _FROZEN_NOW}
-        )
+        code, _, econ_after = _post_economics(proxy, {"session_id": _SESSION, "now": _FROZEN_NOW})
         assert code == 200
         assert json.loads(econ_after) == json.loads(econ_before)
 
@@ -163,9 +158,7 @@ def test_restart_equality_and_default_surface_exclusion(upstream, monkeypatch):
         code, headers, econ_default = _post_economics(proxy, {"now": _FROZEN_NOW})
         assert code == 200
         assert json.loads(econ_default)["session"]["id"] == _SESSION
-        assert headers.get("X-TokenPak-Session-Selection") == (
-            "latest completed ledger session"
-        )
+        assert headers.get("X-TokenPak-Session-Selection") == ("latest completed ledger session")
 
         # -- 3) every thin surface, live against the same subprocess --
         from tokenpak.cli.commands import status as status_mod
