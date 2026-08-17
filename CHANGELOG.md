@@ -6,6 +6,44 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.19.3] — 2026-08-17
+
+This backward-compatible patch repairs the release gate itself and supersedes
+v1.19.2, whose tag never produced published artifacts.
+
+### Fixed
+
+- The public-API snapshot's CrewAI example import-error sentinel is restored to
+  the value a clean build environment produces. The v1.19.2 preparation
+  regenerated the snapshot in an environment carrying a stale locally installed
+  integration package, so the release gate's snapshot check failed at the tag
+  build and no v1.19.2 artifact was published. The snapshot again matches a
+  clean environment deterministically; the symbol count remains 4,665 with no
+  additions or removals relative to the v1.19.2 candidate.
+
+### Notes
+
+- v1.19.2 was tagged but never published: the release gate stopped the build
+  before any distribution, GitHub Release, or index upload existed. Its
+  changes (Python 3.10 launcher compatibility and release-to-site sequencing)
+  ship in this release.
+
+### Upgrade
+
+```bash
+python -m pip install --upgrade "tokenpak==1.19.3"
+```
+
+No configuration migration is required.
+
+### Rollback
+
+```bash
+python -m pip install --upgrade "tokenpak==1.19.1"
+```
+
+(v1.19.2 has no published artifact to roll back to.)
+
 ## [1.19.2] — 2026-08-16
 
 This backward-compatible patch keeps companion launches working on Python 3.10
