@@ -306,3 +306,97 @@ def test_unavailable_runway_blanks_probability(monkeypatch):
         monkeypatch=monkeypatch,
     )
     assert forecast.predicted_block_probability.state is ValueState.UNAVAILABLE
+
+
+# ---------------------------------------------------------------------------
+# Performance and cache honesty (QA finding F-1)
+# ---------------------------------------------------------------------------
+
+
+def test_capacity_corpus_stays_inside_surface_budget(tmp_path, monkeypatch):
+    """At the module's own MAX_SESSIONS cap the forecast must stay far below
+    the 5s client timeout of the default-on surfaces, and a repeat evaluation
+    must be near-free via the fingerprint cache while returning identical
+    values."""
+    import time as _time
+
+    db = tmp_path / "monitor.db"
+    _seed_history_db(db, _corpus(cal.MAX_SESSIONS, seed=41))
+    kwargs = dict(
+        monitor_db_path=str(db),
+        now=NOW,
+        session_id="active",
+        model="model-a",
+        effort="unknown",
+        turn_index=4,
+        spent_tokens=25000.0,
+        runway=_runway(),
+        burn_tokens_per_turn=6000.0,
+        session_blended_usd_rate=None,
+    )
+    t0 = _time.monotonic()
+    first = cal.build_calibrated_forecast(**kwargs)
+    cold = _time.monotonic() - t0
+    t0 = _time.monotonic()
+    second = cal.build_calibrated_forecast(**kwargs)
+    warm = _time.monotonic() - t0
+    assert first.status is ForecastStatus.AVAILABLE
+    assert second.to_dict() == first.to_dict()  # cache returns identical values
+    assert cold < 5.0, f"cold evaluation took {cold:.2f}s"
+    assert warm < 0.5, f"cached evaluation took {warm:.2f}s"
+
+
+def test_cache_invalidates_on_ledger_append(tmp_path):
+    db = tmp_path / "monitor.db"
+    _seed_history_db(db, _corpus(30, seed=43))
+    h1 = cal.read_history(str(db), now=NOW)
+    _seed_history_db_append_one(db)
+    h2 = cal.read_history(str(db), now=NOW)
+    assert len(h2) == len(h1) + 1  # fingerprint change forced a fresh parse
+
+
+def _seed_history_db_append_one(path):
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(str(path))
+    base = _HISTORY_END - timedelta(days=1)
+    for ti in range(6):
+        conn.execute(
+            "INSERT INTO requests (session_id, model, reasoning_effort, timestamp,"
+            " status_code, input_tokens, output_tokens, cache_read_tokens,"
+            " cache_creation_tokens) VALUES ('hist-extra','model-a','unknown',?,200,4000,1000,0,0)",
+            ((base + timedelta(minutes=ti)).isoformat(),),
+        )
+    conn.commit()
+    conn.close()
+
+
+def test_read_history_never_creates_a_database(tmp_path):
+    missing = tmp_path / "definitely-absent.db"
+    assert cal.read_history(str(missing), now=NOW) == []
+    assert not missing.exists()  # read-only open must not create the file
+
+
+def test_drift_refit_shifts_the_emitted_band(monkeypatch):
+    """Pin the adaptive-refit behavior end-to-end: once drifting, the emitted
+    band must reflect the recent regime, not the stale accumulated fit."""
+    stable = _corpus(70, seed=3)
+    shifted = _corpus(60, seed=4, growth=1.8)
+    for i, s in enumerate(shifted):
+        shifted[i] = cal.HistorySession(
+            s.model, s.effort, _HISTORY_END - timedelta(minutes=60 - i), s.turn_costs
+        )
+    drifted_cell = stable + shifted
+    forecast = _forecast(drifted_cell, monkeypatch=monkeypatch)
+    assert forecast.status is ForecastStatus.AVAILABLE
+    assert forecast.coverage.drift_state.value == "drifting"
+    # The all-history band, for contrast:
+    full_band = cal._band_for(drifted_cell, [], 4, cal.TARGET_50)
+    recent_band = cal._band_for(drifted_cell[-cal.RECENT_WINDOW :], [], 4, cal.TARGET_50)
+    assert full_band is not None and recent_band is not None
+    # Growth-shifted regime has larger remaining multipliers: the refit band's
+    # upper edge must sit above the stale full-history one, and the emitted
+    # interval must match the refit fit, not the stale one.
+    assert recent_band.hi_y > full_band.hi_y
+    emitted_hi = forecast.remaining_tokens_likely_50.high
+    assert emitted_hi == round(25000.0 * (math.exp(recent_band.hi_y) - 1.0))

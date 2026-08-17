@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 import math
 import sqlite3
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Sequence
@@ -160,6 +161,106 @@ def _parse_ts_utc(value: object) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+@dataclass(frozen=True)
+class _CorpusEntry:
+    """One parsed session (finished or not) keyed for the fingerprint cache."""
+
+    session_id: str
+    session: HistorySession
+
+
+_CACHE_LOCK = threading.Lock()
+#: db_path -> (fingerprint, corpus entries). Bounded small; process-local.
+_CORPUS_CACHE: dict[str, tuple[tuple[int, int], tuple[_CorpusEntry, ...]]] = {}
+#: (db_path, fingerprint, cell key, participant signature) -> readiness.
+_READINESS_CACHE: dict[tuple, CellReadiness] = {}
+_CORPUS_CACHE_MAX = 4
+_READINESS_CACHE_MAX = 32
+
+
+def _ledger_fingerprint(conn: sqlite3.Connection) -> tuple[int, int]:
+    row = conn.execute("SELECT COALESCE(MAX(id), 0), COUNT(*) FROM requests").fetchone()
+    return int(row[0] or 0), int(row[1] or 0)
+
+
+def _connect_ro(path: str) -> sqlite3.Connection:
+    """Read-only open: an absent file errors instead of being created."""
+    return sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5.0)
+
+
+def _parse_corpus(conn: sqlite3.Connection) -> tuple[_CorpusEntry, ...]:
+    rows = conn.execute(
+        "SELECT session_id, model, reasoning_effort, timestamp, "
+        "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
+        "provider_input_tokens, provider_output_tokens, "
+        "provider_cache_read_tokens, provider_cache_creation_tokens "
+        "FROM requests "
+        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+        "AND status_code BETWEEN 200 AND 599 "
+        "ORDER BY timestamp ASC, id ASC"
+    ).fetchall()
+    grouped: dict[str, list[sqlite3.Row]] = {}
+    for row in rows:
+        sid = str(row["session_id"]).strip()
+        if sid:
+            grouped.setdefault(sid, []).append(row)
+    entries: list[_CorpusEntry] = []
+    for sid, srows in grouped.items():
+        last_ts = _parse_ts_utc(srows[-1]["timestamp"])
+        if last_ts is None:
+            continue
+        costs = tuple(c for c in (_row_total(r) for r in srows) if c > 0)
+        if len(costs) < MIN_TURNS:
+            continue
+        model = str(srows[-1]["model"] or "unknown").strip() or "unknown"
+        effort = str(srows[-1]["reasoning_effort"] or "unknown").strip() or "unknown"
+        entries.append(
+            _CorpusEntry(
+                session_id=sid,
+                session=HistorySession(
+                    model=model, effort=effort, ended_at=last_ts, turn_costs=costs
+                ),
+            )
+        )
+    entries.sort(key=lambda e: e.session.ended_at)
+    # Bound memory ahead of the per-call finished filter; newest win.
+    return tuple(entries[-(MAX_SESSIONS * 3) :])
+
+
+def _corpus_for(monitor_db_path: str) -> tuple[_CorpusEntry, ...]:
+    """Fingerprint-cached parsed corpus; identical to an uncached parse.
+
+    The fingerprint (max id, row count) changes on any ledger append, so a
+    hit can only serve data equal to what a fresh parse would produce —
+    determinism and the non-self-metering claims are unaffected.
+    """
+    try:
+        conn = _connect_ro(monitor_db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'requests'"
+            ).fetchone()
+            if table is None:
+                return ()
+            fingerprint = _ledger_fingerprint(conn)
+            with _CACHE_LOCK:
+                cached = _CORPUS_CACHE.get(monitor_db_path)
+                if cached is not None and cached[0] == fingerprint:
+                    return cached[1]
+            corpus = _parse_corpus(conn)
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        logger.debug("calibration history read failed: %s", exc)
+        return ()
+    with _CACHE_LOCK:
+        if len(_CORPUS_CACHE) >= _CORPUS_CACHE_MAX and monitor_db_path not in _CORPUS_CACHE:
+            _CORPUS_CACHE.pop(next(iter(_CORPUS_CACHE)))
+        _CORPUS_CACHE[monitor_db_path] = (fingerprint, corpus)
+    return corpus
+
+
 def read_history(
     monitor_db_path: str | None,
     *,
@@ -175,52 +276,12 @@ def read_history(
     """
     if not monitor_db_path:
         return []
-    try:
-        conn = sqlite3.connect(monitor_db_path, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        try:
-            table = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'requests'"
-            ).fetchone()
-            if table is None:
-                return []
-            rows = conn.execute(
-                "SELECT session_id, model, reasoning_effort, timestamp, "
-                "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
-                "provider_input_tokens, provider_output_tokens, "
-                "provider_cache_read_tokens, provider_cache_creation_tokens "
-                "FROM requests "
-                "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
-                "AND status_code BETWEEN 200 AND 599 "
-                "ORDER BY timestamp ASC, id ASC"
-            ).fetchall()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        logger.debug("calibration history read failed: %s", exc)
-        return []
-
-    grouped: dict[str, list[sqlite3.Row]] = {}
-    for row in rows:
-        sid = str(row["session_id"]).strip()
-        if sid and sid != exclude_session:
-            grouped.setdefault(sid, []).append(row)
-
     horizon = now - timedelta(seconds=COMPLETION_IDLE_SECONDS)
-    sessions: list[HistorySession] = []
-    for sid, srows in grouped.items():
-        last_ts = _parse_ts_utc(srows[-1]["timestamp"])
-        if last_ts is None or last_ts > horizon:
-            continue  # unfinished or unparseable — not ground truth
-        costs = tuple(c for c in (_row_total(r) for r in srows) if c > 0)
-        if len(costs) < MIN_TURNS:
-            continue
-        model = str(srows[-1]["model"] or "unknown").strip() or "unknown"
-        effort = str(srows[-1]["reasoning_effort"] or "unknown").strip() or "unknown"
-        sessions.append(
-            HistorySession(model=model, effort=effort, ended_at=last_ts, turn_costs=costs)
-        )
-    sessions.sort(key=lambda s: s.ended_at)
+    sessions = [
+        e.session
+        for e in _corpus_for(monitor_db_path)
+        if e.session_id != exclude_session and e.session.ended_at <= horizon
+    ]
     return sessions[-MAX_SESSIONS:]
 
 
@@ -228,19 +289,26 @@ def _cell_key(model: str, effort: str) -> tuple[str, str]:
     return (model.strip() or "unknown", effort.strip() or "unknown")
 
 
+def _session_kys(s: HistorySession) -> tuple[tuple[int, float], ...]:
+    """One session's (turn-index, y) samples; y = log remaining multiplier."""
+    out: list[tuple[int, float]] = []
+    total = s.total
+    spent = 0.0
+    for k, cost in enumerate(s.turn_costs, start=1):
+        spent += cost
+        if k >= s.turns:
+            break  # at the final turn nothing remains — degenerate sample
+        if k > KMAX or spent <= 0:
+            continue
+        out.append((k, math.log(max(total / spent, 1.0))))
+    return tuple(out)
+
+
 def _samples(sessions: Sequence[HistorySession]) -> list[tuple[int, float]]:
-    """(turn-index, y) samples; y = log remaining multiplier at that turn."""
+    """(turn-index, y) samples across sessions (order-preserving)."""
     out: list[tuple[int, float]] = []
     for s in sessions:
-        total = s.total
-        spent = 0.0
-        for k, cost in enumerate(s.turn_costs, start=1):
-            spent += cost
-            if k >= s.turns:
-                break  # at the final turn nothing remains — degenerate sample
-            if k > KMAX or spent <= 0:
-                continue
-            out.append((k, math.log(max(total / spent, 1.0))))
+        out.extend(_session_kys(s))
     return out
 
 
@@ -336,6 +404,125 @@ def _band_for(
     return _conformal_band(base, cell_calib, target, one_sided=one_sided)
 
 
+class _StepBands:
+    """Per-walk-forward-step band table over precomputed prefix samples.
+
+    Assembles the train/calibration pools for a step ONCE (per turn index,
+    from per-session sample tuples) and answers band queries from them —
+    identical mathematics to :func:`_band_for`, restructured so the replay
+    is linear in samples instead of rescanning the prefix for every scored
+    point. This is what keeps the measurement affordable at the corpus cap.
+    """
+
+    def __init__(
+        self,
+        prefix: Sequence[HistorySession],
+        pool_near_by_k: Sequence[list[float]],
+    ) -> None:
+        train_s, calib_s = _split(list(prefix))
+        self._train_by_k: list[list[float]] = [[] for _ in range(KMAX + 1)]
+        self._calib_by_k: list[list[float]] = [[] for _ in range(KMAX + 1)]
+        for s in train_s:
+            for sk, y in _session_kys(s):
+                self._train_by_k[min(sk, KMAX)].append(y)
+        for s in calib_s:
+            for sk, y in _session_kys(s):
+                self._calib_by_k[min(sk, KMAX)].append(y)
+        self._pool_near_by_k = pool_near_by_k
+        self._memo: dict[tuple[int, float, bool], _Band | None] = {}
+
+    def _near(self, by_k: Sequence[list[float]], k: int) -> list[float]:
+        kk = min(k, KMAX)
+        out: list[float] = []
+        for b in range(max(1, kk - K_WINDOW), min(KMAX, kk + K_WINDOW) + 1):
+            out.extend(by_k[b])
+        return out
+
+    def band(self, k: int, target: float, *, one_sided: bool = False) -> _Band | None:
+        key = (min(k, KMAX), target, one_sided)
+        if key not in self._memo:
+            cell_train = self._near(self._train_by_k, k)
+            cell_calib = self._near(self._calib_by_k, k)
+            base = _pooled(cell_train, self._pool_near_by_k[min(k, KMAX)], _prior_near(k))
+            self._memo[key] = (
+                None
+                if len(base) < 6
+                else _conformal_band(base, cell_calib, target, one_sided=one_sided)
+            )
+        return self._memo[key]
+
+
+@dataclass(frozen=True)
+class _ReplayMeasurement:
+    cov50: float | None
+    pts50: int
+    cov90: float | None
+    pts90: int
+    cov50_tail: float | None
+    pts50_tail: int
+
+
+def _pool_near_table(pool_sessions: Sequence[HistorySession]) -> list[list[float]]:
+    pool_by_k: list[list[float]] = [[] for _ in range(KMAX + 1)]
+    for s in pool_sessions:
+        for sk, y in _session_kys(s):
+            pool_by_k[min(sk, KMAX)].append(y)
+    near: list[list[float]] = [[] for _ in range(KMAX + 1)]
+    for k in range(1, KMAX + 1):
+        row: list[float] = []
+        for b in range(max(1, k - K_WINDOW), min(KMAX, k + K_WINDOW) + 1):
+            row.extend(pool_by_k[b])
+        near[k] = row
+    return near
+
+
+def _replay(
+    cell_sessions: Sequence[HistorySession],
+    pool_sessions: Sequence[HistorySession],
+) -> _ReplayMeasurement:
+    """One-pass walk-forward replay measuring all three coverage figures.
+
+    Fit strictly on the past, score strictly on the future; the tail figure
+    restricts SCORING to the most recent ``RECENT_WINDOW`` sessions while
+    still fitting on all prior history — the drift instrument.
+    """
+    pool_near = _pool_near_table(pool_sessions)
+    first_tail = max(0, len(cell_sessions) - RECENT_WINDOW)
+    counters = {"50": [0, 0], "90": [0, 0], "tail": [0, 0]}
+    for i in range(max(MIN_CELL_SESSIONS // 2, 6), len(cell_sessions), WF_BLOCK):
+        step = _StepBands(cell_sessions[:i], pool_near)
+        for j, s in enumerate(cell_sessions[i : i + WF_BLOCK], start=i):
+            total = s.total
+            spent = 0.0
+            for k, cost in enumerate(s.turn_costs, start=1):
+                spent += cost
+                if k >= s.turns or k > KMAX or spent <= 0:
+                    continue
+                b50 = step.band(k, TARGET_50)
+                if b50 is not None:
+                    counters["50"][1] += 1
+                    if spent * math.exp(b50.lo_y) <= total <= spent * math.exp(b50.hi_y):
+                        counters["50"][0] += 1
+                    if j >= first_tail:
+                        counters["tail"][1] += 1
+                        if spent * math.exp(b50.lo_y) <= total <= spent * math.exp(b50.hi_y):
+                            counters["tail"][0] += 1
+                b90 = step.band(k, TARGET_90, one_sided=True)
+                if b90 is not None:
+                    counters["90"][1] += 1
+                    if total <= spent * math.exp(b90.hi_y):
+                        counters["90"][0] += 1
+
+    def pct(name: str) -> tuple[float | None, int]:
+        inside, scored = counters[name]
+        return (None, 0) if scored == 0 else (100.0 * inside / scored, scored)
+
+    c50, p50 = pct("50")
+    c90, p90 = pct("90")
+    ct, pt = pct("tail")
+    return _ReplayMeasurement(c50, p50, c90, p90, ct, pt)
+
+
 def walk_forward_coverage(
     cell_sessions: Sequence[HistorySession],
     pool_sessions: Sequence[HistorySession],
@@ -344,41 +531,13 @@ def walk_forward_coverage(
     one_sided: bool = False,
     score_tail: int | None = None,
 ) -> tuple[float | None, int]:
-    """Measured coverage of this exact procedure, fit on past / scored on future.
-
-    Returns (coverage percent, scored points). Chronological blocks: for each
-    step the band is built from sessions strictly before the block and scored
-    on the block's turn samples. ``score_tail`` restricts SCORING to the most
-    recent N sessions while still fitting on all prior history — that is the
-    drift instrument: a full-history fit that no longer covers recent reality
-    is drifting, however self-consistent the recent window looks on its own.
-    """
-    inside = 0
-    scored = 0
-    first_scored = 0 if score_tail is None else max(0, len(cell_sessions) - score_tail)
-    for i in range(max(MIN_CELL_SESSIONS // 2, 6), len(cell_sessions), WF_BLOCK):
-        history = cell_sessions[:i]
-        block = [
-            s for j, s in enumerate(cell_sessions[i : i + WF_BLOCK], start=i) if j >= first_scored
-        ]
-        for s in block:
-            total = s.total
-            spent = 0.0
-            for k, cost in enumerate(s.turn_costs, start=1):
-                spent += cost
-                if k >= s.turns or k > KMAX or spent <= 0:
-                    continue
-                band = _band_for(history, pool_sessions, k, target, one_sided=one_sided)
-                if band is None:
-                    continue
-                lo_t = spent * math.exp(band.lo_y)
-                hi_t = spent * math.exp(band.hi_y)
-                scored += 1
-                if (one_sided and total <= hi_t) or (not one_sided and lo_t <= total <= hi_t):
-                    inside += 1
-    if scored == 0:
-        return None, 0
-    return 100.0 * inside / scored, scored
+    """Measured coverage of the deployed procedure (see :func:`_replay`)."""
+    measurement = _replay(cell_sessions, pool_sessions)
+    if score_tail is not None:
+        return measurement.cov50_tail, measurement.pts50_tail
+    if one_sided:
+        return measurement.cov90, measurement.pts90
+    return measurement.cov50, measurement.pts50
 
 
 def cell_readiness(
@@ -389,24 +548,21 @@ def cell_readiness(
     n = len(cell_sessions)
     if n < MIN_CELL_SESSIONS:
         return CellReadiness(n, 0, None, None, DriftState.UNKNOWN)
-    cov50, pts50 = walk_forward_coverage(cell_sessions, pool_sessions, TARGET_50)
-    cov90, _pts90 = walk_forward_coverage(cell_sessions, pool_sessions, TARGET_90, one_sided=True)
+    m = _replay(cell_sessions, pool_sessions)
+    cov50, pts50 = m.cov50, m.pts50
     drift = DriftState.UNKNOWN
     if cov50 is not None and pts50 >= MIN_SCORED_POINTS:
         if n > RECENT_WINDOW:
             # Score the full-history fit on the recent tail only: if the
             # accumulated model no longer covers recent sessions, forget.
-            cov_recent, pts_recent = walk_forward_coverage(
-                cell_sessions, pool_sessions, TARGET_50, score_tail=RECENT_WINDOW
-            )
-            if cov_recent is not None and pts_recent >= MIN_SCORED_POINTS // 2:
-                shortfall = (TARGET_50 * 100.0) - cov_recent
+            if m.cov50_tail is not None and m.pts50_tail >= MIN_SCORED_POINTS // 2:
+                shortfall = (TARGET_50 * 100.0) - m.cov50_tail
                 drift = DriftState.DRIFTING if shortfall > DRIFT_TOLERANCE else DriftState.STABLE
             else:
                 drift = DriftState.STABLE
         else:
             drift = DriftState.STABLE
-    return CellReadiness(n, pts50, cov50, cov90, drift)
+    return CellReadiness(n, pts50, cov50, m.cov90, drift)
 
 
 def _expected_turns(
@@ -430,6 +586,37 @@ def _source(readiness: CellReadiness) -> str:
     return f"walk-forward split-conformal empirical quantiles ({readiness.sessions} sessions)"
 
 
+def _participants_signature(sessions):
+    return tuple(
+        (s.model, s.effort, s.ended_at.isoformat(), s.turns, round(s.total, 3)) for s in sessions
+    )
+
+
+def _cached_readiness(monitor_db_path, key, cell, pool) -> CellReadiness:
+    """Memoized trust assessment — the replay is the expensive step.
+
+    The key pins the exact participant sets, so a hit can only return what
+    a fresh replay over the same inputs would compute; results stay a pure
+    function of (ledger, now). Process-local and bounded.
+    """
+    cache_key = (
+        monitor_db_path,
+        key,
+        _participants_signature(cell),
+        _participants_signature(pool),
+    )
+    with _CACHE_LOCK:
+        hit = _READINESS_CACHE.get(cache_key)
+    if hit is not None:
+        return hit
+    readiness = cell_readiness(cell, pool)
+    with _CACHE_LOCK:
+        if len(_READINESS_CACHE) >= _READINESS_CACHE_MAX and cache_key not in _READINESS_CACHE:
+            _READINESS_CACHE.pop(next(iter(_READINESS_CACHE)))
+        _READINESS_CACHE[cache_key] = readiness
+    return readiness
+
+
 def build_calibrated_forecast(
     *,
     monitor_db_path: str | None,
@@ -450,7 +637,6 @@ def build_calibrated_forecast(
     ranges remain intact. Any internal failure degrades to a learning /
     unavailable status — never an exception, never a fabricated number.
     """
-    reason_unavailable = ""
     if spent_tokens <= 0 or turn_index < 1:
         return _status_forecast(ForecastStatus.UNAVAILABLE, "no completed spend to forecast from")
     history = read_history(monitor_db_path, now=now, exclude_session=session_id)
@@ -458,7 +644,7 @@ def build_calibrated_forecast(
     cell = [s for s in history if _cell_key(s.model, s.effort) == key]
     pool = [s for s in history if _cell_key(s.model, s.effort) != key]
 
-    readiness = cell_readiness(cell, pool)
+    readiness = _cached_readiness(monitor_db_path, key, cell, pool)
     if readiness.sessions < MIN_CELL_SESSIONS or readiness.scored_points < MIN_SCORED_POINTS:
         return _status_forecast(
             ForecastStatus.LEARNING,
@@ -541,7 +727,6 @@ def build_calibrated_forecast(
         expected_turns=expected,
         coverage=coverage,
         predicted_block_probability=block_prob,
-        reason=reason_unavailable,
     )
 
 
