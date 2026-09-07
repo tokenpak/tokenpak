@@ -58,7 +58,7 @@ tokenpak serve \
 |---------|-------------|
 | `safe` | Conservative operation; no legacy compact-helper invocation |
 | `balanced` | Default routing and telemetry profile |
-| `aggressive` | Enables eligible explicit packing features used by the reference receipt path |
+| `aggressive` | Enables opt-in legacy and explicit packing features; role-bearing turns stay preserved |
 | `agentic` | Longer-context agent workflows |
 | `transparent` | Compatibility passthrough; no body-reduction receipt expected |
 
@@ -200,19 +200,21 @@ The footer is off by default. Enable it for one proxy process with
 receipt to the proxy terminal's standard error:
 
 ```
-⚡ TokenPak: -1,384 tokens (33%) | $0.004 saved
+⚡ TokenPak: 0 tokens saved
 ```
 
-It does not alter the provider response. Token savings are measured from that
-request's before/after counts; the dollar value is estimated from the local
-model-pricing table. To make the setting explicit without a CLI flag, use:
+It does not alter the provider response. In the unmodified reference setup, the
+built-in Pak builder preserves every system, user, and assistant conversation
+turn, so the measured raw and sent counts are equal. To make the setting
+explicit without a CLI flag, use:
 
 ```bash
 TOKENPAK_STATS_FOOTER=1 tokenpak serve --profile aggressive
 ```
 
-The offline `tokenpak demo` fixture does not qualify as a first-request receipt.
-Short/protected inputs and byte-preserved routes may correctly report zero.
+Use `tokenpak compress` or companion `prune_context` for explicit positive
+compression measurements. The offline `tokenpak demo` remains a fixture rather
+than a provider-request receipt.
 
 ---
 

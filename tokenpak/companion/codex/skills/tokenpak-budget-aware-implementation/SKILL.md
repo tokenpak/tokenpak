@@ -1,31 +1,36 @@
 ---
 name: tokenpak-budget-aware-implementation
-description: Execute a coding task with active budget awareness. Checks remaining budget before starting, estimates cost of planned operations, prioritizes high-value work if budget is tight, and warns before expensive steps. Use for any non-trivial implementation task.
+description: Execute a coding task with budget awareness when cost is material, the user asks about it, or a TokenPak guard reports a constraint. Routine companion accounting calls are unnecessary.
 ---
 
 # TokenPak Budget-Aware Implementation
 
-Work on a coding task while actively managing token budget.
+Work on a coding task while respecting TokenPak's automatic accounting and
+spend guard. The native harness remains responsible for the coding workflow.
 
-## Before starting
+## When to inspect budget
 
-1. Call `check_budget` to see remaining budget.
-2. Call `estimate_tokens` on any large files you plan to read.
-3. If budget remaining < 30% of daily cap, tell the user and ask which parts are highest priority.
+- Call `check_budget` when the user asks about spend, a planned provider action
+  depends on remaining budget, or the automatic guard reports a constraint.
+- Call `estimate_tokens` only for a genuine go/no-go choice about including
+  unusually large content.
+- If a guard blocks the request, surface the block and preserve its reason. Do
+  not shorten protected instructions or work around the guard.
 
 ## During work
 
-- Before reading files > 500 lines, call `estimate_tokens` first.
-- After large tool outputs (test results, build logs), call `prune_context` to compress before reasoning.
-- Every 3-4 tool calls, mentally check: am I still on the critical path or drifting?
+- Keep work on the critical path and use the harness's native context handling.
+- `prune_context` is available for verbose disposable output when retaining it
+  would materially obstruct the task. Preserve exact errors and evidence that
+  affect a decision.
 
 ## If budget gets tight
 
-- Summarize what you've done so far via `journal_write`.
-- Tell the user what remains and estimated cost.
-- Suggest: finish the critical path now, defer nice-to-haves.
+- Prioritize the smallest complete, safe result.
+- Tell the user which work is blocked or deferred and why.
 
-## After completing
+## Durable records
 
-- Call `journal_write` with: what was done, what decisions were made, what's left.
-- Call `check_budget` and report final spend.
+Use `journal_write` only when a durable decision, changed constraint, verified
+milestone, material blocker, or handoff needs to survive the session. Routine
+reads, edits, tests, and completion messages do not require a journal entry.

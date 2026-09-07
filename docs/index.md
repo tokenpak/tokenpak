@@ -55,7 +55,7 @@ Then point your LLM client at `http://localhost:8766` (OpenAI-compatible clients
 
 - :material-fast-forward: **[Getting Started](getting-started.md)**
 
- Install TokenPak and run your first compressed request in 5 minutes.
+ Install TokenPak and record your first measured request in 5 minutes.
 
 - :material-console: **[CLI Reference](cli-reference.md)**
 

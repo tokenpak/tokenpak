@@ -240,6 +240,131 @@ def test_write_settings_without_hooks(tmp_path):
     assert "hooks" not in settings
 
 
+def test_write_settings_preserves_custom_prompt_hooks_and_installs_tokenpak_once(
+    monkeypatch, tmp_path
+):
+    home = tmp_path / "home"
+    settings_dir = home / ".claude"
+    settings_dir.mkdir(parents=True)
+    custom_allow = {"type": "command", "command": "bash /opt/custom/allow.sh"}
+    custom_deny = {"type": "command", "command": "bash /opt/custom/deny.sh"}
+    settings_dir.joinpath("settings.json").write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "UserPromptSubmit": [
+                        {"matcher": "", "hooks": [custom_allow]},
+                        {"matcher": "protected/.*", "hooks": [custom_deny]},
+                    ]
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    cfg = CompanionConfig(journal_dir=tmp_path / "journal", hooks_enabled=True)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    first = json.loads(Path(launcher._write_settings(cfg, run_dir=run_dir)).read_text())
+    # Feed the generated overlay back as the supported repeat-install input.
+    settings_dir.joinpath("settings.json").write_text(json.dumps(first))
+    second = json.loads(Path(launcher._write_settings(cfg, run_dir=run_dir)).read_text())
+
+    entries = second["hooks"]["UserPromptSubmit"]
+    commands = [hook["command"] for entry in entries for hook in entry.get("hooks", [])]
+    assert commands[:2] == [custom_allow["command"], custom_deny["command"]]
+    assert sum("tokenpak/companion/hooks/pre_send" in command for command in commands) == 1
+    assert entries[1]["matcher"] == "protected/.*"
+
+
+def test_disabling_tokenpak_hooks_does_not_remove_custom_denial(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    settings_dir = home / ".claude"
+    settings_dir.mkdir(parents=True)
+    deny = {
+        "matcher": "protected/.*",
+        "hooks": [{"type": "command", "command": "bash /opt/custom/deny.sh"}],
+    }
+    settings_dir.joinpath("settings.json").write_text(
+        json.dumps({"hooks": {"UserPromptSubmit": [deny]}})
+    )
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    cfg = CompanionConfig(journal_dir=tmp_path / "journal", hooks_enabled=False)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    settings = json.loads(Path(launcher._write_settings(cfg, run_dir=run_dir)).read_text())
+
+    assert settings["hooks"]["UserPromptSubmit"] == [deny]
+
+
+def test_scoped_same_command_cannot_suppress_unconditional_guard():
+    command = "bash /package/tokenpak/companion/hooks/pre_send.sh"
+    scoped = {
+        "matcher": "docs/.*",
+        "hooks": [{"type": "command", "command": command}],
+    }
+    settings = {"hooks": {"UserPromptSubmit": [scoped]}}
+
+    launcher._merge_command_hook(settings, "UserPromptSubmit", command, matcher="")
+    launcher._merge_command_hook(settings, "UserPromptSubmit", command, matcher="")
+
+    entries = settings["hooks"]["UserPromptSubmit"]
+    assert entries[0] == scoped
+    unconditional = [entry for entry in entries if entry.get("matcher", "") == ""]
+    assert len(unconditional) == 1
+    assert unconditional[0]["hooks"] == [{"type": "command", "command": command}]
+
+
+def test_composed_custom_denial_command_still_emits_its_payload(monkeypatch, tmp_path):
+    """Exercise the preserved command, without asserting native merge semantics."""
+    import subprocess
+
+    home = tmp_path / "home"
+    settings_dir = home / ".claude"
+    settings_dir.mkdir(parents=True)
+    deny_script = tmp_path / "deny.sh"
+    deny_script.write_text(
+        '#!/bin/sh\nprintf \'%s\\n\' \'{"decision":"block","reason":"custom policy denial"}\'\n'
+    )
+    deny_command = f"bash {shlex.quote(str(deny_script))}"
+    settings_dir.joinpath("settings.json").write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "UserPromptSubmit": [
+                        {
+                            "matcher": "protected/.*",
+                            "hooks": [{"type": "command", "command": deny_command}],
+                        }
+                    ]
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    cfg = CompanionConfig(journal_dir=tmp_path / "journal", hooks_enabled=True)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    settings = json.loads(Path(launcher._write_settings(cfg, run_dir=run_dir)).read_text())
+
+    preserved = settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+    result = subprocess.run(
+        shlex.split(preserved),
+        input="{}",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    decision = json.loads(result.stdout)
+
+    assert result.returncode == 0
+    assert decision == {
+        "decision": "block",
+        "reason": "custom policy denial",
+    }
+
+
 def test_write_settings_has_mcp_permission(tmp_path):
     """settings.json always includes permission allow for MCP tools."""
     cfg = CompanionConfig(journal_dir=tmp_path / "journal")
@@ -317,9 +442,11 @@ def test_main_generates_all_config_files(tmp_path):
                 exec_cmd = mock_exec.call_args[0][0]
                 assert exec_cmd == "claude"
 
-    assert (run_dir / "mcp.json").exists()
-    assert (run_dir / "settings.json").exists()
-    assert (run_dir / "companion-prompt.md").exists()
+    launch_dirs = list(run_dir.glob("launch-*"))
+    assert len(launch_dirs) == 1
+    assert (launch_dirs[0] / "mcp.json").exists()
+    assert (launch_dirs[0] / "settings.json").exists()
+    assert (launch_dirs[0] / "companion-prompt.md").exists()
 
 
 def test_main_passes_through_extra_args(tmp_path):

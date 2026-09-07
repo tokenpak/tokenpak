@@ -107,10 +107,10 @@ tokenpak status # verify proxy is reachable
 
 ### First measured receipt check
 
-Before treating a local deployment as value-ready, run the supported
-[three-command first-receipt path](first-receipt.md). It uses an existing Codex
-OAuth login and the client's selected/default model. Provider API keys and
-explicit model overrides are optional alternatives, not deployment
+Before treating a local deployment as routing-and-accounting ready, run the
+supported [three-command first-receipt path](first-receipt.md). It uses an
+existing Codex OAuth login and the client's selected/default model. Provider
+API keys and explicit model overrides are optional alternatives, not deployment
 requirements. Real requests may count against a subscription or incur provider
 charges.
 
@@ -120,12 +120,13 @@ tokenpak serve --profile aggressive --stats-footer  # terminal 1; leave running
 tokenpak codex  # terminal 2; make a substantive request, then continue the topic
 ```
 
-The proxy prints the measured token receipt to its own standard error; it does
-not inject the receipt into the provider response. The displayed dollar value
-is estimated. A new conversation may begin with an ineligible request; the
-first later eligible request is the proof. Offline demo output,
-short/protected inputs, and byte-preserved routes do not establish a positive
-compression receipt.
+The proxy prints `⚡ TokenPak: 0 tokens saved` to its own standard error; it does
+not inject the receipt into the provider response. The built-in Pak builder
+preserves system, user, and assistant conversation content. With no other
+request transform configured, the measured raw and sent counts are equal. This
+receipt proves the request was routed and recorded without claiming compression
+savings. Use `tokenpak compress` or companion `prune_context` for explicit
+positive compression measurements; offline demo output remains a fixture.
 
 ---
 

@@ -8,8 +8,9 @@ What it does:
     3. Generates config files: MCP config, settings overlay, system prompt
     4. Execs into ``claude`` with the right flags
 
-Config files are written to the fixed location ~/.tokenpak/companion/run/
-(not tempfile) so they persist across relaunches and are inspectable.
+Generated config files are written to a unique directory under
+~/.tokenpak/companion/run/ so concurrent launches cannot replace each other's
+settings, prompt, or session identity. They remain inspectable after launch.
 
 What the user sees:
     $ tokenpak claude
@@ -33,6 +34,7 @@ import re
 import shlex
 import shutil
 import sys
+import tempfile
 import unicodedata
 from pathlib import Path
 from typing import Any, TextIO
@@ -159,13 +161,17 @@ A TokenPak companion is active in this session. You have these MCP tools:
 - **journal_write** — Save an important decision, milestone, or note to the TokenPak journal for future sessions.
 - **session_info** — Get TokenPak companion status and configuration.
 
-For prior work, retrieve before answering. Prefer available native memory;
-otherwise batch journal/Paks. Persist each fact once.
+Start from the conversation and current source. Retrieve only a fact the task
+needs but current context lacks. Use native memory when suitable, an identified
+Handoff Pak for cross-session state, or the journal for targeted follow-up.
+Persist each fact once. Write a semantic journal record for a durable decision,
+changed constraint, verified milestone, material blocker, or handoff — routine
+commands and repeated stop summaries need no model-written note.
 
-The TokenPak companion estimates cost, enforces the budget, and journals each
-prompt automatically via hooks — do not call tools for routine accounting;
-every tool call re-sends the conversation. Compressed context it injects is
-wrapped in `[PAK ...]` envelopes.
+The TokenPak companion estimates cost, enforces the budget, and records request
+cost metadata automatically via hooks — do not call tools for routine
+accounting; every tool call re-sends the conversation. Compressed context it
+injects is wrapped in `[PAK ...]` envelopes.
 """
 
 
@@ -176,14 +182,16 @@ def main(args: list[str] | None = None) -> int:
     config = CompanionConfig.from_env()
     config.profile_overrides()
 
-    # Ensure journal dir and fixed run dir exist
+    # Keep durable run state at the existing path, but give each Claude launch
+    # its own generated-file namespace. These files must outlive this process
+    # because exec replaces it and the child reads them throughout the session.
     config.journal_dir.mkdir(parents=True, exist_ok=True)
     config.run_dir.mkdir(parents=True, exist_ok=True)
+    launch_dir = Path(tempfile.mkdtemp(prefix="launch-", dir=config.run_dir))
 
-    # Generate config files at fixed location (AC5: ~/.tokenpak/companion/run/)
-    mcp_config_path = _write_mcp_config(config)
-    settings_path = _write_settings(config)
-    prompt_path = _write_system_prompt(config)
+    mcp_config_path = _write_mcp_config(config, run_dir=launch_dir)
+    settings_path = _write_settings(config, run_dir=launch_dir)
+    prompt_path = _write_system_prompt(config, run_dir=launch_dir)
 
     _TEAL = Color.TEAL
     _DIM = Color.DIM
@@ -257,7 +265,7 @@ def main(args: list[str] | None = None) -> int:
     # label is handed to the SessionStart hook so it restores this exact
     # label after /clear instead of keeping a copy of its own.
     args, session_label = _resolve_session_name(args)
-    _write_session_title(config, session_label)
+    _write_session_title(config, session_label, run_dir=launch_dir)
 
     # Build claude command
     claude_args = ["claude"]
@@ -408,8 +416,13 @@ def _prefix_session_name(args: list[str]) -> list[str]:
     return _resolve_session_name(args)[0]
 
 
-def _write_mcp_config(config: CompanionConfig) -> str:
-    """Write the MCP server configuration to fixed run_dir."""
+def _generated_dir(config: CompanionConfig, run_dir: Path | None) -> Path:
+    """Resolve the generated-file directory for one launch."""
+    return run_dir if run_dir is not None else config.run_dir
+
+
+def _write_mcp_config(config: CompanionConfig, *, run_dir: Path | None = None) -> str:
+    """Write the MCP server configuration for one launch."""
     python_prefix = python_spawn_prefix()
     mcp_data = {
         "mcpServers": {
@@ -423,12 +436,17 @@ def _write_mcp_config(config: CompanionConfig) -> str:
             }
         }
     }
-    path = config.run_dir / "mcp.json"
+    path = _generated_dir(config, run_dir) / "mcp.json"
     path.write_text(json.dumps(mcp_data, indent=2))
     return str(path)
 
 
-def _write_session_title(config: CompanionConfig, label: str | None) -> str:
+def _write_session_title(
+    config: CompanionConfig,
+    label: str | None,
+    *,
+    run_dir: Path | None = None,
+) -> str:
     """Write the ``SessionStart`` payload the label hook prints.
 
     Generating this from the Python constant is what keeps the shell hook
@@ -436,7 +454,7 @@ def _write_session_title(config: CompanionConfig, label: str | None) -> str:
     fits the terminal, the file is removed so the hook emits nothing and the
     host keeps its own default.
     """
-    path = config.run_dir / "session_title.json"
+    path = _generated_dir(config, run_dir) / "session_title.json"
     if label is None:
         try:
             path.unlink()
@@ -455,7 +473,61 @@ def _write_session_title(config: CompanionConfig, label: str | None) -> str:
     return str(path)
 
 
-def _write_settings(config: CompanionConfig) -> str:
+def _merge_command_hook(
+    settings: dict[str, Any],
+    event: str,
+    command: str,
+    *,
+    matcher: str = "",
+) -> None:
+    """Compose one command hook without replacing user/native hooks.
+
+    Existing entries retain their order. Duplicate copies of this exact
+    TokenPak command collapse to the first occurrence; unrelated commands and
+    matchers are never inferred to be ours from their name alone.
+    """
+    hooks = settings.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        raise ValueError("Claude settings 'hooks' must be an object")
+    entries = hooks.setdefault(event, [])
+    if not isinstance(entries, list):
+        raise ValueError(f"Claude settings hook event {event!r} must be a list")
+
+    found = False
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("matcher", "") != matcher:
+            # The same command under a scoped matcher has different behavior.
+            # Preserve it and still install the requested unconditional guard.
+            continue
+        commands = entry.get("hooks")
+        if not isinstance(commands, list):
+            continue
+        deduplicated: list[Any] = []
+        for hook in commands:
+            is_ours = (
+                isinstance(hook, dict)
+                and hook.get("type") == "command"
+                and hook.get("command") == command
+            )
+            if is_ours:
+                if found:
+                    continue
+                found = True
+            deduplicated.append(hook)
+        commands[:] = deduplicated
+
+    if not found:
+        entries.append(
+            {
+                "matcher": matcher,
+                "hooks": [{"type": "command", "command": command}],
+            }
+        )
+
+
+def _write_settings(config: CompanionConfig, *, run_dir: Path | None = None) -> str:
     """Write the settings overlay with hook configuration and permissions.
 
     Claude Code's ``--settings <file>`` argument replaces the user-level
@@ -529,7 +601,8 @@ def _write_settings(config: CompanionConfig) -> str:
     # defensive pattern as pre_send.sh above). The payload path is passed
     # explicitly so the hook never has to re-derive the run dir.
     session_name_hook = hooks_dir / "session_start_name.sh"
-    session_title_path = config.run_dir / "session_title.json"
+    generated_dir = _generated_dir(config, run_dir)
+    session_title_path = generated_dir / "session_title.json"
     session_name_cmd = (
         f"bash {shlex.quote(str(session_name_hook))} {shlex.quote(str(session_title_path))}"
         if session_name_hook.is_file()
@@ -543,9 +616,6 @@ def _write_settings(config: CompanionConfig) -> str:
             settings = json.loads(user_settings_path.read_text())
         except Exception:
             settings = {}
-    if not config.hooks_enabled:
-        settings.pop("hooks", None)
-
     # Ensure permissions.allow includes the companion's MCP glob
     permissions = settings.setdefault("permissions", {})
     allow = permissions.setdefault("allow", [])
@@ -576,23 +646,11 @@ def _write_settings(config: CompanionConfig) -> str:
             if candidate_str not in add_dirs:
                 add_dirs.append(candidate_str)
 
-    # Install pre-send hook — companion-owned for this launch context.
-    # Replaces any existing UserPromptSubmit entry (companion hooks are
-    # authoritative here; user-level hooks would conflict with budget
-    # gating + journal write-through).
+    # Compose the TokenPak pre-send hook with native/custom hooks. A custom
+    # hook's block/deny decision remains in the event and TokenPak's budget
+    # guard is present exactly once on repeated generation.
     if config.hooks_enabled and hook_cmd is not None:
-        hooks = settings.setdefault("hooks", {})
-        hooks["UserPromptSubmit"] = [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": hook_cmd,
-                    }
-                ],
-            }
-        ]
+        _merge_command_hook(settings, "UserPromptSubmit", hook_cmd)
 
     # Install SessionStart hook — restores the branded top-HR label
     # after /clear. Only injected when the user has not configured
@@ -614,13 +672,13 @@ def _write_settings(config: CompanionConfig) -> str:
                 }
             ]
 
-    path = config.run_dir / "settings.json"
+    path = generated_dir / "settings.json"
     path.write_text(json.dumps(settings, indent=2))
     return str(path)
 
 
-def _write_system_prompt(config: CompanionConfig) -> str:
+def _write_system_prompt(config: CompanionConfig, *, run_dir: Path | None = None) -> str:
     """Write the prompt fragment, adding style guidance only for lean."""
-    path = config.run_dir / "companion-prompt.md"
+    path = _generated_dir(config, run_dir) / "companion-prompt.md"
     path.write_text(_SYSTEM_PROMPT + _style.directive(config.style))
     return str(path)

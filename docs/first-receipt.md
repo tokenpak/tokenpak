@@ -1,4 +1,4 @@
-# First Measured Savings Receipt
+# First Measured Request Receipt
 
 This is TokenPak's supported reference path from a clean install to a measured
 receipt from your own real request. Its reference target is three shell
@@ -28,8 +28,8 @@ client-specific alternative and is forwarded without being persisted.
    python -m pip install tokenpak
    ```
 
-2. In terminal 1, start one proxy session with an eligible compression profile
-   and the local per-request receipt enabled:
+2. In terminal 1, start one proxy session with the local per-request receipt
+   enabled:
 
    ```bash
    tokenpak serve --profile aggressive --stats-footer
@@ -46,7 +46,7 @@ client-specific alternative and is forwarded without being persisted.
    when its health check passes; otherwise it states that the client is using
    its configured upstream.
 
-## Produce the first eligible request
+## Produce the first measured request
 
 Inside that Codex session, ask for a substantive project review, for example:
 
@@ -62,31 +62,32 @@ Turn that assessment into a prioritized release checklist with owners and
 verification steps.
 ```
 
-The initial request may correctly save zero because a new conversation has no
-compressible history. A later request becomes eligible when it carries safe,
-historical narrative outside the protected hot window. TokenPak never
-compresses system/developer policy, protected instructions, or the newest two
-message items. The first eligible request prints a receipt shaped like:
+The proxy prints a receipt shaped like:
 
 ```text
-⚡ TokenPak: -1,234 tokens (31%) | $0.004 saved
+⚡ TokenPak: 0 tokens saved
 ```
 
-The token counts come from that request's before/after proxy measurements. The
-dollar value is an estimate based on TokenPak's model-pricing table. Values
-differ by client, model, and payload.
+That zero is the expected contract for this unmodified reference request. The
+built-in Pak builder preserves every system, user, and assistant conversation
+turn regardless of its age, length, or selected profile. With no other request
+transform configured, the ledger records equal raw and sent token counts, with
+zero actual and would-have-saved tokens.
 
-## Eligibility and alternatives
+## What this proves and where compression lives
 
+- This is a real request receipt proving local routing, upstream completion,
+  ledger persistence, and truthful zero-savings attribution.
+- `tokenpak compress <file>` is the supported explicit local compression path;
+  it reports before/after counts without sending the content to a provider.
+- Companion `prune_context` and `POST /tpk/v1/compress` explicitly reduce
+  caller-selected verbose text and report their measured token reduction. They
+  are separate from provider-request savings receipts.
 - `tokenpak demo` is an offline fixture, not proof from your request.
-- Short, already concise, code-heavy, or protected prompts may correctly save
-  zero tokens. Continue normal work; the first eligible request is the proof.
-- Byte-preserved routes are intentionally not rewritten and may report zero
-  TokenPak compression savings.
 - `--stats-footer` is session-scoped. It prints in the proxy terminal and does
   not modify the provider response.
-- `safe` and `transparent` profiles intentionally do not provide positive
-  compression-savings proof.
+- A more aggressive profile does not override role-bearing conversation
+  preservation.
 - Already-authenticated Codex OAuth is the zero-key reference route. OpenAI,
   Anthropic, and other SDK/API-key routes remain supported alternatives when a
   user chooses them; their keys and explicit model arguments are not TokenPak

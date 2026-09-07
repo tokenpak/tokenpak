@@ -38,6 +38,23 @@ This project follows [Semantic Versioning](https://semver.org/).
   explicit hashed refresh; old-date lookups retain that interpretation after a
   refresh. Stored cost rows are never rewritten by refresh, and the existing
   reprocess pricing-version override remains ineffective in this release.
+- The optional Pak builder now preserves every role-bearing conversation turn
+  verbatim, including user and system instructions, assistant decisions, and
+  tool call history. Only role-less content positively classified as narrative
+  remains eligible for its legacy shortening transform. Unmodified reference
+  Messages and Responses requests now have matching zero-savings receipt tests
+  and documentation; positive reduction proof stays on explicit compression
+  surfaces such as companion `prune_context`.
+- Companion guidance now starts from the current conversation and live source,
+  retrieves prior context only when a needed fact is missing, and records
+  semantic journal milestones only when continuity requires them. Managed
+  skill upgrades remain automatic, while customized or unknown same-name
+  skill directories are preserved with a warning.
+- Concurrent Claude Code launches now use separate generated-file directories,
+  and the launcher composes its prompt hook with existing custom hooks instead
+  of replacing them. Semantic journal entries can carry milestone or handoff
+  types and source references, with identical records stored once and
+  recoverable through `journal_read`.
 - The `tokenpak.core.runtime.proxy` compatibility path is now write-through,
   not just read-through: assigning or deleting one of its 13 legacy names
   (e.g. `tokenpak.core.runtime.proxy.MONITOR = x`) now forwards to

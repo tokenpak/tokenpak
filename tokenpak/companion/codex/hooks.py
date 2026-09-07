@@ -10,7 +10,7 @@ deferred to L5 — see L1 audit delta hooks #10):
 - **UserPromptSubmit** → token estimation, budget gating, journal seed
 - **PreToolUse** → per-tool budget gate + trace stamp
 - **PostToolUse** → token-out journal
-- **Stop** → session closeout, journal summary, cost recording
+- **Stop** → session closeout and accounting metadata
 
 Hooks must be enabled via the ``hooks`` feature flag.
 
