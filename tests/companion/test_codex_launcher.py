@@ -17,6 +17,7 @@ import builtins
 import errno
 import json
 import os
+import shutil
 import sqlite3
 import sys
 import threading
@@ -242,6 +243,33 @@ def test_shared_install_preserves_existing_config_and_skips_skill_refs(monkeypat
 
     assert launcher.main(["--install-only"]) == 0
     assert config.read_bytes() == original
+
+
+def test_shared_install_reconciles_released_legacy_skills(monkeypatch, tmp_path):
+    from tokenpak.companion.codex import skills_installer
+
+    real_install = skills_installer.install_skills
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("TOKENPAK_CODEX_SESSION_MODE", "shared")
+    monkeypatch.setattr(skills_installer, "install_skills", real_install)
+    name = "tokenpak-large-refactor-mode"
+    bundled = tmp_path / "bundled"
+    shutil.copytree(skills_installer._BUNDLED_SKILLS / name, bundled / name)
+    monkeypatch.setattr(skills_installer, "_BUNDLED_SKILLS", bundled)
+    legacy = Path.home() / ".codex" / "skills" / name
+    legacy.mkdir(parents=True)
+    released = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "codex"
+        / "tokenpak-large-refactor-mode-v1.5.1.md"
+    )
+    shutil.copyfile(released, legacy / "SKILL.md")
+
+    assert launcher.main(["--install-only"]) == 0
+    canonical = Path.home() / ".agents" / "skills" / name
+    assert (canonical / "SKILL.md").read_bytes() == (bundled / name / "SKILL.md").read_bytes()
+    assert not legacy.exists()
 
 
 def test_main_supervises_when_preflight_clear(monkeypatch, tmp_path, capsys):

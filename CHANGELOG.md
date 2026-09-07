@@ -6,6 +6,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Codex launcher upgrades now reconcile unchanged legacy skill copies after
+  installing the canonical copies. Customized skills and installs to separate
+  target directories remain preserved.
+
 ## [1.25.1] — 2026-09-07
 
 Version 1.25.0 was tagged but never published: its release workflow found test
