@@ -1,8 +1,30 @@
 {
   "_meta": {
-    "version": "v4",
+    "version": "v5",
     "description": "Unified model registry seed data — costs are USD per 1,000,000 tokens",
-    "updated": "2026-08-17",
+    "updated": "2026-09-04",
+    "sources": [
+      {
+        "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "fetched_at": "2026-09-04T15:51:18Z"
+      },
+      {
+        "url": "https://developers.openai.com/api/docs/pricing",
+        "fetched_at": "2026-09-04T15:51:18Z"
+      },
+      {
+        "url": "https://developers.openai.com/api/docs/pricing",
+        "fetched_at": "2026-09-05T20:31:58Z"
+      },
+      {
+        "url": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+        "fetched_at": "2026-09-05T20:31:58Z"
+      },
+      {
+        "url": "https://developers.openai.com/api/docs/guides/prompt-caching",
+        "fetched_at": "2026-09-05T20:31:58Z"
+      }
+    ],
     "notes": [
       "This is the single source of truth for model metadata across tokenpak",
       "Family rules in _families.py handle unknown models automatically",
@@ -10,7 +32,11 @@
       "cache_read/cache_write: null means provider does not support prompt caching",
       "context_windows: max input-context tokens (provider Models API max_input_tokens); omit a model rather than guessing — consumers fall back to a static threshold for unknowns",
       "cache_write is the standard (short-lived) cache-write multiplier only; providers offering a longer-lived cache-write tier at a different multiplier are not represented by this single field",
-      "2026-08-17 refresh: current-generation Anthropic rows (sonnet-5, opus-5, fable-5) and the haiku-4-5 correction were verified against the official Anthropic pricing/model docs on that date; see the refresh PR body for the exact source URLs"
+      "2026-08-17 refresh: current-generation Anthropic rows (sonnet-5, opus-5, fable-5) and the haiku-4-5 correction were verified against the official Anthropic pricing/model docs on that date; see the refresh PR body for the exact source URLs",
+      "2026-09-04 refresh: current Anthropic and OpenAI rows were verified against the official pricing pages recorded in _meta.sources",
+      "OpenAI entries use standard rates below the provider's long-context threshold; long-context price tiers are not represented by this schema",
+      "The gpt-5.6 alias resolves to gpt-5.6-sol per the official model page",
+      "2026-09-05 provenance check: the official pricing table and prompt-caching guide confirm GPT-5.6 cache writes cost 1.25x uncached input; the model page confirms the gpt-5.6 alias. These sources supplement the earlier pricing fetch without changing catalog rates or refreshing unrelated rows."
     ]
   },
   "provider_cache_multipliers": {
@@ -25,7 +51,10 @@
     "sonnet": {"url": "https://api.anthropic.com/v1/messages", "model": "claude-sonnet-4-6"}
   },
   "context_windows": {
+    "claude-fable-5-1": 1000000,
     "claude-fable-5": 1000000,
+    "claude-mythos-5-1": 1000000,
+    "claude-mythos-5": 1000000,
     "claude-opus-5": 1000000,
     "claude-opus-4-8": 1000000,
     "claude-opus-4-7": 1000000,
@@ -68,7 +97,37 @@
     "gemini-1.5-flash": 1000000
   },
   "models": {
+    "claude-fable-5-1": {
+      "provider": "anthropic",
+      "tier": 4,
+      "input": 10.00,
+      "output": 50.00,
+      "cache_read": 0.25,
+      "cache_write": 12.50,
+      "translations": {},
+      "aliases": []
+    },
     "claude-fable-5": {
+      "provider": "anthropic",
+      "tier": 4,
+      "input": 10.00,
+      "output": 50.00,
+      "cache_read": 1.00,
+      "cache_write": 12.50,
+      "translations": {},
+      "aliases": []
+    },
+    "claude-mythos-5-1": {
+      "provider": "anthropic",
+      "tier": 4,
+      "input": 10.00,
+      "output": 50.00,
+      "cache_read": 0.25,
+      "cache_write": 12.50,
+      "translations": {},
+      "aliases": []
+    },
+    "claude-mythos-5": {
       "provider": "anthropic",
       "tier": 4,
       "input": 10.00,
@@ -98,13 +157,39 @@
       "translations": {},
       "aliases": []
     },
+    "claude-opus-4-8": {
+      "provider": "anthropic",
+      "tier": 4,
+      "input": 5.00,
+      "output": 25.00,
+      "cache_read": 0.50,
+      "cache_write": 6.25,
+      "translations": {
+        "bedrock": "anthropic.claude-opus-4-8-v1:0",
+        "vertex": "claude-opus-4-8@latest"
+      },
+      "aliases": []
+    },
+    "claude-opus-4-7": {
+      "provider": "anthropic",
+      "tier": 4,
+      "input": 5.00,
+      "output": 25.00,
+      "cache_read": 0.50,
+      "cache_write": 6.25,
+      "translations": {
+        "bedrock": "anthropic.claude-opus-4-7-v1:0",
+        "vertex": "claude-opus-4-7@latest"
+      },
+      "aliases": []
+    },
     "claude-opus-4-6": {
       "provider": "anthropic",
       "tier": 4,
-      "input": 15.00,
-      "output": 75.00,
-      "cache_read": 1.50,
-      "cache_write": 18.75,
+      "input": 5.00,
+      "output": 25.00,
+      "cache_read": 0.50,
+      "cache_write": 6.25,
       "translations": {
         "bedrock": "anthropic.claude-opus-4-6-20260101-v1:0",
         "vertex": "claude-opus-4-6@20260101"
@@ -114,10 +199,10 @@
     "claude-opus-4-5": {
       "provider": "anthropic",
       "tier": 3,
-      "input": 15.00,
-      "output": 75.00,
-      "cache_read": 1.50,
-      "cache_write": 18.75,
+      "input": 5.00,
+      "output": 25.00,
+      "cache_read": 0.50,
+      "cache_write": 6.25,
       "translations": {},
       "aliases": []
     },
@@ -342,12 +427,122 @@
       "translations": {},
       "aliases": []
     },
+    "gpt-5.6-sol": {
+      "provider": "openai",
+      "tier": 4,
+      "input": 4.00,
+      "output": 20.00,
+      "cache_read": 0.40,
+      "cache_write": 5.00,
+      "translations": {},
+      "aliases": ["gpt-5.6"]
+    },
+    "gpt-5.6-terra": {
+      "provider": "openai",
+      "tier": 2,
+      "input": 2.00,
+      "output": 12.00,
+      "cache_read": 0.20,
+      "cache_write": 2.50,
+      "translations": {},
+      "aliases": []
+    },
+    "gpt-5.6-luna": {
+      "provider": "openai",
+      "tier": 1,
+      "input": 0.20,
+      "output": 1.20,
+      "cache_read": 0.02,
+      "cache_write": 0.25,
+      "translations": {},
+      "aliases": []
+    },
+    "gpt-5.5": {
+      "provider": "openai",
+      "tier": 4,
+      "input": 5.00,
+      "output": 30.00,
+      "cache_read": 0.50,
+      "cache_write": null,
+      "translations": {},
+      "aliases": []
+    },
+    "gpt-5.4": {
+      "provider": "openai",
+      "tier": 4,
+      "input": 2.50,
+      "output": 15.00,
+      "cache_read": 0.25,
+      "cache_write": null,
+      "translations": {},
+      "aliases": []
+    },
+    "gpt-5.4-mini": {
+      "provider": "openai",
+      "tier": 1,
+      "input": 0.75,
+      "output": 4.50,
+      "cache_read": 0.075,
+      "cache_write": null,
+      "translations": {},
+      "aliases": []
+    },
+    "gpt-5.4-nano": {
+      "provider": "openai",
+      "tier": 1,
+      "input": 0.20,
+      "output": 1.25,
+      "cache_read": 0.02,
+      "cache_write": null,
+      "translations": {},
+      "aliases": []
+    },
     "gpt-5.2": {
       "provider": "openai",
       "tier": 4,
-      "input": 10.00,
-      "output": 40.00,
-      "cache_read": null,
+      "input": 1.75,
+      "output": 14.00,
+      "cache_read": 0.175,
+      "cache_write": null,
+      "translations": {},
+      "aliases": []
+    },
+    "gpt-5.1": {
+      "provider": "openai",
+      "tier": 4,
+      "input": 1.25,
+      "output": 10.00,
+      "cache_read": 0.125,
+      "cache_write": null,
+      "translations": {},
+      "aliases": []
+    },
+    "gpt-5": {
+      "provider": "openai",
+      "tier": 4,
+      "input": 1.25,
+      "output": 10.00,
+      "cache_read": 0.125,
+      "cache_write": null,
+      "translations": {},
+      "aliases": []
+    },
+    "gpt-5-mini": {
+      "provider": "openai",
+      "tier": 1,
+      "input": 0.25,
+      "output": 2.00,
+      "cache_read": 0.025,
+      "cache_write": null,
+      "translations": {},
+      "aliases": []
+    },
+    "gpt-5-nano": {
+      "provider": "openai",
+      "tier": 1,
+      "input": 0.05,
+      "output": 0.40,
+      "cache_read": 0.005,
       "cache_write": null,
       "translations": {},
       "aliases": []
@@ -375,9 +570,9 @@
     "gpt-5.3-codex": {
       "provider": "openai",
       "tier": 2,
-      "input": 3.00,
-      "output": 12.00,
-      "cache_read": null,
+      "input": 1.75,
+      "output": 14.00,
+      "cache_read": 0.175,
       "cache_write": null,
       "translations": {},
       "aliases": []

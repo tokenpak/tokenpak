@@ -30,12 +30,14 @@ races a reader and old generations are never retained indefinitely.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import shutil
 import tempfile
 import threading
 import time
+import warnings
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Callable, cast
@@ -72,6 +74,111 @@ _THREAD_LOCK = threading.RLock()
 # directory out from under an in-flight ``os.listdir``. Kept as a module
 # attribute so tests can force immediate reclamation (set to 0).
 _RECLAIM_MIN_AGE_S = 5.0
+
+# Exact SKILL.md payloads shipped immediately before ownership-aware upgrades.
+# A pre-record install had no manifest, so content identity is the only safe
+# evidence that a same-name directory is an unmodified TokenPak copy. Append a
+# digest when a shipped body changes; never infer ownership from the name/path.
+_KNOWN_SHIPPED_SKILL_MD_SHA256: dict[str, frozenset[str]] = {
+    "tokenpak-budget-aware-implementation": frozenset(
+        {"f7c0eb1e1341cd60f99035f08ded8d3323e2a8bd8687e025b6dfd864b63bae5a"}
+    ),
+    "tokenpak-large-refactor-mode": frozenset(
+        {
+            "1be837f78a802c5185efd3f68804904836a34a39e00a8356e78cf0a5b2e0bf4f",
+            "8bed320ff9c21c2aaaeadf4b87eaefd83cb5d19d502aba91277cbe72b356a4b8",
+        }
+    ),
+    "tokenpak-load-memory": frozenset(
+        {"a2b97424bc25ffd77551685db2d1cee5afda40df252725db405ac5eb764d9f75"}
+    ),
+    "tokenpak-retrospective": frozenset(
+        {"3d49bb508e3a74bd2937cc9a1540a18dfb9859819d7fe07dd3ff055f26446507"}
+    ),
+    "tokenpak-start-session": frozenset(
+        {"1d2671a22fd111c296b092fb97779ed9e2ffb6bebabbd18d810d18fcdc8c844a"}
+    ),
+}
+
+
+def _tree_digest(path: Path) -> str | None:
+    """Return a deterministic digest for a regular-file tree.
+
+    Symlinks and non-file entries fail closed because following them could make
+    a user-owned target look like package-owned content.
+    """
+    if not path.is_dir() or path.is_symlink():
+        return None
+    digest = hashlib.sha256()
+    try:
+        entries = sorted(path.rglob("*"), key=lambda item: item.relative_to(path).as_posix())
+        if any(
+            entry.is_symlink() or (not entry.is_dir() and not entry.is_file()) for entry in entries
+        ):
+            return None
+        for entry in entries:
+            relative = entry.relative_to(path).as_posix().encode("utf-8")
+            digest.update(b"d" if entry.is_dir() else b"f")
+            digest.update(relative)
+            digest.update(b"\0")
+            if entry.is_file():
+                digest.update(entry.read_bytes())
+                digest.update(b"\0")
+    except OSError:
+        return None
+    return digest.hexdigest()
+
+
+def _is_known_shipped_copy(path: Path, name: str) -> bool:
+    """True only for an exact current or recorded TokenPak skill tree."""
+    if path.is_symlink():
+        return False
+    source = _BUNDLED_SKILLS / name
+    installed_digest = _tree_digest(path)
+    source_digest = _tree_digest(source)
+    if installed_digest is not None and installed_digest == source_digest:
+        return True
+
+    # The recorded pre-upgrade bodies contained exactly one regular file.
+    try:
+        entries = list(path.iterdir())
+        skill_file = path / "SKILL.md"
+        if (
+            len(entries) == 1
+            and entries[0] == skill_file
+            and skill_file.is_file()
+            and not skill_file.is_symlink()
+        ):
+            body_digest = hashlib.sha256(skill_file.read_bytes()).hexdigest()
+            return body_digest in _KNOWN_SHIPPED_SKILL_MD_SHA256.get(name, ())
+    except OSError:
+        return False
+    return False
+
+
+def _report_conflict(action: str, path: Path) -> None:
+    warnings.warn(
+        f"TokenPak {action} skipped customized or unknown skill copy: {path}",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+
+
+def _same_location(left: Path, right: Path) -> bool:
+    """Return whether two roots resolve to the same filesystem location."""
+    try:
+        return left.samefile(right)
+    except OSError:
+        return left.resolve(strict=False) == right.resolve(strict=False)
+
+
+def _report_reconciliation_blocked(legacy: Path, canonical: Path) -> None:
+    warnings.warn(
+        "TokenPak legacy reconciliation preserved managed copy "
+        f"{legacy}: canonical destination is customized or unknown: {canonical}",
+        RuntimeWarning,
+        stacklevel=3,
+    )
 
 
 def _default_skills_root() -> Path:
@@ -236,8 +343,9 @@ def _publish_skill(src: Path, dst: Path, target: Path) -> Path:
 def install_skills(target_dir: Path | None = None) -> list[Path]:
     """Copy bundled skills to the Codex skills directory, atomically.
 
-    Existing tokenpak skills are replaced so updates propagate; other
-    skills in the target directory are untouched.  The publish is safe
+    Existing skills are replaced only when their content exactly matches the
+    current bundle or a recorded shipped generation. Same-name customized or
+    unknown directories are preserved and reported. The publish is safe
     under concurrent launcher starts: the whole operation is serialized
     with an interprocess lock, and each skill is fully staged in a temp
     sibling then swapped into place — so a reader never observes a
@@ -253,24 +361,50 @@ def install_skills(target_dir: Path | None = None) -> list[Path]:
             for name in bundled_skill_names():
                 src = _BUNDLED_SKILLS / name
                 dst = target / name
+                if dst.exists() or dst.is_symlink():
+                    if not _is_known_shipped_copy(dst, name):
+                        _report_conflict("upgrade", dst)
+                        continue
+                    if _tree_digest(dst) == _tree_digest(src):
+                        installed.append(dst)
+                        continue
                 installed.append(_publish_skill(src, dst, target))
+
+            # Supported upgrades move demonstrably managed copies out of the
+            # pre-discovery path after the canonical copies are ready. A
+            # customized legacy copy remains in place with a visible conflict.
+            if target_dir is None:
+                legacy = _legacy_skills_root()
+                if not _same_location(legacy, target):
+                    for name in bundled_skill_names():
+                        old = legacy / name
+                        if not (old.exists() or old.is_symlink()):
+                            continue
+                        if not _is_known_shipped_copy(old, name):
+                            _report_conflict("legacy reconciliation", old)
+                            continue
+                        canonical = target / name
+                        if not _is_known_shipped_copy(canonical, name):
+                            _report_reconciliation_blocked(old, canonical)
+                            continue
+                        shutil.rmtree(old)
     return installed
 
 
 def list_installed_skills(target_dir: Path | None = None) -> list[str]:
-    """Return the bundled skills currently present in the target dir."""
+    """Return demonstrably managed bundled skills in the target dir."""
     target = target_dir or _default_skills_root()
-    return [name for name in bundled_skill_names() if (target / name).exists()]
+    return [name for name in bundled_skill_names() if _is_known_shipped_copy(target / name, name)]
 
 
 def uninstall_skills(target_dir: Path | None = None) -> list[str]:
-    """Remove every bundled tokenpak skill from the target dir(s).
+    """Remove demonstrably managed TokenPak skills from the target dir(s).
 
     When ``target_dir`` is omitted, sweeps both the canonical
     ``~/.agents/skills`` path AND the pre-L3 legacy ``~/.codex/skills``
-    location so users migrating off the old path are cleaned up in one
-    pass.  Returns the names that were actually removed (deduped, in
-    bundled order).
+    location so users migrating off the old path are cleaned up in one pass.
+    Same-name customized or unknown copies are preserved and reported. Returns
+    the names that were actually removed (deduped, in bundled order).
     """
     if target_dir is not None:
         targets = [target_dir]
@@ -282,7 +416,10 @@ def uninstall_skills(target_dir: Path | None = None) -> list[str]:
         was_removed = False
         for target in targets:
             dst = target / name
-            if dst.exists():
+            if dst.exists() or dst.is_symlink():
+                if not _is_known_shipped_copy(dst, name):
+                    _report_conflict("uninstall", dst)
+                    continue
                 shutil.rmtree(dst)
                 was_removed = True
         if was_removed:
@@ -332,7 +469,7 @@ def _render_skill_config(skills_root: Path) -> str:
     lines = [_SKILLS_CONFIG_BEGIN]
     for name in bundled_skill_names():
         skill_dir = skills_root / name
-        if not (skill_dir / "SKILL.md").is_file():
+        if not _is_known_shipped_copy(skill_dir, name):
             continue
         lines.extend(
             (
@@ -391,7 +528,7 @@ def _configure_skills(
     else:
         content = existing + ("\n" if existing else "") + block + "\n"
     _write_private(config_path, content)
-    return [root / name for name in bundled_skill_names() if (root / name / "SKILL.md").is_file()]
+    return [root / name for name in list_installed_skills(root)]
 
 
 def _configured_skill_paths(config_path: Path) -> list[Path]:

@@ -185,9 +185,9 @@ def cmd_pak_status(args: Any) -> int:
     types. Always exits 0 (status is informational, not pass/fail).
     """
     from tokenpak import _paths
-    from tokenpak.licensing.daemon_probe import detect_daemon_state
+    from tokenpak.licensing.daemon_probe import probe_daemon
 
-    state = detect_daemon_state()
+    state, state_reason = probe_daemon()
     multipak_enabled = _read_multipak_enabled()
     pak_store_dir = _paths.under("pro", "state", "multipak")
     pak_store_present = pak_store_dir.is_dir()
@@ -196,6 +196,7 @@ def cmd_pak_status(args: Any) -> int:
 
     payload = {
         "daemon_state": state,
+        "daemon_state_reason": state_reason,
         "multipak_enabled": multipak_enabled,
         "pak_store_present": pak_store_present,
         "vault_paks_indexed": vault_paks_indexed,
@@ -212,6 +213,7 @@ def cmd_pak_status(args: Any) -> int:
     print("───────────────────────────")
     daemon_icon = "✅" if state == "active" else "❌"
     print(f"{daemon_icon} Daemon state           : {state}")
+    print(f"   Daemon state reason    : {state_reason}")
     enabled_icon = "✅" if multipak_enabled else "⚠️"
     print(f"{enabled_icon} multipak.enabled       : {multipak_enabled}")
     store_icon = "✅" if pak_store_present else "⚠️"

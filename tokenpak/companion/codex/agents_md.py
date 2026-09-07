@@ -24,7 +24,7 @@ _AGENTS_CONTENT = """\
 
 TokenPak companion tools are available via MCP. Cost accounting is automatic
 and out-of-band: a pre-send hook estimates every prompt and blocks over-budget
-requests, and a stop hook records the session summary. Every MCP tool call
+requests, and a stop hook records closeout accounting. Every MCP tool call
 costs a full model round-trip that re-sends the conversation so far — never
 spend one on routine accounting.
 
@@ -32,11 +32,14 @@ spend one on routine accounting.
   bookkeeping during a task; the hooks already track cost. Reserve
   `estimate_tokens` for a genuine go/no-go decision on including very large
   content.
-- `journal_write`: one concise entry for a major decision (no file contents);
-  session summaries are captured automatically at stop.
-- For prior work, retrieve before answering. Prefer available native memory;
-  otherwise batch via `load_pak` (`load_capsule`); use `journal_read` only for
-  targeted follow-up. Persist each fact once.
+- `journal_write`: one concise semantic record when a durable decision,
+  changed constraint, verified milestone, material blocker, or handoff needs
+  to survive this session. Include the outcome, reason, source, and next step.
+  Routine reads, edits, tests, and repeated stop summaries need no entry.
+- Start from the conversation and current source. Retrieve only a fact the
+  task needs but current context lacks. Use native memory when suitable, an
+  identified Handoff Pak via `load_pak` (`load_capsule`) for cross-session
+  state, or `journal_read` for targeted follow-up. Persist each fact once.
 - `prune_context`: only for verbose output you must keep but do not need in
   full.
 - Prefer targeted file reads over whole-file reads.

@@ -12,6 +12,7 @@ import tempfile
 
 import pytest
 
+from tokenpak.proxy.cache import estimate_cache_savings
 from tokenpak.telemetry.cost import CostEngine, Pricing, calculate_baseline, calculate_savings
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -63,7 +64,7 @@ class TestCostCalculations:
             version="1.0",
             effective_date="2026-03-17",
         )
-        # 1M tokens at $15/1K = $0.015 per token = $15,000 for 1M
+        # 1M tokens at $15/1K = $15,000.
         cost = calculate_baseline(1_000_000, 0, pricing)
         assert cost == pytest.approx(15000.0, rel=0.01)
 
@@ -77,7 +78,7 @@ class TestCostCalculations:
             version="1.0",
             effective_date="2026-03-17",
         )
-        # 1M output tokens at $75/1K = $0.075 per token = $75,000
+        # 1M output tokens at $75/1K = $75,000.
         cost = calculate_baseline(0, 1_000_000, pricing)
         assert cost == pytest.approx(75000.0, rel=0.01)
 
@@ -237,6 +238,17 @@ class TestCostCalculations:
         )
         cost = calculate_baseline(-100, -50, pricing)
         assert cost >= 0.0
+
+    def test_cache_savings_uses_model_specific_cached_input_rate(self):
+        """Models from one provider can have different cache ratios."""
+        assert estimate_cache_savings("openai", 1_000_000, "gpt-5.6-sol") == pytest.approx(3.6)
+        assert estimate_cache_savings("anthropic", 1_000_000, "claude-fable-5-1") == pytest.approx(
+            9.75
+        )
+
+    def test_cache_savings_uses_provider_fallback_when_model_rate_is_absent(self):
+        """A catalog row without cache pricing keeps the provider fallback."""
+        assert estimate_cache_savings("openai", 1_000_000, "gpt-4o") == pytest.approx(1.25)
 
 
 # ─────────────────────────────────────────────────────────────────────────

@@ -120,7 +120,7 @@ def test_api_key_model_refresh_remains_provider_proxied(monkeypatch) -> None:
     assert proxied == [("https://api.openai.com/v1/models?client_version=test", "GET")]
 
 
-def test_responses_capsule_preserves_policy_and_compresses_only_history() -> None:
+def test_responses_capsule_preserves_every_conversation_turn_and_reports_zero_delta() -> None:
     policy_text = "You are the governed client.\n## Safety\nNever change this policy. " * 20
     history_text = "A long ordinary project update with background and rationale. " * 30
     payload = {
@@ -154,12 +154,15 @@ def test_responses_capsule_preserves_policy_and_compresses_only_history() -> Non
     sent, stats = CapsuleBuilder(enabled=True).process(raw)
     result = json.loads(sent)
 
+    assert sent == raw
     assert result["model"] == "client-selected-model"
     assert result["input"][0]["content"][0]["text"] == policy_text
-    assert "[PAK" in result["input"][1]["content"][0]["text"]
+    assert result["input"][1]["content"][0]["text"] == history_text
+    assert result["input"][2]["content"][0]["text"] == "Acknowledged."
     assert result["input"][-1]["content"][0]["text"] == "Continue."
-    assert stats["blocks_capsulized"] == 1
-    assert _estimate_tokens(sent) < _estimate_tokens(raw)
+    assert stats["blocks_capsulized"] == 0
+    assert stats["skip_reason"] == "no_eligible_blocks"
+    assert _estimate_tokens(sent) == _estimate_tokens(raw)
 
 
 def test_launcher_routes_healthy_proxy_without_credential_or_model_arguments(monkeypatch) -> None:

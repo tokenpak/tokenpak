@@ -3,8 +3,8 @@
 
 When a model ID isn't in the seed catalog, the registry matches it against
 these family rules to infer provider, tier, pricing, and translation templates.
-This is what makes the system dynamic: ``claude-opus-4-7`` auto-resolves to
-Opus-family pricing without any code or config change.
+This is what makes the system dynamic: an unlisted future Opus identifier
+auto-resolves to Opus-family pricing without any code or config change.
 
 Rules are matched longest-pattern-first so ``gpt-4o-mini`` beats ``gpt-4o``.
 """
@@ -61,8 +61,8 @@ BUILTIN_FAMILIES: list[FamilyRule] = [
         pattern="claude-opus",
         provider="anthropic",
         tier=4,
-        input_per_mtok=15.0,
-        output_per_mtok=75.0,
+        input_per_mtok=5.0,
+        output_per_mtok=25.0,
         cache_read_mult=0.10,
         cache_write_mult=1.25,
         bedrock_template="anthropic.{model_id}-v1:0",
@@ -198,8 +198,9 @@ BUILTIN_FAMILIES: list[FamilyRule] = [
         pattern="gpt-5",
         provider="openai",
         tier=4,
-        input_per_mtok=10.0,
-        output_per_mtok=40.0,
+        input_per_mtok=1.25,
+        output_per_mtok=10.0,
+        cache_read_mult=0.10,
     ),
     FamilyRule(
         pattern="gpt-4",

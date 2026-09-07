@@ -375,18 +375,35 @@ def _handle_journal_read(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_journal_write(state: CompanionState, args: dict[str, Any]) -> str:
-    """Add a note to the current session journal via proxy POST."""
+    """Add a semantic note to the current session journal via proxy POST."""
     content = args.get("content", "")
-    if not content:
+    if not isinstance(content, str) or not content.strip():
         return json.dumps({"error": "No content provided"})
+
+    entry_type = args.get("entry_type", "user")
+    if not isinstance(entry_type, str) or entry_type not in {"user", "milestone", "handoff"}:
+        return json.dumps({"error": "entry_type must be user, milestone, or handoff"})
+
+    raw_references = args.get("references", [])
+    if not isinstance(raw_references, list) or not all(
+        isinstance(reference, str) and reference.strip() for reference in raw_references
+    ):
+        return json.dumps({"error": "references must be an array of non-empty strings"})
+    if len(raw_references) > 20:
+        return json.dumps({"error": "references supports at most 20 items"})
 
     session_id = state.session_id
     if not session_id:
         return json.dumps({"error": "No active session"})
 
+    body: dict[str, Any] = {"content": content, "entry_type": entry_type}
+    if raw_references:
+        body["metadata"] = {
+            "references": [reference.strip() for reference in raw_references],
+        }
     status, body = _proxy_post(
         f"/tpk/v1/journal/{_url_parse.quote(session_id, safe='')}/entry",
-        {"content": content, "entry_type": "user"},
+        body,
     )
     if status == 0:
         return json.dumps(
@@ -686,7 +703,7 @@ TOOLS: list[ToolDef] = [
                 },
                 "entry_type": {
                     "type": "string",
-                    "description": "Filter by type: auto, user, milestone, cost",
+                    "description": "Filter by type: auto, user, milestone, handoff, cost",
                 },
                 "limit": {
                     "type": "integer",
@@ -699,11 +716,23 @@ TOOLS: list[ToolDef] = [
     ),
     ToolDef(
         name="journal_write",
-        description="Add a note to the TokenPak session journal. Use for important decisions, milestones, or context the user might want later.",
+        description="Add one durable semantic record to the TokenPak session journal. Use milestone for decisions, changed constraints, verified outcomes, or blockers; use handoff at a recovery boundary. Routine activity needs no entry.",
         input_schema={
             "type": "object",
             "properties": {
                 "content": {"type": "string", "description": "The journal note to save"},
+                "entry_type": {
+                    "type": "string",
+                    "enum": ["user", "milestone", "handoff"],
+                    "default": "user",
+                    "description": "Semantic record type",
+                },
+                "references": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1},
+                    "maxItems": 20,
+                    "description": "Source or evidence references needed to recover the record",
+                },
             },
             "required": ["content"],
         },

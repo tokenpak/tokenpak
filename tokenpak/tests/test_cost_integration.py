@@ -74,10 +74,9 @@ class TestCostCalculation:
         )
 
         assert isinstance(result, CostResult)
-        # For sonnet-4-6: input_rate=3.00, output_rate=15.00 per 1K
-        # baseline = (1000 * 3.00 + 100 * 15.00) / 1000 = 3.00 + 1.50 = $4.50
-        expected_baseline = ((1000 * 3.00) + (100 * 15.00)) / 1000
-        assert abs(result.baseline_cost - expected_baseline) < 0.01
+        # For sonnet-4-6: input_rate=3.00, output_rate=15.00 per 1M.
+        expected_baseline = ((1000 * 3.00) + (100 * 15.00)) / 1_000_000
+        assert result.baseline_cost == pytest.approx(expected_baseline, abs=1e-12)
 
     def test_calculate_actual_cost_with_compression(self, cost_engine):
         """Actual cost uses final_input_tokens, baseline uses raw_input_tokens."""
@@ -89,9 +88,9 @@ class TestCostCalculation:
         )
 
         assert isinstance(result, CostResult)
-        # actual = (600 * 3.00 + 100 * 15.00) / 1000 = 1.80 + 1.50 = $3.30
-        expected_actual = ((600 * 3.00) + (100 * 15.00)) / 1000
-        assert abs(result.actual_cost - expected_actual) < 0.01
+        # actual = 600 input at $3/M plus 100 output at $15/M.
+        expected_actual = ((600 * 3.00) + (100 * 15.00)) / 1_000_000
+        assert result.actual_cost == pytest.approx(expected_actual, abs=1e-12)
 
     def test_savings_calculation(self, cost_engine):
         """Savings = baseline_cost - actual_cost."""
@@ -103,8 +102,8 @@ class TestCostCalculation:
         )
 
         assert isinstance(result, CostResult)
-        expected_savings = result.baseline_cost - result.actual_cost
-        assert abs(result.savings_amount - expected_savings) < 0.01
+        expected_savings = (400 * 3.00) / 1_000_000
+        assert result.savings_amount == pytest.approx(expected_savings, abs=1e-12)
 
     def test_zero_compression_no_savings(self, cost_engine):
         """When raw == final, savings = 0."""
@@ -251,9 +250,9 @@ class TestEdgeCases:
             final_input_tokens=1,
             output_tokens=1,
         )
-        # 1 input * 3.00/1000 + 1 output * 15.00/1000
-        expected = (1 * 3.00 + 1 * 15.00) / 1000
-        assert abs(result.baseline_cost - expected) < 0.00001
+        # 1 input at $3/M plus 1 output at $15/M.
+        expected = (1 * 3.00 + 1 * 15.00) / 1_000_000
+        assert result.baseline_cost == pytest.approx(expected, abs=1e-12)
 
     def test_large_token_counts(self, cost_engine):
         """Cost calculation works for large token counts (M-scale)."""

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 # ──────────────────────────────────────────────────────────────
-# Codex Stop hook — session/turn closeout, journal persistence.
+# Codex Stop hook — session/turn closeout accounting.
 #
 # Reads JSON from stdin with: session_id, transcript_path, cwd,
 # hook_event_name, model, stop_hook_active, last_assistant_message.
 #
 # Actions:
-#   - Writes closeout journal entry
+#   - Writes closeout accounting entry
 #   - Records final cost estimate to budget tracker
 #   - Always exits 0 (never blocks Stop)
 # ──────────────────────────────────────────────────────────────

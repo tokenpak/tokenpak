@@ -60,14 +60,14 @@ class TestPricingModule:
         }
         result = estimate_savings(stats)
 
-        # Without TokenPak: 1M tokens * $15/MTok = $15.00
-        assert result["cost_without_tokenpak"] == pytest.approx(15.00, abs=0.01)
+        # Without TokenPak: 1M tokens * $5/MTok = $5.00
+        assert result["cost_without_tokenpak"] == pytest.approx(5.00, abs=0.01)
 
         # With TokenPak:
         # - Compression reduces to 900k tokens
-        # - 200k from cache at $1.50, 700k fresh at $15.00
-        # = (200k * 1.5 + 700k * 15) / 1M = $10.80
-        expected_with = (200_000 * 1.50 + 700_000 * 15.0) / 1_000_000
+        # - 200k from cache at $0.50, 700k fresh at $5.00
+        # = (200k * 0.5 + 700k * 5) / 1M = $3.60
+        expected_with = (200_000 * 0.50 + 700_000 * 5.0) / 1_000_000
         assert result["cost_with_tokenpak"] == pytest.approx(expected_with, abs=0.01)
 
         # Reduction should be positive

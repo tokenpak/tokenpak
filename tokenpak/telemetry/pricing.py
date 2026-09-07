@@ -151,10 +151,12 @@ class PricingCatalog:
         version: str,
         models: dict[str, ModelPricing],
         updated: Optional[str] = None,
+        aliases: Optional[dict[str, str]] = None,
     ) -> None:
         self.version = version
         self.models: dict[str, ModelPricing] = models
         self.updated = updated  # ISO date string from _meta.updated
+        self.aliases = aliases or {}
 
     # ------------------------------------------------------------------
     # Constructors
@@ -188,10 +190,13 @@ class PricingCatalog:
         updated: Optional[str] = meta.get("updated")
 
         models: dict[str, ModelPricing] = {}
+        aliases: dict[str, str] = {}
         for model_id, entry in raw["models"].items():
             models[model_id] = ModelPricing.from_dict(model_id, entry)
+            for alias in entry.get("aliases", []):
+                aliases[str(alias)] = model_id
 
-        catalog = cls(version=version, models=models, updated=updated)
+        catalog = cls(version=version, models=models, updated=updated, aliases=aliases)
         catalog.check_staleness()
         return catalog
 
@@ -202,9 +207,12 @@ class PricingCatalog:
         version = meta.get("version", "v1")
         updated = meta.get("updated")
         models: dict[str, ModelPricing] = {}
+        aliases: dict[str, str] = {}
         for model_id, entry in data.get("models", {}).items():
             models[model_id] = ModelPricing.from_dict(model_id, entry)
-        return cls(version=version, models=models, updated=updated)
+            for alias in entry.get("aliases", []):
+                aliases[str(alias)] = model_id
+        return cls(version=version, models=models, updated=updated, aliases=aliases)
 
     def check_staleness(self) -> None:
         """Log a warning if catalog pricing data is older than _STALENESS_DAYS."""
@@ -267,12 +275,18 @@ class PricingCatalog:
         # 1. Exact match
         if model in self.models:
             return model
+        if model in self.aliases:
+            return self.aliases[model]
 
         # 2. Strip date suffix (e.g. claude-opus-4-6-20250514 -> claude-opus-4-6)
         base = re.sub(r"-\d{8}$", "", model)
         if base in self.models:
             logger.debug("Fuzzy match: %s -> %s (stripped date suffix)", model, base)
             return base
+        if base in self.aliases:
+            resolved = self.aliases[base]
+            logger.debug("Alias match: %s -> %s", model, resolved)
+            return resolved
 
         # 3. Longest prefix match
         # Try models where either model starts with catalog key
@@ -432,7 +446,7 @@ def compute_baseline_cost(model: str, raw_input_tokens: int) -> float:
     Examples
     --------
     >>> cost = compute_baseline_cost("claude-opus-4-6", 50_000)
-    >>> print(f"${cost:.4f}")   # ~ $0.75 at $15/1M
+    >>> print(f"${cost:.4f}")   # ~ $0.25 at $5/1M
     """
     if raw_input_tokens <= 0:
         return 0.0

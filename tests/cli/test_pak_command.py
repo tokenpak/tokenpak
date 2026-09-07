@@ -115,6 +115,7 @@ def test_status_json_emits_canonical_payload():
     payload = json.loads(out)
     for key in (
         "daemon_state",
+        "daemon_state_reason",
         "multipak_enabled",
         "pak_store_present",
         "vault_paks_indexed",
@@ -129,6 +130,7 @@ def test_status_daemon_state_unavailable_by_default():
     rc, out = _capture_stdout(cmd_pak_status, args)
     payload = json.loads(out)
     assert payload["daemon_state"] == "unavailable"
+    assert payload["daemon_state_reason"] == "sock_info_absent"
 
 
 # ---------------------------------------------------------------------------
@@ -328,4 +330,5 @@ def test_e2e_pak_status_via_module_entry():
     assert json_start >= 0, f"no JSON in stdout: {result.stdout!r}"
     payload = json.loads(result.stdout[json_start:])
     assert "daemon_state" in payload
+    assert "daemon_state_reason" in payload
     assert "multipak_enabled" in payload

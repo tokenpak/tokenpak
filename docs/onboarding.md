@@ -7,11 +7,11 @@ Welcome to TokenPak. This guide takes you from a fresh install to running TokenP
 
 ---
 
-## Day 1: Your First Compressed Request
+## Day 1: Your First Measured Request
 
-Your goal today: install TokenPak, send one eligible real request, and see its
-measured savings receipt in the same session. The supported reference target is
-three commands and no more than five minutes.
+Your goal today: install TokenPak, send one real request, and see its measured
+request receipt in the same session. The supported reference target is three
+commands and no more than five minutes.
 
 Before starting, have Python 3.10+ and an already-authenticated supported
 client. The reference path uses Codex OAuth and its normal model selection; it
@@ -44,18 +44,17 @@ In terminal 2:
 tokenpak codex
 ```
 
-Make a substantive project request, then continue the same topic. A new
-conversation's first request may correctly be ineligible because it has no
-historical context. The first later eligible request prints the measured
-before/after receipt in terminal 1. Its dollar figure is an estimate based on
-the model-pricing table. See
-[First Measured Savings Receipt](first-receipt.md) for the exact flow and
-eligibility boundaries.
+Make a substantive project request. Terminal 1 prints
+`⚡ TokenPak: 0 tokens saved` after the provider responds. That zero is expected:
+the built-in Pak builder preserves every system, user, and assistant
+conversation turn, including long history. See
+[First Measured Request Receipt](first-receipt.md) for the exact flow and the
+separate explicit compression surfaces.
 
-Short, protected, or already concise inputs may save zero. Protected policy and
-the newest two messages are never capsulized. Byte-preserved routes are not
-positive-compression proof paths. `tokenpak demo` is an offline fixture, not a
-receipt from your own provider request.
+The receipt proves the real request traversed the proxy and was recorded
+without a false savings claim. Use `tokenpak compress` or companion
+`prune_context` for supported positive compression measurements. `tokenpak
+demo` is an offline fixture, not a receipt from your own provider request.
 
 After the proof, use `tokenpak integrate` to review client-specific routing.
 Applying an integration is a separate, consented workflow and is not required
@@ -66,8 +65,8 @@ for the three-command reference path.
 - [ ] TokenPak installed with command 1
 - [ ] The receipt-enabled proxy started with command 2
 - [ ] Command 3 launched an already-authenticated client without requiring a key or model override
-- [ ] A real eligible request produced a positive measured token receipt
-- [ ] You understand that the dollar figure is estimated and workload-specific
+- [ ] A real request produced the truthful `0 tokens saved` receipt
+- [ ] You understand that system, user, and assistant conversation turns are preserved
 
 ---
 
@@ -91,12 +90,16 @@ This shows your cumulative savings since install: total tokens saved, estimated 
 
 ### What to Look For
 
-A healthy setup measurably reduces tokens on typical mixed workloads — check your own with `tokenpak savings`. If you're seeing little or no reduction, check these:
+A healthy setup records native provider traffic. Explicit compression
+operations report their own before/after counts. If you see little or no
+reduction, check these:
 
-- Is the proxy running with a compression-capable `balanced`, `aggressive`, or
-  `agentic` profile?
-- Are your requests using long system prompts or repetitive context? Those compress best.
-- Run `tokenpak demo` to inspect the offline fixture, then use `tokenpak savings` for receipt-backed savings.
+- Is your integration explicitly invoking a packing operation, companion
+  `prune_context`, or `POST /tpk/v1/compress`?
+- System, user, and assistant conversation turns remain preserved regardless
+  of prompt length or profile.
+- Inspect the explicit operation's own counts. Run `tokenpak demo` separately
+  to inspect the offline fixture.
 
 ### The 48.9% Benchmark
 
@@ -113,7 +116,7 @@ The benchmark runs against the `tests/benchmarks/fixtures/` payloads, which repr
 
 - [ ] `tokenpak cost --week` shows data for at least 2 days
 - [ ] `tokenpak savings` shows a compression ratio
-- [ ] You understand how the proxy's workflow profile affects eligibility
+- [ ] You understand that profiles do not override conversation-turn preservation
 
 ---
 

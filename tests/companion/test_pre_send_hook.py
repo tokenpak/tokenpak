@@ -11,7 +11,7 @@ from pathlib import Path
 from tokenpak.companion.journal.store import JournalStore
 
 HOOK = Path(__file__).parents[2] / "tokenpak" / "companion" / "hooks" / "pre_send.sh"
-HINT = "Prior work is referenced; retrieve native memory or journal/Paks before answering."
+HINT = "Prior work may be relevant; retrieve only facts the current context lacks."
 
 
 def _run_hook(tmp_path: Path, prompt: str, *, store_state: str) -> subprocess.CompletedProcess[str]:

@@ -10,9 +10,9 @@ I/O; the canonical machine-readable form remains ``SessionEconomics.to_dict``
 / ``to_json`` and is deliberately not re-implemented in this module.
 
 Rendering is truth-preserving: observed facts print as plain values,
-estimates are marked ``~``, and empty/unavailable/error states print as
-words, never as zeros. A forecast that is still learning (or not available)
-says so explicitly.
+estimates keep the ``~`` marker plus a nearby ``est`` text label, and empty/
+unavailable/error states print as words, never as zeros. A forecast that is
+still learning (or not available) says so explicitly.
 """
 
 from __future__ import annotations
@@ -44,6 +44,8 @@ _STATE_WORD = {
     ValueState.ERROR: "error",
 }
 
+_ESTIMATE_LEGEND = "  legend         plain=observed  tilde (~)=estimated  words=no value"
+
 
 def _fmt_count(value: float) -> str:
     """Deterministic compact token/turn count (no locale, no clock)."""
@@ -58,14 +60,20 @@ def _fmt_count(value: float) -> str:
     return f"{value:.1f}"
 
 
-def _numeric(value: NumericValue, *, suffix: str = "") -> str:
+def _numeric(
+    value: NumericValue,
+    *,
+    suffix: str = "",
+    label_estimate: bool = True,
+) -> str:
     """Render a NumericValue without ever faking a number."""
     if value.state is ValueState.OBSERVED:
         assert value.value is not None
         return f"{_fmt_count(float(value.value))}{suffix}"
     if value.state is ValueState.ESTIMATED:
         assert value.value is not None
-        return f"~{_fmt_count(float(value.value))}{suffix}"
+        label = " est" if label_estimate else ""
+        return f"~{_fmt_count(float(value.value))}{suffix}{label}"
     return _STATE_WORD[value.state]
 
 
@@ -81,10 +89,16 @@ def _cost(value: CostValue) -> str:
     return _STATE_WORD[value.state]
 
 
-def _interval(value: IntervalEstimate, *, suffix: str = "") -> str:
+def _interval(
+    value: IntervalEstimate,
+    *,
+    suffix: str = "",
+    label_estimate: bool = True,
+) -> str:
     if value.state is ValueState.ESTIMATED:
         assert value.low is not None and value.high is not None
-        return f"~{_fmt_count(float(value.low))}–{_fmt_count(float(value.high))}{suffix}"
+        label = " est" if label_estimate else ""
+        return f"~{_fmt_count(float(value.low))}–{_fmt_count(float(value.high))}{suffix}{label}"
     return _STATE_WORD[value.state]
 
 
@@ -123,9 +137,9 @@ def _format_time_forecast_line(time_forecast: TimeForecast) -> str | None:
     assert band.low is not None and band.high is not None
     assert ceiling.value is not None
     return (
-        f"time ~{_fmt_duration_ms(float(band.low))}"
+        f"time est ~{_fmt_duration_ms(float(band.low))}"
         f"–{_fmt_duration_ms(float(band.high))} "
-        f"(90% ≤ {_fmt_duration_ms(float(ceiling.value))})"
+        f"(90% ≤ ~{_fmt_duration_ms(float(ceiling.value))})"
     )
 
 
@@ -147,8 +161,8 @@ def _format_time_forecast_block(time_forecast: TimeForecast) -> str | None:
     return (
         "  time forecast "
         f"{time_forecast.status.value} · "
-        f"~{_fmt_duration_ms(float(band.low))}–{_fmt_duration_ms(float(band.high))} "
-        f"(90% ≤ {_fmt_duration_ms(float(ceiling.value))}) · "
+        f"est ~{_fmt_duration_ms(float(band.low))}–{_fmt_duration_ms(float(band.high))} "
+        f"(90% ≤ ~{_fmt_duration_ms(float(ceiling.value))}) · "
         f"coverage {observed} · history {coverage.history_n} sessions"
     )
 
@@ -167,12 +181,15 @@ def render_line(economics: SessionEconomics) -> str:
         f"in {_numeric(facts.input_tokens)}",
         f"out {_numeric(facts.output_tokens)}",
         f"cost {_cost(facts.cost_usd)}",
-        (f"burn {_numeric(state.burn_tokens_per_turn)}/turn {_SLOPE_MARK[state.burn_slope]}"),
+        (
+            f"burn {_numeric(state.burn_tokens_per_turn, suffix='/turn')} "
+            f"{_SLOPE_MARK[state.burn_slope]}"
+        ),
     ]
     if runway.status is RunwayStatus.AVAILABLE:
-        parts.append(f"runway {runway.turns} turns ({runway.binding_constraint.value})")
+        parts.append(f"guard runway {runway.turns} turns to {runway.binding_constraint.value}")
     else:
-        parts.append(f"runway {runway.status.value}")
+        parts.append(f"guard runway {runway.status.value}")
     parts.append(f"guard {runway.guard_state.value}")
     forecast = economics.forecast
     if (
@@ -180,8 +197,9 @@ def render_line(economics: SessionEconomics) -> str:
         and forecast.remaining_tokens_likely_50.state is ValueState.ESTIMATED
     ):
         parts.append(
-            f"left {_interval(forecast.remaining_tokens_likely_50)} "
-            f"(90% ≤ {_numeric(forecast.remaining_tokens_ceiling_90)})"
+            "session remainder est "
+            f"{_interval(forecast.remaining_tokens_likely_50, label_estimate=False)} "
+            f"(90% ≤ {_numeric(forecast.remaining_tokens_ceiling_90, label_estimate=False)})"
         )
     else:
         parts.append(f"forecast {forecast.status.value}")
@@ -194,11 +212,12 @@ def render_line(economics: SessionEconomics) -> str:
 def render_block(economics: SessionEconomics) -> str:
     """Multi-line trip-computer block for the full status surface.
 
-    Facts, estimates (~), and unknown states are visually distinct; every
-    non-value state prints its word and, when present, its reason.
+    Facts, estimates (~ plus a textual label), and unknown states are
+    distinct; every non-value state prints its word and, when present, its
+    reason. The legend precedes the values it explains.
     """
     session = economics.session
-    lines: list[str] = ["Session economics"]
+    lines: list[str] = ["Session economics", _ESTIMATE_LEGEND]
 
     if session.identity_state is not ValueState.OBSERVED:
         word = _STATE_WORD.get(session.identity_state, session.identity_state.value)
@@ -207,7 +226,6 @@ def render_block(economics: SessionEconomics) -> str:
             f"  forecast       {economics.forecast.status.value}"
             f"{_reason(economics.forecast.reason)}"
         )
-        lines.append("  legend         plain=observed  ~=estimate  words=no value")
         return "\n".join(lines)
 
     facts = economics.facts
@@ -228,23 +246,24 @@ def render_block(economics: SessionEconomics) -> str:
     lines.append(
         "  context        "
         f"{_numeric(state.context_tokens)} tokens · base {_numeric(state.base_tokens)} · "
-        f"growth {_numeric(state.context_growth_ewma)}/turn"
+        f"growth {_numeric(state.context_growth_ewma, suffix='/turn')}"
     )
     lines.append(
         "  burn           "
-        f"{_numeric(state.burn_tokens_per_turn)} tokens/turn "
+        f"{_numeric(state.burn_tokens_per_turn, suffix=' tokens/turn')} "
         f"{_SLOPE_MARK[state.burn_slope]} · {_cost_per_turn(state.burn_usd_per_turn)}"
     )
     lines.append(
         "  cache/idle     "
-        f"state {state.cache_state.value} · ttl {_numeric(state.cache_ttl_seconds)}s · "
-        f"idle {_numeric(state.idle_seconds)}s"
+        f"state {state.cache_state.value} · ttl {_numeric(state.cache_ttl_seconds, suffix='s')} · "
+        f"idle {_numeric(state.idle_seconds, suffix='s')}"
     )
     if runway.status is RunwayStatus.AVAILABLE:
         lines.append(
             "  runway         "
-            f"{runway.turns} turns · binding {runway.binding_constraint.value} · "
-            f"guard {runway.guard_state.value}"
+            f"guard limit in {runway.turns} turns · "
+            f"binding {runway.binding_constraint.value} · "
+            f"state {runway.guard_state.value}"
         )
     else:
         lines.append(
@@ -254,19 +273,21 @@ def render_block(economics: SessionEconomics) -> str:
     if forecast.status is ForecastStatus.AVAILABLE:
         lines.append(
             "  forecast       "
-            f"remaining {_interval(forecast.remaining_tokens_likely_50)} tokens "
-            f"(90% ceiling {_numeric(forecast.remaining_tokens_ceiling_90)}) · "
-            f"turns {_interval(forecast.expected_turns)}"
+            "session remainder est · "
+            f"tokens {_interval(forecast.remaining_tokens_likely_50, label_estimate=False)} "
+            f"(90% ceiling "
+            f"{_numeric(forecast.remaining_tokens_ceiling_90, label_estimate=False)}) · "
+            f"turns {_interval(forecast.expected_turns, label_estimate=False)}"
         )
         if forecast.remaining_cost_usd_likely_50.state is ValueState.ESTIMATED:
             assert forecast.remaining_cost_usd_likely_50.low is not None
             assert forecast.remaining_cost_usd_likely_50.high is not None
             assert forecast.remaining_cost_usd_ceiling_90.value is not None
             lines.append(
-                "  forecast cost  "
+                "  forecast cost  est "
                 f"~${float(forecast.remaining_cost_usd_likely_50.low):.2f}–"
                 f"${float(forecast.remaining_cost_usd_likely_50.high):.2f} "
-                f"(90% ≤ ${float(forecast.remaining_cost_usd_ceiling_90.value):.2f})"
+                f"(90% ≤ ~${float(forecast.remaining_cost_usd_ceiling_90.value):.2f})"
             )
         coverage = forecast.coverage
         observed = (
@@ -274,7 +295,7 @@ def render_block(economics: SessionEconomics) -> str:
         )
         block_prob = forecast.predicted_block_probability
         block_text = (
-            f" · block risk ~{float(block_prob.value) * 100.0:.0f}%"
+            f" · block risk est ~{float(block_prob.value) * 100.0:.0f}%"
             if block_prob.state is ValueState.ESTIMATED and block_prob.value is not None
             else ""
         )
@@ -288,7 +309,6 @@ def render_block(economics: SessionEconomics) -> str:
     time_block = _format_time_forecast_block(economics.time_forecast)
     if time_block is not None:
         lines.append(time_block)
-    lines.append("  legend         plain=observed  ~=estimate  words=no value")
     return "\n".join(lines)
 
 

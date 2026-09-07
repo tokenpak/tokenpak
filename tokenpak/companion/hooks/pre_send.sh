@@ -94,13 +94,13 @@ case "$PROMPT_LOWER" in
     *previous*|*prior*|*decided*|*last\ session*|*adr-*)
         JOURNAL_DIR="${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}"
         if [ -f "$JOURNAL_DIR/journal.db.nonempty" ]; then
-            RECALL_HINT="Prior work is referenced; retrieve native memory or journal/Paks before answering."
+            RECALL_HINT="Prior work may be relevant; retrieve only facts the current context lacks."
         elif [ -d "$JOURNAL_DIR/capsules" ]; then
             shopt -s nullglob
             _TP_PAK_FILES=("$JOURNAL_DIR"/capsules/*.md)
             shopt -u nullglob
             if [ "${#_TP_PAK_FILES[@]}" -gt 0 ]; then
-                RECALL_HINT="Prior work is referenced; retrieve native memory or journal/Paks before answering."
+                RECALL_HINT="Prior work may be relevant; retrieve only facts the current context lacks."
             fi
         fi
         ;;

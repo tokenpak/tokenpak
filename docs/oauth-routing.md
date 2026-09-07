@@ -90,10 +90,9 @@ These are alternatives, not first-run requirements.
   cross-session response-cache identity.
 - Token refresh remains the client's responsibility. An upstream 401 is
   returned to the client for re-authentication.
-- Responses compression follows the same safety rules as other formats:
-  system/developer policy and protected instructions are never capsulized, the
-  newest two message items remain hot, and short or nonhistorical requests may
-  correctly be ineligible.
+- The built-in Pak stage preserves every system, user, and assistant Responses
+  conversation item regardless of age or length. In the unmodified reference
+  setup, the receipt reports zero TokenPak compression savings.
 - TokenPak receipts record measured request deltas and safe route metadata,
   never bearer values, account IDs, or client session metadata.
 

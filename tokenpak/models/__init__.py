@@ -10,7 +10,7 @@ Usage::
     from tokenpak.models import get_rates, get_tier, translate_model
 
     get_rates("claude-opus-4-7")
-    # → {"input": 15.0, "output": 75.0, "cached": 1.50}
+    # → {"input": 5.0, "output": 25.0, "cached": 0.50}
 
     get_tier("claude-opus-4-7")
     # → 4
