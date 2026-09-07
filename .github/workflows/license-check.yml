@@ -3,6 +3,8 @@ name: License check
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,11 +26,34 @@ jobs:
       - name: Compute changed files
         id: changed
         run: |
-          base="${{ github.event.pull_request.base.sha }}"
-          head="${{ github.event.pull_request.head.sha }}"
-          git diff --name-only --diff-filter=AM "$base" "$head" \
-            | grep -vE "^(tests/|packages/tests/|sdk/tests/|sdk/dist/)" \
-            > changed-files.txt || true
+          set -euo pipefail
+          event="${{ github.event_name }}"
+          case "$event" in
+            pull_request)
+              base="${{ github.event.pull_request.base.sha }}"
+              head="${{ github.event.pull_request.head.sha }}"
+              ;;
+            push)
+              base="${{ github.event.before }}"
+              head="${{ github.event.after }}"
+              ;;
+            *)
+              echo "::error::Unsupported event: $event"
+              exit 1
+              ;;
+          esac
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            echo "::error::Event has no usable base SHA; refusing an empty scan."
+            exit 1
+          fi
+          if [[ -z "$head" || "$head" =~ ^0+$ ]]; then
+            echo "::error::Event has no usable head SHA; refusing an empty scan."
+            exit 1
+          fi
+          # A failed comparison must not become a successful empty scan.
+          git diff --name-only --diff-filter=AM "$base" "$head" > all-changed-files.txt
+          grep -vE "^(tests/|packages/tests/|sdk/tests/|sdk/dist/)" all-changed-files.txt \
+            > changed-files.txt || [[ $? -eq 1 ]]
           echo "Changed files:"
           sed 's/^/  /' changed-files.txt
 

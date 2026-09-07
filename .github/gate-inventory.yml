@@ -16,7 +16,7 @@ files:
   gate-inventory-check.yml: d228cec1c1fc7dddf5e6992e81509fe89a0b11397bf246e5d2ac4200b6330ca6
   identity-language-check.yml: 8d33fe3f26a2519d79e74b021d15889f6bb510ce387fca68ef123144c282d7e5
   integration.yml: 17332502d32dc314dec1b8460ed3c96b5be9369c1bc4919cdd7d9aae315e34d1
-  license-check.yml: e64a9e214bda3e783ee845ae331f8b06b1e7135b1d66246ee6a1b1fe5550bbcd
+  license-check.yml: 005e014738b9aaba93ac6621c352051eb2fe17f9eb927e2e2b4078a8a86a993e
   public-baseline-scan.yml: 4e8cd3f24ebd2b7289053dcbb3250cf5365764eb5cc557893e0dc06a272d27e5
   public-layout-check.yml: 1423f30b12a78b46d7da8763f9a2f04052e95955754a94f3fc75fe151cabe965
   release-rehearsal.yml: b7e43487ba374d0b1197007cae6daa99d2dc48a550563d16b1ee624383141adc

@@ -15,6 +15,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Codex launcher upgrades now reconcile unchanged legacy skill copies after
   installing the canonical copies. Customized skills and installs to separate
   target directories remain preserved.
+- The required license-policy check now runs on main-branch pushes and rejects
+  missing or unusable comparison references instead of passing an empty scan.
 
 ## [1.25.1] — 2026-09-07
 
