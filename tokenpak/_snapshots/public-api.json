@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-09-03T02:35:34Z",
-  "package_version": "1.24.0",
+  "generated_at": "2026-09-07T16:37:47Z",
+  "package_version": "1.25.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -9149,6 +9149,10 @@
     },
     {
       "module": "tokenpak.proxy.config",
+      "name": "RETRIEVAL_TIMEOUT_MS"
+    },
+    {
+      "module": "tokenpak.proxy.config",
       "name": "RETRIEVAL_WATCHDOG_ENABLED"
     },
     {
@@ -9362,6 +9366,10 @@
     {
       "module": "tokenpak.proxy.credential_passthrough",
       "name": "CredentialPassthrough"
+    },
+    {
+      "module": "tokenpak.proxy.credential_passthrough",
+      "name": "is_internal_header"
     },
     {
       "module": "tokenpak.proxy.creds_injection",
@@ -10150,6 +10158,10 @@
     {
       "module": "tokenpak.proxy.passthrough",
       "name": "forward_headers"
+    },
+    {
+      "module": "tokenpak.proxy.passthrough",
+      "name": "is_internal_header"
     },
     {
       "module": "tokenpak.proxy.passthrough",
@@ -11714,6 +11726,10 @@
     {
       "module": "tokenpak.proxy.vault_bridge",
       "name": "RETRIEVAL_BACKEND"
+    },
+    {
+      "module": "tokenpak.proxy.vault_bridge",
+      "name": "RETRIEVAL_TIMEOUT_MS"
     },
     {
       "module": "tokenpak.proxy.vault_bridge",
@@ -14805,11 +14821,63 @@
     },
     {
       "module": "tokenpak.telemetry.cost",
+      "name": "FreshPricingDatabasePopulatedError"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "PROVENANCE_CUSTOM"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "PROVENANCE_FALLBACK"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "PROVENANCE_SEED_REFRESH"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
       "name": "Pricing"
     },
     {
       "module": "tokenpak.telemetry.cost",
+      "name": "PricingRefreshCollisionError"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "PricingRefreshError"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "PricingRefreshUnavailableError"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
       "name": "SEED_PRICING"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "SEED_PRICING_UNIT_BASIS"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "StalePricingRefreshPlanError"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "UNIT_BASIS_USD_PER_1K"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "UNIT_BASIS_USD_PER_1M"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "UNKNOWN_METADATA"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "UnknownPricingUnitError"
     },
     {
       "module": "tokenpak.telemetry.cost",
@@ -16986,6 +17054,22 @@
     {
       "module": "tokenpak.telemetry.tokens",
       "name": "truncate_to_tokens"
+    },
+    {
+      "module": "tokenpak.telemetry.tokens_verify",
+      "name": "TokenCountVerification"
+    },
+    {
+      "module": "tokenpak.telemetry.tokens_verify",
+      "name": "TokenizerUnavailableError"
+    },
+    {
+      "module": "tokenpak.telemetry.tokens_verify",
+      "name": "verify_packaged_corpus"
+    },
+    {
+      "module": "tokenpak.telemetry.tokens_verify",
+      "name": "verify_token_count"
     },
     {
       "module": "tokenpak.tip",

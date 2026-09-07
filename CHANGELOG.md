@@ -6,6 +6,14 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.25.0] — 2026-09-07
+
+This release adds independent savings-estimator verification, corrects pricing
+and forecast inputs, preserves conversation instructions across companion
+surfaces, and bounds automatic vault retrieval latency. Session displays
+separate observed values from estimates, and optional daemon readiness uses
+an explicit compatibility handshake.
+
 ### Added
 
 - Added verified catalog entries for current Anthropic and OpenAI model IDs,
@@ -19,6 +27,16 @@ This project follows [Semantic Versioning](https://semver.org/).
   when the optional tokenizer is unavailable. A new measurement-methodology
   guide documents savings baselines, aggregation, counting provenance, and
   known failure modes without changing savings calculations.
+- Package canonical release metadata for installed clients and require a
+  bounded loopback health/version handshake before reporting the optional
+  daemon as active. Invalid, missing, or incompatible metadata produces an
+  explicit readiness diagnostic.
+
+### Changed
+
+- Session economics displays distinguish observed usage, estimated cost and
+  burn, guard runway, and session remainder. Unavailable or insufficient evidence
+  remains visible instead of being presented as a measured result.
 
 ### Security
 
