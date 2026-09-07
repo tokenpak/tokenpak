@@ -8,6 +8,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Proxy cost estimates now honor explicit model cache-read and cache-write
+  prices from the pricing catalog, including zero-valued cache prices.
 - Codex launcher upgrades now reconcile unchanged legacy skill copies after
   installing the canonical copies. Customized skills and installs to separate
   target directories remain preserved.

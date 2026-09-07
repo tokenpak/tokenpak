@@ -542,25 +542,39 @@ def estimate_cost(
         model: Model name (e.g., "claude-sonnet-4-5")
         input_tokens: Number of input tokens
         output_tokens: Number of output tokens
-        cache_read_tokens: Tokens read from cache (90% discount)
-        cache_creation_tokens: Tokens written to cache (25% premium)
+        cache_read_tokens: Tokens read from cache
+        cache_creation_tokens: Tokens written to cache
 
     Returns:
         Estimated cost in dollars
     """
-    # Get costs from dynamic registry
-    from tokenpak.models import get_model_costs
+    # Resolve the same catalog entry for input, output, and cache prices.
+    from tokenpak.models import get_pricing
 
-    costs = get_model_costs(model) if model else DEFAULT_COSTS
+    pricing = get_pricing(model) if model else None
+    input_rate = pricing.input_per_mtok if pricing is not None else DEFAULT_COSTS["input"]
+    output_rate = pricing.output_per_mtok if pricing is not None else DEFAULT_COSTS["output"]
+    # An explicit cache price takes precedence, including an explicit zero.
+    # Keep legacy estimates when the registry has no corresponding absolute.
+    cache_read_rate = (
+        pricing.cache_read_per_mtok
+        if pricing is not None and pricing.cache_read_per_mtok is not None
+        else input_rate * 0.1
+    )
+    cache_write_rate = (
+        pricing.cache_write_per_mtok
+        if pricing is not None and pricing.cache_write_per_mtok is not None
+        else input_rate * 1.25
+    )
 
     # Calculate regular input (excluding cache tokens)
     regular_input = max(0, input_tokens - cache_read_tokens - cache_creation_tokens)
 
     # Apply costs
-    input_cost = regular_input * costs["input"]
-    cache_read_cost = cache_read_tokens * costs["input"] * 0.1  # 90% discount
-    cache_creation_cost = cache_creation_tokens * costs["input"] * 1.25  # 25% premium
-    output_cost = output_tokens * costs["output"]
+    input_cost = regular_input * input_rate
+    cache_read_cost = cache_read_tokens * cache_read_rate
+    cache_creation_cost = cache_creation_tokens * cache_write_rate
+    output_cost = output_tokens * output_rate
 
     total = (input_cost + cache_read_cost + cache_creation_cost + output_cost) / 1_000_000
     return total
