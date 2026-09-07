@@ -29,6 +29,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Vault context retrieval now has a configurable deadline and bounded worker
+  capacity. A timeout or saturated retrieval backlog forwards the original
+  request unchanged and records an explicit degradation reason.
 - Corrected stale model rates and family fallbacks used by cost and savings
   estimates. Fresh versioned telemetry catalogs normalize explicitly tagged
   per-million provider constants into the existing USD-per-1K public API and

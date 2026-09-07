@@ -339,6 +339,7 @@ SESSION: dict[str, object] = {
     "injected_tokens": 0,
     "injection_hits": 0,
     "injection_skips": 0,
+    "injection_skip_reasons": {},
     "cache_read_tokens": 0,
     "cache_creation_tokens": 0,
     "cache_hits": 0,

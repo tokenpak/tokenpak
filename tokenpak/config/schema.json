@@ -44,7 +44,8 @@
         "index_path": {"type": "string"},
         "inject_budget": {"type": "integer", "minimum": 0},
         "inject_top_k": {"type": "integer", "minimum": 0},
-        "inject_min_score": {"type": "number", "minimum": 0}
+        "inject_min_score": {"type": "number", "minimum": 0},
+        "retrieval_timeout_ms": {"type": "integer", "minimum": 1}
       },
       "additionalProperties": false
     },

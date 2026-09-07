@@ -16,6 +16,7 @@ import logging
 import math
 import os
 import platform
+import queue
 import re
 import sys
 import threading
@@ -25,6 +26,8 @@ from bisect import bisect_left as _bisect_left
 from collections import Counter as _Counter
 from collections import OrderedDict as _OrderedDict
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import Future as _Future
+from concurrent.futures import TimeoutError as _FutureTimeout
 from dataclasses import dataclass as _dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -45,6 +48,7 @@ from .config import (
     INJECT_MIN_SCORE,
     INJECT_TOP_K,
     RETRIEVAL_BACKEND,
+    RETRIEVAL_TIMEOUT_MS,
     SKELETON_ENABLED,
     VAULT_AUTO_REINDEX_INTERVAL,
     VAULT_INDEX_PATH,
@@ -62,6 +66,103 @@ logger = logging.getLogger(__name__)
 
 Block = dict[str, object]
 SearchResult = tuple[Block, float]
+_InjectionResult = tuple[bytes, int, list[str], str]
+
+
+class _VaultRetrievalTimeout(TimeoutError):
+    """Raised when vault retrieval exceeds its configured request budget."""
+
+    def __init__(self, timeout_ms: int) -> None:
+        self.timeout_ms = timeout_ms
+        super().__init__(f"vault retrieval exceeded {timeout_ms}ms")
+
+
+class _VaultRetrievalBacklog(RuntimeError):
+    """Raised when every bounded retrieval worker is already occupied."""
+
+
+class _BoundedDaemonExecutor:
+    """Small lazy worker pool whose stuck tasks cannot delay interpreter exit.
+
+    ``ThreadPoolExecutor`` registers an exit hook that waits for every worker,
+    including workers abandoned after a timeout. Retrieval must fail open even
+    during shutdown, so these workers are explicit daemon threads instead. The
+    semaphore bounds running plus queued work; once both slots are occupied, a
+    caller gets an immediate backlog receipt rather than growing a task queue.
+    """
+
+    def __init__(self, max_workers: int) -> None:
+        self._max_workers = max_workers
+        self._slots = threading.BoundedSemaphore(max_workers)
+        self._queue: queue.Queue[
+            tuple[_Future[_InjectionResult], Callable[[], _InjectionResult]]
+        ] = queue.Queue(maxsize=max_workers)
+        self._start_lock = threading.Lock()
+        self._started = False
+
+    def _ensure_started(self) -> None:
+        if self._started:
+            return
+        with self._start_lock:
+            if self._started:
+                return
+            for worker_number in range(self._max_workers):
+                worker = threading.Thread(
+                    target=self._worker,
+                    name=f"tokenpak-vault-retrieval-{worker_number + 1}",
+                    daemon=True,
+                )
+                worker.start()
+            self._started = True
+
+    def _worker(self) -> None:
+        while True:
+            future, callback = self._queue.get()
+            try:
+                if future.set_running_or_notify_cancel():
+                    try:
+                        future.set_result(callback())
+                    except BaseException as error:
+                        future.set_exception(error)
+            finally:
+                self._slots.release()
+                self._queue.task_done()
+
+    def submit(self, callback: Callable[[], _InjectionResult]) -> _Future[_InjectionResult]:
+        if not self._slots.acquire(blocking=False):
+            raise _VaultRetrievalBacklog("vault retrieval workers are saturated")
+
+        future: _Future[_InjectionResult] = _Future()
+        try:
+            self._ensure_started()
+            self._queue.put_nowait((future, callback))
+        except BaseException:
+            self._slots.release()
+            raise
+        return future
+
+
+_RETRIEVAL_POOL = _BoundedDaemonExecutor(max_workers=2)
+_RETRIEVAL_SKIP_COUNTS = {"retrieval_timeout": 0, "retrieval_backlog": 0}
+_RETRIEVAL_SKIP_LOCK = threading.Lock()
+_RETRIEVAL_WARNING_EVERY = 10
+
+
+def _record_retrieval_skip(reason: str, *, timeout_ms: int | None = None) -> None:
+    """Count retrieval degradation and emit a rate-limited warning."""
+    with _RETRIEVAL_SKIP_LOCK:
+        count = _RETRIEVAL_SKIP_COUNTS[reason] + 1
+        _RETRIEVAL_SKIP_COUNTS[reason] = count
+    if count == 1 or count % _RETRIEVAL_WARNING_EVERY == 0:
+        if timeout_ms is None:
+            logger.warning("Vault injection skipped: %s (count=%d)", reason, count)
+        else:
+            logger.warning(
+                "Vault injection skipped: %s after %dms (count=%d)",
+                reason,
+                timeout_ms,
+                count,
+            )
 
 
 class _VaultIndexBackend(Protocol):
@@ -1257,7 +1358,7 @@ CAPSULE_BUILDER = _LazyAlias(get_capsule_builder)
 # ---------------------------------------------------------------------------
 
 
-def _inject_vault_context_with_text(
+def _retrieve_vault_context_with_text(
     body_bytes: bytes,
     adapter: FormatAdapter | None = None,
     *,
@@ -1416,6 +1517,38 @@ def _inject_vault_context_with_text(
     return new_body, combined_tokens, source_refs, combined_injection
 
 
+def _inject_vault_context_with_text(
+    body_bytes: bytes,
+    adapter: FormatAdapter | None = None,
+    *,
+    request: ProxyRequest | None = None,
+) -> _InjectionResult:
+    """Run vault retrieval within the configured bounded worker budget.
+
+    A timed-out task may still finish in its daemon worker, but it continues to
+    occupy one of two fixed slots until it does. This prevents abandoned work
+    from piling up; callers beyond the bound receive ``retrieval_backlog``.
+    """
+    timeout_ms = max(1, int(RETRIEVAL_TIMEOUT_MS))
+    retrieval_body = request.body if request is not None else body_bytes
+    try:
+        future = _RETRIEVAL_POOL.submit(
+            lambda: _retrieve_vault_context_with_text(
+                retrieval_body,
+                adapter=adapter,
+            )
+        )
+    except _VaultRetrievalBacklog:
+        _record_retrieval_skip("retrieval_backlog")
+        raise
+
+    try:
+        return future.result(timeout=timeout_ms / 1000)
+    except _FutureTimeout:
+        _record_retrieval_skip("retrieval_timeout", timeout_ms=timeout_ms)
+        raise _VaultRetrievalTimeout(timeout_ms) from None
+
+
 def inject_vault_context(
     body_bytes: bytes,
     adapter: FormatAdapter | None = None,
@@ -1428,9 +1561,13 @@ def inject_vault_context(
     byte-preserved callers that also need the raw injection text use the
     private helper above.
     """
-    new_body, injected_tokens, source_refs, _ = _inject_vault_context_with_text(
-        body_bytes,
-        adapter=adapter,
-        request=request,
-    )
+    original_body = request.body if request is not None else body_bytes
+    try:
+        new_body, injected_tokens, source_refs, _ = _inject_vault_context_with_text(
+            body_bytes,
+            adapter=adapter,
+            request=request,
+        )
+    except (_VaultRetrievalTimeout, _VaultRetrievalBacklog):
+        return original_body, 0, []
     return new_body, injected_tokens, source_refs

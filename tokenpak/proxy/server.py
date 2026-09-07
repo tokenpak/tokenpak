@@ -279,6 +279,8 @@ class _SessionState(TypedDict):
     ingest_entries: int
     injected_tokens: int
     injection_hits: int
+    injection_skips: int
+    injection_skip_reasons: dict[str, int]
     injected_source_names: list[str]
 
 
@@ -641,6 +643,8 @@ def _new_session() -> _SessionState:
         "ingest_entries": 0,
         "injected_tokens": 0,
         "injection_hits": 0,
+        "injection_skips": 0,
+        "injection_skip_reasons": {},
         "injected_source_names": [],
     }
 
@@ -840,8 +844,8 @@ class _ThreadedHTTPServer(HTTPServer):
 _VAULT_STAGE_NAME = "vault_injection"
 
 
-def _read_injection_receipt(result: object) -> tuple[int, str]:
-    """Extract ``(injected_tokens, injected_sources)`` from a pipeline result.
+def _read_injection_receipt(result: object) -> tuple[int, str, str]:
+    """Extract tokens, sources, and skip reason from a pipeline result.
 
     The vault stage records both onto ``StageResult.details``. Nothing consumed
     them, so the monitor row and the live session both reported zero while
@@ -850,8 +854,9 @@ def _read_injection_receipt(result: object) -> tuple[int, str]:
     ``injected_sources`` is stored as a comma-separated string because that is
     the column type the monitor already declares (``injected_sources TEXT``).
 
-    Returns ``(0, "")`` when the stage is absent or was skipped — a measured
-    zero, not a default.
+    Returns measured zeros when the stage is absent. A skipped stage also
+    carries its machine-readable reason so bounded retrieval degradation is
+    observable without changing the provider-bound request.
 
     Fail-open at the function boundary, not just at the call site: a
     malformed or adversarial ``result`` (a non-dict ``details`` — the
@@ -866,10 +871,11 @@ def _read_injection_receipt(result: object) -> tuple[int, str]:
             if getattr(stage, "name", "") != _VAULT_STAGE_NAME:
                 continue
             if getattr(stage, "skipped", False):
-                return 0, ""
+                reason = getattr(stage, "skip_reason", "")
+                return 0, "", reason if isinstance(reason, str) else ""
             details = getattr(stage, "details", None)
             if not isinstance(details, dict):
-                return 0, ""
+                return 0, "", ""
             tokens = details.get("injected_tokens", 0)
             sources = details.get("injected_sources", "")
             try:
@@ -880,10 +886,10 @@ def _read_injection_receipt(result: object) -> tuple[int, str]:
                 sources = ",".join(str(s) for s in sources if s)
             elif not isinstance(sources, str):
                 sources = str(sources) if sources else ""
-            return tokens, sources
-        return 0, ""
+            return tokens, sources, ""
+        return 0, "", ""
     except Exception:
-        return 0, ""
+        return 0, "", ""
 
 
 #: Upper bound on distinct source names retained on the session for display.
@@ -891,7 +897,10 @@ _MAX_SESSION_SOURCES = 20
 
 
 def _record_injection_in_session(
-    session: _SessionState, injected_tokens: int, injected_sources: str = ""
+    session: _SessionState,
+    injected_tokens: int,
+    injected_sources: str = "",
+    skip_reason: str = "",
 ) -> None:
     """Accumulate injection totals onto ``ProxyServer.session`` — the dict that
     backs request accounting and ``GET /stats``, which is what ``tokenpak
@@ -916,9 +925,16 @@ def _record_injection_in_session(
     function does no locking of its own, matching every other session-counter
     update at the call site. Best-effort: telemetry must never affect a request.
     """
-    if injected_tokens <= 0:
-        return
     try:
+        if skip_reason in {"retrieval_timeout", "retrieval_backlog"}:
+            session["injection_skips"] = int(session.get("injection_skips", 0)) + 1
+            existing_reasons = session.get("injection_skip_reasons")
+            updated_reasons = dict(existing_reasons) if isinstance(existing_reasons, dict) else {}
+            updated_reasons[skip_reason] = int(updated_reasons.get(skip_reason, 0)) + 1
+            session["injection_skip_reasons"] = updated_reasons
+
+        if injected_tokens <= 0:
+            return
         session["injected_tokens"] = int(session.get("injected_tokens", 0)) + injected_tokens
         session["injection_hits"] = int(session.get("injection_hits", 0)) + 1
 
@@ -1626,6 +1642,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # was injected, never zero by omission.
         _injected_tokens = 0
         _injected_sources = ""
+        _injection_skip_reason = ""
 
         trace: PipelineTrace | None = None
         if should_log and is_model_request:
@@ -1958,7 +1975,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # that did the work, never from a default. The session write
                     # happens later, under `ps._session_lock`, alongside every other
                     # per-request counter update — not here.
-                    _injected_tokens, _injected_sources = _read_injection_receipt(_result)
+                    (
+                        _injected_tokens,
+                        _injected_sources,
+                        _injection_skip_reason,
+                    ) = _read_injection_receipt(_result)
                 except Exception:
                     pass  # fail-open: vault injection failure must never break a request
             else:
@@ -2025,9 +2046,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # empty body) since `request.body` is left untouched then.
                     _prj, _vstage = stage_vault_injection(_prj, _policy, adapter=_adapter)
                     body = _prj.body
-                    _injected_tokens, _injected_sources = _read_injection_receipt(
-                        _PLResultJ(request=_prj, stages=[_vstage])
-                    )
+                    (
+                        _injected_tokens,
+                        _injected_sources,
+                        _injection_skip_reason,
+                    ) = _read_injection_receipt(_PLResultJ(request=_prj, stages=[_vstage]))
                 except Exception:
                     pass  # fail-open: vault injection failure must never break a request
 
@@ -2884,7 +2907,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # Vault-injection receipt onto the *real* session `tokenpak
                     # status` reads (via GET /stats), not the compatibility
                     # global — see _record_injection_in_session.
-                    _record_injection_in_session(ps.session, _injected_tokens, _injected_sources)
+                    _record_injection_in_session(
+                        ps.session,
+                        _injected_tokens,
+                        _injected_sources,
+                        _injection_skip_reason,
+                    )
 
                 # Persist to monitor.db so `tokenpak status`, dashboards, and
                 # cross-session reporting see this request. Async write queue

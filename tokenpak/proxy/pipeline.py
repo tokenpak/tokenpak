@@ -137,20 +137,35 @@ def stage_vault_injection(
         result.skip_reason = "disabled_by_config"
         return request, result
 
+    try:
+        from tokenpak.proxy.vault_bridge import (
+            _inject_vault_context_with_text,
+            _VaultRetrievalBacklog,
+            _VaultRetrievalTimeout,
+        )
+    except ImportError:
+        result.skipped = True
+        result.skip_reason = "vault_bridge_unavailable"
+        return request, result
+
     if inject_fn is None:
-        try:
-            from tokenpak.proxy.vault_bridge import _inject_vault_context_with_text
-        except ImportError:
-            result.skipped = True
-            result.skip_reason = "vault_bridge_unavailable"
-            return request, result
         inject_fn = _inject_vault_context_with_text
 
-    body, injected_tokens, injected_sources, injection_text = inject_fn(
-        request.body,
-        adapter=adapter,
-        request=request,
-    )
+    try:
+        body, injected_tokens, injected_sources, injection_text = inject_fn(
+            request.body,
+            adapter=adapter,
+            request=request,
+        )
+    except _VaultRetrievalTimeout as error:
+        result.skipped = True
+        result.skip_reason = "retrieval_timeout"
+        result.details["timeout_ms"] = error.timeout_ms
+        return request, result
+    except _VaultRetrievalBacklog:
+        result.skipped = True
+        result.skip_reason = "retrieval_backlog"
+        return request, result
 
     if injection_mode == "byte_splice":
         # Don't apply the JSON-mutated body — save the text for byte splicing

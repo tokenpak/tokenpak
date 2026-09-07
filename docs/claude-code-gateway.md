@@ -199,6 +199,7 @@ currently not supported."
 | `TOKENPAK_CC_INJECT_MIN_QUERY` | `50` | Min user prompt length to trigger vault injection |
 | `TOKENPAK_INJECT_MIN_SCORE` | `2.0` | Min BM25 relevance score for vault blocks |
 | `TOKENPAK_INJECT_BUDGET` | `4000` | Vault search budget (tokens) — results trimmed by CC max |
+| `TOKENPAK_RETRIEVAL_TIMEOUT_MS` | `2000` | Vault retrieval deadline; timeout forwards the original request unchanged |
 | `TOKENPAK_SEMANTIC_CACHE` | `0` | Enable semantic cache (`1` to enable) |
 | `TOKENPAK_UPSTREAM_TIMEOUT` | `90` | Upstream request timeout in seconds |
 

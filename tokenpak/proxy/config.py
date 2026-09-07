@@ -48,6 +48,7 @@ __all__ = (
     "QUERY_REWRITER_ENABLED",
     "REQUEST_LOGGER_ENABLED",
     "RETRIEVAL_BACKEND",
+    "RETRIEVAL_TIMEOUT_MS",
     "RETRIEVAL_WATCHDOG_ENABLED",
     "ROUTER_ENABLED",
     "SALIENCE_ROUTER_ENABLED",
@@ -700,6 +701,15 @@ VAULT_CACHE_PRELOAD: int = _cfg(
 RETRIEVAL_BACKEND = _cfg(
     "vault.retrieval_backend", "json_blocks", "TOKENPAK_RETRIEVAL_BACKEND", str
 ).lower()
+RETRIEVAL_TIMEOUT_MS: int = max(
+    1,
+    _cfg(
+        "vault.retrieval_timeout_ms",
+        2000,
+        "TOKENPAK_RETRIEVAL_TIMEOUT_MS",
+        int,
+    ),
+)
 
 # Term-Card Resolver — enabled by default; opt out with TOKENPAK_TERM_RESOLVER_ENABLED=0
 TERM_RESOLVER_ENABLED: bool = _cfg(

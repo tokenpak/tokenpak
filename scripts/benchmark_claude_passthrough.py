@@ -104,6 +104,16 @@ def _no_vault_result(
     return body, 0, [], ""
 
 
+class _OfflineRetrievalTimeout(TimeoutError):
+    """Test-double exception matching the bounded retrieval contract."""
+
+    timeout_ms = 0
+
+
+class _OfflineRetrievalBacklog(RuntimeError):
+    """Test-double exception matching the bounded retrieval contract."""
+
+
 def _calibration_once(body: bytes, headers: dict[str, str]) -> int:
     """Frozen non-product workload that tracks the target's JSON and allocation cost."""
     total = 0
@@ -203,6 +213,8 @@ def run_benchmark(
 
     offline_vault_bridge = types.ModuleType("tokenpak.proxy.vault_bridge")
     offline_vault_bridge._inject_vault_context_with_text = _no_vault_result  # type: ignore[attr-defined]
+    offline_vault_bridge._VaultRetrievalTimeout = _OfflineRetrievalTimeout  # type: ignore[attr-defined]
+    offline_vault_bridge._VaultRetrievalBacklog = _OfflineRetrievalBacklog  # type: ignore[attr-defined]
 
     with (
         # The scenario deliberately benchmarks the injection-capable route.

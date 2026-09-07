@@ -39,10 +39,11 @@ from tokenpak.proxy.server import (
 
 
 class _Stage:
-    def __init__(self, name, skipped=False, details=None):
+    def __init__(self, name, skipped=False, details=None, skip_reason=""):
         self.name = name
         self.skipped = skipped
         self.details = details if details is not None else {}
+        self.skip_reason = skip_reason
 
 
 class _Result:
@@ -68,9 +69,10 @@ def _injecting_result(tokens=412, sources="decisions/auth.md,notes/api.md"):
 
 
 def test_receipt_is_read_from_the_vault_stage():
-    tokens, sources = _read_injection_receipt(_injecting_result())
+    tokens, sources, skip_reason = _read_injection_receipt(_injecting_result())
     assert tokens == 412
     assert sources == "decisions/auth.md,notes/api.md"
+    assert skip_reason == ""
 
 
 def test_receipt_accepts_sources_as_a_sequence():
@@ -83,7 +85,7 @@ def test_receipt_accepts_sources_as_a_sequence():
             )
         ]
     )
-    assert _read_injection_receipt(result) == (7, "a.md,b.md")
+    assert _read_injection_receipt(result) == (7, "a.md,b.md", "")
 
 
 @pytest.mark.parametrize(
@@ -96,7 +98,13 @@ def test_receipt_accepts_sources_as_a_sequence():
     ids=["no-stages", "no-vault-stage", "vault-stage-skipped"],
 )
 def test_non_injecting_requests_report_a_measured_zero(result):
-    assert _read_injection_receipt(result) == (0, "")
+    assert _read_injection_receipt(result) == (0, "", "")
+
+
+@pytest.mark.parametrize("reason", ["retrieval_timeout", "retrieval_backlog"])
+def test_bounded_retrieval_skip_reason_is_preserved(reason):
+    result = _Result([_Stage("vault_injection", skipped=True, skip_reason=reason)])
+    assert _read_injection_receipt(result) == (0, "", reason)
 
 
 def test_malformed_details_do_not_raise():
@@ -109,7 +117,7 @@ def test_malformed_details_do_not_raise():
             )
         ]
     )
-    assert _read_injection_receipt(result) == (0, "")
+    assert _read_injection_receipt(result) == (0, "", "")
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +134,7 @@ def test_receipt_reading_fails_open_on_non_dict_details(details):
     """``details`` deserialized as a list/scalar instead of an object — the
     "valid non-object JSON" shape — must report a measured zero, not raise."""
     result = _Result([_Stage("vault_injection", details=details)])
-    assert _read_injection_receipt(result) == (0, "")
+    assert _read_injection_receipt(result) == (0, "", "")
 
 
 def test_receipt_reading_fails_open_on_a_raising_stages_property():
@@ -139,7 +147,7 @@ def test_receipt_reading_fails_open_on_a_raising_stages_property():
         def stages(self):
             raise RuntimeError("synthetic failure reading stages")
 
-    assert _read_injection_receipt(_ExplodingResult()) == (0, "")
+    assert _read_injection_receipt(_ExplodingResult()) == (0, "", "")
 
 
 def test_receipt_reading_fails_open_on_a_raising_stage_attribute():
@@ -150,7 +158,7 @@ def test_receipt_reading_fails_open_on_a_raising_stage_attribute():
         def skipped(self):
             raise RuntimeError("synthetic failure reading skipped")
 
-    assert _read_injection_receipt(_Result([_ExplodingStage()])) == (0, "")
+    assert _read_injection_receipt(_Result([_ExplodingStage()])) == (0, "", "")
 
 
 def test_session_recording_fails_open_on_an_injected_exception():
@@ -194,6 +202,20 @@ def test_non_injecting_request_does_not_count_as_a_hit(proxy_server):
         _record_injection_in_session(proxy_server.session, 0, "")
     assert proxy_server.session["injected_tokens"] == 0
     assert proxy_server.session["injection_hits"] == 0
+
+
+def test_bounded_retrieval_degradation_reaches_stats(proxy_server):
+    with proxy_server._session_lock:
+        _record_injection_in_session(proxy_server.session, 0, "", "retrieval_timeout")
+        _record_injection_in_session(proxy_server.session, 0, "", "retrieval_timeout")
+        _record_injection_in_session(proxy_server.session, 0, "", "retrieval_backlog")
+
+    session = proxy_server.stats()["session"]
+    assert session["injection_skips"] == 3
+    assert session["injection_skip_reasons"] == {
+        "retrieval_timeout": 2,
+        "retrieval_backlog": 1,
+    }
 
 
 def test_session_source_list_is_bounded(proxy_server):
@@ -270,13 +292,13 @@ def test_injecting_request_is_nameable_end_to_end_via_the_real_stats_surface(
     or because it writes an object no consumer reads (the first fix).
     """
     ps = ProxyServer(host="127.0.0.1", port=0)
-    tokens, sources = _read_injection_receipt(_injecting_result())
+    tokens, sources, skip_reason = _read_injection_receipt(_injecting_result())
     with ps._session_lock:
         # A real request also bumps `requests` in this same locked block —
         # without it `status.run()` takes its "no measurements yet" early
         # exit before ever reaching the injection line.
         ps.session["requests"] += 1
-        _record_injection_in_session(ps.session, tokens, sources)
+        _record_injection_in_session(ps.session, tokens, sources, skip_reason)
 
     stats_payload = ps.stats()
 
