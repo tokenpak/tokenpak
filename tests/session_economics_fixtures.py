@@ -220,6 +220,18 @@ def available_payload() -> dict[str, Any]:
     return payload
 
 
+def soft_block_payload() -> dict[str, Any]:
+    """Observed session at the configured soft guard boundary."""
+    payload = copy.deepcopy(LEARNING_PAYLOAD)
+    payload["runway"] = {
+        "status": "available",
+        "turns": 0,
+        "binding_constraint": "context_soft",
+        "guard_state": "soft_block",
+    }
+    return payload
+
+
 def time_available_payload() -> dict[str, Any]:
     """LEARNING_PAYLOAD with ``time_forecast`` upgraded to a published,
     gate-satisfied ``available`` band — fixture-only; no real coverage has
