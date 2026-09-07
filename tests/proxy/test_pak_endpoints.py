@@ -3,8 +3,8 @@
 
 Per Std 32 §10 every OSS-side hook gets daemon-present (mocked) and
 daemon-absent path coverage. The daemon-absent path is what real users
-hit (Pro daemon is opt-in install); daemon-present is mocked here via
-sock-info file fixtures + a captive socket on a free local port.
+hit (Pro daemon is opt-in install); daemon-present is exercised here via
+sock-info file fixtures + a loopback HTTP health responder.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ from __future__ import annotations
 import io
 import json
 import socket
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -27,18 +29,40 @@ from tokenpak.licensing import daemon_probe
 
 @pytest.fixture
 def sock_info(tmp_path):
-    """Write a sock-info file pointing at a captive listener and return both."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(("127.0.0.1", 0))
-    sock.listen(1)
-    port = sock.getsockname()[1]
+    """Write sock-info pointing at a compatible health responder."""
+
+    class _Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_GET(self):  # noqa: N802
+            payload = json.dumps(
+                {
+                    "ok": True,
+                    "service": "tokenpak-paid-daemon",
+                    "compatibility_status": "declared",
+                    "tokenpak_min_version": "1.24.0",
+                    "tokenpak_max_version": "1.24.0",
+                    "tip_min_version": "TIP-1.0",
+                    "tip_max_version": "TIP-1.0",
+                }
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    server = HTTPServer(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
     info_path = tmp_path / "daemon.sock-info"
     info_path.write_text(json.dumps({"port": port, "tip_version": "1.0", "started_at": 0}))
-    yield info_path, port, sock
-    try:
-        sock.close()
-    except OSError:
-        pass
+    yield info_path, port, server
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=1.0)
 
 
 def test_state_unavailable_when_file_missing(tmp_path):
@@ -165,6 +189,7 @@ def test_status_returns_200_with_required_fields():
     # Required schema per Std 25 §3.4 + Std 32 §13.1 Decision #6
     for key in (
         "daemon_state",
+        "daemon_state_reason",
         "multipak_enabled",
         "pak_store_present",
         "vault_paks_indexed",
@@ -179,6 +204,7 @@ def test_status_daemon_state_is_unavailable_by_default():
         h = _get("/pak/v1/status")
     body = h.response_json()
     assert body["daemon_state"] == "unavailable"
+    assert body["daemon_state_reason"] == "sock_info_absent"
 
 
 def test_status_multipak_enabled_defaults_false(monkeypatch):
@@ -636,9 +662,6 @@ def test_unknown_pak_post_returns_404():
 # Tests use a minimal stub HTTP server in a thread to stand in for the
 # real Pro daemon (which is closed-source and not importable here).
 
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
-
 
 class _DaemonStub:
     """Tiny localhost HTTP server that records forwarded requests.
@@ -666,6 +689,27 @@ class _DaemonStub:
         class _Handler(BaseHTTPRequestHandler):
             def log_message(self, *_a, **_kw):  # silence noise
                 pass
+
+            def do_GET(self):  # noqa: N802
+                if self.path != "/v1/health":
+                    self.send_error(404)
+                    return
+                body = json.dumps(
+                    {
+                        "ok": True,
+                        "service": "tokenpak-paid-daemon",
+                        "compatibility_status": "declared",
+                        "tokenpak_min_version": "1.24.0",
+                        "tokenpak_max_version": "1.24.0",
+                        "tip_min_version": "TIP-1.0",
+                        "tip_max_version": "TIP-1.0",
+                    }
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
 
             def do_POST(self):  # noqa: N802
                 length = int(self.headers.get("Content-Length", "0") or "0")
@@ -705,6 +749,39 @@ def test_promote_returns_501_when_daemon_absent(tmp_path):
     body = h.response_json()
     assert body["error"] == "not_implemented"
     assert body["reason"] == "pro_daemon_required"
+    assert body["daemon_state_reason"] == "sock_info_absent"
+
+
+def test_promote_requires_active_compatibility_probe(monkeypatch):
+    monkeypatch.setattr(
+        daemon_probe,
+        "probe_daemon",
+        lambda **_kwargs: ("tip_mismatch", "tip_out_of_range"),
+    )
+    h = _post("/pak/v1/promote", body=b"{}")
+    assert h.response_status() == 501
+    body = h.response_json()
+    assert body["daemon_state"] == "tip_mismatch"
+    assert body["daemon_state_reason"] == "tip_out_of_range"
+
+
+def test_promote_sock_info_race_does_not_retry_probe(tmp_path, monkeypatch):
+    calls = 0
+
+    def active_probe(**_kwargs):
+        nonlocal calls
+        calls += 1
+        return ("active", "ok")
+
+    monkeypatch.setattr(daemon_probe, "probe_daemon", active_probe)
+    monkeypatch.setattr(daemon_probe, "sock_info_path", lambda: tmp_path / "missing")
+    h = _post("/pak/v1/promote", body=b"{}")
+
+    assert calls == 1
+    assert h.response_status() == 501
+    body = h.response_json()
+    assert body["daemon_state"] == "unavailable"
+    assert body["daemon_state_reason"] == "sock_info_malformed"
 
 
 def test_promote_forwards_to_daemon_when_active(tmp_path):

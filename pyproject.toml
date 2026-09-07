@@ -247,6 +247,7 @@ exclude = [
 [tool.setuptools.package-data]
 tokenpak = [
     "py.typed",
+    "version.json",
     "budget_config.yaml",
     "term_cards.json",
     "recipes_oss/*.yaml",
