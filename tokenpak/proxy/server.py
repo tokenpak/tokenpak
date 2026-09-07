@@ -4134,14 +4134,20 @@ def _extract_request_reasoning_effort(body: bytes | None) -> tuple[str, str]:
         data = json.loads(body)
         if not isinstance(data, Mapping):
             return "", ""
-        value = data.get("reasoning_effort")
+        candidates: list[object] = [data.get("reasoning_effort")]
         reasoning = data.get("reasoning")
-        if not isinstance(value, str) and isinstance(reasoning, Mapping):
-            value = reasoning.get("effort")
-        if not isinstance(value, str):
-            return "", ""
-        raw = value.strip()
-        return (raw if raw in {"low", "medium", "high"} else "", raw)
+        if isinstance(reasoning, Mapping):
+            candidates.append(reasoning.get("effort"))
+        output_config = data.get("output_config")
+        if isinstance(output_config, Mapping):
+            candidates.append(output_config.get("effort"))
+        for value in candidates:
+            if not isinstance(value, str):
+                continue
+            raw = value.strip()
+            if raw:
+                return (raw if raw in {"low", "medium", "high"} else "", raw)
+        return "", ""
     except (json.JSONDecodeError, UnicodeDecodeError):
         return "", ""
 
@@ -4206,14 +4212,14 @@ def _provider_usage_observation(
             if isinstance(provider_effort_raw, str) and provider_effort_raw
             else provider_effort
         )
-    elif request_effort:
-        effort = request_effort
-        effort_source = "request_body"
-        effort_raw = request_effort_raw
     elif isinstance(provider_effort_raw, str) and provider_effort_raw:
         effort = ""
         effort_source = "provider_usage_object_unrecognized"
         effort_raw = provider_effort_raw
+    elif request_effort:
+        effort = request_effort
+        effort_source = "request_body"
+        effort_raw = request_effort_raw
     elif request_effort_raw:
         effort = ""
         effort_source = "request_body_unrecognized"

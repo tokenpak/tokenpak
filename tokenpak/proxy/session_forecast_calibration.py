@@ -7,7 +7,8 @@ quantiles so the proxy carries no ML runtime. What is kept from the research
 is the part that made its numbers honest:
 
 - the target is the LOG REMAINING MULTIPLIER ``y = log(max(total/spent, 1))``
-  of *finished* sessions, never a point blend with already-spent tokens;
+  of session histories inactive for at least six hours, never a point blend
+  with already-spent tokens; inactivity is not verified task completion;
 - quantile bands are fit on a chronological train split and widened by
   split-conformal correction measured on the most recent calibration split,
   so the band's label is made true by construction rather than asserted;
@@ -48,6 +49,7 @@ from tokenpak.core.contracts.session_economics import (
     RunwayStatus,
     ValueState,
 )
+from tokenpak.proxy.spend_guard.session_state import _reasoning_effort_cell
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +58,12 @@ logger = logging.getLogger(__name__)
 #: surfaced in the learning reason so a borrowed prior is always attributable.
 PRIOR_VERSION = "tokenpak-builtin-prior/1"
 
-#: Trust floor: a cell forecasts only after this many of its own finished
-#: sessions have been measured by the walk-forward replay.
+#: Trust floor: a cell forecasts only after this many of its own inactive
+#: session histories have been measured by the walk-forward replay.
 MIN_CELL_SESSIONS = 20
 #: Minimum scored walk-forward points before observed coverage is trusted.
 MIN_SCORED_POINTS = 20
-#: A session counts as finished once idle past this horizon.
+#: Corpus closure proxy: session inactivity, never verified task completion.
 COMPLETION_IDLE_SECONDS = 6 * 3600
 #: Turn-index ceiling; deeper turns share the last bucket.
 KMAX = 15
@@ -81,8 +83,57 @@ RECENT_WINDOW = 60
 DRIFT_TOLERANCE = 12.0
 #: Bound history reads; newest sessions win.
 MAX_SESSIONS = 400
-#: Minimum finished-session turn count to enter the corpus (research floor).
+#: Minimum turn count for an inactive session history to enter the corpus.
 MIN_TURNS = 4
+
+# Schema inspection selects one of these complete, static projections. No
+# database-provided identifier is ever interpolated into executable SQL.
+_CORPUS_QUERY_BY_EFFORT_PROVENANCE: dict[tuple[bool, bool], str] = {
+    (False, False): (
+        "SELECT session_id, model, reasoning_effort, "
+        "'' AS reasoning_effort_source, '' AS reasoning_effort_raw, timestamp, "
+        "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
+        "provider_input_tokens, provider_output_tokens, "
+        "provider_cache_read_tokens, provider_cache_creation_tokens "
+        "FROM requests "
+        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+        "AND status_code BETWEEN 200 AND 599 "
+        "ORDER BY timestamp ASC, id ASC"
+    ),
+    (False, True): (
+        "SELECT session_id, model, reasoning_effort, "
+        "'' AS reasoning_effort_source, reasoning_effort_raw, timestamp, "
+        "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
+        "provider_input_tokens, provider_output_tokens, "
+        "provider_cache_read_tokens, provider_cache_creation_tokens "
+        "FROM requests "
+        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+        "AND status_code BETWEEN 200 AND 599 "
+        "ORDER BY timestamp ASC, id ASC"
+    ),
+    (True, False): (
+        "SELECT session_id, model, reasoning_effort, "
+        "reasoning_effort_source, '' AS reasoning_effort_raw, timestamp, "
+        "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
+        "provider_input_tokens, provider_output_tokens, "
+        "provider_cache_read_tokens, provider_cache_creation_tokens "
+        "FROM requests "
+        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+        "AND status_code BETWEEN 200 AND 599 "
+        "ORDER BY timestamp ASC, id ASC"
+    ),
+    (True, True): (
+        "SELECT session_id, model, reasoning_effort, "
+        "reasoning_effort_source, reasoning_effort_raw, timestamp, "
+        "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
+        "provider_input_tokens, provider_output_tokens, "
+        "provider_cache_read_tokens, provider_cache_creation_tokens "
+        "FROM requests "
+        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+        "AND status_code BETWEEN 200 AND 599 "
+        "ORDER BY timestamp ASC, id ASC"
+    ),
+}
 
 #: Built-in prior samples of the log remaining multiplier, expressed per
 #: turn-bucket as conservative wide shapes. Used only for internal pooling
@@ -98,7 +149,7 @@ _PRIOR_Y_BY_K: dict[int, tuple[float, ...]] = {
 
 @dataclass(frozen=True)
 class HistorySession:
-    """One finished session's per-turn total-token sequence."""
+    """One inactive session history's per-turn total-token sequence."""
 
     model: str
     effort: str
@@ -196,16 +247,14 @@ def _connect_ro(path: str) -> sqlite3.Connection:
 
 
 def _parse_corpus(conn: sqlite3.Connection) -> tuple[_CorpusEntry, ...]:
-    rows = conn.execute(
-        "SELECT session_id, model, reasoning_effort, timestamp, "
-        "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
-        "provider_input_tokens, provider_output_tokens, "
-        "provider_cache_read_tokens, provider_cache_creation_tokens "
-        "FROM requests "
-        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
-        "AND status_code BETWEEN 200 AND 599 "
-        "ORDER BY timestamp ASC, id ASC"
-    ).fetchall()
+    available = {str(row[1]) for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
+    query = _CORPUS_QUERY_BY_EFFORT_PROVENANCE[
+        (
+            "reasoning_effort_source" in available,
+            "reasoning_effort_raw" in available,
+        )
+    ]
+    rows = conn.execute(query).fetchall()
     grouped: dict[str, list[sqlite3.Row]] = {}
     for row in rows:
         sid = str(row["session_id"]).strip()
@@ -216,11 +265,30 @@ def _parse_corpus(conn: sqlite3.Connection) -> tuple[_CorpusEntry, ...]:
         last_ts = _parse_ts_utc(srows[-1]["timestamp"])
         if last_ts is None:
             continue
+        models = {str(row["model"] or "unknown").strip() or "unknown" for row in srows}
+        effort_observations = [
+            _reasoning_effort_cell(
+                row["reasoning_effort"],
+                row["reasoning_effort_raw"],
+                row["reasoning_effort_source"],
+            )
+            for row in srows
+        ]
+        efforts = {label for label, _unsupported in effort_observations}
+        if (
+            len(models) != 1
+            or len(efforts) != 1
+            or any(unsupported for _label, unsupported in effort_observations)
+        ):
+            # A stable session identity can legitimately cross model or
+            # effort boundaries. Its spend remains observable elsewhere, but
+            # its total cannot train either homogeneous calibration cell.
+            continue
         costs = tuple(c for c in (_row_total(r) for r in srows) if c > 0)
         if len(costs) < MIN_TURNS:
             continue
-        model = str(srows[-1]["model"] or "unknown").strip() or "unknown"
-        effort = str(srows[-1]["reasoning_effort"] or "unknown").strip() or "unknown"
+        model = next(iter(models))
+        effort = next(iter(efforts))
         entries.append(
             _CorpusEntry(
                 session_id=sid,
@@ -289,12 +357,13 @@ def read_history(
     now: datetime,
     exclude_session: str = "",
 ) -> list[HistorySession]:
-    """Finished-session corpus from the same ledger table the engine reads.
+    """Inactive-session corpus from the same ledger table the engine reads.
 
     Read-only and deterministic given the database contents and ``now``:
-    a session is finished when its last completed row is idle past the
-    completion horizon. The active session is excluded — its total is not
-    yet ground truth.
+    a session enters the corpus when its last completed row has been inactive
+    for six hours. This is a session-inactivity boundary, not verified task
+    completion. The active session is excluded because its observed total can
+    still grow.
     """
     if not monitor_db_path:
         return []
@@ -625,7 +694,7 @@ def _expected_turns(
     pool_sessions: Sequence[HistorySession],
     k: int,
 ) -> tuple[int, int] | None:
-    """Central-50% remaining-turn interval from finished-session lengths."""
+    """Central-50% remaining-turn interval from inactive-session lengths."""
     remaining = [s.turns - k for s in cell_sessions if s.turns > k]
     weight = POOL_STRENGTH / (len(remaining) + POOL_STRENGTH)
     borrow = [s.turns - k for s in pool_sessions if s.turns > k]
@@ -717,8 +786,9 @@ def build_calibrated_forecast(
         return _status_forecast(
             ForecastStatus.LEARNING,
             (
-                f"learning: {readiness.sessions} finished sessions for this "
-                f"model/effort (needs {MIN_CELL_SESSIONS}); borrowing "
+                f"learning: {readiness.sessions} session histories inactive for at least "
+                f"six hours for this model/effort (inactivity is not verified task "
+                f"completion; needs {MIN_CELL_SESSIONS}); borrowing "
                 f"{PRIOR_VERSION} until the cell's own coverage is measured"
             ),
         )

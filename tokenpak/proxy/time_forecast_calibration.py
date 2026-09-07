@@ -68,6 +68,7 @@ from tokenpak.proxy.session_forecast_calibration import (
     _pooled,
     _split,
 )
+from tokenpak.proxy.spend_guard.session_state import _reasoning_effort_cell
 
 logger = logging.getLogger(__name__)
 
@@ -82,11 +83,11 @@ BASIS = "timing-facts-v1"
 # constants — the two domains' tuning knobs must be free to diverge without
 # coupling.
 #: Trust floor: a cell is scored by the walk-forward replay only after this
-#: many of its own finished sessions are available.
+#: many of its own inactive session histories are available.
 MIN_CELL_SESSIONS = 20
 #: Minimum scored walk-forward points before observed coverage is trusted.
 MIN_SCORED_POINTS = 20
-#: A session counts as finished once idle past this horizon.
+#: Corpus closure proxy: session inactivity, never verified task completion.
 COMPLETION_IDLE_SECONDS = 6 * 3600
 #: Turn-index ceiling; deeper turns share the last bucket.
 KMAX = 15
@@ -106,8 +107,49 @@ RECENT_WINDOW = 60
 DRIFT_TOLERANCE = 12.0
 #: Bound history reads; newest sessions win.
 MAX_SESSIONS = 400
-#: Minimum finished-session turn count to enter the corpus (research floor).
+#: Minimum turn count for an inactive session history to enter the corpus.
 MIN_TURNS = 4
+
+# Schema inspection selects one of these complete, static projections. No
+# database-provided identifier is ever interpolated into executable SQL.
+_CORPUS_QUERY_BY_EFFORT_PROVENANCE: dict[tuple[bool, bool], str] = {
+    (False, False): (
+        "SELECT session_id, model, reasoning_effort, "
+        "'' AS reasoning_effort_source, '' AS reasoning_effort_raw, timestamp, "
+        "stream_mode, ttfb_ms, stream_duration_ms "
+        "FROM requests "
+        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+        "AND status_code BETWEEN 200 AND 599 "
+        "ORDER BY timestamp ASC, id ASC"
+    ),
+    (False, True): (
+        "SELECT session_id, model, reasoning_effort, "
+        "'' AS reasoning_effort_source, reasoning_effort_raw, timestamp, "
+        "stream_mode, ttfb_ms, stream_duration_ms "
+        "FROM requests "
+        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+        "AND status_code BETWEEN 200 AND 599 "
+        "ORDER BY timestamp ASC, id ASC"
+    ),
+    (True, False): (
+        "SELECT session_id, model, reasoning_effort, "
+        "reasoning_effort_source, '' AS reasoning_effort_raw, timestamp, "
+        "stream_mode, ttfb_ms, stream_duration_ms "
+        "FROM requests "
+        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+        "AND status_code BETWEEN 200 AND 599 "
+        "ORDER BY timestamp ASC, id ASC"
+    ),
+    (True, True): (
+        "SELECT session_id, model, reasoning_effort, "
+        "reasoning_effort_source, reasoning_effort_raw, timestamp, "
+        "stream_mode, ttfb_ms, stream_duration_ms "
+        "FROM requests "
+        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
+        "AND status_code BETWEEN 200 AND 599 "
+        "ORDER BY timestamp ASC, id ASC"
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -209,7 +251,7 @@ _PUBLISHED_TIME_PRIOR: dict[tuple[str, str, str], PublishedTimeCellEvidence] = {
 
 @dataclass(frozen=True)
 class TimeHistorySession:
-    """One finished session's per-turn wall-clock duration sequence (ms).
+    """One inactive session history's per-turn wall-clock duration sequence (ms).
 
     A turn's duration is ``ttfb_ms + stream_duration_ms`` — the same
     definition ``session_forecast.py`` uses to build ``elapsed_ms`` for the
@@ -310,14 +352,14 @@ def _connect_ro(path: str) -> sqlite3.Connection:
 def _parse_time_corpus(
     conn: sqlite3.Connection, *, exclude_session: str = ""
 ) -> list[TimeHistorySession]:
-    rows = conn.execute(
-        "SELECT session_id, model, reasoning_effort, timestamp, stream_mode, "
-        "ttfb_ms, stream_duration_ms "
-        "FROM requests "
-        "WHERE session_id IS NOT NULL AND TRIM(session_id) != '' "
-        "AND status_code BETWEEN 200 AND 599 "
-        "ORDER BY timestamp ASC, id ASC"
-    ).fetchall()
+    available = {str(row[1]) for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
+    query = _CORPUS_QUERY_BY_EFFORT_PROVENANCE[
+        (
+            "reasoning_effort_source" in available,
+            "reasoning_effort_raw" in available,
+        )
+    ]
+    rows = conn.execute(query).fetchall()
     excluded = exclude_session.strip()
     grouped: dict[str, list[sqlite3.Row]] = {}
     for row in rows:
@@ -338,16 +380,32 @@ def _parse_time_corpus(
         # single label for it.
         if len({_map_stream_mode(r["stream_mode"]) for r in srows}) > 1:
             continue
+        models = {str(row["model"] or "unknown").strip() or "unknown" for row in srows}
+        effort_observations = [
+            _reasoning_effort_cell(
+                row["reasoning_effort"],
+                row["reasoning_effort_raw"],
+                row["reasoning_effort_source"],
+            )
+            for row in srows
+        ]
+        efforts = {label for label, _unsupported in effort_observations}
+        if (
+            len(models) != 1
+            or len(efforts) != 1
+            or any(unsupported for _label, unsupported in effort_observations)
+        ):
+            # Preserve the stable session identity in the ledger, but do not
+            # assign mixed timing observations to the final row's cell.
+            continue
         durations = tuple(
             d for d in (_row_duration_ms(r) for r in srows) if d is not None and d > 0
         )
         if len(durations) < MIN_TURNS:
             continue
-        # A session's cell is keyed off its last observed stream_mode/model/
-        # effort, mirroring the token engine's precedent for model/effort.
         stream_mode = _map_stream_mode(srows[-1]["stream_mode"])
-        model = str(srows[-1]["model"] or "unknown").strip() or "unknown"
-        effort = str(srows[-1]["reasoning_effort"] or "unknown").strip() or "unknown"
+        model = next(iter(models))
+        effort = next(iter(efforts))
         sessions.append(
             TimeHistorySession(
                 model=model,
@@ -367,15 +425,16 @@ def read_time_history(
     now: datetime,
     exclude_session: str = "",
 ) -> list[TimeHistorySession]:
-    """Finished-session duration corpus from the same ledger table the token
+    """Inactive-session duration corpus from the same ledger table the token
     forecast's calibration reader reads.
 
     Read-only and deterministic given the database contents and ``now``: a
-    session is finished when its last completed row is idle past the
-    completion horizon. The active session is excluded — its total is not yet
-    ground truth. Any read failure (missing file, missing table, corrupt
-    schema) fails open to an empty corpus — the caller degrades honestly
-    rather than raising.
+    session enters the corpus when its last completed row has been inactive
+    for six hours. This is a session-inactivity boundary, not verified task
+    completion. The active session is excluded because its observed duration
+    can still grow. Any read failure (missing file, missing table, corrupt
+    schema) fails open to an empty corpus — the caller degrades honestly rather
+    than raising.
 
     This is the offline evidence-publishing job's measurement tool, not
     something the live forecast path calls — see the module docstring.

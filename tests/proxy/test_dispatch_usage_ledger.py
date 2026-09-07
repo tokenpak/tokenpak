@@ -80,6 +80,7 @@ class _UsageFixtureHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         request_body = self.rfile.read(length) if length else b""
+        self.server.last_request_body = request_body  # type: ignore[attr-defined]
         status = self.server.response_status  # type: ignore[attr-defined]
         provider = self.server.usage_provider  # type: ignore[attr-defined]
         is_streaming = "streamGenerateContent" in self.path or "alt=sse" in self.path
@@ -255,6 +256,72 @@ def test_openai_responses_stream_usage_and_request_effort_are_truthful():
         "reasoning_effort_raw": "high",
     }
     assert observed["provider_usage_ref"]
+
+
+@pytest.mark.parametrize(
+    ("request_body", "expected_effort", "expected_raw", "expected_source"),
+    [
+        (b"{}", "", "", ""),
+        (b'{"output_config":{}}', "", "", ""),
+        (b'{"output_config":{"effort":null}}', "", "", ""),
+        (
+            b'{"output_config":{"effort":"unknown"}}',
+            "",
+            "unknown",
+            "request_body_unrecognized",
+        ),
+        (
+            b'{"output_config":{"effort":"max"}}',
+            "",
+            "max",
+            "request_body_unrecognized",
+        ),
+    ],
+)
+def test_anthropic_effort_absence_and_explicit_unknown_stay_distinct(
+    request_body,
+    expected_effort,
+    expected_raw,
+    expected_source,
+):
+    before = bytes(request_body)
+    observed = _provider_usage_observation(
+        "anthropic",
+        {"input_tokens": 4, "output_tokens": 2},
+        request_body,
+    )
+    assert request_body == before
+    assert observed["reasoning_effort"] == expected_effort
+    assert observed["reasoning_effort_raw"] == expected_raw
+    assert observed["reasoning_effort_source"] == expected_source
+
+
+def test_effort_precedence_is_provider_then_explicit_request_shape():
+    provider_wins = _provider_usage_observation(
+        "openai",
+        {
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "total_tokens": 15,
+            "reasoning_effort": "xhigh",
+        },
+        b'{"output_config":{"effort":"high"}}',
+    )
+    assert provider_wins["reasoning_effort"] == ""
+    assert provider_wins["reasoning_effort_raw"] == "xhigh"
+    assert provider_wins["reasoning_effort_source"] == "provider_usage_object_unrecognized"
+
+    request_conflict = _provider_usage_observation(
+        "anthropic",
+        {"input_tokens": 10, "output_tokens": 5},
+        (
+            b'{"reasoning_effort":"low","reasoning":{"effort":"medium"},'
+            b'"output_config":{"effort":"high"}}'
+        ),
+    )
+    assert request_conflict["reasoning_effort"] == "low"
+    assert request_conflict["reasoning_effort_raw"] == "low"
+    assert request_conflict["reasoning_effort_source"] == "request_body"
 
 
 @pytest.mark.parametrize(
@@ -692,11 +759,27 @@ def test_real_proxy_persists_equivalent_usage_without_rewriting_responses(
         pytest.fail("proxy did not open its listener")
 
     try:
-        nonstream_status, nonstream_body = _post(port, target, stream=False)
-        stream_status, stream_body = _post(port, target, stream=True)
+        nonstream_payload = {
+            "model": "claude-sonnet-4-5",
+            "max_tokens": 32,
+            "messages": [{"role": "user", "content": "ledger truth probe"}],
+            "output_config": {"effort": "high"},
+            "stream": False,
+        }
+        nonstream_wire = json.dumps(nonstream_payload).encode()
+        nonstream_status, nonstream_body = _post(
+            port, target, stream=False, payload=nonstream_payload
+        )
+        nonstream_forwarded = stub_upstream.last_request_body
+        stream_payload = {**nonstream_payload, "stream": True}
+        stream_wire = json.dumps(stream_payload).encode()
+        stream_status, stream_body = _post(port, target, stream=True, payload=stream_payload)
+        stream_forwarded = stub_upstream.last_request_body
         assert nonstream_status == stream_status == 200
         assert nonstream_body == _JSON_BODY
         assert stream_body == _SSE_BODY
+        assert nonstream_forwarded == nonstream_wire
+        assert stream_forwarded == stream_wire
         assert proxy.monitor is not None
         assert proxy.monitor.flush(timeout=10.0)
 
@@ -709,6 +792,10 @@ def test_real_proxy_persists_equivalent_usage_without_rewriting_responses(
                 "provider_usage_confidence, provider_usage_provider, cost_basis, "
                 "pricing_source, estimated_cost, stream_mode, "
                 "event_transform_applied FROM requests ORDER BY id"
+            ).fetchall()
+            effort_rows = conn.execute(
+                "SELECT reasoning_effort, reasoning_effort_source, reasoning_effort_raw "
+                "FROM requests ORDER BY id"
             ).fetchall()
         finally:
             conn.close()
@@ -745,6 +832,10 @@ def test_real_proxy_persists_equivalent_usage_without_rewriting_responses(
     assert [row[-2:] for row in rows] == [("json", 0), ("sse", 0)]
     assert rows[0][-3] == pytest.approx(expected_cost)
     assert rows[1][-3] == pytest.approx(expected_cost)
+    assert effort_rows == [
+        ("high", "request_body", "high"),
+        ("high", "request_body", "high"),
+    ]
 
 
 @pytest.mark.needs_proxy
@@ -925,15 +1016,19 @@ def test_real_proxy_persists_openai_codex_and_google_json_sse_parity(
                 stream=False,
                 payload=json_payload,
             )
+            json_forwarded = upstream.last_request_body  # type: ignore[attr-defined]
             stream_status, relayed_stream = _post(
                 port,
                 f"{upstream_base}{stream_path}",
                 stream=True,
                 payload=stream_payload,
             )
+            stream_forwarded = upstream.last_request_body  # type: ignore[attr-defined]
             assert json_status == stream_status == 200
             assert relayed_json == json_body
             assert relayed_stream == stream_body
+            assert json_forwarded == json.dumps(json_payload).encode()
+            assert stream_forwarded == json.dumps(stream_payload).encode()
             assert proxy.monitor is not None
             assert proxy.monitor.flush(timeout=20.0)
 
@@ -945,6 +1040,10 @@ def test_real_proxy_persists_openai_codex_and_google_json_sse_parity(
                     "provider_usage_source, provider_usage_confidence, "
                     "provider_usage_provider, cost_basis, pricing_source, stream_mode, "
                     "event_transform_applied FROM requests ORDER BY id"
+                ).fetchall()
+                effort_rows = conn.execute(
+                    "SELECT reasoning_effort, reasoning_effort_source, reasoning_effort_raw "
+                    "FROM requests ORDER BY id"
                 ).fetchall()
         finally:
             proxy.stop()
@@ -958,8 +1057,13 @@ def test_real_proxy_persists_openai_codex_and_google_json_sse_parity(
     assert [row[10] for row in rows] == [expected_cost_basis, expected_cost_basis]
     if provider == "openai-codex":
         assert [row[11] for row in rows] == ["unknown", "unknown"]
+        assert effort_rows == [
+            ("high", "request_body", "high"),
+            ("high", "request_body", "high"),
+        ]
     else:
         assert all(row[11] in {"seed", "discovered", "inferred"} for row in rows)
+        assert effort_rows == [("", "", ""), ("", "", "")]
     assert [row[12:] for row in rows] == [("json", 0), ("sse", 0)]
 
 

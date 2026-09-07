@@ -55,6 +55,14 @@ This project follows [Semantic Versioning](https://semver.org/).
   of replacing them. Semantic journal entries can carry milestone or handoff
   types and source references, with identical records stored once and
   recoverable through `journal_read`.
+- Forecast inputs now capture Anthropic `output_config.effort`, preserve
+  provider effort precedence and raw provenance, and keep absent signals
+  unknown. Mixed-model or mixed-effort session histories no longer train or
+  receive a homogeneous forecast; the six-hour history boundary is reported
+  as session inactivity rather than verified task completion. Explicit effort
+  values outside the current low/medium/high contract remain unavailable for
+  calibration instead of being pooled with missing-effort history.
+
 - The `tokenpak.core.runtime.proxy` compatibility path is now write-through,
   not just read-through: assigning or deleting one of its 13 legacy names
   (e.g. `tokenpak.core.runtime.proxy.MONITOR = x`) now forwards to

@@ -39,6 +39,8 @@ _SESSION_LEDGER_COLUMNS = (
     "session_id",
     "agent_id",
     "reasoning_effort",
+    "reasoning_effort_source",
+    "reasoning_effort_raw",
     "provider_usage_ref",
     "provider_usage_provider",
     "provider_input_tokens",
@@ -54,6 +56,8 @@ _SESSION_LEDGER_COLUMNS = (
     "stream_duration_ms",
     "stream_mode",
 )
+
+_OPTIONAL_SESSION_LEDGER_COLUMNS = frozenset({"reasoning_effort_source", "reasoning_effort_raw"})
 
 
 @dataclass(frozen=True)
@@ -78,6 +82,8 @@ class _SessionLedgerRow:
     session_id: object
     agent_id: object
     reasoning_effort: object
+    reasoning_effort_source: object
+    reasoning_effort_raw: object
     provider_usage_ref: object
     provider_usage_provider: object
     provider_input_tokens: object
@@ -101,6 +107,35 @@ class _SessionLedgerRead:
     state: str
     rows: tuple[_SessionLedgerRow, ...] = ()
     reason: str = ""
+
+
+def _reasoning_effort_cell(
+    normalized: object,
+    raw: object,
+    source: object,
+) -> tuple[str, bool]:
+    """Return (cell label, unsupported-explicit-signal).
+
+    The normalized ledger contract recognizes low/medium/high. Empty legacy
+    rows are the honest ``unknown`` cell. A non-empty raw/source observation
+    without a recognized normalized value is explicit but unsupported; it
+    must not be pooled with requests that carried no effort signal.
+    """
+    normalized_text = normalized.strip() if isinstance(normalized, str) else ""
+    raw_text = raw.strip() if isinstance(raw, str) else ""
+    source_text = source.strip() if isinstance(source, str) else ""
+    source_has_signal = source_text not in {"", "unknown", "unavailable"}
+    if normalized_text in {"low", "medium", "high"}:
+        if (raw_text and raw_text != normalized_text) or source_text.endswith("_unrecognized"):
+            return "unknown", True
+        return normalized_text, False
+    if normalized_text == "unknown" and not raw_text and not source_has_signal:
+        # Compatibility with older synthetic/imported rows that explicitly
+        # stored the established unknown-cell label.
+        return "unknown", False
+    if normalized_text or raw_text or source_has_signal:
+        return "unknown", True
+    return "unknown", False
 
 
 def _path() -> Path:
@@ -237,14 +272,18 @@ def _read_completed_session_rows(
             return _SessionLedgerRead("no_data", reason="monitor ledger has no requests table")
 
         available = {str(row[1]) for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
-        missing = sorted(set(_SESSION_LEDGER_COLUMNS) - available)
+        required = set(_SESSION_LEDGER_COLUMNS) - _OPTIONAL_SESSION_LEDGER_COLUMNS
+        missing = sorted(required - available)
         if missing:
             return _SessionLedgerRead(
                 "error",
                 reason="monitor ledger schema is missing columns: " + ", ".join(missing),
             )
 
-        columns = ", ".join(_SESSION_LEDGER_COLUMNS)
+        columns = ", ".join(
+            column if column in available else f"'' AS {column}"
+            for column in _SESSION_LEDGER_COLUMNS
+        )
         raw_rows = conn.execute(
             f"SELECT {columns} FROM requests "
             "WHERE session_id = ? AND status_code BETWEEN 200 AND 599 "
