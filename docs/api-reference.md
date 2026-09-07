@@ -282,7 +282,7 @@ Proxy health and stats.
 ```json
 {
  "status": "ok",
- "version": "1.25.1",
+ "version": "1.25.2",
  "uptime_seconds": 86400,
  "compression": {
  "enabled": true,
@@ -329,7 +329,7 @@ is configured, a missing, malformed, or incorrect Bearer value is rejected with
 {
  "status": "ok",
  "uptime_seconds": 3600,
-  "version": "1.25.1",
+  "version": "1.25.2",
  "requests_total": 42,
  "requests_errors": 0,
  "compression_ratio_avg": 0.72,
@@ -478,7 +478,7 @@ Detailed health check (legacy).
  "database": "ok",
  "index": "ok",
  "compression_pipeline": "ok",
- "version": "1.25.1"
+ "version": "1.25.2"
 }
 ```
 

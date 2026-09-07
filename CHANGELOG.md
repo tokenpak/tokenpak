@@ -6,6 +6,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.25.2] — 2026-09-07
+
 ### Fixed
 
 - Proxy cost estimates now honor explicit model cache-read and cache-write
