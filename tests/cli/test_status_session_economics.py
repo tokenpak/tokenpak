@@ -49,9 +49,9 @@ def soft_block_econ():
 def test_line_distinguishes_facts_estimates_and_states(learning_econ):
     line = render_line(learning_econ)
     assert "in 120k" in line  # observed: plain
-    assert "~$1.23 estimated" in line  # estimate: glyph plus textual equivalent
-    assert "~42k/turn estimated" in line
-    assert "runway 14 turns · binding constraint context_soft" in line
+    assert "cost ~$1.23 est ·" in line  # glyph plus compact textual equivalent
+    assert "burn ~42k/turn est ↑" in line
+    assert "guard runway 14 turns to context_soft" in line
     assert "guard allow" in line
     assert "forecast learning" in line
 
@@ -77,10 +77,11 @@ def test_soft_block_fixture_names_guard_and_binding_constraint(soft_block_econ):
     line = render_line(soft_block_econ)
     block = render_block(soft_block_econ)
 
-    assert "runway 0 turns · binding constraint context_soft" in line
+    assert "guard runway 0 turns to context_soft" in line
     assert "guard soft_block" in line
-    assert "guard runway 0 turns · binding constraint context_soft" in block
-    assert "guard soft_block" in block
+    assert "guard limit in 0 turns" in block
+    assert "binding context_soft" in block
+    assert "state soft_block" in block
 
 
 @pytest.mark.parametrize(
@@ -93,11 +94,12 @@ def test_soft_block_fixture_names_guard_and_binding_constraint(soft_block_econ):
         time_available_payload,
     ],
 )
-def test_each_estimate_marker_has_a_textual_equivalent(payload_factory):
+def test_estimate_markers_have_a_text_label_or_group(payload_factory):
     economics = SessionEconomics.from_dict(payload_factory())
 
     for rendered in (render_line(economics), render_block(economics)):
-        assert rendered.count("~") == rendered.count("estimated")
+        if "~" in rendered:
+            assert "est" in rendered
 
 
 def test_block_unavailable_forecast_is_first_class(no_data_econ):
@@ -226,9 +228,11 @@ def test_line_available_forecast_shows_range_and_ceiling():
 
     econ = SessionEconomics.from_dict(available_payload())
     line = render_line(econ)
-    assert "left ~40k–160k estimated" in line
-    assert "90% ≤ ~320k estimated" in line
+    assert "guard runway 14 turns to context_soft" in line
+    assert "session remainder est ~40k–160k" in line
+    assert "90% ≤ ~320k" in line
     assert "forecast learning" not in line
+    assert len(line) < 190
 
 
 def test_block_available_forecast_reports_calibration_metadata():
@@ -236,13 +240,16 @@ def test_block_available_forecast_reports_calibration_metadata():
 
     econ = SessionEconomics.from_dict(available_payload())
     block = render_block(econ)
-    assert "projected session remainder ~40k–160k tokens estimated" in block
-    assert "90% ceiling ~320k estimated" in block
-    assert "projected remaining turns ~2–9 turns estimated" in block
-    assert "forecast cost  ~$0.41–$1.64 estimated" in block
+    assert "runway         guard limit in 14 turns" in block
+    assert "forecast       session remainder est" in block
+    assert "tokens ~40k–160k" in block
+    assert "90% ceiling ~320k" in block
+    assert "turns ~2–9" in block
+    assert "forecast cost  est ~$0.41–$1.64" in block
+    assert "runway         guard runway" not in block
     assert "measured coverage 52%" in block
     assert "history 48 sessions" in block
-    assert "block risk ~8% estimated" in block
+    assert "block risk est ~8%" in block
 
 
 def test_available_fixture_round_trips_canonically():
@@ -277,7 +284,8 @@ def test_line_time_forecast_available_shows_ms_band_never_minutes():
 
     econ = SessionEconomics.from_dict(time_available_payload())
     line = render_line(econ)
-    assert "time ~90,000ms–600,000ms estimated (90% ≤ ~1,500,000ms estimated)" in line
+    assert "time est ~90,000ms–600,000ms (90% ≤ ~1,500,000ms)" in line
+    assert len(line) < 210
     # No unit conversion to minutes/hours anywhere in the contract, API, or
     # renderer — assert the banned units never appear.
     for banned in ("min", "minute", "hour"):
@@ -290,8 +298,8 @@ def test_block_time_forecast_available_reports_calibration_in_ms():
     econ = SessionEconomics.from_dict(time_available_payload())
     block = render_block(econ)
     assert "time forecast available" in block
-    assert "~90,000ms–600,000ms estimated" in block
-    assert "90% ≤ ~1,500,000ms estimated" in block
+    assert "time forecast available · est ~90,000ms–600,000ms" in block
+    assert "90% ≤ ~1,500,000ms" in block
     assert "coverage 52%" in block
     assert "history 40 sessions" in block
 
