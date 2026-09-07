@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.session_economics_fixtures import learning_payload
+from tests.session_economics_fixtures import learning_payload, soft_block_payload
 from tokenpak.cli.commands import dashboard as dashboard_mod
 from tokenpak.core.contracts.session_economics import SessionEconomics
 
@@ -92,6 +92,17 @@ def test_home_layout_section_present_when_enabled(monkeypatch):
     assert "session economics:" in str(values["Trip computer"]["value"])
     assert values["Guard state"]["value"] == "allow"
     assert values["Forecast"]["value"] == "learning"
+
+
+def test_soft_block_layout_keeps_binding_context_and_text_guard():
+    payload = soft_block_payload()
+    items = dashboard_mod._session_economics_items(payload)
+    values = {item["label"]: item for item in items}
+
+    assert "runway 0 turns · binding constraint context_soft" in str(
+        values["Trip computer"]["value"]
+    )
+    assert values["Guard state"]["value"] == "soft_block"
 
 
 def test_home_layout_section_suppressed_when_disabled_data_kept(monkeypatch):

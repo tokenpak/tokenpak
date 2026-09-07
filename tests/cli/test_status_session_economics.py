@@ -14,7 +14,13 @@ import json
 
 import pytest
 
-from tests.session_economics_fixtures import learning_payload, no_data_payload
+from tests.session_economics_fixtures import (
+    available_payload,
+    learning_payload,
+    no_data_payload,
+    soft_block_payload,
+    time_available_payload,
+)
 from tokenpak.cli.commands import status as status_mod
 from tokenpak.core.contracts.session_economics import SessionEconomics
 from tokenpak.core.contracts.session_economics_renderer import render_block, render_line
@@ -30,6 +36,11 @@ def no_data_econ():
     return SessionEconomics.from_dict(no_data_payload())
 
 
+@pytest.fixture()
+def soft_block_econ():
+    return SessionEconomics.from_dict(soft_block_payload())
+
+
 # ---------------------------------------------------------------------------
 # Renderer goldens (facts vs estimates vs unknowns must be visibly distinct)
 # ---------------------------------------------------------------------------
@@ -38,9 +49,9 @@ def no_data_econ():
 def test_line_distinguishes_facts_estimates_and_states(learning_econ):
     line = render_line(learning_econ)
     assert "in 120k" in line  # observed: plain
-    assert "~$1.23 est" in line  # estimated: marked
-    assert "~42k/turn" in line
-    assert "runway 14 turns (context_soft)" in line
+    assert "~$1.23 estimated" in line  # estimate: glyph plus textual equivalent
+    assert "~42k/turn estimated" in line
+    assert "runway 14 turns · binding constraint context_soft" in line
     assert "guard allow" in line
     assert "forecast learning" in line
 
@@ -55,9 +66,38 @@ def test_line_no_data_session_is_words_not_zeros(no_data_econ):
 def test_block_reports_every_plane_and_legend(learning_econ):
     block = render_block(learning_econ)
     assert block.splitlines()[0] == "Session economics"
+    assert block.splitlines()[1].lstrip().startswith("legend")
+    assert "tilde (~)=estimated" in block.splitlines()[1]
     assert "base no data" in block  # unknown inside an observed session
     assert "forecast       learning" in block
     assert "legend" in block
+
+
+def test_soft_block_fixture_names_guard_and_binding_constraint(soft_block_econ):
+    line = render_line(soft_block_econ)
+    block = render_block(soft_block_econ)
+
+    assert "runway 0 turns · binding constraint context_soft" in line
+    assert "guard soft_block" in line
+    assert "guard runway 0 turns · binding constraint context_soft" in block
+    assert "guard soft_block" in block
+
+
+@pytest.mark.parametrize(
+    "payload_factory",
+    [
+        learning_payload,
+        no_data_payload,
+        soft_block_payload,
+        available_payload,
+        time_available_payload,
+    ],
+)
+def test_each_estimate_marker_has_a_textual_equivalent(payload_factory):
+    economics = SessionEconomics.from_dict(payload_factory())
+
+    for rendered in (render_line(economics), render_block(economics)):
+        assert rendered.count("~") == rendered.count("estimated")
 
 
 def test_block_unavailable_forecast_is_first_class(no_data_econ):
@@ -186,8 +226,8 @@ def test_line_available_forecast_shows_range_and_ceiling():
 
     econ = SessionEconomics.from_dict(available_payload())
     line = render_line(econ)
-    assert "left ~40k–160k" in line
-    assert "90% ≤ ~320k" in line
+    assert "left ~40k–160k estimated" in line
+    assert "90% ≤ ~320k estimated" in line
     assert "forecast learning" not in line
 
 
@@ -196,13 +236,13 @@ def test_block_available_forecast_reports_calibration_metadata():
 
     econ = SessionEconomics.from_dict(available_payload())
     block = render_block(econ)
-    assert "remaining ~40k–160k tokens" in block
-    assert "90% ceiling ~320k" in block
-    assert "turns ~2–9" in block
-    assert "forecast cost  ~$0.41–$1.64" in block
+    assert "projected session remainder ~40k–160k tokens estimated" in block
+    assert "90% ceiling ~320k estimated" in block
+    assert "projected remaining turns ~2–9 turns estimated" in block
+    assert "forecast cost  ~$0.41–$1.64 estimated" in block
     assert "measured coverage 52%" in block
     assert "history 48 sessions" in block
-    assert "block risk ~8%" in block
+    assert "block risk ~8% estimated" in block
 
 
 def test_available_fixture_round_trips_canonically():
@@ -237,7 +277,7 @@ def test_line_time_forecast_available_shows_ms_band_never_minutes():
 
     econ = SessionEconomics.from_dict(time_available_payload())
     line = render_line(econ)
-    assert "time ~90,000ms–600,000ms (90% ≤ 1,500,000ms)" in line
+    assert "time ~90,000ms–600,000ms estimated (90% ≤ ~1,500,000ms estimated)" in line
     # No unit conversion to minutes/hours anywhere in the contract, API, or
     # renderer — assert the banned units never appear.
     for banned in ("min", "minute", "hour"):
@@ -250,8 +290,8 @@ def test_block_time_forecast_available_reports_calibration_in_ms():
     econ = SessionEconomics.from_dict(time_available_payload())
     block = render_block(econ)
     assert "time forecast available" in block
-    assert "90,000ms–600,000ms" in block
-    assert "1,500,000ms" in block
+    assert "~90,000ms–600,000ms estimated" in block
+    assert "90% ≤ ~1,500,000ms estimated" in block
     assert "coverage 52%" in block
     assert "history 40 sessions" in block
 
