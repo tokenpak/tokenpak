@@ -118,65 +118,65 @@ class TestUSDCalculation:
     def test_usd_anthropic_sonnet(self):
         """Anthropic Sonnet pricing."""
         tokens = 1000
-        rate_per_1k = 3.0  # $3 per 1K tokens
-        cost = (tokens / 1000) * rate_per_1k
-        assert cost == 3.0
+        rate_per_million = 3.0
+        cost = (tokens / 1_000_000) * rate_per_million
+        assert cost == 0.003
 
     def test_usd_anthropic_opus(self):
         """Anthropic Opus pricing."""
         tokens = 1000
-        rate_per_1k = 15.0  # $15 per 1K tokens
-        cost = (tokens / 1000) * rate_per_1k
-        assert cost == 15.0
+        rate_per_million = 5.0
+        cost = (tokens / 1_000_000) * rate_per_million
+        assert cost == 0.005
 
     def test_usd_anthropic_haiku(self):
         """Anthropic Haiku pricing."""
         tokens = 1000
-        rate_per_1k = 0.80  # $0.80 per 1K tokens
-        cost = (tokens / 1000) * rate_per_1k
-        assert cost == 0.8
+        rate_per_million = 1.0
+        cost = (tokens / 1_000_000) * rate_per_million
+        assert cost == 0.001
 
     def test_usd_openai_gpt4(self):
         """OpenAI GPT-4 pricing."""
         tokens = 1000
-        rate_per_1k = 30.0  # $30 per 1K tokens
-        cost = (tokens / 1000) * rate_per_1k
-        assert cost == 30.0
+        rate_per_million = 10.0
+        cost = (tokens / 1_000_000) * rate_per_million
+        assert cost == 0.01
 
     def test_usd_openai_gpt35(self):
         """OpenAI GPT-3.5 pricing."""
         tokens = 1000
-        rate_per_1k = 0.50  # $0.50 per 1K tokens
-        cost = (tokens / 1000) * rate_per_1k
-        assert cost == 0.5
+        rate_per_million = 0.50
+        cost = (tokens / 1_000_000) * rate_per_million
+        assert cost == 0.0005
 
     def test_usd_google_gemini(self):
         """Google Gemini pricing."""
         tokens = 1000
-        rate_per_1k = 0.0001  # $0.0001 per 1K tokens
-        cost = (tokens / 1000) * rate_per_1k
-        assert cost == 0.0001
+        rate_per_million = 1.25
+        cost = (tokens / 1_000_000) * rate_per_million
+        assert cost == 0.00125
 
     def test_usd_calculation_zero_tokens(self):
         """Zero tokens cost zero."""
         tokens = 0
         rate = 3.0
-        cost = (tokens / 1000) * rate
+        cost = (tokens / 1_000_000) * rate
         assert cost == 0.0
 
     def test_usd_calculation_single_token(self):
         """Single token fractional cost."""
         tokens = 1
-        rate_per_1k = 3000.0  # $3000 per 1M tokens = $0.003 per token
-        cost = (tokens / 1000) * rate_per_1k
-        assert cost == 3.0
+        rate_per_million = 3000.0
+        cost = (tokens / 1_000_000) * rate_per_million
+        assert cost == 0.003
 
     def test_usd_calculation_large_volume(self):
         """Large token volume cost."""
         tokens = 1_000_000
-        rate_per_1k = 3.0  # $3 per 1K
-        cost = (tokens / 1000) * rate_per_1k
-        assert cost == 3000.0
+        rate_per_million = 3.0
+        cost = (tokens / 1_000_000) * rate_per_million
+        assert cost == 3.0
 
     def test_usd_input_output_separate(self):
         """Separate input/output pricing."""
@@ -184,31 +184,33 @@ class TestUSDCalculation:
         output_tokens = 500
         input_rate = 3.0
         output_rate = 12.0
-        total_cost = (input_tokens / 1000) * input_rate + (output_tokens / 1000) * output_rate
-        assert total_cost == 9.0
+        total_cost = (input_tokens / 1_000_000) * input_rate + (
+            output_tokens / 1_000_000
+        ) * output_rate
+        assert total_cost == pytest.approx(0.009)
 
     def test_usd_calculation_precision(self):
         """USD calculation precision."""
         tokens = 333
-        rate_per_1k = 3.0
-        cost = (tokens / 1000) * rate_per_1k
-        assert abs(cost - 0.999) < 0.01
+        rate_per_million = 3.0
+        cost = (tokens / 1_000_000) * rate_per_million
+        assert abs(cost - 0.000999) < 0.000001
 
     def test_usd_calculation_rounding(self):
-        """Cost rounding to cents."""
+        """Cost rounding preserves micro-dollar precision."""
         tokens = 1234
-        rate_per_1k = 2.5
-        cost = (tokens / 1000) * rate_per_1k
-        rounded = round(cost, 2)
-        assert rounded == 3.08
+        rate_per_million = 2.5
+        cost = (tokens / 1_000_000) * rate_per_million
+        rounded = round(cost, 6)
+        assert rounded == 0.003085
 
     def test_usd_bulk_discount(self):
         """Bulk discount pricing."""
         tokens = 100_000
         base_rate = 3.0
         discount_rate = 2.5  # 17% discount
-        discounted_cost = (tokens / 1000) * discount_rate
-        assert discounted_cost < (tokens / 1000) * base_rate
+        discounted_cost = (tokens / 1_000_000) * discount_rate
+        assert discounted_cost < (tokens / 1_000_000) * base_rate
 
 
 class TestBudgetTracking:

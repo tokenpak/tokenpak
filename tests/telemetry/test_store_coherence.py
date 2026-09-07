@@ -330,21 +330,22 @@ class TestPricingUniqueness:
         conn.close()
         assert count == len(SEED_PRICING)
 
-    def test_direct_double_seed_is_idempotent(self, tmp_path):
-        """Simulates the cross-process COUNT-then-seed race: even if two
-        writers both decide to seed, the uniqueness key keeps one row set."""
+    def test_seed_receipt_makes_second_initialization_idempotent(self, tmp_path):
         from tokenpak.telemetry.cost import SEED_PRICING, CostEngine
 
         db_file = tmp_path / "telemetry.db"
-        engine = CostEngine(db_path=str(db_file))
-        conn = sqlite3.connect(str(db_file))
-        engine._seed(conn)  # racing second seed
-        count = conn.execute("SELECT COUNT(*) FROM tp_pricing").fetchone()[0]
-        conn.close()
+        CostEngine(db_path=str(db_file))
+        CostEngine(db_path=str(db_file))
+        with sqlite3.connect(str(db_file)) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM tp_pricing").fetchone()[0]
+            receipts = conn.execute("SELECT COUNT(*) FROM tp_pricing_refresh_receipts").fetchone()[
+                0
+            ]
         assert count == len(SEED_PRICING)
+        assert receipts == 1
 
-    def test_legacy_duplicate_rows_deduped_on_migration(self, tmp_path):
-        from tokenpak.telemetry.cost import CostEngine
+    def test_legacy_duplicate_rows_preserved_and_refresh_unavailable(self, tmp_path):
+        from tokenpak.telemetry.cost import CostEngine, PricingRefreshUnavailableError
 
         db_file = tmp_path / "telemetry.db"
         conn = sqlite3.connect(str(db_file))
@@ -374,14 +375,18 @@ class TestPricingUniqueness:
         conn.commit()
         conn.close()
 
-        CostEngine(db_path=str(db_file))  # migration runs here
+        engine = CostEngine(db_path=str(db_file))
         conn = sqlite3.connect(str(db_file))
         rows = conn.execute(
             "SELECT input_rate FROM tp_pricing WHERE version='v-old' AND provider='p' AND model='m'"
         ).fetchall()
         conn.close()
-        assert len(rows) == 1
-        assert rows[0][0] == 2.0  # newest kept
+        assert rows == [(1.0,), (2.0,)]
+        with pytest.raises(PricingRefreshUnavailableError, match="duplicate key preserved"):
+            engine.plan_seed_refresh(
+                selected_models=["openai/gpt-4o-mini"],
+                overrides={"openai/gpt-4o-mini": True},
+            )
 
 
 # ===========================================================================

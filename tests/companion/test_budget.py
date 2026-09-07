@@ -40,10 +40,10 @@ def test_estimate_sonnet_full_model_name(tmp_path):
 
 
 def test_estimate_opus_1m_input(tmp_path):
-    """1M input tokens at opus rate = $15.00."""
+    """1M input tokens at the current Opus rate = $5.00."""
     t = _tracker(tmp_path)
     est = t.estimate(input_tokens=1_000_000, model="claude-opus-4-6")
-    assert est.estimated_cost_usd == pytest.approx(15.0, abs=1e-6)
+    assert est.estimated_cost_usd == pytest.approx(5.0, abs=1e-6)
 
 
 def test_estimate_haiku_1m_input(tmp_path):
@@ -81,10 +81,10 @@ def test_estimate_cache_read_10pct_sonnet(tmp_path):
 
 
 def test_estimate_cache_read_10pct_opus(tmp_path):
-    """Cached tokens at opus rate = 10% of $15 = $1.50/1M."""
+    """Cached tokens at Opus rate = 10% of $5 = $0.50/1M."""
     t = _tracker(tmp_path)
     est = t.estimate(input_tokens=1_000_000, cached_tokens=1_000_000, model="claude-opus-4-6")
-    assert est.estimated_cost_usd == pytest.approx(1.50, abs=1e-6)
+    assert est.estimated_cost_usd == pytest.approx(0.50, abs=1e-6)
 
 
 def test_estimate_cache_read_10pct_haiku(tmp_path):

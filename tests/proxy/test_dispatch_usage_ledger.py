@@ -408,9 +408,25 @@ def test_cost_observation_uses_provider_counts_and_labels_price_provenance():
         "pricing_source": "seed",
     }
 
-    inferred = _cost_observation(
+    seeded_openai = _cost_observation(
         provider="openai",
         model="gpt-5.6-sol",
+        status_code=200,
+        usage=_provider_usage_observation(
+            "openai",
+            {"input_tokens": 10, "output_tokens": 2, "total_tokens": 12},
+            b"{}",
+        ),
+        fallback_input_tokens=999,
+        fallback_output_tokens=999,
+        fallback_cache_read_tokens=0,
+        fallback_cache_creation_tokens=0,
+    )
+    assert seeded_openai["pricing_source"] == "seed"
+
+    inferred = _cost_observation(
+        provider="openai",
+        model="gpt-6-sol",
         status_code=200,
         usage=_provider_usage_observation(
             "openai",
@@ -491,7 +507,7 @@ def test_custom_provider_can_declare_catalog_cost_policy(monkeypatch):
 
     observed = _cost_observation(
         provider=provider,
-        model="gpt-5.6-sol",
+        model="gpt-6-sol",
         status_code=200,
         usage=_provider_usage_observation(
             provider,

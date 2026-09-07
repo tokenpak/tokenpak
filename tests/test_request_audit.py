@@ -22,13 +22,13 @@ class TestRequestAudit:
 
     def test_baseline_cost_opus(self):
         r = RequestAudit(model="claude-opus-4-6", input_tokens=1_000_000, output_tokens=0)
-        # $15/MTok input
-        assert r.baseline_cost == pytest.approx(15.0, rel=0.01)
+        # $5/MTok input
+        assert r.baseline_cost == pytest.approx(5.0, rel=0.01)
 
     def test_baseline_cost_haiku(self):
         r = RequestAudit(model="claude-haiku-4-5", input_tokens=1_000_000, output_tokens=0)
-        # $0.80/MTok input
-        assert r.baseline_cost == pytest.approx(0.80, rel=0.01)
+        # $1/MTok input
+        assert r.baseline_cost == pytest.approx(1.0, rel=0.01)
 
     def test_compression_savings(self):
         r = RequestAudit(
@@ -36,8 +36,8 @@ class TestRequestAudit:
             input_tokens=10000,
             sent_input_tokens=8000,
         )
-        # 2000 tokens saved × $15/MTok = $0.03
-        assert r.compression_savings == pytest.approx(0.03, rel=0.01)
+        # 2000 tokens saved x $5/MTok = $0.01
+        assert r.compression_savings == pytest.approx(0.01, rel=0.01)
 
     def test_cache_savings(self):
         r = RequestAudit(
@@ -47,10 +47,10 @@ class TestRequestAudit:
             cache_read_tokens=50000,
             cache_hit=True,
         )
-        # 50000 tokens at $15/MTok = $0.75 full price
-        # 50000 tokens at $1.50/MTok = $0.075 cache price
-        # Savings = $0.75 - $0.075 = $0.675
-        assert r.cache_savings == pytest.approx(0.675, rel=0.01)
+        # 50000 tokens at $5/MTok = $0.25 full price
+        # 50000 tokens at $0.50/MTok = $0.025 cache price
+        # Savings = $0.25 - $0.025 = $0.225
+        assert r.cache_savings == pytest.approx(0.225, rel=0.01)
 
     def test_total_savings(self):
         r = RequestAudit(
@@ -70,9 +70,9 @@ class TestRequestAudit:
             sent_input_tokens=5000,
             output_tokens=0,
         )
-        # baseline = 10000 * 15 / 1M = 0.15
-        # compression savings = 5000 * 15 / 1M = 0.075
-        # pct = 0.075 / 0.15 * 100 = 50%
+        # baseline = 10000 * 5 / 1M = 0.05
+        # compression savings = 5000 * 5 / 1M = 0.025
+        # pct = 0.025 / 0.05 * 100 = 50%
         assert r.savings_pct == pytest.approx(50.0, rel=0.1)
 
     def test_no_savings(self):
