@@ -373,7 +373,9 @@ def install_skills(target_dir: Path | None = None) -> list[Path]:
             # Supported upgrades move demonstrably managed copies out of the
             # pre-discovery path after the canonical copies are ready. A
             # customized legacy copy remains in place with a visible conflict.
-            if target_dir is None:
+            # The launcher supplies the canonical root explicitly, while an
+            # export to a separate directory must leave legacy installs alone.
+            if target_dir is None or _same_location(target, _default_skills_root()):
                 legacy = _legacy_skills_root()
                 if not _same_location(legacy, target):
                     for name in bundled_skill_names():

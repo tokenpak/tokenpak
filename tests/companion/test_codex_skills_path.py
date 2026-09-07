@@ -219,7 +219,10 @@ def test_install_preserves_root_symlink(monkeypatch, tmp_path: Path):
     assert (user_copy / "SKILL.md").read_text() == "# user copy\n"
 
 
-def test_default_upgrade_reconciles_managed_legacy_copy(monkeypatch, tmp_path: Path):
+@pytest.mark.parametrize("explicit_canonical", [False, True])
+def test_default_upgrade_reconciles_managed_legacy_copy(
+    monkeypatch, tmp_path: Path, explicit_canonical: bool
+):
     bundled = _bundled_dir_with(tmp_path, ["a"])
     canonical = tmp_path / ".agents" / "skills"
     legacy = tmp_path / ".codex" / "skills"
@@ -228,12 +231,17 @@ def test_default_upgrade_reconciles_managed_legacy_copy(monkeypatch, tmp_path: P
     monkeypatch.setattr(si, "_LEGACY_TARGET", legacy)
     shutil.copytree(bundled / "a", legacy / "a")
 
-    assert si.install_skills() == [canonical / "a"]
+    assert si.install_skills(**({"target_dir": canonical} if explicit_canonical else {})) == [
+        canonical / "a"
+    ]
     assert (canonical / "a" / "SKILL.md").is_file()
     assert not (legacy / "a").exists()
 
 
-def test_default_upgrade_preserves_customized_legacy_copy(monkeypatch, tmp_path: Path):
+@pytest.mark.parametrize("explicit_canonical", [False, True])
+def test_default_upgrade_preserves_customized_legacy_copy(
+    monkeypatch, tmp_path: Path, explicit_canonical: bool
+):
     bundled = _bundled_dir_with(tmp_path, ["a"])
     canonical = tmp_path / ".agents" / "skills"
     legacy = tmp_path / ".codex" / "skills"
@@ -245,12 +253,17 @@ def test_default_upgrade_preserves_customized_legacy_copy(monkeypatch, tmp_path:
     (custom / "SKILL.md").write_text("# customized legacy\n")
 
     with pytest.warns(RuntimeWarning, match="legacy reconciliation"):
-        assert si.install_skills() == [canonical / "a"]
+        assert si.install_skills(**({"target_dir": canonical} if explicit_canonical else {})) == [
+            canonical / "a"
+        ]
 
     assert (custom / "SKILL.md").read_text() == "# customized legacy\n"
 
 
-def test_default_upgrade_does_not_reconcile_aliased_legacy_root(monkeypatch, tmp_path: Path):
+@pytest.mark.parametrize("explicit_canonical", [False, True])
+def test_default_upgrade_does_not_reconcile_aliased_legacy_root(
+    monkeypatch, tmp_path: Path, explicit_canonical: bool
+):
     bundled = _bundled_dir_with(tmp_path, ["a"])
     canonical = tmp_path / ".agents" / "skills"
     legacy = tmp_path / ".codex" / "skills"
@@ -261,9 +274,26 @@ def test_default_upgrade_does_not_reconcile_aliased_legacy_root(monkeypatch, tmp
     monkeypatch.setattr(si, "_DEFAULT_TARGET", canonical)
     monkeypatch.setattr(si, "_LEGACY_TARGET", legacy)
 
-    assert si.install_skills() == [canonical / "a"]
+    assert si.install_skills(**({"target_dir": canonical} if explicit_canonical else {})) == [
+        canonical / "a"
+    ]
     assert (canonical / "a" / "SKILL.md").is_file()
     assert (legacy / "a" / "SKILL.md").is_file()
+
+
+def test_explicit_noncanonical_install_preserves_managed_legacy_copy(monkeypatch, tmp_path: Path):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    canonical = tmp_path / ".agents" / "skills"
+    legacy = tmp_path / ".codex" / "skills"
+    exported = tmp_path / "exported-skills"
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    monkeypatch.setattr(si, "_DEFAULT_TARGET", canonical)
+    monkeypatch.setattr(si, "_LEGACY_TARGET", legacy)
+    shutil.copytree(bundled / "a", legacy / "a")
+
+    assert si.install_skills(target_dir=exported) == [exported / "a"]
+    assert (legacy / "a" / "SKILL.md").read_bytes() == (bundled / "a" / "SKILL.md").read_bytes()
+    assert not canonical.exists()
 
 
 def test_default_upgrade_keeps_managed_legacy_when_canonical_is_customized(
