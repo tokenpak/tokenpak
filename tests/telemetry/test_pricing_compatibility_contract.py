@@ -8,7 +8,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from tokenpak.telemetry import cost as cost_module
 from tokenpak.telemetry.cost import (
@@ -27,8 +26,6 @@ from tokenpak.telemetry.cost import (
     UnknownPricingUnitError,
     calculate_baseline,
 )
-from tokenpak.telemetry.server import create_app
-from tokenpak.telemetry.storage import TelemetryDB
 
 LEGACY_DDL = """
 CREATE TABLE tp_pricing (
@@ -499,7 +496,7 @@ def test_deterministic_exact_fuzzy_version_and_list_ties(tmp_path: Path) -> None
     assert ids == sorted(ids, reverse=True)
 
 
-def test_submicro_cost_metadata_and_http_rates_surface(tmp_path: Path) -> None:
+def test_submicro_cost_metadata_preserves_nonzero_amounts(tmp_path: Path) -> None:
     db = tmp_path / "http.db"
     engine = CostEngine(str(db))
     result = engine.calculate("gpt-5-nano", 1, 1, 0)
@@ -509,8 +506,16 @@ def test_submicro_cost_metadata_and_http_rates_surface(tmp_path: Path) -> None:
     assert payload["pricing_provenance"] == PROVENANCE_SEED_REFRESH
     assert payload["unit_basis"] == UNIT_BASIS_USD_PER_1K
 
+
+def test_http_rates_surface_includes_pricing_metadata(tmp_path: Path) -> None:
+    testclient = pytest.importorskip("fastapi.testclient", reason="requires the serve extra")
+    from tokenpak.telemetry.server import create_app
+    from tokenpak.telemetry.storage import TelemetryDB
+
+    db = tmp_path / "http.db"
+    CostEngine(str(db))
     storage = TelemetryDB(db)
-    with TestClient(create_app(db_path=str(db), storage=storage)) as client:
+    with testclient.TestClient(create_app(db_path=str(db), storage=storage)) as client:
         response = client.get("/v1/pricing/rates")
     assert response.status_code == 200
     body = response.json()
