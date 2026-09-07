@@ -577,6 +577,7 @@ Show compression savings summary.
 
 - `--days` — Rolling window in days (default: 30)
 - `--json` — Emit machine-readable JSON output
+- `--verify` — Cross-check token counting on the packaged fixture corpus
 
 ### `tokenpak vault`
 
