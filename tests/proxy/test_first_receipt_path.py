@@ -1,4 +1,4 @@
-"""Deterministic end-to-end proof for the eligible first-receipt path."""
+"""Deterministic end-to-end proof for the first measured request receipt."""
 
 from __future__ import annotations
 
@@ -73,10 +73,10 @@ def test_ineligible_request_is_byte_preserved_and_never_claims_positive_savings(
         proxy.cleanup()
 
 
-def test_eligible_first_request_produces_positive_measured_receipt(
+def test_documented_conversation_produces_truthful_zero_savings_receipt(
     stub_upstream,
 ) -> None:
-    """The documented request traverses proxy, upstream, ledger, and footer."""
+    """A role-bearing request traverses proxy, upstream, ledger, and footer intact."""
     proxy = ProxyProc(
         f"http://127.0.0.1:{stub_upstream.server_port}",
         extra_env={
@@ -87,33 +87,41 @@ def test_eligible_first_request_produces_positive_measured_receipt(
     try:
         proxy.wait_ready()
         project_context = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-        # Keep the fixture eligible even when normal README editing moves it
-        # just below the request-size threshold. Repetition remains real project
-        # context and gives the deterministic compressor a measurable target.
+        # Keep this formerly compressible fixture above the old request-size
+        # threshold. Its size proves that role-bearing history remains protected
+        # because of its contract, not because it happened to be short.
         if len(project_context) < 8_000:
             project_context = f"{project_context}\n\n{project_context}"
         assert len(project_context) >= 8_000
 
-        status, _, body = proxy.post_messages(
-            [
-                {
-                    "role": "user",
-                    "content": f"Project document README.md:\n\n{project_context}",
-                },
-                {"role": "assistant", "content": "Project context received."},
-                {
-                    "role": "user",
-                    "content": (
-                        "Review this project context and identify five concrete "
-                        "release-readiness risks, citing the README.md section for each."
-                    ),
-                },
-            ]
-        )
+        messages = [
+            {
+                "role": "user",
+                "content": f"Project document README.md:\n\n{project_context}",
+            },
+            {"role": "assistant", "content": "Project context received."},
+            {
+                "role": "user",
+                "content": (
+                    "Review this project context and identify five concrete "
+                    "release-readiness risks, citing the README.md section for each."
+                ),
+            },
+        ]
+        expected_body = json.dumps(
+            {
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 32,
+                "messages": messages,
+            }
+        ).encode()
+
+        status, _, body = proxy.post_messages(messages)
 
         assert status == 200
         assert b"msg_" in body
         assert stub_upstream.request_count == 1
+        assert stub_upstream.last_request_body == expected_body
         assert proxy.wait_row_count(1) == 1
 
         conn = sqlite3.connect(f"file:{proxy.db_path}?mode=ro", uri=True, timeout=5)
@@ -131,13 +139,13 @@ def test_eligible_first_request_produces_positive_measured_receipt(
         raw_tokens, compressed_tokens, would_have_saved, status_code = row
         sent_tokens = raw_tokens - compressed_tokens
         assert status_code == 200
-        assert raw_tokens > sent_tokens > 0
-        assert compressed_tokens == would_have_saved
-        assert compressed_tokens > 0
+        assert raw_tokens == sent_tokens
+        assert raw_tokens > 0
+        assert compressed_tokens == 0
+        assert would_have_saved == 0
 
         stderr = proxy.stderr()
-        assert "⚡ TokenPak:" in stderr
-        assert f"-{compressed_tokens:,} tokens" in stderr
-        assert "saved" in stderr
+        assert "⚡ TokenPak: 0 tokens saved" in stderr
+        assert "⚡ TokenPak: -" not in stderr
     finally:
         proxy.cleanup()

@@ -12,7 +12,7 @@ minutes. Pick your path:
 
 ## Proxy Path: First Measured Receipt
 
-**You already write prompts. TokenPak compresses them before they hit the API.**
+**You already write prompts. TokenPak routes them and records measured receipts.**
 
 The supported reference path is three commands. Before starting, sign in to a
 supported client. The reference path uses Codex OAuth and its selected/default
@@ -44,19 +44,17 @@ In terminal 2:
 tokenpak codex
 ```
 
-Make a substantive project request, then continue the same topic. A new
-conversation can begin with an ineligible request because it has no historical
-context. Terminal 1 prints the measured before/after receipt for the first
-eligible request. The dollar value is an estimate based on TokenPak's
-model-pricing table. See
-[First Measured Savings Receipt](./first-receipt.md) for the expected output,
-five-minute reference target, and truthful exclusions.
+Make a substantive project request. Terminal 1 prints the measured receipt
+`⚡ TokenPak: 0 tokens saved`. This is expected for supported provider traffic:
+in the unmodified reference setup, the built-in Pak builder preserves every
+system, user, and assistant conversation turn, including long history. See
+[First Measured Request Receipt](./first-receipt.md) for the five-minute
+reference target and the separate explicit compression surfaces.
 
-Short or protected inputs may legitimately save zero. TokenPak preserves
-system/developer policy and the newest two messages. Byte-preserved routes are
-also ineligible for TokenPak compression savings. `tokenpak demo` remains
-useful as an offline fixture, but it does not satisfy a real first-request
-receipt.
+This zero-savings receipt proves the request traversed the proxy and was
+recorded without a false reduction claim. `tokenpak compress` and companion
+`prune_context` provide supported positive compression measurements. `tokenpak
+demo` remains an offline fixture rather than a provider-request receipt.
 
 ### Connect your normal client afterward
 
@@ -209,9 +207,8 @@ export ANTHROPIC_BASE_URL=http://localhost:8766
 ```
 
 Claude Code's supported route is byte-preserved. It can use TokenPak routing and
-telemetry, but it is intentionally not the reference path for proving positive
-TokenPak compression savings. Use the direct eligible request above for that
-receipt.
+telemetry and can likewise report a truthful zero-savings receipt. The
+three-command reference path above exercises Codex.
 
 ### "I use the OpenAI SDK"
 
@@ -278,10 +275,12 @@ tokenpak cost --week # check a longer time window
 tokenpak demo # inspect the offline fixture only
 ```
 
-Short prompts compress less, and byte-preserved routes may correctly report zero
-TokenPak compression savings. For a real per-request proof, use the
-[three-command first-receipt path](./first-receipt.md); the demo is not a
-substitute for that receipt.
+Role-bearing provider conversations correctly report zero TokenPak compression
+savings regardless of length. Use the
+[three-command first-receipt path](./first-receipt.md) to verify real request
+routing and accounting. Use `tokenpak compress` or companion `prune_context`
+for explicit positive compression measurements; the demo remains an offline
+fixture.
 
 ### "The proxy started but requests aren't going through"
 

@@ -58,11 +58,23 @@ def estimate_cache_savings(provider: Any, cache_read_tokens: int, model: str = "
     if cache_read_tokens <= 0:
         return 0.0
 
-    # Get input cost per token from dynamic registry
-    from tokenpak.models import get_model_costs
+    # Prefer the model-specific cached-input price. Provider-wide cache
+    # multipliers are only a fallback because current models from the same
+    # provider can have different cached-input ratios.
+    input_cost_per_mtok = 3.0
+    if model:
+        from tokenpak.models import get_pricing
 
-    costs = get_model_costs(model) if model else {"input": 3.0}
-    input_cost_per_mtok = costs["input"]
+        pricing = get_pricing(model)
+        if pricing is not None:
+            input_cost_per_mtok = pricing.input_per_mtok
+            if pricing.cache_read_per_mtok is not None:
+                return (
+                    cache_read_tokens
+                    * (input_cost_per_mtok - pricing.cache_read_per_mtok)
+                    / 1_000_000
+                )
+
     input_cost_per_tok = input_cost_per_mtok / 1_000_000
 
     # Resolve read multiplier — try Provider enum first, fall back to string name

@@ -4849,12 +4849,70 @@ def cmd_usage(args: CommandArgs) -> None:
             )
 
 
+def _savings_verification_payload() -> dict[str, object]:
+    """Return an honest independent-count check for ``savings --verify``."""
+    from .telemetry.tokens_verify import TokenizerUnavailableError, verify_packaged_corpus
+
+    scope_note = (
+        "Stored request logs contain counts, not source text. This checks the "
+        "TokenPak UTF-8 byte estimator against cl100k_base on a packaged "
+        "fixture corpus; it does not recount logged requests."
+    )
+    try:
+        result = verify_packaged_corpus()
+    except TokenizerUnavailableError as exc:
+        return {
+            "available": False,
+            "scope": "packaged-fixture-corpus",
+            "scope_note": scope_note,
+            "reported_method": "utf8-bytes-div-4",
+            "independent_method": "tiktoken:cl100k_base",
+            "message": str(exc),
+        }
+
+    return {
+        "available": True,
+        "scope": "packaged-fixture-corpus",
+        "scope_note": scope_note,
+        "reported_method": "utf8-bytes-div-4",
+        "independent_method": "tiktoken:cl100k_base",
+        "reported_count": result.reported_count,
+        "independent_count": result.independent_count,
+        "absolute_divergence": result.absolute_divergence,
+        "relative_divergence": result.relative_divergence,
+    }
+
+
+def _print_savings_verification(verification: dict[str, object] | None) -> None:
+    if verification is None:
+        return
+
+    print()
+    print("Independent token-count verification")
+    print(f"  Scope: {verification['scope_note']}")
+    if verification["available"] is not True:
+        print(f"  Unavailable: {verification['message']}")
+        return
+
+    reported_count = _as_int(verification["reported_count"])
+    independent_count = _as_int(verification["independent_count"])
+    absolute_divergence = _as_int(verification["absolute_divergence"])
+    relative_divergence = _as_float(verification["relative_divergence"])
+    print(f"  Reported ({verification['reported_method']}): {reported_count:,}")
+    print(f"  Independent ({verification['independent_method']}): {independent_count:,}")
+    print(
+        f"  Divergence: {absolute_divergence:,} tokens "
+        f"({relative_divergence * 100:.1f}% of reported)"
+    )
+
+
 def cmd_savings(args: CommandArgs) -> None:
     """Show compression savings summary."""
     mode = resolve_mode(args)
     fmt = OutputFormatter("Savings", mode=mode, minimal=getattr(args, "minimal", False))
     days = getattr(args, "days", 30)
     as_json = getattr(args, "as_json", False)
+    verification = _savings_verification_payload() if getattr(args, "verify", False) else None
 
     # Try monitor.db first (proxy's live data source)
     monitor_data = _monitor_db_savings(days=days)
@@ -4872,23 +4930,23 @@ def cmd_savings(args: CommandArgs) -> None:
         savings_pct = (savings_amount / estimated_without * 100) if estimated_without > 0 else 0
 
         if mode == OutputMode.RAW or as_json:
-            print(
-                json.dumps(
-                    {
-                        "section": "savings",
-                        "days": days,
-                        "actual_cost": actual,
-                        "savings_amount": savings_amount,
-                        "savings_pct": savings_pct,
-                        "cache_hit_rate": cache_hit_rate,
-                        "estimated_without_compression": estimated_without,
-                    }
-                )
-            )
+            payload: dict[str, object] = {
+                "section": "savings",
+                "days": days,
+                "actual_cost": actual,
+                "savings_amount": savings_amount,
+                "savings_pct": savings_pct,
+                "cache_hit_rate": cache_hit_rate,
+                "estimated_without_compression": estimated_without,
+            }
+            if verification is not None:
+                payload["verification"] = verification
+            print(json.dumps(payload))
             return
 
         if fmt.minimal:
             print(fmt.minimal_line([f"{savings_pct:.1f}%", f"${savings_amount:.2f}", f"{days}d"]))
+            _print_savings_verification(verification)
             return
 
         print(fmt.header())
@@ -4904,6 +4962,7 @@ def cmd_savings(args: CommandArgs) -> None:
                 ]
             )
         )
+        _print_savings_verification(verification)
         return
 
     # Fallback to telemetry.db
@@ -4912,12 +4971,16 @@ def cmd_savings(args: CommandArgs) -> None:
     report = get_savings_report(days=days)
 
     if mode == OutputMode.RAW or as_json:
-        print(fmt.raw({"section": "savings", "days": days, **report.__dict__}))
+        payload = {"section": "savings", "days": days, **report.__dict__}
+        if verification is not None:
+            payload["verification"] = verification
+        print(fmt.raw(payload))
         return
 
     # Check for empty database
     if report.total_cost == 0.0 and report.savings_amount == 0.0:
         print("No savings data yet. Run your first request through the proxy to start tracking.")
+        _print_savings_verification(verification)
         return
 
     if fmt.minimal:
@@ -4926,6 +4989,7 @@ def cmd_savings(args: CommandArgs) -> None:
                 [f"{report.savings_pct:.1f}%", f"${report.savings_amount:.2f}", f"{days}d"]
             )
         )
+        _print_savings_verification(verification)
         return
 
     print(fmt.header())
@@ -4973,6 +5037,8 @@ def cmd_savings(args: CommandArgs) -> None:
                     print(format_savings_by_source(by_source, days=days))
     except Exception:
         pass
+
+    _print_savings_verification(verification)
 
 
 def cmd_compare(args: CommandArgs) -> None:
@@ -5217,6 +5283,11 @@ def _build_savings_parser(sub: Subparsers) -> None:
         dest="as_json",
         action="store_true",
         help="Emit machine-readable JSON output",
+    )
+    p_savings.add_argument(
+        "--verify",
+        action="store_true",
+        help="Cross-check token counting on the packaged fixture corpus",
     )
     p_savings.set_defaults(func=cmd_savings)
 

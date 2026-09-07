@@ -142,6 +142,53 @@ def test_read_time_history_groups_gates_and_excludes_active(tmp_path: Path) -> N
     assert all(s.ended_at <= NOW - timedelta(seconds=tf_cal.COMPLETION_IDLE_SECONDS) for s in out)
 
 
+@pytest.mark.parametrize(
+    ("has_source", "has_raw", "expected_effort"),
+    [
+        (False, False, "unknown"),
+        (False, True, None),
+        (True, False, None),
+        (True, True, "high"),
+    ],
+)
+def test_read_time_history_supports_every_optional_effort_provenance_schema(
+    tmp_path: Path,
+    has_source: bool,
+    has_raw: bool,
+    expected_effort: str | None,
+) -> None:
+    db = tmp_path / "monitor.db"
+    _seed_ledger(db, _corpus(1))
+    conn = sqlite3.connect(str(db))
+    try:
+        if has_source:
+            conn.execute("ALTER TABLE requests ADD COLUMN reasoning_effort_source TEXT")
+        if has_raw:
+            conn.execute("ALTER TABLE requests ADD COLUMN reasoning_effort_raw TEXT")
+        if has_source and has_raw:
+            conn.execute(
+                "UPDATE requests SET reasoning_effort = 'high', "
+                "reasoning_effort_source = 'request_body', reasoning_effort_raw = 'high'"
+            )
+        elif has_source:
+            conn.execute(
+                "UPDATE requests SET reasoning_effort_source = 'request_body_unrecognized'"
+            )
+        elif has_raw:
+            conn.execute("UPDATE requests SET reasoning_effort_raw = 'xhigh'")
+        conn.commit()
+    finally:
+        conn.close()
+
+    out = tf_cal.read_time_history(str(db), now=NOW)
+
+    if expected_effort is None:
+        assert out == []
+    else:
+        assert len(out) == 1
+        assert out[0].effort == expected_effort
+
+
 def test_read_time_history_exclude_session_removes_only_that_session(tmp_path: Path) -> None:
     db = tmp_path / "monitor.db"
     _seed_ledger(db, _corpus(6))
@@ -237,6 +284,30 @@ def test_read_time_history_excludes_mixed_stream_mode_sessions(tmp_path: Path) -
 
     out = tf_cal.read_time_history(str(db), now=NOW)
     assert out == []
+
+
+def test_read_time_history_excludes_mixed_model_and_effort_sessions(tmp_path: Path) -> None:
+    db = tmp_path / "monitor.db"
+    _seed_ledger(db, _corpus(3))
+    conn = sqlite3.connect(str(db))
+    try:
+        conn.execute(
+            "UPDATE requests SET model = 'model-b' "
+            "WHERE id = (SELECT id FROM requests WHERE session_id = 'hist-1' ORDER BY id LIMIT 1)"
+        )
+        conn.execute(
+            "UPDATE requests SET reasoning_effort = 'high' "
+            "WHERE id = (SELECT id FROM requests WHERE session_id = 'hist-2' ORDER BY id LIMIT 1)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    out = tf_cal.read_time_history(str(db), now=NOW)
+
+    assert len(out) == 1
+    assert out[0].model == "model-a"
+    assert out[0].effort == "unknown"
 
 
 # ---------------------------------------------------------------------------

@@ -90,8 +90,8 @@ class TestModelCostCalc(unittest.TestCase):
 
     def test_known_model(self):
         cost = _model_cost_per_request("claude-opus-4-6", avg_input=1000, avg_output=500)
-        # (1000 * 15.00 + 500 * 75.00) / 1_000_000 = 0.0525
-        self.assertAlmostEqual(cost, 0.0525, places=4)
+        # (1000 * 5.00 + 500 * 25.00) / 1_000_000 = 0.0175
+        self.assertAlmostEqual(cost, 0.0175, places=4)
 
     @pytest.mark.skip(reason=SKIP_FALLBACK_MODEL_RATE_DRIFT)
     def test_fallback_model(self):

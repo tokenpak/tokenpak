@@ -87,6 +87,7 @@ nav:
     - Compression: compression.md
     - Caching: cache.md
     - Telemetry & Privacy: telemetry.md
+    - Measurement Methodology: measurement-methodology.md
   - Compare: comparison.md
   - Blog:
     - Why Zero Data Architecture: blog/zero-data-architecture.md

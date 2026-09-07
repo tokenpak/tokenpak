@@ -336,12 +336,12 @@ class TestCapsuleBuilderEnabled:
         assert new_body == body
         assert stats["blocks_capsulized"] == 0
 
-    def test_three_messages_first_capsulised(self, builder):
-        """3 messages: first is outside hot window (size 2) → should be capsulised."""
+    def test_three_messages_first_roleless_narrative_capsulised(self, builder):
+        """An old role-less narrative outside the hot window stays eligible."""
         long = _long_text()
         body = _make_body(
             [
-                {"role": "user", "content": long},  # idx 0 — outside hot window
+                {"content": long},  # idx 0 — outside hot window
                 {"role": "assistant", "content": "ok"},  # idx 1 — inside hot window
                 {"role": "user", "content": "hi"},  # idx 2 — inside hot window
             ]
@@ -354,13 +354,13 @@ class TestCapsuleBuilderEnabled:
         assert data["messages"][1]["content"] == "ok"
         assert data["messages"][2]["content"] == "hi"
 
-    def test_hot_window_zero_capsulises_all(self):
+    def test_hot_window_zero_capsulises_all_roleless_narrative(self):
         builder = CapsuleBuilder(enabled=True, hot_window=0)
         long = _long_text()
         body = _make_body(
             [
-                {"role": "user", "content": long},
-                {"role": "assistant", "content": long},
+                {"content": long},
+                {"content": long},
             ]
         )
         _, stats = builder.process(body)
@@ -390,7 +390,7 @@ class TestCapsuleBuilderEnabled:
     def test_above_threshold_capsulised(self):
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=0)
         text = "word " * 20  # well above threshold
-        body = _make_body([{"role": "user", "content": text}])
+        body = _make_body([{"content": text}])
         _, stats = builder.process(body)
         assert stats["blocks_capsulized"] == 1
 
@@ -402,7 +402,6 @@ class TestCapsuleBuilderEnabled:
         body = _make_body(
             [
                 {
-                    "role": "user",
                     "content": [
                         {"type": "text", "text": long},
                         {"type": "image_url", "url": "http://example.com/img.png"},
@@ -455,8 +454,8 @@ class TestCapsuleBuilderEnabled:
         long = "word " * 20
         body = _make_body(
             [
-                {"role": "user", "content": long},
-                {"role": "assistant", "content": long},
+                {"content": long},
+                {"content": long},
             ]
         )
         _, stats = builder.process(body)
@@ -489,7 +488,7 @@ class TestCapsuleBuilderEnabled:
     def test_unicode_content_preserved(self):
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=0)
         text = "café ☕ " * 30
-        body = _make_body([{"role": "user", "content": text}])
+        body = _make_body([{"content": text}])
         new_body, stats = builder.process(body)
         # Capsule envelope should appear
         assert stats["blocks_capsulized"] == 1
@@ -560,7 +559,7 @@ class TestCapsuleBuilderIntegration:
     def test_capsule_envelope_parseable_after_roundtrip(self):
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=0)
         original_text = "This is a long message. " * 30
-        body = _make_body([{"role": "user", "content": original_text}])
+        body = _make_body([{"content": original_text}])
         new_body, stats = builder.process(body)
 
         assert stats["blocks_capsulized"] == 1
@@ -576,8 +575,8 @@ class TestCapsuleBuilderIntegration:
         builder = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=1)
         long = "word " * 20
         messages = [
-            {"role": "user", "content": long},  # idx 0 — outside hot window
-            {"role": "assistant", "content": long},  # idx 1 — outside hot window
+            {"content": long},  # idx 0 — role-less and outside hot window
+            {"content": long},  # idx 1 — role-less and outside hot window
             {"role": "user", "content": "last msg"},  # idx 2 — inside hot window (tail-1)
         ]
         body = _make_body(messages)

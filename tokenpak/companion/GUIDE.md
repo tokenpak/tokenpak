@@ -156,9 +156,11 @@ Notes:
 | The host already retains session or project memory | Native memory |
 | Cross-tool handoff or a host without native memory | Journal / Pak |
 
-Before answering about prior work, retrieve it. Batch related Pak IDs with
-`include_journal` when journal context is needed. Persist each fact in one
-store only; do not duplicate the same briefing across native memory and a Pak.
+Start from the current conversation and source. When a needed prior fact is
+missing, retrieve it from suitable native memory, an identified Pak, or the
+journal. Batch related Pak IDs with `include_journal` when journal context is
+needed. Persist each fact in one store only; do not duplicate the same briefing
+across native memory and a Pak.
 
 The companion can surface lessons from your own Markdown notes, not just its
 built-in memory schema. Any folder of `.md` / `.markdown` files works (scanned
@@ -257,12 +259,22 @@ over indexed vault blocks. They are not structured Pak or MultiPak recall.
 ```json
 { "session_id": "abc123", "entry_type": "user", "limit": 20 }   // all optional
 ```
-Valid `entry_type` values: `auto`, `user`, `milestone`, `cost`.
+Valid `entry_type` values include `auto`, `user`, `milestone`, `handoff`, and
+`cost`.
 
 **`journal_write`**
 ```json
-{ "content": "Decided to use sqlite for the budget store." }
+{
+  "content": "Decision: retain the current schema. Reason: existing storage supports the required record. Next: verify recovery.",
+  "entry_type": "milestone",
+  "references": ["docs/decision.md", "test:semantic-journal-round-trip"]
+}
 ```
+
+`entry_type` defaults to `user`; use `milestone` for a durable decision,
+changed constraint, verified outcome, or blocker, and `handoff` at a recovery
+boundary. `references` is optional and is returned by `journal_read`.
+Identical records are stored once.
 
 **`vault_search`**
 ```json
@@ -385,7 +397,7 @@ journal directory (`~/.tokenpak/companion/` by default, overridable with
 | `recall.db` | Recall index | Small | No |
 | `budget.db` | Spend and budget history | Small | No |
 | `capsules/` | Session Paks (Markdown; legacy dir name) | ~2–10 KB each | No |
-| `run/` | Generated launch config — MCP, settings, prompt fragment | Fixed, rewritten each launch | Overwritten |
+| `run/` | Shared markers plus per-launch `launch-*` config — MCP, settings, prompt fragment | Small per launch | No |
 
 ### Codex session-home retention
 

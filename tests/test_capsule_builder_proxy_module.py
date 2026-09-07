@@ -74,7 +74,7 @@ class TestCapsuleBuilderViaProxyModule:
 
         b = CapsuleBuilder(enabled=True, min_block_chars=10, hot_window=0)
         long_text = "This is a long message. " * 30
-        body = json.dumps({"messages": [{"role": "user", "content": long_text}]}).encode()
+        body = json.dumps({"messages": [{"content": long_text}]}).encode()
         out, stats = b.process(body)
         assert stats["blocks_capsulized"] >= 1
         assert b"[PAK" in out

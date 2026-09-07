@@ -1,6 +1,6 @@
 ---
 name: tokenpak-retrospective
-description: End-of-session retrospective that summarizes what was accomplished, records decisions and rationale, captures unfinished work, and estimates cost. Use at the end of a session or when wrapping up a task to ensure continuity for future sessions.
+description: Create a concise end-of-session handoff when the user asks for one or future work needs durable continuity. Avoid duplicate stop narration and routine accounting calls.
 ---
 
 # TokenPak Retrospective
@@ -9,17 +9,20 @@ Wrap up the current session with a structured closeout.
 
 ## Steps
 
-1. Call `check_budget` to get final session spend.
-2. Call `journal_read` for this session to review what was journaled.
-3. Write a closeout summary via `journal_write` covering:
+1. Use the current conversation and verified task results as the source.
+2. Write one handoff via `journal_write` only when future continuity needs it,
+   covering:
    - What was accomplished (bullet points).
    - Key decisions made and why.
    - What's unfinished and what the next step would be.
    - Any gotchas or surprises found.
-4. Report to the user:
-   - Session cost
+3. Report to the user:
    - Accomplishments (concise)
    - Next steps if work remains
+
+Call `check_budget` only if the user asks for cost or a budget decision depends
+on it. Do not repeat a handoff already written during the work; the stop hook's
+accounting closeout remains separate.
 
 ## Output format
 
@@ -28,7 +31,7 @@ Session summary:
 - Done: [1-3 bullet points]
 - Decisions: [any architectural or design choices]
 - Remaining: [what's left, if anything]
-- Cost: $X.XX (N requests)
+- Evidence: [tests or receipts that matter]
 ```
 
-Keep it under 15 lines. The journal has the details — this is the headline.
+Keep the report proportional to the work and preserve material failures.

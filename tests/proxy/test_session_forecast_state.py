@@ -20,6 +20,7 @@ from tokenpak.core.contracts.session_economics import (
 )
 from tokenpak.proxy.session_forecast import _build_session_economics
 from tokenpak.proxy.spend_guard.policy import SpendGuardConfig
+from tokenpak.proxy.spend_guard.session_state import _reasoning_effort_cell
 
 _COLUMNS = (
     "timestamp",
@@ -150,6 +151,11 @@ def _config(**overrides: object) -> SpendGuardConfig:
     return config
 
 
+@pytest.mark.parametrize("source", ["", "unknown", "unavailable"])
+def test_empty_effort_with_no_signal_source_remains_unknown(source: str) -> None:
+    assert _reasoning_effort_cell("", "", source) == ("unknown", False)
+
+
 def test_completed_turns_deduplicate_and_match_hand_calculated_ewmas(tmp_path: Path) -> None:
     db = _create_ledger(
         tmp_path,
@@ -231,6 +237,137 @@ def test_completed_turns_deduplicate_and_match_hand_calculated_ewmas(tmp_path: P
 
     encoded = economics.to_json()
     assert SessionEconomics.from_json(encoded).to_json() == encoded
+
+
+def test_return_to_original_cell_does_not_hide_mixed_session_history(tmp_path: Path) -> None:
+    db = _create_ledger(
+        tmp_path,
+        [
+            {"provider_usage_ref": "turn-1"},
+            {
+                "timestamp": "2026-08-10T12:01:00Z",
+                "provider_usage_ref": "turn-2",
+                "model": "claude-opus-4-1",
+                "reasoning_effort": "low",
+                "provider_input_tokens": 120,
+                "provider_cache_read_tokens": 20,
+                "provider_cache_creation_tokens": 0,
+            },
+            {
+                "timestamp": "2026-08-10T12:02:00Z",
+                "provider_usage_ref": "turn-3",
+                "model": "claude-sonnet-4-5",
+                "reasoning_effort": "high",
+                "provider_input_tokens": 150,
+                "provider_cache_read_tokens": 30,
+                "provider_cache_creation_tokens": 0,
+            },
+        ],
+    )
+
+    economics = _build_session_economics(
+        "session-golden",
+        monitor_db_path=str(db),
+        now=datetime(2026, 8, 10, 12, 3, tzinfo=timezone.utc),
+        spend_guard_config=_config(),
+        rate_provenance=_fresh_rates(),
+    )
+
+    assert economics.session.id == "session-golden"
+    assert economics.session.identity_state is ValueState.OBSERVED
+    assert economics.session.turns_observed == 3
+    assert economics.session.model.id == "mixed"
+    assert economics.session.model.effort == "mixed"
+    assert economics.facts.input_tokens.state is ValueState.OBSERVED
+    assert economics.facts.input_tokens.value == 355
+    assert economics.facts.output_tokens.state is ValueState.OBSERVED
+    assert economics.facts.output_tokens.value == 60
+    assert economics.runway.status is RunwayStatus.AVAILABLE
+    assert economics.forecast.status is ForecastStatus.UNAVAILABLE
+    assert "multiple models" in economics.forecast.reason
+    assert "multiple reasoning-effort values" in economics.forecast.reason
+    assert "homogeneous model/effort history is required" in economics.forecast.reason
+    assert economics.time_forecast.status.value == "unavailable"
+    assert economics.time_forecast.cell.model == "mixed"
+    assert economics.time_forecast.cell.effort == "mixed"
+
+    encoded = economics.to_json()
+    restored = SessionEconomics.from_json(encoded)
+    assert restored.session.model.id == "mixed"
+    assert restored.session.model.effort == "mixed"
+    assert restored.forecast.status is ForecastStatus.UNAVAILABLE
+
+
+def test_unsupported_explicit_effort_never_joins_missing_effort_cell(tmp_path: Path) -> None:
+    db = _create_ledger(
+        tmp_path,
+        [
+            {"provider_usage_ref": "turn-1", "reasoning_effort": ""},
+            {
+                "timestamp": "2026-08-10T12:01:00Z",
+                "provider_usage_ref": "turn-2",
+                "reasoning_effort": "",
+                "provider_input_tokens": 120,
+                "provider_cache_read_tokens": 20,
+                "provider_cache_creation_tokens": 0,
+            },
+            {
+                "timestamp": "2026-08-10T12:02:00Z",
+                "provider_usage_ref": "turn-3",
+                "reasoning_effort": "",
+                "provider_input_tokens": 150,
+                "provider_cache_read_tokens": 30,
+                "provider_cache_creation_tokens": 0,
+            },
+        ],
+    )
+    conn = sqlite3.connect(str(db))
+    try:
+        conn.execute("ALTER TABLE requests ADD COLUMN reasoning_effort_source TEXT DEFAULT ''")
+        conn.execute("ALTER TABLE requests ADD COLUMN reasoning_effort_raw TEXT DEFAULT ''")
+        conn.execute(
+            "UPDATE requests SET reasoning_effort_source = 'request_body_unrecognized', "
+            "reasoning_effort_raw = 'xhigh' WHERE provider_usage_ref = 'turn-1'"
+        )
+        conn.execute(
+            "UPDATE requests SET reasoning_effort_source = 'request_body_unrecognized', "
+            "reasoning_effort_raw = 'ultra' WHERE provider_usage_ref = 'turn-2'"
+        )
+        # turn-3 has genuinely absent normalized/raw/source values.
+        conn.commit()
+    finally:
+        conn.close()
+
+    economics = _build_session_economics(
+        "session-golden",
+        monitor_db_path=str(db),
+        now=datetime(2026, 8, 10, 12, 3, tzinfo=timezone.utc),
+        spend_guard_config=_config(),
+        rate_provenance=_fresh_rates(),
+    )
+
+    assert economics.session.id == "session-golden"
+    assert economics.session.model.effort == "unknown"
+    assert economics.facts.input_tokens.state is ValueState.OBSERVED
+    assert economics.runway.status is RunwayStatus.AVAILABLE
+    assert economics.forecast.status is ForecastStatus.UNAVAILABLE
+    assert "unsupported explicit reasoning-effort values" in economics.forecast.reason
+
+
+def test_legacy_ledger_without_effort_provenance_columns_remains_readable(tmp_path: Path) -> None:
+    db = _create_ledger(tmp_path, [{"reasoning_effort": ""}])
+
+    economics = _build_session_economics(
+        "session-golden",
+        monitor_db_path=str(db),
+        now=datetime(2026, 8, 10, 12, 1, tzinfo=timezone.utc),
+        spend_guard_config=_config(),
+        rate_provenance=_fresh_rates(),
+    )
+
+    assert economics.session.identity_state is ValueState.OBSERVED
+    assert economics.session.model.effort == "unknown"
+    assert economics.facts.input_tokens.state is ValueState.OBSERVED
 
 
 def test_missing_provider_measurement_never_becomes_measured_zero(tmp_path: Path) -> None:

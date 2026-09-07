@@ -72,15 +72,12 @@ def test_pak_envelope_unit_shape_is_stable():
     assert max(sizes) < MAX_UNIT_ENVELOPE_BYTES
 
 
-def test_injected_envelopes_replace_not_accumulate_across_sequential_turns():
-    """Drive N sequential turns through ``CapsuleBuilder.process`` — the real
-    per-turn injection path, in the production topology where the client
-    resends its own original history each turn.
+def test_roleless_narrative_envelopes_replace_not_accumulate_across_turns():
+    """Drive an eligible legacy narrative through repeated request processing.
 
-    Invariants: each eligible historical block carries exactly ONE envelope
-    per turn (no accumulation, no nesting); the envelope for unchanged
-    history is byte-identical across turns (stable capsule id); per-turn
-    injected size is bounded by a scenario constant.
+    A role-less narrative block may still carry one envelope per turn. The
+    envelope for unchanged history remains byte-identical and bounded, while
+    the client's role-bearing conversation stays intact.
 
     A separate regression below covers the other production topology, where
     a returned Pak envelope itself re-enters ``process`` on later turns.
@@ -88,7 +85,7 @@ def test_injected_envelopes_replace_not_accumulate_across_sequential_turns():
     builder = CapsuleBuilder(enabled=True, min_block_chars=64, hot_window=2)
     base_block = "historical analysis of the migration plan " * 20
     history: list[dict] = [
-        {"role": "user", "content": base_block},
+        {"content": base_block},
         {"role": "assistant", "content": "ack"},
     ]
     size_bound = len(base_block.encode()) + 160

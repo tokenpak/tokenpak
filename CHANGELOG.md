@@ -6,6 +6,20 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added verified catalog entries for current Anthropic and OpenAI model IDs,
+  including their cache rates and source-fetch metadata, plus a freshness
+  regression guard covering every load-bearing pricing surface.
+- `tokenpak savings --verify` compares the existing UTF-8 byte estimator with
+  an independent `cl100k_base` count on a packaged fixture corpus and reports
+  both counts plus absolute and relative divergence in human and JSON output.
+  It explicitly does not claim to recount stored requests, whose source text
+  is not retained, and gives a specific `tokenpak[tokens]` installation hint
+  when the optional tokenizer is unavailable. A new measurement-methodology
+  guide documents savings baselines, aggregation, counting provenance, and
+  known failure modes without changing savings calculations.
+
 ### Security
 
 - Proxy forwarding paths now use the same internal-header predicate, including
@@ -14,6 +28,40 @@ This project follows [Semantic Versioning](https://semver.org/).
   provider through an adjacent or currently inactive forwarding path.
 
 ### Fixed
+
+- Corrected stale model rates and family fallbacks used by cost and savings
+  estimates. Fresh versioned telemetry catalogs normalize explicitly tagged
+  per-million provider constants into the existing USD-per-1K public API and
+  expose rate-unit and provenance metadata. Existing pricing rows, custom rates,
+  duplicate rows, source strings, and stored cost history are preserved. Old
+  incorrectly seeded rows keep their legacy numeric interpretation until an
+  explicit hashed refresh; old-date lookups retain that interpretation after a
+  refresh. Stored cost rows are never rewritten by refresh, and the existing
+  reprocess pricing-version override remains ineffective in this release.
+- The optional Pak builder now preserves every role-bearing conversation turn
+  verbatim, including user and system instructions, assistant decisions, and
+  tool call history. Only role-less content positively classified as narrative
+  remains eligible for its legacy shortening transform. Unmodified reference
+  Messages and Responses requests now have matching zero-savings receipt tests
+  and documentation; positive reduction proof stays on explicit compression
+  surfaces such as companion `prune_context`.
+- Companion guidance now starts from the current conversation and live source,
+  retrieves prior context only when a needed fact is missing, and records
+  semantic journal milestones only when continuity requires them. Managed
+  skill upgrades remain automatic, while customized or unknown same-name
+  skill directories are preserved with a warning.
+- Concurrent Claude Code launches now use separate generated-file directories,
+  and the launcher composes its prompt hook with existing custom hooks instead
+  of replacing them. Semantic journal entries can carry milestone or handoff
+  types and source references, with identical records stored once and
+  recoverable through `journal_read`.
+- Forecast inputs now capture Anthropic `output_config.effort`, preserve
+  provider effort precedence and raw provenance, and keep absent signals
+  unknown. Mixed-model or mixed-effort session histories no longer train or
+  receive a homogeneous forecast; the six-hour history boundary is reported
+  as session inactivity rather than verified task completion. Explicit effort
+  values outside the current low/medium/high contract remain unavailable for
+  calibration instead of being pooled with missing-effort history.
 
 - The `tokenpak.core.runtime.proxy` compatibility path is now write-through,
   not just read-through: assigning or deleting one of its 13 legacy names

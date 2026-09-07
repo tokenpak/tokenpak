@@ -27,9 +27,9 @@ from tokenpak.models import (
 class TestKnownModels:
     def test_opus_4_6_rates(self):
         rates = get_rates("claude-opus-4-6")
-        assert rates["input"] == 15.0
-        assert rates["output"] == 75.0
-        assert rates["cached"] == 1.5
+        assert rates["input"] == 5.0
+        assert rates["output"] == 25.0
+        assert rates["cached"] == 0.5
 
     def test_sonnet_4_6_rates(self):
         rates = get_rates("claude-sonnet-4-6")
@@ -75,11 +75,11 @@ class TestUnknownModels:
     """
 
     def test_opus_4_7_rates(self):
-        """A future Opus release should get Opus-family pricing."""
+        """A current Opus release should use its verified catalog pricing."""
         rates = get_rates("claude-opus-4-7")
-        assert rates["input"] == 15.0
-        assert rates["output"] == 75.0
-        assert rates["cached"] == 1.5
+        assert rates["input"] == 5.0
+        assert rates["output"] == 25.0
+        assert rates["cached"] == 0.5
 
     def test_opus_4_7_tier(self):
         assert get_tier("claude-opus-4-7") == 4
@@ -141,13 +141,13 @@ class TestResolution:
     def test_date_suffix_stripping(self):
         """Model IDs with date suffixes resolve to the base model."""
         rates = get_rates("claude-opus-4-6-20260515")
-        assert rates["input"] == 15.0
+        assert rates["input"] == 5.0
 
     def test_prefix_match(self):
         """Models sharing a prefix with a known model resolve via prefix matching."""
         info = get_pricing("claude-opus-4-6-extended")
         assert info is not None
-        assert info.input_per_mtok == 15.0
+        assert info.input_per_mtok == 5.0
 
     def test_empty_string(self):
         assert get_pricing("") is None
@@ -312,14 +312,12 @@ class TestThreadSafety:
 
 
 class TestRegressionValues:
-    """Ensure the registry returns the same values that were previously
-    hardcoded in the various inline dicts.
-    """
+    """Ensure the registry returns the expected current catalog values."""
 
-    def test_opus_4_6_matches_old_proxy(self):
+    def test_opus_4_6_matches_current_catalog(self):
         costs = get_model_costs("claude-opus-4-6")
-        assert costs["input"] == 15.0
-        assert costs["output"] == 75.0
+        assert costs["input"] == 5.0
+        assert costs["output"] == 25.0
 
     def test_sonnet_4_6_matches_old_proxy(self):
         costs = get_model_costs("claude-sonnet-4-6")

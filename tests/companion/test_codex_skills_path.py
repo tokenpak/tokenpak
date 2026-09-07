@@ -9,12 +9,33 @@ test pins the canonical target and the defensive dual-path uninstall.
 
 from __future__ import annotations
 
+import hashlib
+import shutil
 import time
 from pathlib import Path
 
 import pytest
 
 from tokenpak.companion.codex import skills_installer as si
+
+_RELEASED_LARGE_REFACTOR_V151 = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "codex"
+    / "tokenpak-large-refactor-mode-v1.5.1.md"
+)
+_RELEASED_LARGE_REFACTOR_V151_SHA256 = (
+    "8bed320ff9c21c2aaaeadf4b87eaefd83cb5d19d502aba91277cbe72b356a4b8"
+)
+
+
+def _large_refactor_only_bundle(monkeypatch, tmp_path: Path) -> Path:
+    name = "tokenpak-large-refactor-mode"
+    bundled = tmp_path / "bundled"
+    shutil.copytree(si._BUNDLED_SKILLS / name, bundled / name)
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    return bundled
+
 
 # ---------------------------------------------------------------------------
 # Runtime default — spec-canonical user path
@@ -59,6 +80,215 @@ def test_install_skills_default_target_is_dot_agents(monkeypatch, tmp_path: Path
         assert str(path).startswith(str(new_default)), (
             f"skill {path} not under canonical default {new_default}"
         )
+
+
+def test_install_preserves_and_reports_customized_same_name_skill(monkeypatch, tmp_path: Path):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    target = tmp_path / "agents" / "skills"
+    customized = target / "a"
+    customized.mkdir(parents=True)
+    (customized / "SKILL.md").write_text("# user customized\n")
+
+    with pytest.warns(RuntimeWarning, match="customized or unknown"):
+        installed = si.install_skills(target_dir=target)
+
+    assert installed == []
+    assert (customized / "SKILL.md").read_text() == "# user customized\n"
+    assert si.list_installed_skills(target) == []
+
+
+def test_uninstall_preserves_and_reports_customized_same_name_skill(monkeypatch, tmp_path: Path):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    target = tmp_path / "agents" / "skills"
+    customized = target / "a"
+    customized.mkdir(parents=True)
+    (customized / "SKILL.md").write_text("# user customized\n")
+
+    with pytest.warns(RuntimeWarning, match="customized or unknown"):
+        removed = si.uninstall_skills(target_dir=target)
+
+    assert removed == []
+    assert (customized / "SKILL.md").read_text() == "# user customized\n"
+
+
+def test_upgrade_accepts_released_v151_large_refactor_body(monkeypatch, tmp_path: Path):
+    name = "tokenpak-large-refactor-mode"
+    bundled = _large_refactor_only_bundle(monkeypatch, tmp_path)
+    released_body = _RELEASED_LARGE_REFACTOR_V151.read_bytes()
+    assert hashlib.sha256(released_body).hexdigest() == _RELEASED_LARGE_REFACTOR_V151_SHA256
+    target = tmp_path / "agents" / "skills"
+    installed = target / name
+    installed.mkdir(parents=True)
+    (installed / "SKILL.md").write_bytes(released_body)
+
+    assert si.install_skills(target_dir=target) == [installed]
+
+    assert (installed / "SKILL.md").read_bytes() == (bundled / name / "SKILL.md").read_bytes()
+    assert si.list_installed_skills(target) == [name]
+
+
+def test_upgrade_preserves_modified_v151_large_refactor_body(monkeypatch, tmp_path: Path):
+    name = "tokenpak-large-refactor-mode"
+    _large_refactor_only_bundle(monkeypatch, tmp_path)
+    customized_body = _RELEASED_LARGE_REFACTOR_V151.read_bytes() + b"\n# local customization\n"
+    target = tmp_path / "agents" / "skills"
+    installed = target / name
+    installed.mkdir(parents=True)
+    (installed / "SKILL.md").write_bytes(customized_body)
+
+    with pytest.warns(RuntimeWarning, match="customized or unknown"):
+        assert si.install_skills(target_dir=target) == []
+
+    assert (installed / "SKILL.md").read_bytes() == customized_body
+    assert si.list_installed_skills(target) == []
+
+
+def test_upgrade_accepts_recorded_shipped_body_without_name_only_ownership(
+    monkeypatch, tmp_path: Path
+):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    target = tmp_path / "agents" / "skills"
+    previous = target / "a"
+    previous.mkdir(parents=True)
+    old_body = b"# previously shipped\n"
+    (previous / "SKILL.md").write_bytes(old_body)
+    monkeypatch.setattr(
+        si,
+        "_KNOWN_SHIPPED_SKILL_MD_SHA256",
+        {"a": frozenset({hashlib.sha256(old_body).hexdigest()})},
+    )
+
+    installed = si.install_skills(target_dir=target)
+
+    assert installed == [previous]
+    assert (previous / "SKILL.md").read_text() == "# a\n"
+    assert (previous / "body.md").is_file()
+
+
+def test_repeat_install_of_managed_copy_is_idempotent_without_backup(monkeypatch, tmp_path: Path):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    target = tmp_path / "agents" / "skills"
+    installed = target / "a"
+    installed.parent.mkdir(parents=True)
+    shutil.copytree(bundled / "a", installed)
+
+    assert si.install_skills(target_dir=target) == [installed]
+    assert not list(target.parent.glob(f"{si._BACKUP_PREFIX}*"))
+
+
+@pytest.mark.parametrize("custom_entry", ["directory", "file"])
+def test_install_preserves_extra_custom_assets(monkeypatch, tmp_path: Path, custom_entry: str):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    target = tmp_path / "agents" / "skills"
+    customized = target / "a"
+    shutil.copytree(bundled / "a", customized)
+    if custom_entry == "directory":
+        (customized / "notes").mkdir()
+    else:
+        (customized / "notes.txt").write_text("user asset\n")
+
+    with pytest.warns(RuntimeWarning, match="customized or unknown"):
+        assert si.install_skills(target_dir=target) == []
+
+    assert (
+        (customized / "notes").is_dir()
+        if custom_entry == "directory"
+        else (customized / "notes.txt").is_file()
+    )
+
+
+def test_install_preserves_root_symlink(monkeypatch, tmp_path: Path):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    user_copy = tmp_path / "user-copy"
+    user_copy.mkdir()
+    (user_copy / "SKILL.md").write_text("# user copy\n")
+    target = tmp_path / "agents" / "skills"
+    target.mkdir(parents=True)
+    (target / "a").symlink_to(user_copy, target_is_directory=True)
+
+    with pytest.warns(RuntimeWarning, match="customized or unknown"):
+        assert si.install_skills(target_dir=target) == []
+
+    assert (target / "a").is_symlink()
+    assert (user_copy / "SKILL.md").read_text() == "# user copy\n"
+
+
+def test_default_upgrade_reconciles_managed_legacy_copy(monkeypatch, tmp_path: Path):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    canonical = tmp_path / ".agents" / "skills"
+    legacy = tmp_path / ".codex" / "skills"
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    monkeypatch.setattr(si, "_DEFAULT_TARGET", canonical)
+    monkeypatch.setattr(si, "_LEGACY_TARGET", legacy)
+    shutil.copytree(bundled / "a", legacy / "a")
+
+    assert si.install_skills() == [canonical / "a"]
+    assert (canonical / "a" / "SKILL.md").is_file()
+    assert not (legacy / "a").exists()
+
+
+def test_default_upgrade_preserves_customized_legacy_copy(monkeypatch, tmp_path: Path):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    canonical = tmp_path / ".agents" / "skills"
+    legacy = tmp_path / ".codex" / "skills"
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    monkeypatch.setattr(si, "_DEFAULT_TARGET", canonical)
+    monkeypatch.setattr(si, "_LEGACY_TARGET", legacy)
+    custom = legacy / "a"
+    custom.mkdir(parents=True)
+    (custom / "SKILL.md").write_text("# customized legacy\n")
+
+    with pytest.warns(RuntimeWarning, match="legacy reconciliation"):
+        assert si.install_skills() == [canonical / "a"]
+
+    assert (custom / "SKILL.md").read_text() == "# customized legacy\n"
+
+
+def test_default_upgrade_does_not_reconcile_aliased_legacy_root(monkeypatch, tmp_path: Path):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    canonical = tmp_path / ".agents" / "skills"
+    legacy = tmp_path / ".codex" / "skills"
+    canonical.mkdir(parents=True)
+    legacy.parent.mkdir(parents=True)
+    legacy.symlink_to(canonical, target_is_directory=True)
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    monkeypatch.setattr(si, "_DEFAULT_TARGET", canonical)
+    monkeypatch.setattr(si, "_LEGACY_TARGET", legacy)
+
+    assert si.install_skills() == [canonical / "a"]
+    assert (canonical / "a" / "SKILL.md").is_file()
+    assert (legacy / "a" / "SKILL.md").is_file()
+
+
+def test_default_upgrade_keeps_managed_legacy_when_canonical_is_customized(
+    monkeypatch,
+    tmp_path: Path,
+):
+    bundled = _bundled_dir_with(tmp_path, ["a"])
+    canonical = tmp_path / ".agents" / "skills"
+    legacy = tmp_path / ".codex" / "skills"
+    custom = canonical / "a"
+    custom.mkdir(parents=True)
+    (custom / "SKILL.md").write_text("# customized canonical\n")
+    shutil.copytree(bundled / "a", legacy / "a")
+    monkeypatch.setattr(si, "_BUNDLED_SKILLS", bundled)
+    monkeypatch.setattr(si, "_DEFAULT_TARGET", canonical)
+    monkeypatch.setattr(si, "_LEGACY_TARGET", legacy)
+
+    with pytest.warns(RuntimeWarning) as captured:
+        assert si.install_skills() == []
+
+    messages = [str(warning.message) for warning in captured]
+    assert any("upgrade skipped customized or unknown" in message for message in messages)
+    assert any("legacy reconciliation preserved managed copy" in message for message in messages)
+    assert (custom / "SKILL.md").read_text() == "# customized canonical\n"
+    assert (legacy / "a" / "SKILL.md").is_file()
 
 
 # ---------------------------------------------------------------------------

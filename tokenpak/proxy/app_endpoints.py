@@ -646,6 +646,7 @@ def _handle_journal_get(handler: Any, session_id: str, qs: dict[str, list[str]])
                     "timestamp": getattr(e, "timestamp", 0),
                     "type": getattr(e, "entry_type", ""),
                     "content": getattr(e, "content", ""),
+                    "metadata": getattr(e, "metadata", {}),
                 }
                 for e in entries
             ],
@@ -662,6 +663,10 @@ def _handle_journal_post(handler: Any, session_id: str, body: dict[str, Any]) ->
         _send_error(handler, 400, "missing_content")
         return
     entry_type = str(body.get("entry_type", "user")).strip() or "user"
+    metadata = body.get("metadata", {})
+    if not isinstance(metadata, dict):
+        _send_error(handler, 400, "invalid_metadata", "metadata must be an object")
+        return
     try:
         store = _get_journal_store()
         # Register the session row on first write so the sessions table is
@@ -677,6 +682,7 @@ def _handle_journal_post(handler: Any, session_id: str, body: dict[str, Any]) ->
             session_id=session_id,
             entry_type=entry_type,
             content=content,
+            metadata=metadata,
         )
     except Exception as exc:
         _send_error(handler, 500, "journal_write_failed", str(exc))

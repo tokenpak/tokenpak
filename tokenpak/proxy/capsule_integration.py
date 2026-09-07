@@ -4,9 +4,10 @@ tokenpak.proxy.capsule_integration
 
 Wire the CapsuleBuilder into the proxy request pipeline.
 
-This module provides a request hook that invokes the capsule builder
-on incoming request bodies, compressing verbose historical context
-before forwarding to the upstream model.
+This module provides a request hook that invokes the capsule builder on
+incoming request bodies. Supported provider conversation turns are
+role-bearing and remain byte-preserved; only legacy role-less narrative blocks
+are eligible for the builder's shortening transform.
 
 Feature Flag
 ------------

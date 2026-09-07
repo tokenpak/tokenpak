@@ -45,12 +45,12 @@ path reuses an existing Codex OAuth login and its normal model selection.
 
 ---
 
-## Prove One Measured Request
+## Record One Measured Request
 
 For the canonical first-use path, follow
-[First Measured Savings Receipt](first-receipt.md). It installs TokenPak, starts
-one receipt-enabled foreground proxy, and sends one eligible request using your
-current project's real `README.md`. Complete that path before starting another
+[First Measured Request Receipt](first-receipt.md). It installs TokenPak, starts
+one receipt-enabled foreground proxy, and records one real project request with
+truthful zero-savings attribution. Complete that path before starting another
 proxy or applying a client integration.
 
 `tokenpak demo` remains an optional offline fixture; it is not a receipt from
@@ -172,7 +172,7 @@ Expected output:
 ✓ Session: 0 requests
 ```
 
-Make a normal, eligible request through your client, then:
+Make a normal request through your client, then:
 
 ```bash
 tokenpak cost

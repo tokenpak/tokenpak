@@ -29,13 +29,13 @@ class TestGetRates:
 
     def test_opus_rates(self):
         r = get_rates("claude-opus-4-6")
-        assert r["input"] == 15.0
-        assert r["output"] == 75.0
+        assert r["input"] == 5.0
+        assert r["output"] == 25.0
 
     def test_haiku_rates(self):
         r = get_rates("claude-haiku-4-5")
-        assert r["input"] == 0.80
-        assert r["output"] == 4.0
+        assert r["input"] == 1.0
+        assert r["output"] == 5.0
 
     def test_haiku_4_6_rates(self):
         r = get_rates("claude-haiku-4-6")

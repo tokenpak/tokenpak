@@ -11,14 +11,13 @@ TokenPak starts as a local proxy that **packs AI requests** before they ship —
 
 ---
 
-## First measured receipt in three commands
+## First measured request receipt in three commands
 
 Prerequisites: Python 3.10+ and an already authenticated supported client. The
 reference path below uses Codex and reuses its existing OAuth login and normal
 default model. An API key or explicit model override is optional, not required.
-Run it from a project with enough real history for an eligible multi-turn
-request; real provider usage may count against your subscription or incur
-provider charges.
+Run it from a real project; provider usage may count against your subscription
+or incur provider charges.
 
 ```bash
 python -m pip install tokenpak
@@ -26,16 +25,16 @@ tokenpak serve --profile aggressive --stats-footer  # terminal 1; leave running
 tokenpak codex  # terminal 2; use your existing login and selected/default model
 ```
 
-In Codex, make a normal context-bearing request, then continue that same topic.
-The first request may correctly be ineligible because there is no historical
-context yet; the first eligible request prints the measured before/after token
-receipt in terminal 1. The dollar figure is estimated from TokenPak's
-model-pricing table. This session-only footer is off by default and does not
-alter the provider response.
+In Codex, make a normal context-bearing request. The proxy prints a measured
+receipt in terminal 1. In this unmodified reference setup, the built-in Pak
+builder leaves every system, user, and assistant conversation turn intact, so
+the receipt truthfully reports `0 tokens saved`. This verifies routing and
+accounting without claiming savings that did not occur. The session-only
+footer is off by default and does not alter the provider response.
 
 See the [first receipt guide](docs/first-receipt.md) for prerequisites,
-expected output, the five-minute reference target, and routes that are not
-eligible for compression savings.
+the expected zero-savings output, the five-minute reference target, and the
+separate explicit compression surfaces.
 
 ## Offline fixture demo
 

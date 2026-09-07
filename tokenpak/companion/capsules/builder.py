@@ -5,11 +5,12 @@ tokenpak.companion.capsules.builder
 Pak Builder — context-block compression for the TokenPak proxy pipeline.
 
 A **Pak** (Portable AI Knowledge — legacy name: capsule) is a compact,
-structured representation of a verbose context block. The builder identifies
-large historical message blocks, compresses them deterministically, and wraps
-them in a Pak envelope so the model still receives the semantic content at
-reduced token cost. Class and module names retain the legacy ``capsule``
-spelling as deprecation aliases; the wire-visible surface is Pak-branded.
+structured representation of a verbose context block. The builder preserves
+role-bearing conversation turns and tool evidence verbatim. Its legacy
+transform applies only to role-less context objects positively classified as
+narrative, which it compresses deterministically and wraps in a Pak envelope.
+Class and module names retain the legacy ``capsule`` spelling as deprecation
+aliases; the wire-visible surface is Pak-branded.
 
 Design Principles
 -----------------
@@ -225,7 +226,7 @@ def _wrap_capsule(original: str, compressed: str) -> str:
 
 class CapsuleBuilder:
     """
-    Compress verbose historical context blocks in an LLM request payload.
+    Compress eligible role-less narrative blocks in a request payload.
 
     Parameters
     ----------
@@ -235,8 +236,10 @@ class CapsuleBuilder:
     min_block_chars : int
         Minimum character length of a text block to qualify for compression.
     hot_window : int
-        Number of trailing messages to leave untouched (the "hot window").
-        Capsule compression applies only to messages *before* this window.
+        Number of trailing entries to leave untouched (the "hot window").
+        Eligible legacy compression applies only to role-less narrative entries
+        *before* this window. Role-bearing conversation turns remain untouched
+        regardless of position.
     """
 
     def __init__(
@@ -323,11 +326,19 @@ class CapsuleBuilder:
             if not isinstance(msg, dict):
                 continue
 
-            # System/developer policy and protected instruction blocks are
-            # never compression candidates, even in aggressive mode.
-            if msg.get("role") in {"system", "developer"}:
+            # Conversation turns are authoritative request history. Natural
+            # language has no dependable marker that separates an optional
+            # anecdote from a user constraint or an assistant decision, so a
+            # role-bearing message is never shortened to obtain admission.
+            # This covers Anthropic/OpenAI Messages and message items in the
+            # OpenAI Responses ``input`` array. Role-less context objects may
+            # still use the legacy opt-in Pak transform below.
+            if "role" in msg or msg.get("type") == "message":
                 continue
-            if classify_message_risk(msg) == "protected":
+            # Preserve tool/config/code/error evidence as well. Only a
+            # role-less block positively classified as narrative remains an
+            # eligible legacy compression candidate.
+            if classify_message_risk(msg) != "narrative":
                 continue
 
             content = msg.get("content")

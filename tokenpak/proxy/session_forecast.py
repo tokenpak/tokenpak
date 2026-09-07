@@ -68,6 +68,7 @@ from tokenpak.proxy.spend_guard._context_window import get_model_max_context
 from tokenpak.proxy.spend_guard.policy import SpendGuardConfig, load_config
 from tokenpak.proxy.spend_guard.session_state import (
     _read_completed_session_rows,
+    _reasoning_effort_cell,
     _SessionLedgerRead,
     _SessionLedgerRow,
 )
@@ -138,6 +139,40 @@ def _nonnegative_number(value: object, field: str) -> float:
 
 def _text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
+
+
+def _session_model_effort(
+    turns: Sequence[_Turn], *, model_hint: str = ""
+) -> tuple[str, str, tuple[str, ...]]:
+    """Return an honest cell label without collapsing mixed histories."""
+    models = {_text(turn.row.model) or "unknown" for turn in turns}
+    effort_observations = [
+        _reasoning_effort_cell(
+            turn.row.reasoning_effort,
+            turn.row.reasoning_effort_raw,
+            turn.row.reasoning_effort_source,
+        )
+        for turn in turns
+    ]
+    efforts = {label for label, _unsupported in effort_observations}
+    unsupported_effort = any(unsupported for _label, unsupported in effort_observations)
+    mixed: list[str] = []
+    if len(models) > 1:
+        model = "mixed"
+        mixed.append("multiple models")
+    else:
+        model = next(iter(models))
+        if model == "unknown":
+            model = _text(model_hint) or model
+    if unsupported_effort:
+        effort = "mixed" if len(efforts) > 1 else "unknown"
+        mixed.append("unsupported explicit reasoning-effort values")
+    elif len(efforts) > 1:
+        effort = "mixed"
+        mixed.append("multiple reasoning-effort values")
+    else:
+        effort = next(iter(efforts))
+    return model, effort, tuple(mixed)
 
 
 def _deduplicate_rows(rows: Sequence[_SessionLedgerRow]) -> tuple[_Turn, ...]:
@@ -1103,8 +1138,7 @@ def _build_session_economics(
         )
 
     latest = turns[-1].row
-    model = _text(latest.model) or _text(model_hint) or "unknown"
-    effort = _text(latest.reasoning_effort) or "unknown"
+    model, effort, mixed_dimensions = _session_model_effort(turns, model_hint=model_hint)
     facts = SessionFacts(
         input_tokens=_fact_total(turns, "provider_input_tokens"),
         output_tokens=_fact_total(turns, "provider_output_tokens"),
@@ -1112,26 +1146,41 @@ def _build_session_economics(
         cache_write_tokens=_fact_total(turns, "provider_cache_creation_tokens"),
         cost_usd=cost,
     )
-    forecast = _calibrated_or_fallback(
-        monitor_db_path=monitor_db_path,
-        as_of=as_of,
-        session_id=stable_id,
-        model=model,
-        effort=effort,
-        turns=turns,
-        state=state,
-        runway=runway,
-        facts=facts,
-        token_burns=token_burns,
-    )
-    time_forecast = _time_calibrated_or_fallback(
-        monitor_db_path=monitor_db_path,
-        as_of=as_of,
-        session_id=stable_id,
-        model=model,
-        effort=effort,
-        turns=turns,
-    )
+    if mixed_dimensions:
+        mixed_reason = (
+            "forecast unavailable: session contains "
+            + " and ".join(mixed_dimensions)
+            + "; a homogeneous model/effort history is required"
+        )
+        forecast = _empty_forecast(ForecastStatus.UNAVAILABLE, mixed_reason)
+        time_forecast = TimeForecast.unavailable(
+            cell=TimeForecastCell(
+                model=model,
+                effort=effort,
+                stream_mode=_map_stream_mode(latest.stream_mode),
+            )
+        )
+    else:
+        forecast = _calibrated_or_fallback(
+            monitor_db_path=monitor_db_path,
+            as_of=as_of,
+            session_id=stable_id,
+            model=model,
+            effort=effort,
+            turns=turns,
+            state=state,
+            runway=runway,
+            facts=facts,
+            token_burns=token_burns,
+        )
+        time_forecast = _time_calibrated_or_fallback(
+            monitor_db_path=monitor_db_path,
+            as_of=as_of,
+            session_id=stable_id,
+            model=model,
+            effort=effort,
+            turns=turns,
+        )
     return SessionEconomics(
         as_of=as_of.isoformat(),
         session=SessionRef(

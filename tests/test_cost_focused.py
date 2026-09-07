@@ -21,9 +21,9 @@ from tokenpak.telemetry.cost import (
 class TestCostEngine:
     """Test cost engine for USD calculation."""
 
-    def test_engine_initialized(self):
+    def test_engine_initialized(self, tmp_path):
         """CostEngine initializes correctly."""
-        engine = CostEngine()
+        engine = CostEngine(str(tmp_path / "cost.db"))
         assert engine is not None
 
     def test_cost_result_structure(self):
@@ -83,8 +83,6 @@ class TestCostEngine:
             version="1.0",
             effective_date="2026-03-17",
         )
-        # Per-token should be 1/1000 of per-1K rate
-        # $15/1K = $0.015 per token
         assert pricing.input_per_token == pytest.approx(0.015, rel=0.01)
         assert pricing.output_per_token == pytest.approx(0.075, rel=0.01)
 
@@ -103,7 +101,7 @@ class TestCostCalculation:
             effective_date="2026-03-17",
         )
         cost = calculate_baseline(raw_input_tokens=1_000_000, output_tokens=0, pricing=pricing)
-        # 1M tokens * $0.015/token = $15,000
+        # 1M tokens at $15/1K = $15,000.
         assert cost == pytest.approx(15000.0, rel=0.01)
 
     def test_baseline_cost_openai(self):
@@ -117,7 +115,7 @@ class TestCostCalculation:
             effective_date="2026-03-17",
         )
         cost = calculate_baseline(raw_input_tokens=1_000_000, output_tokens=0, pricing=pricing)
-        # 1M tokens * $0.010/token = $10,000
+        # 1M tokens at $10/1K = $10,000.
         assert cost == pytest.approx(10000.0, rel=0.01)
 
     def test_baseline_cost_zero_tokens(self):
@@ -144,7 +142,7 @@ class TestCostCalculation:
             effective_date="2026-03-17",
         )
         cost = calculate_baseline(raw_input_tokens=0, output_tokens=1_000_000, pricing=pricing)
-        # 1M output tokens * $0.075/token = $75,000
+        # 1M output tokens at $75/1K = $75,000.
         assert cost == pytest.approx(75000.0, rel=0.01)
 
     def test_baseline_cost_combined(self):
@@ -160,7 +158,6 @@ class TestCostCalculation:
         cost = calculate_baseline(
             raw_input_tokens=1_000_000, output_tokens=1_000_000, pricing=pricing
         )
-        # (1M * $0.015/token) + (1M * $0.075/token) = $15,000 + $75,000 = $90,000
         assert cost == pytest.approx(90000.0, rel=0.01)
 
 
@@ -223,7 +220,6 @@ class TestEdgeCases:
         )
         cost = calculate_baseline(1, 0, pricing)
 
-        # 1 token * $0.015/token = $0.015
         assert cost == pytest.approx(0.015, rel=0.01)
 
     def test_large_token_count(self):

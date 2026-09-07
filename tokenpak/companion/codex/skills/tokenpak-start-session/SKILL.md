@@ -1,26 +1,26 @@
 ---
 name: tokenpak-start-session
-description: Initialize a TokenPak companion session. Sets up budget tracking, checks for relevant capsules from prior sessions, seeds the journal, and reports companion status. Use at the beginning of a new coding session or when resuming work.
+description: Inspect TokenPak companion status or recover an identified handoff when the user requests it or current context is missing required prior-session facts.
 ---
 
 # TokenPak Start Session
 
-Initialize the companion for this session.
+Use companion startup and retrieval tools only when they answer a real task
+question. Accounting and spend enforcement already run out of band.
 
 ## Steps
 
-1. Call `session_info` to verify the companion is active and get config.
-2. Call `check_budget` to see daily spend and remaining budget.
-3. Call `journal_read` (no session_id) to list recent sessions — show the user the last 3.
-4. If the user mentioned resuming prior work or a specific task, call `load_capsule` to find relevant context.
-5. Call `journal_write` with a brief note: what the user wants to accomplish this session.
+1. Start from the user's request and current conversation.
+2. Call `session_info` only for setup, diagnosis, or an explicit status request.
+3. Call `check_budget` only for an explicit budget question or decision.
+4. If a needed prior fact is missing, query the most likely source. Use native
+   memory when suitable, `load_pak` for an identified handoff, or
+   `journal_read` for targeted follow-up.
+5. Do not list the Pak catalog or recent sessions automatically.
+6. Use `journal_write` only for a durable decision, changed constraint,
+   verified milestone, material blocker, or handoff.
 
 ## Output
 
-Report to the user:
-- Companion status (profile, budget)
-- Today's spend so far
-- Recent sessions (1-line each)
-- Whether a relevant capsule was loaded
-
-Keep it under 10 lines. Do not dump raw JSON.
+Report only the information requested or needed for the task, including any
+missing or stale evidence.
