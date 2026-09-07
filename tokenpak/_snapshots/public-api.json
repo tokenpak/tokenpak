@@ -6405,7 +6405,15 @@
     },
     {
       "module": "tokenpak.licensing.daemon_probe",
+      "name": "DaemonProbeResult"
+    },
+    {
+      "module": "tokenpak.licensing.daemon_probe",
       "name": "DaemonState"
+    },
+    {
+      "module": "tokenpak.licensing.daemon_probe",
+      "name": "DaemonStateReason"
     },
     {
       "module": "tokenpak.licensing.daemon_probe",
@@ -6414,6 +6422,10 @@
     {
       "module": "tokenpak.licensing.daemon_probe",
       "name": "is_daemon_reachable"
+    },
+    {
+      "module": "tokenpak.licensing.daemon_probe",
+      "name": "probe_daemon"
     },
     {
       "module": "tokenpak.licensing.daemon_probe",
@@ -11790,6 +11802,18 @@
     {
       "module": "tokenpak.proxy.websocket",
       "name": "start_ws_server"
+    },
+    {
+      "module": "tokenpak.release_metadata",
+      "name": "ReleaseMetadata"
+    },
+    {
+      "module": "tokenpak.release_metadata",
+      "name": "ReleaseMetadataError"
+    },
+    {
+      "module": "tokenpak.release_metadata",
+      "name": "load_release_metadata"
     },
     {
       "module": "tokenpak.routing",

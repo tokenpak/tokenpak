@@ -43,13 +43,14 @@ def isolated_license(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_activate_no_daemon_keeps_pending(isolated_license, monkeypatch):
+@pytest.mark.parametrize("daemon_state", ["unavailable", "tip_mismatch"])
+def test_activate_non_active_daemon_keeps_pending(isolated_license, monkeypatch, daemon_state):
     from tokenpak import licensing as _lic
 
     # Force daemon probe to report unavailable.
     monkeypatch.setattr(
         "tokenpak.licensing.daemon_probe.detect_daemon_state",
-        lambda: "unavailable",
+        lambda: daemon_state,
     )
     result = _lic.activate("PLAUSIBLE-LICENSE-KEY-0001")
     assert result.ok is True

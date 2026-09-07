@@ -1178,7 +1178,7 @@ def _handle_pak_promote_forward(handler: Any) -> None:
     The capture pipeline lives in the closed-source daemon. The OSS proxy's
     job here is to:
 
-    1. Probe daemon presence via ``daemon_probe.detect_daemon_state``.
+    1. Probe daemon health and compatibility via ``daemon_probe.probe_daemon``.
     2. If absent → return 501 ``pro_daemon_required``.
     3. If present → read the daemon's port from sock-info, POST the
        request body to the daemon's ``/pak/v1/promote``, stream the
@@ -1199,11 +1199,12 @@ def _handle_pak_promote_forward(handler: Any) -> None:
     import http.client
 
     from tokenpak.licensing.daemon_probe import (
-        detect_daemon_state,
+        probe_daemon,
         sock_info_path,
     )
 
-    state = detect_daemon_state()
+    probe_result = probe_daemon()
+    state, _state_reason = probe_result
     if state != "active":
         _send_pak_not_implemented(
             handler,
@@ -1212,6 +1213,7 @@ def _handle_pak_promote_forward(handler: Any) -> None:
                 "Capture pipeline is a Pro-only feature; install tokenpak-paid "
                 "and start the daemon to enable."
             ),
+            daemon_probe_result=probe_result,
         )
         return
 
@@ -1226,6 +1228,7 @@ def _handle_pak_promote_forward(handler: Any) -> None:
             handler,
             reason="pro_daemon_required",
             detail="Daemon sock-info missing or malformed at forward time.",
+            daemon_probe_result=("unavailable", "sock_info_malformed"),
         )
         return
 
@@ -1289,6 +1292,7 @@ def _send_pak_not_implemented(
     reason: str,
     detail: str,
     suggested_action: str = "Install tokenpak-paid (Pro) to enable this surface.",
+    daemon_probe_result: tuple[str, str] | None = None,
 ) -> None:
     """Standardized 501 response for Pro-gated /pak/v1/* endpoints.
 
@@ -1299,7 +1303,9 @@ def _send_pak_not_implemented(
     installed" from "Pro present but version-incompatible" once Phase 2
     ships.
     """
-    from tokenpak.licensing.daemon_probe import detect_daemon_state
+    from tokenpak.licensing.daemon_probe import probe_daemon
+
+    state, state_reason = daemon_probe_result or probe_daemon()
 
     _send_json(
         handler,
@@ -1309,7 +1315,8 @@ def _send_pak_not_implemented(
             "reason": reason,
             "detail": detail,
             "suggested_action": suggested_action,
-            "daemon_state": detect_daemon_state(),
+            "daemon_state": state,
+            "daemon_state_reason": state_reason,
         },
     )
 
@@ -1469,9 +1476,9 @@ def _handle_pak_status(handler: Any) -> None:
     - ``promotion_candidates`` — count of journal entries marked ready
       for daemon-side promotion.
     """
-    from tokenpak.licensing.daemon_probe import detect_daemon_state
+    from tokenpak.licensing.daemon_probe import probe_daemon
 
-    state = detect_daemon_state()
+    state, state_reason = probe_daemon()
 
     # multipak.enabled config flag — read dynamically per
     # ``feedback_always_dynamic.md``. The flag lives under ``pro.multipak.
@@ -1493,6 +1500,7 @@ def _handle_pak_status(handler: Any) -> None:
         200,
         {
             "daemon_state": state,
+            "daemon_state_reason": state_reason,
             "multipak_enabled": multipak_enabled,
             "pak_store_present": pak_store_present,
             "vault_paks_indexed": vault_paks_indexed,

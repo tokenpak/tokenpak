@@ -188,10 +188,11 @@ def test_forward_to_daemon_round_trip(active_daemon):
     assert got["content"] == "captured text"
 
 
-def test_forward_noop_when_daemon_unavailable(monkeypatch):
+@pytest.mark.parametrize("state", ["unavailable", "tip_mismatch"])
+def test_forward_noop_when_daemon_is_not_active(monkeypatch, state):
     import tokenpak.licensing.daemon_probe as probe
 
-    monkeypatch.setattr(probe, "detect_daemon_state", lambda *a, **k: "unavailable")
+    monkeypatch.setattr(probe, "detect_daemon_state", lambda *a, **k: state)
     assert ci.forward_to_daemon({"source": "llm_response", "content": "x"}) is None
 
 
