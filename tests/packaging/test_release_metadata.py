@@ -16,11 +16,12 @@ import tokenpak
 from tokenpak import release_metadata
 
 ROOT = Path(__file__).resolve().parents[2]
+VERSION_PARTS = tuple(int(part) for part in tokenpak.__version__.split("."))
 
 
 def _metadata(**overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
-        "tokenpak_version": "1.24.0",
+        "tokenpak_version": tokenpak.__version__,
         "asserted_tip_version": "TIP-1.0",
         "pinned_registry_schema_tag": "schema-2026-07-18",
         "pinned_docs_revision": "v1.18.5-docs@abc123",
@@ -37,7 +38,7 @@ def test_packaged_metadata_matches_canonical_source_and_module_version() -> None
     assert payload["tokenpak_version"] == tokenpak.__version__
 
     loaded = release_metadata.load_release_metadata()
-    assert loaded.tokenpak_version == (1, 24, 0)
+    assert loaded.tokenpak_version == VERSION_PARTS
     assert loaded.asserted_tip_version == (1, 0)
 
 
@@ -72,7 +73,8 @@ def test_malformed_metadata_fails_closed(tmp_path, monkeypatch, raw):
 def test_packaged_version_disagreement_is_malformed(tmp_path, monkeypatch):
     (tmp_path / "version.json").write_text(json.dumps(_metadata()), encoding="utf-8")
     monkeypatch.setattr(release_metadata.resources, "files", lambda _package: tmp_path)
-    monkeypatch.setattr(release_metadata, "__version__", "1.24.1")
+    next_patch = ".".join(map(str, (*VERSION_PARTS[:2], VERSION_PARTS[2] + 1)))
+    monkeypatch.setattr(release_metadata, "__version__", next_patch)
     with pytest.raises(release_metadata.ReleaseMetadataError) as excinfo:
         release_metadata.load_release_metadata()
     assert excinfo.value.reason == "oss_metadata_malformed"
@@ -112,18 +114,14 @@ def test_metadata_preserves_opaque_exact_pin_syntax(tmp_path, monkeypatch):
     )
     (tmp_path / "version.json").write_text(json.dumps(payload), encoding="utf-8")
     monkeypatch.setattr(release_metadata.resources, "files", lambda _package: tmp_path)
-    assert release_metadata.load_release_metadata() == ((1, 24, 0), (1, 0))
+    assert release_metadata.load_release_metadata() == (VERSION_PARTS, (1, 0))
 
 
 def test_duplicate_metadata_key_is_malformed(tmp_path, monkeypatch):
-    raw = (
-        (ROOT / "version.json")
-        .read_bytes()
-        .replace(
-            b'"tokenpak_version": "1.24.0",',
-            b'"tokenpak_version": "1.24.0",\n  "tokenpak_version": "1.24.0",',
-        )
-    )
+    payload = json.loads((ROOT / "version.json").read_bytes())
+    duplicate = '"tokenpak_version": ' + json.dumps(payload["tokenpak_version"]) + ", "
+    raw = ("{" + duplicate + json.dumps(payload)[1:]).encode("utf-8")
+    assert raw.count(b'"tokenpak_version":') == 2
     (tmp_path / "version.json").write_bytes(raw)
     monkeypatch.setattr(release_metadata.resources, "files", lambda _package: tmp_path)
     with pytest.raises(release_metadata.ReleaseMetadataError) as excinfo:
@@ -170,7 +168,7 @@ def test_built_wheel_contains_and_imports_metadata(built_distributions, tmp_path
     wheel, _sdist = built_distributions
     with zipfile.ZipFile(wheel) as archive:
         assert archive.read("tokenpak/version.json") == (ROOT / "version.json").read_bytes()
-    assert _isolated_import(wheel, tmp_path) == "1.24.0|1.0"
+    assert _isolated_import(wheel, tmp_path) == f"{tokenpak.__version__}|1.0"
 
 
 def test_built_sdist_contains_and_source_imports_metadata(built_distributions, tmp_path):
@@ -195,4 +193,4 @@ def test_built_sdist_contains_and_source_imports_metadata(built_distributions, t
                 destination.write_bytes(source.read())
 
     source_root = next(path for path in tmp_path.iterdir() if path.is_dir())
-    assert _isolated_import(source_root, tmp_path) == "1.24.0|1.0"
+    assert _isolated_import(source_root, tmp_path) == f"{tokenpak.__version__}|1.0"

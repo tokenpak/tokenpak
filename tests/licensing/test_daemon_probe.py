@@ -12,7 +12,11 @@ from pathlib import Path
 
 import pytest
 
+from tokenpak import __version__
 from tokenpak.licensing import daemon_probe
+
+_VERSION_PARTS = tuple(int(part) for part in __version__.split("."))
+_NEXT_PATCH = ".".join(map(str, (*_VERSION_PARTS[:2], _VERSION_PARTS[2] + 1)))
 
 
 def _declared_health(**overrides: object) -> dict[str, object]:
@@ -20,8 +24,8 @@ def _declared_health(**overrides: object) -> dict[str, object]:
         "ok": True,
         "service": "tokenpak-paid-daemon",
         "compatibility_status": "declared",
-        "tokenpak_min_version": "1.24.0",
-        "tokenpak_max_version": "1.24.0",
+        "tokenpak_min_version": __version__,
+        "tokenpak_max_version": __version__,
         "tip_min_version": "TIP-1.0",
         "tip_max_version": "TIP-1.0",
     }
@@ -197,7 +201,7 @@ def test_connection_refusal_has_specific_reason(tmp_path):
             ("unavailable", "declaration_malformed"),
         ),
         (
-            _declared_health(tokenpak_min_version="1.24.1", tokenpak_max_version="1.25.0"),
+            _declared_health(tokenpak_min_version=_NEXT_PATCH, tokenpak_max_version=_NEXT_PATCH),
             ("tip_mismatch", "tokenpak_out_of_range"),
         ),
         (

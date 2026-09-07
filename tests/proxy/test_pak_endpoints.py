@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 import pytest
 
+from tokenpak import __version__
 from tokenpak.licensing import daemon_probe
 
 # ---------------------------------------------------------------------------
@@ -41,8 +42,8 @@ def sock_info(tmp_path):
                     "ok": True,
                     "service": "tokenpak-paid-daemon",
                     "compatibility_status": "declared",
-                    "tokenpak_min_version": "1.24.0",
-                    "tokenpak_max_version": "1.24.0",
+                    "tokenpak_min_version": __version__,
+                    "tokenpak_max_version": __version__,
                     "tip_min_version": "TIP-1.0",
                     "tip_max_version": "TIP-1.0",
                 }
@@ -699,8 +700,8 @@ class _DaemonStub:
                         "ok": True,
                         "service": "tokenpak-paid-daemon",
                         "compatibility_status": "declared",
-                        "tokenpak_min_version": "1.24.0",
-                        "tokenpak_max_version": "1.24.0",
+                        "tokenpak_min_version": __version__,
+                        "tokenpak_max_version": __version__,
                         "tip_min_version": "TIP-1.0",
                         "tip_max_version": "TIP-1.0",
                     }
