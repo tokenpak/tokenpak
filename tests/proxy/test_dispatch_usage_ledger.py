@@ -71,6 +71,28 @@ _GOOGLE_SSE_BODY = (
     f"data: {json.dumps({'candidates': [{'content': {'parts': [{'text': 'ok'}]}}], 'usageMetadata': _GOOGLE_USAGE}, separators=(',', ':'))}\n\n"
 ).encode()
 _RAW_ERROR_BODY = b'{"error":"raw upstream detail"}'
+_ANTHROPIC_CACHE_USAGE = {
+    "input_tokens": 100,
+    "output_tokens": 20,
+    "cache_read_input_tokens": 1_000_000,
+    "cache_creation_input_tokens": 0,
+}
+_ANTHROPIC_CACHE_JSON_BODY = json.dumps(
+    {"type": "message", "model": "claude-fable-5-1", "usage": _ANTHROPIC_CACHE_USAGE},
+    separators=(",", ":"),
+).encode()
+_ANTHROPIC_CACHE_SSE_BODY = (
+    "event: message_start\n"
+    "data: "
+    + json.dumps(
+        {
+            "type": "message_start",
+            "message": {"usage": {**_ANTHROPIC_CACHE_USAGE, "output_tokens": 0}},
+        },
+        separators=(",", ":"),
+    )
+    + '\n\nevent: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":20}}\n\n'
+).encode()
 
 
 class _UsageFixtureHandler(BaseHTTPRequestHandler):
@@ -92,6 +114,11 @@ class _UsageFixtureHandler(BaseHTTPRequestHandler):
         if status >= 400:
             response_body = _RAW_ERROR_BODY
             content_type = "application/json"
+        elif provider == "anthropic":
+            response_body = (
+                _ANTHROPIC_CACHE_SSE_BODY if is_streaming else _ANTHROPIC_CACHE_JSON_BODY
+            )
+            content_type = "text/event-stream" if is_streaming else "application/json"
         elif provider == "google":
             response_body = _GOOGLE_SSE_BODY if is_streaming else _GOOGLE_JSON_BODY
             content_type = "text/event-stream" if is_streaming else "application/json"
@@ -197,6 +224,53 @@ def _start_test_proxy(
             time.sleep(0.05)
     proxy.stop()
     pytest.fail("proxy did not open its listener")
+
+
+@pytest.mark.needs_proxy
+@pytest.mark.timeout(120)
+def test_proxy_persists_explicit_catalog_cache_rates_in_both_wire_modes(tmp_path, monkeypatch):
+    db = tmp_path / "cache-rates-monitor.db"
+    with _usage_upstream("anthropic") as upstream:
+        upstream_base = f"http://127.0.0.1:{upstream.server_port}"
+        proxy, port = _start_test_proxy(
+            monkeypatch, db, provider="anthropic", upstream_base=upstream_base
+        )
+        try:
+            for stream, expected_body in [
+                (False, _ANTHROPIC_CACHE_JSON_BODY),
+                (True, _ANTHROPIC_CACHE_SSE_BODY),
+            ]:
+                payload = {
+                    "model": "claude-fable-5-1",
+                    "max_tokens": 32,
+                    "messages": [{"role": "user", "content": "cache pricing probe"}],
+                    "stream": stream,
+                }
+                status, body = _post(
+                    port, upstream_base + "/v1/messages", stream=stream, payload=payload
+                )
+                assert status == 200 and body == expected_body
+                assert upstream.last_request_body == json.dumps(payload).encode()
+            assert proxy.monitor is not None
+            assert proxy.monitor.flush(timeout=20.0)
+            with sqlite3.connect(str(db)) as connection:
+                rows = connection.execute(
+                    "SELECT provider_input_tokens, provider_output_tokens, "
+                    "provider_cache_read_tokens, provider_cache_creation_tokens, "
+                    "estimated_cost, cost_basis, pricing_source, stream_mode "
+                    "FROM requests ORDER BY id"
+                ).fetchall()
+        finally:
+            proxy.stop()
+
+    assert len(rows) == 2
+    for row in rows:
+        assert row[:4] == (100, 20, 1_000_000, 0)
+        # Independently derived from the published input/output/cache absolutes:
+        # 100 * $10/M + 20 * $50/M + 1M * $0.25/M = $0.252.
+        assert row[4] == pytest.approx(0.252)
+        assert row[5:7] == ("provider_usage_rate_estimate", "seed")
+    assert [row[7] for row in rows] == ["json", "sse"]
 
 
 def test_anthropic_sse_usage_is_merged_without_changing_source_bytes():
