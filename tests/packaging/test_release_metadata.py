@@ -131,6 +131,7 @@ def test_duplicate_metadata_key_is_malformed(tmp_path, monkeypatch):
 
 @pytest.fixture(scope="module")
 def built_distributions(tmp_path_factory):
+    pytest.importorskip("build", reason="archive construction requires the dev build frontend")
     output = tmp_path_factory.mktemp("release-metadata-dist")
     result = subprocess.run(
         [sys.executable, "-m", "build", "--no-isolation", "--outdir", str(output)],

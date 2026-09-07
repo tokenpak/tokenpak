@@ -6,7 +6,14 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.25.0] — 2026-09-07
+## [1.25.1] — 2026-09-07
+
+Version 1.25.0 was tagged but never published: its release workflow found test
+dependency failures in the slim install matrix. Its tag remains unchanged.
+This release retains the planned 1.25 capabilities and corrects those test
+boundaries. Core pricing and source metadata checks run without optional
+FastAPI or build tooling; HTTP and built-archive checks still run where their
+explicit dependencies are installed.
 
 This release adds independent savings-estimator verification, corrects pricing
 and forecast inputs, preserves conversation instructions across companion
