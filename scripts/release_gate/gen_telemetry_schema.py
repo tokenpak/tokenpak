@@ -82,13 +82,16 @@ def _materialize_spend_guard(db_path: Path) -> None:
         PendingStore,
         reset_schema_cache_for_testing,
     )
+    from tokenpak.proxy.spend_guard.reservation import _schema as reservation_schema
 
-    # Both components share one store and own distinct schema objects. Exercise
-    # their read paths so the snapshot contains both without inserting data.
+    # Components share one store and own distinct schema objects. Materialize
+    # each schema, including opt-in reservations, without inserting request data.
     reset_schema_cache_for_testing()
     try:
         PendingStore(str(db_path)).get_by_session("__snapshot__")
         query_recent(str(db_path), limit=1)
+        with sqlite3.connect(db_path) as conn:
+            reservation_schema(conn)
     finally:
         reset_schema_cache_for_testing()
 

@@ -12,15 +12,23 @@ import sqlite3
 import sys
 import threading
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from queue import Empty, Full, Queue
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from tokenpak.proxy.spend_guard.reservation import ReservationRef
 
 DbPath = str | os.PathLike[str]
 SqlValue = int | float | str | bytes | None
 InsertParams = tuple[SqlValue, ...]
-DbWorkItem = tuple[DbPath, InsertParams] | tuple[DbPath, InsertParams, str]
+DbWorkItem = (
+    tuple[DbPath, InsertParams]
+    | tuple[DbPath, InsertParams, str]
+    | tuple[DbPath, InsertParams, str | None, "ReservationRef"]
+)
 
 
 class _DateSavings(TypedDict):
@@ -158,6 +166,9 @@ _REQUEST_INSERT_COLUMNS = (
     "started_at",
     "ttfb_ms",
     "stream_duration_ms",
+    "guard_reservation_id",
+    "guard_ledger_key",
+    "guard_usage_complete",
 )
 
 
@@ -272,8 +283,11 @@ def _db_writer_worker(queue: Queue[DbWorkItem | None], stop_event: threading.Eve
                 return
 
             admission_ticket = None
+            reservation_ref = None
             if len(work_item) == 2:
                 db_path, insert_params = work_item
+            elif len(work_item) == 4:
+                db_path, insert_params, admission_ticket, reservation_ref = work_item
             else:
                 db_path, insert_params, admission_ticket = work_item
             try:
@@ -282,6 +296,7 @@ def _db_writer_worker(queue: Queue[DbWorkItem | None], stop_event: threading.Eve
                 _record_dropped_row("async-writer", e)
             else:
                 _notify_spend_guard_commit(admission_ticket)
+                _notify_durable_guard_commit(db_path, insert_params, reservation_ref)
         except Exception as e:
             print(f"[TokenPak] DB worker error: {e}", file=sys.stderr)
         finally:
@@ -289,6 +304,31 @@ def _db_writer_worker(queue: Queue[DbWorkItem | None], stop_event: threading.Eve
             # item, must retire exactly one unfinished task. Otherwise flush()
             # can wait forever on work no thread still owns.
             queue.task_done()
+
+
+def _notify_durable_guard_commit(db_path, insert_params, reservation_ref) -> None:
+    if reservation_ref is None:
+        return
+    try:
+        from tokenpak.proxy.spend_guard.reservation import Projection, ReservationStore
+
+        values = dict(zip(_REQUEST_INSERT_COLUMNS, insert_params))
+        actual = Projection(
+            values["estimated_cost"],
+            values["input_tokens"],
+            values["output_tokens"],
+            values["cache_read_tokens"],
+        )
+        ReservationStore(reservation_ref.store_path, db_path).settle_after_commit(
+            reservation_ref, actual
+        )
+    except Exception as exc:
+        # A committed INSERT must never be retried because its notification
+        # failed. Admission also correlates committed rows with pending holds.
+        print(
+            f"[TokenPak] Telemetry committed; durable guard notification failed: {exc}",
+            file=sys.stderr,
+        )
 
 
 def _wait_for_queue_drain(q: Queue[DbWorkItem | None], deadline: float) -> bool:
@@ -570,6 +610,15 @@ class Monitor:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ts ON requests(timestamp)")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS guard_accounting_domain "
+            "(id INTEGER PRIMARY KEY CHECK(id=1), ledger_id TEXT NOT NULL, "
+            "audit_store_sha256 TEXT)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO guard_accounting_domain (id, ledger_id) VALUES (1, ?)",
+            (uuid.uuid4().hex,),
+        )
         # Add columns if upgrading from v3. NOTE: these migrations tolerate
         # ONLY 'duplicate column name' (idempotent re-run). Any other
         # OperationalError — most importantly 'database is locked' — must
@@ -580,6 +629,18 @@ class Monitor:
             conn,
             "requests",
             (
+                (
+                    "guard_reservation_id",
+                    "ALTER TABLE requests ADD COLUMN guard_reservation_id TEXT NOT NULL DEFAULT ''",
+                ),
+                (
+                    "guard_ledger_key",
+                    "ALTER TABLE requests ADD COLUMN guard_ledger_key TEXT NOT NULL DEFAULT ''",
+                ),
+                (
+                    "guard_usage_complete",
+                    "ALTER TABLE requests ADD COLUMN guard_usage_complete INTEGER NOT NULL DEFAULT 0",
+                ),
                 (
                     "injected_tokens",
                     "ALTER TABLE requests ADD COLUMN injected_tokens INTEGER DEFAULT 0",
@@ -711,6 +772,11 @@ class Monitor:
                 ),
             ),
         )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_guard_reservation_row "
+            "ON requests(guard_ledger_key, guard_reservation_id) "
+            "WHERE guard_reservation_id != ''"
+        )
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -829,7 +895,11 @@ class Monitor:
         ttfb_ms: int | None = None,
         stream_duration_ms: int | None = None,
         admission_ticket: str | None = None,
+        reservation_ref: ReservationRef | None = None,
+        guard_usage_complete: bool = False,
     ) -> None:
+        if type(guard_usage_complete) is not bool:
+            raise ValueError("guard_usage_complete must be a boolean")
         # ``session_id`` is the resolved Claude Code / TokenPak session id
         # (``_resolve_session_id``). Empty string when no session header was
         # present. NOTE: Claude Code spawned subagents reuse the parent
@@ -890,6 +960,9 @@ class Monitor:
             started_at,
             ttfb_ms,
             stream_duration_ms,
+            reservation_ref.reservation_id if reservation_ref else "",
+            reservation_ref.ledger_key if reservation_ref else "",
+            int(guard_usage_complete),
         )
         _queued = False
         try:
@@ -900,7 +973,9 @@ class Monitor:
                 if queue is None or _DB_BACKGROUND_STOP.is_set():
                     raise RuntimeError("database write queue is not accepting rows")
                 work_item: DbWorkItem = (
-                    (self.db_path, insert_params, admission_ticket)
+                    (self.db_path, insert_params, admission_ticket, reservation_ref)
+                    if reservation_ref
+                    else (self.db_path, insert_params, admission_ticket)
                     if admission_ticket
                     else (self.db_path, insert_params)
                 )
@@ -917,6 +992,7 @@ class Monitor:
                 _record_dropped_row("sync-fallback", exc)
             else:
                 _notify_spend_guard_commit(admission_ticket)
+                _notify_durable_guard_commit(self.db_path, insert_params, reservation_ref)
         try:
             # When queued async, cost not yet in DB — pass it as current_cost.
             # When written synchronously (fallback), cost already in DB — pass 0.

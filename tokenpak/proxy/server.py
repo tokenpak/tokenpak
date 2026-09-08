@@ -1095,10 +1095,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         host, _, port_str = self.path.partition(":")
         port = int(port_str) if port_str else 443
-        self._tunnel(host, port)
+        self._run_accounted_forward(lambda: self._tunnel(host, port))
 
     def _tunnel(self, host: str, port: int) -> None:
         try:
+            self._guard_accounting.before_send()
             remote = socket.create_connection((host, port), timeout=30)
         except Exception as e:
             self.send_error(502, f"Cannot connect to {host}:{port}: {e}")
@@ -1536,7 +1537,31 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def _proxy_to(self, target_url: str, method: str) -> None:
         ps = self._ps
         with ps.shutdown.track_request():
-            self._proxy_to_inner(target_url, method)
+            self._run_accounted_forward(lambda: self._proxy_to_inner(target_url, method))
+
+    def _run_accounted_forward(self, forward) -> None:
+        from tokenpak.proxy.spend_guard.request_accounting import RequestAccounting
+
+        try:
+            self._guard_accounting = RequestAccounting(self._ps, self.headers)
+        except Exception as exc:
+            from tokenpak.proxy.spend_guard import _fail_closed_outcome
+
+            self._write_accounting_block(_fail_closed_outcome(exc))
+            return
+        try:
+            forward()
+        finally:
+            self._guard_accounting.finish()
+
+    def _write_accounting_block(self, outcome) -> None:
+        raw = outcome.response_body or b"{}"
+        self.send_response(outcome.http_status or 402)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("X-TokenPak-Spend-Guard", outcome.kind)
+        self.end_headers()
+        self.wfile.write(raw)
 
     def _proxy_to_inner(self, target_url: str, method: str) -> None:
         t0 = time.time()
@@ -1661,6 +1686,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _backend_header = _bv.strip().lower()
                 break
         if _backend_header == "claude-code" and body:
+            self._guard_accounting.before_send()
             self._handle_claude_code_backend(body)
             return
 
@@ -1710,6 +1736,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # (A model-name pseudo-session summed zero recorded rows
                 # forever, silently disabling session-cumulative caps.)
                 _sg_session = _resolve_session_id(self.headers, "")
+                _durable_guard = self._guard_accounting.store is not None
+                if _durable_guard:
+                    self._guard_accounting.observe_directive(body)
                 _sg_outcome = _sg_evaluate(
                     body,
                     # Empty when the body carries no model. Pricing falls
@@ -1720,6 +1749,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     _sg_model,
                     _sg_session,
                     dict(self.headers),
+                    **(
+                        {"config": self._guard_accounting.preflight_config}
+                        if _durable_guard
+                        else {}
+                    ),
                 )
                 _sg_admission_ticket = getattr(_sg_outcome, "admission_ticket", None)
                 # Forwarded outcomes update body for downstream pipeline.
@@ -2363,6 +2397,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # here instead of piling onto Anthropic simultaneously. Blocks
         # for up to TOKENPAK_UPSTREAM_ACQUIRE_TIMEOUT seconds, then 503s.
         _sem_provider = _upstream_provider or provider_from_url(target_url)
+        if should_log and is_model_request and body and self._guard_accounting.store is not None:
+            try:
+                _admission_block = self._guard_accounting.admit(body, model, _req_id, self.headers)
+            except Exception as exc:
+                from tokenpak.proxy.spend_guard import _fail_closed_outcome
+
+                _admission_block = _fail_closed_outcome(exc)
+            if _admission_block is not None:
+                self._write_accounting_block(_admission_block)
+                return
+
         _upstream_sem = _get_upstream_semaphore(_sem_provider, _session_key)
         _sem_acquired = False
         if _upstream_sem.acquire(timeout=_UPSTREAM_ACQUIRE_TIMEOUT):
@@ -2402,6 +2447,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
             output_tokens = 0
             provider_usage_object: Mapping[str, object] | None = None
+            _guard_response_complete = not is_streaming
 
             # Facts-only in-flight registration: started_at reuses the
             # existing t0 anchor; ttfb/stream-duration/live output-tokens
@@ -2430,6 +2476,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 for _ustream_attempt in range(_retry_policy.max_attempts):
                     _stream_retry = False
                     try:
+                        self._guard_accounting.before_send()
                         with pool.stream(
                             method,
                             target_url,
@@ -2544,6 +2591,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                             )
 
                                             _inflight_update(_req_id, _live_output_tokens)
+                                else:
+                                    _guard_response_complete = True
                                 if _stream_first_byte_time is not None:
                                     _stream_duration_ms = int(
                                         (time.time() - _stream_first_byte_time) * 1000
@@ -2580,6 +2629,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             sse_observation_buffer = b""
                     sse_usage = extract_sse_tokens(sse_observation_buffer)
                     provider_usage_object = _extract_sse_usage(sse_observation_buffer)
+                    _guard_response_complete = (
+                        _guard_response_complete
+                        and self._guard_accounting.stream_completed(sse_observation_buffer)
+                    )
                     # stop_reason from message_delta (read-only on the buffered
                     # copy - forwarded stream bytes already went out unmodified).
                     stop_reason = _extract_sse_stop_reason(sse_observation_buffer)
@@ -2601,6 +2654,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 resp = None
                 for _ustream_attempt in range(_retry_policy.max_attempts):
                     try:
+                        self._guard_accounting.before_send()
                         resp = pool.request(
                             method,
                             target_url,
@@ -2948,8 +3002,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     try:
                         ps.monitor.log(
                             model=model,
-                            input_tokens=input_tokens,
-                            output_tokens=output_tokens,
+                            input_tokens=(
+                                _cost_observed["input_tokens"]
+                                if self._guard_accounting.ref
+                                else input_tokens
+                            ),
+                            output_tokens=(
+                                _cost_observed["output_tokens"]
+                                if self._guard_accounting.ref
+                                else output_tokens
+                            ),
                             cost=cost,
                             latency_ms=latency_ms,
                             status_code=_resp_status,
@@ -3009,6 +3071,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             ttfb_ms=_ttfb_ms,
                             stream_duration_ms=_stream_duration_ms,
                             admission_ticket=_sg_admission_ticket,
+                            reservation_ref=self._guard_accounting.ref,
+                            guard_usage_complete=self._guard_accounting.complete_usage(
+                                _cost_observed,
+                                _provider_usage,
+                                response_complete=_guard_response_complete,
+                            ),
                         )
                     except Exception:
                         pass  # DB errors must never break the request

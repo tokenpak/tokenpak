@@ -345,7 +345,7 @@ def _get_agents_for_window(window_seconds: int) -> dict[str, list[str]]:
 
 
 def _query_recorded_usage(
-    conn: sqlite3.Connection, cutoff_iso: str, sessions: list[str]
+    conn: sqlite3.Connection, cutoff_iso: str, sessions: list[str], *, agent_id: str | None = None
 ) -> RollingUsage:
     """One SQL definition for cap checks and native diagnostic snapshots."""
     columns = (
@@ -357,7 +357,12 @@ def _query_recorded_usage(
         f"SELECT {columns} FROM requests WHERE timestamp >= ?", (cutoff_iso,)
     ).fetchone()
     agent = (0.0, 0, 0)
-    if sessions:
+    if agent_id is not None:
+        agent = conn.execute(
+            f"SELECT {columns} FROM requests WHERE timestamp >= ? AND lower(agent_id)=?",
+            (cutoff_iso, agent_id.lower()),
+        ).fetchone()
+    elif sessions:
         placeholders = ",".join("?" for _ in sessions)
         agent = conn.execute(
             f"SELECT {columns} FROM requests WHERE timestamp >= ? "
