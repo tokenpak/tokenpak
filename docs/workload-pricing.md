@@ -52,3 +52,8 @@ versioned seed-refresh plan; initialization does not replace their pricing histo
 Plans and receipts hash the bands, cache rates and schema. A change invalidates
 stale plans. Lookups observe committed changes from other processes without a
 restart. Reprocessing honors an explicitly selected pricing version.
+
+[Request workload observations](request-workload-observations.md) can supply
+supported facts from the proxy's actual final request and response. Observation
+availability and quote availability are separate checks; neither supplies target
+seed measurement or recommendation policy.

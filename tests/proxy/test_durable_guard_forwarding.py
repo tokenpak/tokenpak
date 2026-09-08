@@ -172,15 +172,19 @@ def _send(
         conn.close()
 
 
-def _snapshot(domain):
+def _snapshot(domain, *, workload=False, headers=None):
     proxy = domain[0]
     conn = http.client.HTTPConnection("127.0.0.1", proxy.port, timeout=5)
     try:
         conn.request(
             "POST",
-            "/tpk/v1/sessions/guard-snapshot",
+            "/tpk/v1/sessions/workload-snapshot" if workload else "/tpk/v1/sessions/guard-snapshot",
             json.dumps({"session_id": "explicit-session"}).encode(),
-            {"Content-Type": "application/json", "X-TPK-Key": "accounting-test-key"},
+            {
+                "Content-Type": "application/json",
+                "X-TPK-Key": "accounting-test-key",
+                **(headers or {}),
+            },
         )
         response = conn.getresponse()
         return response.status, json.loads(response.read())
@@ -215,6 +219,61 @@ def test_complete_provider_usage_can_produce_eligible_native_evidence(domain, st
     assert snapshot["recorded_usage"]["fleet_tokens_total"] == 10
     assert snapshot["recorded_usage"]["fleet_cost_usd"] > 0
     assert len(domain[3]) == 1
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_final_forwarded_bytes_are_bound_without_promoting_a_custom_gateway(domain, stream):
+    import hashlib
+
+    assert _send(domain, stream=stream)[0] == 200
+    assert _settled_snapshot(domain)[0] == 200
+    status, snapshot = _snapshot(domain, workload=True)
+    assert status == 200, snapshot
+    assert snapshot["schema_version"] == "native-workload-snapshot/1"
+    evidence = snapshot["workload_observation"]
+    assert evidence["workload"]["body_sha256"] == hashlib.sha256(domain[3][0]).hexdigest()
+    assert not evidence["available"]
+    assert "route_unsupported" in evidence["reason_codes"]
+    raw = json.dumps(snapshot)
+    for forbidden in (
+        "synthetic accounting check",
+        "test-only",
+        "/v1/messages",
+        "127.0.0.1",
+        "spend_guard.db",
+    ):
+        assert forbidden not in raw
+    assert _snapshot(domain)[1]["schema_version"] == "native-guard-snapshot/2"
+
+
+@pytest.mark.parametrize(
+    "headers,status",
+    [
+        ({"X-TPK-Key": "wrong"}, 401),
+        ({"Origin": "http://localhost"}, 403),
+        ({"X-TokenPak-Session": "another-session"}, 400),
+    ],
+)
+def test_workload_endpoint_reuses_auth_and_explicit_identity_checks(domain, headers, status):
+    assert _snapshot(domain, workload=True, headers=headers)[0] == status
+    assert not domain[3]
+
+
+def test_busy_accounting_store_returns_local_state_refusal_before_provider_send(domain):
+    _, _, store, received, *_ = domain
+    setup = store.begin_request("setup-session", "setup-instance")
+    store.finish_request(setup)
+    with sqlite3.connect(store.path) as writer:
+        writer.execute("BEGIN EXCLUSIVE")
+        status, raw = _send(domain)
+        writer.rollback()
+    assert status == 402
+    error = json.loads(raw)["error"]
+    assert error["reason"] == "spend_guard_state_unavailable"
+    assert error["approval_prompt_available"] is False
+    assert not received
+    with sqlite3.connect(store.path) as reader:
+        assert reader.execute("SELECT COUNT(*) FROM budget_reservations").fetchone()[0] == 0
 
 
 def test_concurrent_request_is_denied_before_provider_or_reservation_insert(domain, monkeypatch):
