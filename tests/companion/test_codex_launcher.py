@@ -148,6 +148,52 @@ def test_display_is_bound_cleaned_up_and_cannot_change_child_exit(
     ]
 
 
+def test_default_footer_opens_private_terminal_without_an_extra_flag(monkeypatch, tmp_path):
+    from tokenpak.companion.statusline import launch as display
+    from tokenpak.companion.statusline import terminal
+
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("TOKENPAK_STATUS_SURFACE", raising=False)
+    monkeypatch.setattr(display, "interactive", lambda args: True)
+    monkeypatch.setattr(launcher.shutil, "which", lambda name: "/fixture/tmux")
+    launched = []
+    monkeypatch.setattr(
+        terminal, "launch", lambda args, parent, **kw: launched.append((args, parent, kw)) or 7
+    )
+    assert launcher.main(["--model", "chosen"]) == 7
+    assert launched[0][0] == ["--model", "chosen"]
+
+
+@pytest.mark.parametrize("mode", ["off", "auto", "disabled", "missing-tmux"])
+def test_footer_opt_out_and_missing_dependency_keep_native_launch(
+    monkeypatch, tmp_path, mode, capsys
+):
+    from tokenpak.companion.statusline import launch as display
+    from tokenpak.companion.statusline import terminal
+
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("TOKENPAK_STATUS_SURFACE", raising=False)
+    monkeypatch.setattr(display, "interactive", lambda args: True)
+    monkeypatch.setattr(launcher.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        terminal, "launch", lambda *a, **kw: pytest.fail("unexpected terminal wrapper")
+    )
+    monkeypatch.setattr(
+        display, "start_writer", lambda env: pytest.fail("unexpected footer writer")
+    )
+    monkeypatch.setattr(
+        launcher, "_run_codex_process", lambda *a, **kw: (7, launcher.empty_usage())
+    )
+    if mode == "disabled":
+        launcher.CompanionConfig.from_env().enabled = False
+    args = [f"--status-surface={mode}"] if mode in {"off", "auto"} else []
+    assert launcher.main(args) == 7
+    if mode == "missing-tmux":
+        assert "install tmux" in capsys.readouterr().err
+
+
 def test_parallel_sessions_are_not_gated(monkeypatch, tmp_path):
     """A second session starts while the first still holds the databases.
 

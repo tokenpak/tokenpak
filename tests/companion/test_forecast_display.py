@@ -211,6 +211,48 @@ def test_surface_selection_keeps_native_arguments_and_explicit_off():
         launch.options(["--status-surface=native"], "codex")
 
 
+@pytest.mark.parametrize("client", ["claude", "codex"])
+def test_footer_is_default_on_with_explicit_environment_and_flag_overrides(monkeypatch, client):
+    monkeypatch.delenv("TOKENPAK_STATUS_SURFACE", raising=False)
+    assert launch.options([], client) == ([], "on")
+    monkeypatch.setenv("TOKENPAK_STATUS_SURFACE", "off")
+    assert launch.options([], client) == ([], "off")
+    assert launch.options(["--status-surface=on"], client) == ([], "on")
+    assert launch.options(["--status-surface=auto"], client) == ([], "auto")
+
+
+@pytest.mark.parametrize(
+    "args,tokenpak_footer",
+    [([], True), (["--status-surface=auto"], False), (["--status-surface=off"], False)],
+)
+def test_claude_default_footer_overlay_preserves_saved_custom_settings(
+    monkeypatch, tmp_path, args, tokenpak_footer
+):
+    from tokenpak.companion import launcher
+    from tokenpak.companion.config import CompanionConfig
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.delenv("TOKENPAK_STATUS_SURFACE", raising=False)
+    user = tmp_path / ".claude/settings.json"
+    user.parent.mkdir()
+    original = '{"statusLine":{"type":"command","command":"echo custom"}}'
+    user.write_text(original)
+    config = CompanionConfig(
+        journal_dir=tmp_path / "journal", proxy_url="http://127.0.0.1:1", hooks_enabled=False
+    )
+    monkeypatch.setattr(launcher.CompanionConfig, "from_env", lambda: config)
+    monkeypatch.setattr(launch, "interactive", lambda args: True)
+    writer_env = []
+    monkeypatch.setattr(launch, "start_writer", lambda env: writer_env.append(env))
+    monkeypatch.setattr(launcher.os, "execvpe", lambda *args: None)
+    launcher.main(args)
+    directory = next(config.run_dir.glob("launch-*"))
+    settings = json.loads((directory / "settings.json").read_text())
+    assert ("native.sh" in settings["statusLine"]["command"]) is tokenpak_footer
+    assert bool(writer_env) is tokenpak_footer
+    assert user.read_text() == original
+
+
 def test_available_forecast_preserves_currency_precision_and_intervals():
     economics = SessionEconomics.from_dict(available_payload())
     fact = snapshot.StatusSnapshot("sess-fixture-1", time.time(), "proxy", economics, "")

@@ -1,6 +1,6 @@
 # Session forecasts in your terminal
 
-The companion can keep a compact session display visible while you work.
+The companion keeps a compact session display visible by default while you work.
 It shows the session identity, guard state, forecast availability or estimated
 remaining range, and spending or guard runway when space permits.
 
@@ -10,12 +10,13 @@ remaining range, and spending or guard runway when space permits.
 tokenpak claude
 ```
 
-An interactive companion launch adds a native footer through its temporary
-settings overlay. Existing user or project status lines take precedence in
-`auto` mode. To explicitly select the TokenPak footer for this launch:
+An interactive companion launch adds the TokenPak native footer through its
+temporary settings overlay, including when a custom status line is configured.
+Your saved settings stay intact. Select `auto` to keep an existing user or
+project status line instead:
 
 ```sh
-tokenpak claude --status-surface=native
+tokenpak claude --status-surface=auto
 ```
 
 Install `jq` for this adapter. Without it the footer says
@@ -27,20 +28,22 @@ The footer refreshes every two seconds, including while idle, using Claude's
 
 ## Codex
 
-Inside an existing tmux session, `tokenpak codex` opens a small forecast pane
-below Codex. The pane closes when that companion exits. Outside tmux, request
-a dedicated terminal session explicitly:
+`tokenpak codex` opens a small forecast pane below Codex by default. Inside tmux
+it uses the current session; outside tmux it opens a private terminal session.
+The pane closes when that companion exits. No extra flag is needed:
 
 ```sh
-tokenpak codex --status-surface=tmux
+tokenpak codex
 ```
 
-This requires `tmux`. It starts a private tmux server with its own configuration;
+The pane requires `tmux`. If it is missing, the default launch explains the
+dependency and continues without the footer. Explicit `--status-surface=tmux`
+requires it and reports an error when unavailable. A private tmux server uses its own configuration;
 existing servers, panes, and bindings are preserved. Detaching keeps the session
 running and prints the command to reattach. This is a terminal pane, not an
 extension of Codex's built-in `/statusline` fields.
 
-The default `auto` mode never starts a multiplexer. In an ordinary terminal it
+The optional `auto` mode never starts a multiplexer. In an ordinary terminal it
 prints the panel option and leaves Codex's own interface in place. Noninteractive
 commands such as `codex exec`, JSON output, and install-only runs create no panel.
 
@@ -55,7 +58,8 @@ tokenpak claude --status-surface=off
 ```
 
 `TOKENPAK_STATUS_SURFACE=off` disables both adapters. Supported surface values
-are `auto`, `native` (Claude), `tmux` (Codex), and `off`. Native arguments after
+are `on` (default), `auto`, `native` (Claude), `tmux` (Codex), and `off`. An explicit
+flag overrides the environment variable. Native arguments after
 `--` are forwarded without interpretation.
 
 Use the exact native session ID when reading from a separate terminal. A managed

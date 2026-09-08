@@ -21,7 +21,7 @@ SCRIPTS = Path(__file__).parent
 
 def options(args: list[str], client: str) -> tuple[list[str], str]:
     forwarded = []
-    surface = os.environ.get("TOKENPAK_STATUS_SURFACE", "auto")
+    surface = os.environ.get("TOKENPAK_STATUS_SURFACE", "on")
     index = 0
     while index < len(args):
         arg = args[index]
@@ -33,13 +33,13 @@ def options(args: list[str], client: str) -> tuple[list[str], str]:
         elif arg == "--status-surface":
             index += 1
             if index == len(args):
-                raise ValueError("--status-surface needs auto, native, tmux or off")
+                raise ValueError("--status-surface needs on, auto, native, tmux or off")
             surface = args[index]
         else:
             forwarded.append(arg)
         index += 1
-    if surface not in {"auto", "native", "tmux", "off"}:
-        raise ValueError("--status-surface supports auto, native, tmux or off")
+    if surface not in {"on", "auto", "native", "tmux", "off"}:
+        raise ValueError("--status-surface supports on, auto, native, tmux or off")
     if client == "codex" and surface == "native":
         raise ValueError("Codex has no custom native footer; use --status-surface=tmux")
     return forwarded, surface
