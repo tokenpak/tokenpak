@@ -44,7 +44,7 @@ The `native-guard-snapshot/1` response contains the explicit `session_id`, an
 opaque `owner_instance_id`, `scope: serving_proxy_process`, `observed_at` and
 `produced_at` timestamps, the effective `rolling_policy` and a fingerprint of
 the full effective policy. `recorded_usage` and `pending_projected_usage` each
-contain agent/fleet cost, input-plus-output tokens, and cache-read tokens.
+contain per-agent and overall cost, input-plus-output tokens, and cache-read tokens.
 Recorded costs retain their ledger estimate semantics. Pending costs are
 existing admission estimates. These components can overlap during settlement;
 `components_may_overlap` is always true. Do not add them as exact billed usage.
