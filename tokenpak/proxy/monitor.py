@@ -20,7 +20,7 @@ from typing import TypedDict
 DbPath = str | os.PathLike[str]
 SqlValue = int | float | str | bytes | None
 InsertParams = tuple[SqlValue, ...]
-DbWorkItem = tuple[DbPath, InsertParams]
+DbWorkItem = tuple[DbPath, InsertParams] | tuple[DbPath, InsertParams, str]
 
 
 class _DateSavings(TypedDict):
@@ -238,6 +238,23 @@ def _write_row(db_path: DbPath, insert_params: InsertParams) -> None:
     raise RuntimeError("database write retries exhausted without an exception")
 
 
+def _notify_spend_guard_commit(admission_ticket: str | None) -> None:
+    """Transfer accounting only after a successful row commit.
+
+    Notification failure must not retry an already committed INSERT or count
+    it as a lost row. The reservation retains its existing TTL backstop.
+    """
+    try:
+        from tokenpak.proxy.spend_guard.rolling_caps import recorded_spend_committed
+
+        recorded_spend_committed(admission_ticket)
+    except Exception as exc:
+        print(
+            f"[TokenPak] Telemetry row committed; spend-guard notification failed: {exc}",
+            file=sys.stderr,
+        )
+
+
 def _db_writer_worker(queue: Queue[DbWorkItem | None], stop_event: threading.Event) -> None:
     """Drain one immutable queue generation in a background thread."""
     while True:
@@ -254,11 +271,17 @@ def _db_writer_worker(queue: Queue[DbWorkItem | None], stop_event: threading.Eve
             if work_item is None:  # Poison pill to stop
                 return
 
-            db_path, insert_params = work_item
+            admission_ticket = None
+            if len(work_item) == 2:
+                db_path, insert_params = work_item
+            else:
+                db_path, insert_params, admission_ticket = work_item
             try:
                 _write_row(db_path, insert_params)
             except Exception as e:
                 _record_dropped_row("async-writer", e)
+            else:
+                _notify_spend_guard_commit(admission_ticket)
         except Exception as e:
             print(f"[TokenPak] DB worker error: {e}", file=sys.stderr)
         finally:
@@ -805,6 +828,7 @@ class Monitor:
         started_at: str | None = None,
         ttfb_ms: int | None = None,
         stream_duration_ms: int | None = None,
+        admission_ticket: str | None = None,
     ) -> None:
         # ``session_id`` is the resolved Claude Code / TokenPak session id
         # (``_resolve_session_id``). Empty string when no session header was
@@ -875,7 +899,12 @@ class Monitor:
                 queue = _DB_WRITE_QUEUE
                 if queue is None or _DB_BACKGROUND_STOP.is_set():
                     raise RuntimeError("database write queue is not accepting rows")
-                queue.put_nowait((self.db_path, insert_params))
+                work_item: DbWorkItem = (
+                    (self.db_path, insert_params, admission_ticket)
+                    if admission_ticket
+                    else (self.db_path, insert_params)
+                )
+                queue.put_nowait(work_item)
                 _queued = True
         except (NameError, Exception):
             # Queue full / uninitialized / stopped: write synchronously through
@@ -886,6 +915,8 @@ class Monitor:
                 _write_row(self.db_path, insert_params)
             except Exception as exc:
                 _record_dropped_row("sync-fallback", exc)
+            else:
+                _notify_spend_guard_commit(admission_ticket)
         try:
             # When queued async, cost not yet in DB — pass it as current_cost.
             # When written synchronously (fallback), cost already in DB — pass 0.

@@ -47,6 +47,7 @@ __all__ = (
     "check_rolling_caps_and_admit",
     "compute_rolling_usage",
     "record_session_agent",
+    "recorded_spend_committed",
     "reset_caches_for_testing",
     "settle_pending_spend",
 )
@@ -95,6 +96,7 @@ _SESSION_AGENT: dict[str, tuple[str, float]] = {}  # session_id → (agent_id, l
 _USAGE_CACHE_LOCK = threading.Lock()
 _USAGE_CACHE: dict[str, tuple[float, RollingUsage]] = {}
 _USAGE_CACHE_TTL_SEC = 30.0
+_USAGE_GENERATION = 0
 
 # ---------------------------------------------------------------------------
 # In-flight (pending) spend accounting — closes the check-then-spend window.
@@ -120,7 +122,7 @@ _INFLIGHT_TTL_SEC = 600.0
 
 # Serializes check+admit so two concurrent requests cannot both pass the
 # same cap headroom before either registers its pending spend.
-_ADMISSION_LOCK = threading.Lock()
+_ADMISSION_LOCK = threading.RLock()
 
 
 def admit_pending_spend(
@@ -150,8 +152,24 @@ def settle_pending_spend(ticket: Optional[str]) -> bool:
     """
     if not ticket:
         return False
-    with _INFLIGHT_LOCK:
+    with _ADMISSION_LOCK, _INFLIGHT_LOCK:
         return _INFLIGHT.pop(ticket, None) is not None
+
+
+def recorded_spend_committed(ticket: Optional[str]) -> None:
+    """Make a committed row visible before retiring its pending projection.
+
+    Cap checks share this lock, so they cannot combine a pre-commit cache
+    with the post-settlement pending total. In-progress standalone usage
+    reads may return their historical snapshot but cannot cache it after
+    this generation changes. This remains process-local accounting.
+    """
+    global _USAGE_GENERATION
+    with _ADMISSION_LOCK:
+        with _USAGE_CACHE_LOCK:
+            _USAGE_GENERATION += 1
+            _USAGE_CACHE.clear()
+        settle_pending_spend(ticket)
 
 
 def get_admitted_projection(ticket: Optional[str]) -> Optional[dict[str, object]]:
@@ -342,7 +360,8 @@ def compute_rolling_usage(
           "fleet_cache_read_tokens": int,
         }
 
-    Cached for 30 seconds keyed by (agent_id, window_seconds, db_path).
+    Cached for up to 30 seconds keyed by (agent_id, window_seconds, db_path).
+    Successful monitor commits invalidate the cache before pending settlement.
 
     Failure semantics (fail CLOSED on unmeasurable state):
     - Usage DB missing entirely (fresh install, nothing recorded yet):
@@ -358,6 +377,7 @@ def compute_rolling_usage(
 
     now = time.time()
     with _USAGE_CACHE_LOCK:
+        generation = _USAGE_GENERATION
         cached = _USAGE_CACHE.get(cache_key)
         if cached and cached[0] > now:
             return cached[1]
@@ -434,7 +454,8 @@ def compute_rolling_usage(
             "fleet_cache_read_tokens": fleet_cache_read,
         }
         with _USAGE_CACHE_LOCK:
-            _USAGE_CACHE[cache_key] = (now + _USAGE_CACHE_TTL_SEC, usage)
+            if generation == _USAGE_GENERATION:
+                _USAGE_CACHE[cache_key] = (now + _USAGE_CACHE_TTL_SEC, usage)
         return usage
     except sqlite3.Error as e:
         _warn_unmeasurable(
@@ -454,6 +475,29 @@ def compute_rolling_usage(
 
 
 def check_rolling_caps(
+    agent_id: str,
+    projected_cost_usd: float,
+    projected_input_tokens: int,
+    projected_output_tokens: int,
+    projected_cache_read_tokens: int,
+    config: RollingCapsConfig,
+    *,
+    monitor_db_path: Optional[str] = None,
+) -> Optional[CapBreach]:
+    """Check recorded and pending usage coherently with durable settlement."""
+    with _ADMISSION_LOCK:
+        return _check_rolling_caps(
+            agent_id,
+            projected_cost_usd,
+            projected_input_tokens,
+            projected_output_tokens,
+            projected_cache_read_tokens,
+            config,
+            monitor_db_path=monitor_db_path,
+        )
+
+
+def _check_rolling_caps(
     agent_id: str,
     projected_cost_usd: float,
     projected_input_tokens: int,
