@@ -48,6 +48,7 @@ class RequestAccounting:
         self.store = None
         self.ref = None
         self.attempts = 0
+        self.workload = None
         self.force = False
         self.session_id = _resolve_session_id(headers, "")
         self.agent_id = _resolve_agent_id(headers)
@@ -187,10 +188,28 @@ class RequestAccounting:
             )
         return None
 
-    def before_send(self) -> None:
+    def before_send(self, *, body=None, url=None, headers=None) -> None:
         if self.store is not None:
-            self.store.attempted_send(self.coverage_id, self.ref)
+            from .request_workload import observe_request
+
+            self.workload = observe_request(body, url, headers)
+            self.store.attempted_send(self.coverage_id, self.ref, workload=self.workload)
         self.attempts += 1
+
+    def record_response(self, raw: bytes, *, streaming: bool, complete: bool, status: int) -> None:
+        if self.store is None or self.workload is None:
+            return
+        from .request_workload import observe_response
+
+        # A failed metadata write leaves the original request-only observation
+        # unavailable. It must not prevent the ordinary usage row being logged.
+        try:
+            observed = observe_response(
+                self.workload, raw, streaming=streaming, complete=complete, status=status
+            )
+            self.store.record_workload(self.coverage_id, observed)
+        except Exception:
+            _log.warning("request workload observation remains unavailable", exc_info=True)
 
     def complete_usage(
         self, cost_observation: dict, provider_usage: dict, *, response_complete: bool = True

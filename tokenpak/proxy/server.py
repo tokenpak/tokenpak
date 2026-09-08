@@ -2476,7 +2476,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 for _ustream_attempt in range(_retry_policy.max_attempts):
                     _stream_retry = False
                     try:
-                        self._guard_accounting.before_send()
+                        self._guard_accounting.before_send(
+                            body=body, url=target_url, headers=fwd_headers
+                        )
                         with pool.stream(
                             method,
                             target_url,
@@ -2654,7 +2656,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 resp = None
                 for _ustream_attempt in range(_retry_policy.max_attempts):
                     try:
-                        self._guard_accounting.before_send()
+                        self._guard_accounting.before_send(
+                            body=body, url=target_url, headers=fwd_headers
+                        )
                         resp = pool.request(
                             method,
                             target_url,
@@ -2870,6 +2874,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 pass  # logging must never break the proxy
 
             if should_log and is_model_request:
+                self._guard_accounting.record_response(
+                    sse_observation_buffer if is_streaming else body_for_metrics,
+                    streaming=is_streaming,
+                    complete=_guard_response_complete,
+                    status=_resp_status,
+                )
                 _provider_usage = _safe_provider_usage_observation(
                     _usage_parser_provider,
                     provider_usage_object,

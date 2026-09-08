@@ -92,7 +92,7 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def handle_post(handler: Any) -> None:
+def handle_post(handler: Any, *, include_workload: bool = False) -> None:
     """Serve only an explicit session, with a configured existing app key.
 
     Localhost alone is not proof of same-user access. This route requires
@@ -173,11 +173,14 @@ def handle_post(handler: Any) -> None:
         config = _effective_config()
         policy, policy_hash = _effective_policy(config)
         durable = config.enabled and config.reservations_enabled
+        if include_workload and not durable:
+            _send(handler, 503, {"error": "workload_accounting_unavailable"})
+            return
         if durable:
             from tokenpak.proxy.spend_guard.reservation import ReservationStore
 
             components = ReservationStore(config.audit_db_path, monitor.db_path).snapshot(
-                session_id, policy["rolling_caps_window_seconds"]
+                session_id, policy["rolling_caps_window_seconds"], include_workload=include_workload
             )
         else:
             components = _capture_rolling_snapshot(
@@ -193,7 +196,13 @@ def handle_post(handler: Any) -> None:
         handler,
         200,
         {
-            "schema_version": "native-guard-snapshot/2" if durable else "native-guard-snapshot/1",
+            "schema_version": (
+                "native-workload-snapshot/1"
+                if include_workload
+                else "native-guard-snapshot/2"
+                if durable
+                else "native-guard-snapshot/1"
+            ),
             "session_id": session_id,
             "owner_instance_id": owner_id,
             "scope": "configured_monitor_domain" if durable else "serving_proxy_process",

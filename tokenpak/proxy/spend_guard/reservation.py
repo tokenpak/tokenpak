@@ -184,8 +184,14 @@ def _schema(conn: sqlite3.Connection) -> None:
             coverage_id TEXT PRIMARY KEY, ledger_key TEXT NOT NULL,
             owner_instance_id TEXT NOT NULL, session_id TEXT NOT NULL,
             started_at REAL NOT NULL, ended_at REAL, attempts INTEGER NOT NULL DEFAULT 0,
-            reservation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'preflight'
+            reservation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'preflight',
+            workload_json TEXT
         )""")
+        coverage_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(budget_guard_coverage)")
+        }
+        if "workload_json" not in coverage_columns:
+            conn.execute("ALTER TABLE budget_guard_coverage ADD COLUMN workload_json TEXT")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_guard_coverage_scope "
             "ON budget_guard_coverage(ledger_key, state, ended_at)"
@@ -589,16 +595,31 @@ class ReservationStore:
                 raise
         return coverage_id
 
-    def attempted_send(self, coverage_id: str, ref: ReservationRef | None) -> None:
+    def attempted_send(
+        self, coverage_id: str, ref: ReservationRef | None, *, workload=None
+    ) -> None:
         if ref is not None and (
             ref.ledger_key != self.ledger_key or ref.store_path != str(self.path)
         ):
             raise ValueError("reservation reference belongs to another accounting scope")
+        from .request_workload import RequestWorkload
+
+        raw = None if workload is None else RequestWorkload.from_json(workload.to_json()).to_json()
         self._update_coverage(
-            "UPDATE budget_guard_coverage SET attempts=attempts+1, reservation_id=?, state='sending' "
+            "UPDATE budget_guard_coverage SET attempts=attempts+1, reservation_id=?, state='sending', workload_json=? "
             "WHERE coverage_id=? AND ledger_key=?",
             coverage_id,
-            (ref.reservation_id if ref else "",),
+            (ref.reservation_id if ref else "", raw),
+        )
+
+    def record_workload(self, coverage_id: str, workload) -> None:
+        from .request_workload import RequestWorkload
+
+        raw = RequestWorkload.from_json(workload.to_json()).to_json()
+        self._update_coverage(
+            "UPDATE budget_guard_coverage SET workload_json=? WHERE coverage_id=? AND ledger_key=?",
+            coverage_id,
+            (raw,),
         )
 
     def finish_request(self, coverage_id: str) -> None:
@@ -628,7 +649,9 @@ class ReservationStore:
                 conn.rollback()
                 raise
 
-    def snapshot(self, session_id: str, window_seconds: int) -> dict:
+    def snapshot(
+        self, session_id: str, window_seconds: int, *, include_workload: bool = False
+    ) -> dict:
         """Read a generation-fenced, correlated view without writes or pruning."""
         _identity(session_id, "session_id")
         _number(window_seconds, "window_seconds", integer=True)
@@ -642,7 +665,8 @@ class ReservationStore:
             deadline = time.monotonic() + 2.0
             conn.set_progress_handler(lambda: int(time.monotonic() > deadline), 1000)
             coverage = conn.execute(
-                "SELECT * FROM budget_guard_coverage WHERE ledger_key=? "
+                "SELECT coverage_id, ledger_key, owner_instance_id, session_id, started_at, "
+                "ended_at, attempts, reservation_id, state FROM budget_guard_coverage WHERE ledger_key=? "
                 "AND (ended_at IS NULL OR ended_at >= ?) LIMIT 100001",
                 (self.ledger_key, now - window_seconds),
             ).fetchall()
@@ -714,6 +738,11 @@ class ReservationStore:
                 ).fetchone():
                     reasons.append("reservation_coverage_incomplete")
                 pending = self._active(conn, agent or "", now, committed)
+                workload = (
+                    self._workload_observation(conn, ledger, coverage, session_id, now)
+                    if include_workload
+                    else None
+                )
             for request in coverage:
                 if request["ended_at"] is None:
                     reasons.append("request_in_progress")
@@ -736,7 +765,7 @@ class ReservationStore:
                 for key in values:
                     if key.startswith("agent_"):
                         values[key] = None
-        return {
+        result = {
             "observed_at": datetime.fromtimestamp(now, timezone.utc).isoformat(),
             "window_seconds": window_seconds,
             "ledger_scope_sha256": self.ledger_key,
@@ -751,6 +780,83 @@ class ReservationStore:
             "guard_evidence_eligible": not reasons,
             "reason_codes": sorted(set(reasons)),
         }
+        if include_workload:
+            if reasons:
+                workload["available"] = False
+                workload["reason_codes"] = sorted(
+                    set(workload["reason_codes"]) | {"accounting_ineligible"}
+                )
+            result["workload_observation"] = workload
+        return result
+
+    @staticmethod
+    def _workload_observation(conn, ledger, coverage, session_id, now):
+        from .request_workload import RequestWorkload
+
+        result = {
+            "available": False,
+            "reason_codes": ["workload_unobserved"],
+            "request_id_sha256": None,
+            "started_at": None,
+            "completed_at": None,
+            "workload": None,
+        }
+        candidates = [r for r in coverage if r["session_id"] == session_id and r["attempts"]]
+        if not candidates:
+            return result
+        latest = max(candidates, key=lambda r: (r["started_at"], r["coverage_id"]))
+        if latest["attempts"] != 1 or latest["ended_at"] is None or latest["state"] != "recorded":
+            result["reason_codes"] = ["latest_request_unresolved"]
+            return result
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(budget_guard_coverage)")}
+        if "workload_json" not in columns:
+            return result
+        # Read only the selected row, bounded even when the store is corrupt.
+        raw = conn.execute(
+            "SELECT substr(workload_json, 1, 4097) FROM budget_guard_coverage WHERE coverage_id=? AND ledger_key=?",
+            (latest["coverage_id"], latest["ledger_key"]),
+        ).fetchone()[0]
+        if raw is None:
+            return result
+        observed = RequestWorkload.from_json(raw)
+        rows = ledger.execute(
+            "SELECT input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, model, "
+            "guard_usage_complete, session_id FROM requests WHERE guard_reservation_id=? AND guard_ledger_key=?",
+            (latest["reservation_id"], latest["ledger_key"]),
+        ).fetchall()
+        identity = conn.execute(
+            "SELECT request_id FROM budget_reservations WHERE reservation_id=? AND ledger_key=? AND session_id=?",
+            (latest["reservation_id"], latest["ledger_key"], session_id),
+        ).fetchone()
+        expected = (
+            observed.input_tokens,
+            observed.output_tokens,
+            observed.cache_read_tokens,
+            observed.cache_write_tokens,
+            observed.model,
+            1,
+            session_id,
+        )
+        reasons = list(observed.reason_codes)
+        if len(rows) != 1 or tuple(rows[0]) != expected or identity is None:
+            reasons.append("workload_ledger_mismatch")
+        for field in ("started_at", "ended_at"):
+            _number(latest[field], field)
+        if latest["ended_at"] < latest["started_at"] or latest["ended_at"] > now:
+            raise ReservationUnavailable("contradictory workload timestamps")
+        if identity is not None:
+            _identity(identity[0], "request_id")
+        result.update(
+            available=not reasons,
+            reason_codes=sorted(set(reasons)),
+            request_id_sha256=hashlib.sha256(identity[0].encode()).hexdigest()
+            if identity is not None
+            else None,
+            started_at=datetime.fromtimestamp(latest["started_at"], timezone.utc).isoformat(),
+            completed_at=datetime.fromtimestamp(latest["ended_at"], timezone.utc).isoformat(),
+            workload=observed.to_dict(),
+        )
+        return result
 
     def _read_generation(self, conn: sqlite3.Connection) -> int:
         row = conn.execute(

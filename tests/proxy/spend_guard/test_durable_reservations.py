@@ -113,14 +113,34 @@ def test_each_dimension_denies_without_inserting(domain, dimension):
 
 def test_threads_enforce_joint_cap(domain):
     store, _ = domain
+    # This test isolates concurrent cap admission from first-use schema I/O.
+    # Schema migration and bounded lock refusal have their own checks below.
+    warmup = store.begin_request("setup-session", "instance-a")
+    store.finish_request(warmup)
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda _: _reserve(store), range(8)))
     assert sum(ref is not None for ref, _ in results) == 2
     assert len(_rows(store)) == 2
 
 
+def test_contended_store_refuses_within_busy_timeout_without_reserving(domain):
+    store, _ = domain
+    warmup = store.begin_request("setup-session", "instance-a")
+    store.finish_request(warmup)
+    with sqlite3.connect(store.path) as blocker, ThreadPoolExecutor(max_workers=1) as pool:
+        blocker.execute("BEGIN IMMEDIATE")
+        pending = pool.submit(_reserve, store)
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            pending.result(timeout=6)
+        blocker.rollback()
+    assert _rows(store) == []
+
+
 def test_processes_enforce_joint_cap(domain):
     store, monitor = domain
+    # Match the initialized request lifecycle used by the native send path.
+    warmup = store.begin_request("setup-session", "instance-a")
+    store.finish_request(warmup)
     assert monitor.stop(timeout=3)
     context = multiprocessing.get_context("spawn")
     start, result = context.Event(), context.Queue()
@@ -312,7 +332,8 @@ def test_legacy_reservations_are_preserved_and_cannot_be_assumed_scoped(domain):
     assert _rows(store)[0]["reservation_id"] == "legacy"
 
 
-def test_snapshot_fence_detects_intervening_request(domain, monkeypatch):
+@pytest.mark.parametrize("include_workload", [False, True])
+def test_snapshot_fence_detects_intervening_request(domain, monkeypatch, include_workload):
     store, monitor = domain
     coverage = store.begin_request("session-a", "instance-a")
     ref, _ = _reserve(store)
@@ -332,10 +353,11 @@ def test_snapshot_fence_detects_intervening_request(domain, monkeypatch):
 
     monkeypatch.setattr(store, "_read_generation", race)
     with pytest.raises(ReservationUnavailable, match="changed during observation"):
-        store.snapshot("session-a", 3600)
+        store.snapshot("session-a", 3600, include_workload=include_workload)
 
 
-def test_readonly_snapshot_does_not_prune_or_write(domain, monkeypatch):
+@pytest.mark.parametrize("include_workload", [False, True])
+def test_readonly_snapshot_does_not_prune_or_write(domain, monkeypatch, include_workload):
     store, monitor = domain
     coverage = store.begin_request("session-a", "instance-a")
     ref, _ = _reserve(store)
@@ -362,7 +384,9 @@ def test_readonly_snapshot_does_not_prune_or_write(domain, monkeypatch):
         return conn
 
     monkeypatch.setattr(sqlite3, "connect", read_connection)
-    assert store.snapshot("session-a", 3600)["guard_evidence_eligible"]
+    assert store.snapshot("session-a", 3600, include_workload=include_workload)[
+        "guard_evidence_eligible"
+    ]
     assert len(connections) == 3
 
 
@@ -415,3 +439,91 @@ def test_changed_monitor_attribution_cannot_settle_or_lower_agent_spend(domain, 
 )
 def test_output_reservation(declared, context, expected):
     assert pessimistic_output_reservation(declared, context, 100) == expected
+
+
+def _record_workload(domain):
+    from tests.proxy.spend_guard.test_request_workload import response
+
+    store, monitor = domain
+    observed = response()
+    coverage = store.begin_request("session-a", "instance-a")
+    ref, _ = _reserve(store)
+    store.attempted_send(coverage, ref, workload=observed)
+    monitor.log(
+        model=observed.model,
+        input_tokens=33,
+        output_tokens=7,
+        cache_read_tokens=20,
+        cache_creation_tokens=3,
+        cost=4.0,
+        latency_ms=1,
+        status_code=200,
+        endpoint="/v1/messages",
+        session_id="session-a",
+        agent_id="agent-a",
+        reservation_ref=ref,
+        guard_usage_complete=True,
+    )
+    assert monitor.flush(timeout=3)
+    store.finish_request(coverage)
+    return coverage, observed
+
+
+def test_workload_snapshot_binds_only_requested_session_and_exact_committed_counts(domain):
+    store, _ = domain
+    _, observed = _record_workload(domain)
+    ordinary = store.snapshot("session-a", 3600)
+    assert "workload_observation" not in ordinary
+    result = store.snapshot("session-a", 3600, include_workload=True)
+    evidence = result.pop("workload_observation")
+    assert result["accounting_generation"] == ordinary["accounting_generation"]
+    assert evidence["available"] and evidence["reason_codes"] == []
+    assert evidence["workload"] == observed.to_dict()
+    import hashlib
+
+    assert evidence["request_id_sha256"] == hashlib.sha256(b"request-a").hexdigest()
+    other = store.snapshot("private-other-session", 3600, include_workload=True)
+    assert other["workload_observation"]["workload"] is None
+    assert "request-a" not in str(other)
+
+
+def test_workload_snapshot_refuses_newer_unresolved_send_and_ledger_mismatch(domain):
+    store, monitor = domain
+    _record_workload(domain)
+    with sqlite3.connect(monitor.db_path) as ledger:
+        ledger.execute("UPDATE requests SET cache_creation_tokens=2")
+    evidence = store.snapshot("session-a", 3600, include_workload=True)["workload_observation"]
+    assert not evidence["available"] and "workload_ledger_mismatch" in evidence["reason_codes"]
+    newest = store.begin_request("session-a", "instance-a")
+    store.attempted_send(newest, None)
+    evidence = store.snapshot("session-a", 3600, include_workload=True)["workload_observation"]
+    assert not evidence["available"] and evidence["workload"] is None
+
+
+def test_workload_read_preserves_legacy_schema_and_write_adds_column_without_loss(domain):
+    store, _ = domain
+    _record_workload(domain)
+    with sqlite3.connect(store.path) as conn:
+        conn.execute("ALTER TABLE budget_guard_coverage DROP COLUMN workload_json")
+    evidence = store.snapshot("session-a", 3600, include_workload=True)["workload_observation"]
+    assert not evidence["available"]
+    with sqlite3.connect(store.path) as conn:
+        assert "workload_json" not in {
+            r[1] for r in conn.execute("PRAGMA table_info(budget_guard_coverage)")
+        }
+        assert conn.execute("SELECT count(*) FROM budget_guard_coverage").fetchone()[0] == 1
+    store.begin_request("session-b", "instance-a")
+    with sqlite3.connect(store.path) as conn:
+        assert "workload_json" in {
+            r[1] for r in conn.execute("PRAGMA table_info(budget_guard_coverage)")
+        }
+        assert conn.execute("SELECT count(*) FROM budget_guard_coverage").fetchone()[0] == 2
+
+
+def test_stored_workload_corruption_is_not_returned_as_content(domain):
+    store, _ = domain
+    _record_workload(domain)
+    with sqlite3.connect(store.path) as conn:
+        conn.execute("UPDATE budget_guard_coverage SET workload_json=?", ('{"prompt":"private"}',))
+    with pytest.raises(ValueError, match="workload fields"):
+        store.snapshot("session-a", 3600, include_workload=True)
