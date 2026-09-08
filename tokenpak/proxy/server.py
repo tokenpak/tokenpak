@@ -4612,7 +4612,7 @@ class ProxyServer:
     ) -> None:
         self.host = host
         self._intercept_hosts = intercept_hosts
-        self.port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
+        self.port = int(os.environ.get("TOKENPAK_PORT", "8766")) if port is None else port
         from tokenpak.proxy.config import env_or_profile as _env_or_profile
 
         # Resolve through the profile, not os.environ alone: a caller can
@@ -4789,6 +4789,8 @@ class ProxyServer:
                 raise
             server.proxy_server = self  # inject back-reference
             self._server = server
+            if self.port == 0:
+                self.port = server.server_address[1]
 
             try:
                 if self._memory_guard is not None:
