@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-09-08T18:46:58Z",
-  "package_version": "1.26.0",
+  "generated_at": "2026-09-08T23:39:17Z",
+  "package_version": "1.27.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -2666,6 +2666,62 @@
     {
       "module": "tokenpak.companion.recall.store",
       "name": "open_recall_store"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "ENV"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "interactive"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "options"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "preflight"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "python_spawn_prefix"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "start_panel"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "start_writer"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "stop_panel"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "stop_writer"
+    },
+    {
+      "module": "tokenpak.companion.statusline.launch",
+      "name": "user_statusline"
+    },
+    {
+      "module": "tokenpak.companion.statusline.terminal",
+      "name": "create_launch_dir"
+    },
+    {
+      "module": "tokenpak.companion.statusline.terminal",
+      "name": "launch"
+    },
+    {
+      "module": "tokenpak.companion.statusline.terminal",
+      "name": "main"
+    },
+    {
+      "module": "tokenpak.companion.statusline.terminal",
+      "name": "python_spawn_prefix"
     },
     {
       "module": "tokenpak.companion.stream",
@@ -14082,6 +14138,122 @@
     {
       "module": "tokenpak.sources.url_adapter",
       "name": "URLAdapter"
+    },
+    {
+      "module": "tokenpak.status.binding",
+      "name": "ENV"
+    },
+    {
+      "module": "tokenpak.status.binding",
+      "name": "create_launch_dir"
+    },
+    {
+      "module": "tokenpak.status.binding",
+      "name": "current_session"
+    },
+    {
+      "module": "tokenpak.status.binding",
+      "name": "run_dir"
+    },
+    {
+      "module": "tokenpak.status.binding",
+      "name": "valid_session"
+    },
+    {
+      "module": "tokenpak.status.binding",
+      "name": "write_session"
+    },
+    {
+      "module": "tokenpak.status.display",
+      "name": "ForecastStatus"
+    },
+    {
+      "module": "tokenpak.status.display",
+      "name": "RunwayStatus"
+    },
+    {
+      "module": "tokenpak.status.display",
+      "name": "StatusSnapshot"
+    },
+    {
+      "module": "tokenpak.status.display",
+      "name": "ValueState"
+    },
+    {
+      "module": "tokenpak.status.display",
+      "name": "WIDTHS"
+    },
+    {
+      "module": "tokenpak.status.display",
+      "name": "render"
+    },
+    {
+      "module": "tokenpak.status.snapshot",
+      "name": "MAX_AGE"
+    },
+    {
+      "module": "tokenpak.status.snapshot",
+      "name": "MAX_BYTES"
+    },
+    {
+      "module": "tokenpak.status.snapshot",
+      "name": "SessionEconomics"
+    },
+    {
+      "module": "tokenpak.status.snapshot",
+      "name": "StatusSnapshot"
+    },
+    {
+      "module": "tokenpak.status.snapshot",
+      "name": "fetch_snapshot"
+    },
+    {
+      "module": "tokenpak.status.snapshot",
+      "name": "local_url"
+    },
+    {
+      "module": "tokenpak.status.snapshot",
+      "name": "valid_session"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "MAX_AGE"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "WIDTHS"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "atomic_write"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "current_session"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "fetch_snapshot"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "main"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "refresh"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "render"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "run_dir"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "valid_session"
     },
     {
       "module": "tokenpak.telemetry",

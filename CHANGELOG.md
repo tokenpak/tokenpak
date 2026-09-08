@@ -6,6 +6,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.27.0] — 2026-09-08
+
 ### Added
 
 - Active-session forecasts enabled by default in the Claude Code companion footer and
@@ -15,6 +17,14 @@ This project follows [Semantic Versioning](https://semver.org/).
   existing tmux session. See [terminal forecasts](docs/companion-session-forecast.md).
 - `tokenpak status --line --session ID` reads a compact forecast for an exact
   native session; `--session` also selects the full and JSON economics views.
+
+### Compatibility and security
+
+- Pro 0.4.1 supports this release and OSS 1.26.0. Pro 0.4.0 remains pinned to
+  OSS 1.26.0; upgrade the pair together. TIP-1.0 is unchanged.
+- Reassess and disclose the open optional NLTK High and Accelerate Moderate
+  advisories. The NLTK finding is accepted for this release only; it remains
+  open. See [upgrade and security guidance](docs/release-log/v1.27.0.md).
 
 ## [1.26.0] — 2026-09-08
 
