@@ -4627,6 +4627,7 @@ class ProxyServer:
         self.session_filter = SessionFilter()
         self.session: _SessionState = _new_session()
         self._session_lock = threading.Lock()
+        self._guard_snapshot_owner_id = uuid.uuid4().hex
         self._last_request: dict[str, object] | None = None
         self._last_lock = threading.Lock()
         self._server: _ThreadedHTTPServer | None = None
