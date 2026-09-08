@@ -148,8 +148,59 @@ def _private_connection(path: Path, *, write: bool, create: bool = False) -> sql
     return conn
 
 
+def _schema_is_current(conn: sqlite3.Connection) -> bool:
+    """Check additive objects using fresh reads, without a migration lock."""
+    required = {
+        "budget_reservations": {
+            "reservation_id",
+            "session_id",
+            "fleet_id",
+            "agent_id",
+            "created_at",
+            "expires_at",
+            "reserved_input_tokens",
+            "reserved_output_tokens",
+            "reserved_cost_usd",
+            "status",
+            "actual_cost_usd",
+            "actual_tokens",
+            "ledger_key",
+            "owner_instance_id",
+            "request_id",
+            "reserved_cache_read_tokens",
+            "actual_cache_read_tokens",
+            "settled_at",
+        },
+        "budget_guard_coverage": {
+            "coverage_id",
+            "ledger_key",
+            "owner_instance_id",
+            "session_id",
+            "started_at",
+            "ended_at",
+            "attempts",
+            "reservation_id",
+            "state",
+            "workload_json",
+        },
+        "budget_reservation_generation": {"ledger_key", "generation"},
+    }
+    for table, columns in required.items():
+        present = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if not columns <= present:
+            return False
+    indexes = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+    return {
+        "idx_reservation_scope",
+        "idx_guard_coverage_scope",
+        "idx_guard_coverage_reservation",
+    } <= indexes
+
+
 def _schema(conn: sqlite3.Connection) -> None:
     """Add columns without discarding rows from an older reservation store."""
+    if _schema_is_current(conn):
+        return
     conn.execute("BEGIN IMMEDIATE")
     try:
         conn.execute("""CREATE TABLE IF NOT EXISTS budget_reservations (
@@ -306,6 +357,13 @@ class ReservationStore:
         with closing(
             sqlite3.connect(self.monitor_path.as_uri() + "?mode=rw", uri=True, timeout=2)
         ) as ledger:
+            row = ledger.execute(
+                "SELECT ledger_id, audit_store_sha256 FROM guard_accounting_domain WHERE id=1"
+            ).fetchone()
+            if row is not None and tuple(row) == (self.ledger_id, self.audit_store_sha256):
+                return
+            # Initial binding remains serialized and checked under the writer
+            # lock. Reservation reads independently revalidate this domain.
             ledger.execute("BEGIN IMMEDIATE")
             try:
                 ledger.execute(

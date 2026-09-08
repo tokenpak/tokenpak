@@ -259,6 +259,23 @@ def test_workload_endpoint_reuses_auth_and_explicit_identity_checks(domain, head
     assert not domain[3]
 
 
+def test_busy_accounting_store_returns_local_state_refusal_before_provider_send(domain):
+    _, _, store, received, *_ = domain
+    setup = store.begin_request("setup-session", "setup-instance")
+    store.finish_request(setup)
+    with sqlite3.connect(store.path) as writer:
+        writer.execute("BEGIN EXCLUSIVE")
+        status, raw = _send(domain)
+        writer.rollback()
+    assert status == 402
+    error = json.loads(raw)["error"]
+    assert error["reason"] == "spend_guard_state_unavailable"
+    assert error["approval_prompt_available"] is False
+    assert not received
+    with sqlite3.connect(store.path) as reader:
+        assert reader.execute("SELECT COUNT(*) FROM budget_reservations").fetchone()[0] == 0
+
+
 def test_concurrent_request_is_denied_before_provider_or_reservation_insert(domain, monkeypatch):
     _, _, store, received, entered, release = domain
     denial_finished = threading.Event()

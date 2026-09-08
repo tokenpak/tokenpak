@@ -136,6 +136,29 @@ def test_contended_store_refuses_within_busy_timeout_without_reserving(domain):
     assert _rows(store) == []
 
 
+def test_current_schema_does_not_require_a_writer_lock(domain):
+    from tokenpak.proxy.spend_guard.reservation import _schema
+
+    store, _ = domain
+    coverage = store.begin_request("setup-session", "instance-a")
+    store.finish_request(coverage)
+    with sqlite3.connect(store.path) as writer:
+        writer.execute("BEGIN IMMEDIATE")
+        with sqlite3.connect(store.path.as_uri() + "?mode=rw", uri=True, timeout=0.1) as checker:
+            _schema(checker)
+        writer.rollback()
+
+
+def test_existing_domain_binding_does_not_require_a_writer_lock(domain):
+    store, monitor = domain
+    coverage = store.begin_request("setup-session", "instance-a")
+    store.finish_request(coverage)
+    with sqlite3.connect(monitor.db_path) as writer:
+        writer.execute("BEGIN IMMEDIATE")
+        store._bind_domain()
+        writer.rollback()
+
+
 def test_processes_enforce_joint_cap(domain):
     store, monitor = domain
     # Match the initialized request lifecycle used by the native send path.
