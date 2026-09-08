@@ -36,6 +36,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Disclose the open NLTK advisory in optional compression/full and llamaindex
   dependencies; this release accepts that finding only for the documented scope.
   No patched NLTK release is currently listed. See SECURITY.md.
+- Disclose the separate Moderate Accelerate checkpoint-path advisory in the
+  optional compression/full dependency path and its trusted-model requirement.
 - Update the supported security-release line. TIP-1.0 and exact normative docs
   and registry pins remain unchanged. Existing pricing rows and settings are
   preserved; schema additions require backups before upgrade.

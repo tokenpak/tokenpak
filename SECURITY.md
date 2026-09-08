@@ -75,6 +75,22 @@ the advisory range alone are not proof of a fix; the published replacement and
 its advisory coverage must be verified. This note will be updated when that
 evidence is available.
 
+### Accelerate sharded checkpoint paths
+
+The optional `compression` and `full` extras also select Accelerate through
+LLMLingua. Accelerate releases through 1.14.0 are covered by
+[CVE-2026-69112 / GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79),
+classified as Moderate by the reviewed advisory. No patched release is listed
+as of September 8, 2026. Crafted shard paths in a checkpoint index can cause
+reads outside the checkpoint directory or block loading on a named pipe.
+
+Only load model repositories and checkpoint files from sources you trust.
+LLMLingua0.2.2 enables repository-provided model code by default; TokenPak's
+optional engine does not override that setting or isolate the model loader.
+Do not pass untrusted model repositories, checkpoint indexes or local model
+paths to this integration. The base install does not select these packages.
+This finding remains tracked separately from the NLTK advisory.
+
 ## Advisories in Integrations You Install Yourself
 
 TokenPak's dependency graph does not carry the package below. This note exists because a path we
