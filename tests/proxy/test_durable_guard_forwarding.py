@@ -13,9 +13,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from tests.proxy._proxy_subprocess import free_port
 from tokenpak.proxy import monitor as monitor_module
 from tokenpak.proxy import server as server_module
+from tokenpak.proxy.spend_guard.request_accounting import RequestAccounting
 from tokenpak.proxy.spend_guard.reservation import ReservationStore
 
 pytestmark = pytest.mark.needs_proxy
@@ -103,8 +103,8 @@ def domain(tmp_path, monkeypatch):
     upstream = ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
     worker = threading.Thread(target=upstream.serve_forever, daemon=True)
     worker.start()
-    proxy = server_module.ProxyServer(host="127.0.0.1", port=free_port())
-    allowed_ports = {upstream.server_port, proxy.port}
+    proxy = server_module.ProxyServer(host="127.0.0.1", port=0)
+    allowed_ports = {upstream.server_port}
     connect = socket.socket.connect
 
     def confined_connect(sock, address):
@@ -121,6 +121,7 @@ def domain(tmp_path, monkeypatch):
         custom_hosts={upstream_base: "anthropic"},
     )
     proxy.start(blocking=False)
+    allowed_ports.add(proxy.port)
     yield proxy, upstream, ReservationStore(audit, db), received, entered, release
     release.set()
     proxy.stop()
@@ -216,8 +217,17 @@ def test_complete_provider_usage_can_produce_eligible_native_evidence(domain, st
     assert len(domain[3]) == 1
 
 
-def test_concurrent_request_is_denied_before_provider_or_reservation_insert(domain):
+def test_concurrent_request_is_denied_before_provider_or_reservation_insert(domain, monkeypatch):
     _, _, store, received, entered, release = domain
+    denial_finished = threading.Event()
+    finish = RequestAccounting.finish
+
+    def observed_finish(accounting):
+        finish(accounting)
+        if accounting.attempts == 0:
+            denial_finished.set()
+
+    monkeypatch.setattr(RequestAccounting, "finish", observed_finish)
     release.clear()
     with ThreadPoolExecutor(max_workers=1) as pool:
         pending = pool.submit(_send, domain)
@@ -231,8 +241,12 @@ def test_concurrent_request_is_denied_before_provider_or_reservation_insert(doma
             assert len(received) == 1
             with sqlite3.connect(store.path) as conn:
                 assert conn.execute("SELECT COUNT(*) FROM budget_reservations").fetchone()[0] == 1
+            # The 402 response reaches the client before the handler's finally
+            # records completion. Observe after that write; a snapshot racing
+            # it must correctly return 503 under the generation fence.
+            assert denial_finished.wait(5), "denied request accounting did not finish"
             status, snapshot = _snapshot(domain)
-            assert status == 200 and not snapshot["guard_evidence_eligible"]
+            assert status == 200 and not snapshot["guard_evidence_eligible"], snapshot
             assert "request_in_progress" in snapshot["reason_codes"]
         finally:
             release.set()
