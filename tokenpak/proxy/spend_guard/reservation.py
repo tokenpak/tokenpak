@@ -317,6 +317,49 @@ def _validate_recorded_rows(conn, cutoff):
         raise ReservationUnavailable("recorded reservation usage is incomplete")
 
 
+def _validate_recorded_prices(conn, cutoff, *, deadline):
+    from .request_pricing import RequestPrice
+
+    # Use the same read transaction and cutoff as the committed money sum.
+    # Never backfill legacy prices or load an unbounded historical JSON value.
+    if conn.execute(
+        "SELECT 1 FROM requests WHERE timestamp >= ? AND "
+        "(guard_price_json IS NULL OR typeof(guard_price_json) != 'text' OR "
+        "length(CAST(guard_price_json AS BLOB)) > 16384) LIMIT 1",
+        (cutoff,),
+    ).fetchone():
+        raise ReservationUnavailable("recorded monetary pricing is incomplete")
+    rows = conn.execute(
+        "SELECT guard_price_json, model, input_tokens, output_tokens, cache_read_tokens, "
+        "cache_creation_tokens, estimated_cost FROM requests WHERE timestamp >= ? LIMIT 100001",
+        (cutoff,),
+    )
+    for index, row in enumerate(rows):
+        # SQLite's progress hook does not cover Python receipt parsing.
+        if time.monotonic() >= deadline:
+            raise ReservationUnavailable("recorded monetary pricing deadline exceeded")
+        if index >= 100000:
+            raise ReservationUnavailable("recorded monetary pricing row limit exceeded")
+        try:
+            RequestPrice.from_json(row[0]).require_row(
+                **dict(
+                    zip(
+                        (
+                            "model",
+                            "input_tokens",
+                            "output_tokens",
+                            "cache_read_tokens",
+                            "cache_creation_tokens",
+                            "cost",
+                        ),
+                        row[1:],
+                    )
+                )
+            )
+        except (ValueError, TypeError, OverflowError, RecursionError) as exc:
+            raise ReservationUnavailable("recorded monetary pricing is invalid") from exc
+
+
 class ReservationStore:
     """One configured guard store bound to one canonical monitor path.
 
@@ -387,7 +430,7 @@ class ReservationStore:
             )
 
     def _recorded(
-        self, agent_id: str, window_seconds: int, now: float
+        self, agent_id: str, window_seconds: int, now: float, *, require_prices: bool = False
     ) -> tuple[RollingUsage, dict[str, tuple[str, str]]]:
         cutoff = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(now - window_seconds))
         # Missing DB/schema and unreadable state are unavailable, never zero.
@@ -399,6 +442,8 @@ class ReservationStore:
             self._check_domain(conn)
             conn.set_progress_handler(lambda: int(time.monotonic() > deadline), 1000)
             _validate_recorded_rows(conn, cutoff)
+            if require_prices:
+                _validate_recorded_prices(conn, cutoff, deadline=deadline)
             usage = _query_recorded_usage(conn, cutoff, [], agent_id=agent_id)
             for key, value in usage.items():
                 _number(value, key)
@@ -496,7 +541,16 @@ class ReservationStore:
                     self.max_records,
                 )
                 if not force and caps.enabled:
-                    recorded, committed = self._recorded(agent_id, caps.window_seconds, now)
+                    recorded, committed = self._recorded(
+                        agent_id,
+                        caps.window_seconds,
+                        now,
+                        require_prices=(
+                            caps.per_fleet_max_cost_usd > 0
+                            or bool(agent_id)
+                            and caps.per_agent_max_cost_usd > 0
+                        ),
+                    )
                     active = self._active(conn, agent_id, now, committed)
                     for key, field, add_field in _DIMENSIONS:
                         cap = getattr(caps, field)
@@ -778,6 +832,10 @@ class ReservationStore:
                     )
                 covered = {row["reservation_id"] for row in coverage if row["attempts"] == 1}
                 reasons = []
+                try:
+                    _validate_recorded_prices(ledger, cutoff, deadline=deadline)
+                except ReservationUnavailable:
+                    reasons.append("ledger_pricing_incomplete")
                 if any(
                     not row[0]
                     or row[0] not in covered

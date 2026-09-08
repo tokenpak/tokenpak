@@ -6,6 +6,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Optional durable budget accounting now prices supported responses from their
+  observed workload and commits a bounded rate receipt with each cost. Pending
+  projections cover known cache-write and long-context rates; unpriced historical
+  rows cannot support monetary admission or eligible native observations.
+
 ## [1.25.3] — 2026-09-08
 
 ### Fixed

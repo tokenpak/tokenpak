@@ -169,6 +169,7 @@ _REQUEST_INSERT_COLUMNS = (
     "guard_reservation_id",
     "guard_ledger_key",
     "guard_usage_complete",
+    "guard_price_json",
 )
 
 
@@ -642,6 +643,10 @@ class Monitor:
                     "ALTER TABLE requests ADD COLUMN guard_usage_complete INTEGER NOT NULL DEFAULT 0",
                 ),
                 (
+                    "guard_price_json",
+                    "ALTER TABLE requests ADD COLUMN guard_price_json TEXT",
+                ),
+                (
                     "injected_tokens",
                     "ALTER TABLE requests ADD COLUMN injected_tokens INTEGER DEFAULT 0",
                 ),
@@ -897,9 +902,21 @@ class Monitor:
         admission_ticket: str | None = None,
         reservation_ref: ReservationRef | None = None,
         guard_usage_complete: bool = False,
+        guard_price_json: str | None = None,
     ) -> None:
         if type(guard_usage_complete) is not bool:
             raise ValueError("guard_usage_complete must be a boolean")
+        if guard_price_json is not None:
+            from .spend_guard.request_pricing import RequestPrice
+
+            RequestPrice.from_json(guard_price_json).require_row(
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_read_tokens=cache_read_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+                cost=cost,
+            )
         # ``session_id`` is the resolved Claude Code / TokenPak session id
         # (``_resolve_session_id``). Empty string when no session header was
         # present. NOTE: Claude Code spawned subagents reuse the parent
@@ -963,6 +980,7 @@ class Monitor:
             reservation_ref.reservation_id if reservation_ref else "",
             reservation_ref.ledger_key if reservation_ref else "",
             int(guard_usage_complete),
+            guard_price_json,
         )
         _queued = False
         try:
