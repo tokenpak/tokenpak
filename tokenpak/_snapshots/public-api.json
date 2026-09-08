@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-09-08T02:45:38Z",
-  "package_version": "1.25.3",
+  "generated_at": "2026-09-08T18:46:58Z",
+  "package_version": "1.26.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -6493,6 +6493,22 @@
     },
     {
       "module": "tokenpak.models",
+      "name": "PricingContext"
+    },
+    {
+      "module": "tokenpak.models",
+      "name": "PricingQuote"
+    },
+    {
+      "module": "tokenpak.models",
+      "name": "PricingQuoteUnavailable"
+    },
+    {
+      "module": "tokenpak.models",
+      "name": "RateBand"
+    },
+    {
+      "module": "tokenpak.models",
       "name": "detect_provider"
     },
     {
@@ -6534,6 +6550,10 @@
     {
       "module": "tokenpak.models",
       "name": "known_models"
+    },
+    {
+      "module": "tokenpak.models",
+      "name": "quote_workload"
     },
     {
       "module": "tokenpak.models",
@@ -9652,6 +9672,10 @@
       "name": "resolve_default_session_id"
     },
     {
+      "module": "tokenpak.proxy.guard_snapshot_endpoint",
+      "name": "handle_post"
+    },
+    {
       "module": "tokenpak.proxy.handlers",
       "name": "rate_limit"
     },
@@ -10066,6 +10090,10 @@
     {
       "module": "tokenpak.proxy.monitor",
       "name": "Monitor"
+    },
+    {
+      "module": "tokenpak.proxy.monitor",
+      "name": "TYPE_CHECKING"
     },
     {
       "module": "tokenpak.proxy.monitor",
@@ -11406,6 +11434,110 @@
     {
       "module": "tokenpak.proxy.spend_guard.replay",
       "name": "resolve_pending"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_accounting",
+      "name": "GuardOutcome"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_accounting",
+      "name": "Projection"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_accounting",
+      "name": "RequestAccounting"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_accounting",
+      "name": "ReservationStore"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_accounting",
+      "name": "ReservationUnavailable"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_accounting",
+      "name": "RollingCapsConfig"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_accounting",
+      "name": "pessimistic_output_reservation"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_pricing",
+      "name": "ModelRegistry"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_pricing",
+      "name": "PricingContext"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_pricing",
+      "name": "RateBand"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_pricing",
+      "name": "RequestPrice"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_pricing",
+      "name": "RequestWorkload"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_pricing",
+      "name": "parse_pricing_timestamp"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_pricing",
+      "name": "price_request"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_workload",
+      "name": "RequestWorkload"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_workload",
+      "name": "observe_request"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_workload",
+      "name": "observe_response"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.reservation",
+      "name": "CapBreach"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.reservation",
+      "name": "Projection"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.reservation",
+      "name": "ReservationBreach"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.reservation",
+      "name": "ReservationRef"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.reservation",
+      "name": "ReservationStore"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.reservation",
+      "name": "ReservationUnavailable"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.reservation",
+      "name": "RollingCapsConfig"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.reservation",
+      "name": "RollingUsage"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.reservation",
+      "name": "pessimistic_output_reservation"
     },
     {
       "module": "tokenpak.proxy.spend_guard.rolling_caps",
@@ -14845,6 +14977,10 @@
     },
     {
       "module": "tokenpak.telemetry.cost",
+      "name": "PricingContext"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
       "name": "PricingRefreshCollisionError"
     },
     {
@@ -14854,6 +14990,10 @@
     {
       "module": "tokenpak.telemetry.cost",
       "name": "PricingRefreshUnavailableError"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "RateBand"
     },
     {
       "module": "tokenpak.telemetry.cost",
@@ -14894,6 +15034,10 @@
     {
       "module": "tokenpak.telemetry.cost",
       "name": "calculate_savings"
+    },
+    {
+      "module": "tokenpak.telemetry.cost",
+      "name": "select_rate_band"
     },
     {
       "module": "tokenpak.telemetry.cost_tracker",
