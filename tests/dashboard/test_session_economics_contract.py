@@ -103,7 +103,7 @@ def test_soft_block_layout_keeps_binding_context_and_text_guard():
     items = dashboard_mod._session_economics_items(payload)
     values = {item["label"]: item for item in items}
 
-    assert "guard runway 0 turns to context_soft" in str(values["Trip computer"]["value"])
+    assert "guard runway 0 turns to soft context limit" in str(values["Trip computer"]["value"])
     assert values["Guard state"]["value"] == "soft_block"
 
 
@@ -112,7 +112,7 @@ def test_available_layout_distinguishes_guard_runway_from_session_remainder():
     values = {item["label"]: item for item in items}
     trip_computer = str(values["Trip computer"]["value"])
 
-    assert "guard runway 14 turns to context_soft" in trip_computer
+    assert "guard runway 14 turns to soft context limit" in trip_computer
     assert "session remainder est ~40k–160k" in trip_computer
 
 

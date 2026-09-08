@@ -6,6 +6,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Session economics displays now pair burn-direction arrows with words and
+  expand context-limit labels for easier reading across shared surfaces.
+
 ## [1.25.2] — 2026-09-07
 
 ### Fixed

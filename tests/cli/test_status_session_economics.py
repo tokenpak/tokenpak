@@ -50,8 +50,8 @@ def test_line_distinguishes_facts_estimates_and_states(learning_econ):
     line = render_line(learning_econ)
     assert "in 120k" in line  # observed: plain
     assert "cost ~$1.23 est ·" in line  # glyph plus compact textual equivalent
-    assert "burn ~42k/turn est ↑" in line
-    assert "guard runway 14 turns to context_soft" in line
+    assert "burn ~42k/turn est ↑ rising" in line
+    assert "guard runway 14 turns to soft context limit" in line
     assert "guard allow" in line
     assert "forecast learning" in line
 
@@ -77,10 +77,10 @@ def test_soft_block_fixture_names_guard_and_binding_constraint(soft_block_econ):
     line = render_line(soft_block_econ)
     block = render_block(soft_block_econ)
 
-    assert "guard runway 0 turns to context_soft" in line
+    assert "guard runway 0 turns to soft context limit" in line
     assert "guard soft_block" in line
     assert "guard limit in 0 turns" in block
-    assert "binding context_soft" in block
+    assert "binding soft context limit" in block
     assert "state soft_block" in block
 
 
@@ -228,11 +228,11 @@ def test_line_available_forecast_shows_range_and_ceiling():
 
     econ = SessionEconomics.from_dict(available_payload())
     line = render_line(econ)
-    assert "guard runway 14 turns to context_soft" in line
+    assert "guard runway 14 turns to soft context limit" in line
     assert "session remainder est ~40k–160k" in line
     assert "90% ≤ ~320k" in line
     assert "forecast learning" not in line
-    assert len(line) < 190
+    assert len(line) < 210  # includes textual slope and expanded guard labels
 
 
 def test_block_available_forecast_reports_calibration_metadata():
@@ -285,7 +285,7 @@ def test_line_time_forecast_available_shows_ms_band_never_minutes():
     econ = SessionEconomics.from_dict(time_available_payload())
     line = render_line(econ)
     assert "time est ~90,000ms–600,000ms (90% ≤ ~1,500,000ms)" in line
-    assert len(line) < 210
+    assert len(line) < 230  # includes textual slope and expanded guard labels
     # No unit conversion to minutes/hours anywhere in the contract, API, or
     # renderer — assert the banned units never appear.
     for banned in ("min", "minute", "hour"):
