@@ -36,7 +36,9 @@ from tokenpak.companion.codex import session_home as sh
 class _FakeConfig:
     def __init__(self, journal_dir):
         self.journal_dir = journal_dir
+        self.run_dir = journal_dir / "run"
         self.hooks_enabled = False
+        self.enabled = True
         self.profile = "balanced"
         self.budget_daily_usd = 0.0
 
@@ -101,6 +103,49 @@ def test_shared_mode_existing_database_launches_on_every_platform(
     monkeypatch.setattr(sys, "platform", platform_id)
 
     assert launcher.main(["--install-only"]) == 0
+
+
+@pytest.mark.parametrize("writer_failure", [False, True])
+def test_display_is_bound_cleaned_up_and_cannot_change_child_exit(
+    monkeypatch, tmp_path, writer_failure
+):
+    from tokenpak.companion.session_binding import ENV
+    from tokenpak.companion.statusline import launch as display
+
+    _stub_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("TMUX", "fixture")
+    monkeypatch.setattr(display, "interactive", lambda args: True)
+    calls = []
+    writer = object()
+
+    def start_writer(env):
+        calls.append(("writer", env[ENV]))
+        if writer_failure:
+            raise OSError("fixture unavailable")
+        return writer
+
+    def start_panel(env):
+        calls.append(("panel", env[ENV]))
+        return "%88"
+
+    def child(args, env, on_start):
+        calls.append(("child", env[ENV]))
+        assert any(ENV in arg and env[ENV] in arg for arg in args)
+        return 7, launcher.empty_usage()
+
+    monkeypatch.setattr(display, "start_writer", start_writer)
+    monkeypatch.setattr(display, "start_panel", start_panel)
+    monkeypatch.setattr(display, "stop_writer", lambda value: calls.append(("stop_writer", value)))
+    monkeypatch.setattr(display, "stop_panel", lambda pane, env: calls.append(("stop_panel", pane)))
+    monkeypatch.setattr(launcher, "_run_codex_process", child)
+    assert launcher.main([]) == 7
+    bound = [value for event, value in calls if event in {"writer", "panel", "child"}]
+    assert len(set(bound)) == 1
+    assert Path(bound[0]).stat().st_mode & 0o777 == 0o700
+    assert calls[-2:] == [
+        ("stop_panel", None if writer_failure else "%88"),
+        ("stop_writer", None if writer_failure else writer),
+    ]
 
 
 def test_parallel_sessions_are_not_gated(monkeypatch, tmp_path):
@@ -661,6 +706,9 @@ def test_main_applies_launcher_default_before_launch(monkeypatch, tmp_path, caps
         "codex",
         "--sandbox",
         "danger-full-access",
+        "-c",
+        "mcp_servers.tokenpak-companion.env.TOKENPAK_COMPANION_SESSION_DIR="
+        + json.dumps(captured["env"]["TOKENPAK_COMPANION_SESSION_DIR"]),
         "--foo",
     ]
     stderr = capsys.readouterr().err
@@ -789,7 +837,16 @@ def test_main_receipt_mode_runs_child_and_writes_no_body_receipt(monkeypatch, tm
     )
 
     assert rc == 0
-    assert captured["argv"] == ["codex", "exec", "-m", "gpt-5.5", prompt_body]
+    assert captured["argv"] == [
+        "codex",
+        "-c",
+        "mcp_servers.tokenpak-companion.env.TOKENPAK_COMPANION_SESSION_DIR="
+        + json.dumps(captured["env"]["TOKENPAK_COMPANION_SESSION_DIR"]),
+        "exec",
+        "-m",
+        "gpt-5.5",
+        prompt_body,
+    ]
     assert captured["env"]["TOKENPAK_CODEX_RUN_ID"] == "run_receipt_test"
     assert captured["env"]["TOKENPAK_CODEX_RECEIPT_OUT"] == str(receipt_path)
 
@@ -801,6 +858,8 @@ def test_main_receipt_mode_runs_child_and_writes_no_body_receipt(monkeypatch, tm
     assert receipt["command"]["model"] == "gpt-5.5"
     assert receipt["command"]["argv_redacted"] == [
         "codex",
+        "-c",
+        "<redacted-value>",
         "exec",
         "-m",
         "gpt-5.5",

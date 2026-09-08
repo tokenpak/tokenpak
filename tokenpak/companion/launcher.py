@@ -179,8 +179,29 @@ def main(args: list[str] | None = None) -> int:
     """Entry point for ``tokenpak claude``."""
     args = args if args is not None else sys.argv[1:]
 
+    from .session_binding import ENV as session_dir_env
+    from .statusline import launch as display
+
+    try:
+        args, surface = display.options(args, "claude")
+    except ValueError as exc:
+        print(f"tokenpak: {exc}", file=sys.stderr)
+        return 2
     config = CompanionConfig.from_env()
     config.profile_overrides()
+    show_display = (
+        config.enabled and not config.bare and display.interactive(args) and surface != "off"
+    )
+    if surface == "tmux":
+        print(
+            "tokenpak: Claude supports a native footer; use --status-surface=native",
+            file=sys.stderr,
+        )
+        return 2
+    if show_display and surface == "auto" and display.user_statusline(args):
+        show_display = False
+    if show_display:
+        display.preflight("native")
 
     # Keep durable run state at the existing path, but give each Claude launch
     # its own generated-file namespace. These files must outlive this process
@@ -190,7 +211,7 @@ def main(args: list[str] | None = None) -> int:
     launch_dir = Path(tempfile.mkdtemp(prefix="launch-", dir=config.run_dir))
 
     mcp_config_path = _write_mcp_config(config, run_dir=launch_dir)
-    settings_path = _write_settings(config, run_dir=launch_dir)
+    settings_path = _write_settings(config, run_dir=launch_dir, status_line=show_display)
     prompt_path = _write_system_prompt(config, run_dir=launch_dir)
 
     _TEAL = Color.TEAL
@@ -203,6 +224,7 @@ def main(args: list[str] | None = None) -> int:
     # Route through tokenpak proxy for compression/caching/dedup.
     # Auto-detect if proxy is running when no explicit proxy_url is set.
     env = os.environ.copy()
+    env[session_dir_env] = str(launch_dir)
 
     # Bare mode: strip Claude Code native context layers so an external
     # gateway (e.g. OpenClaw) can inject its own tools/history/memory.
@@ -312,7 +334,23 @@ def main(args: list[str] | None = None) -> int:
     # native ``sessionTitle`` field. We never emit OSC-0 escapes manually;
     # Claude Code repaints the title on its own render loop and would clobber
     # them (this was the root cause of the abandoned OSC-0 tab-title attempt).
-    os.execvpe("claude", claude_args, env)
+    writer = None
+    if show_display:
+        env["TOKENPAK_FORECAST_PROXY"] = proxy_url or "http://127.0.0.1:8766"
+        env["TOKENPAK_FORECAST_ROUTING"] = "proxy" if proxy_url else "unknown"
+        try:
+            writer = display.start_writer(env)
+        except OSError:
+            print(
+                "tokenpak: forecast writer unavailable; footer will show status unavailable",
+                file=sys.stderr,
+            )
+    try:
+        os.execvpe("claude", claude_args, env)
+    finally:
+        # Successful exec preserves this PID; its writer exits when Claude exits.
+        # This finally runs only when exec fails (or under launcher tests).
+        display.stop_writer(writer)
 
     # Only reached if exec fails
     print("tokenpak: failed to launch claude", file=sys.stderr)
@@ -436,6 +474,10 @@ def _write_mcp_config(config: CompanionConfig, *, run_dir: Path | None = None) -
             }
         }
     }
+    if run_dir is not None:
+        from .session_binding import ENV
+
+        mcp_data["mcpServers"]["tokenpak-companion"]["env"] = {ENV: str(run_dir)}
     path = _generated_dir(config, run_dir) / "mcp.json"
     path.write_text(json.dumps(mcp_data, indent=2))
     return str(path)
@@ -527,7 +569,9 @@ def _merge_command_hook(
         )
 
 
-def _write_settings(config: CompanionConfig, *, run_dir: Path | None = None) -> str:
+def _write_settings(
+    config: CompanionConfig, *, run_dir: Path | None = None, status_line: bool = False
+) -> str:
     """Write the settings overlay with hook configuration and permissions.
 
     Claude Code's ``--settings <file>`` argument replaces the user-level
@@ -671,6 +715,17 @@ def _write_settings(config: CompanionConfig, *, run_dir: Path | None = None) -> 
                     ],
                 }
             ]
+
+    if config.hooks_enabled and run_dir is not None:
+        bind_hook = hooks_dir / "session_bind.sh"
+        _merge_command_hook(settings, "SessionStart", shlex.join(["bash", str(bind_hook)]))
+    if status_line:
+        native_script = Path(__file__).parent / "statusline" / "native.sh"
+        settings["statusLine"] = {
+            "type": "command",
+            "command": shlex.join(["bash", str(native_script)]),
+            "refreshInterval": 2,
+        }
 
     path = generated_dir / "settings.json"
     path.write_text(json.dumps(settings, indent=2))

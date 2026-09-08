@@ -1,6 +1,6 @@
 """doctor_claude_code — Claude Code health checks for tokenpak doctor --claude-code.
 
-10 health checks:
+11 health checks:
   1. ANTHROPIC_BASE_URL is set (env + ~/.claude/settings.json)
   2. Proxy reachable at configured URL (GET /health)
   3. Auth flow works (POST /v1/messages/count_tokens, expect 200)
@@ -11,6 +11,7 @@
   8. Per-host install consistency (tokenpak.env, systemd unit, settings.json same URL)
   9. Plugin directory exists at ~/.claude/plugins/tokenpak or ~/.claude/plugins/tokenpak-claude-code
   10. Permission tiers and per-client launcher defaults
+  11. Native forecast reader and optional jq dependency
 
 Each check runs independently.  A failure in one does not block the rest.
 Exit: non-zero if any check fails.
@@ -21,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sqlite3
 import time
 import urllib.error
@@ -34,7 +36,7 @@ from typing import Any, TypedDict, cast
 DEFAULT_PROXY_URL = "http://127.0.0.1:8766"
 SYSTEMD_UNIT_NAME = "tokenpak-proxy.service"
 REMEDIATION = "Run `tokenpak install --claude-code` to fix this"
-NUM_CHECKS = 10
+NUM_CHECKS = 11
 
 # Plugin directory candidate names under ~/.claude/plugins/
 _PLUGIN_DIR_NAMES = ("tokenpak", "tokenpak-claude-code")
@@ -750,6 +752,28 @@ def _check_permission_tiers() -> CheckResult:
     )
 
 
+def _check_status_line() -> CheckResult:
+    from tokenpak.companion.statusline.launch import SCRIPTS
+
+    present = all((SCRIPTS / name).is_file() for name in ("native.sh", "cache.sh"))
+    jq = shutil.which("jq") is not None
+    return CheckResult(
+        check="status_line",
+        status="fail" if not present else "pass" if jq else "warn",
+        message="Check 11 Session forecast status line",
+        detail="native cache reader ready"
+        if present and jq
+        else "jq unavailable"
+        if present
+        else "reader files missing",
+        remediation=""
+        if present and jq
+        else "Install jq for the native forecast footer"
+        if present
+        else "Reinstall TokenPak",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -775,6 +799,7 @@ def run_claude_code_checks(
         _check_install_consistency,
         _check_plugin_dir,
         _check_permission_tiers,
+        _check_status_line,
     ]
 
     results: list[CheckResult] = []

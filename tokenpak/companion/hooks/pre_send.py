@@ -164,13 +164,9 @@ def _write_session_marker(session_id: str) -> None:
     server (a separate process) can bind ``state.session_id`` to it. Atomic
     write via tmp+replace. Best-effort; never fails the hook."""
     try:
-        run_dir = _companion_config.journal_run_dir()
-        run_dir.mkdir(parents=True, exist_ok=True)
-        # pid-unique temp name so two concurrent hook processes can't
-        # interleave writes to the same temp file before the atomic rename.
-        tmp = run_dir / f"current-session.{os.getpid()}.tmp"
-        tmp.write_text(session_id.strip(), encoding="utf-8")
-        tmp.replace(run_dir / "current-session")
+        from tokenpak.companion.session_binding import write_session
+
+        write_session(session_id)
     except Exception:
         pass  # never fail the hook
 

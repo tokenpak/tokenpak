@@ -18,6 +18,9 @@ INPUT=$(cat)
 
 [ "${TOKENPAK_COMPANION_ENABLED:-1}" = "0" ] && exit 0
 
+printf '%s' "$INPUT" | bash "$(dirname "${BASH_SOURCE[0]}")/../hooks/session_bind.sh"
+
+
 if command -v jq >/dev/null 2>&1; then
     SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
     CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)

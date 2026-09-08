@@ -63,6 +63,7 @@ def redact_argv(args: list[str]) -> list[str]:
     redacted: list[str] = []
     redact_next_for: str | None = None
     positional_seen = False
+    command_seen = False
 
     for index, token in enumerate(args):
         if redact_next_for is not None:
@@ -73,8 +74,9 @@ def redact_argv(args: list[str]) -> list[str]:
             redact_next_for = None
             continue
 
-        if token in _CODEX_SUBCOMMANDS and index == 0:
+        if token in _CODEX_SUBCOMMANDS and not positional_seen and not command_seen:
             redacted.append(token)
+            command_seen = True
             continue
 
         if token in _VALUE_FLAGS:

@@ -16,6 +16,7 @@ Modes:
 
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import random
@@ -134,6 +135,9 @@ def _print_free_tier_upgrade_hint() -> None:
 
 SEP_INNER = "─────────────────────────────────"
 PROXY_DEFAULT = "http://127.0.0.1:8766"
+_SELECTED_SESSION: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "status_session", default=""
+)
 # Canonical fresh-install fallback. Only used when the
 # resolver finds no existing store; the legacy ``~/tokenpak/monitor.db`` literal
 # was removed so this never seeds a divergent pre-dot store.
@@ -206,9 +210,20 @@ def _fetch_session_economics(proxy_base: str) -> tuple[Optional["SessionEconomic
     the surface is honestly unavailable (proxy down, invalid payload).
     """
     url = f"{proxy_base}/v1/messages/session-economics"
+    from tokenpak.companion.session_binding import ENV, current_session, valid_session
+
+    selected = _SELECTED_SESSION.get()
+    if not selected:
+        selected = (
+            current_session() if os.environ.get(ENV) else os.environ.get("CODEX_THREAD_ID", "")
+        )
+    if os.environ.get(ENV) and not selected:
+        return None, "waiting for this launch's session"
+    if selected and not valid_session(selected):
+        return None, "invalid session identity"
     req = urllib.request.Request(
         url,
-        data=b"{}",
+        data=json.dumps({"session_id": selected}).encode() if selected else b"{}",
         headers={"Content-Type": "application/json"},
         method="POST",
     )
@@ -222,9 +237,24 @@ def _fetch_session_economics(proxy_base: str) -> tuple[Optional["SessionEconomic
     try:
         from tokenpak.core.contracts.session_economics import SessionEconomics
 
-        return SessionEconomics.from_dict(payload), ""
+        result = SessionEconomics.from_dict(payload)
+        if selected and result.session.id != selected:
+            return None, "session mismatch"
+        return result, ""
     except Exception as exc:
         return None, f"payload failed contract validation: {exc}"
+
+
+def _print_forecast_line(proxy: str, session_id: str = "") -> None:
+    import shutil
+
+    from tokenpak.status.display import render
+    from tokenpak.status.snapshot import StatusSnapshot
+
+    economics, reason = _fetch_session_economics(proxy)
+    selected = (economics.session.id if economics else session_id) or ""
+    snapshot = StatusSnapshot(selected, time.time(), economics=economics, reason=reason)
+    print(render(snapshot, shutil.get_terminal_size((80, 24)).columns))
 
 
 def _print_session_economics_line(proxy_base: str) -> None:
@@ -2006,6 +2036,8 @@ if HAS_CLICK:
         envvar="TOKENPAK_PROXY_URL",
         help="Proxy base URL",
     )
+    @click.option("--session", "session_id", default="", help="Exact native session ID")
+    @click.option("--line", "one_line", is_flag=True, help="Compact session forecast (read-only)")
     @click.option("--full", is_flag=True, help="Show full technical output (legacy format)")
     @click.option("--raw", is_flag=True, help="Dump raw JSON (with --full)")
     @click.option("--minimal", is_flag=True, help="One-line savings summary")
@@ -2025,6 +2057,8 @@ if HAS_CLICK:
     )
     def status_cmd(
         proxy: str,
+        session_id: str,
+        one_line: bool,
         full: bool,
         raw: bool,
         minimal: bool,
@@ -2059,17 +2093,26 @@ if HAS_CLICK:
           tokenpak status --fleet --since 7d  # fleet rollup (last 7d)
           tokenpak status --fleet --json      # fleet rollup as JSON
         """
-        run(
-            proxy_base=proxy,
-            raw=raw,
-            minimal=minimal,
-            full=full,
-            tip_cache=tip_cache,
-            as_json=as_json,
-            no_meme=no_meme,
-            db_path=db_path,
-            days=days,
-            hours=hours,
-            fleet=fleet,
-            since=since,
-        )
+        token = _SELECTED_SESSION.set(session_id)
+        try:
+            if one_line:
+                if fleet or as_json or full or raw or minimal or tip_cache:
+                    raise click.UsageError("--line cannot be combined with other output modes")
+                _print_forecast_line(proxy, session_id)
+                return
+            run(
+                proxy_base=proxy,
+                raw=raw,
+                minimal=minimal,
+                full=full,
+                tip_cache=tip_cache,
+                as_json=as_json,
+                no_meme=no_meme,
+                db_path=db_path,
+                days=days,
+                hours=hours,
+                fleet=fleet,
+                since=since,
+            )
+        finally:
+            _SELECTED_SESSION.reset(token)

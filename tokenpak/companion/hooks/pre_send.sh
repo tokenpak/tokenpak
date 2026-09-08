@@ -66,8 +66,8 @@ _tp_ensure_dedupe_schema() {
 # run-dir file. Without it, a stale marker from an earlier session causes
 # cross-session misattribution of journal/budget writes. Mirrors
 # pre_send.py:_write_session_marker; must run BEFORE any early exit.
-if [ -n "$SESSION_ID" ]; then
-    RUN_DIR="${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}/run"
+if [[ "$SESSION_ID" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+    RUN_DIR="${TOKENPAK_COMPANION_SESSION_DIR:-${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}/run}"
     _TP_CUR=""
     if [ -f "$RUN_DIR/current-session" ]; then
         IFS= read -r _TP_CUR < "$RUN_DIR/current-session" 2>/dev/null
@@ -75,7 +75,7 @@ if [ -n "$SESSION_ID" ]; then
     # Hot-path guard: rewrite only on session change (builtin read, no spawns).
     if [ "$_TP_CUR" != "$SESSION_ID" ]; then
         mkdir -p "$RUN_DIR" 2>/dev/null
-        if printf '%s' "$SESSION_ID" > "$RUN_DIR/current-session.$$.tmp" 2>/dev/null; then
+        if (umask 077; printf '%s' "$SESSION_ID" > "$RUN_DIR/current-session.$$.tmp") 2>/dev/null; then
             mv -f "$RUN_DIR/current-session.$$.tmp" "$RUN_DIR/current-session" 2>/dev/null \
                 || rm -f "$RUN_DIR/current-session.$$.tmp" 2>/dev/null
         fi
