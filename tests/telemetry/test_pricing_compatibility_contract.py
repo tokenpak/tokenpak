@@ -545,11 +545,7 @@ def test_refresh_leaves_cost_history_and_old_column_reads_untouched(tmp_path: Pa
     assert len(old_reader_rows) == 2
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="pre-existing reprocess pricing-version override is accepted but not used",
-)
-def test_reprocess_pricing_version_override_remains_a_documented_gap(tmp_path: Path) -> None:
+def test_reprocess_honors_explicit_pricing_version(tmp_path: Path) -> None:
     db = tmp_path / "reprocess.db"
     engine = CostEngine(str(db))
     engine.add_pricing(

@@ -30,10 +30,15 @@ import json
 import logging
 import sqlite3
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from functools import lru_cache
+from math import isfinite
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, cast
+
+from tokenpak.models import PricingContext, RateBand
+from tokenpak.models._pricing import select_rate_band
 
 logger = logging.getLogger(__name__)
 
@@ -379,6 +384,28 @@ SEED_PRICING: List[dict[str, PricingSeedValue]] = [
 ]
 
 CURRENT_PRICING_VERSION = "2026.09"
+
+
+@lru_cache(maxsize=1)
+def _bundled_workload_prices() -> dict[str, dict[str, object]]:
+    """Read packaged bands once; never use discovered or process-local prices."""
+    path = Path(__file__).parents[1] / "models" / "data" / "seed_catalog.json"
+    models = json.loads(path.read_text(encoding="utf-8"))["models"]
+    result = {}
+    for model, data in models.items():
+        if not data.get("pricing_bands"):
+            continue
+        bands = [RateBand.from_mapping(raw).to_mapping() for raw in data["pricing_bands"]]
+        result[f"{data['provider']}/{model}"] = {
+            "input": data["input"],
+            "output": data["output"],
+            "cache_read": data.get("cache_read"),
+            "cache_write": data.get("cache_write"),
+            "bands": bands,
+        }
+    return result
+
+
 CURRENT_EFFECTIVE_DATE = "2026-09-04"
 
 
@@ -425,6 +452,8 @@ class CostResult:
     data_source: str  # "official" | "estimated" | "fallback"
     pricing_provenance: str = UNKNOWN_METADATA
     unit_basis: str = UNKNOWN_METADATA
+    baseline_rate_band: str | None = None
+    actual_rate_band: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -440,6 +469,8 @@ class CostResult:
             "data_source": self.data_source,
             "pricing_provenance": self.pricing_provenance,
             "unit_basis": self.unit_basis,
+            "baseline_rate_band": self.baseline_rate_band,
+            "actual_rate_band": self.actual_rate_band,
         }
 
 
@@ -456,6 +487,48 @@ class Pricing:
     source: str = "official"
     provenance: str = UNKNOWN_METADATA
     unit_basis: str = UNKNOWN_METADATA
+    cache_read_rate: float | None = None  # USD per 1K tokens
+    cache_write_rate: float | None = None  # USD per 1K tokens
+    rate_bands: tuple[RateBand, ...] = ()
+    selected_band: str | None = None
+    source_url: str | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("input_rate", "output_rate", "cache_read_rate", "cache_write_rate"):
+            value = getattr(self, name)
+            if value is None and name.startswith("cache_"):
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"{name} must be a finite non-negative rate")
+            try:
+                valid = isfinite(value) and value >= 0
+            except OverflowError:
+                valid = False
+            if not valid:
+                raise ValueError(f"{name} must be a finite non-negative rate")
+
+    def for_context(self, context: PricingContext | None) -> Pricing:
+        """Select one complete tuple, converting USD/1M to the USD/1K API."""
+        band = select_rate_band(self.rate_bands, context)
+        if band is None:
+            if self.selected_band is not None:
+                raise ValueError("resolved price band does not match the new workload")
+            return self
+        return replace(
+            self,
+            input_rate=band.input_per_mtok / 1_000.0,
+            output_rate=band.output_per_mtok / 1_000.0,
+            cache_read_rate=None
+            if band.cache_read_per_mtok is None
+            else band.cache_read_per_mtok / 1_000.0,
+            cache_write_rate=None
+            if band.cache_write_per_mtok is None
+            else band.cache_write_per_mtok / 1_000.0,
+            source=band.source,
+            source_url=band.source_url,
+            selected_band=band.band_id,
+            unit_basis=UNIT_BASIS_USD_PER_1K,
+        )
 
     @property
     def input_per_token(self) -> float:
@@ -464,6 +537,17 @@ class Pricing:
     @property
     def output_per_token(self) -> float:
         return self.output_rate / 1_000.0
+
+    @property
+    def cache_read_per_token(self) -> float:
+        # An unknown discount is not a free cache read.
+        return (self.input_rate if self.cache_read_rate is None else self.cache_read_rate) / 1_000.0
+
+    @property
+    def cache_write_per_token(self) -> float:
+        return (
+            self.input_rate if self.cache_write_rate is None else self.cache_write_rate
+        ) / 1_000.0
 
 
 # ---------------------------------------------------------------------------
@@ -490,6 +574,9 @@ class CostEngine:
         source         TEXT    NOT NULL DEFAULT 'official',
         provenance     TEXT,
         unit_basis     TEXT,
+        cache_read_rate REAL,
+        cache_write_rate REAL,
+        rate_bands_json TEXT,
         created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_tp_pricing_model
@@ -592,6 +679,12 @@ class CostEngine:
             conn.execute("ALTER TABLE tp_pricing ADD COLUMN provenance TEXT")
         if "unit_basis" not in columns:
             conn.execute("ALTER TABLE tp_pricing ADD COLUMN unit_basis TEXT")
+        if "cache_read_rate" not in columns:
+            conn.execute("ALTER TABLE tp_pricing ADD COLUMN cache_read_rate REAL")
+        if "cache_write_rate" not in columns:
+            conn.execute("ALTER TABLE tp_pricing ADD COLUMN cache_write_rate REAL")
+        if "rate_bands_json" not in columns:
+            conn.execute("ALTER TABLE tp_pricing ADD COLUMN rate_bands_json TEXT")
 
     @classmethod
     def _ensure_unique_pricing_key(cls, conn: sqlite3.Connection) -> bool:
@@ -697,6 +790,7 @@ class CostEngine:
             {
                 "unit_basis": SEED_PRICING_UNIT_BASIS,
                 "rows": SEED_PRICING,
+                "workload_prices": _bundled_workload_prices(),
             }
         )
 
@@ -715,6 +809,13 @@ class CostEngine:
         version: str,
         effective_date: str,
     ) -> dict[str, object]:
+        workload = _bundled_workload_prices().get(cls._seed_key(seed))
+        if workload is not None and (
+            workload["input"] != seed["input_rate"] or workload["output"] != seed["output_rate"]
+        ):
+            raise PricingRefreshError("packaged workload and scalar seed rates disagree")
+        read = workload.get("cache_read") if workload else None
+        write = workload.get("cache_write") if workload else None
         return {
             "version": version,
             "effective_date": effective_date,
@@ -730,6 +831,17 @@ class CostEngine:
             "source": str(seed["source"]),
             "provenance": PROVENANCE_SEED_REFRESH,
             "unit_basis": UNIT_BASIS_USD_PER_1K,
+            "cache_read_rate": None
+            if read is None
+            else cls._normalize_rate_to_per_1k(float(read), SEED_PRICING_UNIT_BASIS),
+            "cache_write_rate": None
+            if write is None
+            else cls._normalize_rate_to_per_1k(float(write), SEED_PRICING_UNIT_BASIS),
+            "rate_bands_json": json.dumps(
+                workload["bands"], sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+            if workload
+            else None,
         }
 
     @staticmethod
@@ -747,6 +859,9 @@ class CostEngine:
             "source",
             "provenance",
             "unit_basis",
+            "cache_read_rate",
+            "cache_write_rate",
+            "rate_bands_json",
         )
         return stored.get("provenance") == PROVENANCE_SEED_REFRESH and all(
             stored.get(column) == target.get(column) for column in compared
@@ -1040,8 +1155,9 @@ class CostEngine:
                 cursor = conn.execute(
                     """INSERT INTO tp_pricing
                        (version, effective_date, provider, model, input_rate,
-                        output_rate, currency, source, provenance, unit_basis)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        output_rate, currency, source, provenance, unit_basis,
+                        cache_read_rate, cache_write_rate, rate_bands_json)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     tuple(
                         target[column]
                         for column in (
@@ -1055,6 +1171,9 @@ class CostEngine:
                             "source",
                             "provenance",
                             "unit_basis",
+                            "cache_read_rate",
+                            "cache_write_rate",
+                            "rate_bands_json",
                         )
                     ),
                 )
@@ -1106,7 +1225,9 @@ class CostEngine:
     # ------------------------------------------------------------------
     # Pricing resolution
     # ------------------------------------------------------------------
-    def get_pricing(self, model: str, event_ts: Optional[str] = None) -> Pricing:
+    def get_pricing(
+        self, model: str, event_ts: Optional[str] = None, *, context: PricingContext | None = None
+    ) -> Pricing:
         """
         Resolve pricing for a model at a given event timestamp.
 
@@ -1162,10 +1283,18 @@ class CostEngine:
             logger.warning(f"No pricing found for model '{model}', using fallback")
 
         self._enforce_known_unit(pricing)
-        return pricing
+        return pricing.for_context(context)
 
     def _pricing_from_row(self, row: sqlite3.Row) -> Pricing:
         columns = set(row.keys())
+        bands = ()
+        if "rate_bands_json" in columns and row["rate_bands_json"] is not None:
+            raw_bands = json.loads(row["rate_bands_json"])
+            if not isinstance(raw_bands, list):
+                raise ValueError("stored pricing bands must be a list")
+            bands = tuple(RateBand.from_mapping(band) for band in raw_bands)
+            if len({band.band_id for band in bands}) != len(bands):
+                raise ValueError("stored pricing band ids must be unique")
         return Pricing(
             provider=row["provider"],
             model=row["model"],
@@ -1180,6 +1309,9 @@ class CostEngine:
             unit_basis=(row["unit_basis"] or UNKNOWN_METADATA)
             if "unit_basis" in columns
             else UNKNOWN_METADATA,
+            cache_read_rate=row["cache_read_rate"] if "cache_read_rate" in columns else None,
+            cache_write_rate=row["cache_write_rate"] if "cache_write_rate" in columns else None,
+            rate_bands=bands,
         )
 
     def _enforce_known_unit(self, pricing: Pricing) -> None:
@@ -1232,6 +1364,9 @@ class CostEngine:
         output_tokens: int,
         event_ts: Optional[str] = None,
         cache_read_tokens: int = 0,
+        *,
+        cache_write_tokens: int = 0,
+        context: PricingContext | None = None,
     ) -> CostResult:
         """
         Calculate baseline, actual, and savings for a single event.
@@ -1242,24 +1377,52 @@ class CostEngine:
             final_input_tokens: Tokens AFTER compression (actual billing).
             output_tokens: Output tokens (same for baseline and actual).
             event_ts: Event ISO timestamp for pricing version resolution.
-            cache_read_tokens: Cache-read tokens (reduces actual cost).
+            cache_read_tokens: Cache-read subset of final_input_tokens.
+            cache_write_tokens: Cache-write subset of final_input_tokens.
+            context: Workload modalities and tier; input_tokens, if given, must
+                equal final_input_tokens. Baseline pricing uses raw_input_tokens.
 
         Returns:
             CostResult with all cost fields.
         """
-        # Clamp negative values
+        pricing = self.get_pricing(model, event_ts)
+        return self._calculate_with_pricing(
+            model,
+            raw_input_tokens,
+            final_input_tokens,
+            output_tokens,
+            pricing,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_tokens=cache_write_tokens,
+            context=context,
+        )
+
+    @staticmethod
+    def _calculate_with_pricing(
+        model: str,
+        raw_input_tokens: int,
+        final_input_tokens: int,
+        output_tokens: int,
+        pricing: Pricing,
+        *,
+        cache_read_tokens: int = 0,
+        cache_write_tokens: int = 0,
+        context: PricingContext | None = None,
+    ) -> CostResult:
+        # Preserve historical negative-token clamping. Both prices come from
+        # the same database row, even if another process updates the catalog.
         raw = max(0, raw_input_tokens)
         final = max(0, final_input_tokens)
         out = max(0, output_tokens)
-
-        pricing = self.get_pricing(model, event_ts)
-
-        # Baseline: what would have been billed without compression
-        baseline_cost = raw * pricing.input_per_token + out * pricing.output_per_token
-
-        # Actual: billed tokens after compression
-        effective_input = max(0, final - cache_read_tokens)
-        actual_cost = effective_input * pricing.input_per_token + out * pricing.output_per_token
+        context = context or PricingContext()
+        if context.input_tokens is not None and context.input_tokens != final:
+            raise ValueError("pricing context input_tokens differs from final_input_tokens")
+        baseline_pricing = pricing.for_context(replace(context, input_tokens=raw))
+        actual_pricing = pricing.for_context(replace(context, input_tokens=final))
+        baseline_cost = calculate_baseline(raw, out, baseline_pricing)
+        actual_cost = calculate_actual(
+            final, out, actual_pricing, cache_read_tokens, cache_write_tokens=cache_write_tokens
+        )
 
         # Savings (never negative — rounding artifacts clamped)
         savings_amount = max(0.0, baseline_cost - actual_cost)
@@ -1275,9 +1438,11 @@ class CostEngine:
             actual_cost=actual_cost,
             savings_amount=savings_amount,
             savings_pct=savings_pct,
-            data_source=pricing.source,
+            data_source=actual_pricing.source,
             pricing_provenance=pricing.provenance,
-            unit_basis=pricing.unit_basis,
+            unit_basis=actual_pricing.unit_basis,
+            baseline_rate_band=baseline_pricing.selected_band,
+            actual_rate_band=actual_pricing.selected_band,
         )
 
     # ------------------------------------------------------------------
@@ -1316,32 +1481,70 @@ class CostEngine:
         version: Optional[str] = None,
         effective_date: Optional[str] = None,
         source: str = "official",
+        *,
+        cache_read_rate: float | None = None,
+        cache_write_rate: float | None = None,
+        rate_bands: Sequence[RateBand] = (),
     ) -> int:
         """Insert a custom USD/1K pricing record. Returns the new row id."""
         version = version or CURRENT_PRICING_VERSION
         effective_date = effective_date or datetime.now(timezone.utc).date().isoformat()
+        Pricing(
+            provider,
+            model,
+            input_rate,
+            output_rate,
+            version,
+            effective_date,
+            cache_read_rate=cache_read_rate,
+            cache_write_rate=cache_write_rate,
+        )
+        bands = tuple(rate_bands)
+        if not all(isinstance(band, RateBand) for band in bands):
+            raise ValueError("rate_bands must contain RateBand values")
+        if len({band.band_id for band in bands}) != len(bands):
+            raise ValueError("pricing band ids must be unique")
+        bands_json = (
+            json.dumps(
+                [band.to_mapping() for band in bands],
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            if bands
+            else None
+        )
         with self._lock:
             conn = self._connect()
-            cur = conn.execute(
-                """INSERT INTO tp_pricing
+            try:
+                cur = conn.execute(
+                    """INSERT INTO tp_pricing
                    (version, effective_date, provider, model, input_rate, output_rate,
-                    source, provenance, unit_basis)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    version,
-                    effective_date,
-                    provider,
-                    model,
-                    input_rate,
-                    output_rate,
-                    source,
-                    PROVENANCE_CUSTOM,
-                    UNIT_BASIS_USD_PER_1K,
-                ),
-            )
-            conn.commit()
-            row_id = cur.lastrowid
-            conn.close()
+                    source, provenance, unit_basis, cache_read_rate, cache_write_rate,
+                    rate_bands_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        version,
+                        effective_date,
+                        provider,
+                        model,
+                        input_rate,
+                        output_rate,
+                        source,
+                        PROVENANCE_CUSTOM,
+                        UNIT_BASIS_USD_PER_1K,
+                        cache_read_rate,
+                        cache_write_rate,
+                        bands_json,
+                    ),
+                )
+                conn.commit()
+                row_id = cur.lastrowid
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
         # Retained for compatibility even though DB-backed lookup no longer
         # consumes this cache.
         self._pricing_cache.clear()
@@ -1407,7 +1610,7 @@ class CostEngine:
                     else:
                         pricing = self.get_pricing(model, ts)
 
-                    result = self.calculate(model, raw, final, out, event_ts=ts)
+                    result = self._calculate_with_pricing(model, raw, final, out, pricing)
 
                     # Update tp_costs
                     existing = conn.execute(
@@ -1482,11 +1685,24 @@ def calculate_baseline(raw_input_tokens: int, output_tokens: int, pricing: Prici
 
 
 def calculate_actual(
-    final_input_tokens: int, output_tokens: int, pricing: Pricing, cache_read_tokens: int = 0
+    final_input_tokens: int,
+    output_tokens: int,
+    pricing: Pricing,
+    cache_read_tokens: int = 0,
+    *,
+    cache_write_tokens: int = 0,
 ) -> float:
-    """Compute actual cost (after compression)."""
-    effective = max(0, final_input_tokens - cache_read_tokens)
-    return max(0.0, effective * pricing.input_per_token + output_tokens * pricing.output_per_token)
+    """Price disjoint uncached, read and write subsets of total final input."""
+    final = max(0, final_input_tokens)
+    read = min(final, max(0, cache_read_tokens))
+    write = min(final - read, max(0, cache_write_tokens))
+    return max(
+        0.0,
+        (final - read - write) * pricing.input_per_token
+        + read * pricing.cache_read_per_token
+        + write * pricing.cache_write_per_token
+        + max(0, output_tokens) * pricing.output_per_token,
+    )
 
 
 def calculate_savings(baseline: float, actual: float) -> tuple[float, float]:
