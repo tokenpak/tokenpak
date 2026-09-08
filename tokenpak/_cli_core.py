@@ -4784,7 +4784,7 @@ def cmd_status(args: CommandArgs) -> None:
 
     session_id = getattr(args, "session_id", "")
     one_line = getattr(args, "one_line", False)
-    proxy_url = f"http://127.0.0.1:{os.environ.get('TOKENPAK_PORT', '8766')}"
+    proxy_url = _proxy_base_url()
     if one_line:
         if any(
             (
@@ -5860,6 +5860,7 @@ _MACHINE_OUTPUT_ATTRS = (
     "output_json",
     "markdown",
     "minimal",
+    "one_line",
     "print_url",
     "quiet",
     "raw",

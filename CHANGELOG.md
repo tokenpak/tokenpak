@@ -20,6 +20,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Compatibility and security
 
+- Compact session status honors the configured proxy URL and omits first-run
+  welcome text and update prompts.
+
 - Pro 0.4.1 supports this release and OSS 1.26.0. Pro 0.4.0 remains pinned to
   OSS 1.26.0; upgrade the pair together. TIP-1.0 is unchanged.
 - Reassess and disclose the open optional NLTK High and Accelerate Moderate

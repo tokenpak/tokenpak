@@ -311,3 +311,42 @@ def test_time_available_fixture_round_trips_canonically():
 
     econ = SessionEconomics.from_dict(time_available_payload())
     assert SessionEconomics.from_dict(econ.to_dict()).to_json() == econ.to_json()
+
+
+def test_status_line_first_launch_uses_configured_proxy_without_preamble(
+    tmp_path, monkeypatch, capsys
+):
+    import sys
+
+    from tokenpak import _cli_core
+    from tokenpak.cli.commands import status
+
+    monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path / "new-home"))
+    monkeypatch.setenv("TOKENPAK_PROXY_URL", "http://127.0.0.1:18765/")
+    monkeypatch.setenv("TOKENPAK_PORT", "18766")
+    monkeypatch.setattr(_cli_core, "_is_first_run", lambda: True)
+    monkeypatch.setattr(sys, "argv", ["tokenpak", "status", "--line", "--session", "chosen"])
+    calls = []
+
+    def display(proxy, session):
+        calls.append((proxy, session))
+        print("TP chosen | forecast learning")
+
+    monkeypatch.setattr(status, "_print_forecast_line", display)
+    _cli_core.main()
+    assert calls == [("http://127.0.0.1:18765", "chosen")]
+    assert capsys.readouterr().out == "TP chosen | forecast learning\n"
+
+
+def test_status_line_retains_port_fallback(monkeypatch, capsys):
+    from argparse import Namespace
+
+    from tokenpak import _cli_core
+    from tokenpak.cli.commands import status
+
+    monkeypatch.delenv("TOKENPAK_PROXY_URL", raising=False)
+    monkeypatch.setenv("TOKENPAK_PORT", "18766")
+    calls = []
+    monkeypatch.setattr(status, "_print_forecast_line", lambda *args: calls.append(args))
+    _cli_core.cmd_status(Namespace(one_line=True, session_id="chosen"))
+    assert calls == [("http://127.0.0.1:18766", "chosen")]
