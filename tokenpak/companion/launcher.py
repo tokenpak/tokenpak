@@ -179,7 +179,8 @@ def main(args: list[str] | None = None) -> int:
     """Entry point for ``tokenpak claude``."""
     args = args if args is not None else sys.argv[1:]
 
-    from .session_binding import ENV as session_dir_env
+    from tokenpak.status.binding import ENV as session_dir_env
+
     from .statusline import launch as display
 
     try:
@@ -475,7 +476,7 @@ def _write_mcp_config(config: CompanionConfig, *, run_dir: Path | None = None) -
         }
     }
     if run_dir is not None:
-        from .session_binding import ENV
+        from tokenpak.status.binding import ENV
 
         mcp_data["mcpServers"]["tokenpak-companion"]["env"] = {ENV: str(run_dir)}
     path = _generated_dir(config, run_dir) / "mcp.json"

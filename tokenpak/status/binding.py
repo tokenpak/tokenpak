@@ -17,10 +17,10 @@ def valid_session(value: object) -> bool:
 
 
 def run_dir() -> Path:
-    from .config import journal_run_dir
+    from tokenpak import _paths
 
     scoped = os.environ.get(ENV)
-    return Path(scoped) if scoped else journal_run_dir()
+    return Path(scoped) if scoped else _paths.companion_run_dir()
 
 
 def current_session() -> str:

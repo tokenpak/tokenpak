@@ -10,7 +10,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from tokenpak.companion.session_binding import current_session, run_dir, valid_session
+from tokenpak.status.binding import current_session, run_dir, valid_session
 from tokenpak.status.display import WIDTHS, render
 from tokenpak.status.snapshot import MAX_AGE, fetch_snapshot
 

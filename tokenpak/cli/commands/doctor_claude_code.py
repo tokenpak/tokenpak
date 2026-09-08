@@ -753,9 +753,8 @@ def _check_permission_tiers() -> CheckResult:
 
 
 def _check_status_line() -> CheckResult:
-    from tokenpak.companion.statusline.launch import SCRIPTS
-
-    present = all((SCRIPTS / name).is_file() for name in ("native.sh", "cache.sh"))
+    scripts = Path(__file__).resolve().parents[2] / "companion" / "statusline"
+    present = all((scripts / name).is_file() for name in ("native.sh", "cache.sh"))
     jq = shutil.which("jq") is not None
     return CheckResult(
         check="status_line",

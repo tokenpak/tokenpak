@@ -109,8 +109,8 @@ def test_shared_mode_existing_database_launches_on_every_platform(
 def test_display_is_bound_cleaned_up_and_cannot_change_child_exit(
     monkeypatch, tmp_path, writer_failure
 ):
-    from tokenpak.companion.session_binding import ENV
     from tokenpak.companion.statusline import launch as display
+    from tokenpak.status.binding import ENV
 
     _stub_setup(monkeypatch, tmp_path)
     monkeypatch.setenv("TMUX", "fixture")

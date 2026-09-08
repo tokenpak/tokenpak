@@ -164,7 +164,7 @@ def _write_session_marker(session_id: str) -> None:
     server (a separate process) can bind ``state.session_id`` to it. Atomic
     write via tmp+replace. Best-effort; never fails the hook."""
     try:
-        from tokenpak.companion.session_binding import write_session
+        from tokenpak.status.binding import write_session
 
         write_session(session_id.strip())
     except Exception:

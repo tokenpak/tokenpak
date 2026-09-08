@@ -10,8 +10,8 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
-from tokenpak.companion.session_binding import valid_session
 from tokenpak.core.contracts.session_economics import SessionEconomics
+from tokenpak.status.binding import valid_session
 
 MAX_BYTES = 65536
 MAX_AGE = 10

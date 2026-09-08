@@ -21,9 +21,9 @@ from pathlib import Path
 import pytest
 
 from tests.session_economics_fixtures import learning_payload
-from tokenpak.companion import session_binding
 from tokenpak.companion.statusline.launch import SCRIPTS, start_panel
 from tokenpak.core.contracts.session_economics import SessionEconomics
+from tokenpak.status import binding as session_binding
 from tokenpak.status.display import WIDTHS, render
 from tokenpak.status.snapshot import StatusSnapshot
 from tokenpak.status.worker import atomic_write

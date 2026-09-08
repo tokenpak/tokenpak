@@ -210,7 +210,7 @@ def _fetch_session_economics(proxy_base: str) -> tuple[Optional["SessionEconomic
     the surface is honestly unavailable (proxy down, invalid payload).
     """
     url = f"{proxy_base}/v1/messages/session-economics"
-    from tokenpak.companion.session_binding import ENV, current_session, valid_session
+    from tokenpak.status.binding import ENV, current_session, valid_session
 
     selected = _SELECTED_SESSION.get()
     if not selected:

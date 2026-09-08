@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from tokenpak.companion._python_spawn import python_spawn_prefix
-from tokenpak.companion.session_binding import ENV
+from tokenpak.status.binding import ENV
 
 SCRIPTS = Path(__file__).parent
 

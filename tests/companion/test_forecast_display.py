@@ -16,9 +16,9 @@ from unittest.mock import Mock
 import pytest
 
 from tests.session_economics_fixtures import available_payload, learning_payload
-from tokenpak.companion import session_binding
 from tokenpak.companion.statusline import launch
 from tokenpak.core.contracts.session_economics import SessionEconomics
+from tokenpak.status import binding as session_binding
 from tokenpak.status import snapshot, worker
 from tokenpak.status.display import WIDTHS, render
 
@@ -66,11 +66,11 @@ def test_rejects_non_session_path_keys(value, tmp_path, monkeypatch):
 
 
 def test_bound_launch_never_reads_global_marker(tmp_path, monkeypatch):
-    from tokenpak.companion import config
+    from tokenpak import _paths
     from tokenpak.companion.mcp.tools import current_session_id
 
     (tmp_path / "current-session").write_text("other-session")
-    monkeypatch.setattr(config, "journal_run_dir", lambda: tmp_path)
+    monkeypatch.setattr(_paths, "companion_run_dir", lambda: tmp_path)
     monkeypatch.setenv(session_binding.ENV, str(tmp_path / "fresh"))
     assert current_session_id() == ""
     session_binding.write_session("this-session")

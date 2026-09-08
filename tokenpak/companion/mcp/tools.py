@@ -30,7 +30,7 @@ def current_session_id() -> str:
     pre_send hook (session binding). The MCP server is a separate process
     from the hook, so this file is the only channel by which it learns the
     active session id. Returns "" if no marker exists yet."""
-    from tokenpak.companion.session_binding import current_session
+    from tokenpak.status.binding import current_session
 
     return current_session()
 
@@ -179,7 +179,7 @@ def _handle_session_economics(state: CompanionState, args: dict[str, Any]) -> st
     """
     session_id = str(args.get("session_id", "") or "").strip()
     if not session_id:
-        from tokenpak.companion.session_binding import ENV
+        from tokenpak.status.binding import ENV
 
         if os.environ.get(ENV):
             session_id = current_session_id()

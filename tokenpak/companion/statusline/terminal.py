@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 from tokenpak.companion._python_spawn import python_spawn_prefix
-from tokenpak.companion.session_binding import create_launch_dir
+from tokenpak.status.binding import create_launch_dir
 
 
 def launch(args: list[str], parent: Path, *, receipt_out=None, run_id=None) -> int:

@@ -611,8 +611,9 @@ def main(
     """Entry point for ``tokenpak codex``."""
     args = list(args if args is not None else sys.argv[1:])
 
-    from ..session_binding import ENV as session_dir_env
-    from ..session_binding import create_launch_dir
+    from tokenpak.status.binding import ENV as session_dir_env
+    from tokenpak.status.binding import create_launch_dir
+
     from ..statusline import launch as display
 
     try:
