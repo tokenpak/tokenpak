@@ -208,8 +208,9 @@ class TestCalculateEdgeCases:
 
     def test_cache_read_tokens_reduce_actual(self, engine):
         """cache_read_tokens lowers actual cost below baseline."""
+        engine.add_pricing("anthropic", "cache-priced-model", 0.003, 0.015, cache_read_rate=0.0003)
         result = engine.calculate(
-            model="claude-sonnet-4-6",
+            model="cache-priced-model",
             raw_input_tokens=5000,
             final_input_tokens=5000,
             output_tokens=500,
@@ -334,9 +335,9 @@ class TestModuleLevelHelpers:
         assert calculate_baseline(0, 0, sonnet_pricing) == pytest.approx(0.0)
 
     def test_calculate_actual_with_cache_reads(self, sonnet_pricing):
-        # final=1000, cache_read=400 -> $1.80 input plus $1.50 output.
+        # Missing cache pricing charges the ordinary input rate, not zero.
         result = calculate_actual(1000, 100, sonnet_pricing, cache_read_tokens=400)
-        assert result == pytest.approx(3.3)
+        assert result == pytest.approx(4.5)
 
     def test_calculate_actual_no_cache_reads(self, sonnet_pricing):
         # 1000 input at $3/1K plus 100 output at $15/1K.

@@ -109,6 +109,8 @@ Cost estimates use a local pricing catalog (`tokenpak/telemetry/data/pricing_cat
 
 For models not in the catalog, a conservative default is used (`$3.00/$15.00 per MTok input/output`).
 
+For context-dependent rates and explicit verified quotes, see [Workload pricing](workload-pricing.md).
+
 ---
 
 ## What You Can Do With Telemetry

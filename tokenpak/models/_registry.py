@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ._families import PROVIDER_PREFIXES, FamilyRule, get_sorted_families
+from ._pricing import PricingContext, RateBand, select_rate_band
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,11 @@ class ModelInfo:
     # ``max_input_tokens``). None when unknown — consumers must fall back
     # to their configured static threshold rather than inventing a value.
     max_input_tokens: int | None = None
+    rate_bands: tuple[RateBand, ...] = ()
+
+    def rate_band_for(self, context: PricingContext | None) -> RateBand | None:
+        """Return the context-specific rate band, or ``None`` for scalar rates."""
+        return select_rate_band(self.rate_bands, context)
 
 
 # Singleton default for completely unknown models
@@ -119,6 +125,9 @@ class ModelRegistry:
                 aliases=data.get("aliases", []),
                 source="seed",
                 max_input_tokens=self._lookup_context_window(model_id.lower()),
+                rate_bands=tuple(
+                    RateBand.from_mapping(band) for band in data.get("pricing_bands", [])
+                ),
             )
             self._models[model_id] = info
             for alias in info.aliases:
