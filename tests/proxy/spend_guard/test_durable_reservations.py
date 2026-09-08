@@ -67,6 +67,8 @@ def domain(tmp_path):
 
 
 def _log(monitor, ref, cost=4.0, complete=True):
+    from .pricing_fixtures import synthetic_price
+
     monitor.log(
         model="test-model",
         input_tokens=3,
@@ -80,6 +82,7 @@ def _log(monitor, ref, cost=4.0, complete=True):
         agent_id="agent-a",
         reservation_ref=ref,
         guard_usage_complete=complete,
+        guard_price_json=synthetic_price(cost).to_json(),
     )
     assert monitor.flush(timeout=3)
 
@@ -466,6 +469,7 @@ def test_output_reservation(declared, context, expected):
 
 def _record_workload(domain):
     from tests.proxy.spend_guard.test_request_workload import response
+    from tokenpak.proxy.spend_guard.request_pricing import price_request
 
     store, monitor = domain
     observed = response()
@@ -478,7 +482,7 @@ def _record_workload(domain):
         output_tokens=7,
         cache_read_tokens=20,
         cache_creation_tokens=3,
-        cost=4.0,
+        cost=price_request(observed).cost_usd,
         latency_ms=1,
         status_code=200,
         endpoint="/v1/messages",
@@ -486,6 +490,7 @@ def _record_workload(domain):
         agent_id="agent-a",
         reservation_ref=ref,
         guard_usage_complete=True,
+        guard_price_json=price_request(observed).to_json(),
     )
     assert monitor.flush(timeout=3)
     store.finish_request(coverage)

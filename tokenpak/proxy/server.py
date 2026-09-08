@@ -2910,6 +2910,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # here, after self.wfile.write()/flush(), raced a fast
                     # client's next request against this call.
                 else:
+                    _guard_price = self._guard_accounting.price_usage(_cost_observed, model=model)
                     cost = estimate_cost(
                         model,
                         _cost_observed["input_tokens"],
@@ -2917,6 +2918,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         _cost_observed["cache_read_tokens"],
                         _cost_observed["cache_creation_tokens"],
                     )
+                    if _guard_price is not None:
+                        cost = _guard_price.cost_usd
                     cost_saved = _local_rate_estimated_cost_saved(
                         model=model,
                         input_tokens=input_tokens,
@@ -3034,8 +3037,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             compressed_tokens=max(0, input_tokens - sent_input_tokens),
                             injected_tokens=_injected_tokens,
                             injected_sources=_injected_sources,
-                            cache_read_tokens=cache_read_tokens,
-                            cache_creation_tokens=cache_creation_tokens,
+                            cache_read_tokens=(
+                                _cost_observed["cache_read_tokens"]
+                                if self._guard_accounting.ref
+                                else cache_read_tokens
+                            ),
+                            cache_creation_tokens=(
+                                _cost_observed["cache_creation_tokens"]
+                                if self._guard_accounting.ref
+                                else cache_creation_tokens
+                            ),
                             cache_creation_ephemeral_1h_tokens=cache_creation_1h_tokens,
                             cache_creation_ephemeral_5m_tokens=cache_creation_5m_tokens,
                             ttl_attribution=(
@@ -3085,6 +3096,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             stream_duration_ms=_stream_duration_ms,
                             admission_ticket=_sg_admission_ticket,
                             reservation_ref=self._guard_accounting.ref,
+                            guard_price_json=(
+                                self._guard_accounting.price.to_json()
+                                if self._guard_accounting.price is not None
+                                else None
+                            ),
                             guard_usage_complete=self._guard_accounting.complete_usage(
                                 _cost_observed,
                                 _provider_usage,

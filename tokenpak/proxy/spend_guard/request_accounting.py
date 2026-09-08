@@ -49,6 +49,7 @@ class RequestAccounting:
         self.ref = None
         self.attempts = 0
         self.workload = None
+        self.price = None
         self.force = False
         self.session_id = _resolve_session_id(headers, "")
         self.agent_id = _resolve_agent_id(headers)
@@ -137,16 +138,26 @@ class RequestAccounting:
         output = pessimistic_output_reservation(
             declared[0] if declared else None, context, est.projected_input_tokens
         )
-        # Charge the full projected input at the ordinary rate. A cache hit
-        # prediction must not lower the pending budget reservation.
+        # Bound the projection against every known token-rate band, including
+        # long-context and one-hour writes. Assigned tier/region and extra fees
+        # may still be unknown; this is a projection, not a billed-cost bound.
+        # A predicted cache hit must never lower the pending reservation.
         from tokenpak.models import get_pricing
 
         pricing = get_pricing(model)
         input_rate = est.rates["input"]
-        if pricing is not None and pricing.cache_write_per_mtok is not None:
-            input_rate = max(input_rate, pricing.cache_write_per_mtok)
+        output_rate = est.rates["output"]
+        if pricing is not None:
+            for rates in (pricing, *pricing.rate_bands):
+                input_rate = max(
+                    input_rate,
+                    rates.input_per_mtok,
+                    rates.cache_write_per_mtok or 0,
+                    rates.cache_read_per_mtok or 0,
+                )
+                output_rate = max(output_rate, rates.output_per_mtok)
         projection = Projection(
-            (est.projected_input_tokens * input_rate + output * est.rates["output"]) / 1_000_000,
+            (est.projected_input_tokens * input_rate + output * output_rate) / 1_000_000,
             est.projected_input_tokens,
             output,
             est.projected_input_tokens,
@@ -189,6 +200,7 @@ class RequestAccounting:
         return None
 
     def before_send(self, *, body=None, url=None, headers=None) -> None:
+        self.price = None
         if self.store is not None:
             from .request_workload import observe_request
 
@@ -208,8 +220,40 @@ class RequestAccounting:
                 self.workload, raw, streaming=streaming, complete=complete, status=status
             )
             self.store.record_workload(self.coverage_id, observed)
+            self.workload = observed
         except Exception:
             _log.warning("request workload observation remains unavailable", exc_info=True)
+
+    def price_usage(self, cost_observation: dict, *, model: str):
+        """Return a price only when it binds the exact normalized ledger counts."""
+        self.price = None
+        if not self.ref or self.attempts != 1 or self.workload is None:
+            return None
+        if cost_observation["cost_basis"] != "provider_usage_rate_estimate":
+            return None
+        from .request_pricing import price_request
+
+        try:
+            price = price_request(self.workload)
+            price.require_row(
+                model=model,
+                cost=price.cost_usd,
+                **{
+                    key: cost_observation[key]
+                    for key in (
+                        "input_tokens",
+                        "output_tokens",
+                        "cache_read_tokens",
+                        "cache_creation_tokens",
+                    )
+                },
+            )
+            self.price = price
+        except (ValueError, TypeError, OverflowError):
+            # Preserve ordinary scalar telemetry with no receipt. Durable
+            # monetary admission and native eligibility reject unpriced rows.
+            return None
+        return price
 
     def complete_usage(
         self, cost_observation: dict, provider_usage: dict, *, response_complete: bool = True

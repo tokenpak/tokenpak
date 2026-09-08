@@ -52,3 +52,24 @@ session's identity is returned. Digests reveal equality and may permit guessing
 known candidate values; they are not anonymization. Observation reads do not
 create, migrate, prune or change store permissions. Existing history limits and
 write-time cleanup apply, and durable accounting remains off by default.
+
+With durable accounting enabled, a supported completed response also records a
+`native-request-price/1` receipt in the monitor row's `guard_price_json` column.
+The receipt holds the observed workload, applicable catalog bands and pricing
+time, bounded to 16 KiB. It commits with the row's cost; input/output/cache counts,
+model and recomputed amount must agree. Pending projections use the highest known
+token rates, including one-hour cache writes and long-context bands, without a
+predicted cache-hit discount.
+
+Legacy or unsupported rows retain their existing estimates and no price receipt.
+Positive durable monetary caps refuse an unpriced recorded baseline; native
+snapshots report `ledger_pricing_incomplete` and cannot be eligible. Token-only
+storage admission does not certify monetary pricing. Reads never backfill or
+reprice historical rows. A receipt establishes catalog applicability at pricing
+time, not an invoice or compliance with a consumer's maximum price-age policy.
+
+If a response reports zero cache-read and cache-write tokens, missing cache TTL
+can be irrelevant to that completed charge: both supported lifetime bands must
+agree on input/output rates, and every other workload fact must be complete.
+The workload still records an unknown TTL and cannot support future cache-use
+modeling. Default-off forwarding and the legacy scalar pricing API are unchanged.

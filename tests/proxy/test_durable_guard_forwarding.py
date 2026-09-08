@@ -73,13 +73,34 @@ def domain(tmp_path, monkeypatch):
                 "output_tokens": 2,
                 "cache_read_input_tokens": 0,
                 "cache_creation_input_tokens": 0,
+                "service_tier": "standard",
+                "inference_geo": "global",
             }
+            if json.loads(raw).get("cache_control", {}).get("ttl") == "1h":
+                usage.update(
+                    input_tokens=0,
+                    cache_creation_input_tokens=100,
+                    cache_creation={
+                        "ephemeral_5m_input_tokens": 0,
+                        "ephemeral_1h_input_tokens": 100,
+                    },
+                )
             if self.path.endswith("/missing-cache"):
                 usage.pop("cache_creation_input_tokens")
             if json.loads(raw).get("stream"):
                 reply = (
                     "event: message_start\ndata: "
-                    + json.dumps({"type": "message_start", "message": {"usage": usage}})
+                    + json.dumps(
+                        {
+                            "type": "message_start",
+                            "message": {
+                                "model": "claude-sonnet-4-6",
+                                "usage": {**usage, "output_tokens": 0},
+                            },
+                        }
+                    )
+                    + "\n\nevent: message_delta\ndata: "
+                    + json.dumps({"type": "message_delta", "usage": {"output_tokens": 2}})
                     + "\n\nevent: message_stop\ndata: "
                     + json.dumps({"type": "message_stop"})
                     + "\n\n"
@@ -92,7 +113,9 @@ def domain(tmp_path, monkeypatch):
                     ).encode()
                 content_type = "text/event-stream"
             else:
-                reply = json.dumps({"content": [], "usage": usage}).encode()
+                reply = json.dumps(
+                    {"model": "claude-sonnet-4-6", "content": [], "usage": usage}
+                ).encode()
                 content_type = "application/json"
             self.send_response(200)
             self.send_header("Content-Type", content_type)
@@ -143,6 +166,7 @@ def _send(
     stream=False,
     text="synthetic accounting check",
     endpoint="/v1/messages",
+    cache_ttl=None,
 ):
     proxy, upstream, *_ = domain
     request = {
@@ -151,6 +175,8 @@ def _send(
         "messages": [{"role": "user", "content": text}],
         "stream": stream,
     }
+    if cache_ttl:
+        request["cache_control"] = {"type": "ephemeral", "ttl": cache_ttl}
     combined = {
         "Content-Type": "application/json",
         "x-api-key": "test-only",
@@ -207,11 +233,12 @@ def _settled_snapshot(domain):
 
 
 @pytest.mark.parametrize("stream", [False, True])
-def test_complete_provider_usage_can_produce_eligible_native_evidence(domain, stream):
+def test_custom_route_counts_cannot_certify_monetary_pricing(domain, stream):
     status, _ = _send(domain, stream=stream)
     assert status == 200
     status, snapshot = _settled_snapshot(domain)
-    assert status == 200 and snapshot["guard_evidence_eligible"], snapshot.get("reason_codes")
+    assert status == 200 and not snapshot["guard_evidence_eligible"]
+    assert "ledger_pricing_incomplete" in snapshot["reason_codes"]
     assert snapshot["schema_version"] == "native-guard-snapshot/2"
     assert snapshot["session_id"] == "explicit-session"
     assert snapshot["components_may_overlap"] is False
@@ -337,13 +364,62 @@ def test_force_cannot_cross_context_hard_stop(domain, monkeypatch):
         assert conn.execute("SELECT COUNT(*) FROM budget_reservations").fetchone()[0] == 0
 
 
-def test_unmetered_forward_invalidates_otherwise_complete_observation(domain):
+def test_unmetered_forward_invalidates_otherwise_complete_observation(domain, monkeypatch):
+    _synthetic_direct_route(monkeypatch)
     assert _send(domain)[0] == 200
     assert _settled_snapshot(domain)[1]["guard_evidence_eligible"]
     assert _send(domain, endpoint="/unmetered")[0] == 200
     status, snapshot = _settled_snapshot(domain)
     assert status == 200 and not snapshot["guard_evidence_eligible"]
     assert "forward_usage_unresolved" in snapshot["reason_codes"]
+
+
+def _synthetic_direct_route(monkeypatch):
+    # Local sockets stay confined. Supply synthetic canonical route metadata
+    # at the observation boundary; parsing, pricing, logging and SQL are real.
+    # This fixture does not establish a live provider route or verified bill.
+    from tokenpak.proxy.spend_guard import request_workload
+
+    observe = request_workload.observe_request
+    monkeypatch.setattr(
+        request_workload,
+        "observe_request",
+        lambda body, url, headers: observe(body, "https://api.anthropic.com/v1/messages", headers),
+    )
+
+
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("cache_ttl", [None, "1h"])
+def test_actual_forwarding_commits_workload_prices_and_eligible_money(
+    domain, monkeypatch, stream, cache_ttl
+):
+    from tokenpak.proxy.spend_guard.request_pricing import RequestPrice
+
+    _synthetic_direct_route(monkeypatch)
+    # Exercise settlement independently of projected-limit denial. The
+    # concurrent request test still verifies the production pending cap.
+    import os
+    from pathlib import Path
+
+    config_path = Path(os.environ["TOKENPAK_CONFIG"])
+    config = json.loads(config_path.read_text())
+    config["spend_guard"]["rolling_caps_per_fleet_max_cost_usd"] = 1.0
+    config_path.write_text(json.dumps(config))
+    assert _send(domain, stream=stream, cache_ttl=cache_ttl)[0] == 200
+    status, snapshot = _settled_snapshot(domain)
+    assert status == 200 and snapshot["guard_evidence_eligible"], snapshot
+    with sqlite3.connect(domain[0].monitor.db_path) as ledger:
+        cost, receipt = ledger.execute(
+            "SELECT estimated_cost, guard_price_json FROM requests"
+        ).fetchone()
+    price = RequestPrice.from_json(receipt)
+    assert cost == price.cost_usd == (0.000630 if cache_ttl else 0.000054)
+    assert price.workload.cache_ttl_seconds == (3600 if cache_ttl else None)
+    with sqlite3.connect(domain[2].path) as store:
+        status, actual = store.execute(
+            "SELECT status, actual_cost_usd FROM budget_reservations"
+        ).fetchone()
+    assert status == "settled" and actual == cost
 
 
 def test_alternate_backend_is_covered_before_delegation(domain, monkeypatch):
