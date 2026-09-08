@@ -214,26 +214,25 @@ def _maintain_history(
     """Bound completed metadata during writes; unresolved evidence is retained."""
     cutoff = time.time() - max(history_seconds, window_seconds)
     deleted = 0
-    for table, identity, predicate in (
+    for prune_sql, count_sql in (
         (
-            "budget_reservations",
-            "reservation_id",
-            "status IN ('settled', 'released') AND settled_at < ?",
+            "DELETE FROM budget_reservations WHERE reservation_id IN "
+            "(SELECT reservation_id FROM budget_reservations WHERE ledger_key=? "
+            "AND status IN ('settled', 'released') AND settled_at < ? LIMIT 1000)",
+            "SELECT COUNT(*) FROM (SELECT 1 FROM budget_reservations LIMIT ?)",
         ),
         (
-            "budget_guard_coverage",
-            "coverage_id",
-            "state IN ('recorded', 'unsent') AND ended_at < ?",
+            "DELETE FROM budget_guard_coverage WHERE coverage_id IN "
+            "(SELECT coverage_id FROM budget_guard_coverage WHERE ledger_key=? "
+            "AND state IN ('recorded', 'unsent') AND ended_at < ? LIMIT 1000)",
+            "SELECT COUNT(*) FROM (SELECT 1 FROM budget_guard_coverage LIMIT ?)",
         ),
     ):
         deleted += conn.execute(
-            f"DELETE FROM {table} WHERE {identity} IN (SELECT {identity} FROM {table} "
-            f"WHERE ledger_key=? AND {predicate} LIMIT 1000)",
+            prune_sql,
             (ledger_key, cutoff),
         ).rowcount
-        size = conn.execute(
-            f"SELECT COUNT(*) FROM (SELECT 1 FROM {table} LIMIT ?)", (max_records,)
-        ).fetchone()[0]
+        size = conn.execute(count_sql, (max_records,)).fetchone()[0]
         if size >= max_records:
             raise ReservationUnavailable("reservation metadata capacity exhausted")
     if deleted:
@@ -596,7 +595,8 @@ class ReservationStore:
         ):
             raise ValueError("reservation reference belongs to another accounting scope")
         self._update_coverage(
-            "attempts=attempts+1, reservation_id=?, state='sending'",
+            "UPDATE budget_guard_coverage SET attempts=attempts+1, reservation_id=?, state='sending' "
+            "WHERE coverage_id=? AND ledger_key=?",
             coverage_id,
             (ref.reservation_id if ref else "",),
         )
@@ -605,20 +605,19 @@ class ReservationStore:
         # A response finishing before the async commit must not appear idle
         # and completely accounted. The monitor's correlated commit resolves it.
         self._update_coverage(
-            "ended_at=?, state=CASE WHEN attempts=0 THEN 'unsent' "
-            "WHEN state='recorded' THEN state ELSE 'awaiting_usage' END",
+            "UPDATE budget_guard_coverage SET ended_at=?, state=CASE WHEN attempts=0 THEN 'unsent' "
+            "WHEN state='recorded' THEN state ELSE 'awaiting_usage' END "
+            "WHERE coverage_id=? AND ledger_key=?",
             coverage_id,
             (time.time(),),
         )
 
-    def _update_coverage(self, assignments: str, coverage_id: str, values: tuple) -> None:
+    def _update_coverage(self, statement: str, coverage_id: str, values: tuple) -> None:
         with closing(_private_connection(self.path, write=True)) as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
                 cursor = conn.execute(
-                    "UPDATE budget_guard_coverage SET "
-                    + assignments
-                    + " WHERE coverage_id=? AND ledger_key=?",
+                    statement,
                     (*values, coverage_id, self.ledger_key),
                 )
                 if cursor.rowcount != 1:
@@ -684,16 +683,14 @@ class ReservationStore:
                 }
                 known = {}
                 identifiers = list({row[0] for row in rows if row[0]})
-                for start in range(0, len(identifiers), 500):
-                    batch = identifiers[start : start + 500]
-                    placeholders = ",".join("?" for _ in batch)
+                for identifier in identifiers:
                     known.update(
                         {
                             row[0]: (row[1], row[2])
                             for row in conn.execute(
                                 "SELECT reservation_id, session_id, agent_id FROM budget_reservations "
-                                f"WHERE ledger_key=? AND reservation_id IN ({placeholders})",
-                                (self.ledger_key, *batch),
+                                "WHERE ledger_key=? AND reservation_id=?",
+                                (self.ledger_key, identifier),
                             )
                         }
                     )

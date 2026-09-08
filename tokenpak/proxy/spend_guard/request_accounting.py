@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import asdict, replace
 
 from .contracts import GuardOutcome
@@ -19,12 +20,31 @@ from .rolling_caps import RollingCapsConfig
 _log = logging.getLogger(__name__)
 
 
+def _request_config():
+    from tokenpak.proxy.guard_snapshot_endpoint import _effective_config
+
+    from .policy import SpendGuardConfig, _coerce_bool, load_config
+
+    # Explicitly disabled accounting must not add config I/O to forwarding.
+    # The existing guard still resolves its own policy when durable mode is off.
+    switches = ("TOKENPAK_SPEND_GUARD_ENABLED", "TOKENPAK_SPEND_GUARD_RESERVATIONS_ENABLED")
+    if any(name in os.environ and not _coerce_bool(os.environ[name]) for name in switches):
+        return SpendGuardConfig(reservations_enabled=False)
+    try:
+        return _effective_config()
+    except FileNotFoundError:
+        # Legacy forwarding accepts an absent config. An explicit durable opt-in
+        # must instead refuse a missing configured file, whose limits are unknown.
+        if _coerce_bool(os.environ.get("TOKENPAK_SPEND_GUARD_RESERVATIONS_ENABLED")):
+            raise
+        return load_config(raw_config={})
+
+
 class RequestAccounting:
     def __init__(self, owner, headers):
-        from tokenpak.proxy.guard_snapshot_endpoint import _effective_config
         from tokenpak.proxy.request_pipeline import _resolve_agent_id, _resolve_session_id
 
-        self.config = _effective_config()
+        self.config = _request_config()
         self.store = None
         self.ref = None
         self.attempts = 0
