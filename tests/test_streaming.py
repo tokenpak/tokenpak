@@ -17,7 +17,6 @@ import gzip
 import hashlib
 import http.client
 import json
-import socket
 import threading
 import time
 import urllib.request
@@ -34,13 +33,6 @@ from tokenpak.proxy.streaming import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _free_port() -> int:
-    """Return an ephemeral TCP port on 127.0.0.1."""
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def _build_anthropic_sse(
@@ -373,7 +365,7 @@ class TestProxyStreamingEndToEnd:
     """Integration tests for the proxy streaming path using a fake upstream."""
 
     @pytest.fixture(autouse=True)
-    def _start_proxy(self):
+    def _start_proxy(self, monkeypatch):
         """Start proxy + fake upstream for each test.
 
         Patches INTERCEPT_HOSTS in both `server` and `router` modules so the
@@ -387,29 +379,30 @@ class TestProxyStreamingEndToEnd:
         import tokenpak.proxy.server as _server_mod
         from tokenpak.proxy.server import ProxyServer
 
-        self.upstream_port = _free_port()
-        self.proxy_port = _free_port()
         self.sse_body = _build_anthropic_sse(output_tokens=42)
 
         # Patch both modules so the streaming intercept check uses the extended set
         _orig_router_hosts = _router_mod.INTERCEPT_HOSTS
-        _orig_server_hosts = _server_mod.INTERCEPT_HOSTS
         _patched = _orig_router_hosts | {"127.0.0.1"}
-        _router_mod.INTERCEPT_HOSTS = _patched
-        _server_mod.INTERCEPT_HOSTS = _patched
+        monkeypatch.setattr(_router_mod, "INTERCEPT_HOSTS", _patched)
+        monkeypatch.setattr(_server_mod, "INTERCEPT_HOSTS", _patched)
 
-        self.upstream = _make_sse_upstream(self.upstream_port, self.sse_body)
-
-        self.proxy = ProxyServer(host="127.0.0.1", port=self.proxy_port)
-        self.proxy.start(blocking=False)
-        time.sleep(0.2)
-
-        yield
-
-        self.proxy.stop()
-        self.upstream.shutdown()
-        _router_mod.INTERCEPT_HOSTS = _orig_router_hosts
-        _server_mod.INTERCEPT_HOSTS = _orig_server_hosts
+        self.upstream = _make_sse_upstream(0, self.sse_body)
+        self.upstream_port = self.upstream.server_port
+        self.proxy = None
+        try:
+            self.proxy = ProxyServer(host="127.0.0.1", port=0)
+            self.proxy.start(blocking=False)
+            self.proxy_port = self.proxy.port
+            assert self.proxy_port > 0 and self.proxy_port != self.upstream_port
+            yield
+        finally:
+            try:
+                if self.proxy is not None:
+                    self.proxy.stop()
+            finally:
+                self.upstream.shutdown()
+                self.upstream.server_close()
 
     def _stream_request(self, upstream_port=None):
         """
@@ -521,7 +514,6 @@ class TestProxyStreamingEndToEnd:
 
     def test_short_sse_is_observed_before_upstream_eof(self, record_property):
         """A sub-4KiB SSE must not wait for an upstream EOF flush."""
-        upstream_port = _free_port()
         upstream_eof = threading.Event()
         chunks = [self.sse_body[i : i + 64] for i in range(0, len(self.sse_body), 64)]
         assert len(self.sse_body) < 4096
@@ -529,11 +521,12 @@ class TestProxyStreamingEndToEnd:
         assert max(map(len, chunks)) <= 64
 
         upstream = _make_chunked_upstream(
-            upstream_port,
+            0,
             chunks,
             upstream_eof,
             inter_chunk_delay=0.025,
         )
+        upstream_port = upstream.server_port
         connection = None
         reads = []
         started = time.monotonic()
@@ -580,7 +573,6 @@ class TestProxyStreamingEndToEnd:
 
     def test_raw_stream_body_and_content_encoding_are_preserved(self, record_property):
         """A large content-coded entity must remain byte-identical."""
-        upstream_port = _free_port()
         upstream_eof = threading.Event()
         plain_body = b": " + (b"x" * 8192) + b"\n\n" + self.sse_body
         wire_body = gzip.compress(plain_body, compresslevel=0, mtime=0)
@@ -588,11 +580,12 @@ class TestProxyStreamingEndToEnd:
         assert len(wire_body) > 4096
 
         upstream = _make_chunked_upstream(
-            upstream_port,
+            0,
             [wire_body],
             upstream_eof,
             content_encoding="gzip",
         )
+        upstream_port = upstream.server_port
         connection = None
         try:
             self.proxy.reset_session()
@@ -617,7 +610,6 @@ class TestProxyStreamingEndToEnd:
         """
         If upstream omits Content-Type, the proxy must inject text/event-stream.
         """
-        upstream_port2 = _free_port()
 
         class _NoCtHandler(BaseHTTPRequestHandler):
             def log_message(self, *a):
@@ -636,23 +628,23 @@ class TestProxyStreamingEndToEnd:
                 self.wfile.write(body)
                 self.wfile.flush()
 
-        srv2 = HTTPServer(("127.0.0.1", upstream_port2), _NoCtHandler)
+        srv2 = HTTPServer(("127.0.0.1", 0), _NoCtHandler)
         t2 = threading.Thread(target=srv2.serve_forever, daemon=True)
         t2.daemon = True
         t2.start()
 
         try:
-            resp = self._stream_request(upstream_port=upstream_port2)
+            resp = self._stream_request(upstream_port=srv2.server_port)
             ct = resp.headers.get("Content-Type", "")
             assert "text/event-stream" in ct
         finally:
             srv2.shutdown()
+            srv2.server_close()
 
     def test_streaming_headers_enforced_without_upstream_cache_control(self):
         """
         If upstream omits Cache-Control, the proxy must inject no-cache.
         """
-        upstream_port3 = _free_port()
 
         class _NoCcHandler(BaseHTTPRequestHandler):
             def log_message(self, *a):
@@ -671,17 +663,18 @@ class TestProxyStreamingEndToEnd:
                 self.wfile.write(body)
                 self.wfile.flush()
 
-        srv3 = HTTPServer(("127.0.0.1", upstream_port3), _NoCcHandler)
+        srv3 = HTTPServer(("127.0.0.1", 0), _NoCcHandler)
         t3 = threading.Thread(target=srv3.serve_forever, daemon=True)
         t3.daemon = True
         t3.start()
 
         try:
-            resp = self._stream_request(upstream_port=upstream_port3)
+            resp = self._stream_request(upstream_port=srv3.server_port)
             cc = resp.headers.get("Cache-Control", "")
             assert "no-cache" in cc
         finally:
             srv3.shutdown()
+            srv3.server_close()
 
     def test_streaming_session_stats_track_request(self):
         """Session request counter increments for streaming requests."""
