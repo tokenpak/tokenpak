@@ -610,6 +610,7 @@ class TestProxyStreamingEndToEnd:
         """
         If upstream omits Content-Type, the proxy must inject text/event-stream.
         """
+
         class _NoCtHandler(BaseHTTPRequestHandler):
             def log_message(self, *a):
                 pass
@@ -644,6 +645,7 @@ class TestProxyStreamingEndToEnd:
         """
         If upstream omits Cache-Control, the proxy must inject no-cache.
         """
+
         class _NoCcHandler(BaseHTTPRequestHandler):
             def log_message(self, *a):
                 pass
