@@ -35,6 +35,7 @@ from typing import Any, Union
 if _TYPE_CHECKING:
     from tokenpak.core.contracts.session_economics import RateProvenance, SessionEconomics
     from tokenpak.proxy.spend_guard.policy import SpendGuardConfig
+    from tokenpak.proxy.spend_guard.session_state import _SessionLedgerRead
 
 # ---------------------------------------------------------------------------
 # Rolling latency buffer (shared with server.py via import)
@@ -309,6 +310,7 @@ def _build_session_economics_response(
     spend_guard_config: SpendGuardConfig | None = None,
     rate_provenance: RateProvenance | None = None,
     rolling_usage: object = None,
+    ledger_read: _SessionLedgerRead | None = None,
 ) -> SessionEconomics:
     """Build the versioned deterministic session-economics value object.
 
@@ -319,6 +321,22 @@ def _build_session_economics_response(
     from tokenpak.proxy.session_forecast import _build_session_economics
 
     monitor_db_path = None if db_path is None else str(db_path)
+    options = {}
+    if ledger_read is not None:
+        from tokenpak.proxy.spend_guard.session_state import _SessionLedgerRead, _SessionLedgerRow
+
+        if (
+            not isinstance(ledger_read, _SessionLedgerRead)
+            or type(ledger_read.rows) is not tuple
+            or any(not isinstance(row, _SessionLedgerRow) for row in ledger_read.rows)
+        ):
+            raise ValueError("a canonical frozen session ledger is required")
+        stable_id = session_id.strip() if isinstance(session_id, str) else ""
+        if any(row.session_id != stable_id for row in ledger_read.rows):
+            raise ValueError("frozen ledger belongs to another session")
+        # Internal producers can bind a bounded read to their own observation
+        # fences. HTTP routes never accept a caller-supplied ledger snapshot.
+        options["ledger_read"] = ledger_read
     if rolling_usage is None:
         return _build_session_economics(
             session_id,
@@ -327,6 +345,7 @@ def _build_session_economics_response(
             now=now,
             spend_guard_config=spend_guard_config,
             rate_provenance=rate_provenance,
+            **options,
         )
     return _build_session_economics(
         session_id,
@@ -336,4 +355,5 @@ def _build_session_economics_response(
         spend_guard_config=spend_guard_config,
         rate_provenance=rate_provenance,
         rolling_usage=rolling_usage,
+        **options,
     )
