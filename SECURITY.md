@@ -19,8 +19,8 @@ Include the TokenPak version (`tokenpak --version`), reproduction steps, and you
 
 | Version | Supported |
 | ------- | --------- |
-| 1.15.x (latest minor) | ✅ Security fixes |
-| < 1.15 | ❌ Unsupported — please upgrade |
+| 1.25.x (latest minor) | ✅ Security fixes |
+| < 1.25 | ❌ Unsupported — please upgrade |
 
 TokenPak is in beta: security fixes target the **latest public minor release line** unless a security advisory explicitly extends support to an earlier line. This table is checked at each release.
 
@@ -47,9 +47,37 @@ We welcome good-faith security research and will not pursue legal action against
 - do not access, modify, or exfiltrate data that isn't theirs;
 - report promptly through the channels above and allow reasonable remediation time before public disclosure.
 
+## Advisory in Optional Dependencies
+
+### NLTK model-artifact path confinement
+
+As of September 8, 2026, NLTK releases through 3.10.3 are covered by
+[CVE-2026-81726 / GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp),
+a High-severity advisory with no patched release listed. Some model import and
+export APIs can access files outside the configured roots when an application
+relies on NLTK's `pathsec` enforcement and accepts untrusted model paths.
+
+The `compression` and `full` extras bring in NLTK through LLMLingua; the
+`llamaindex` extra brings it in through LlamaIndex. The base TokenPak install
+does not select NLTK. TokenPak's direct integration calls use text compression
+and indexing, but this does not establish safety for every downstream plugin,
+callback, custom configuration or other application sharing the environment.
+
+Avoid workflows that pass untrusted paths to NLTK model persistence APIs until
+a verified fix is available. Do not rely on `pathsec` as the containment boundary
+for those APIs. Where untrusted model-file processing is necessary, isolate it
+at the operating-system level with access limited to disposable input and output
+files; TokenPak does not provide that isolation for an embedding application.
+
+This dependency finding remains open. Installing or upgrading TokenPak does not
+patch an existing NLTK installation. Upstream source changes or a version outside
+the advisory range alone are not proof of a fix; the published replacement and
+its advisory coverage must be verified. This note will be updated when that
+evidence is available.
+
 ## Advisories in Integrations You Install Yourself
 
-TokenPak's dependency graph carries neither package below. This note exists because a path we
+TokenPak's dependency graph does not carry the package below. This note exists because a path we
 document still leads to one, and removing a disclosure whose subject still affects our users would
 be concealment rather than cleanup.
 
