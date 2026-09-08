@@ -523,6 +523,26 @@ def test_workload_snapshot_refuses_newer_unresolved_send_and_ledger_mismatch(dom
     assert not evidence["available"] and evidence["workload"] is None
 
 
+def test_overlapping_session_requests_do_not_claim_a_single_current_workload(domain):
+    store, _ = domain
+    first, _ = _record_workload(domain)
+    second, _ = _record_workload(domain)
+    with sqlite3.connect(store.path) as conn:
+        started, ended = conn.execute(
+            "SELECT started_at, ended_at FROM budget_guard_coverage WHERE coverage_id=?", (second,)
+        ).fetchone()
+        # Synthetic completed requests with overlapping lifecycle intervals.
+        conn.execute(
+            "UPDATE budget_guard_coverage SET ended_at=? WHERE coverage_id=?",
+            (started + (ended - started) / 2, first),
+        )
+    snapshot = store.snapshot("session-a", 3600, include_workload=True)
+    assert snapshot["guard_evidence_eligible"]
+    evidence = snapshot["workload_observation"]
+    assert not evidence["available"] and evidence["workload"] is None
+    assert evidence["reason_codes"] == ["session_request_order_ambiguous"]
+
+
 def test_workload_read_preserves_legacy_schema_and_write_adds_column_without_loss(domain):
     store, _ = domain
     _record_workload(domain)

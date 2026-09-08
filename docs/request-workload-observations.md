@@ -43,6 +43,8 @@ A retry, newer unresolved send, missing ledger correlation, or accounting write
 during observation prevents usable evidence. Consumers must check availability,
 the exact schema, matching accounting generations and their explicit age policy.
 An older observation cannot authorize a later action.
+Overlapping sends within the same session remain ambiguous after settlement;
+complete budget accounting alone does not establish one current context.
 
 Only bounded metadata is stored with the existing private accounting history.
 No request/response body, credential, raw header, URL, filesystem path or another

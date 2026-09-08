@@ -866,6 +866,15 @@ class ReservationStore:
         if latest["attempts"] != 1 or latest["ended_at"] is None or latest["state"] != "recorded":
             result["reason_codes"] = ["latest_request_unresolved"]
             return result
+        if any(
+            row["coverage_id"] != latest["coverage_id"]
+            and (row["ended_at"] is None or row["ended_at"] > latest["started_at"])
+            for row in candidates
+        ):
+            # Overlapping sends within one session do not establish a single
+            # current context, even after both usage rows have committed.
+            result["reason_codes"] = ["session_request_order_ambiguous"]
+            return result
         columns = {r[1] for r in conn.execute("PRAGMA table_info(budget_guard_coverage)")}
         if "workload_json" not in columns:
             return result
