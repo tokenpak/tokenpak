@@ -12,6 +12,12 @@ The companion starts, prints a startup banner to stderr, then execs into the
 `claude` binary with MCP tools, a settings overlay, and a system prompt
 fragment already wired in.
 
+Interactive Claude launches include a session forecast footer. Codex launches
+inside tmux include a companion pane; use `tokenpak codex --status-surface=tmux`
+to request one from an ordinary terminal. See the
+[session forecast guide](../../docs/companion-session-forecast.md) for estimates,
+session selection, existing status lines, and disabling the display.
+
 ---
 
 ## Config Reference

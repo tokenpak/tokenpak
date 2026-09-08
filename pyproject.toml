@@ -270,6 +270,7 @@ tokenpak = [
     "orchestration/dispatch/schemas/*.json",
     "companion/GUIDE.md",
     "companion/hooks/*.sh",
+    "companion/statusline/*.sh",
     "companion/codex/*.sh",
     "companion/codex/skills/*/SKILL.md",
     "standards_oss/**/*",

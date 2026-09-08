@@ -6,6 +6,15 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Active-session forecasts in the Claude Code companion footer and an optional
+  Codex tmux pane, with private session binding, idle refresh, and explicit
+  learning, unavailable, and stale states. Existing custom Claude status lines
+  take precedence by default. See [terminal forecasts](docs/companion-session-forecast.md).
+- `tokenpak status --line --session ID` reads a compact forecast for an exact
+  native session; `--session` also selects the full and JSON economics views.
+
 ## [1.26.0] — 2026-09-08
 
 ### Added

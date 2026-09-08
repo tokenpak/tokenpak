@@ -114,6 +114,8 @@ def test_block_unavailable_forecast_is_first_class(no_data_econ):
 
 
 def test_fetch_validates_payload_via_contract(monkeypatch):
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("TOKENPAK_COMPANION_SESSION_DIR", raising=False)
     payload = learning_payload()
 
     class _Resp:

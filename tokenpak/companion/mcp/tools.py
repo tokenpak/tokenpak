@@ -12,11 +12,10 @@ goes through CompanionState methods so it's centralized and testable.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
-
-from tokenpak.companion import config as _companion_config
 
 from ..config import CompanionConfig
 
@@ -31,14 +30,9 @@ def current_session_id() -> str:
     pre_send hook (session binding). The MCP server is a separate process
     from the hook, so this file is the only channel by which it learns the
     active session id. Returns "" if no marker exists yet."""
-    try:
-        run_dir = _companion_config.journal_run_dir()
-        marker = run_dir / "current-session"
-        if marker.exists():
-            return marker.read_text(encoding="utf-8").strip()
-    except Exception:
-        pass
-    return ""
+    from tokenpak.status.binding import current_session
+
+    return current_session()
 
 
 @dataclass
@@ -185,7 +179,16 @@ def _handle_session_economics(state: CompanionState, args: dict[str, Any]) -> st
     """
     session_id = str(args.get("session_id", "") or "").strip()
     if not session_id:
-        session_id = state.session_id or current_session_id()
+        from tokenpak.status.binding import ENV
+
+        if os.environ.get(ENV):
+            session_id = current_session_id()
+            if not session_id:
+                return json.dumps(
+                    {"error": "session_unbound", "detail": "waiting for this launch's session"}
+                )
+        else:
+            session_id = state.session_id or current_session_id()
     body: dict[str, Any] = {}
     if session_id:
         body["session_id"] = session_id

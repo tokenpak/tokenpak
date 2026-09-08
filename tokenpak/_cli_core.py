@@ -4780,12 +4780,40 @@ def cmd_status(args: CommandArgs) -> None:
     by_provider = getattr(args, "by_provider", False)
     tip_cache = getattr(args, "tip_cache", False)
 
+    from tokenpak.cli.commands import status as status_surface
+
+    session_id = getattr(args, "session_id", "")
+    one_line = getattr(args, "one_line", False)
+    proxy_url = f"http://127.0.0.1:{os.environ.get('TOKENPAK_PORT', '8766')}"
+    if one_line:
+        if any(
+            (
+                is_full,
+                is_json,
+                is_minimal,
+                tip_cache,
+                by_source,
+                by_provider,
+                getattr(args, "fleet", False),
+                getattr(args, "raw", False),
+            )
+        ):
+            print("tokenpak: --line cannot be combined with other output modes", file=sys.stderr)
+            raise SystemExit(2)
+        token = status_surface._SELECTED_SESSION.set(session_id)
+        try:
+            status_surface._print_forecast_line(proxy_url, session_id)
+        finally:
+            status_surface._SELECTED_SESSION.reset(token)
+        return
+
     # --raw dispatches to legacy (raw JSON mode)
     if getattr(args, "raw", False):
         _cmd_status_legacy(args)
         return
 
     # Delegate to savings-first status.py
+    token = status_surface._SELECTED_SESSION.set(session_id)
     try:
         from tokenpak.cli.commands.status import run as savings_status_run
 
@@ -4807,6 +4835,9 @@ def cmd_status(args: CommandArgs) -> None:
     except Exception as e:
         print(f"⚠️  Savings-first status failed ({e}), falling back to legacy output...")
         _cmd_status_legacy(args)
+
+    finally:
+        status_surface._SELECTED_SESSION.reset(token)
 
 
 def cmd_usage(args: CommandArgs) -> None:
@@ -5231,6 +5262,12 @@ def cmd_check_alerts(args: CommandArgs) -> None:
 
 def _build_status_parser(sub: Subparsers) -> None:
     p_status = sub.add_parser("status", help="Show savings report (default) or full system status")
+    p_status.add_argument(
+        "--line", dest="one_line", action="store_true", help="Compact session forecast"
+    )
+    p_status.add_argument(
+        "--session", dest="session_id", default="", help="Exact native session ID"
+    )
     p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
     p_status.add_argument("--full", action="store_true", help="Expanded view with all details")
     p_status.add_argument(

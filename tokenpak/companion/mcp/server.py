@@ -15,6 +15,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 from .tools import TOOLS, CompanionState, active_tools, current_session_id
@@ -75,7 +76,9 @@ def _handle_tools_call(req_id: int | str, params: dict, state: CompanionState) -
     # journal_read, and session_info. Refreshed per call so /clear (new
     # session id) is picked up without restarting the server.
     _sid = current_session_id()
-    if _sid:
+    from tokenpak.status.binding import ENV
+
+    if _sid or os.environ.get(ENV):
         state.session_id = _sid
 
     # Find the tool

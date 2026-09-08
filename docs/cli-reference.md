@@ -82,6 +82,8 @@ Check proxy health
 
 **Flags:**
 
+- `--line` — Compact session forecast
+- `--session` — Exact native session ID (default: )
 - `--limit` — Max retry events to show (default: 20)
 - `--full` — Expanded view with all details
 - `--by-source` — Breakdown by request source (Claude Code, Codex, API, etc.)

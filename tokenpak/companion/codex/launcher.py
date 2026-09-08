@@ -611,6 +611,30 @@ def main(
     """Entry point for ``tokenpak codex``."""
     args = list(args if args is not None else sys.argv[1:])
 
+    from tokenpak.status.binding import ENV as session_dir_env
+    from tokenpak.status.binding import create_launch_dir
+
+    from ..statusline import launch as display
+
+    try:
+        args, surface = display.options(args, "codex")
+    except ValueError as exc:
+        print(f"tokenpak: {exc}", file=sys.stderr)
+        return 2
+    show_display = display.interactive(args) and surface != "off"
+    if show_display and surface == "tmux" and not os.environ.get("TMUX"):
+        from ..statusline.terminal import launch as launch_terminal
+
+        return launch_terminal(
+            args, CompanionConfig.from_env().run_dir, receipt_out=receipt_out, run_id=run_id
+        )
+    if show_display and not os.environ.get("TMUX"):
+        print(
+            "tokenpak: forecast panel: use --status-surface=tmux, or tokenpak status --line --session ID",
+            file=sys.stderr,
+        )
+        show_display = False
+
     install_only = "--install-only" in args
     receipt_only = "--receipt-only" in args
     args = [a for a in args if a not in {"--install-only", "--receipt-only"}]
@@ -930,6 +954,18 @@ def main(
 
         env = paths.environment(os.environ.copy())
         env.update(env_vars)
+        session_dir = create_launch_dir(config.run_dir)
+        env[session_dir_env] = str(session_dir)
+        # A per-launch override reaches the MCP subprocess even when its native
+        # environment allowlist omits inherited TokenPak variables. Never persist it.
+        args = [
+            "-c",
+            "mcp_servers.tokenpak-companion.env."
+            + session_dir_env
+            + "="
+            + json.dumps(str(session_dir)),
+            *args,
+        ]
         if receipt_out and run_id:
             env["TOKENPAK_CODEX_RECEIPT_OUT"] = receipt_out
             env["TOKENPAK_CODEX_RUN_ID"] = run_id
@@ -965,7 +1001,22 @@ def main(
         codex_args = ["codex", *forwarded]
         started_at = utc_now()
         start_monotonic = time.monotonic()
+        writer = None
+        panel = None
+        env["TOKENPAK_FORECAST_PROXY"] = _TOKENPAK_OPENAI_BASE_URL
+        env["TOKENPAK_FORECAST_ROUTING"] = "proxy" if proxy_routed else "unknown"
         try:
+            if show_display and config.enabled:
+                try:
+                    writer = display.start_writer(env)
+                    panel = display.start_panel(env)
+                except OSError:
+                    pass
+                if panel is None:
+                    print(
+                        "tokenpak: forecast panel unavailable; use tokenpak status --line --session ID",
+                        file=sys.stderr,
+                    )
             lease.assert_home_binding()
             lease.begin_transfer()
             exit_code, usage = _run_codex_process(codex_args, env, on_start=lease.transfer_to)
@@ -977,6 +1028,9 @@ def main(
             usage = empty_usage()
             status = "launch_failed"
             print(f"tokenpak: failed to launch codex: {exc}", file=sys.stderr)
+        finally:
+            display.stop_panel(panel, env)
+            display.stop_writer(writer)
 
         if receipt_out and run_id:
             try:
