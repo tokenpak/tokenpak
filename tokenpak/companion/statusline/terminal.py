@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Explicit private tmux launcher. Auto mode never starts a multiplexer."""
+"""Private tmux launcher for on/tmux modes. Auto never starts a multiplexer."""
 
 from __future__ import annotations
 

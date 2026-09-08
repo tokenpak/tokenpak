@@ -22,6 +22,7 @@ import contextlib
 import errno
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -621,13 +622,22 @@ def main(
     except ValueError as exc:
         print(f"tokenpak: {exc}", file=sys.stderr)
         return 2
-    show_display = display.interactive(args) and surface != "off"
-    if show_display and surface == "tmux" and not os.environ.get("TMUX"):
-        from ..statusline.terminal import launch as launch_terminal
+    show_display = (
+        display.interactive(args) and surface != "off" and CompanionConfig.from_env().enabled
+    )
+    if show_display and surface in {"on", "tmux"} and not os.environ.get("TMUX"):
+        if surface == "on" and shutil.which("tmux") is None:
+            print(
+                "tokenpak: install tmux to show the forecast footer; continuing without it",
+                file=sys.stderr,
+            )
+            show_display = False
+        else:
+            from ..statusline.terminal import launch as launch_terminal
 
-        return launch_terminal(
-            args, CompanionConfig.from_env().run_dir, receipt_out=receipt_out, run_id=run_id
-        )
+            return launch_terminal(
+                args, CompanionConfig.from_env().run_dir, receipt_out=receipt_out, run_id=run_id
+            )
     if show_display and not os.environ.get("TMUX"):
         print(
             "tokenpak: forecast panel: use --status-surface=tmux, or tokenpak status --line --session ID",
