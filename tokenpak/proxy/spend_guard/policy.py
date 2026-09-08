@@ -216,6 +216,12 @@ class SpendGuardConfig:
     # where 64 sub-cap sessions cumulated to $566 in 8 hours. Default
     # values per packet p0-rolling-spend-guard-caps-2026-05-15.md.
     rolling_caps_enabled: bool = True
+    # The durable path is activated only after request and settlement wiring
+    # have been validated. An explicit opt-in supports deployment preparation.
+    reservations_enabled: bool = False
+    reservation_ttl_seconds: int = 600
+    reservation_history_seconds: int = 30 * 24 * 3600
+    reservation_max_records: int = 100_000
     rolling_caps_window_seconds: int = 3600
     rolling_caps_per_agent_max_cost_usd: float = 20.0
     rolling_caps_per_agent_max_tokens_total: int = 5_000_000
@@ -293,6 +299,19 @@ def load_config(raw_config: Optional[dict[str, Any]] = None) -> SpendGuardConfig
 
     if "enabled" in sg:
         cfg.enabled = _coerce_bool(sg["enabled"])
+    if "reservations_enabled" in sg:
+        cfg.reservations_enabled = _coerce_bool(sg["reservations_enabled"])
+    if "reservation_ttl_seconds" in sg:
+        value = sg["reservation_ttl_seconds"]
+        if type(value) is not int or value <= 0:
+            raise ValueError("reservation_ttl_seconds must be a positive integer")
+        cfg.reservation_ttl_seconds = value
+    for name in ("reservation_history_seconds", "reservation_max_records"):
+        if name in sg:
+            value = sg[name]
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+            setattr(cfg, name, value)
 
     # New canonical fields
     if "default_basis" in sg:
@@ -446,6 +465,8 @@ def load_config(raw_config: Optional[dict[str, Any]] = None) -> SpendGuardConfig
             env["TOKENPAK_SPEND_GUARD_DOLLAR_CAP_ENABLED"]
         )
     env_overrides: tuple[tuple[str, str, Callable[[Any], Any]], ...] = (
+        ("TOKENPAK_SPEND_GUARD_RESERVATIONS_ENABLED", "reservations_enabled", _coerce_bool),
+        ("TOKENPAK_SPEND_GUARD_RESERVATION_TTL", "reservation_ttl_seconds", int),
         ("TOKENPAK_SPEND_GUARD_WARN_TOKENS", "warn_tokens", int),
         ("TOKENPAK_SPEND_GUARD_BLOCK_TOKENS", "block_tokens", int),
         ("TOKENPAK_SPEND_GUARD_HARD_BLOCK_TOKENS", "hard_block_tokens", int),

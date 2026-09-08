@@ -32,7 +32,7 @@ _ROLLING_FIELDS = (
 )
 
 
-def _effective_policy() -> tuple[dict[str, Any], str]:
+def _effective_config():
     """Use the effective policy parser without config migration or writes."""
     from tokenpak import _paths
     from tokenpak.core import config_loader
@@ -54,7 +54,11 @@ def _effective_policy() -> tuple[dict[str, Any], str]:
             raw = parser(handle)
         if not isinstance(raw, dict) or not all(isinstance(k, str) for k in raw):
             raise ValueError("config must be an object")
-    resolved = asdict(load_config(raw_config=raw))
+    return load_config(raw_config=raw)
+
+
+def _effective_policy(config=None) -> tuple[dict[str, Any], str]:
+    resolved = asdict(config if config is not None else _effective_config())
     digest = hashlib.sha256(
         json.dumps(resolved, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
     ).hexdigest()
@@ -166,12 +170,21 @@ def handle_post(handler: Any) -> None:
     try:
         from tokenpak.proxy.spend_guard.rolling_caps import _capture_rolling_snapshot
 
-        policy, policy_hash = _effective_policy()
-        components = _capture_rolling_snapshot(
-            session_id,
-            policy["rolling_caps_window_seconds"],
-            monitor_db_path=str(monitor.db_path),
-        )
+        config = _effective_config()
+        policy, policy_hash = _effective_policy(config)
+        durable = config.enabled and config.reservations_enabled
+        if durable:
+            from tokenpak.proxy.spend_guard.reservation import ReservationStore
+
+            components = ReservationStore(config.audit_db_path, monitor.db_path).snapshot(
+                session_id, policy["rolling_caps_window_seconds"]
+            )
+        else:
+            components = _capture_rolling_snapshot(
+                session_id,
+                policy["rolling_caps_window_seconds"],
+                monitor_db_path=str(monitor.db_path),
+            )
     except Exception:
         # Do not expose config paths, input text, credentials or raw errors.
         _send(handler, 503, {"error": "snapshot_resolution_unavailable"})
@@ -180,10 +193,10 @@ def handle_post(handler: Any) -> None:
         handler,
         200,
         {
-            "schema_version": "native-guard-snapshot/1",
+            "schema_version": "native-guard-snapshot/2" if durable else "native-guard-snapshot/1",
             "session_id": session_id,
             "owner_instance_id": owner_id,
-            "scope": "serving_proxy_process",
+            "scope": "configured_monitor_domain" if durable else "serving_proxy_process",
             "produced_at": datetime.now(timezone.utc).isoformat(),
             "rolling_policy": policy,
             "effective_policy_sha256": policy_hash,

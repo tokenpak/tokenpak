@@ -55,7 +55,7 @@ serving process's current mapping. Unavailable agent values are `null`, as is
 an unreadable or invalid recorded component. Expired reservations are reported
 in `expired_pending_count`; observing them does not remove them.
 
-Every response currently has `guard_evidence_eligible: false` and explicit
+Every version 1 response has `guard_evidence_eligible: false` and explicit
 `reason_codes`: accounting cannot prove coverage across all request paths,
 other proxy processes or ledger ownership. Missing data adds further reasons.
 This endpoint cannot authorize spending, create a production recommendation,
@@ -69,6 +69,40 @@ Errors include `400 invalid_snapshot_input`, `401 unauthorized`,
 `503 snapshot_auth_unconfigured`, `snapshot_owner_unavailable` or
 `snapshot_resolution_unavailable`. No config path, credential, prompt, other
 session identifier or raw exception is returned.
+
+With `spend_guard.reservations_enabled: true`, the response uses
+`native-guard-snapshot/2` and `scope: configured_monitor_domain`. This opt-in
+is off by default. Requests reserve projected cost and tokens in the existing
+guard database before provider send, including requests without an agent tag.
+One monitor ledger binds to one reservation store, so separate proxy processes
+using that ledger serialize against the same budget. Replacing the monitor
+database changes its accounting identity; a conflicting store binding refuses.
+
+Version 2 adds an opaque `ledger_scope_sha256`, `accounting_generation` and
+`agent_caps_applicable`. It correlates committed monitor rows with their holds,
+so `components_may_overlap` is false. The values retain the guard's token and
+rate-estimate semantics; they are not provider billing statements. Unknown
+agent dimensions are null while overall caps still apply.
+
+`guard_evidence_eligible` can be true after a fully measured, attributed request
+has finished and its monitor row has committed. In-progress requests, unknown
+usage, retries with unmeasured attempts, unsupported forwarding, alternate
+backends and opaque tunnels prevent complete evidence. Missing cache counts
+are not assumed to be zero. Expired unresolved reservations make accounting
+unavailable; expiry does not prove that no spend occurred. The configured
+domain does not measure traffic sent outside these proxy instances. A true
+flag supplies guard accounting evidence only; economic recommendations and
+confirmation still need their own complete, fresh inputs.
+
+Completed reservation and request metadata is retained for 30 days by default,
+or the rolling window if longer. Cleanup happens during writes. Each table has
+a default limit of 100,000 records; exhaustion refuses new admission without
+discarding unresolved history. Configure `reservation_history_seconds` and
+`reservation_max_records` in the `spend_guard` block to change these limits.
+`reservation_ttl_seconds` defaults to 600; its environment override is
+`TOKENPAK_SPEND_GUARD_RESERVATION_TTL`. The feature switch also accepts
+`TOKENPAK_SPEND_GUARD_RESERVATIONS_ENABLED`. Observing a snapshot does not
+provision, prune or change permissions on these records.
 
 ### `GET /tpk/v1/health`
 

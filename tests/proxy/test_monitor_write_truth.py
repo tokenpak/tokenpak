@@ -779,6 +779,9 @@ def _create_requests_table_for_insert(db_path):
 def _request_insert_params(*, stop_reason=""):
     values = dict.fromkeys(monitor_module._REQUEST_INSERT_COLUMNS)
     values.update(
+        guard_reservation_id="",
+        guard_ledger_key="",
+        guard_usage_complete=0,
         timestamp=datetime.now().isoformat(),
         model="claude-sonnet-4-6",
         request_type="chat",
