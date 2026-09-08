@@ -21,11 +21,18 @@ Usage::
 
 from __future__ import annotations
 
+from ._pricing import PricingContext, RateBand
+from ._quote import PricingQuote, PricingQuoteUnavailable, quote_workload
 from ._registry import ModelInfo, ModelRegistry, get_registry
 
 __all__ = [
     "ModelInfo",
     "ModelRegistry",
+    "PricingContext",
+    "RateBand",
+    "PricingQuote",
+    "PricingQuoteUnavailable",
+    "quote_workload",
     "get_registry",
     "get_rates",
     "get_tier",
@@ -43,20 +50,26 @@ __all__ = [
 ]
 
 
-def get_rates(model: str | None = None) -> dict[str, float]:
+def get_rates(
+    model: str | None = None, *, context: PricingContext | None = None
+) -> dict[str, float]:
     """Return ``{"input": X, "output": Y, "cached": Z}`` for a model.
 
-    Never raises.  Returns sonnet-class defaults for unknown models.
+    Scalar calls never raise and return sonnet-class defaults for unknown
+    models. Context-aware calls reject ambiguous band definitions.
     """
     if not model:
         return {"input": 3.0, "output": 15.0, "cached": 0.30}
     info = get_registry().resolve(model)
+    band = info.rate_band_for(context)
+    input_rate = band.input_per_mtok if band is not None else info.input_per_mtok
+    output_rate = band.output_per_mtok if band is not None else info.output_per_mtok
+    cache_read_rate = band.cache_read_per_mtok if band is not None else info.cache_read_per_mtok
+    default_cache_rate = input_rate if band is not None else input_rate * 0.1
     return {
-        "input": info.input_per_mtok,
-        "output": info.output_per_mtok,
-        "cached": info.cache_read_per_mtok
-        if info.cache_read_per_mtok is not None
-        else info.input_per_mtok * 0.1,
+        "input": input_rate,
+        "output": output_rate,
+        "cached": cache_read_rate if cache_read_rate is not None else default_cache_rate,
     }
 
 
@@ -68,9 +81,12 @@ def get_tier(model: str) -> int:
     return get_registry().resolve(model).tier
 
 
-def get_model_costs(model: str) -> dict[str, float]:
+def get_model_costs(model: str, *, context: PricingContext | None = None) -> dict[str, float]:
     """Return ``{"input": X, "output": Y}`` — simplified form for fast-path callers."""
     info = get_registry().resolve(model)
+    band = info.rate_band_for(context)
+    if band is not None:
+        return {"input": band.input_per_mtok, "output": band.output_per_mtok}
     return {"input": info.input_per_mtok, "output": info.output_per_mtok}
 
 

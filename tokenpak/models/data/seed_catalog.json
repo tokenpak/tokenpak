@@ -105,7 +105,71 @@
       "cache_read": 0.25,
       "cache_write": 12.50,
       "translations": {},
-      "aliases": []
+      "aliases": [],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-300s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 300
+          },
+          "rates": {
+            "input": 10,
+            "output": 50,
+            "cache_read": 0.25,
+            "cache_write": 12.5
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        },
+        {
+          "id": "standard-global-text-3600s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 3600
+          },
+          "rates": {
+            "input": 10,
+            "output": 50,
+            "cache_read": 0.25,
+            "cache_write": 20
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        }
+      ]
     },
     "claude-fable-5": {
       "provider": "anthropic",
@@ -115,7 +179,71 @@
       "cache_read": 1.00,
       "cache_write": 12.50,
       "translations": {},
-      "aliases": []
+      "aliases": [],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-300s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 300
+          },
+          "rates": {
+            "input": 10,
+            "output": 50,
+            "cache_read": 1,
+            "cache_write": 12.5
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        },
+        {
+          "id": "standard-global-text-3600s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 3600
+          },
+          "rates": {
+            "input": 10,
+            "output": 50,
+            "cache_read": 1,
+            "cache_write": 20
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        }
+      ]
     },
     "claude-mythos-5-1": {
       "provider": "anthropic",
@@ -145,7 +273,71 @@
       "cache_read": 0.50,
       "cache_write": 6.25,
       "translations": {},
-      "aliases": []
+      "aliases": [],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-300s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 300
+          },
+          "rates": {
+            "input": 5,
+            "output": 25,
+            "cache_read": 0.5,
+            "cache_write": 6.25
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        },
+        {
+          "id": "standard-global-text-3600s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 3600
+          },
+          "rates": {
+            "input": 5,
+            "output": 25,
+            "cache_read": 0.5,
+            "cache_write": 10
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        }
+      ]
     },
     "claude-sonnet-5": {
       "provider": "anthropic",
@@ -155,7 +347,71 @@
       "cache_read": 0.20,
       "cache_write": 2.50,
       "translations": {},
-      "aliases": []
+      "aliases": [],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-300s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 300
+          },
+          "rates": {
+            "input": 2,
+            "output": 10,
+            "cache_read": 0.2,
+            "cache_write": 2.5
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        },
+        {
+          "id": "standard-global-text-3600s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 3600
+          },
+          "rates": {
+            "input": 2,
+            "output": 10,
+            "cache_read": 0.2,
+            "cache_write": 4
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        }
+      ]
     },
     "claude-opus-4-8": {
       "provider": "anthropic",
@@ -168,7 +424,71 @@
         "bedrock": "anthropic.claude-opus-4-8-v1:0",
         "vertex": "claude-opus-4-8@latest"
       },
-      "aliases": []
+      "aliases": [],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-300s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 300
+          },
+          "rates": {
+            "input": 5,
+            "output": 25,
+            "cache_read": 0.5,
+            "cache_write": 6.25
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        },
+        {
+          "id": "standard-global-text-3600s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 3600
+          },
+          "rates": {
+            "input": 5,
+            "output": 25,
+            "cache_read": 0.5,
+            "cache_write": 10
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        }
+      ]
     },
     "claude-opus-4-7": {
       "provider": "anthropic",
@@ -181,7 +501,71 @@
         "bedrock": "anthropic.claude-opus-4-7-v1:0",
         "vertex": "claude-opus-4-7@latest"
       },
-      "aliases": []
+      "aliases": [],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-300s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 300
+          },
+          "rates": {
+            "input": 5,
+            "output": 25,
+            "cache_read": 0.5,
+            "cache_write": 6.25
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        },
+        {
+          "id": "standard-global-text-3600s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 3600
+          },
+          "rates": {
+            "input": 5,
+            "output": 25,
+            "cache_read": 0.5,
+            "cache_write": 10
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        }
+      ]
     },
     "claude-opus-4-6": {
       "provider": "anthropic",
@@ -194,7 +578,71 @@
         "bedrock": "anthropic.claude-opus-4-6-20260101-v1:0",
         "vertex": "claude-opus-4-6@20260101"
       },
-      "aliases": ["opus"]
+      "aliases": ["opus"],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-300s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 300
+          },
+          "rates": {
+            "input": 5,
+            "output": 25,
+            "cache_read": 0.5,
+            "cache_write": 6.25
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        },
+        {
+          "id": "standard-global-text-3600s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 3600
+          },
+          "rates": {
+            "input": 5,
+            "output": 25,
+            "cache_read": 0.5,
+            "cache_write": 10
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        }
+      ]
     },
     "claude-opus-4-5": {
       "provider": "anthropic",
@@ -217,7 +665,71 @@
         "bedrock": "anthropic.claude-sonnet-4-6-20260101-v1:0",
         "vertex": "claude-sonnet-4-6@20260101"
       },
-      "aliases": []
+      "aliases": [],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-300s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 300
+          },
+          "rates": {
+            "input": 3,
+            "output": 15,
+            "cache_read": 0.3,
+            "cache_write": 3.75
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        },
+        {
+          "id": "standard-global-text-3600s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 1000001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 3600
+          },
+          "rates": {
+            "input": 3,
+            "output": 15,
+            "cache_read": 0.3,
+            "cache_write": 6
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        }
+      ]
     },
     "claude-sonnet-4-5": {
       "provider": "anthropic",
@@ -240,7 +752,71 @@
       "cache_read": 0.10,
       "cache_write": 1.25,
       "translations": {},
-      "aliases": []
+      "aliases": [],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-300s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 200001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 300
+          },
+          "rates": {
+            "input": 1,
+            "output": 5,
+            "cache_read": 0.1,
+            "cache_write": 1.25
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        },
+        {
+          "id": "standard-global-text-3600s",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 200001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 3600
+          },
+          "rates": {
+            "input": 1,
+            "output": 5,
+            "cache_read": 0.1,
+            "cache_write": 2
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00"
+          }
+        }
+      ]
     },
     "claude-haiku-3-5": {
       "provider": "anthropic",
@@ -435,7 +1011,73 @@
       "cache_read": 0.40,
       "cache_write": 5.00,
       "translations": {},
-      "aliases": ["gpt-5.6"]
+      "aliases": ["gpt-5.6"],
+      "pricing_bands": [
+        {
+          "id": "standard-global-text-1800s-short",
+          "selectors": {
+            "min_input_tokens": 0,
+            "max_input_tokens": 272001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 1800
+          },
+          "rates": {
+            "input": 4,
+            "output": 20,
+            "cache_read": 0.4,
+            "cache_write": 5
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00",
+            "expires_at": "2026-11-21T00:00:00Z"
+          }
+        },
+        {
+          "id": "standard-global-text-1800s-long",
+          "selectors": {
+            "min_input_tokens": 272001,
+            "max_input_tokens": 1050001,
+            "input_modalities": [
+              "text"
+            ],
+            "output_modalities": [
+              "text"
+            ],
+            "service_tiers": [
+              "standard"
+            ],
+            "regions": [
+              "global"
+            ],
+            "cache_ttl_seconds": 1800
+          },
+          "rates": {
+            "input": 8,
+            "output": 30,
+            "cache_read": 0.8,
+            "cache_write": 10
+          },
+          "provenance": {
+            "source": "official",
+            "source_url": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+            "verified_at": "2026-09-08T07:53:46.855516+00:00",
+            "expires_at": "2026-11-21T00:00:00Z"
+          }
+        }
+      ]
     },
     "gpt-5.6-terra": {
       "provider": "openai",

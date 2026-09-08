@@ -3,9 +3,14 @@
 
 from __future__ import annotations
 
+import json
 import threading
 
+import pytest
+
 from tokenpak.models import (
+    ModelRegistry,
+    PricingContext,
     detect_provider,
     get_all_tiers,
     get_cheaper_alternative,
@@ -156,6 +161,120 @@ class TestResolution:
     def test_none_model_rates(self):
         rates = get_rates(None)
         assert rates["input"] == 3.0
+
+
+class TestContextAwareRateBands:
+    @staticmethod
+    def _registry(tmp_path):
+        catalog = {
+            "models": {
+                "tiered-model": {
+                    "provider": "example",
+                    "tier": 2,
+                    "input": 1.0,
+                    "output": 4.0,
+                    "pricing_bands": [
+                        {
+                            "id": "long-context",
+                            "selectors": {"min_input_tokens": 200_000},
+                            "rates": {
+                                "input": 2.0,
+                                "output": 6.0,
+                                "cache_read": 0.5,
+                            },
+                            "provenance": {
+                                "source": "official",
+                                "source_url": "https://example.com/pricing",
+                            },
+                        },
+                        {
+                            "id": "very-long-context",
+                            "selectors": {"min_input_tokens": 400_000},
+                            "rates": {"input": 2.5, "output": 7.0},
+                            "provenance": {
+                                "source": "official",
+                                "source_url": "https://example.com/pricing",
+                            },
+                        },
+                        {
+                            "id": "batch",
+                            "selectors": {"service_tiers": ["batch"]},
+                            "rates": {"input": 0.5, "output": 2.0},
+                            "provenance": {
+                                "source": "official",
+                                "source_url": "https://example.com/pricing",
+                            },
+                        },
+                        {
+                            "id": "audio-input",
+                            "selectors": {"input_modalities": ["audio"]},
+                            "rates": {"input": 3.0, "output": 4.0},
+                            "provenance": {
+                                "source": "official",
+                                "source_url": "https://example.com/pricing",
+                            },
+                        },
+                    ],
+                }
+            }
+        }
+        path = tmp_path / "catalog.json"
+        path.write_text(json.dumps(catalog), encoding="utf-8")
+        registry = ModelRegistry()
+        registry.reload(path)
+        return registry
+
+    def test_scalar_callers_keep_base_rate(self, tmp_path, monkeypatch):
+        registry = self._registry(tmp_path)
+        monkeypatch.setattr("tokenpak.models.get_registry", lambda: registry)
+
+        assert get_rates("tiered-model") == {"input": 1.0, "output": 4.0, "cached": 0.1}
+        assert get_model_costs("tiered-model") == {"input": 1.0, "output": 4.0}
+
+    def test_context_selects_threshold_modality_and_service_rates(self, tmp_path, monkeypatch):
+        registry = self._registry(tmp_path)
+        monkeypatch.setattr("tokenpak.models.get_registry", lambda: registry)
+
+        long_rates = get_rates("tiered-model", context=PricingContext(input_tokens=200_000))
+        batch_rates = get_rates(
+            "tiered-model", context=PricingContext(input_tokens=10_000, service_tier="batch")
+        )
+        audio_rates = get_rates(
+            "tiered-model", context=PricingContext(input_tokens=10_000, input_modality="audio")
+        )
+        very_long_rates = get_rates("tiered-model", context=PricingContext(input_tokens=400_000))
+
+        assert long_rates == {"input": 2.0, "output": 6.0, "cached": 0.5}
+        assert batch_rates == {"input": 0.5, "output": 2.0, "cached": 0.5}
+        assert audio_rates == {"input": 3.0, "output": 4.0, "cached": 3.0}
+        assert very_long_rates == {"input": 2.5, "output": 7.0, "cached": 2.5}
+
+    def test_overlapping_equal_specificity_is_rejected(self, tmp_path):
+        registry = self._registry(tmp_path)
+        info = registry.resolve("tiered-model")
+
+        with pytest.raises(ValueError, match="ambiguous pricing rate bands"):
+            info.rate_band_for(PricingContext(input_tokens=200_000, service_tier="batch"))
+
+    def test_band_requires_complete_provenance(self, tmp_path):
+        catalog = {
+            "models": {
+                "invalid-model": {
+                    "pricing_bands": [
+                        {
+                            "id": "missing-source-url",
+                            "rates": {"input": 1.0, "output": 2.0},
+                            "provenance": {"source": "official"},
+                        }
+                    ]
+                }
+            }
+        }
+        path = tmp_path / "catalog.json"
+        path.write_text(json.dumps(catalog), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="source_url"):
+            ModelRegistry().reload(path)
 
 
 # ---------------------------------------------------------------------------
