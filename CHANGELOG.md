@@ -6,12 +6,41 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.26.0] — 2026-09-08
+
+### Added
+
+- Authenticated, loopback-only native guard and request-workload observations
+  bind explicitly selected sessions to coherent accounting and current policy.
+  Unsupported, missing, overlapping or stale observations remain unavailable.
+- Optional durable spend reservations coordinate pending work with committed
+  usage and preserve bounded metadata across supported process handoffs.
+  Durable accounting remains off by default.
+- Workload pricing supports explicit model, input length, cache lifetime,
+  modality, region and service-tier conditions. Verified quotes require complete
+  applicable evidence; existing scalar pricing APIs remain compatible.
+
 ### Fixed
 
-- Optional durable budget accounting now prices supported responses from their
-  observed workload and commits a bounded rate receipt with each cost. Pending
-  projections cover known cache-write and long-context rates; unpriced historical
-  rows cannot support monetary admission or eligible native observations.
+- Durable budget accounting prices supported responses from observed workload
+  facts and commits a bounded rate receipt with each cost. Pending projections
+  cover known cache-write and long-context rates; unpriced historical rows cannot
+  support monetary admission or eligible native observations.
+- Frozen per-session history reaches the session-economics wrapper without
+  falling back to a different read or losing the selected rows.
+- Empty streamed responses preserve ordinary accounting observations, and proxy
+  test listeners bind atomically without changing provider forwarding defaults.
+
+### Security and compatibility
+
+- Disclose the open NLTK advisory in optional compression/full and llamaindex
+  dependencies; this release accepts that finding only for the documented scope.
+  No patched NLTK release is currently listed. See SECURITY.md.
+- Update the supported security-release line. TIP-1.0 and exact normative docs
+  and registry pins remain unchanged. Existing pricing rows and settings are
+  preserved; schema additions require backups before upgrade.
+- Pro 0.4.0 is the matching separately distributed companion. Upgrade and roll
+  back the pair together. See [release guidance](docs/release-log/v1.26.0.md).
 
 ## [1.25.3] — 2026-09-08
 
