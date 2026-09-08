@@ -2860,20 +2860,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     )
                 saved = max(0, input_tokens - sent_input_tokens)
 
-                # Settle the spend-guard in-flight admission now that this
-                # request's actual cost is known (the monitor row below makes
-                # it visible to DB-derived usage). Requests that die before
-                # reaching this point are reclaimed by the counter's TTL.
-                if _sg_admission_ticket:
-                    try:
-                        from tokenpak.proxy.spend_guard.rolling_caps import (
-                            settle_pending_spend as _sg_settle,
-                        )
-
-                        _sg_settle(_sg_admission_ticket)
-                    except Exception:
-                        pass
-                    _sg_admission_ticket = None
+                # The monitor owns settlement after its row commits. Knowing
+                # the response outcome is not durable ledger visibility;
+                # retiring here would omit spend while the write is queued.
 
                 # Tear down the facts-only in-flight registration — this
                 # request is no longer "in flight" once its outcome is known.
@@ -3019,6 +3008,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             started_at=datetime.fromtimestamp(t0, tz=timezone.utc).isoformat(),
                             ttfb_ms=_ttfb_ms,
                             stream_duration_ms=_stream_duration_ms,
+                            admission_ticket=_sg_admission_ticket,
                         )
                     except Exception:
                         pass  # DB errors must never break the request

@@ -8,6 +8,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Keep in-flight spend reserved until its queued telemetry row commits, and refresh rolling-cap usage before releasing the reservation. Failed writes retain the existing bounded reservation.
 - Session economics displays now pair burn-direction arrows with words and
   expand context-limit labels for easier reading across shared surfaces.
 
