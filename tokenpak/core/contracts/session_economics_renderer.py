@@ -18,6 +18,7 @@ still learning (or not available) says so explicitly.
 from __future__ import annotations
 
 from tokenpak.core.contracts.session_economics import (
+    BindingConstraint,
     BurnSlope,
     CostBasis,
     CostValue,
@@ -32,10 +33,18 @@ from tokenpak.core.contracts.session_economics import (
 )
 
 _SLOPE_MARK = {
-    BurnSlope.UP: "↑",
-    BurnSlope.DOWN: "↓",
-    BurnSlope.FLAT: "→",
-    BurnSlope.UNKNOWN: "?",
+    BurnSlope.UP: "↑ rising",
+    BurnSlope.DOWN: "↓ falling",
+    BurnSlope.FLAT: "→ steady",
+    BurnSlope.UNKNOWN: "? trend unknown",
+}
+
+_BINDING_WORD = {
+    BindingConstraint.BUDGET: "budget",
+    BindingConstraint.CONTEXT_SOFT: "soft context limit",
+    BindingConstraint.CONTEXT_HARD: "hard context limit",
+    BindingConstraint.ROLLING_CAP: "rolling cap",
+    BindingConstraint.UNKNOWN: "unknown",
 }
 
 _STATE_WORD = {
@@ -187,7 +196,9 @@ def render_line(economics: SessionEconomics) -> str:
         ),
     ]
     if runway.status is RunwayStatus.AVAILABLE:
-        parts.append(f"guard runway {runway.turns} turns to {runway.binding_constraint.value}")
+        parts.append(
+            f"guard runway {runway.turns} turns to {_BINDING_WORD[runway.binding_constraint]}"
+        )
     else:
         parts.append(f"guard runway {runway.status.value}")
     parts.append(f"guard {runway.guard_state.value}")
@@ -262,7 +273,7 @@ def render_block(economics: SessionEconomics) -> str:
         lines.append(
             "  runway         "
             f"guard limit in {runway.turns} turns · "
-            f"binding {runway.binding_constraint.value} · "
+            f"binding {_BINDING_WORD[runway.binding_constraint]} · "
             f"state {runway.guard_state.value}"
         )
     else:
