@@ -166,7 +166,7 @@ def _write_session_marker(session_id: str) -> None:
     try:
         from tokenpak.companion.session_binding import write_session
 
-        write_session(session_id)
+        write_session(session_id.strip())
     except Exception:
         pass  # never fail the hook
 

@@ -2051,7 +2051,9 @@ if HAS_CLICK:
     @click.option(
         "--hours", default=0, type=int, help="Filter to last N hours (combinable with --days)"
     )
-    @click.option("--fleet", is_flag=True, help="Fleet rollup view — reads rollup_daily")
+    @click.option(
+        "--fleet", "fleet_view", is_flag=True, help="Fleet rollup view — reads rollup_daily"
+    )
     @click.option(
         "--since", default=None, help="With --fleet: window in days, e.g. '7d' (default: 7d)"
     )
@@ -2068,7 +2070,7 @@ if HAS_CLICK:
         db_path: Optional[str],
         days: int,
         hours: int,
-        fleet: bool,
+        fleet_view: bool,
         since: Optional[str],
     ) -> None:
         """Show savings report (default) or full technical status.
@@ -2096,7 +2098,7 @@ if HAS_CLICK:
         token = _SELECTED_SESSION.set(session_id)
         try:
             if one_line:
-                if fleet or as_json or full or raw or minimal or tip_cache:
+                if fleet_view or as_json or full or raw or minimal or tip_cache:
                     raise click.UsageError("--line cannot be combined with other output modes")
                 _print_forecast_line(proxy, session_id)
                 return
@@ -2111,7 +2113,7 @@ if HAS_CLICK:
                 db_path=db_path,
                 days=days,
                 hours=hours,
-                fleet=fleet,
+                fleet=fleet_view,
                 since=since,
             )
         finally:

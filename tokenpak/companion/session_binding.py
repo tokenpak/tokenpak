@@ -46,7 +46,7 @@ def write_session(value: str) -> None:
     fd, name = tempfile.mkstemp(prefix=".session-", dir=directory)
     try:
         with os.fdopen(fd, "w", encoding="ascii") as handle:
-            handle.write(value + "\n")
+            handle.write(value)
         os.replace(name, directory / "current-session")
     finally:
         if os.path.exists(name):
