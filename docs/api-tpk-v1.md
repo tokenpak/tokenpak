@@ -12,12 +12,14 @@ the endpoints the companion MCP server calls — and that external tooling
 - **Optional key auth.** If `TOKENPAK_PROXY_KEY` is set in the proxy's
  environment, all `/tpk/v1/*` requests must include the header
  `X-TPK-Key: <same-value>`.
+- **Guard snapshots require this key.** The session guard snapshot route
+ rejects access when the key is unconfigured, including loopback requests.
 - No CORS today; this is a dev-host API. For remote use, put a reverse proxy
  in front of it that handles TLS + auth.
 
 ## Error shape
 
-All 4xx / 5xx responses:
+4xx / 5xx responses use an error code and may include a detail:
 
 ```json
 {"error": "<machine-readable-code>", "detail": "<human message>"}
@@ -27,6 +29,46 @@ Status codes follow HTTP semantics: `400` malformed, `401` unauthorized,
 `404` not found, `500` internal, `503` index not loaded / dependency missing.
 
 ## Endpoint reference
+
+### `POST /tpk/v1/sessions/guard-snapshot`
+
+Observe the serving proxy's rolling guard accounting for an explicit session.
+Send `Content-Type: application/json`, the configured `X-TPK-Key`, and exactly
+`{"session_id":"your-session-id"}`. The body is limited to 4096 bytes; session
+identifiers are limited to 512 characters and retain their exact identity.
+Recognized session headers must agree with the body. Query parameters, extra
+fields, duplicate JSON keys, caller clocks and database paths are rejected.
+Browser `Origin` requests are refused. Responses use `Cache-Control: no-store`.
+
+The `native-guard-snapshot/1` response contains the explicit `session_id`, an
+opaque `owner_instance_id`, `scope: serving_proxy_process`, `observed_at` and
+`produced_at` timestamps, the effective `rolling_policy` and a fingerprint of
+the full effective policy. `recorded_usage` and `pending_projected_usage` each
+contain per-agent and overall cost, input-plus-output tokens, and cache-read tokens.
+Recorded costs retain their ledger estimate semantics. Pending costs are
+existing admission estimates. These components can overlap during settlement;
+`components_may_overlap` is always true. Do not add them as exact billed usage.
+
+`session_observed` means the ledger contains a row for the supplied identifier.
+`agent_attribution_available` requires durable attribution to agree with the
+serving process's current mapping. Unavailable agent values are `null`, as is
+an unreadable or invalid recorded component. Expired reservations are reported
+in `expired_pending_count`; observing them does not remove them.
+
+Every response currently has `guard_evidence_eligible: false` and explicit
+`reason_codes`: accounting cannot prove coverage across all request paths,
+other proxy processes or ledger ownership. Missing data adds further reasons.
+This endpoint cannot authorize spending, create a production recommendation,
+or replace fresh guard validation at confirmation. It creates no application
+record and makes no provider request. SQL opens read-only with fresh WAL
+visibility; SQLite may coordinate readers through WAL sidecars. There is no
+claim of zero filesystem effects from that coordination.
+
+Errors include `400 invalid_snapshot_input`, `401 unauthorized`,
+`403 browser_origin_forbidden`, `413 snapshot_body_size`, and
+`503 snapshot_auth_unconfigured`, `snapshot_owner_unavailable` or
+`snapshot_resolution_unavailable`. No config path, credential, prompt, other
+session identifier or raw exception is returned.
 
 ### `GET /tpk/v1/health`
 

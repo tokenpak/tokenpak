@@ -54,12 +54,14 @@ __all__ = (
 
 
 import logging
+import math
 import os
 import secrets
 import sqlite3
 import sys
 import threading
 import time
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, TypedDict
@@ -134,7 +136,7 @@ def admit_pending_spend(
     """Register a request's projected spend as in-flight. Returns a ticket."""
     ticket = "adm_" + secrets.token_hex(8)
     now = time.time()
-    with _INFLIGHT_LOCK:
+    with _ADMISSION_LOCK, _INFLIGHT_LOCK:
         _INFLIGHT[ticket] = (
             (agent_id or "").lower(),
             float(projected_cost_usd),
@@ -342,6 +344,36 @@ def _get_agents_for_window(window_seconds: int) -> dict[str, list[str]]:
     return out
 
 
+def _query_recorded_usage(
+    conn: sqlite3.Connection, cutoff_iso: str, sessions: list[str]
+) -> RollingUsage:
+    """One SQL definition for cap checks and native diagnostic snapshots."""
+    columns = (
+        "COALESCE(SUM(estimated_cost), 0.0), "
+        "COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0), "
+        "COALESCE(SUM(cache_read_tokens), 0)"
+    )
+    fleet = conn.execute(
+        f"SELECT {columns} FROM requests WHERE timestamp >= ?", (cutoff_iso,)
+    ).fetchone()
+    agent = (0.0, 0, 0)
+    if sessions:
+        placeholders = ",".join("?" for _ in sessions)
+        agent = conn.execute(
+            f"SELECT {columns} FROM requests WHERE timestamp >= ? "
+            f"AND session_id IN ({placeholders})",
+            (cutoff_iso, *sessions),
+        ).fetchone()
+    return {
+        "agent_cost_usd": float(agent[0]),
+        "agent_tokens_total": int(agent[1]),
+        "agent_cache_read_tokens": int(agent[2]),
+        "fleet_cost_usd": float(fleet[0]),
+        "fleet_tokens_total": int(fleet[1]),
+        "fleet_cache_read_tokens": int(fleet[2]),
+    }
+
+
 def compute_rolling_usage(
     agent_id: str,
     window_seconds: int,
@@ -403,56 +435,10 @@ def compute_rolling_usage(
         "%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - float(window_seconds))
     )
     try:
-        conn = sqlite3.connect(str(p), timeout=2.0)
-        # Fleet-wide totals.
-        # tokens_total = input + output (cache_read EXCLUDED
-        # 2026-05-15: Anthropic bills cache_read ~90% cheaper, so cache_read
-        # inflation should not trip the rolling tokens cap. cache_read is
-        # still recorded for observability + its own dedicated cap.
-        row = conn.execute(
-            """SELECT COALESCE(SUM(estimated_cost), 0.0),
-                      COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0),
-                      COALESCE(SUM(cache_read_tokens), 0)
-               FROM requests
-               WHERE timestamp >= ?""",
-            (cutoff_iso,),
-        ).fetchone()
-        fleet_cost, fleet_tokens, fleet_cache_read = float(row[0]), int(row[1]), int(row[2])
-
-        # Per-agent totals — restrict to sessions the proxy has mapped
-        # to this agent. Sessions with no mapping count toward fleet
-        # only (handled by the fleet query above).
-        agent_cost = 0.0
-        agent_tokens = 0
-        agent_cache_read = 0
-        if agent_id:
-            mapping = _get_agents_for_window(window_seconds)
-            sessions = mapping.get(agent_id.lower(), [])
-            if sessions:
-                placeholders = ",".join("?" for _ in sessions)
-                row2 = conn.execute(
-                    f"""SELECT COALESCE(SUM(estimated_cost), 0.0),
-                              COALESCE(SUM(input_tokens), 0) + COALESCE(SUM(output_tokens), 0),
-                              COALESCE(SUM(cache_read_tokens), 0)
-                       FROM requests
-                       WHERE timestamp >= ?
-                         AND session_id IN ({placeholders})""",
-                    (cutoff_iso, *sessions),
-                ).fetchone()
-                agent_cost, agent_tokens, agent_cache_read = (
-                    float(row2[0]),
-                    int(row2[1]),
-                    int(row2[2]),
-                )
-        conn.close()
-        usage: RollingUsage = {
-            "agent_cost_usd": agent_cost,
-            "agent_tokens_total": agent_tokens,
-            "agent_cache_read_tokens": agent_cache_read,
-            "fleet_cost_usd": fleet_cost,
-            "fleet_tokens_total": fleet_tokens,
-            "fleet_cache_read_tokens": fleet_cache_read,
-        }
+        mapping = _get_agents_for_window(window_seconds) if agent_id else {}
+        sessions = mapping.get(agent_id.lower(), [])
+        with closing(sqlite3.connect(str(p), timeout=2.0)) as conn:
+            usage = _query_recorded_usage(conn, cutoff_iso, sessions)
         with _USAGE_CACHE_LOCK:
             if generation == _USAGE_GENERATION:
                 _USAGE_CACHE[cache_key] = (now + _USAGE_CACHE_TTL_SEC, usage)
@@ -472,6 +458,163 @@ def compute_rolling_usage(
             "and requests will be blocked (fail closed)."
         )
         return None
+
+
+def _capture_rolling_snapshot(
+    session_id: str, window_seconds: int, *, monitor_db_path: str
+) -> dict[str, object]:
+    """Observe native accounting components, never a complete guard verdict.
+
+    This must run in the serving process. No cache writes, map pruning,
+    reservation expiry, schema initialization or usage writes occur here.
+    SQL uses a fresh read-only transaction and the cap check's shared query.
+    Committed rows can overlap projections awaiting settlement notification;
+    the components must not be presented as exact additive billed usage.
+    """
+    if type(window_seconds) is not int or window_seconds <= 0:
+        raise ValueError("rolling window must be a positive integer")
+    from datetime import datetime, timezone
+
+    reasons = [
+        "pending_coverage_unverified",
+        "cross_process_pending_unverified",
+        "ledger_ownership_unverified",
+    ]
+    with _ADMISSION_LOCK:
+        now = time.time()
+        cutoff = now - window_seconds
+        cutoff_iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(cutoff))
+        with _SESSION_AGENT_LOCK:
+            mapping = {sid: aid for sid, (aid, seen) in _SESSION_AGENT.items() if seen >= cutoff}
+        with _INFLIGHT_LOCK:
+            pending_entries = list(_INFLIGHT.values())
+        agent_id = mapping.get(session_id, "")
+        pending = {
+            "agent_cost_usd": 0.0,
+            "agent_tokens_total": 0,
+            "agent_cache_read_tokens": 0,
+            "fleet_cost_usd": 0.0,
+            "fleet_tokens_total": 0,
+            "fleet_cache_read_tokens": 0,
+        }
+        expired = 0
+        invalid_pending = False
+        pending_attribution_known = True
+        for aid, cost, tokens, cache_read, admitted_at in pending_entries:
+            if (
+                type(admitted_at) not in (int, float)
+                or not math.isfinite(admitted_at)
+                or admitted_at > now
+            ):
+                invalid_pending = True
+                continue
+            if admitted_at < now - _INFLIGHT_TTL_SEC:
+                expired += 1
+                continue
+            if (
+                type(cost) not in (int, float)
+                or not math.isfinite(cost)
+                or cost < 0
+                or type(tokens) is not int
+                or tokens < 0
+                or type(cache_read) is not int
+                or cache_read < 0
+            ):
+                invalid_pending = True
+                continue
+            if not isinstance(aid, str) or not aid:
+                pending_attribution_known = False
+            for scope in ("fleet", "agent"):
+                if scope == "agent" and (not agent_id or aid != agent_id):
+                    continue
+                pending[f"{scope}_cost_usd"] += cost
+                pending[f"{scope}_tokens_total"] += tokens
+                pending[f"{scope}_cache_read_tokens"] += cache_read
+        if expired:
+            reasons.append("expired_pending_reservations")
+        if invalid_pending or any(not math.isfinite(v) or v < 0 for v in pending.values()):
+            pending = None
+            reasons.append("pending_values_invalid")
+
+        recorded = None
+        observed_session = False
+        attribution_complete = False
+        path = _path(monitor_db_path).absolute()
+        if not path.is_file():
+            reasons.append("ledger_unavailable")
+        else:
+            try:
+                # mode=ro preserves WAL visibility; immutable=1 would ignore
+                # recent commits. SQLite may manage existing WAL sidecars.
+                with closing(
+                    sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=2.0)
+                ) as conn:
+                    deadline = time.monotonic() + 2.0
+                    conn.set_progress_handler(lambda: int(time.monotonic() > deadline), 1000)
+                    conn.execute("BEGIN")
+                    observed_session = (
+                        conn.execute(
+                            "SELECT 1 FROM requests WHERE session_id = ? LIMIT 1", (session_id,)
+                        ).fetchone()
+                        is not None
+                    )
+                    sessions = [sid for sid, aid in mapping.items() if aid == agent_id]
+                    recorded = _query_recorded_usage(conn, cutoff_iso, sessions if agent_id else [])
+                    invalid = conn.execute(
+                        "SELECT 1 FROM requests WHERE timestamp >= ? AND ("
+                        "estimated_cost IS NULL OR estimated_cost < 0 OR "
+                        "typeof(estimated_cost) NOT IN ('integer', 'real') OR "
+                        "input_tokens IS NULL OR input_tokens < 0 OR "
+                        "typeof(input_tokens) != 'integer' OR "
+                        "output_tokens IS NULL OR output_tokens < 0 OR "
+                        "typeof(output_tokens) != 'integer' OR "
+                        "cache_read_tokens IS NULL OR cache_read_tokens < 0 OR "
+                        "typeof(cache_read_tokens) != 'integer') LIMIT 1",
+                        (cutoff_iso,),
+                    ).fetchone()
+                    if invalid or any(not math.isfinite(v) or v < 0 for v in recorded.values()):
+                        recorded = None
+                        reasons.append("recorded_values_invalid")
+                    # Durable attribution must agree with the native mapping;
+                    # a missing/reused session mapping cannot become zero usage.
+                    attributions = conn.execute(
+                        "SELECT DISTINCT session_id, agent_id FROM requests "
+                        "WHERE timestamp >= ? OR session_id = ? LIMIT 10001",
+                        (cutoff_iso, session_id),
+                    ).fetchall()
+                    attribution_complete = bool(
+                        agent_id and observed_session and pending_attribution_known
+                    ) and (
+                        len(attributions) <= 10000
+                        and all(
+                            isinstance(aid, str) and aid and mapping.get(sid) == aid.lower()
+                            for sid, aid in attributions
+                        )
+                    )
+            except (sqlite3.Error, OSError, ValueError, TypeError, OverflowError):
+                recorded = None
+                reasons.append("ledger_unmeasurable")
+        if not observed_session:
+            reasons.append("session_unobserved")
+        if not attribution_complete:
+            reasons.append("agent_attribution_unavailable")
+            for values in (recorded, pending):
+                if values is not None:
+                    for key in values:
+                        if key.startswith("agent_"):
+                            values[key] = None
+        return {
+            "observed_at": datetime.fromtimestamp(now, timezone.utc).isoformat(),
+            "window_seconds": window_seconds,
+            "session_observed": observed_session,
+            "agent_attribution_available": attribution_complete,
+            "recorded_usage": recorded,
+            "pending_projected_usage": pending,
+            "expired_pending_count": expired,
+            "components_may_overlap": True,
+            "guard_evidence_eligible": False,
+            "reason_codes": reasons,
+        }
 
 
 def check_rolling_caps(
