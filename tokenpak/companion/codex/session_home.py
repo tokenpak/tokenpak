@@ -2601,9 +2601,11 @@ class SessionLease:
                 if current != self.sentinel:
                     raise HomeInUseError("PID sentinel ownership changed during launch")
                 revalidated = _proc_identity(pid, self.proc_root)
+                # Scheduler state can change while the same child remains
+                # alive. Its start time identifies the process incarnation.
                 if (
-                    revalidated != identity
-                    or revalidated is None
+                    revalidated is None
+                    or revalidated[1] != start_ticks
                     or revalidated[0]
                     in {
                         "Z",

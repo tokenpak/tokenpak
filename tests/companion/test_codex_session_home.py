@@ -1047,6 +1047,71 @@ def test_dead_process_cannot_acquire_or_receive_lease(
         lease.release()
 
 
+@pytest.mark.parametrize(
+    "next_state,next_ticks,accepted",
+    [
+        ("S", 33, True),
+        ("D", 33, True),
+        ("T", 33, True),
+        ("S", 34, False),
+        ("Z", 33, False),
+        ("X", 33, False),
+        ("x", 33, False),
+        (None, 33, False),
+    ],
+)
+def test_transfer_checks_incarnation_and_liveness_separately(
+    homes, tmp_path, monkeypatch, next_state, next_ticks, accepted
+):
+    source, tokenpak_home = homes
+    paths = sh.select_paths(
+        "isolated",
+        workspace_dir=tmp_path,
+        session_id="state-transition",
+        tokenpak_home=tokenpak_home,
+        source_home=source,
+    )
+    sh.provision(paths)
+    proc_root = tmp_path / "proc"
+    _write_proc_stat(proc_root, 606, state="R", start_ticks=66)
+    _write_proc_stat(proc_root, 303, state="R", start_ticks=33)
+    lease = sh.SessionLease.acquire(paths, pid=606, proc_root=proc_root)
+    parent = lease.sentinel
+    original = sh._proc_identity
+    observed_child = False
+
+    def changing_process(pid, root=Path("/proc")):
+        nonlocal observed_child
+        identity = original(pid, root)
+        if pid == 303 and not observed_child:
+            observed_child = True
+            if next_state is None:
+                (proc_root / "303" / "stat").unlink()
+            else:
+                stat_path = proc_root / "303" / "stat"
+                raw = stat_path.read_text()
+                prefix, fields = raw.rsplit(")", 1)
+                values = fields.split()
+                values[0] = next_state
+                values[19] = str(next_ticks)
+                stat_path.write_text(prefix + ") " + " ".join(values))
+        return identity
+
+    monkeypatch.setattr(sh, "_proc_identity", changing_process)
+    try:
+        if accepted:
+            lease.transfer_to(303)
+            child = sh.read_pid_sentinel(paths.pid_sentinel)
+            assert child.pid == 303 and child.start_time_ticks == 33
+            assert sh.sentinel_is_live(child, expected_home=paths.home, proc_root=proc_root)
+        else:
+            with pytest.raises(sh.HomeInUseError, match="changed during handoff"):
+                lease.transfer_to(303)
+            assert sh.read_pid_sentinel(paths.pid_sentinel) == parent
+    finally:
+        lease.release()
+
+
 def test_live_wrong_home_sentinel_is_preserved(homes: tuple[Path, Path], tmp_path: Path) -> None:
     source, tokenpak_home = homes
     paths = sh.select_paths(
