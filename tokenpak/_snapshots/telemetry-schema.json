@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-09-08T06:37:31Z",
+  "generated_at": "2026-09-08T09:39:42Z",
   "stores": [
     {
       "path": "~/.tpk/telemetry.db",
@@ -175,7 +175,7 @@
           {
             "type": "table",
             "name": "budget_guard_coverage",
-            "sql": "CREATE TABLE budget_guard_coverage (\n            coverage_id TEXT PRIMARY KEY, ledger_key TEXT NOT NULL,\n            owner_instance_id TEXT NOT NULL, session_id TEXT NOT NULL,\n            started_at REAL NOT NULL, ended_at REAL, attempts INTEGER NOT NULL DEFAULT 0,\n            reservation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'preflight'\n        )"
+            "sql": "CREATE TABLE budget_guard_coverage (\n            coverage_id TEXT PRIMARY KEY, ledger_key TEXT NOT NULL,\n            owner_instance_id TEXT NOT NULL, session_id TEXT NOT NULL,\n            started_at REAL NOT NULL, ended_at REAL, attempts INTEGER NOT NULL DEFAULT 0,\n            reservation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'preflight',\n            workload_json TEXT\n        )"
           },
           {
             "type": "table",

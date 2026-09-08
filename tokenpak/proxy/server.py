@@ -2471,6 +2471,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # CLI it's no longer safe to retry (would cause `Unterminated
                 # string` JSON parse errors in the client's SSE reader).
                 sse_buffer = b""
+                # Error responses and empty streams have no SSE telemetry copy.
+                # Keep their ordinary request accounting reachable as well.
+                sse_observation_buffer = b""
                 sse_content_encoding = ""
                 _stream_wrote_to_client = False
                 for _ustream_attempt in range(_retry_policy.max_attempts):
