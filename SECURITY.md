@@ -19,8 +19,8 @@ Include the TokenPak version (`tokenpak --version`), reproduction steps, and you
 
 | Version | Supported |
 | ------- | --------- |
-| 1.27.x (latest minor) | ✅ Security fixes |
-| < 1.27 | ❌ Unsupported — please upgrade |
+| 1.28.x (latest minor) | ✅ Security fixes |
+| < 1.28 | ❌ Unsupported — please upgrade |
 
 TokenPak is in beta: security fixes target the **latest public minor release line** unless a security advisory explicitly extends support to an earlier line. This table is checked at each release.
 
@@ -51,7 +51,7 @@ We welcome good-faith security research and will not pursue legal action against
 
 ### NLTK model-artifact path confinement
 
-As of September 8, 2026, NLTK releases through 3.10.3 are covered by
+As of September 12, 2026, NLTK releases through 3.10.3 are covered by
 [CVE-2026-81726 / GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp),
 a High-severity advisory with no patched release listed. Some model import and
 export APIs can access files outside the configured roots when an application
@@ -78,10 +78,13 @@ evidence is available.
 ### Accelerate sharded checkpoint paths
 
 The optional `compression` and `full` extras also select Accelerate through
-LLMLingua. Accelerate releases through 1.14.0 are covered by
+LLMLingua. The locked Accelerate 1.14.0 dependency is covered by
 [CVE-2026-69112 / GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79),
-classified as Moderate by the reviewed advisory. No patched release is listed
-as of September 8, 2026. Crafted shard paths in a checkpoint index can cause
+whose CVSS v3.1 score of 7.1 is High under this policy. The advisory separately
+lists Moderate severity with a CVSS v4 score of 6.9. No verified published fix
+is available as of September 12, 2026. Accelerate 1.15.0, published September 9,
+retains unchecked checkpoint shard paths; its newer version alone does not
+establish a fix. Crafted shard paths in a checkpoint index can cause
 reads outside the checkpoint directory or block loading on a named pipe.
 
 Only load model repositories and checkpoint files from sources you trust.

@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "generated_at": "2026-09-08T23:39:17Z",
-  "package_version": "1.27.0",
+  "package_version": "1.28.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -2102,6 +2102,34 @@
     {
       "module": "tokenpak.companion.codex.hooks",
       "name": "install_hooks"
+    },
+    {
+      "module": "tokenpak.companion.codex.journal_hook",
+      "name": "MAX_LINE_BYTES"
+    },
+    {
+      "module": "tokenpak.companion.codex.journal_hook",
+      "name": "MAX_TRANSCRIPT_BYTES"
+    },
+    {
+      "module": "tokenpak.companion.codex.journal_hook",
+      "name": "journal_write_dir"
+    },
+    {
+      "module": "tokenpak.companion.codex.journal_hook",
+      "name": "main"
+    },
+    {
+      "module": "tokenpak.companion.codex.journal_hook",
+      "name": "record"
+    },
+    {
+      "module": "tokenpak.companion.codex.journal_hook",
+      "name": "transcript_turns"
+    },
+    {
+      "module": "tokenpak.companion.codex.journal_hook",
+      "name": "valid_session"
     },
     {
       "module": "tokenpak.companion.codex.launcher",

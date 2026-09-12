@@ -61,10 +61,10 @@ def _wait_for_port(port: int, timeout: float = 10.0):
     raise RuntimeError(f"Port {port} did not become available within {timeout}s")
 
 
-def _get(proxy, path: str) -> tuple[int, dict]:
+def _get(proxy, path: str, *, timeout: float = 10.0) -> tuple[int, dict]:
     url = f"http://127.0.0.1:{proxy.port}{path}"
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.status, json.loads(resp.read())
 
 
@@ -184,36 +184,37 @@ def test_async_circuit_breakers(async_proxy):
 def test_async_50_concurrent_requests(async_proxy):
     """
     Fire 60 concurrent GET /health requests via threads.
-    All must complete (timeout widened to accommodate shared CI
-    runner scheduling stalls). The test's intent — verify the proxy
-    handles 60 concurrent /health requests without deadlocking or
-    serializing — does not require the original 5s budget; the
-    assertion that matters is `len(successes) == N` (all 60 complete
-    successfully). 30s is generous enough that scheduling-jitter on
-    shared GitHub Actions runners does not flake while still catching
-    real serialization regressions (which would not finish at all).
+    All 60 must succeed within the existing 30s aggregate budget, including
+    thread scheduling and HTTP requests. Each request receives only the
+    remaining budget instead of the helper's unrelated 10s default. This
+    checks completion under concurrent load; it is not a latency benchmark
+    or proof that requests are never serialized.
     """
     N = 60
-    TIMEOUT_TOTAL = 30.0  # bumped from 5.0 — see docstring
+    TIMEOUT_TOTAL = 30.0
 
     results = []
     lock = threading.Lock()
+    t0 = time.monotonic()
+    deadline = t0 + TIMEOUT_TOTAL
 
     def _one_request():
         try:
-            status, _ = _get(async_proxy, "/health")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("concurrent request budget exhausted before dispatch")
+            status, _ = _get(async_proxy, "/health", timeout=remaining)
             with lock:
                 results.append(status)
         except Exception as exc:
             with lock:
                 results.append(f"error:{exc}")
 
-    t0 = time.time()
     with ThreadPoolExecutor(max_workers=N) as ex:
         futures = [ex.submit(_one_request) for _ in range(N)]
-        for f in as_completed(futures, timeout=TIMEOUT_TOTAL + 1):
+        for f in as_completed(futures, timeout=max(0.0, deadline - time.monotonic())):
             pass  # just wait
-    elapsed = time.time() - t0
+    elapsed = time.monotonic() - t0
 
     successes = [r for r in results if r == 200]
     failures = [r for r in results if r != 200]
