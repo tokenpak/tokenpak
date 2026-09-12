@@ -1,4 +1,4 @@
-# TokenPak — Cut your LLM token spend — guided setup
+# TokenPak — Local LLM proxy — guided setup
 
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
@@ -7,7 +7,7 @@
 
 > **The open logistics layer for AI context.**
 
-TokenPak starts as a local proxy that **packs AI requests** before they ship — reducing wasted context and giving teams receipts for what changed. Fewer tokens, lower cost. No code changes, no cloud, no credentials stored.
+TokenPak runs as a **local LLM proxy with request records and explicit context tools**. The default proxy preserves conversation turns; a forwarded request can correctly report zero tokens saved. Explicit compression operations can reduce eligible content. Provider-bound requests still go to your chosen provider, with no TokenPak cloud relay.
 
 ---
 
@@ -71,7 +71,10 @@ tokenpak demo
 
 ## Works with
 
-**Claude Code** · **Cursor** · **Cline** · **Continue.dev** · **Aider** · **OpenAI SDK** · **Anthropic SDK** · **LiteLLM** · **Codex**
+- **Tested SDK adapters:** OpenAI SDK, Anthropic SDK and LiteLLM.
+- **First-class integrations:** Claude Code and Codex.
+- **Compatibility targets, not yet independently verified:** Cursor, Cline,
+  Continue.dev and Aider.
 
 Run `tokenpak integrate` to see the full client list with setup guides for each.
 
@@ -122,17 +125,17 @@ index and developer editable-install path.
 
 ## What's included (Free)
 
-> **Dispatch (v0.1-alpha preview):** turn a request into a scoped, resumable, reviewable workflow from the CLI. It is a source/`main`-branch preview and is not yet part of a released `pip install tokenpak`; see the [Dispatch guide](docs/guides/dispatch.md).
+> **Dispatch (v0.1-alpha preview):** a scoped, resumable, reviewable workflow-control surface. Released packages include the CLI and runtime modules; runtime commands require the optional `[dispatch]` dependencies. Live station execution and delivery receipts are not wired yet. See the [Dispatch guide](docs/guides/dispatch.md).
 
-- **Context compression** — deterministic token reduction on real agent
-  workloads, <50ms latency. Savings are route-specific: direct API, CLI, and
-  uncached repeated-agent loops are the best fit, while Claude Code/TUI routes
-  may show lower incremental savings when the provider cache already handled
-  repeated context. Measure your own savings with `tokenpak savings`; inspect
-  attribution with `tokenpak status --tip-cache` (reproduce the headline
-  benchmark with `make benchmark-headline`).
-- **Client integration** — one command wires Claude Code, Cursor, Aider, and 6 other clients
-- **Model routing** — send requests to the right model automatically, with fallback rules
+- **Context tools and truthful receipts** — explicit compression operations can
+  reduce eligible content. The built-in Pak builder preserves role-bearing
+  conversation turns; byte-preserved routes report zero product-attributed
+  reduction. Inspect recorded usage with `tokenpak savings` and cache attribution
+  with `tokenpak status --tip-cache`. `make benchmark-headline` exercises a fixed
+  fixture; its result is not a default-proxy savings receipt.
+- **Client integration** — setup guides and helpers for the compatibility tiers above
+- **Routing policy** — configuration and observe-mode records; automatic model
+  changes and fallback enforcement are not active by default
 - **Cost tracking** — per model, per session, per agent; local SQLite, zero cloud
 - **TIP Spend Guard** — pre-send circuit breaker; blocks runaway requests before provider call. Yes/No release or `[TIP: allow=once max=$X]` directive. Catches both single-request spikes and the death-by-1000-cuts pattern via session-cumulative tracking. See [docs/spend-guard.md](docs/spend-guard.md).
 - **Vault indexing + semantic search** — index your codebase; search without an LLM call
@@ -142,13 +145,15 @@ index and developer editable-install path.
 - **A/B testing and replay/debug** — compare compression configs, replay past requests
 - **50 built-in compression recipes** — YAML, customizable
 
-Repeated context is reused from cache instead of re-sent on every call. See [docs/quickstart.md](docs/quickstart.md) and [docs/api-tpk-v1.md](docs/api-tpk-v1.md) to get started.
+Provider cache reuse is distinct from TokenPak context reduction. A provider cache hit does not mean the proxy omitted that context from the request. See [docs/quickstart.md](docs/quickstart.md) and [docs/api-tpk-v1.md](docs/api-tpk-v1.md) to get started.
 
 ---
 
 ## Open source & editions
 
-TokenPak's core is Apache-2.0 open source; TokenPak Pro and hosted services are proprietary. Commercial packaging is not published yet.
+TokenPak's core is Apache-2.0 open source. TokenPak Pro is the proprietary
+`tokenpak-paid` package, distributed separately with license requirements.
+Hosted services remain deferred.
 
 ---
 
@@ -163,7 +168,7 @@ TokenPak's core is Apache-2.0 open source; TokenPak Pro and hosted services are 
 
 ## License
 
-The TokenPak open-source core is licensed under the Apache License 2.0 — see [LICENSE](LICENSE). TokenPak Pro and hosted services are proprietary.
+The TokenPak open-source core is licensed under the Apache License 2.0 — see [LICENSE](LICENSE). TokenPak Pro is proprietary; hosted services remain deferred.
 
 ### Trademark
 
