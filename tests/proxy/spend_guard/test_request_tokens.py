@@ -132,6 +132,26 @@ def test_unknown_or_contradictory_usage_is_not_complete(updates):
     assert not response(**updates).token_usage_complete
 
 
+def test_positive_creation_without_ttl_partition_remains_observed_only():
+    from tokenpak.proxy.spend_guard.request_workload import observe_response as old_response
+
+    usage = {
+        "input_tokens": 10,
+        "output_tokens": 7,
+        "cache_read_input_tokens": 20,
+        "cache_creation_input_tokens": 3,
+    }
+    raw = json.dumps({"model": "claude-sonnet-4-6", "usage": usage}).encode()
+    observed = observe_response(request(), raw, streaming=False, complete=True, status=200)
+    assert observed.token_usage_complete
+    assert observed.cache_creation_tokens == 3 and observed.input_tokens == 33
+    assert observed.actual_cost_usd is None and observed.comparison_reason_codes
+    legacy = old_response(
+        old_request(BODY, URL, {"x-api-key": "x"}), raw, streaming=False, complete=True, status=200
+    )
+    assert "cache_usage_mismatch" in legacy.reason_codes
+
+
 @pytest.mark.parametrize(
     "change",
     [

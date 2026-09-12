@@ -293,7 +293,10 @@ def observe_response(
                 output_tokens=output,
             )
             split = usage.get("cache_creation")
-            if split is not None or write:
+            # The aggregate creation count is an observed token category.
+            # A missing TTL partition affects pricing, not that scalar count;
+            # a supplied partition must still reconcile exactly.
+            if "cache_creation" in usage:
                 names = {"ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens"}
                 if (
                     not isinstance(split, dict)

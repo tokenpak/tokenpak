@@ -1810,9 +1810,19 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             _sg_wexc,
                         )
                     return
-            except ImportError:
+            except ImportError as _sg_import_exc:
+                if self._guard_accounting.config.accounting_basis == "provider_tokens":
+                    from tokenpak.proxy.spend_guard import _fail_closed_outcome
+
+                    self._write_accounting_block(_fail_closed_outcome(_sg_import_exc))
+                    return
                 pass  # spend guard not installed
             except Exception as _sg_exc:
+                if self._guard_accounting.config.accounting_basis == "provider_tokens":
+                    from tokenpak.proxy.spend_guard import _fail_closed_outcome
+
+                    self._write_accounting_block(_fail_closed_outcome(_sg_exc))
+                    return
                 # The guard's own evaluate() converts internal evaluator
                 # errors into fail-closed 402s, so an exception here is a
                 # proxy-hook defect (header/session resolution, outcome
@@ -2314,6 +2324,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     fwd_headers,
                     target_url,
                     dict(self.headers),
+                    **(
+                        {"provenance_callback": self._guard_accounting.record_credential_kind}
+                        if self._guard_accounting.config.accounting_basis == "provider_tokens"
+                        else {}
+                    ),
                 )
             except Exception:
                 _router_injected = False  # fail-open
@@ -3100,6 +3115,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                 self._guard_accounting.price.to_json()
                                 if self._guard_accounting.price is not None
                                 else None
+                            ),
+                            guard_token_usage_complete=self._guard_accounting.complete_token_usage(
+                                _provider_usage,
+                                response_complete=_guard_response_complete,
                             ),
                             guard_usage_complete=self._guard_accounting.complete_usage(
                                 _cost_observed,

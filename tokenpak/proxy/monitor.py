@@ -170,6 +170,7 @@ _REQUEST_INSERT_COLUMNS = (
     "guard_ledger_key",
     "guard_usage_complete",
     "guard_price_json",
+    "guard_token_usage_complete",
 )
 
 
@@ -313,6 +314,12 @@ def _notify_durable_guard_commit(db_path, insert_params, reservation_ref) -> Non
     try:
         from tokenpak.proxy.spend_guard.reservation import Projection, ReservationStore
 
+        store = ReservationStore(
+            reservation_ref.store_path, db_path, accounting_basis=reservation_ref.accounting_basis
+        )
+        if reservation_ref.accounting_basis == "provider_tokens":
+            store.settle_token_after_commit(reservation_ref)
+            return
         values = dict(zip(_REQUEST_INSERT_COLUMNS, insert_params))
         actual = Projection(
             values["estimated_cost"],
@@ -320,9 +327,7 @@ def _notify_durable_guard_commit(db_path, insert_params, reservation_ref) -> Non
             values["output_tokens"],
             values["cache_read_tokens"],
         )
-        ReservationStore(reservation_ref.store_path, db_path).settle_after_commit(
-            reservation_ref, actual
-        )
+        store.settle_after_commit(reservation_ref, actual)
     except Exception as exc:
         # A committed INSERT must never be retried because its notification
         # failed. Admission also correlates committed rows with pending holds.
@@ -643,6 +648,10 @@ class Monitor:
                     "ALTER TABLE requests ADD COLUMN guard_usage_complete INTEGER NOT NULL DEFAULT 0",
                 ),
                 (
+                    "guard_token_usage_complete",
+                    "ALTER TABLE requests ADD COLUMN guard_token_usage_complete INTEGER NOT NULL DEFAULT 0",
+                ),
+                (
                     "guard_price_json",
                     "ALTER TABLE requests ADD COLUMN guard_price_json TEXT",
                 ),
@@ -903,7 +912,17 @@ class Monitor:
         reservation_ref: ReservationRef | None = None,
         guard_usage_complete: bool = False,
         guard_price_json: str | None = None,
+        guard_token_usage_complete: bool = False,
     ) -> None:
+        if type(guard_token_usage_complete) is not bool:
+            raise ValueError("guard_token_usage_complete must be a boolean")
+        if guard_token_usage_complete and (
+            guard_usage_complete
+            or guard_price_json is not None
+            or reservation_ref is None
+            or reservation_ref.accounting_basis != "provider_tokens"
+        ):
+            raise ValueError("token-only completeness cannot establish priced usage")
         if type(guard_usage_complete) is not bool:
             raise ValueError("guard_usage_complete must be a boolean")
         if guard_price_json is not None:
@@ -981,6 +1000,7 @@ class Monitor:
             reservation_ref.ledger_key if reservation_ref else "",
             int(guard_usage_complete),
             guard_price_json,
+            int(guard_token_usage_complete),
         )
         _queued = False
         try:
