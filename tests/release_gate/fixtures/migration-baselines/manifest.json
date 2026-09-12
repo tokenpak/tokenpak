@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "repository": "https://github.com/tokenpak/tokenpak",
+  "snapshot_path": "tokenpak/_snapshots/telemetry-schema.json",
+  "publication_anchor": "v1.28.0",
+  "major": 1,
+  "baselines": [
+    {
+      "tag": "v1.23.0",
+      "tag_object": "10953b0b53948b189592f705fe44b3b0503e739e",
+      "commit": "f739654ef6ec47507cdb3ca04741793be428afb7",
+      "tree": "cd89623ae59ae67e3adceae1ef58fe6178c060bf",
+      "blob": "419e71db8f2559cda0a8ff8d38862ac4895e072f",
+      "sha256": "847d6b32ce3f67ff62621cd263e84360268c8c0cee41fbd2cb2eafda603677ef",
+      "bytes": 18241,
+      "file": "847d6b32ce3f67ff62621cd263e84360268c8c0cee41fbd2cb2eafda603677ef.json"
+    },
+    {
+      "tag": "v1.24.0",
+      "tag_object": "17d68f552b5fd924e6ee5b01e8d026625a8129d9",
+      "commit": "347e234e5d663d1421cb9876aca198fbe4a0c9c7",
+      "tree": "fec6978992624cdad732161b7529345a652d66b4",
+      "blob": "419e71db8f2559cda0a8ff8d38862ac4895e072f",
+      "sha256": "847d6b32ce3f67ff62621cd263e84360268c8c0cee41fbd2cb2eafda603677ef",
+      "bytes": 18241,
+      "file": "847d6b32ce3f67ff62621cd263e84360268c8c0cee41fbd2cb2eafda603677ef.json"
+    },
+    {
+      "tag": "v1.25.0",
+      "tag_object": "1c76acafba0b9fc5acc624cbe9562ceddc8674d6",
+      "commit": "35f576766eaf355d3f07c28f5c849fa60a3a88e0",
+      "tree": "8baedabd5f893faff799635ba1c66582821e6f7a",
+      "blob": "419e71db8f2559cda0a8ff8d38862ac4895e072f",
+      "sha256": "847d6b32ce3f67ff62621cd263e84360268c8c0cee41fbd2cb2eafda603677ef",
+      "bytes": 18241,
+      "file": "847d6b32ce3f67ff62621cd263e84360268c8c0cee41fbd2cb2eafda603677ef.json"
+    },
+    {
+      "tag": "v1.26.0",
+      "tag_object": "0ef4546808ea1798115fe30745b627ddafa681fc",
+      "commit": "f922003db9d8db2120daa8298702f954619d8cd5",
+      "tree": "1f39affcd879d7fe915b3adfe22bc16e263b282e",
+      "blob": "ea6d8fa7960afa252ebcd7bfb322338c4a0323a7",
+      "sha256": "7cade8b9768c64c1702a6bf47df68d0f9e5d427153422d42b19597e11b1fcce2",
+      "bytes": 21246,
+      "file": "7cade8b9768c64c1702a6bf47df68d0f9e5d427153422d42b19597e11b1fcce2.json"
+    },
+    {
+      "tag": "v1.27.0",
+      "tag_object": "789b1c9b3133bd74f4699b6e1603f600a609b9ee",
+      "commit": "0ae23510666c8bbf29ac41671db03e292ad8e55a",
+      "tree": "e9d74bb57e0199f756b1d4bf8acef80f9638932c",
+      "blob": "ea6d8fa7960afa252ebcd7bfb322338c4a0323a7",
+      "sha256": "7cade8b9768c64c1702a6bf47df68d0f9e5d427153422d42b19597e11b1fcce2",
+      "bytes": 21246,
+      "file": "7cade8b9768c64c1702a6bf47df68d0f9e5d427153422d42b19597e11b1fcce2.json"
+    },
+    {
+      "tag": "v1.28.0",
+      "tag_object": "4868c8de511a6db47d82b48ebdedcb30fae943d6",
+      "commit": "faf63ac6a944cda0a811bae821d6b01872430218",
+      "tree": "58fc0bf88d47cf178fb8758782f4437f34d94294",
+      "blob": "ea6d8fa7960afa252ebcd7bfb322338c4a0323a7",
+      "sha256": "7cade8b9768c64c1702a6bf47df68d0f9e5d427153422d42b19597e11b1fcce2",
+      "bytes": 21246,
+      "file": "7cade8b9768c64c1702a6bf47df68d0f9e5d427153422d42b19597e11b1fcce2.json"
+    }
+  ]
+}

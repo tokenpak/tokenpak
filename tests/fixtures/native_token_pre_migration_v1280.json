@@ -1,0 +1,140 @@
+{
+  "source_commit": "faf63ac6a944cda0a811bae821d6b01872430218",
+  "source_snapshot_sha256": "7cade8b9768c64c1702a6bf47df68d0f9e5d427153422d42b19597e11b1fcce2",
+  "scope": "Frozen published v1.28.0 DDL for copy-only additive migration tests; synthetic rows only.",
+  "stores": [
+    {
+      "path": "~/.tokenpak/spend_guard.db",
+      "purpose": "TIP Spend Guard audit and pending-request log",
+      "exists": true,
+      "ddl": {
+        "objects": [
+          {
+            "type": "index",
+            "name": "idx_audit_event_ts",
+            "sql": "CREATE INDEX idx_audit_event_ts ON spend_guard_audit(event_type, ts)"
+          },
+          {
+            "type": "index",
+            "name": "idx_audit_session_ts",
+            "sql": "CREATE INDEX idx_audit_session_ts ON spend_guard_audit(session_id, ts)"
+          },
+          {
+            "type": "index",
+            "name": "idx_guard_coverage_reservation",
+            "sql": "CREATE UNIQUE INDEX idx_guard_coverage_reservation ON budget_guard_coverage(ledger_key, reservation_id) WHERE reservation_id != ''"
+          },
+          {
+            "type": "index",
+            "name": "idx_guard_coverage_scope",
+            "sql": "CREATE INDEX idx_guard_coverage_scope ON budget_guard_coverage(ledger_key, state, ended_at)"
+          },
+          {
+            "type": "index",
+            "name": "idx_pending_hash",
+            "sql": "CREATE INDEX idx_pending_hash ON pending_requests(request_hash, status)"
+          },
+          {
+            "type": "index",
+            "name": "idx_pending_session",
+            "sql": "CREATE INDEX idx_pending_session ON pending_requests(session_id, status)"
+          },
+          {
+            "type": "index",
+            "name": "idx_reservation_scope",
+            "sql": "CREATE INDEX idx_reservation_scope ON budget_reservations(ledger_key, status, expires_at)"
+          },
+          {
+            "type": "table",
+            "name": "budget_guard_coverage",
+            "sql": "CREATE TABLE budget_guard_coverage (\n            coverage_id TEXT PRIMARY KEY, ledger_key TEXT NOT NULL,\n            owner_instance_id TEXT NOT NULL, session_id TEXT NOT NULL,\n            started_at REAL NOT NULL, ended_at REAL, attempts INTEGER NOT NULL DEFAULT 0,\n            reservation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'preflight',\n            workload_json TEXT\n        )"
+          },
+          {
+            "type": "table",
+            "name": "budget_reservation_generation",
+            "sql": "CREATE TABLE budget_reservation_generation (ledger_key TEXT PRIMARY KEY, generation INTEGER NOT NULL)"
+          },
+          {
+            "type": "table",
+            "name": "budget_reservations",
+            "sql": "CREATE TABLE budget_reservations (\n            reservation_id TEXT PRIMARY KEY,\n            session_id TEXT NOT NULL DEFAULT '', fleet_id TEXT NOT NULL DEFAULT '',\n            agent_id TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL,\n            expires_at REAL NOT NULL, reserved_input_tokens INTEGER NOT NULL DEFAULT 0,\n            reserved_output_tokens INTEGER NOT NULL DEFAULT 0,\n            reserved_cost_usd REAL NOT NULL DEFAULT 0.0,\n            status TEXT NOT NULL DEFAULT 'active', actual_cost_usd REAL, actual_tokens INTEGER\n        , ledger_key TEXT NOT NULL DEFAULT '', owner_instance_id TEXT NOT NULL DEFAULT '', request_id TEXT NOT NULL DEFAULT '', reserved_cache_read_tokens INTEGER NOT NULL DEFAULT 0, actual_cache_read_tokens INTEGER, settled_at REAL)"
+          },
+          {
+            "type": "table",
+            "name": "pending_requests",
+            "sql": "CREATE TABLE pending_requests (\n            pending_id TEXT PRIMARY KEY,\n            session_id TEXT NOT NULL,\n            created_at REAL NOT NULL,\n            expires_at REAL NOT NULL,\n            request_hash TEXT NOT NULL,\n            provider TEXT NOT NULL DEFAULT '',\n            model TEXT NOT NULL DEFAULT '',\n            projected_tokens INTEGER NOT NULL DEFAULT 0,\n            projected_cost_usd REAL NOT NULL DEFAULT 0.0,\n            raw_request_blob BLOB NOT NULL,\n            raw_request_headers TEXT NOT NULL DEFAULT '{}',\n            target_url TEXT NOT NULL DEFAULT '',\n            status TEXT NOT NULL DEFAULT 'pending'\n        )"
+          },
+          {
+            "type": "table",
+            "name": "spend_guard_audit",
+            "sql": "CREATE TABLE spend_guard_audit (\n            id INTEGER PRIMARY KEY AUTOINCREMENT,\n            ts REAL NOT NULL,\n            session_id TEXT NOT NULL DEFAULT '',\n            event_type TEXT NOT NULL,\n            decision TEXT NOT NULL DEFAULT '',\n            reason TEXT NOT NULL DEFAULT '',\n            projected_tokens INTEGER NOT NULL DEFAULT 0,\n            projected_cost_usd REAL NOT NULL DEFAULT 0.0,\n            pending_id TEXT NOT NULL DEFAULT '',\n            request_hash TEXT NOT NULL DEFAULT '',\n            tip_directive_json TEXT NOT NULL DEFAULT '',\n            extra_json TEXT NOT NULL DEFAULT ''\n        )"
+          }
+        ]
+      }
+    },
+    {
+      "path": "~/.tpk/monitor.db",
+      "purpose": "Proxy request, cost, savings, and timing ledger",
+      "exists": true,
+      "ddl": {
+        "objects": [
+          {
+            "type": "index",
+            "name": "idx_budget_alerts_day_period",
+            "sql": "CREATE UNIQUE INDEX idx_budget_alerts_day_period ON budget_alerts(date(timestamp), period)"
+          },
+          {
+            "type": "index",
+            "name": "idx_guard_reservation_row",
+            "sql": "CREATE UNIQUE INDEX idx_guard_reservation_row ON requests(guard_ledger_key, guard_reservation_id) WHERE guard_reservation_id != ''"
+          },
+          {
+            "type": "index",
+            "name": "idx_ma_request_id",
+            "sql": "CREATE INDEX idx_ma_request_id  ON mutation_audit(request_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_ma_session_id",
+            "sql": "CREATE INDEX idx_ma_session_id  ON mutation_audit(session_id)"
+          },
+          {
+            "type": "index",
+            "name": "idx_provider_events_ts",
+            "sql": "CREATE INDEX idx_provider_events_ts ON provider_events(timestamp)"
+          },
+          {
+            "type": "index",
+            "name": "idx_ts",
+            "sql": "CREATE INDEX idx_ts ON requests(timestamp)"
+          },
+          {
+            "type": "table",
+            "name": "budget_alerts",
+            "sql": "CREATE TABLE budget_alerts (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                timestamp TEXT NOT NULL,\n                agent_id TEXT DEFAULT \"\",\n                period TEXT DEFAULT \"daily\",\n                budget_usd REAL,\n                spent_usd REAL,\n                pct_used REAL,\n                triggered INTEGER DEFAULT 1\n            )"
+          },
+          {
+            "type": "table",
+            "name": "guard_accounting_domain",
+            "sql": "CREATE TABLE guard_accounting_domain (id INTEGER PRIMARY KEY CHECK(id=1), ledger_id TEXT NOT NULL, audit_store_sha256 TEXT)"
+          },
+          {
+            "type": "table",
+            "name": "mutation_audit",
+            "sql": "CREATE TABLE mutation_audit (\n            id                INTEGER PRIMARY KEY AUTOINCREMENT,\n            request_id        INTEGER,\n            session_id        TEXT,\n            timestamp         TEXT    NOT NULL,\n            pre_hash          TEXT,\n            post_hash         TEXT,\n            rules_applied     TEXT,\n            cache_risk        TEXT,\n            rollback_possible INTEGER,\n            mode              TEXT\n        )"
+          },
+          {
+            "type": "table",
+            "name": "provider_events",
+            "sql": "CREATE TABLE provider_events (\n            id INTEGER PRIMARY KEY AUTOINCREMENT,\n            timestamp TEXT NOT NULL,\n            event TEXT NOT NULL,\n            kind TEXT NOT NULL,\n            severity TEXT NOT NULL,\n            trace_id TEXT,\n            bytes_received INTEGER DEFAULT 0,\n            last_event_kind TEXT DEFAULT '',\n            time_since_last_chunk_ms INTEGER DEFAULT 0,\n            reason TEXT DEFAULT ''\n        )"
+          },
+          {
+            "type": "table",
+            "name": "requests",
+            "sql": "CREATE TABLE requests (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                timestamp TEXT NOT NULL,\n                model TEXT NOT NULL,\n                request_type TEXT,\n                input_tokens INTEGER,\n                output_tokens INTEGER,\n                estimated_cost REAL,\n                latency_ms INTEGER,\n                status_code INTEGER,\n                endpoint TEXT,\n                compilation_mode TEXT,\n                protected_tokens INTEGER,\n                compressed_tokens INTEGER,\n                injected_tokens INTEGER DEFAULT 0,\n                injected_sources TEXT DEFAULT '',\n                cache_read_tokens INTEGER DEFAULT 0,\n                cache_creation_tokens INTEGER DEFAULT 0,\n                would_have_saved INTEGER DEFAULT 0,\n                cache_origin TEXT DEFAULT 'unknown',\n                user_id TEXT DEFAULT '',\n                cache_creation_ephemeral_1h_tokens INTEGER DEFAULT 0,\n                cache_creation_ephemeral_5m_tokens INTEGER DEFAULT 0,\n                ttl_attribution TEXT DEFAULT NULL,\n                session_id TEXT DEFAULT '',\n                agent_id TEXT DEFAULT '',\n                cycle_id TEXT DEFAULT '',\n                attribution_source TEXT DEFAULT '',\n                reasoning_tokens INTEGER DEFAULT NULL,\n                visible_output_tokens INTEGER DEFAULT NULL,\n                total_billable_tokens INTEGER DEFAULT NULL,\n                reasoning_effort TEXT DEFAULT '',\n                reasoning_usage_source TEXT DEFAULT '',\n                provider_usage_ref TEXT DEFAULT '',\n                provider_usage_provider TEXT DEFAULT '',\n                provider_input_tokens INTEGER DEFAULT NULL,\n                provider_output_tokens INTEGER DEFAULT NULL,\n                provider_cache_read_tokens INTEGER DEFAULT NULL,\n                provider_cache_creation_tokens INTEGER DEFAULT NULL,\n                provider_usage_source TEXT DEFAULT '',\n                provider_usage_confidence TEXT DEFAULT '',\n                reasoning_effort_source TEXT DEFAULT '',\n                reasoning_effort_raw TEXT DEFAULT '',\n                cost_basis TEXT DEFAULT '',\n                pricing_source TEXT DEFAULT '',\n                stream_mode TEXT DEFAULT '',\n                event_transform_applied INTEGER DEFAULT 0,\n                stop_reason TEXT DEFAULT '',\n                started_at TEXT DEFAULT NULL,\n                ttfb_ms INTEGER DEFAULT NULL,\n                stream_duration_ms INTEGER DEFAULT NULL\n            , guard_reservation_id TEXT NOT NULL DEFAULT '', guard_ledger_key TEXT NOT NULL DEFAULT '', guard_usage_complete INTEGER NOT NULL DEFAULT 0, guard_price_json TEXT)"
+          }
+        ]
+      }
+    }
+  ]
+}
