@@ -22,6 +22,19 @@ def request(headers=None, **kwargs):
     )
 
 
+def native_message(usage, *, model="claude-sonnet-4-6", streaming=False):
+    return {
+        "id": "msg_synthetic",
+        "type": "message",
+        "role": "assistant",
+        "model": model,
+        "content": [],
+        "usage": usage,
+        "stop_reason": None if streaming else "end_turn",
+        "stop_sequence": None,
+    }
+
+
 def response(observed=None, **updates):
     usage = {
         "input_tokens": 10,
@@ -31,7 +44,7 @@ def response(observed=None, **updates):
         "cache_creation": {"ephemeral_5m_input_tokens": 3, "ephemeral_1h_input_tokens": 0},
     }
     usage.update(updates)
-    raw = json.dumps({"model": "claude-sonnet-4-6", "usage": usage}).encode()
+    raw = json.dumps(native_message(usage)).encode()
     return observe_response(observed or request(), raw, streaming=False, complete=True, status=200)
 
 
@@ -141,7 +154,7 @@ def test_positive_creation_without_ttl_partition_remains_observed_only():
         "cache_read_input_tokens": 20,
         "cache_creation_input_tokens": 3,
     }
-    raw = json.dumps({"model": "claude-sonnet-4-6", "usage": usage}).encode()
+    raw = json.dumps(native_message(usage)).encode()
     observed = observe_response(request(), raw, streaming=False, complete=True, status=200)
     assert observed.token_usage_complete
     assert observed.cache_creation_tokens == 3 and observed.input_tokens == 33
@@ -183,8 +196,12 @@ def test_native_stream_needs_full_terminal_and_monotonic_usage():
         "cache_creation_input_tokens": 0,
     }
     events = [
-        {"type": "message_start", "message": {"model": "claude-sonnet-4-6", "usage": usage}},
-        {"type": "message_delta", "usage": {"output_tokens": 7}},
+        {"type": "message_start", "message": native_message(usage, streaming=True)},
+        {
+            "type": "message_delta",
+            "usage": {"output_tokens": 7},
+            "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+        },
         {"type": "message_stop"},
     ]
     raw = b"".join(b"data: " + json.dumps(e).encode() + b"\n\n" for e in events)
@@ -205,7 +222,11 @@ def test_strict_json_and_model_binding_are_preserved():
     for raw in (b'{"model":"x","model":"y"}', b'{"x":NaN}', b"[1]", b"{"):
         assert "request_invalid" in observe_request(raw, URL, {"x-api-key": "x"}).token_reason_codes
     result = observe_response(
-        request(), b'{"model":"other","usage":{}}', streaming=False, complete=True, status=200
+        request(),
+        json.dumps(native_message({}, model="other")).encode(),
+        streaming=False,
+        complete=True,
+        status=200,
     )
     assert "response_model_mismatch" in result.token_reason_codes
     assert (

@@ -26,17 +26,21 @@ URL = "https://api.anthropic.com/v1/messages"
 
 
 @pytest.fixture
-def domain(tmp_path, monkeypatch):
+def domain(tmp_path, monkeypatch, request):
     # Each synthetic server owns its provider health; one refusal fixture must
     # not pre-open the next server's circuit. Multi-request behavior is tested
     # explicitly within a single domain below.
     monkeypatch.setattr(breaker_module, "_registry", breaker_module.CircuitBreakerRegistry())
     assert monitor_module._stop_db_write_queue(timeout=3)
+    options = getattr(request, "param", {})
     audit, db, config = tmp_path / "guard.db", tmp_path / "monitor.db", tmp_path / "config.json"
+    if options.get("config_location") == "default":
+        config = tmp_path / "state" / "config.yaml"
+        config.parent.mkdir()
     config.write_text(
         json.dumps(
             {
-                "tip_spend_guard": {
+                options.get("section", "tip_spend_guard"): {
                     "enabled": True,
                     "reservations_enabled": True,
                     "accounting_basis": "provider_tokens",
@@ -59,6 +63,8 @@ def domain(tmp_path, monkeypatch):
         "TOKENPAK_CREDS_ROUTER_ENABLED": "0",
     }.items():
         monkeypatch.setenv(key, value)
+    if options.get("config_location") == "default":
+        monkeypatch.delenv("TOKENPAK_CONFIG")
     monkeypatch.setattr("tokenpak.proxy.config.MONITOR_DB", str(db))
     received = []
     entered, release = threading.Event(), threading.Event()
@@ -80,13 +86,31 @@ def domain(tmp_path, monkeypatch):
         }
         if behavior.get("missing_usage"):
             usage.pop("cache_creation_input_tokens")
+        envelope = {
+            "id": "msg_synthetic",
+            "type": "message",
+            "role": "assistant",
+            "model": MODEL,
+            "content": [],
+            "usage": usage,
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+        }
         if json.loads(request.content).get("stream"):
             events = [
                 {
                     "type": "message_start",
-                    "message": {"model": MODEL, "usage": {**usage, "output_tokens": 0}},
+                    "message": {
+                        **envelope,
+                        "stop_reason": None,
+                        "usage": {**usage, "output_tokens": 0},
+                    },
                 },
-                {"type": "message_delta", "usage": {"output_tokens": 2}},
+                {
+                    "type": "message_delta",
+                    "usage": {"output_tokens": 2},
+                    "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                },
             ]
             if not behavior.get("partial"):
                 events.append({"type": "message_stop"})
@@ -94,7 +118,7 @@ def domain(tmp_path, monkeypatch):
             return httpx.Response(
                 200, stream=httpx.ByteStream(content), headers={"Content-Type": "text/event-stream"}
             )
-        return httpx.Response(200, json={"model": MODEL, "content": [], "usage": usage})
+        return httpx.Response(200, json=envelope)
 
     proxy = server_module.ProxyServer(host="127.0.0.1", port=0)
     proxy._connection_pool._make_client = lambda: httpx.Client(
@@ -173,6 +197,60 @@ def settled(domain):
             return result
         time.sleep(0.02)
     return result
+
+
+@pytest.mark.parametrize(
+    "switch", ["TOKENPAK_SPEND_GUARD_ENABLED", "TOKENPAK_SPEND_GUARD_RESERVATIONS_ENABLED"]
+)
+@pytest.mark.parametrize("explicit_basis", [False, True])
+@pytest.mark.parametrize(
+    "domain",
+    [
+        {"config_location": location, "section": section}
+        for location in ("explicit", "default")
+        for section in ("tip_spend_guard", "spend_guard")
+    ],
+    indirect=True,
+)
+def test_actual_owner_token_intent_survives_both_disable_switches(
+    domain, monkeypatch, switch, explicit_basis
+):
+    assert domain[0]._guard_serving_basis.accounting_basis == "provider_tokens"
+    if explicit_basis:
+        monkeypatch.setenv("TOKENPAK_SPEND_GUARD_ACCOUNTING_BASIS", "provider_tokens")
+    monkeypatch.setenv(switch, "false")
+    status, _ = send(domain)
+    assert status == 402
+    assert domain[3] == []
+
+
+def test_actual_owner_refuses_file_basis_change_and_snapshot_reinterpretation(domain):
+    config = json.loads(domain[2].read_text())
+    config["tip_spend_guard"]["accounting_basis"] = "priced_usage"
+    domain[2].write_text(json.dumps(config))
+    assert send(domain)[0] == 402
+    assert domain[3] == []
+    assert snapshot(domain)[0] == 503
+
+
+@pytest.mark.parametrize(
+    "switch", ["TOKENPAK_SPEND_GUARD_ENABLED", "TOKENPAK_SPEND_GUARD_RESERVATIONS_ENABLED"]
+)
+def test_switch_changed_after_reservation_still_refuses_before_transport(
+    domain, monkeypatch, switch
+):
+    from tokenpak.proxy.spend_guard.request_accounting import RequestAccounting
+
+    original = RequestAccounting.admit
+
+    def admit_then_disable(self, *args, **kwargs):
+        result = original(self, *args, **kwargs)
+        monkeypatch.setenv(switch, "false")
+        return result
+
+    monkeypatch.setattr(RequestAccounting, "admit", admit_then_disable)
+    assert send(domain)[0] == 402
+    assert domain[3] == []
 
 
 @pytest.mark.parametrize("stream", [False, True])

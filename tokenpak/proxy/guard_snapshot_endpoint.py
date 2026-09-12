@@ -32,11 +32,10 @@ _ROLLING_FIELDS = (
 )
 
 
-def _effective_config():
-    """Use the effective policy parser without config migration or writes."""
+def _raw_config():
+    """Read the selected configuration without migration, caching or writes."""
     from tokenpak import _paths
     from tokenpak.core import config_loader
-    from tokenpak.proxy.spend_guard.policy import load_config
 
     override = os.environ.get("TOKENPAK_CONFIG", "").strip()
     path = Path(override).expanduser() if override else _paths.config_read_path()
@@ -54,7 +53,14 @@ def _effective_config():
             raw = parser(handle)
         if not isinstance(raw, dict) or not all(isinstance(k, str) for k in raw):
             raise ValueError("config must be an object")
-    return load_config(raw_config=raw)
+    return raw
+
+
+def _effective_config():
+    """Use the effective policy parser without config migration or writes."""
+    from tokenpak.proxy.spend_guard.policy import load_config
+
+    return load_config(raw_config=_raw_config())
 
 
 def _effective_policy(config=None) -> tuple[dict[str, Any], str]:
@@ -173,6 +179,11 @@ def handle_post(
         from tokenpak.proxy.spend_guard.rolling_caps import _capture_rolling_snapshot
 
         config = _effective_config()
+        from tokenpak.proxy.spend_guard.serving_basis import check_environment, check_policy
+
+        intent = getattr(owner, "_guard_serving_basis", None)
+        check_environment(intent)
+        check_policy(config, intent)
         policy, policy_hash = _effective_policy(config)
         durable = config.enabled and config.reservations_enabled
         if include_tokens:

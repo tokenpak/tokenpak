@@ -4686,6 +4686,11 @@ class ProxyServer:
         shutdown_timeout: float | None = None,
         intercept_hosts: set[str] | None = None,
     ) -> None:
+        from .spend_guard.serving_basis import capture_serving_basis
+
+        # Capture new accounting-mode intent before a listener, pool or worker
+        # can exist. File basis changes require a new serving generation.
+        self._guard_serving_basis = capture_serving_basis()
         self.host = host
         self._intercept_hosts = intercept_hosts
         self.port = int(os.environ.get("TOKENPAK_PORT", "8766")) if port is None else port

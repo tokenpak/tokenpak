@@ -20,31 +20,35 @@ from .rolling_caps import RollingCapsConfig
 _log = logging.getLogger(__name__)
 
 
-def _request_config():
+def _request_config(intent=None):
     from tokenpak.proxy.guard_snapshot_endpoint import _effective_config
 
     from .policy import SpendGuardConfig, _coerce_bool, load_config
+    from .serving_basis import check_environment, check_policy, explicitly_disabled
 
     # Explicitly disabled accounting must not add config I/O to forwarding.
     # The existing guard still resolves its own policy when durable mode is off.
-    switches = ("TOKENPAK_SPEND_GUARD_ENABLED", "TOKENPAK_SPEND_GUARD_RESERVATIONS_ENABLED")
-    if any(name in os.environ and not _coerce_bool(os.environ[name]) for name in switches):
+    check_environment(intent)
+    if explicitly_disabled():
         return SpendGuardConfig(reservations_enabled=False)
     try:
-        return _effective_config()
+        config = _effective_config()
     except FileNotFoundError:
         # Legacy forwarding accepts an absent config. An explicit durable opt-in
         # must instead refuse a missing configured file, whose limits are unknown.
         if _coerce_bool(os.environ.get("TOKENPAK_SPEND_GUARD_RESERVATIONS_ENABLED")):
             raise
-        return load_config(raw_config={})
+        config = load_config(raw_config={})
+    check_policy(config, intent)
+    return config
 
 
 class RequestAccounting:
     def __init__(self, owner, headers):
         from tokenpak.proxy.request_pipeline import _resolve_agent_id, _resolve_session_id
 
-        self.config = _request_config()
+        self.serving_basis = getattr(owner, "_guard_serving_basis", None)
+        self.config = _request_config(self.serving_basis)
         from .policy import validate_accounting_basis
 
         validate_accounting_basis(self.config)
@@ -234,6 +238,9 @@ class RequestAccounting:
         return None
 
     def before_send(self, *, body=None, url=None, headers=None) -> None:
+        from .serving_basis import check_environment
+
+        check_environment(self.serving_basis)
         self.price = None
         if self.store is not None:
             from .request_workload import observe_request

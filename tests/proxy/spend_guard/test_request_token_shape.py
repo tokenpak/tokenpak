@@ -21,7 +21,23 @@ def request(body=None, url=URL):
 
 
 def complete(observed):
-    raw = b'{"model":"claude-sonnet-4-6","usage":{"input_tokens":8,"output_tokens":2,"cache_read_input_tokens":4,"cache_creation_input_tokens":3}}'
+    raw = json.dumps(
+        {
+            "id": "msg_synthetic",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-sonnet-4-6",
+            "content": [],
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+            "usage": {
+                "input_tokens": 8,
+                "output_tokens": 2,
+                "cache_read_input_tokens": 4,
+                "cache_creation_input_tokens": 3,
+            },
+        }
+    ).encode()
     return observe_response(observed, raw, streaming=False, complete=True, status=200)
 
 

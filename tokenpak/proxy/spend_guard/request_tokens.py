@@ -10,7 +10,8 @@ from dataclasses import asdict, dataclass, replace
 from typing import Mapping
 
 from .request_token_shape import observe_shape
-from .request_workload import _count, _json, _model, _response
+from .request_workload import _count, _json, _model
+from .response_token_shape import token_response
 
 _MAX_RECEIPT = 4096
 _REASONS = frozenset(
@@ -251,7 +252,8 @@ def observe_response(
     try:
         if request.provider != "anthropic" or type(streaming) is not bool:
             raise ValueError("unsupported response transport")
-        model, usage = _response(raw, streaming)
+        model, usage = token_response(raw, streaming)
+        facts["output_modality"] = "text"
         facts["response_model"] = _model(model)
         if model != request.request_model or facts["response_model"] is None:
             reasons.add("response_model_mismatch")
@@ -322,6 +324,7 @@ def observe_response(
     except (TypeError, ValueError, KeyError, UnicodeError, RecursionError, AttributeError):
         reasons.add("response_invalid")
         facts["response_complete"] = False
+        facts["output_modality"] = None
     return replace(
         request,
         **facts,

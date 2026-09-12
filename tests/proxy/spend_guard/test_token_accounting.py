@@ -70,7 +70,23 @@ def observed(store, coverage, ref):
     )
     store.attempted_send(coverage, ref)
     store.record_tokens(coverage, req)
-    raw = b'{"model":"claude-sonnet-4-6","usage":{"input_tokens":10,"output_tokens":7,"cache_read_input_tokens":20,"cache_creation_input_tokens":3}}'
+    raw = json.dumps(
+        {
+            "id": "msg_synthetic",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-sonnet-4-6",
+            "content": [],
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+            "usage": {
+                "input_tokens": 10,
+                "output_tokens": 7,
+                "cache_read_input_tokens": 20,
+                "cache_creation_input_tokens": 3,
+            },
+        }
+    ).encode()
     result = observe_response(req, raw, streaming=False, complete=True, status=200)
     store.record_tokens(coverage, result)
     return result
