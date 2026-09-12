@@ -6,6 +6,7 @@ import http.client
 import json
 import socket
 import sqlite3
+import struct
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -14,6 +15,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from tokenpak.proxy import circuit_breaker as breaker_module
 from tokenpak.proxy import monitor as monitor_module
 from tokenpak.proxy import server as server_module
 from tokenpak.proxy.spend_guard._context_window import get_model_max_context
@@ -25,6 +27,10 @@ URL = "https://api.anthropic.com/v1/messages"
 
 @pytest.fixture
 def domain(tmp_path, monkeypatch):
+    # Each synthetic server owns its provider health; one refusal fixture must
+    # not pre-open the next server's circuit. Multi-request behavior is tested
+    # explicitly within a single domain below.
+    monkeypatch.setattr(breaker_module, "_registry", breaker_module.CircuitBreakerRegistry())
     assert monitor_module._stop_db_write_queue(timeout=3)
     audit, db, config = tmp_path / "guard.db", tmp_path / "monitor.db", tmp_path / "config.json"
     config.write_text(
@@ -60,7 +66,7 @@ def domain(tmp_path, monkeypatch):
     behavior = {}
 
     def transport(request):
-        assert str(request.url) == URL
+        assert str(request.url) in (URL, URL + "?beta=true")
         received.append((bytes(request.content), dict(request.headers)))
         entered.set()
         assert release.wait(10)
@@ -118,7 +124,7 @@ def domain(tmp_path, monkeypatch):
         monitor_module._DB_CONNECTION_PATH = None
 
 
-def send(domain, *, stream=False, headers=None, body=None, url=URL):
+def send(domain, *, stream=False, headers=None, body=None, url=URL, raw_body=None):
     request = body or {
         "model": MODEL,
         "max_tokens": 16,
@@ -134,7 +140,9 @@ def send(domain, *, stream=False, headers=None, body=None, url=URL):
     combined.update(headers or {})
     conn = http.client.HTTPConnection("127.0.0.1", domain[0].port, timeout=15)
     try:
-        conn.request("POST", url, json.dumps(request).encode(), combined)
+        conn.request(
+            "POST", url, json.dumps(request).encode() if raw_body is None else raw_body, combined
+        )
         result = conn.getresponse()
         return result.status, result.read()
     finally:
@@ -309,3 +317,246 @@ def test_coverage_writer_contention_refuses_before_upstream(domain):
         assert domain[3] == []
         assert blocker.execute("SELECT COUNT(*) FROM budget_reservations").fetchone()[0] == 0
         blocker.rollback()
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_reconstructed_native_no_tools_shape_preserves_final_bytes(domain, stream):
+    import hashlib
+
+    from tokenpak.proxy.passthrough import _classify_route
+
+    from .spend_guard.native_text_fixtures import BETA, native_text_body
+
+    # The captured output bound is larger than the minimal fixture's cap.
+    # Raise only this test domain's explicit cap to fit that conservative hold.
+    policy_path = Path(domain[2])
+    policy = json.loads(policy_path.read_text())
+    for scope in ("agent", "fleet"):
+        policy["tip_spend_guard"][f"rolling_caps_per_{scope}_max_tokens_total"] = (
+            get_model_max_context(MODEL) + 32000
+        )
+    policy_path.write_text(json.dumps(policy))
+    body = native_text_body(stream=stream)
+    raw = json.dumps(body, indent=1).encode() + b"\n"
+    native_headers = {"anthropic-beta": BETA, "X-Claude-Code-Session-Id": "session-a"}
+    assert _classify_route(URL, native_headers) == "claude-code"
+    assert (
+        send(
+            domain,
+            body=body,
+            raw_body=raw,
+            url=URL + "?beta=true",
+            headers=native_headers,
+        )[0]
+        == 200
+    )
+    assert len(domain[3]) == 1 and domain[3][0][0] == raw
+    assert domain[3][0][1]["x-claude-code-session-id"] == "session-a"
+    facts = settled(domain)[2]["token_observation"]["observation"]
+    assert facts["token_usage_complete"] and facts["response_complete"]
+    assert facts["body_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert (facts["input_tokens"], facts["output_tokens"]) == (15, 2)
+    assert facts["feature_profile_status"] == "unclassified"
+    assert facts["comparison_reason_codes"] == ["feature_profile_unclassified"]
+    assert facts["actual_cost_usd"] is None and facts["billing_semantics"] == "unestablished"
+
+
+@pytest.mark.parametrize("change", ["context", "tools", "block", "query"])
+def test_native_shape_mutations_refuse_before_upstream(domain, change):
+    from .spend_guard.native_text_fixtures import BETA, native_text_body
+
+    body = native_text_body(max_tokens=16)
+    url = URL + "?beta=true"
+    if change == "context":
+        body["context_management"]["edits"][0]["keep"] = True
+    elif change == "tools":
+        body["tools"] = [{"name": "synthetic", "input_schema": {"type": "object"}}]
+    elif change == "block":
+        body["messages"][0]["content"] = [{"type": "image", "source": {}}]
+    else:
+        url += "&beta=true"
+    assert (
+        send(
+            domain,
+            body=body,
+            url=url,
+            headers={"anthropic-beta": BETA, "X-Claude-Code-Session-Id": "session-a"},
+        )[0]
+        >= 400
+    )
+    assert domain[3] == []
+
+
+def test_native_no_tools_shape_cannot_expand_the_token_cap(domain):
+    from .spend_guard.native_text_fixtures import BETA, native_text_body
+
+    assert (
+        send(
+            domain,
+            body=native_text_body(),
+            url=URL + "?beta=true",
+            headers={"anthropic-beta": BETA, "X-Claude-Code-Session-Id": "session-a"},
+        )[0]
+        == 402
+    )
+    assert domain[3] == []
+
+
+def test_repeated_local_native_refusals_do_not_mark_provider_unhealthy(domain):
+    from .spend_guard.native_text_fixtures import BETA, native_text_body
+
+    body = native_text_body(max_tokens=16)
+    body["context_management"] = None
+    native_headers = {"anthropic-beta": BETA, "X-Claude-Code-Session-Id": "session-a"}
+    registry = breaker_module.get_circuit_breaker_registry()
+    for _ in range(6):
+        status, raw = send(domain, body=body, url=URL + "?beta=true", headers=native_headers)
+        assert status == 402
+        assert json.loads(raw)["error"]["failure_kind"] == "spend_guard_internal_error"
+        assert domain[3] == []
+        health = registry.all_statuses()["anthropic"]
+        assert health["total_failures"] == 0 and health["state"] == "closed"
+    assert (
+        send(
+            domain,
+            body=native_text_body(max_tokens=16),
+            url=URL + "?beta=true",
+            headers=native_headers,
+        )[0]
+        == 200
+    )
+    assert len(domain[3]) == 1
+    assert settled(domain)[2]["token_coverage_complete"]
+
+
+def test_actual_provider_failure_still_counts_for_token_requests(domain):
+    domain[6]["status"] = 503
+    assert send(domain)[0] == 503
+    assert len(domain[3]) == 1
+    health = breaker_module.get_circuit_breaker_registry().all_statuses()["anthropic"]
+    assert health["total_failures"] == 1 and health["total_successes"] == 0
+
+
+@pytest.mark.parametrize("refusal", ["invalid_shape", "cap"])
+def test_local_refusal_releases_own_half_open_probe_for_next_request(domain, monkeypatch, refusal):
+    from .spend_guard.native_text_fixtures import BETA, native_text_body
+
+    registry = breaker_module.CircuitBreakerRegistry(
+        breaker_module.CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0)
+    )
+    monkeypatch.setattr(breaker_module, "_registry", registry)
+    registry.record_failure("anthropic")  # Synthetic health setup; no provider request.
+    body = native_text_body(max_tokens=32000 if refusal == "cap" else 16)
+    if refusal == "invalid_shape":
+        body["context_management"] = None
+    headers = {"anthropic-beta": BETA, "X-Claude-Code-Session-Id": "session-a"}
+    assert send(domain, body=body, url=URL + "?beta=true", headers=headers)[0] == 402
+    assert domain[3] == []
+    health = registry.all_statuses()["anthropic"]
+    assert health["state"] == "half_open" and health["total_failures"] == 1
+    assert (
+        send(domain, body=native_text_body(max_tokens=16), url=URL + "?beta=true", headers=headers)[
+            0
+        ]
+        == 200
+    )
+    assert len(domain[3]) == 1 and settled(domain)[2]["token_coverage_complete"]
+    health = registry.all_statuses()["anthropic"]
+    assert health["state"] == "closed"
+    assert (health["total_failures"], health["total_successes"]) == (1, 1)
+
+
+def test_client_disconnect_after_attempt_keeps_hold_and_releases_only_probe(domain, monkeypatch):
+    from tokenpak.proxy.spend_guard.request_accounting import RequestAccounting
+
+    from .spend_guard.native_text_fixtures import BETA, native_text_body
+
+    registry = breaker_module.CircuitBreakerRegistry(
+        breaker_module.CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0)
+    )
+    monkeypatch.setattr(breaker_module, "_registry", registry)
+    registry.record_failure("anthropic")  # Synthetic health setup only.
+    finished, terminal = threading.Event(), threading.Event()
+    original_finish = RequestAccounting.finish
+
+    def finish(accounting):
+        try:
+            original_finish(accounting)
+        finally:
+            finished.set()
+
+    def log_request(**kwargs):
+        if kwargs.get("extra", {}).get("outcome") == "client_disconnect":
+            terminal.set()
+
+    monkeypatch.setattr(RequestAccounting, "finish", finish)
+    monkeypatch.setattr(server_module, "log_request", log_request)
+    domain[5].clear()
+    raw_body = json.dumps(native_text_body(stream=False, max_tokens=16)).encode()
+    request = (
+        f"POST {URL}?beta=true HTTP/1.1\r\n"
+        "Host: api.anthropic.com\r\n"
+        "Content-Type: application/json\r\n"
+        "Authorization: Bearer synthetic-private\r\n"
+        "X-TokenPak-Session: session-a\r\n"
+        "X-TokenPak-Agent: agent-a\r\n"
+        "X-Claude-Code-Session-Id: session-a\r\n"
+        f"anthropic-beta: {BETA}\r\n"
+        f"Content-Length: {len(raw_body)}\r\n"
+        "Connection: close\r\n\r\n"
+    ).encode() + raw_body
+    with socket.create_connection(("127.0.0.1", domain[0].port), timeout=10) as client:
+        client.sendall(request)
+        assert domain[4].wait(8), "synthetic upstream was not attempted"
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+    domain[5].set()
+    assert terminal.wait(10) and finished.wait(10)
+    assert len(domain[3]) == 1
+    health = registry.all_statuses()["anthropic"]
+    assert (health["total_failures"], health["total_successes"]) == (1, 0)
+    assert health["state"] == "half_open"
+    owner = object()
+    assert registry.allow_request("anthropic", probe_owner=owner)
+    assert registry.release_probe("anthropic", owner)
+    with sqlite3.connect(domain[1]) as conn:
+        assert conn.execute(
+            "SELECT attempts, state, ended_at IS NOT NULL FROM budget_guard_coverage"
+        ).fetchone() == (1, "awaiting_usage", 1)
+        assert conn.execute(
+            "SELECT status, actual_cost_usd FROM budget_reservations"
+        ).fetchone() == ("active", None)
+
+
+def test_cancel_pending_token_request_does_not_mark_provider_failure(domain):
+    from tokenpak.proxy.spend_guard.pending import PendingStore
+
+    from .spend_guard.native_text_fixtures import BETA, native_text_body
+
+    body = native_text_body(max_tokens=16)
+    pending = PendingStore(str(domain[1]))
+    pending.store(
+        session_id="session-a",
+        body=json.dumps(body).encode(),
+        headers={},
+        target_url=URL,
+        provider="anthropic",
+        model=MODEL,
+        projected_tokens=16,
+        projected_cost_usd=0,
+    )
+    registry = breaker_module.get_circuit_breaker_registry()
+    registry.get_state("anthropic")
+    body["messages"][0]["content"][0]["text"] = "[TIP: cancel] synthetic work"
+    assert (
+        send(
+            domain,
+            body=body,
+            url=URL + "?beta=true",
+            headers={"anthropic-beta": BETA, "X-Claude-Code-Session-Id": "session-a"},
+        )[0]
+        == 200
+    )
+    assert pending.get_by_session("session-a") is None and domain[3] == []
+    assert registry.all_statuses()["anthropic"]["total_failures"] == 0
+    with sqlite3.connect(domain[1]) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM budget_reservations").fetchone()[0] == 0

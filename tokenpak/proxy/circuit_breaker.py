@@ -495,11 +495,12 @@ class CircuitBreaker:
         self._success_times: deque[float] = deque()
         self._opened_at: float = 0.0
         self._probe_in_flight: bool = False
+        self._probe_owner: object | None = None
         self._total_trips: int = 0
         self._total_successes: int = 0
         self._total_failures: int = 0
 
-    def allow_request(self) -> bool:
+    def allow_request(self, *, probe_owner: object | None = None) -> bool:
         """Return True if the request should proceed, False to fast-fail."""
         if not self._config.enabled:
             return True
@@ -512,14 +513,34 @@ class CircuitBreaker:
                 if elapsed >= self._config.recovery_timeout:
                     self._state = CircuitState.HALF_OPEN
                     self._probe_in_flight = True
+                    self._probe_owner = probe_owner
                     return True
                 return False
             if self._state == CircuitState.HALF_OPEN:
                 if not self._probe_in_flight:
                     self._probe_in_flight = True
+                    self._probe_owner = probe_owner
                     return True
                 return False
         return True
+
+    def release_probe(self, owner: object) -> bool:
+        """Release an owned probe without asserting any provider outcome.
+
+        Identity matching prevents delayed cleanup from releasing a newer or
+        concurrent request's permit. Legacy unowned probes cannot be released.
+        """
+        with self._lock:
+            if (
+                owner is None
+                or owner is not self._probe_owner
+                or self._state != CircuitState.HALF_OPEN
+                or not self._probe_in_flight
+            ):
+                return False
+            self._probe_in_flight = False
+            self._probe_owner = None
+            return True
 
     def record_success(self) -> None:
         """Record a successful response. Resets circuit if in HALF_OPEN."""
@@ -534,6 +555,7 @@ class CircuitBreaker:
                 self._state = CircuitState.CLOSED
                 self._failure_times.clear()
                 self._probe_in_flight = False
+                self._probe_owner = None
 
     def record_failure(self) -> None:
         """Record a failed response. May trip the circuit."""
@@ -544,6 +566,7 @@ class CircuitBreaker:
                 self._state = CircuitState.OPEN
                 self._opened_at = now
                 self._probe_in_flight = False
+                self._probe_owner = None
                 return
             if self._state == CircuitState.OPEN:
                 return
@@ -604,6 +627,7 @@ class CircuitBreaker:
             self._failure_times.clear()
             self._success_times.clear()
             self._probe_in_flight = False
+            self._probe_owner = None
             self._opened_at = 0.0
 
 
@@ -654,8 +678,11 @@ class CircuitBreakerRegistry:
                 self._breakers[provider] = CircuitBreaker(provider, self._config)
             return self._breakers[provider]
 
-    def allow_request(self, provider: str) -> bool:
-        return self._get_or_create(provider).allow_request()
+    def allow_request(self, provider: str, *, probe_owner: object | None = None) -> bool:
+        return self._get_or_create(provider).allow_request(probe_owner=probe_owner)
+
+    def release_probe(self, provider: str, owner: object) -> bool:
+        return self._get_or_create(provider).release_probe(owner)
 
     def record_success(self, provider: str) -> None:
         self._get_or_create(provider).record_success()

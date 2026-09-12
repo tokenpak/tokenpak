@@ -1542,6 +1542,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def _run_accounted_forward(self, forward) -> None:
         from tokenpak.proxy.spend_guard.request_accounting import RequestAccounting
 
+        self._token_guard_probe = None
         try:
             self._guard_accounting = RequestAccounting(self._ps, self.headers)
         except Exception as exc:
@@ -1552,7 +1553,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         try:
             forward()
         finally:
-            self._guard_accounting.finish()
+            try:
+                if self._token_guard_probe is not None:
+                    registry, provider, owner = self._token_guard_probe
+                    # Local refusal or downstream cancellation has no provider
+                    # health verdict. Known success/failure already clears the
+                    # owner; identity matching cannot release another probe.
+                    registry.release_probe(provider, owner)
+            finally:
+                self._guard_accounting.finish()
 
     def _write_accounting_block(self, outcome) -> None:
         raw = outcome.response_body or b"{}"
@@ -2138,7 +2147,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if should_log and is_model_request:
             _cb_provider = provider_from_url(target_url)
             _cb_registry = get_circuit_breaker_registry()
-            if not _cb_registry.allow_request(_cb_provider):
+            if self._guard_accounting.config.accounting_basis == "provider_tokens":
+                owner = object()
+                allowed = _cb_registry.allow_request(_cb_provider, probe_owner=owner)
+                if allowed:
+                    self._token_guard_probe = (_cb_registry, _cb_provider, owner)
+            else:
+                allowed = _cb_registry.allow_request(_cb_provider)
+            if not allowed:
                 import logging as _logging
 
                 _logging.getLogger(__name__).warning(
@@ -3307,6 +3323,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:
                     pass  # logging must never break the proxy
+                return
+
+            if (
+                self._guard_accounting.config.accounting_basis == "provider_tokens"
+                and self._guard_accounting.attempts == 0
+            ):
+                # A local token refusal or metadata failure before any send
+                # says nothing about provider health. Retain the local block
+                # without opening a provider circuit for unsent requests.
+                from tokenpak.proxy.spend_guard import _fail_closed_outcome
+
+                self._write_accounting_block(_fail_closed_outcome(exc))
                 return
 
             # ── Circuit breaker: record failure ───────────────────────────

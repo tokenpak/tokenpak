@@ -27,6 +27,7 @@ import copy
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
 import pytest
@@ -333,6 +334,73 @@ class TestCircuitBreakerHalfOpen:
         cb = self._make_half_open()
         cb.record_success()
         assert cb.status()["total_successes"] == 1
+
+
+class TestOwnedProbeRelease:
+    def test_release_is_neutral_and_cannot_release_legacy_probe(self):
+        cb = CircuitBreaker(
+            "anthropic", CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0)
+        )
+        cb.record_failure()
+        assert cb.allow_request()
+        before = cb.status()
+        assert not cb.release_probe(None)
+        assert not cb.release_probe(object())
+        assert not cb.allow_request()
+        assert cb.status() == before
+
+    def test_replacement_owner_and_concurrent_cleanup_cannot_release_current_probe(self):
+        cb = CircuitBreaker(
+            "anthropic", CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0)
+        )
+        old, current = object(), object()
+        cb.record_failure()
+        assert cb.allow_request(probe_owner=old)
+        before = cb.status()
+        assert cb.release_probe(old)
+        assert cb.status() == before
+        assert cb.allow_request(probe_owner=current)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(lambda _: cb.release_probe(old), range(20)))
+            admissions = list(pool.map(lambda _: cb.allow_request(probe_owner=object()), range(20)))
+        assert not any(results) and not any(admissions)
+        assert cb.status() == before
+        assert cb.release_probe(current)
+        assert cb.allow_request(probe_owner=object())
+
+    @pytest.mark.parametrize("outcome", ["success", "failure", "reset"])
+    def test_old_owner_cannot_undo_outcome_or_release_new_probe(self, outcome):
+        cb = CircuitBreaker(
+            "anthropic", CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0)
+        )
+        old, current = object(), object()
+        cb.record_failure()
+        assert cb.allow_request(probe_owner=old)
+        if outcome == "reset":
+            cb.reset()
+        else:
+            getattr(cb, "record_" + outcome)()
+        after = cb.status()
+        assert not cb.release_probe(old)
+        assert cb.status() == after
+        if cb.state == CircuitState.CLOSED:
+            cb.record_failure()
+        assert cb.allow_request(probe_owner=current)
+        assert not cb.release_probe(old)
+        assert not cb.allow_request(probe_owner=object())
+        assert cb.release_probe(current)
+
+    def test_owner_admitted_while_closed_cannot_release_later_probe(self):
+        cb = CircuitBreaker(
+            "anthropic", CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0)
+        )
+        earlier, probe = object(), object()
+        assert cb.allow_request(probe_owner=earlier)
+        cb.record_failure()
+        assert cb.allow_request(probe_owner=probe)
+        assert not cb.release_probe(earlier)
+        assert not cb.allow_request()
+        assert cb.release_probe(probe)
 
 
 class TestCircuitBreakerRollingWindow:

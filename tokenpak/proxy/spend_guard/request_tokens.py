@@ -9,8 +9,8 @@ import re
 from dataclasses import asdict, dataclass, replace
 from typing import Mapping
 
+from .request_token_shape import observe_shape
 from .request_workload import _count, _json, _model, _response
-from .request_workload import observe_request as observe_workload_request
 
 _MAX_RECEIPT = 4096
 _REASONS = frozenset(
@@ -184,17 +184,7 @@ def observe_request(
     credential_kind: str | None = None,
 ) -> RequestTokenObservation:
     """Classify final forwarding; router kind is internal metadata, never a header."""
-    workload = observe_workload_request(body, url, headers)
-    reasons = set(workload.reason_codes) & _REASONS
-    facts = dict(
-        body_sha256=workload.body_sha256,
-        provider=workload.provider,
-        request_model=workload.model,
-        input_modality=workload.input_modality,
-        output_modality=workload.output_modality,
-    )
-    if workload.provider == "anthropic":
-        facts["transport"] = "anthropic_messages_https"
+    facts, reasons, shape = observe_shape(body, url)
     try:
         lowered = {}
         for key, value in (headers or {}).items():
@@ -234,9 +224,7 @@ def observe_request(
         # enters this digest and no beta profile earns comparison eligibility.
         profile = dict(
             beta_sha256=hashlib.sha256(beta.encode()).hexdigest(),
-            input_modality=workload.input_modality,
-            output_modality=workload.output_modality,
-            cache_ttl_seconds=workload.cache_ttl_seconds,
+            request_shape=shape,
         )
         facts["request_feature_profile_sha256"] = hashlib.sha256(
             json.dumps(profile, sort_keys=True, separators=(",", ":")).encode()
