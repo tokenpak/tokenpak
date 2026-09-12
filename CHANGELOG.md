@@ -25,6 +25,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Shared session status views label forecast-derived guard runway as an estimate,
   consistently with the companion footer.
 
+### Security
+
+This release accepts the open NLTK GHSA-8mgp-746c-j5xp and Accelerate GHSA-4j2p-28q2-5m79 optional-dependency findings for this release only. Both are High under CVSS v3.1; the Accelerate advisory separately lists Moderate severity under CVSS v4. No verified published fix is available. The base install excludes both packages. Optional integrations must avoid untrusted model paths and checkpoint repositories and cannot rely on these APIs for filesystem containment. See SECURITY.md for affected extras and limitations. The findings remain open and must be resolved or reassessed before another release; all other checks remain required.
+
 ### Compatibility
 
 - The optional `recorded_usage` contract field is backward compatible with v1
