@@ -1,11 +1,10 @@
 # TokenPak Dispatch (v0.1-alpha preview)
 
-> **Preview status.** Dispatch is an early **v0.1-alpha preview**. It is **not yet part of a
-> released `pip install tokenpak` package** — in published PyPI wheels the Dispatch engine is
-> intentionally excluded, so the `dispatch` command is cleanly absent. To try the preview today you
-> need a **source / `main`-branch install** (see [Trying the preview](#trying-the-preview)). The
-> command surface is real and tested, but one part of the flow — actually executing the work and
-> producing a delivery receipt — is intentionally **post-alpha** and is not wired yet.
+> **Preview status.** Dispatch is an early **v0.1-alpha preview**. Released packages include
+> its CLI and runtime modules. Runtime commands require the optional `[dispatch]` dependencies
+> (see [Trying the preview](#trying-the-preview)). Packaged availability does not make the
+> delivery flow complete: actually executing station work and producing a delivery receipt
+> remain **post-alpha** and are not wired yet.
 
 ## What Dispatch is
 
@@ -45,7 +44,7 @@ proposed, why, and at what level of autonomy — rather than a black box that ru
 
 ## What works today
 
-From the CLI, the **control plane is fully usable** in the preview:
+The packaged preview exposes the following control-plane commands:
 
 | You want to… | Command |
 |---|---|
@@ -104,23 +103,22 @@ If you see "no receipt" in the preview, that is expected and correct — not a b
 
 ## Trying the preview
 
-Because the engine is excluded from released wheels, `pip install tokenpak` will **not** give you a
-`dispatch` command. To explore the preview, install TokenPak from source on the project `main`
-branch, then run:
+Install the optional preview dependencies in the same environment as TokenPak, then inspect
+the command surface:
 
 ```console
+$ python -m pip install 'tokenpak[dispatch]'
 $ tokenpak dispatch --help
 ```
 
-If `dispatch` is not listed, you are on a released package without the preview engine — switch to a
-source / `main`-branch install. When Dispatch graduates beyond the preview, it will become available
-through the standard install.
+Help lists the available commands; it does not execute a job or verify a delivery. If `dispatch`
+is not listed, check `tokenpak version` and the active installation environment, then upgrade
+TokenPak in that environment. A source checkout can also be used for preview development.
 
 ## Summary
 
 - Dispatch is a CLI-first, preview workflow-control surface: route a request, track it in a Run
   Ledger, and approve/reject via a Decision Inbox.
-- The control plane (run, status, inspect, decisions, lifecycle, error paths) **works today** from a
-  source/`main` install.
+- Released packages include the alpha CLI and runtime modules; runtime commands require the
+  optional `[dispatch]` dependencies.
 - Live station execution and delivery **receipts are post-alpha** and not wired yet.
-- It is **not** available via `pip install tokenpak` in this preview.
