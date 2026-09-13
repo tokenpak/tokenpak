@@ -157,6 +157,7 @@ def create_baseline(conn: sqlite3.Connection, ddl: list[dict]) -> None:
         require(kind in {"table", "index"}, f"unsupported historical DDL: {kind}")
         prefix = ["create", kind] if kind == "table" else ["create", "index"]
         tokens = list(sql_tokens(sql))
+        require(";" not in tokens, "multiple historical SQL statements are forbidden")
         if tokens[:3] == ["create", "unique", "index"]:
             tokens.pop(1)
         require(
@@ -193,7 +194,9 @@ def create_baseline(conn: sqlite3.Connection, ddl: list[dict]) -> None:
         for obj in sorted(ddl, key=lambda obj: (obj["type"] != "table", obj["name"])):
             conn.execute(obj["sql"])
     finally:
-        conn.set_authorizer(None)
+        # Disabling with None is supported only from Python 3.11. Older
+        # interpreters require a callable even after the bounded DDL phase.
+        conn.set_authorizer(None if sys.version_info >= (3, 11) else lambda *_: sqlite3.SQLITE_OK)
     actual = {(kind, name): sql_tokens(sql) for kind, name, sql in objects(conn)}
     expected = {(obj["type"], obj["name"]): sql_tokens(obj["sql"]) for obj in ddl}
     require(actual == expected, "historical DDL did not materialize exactly")

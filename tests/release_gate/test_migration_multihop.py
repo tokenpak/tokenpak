@@ -211,6 +211,41 @@ def test_unsupported_or_executable_historical_ddl_refuses(kind, sql):
             gate.create_baseline(conn, [{"type": kind, "name": "samples", "sql": sql}])
 
 
+def test_multiple_statements_refuse_before_any_schema_or_attachment_change():
+    with sqlite3.connect(":memory:") as conn:
+        with pytest.raises(ValueError, match="multiple historical SQL statements"):
+            gate.create_baseline(
+                conn,
+                [
+                    {
+                        "type": "table",
+                        "name": "samples",
+                        "sql": "CREATE TABLE samples (id INTEGER); ATTACH ':memory:' AS other",
+                    }
+                ],
+            )
+        assert conn.execute("SELECT name FROM sqlite_master").fetchall() == []
+        assert [row[1] for row in conn.execute("PRAGMA database_list")] == ["main"]
+
+
+def test_ddl_authorizer_is_released_after_rejected_statement():
+    with sqlite3.connect(":memory:") as conn:
+        with pytest.raises(sqlite3.DatabaseError):
+            gate.create_baseline(
+                conn,
+                [
+                    {
+                        "type": "table",
+                        "name": "samples",
+                        "sql": "CREATE TABLE samples AS SELECT 1 AS id",
+                    }
+                ],
+            )
+        conn.execute("CREATE TABLE after_refusal (value INTEGER)")
+        conn.execute("INSERT INTO after_refusal VALUES (7)")
+        assert conn.execute("SELECT value FROM after_refusal").fetchall() == [(7,)]
+
+
 def test_unknown_seed_type_is_not_silently_skipped():
     with sqlite3.connect(":memory:") as conn:
         conn.execute("CREATE TABLE samples (id INTEGER PRIMARY KEY, value CUSTOM NOT NULL)")
