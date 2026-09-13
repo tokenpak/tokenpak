@@ -1084,11 +1084,15 @@ class ReservationStore:
         if row is not None and row[0] is not None:
             self._check_basis(conn)
             return
-        if self.accounting_basis == "provider_tokens" and any(
+        if self.accounting_basis == "provider_tokens" and (
             conn.execute(
-                f"SELECT 1 FROM {table} WHERE ledger_key=? LIMIT 1", (self.ledger_key,)
+                "SELECT 1 FROM budget_reservations WHERE ledger_key=? LIMIT 1",
+                (self.ledger_key,),
             ).fetchone()
-            for table in ("budget_reservations", "budget_guard_coverage")
+            or conn.execute(
+                "SELECT 1 FROM budget_guard_coverage WHERE ledger_key=? LIMIT 1",
+                (self.ledger_key,),
+            ).fetchone()
         ):
             raise ReservationUnavailable("existing accounting domain cannot change basis")
         conn.execute(

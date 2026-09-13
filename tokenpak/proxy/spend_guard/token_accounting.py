@@ -47,14 +47,26 @@ def _rows(store, ledger, guard, *, cutoff=None, reservation_id=None):
         raise ReservationUnavailable("provider-token accounting basis required")
     store._check_domain(ledger)
     store._check_basis(guard)
-    clause, parameters = (
-        ("timestamp >= ?", (cutoff,))
-        if cutoff is not None
-        else ("guard_reservation_id=? AND guard_ledger_key=?", (reservation_id, store.ledger_key))
-    )
-    cursor = ledger.execute(
-        f"SELECT {', '.join(_FIELDS)} FROM requests WHERE {clause} LIMIT 100001", parameters
-    )
+    if cutoff is not None:
+        cursor = ledger.execute(
+            "SELECT guard_reservation_id, guard_ledger_key, guard_token_usage_complete, "
+            "guard_usage_complete, session_id, agent_id, model, input_tokens, output_tokens, "
+            "cache_read_tokens, cache_creation_tokens, provider_input_tokens, "
+            "provider_output_tokens, provider_cache_read_tokens, provider_cache_creation_tokens, "
+            "provider_usage_source, provider_usage_provider "
+            "FROM requests WHERE timestamp >= ? LIMIT 100001",
+            (cutoff,),
+        )
+    else:
+        cursor = ledger.execute(
+            "SELECT guard_reservation_id, guard_ledger_key, guard_token_usage_complete, "
+            "guard_usage_complete, session_id, agent_id, model, input_tokens, output_tokens, "
+            "cache_read_tokens, cache_creation_tokens, provider_input_tokens, "
+            "provider_output_tokens, provider_cache_read_tokens, provider_cache_creation_tokens, "
+            "provider_usage_source, provider_usage_provider "
+            "FROM requests WHERE guard_reservation_id=? AND guard_ledger_key=? LIMIT 100001",
+            (reservation_id, store.ledger_key),
+        )
     rows = [dict(zip(_FIELDS, row)) for row in cursor]
     if len(rows) > 100000:
         raise ReservationUnavailable("token accounting row limit exceeded")
