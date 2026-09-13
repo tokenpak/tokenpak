@@ -6,6 +6,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Clarify README descriptions of default proxy preservation, explicit context
+  tools, provider cache attribution, integration maturity and available editions.
+- Correct Dispatch documentation to describe the packaged alpha CLI and runtime,
+  optional dependencies, and unfinished station execution and delivery flow.
+
 ## [1.28.0] — 2026-09-12
 
 ### Added
