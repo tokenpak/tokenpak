@@ -219,6 +219,7 @@ class SpendGuardConfig:
     # The durable path is activated only after request and settlement wiring
     # have been validated. An explicit opt-in supports deployment preparation.
     reservations_enabled: bool = False
+    accounting_basis: str = "priced_usage"
     reservation_ttl_seconds: int = 600
     reservation_history_seconds: int = 30 * 24 * 3600
     reservation_max_records: int = 100_000
@@ -301,6 +302,8 @@ def load_config(raw_config: Optional[dict[str, Any]] = None) -> SpendGuardConfig
         cfg.enabled = _coerce_bool(sg["enabled"])
     if "reservations_enabled" in sg:
         cfg.reservations_enabled = _coerce_bool(sg["reservations_enabled"])
+    if "accounting_basis" in sg:
+        cfg.accounting_basis = sg["accounting_basis"]
     if "reservation_ttl_seconds" in sg:
         value = sg["reservation_ttl_seconds"]
         if type(value) is not int or value <= 0:
@@ -521,6 +524,9 @@ def load_config(raw_config: Optional[dict[str, Any]] = None) -> SpendGuardConfig
             except (TypeError, ValueError):
                 pass
 
+    if "TOKENPAK_SPEND_GUARD_ACCOUNTING_BASIS" in env:
+        cfg.accounting_basis = env["TOKENPAK_SPEND_GUARD_ACCOUNTING_BASIS"]
+
     # Validation: percent values
     for pct_field in ("default_context_window_percent", "hard_stop_context_window_percent"):
         v = getattr(cfg, pct_field)
@@ -562,7 +568,41 @@ def load_config(raw_config: Optional[dict[str, Any]] = None) -> SpendGuardConfig
     # we don't auto-promote a soft block into a hard block.
     if cfg.hard_block_cost_usd > 0 and cfg.block_cost_usd > 0:
         cfg.hard_block_cost_usd = max(cfg.hard_block_cost_usd, cfg.block_cost_usd)
+    validate_accounting_basis(cfg)
     return cfg
+
+
+def validate_accounting_basis(cfg: SpendGuardConfig) -> None:
+    """A token-only domain cannot silently drop an engaged monetary cap."""
+    import math
+
+    if cfg.accounting_basis not in ("priced_usage", "provider_tokens"):
+        raise ValueError("unsupported spend guard accounting basis")
+    if cfg.accounting_basis != "provider_tokens":
+        return
+    if not (cfg.enabled and cfg.reservations_enabled and cfg.rolling_caps_enabled):
+        raise ValueError("provider-token accounting requires enabled durable rolling caps")
+    monetary = (
+        cfg.rolling_caps_per_agent_max_cost_usd,
+        cfg.rolling_caps_per_fleet_max_cost_usd,
+        cfg.block_cost_usd,
+        cfg.hard_block_cost_usd,
+        cfg.session_block_cost_usd,
+    )
+    if (
+        cfg.dollar_cap_enabled_by_default
+        or cfg.default_dollar_cap is not None
+        or any(
+            type(value) not in (int, float) or not math.isfinite(value) or value != 0
+            for value in monetary
+        )
+    ):
+        raise ValueError("provider-token accounting cannot enforce monetary caps")
+    if (
+        type(cfg.rolling_caps_per_fleet_max_tokens_total) is not int
+        or cfg.rolling_caps_per_fleet_max_tokens_total <= 0
+    ):
+        raise ValueError("provider-token accounting requires an overall total-token cap")
 
 
 # ---------------------------------------------------------------------------

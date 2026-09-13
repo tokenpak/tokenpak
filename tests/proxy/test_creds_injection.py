@@ -273,3 +273,35 @@ def test_unresolvable_secret_fails_open(monkeypatch):
 
     assert result is False
     assert fwd == {"Authorization": "Bearer orig"}
+
+
+def test_provenance_callback_receives_only_successful_router_kind(monkeypatch):
+    calls = []
+    credential = _fake_cred("synthetic", platform="anthropic", kind="oauth")
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        router,
+        "select",
+        lambda *_: SimpleNamespace(credential=credential, layer="test", reason="synthetic"),
+    )
+    monkeypatch.setattr("tokenpak.creds.providers.resolve_secret", lambda *_: "fixture-private")
+    with _flag_on():
+        headers = {}
+        assert creds_injection.maybe_inject(
+            headers,
+            "https://api.anthropic.com/v1/messages",
+            {},
+            provenance_callback=lambda platform, kind: calls.append((platform, kind)),
+        )
+    assert calls == [("anthropic", "oauth")]
+    assert headers["Authorization"] == "Bearer fixture-private"
+    assert "fixture-private" not in str(calls)
+    with _flag_off():
+        assert not creds_injection.maybe_inject(
+            {},
+            "https://api.anthropic.com/v1/messages",
+            {},
+            provenance_callback=lambda *args: calls.append(args),
+        )
+    assert len(calls) == 1

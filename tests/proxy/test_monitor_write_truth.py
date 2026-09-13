@@ -782,6 +782,7 @@ def _request_insert_params(*, stop_reason=""):
         guard_reservation_id="",
         guard_ledger_key="",
         guard_usage_complete=0,
+        guard_token_usage_complete=0,
         timestamp=datetime.now().isoformat(),
         model="claude-sonnet-4-6",
         request_type="chat",

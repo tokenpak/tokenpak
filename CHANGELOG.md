@@ -6,6 +6,20 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in authenticated native token observations report independent request
+  coverage and bounded reservations with explicit response-completion evidence.
+  Token measurements do not establish billed cost or accepted task outcomes.
+
+### Fixed
+
+- Additive accounting migrations preserve historical rows and priced reservation
+  domains without reclassifying older evidence as measured native token usage.
+- The database upgrade gate now migrates seeded snapshots from the six latest
+  published minor baselines through all registered stores, checking row fidelity,
+  current schema and repeated initialization. Missing baselines fail the gate.
+
 ### Changed
 
 - Clarify README descriptions of default proxy preservation, explicit context

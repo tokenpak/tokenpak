@@ -1542,6 +1542,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def _run_accounted_forward(self, forward) -> None:
         from tokenpak.proxy.spend_guard.request_accounting import RequestAccounting
 
+        self._token_guard_probe = None
         try:
             self._guard_accounting = RequestAccounting(self._ps, self.headers)
         except Exception as exc:
@@ -1552,7 +1553,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         try:
             forward()
         finally:
-            self._guard_accounting.finish()
+            try:
+                if self._token_guard_probe is not None:
+                    registry, provider, owner = self._token_guard_probe
+                    # Local refusal or downstream cancellation has no provider
+                    # health verdict. Known success/failure already clears the
+                    # owner; identity matching cannot release another probe.
+                    registry.release_probe(provider, owner)
+            finally:
+                self._guard_accounting.finish()
 
     def _write_accounting_block(self, outcome) -> None:
         raw = outcome.response_body or b"{}"
@@ -1810,9 +1819,19 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             _sg_wexc,
                         )
                     return
-            except ImportError:
+            except ImportError as _sg_import_exc:
+                if self._guard_accounting.config.accounting_basis == "provider_tokens":
+                    from tokenpak.proxy.spend_guard import _fail_closed_outcome
+
+                    self._write_accounting_block(_fail_closed_outcome(_sg_import_exc))
+                    return
                 pass  # spend guard not installed
             except Exception as _sg_exc:
+                if self._guard_accounting.config.accounting_basis == "provider_tokens":
+                    from tokenpak.proxy.spend_guard import _fail_closed_outcome
+
+                    self._write_accounting_block(_fail_closed_outcome(_sg_exc))
+                    return
                 # The guard's own evaluate() converts internal evaluator
                 # errors into fail-closed 402s, so an exception here is a
                 # proxy-hook defect (header/session resolution, outcome
@@ -2128,7 +2147,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if should_log and is_model_request:
             _cb_provider = provider_from_url(target_url)
             _cb_registry = get_circuit_breaker_registry()
-            if not _cb_registry.allow_request(_cb_provider):
+            if self._guard_accounting.config.accounting_basis == "provider_tokens":
+                owner = object()
+                allowed = _cb_registry.allow_request(_cb_provider, probe_owner=owner)
+                if allowed:
+                    self._token_guard_probe = (_cb_registry, _cb_provider, owner)
+            else:
+                allowed = _cb_registry.allow_request(_cb_provider)
+            if not allowed:
                 import logging as _logging
 
                 _logging.getLogger(__name__).warning(
@@ -2314,6 +2340,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     fwd_headers,
                     target_url,
                     dict(self.headers),
+                    **(
+                        {"provenance_callback": self._guard_accounting.record_credential_kind}
+                        if self._guard_accounting.config.accounting_basis == "provider_tokens"
+                        else {}
+                    ),
                 )
             except Exception:
                 _router_injected = False  # fail-open
@@ -3101,6 +3132,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                 if self._guard_accounting.price is not None
                                 else None
                             ),
+                            guard_token_usage_complete=self._guard_accounting.complete_token_usage(
+                                _provider_usage,
+                                response_complete=_guard_response_complete,
+                            ),
                             guard_usage_complete=self._guard_accounting.complete_usage(
                                 _cost_observed,
                                 _provider_usage,
@@ -3288,6 +3323,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:
                     pass  # logging must never break the proxy
+                return
+
+            if (
+                self._guard_accounting.config.accounting_basis == "provider_tokens"
+                and self._guard_accounting.attempts == 0
+            ):
+                # A local token refusal or metadata failure before any send
+                # says nothing about provider health. Retain the local block
+                # without opening a provider circuit for unsent requests.
+                from tokenpak.proxy.spend_guard import _fail_closed_outcome
+
+                self._write_accounting_block(_fail_closed_outcome(exc))
                 return
 
             # ── Circuit breaker: record failure ───────────────────────────
@@ -4639,6 +4686,11 @@ class ProxyServer:
         shutdown_timeout: float | None = None,
         intercept_hosts: set[str] | None = None,
     ) -> None:
+        from .spend_guard.serving_basis import capture_serving_basis
+
+        # Capture new accounting-mode intent before a listener, pool or worker
+        # can exist. File basis changes require a new serving generation.
+        self._guard_serving_basis = capture_serving_basis()
         self.host = host
         self._intercept_hosts = intercept_hosts
         self.port = int(os.environ.get("TOKENPAK_PORT", "8766")) if port is None else port

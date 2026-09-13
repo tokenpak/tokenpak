@@ -85,8 +85,11 @@ class ReservationRef:
     store_path: str
     ledger_key: str
     reservation_id: str
+    accounting_basis: str = "priced_usage"
 
     def __post_init__(self) -> None:
+        if self.accounting_basis not in ("priced_usage", "provider_tokens"):
+            raise ValueError("unsupported reservation accounting basis")
         if not Path(self.store_path).is_absolute():
             raise ValueError("reservation store path must be absolute")
         if len(self.ledger_key) != 64 or any(c not in "0123456789abcdef" for c in self.ledger_key):
@@ -189,6 +192,13 @@ def _schema_is_current(conn: sqlite3.Connection) -> bool:
         present = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if not columns <= present:
             return False
+    for table, additions in (
+        ("budget_reservations", {"accounting_basis"}),
+        ("budget_guard_coverage", {"accounting_basis", "token_observation_json"}),
+        ("budget_reservation_generation", {"accounting_basis"}),
+    ):
+        if not additions <= {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}:
+            return False
     indexes = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
     return {
         "idx_reservation_scope",
@@ -214,6 +224,7 @@ def _schema(conn: sqlite3.Connection) -> None:
         )""")
         columns = {row[1] for row in conn.execute("PRAGMA table_info(budget_reservations)")}
         for name, definition in (
+            ("accounting_basis", "TEXT"),
             ("ledger_key", "TEXT NOT NULL DEFAULT ''"),
             ("owner_instance_id", "TEXT NOT NULL DEFAULT ''"),
             ("request_id", "TEXT NOT NULL DEFAULT ''"),
@@ -238,9 +249,19 @@ def _schema(conn: sqlite3.Connection) -> None:
             reservation_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'preflight',
             workload_json TEXT
         )""")
+        generation_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(budget_reservation_generation)")
+        }
+        if "accounting_basis" not in generation_columns:
+            conn.execute(
+                "ALTER TABLE budget_reservation_generation ADD COLUMN accounting_basis TEXT"
+            )
         coverage_columns = {
             row[1] for row in conn.execute("PRAGMA table_info(budget_guard_coverage)")
         }
+        for name in ("accounting_basis", "token_observation_json"):
+            if name not in coverage_columns:
+                conn.execute(f"ALTER TABLE budget_guard_coverage ADD COLUMN {name} TEXT")
         if "workload_json" not in coverage_columns:
             conn.execute("ALTER TABLE budget_guard_coverage ADD COLUMN workload_json TEXT")
         conn.execute(
@@ -259,7 +280,7 @@ def _schema(conn: sqlite3.Connection) -> None:
 
 def _generation_changed(conn: sqlite3.Connection, ledger_key: str) -> None:
     conn.execute(
-        "INSERT INTO budget_reservation_generation VALUES (?, 1) "
+        "INSERT INTO budget_reservation_generation (ledger_key, generation) VALUES (?, 1) "
         "ON CONFLICT(ledger_key) DO UPDATE SET generation=generation+1",
         (ledger_key,),
     )
@@ -375,7 +396,11 @@ class ReservationStore:
         *,
         history_seconds: int | None = None,
         max_records: int | None = None,
+        accounting_basis: str = "priced_usage",
     ):
+        if accounting_basis not in ("priced_usage", "provider_tokens"):
+            raise ValueError("unsupported reservation accounting basis")
+        self.accounting_basis = accounting_basis
         self.history_seconds = _HISTORY_SECONDS if history_seconds is None else history_seconds
         self.max_records = _MAX_HISTORY_ROWS if max_records is None else max_records
         for name in ("history_seconds", "max_records"):
@@ -430,7 +455,13 @@ class ReservationStore:
             )
 
     def _recorded(
-        self, agent_id: str, window_seconds: int, now: float, *, require_prices: bool = False
+        self,
+        agent_id: str,
+        window_seconds: int,
+        now: float,
+        *,
+        require_prices: bool = False,
+        guard_conn=None,
     ) -> tuple[RollingUsage, dict[str, tuple[str, str]]]:
         cutoff = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(now - window_seconds))
         # Missing DB/schema and unreadable state are unavailable, never zero.
@@ -441,6 +472,14 @@ class ReservationStore:
             deadline = time.monotonic() + 2.0
             self._check_domain(conn)
             conn.set_progress_handler(lambda: int(time.monotonic() > deadline), 1000)
+            if self.accounting_basis == "provider_tokens":
+                from .token_accounting import recorded_tokens
+
+                if guard_conn is None or require_prices:
+                    raise ReservationUnavailable(
+                        "token accounting requires its unpriced guard transaction"
+                    )
+                return recorded_tokens(self, conn, guard_conn, cutoff, agent_id)
             _validate_recorded_rows(conn, cutoff)
             if require_prices:
                 _validate_recorded_prices(conn, cutoff, deadline=deadline)
@@ -471,7 +510,12 @@ class ReservationStore:
         ).fetchone()
         if unscoped:
             raise ReservationUnavailable("active legacy reservations have unknown ledger scope")
-        result = {key: 0 for key, _, _ in _DIMENSIONS}
+        self._check_basis(conn)
+        result = {
+            key: 0
+            for key, _, _ in _DIMENSIONS
+            if self.accounting_basis == "priced_usage" or not key.endswith("usd")
+        }
         rows = conn.execute(
             "SELECT * FROM budget_reservations WHERE ledger_key=? "
             "AND status IN ('active', 'expired')",
@@ -492,7 +536,7 @@ class ReservationStore:
                 row["reserved_cache_read_tokens"],
             )
             for key, _, field in _DIMENSIONS:
-                if key.startswith("fleet_") or row["agent_id"] == agent_id:
+                if key in result and (key.startswith("fleet_") or row["agent_id"] == agent_id):
                     result[key] += getattr(projection, field)
                     _number(result[key], key)
         return result
@@ -526,12 +570,23 @@ class ReservationStore:
             raise ValueError("reservation TTL and rolling window must be positive")
         for _, field, _ in _DIMENSIONS:
             _number(getattr(caps, field), field)
+        if self.accounting_basis == "provider_tokens" and (
+            force
+            or not caps.enabled
+            or caps.per_agent_max_cost_usd != 0
+            or caps.per_fleet_max_cost_usd != 0
+            or caps.per_fleet_max_tokens_total <= 0
+        ):
+            raise ReservationUnavailable(
+                "provider-token admission requires token caps without force or monetary caps"
+            )
         self._bind_domain()
         reservation_id = "tpr_" + secrets.token_hex(16)
         with closing(_private_connection(self.path, write=True, create=True)) as conn:
             _schema(conn)
             conn.execute("BEGIN IMMEDIATE")
             try:
+                self._bind_basis(conn)
                 now = time.time()
                 _maintain_history(
                     conn,
@@ -545,6 +600,7 @@ class ReservationStore:
                         agent_id,
                         caps.window_seconds,
                         now,
+                        guard_conn=conn,
                         require_prices=(
                             caps.per_fleet_max_cost_usd > 0
                             or bool(agent_id)
@@ -574,7 +630,7 @@ class ReservationStore:
                     "INSERT INTO budget_reservations (reservation_id, session_id, agent_id, "
                     "created_at, expires_at, reserved_input_tokens, reserved_output_tokens, "
                     "reserved_cost_usd, ledger_key, owner_instance_id, request_id, "
-                    "reserved_cache_read_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "reserved_cache_read_tokens, accounting_basis) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         reservation_id,
                         session_id,
@@ -588,6 +644,7 @@ class ReservationStore:
                         owner_instance_id,
                         request_id,
                         projection.cache_read_tokens,
+                        self.accounting_basis,
                     ),
                 )
                 _generation_changed(conn, self.ledger_key)
@@ -595,7 +652,9 @@ class ReservationStore:
             except BaseException:
                 conn.rollback()
                 raise
-        return ReservationRef(str(self.path), self.ledger_key, reservation_id), None
+        return ReservationRef(
+            str(self.path), self.ledger_key, reservation_id, self.accounting_basis
+        ), None
 
     def settle_after_commit(self, ref: ReservationRef, actual: Projection) -> bool:
         """Called only after the actual monitor row has committed.
@@ -603,6 +662,8 @@ class ReservationStore:
         A late successful commit may resolve an expired hold. This does not
         discard expiry history by reclassifying it as a timely settlement.
         """
+        if self.accounting_basis != "priced_usage" or ref.accounting_basis != "priced_usage":
+            raise ReservationUnavailable("token-only rows cannot settle priced usage")
         if ref.store_path != str(self.path) or ref.ledger_key != self.ledger_key:
             raise ValueError("reservation reference belongs to another accounting scope")
         # Verify the durable row, not a caller's promise that enqueue succeeded.
@@ -666,6 +727,19 @@ class ReservationStore:
         with closing(_private_connection(self.path, write=True)) as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
+                self._check_basis(conn)
+                if ref.accounting_basis != self.accounting_basis:
+                    raise ReservationUnavailable("reservation release accounting basis differs")
+                if (
+                    self.accounting_basis == "provider_tokens"
+                    and conn.execute(
+                        "SELECT 1 FROM budget_guard_coverage WHERE ledger_key=? AND reservation_id=? AND attempts>0 LIMIT 1",
+                        (self.ledger_key, ref.reservation_id),
+                    ).fetchone()
+                ):
+                    raise ReservationUnavailable(
+                        "sent token reservation cannot be released as unsent"
+                    )
                 cursor = conn.execute(
                     "UPDATE budget_reservations SET status='released', settled_at=? "
                     "WHERE reservation_id=? AND ledger_key=? AND status='active'",
@@ -691,14 +765,22 @@ class ReservationStore:
             _schema(conn)
             conn.execute("BEGIN IMMEDIATE")
             try:
+                self._bind_basis(conn)
                 _maintain_history(
                     conn, self.ledger_key, window_seconds, self.history_seconds, self.max_records
                 )
                 conn.execute(
                     "INSERT INTO budget_guard_coverage "
-                    "(coverage_id, ledger_key, owner_instance_id, session_id, started_at) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (coverage_id, self.ledger_key, owner_instance_id, session_id, time.time()),
+                    "(coverage_id, ledger_key, owner_instance_id, session_id, started_at, accounting_basis) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        coverage_id,
+                        self.ledger_key,
+                        owner_instance_id,
+                        session_id,
+                        time.time(),
+                        self.accounting_basis,
+                    ),
                 )
                 _generation_changed(conn, self.ledger_key)
                 conn.commit()
@@ -765,6 +847,8 @@ class ReservationStore:
         self, session_id: str, window_seconds: int, *, include_workload: bool = False
     ) -> dict:
         """Read a generation-fenced, correlated view without writes or pruning."""
+        if self.accounting_basis != "priced_usage":
+            raise ReservationUnavailable("token-only accounting is not priced guard evidence")
         _identity(session_id, "session_id")
         _number(window_seconds, "window_seconds", integer=True)
         if not window_seconds:
@@ -991,3 +1075,66 @@ class ReservationStore:
         if row is None:
             raise ReservationUnavailable("accounting generation is unavailable")
         return _number(row[0], "generation", integer=True)
+
+    def _bind_basis(self, conn: sqlite3.Connection) -> None:
+        row = conn.execute(
+            "SELECT accounting_basis FROM budget_reservation_generation WHERE ledger_key=?",
+            (self.ledger_key,),
+        ).fetchone()
+        if row is not None and row[0] is not None:
+            self._check_basis(conn)
+            return
+        if self.accounting_basis == "provider_tokens" and (
+            conn.execute(
+                "SELECT 1 FROM budget_reservations WHERE ledger_key=? LIMIT 1",
+                (self.ledger_key,),
+            ).fetchone()
+            or conn.execute(
+                "SELECT 1 FROM budget_guard_coverage WHERE ledger_key=? LIMIT 1",
+                (self.ledger_key,),
+            ).fetchone()
+        ):
+            raise ReservationUnavailable("existing accounting domain cannot change basis")
+        conn.execute(
+            "INSERT INTO budget_reservation_generation (ledger_key, generation, accounting_basis) VALUES (?, 0, ?) ON CONFLICT(ledger_key) DO UPDATE SET accounting_basis=excluded.accounting_basis WHERE accounting_basis IS NULL",
+            (self.ledger_key, self.accounting_basis),
+        )
+        self._check_basis(conn)
+
+    def _check_basis(self, conn: sqlite3.Connection) -> None:
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(budget_reservation_generation)")
+        }
+        if "accounting_basis" not in columns:
+            if self.accounting_basis == "priced_usage":
+                return
+            raise ReservationUnavailable("token accounting schema is unavailable")
+        row = conn.execute(
+            "SELECT accounting_basis FROM budget_reservation_generation WHERE ledger_key=?",
+            (self.ledger_key,),
+        ).fetchone()
+        basis = row[0] if row is not None and row[0] is not None else "priced_usage"
+        if basis != self.accounting_basis:
+            raise ReservationUnavailable("accounting domain basis differs")
+
+    def record_tokens(self, coverage_id: str, observation) -> None:
+        from .request_tokens import RequestTokenObservation
+
+        raw = RequestTokenObservation.from_json(observation.to_json()).to_json()
+        self._update_coverage(
+            "UPDATE budget_guard_coverage SET token_observation_json=? WHERE coverage_id=? AND ledger_key=?",
+            coverage_id,
+            (raw,),
+        )
+
+    def settle_token_after_commit(self, ref: ReservationRef) -> bool:
+        from .token_accounting import settle_tokens
+
+        return settle_tokens(self, ref)
+
+    def token_snapshot(
+        self, session_id: str, window_seconds: int, *, owner_instance_id: str
+    ) -> dict:
+        from .token_accounting import token_snapshot
+
+        return token_snapshot(self, session_id, window_seconds, owner_instance_id=owner_instance_id)

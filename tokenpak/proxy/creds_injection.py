@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Mapping, Optional
+from typing import Callable, Mapping, Optional
 from urllib.parse import urlparse
 
 log = logging.getLogger(__name__)
@@ -93,6 +93,8 @@ def maybe_inject(
     fwd_headers: dict[str, str],
     target_url: str,
     client_headers: Mapping[str, str],
+    *,
+    provenance_callback: Callable[[str, str], None] | None = None,
 ) -> bool:
     """Inject a router-chosen credential into ``fwd_headers``.
 
@@ -176,6 +178,10 @@ def maybe_inject(
         return False
 
     _inject_secret(fwd_headers, decision.credential.platform, secret, decision.credential.kind)
+    if provenance_callback is not None:
+        # The callback sees only classification enums. It cannot resolve,
+        # replace or retain the credential selected by this existing path.
+        provenance_callback(decision.credential.platform, decision.credential.kind)
 
     log.info(
         "creds router → %s (platform=%s layer=%s reason=%s)",

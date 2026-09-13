@@ -241,10 +241,18 @@ def try_handle_post(handler: Any) -> bool:
     if not path.startswith("/tpk/v1/"):
         return False
 
-    if path in ("/tpk/v1/sessions/guard-snapshot", "/tpk/v1/sessions/workload-snapshot"):
+    if path in (
+        "/tpk/v1/sessions/guard-snapshot",
+        "/tpk/v1/sessions/workload-snapshot",
+        "/tpk/v1/sessions/token-snapshot",
+    ):
         from tokenpak.proxy.guard_snapshot_endpoint import handle_post
 
-        handle_post(handler, include_workload=path.endswith("/workload-snapshot"))
+        handle_post(
+            handler,
+            include_workload=path.endswith("/workload-snapshot"),
+            include_tokens=path.endswith("/token-snapshot"),
+        )
         return True
 
     if not _is_authorized(handler):

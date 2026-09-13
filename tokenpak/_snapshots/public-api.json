@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-09-08T23:39:17Z",
+  "generated_at": "2026-09-12T23:06:27Z",
   "package_version": "1.28.0",
   "symbols": [
     {
@@ -11520,6 +11520,10 @@
       "name": "load_config"
     },
     {
+      "module": "tokenpak.proxy.spend_guard.policy",
+      "name": "validate_accounting_basis"
+    },
+    {
       "module": "tokenpak.proxy.spend_guard.replay",
       "name": "resolve_pending"
     },
@@ -11580,6 +11584,30 @@
       "name": "price_request"
     },
     {
+      "module": "tokenpak.proxy.spend_guard.request_token_shape",
+      "name": "observe_shape"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_tokens",
+      "name": "RequestTokenObservation"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_tokens",
+      "name": "observe_request"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_tokens",
+      "name": "observe_response"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_tokens",
+      "name": "observe_shape"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.request_tokens",
+      "name": "token_response"
+    },
+    {
       "module": "tokenpak.proxy.spend_guard.request_workload",
       "name": "RequestWorkload"
     },
@@ -11628,6 +11656,10 @@
       "name": "pessimistic_output_reservation"
     },
     {
+      "module": "tokenpak.proxy.spend_guard.response_token_shape",
+      "name": "token_response"
+    },
+    {
       "module": "tokenpak.proxy.spend_guard.rolling_caps",
       "name": "CAP_DIMENSION_UNMEASURABLE"
     },
@@ -11672,6 +11704,26 @@
       "name": "settle_pending_spend"
     },
     {
+      "module": "tokenpak.proxy.spend_guard.serving_basis",
+      "name": "ServingBasis"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.serving_basis",
+      "name": "capture_serving_basis"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.serving_basis",
+      "name": "check_environment"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.serving_basis",
+      "name": "check_policy"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.serving_basis",
+      "name": "explicitly_disabled"
+    },
+    {
       "module": "tokenpak.proxy.spend_guard.session_state",
       "name": "session_cumulative_cost"
     },
@@ -11694,6 +11746,34 @@
     {
       "module": "tokenpak.proxy.spend_guard.tip_header",
       "name": "strip_tip_header"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.token_accounting",
+      "name": "RequestTokenObservation"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.token_accounting",
+      "name": "ReservationRef"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.token_accounting",
+      "name": "ReservationStore"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.token_accounting",
+      "name": "ReservationUnavailable"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.token_accounting",
+      "name": "recorded_tokens"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.token_accounting",
+      "name": "settle_tokens"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.token_accounting",
+      "name": "token_snapshot"
     },
     {
       "module": "tokenpak.proxy.startup",

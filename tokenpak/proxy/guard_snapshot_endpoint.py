@@ -32,11 +32,10 @@ _ROLLING_FIELDS = (
 )
 
 
-def _effective_config():
-    """Use the effective policy parser without config migration or writes."""
+def _raw_config():
+    """Read the selected configuration without migration, caching or writes."""
     from tokenpak import _paths
     from tokenpak.core import config_loader
-    from tokenpak.proxy.spend_guard.policy import load_config
 
     override = os.environ.get("TOKENPAK_CONFIG", "").strip()
     path = Path(override).expanduser() if override else _paths.config_read_path()
@@ -54,7 +53,14 @@ def _effective_config():
             raw = parser(handle)
         if not isinstance(raw, dict) or not all(isinstance(k, str) for k in raw):
             raise ValueError("config must be an object")
-    return load_config(raw_config=raw)
+    return raw
+
+
+def _effective_config():
+    """Use the effective policy parser without config migration or writes."""
+    from tokenpak.proxy.spend_guard.policy import load_config
+
+    return load_config(raw_config=_raw_config())
 
 
 def _effective_policy(config=None) -> tuple[dict[str, Any], str]:
@@ -92,7 +98,9 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def handle_post(handler: Any, *, include_workload: bool = False) -> None:
+def handle_post(
+    handler: Any, *, include_workload: bool = False, include_tokens: bool = False
+) -> None:
     """Serve only an explicit session, with a configured existing app key.
 
     Localhost alone is not proof of same-user access. This route requires
@@ -171,15 +179,45 @@ def handle_post(handler: Any, *, include_workload: bool = False) -> None:
         from tokenpak.proxy.spend_guard.rolling_caps import _capture_rolling_snapshot
 
         config = _effective_config()
+        from tokenpak.proxy.spend_guard.serving_basis import check_environment, check_policy
+
+        intent = getattr(owner, "_guard_serving_basis", None)
+        check_environment(intent)
+        check_policy(config, intent)
         policy, policy_hash = _effective_policy(config)
         durable = config.enabled and config.reservations_enabled
+        if include_tokens:
+            if not durable or config.accounting_basis != "provider_tokens":
+                _send(handler, 503, {"error": "token_accounting_unavailable"})
+                return
+            from tokenpak.proxy.spend_guard.reservation import ReservationStore
+
+            components = ReservationStore(
+                config.audit_db_path, monitor.db_path, accounting_basis="provider_tokens"
+            ).token_snapshot(
+                session_id, policy["rolling_caps_window_seconds"], owner_instance_id=owner_id
+            )
+            _send(
+                handler,
+                200,
+                {
+                    "schema_version": "native-token-snapshot/1",
+                    "session_id": session_id,
+                    "owner_instance_id": owner_id,
+                    "effective_policy_sha256": policy_hash,
+                    **components,
+                },
+            )
+            return
         if include_workload and not durable:
             _send(handler, 503, {"error": "workload_accounting_unavailable"})
             return
         if durable:
             from tokenpak.proxy.spend_guard.reservation import ReservationStore
 
-            components = ReservationStore(config.audit_db_path, monitor.db_path).snapshot(
+            components = ReservationStore(
+                config.audit_db_path, monitor.db_path, accounting_basis=config.accounting_basis
+            ).snapshot(
                 session_id, policy["rolling_caps_window_seconds"], include_workload=include_workload
             )
         else:
