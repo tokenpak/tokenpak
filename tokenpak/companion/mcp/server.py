@@ -18,6 +18,8 @@ import json
 import os
 import sys
 
+import tokenpak
+
 from .tools import TOOLS, CompanionState, active_tools, current_session_id
 
 
@@ -115,6 +117,7 @@ def _handle_tools_call(req_id: int | str, params: dict, state: CompanionState) -
 def main() -> None:
     """MCP server main loop — read JSON-RPC from stdin, dispatch, respond."""
     state = CompanionState()
+    print(f"tokenpak-companion-mcp v{tokenpak.__version__} ready", file=sys.stderr, flush=True)
 
     for line in sys.stdin:
         line = line.strip()
@@ -123,6 +126,8 @@ def main() -> None:
         try:
             req = json.loads(line)
         except json.JSONDecodeError:
+            # Request text and parser exception details may contain private content.
+            print("tokenpak-companion-mcp JSON parse error", file=sys.stderr, flush=True)
             continue
 
         req_id = req.get("id")

@@ -55,6 +55,29 @@ def _invoke(args):
     return rc, out.getvalue(), err.getvalue(), exc
 
 
+def test_help_describes_packaged_alpha_without_runtime_probe(monkeypatch, capsys):
+    """Help explains install availability and unfinished execution without loading it."""
+
+    def unexpected_probe():
+        pytest.fail("Dispatch help must not probe runtime availability or dependencies")
+
+    monkeypatch.setattr(dc, "_dispatch_runtime_source_present", unexpected_probe)
+    monkeypatch.setattr(dc, "_missing_dispatch_deps", unexpected_probe)
+    with pytest.raises(SystemExit) as exc:
+        _parser().parse_args(["dispatch", "--help"])
+
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    help_text = " ".join(captured.out.split())
+    assert captured.err == ""
+    assert "v0.1-alpha preview" in help_text
+    assert "Released packages include the CLI and runtime modules" in help_text
+    assert "runtime commands require the optional [dispatch] dependencies" in help_text
+    assert "Live station execution and delivery receipts are not wired yet" in help_text
+    assert "not yet in a released pip package" not in help_text
+    assert "on the project main branch" not in help_text
+
+
 # Every runtime/deps-gated verb (includes the new discovery verbs).
 GATED_VERB_ARGV = [
     ["dispatch", "run", "hello"],
