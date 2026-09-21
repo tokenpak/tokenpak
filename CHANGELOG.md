@@ -14,6 +14,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Restore the companion MCP startup version banner and content-free malformed
+  JSON diagnostics on stderr, preserving JSON-RPC responses on stdout.
 - Additive accounting migrations preserve historical rows and priced reservation
   domains without reclassifying older evidence as measured native token usage.
 - The database upgrade gate now migrates seeded snapshots from the six latest
@@ -24,7 +26,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 - Clarify README descriptions of default proxy preservation, explicit context
   tools, provider cache attribution, integration maturity and available editions.
-- Correct Dispatch documentation to describe the packaged alpha CLI and runtime,
+- Correct Dispatch documentation and CLI help to describe the packaged alpha CLI and runtime,
   optional dependencies, and unfinished station execution and delivery flow.
 
 ## [1.28.0] — 2026-09-12

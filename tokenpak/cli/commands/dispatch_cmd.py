@@ -177,10 +177,11 @@ def build_dispatch_parser(
         "dispatch",
         help="Run, observe, and decide on Dispatch jobs (workflow control)",
         description=(
-            "TokenPak Dispatch — scoped, station-based, resumable, gated work "
-            "packages with a Decision Inbox and delivery receipts (OSS, "
-            "v0.1-alpha preview — not yet in a released pip package; available "
-            "on the project main branch; CLI-first)."
+            "TokenPak Dispatch — scoped, resumable workflow control with a "
+            "Decision Inbox (OSS, v0.1-alpha preview; CLI-first). Released "
+            "packages include the CLI and runtime modules; runtime commands "
+            "require the optional [dispatch] dependencies. Live station "
+            "execution and delivery receipts are not wired yet."
         ),
     )
     dsub = p.add_subparsers(dest="dispatch_action", required=False)

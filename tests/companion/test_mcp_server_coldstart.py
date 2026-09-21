@@ -26,9 +26,12 @@ would break the 3.10 CI leg.
 
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 HEAVY_MODULES = ("sentence_transformers", "transformers", "torch")
 
@@ -49,6 +52,29 @@ def _run_py(code: str) -> subprocess.CompletedProcess[str]:
 
 def _line_after(prefix: str, output: str) -> str:
     return [ln for ln in output.splitlines() if ln.startswith(prefix)][-1][len(prefix) :]
+
+
+def _run_stdio(arguments: list[str], stdin: str) -> subprocess.CompletedProcess[str]:
+    """Exercise the server with finite input and isolated companion storage."""
+    with tempfile.TemporaryDirectory() as neutral_cwd:
+        env = {key: value for key, value in os.environ.items() if not key.startswith("TOKENPAK_")}
+        env.update(
+            {
+                "HOME": neutral_cwd,
+                "TOKENPAK_HOME": str(Path(neutral_cwd) / ".tpk"),
+                "TOKENPAK_COMPANION_JOURNAL_DIR": str(Path(neutral_cwd) / "journal"),
+                "TOKENPAK_COMPANION_PROFILE": "balanced",
+            }
+        )
+        return subprocess.run(
+            [sys.executable, *arguments],
+            input=stdin,
+            cwd=neutral_cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=_SUBPROC_TIMEOUT,
+        )
 
 
 def test_mcp_server_import_does_not_load_heavy_ml_stack() -> None:
@@ -86,3 +112,53 @@ def test_mcp_server_exposes_canonical_tool_registry() -> None:
     names = set(_line_after("TOOLS:", proc.stdout).split(","))
     assert {"journal_write", "prune_context"} <= names, names
     assert {"check_budget", "vault_search"} <= names, names
+
+
+def test_mcp_stdio_logs_private_parse_failure_and_recovers() -> None:
+    """Malformed input logs no content and does not corrupt the next responses."""
+    from tokenpak import __version__
+
+    private_marker = "private-mcp-diagnostic-probe"
+    stdin = "\n".join(
+        [
+            "",
+            '{"private": "' + private_marker + '",',
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}),
+            json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+            json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+            "",
+        ]
+    )
+    proc = _run_stdio(["-m", "tokenpak.companion.mcp.server"], stdin)
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stderr.splitlines() == [
+        f"tokenpak-companion-mcp v{__version__} ready",
+        "tokenpak-companion-mcp JSON parse error",
+    ]
+    assert private_marker not in proc.stdout + proc.stderr
+    responses = [json.loads(line) for line in proc.stdout.splitlines()]
+    assert [response["id"] for response in responses] == [1, 2]
+    assert all(response["jsonrpc"] == "2.0" and "error" not in response for response in responses)
+    assert responses[0]["result"]["protocolVersion"] == "2024-11-05"
+    assert responses[0]["result"]["serverInfo"] == {
+        "name": "tokenpak-companion",
+        "version": "0.1.0",
+    }
+    names = {tool["name"] for tool in responses[1]["result"]["tools"]}
+    assert {"journal_write", "prune_context", "check_budget", "vault_search"} <= names
+
+
+def test_mcp_stdio_banner_reads_current_package_version() -> None:
+    """The diagnostic uses package metadata at startup, not the wire version."""
+    code = (
+        "import tokenpak\n"
+        "from tokenpak.companion.mcp.server import main\n"
+        "tokenpak.__version__ = '9.8.7.dev6'\n"
+        "main()\n"
+    )
+    proc = _run_stdio(["-c", code], "")
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == ""
+    assert proc.stderr == "tokenpak-companion-mcp v9.8.7.dev6 ready\n"
