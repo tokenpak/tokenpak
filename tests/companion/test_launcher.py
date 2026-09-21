@@ -441,6 +441,10 @@ def test_main_generates_all_config_files(tmp_path):
                 mock_exec.assert_called_once()
                 exec_cmd = mock_exec.call_args[0][0]
                 assert exec_cmd == "claude"
+                assert mock_exec.call_args[0][2]["TOKENPAK_COMPANION_PYTHON"] == sys.executable
+                assert mock_exec.call_args[0][2]["TOKENPAK_COMPANION_JOURNAL_DIR"] == str(
+                    journal_dir
+                )
 
     launch_dirs = list(run_dir.glob("launch-*"))
     assert len(launch_dirs) == 1

@@ -555,9 +555,9 @@ def companion_hook_integrity() -> "list[tuple[str, str, str]]":
     are checked across Claude Code (``~/.claude/settings.json``) and Codex
     (``~/.codex/hooks.json``) hook configs:
 
-    - The bash hook variants shell out to the ``sqlite3`` CLI for their
-      journal/budget writes and silently no-op when the binary is missing —
-      evidence loss with no error surfaced anywhere. WARN when bash hooks
+    - Some bash budget/recall and legacy journal paths require the external
+      ``sqlite3`` CLI. Current Claude prompt journaling has a Python fallback,
+      but that does not replace every shell operation. WARN when bash hooks
       are installed but the CLI is absent.
     - Hook commands referencing script paths that no longer exist (e.g. a
       relocated or partially removed install) fail on every prompt. WARN
@@ -635,12 +635,13 @@ def companion_hook_integrity() -> "list[tuple[str, str, str]]":
         results.append(
             (
                 "warn",
-                "Companion hooks     sqlite3 CLI not found — bash hooks silently "
-                "skip journal/budget writes",
-                "The installed bash hook variants depend on the sqlite3 "
-                "command-line tool for journal and budget writes and no-op "
-                "without it. Install it (e.g. apt install sqlite3 / brew "
-                "install sqlite) or switch to the python hook variant.",
+                "Companion hooks     sqlite3 CLI not found — some shell-hook "
+                "budget and recall operations require it",
+                "Current managed Claude prompt journaling uses a Python fallback. "
+                "A configured shell-hook budget still refuses requests without sqlite3; "
+                "legacy hooks and optional recall queries may also need it. "
+                "Install it (e.g. apt install sqlite3 / brew install sqlite) "
+                "and re-run doctor to check the configured hooks.",
             )
         )
 
@@ -1694,9 +1695,8 @@ def run_doctor(
         _record("required_dirs", "pass", "Required dirs       all present")
 
     # === Companion hook integrity (script paths + sqlite3 CLI) ==================
-    # The bash hook variants no-op silently without the sqlite3 CLI, and a
-    # hook command pointing at a missing script fails on every prompt —
-    # both are invisible without a doctor check.
+    # Some shell-hook features require the sqlite3 CLI, and a hook command
+    # pointing at a missing script fails on every prompt. Report both here.
     try:
         for _ch_status, _ch_msg, _ch_detail in companion_hook_integrity():
             _record("companion_hooks", _ch_status, _ch_msg, detail=_ch_detail)

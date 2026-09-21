@@ -226,6 +226,8 @@ def main(args: list[str] | None = None) -> int:
     # Auto-detect if proxy is running when no explicit proxy_url is set.
     env = os.environ.copy()
     env[session_dir_env] = str(launch_dir)
+    env["TOKENPAK_COMPANION_PYTHON"] = sys.executable
+    env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(config.journal_dir)
 
     # Bare mode: strip Claude Code native context layers so an external
     # gateway (e.g. OpenClaw) can inject its own tools/history/memory.
