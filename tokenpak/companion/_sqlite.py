@@ -582,6 +582,13 @@ def flush_pre_send_events(base_dir: Path | str) -> int:
             with _write_transaction(conn):
                 ensure_journal_schema(conn)
                 for event in events:
+                    # A first prompt can precede the MCP session registration.
+                    # Preserve existing session metadata and observed totals;
+                    # a queued submission establishes neither completion nor usage.
+                    conn.execute(
+                        "INSERT OR IGNORE INTO sessions (session_id, started_at) VALUES (?, ?)",
+                        (event["session_id"], event["timestamp"]),
+                    )
                     journal = event["journal"]
                     entry_type = journal["entry_type"]
                     content = journal["content"]

@@ -3,12 +3,14 @@
 # ──────────────────────────────────────────────────────────────
 # Ultra-lean UserPromptSubmit hook — pure bash, ~30ms target.
 #
-# No python3 in the hot path. JSON fields extracted with grep.
-# Budget check uses sqlite3 CLI (only if budget is set).
+# Existing journals use the sqlite3 fast path. Cold journals or installations
+# without that executable enqueue metadata with the packaged Python helper.
+# Budget check still requires sqlite3 CLI when a budget is set.
 # ──────────────────────────────────────────────────────────────
 
-# Read stdin
-INPUT=$(cat)
+# Read all JSON input without starting a process on every prompt.
+INPUT=""
+IFS= read -r -d '' INPUT || true
 
 # Quick exit if companion disabled
 [ "${TOKENPAK_COMPANION_ENABLED:-1}" = "0" ] && exit 0
@@ -59,6 +61,23 @@ _tp_ensure_dedupe_schema() {
         "ALTER TABLE entries ADD COLUMN content_hash TEXT;" >/dev/null 2>&1
     sqlite3 -cmd ".timeout 5000" "$1" \
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_dedupe ON entries(session_id, entry_type, content_hash) WHERE content_hash IS NOT NULL;" >/dev/null 2>&1
+}
+
+_tp_queue_prompt() {
+    # Like the sqlite3 writer below, this helper must not hold up the prompt.
+    # Close inherited stdio; retain content-free failures in a private log.
+    local journal_run="${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}/run"
+    (
+        umask 077
+        [ -d "$journal_run" ] || mkdir -p "$journal_run" 2>/dev/null || exit 0
+        # Set scheduling priority before interpreter startup where available.
+        local journal_priority=()
+        command -v nice >/dev/null 2>&1 && journal_priority=(nice -n 10)
+        exec "${journal_priority[@]}" "${TOKENPAK_COMPANION_PYTHON:-python3}" \
+            "${BASH_SOURCE[0]%/*}/_journal_event.py" \
+            "$SESSION_ID" "$1" "$2" "$MODEL" \
+            </dev/null >>"$journal_run/journal-fallback.log" 2>&1
+    ) </dev/null >/dev/null 2>&1 &
 }
 
 # Session-binding marker (atomic tmp+mv): the companion MCP server — a
@@ -114,6 +133,9 @@ if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
 fi
 
 if [ "$TOKENS" -eq 0 ]; then
+    if [[ "$SESSION_ID" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
+        _tp_queue_prompt 0 0
+    fi
     [ -n "$RECALL_HINT" ] && printf '%s\n' "$RECALL_HINT"
     exit 0
 fi
@@ -155,7 +177,7 @@ fi
 
 # Integer math in microdollars: USD/Mtoken => tokens * rate microdollars.
 COST_MICRO=$((TOKENS * RATE))
-COST_DOLLARS="$(( COST_MICRO / 1000000 )).$(printf '%06d' $(( COST_MICRO % 1000000 )) )"
+printf -v COST_DOLLARS '%d.%06d' "$(( COST_MICRO / 1000000 ))" "$(( COST_MICRO % 1000000 ))"
 
 # Budget check (only if TOKENPAK_COMPANION_BUDGET is set and > 0)
 BUDGET="${TOKENPAK_COMPANION_BUDGET:-0}"
@@ -217,19 +239,22 @@ if [ "${TOKENPAK_COMPANION_SHOW_COST:-1}" != "0" ]; then
     printf 'tokenpak: ~%s tokens  est $%s%s%s\n' "$TOKENS_FMT" "$COST_DOLLARS" "$MODEL_TAG" "$BUDGET_TAG" >&2
 fi
 
-if [ -n "$SESSION_ID" ]; then
+if [[ "$SESSION_ID" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
     JOURNAL_DIR="${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}"
     JOURNAL_DB="$JOURNAL_DIR/journal.db"
     if [ -f "$JOURNAL_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
         TIMESTAMP=$(date +%s)
         ENTRY_CONTENT="prompt submitted (~${TOKENS_FMT} tokens, est \$$COST_DOLLARS, model: ${MODEL:-unknown})"
         ENTRY_HASH=$(_tp_entry_hash 'auto' "$ENTRY_CONTENT" '{}')
+        ENTRY_CONTENT_SQL=${ENTRY_CONTENT//\'/\'\'}
         {
             _tp_ensure_dedupe_schema "$JOURNAL_DB"
             sqlite3 -cmd ".timeout 5000" "$JOURNAL_DB" \
                 "INSERT OR IGNORE INTO entries (session_id, timestamp, entry_type, content, metadata_json, content_hash)
-                 VALUES ('$SESSION_ID', $TIMESTAMP, 'auto', '$ENTRY_CONTENT', '{}', NULLIF('$ENTRY_HASH', ''));" 2>/dev/null
+                 VALUES ('$SESSION_ID', $TIMESTAMP, 'auto', '$ENTRY_CONTENT_SQL', '{}', NULLIF('$ENTRY_HASH', ''));" 2>/dev/null
         } &
+    else
+        _tp_queue_prompt "$TOKENS" "$COST_MICRO"
     fi
 fi
 

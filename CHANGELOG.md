@@ -14,6 +14,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Claude prompt submissions appear in fresh companion journals even without
+  the external SQLite executable. Metadata is queued outside the prompt path;
+  it does not count as completed work or provider usage. Configured shell-hook
+  budgets retain their refusal behavior when SQLite is unavailable.
 - Restore the companion MCP startup version banner and content-free malformed
   JSON diagnostics on stderr, preserving JSON-RPC responses on stdout.
 - Additive accounting migrations preserve historical rows and priced reservation
