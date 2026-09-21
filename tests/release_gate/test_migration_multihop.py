@@ -87,6 +87,30 @@ def test_published_fixture_matrix_is_complete_and_each_table_is_seedable(tmp_pat
     assert cases == 18
 
 
+def test_late_ddl_failure_removes_partial_baseline_without_ending_caller_transaction(tmp_path):
+    with sqlite3.connect(tmp_path / "atomic.db") as conn:
+        conn.execute("BEGIN")
+        with pytest.raises(sqlite3.OperationalError, match="no such column"):
+            gate.create_baseline(
+                conn,
+                DDL
+                + [
+                    {
+                        "type": "index",
+                        "name": "bad_index",
+                        "sql": "CREATE INDEX bad_index ON samples(missing_column)",
+                    }
+                ],
+            )
+        assert conn.in_transaction
+        assert gate.objects(conn) == []
+        # The authorizer must also be restored after a rejected declaration.
+        conn.execute("CREATE TABLE caller_work (value TEXT)")
+        conn.execute("INSERT INTO caller_work VALUES ('retained')")
+        conn.commit()
+        assert conn.execute("SELECT value FROM caller_work").fetchall() == [("retained",)]
+
+
 @pytest.mark.parametrize("change", ["missing", "tampered"])
 def test_missing_or_tampered_snapshot_refuses(manifest_path, change):
     manifest = json.loads(manifest_path.read_text())

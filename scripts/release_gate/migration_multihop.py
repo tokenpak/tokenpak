@@ -189,17 +189,29 @@ def create_baseline(conn: sqlite3.Connection, ddl: list[dict]) -> None:
             allowed = False
         return sqlite3.SQLITE_OK if allowed else sqlite3.SQLITE_DENY
 
-    conn.set_authorizer(authorize)
+    # Batch historical DDL into one atomic operation. SQLite otherwise commits
+    # each CREATE separately, making the fixture matrix depend on disk latency.
+    # A savepoint also preserves an existing caller transaction on refusal.
+    conn.execute("SAVEPOINT migration_baseline")
     try:
-        for obj in sorted(ddl, key=lambda obj: (obj["type"] != "table", obj["name"])):
-            conn.execute(obj["sql"])
+        conn.set_authorizer(authorize)
+        try:
+            for obj in sorted(ddl, key=lambda obj: (obj["type"] != "table", obj["name"])):
+                conn.execute(obj["sql"])
+        finally:
+            # Disabling with None is supported only from Python 3.11. Older
+            # interpreters require a callable after the bounded DDL phase.
+            conn.set_authorizer(
+                None if sys.version_info >= (3, 11) else lambda *_: sqlite3.SQLITE_OK
+            )
+        actual = {(kind, name): sql_tokens(sql) for kind, name, sql in objects(conn)}
+        expected = {(obj["type"], obj["name"]): sql_tokens(obj["sql"]) for obj in ddl}
+        require(actual == expected, "historical DDL did not materialize exactly")
+    except BaseException:
+        conn.execute("ROLLBACK TO migration_baseline")
+        raise
     finally:
-        # Disabling with None is supported only from Python 3.11. Older
-        # interpreters require a callable even after the bounded DDL phase.
-        conn.set_authorizer(None if sys.version_info >= (3, 11) else lambda *_: sqlite3.SQLITE_OK)
-    actual = {(kind, name): sql_tokens(sql) for kind, name, sql in objects(conn)}
-    expected = {(obj["type"], obj["name"]): sql_tokens(obj["sql"]) for obj in ddl}
-    require(actual == expected, "historical DDL did not materialize exactly")
+        conn.execute("RELEASE migration_baseline")
 
 
 def seed_value(table: str, column: tuple, row: int) -> object:
