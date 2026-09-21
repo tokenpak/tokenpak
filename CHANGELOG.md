@@ -6,6 +6,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.29.0] — 2026-09-21
+
 ### Added
 
 - Opt-in authenticated native token observations report independent request
@@ -32,6 +34,14 @@ This project follows [Semantic Versioning](https://semver.org/).
   tools, provider cache attribution, integration maturity and available editions.
 - Correct Dispatch documentation and CLI help to describe the packaged alpha CLI and runtime,
   optional dependencies, and unfinished station execution and delivery flow.
+
+### Compatibility
+
+- Native token observations are opt-in. Existing configurations and TIP-1.0
+  remain supported; absent or incomplete observations remain unavailable.
+- The paired Pro 0.5.0 candidate supports OSS 1.26.0 through 1.29.0.
+  Native token measurement requires OSS 1.29.0. Upgrade both packages together.
+- See [upgrade, rollback and release status](docs/release-log/v1.29.0.md).
 
 ## [1.28.0] — 2026-09-12
 
