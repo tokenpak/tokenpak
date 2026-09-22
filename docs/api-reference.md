@@ -274,7 +274,7 @@ each `(model, effort, stream_mode)` cell only serves `status: "available"`
 once that cell has cleared its own independent walk-forward calibration
 review. A cell that has not yet been reviewed still reports
 `"insufficient_data"` even with the flag on; a cell with early, below-
-threshold evidence reports `"learning"` (band still populated, just not yet
+threshold evidence reports `"learning"` (band still populated, but not yet
 at full confidence). `status` is always one of `unavailable` /
 `insufficient_data` / `unknown` / `learning` / `available` — never a bare
 number standing in for missing data.
