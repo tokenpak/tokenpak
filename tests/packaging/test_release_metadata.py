@@ -133,7 +133,9 @@ def test_duplicate_metadata_key_is_malformed(tmp_path, monkeypatch):
 def built_distributions(tmp_path_factory):
     # A source install can leave a build/ namespace directory even when the
     # optional build frontend is absent. Require its executable module.
-    pytest.importorskip("build.__main__", reason="archive construction requires the dev build frontend")
+    pytest.importorskip(
+        "build.__main__", reason="archive construction requires the dev build frontend"
+    )
     output = tmp_path_factory.mktemp("release-metadata-dist")
     result = subprocess.run(
         [sys.executable, "-m", "build", "--no-isolation", "--outdir", str(output)],
