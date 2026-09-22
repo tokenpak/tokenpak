@@ -252,7 +252,8 @@ if [[ "$SESSION_ID" =~ ^[A-Za-z0-9_-]{1,64}$ ]]; then
             sqlite3 -cmd ".timeout 5000" "$JOURNAL_DB" \
                 "INSERT OR IGNORE INTO entries (session_id, timestamp, entry_type, content, metadata_json, content_hash)
                  VALUES ('$SESSION_ID', $TIMESTAMP, 'auto', '$ENTRY_CONTENT_SQL', '{}', NULLIF('$ENTRY_HASH', ''));" 2>/dev/null
-        } &
+        # A background writer must not keep the caller's response pipes open.
+        } </dev/null >/dev/null 2>&1 &
     else
         _tp_queue_prompt "$TOKENS" "$COST_MICRO"
     fi

@@ -29,6 +29,8 @@ This project follows [Semantic Versioning](https://semver.org/).
   current schema and repeated initialization. Missing baselines fail the gate.
 - Packaging tests distinguish the optional build frontend from a generated
   source-install directory, restoring minimal-install release rehearsals.
+- Background SQLite journal writes close inherited response pipes so a pending
+  write cannot hold up prompt submission or leak writer output into the response.
 
 ### Changed
 
