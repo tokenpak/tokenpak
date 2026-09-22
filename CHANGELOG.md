@@ -27,6 +27,8 @@ This project follows [Semantic Versioning](https://semver.org/).
 - The database upgrade gate now migrates seeded snapshots from the six latest
   published minor baselines through all registered stores, checking row fidelity,
   current schema and repeated initialization. Missing baselines fail the gate.
+- Packaging tests distinguish the optional build frontend from a generated
+  source-install directory, restoring minimal-install release rehearsals.
 
 ### Changed
 
