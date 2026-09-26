@@ -223,7 +223,7 @@ curl -H "X-Admin-Token: your-token" http://team-server:8766/v1/telemetry/team
 curl -H "X-Admin-Token: your-token" http://team-server:8766/v1/telemetry/agents/agent-alpha
 ```
 
-See [API Reference](../api-reference.md) for full details.
+See [REST API Reference](../REST_API.md) for full details.
 
 ---
 

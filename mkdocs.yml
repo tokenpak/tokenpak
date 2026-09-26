@@ -1,3 +1,7 @@
+# This file and the docs/ tree it builds are the authoring source for the
+# public docs site (docs.tokenpak.ai). The separate `tokenpak/docs` repo is
+# the publish target this site is synced to at release time — not a
+# duplicate of this directory. See docs/README.md for the full note.
 site_name: TokenPak
 site_dir: docs_site
 site_url: https://docs.tokenpak.ai
