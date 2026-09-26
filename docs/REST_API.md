@@ -179,6 +179,108 @@ Replay a session with optional overrides.
 
 ---
 
+## Session Economics
+
+### `POST /v1/messages/session-economics`
+
+Build a versioned session-economics snapshot from completed local request
+ledger rows. This endpoint never forwards a provider request.
+
+The optional additive `recorded_usage` object exposes provider-observed
+subtotals: `requests_observed`, `requests_total`, `failed_requests`, and a
+`facts` object with the same token and cost provenance types as session facts.
+Its denominator includes every completed request, including failed responses.
+Only requests with all four valid provider token counters enter this subtotal;
+missing counters are never treated as zero. These are partial measurements
+when coverage is incomplete, not full-session totals or inputs to burn,
+runway, or calibration. Older v1 consumers may ignore this object.
+
+Supply the stable session identity in `X-Claude-Code-Session-Id` or as
+`session_id` in the JSON body. If both are present, they must match. `model` is
+an optional hint when the ledger does not identify a model unambiguously.
+
+**Request body:**
+
+```json
+{
+ "session_id": "session-abc",
+ "model": "claude-sonnet-4-5"
+}
+```
+
+**Selected response fields:**
+
+```json
+{
+ "schema_version": "session-economics/1",
+ "as_of": "2026-08-12T00:00:00Z",
+ "session": {
+   "id": "session-abc",
+   "identity_state": "observed",
+   "turns_observed": 12,
+   "model": {"id": "claude-sonnet-4-5", "effort": "unknown"}
+ },
+ "runway": {
+   "status": "available",
+   "turns": 8,
+   "binding_constraint": "context_soft",
+   "guard_state": "amber"
+ },
+ "advisory": null
+}
+```
+
+The full immutable response also includes truth-preserving `facts`, `state`,
+and `forecast` objects. Missing measurements use explicit `no_data`,
+`unavailable`, or `error` states and `null` values; they are never represented
+as measured zero. Runway can be `learning`, `unavailable`, or `error` when the
+local facts are insufficient or invalid.
+
+#### `time_forecast`: wall-clock time-remaining bands
+
+The response also includes a `time_forecast` object — a calibrated,
+wall-clock time-remaining estimate, distinct from the token-based `runway`
+and `forecast` fields above. It ships **disabled by default** and its
+`status` is `"unavailable"` (both interval fields `null`) until explicitly
+turned on:
+
+```json
+{
+ "time_forecast": {
+   "status": "unavailable",
+   "remaining_time_likely_50_ms": null,
+   "remaining_time_ceiling_90_ms": null
+ }
+}
+```
+
+Enable it with the `TOKENPAK_TIME_FORECAST_BANDS` environment variable, or
+the `time_forecast_bands.enabled` key in `config.json` (env var takes
+precedence when both are set — the same resolution order as other
+default-off TokenPak flags):
+
+```bash
+TOKENPAK_TIME_FORECAST_BANDS=1 tokenpak serve
+```
+
+```json
+{
+ "time_forecast_bands": {"enabled": true}
+}
+```
+
+Turning the flag on does not, by itself, produce a band for every session:
+each `(model, effort, stream_mode)` cell only serves `status: "available"`
+once that cell has cleared its own independent walk-forward calibration
+review. A cell that has not yet been reviewed still reports
+`"insufficient_data"` even with the flag on; a cell with early, below-
+threshold evidence reports `"learning"` (band still populated, but not yet
+at full confidence). `status` is always one of `unavailable` /
+`insufficient_data` / `unknown` / `learning` / `available` — never a bare
+number standing in for missing data.
+
+---
+
 ## Proxy Status
 
 ### `GET /v1/status`
@@ -206,9 +308,177 @@ Proxy health and stats.
 
 ---
 
+### `GET /health`
+
+Returns the proxy's current operational snapshot. The basic response is built
+for each request; it is not served from the legacy route-local cache.
+
+Loopback clients (`127.0.0.1`, `::1`, and IPv4-mapped loopback) are trusted and
+do not need a proxy-auth credential. Non-loopback access fails closed: set
+`TOKENPAK_PROXY_AUTH_TOKEN` in the proxy environment and send the same value as
+`Authorization: Bearer <token>`. This proxy-auth Bearer is timing-safely
+compared and removed before forwarding; it is distinct from any upstream
+provider credential.
+
+If `TOKENPAK_PROXY_AUTH_TOKEN` is not configured, every non-loopback request is
+rejected with `403` even if it sends an `Authorization` header. When the setting
+is configured, a missing, malformed, or incorrect Bearer value is rejected with
+`401`.
+
+**HTTP status codes:**
+- `200` — snapshot returned; inspect `status`, `is_degraded`, and
+  `is_shutting_down`
+- `401` — non-loopback proxy authorization is configured, but the Bearer value
+  is missing, malformed, or incorrect
+- `403` — non-loopback access is attempted without
+  `TOKENPAK_PROXY_AUTH_TOKEN` configured on the proxy
+
+**Response:**
+```json
+{
+ "status": "ok",
+ "uptime_seconds": 3600,
+  "version": "1.29.0",
+ "requests_total": 42,
+ "requests_errors": 0,
+ "compression_ratio_avg": 0.72,
+ "is_degraded": false,
+ "is_shutting_down": false,
+ "in_flight_requests": 0,
+ "memory_guard": {
+   "enabled": false,
+   "state": "disabled",
+   "thread_alive": false,
+   "callback_policy": "disabled",
+   "configuration": {
+     "source": "default",
+     "mode": "off",
+     "plan_sha256": null,
+     "managed_config_path": "/home/user/.tokenpak/memory-optimization.json",
+     "managed_file_present": false,
+     "managed_file_ignored": false,
+     "triggering_env": [],
+     "warning": null
+   },
+   "callbacks": { "compact": false, "token": false, "semantic": false }
+ },
+ "admission": { "limit": 16, "available": 16, "rejected": 0 },
+ "agent_concurrency": {
+   "enabled": true,
+   "max_parallel_subagents": 2,
+   "effective_cap": 2,
+   "degraded_serial": false,
+   "in_flight": 0,
+   "queued": 0,
+   "queue_depth_max": 14,
+   "admitted_total": 0,
+   "queued_total": 0,
+   "rejected_queue_full": 0,
+   "rejected_wait_timeout": 0,
+   "source": "config"
+ },
+ "timestamp": "2026-07-23T19:10:00Z",
+ "connection_pool": {
+   "http2_enabled": true,
+   "active_providers": [],
+   "total_requests": 0,
+   "reused_connections": 0,
+   "new_connections": 0,
+   "errors": 0,
+   "evicted_clients": 0,
+   "reuse_rate": 0.0,
+   "cleanup_pending_close": 0,
+   "cleanup_queued": 0,
+   "cleanup_in_progress": 0,
+   "cleanup_retrying": 0,
+   "cleanup_failures_total": 0,
+   "cleanup_worker_start_failures_total": 0,
+   "cleanup_completed_total": 0,
+   "cleanup_oldest_pending_seconds": 0.0,
+   "cleanup_workers_alive": 0,
+   "client_slots_used": 0,
+   "client_slots_max": 64,
+   "client_capacity_rejections_total": 0,
+   "cleanup_saturated": false,
+   "retired_pending_close": 0
+ },
+ "circuit_breakers": {
+   "enabled": true,
+   "any_open": false,
+   "providers": {}
+ }
+}
+```
+
+**`status` values:**
+
+| Value | Meaning |
+|-------|---------|
+| `ok` | No tracked degradation or shutdown condition is active |
+| `degraded` | A tracked degradation condition is active |
+| `shutting_down` | Graceful shutdown is in progress |
+
+Add `?deep=true` for additive provider, process-memory, and disk diagnostics.
+On a base installation where the optional process-memory dependency is absent,
+the endpoint still returns JSON and marks that measurement unavailable rather
+than reporting zero. Deep fields are diagnostic additions and are not present
+in the basic response.
+
+Example unavailable probes:
+
+```json
+{
+  "memory": {
+    "rss_mb": null,
+    "available": false,
+    "reason": "optional_dependency_unavailable"
+  },
+  "disk": {
+    "available_gb": null,
+    "available": false,
+    "reason": "probe_failed"
+  }
+}
+```
+
+`memory.reason` is `optional_dependency_unavailable` when `psutil` is not
+installed and `probe_failed` when an installed probe fails. `disk.reason` is
+`probe_failed` when disk inspection fails. Successful probes set `available`
+to `true`, return a measured number, and omit `reason`.
+
+The importable `ProxyRoutesMixin` retains its deprecated v1.13 compatibility
+payload and one-second route-local cache for one deprecation window. The
+running `ProxyServer` does not use that mixin for `GET /health`; its canonical
+response above remains uncached.
+
+---
+
+### `GET /ready`
+
+Kubernetes/Docker readiness probe. Returns `200` only when the proxy has fully initialised and is accepting requests. Returns `503` during startup or graceful shutdown. No authentication required. Response time < 50ms (no I/O).
+
+**Response (ready):**
+```json
+{ "ready": true, "status": "ready" }
+```
+
+**Response (503 — startup):**
+```json
+{ "ready": false, "status": "starting_up" }
+```
+
+**Response (503 — shutdown):**
+```json
+{ "ready": false, "status": "shutting_down" }
+```
+
+---
+
 ### `GET /v1/health`
 
-Detailed health check.
+> **Deprecated** — use `GET /health` instead (see above).
+
+Detailed health check (legacy).
 
 **Response:**
 ```json

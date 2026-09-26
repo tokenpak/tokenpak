@@ -437,7 +437,7 @@ def test_config_key_can_enable_without_env_var(
 # gate check ever runs. Once that migration fires, ``config.json`` no longer
 # exists on disk. A gate check that reads only the raw JSON file (rather than
 # the migration-aware merged view) silently stops seeing a key the user set
-# exactly as ``docs/api-reference.md`` instructs.
+# exactly as ``docs/REST_API.md`` instructs.
 #
 # An in-process test that monkeypatches ``TOKENPAK_HOME`` cannot reproduce
 # this: by the time such a test runs, ``tokenpak.proxy`` (and therefore
