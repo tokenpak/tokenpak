@@ -2,6 +2,17 @@
 
 Welcome to the TokenPak docs. Start here, then dive into specifics.
 
+> **This directory is the authoring source for the public docs site**
+> (`docs.tokenpak.ai`), built with the `mkdocs.yml` at the repo root. It is
+> not a stray copy of the separate `tokenpak/docs` repository: this is
+> where documentation is written, reviewed, and CI-checked (`mkdocs build
+> --strict`, link/orphan-page audits, CLI-doc parity checks) alongside the
+> code changes it describes. The `tokenpak/docs` repository is the publish
+> target these pages are synced to at release time (see the release log
+> under `release-log/` for the per-release convergence record) and is what
+> actually serves the GitHub Pages site. If you're editing docs, edit them
+> here, not there.
+
 ## Quick Start
 
 | Guide | Description |
