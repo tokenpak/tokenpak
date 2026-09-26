@@ -283,6 +283,38 @@ class _OversizedVaultBlock(Exception):
     """Raised internally when a block exceeds the canonical walker limit."""
 
 
+def _record_vault_index_load_failure(reason: str, exc: BaseException, *, cold_start: bool) -> None:
+    """Signal a corrupt/unreadable vault index instead of failing silently.
+
+    Two states are distinguished because they carry different operational
+    meaning: ``cold_start=True`` means no generation has ever loaded
+    successfully — retrieval will silently return no context at all until
+    this is fixed. ``cold_start=False`` means a previously loaded generation
+    is still being served unchanged (stale, not fresh) while this reload
+    attempt is discarded.
+
+    Emits through two channels an operator can actually see, instead of the
+    bare ``print()`` this replaces (server stdout is invisible to the calling
+    LLM run and to any log/monitoring consumer):
+
+    - the module logger, at ERROR level, with the reason and exception; and
+    - the proxy's existing degradation tracker (``GET /degradation``,
+      ``tokenpak status``), which keeps a durable-for-process-lifetime count
+      and the most recent events — the same mechanism already used for
+      compression-failure and provider-failover degradation.
+    """
+    variant = "cold_start_empty" if cold_start else "warm_reload_stale"
+    logger.error(
+        "vault_index_stale: index load failed (variant=%s reason=%s): %s",
+        variant,
+        reason,
+        exc,
+    )
+    from tokenpak.proxy.degradation import get_degradation_tracker
+
+    get_degradation_tracker().record_vault_index_load_failure(reason, exc, cold_start=cold_start)
+
+
 @_dataclass(frozen=True)
 class _IndexGeneration:
     """One atomically published, read-only BM25 generation."""
@@ -509,10 +541,16 @@ class VaultIndex:
         with corpus size (block count and distinct terms), so index memory
         grows with the corpus even though raw block bytes are not retained.
         """
+        # Snapshot before the attempt: a generation_id of 0 means no load has
+        # ever succeeded (cold start, nothing to fall back on); any higher id
+        # means a previously loaded generation exists and keeps being served,
+        # unchanged, if this attempt fails (warm reload, stale fallback).
+        cold_start = self._snapshot_generation().generation_id == 0
+
         try:
             data = json.loads(index_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as e:
-            print(f"  ⚠️ Vault index load error: {e}")
+            _record_vault_index_load_failure("index_read_or_parse_error", e, cold_start=cold_start)
             return
 
         blocks_dir = self.tokenpak_dir / "blocks"
@@ -532,11 +570,22 @@ class VaultIndex:
         if isinstance(raw_blocks, dict):
             items = raw_blocks.items()
         else:
+            _record_vault_index_load_failure(
+                "invalid_blocks_field",
+                ValueError(
+                    f"index.json 'blocks' field is {type(raw_blocks).__name__}, expected dict"
+                ),
+                cold_start=cold_start,
+            )
             return  # unexpected format
 
         for bid, bdata in items:
             if not isinstance(bid, str) or not isinstance(bdata, dict):
-                print(f"  ⚠️ Vault index load error: invalid block metadata for {bid}")
+                _record_vault_index_load_failure(
+                    "invalid_block_metadata",
+                    ValueError(f"invalid block metadata for {bid!r}"),
+                    cold_start=cold_start,
+                )
                 return
 
             content_file = blocks_dir / f"{bid}.txt"

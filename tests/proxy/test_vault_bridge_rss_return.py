@@ -45,6 +45,17 @@ def _write_generation(root: Path, generation: int) -> tuple[Path, dict[str, str]
 
 def test_reload_returns_memory_only_after_successful_publication(tmp_path, monkeypatch):
     """Regression: collection follows publication, not failed or unchanged reload attempts."""
+    # This test deliberately writes invalid JSON below to force a discarded
+    # reload attempt, which now (via vault_bridge's corruption-signaling)
+    # records to the *global* degradation tracker. Isolate it so this
+    # unrelated memory-return test doesn't leak a VAULT_INDEX_STALE event
+    # into the real singleton other tests' /health checks read from.
+    from tokenpak.proxy.degradation import DegradationTracker
+
+    monkeypatch.setattr(
+        "tokenpak.proxy.degradation.get_degradation_tracker",
+        lambda: DegradationTracker(),
+    )
     monkeypatch.setattr(vault_bridge, "VAULT_INDEX_RELOAD_INTERVAL", 0)
     monkeypatch.setattr(vault_bridge, "_VAULT_CACHE_PRELOAD", 0)
     index_path, _ = _write_generation(tmp_path, 1)
