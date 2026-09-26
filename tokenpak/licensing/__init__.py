@@ -10,6 +10,16 @@ Design invariants:
     - Missing key / missing license.json → Free tier (never error on clean install)
     - Stored license.json with no "tier" field → Free tier
     - is_feature_enabled(name) is the single choke point for Pro gating
+      *within this repository*. A sibling table,
+      ``tokenpak.agent.license.validator.TIER_FEATURES`` /
+      ``required_tier_for``, is a separate, externally-consumed choke
+      point read directly by the private `tokenpak-paid` package's
+      runtime command gate — see that module's docstring before assuming
+      the two can be merged or that a feature missing from one has no
+      equivalent in the other. The two vocabularies agree on tier for the
+      one feature confirmed to overlap (``X1_ab_testing`` here /
+      ``ab_testing`` there); that agreement is regression-tested in
+      ``tests/license/test_gating_tables_no_silent_divergence.py``.
     - License store is JSON at ~/.tokenpak/license.json (human-inspectable)
 """
 
@@ -31,6 +41,14 @@ TIER_PRO = "pro"
 # Feature → minimum tier required. The product ships two tiers only — OSS
 # (free) and Pro. Free features are implicit (not here). Add entries only for
 # gated features; anything absent is treated as Free.
+#
+# Coded IDs here (C3_, T9_, A1_, ...) are this repo's own vocabulary for the
+# OSS `tokenpak features` CLI surface. They are NOT the same table as
+# `tokenpak.agent.license.validator.TIER_FEATURES`, which the private
+# `tokenpak-paid` package reads directly by its own coarser names
+# (`compression_advanced`, `team_analytics`, ...). See that module's
+# docstring for why both exist and which single name is confirmed to mean
+# the same thing on both sides today (`X1_ab_testing` / `ab_testing`).
 _GATES: dict[str, str] = {
     # Compression (Pro)
     "C3_code_compression": TIER_PRO,
