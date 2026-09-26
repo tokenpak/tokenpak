@@ -162,7 +162,7 @@ curl http://localhost:8766/v1/telemetry/export?format=csv > sessions.csv
 curl http://localhost:8766/v1/telemetry/summary
 ```
 
-See [API Reference](../api-reference.md) for full endpoint docs.
+See [REST API Reference](../REST_API.md) for full endpoint docs.
 
 ---
 

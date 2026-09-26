@@ -303,7 +303,8 @@ If the health check fails, restart with `tokenpak restart`.
 - **Tune compression:** See [compression.md](./compression.md) for aggressiveness settings
 - **Index your vault:** `tokenpak index ~/your-docs` for semantic search at zero token cost
 - **Full CLI reference:** [cli-reference.md](./cli-reference.md) — all commands explained
-- **API reference:** [api-reference.md](./api-reference.md) — SDK classes and methods
+- **API reference:** [API_REFERENCE.md](./API_REFERENCE.md) — SDK classes and methods
+- **REST API (proxy telemetry/admin endpoints):** [REST_API.md](./REST_API.md)
 - **REST API (companion/external dashboards):** [api-tpk-v1.md](./api-tpk-v1.md)
 
 ---
