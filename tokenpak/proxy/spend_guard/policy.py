@@ -67,6 +67,106 @@ _LEGACY_DOLLAR_FIELDS: tuple[str, ...] = (
     "default_dollar_cap",
 )
 
+# ---------------------------------------------------------------------------
+# Known-key allowlist for the ``spend_guard:`` / ``tip_spend_guard:`` config
+# section — used to reject unrecognized keys at load time (see
+# :func:`_reject_unknown_keys`). This is deliberately the set of keys the
+# loader below actually reads and acts on today, NOT an aspirational vocabulary
+# for features that don't exist yet (e.g. non-context-window budget bases).
+# An operator setting a not-yet-implemented or misspelled key must get a loud
+# error, never silent no-op enforcement.
+# ---------------------------------------------------------------------------
+_KNOWN_SPEND_GUARD_KEYS: frozenset[str] = frozenset(
+    {
+        "enabled",
+        "reservations_enabled",
+        "accounting_basis",
+        "reservation_ttl_seconds",
+        "reservation_history_seconds",
+        "reservation_max_records",
+        "default_basis",
+        "default_context_window_percent",
+        "hard_stop_context_window_percent",
+        "dollar_cap_enabled_by_default",
+        "default_dollar_cap",
+        "warn_tokens",
+        "warn_cost_usd",
+        "block_tokens",
+        "block_cost_usd",
+        "hard_block_tokens",
+        "hard_block_cost_usd",
+        "session_block_cost_usd",
+        "session_window_seconds",
+        "pending_ttl_seconds",
+        "audit_db_path",
+        "audit_min_cost_usd",
+        "rolling_caps_enabled",
+        "rolling_caps_window_seconds",
+        "rolling_caps_per_agent_max_cost_usd",
+        "rolling_caps_per_agent_max_tokens_total",
+        "rolling_caps_per_agent_max_cache_read_tokens",
+        "rolling_caps_per_fleet_max_cost_usd",
+        "rolling_caps_per_fleet_max_tokens_total",
+        "rolling_caps_per_fleet_max_cache_read_tokens",
+        "rolling_caps",  # nested-block alternative to the flat fields above
+    }
+)
+
+# Nested ``rolling_caps:`` sub-block keys.
+_ROLLING_CAPS_KNOWN_KEYS: frozenset[str] = frozenset(
+    {"enabled", "window_seconds", "per_agent", "per_fleet"}
+)
+_ROLLING_CAPS_SCOPE_KNOWN_KEYS: frozenset[str] = frozenset(
+    {"max_cost_usd", "max_tokens_total", "max_cache_read_tokens"}
+)
+
+
+def _reject_unknown_keys(section: object, alias: str) -> None:
+    """Fail loudly on any unrecognized key under a spend-guard config section.
+
+    ``section`` is the raw dict an operator wrote under ``spend_guard:`` or
+    ``tip_spend_guard:`` (``alias`` records which, purely for the error
+    message). Unknown keys are NOT warned about and forwarded — they are
+    rejected with a ``ValueError`` naming the exact offending key and the
+    currently-valid keys.
+
+    This is deliberately fail-fast rather than warn-and-continue: this
+    section configures spend/budget enforcement, and a silently-ignored key
+    here means a silently-disabled safety control (for example, an operator
+    setting a not-yet-implemented budget basis such as
+    ``non_context_bases.audio_seconds_per_session.enabled`` and reasonably
+    but wrongly believing it is being enforced). A loud startup-time error
+    is safer than a warning an operator could miss.
+    """
+    if not isinstance(section, dict):
+        return
+    for key in section:
+        if key not in _KNOWN_SPEND_GUARD_KEYS:
+            raise ValueError(
+                f"Unknown {alias}.{key!s} config key. TokenPak's spend guard "
+                "does not silently ignore config it does not recognize — "
+                f"{key!r} is either a typo or a feature that is not "
+                "implemented in this version (for example, non-context-"
+                "window budget bases are not implemented yet). "
+                f"Valid {alias} keys: {', '.join(sorted(_KNOWN_SPEND_GUARD_KEYS))}"
+            )
+    rolling_caps = section.get("rolling_caps")
+    if isinstance(rolling_caps, dict):
+        for key, value in rolling_caps.items():
+            if key not in _ROLLING_CAPS_KNOWN_KEYS:
+                raise ValueError(
+                    f"Unknown {alias}.rolling_caps.{key!s} config key. "
+                    f"Valid keys: {', '.join(sorted(_ROLLING_CAPS_KNOWN_KEYS))}"
+                )
+            if key in ("per_agent", "per_fleet") and isinstance(value, dict):
+                for scope_key in value:
+                    if scope_key not in _ROLLING_CAPS_SCOPE_KNOWN_KEYS:
+                        raise ValueError(
+                            f"Unknown {alias}.rolling_caps.{key}.{scope_key!s} "
+                            "config key. Valid keys: "
+                            f"{', '.join(sorted(_ROLLING_CAPS_SCOPE_KNOWN_KEYS))}"
+                        )
+
 
 def derive_block_threshold(
     model_max_context_tokens: Optional[int],
@@ -272,6 +372,15 @@ def load_config(raw_config: Optional[dict[str, Any]] = None) -> SpendGuardConfig
     - ``default_context_window_percent <= hard_stop_context_window_percent``.
 
     Violations raise :class:`ValueError` with the offending key name.
+
+    **Unknown keys are rejected, not ignored:** any key under ``spend_guard:``
+    or ``tip_spend_guard:`` (including nested ``rolling_caps:`` sub-keys)
+    that isn't one of the fields this loader actually implements raises
+    :class:`ValueError` naming the offending key and the valid keys, instead
+    of being silently dropped. This applies equally to a typo and to a
+    documented-but-not-yet-implemented setting (e.g. a non-context-window
+    budget basis) — an unenforced budget key must never look like it is
+    quietly taking effect. See :func:`_reject_unknown_keys`.
     """
     import os
 
@@ -292,6 +401,13 @@ def load_config(raw_config: Optional[dict[str, Any]] = None) -> SpendGuardConfig
             _raw = {}
         sg_legacy = _raw.get("spend_guard") or {}
         sg_canonical = _raw.get("tip_spend_guard") or {}
+
+    # Reject unknown keys before reading anything — see module docstring
+    # above :func:`_reject_unknown_keys` for why this is fail-fast, not
+    # warn-and-continue.
+    _reject_unknown_keys(sg_legacy, "spend_guard")
+    _reject_unknown_keys(sg_canonical, "tip_spend_guard")
+
     sg = {**sg_legacy, **sg_canonical}  # canonical wins
 
     # Track which legacy dollar fields the operator explicitly set so we can
