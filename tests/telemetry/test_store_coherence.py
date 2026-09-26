@@ -88,26 +88,45 @@ def _make_cost(trace_id: str):
 
 class TestSingleResolver:
     def test_env_var_moves_writer_and_reader_to_one_file(self, tmp_path, monkeypatch):
-        """TOKENPAK_TELEMETRY_DB must move BOTH the writer (TelemetryDB via
-        the resolver) and the reader (query_dsl default) to the same file."""
+        """TOKENPAK_DB must move both the proxy's writer and the CLI reader
+        (query_dsl default) to the same monitor store.
+
+        query_dsl now reads the monitor database — the same store the live
+        proxy writes every completed request into — rather than the
+        separate, never-written telemetry.db this test previously
+        exercised. The resolver contract this test guards is unchanged: one
+        env var moves both ends to the same file; only which store that is
+        has changed.
+        """
+        from tokenpak._paths import monitor_db
         from tokenpak.telemetry import query_dsl
-        from tokenpak.telemetry.storage import TelemetryDB
 
-        _clear_db_env(monkeypatch)
-        db_file = tmp_path / "telemetry.db"
-        monkeypatch.setenv("TOKENPAK_TELEMETRY_DB", str(db_file))
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("TOKENPAK_DB", raising=False)
+        monkeypatch.delenv("TOKENPAK_MONITOR_DB", raising=False)
+        db_file = tmp_path / "monitor.db"
+        monkeypatch.setenv("TOKENPAK_DB", str(db_file))
 
-        writer_path = get_db_path("telemetry.db")
-        assert writer_path == db_file
+        conn = sqlite3.connect(db_file)
+        conn.execute(
+            "CREATE TABLE requests (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "timestamp TEXT NOT NULL, model TEXT, input_tokens INTEGER, "
+            "output_tokens INTEGER, estimated_cost REAL, status_code INTEGER, "
+            "compressed_tokens INTEGER, cache_read_tokens INTEGER, "
+            "cache_origin TEXT DEFAULT 'unknown', agent_id TEXT DEFAULT '')"
+        )
+        conn.execute(
+            "INSERT INTO requests (timestamp, model, input_tokens, output_tokens, "
+            "estimated_cost, status_code) VALUES (datetime('now'), 'test-model', 10, 5, 0.01, 200)"
+        )
+        conn.commit()
+        conn.close()
 
-        db = TelemetryDB(str(writer_path))
-        trace_id = uuid.uuid4().hex
-        db.insert_trace(_make_event(trace_id), usage=_make_usage(trace_id))
-        db.close()
-
-        # Reader resolves its default through the same resolver.
+        # Writer-side resolver (proxy/doctor) and reader-side resolver
+        # (query_dsl default) must agree on the same file.
+        assert monitor_db(mode="read") == db_file
         rows = query_dsl.get_recent_events()  # db_path=None -> resolver
-        assert any(r["trace_id"] == trace_id for r in rows)
+        assert any(r["model"] == "test-model" for r in rows)
 
     def test_deprecated_alias_env_var_honored(self, tmp_path, monkeypatch):
         _clear_db_env(monkeypatch)
@@ -135,11 +154,28 @@ class TestSingleResolver:
         assert api._get_db_path() == tmp_path / "alias.db"
 
     def test_query_dsl_default_routes_through_resolver(self, tmp_path, monkeypatch):
+        """query_dsl's default now routes through the monitor DB resolver
+        (``tokenpak._paths.monitor_db``), honoring ``TOKENPAK_DB``, not
+        through ``tokenpak.core.paths.get_db_path`` / ``TOKENPAK_TELEMETRY_DB``."""
         from tokenpak.telemetry import query_dsl
 
-        _clear_db_env(monkeypatch)
-        db_file = tmp_path / "dsl.db"
-        monkeypatch.setenv("TOKENPAK_TELEMETRY_DB", str(db_file))
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("TOKENPAK_DB", raising=False)
+        monkeypatch.delenv("TOKENPAK_MONITOR_DB", raising=False)
+        db_file = tmp_path / "dsl-monitor.db"
+        conn = sqlite3.connect(db_file)
+        conn.execute(
+            "CREATE TABLE requests (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL)"
+        )
+        conn.commit()
+        conn.close()
+        monkeypatch.setenv("TOKENPAK_DB", str(db_file))
+        assert query_dsl._default_db_path() == db_file
+
+        # The old telemetry.db resolver/env var no longer influence this
+        # default — a stale TOKENPAK_TELEMETRY_DB pointing elsewhere must
+        # not change what query_dsl reads.
+        monkeypatch.setenv("TOKENPAK_TELEMETRY_DB", str(tmp_path / "unrelated-telemetry.db"))
         assert query_dsl._default_db_path() == db_file
 
     def test_no_module_level_repo_root_defaults(self):
