@@ -474,6 +474,89 @@ class TestCanonicalKeyAlias:
 
 
 # ---------------------------------------------------------------------------
+# Unknown-key rejection — an unrecognized tip_spend_guard.*/spend_guard.* key
+# must be rejected, never silently ignored. This closes the class of bug
+# where a documented-but-unimplemented (or merely misspelled) budget-basis
+# key gets no error, no warning, and no enforcement.
+# ---------------------------------------------------------------------------
+
+
+class TestUnknownKeyRejection:
+    def test_known_keys_config_loads_cleanly(self):
+        """A config using only currently-implemented keys loads with no error
+        and no warning."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            cfg = load_config(
+                raw_config={
+                    "tip_spend_guard": {
+                        "enabled": True,
+                        "default_basis": "context_window_percent",
+                        "default_context_window_percent": 90,
+                        "hard_stop_context_window_percent": 100,
+                        "warn_tokens": 100_000,
+                        "block_tokens": 500_000,
+                        "hard_block_tokens": 1_000_000,
+                        "pending_ttl_seconds": 600,
+                        "audit_db_path": "~/.tokenpak/spend_guard.db",
+                        "rolling_caps_enabled": True,
+                        "rolling_caps": {
+                            "window_seconds": 3600,
+                            "per_agent": {"max_cost_usd": 20.0},
+                            "per_fleet": {"max_tokens_total": 15_000_000},
+                        },
+                    }
+                }
+            )
+        assert cfg.enabled is True
+        assert cfg.default_context_window_percent == 90
+
+    def test_rejects_non_context_bases_audio_seconds_key(self):
+        """The audit's exact reproduction case: an operator following the
+        (not-yet-implemented) non-context-window-basis vocabulary must get a
+        loud rejection, not silent no-op acceptance."""
+        with pytest.raises(ValueError) as exc:
+            load_config(
+                raw_config={
+                    "tip_spend_guard": {
+                        "non_context_bases": {"audio_seconds_per_session": {"enabled": True}}
+                    }
+                }
+            )
+        assert "non_context_bases" in str(exc.value)
+        assert "tip_spend_guard" in str(exc.value)
+
+    def test_rejects_misspelled_top_level_key(self):
+        with pytest.raises(ValueError) as exc:
+            load_config(raw_config={"tip_spend_guard": {"enalbed": True}})
+        assert "enalbed" in str(exc.value)
+
+    def test_rejects_unknown_key_under_legacy_spend_guard_alias(self):
+        with pytest.raises(ValueError) as exc:
+            load_config(raw_config={"spend_guard": {"tokens_per_second": {"enabled": True}}})
+        assert "tokens_per_second" in str(exc.value)
+        assert "spend_guard" in str(exc.value)
+
+    def test_rejects_unknown_nested_rolling_caps_key(self):
+        with pytest.raises(ValueError) as exc:
+            load_config(
+                raw_config={
+                    "tip_spend_guard": {"rolling_caps": {"max_agents": 5}},
+                }
+            )
+        assert "rolling_caps.max_agents" in str(exc.value)
+
+    def test_rejects_unknown_rolling_caps_scope_key(self):
+        with pytest.raises(ValueError) as exc:
+            load_config(
+                raw_config={
+                    "tip_spend_guard": {"rolling_caps": {"per_agent": {"max_widgets": 5}}},
+                }
+            )
+        assert "rolling_caps.per_agent.max_widgets" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
 # Large-cycle clear-case — ~1047-line composed prompt clears
 # ---------------------------------------------------------------------------
 
