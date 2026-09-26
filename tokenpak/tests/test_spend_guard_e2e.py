@@ -190,3 +190,40 @@ class TestAuditTrail:
         events = [r["event_type"] for r in rows]
         assert "block" in events
         assert "replay" in events
+
+    def test_block_audit_row_has_reason_and_projected_tokens(self, tmp_db):
+        """Regression for backbone audit finding 4.2-3: the audit row for a
+        block must be reconstructable after the fact — it needs a specific
+        (non-empty) reason and the projected token count that drove the
+        decision, not the hardcoded '' / 0 placeholders.
+
+        Sized to land in the context-window-% soft-block band (>=90% but
+        <100% of claude-opus-4-7's known 1M-token context) rather than
+        reusing the smaller legacy fixture size, which no longer crosses
+        the block threshold now that this model resolves to a known
+        million-token context window.
+        """
+        cfg, db = tmp_db
+        runaway = _opus_body(3_800_000)
+        evaluate(runaway, "claude-opus-4-7", "sess-audit-fields", {}, config=cfg)
+        rows = query_recent(db, session_id="sess-audit-fields", limit=10)
+        block_rows = [r for r in rows if r["event_type"] == "block"]
+        assert block_rows
+        row = block_rows[0]
+        assert row["reason"] != ""
+        assert row["projected_tokens"] > 0
+
+    def test_hard_block_audit_row_has_reason_and_projected_tokens(self, tmp_db):
+        """Same regression, for the hard-block branch called out explicitly
+        in finding 4.2-3 (orchestrator's hard-block audit call never passed
+        projected_tokens, so every hard_block row stored 0)."""
+        cfg, db = tmp_db
+        body = _opus_body("[TIP: bypass=on] " + "x" * 4_000_000, max_tokens=50_000)
+        out = evaluate(body, "claude-opus-4-7", "sess-audit-hard", {}, config=cfg)
+        assert out.kind == "hard_block"
+        rows = query_recent(db, session_id="sess-audit-hard", limit=10)
+        hard_block_rows = [r for r in rows if r["event_type"] == "hard_block"]
+        assert hard_block_rows
+        row = hard_block_rows[0]
+        assert row["reason"] != ""
+        assert row["projected_tokens"] > 0
