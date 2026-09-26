@@ -21,6 +21,7 @@ from __future__ import annotations
 import contextlib
 import errno
 import json
+import logging
 import os
 import shutil
 import signal
@@ -46,6 +47,8 @@ from .accounting import (
 
 if _TYPE_CHECKING:
     from .session_home import SessionPaths
+
+_log = logging.getLogger(__name__)
 
 
 class _RetentionResult(_Protocol):
@@ -198,9 +201,41 @@ def _local_proxy_is_healthy(timeout_seconds: float = 0.5) -> bool:
     return isinstance(payload, dict) and payload.get("status") in {"ok", "healthy"}
 
 
-def _with_tokenpak_proxy_route(args: list[str]) -> tuple[list[str], bool]:
+def _audit_guard_bypassed_proxy_unhealthy(session_id: str | None) -> None:
+    """Record the silent spend-guard bypass caused by an unhealthy local proxy.
+
+    When ``_local_proxy_is_healthy`` fails, Codex launches straight against
+    its own configured upstream for the rest of the session: zero spend-guard
+    evaluation, zero ``monitor.db`` row. Best-effort — never raises into the
+    launcher's hot path.
+    """
+    try:
+        from tokenpak.proxy.spend_guard.audit import write_audit
+
+        audit_db_path = os.environ.get(
+            "TOKENPAK_SPEND_GUARD_AUDIT_DB", "~/.tokenpak/spend_guard.db"
+        )
+        write_audit(
+            audit_db_path,
+            event_type="guard_bypassed_proxy_unhealthy",
+            session_id=session_id or "",
+            extra={"reason": "local_proxy_health_check_failed"},
+        )
+    except ImportError:
+        # audit module not importable in this environment
+        pass
+    except Exception as exc:  # pragma: no cover - defensive, best-effort only
+        _log.debug("tokenpak: spend-guard bypass audit write failed: %s", exc)
+
+
+def _with_tokenpak_proxy_route(
+    args: list[str], *, session_id: str | None = None
+) -> tuple[list[str], bool]:
     """Route native Codex through a healthy local proxy unless user-overridden."""
-    if _has_model_route_override(args) or not _local_proxy_is_healthy():
+    if _has_model_route_override(args):
+        return list(args), False
+    if not _local_proxy_is_healthy():
+        _audit_guard_bypassed_proxy_unhealthy(session_id)
         return list(args), False
     provider = _TOKENPAK_MODEL_PROVIDER
     return [
@@ -803,7 +838,7 @@ def main(
             env = paths.environment(_vanilla_receipt_env())
             env["TOKENPAK_CODEX_RECEIPT_OUT"] = receipt_out
             env["TOKENPAK_CODEX_RUN_ID"] = run_id
-            routed_args, proxy_routed = _with_tokenpak_proxy_route(args)
+            routed_args, proxy_routed = _with_tokenpak_proxy_route(args, session_id=run_id)
             receipt_setup["traffic_routing"] = (
                 "tokenpak_local_proxy" if proxy_routed else "client_default"
             )
@@ -993,7 +1028,9 @@ def main(
             mode,
             env,
         )
-        forwarded, proxy_routed = _with_tokenpak_proxy_route(forwarded)
+        forwarded, proxy_routed = _with_tokenpak_proxy_route(
+            forwarded, session_id=run_id or session_dir.name
+        )
         setup["traffic_routing"] = "tokenpak_local_proxy" if proxy_routed else "client_default"
         if proxy_routed:
             print(
@@ -1001,10 +1038,10 @@ def main(
                 file=sys.stderr,
             )
         else:
-            print(
+            _log.warning(
                 "tokenpak: local proxy unavailable or explicitly overridden; "
-                "Codex is using its configured upstream",
-                file=sys.stderr,
+                "Codex is using its configured upstream with no spend-guard coverage "
+                "for this session"
             )
         banner = _launcher_mode_banner(effective_mode, mode_flags, skip_reason)
         if banner:
