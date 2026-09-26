@@ -183,6 +183,16 @@ class SemanticCache:
     returns entries whose ``wire_format`` matches.  Store requires raw bytes +
     content_type + wire_format.
 
+    Persistence model: this cache is intentionally in-memory-only and
+    process-lifetime-scoped — no on-disk persistence, no cross-process
+    sharing. A protocol/TIP version bump ships as a new release requiring a
+    process restart, which empties the cache as a side effect, so there is
+    no live version-mismatch risk today. If on-disk persistence or
+    cross-process sharing is ever added to this cache, entries MUST be
+    stamped with the protocol/TIP version they were created under and
+    invalidated on version mismatch, to avoid silently serving
+    stale-protocol-version responses across a version bump.
+
     >>> import json
     >>> cfg = SemanticCacheConfig(ttl_seconds=60, max_entries=10)
     >>> sc = SemanticCache(cfg)
