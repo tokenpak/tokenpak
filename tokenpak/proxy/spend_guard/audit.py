@@ -40,6 +40,7 @@ EVENT_TYPES = frozenset(
         "anti_loop_hit",  # cached block returned without re-estimation
         "pending_waiting",  # subsequent request while pending exists
         "replay_race",  # race on double-consume
+        "guard_bypassed_proxy_unhealthy",  # Codex launcher: local proxy health probe failed
     }
 )
 

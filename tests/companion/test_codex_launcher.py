@@ -1154,3 +1154,55 @@ def test_json_output_failure_is_drained_and_child_reaped(monkeypatch, write_erro
     assert result == 0
     assert process.waited
     assert process.stdout.read_count == 3
+
+
+# ── spend-guard bypass audit (unhealthy local proxy) ───────────────────
+
+
+def test_unhealthy_local_proxy_writes_spend_guard_bypass_audit_row(monkeypatch, tmp_path):
+    """Falling back off an unhealthy local proxy must leave an audit trail.
+
+    Codex still launches (against its own configured upstream) in this
+    branch, but that means the whole session gets zero spend-guard
+    evaluation. That must not be silent — a queryable audit row is the
+    minimum signal an operator can rely on after the fact.
+    """
+    from tokenpak.proxy.spend_guard.audit import query_recent
+
+    audit_db_path = tmp_path / "spend_guard.db"
+    monkeypatch.setenv("TOKENPAK_SPEND_GUARD_AUDIT_DB", str(audit_db_path))
+    monkeypatch.setattr(launcher, "_local_proxy_is_healthy", lambda: False)
+
+    args, routed = launcher._with_tokenpak_proxy_route(
+        ["exec", "hello"], session_id="test-session-unhealthy"
+    )
+
+    assert routed is False
+    assert args == ["exec", "hello"]
+
+    rows = query_recent(str(audit_db_path), session_id="test-session-unhealthy")
+    assert len(rows) == 1
+    assert rows[0]["event_type"] == "guard_bypassed_proxy_unhealthy"
+    assert rows[0]["session_id"] == "test-session-unhealthy"
+
+
+def test_explicit_route_override_does_not_write_bypass_audit_row(monkeypatch, tmp_path):
+    """An operator-chosen route override is not the unhealthy-proxy bypass.
+
+    ``_local_proxy_is_healthy`` is stubbed ``True`` here (healthy) so the
+    only reason routing declines is the explicit override — that branch is
+    a deliberate operator choice, not the silent failure the audit row
+    exists to surface.
+    """
+    from tokenpak.proxy.spend_guard.audit import query_recent
+
+    audit_db_path = tmp_path / "spend_guard.db"
+    monkeypatch.setenv("TOKENPAK_SPEND_GUARD_AUDIT_DB", str(audit_db_path))
+    monkeypatch.setattr(launcher, "_local_proxy_is_healthy", lambda: True)
+    explicit = ["-c", 'model_provider="company-proxy"', "exec", "hello"]
+
+    args, routed = launcher._with_tokenpak_proxy_route(explicit, session_id="test-session-override")
+
+    assert routed is False
+    assert args == explicit
+    assert not audit_db_path.exists()
