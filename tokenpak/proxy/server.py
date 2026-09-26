@@ -4825,7 +4825,7 @@ class ProxyServer:
     Parameters
     ----------
     host : str
-        Bind host (default "0.0.0.0").
+        Bind host (default "127.0.0.1").
     port : int
         Bind port (default from TOKENPAK_PORT env var or 8766).
     compilation_mode : str
