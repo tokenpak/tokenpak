@@ -63,8 +63,16 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Security
 
-See [upgrade, rollback and release status](docs/release-log/v1.30.0.md) for
-the fresh dependency-audit reassessment carried out for this release.
+This release accepts the open NLTK GHSA-8mgp-746c-j5xp and Accelerate
+GHSA-4j2p-28q2-5m79 optional-dependency findings for this release only, following
+a fresh September 26 dependency reassessment. Both are High under CVSS v3.1; the
+Accelerate advisory separately lists Moderate severity under CVSS v4. No verified
+published fix is available for either. The base install excludes both packages.
+Optional integrations must avoid untrusted model paths and checkpoint
+repositories and cannot rely on these APIs for filesystem containment. See
+SECURITY.md for affected extras and limitations. Both findings remain open and
+must be resolved or reassessed before another release; all other release checks
+remain required.
 
 ## [1.29.0] — 2026-09-21
 
