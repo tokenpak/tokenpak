@@ -329,6 +329,10 @@ class RequestLogger:
 
         self._writer = self._build_writer()
         self._queue: queue.Queue[RequestLogRecord | None] = queue.Queue(maxsize=10_000)
+        # Diagnostic-path drop accounting: counted+surfaced, never silent.
+        # See _record_dropped() below.
+        self._dropped_lock = threading.Lock()
+        self._dropped_count = 0
         self._thread = threading.Thread(target=self._worker, daemon=True, name="tokenpak-logger")
         self._thread.start()
 
@@ -418,8 +422,31 @@ class RequestLogger:
         try:
             self._queue.put_nowait(record)
         except queue.Full:
-            # Drop silently — logging must never block the proxy
-            pass
+            # Logging must never block the proxy, so the record itself is
+            # still dropped here — but never silently. Mirrors the canonical
+            # write path's explicit-reason + durable counter pattern
+            # (tokenpak/proxy/monitor.py's _record_dropped_row) so a
+            # queue-full drop on this diagnostic request-logging path is
+            # observable instead of invisible.
+            self._record_dropped("queue-full")
+
+    def _record_dropped(self, reason: str) -> None:
+        """Count one dropped log record and surface why (non-blocking).
+
+        This is the secondary diagnostic request-logging path (structured
+        request logs to file/stdout/syslog), not the canonical monitor.db
+        accounting store — a drop here cannot corrupt accounting numbers,
+        but it should still be diagnosable rather than invisible.
+        """
+        with self._dropped_lock:
+            self._dropped_count += 1
+            count = self._dropped_count
+        _log.warning("request_logger: dropped log record (%s); %d dropped so far", reason, count)
+
+    def dropped_count(self) -> int:
+        """Total log records dropped by this logger's queue since it started."""
+        with self._dropped_lock:
+            return self._dropped_count
 
     def log_dict(self, level: str = LEVEL_INFO, **kwargs: Any) -> None:
         """Convenience: log an arbitrary dict (debug/info/warn)."""
