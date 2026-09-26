@@ -288,7 +288,7 @@ dependency lockfiles to close open security advisories.
   default-off master switch (`TOKENPAK_TIME_FORECAST_BANDS` /
   `time_forecast_bands.enabled`, both still default-off) — populating the
   table only makes the cell *eligible*, it does not change the shipped
-  default. See the `time_forecast` section in `docs/api-reference.md`.
+  default. See the `time_forecast` section in `docs/REST_API.md`.
 - The retry engine (`RetryEngine`, `RetryExhaustedError`,
   `ImmediateAlertError`, `load_recent_retry_events`, and their supporting
   constants) is now directly importable from `tokenpak.core.retry`. The
