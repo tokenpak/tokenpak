@@ -4,7 +4,7 @@
 ``FidelityPolicy`` declares how aggressively the optimization layer may
 alter request or context content for a given stage/route combination.
 
-This is distinct from ``tokenpak.agent.compression.fidelity_tiers.FidelityTier``
+This is distinct from ``tokenpak.compression.fidelity_tiers.FidelityTier``
 (L0_RAW → L4_SUMMARY), which is a *compression level ladder* used by the
 agent-side context manager. ``FidelityPolicy`` is a *proxy-side safety gate*
 that constrains what the optimization pipeline may do to request bytes.

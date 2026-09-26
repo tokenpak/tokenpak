@@ -200,7 +200,7 @@ def _heartbeat_loop(url: str, interval: int) -> None:
     """Run in a daemon thread. Never raises."""
     while True:
         try:
-            from tokenpak.agent.config import get_metrics_enabled
+            from tokenpak.core.config import get_metrics_enabled
 
             if not get_metrics_enabled():
                 time.sleep(interval)

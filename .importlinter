@@ -23,11 +23,12 @@ root_packages =
 name = Dependency direction (levels 0-5)
 type = layers
 layers =
+    tokenpak.agent
     tokenpak.cli : tokenpak.sdk : tokenpak.companion : tokenpak.dashboard : tokenpak.alerts
     tokenpak.proxy : tokenpak.orchestration : tokenpak.plugins
     tokenpak.services
     tokenpak.telemetry : tokenpak.routing
-    tokenpak.security : tokenpak.compression : tokenpak.cache : tokenpak.vault : tokenpak.sources : tokenpak.debug
+    tokenpak.security : tokenpak.compression : tokenpak.cache : tokenpak.vault : tokenpak.sources : tokenpak.debug : tokenpak.licensing : tokenpak.creds
     tokenpak.core
 ignore_imports =
     ; Group 1 — core.registry.claude_code.adapter -> proxy.request (IMP-011).

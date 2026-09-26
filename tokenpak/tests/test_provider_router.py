@@ -10,7 +10,8 @@ import types
 from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
-# Patch the broken ingest module BEFORE importing anything from tokenpak.agent
+# Patch the broken ingest module BEFORE importing anything that touches
+# tokenpak.vault.ingest
 # ---------------------------------------------------------------------------
 _fake_ingest = types.ModuleType("tokenpak.vault.ingest")
 _fake_ingest.create_ingest_app = MagicMock()
