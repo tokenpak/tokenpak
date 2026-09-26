@@ -2,17 +2,17 @@
 """Reading telemetry must not create state, and must not read someone else's.
 
 Two defects with one visible symptom — `tokenpak leaderboard` on a fresh
-install printing a raw `sqlite3.OperationalError: no such table: tp_events`
+install printing a raw `sqlite3.OperationalError: no such table: requests`
 traceback:
 
 1. ``_get_conn`` used ``sqlite3.connect``, which *creates* the file when it is
-   absent. A read materialised an empty ``telemetry.db`` at the ambient umask
-   and then failed on the first query. Read paths must not create state.
+   absent. A read materialised an empty database at the ambient umask and
+   then failed on the first query. Read paths must not create state.
 
-2. ``get_db_path`` preferred a database sitting in the source tree over the
-   user's own home. On a source checkout that silently shadowed the real
-   store: an isolated HOME with no telemetry.db still answered from a stale
-   repo-root file the user never created and could not see.
+2. The resolver could prefer a database sitting somewhere other than the
+   user's own home. An isolated HOME with no monitor store must still answer
+   "no data" rather than reading a stale file the user never created and
+   could not see.
 
 "Nothing recorded yet" is a normal condition with a defined representation.
 """
@@ -35,7 +35,11 @@ from pathlib import Path
 from tokenpak.telemetry import query_dsl as q
 
 resolved = q._default_db_path()
-out = {"resolved": str(resolved), "existed_before": resolved.exists()}
+existed_before = resolved.exists() if resolved is not None else False
+out = {
+    "resolved": (str(resolved) if resolved is not None else None),
+    "existed_before": existed_before,
+}
 try:
     q._get_conn()
     out["raised"] = None
@@ -43,7 +47,7 @@ except q.TelemetryUnavailable as exc:
     out["raised"] = "TelemetryUnavailable"
 except Exception as exc:
     out["raised"] = type(exc).__name__
-out["created"] = resolved.exists() and not out["existed_before"]
+out["created"] = resolved is not None and resolved.exists() and not existed_before
 out["usage"] = q.get_model_usage()
 out["events"] = q.get_recent_events()
 report = q.get_savings_report()
@@ -80,8 +84,9 @@ def test_reading_an_absent_store_creates_nothing(home: Path) -> None:
     assert out["raised"] == "TelemetryUnavailable", (
         f"expected the typed unavailable signal, got {out['raised']}"
     )
+    assert out["resolved"] is None, f"expected no monitor store to resolve, got {out['resolved']}"
     assert not out["created"], f"a read created {out['resolved']}"
-    assert not (home / ".tpk" / "telemetry.db").exists()
+    assert not (home / ".tpk" / "monitor.db").exists()
 
 
 def test_readers_degrade_instead_of_raising(home: Path) -> None:
@@ -96,20 +101,34 @@ def test_readers_degrade_instead_of_raising(home: Path) -> None:
     assert out["savings_observations"] == 0
 
 
-def test_a_database_in_the_source_tree_does_not_shadow_the_home(home: Path, tmp_path: Path) -> None:
-    """Resolution must answer to HOME, not to whatever is next to the code."""
-    fake_repo = tmp_path / "checkout"
-    fake_repo.mkdir()
-    decoy = fake_repo / "telemetry.db"
-    conn = sqlite3.connect(decoy)
-    conn.execute("CREATE TABLE tp_pricing (x INT)")
+def _seed_monitor_db(path: Path) -> None:
+    """Create a minimally valid monitor.db: a ``requests`` table only."""
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE requests ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, model TEXT, "
+        "input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, "
+        "status_code INTEGER, compressed_tokens INTEGER, cache_read_tokens INTEGER, "
+        "cache_origin TEXT DEFAULT 'unknown')"
+    )
     conn.commit()
     conn.close()
 
+
+def test_a_database_in_the_source_tree_does_not_shadow_the_home(home: Path, tmp_path: Path) -> None:
+    """Resolution must answer to HOME, not to an unrelated file elsewhere on disk."""
+    fake_repo = tmp_path / "checkout"
+    fake_repo.mkdir()
+    decoy = fake_repo / "monitor.db"
+    _seed_monitor_db(decoy)
+
+    real = home / ".tpk" / "monitor.db"
+    _seed_monitor_db(real)
+
     out = _probe(home, REPO_ROOT)
     assert str(decoy) != out["resolved"]
-    assert str(home) in out["resolved"], (
-        f"resolved to {out['resolved']}, which is outside the user's home"
+    assert out["resolved"] == str(real), (
+        f"resolved to {out['resolved']}, expected the user's home store {real}"
     )
 
 

@@ -1,252 +1,314 @@
-"""Integration tests for the /savings API endpoint.
+"""Integration tests for the savings/compare/leaderboard read path.
 
-Verifies the savings endpoint can be called via HTTP and returns proper responses.
-Tests cover:
-  - Endpoint responds with 200 OK
-  - Response is valid JSON
-  - Response has expected schema fields
-  - Empty database returns sensible defaults (zeros)
-  - Date filtering works
-  - Content-Type is application/json
+The previous version of this file built two schemas (``audit_log``,
+``monitor_log``) that no production code reads or writes, and every
+assertion checked properties of hand-written example dicts rather than
+exercising any real code path — it could not have caught the defect this
+replaces: ``tokenpak savings`` / ``compare`` / ``leaderboard`` reading a
+database the live proxy never writes to.
+
+These tests instead seed the real ``requests`` table — the schema created by
+``tokenpak.proxy.monitor.Monitor`` and populated by the live proxy on every
+completed request — and assert that ``tokenpak.telemetry.query_dsl`` (and the
+CLI verbs built on it) surface that data correctly.
 """
 
-import json
+from __future__ import annotations
+
+import os
 import sqlite3
-import tempfile
+import subprocess
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 
-# For testing, we need to mock the HTTP server.
-# Since tokenpak is designed as a proxy, we test via:
-# 1. Direct Monitor.get_savings_report() call (unit-level)
-# 2. Via the API if a test server is available (integration-level)
+from tokenpak.proxy.monitor import Monitor
+from tokenpak.telemetry import query_dsl
+from tokenpak.telemetry.pricing_rates import get_rates
 
-try:
-    import requests
-
-    HAS_REQUESTS = True
-except ImportError:
-    HAS_REQUESTS = False
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-class TestSavingsEndpointSchema:
-    """Test the response schema of the /savings endpoint."""
+def _insert_request(
+    db_path,
+    *,
+    timestamp: str | None = None,
+    model: str = "claude-sonnet-4-6",
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    estimated_cost: float = 0.0,
+    compressed_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cache_origin: str = "proxy",
+    status_code: int = 200,
+    agent_id: str = "",
+) -> None:
+    """Seed one row of the real ``requests`` schema.
 
-    @pytest.fixture
-    def temp_db(self):
-        """Create a temporary monitor database."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "monitor.db"
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
+    Inserted directly via SQL (bypassing ``Monitor``'s async write queue) for
+    determinism, the same pattern used by ``tests/proxy/test_monitor_write_truth.py``.
+    """
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            "INSERT INTO requests (timestamp, model, input_tokens, output_tokens, "
+            "estimated_cost, compressed_tokens, cache_read_tokens, cache_origin, "
+            "status_code, agent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                timestamp or datetime.now().isoformat(),
+                model,
+                input_tokens,
+                output_tokens,
+                estimated_cost,
+                compressed_tokens,
+                cache_read_tokens,
+                cache_origin,
+                status_code,
+                agent_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
-            # Create minimal schema required for savings queries
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS audit_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT,
-                    model TEXT,
-                    input_tokens INTEGER,
-                    output_tokens INTEGER,
-                    cached_tokens INTEGER,
-                    compression_mode TEXT,
-                    tokens_saved INTEGER,
-                    cost_usd REAL,
-                    cost_saved_usd REAL
-                )
-            """)
 
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS monitor_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT,
-                    model TEXT,
-                    input_tokens INTEGER,
-                    output_tokens INTEGER,
-                    cached_tokens INTEGER,
-                    compilation_mode TEXT,
-                    tokens_saved INTEGER,
-                    cost_usd REAL,
-                    cost_saved_usd REAL
-                )
-            """)
+@pytest.fixture()
+def monitor_db(tmp_path: Path) -> Path:
+    """A real monitor.db: schema created the same way the live proxy creates it."""
+    db_path = tmp_path / "monitor.db"
+    Monitor(db_path=str(db_path))  # builds schema via _init_db(); inserts no rows
+    return db_path
 
-            conn.commit()
-            conn.close()
 
-            yield db_path
+class TestQueryDslReadsRealSchema:
+    """``query_dsl`` must read the schema the live proxy actually writes."""
 
-    def test_savings_endpoint_returns_200(self, temp_db):
-        """Savings endpoint should return HTTP 200 OK."""
-        # This would be tested against a live proxy in integration environment
-        # For now, verify the schema structure would be correct
-        expected_fields = {
-            "total_requests",
-            "total_tokens_saved",
-            "total_cost_saved_usd",
-            "total_cost_usd",
-            "total_input_tokens",
-            "since",
-            "savings_by_model",
-            "savings_by_date_7d",
-        }
-        # When endpoint exists, check response keys
-        assert all(isinstance(k, str) for k in expected_fields)
+    def test_get_savings_report_reads_seeded_requests(self, monitor_db: Path) -> None:
+        _insert_request(
+            monitor_db,
+            model="claude-sonnet-4-6",
+            input_tokens=1000,
+            output_tokens=200,
+            estimated_cost=0.05,
+            compressed_tokens=5000,
+            cache_read_tokens=2000,
+            cache_origin="proxy",
+        )
 
-    def test_savings_response_has_required_fields(self):
-        """Response must include all required top-level fields."""
-        expected_fields = {
-            "total_requests",
-            "total_tokens_saved",
-            "total_cost_saved_usd",
-            "savings_by_model",
-            "savings_by_date_7d",
-        }
-        # Verify field names are present
-        for field in expected_fields:
-            assert isinstance(field, str)
-            assert len(field) > 0
+        report = query_dsl.get_savings_report(db_path=monitor_db, days=30)
 
-    def test_empty_database_returns_valid_response(self, temp_db):
-        """Empty database should return zeros, not error."""
-        # Expected response structure for empty DB
-        expected_structure = {
-            "total_requests": 0,
-            "total_tokens_saved": 0,
-            "total_cost_saved_usd": 0.0,
-            "savings_by_model": {},
-            "savings_by_date_7d": [],
-        }
-        for key, value in expected_structure.items():
-            assert isinstance(key, str)
-            assert value is not None or isinstance(value, type(None))
+        assert report.available is True
+        assert report.observations == 1
+        assert report.total_cost == pytest.approx(0.05)
+        assert report.savings_amount > 0
+        assert report.estimated_without_compression == pytest.approx(
+            report.total_cost + report.savings_amount
+        )
 
-    def test_savings_by_model_field_is_dict(self):
-        """savings_by_model should be a dictionary keyed by model name."""
-        # Example of expected structure
-        example = {
-            "claude-sonnet-4-6": {"requests": 100, "tokens_saved": 50000, "cost_saved_usd": 10.5},
-            "claude-haiku-4-5": {"requests": 50, "tokens_saved": 10000, "cost_saved_usd": 2.0},
-        }
+    def test_get_savings_report_excludes_non_proxy_cache_origin(self, monitor_db: Path) -> None:
+        """Only cache_origin='proxy' rows are credited toward savings_amount."""
+        _insert_request(
+            monitor_db,
+            model="claude-sonnet-4-6",
+            estimated_cost=0.01,
+            compressed_tokens=1000,
+            cache_read_tokens=500,
+            cache_origin="proxy",
+        )
+        _insert_request(
+            monitor_db,
+            model="claude-sonnet-4-6",
+            estimated_cost=0.01,
+            compressed_tokens=1000,
+            cache_read_tokens=500,
+            cache_origin="client",
+        )
 
-        assert isinstance(example, dict)
-        for model, stats in example.items():
-            assert isinstance(model, str)
-            assert isinstance(stats, dict)
-            assert "requests" in stats
-            assert "tokens_saved" in stats
-            assert "cost_saved_usd" in stats
+        report = query_dsl.get_savings_report(db_path=monitor_db, days=30)
 
-    def test_savings_by_date_7d_is_list(self):
-        """savings_by_date_7d should be a list of daily summaries."""
-        # Example of expected structure
-        example = [
-            {
-                "date": "2026-03-27",
-                "tokens_saved": 100000,
-                "cost_saved_usd": 50.25,
-                "requests": 300,
+        rates = get_rates("claude-sonnet-4-6")
+        expected = (1000 / 1_000_000) * rates["input"] + (500 / 1_000_000) * max(
+            rates["input"] - rates["cached"], 0.0
+        )
+        # Both rows count toward total_cost/observations; only the proxy-origin
+        # row's compression/cache-read tokens are credited as savings.
+        assert report.observations == 2
+        assert report.total_cost == pytest.approx(0.02)
+        assert report.savings_amount == pytest.approx(expected)
+
+    def test_get_model_usage_reads_seeded_requests(self, monitor_db: Path) -> None:
+        _insert_request(monitor_db, model="claude-sonnet-4-6", input_tokens=100, output_tokens=50)
+        _insert_request(monitor_db, model="claude-sonnet-4-6", input_tokens=200, output_tokens=75)
+        _insert_request(monitor_db, model="claude-haiku-4-5", input_tokens=10, output_tokens=5)
+
+        usage = query_dsl.get_model_usage(db_path=monitor_db, days=30)
+        by_model = {u.model: u for u in usage}
+
+        assert by_model["claude-sonnet-4-6"].request_count == 2
+        assert by_model["claude-sonnet-4-6"].total_input_tokens == 300
+        assert by_model["claude-sonnet-4-6"].total_output_tokens == 125
+        assert by_model["claude-haiku-4-5"].request_count == 1
+
+    def test_get_recent_events_reads_seeded_requests(self, monitor_db: Path) -> None:
+        _insert_request(
+            monitor_db,
+            model="claude-sonnet-4-6",
+            input_tokens=42,
+            output_tokens=7,
+            estimated_cost=0.002,
+            status_code=200,
+        )
+
+        events = query_dsl.get_recent_events(db_path=monitor_db, limit=10)
+
+        assert len(events) == 1
+        evt = events[0]
+        assert evt["model"] == "claude-sonnet-4-6"
+        assert evt["input_tokens"] == 42
+        assert evt["output_tokens"] == 7
+        assert evt["cost"] == pytest.approx(0.002)
+        assert evt["status"] == "ok"
+
+    def test_get_recent_events_marks_error_status(self, monitor_db: Path) -> None:
+        _insert_request(monitor_db, model="claude-sonnet-4-6", status_code=500)
+
+        events = query_dsl.get_recent_events(db_path=monitor_db, limit=10)
+
+        assert events[0]["status"] == "error"
+        assert events[0]["error_class"] == "http_500"
+
+    def test_get_cost_summary_reads_seeded_requests(self, monitor_db: Path) -> None:
+        _insert_request(monitor_db, model="claude-sonnet-4-6", estimated_cost=0.10)
+        _insert_request(monitor_db, model="claude-haiku-4-5", estimated_cost=0.02)
+
+        summary = query_dsl.get_cost_summary(db_path=monitor_db, days=30)
+
+        assert summary.total_cost == pytest.approx(0.12)
+        assert summary.by_model["claude-sonnet-4-6"] == pytest.approx(0.10)
+        assert summary.by_model["claude-haiku-4-5"] == pytest.approx(0.02)
+
+    def test_get_daily_trend_reads_seeded_requests(self, monitor_db: Path) -> None:
+        _insert_request(
+            monitor_db,
+            model="claude-sonnet-4-6",
+            estimated_cost=0.03,
+            input_tokens=10,
+            output_tokens=5,
+        )
+
+        trend = query_dsl.get_daily_trend(db_path=monitor_db, days=30)
+
+        assert len(trend) == 1
+        assert trend[0].cost == pytest.approx(0.03)
+        assert trend[0].request_count == 1
+
+    def test_get_model_compression_breakdown_reads_seeded_requests(self, monitor_db: Path) -> None:
+        _insert_request(
+            monitor_db,
+            model="claude-sonnet-4-6",
+            input_tokens=100,
+            compressed_tokens=400,
+            cache_origin="proxy",
+        )
+
+        breakdown = query_dsl.get_model_compression_breakdown(db_path=monitor_db, days=1)
+
+        assert len(breakdown) == 1
+        b = breakdown[0]
+        assert b.model == "claude-sonnet-4-6"
+        assert b.tokens_saved == 400
+        assert b.avg_raw_tokens == pytest.approx(500.0)
+        assert b.avg_final_tokens == pytest.approx(100.0)
+        assert b.savings_amount > 0
+
+    def test_stale_rows_excluded_by_days_window(self, monitor_db: Path) -> None:
+        stale = (datetime.now() - timedelta(days=400)).isoformat()
+        _insert_request(monitor_db, timestamp=stale, model="claude-sonnet-4-6", estimated_cost=1.0)
+
+        report = query_dsl.get_savings_report(db_path=monitor_db, days=30)
+
+        assert report.available is True
+        assert report.observations == 0
+        assert report.total_cost == 0.0
+
+    def test_error_status_rows_excluded(self, monitor_db: Path) -> None:
+        """status_code >= 400 (failed requests) must not count as billed usage."""
+        _insert_request(monitor_db, model="claude-sonnet-4-6", estimated_cost=5.0, status_code=500)
+
+        report = query_dsl.get_savings_report(db_path=monitor_db, days=30)
+
+        assert report.observations == 0
+        assert report.total_cost == 0.0
+
+
+class TestCliSurfacesRealMonitorData:
+    """The exact deviation the audit found: a user with real proxy traffic in
+    monitor.db got "no data yet" from these CLI verbs regardless. Seed the
+    real store the proxy would have written and confirm each verb reports
+    the data instead.
+    """
+
+    @pytest.fixture()
+    def home_with_monitor_db(self, tmp_path: Path) -> Path:
+        home = tmp_path / "home"
+        tpk_dir = home / ".tpk"
+        tpk_dir.mkdir(parents=True)
+        (tpk_dir / ".seen_intro").touch()
+        db_path = tpk_dir / "monitor.db"
+        Monitor(db_path=str(db_path))
+        _insert_request(
+            db_path,
+            model="claude-sonnet-4-6",
+            input_tokens=1000,
+            output_tokens=200,
+            estimated_cost=0.05,
+            compressed_tokens=5000,
+            cache_read_tokens=2000,
+            cache_origin="proxy",
+            status_code=200,
+        )
+        return home
+
+    def _run_cli(self, home: Path, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, "-m", "tokenpak.cli", *args],
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+            env={
+                "HOME": str(home),
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "NO_COLOR": "1",
+                "TERM": "dumb",
+                "TOKENPAK_PORT": "8899",
             },
-            {"date": "2026-03-26", "tokens_saved": 95000, "cost_saved_usd": 48.0, "requests": 280},
-        ]
+            timeout=180,
+        )
 
-        assert isinstance(example, list)
-        for day in example:
-            assert isinstance(day, dict)
-            assert "date" in day
-            assert "tokens_saved" in day
-            assert "cost_saved_usd" in day
+    def test_savings_surfaces_seeded_data(self, home_with_monitor_db: Path) -> None:
+        result = self._run_cli(home_with_monitor_db, "savings")
+        combined = result.stdout + result.stderr
 
+        assert result.returncode == 0, combined
+        assert "No savings data yet" not in combined, combined
 
-class TestSavingsDataFormat:
-    """Test data formats and calculations in savings response."""
+    def test_compare_surfaces_seeded_data(self, home_with_monitor_db: Path) -> None:
+        result = self._run_cli(home_with_monitor_db, "compare")
+        combined = result.stdout + result.stderr
 
-    def test_tokens_saved_is_numeric(self):
-        """Tokens saved should be an integer >= 0."""
-        values = [0, 1000, 1037703198]
-        for val in values:
-            assert isinstance(val, int)
-            assert val >= 0
+        assert result.returncode == 0, combined
+        assert "No recent requests found" not in combined, combined
+        assert "claude-sonnet-4-6" in combined
 
-    def test_cost_saved_usd_is_float(self):
-        """Cost saved should be a float with reasonable precision."""
-        values = [0.0, 2808.1365, 10.50]
-        for val in values:
-            assert isinstance(val, float)
-            assert val >= 0.0
+    def test_leaderboard_surfaces_seeded_data(self, home_with_monitor_db: Path) -> None:
+        result = self._run_cli(home_with_monitor_db, "leaderboard")
+        combined = result.stdout + result.stderr
 
-    def test_since_parameter_nullable(self):
-        """The 'since' field can be null or an ISO date string."""
-        valid_values = [None, "2026-03-01", "2026-03-27T15:00:00Z"]
-        for val in valid_values:
-            assert val is None or isinstance(val, str)
-
-    def test_total_cost_saved_sums_correctly(self):
-        """total_cost_saved_usd should equal sum of savings_by_model costs."""
-        savings_by_model = {
-            "claude-sonnet": {"cost_saved_usd": 100.0},
-            "claude-haiku": {"cost_saved_usd": 50.0},
-            "gpt-4": {"cost_saved_usd": 25.0},
-        }
-
-        expected_total = sum(m["cost_saved_usd"] for m in savings_by_model.values())
-        assert expected_total == 175.0
-
-
-class TestSavingsDateFiltering:
-    """Test date filtering capabilities."""
-
-    def test_since_parameter_filters_by_date(self):
-        """?since=YYYY-MM-DD should restrict results to dates >= since."""
-        # Test date filtering logic
-        since = datetime.fromisoformat("2026-03-20").date()
-        test_dates = [
-            datetime.fromisoformat("2026-03-19").date(),  # Before
-            datetime.fromisoformat("2026-03-20").date(),  # Equal
-            datetime.fromisoformat("2026-03-27").date(),  # After
-        ]
-
-        filtered = [d for d in test_dates if d >= since]
-        assert len(filtered) == 2
-        assert test_dates[0] not in filtered
-
-    def test_savings_by_date_7d_uses_last_7_days(self):
-        """savings_by_date_7d should cover exactly 7 days or fewer if unavailable."""
-        today = datetime.now(tz=None).date()
-        # Generate last 7 days: from 6 days ago through today
-        dates = [today - timedelta(days=i) for i in range(7)]
-        dates.reverse()  # Chronological order: oldest first
-
-        assert len(dates) == 7
-        assert dates[0] <= dates[-1]  # Oldest <= Newest
-        assert (dates[-1] - dates[0]).days == 6  # 7 days span
-
-
-class TestSavingsResponseValidJSON:
-    """Test that savings response is valid, parseable JSON."""
-
-    def test_response_is_valid_json(self):
-        """Response must be parseable as JSON."""
-        example_response = {
-            "total_requests": 26452,
-            "total_tokens_saved": 1037703198,
-            "total_cost_saved_usd": 2808.1365,
-            "savings_by_model": {"claude-sonnet": {"requests": 1000}},
-            "savings_by_date_7d": [{"date": "2026-03-27", "cost_saved_usd": 100.0}],
-        }
-
-        # Should serialize without error
-        json_str = json.dumps(example_response)
-        parsed = json.loads(json_str)
-
-        assert parsed == example_response
-
-    def test_response_content_type_is_json(self):
-        """HTTP Content-Type header should be application/json."""
-        expected_content_type = "application/json"
-        assert "json" in expected_content_type.lower()
+        assert result.returncode == 0, combined
+        assert "No model usage data available" not in combined, combined
+        assert "claude-sonnet-4-6" in combined
 
 
 if __name__ == "__main__":

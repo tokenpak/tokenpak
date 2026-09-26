@@ -1,13 +1,24 @@
-"""Query DSL parser and query engine for TokenPak telemetry API."""
+"""Query DSL parser and query engine for TokenPak telemetry API.
+
+Reads from the monitor database (the ``requests`` table) — the same store
+the live proxy writes every completed request into, and the same resolver
+``tokenpak doctor`` and the CLI's monitor-backed commands use
+(``tokenpak._paths.monitor_db``). Earlier versions of this module queried a
+separate ``telemetry.db`` (``tp_events``/``tp_usage``/``tp_costs``) that
+nothing in the live proxy write path ever populated, so every caller of
+these functions read a permanently empty store regardless of real traffic.
+"""
 
 from __future__ import annotations
 
 import sqlite3
-import time
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
+from tokenpak.models import detect_provider
+from tokenpak.telemetry.pricing_rates import get_rates
 from tokenpak.telemetry.query_models import (
     CostSummary,
     DailyTrend,
@@ -111,12 +122,20 @@ def build_sql_where(
     return ("WHERE " + " AND ".join(conditions), params) if conditions else ("", params)
 
 
-def _default_db_path() -> Path:
-    # Single-resolver rule: resolve at call time (not import time) so env
-    # changes are honored, and never fall back to a repo-root telemetry.db.
-    from tokenpak.core.paths import get_db_path
+def _default_db_path() -> Optional[Path]:
+    """Resolve the canonical monitor store the live proxy writes to.
 
-    return get_db_path("telemetry.db")
+    Single-resolver rule: resolve at call time (not import time) so env
+    changes are honored. Routes through ``tokenpak._paths.monitor_db``, the
+    same resolver the proxy writer, ``tokenpak doctor``, and the CLI's
+    monitor-backed commands use — so a read here sees the store the proxy
+    actually populated instead of a second, never-written file. Returns
+    ``None`` when no valid monitor DB exists anywhere (a fresh install),
+    which callers must render as "no data yet", not as an error.
+    """
+    from tokenpak._paths import monitor_db
+
+    return monitor_db(mode="read")
 
 
 class TelemetryUnavailable(Exception):
@@ -124,12 +143,12 @@ class TelemetryUnavailable(Exception):
 
 
 def _get_conn(db_path: str | Path | None = None) -> sqlite3.Connection:
-    """Open the telemetry store read-only. Never creates it.
+    """Open the monitor store read-only. Never creates it.
 
     ``sqlite3.connect`` creates the file when it is absent, so *reading*
-    telemetry on a fresh install materialised an empty ``telemetry.db`` — at
-    the ambient umask — and then every query raised
-    ``sqlite3.OperationalError: no such table: tp_events`` as a raw traceback.
+    telemetry on a fresh install materialised an empty database — at the
+    ambient umask — and then every query raised
+    ``sqlite3.OperationalError: no such table: requests`` as a raw traceback.
 
     Read paths must not create state, and "there is nothing recorded yet" is
     a normal condition with a defined representation elsewhere in this module.
@@ -137,7 +156,7 @@ def _get_conn(db_path: str | Path | None = None) -> sqlite3.Connection:
     value rather than propagating a stack trace to a user's terminal.
     """
     resolved = Path(db_path) if db_path else _default_db_path()
-    if not resolved.exists():
+    if resolved is None or not resolved.exists():
         raise TelemetryUnavailable(f"no telemetry store at {resolved}")
     try:
         conn = sqlite3.connect(f"file:{resolved}?mode=ro", uri=True)
@@ -147,84 +166,159 @@ def _get_conn(db_path: str | Path | None = None) -> sqlite3.Connection:
     return conn
 
 
-def _ts_range(days: int) -> tuple[float, float]:
-    end = time.time()
-    return end - days * 86400, end
+def _date_cutoff(days: int) -> str:
+    """ISO date string ``days`` back from today, for a local-time cutoff.
+
+    ``requests.timestamp`` is written as ``datetime.now().isoformat()`` —
+    local time, not epoch, and not UTC. A plain ISO date string (e.g.
+    ``"2026-08-27"``) sorts and compares correctly against it with a simple
+    lexicographic ``>=``, matching the convention already used by the
+    monitor-backed CLI paths (``_cli_core._monitor_db_savings`` et al.).
+    """
+    return (date.today() - timedelta(days=days)).isoformat()
+
+
+def _iso_to_epoch(ts: str | None) -> float:
+    """Parse a local ISO-8601 ``requests.timestamp`` string to a Unix epoch.
+
+    Feeds a display/sort field, not a filter, so a null or unparseable
+    timestamp degrades to ``0.0`` rather than raising.
+    """
+    if not ts:
+        return 0.0
+    try:
+        return datetime.fromisoformat(ts).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _bucket_savings_usd(model: str, compressed_tokens: float, cache_read_tokens: float) -> float:
+    """Approximate USD saved for one (model) bucket of compression + cache reads.
+
+    Compression: tokens removed entirely, priced at the model's input rate
+    (they would have been billed at that rate had they been sent).
+    Cache reads: priced at the difference between the input rate and the
+    cached-read rate. This mirrors the live proxy's own bucket estimator
+    (``tokenpak.proxy.monitor._estimate_bucket_savings_usd``) for the common
+    case where the model registry has a model-specific cached-input rate —
+    the two formulas are then identical. It differs only in the fallback
+    used when a model has *no* registry cache rate: the proxy falls back to
+    a per-provider discount table (``tokenpak.proxy.cache``), which this
+    telemetry-layer helper cannot import (it sits below the proxy layer), so
+    it falls back to the registry's flat 10%-of-input default instead. That
+    fallback only applies to models without a specific cache rate on record.
+    """
+    rates = get_rates(model or None)
+    input_rate = rates.get("input", 0.0)
+    cached_rate = rates.get("cached", 0.0)
+    compression_saved = (compressed_tokens / 1_000_000) * input_rate
+    cache_saved = (cache_read_tokens / 1_000_000) * max(input_rate - cached_rate, 0.0)
+    return compression_saved + cache_saved
 
 
 def get_cost_summary(db_path: str | Path | None = None, days: int = 30) -> CostSummary:
-    """Query aggregated cost summary from the telemetry DB."""
+    """Query aggregated cost summary from the monitor DB."""
     try:
         conn = _get_conn(db_path)
     except TelemetryUnavailable:
         return CostSummary(period_days=days)
     try:
-        s, e = _ts_range(days)
+        since = _date_cutoff(days)
         cur = conn.cursor()
-        cur.execute(
-            "SELECT COALESCE(SUM(c.actual_cost),0) FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
-            (s, e),
-        )
-        total = cur.fetchone()[0] or 0.0
-        cur.execute(
-            "SELECT e.model, COALESCE(SUM(c.actual_cost),0) as cost FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end' GROUP BY e.model",
-            (s, e),
-        )
-        by_model = {r["model"]: r["cost"] for r in cur.fetchall()}
-        cur.execute(
-            "SELECT e.provider, COALESCE(SUM(c.actual_cost),0) as cost FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end' GROUP BY e.provider",
-            (s, e),
-        )
-        by_prov = {r["provider"]: r["cost"] for r in cur.fetchall()}
-        cur.execute(
-            "SELECT DATE(e.ts,'unixepoch') as date, COALESCE(SUM(c.actual_cost),0) as cost FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end' GROUP BY date ORDER BY date",
-            (s, e),
-        )
-        daily = [{"date": r["date"], "cost": r["cost"]} for r in cur.fetchall()]
+        try:
+            cur.execute(
+                "SELECT COALESCE(SUM(estimated_cost),0) FROM requests "
+                "WHERE timestamp >= ? AND status_code < 400",
+                (since,),
+            )
+            total = cur.fetchone()[0] or 0.0
+            cur.execute(
+                "SELECT model, COALESCE(SUM(estimated_cost),0) as cost FROM requests "
+                "WHERE timestamp >= ? AND status_code < 400 GROUP BY model",
+                (since,),
+            )
+            by_model = {(r["model"] or "unknown"): (r["cost"] or 0.0) for r in cur.fetchall()}
+            by_provider: dict[str, float] = {}
+            for model, cost in by_model.items():
+                provider = detect_provider(model)
+                by_provider[provider] = by_provider.get(provider, 0.0) + cost
+            cur.execute(
+                "SELECT DATE(timestamp) as d, COALESCE(SUM(estimated_cost),0) as cost "
+                "FROM requests WHERE timestamp >= ? AND status_code < 400 "
+                "GROUP BY d ORDER BY d",
+                (since,),
+            )
+            daily = [{"date": r["d"], "cost": r["cost"] or 0.0} for r in cur.fetchall()]
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc) or "no such column" in str(exc):
+                return CostSummary(period_days=days)
+            raise
         return CostSummary(
-            total_cost=total, by_model=by_model, by_provider=by_prov, daily=daily, period_days=days
+            total_cost=total,
+            by_model=by_model,
+            by_provider=by_provider,
+            daily=daily,
+            period_days=days,
         )
     finally:
         conn.close()
 
 
 def get_model_usage(db_path: str | Path | None = None, days: int = 30) -> list[ModelUsage]:
-    """Query per-model token usage from the telemetry DB."""
+    """Query per-model token usage from the monitor DB."""
     try:
         conn = _get_conn(db_path)
     except TelemetryUnavailable:
         return []
     try:
-        s, e = _ts_range(days)
+        since = _date_cutoff(days)
         cur = conn.cursor()
-        cur.execute(
-            "SELECT e.model, e.provider, COUNT(*) as cnt, COALESCE(SUM(u.input_billed),0) as inp, COALESCE(SUM(u.output_billed),0) as outp FROM tp_events e LEFT JOIN tp_usage u ON e.trace_id=u.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end' GROUP BY e.model,e.provider ORDER BY cnt DESC",
-            (s, e),
-        )
+        try:
+            cur.execute(
+                "SELECT model, COUNT(*) as cnt, "
+                "COALESCE(SUM(input_tokens),0) as inp, "
+                "COALESCE(SUM(output_tokens),0) as outp, "
+                "AVG(latency_ms) as avg_latency "
+                "FROM requests WHERE timestamp >= ? AND status_code < 400 "
+                "GROUP BY model ORDER BY cnt DESC",
+                (since,),
+            )
+            rows = cur.fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc) or "no such column" in str(exc):
+                return []
+            raise
         return [
             ModelUsage(
-                model=r["model"],
-                provider=r["provider"],
+                model=r["model"] or "unknown",
+                provider=detect_provider(r["model"] or ""),
                 request_count=r["cnt"],
                 total_input_tokens=r["inp"],
                 total_output_tokens=r["outp"],
+                avg_latency_ms=(
+                    round(r["avg_latency"], 1) if r["avg_latency"] is not None else None
+                ),
             )
-            for r in cur.fetchall()
+            for r in rows
         ]
     finally:
         conn.close()
 
 
 def get_savings_report(db_path: str | Path | None = None, days: int = 30) -> SavingsReport:
-    """Query token savings (raw vs compressed) from the telemetry DB.
+    """Query token/cost savings from the monitor DB.
 
-    Only counts savings from proxy-managed routes (where tokenpak actually
-    caused the cost reduction).  Client-managed routes (e.g. ``claude-code``)
-    are excluded from ``savings_amount`` because their caching is done by the
-    client, not by tokenpak.
+    Only proxy-caused savings are counted in ``savings_amount``: a row's
+    compression and cache-read tokens are credited only when its
+    ``cache_origin`` is ``'proxy'``. Client-caused caching
+    (``cache_origin='client'``, e.g. an agent's own prompt caching) and rows
+    of unknown origin are excluded from the dollar/percentage totals — the
+    same exclusion the live proxy's own savings accounting applies
+    (``tokenpak.proxy.monitor.Monitor.get_savings_report``) — because that
+    savings was not caused by this product. ``total_cost`` and
+    ``cache_hit_rate`` are reported across all rows regardless of origin,
+    since those are observed totals, not an attribution claim.
     """
-    import sqlite3
-
     try:
         conn = _get_conn(db_path)
     except TelemetryUnavailable:
@@ -232,52 +326,84 @@ def get_savings_report(db_path: str | Path | None = None, days: int = 30) -> Sav
         # state, distinct from a healthy store with zero observations.
         return SavingsReport(available=False)
     try:
-        s, e = _ts_range(days)
+        since = _date_cutoff(days)
         cur = conn.cursor()
         try:
-            # Exclude client-managed routes from savings attribution.
-            # COALESCE(e.route, '') handles rows written before the route column existed.
-            # COUNT(*) rides along so callers can distinguish "no rows" from
-            # "rows that sum to zero". The COALESCE(...,0) aggregates below
-            # cannot express that difference on their own.
             cur.execute(
-                "SELECT COALESCE(SUM(c.actual_cost),0) as tc, COALESCE(SUM(c.baseline_cost),0) as bc, COALESCE(SUM(CASE WHEN COALESCE(e.route,'') != 'claude-code' THEN c.savings_total ELSE 0 END),0) as sv, COUNT(*) as n FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
-                (s, e),
+                "SELECT COALESCE(SUM(estimated_cost),0) as tc, COUNT(*) as n "
+                "FROM requests WHERE timestamp >= ? AND status_code < 400",
+                (since,),
             )
             r = cur.fetchone()
-            tc, bc, sv = r["tc"] or 0, r["bc"] or 0, r["sv"] or 0
+            total_cost = float(r["tc"] or 0.0)
             observations = int(r["n"] or 0)
-            # Cache hit rate is still reported for observability (all routes)
+
+            try:
+                cur.execute(
+                    "SELECT model, "
+                    "COALESCE(SUM(compressed_tokens),0) as comp, "
+                    "COALESCE(SUM(cache_read_tokens),0) as cread "
+                    "FROM requests WHERE timestamp >= ? AND status_code < 400 "
+                    "AND cache_origin = 'proxy' "
+                    "GROUP BY model",
+                    (since,),
+                )
+                origin_rows = cur.fetchall()
+            except sqlite3.OperationalError as exc:
+                if "no such column" in str(exc) and "cache_origin" in str(exc):
+                    # A monitor.db predating the cache_origin column has no
+                    # way to distinguish proxy- from client-caused savings;
+                    # every row on that schema version was proxy-managed, so
+                    # treat all of it as attributable rather than reporting
+                    # zero savings on an otherwise healthy store.
+                    cur.execute(
+                        "SELECT model, "
+                        "COALESCE(SUM(compressed_tokens),0) as comp, "
+                        "COALESCE(SUM(cache_read_tokens),0) as cread "
+                        "FROM requests WHERE timestamp >= ? AND status_code < 400 "
+                        "GROUP BY model",
+                        (since,),
+                    )
+                    origin_rows = cur.fetchall()
+                else:
+                    raise
+
+            savings_amount = 0.0
+            for row in origin_rows:
+                savings_amount += _bucket_savings_usd(
+                    row["model"] or "", row["comp"] or 0, row["cread"] or 0
+                )
+
             cur.execute(
-                "SELECT COALESCE(SUM(u.cache_read),0) as cr, COALESCE(SUM(u.input_billed+u.cache_read),0) as ti FROM tp_usage u JOIN tp_events e ON u.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
-                (s, e),
+                "SELECT COALESCE(SUM(cache_read_tokens),0) as cr, "
+                "COALESCE(SUM(input_tokens + cache_read_tokens),0) as ti "
+                "FROM requests WHERE timestamp >= ? AND status_code < 400",
+                (since,),
             )
-            cr = cur.fetchone()
-            cache_read, total_in = cr["cr"] or 0, cr["ti"] or 0
+            cr_row = cur.fetchone()
+            cache_read_all = cr_row["cr"] or 0
+            total_in_all = cr_row["ti"] or 0
+            cache_hit_rate = (cache_read_all / total_in_all) if total_in_all else 0.0
+
+            estimated_without = total_cost + savings_amount
+            savings_pct = (savings_amount / estimated_without * 100) if estimated_without else 0.0
+
             return SavingsReport(
-                total_cost=tc,
-                estimated_without_compression=bc,
-                savings_amount=sv,
-                savings_pct=(sv / bc * 100 if bc else 0),
-                cache_hit_rate=(cache_read / total_in if total_in else 0),
+                total_cost=total_cost,
+                estimated_without_compression=estimated_without,
+                savings_amount=savings_amount,
+                savings_pct=savings_pct,
+                cache_hit_rate=cache_hit_rate,
                 observations=observations,
                 available=True,
             )
-        except sqlite3.OperationalError as e:
-            if "no such table" in str(e) or "no such column" in str(e):
-                # Legacy DB schema — missing tp_events/tp_costs tables or route
-                # column. Do not crash, but do not claim a measurement either:
-                # available=False marks these floats as meaningless so callers
-                # render "unavailable" instead of "$0.00 (0.0%)".
-                return SavingsReport(
-                    total_cost=0.0,
-                    estimated_without_compression=0.0,
-                    savings_amount=0.0,
-                    savings_pct=0.0,
-                    cache_hit_rate=0.0,
-                    observations=0,
-                    available=False,
-                )
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc) or "no such column" in str(exc):
+                # Legacy/unrecognised schema — do not crash, but do not claim
+                # a measurement either: available=False marks these floats as
+                # meaningless so callers render "unavailable" instead of
+                # "$0.00 (0.0%)".
+                return SavingsReport(available=False)
             raise  # re-raise unexpected SQLite errors
     finally:
         conn.close()
@@ -286,34 +412,46 @@ def get_savings_report(db_path: str | Path | None = None, days: int = 30) -> Sav
 def get_recent_events(
     db_path: str | Path | None = None, limit: int = 50
 ) -> list[dict[str, object]]:
-    """Fetch the most recent telemetry events up to limit."""
+    """Fetch the most recent request events, most recent first."""
     try:
         conn = _get_conn(db_path)
     except TelemetryUnavailable:
         return []
     try:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT e.trace_id,e.request_id,e.event_type,e.ts,e.provider,e.model,e.agent_id,e.status,e.error_class,u.input_billed,u.output_billed,c.actual_cost FROM tp_events e LEFT JOIN tp_usage u ON e.trace_id=u.trace_id LEFT JOIN tp_costs c ON e.trace_id=c.trace_id WHERE e.event_type='request_end' ORDER BY e.ts DESC LIMIT ?",
-            (limit,),
-        )
-        return [
-            {
-                "trace_id": r["trace_id"],
-                "request_id": r["request_id"],
-                "event_type": r["event_type"],
-                "ts": r["ts"],
-                "provider": r["provider"],
-                "model": r["model"],
-                "agent_id": r["agent_id"],
-                "status": r["status"],
-                "error_class": r["error_class"],
-                "input_tokens": r["input_billed"],
-                "output_tokens": r["output_billed"],
-                "cost": r["actual_cost"],
-            }
-            for r in cur.fetchall()
-        ]
+        try:
+            cur.execute(
+                "SELECT id, timestamp, model, agent_id, input_tokens, output_tokens, "
+                "estimated_cost, status_code "
+                "FROM requests ORDER BY timestamp DESC, id DESC LIMIT ?",
+                (limit,),
+            )
+            rows = cur.fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc) or "no such column" in str(exc):
+                return []
+            raise
+        events = []
+        for r in rows:
+            status_code = r["status_code"]
+            is_ok = status_code is not None and status_code < 400
+            events.append(
+                {
+                    "trace_id": str(r["id"]),
+                    "request_id": str(r["id"]),
+                    "event_type": "request_end",
+                    "ts": _iso_to_epoch(r["timestamp"]),
+                    "provider": detect_provider(r["model"] or ""),
+                    "model": r["model"],
+                    "agent_id": r["agent_id"] or None,
+                    "status": "ok" if is_ok else "error",
+                    "error_class": None if is_ok else f"http_{status_code}",
+                    "input_tokens": r["input_tokens"],
+                    "output_tokens": r["output_tokens"],
+                    "cost": r["estimated_cost"],
+                }
+            )
+        return events
     finally:
         conn.close()
 
@@ -321,10 +459,7 @@ def get_recent_events(
 def get_model_compression_breakdown(
     db_path: str | Path | None = None, days: int = 1
 ) -> list[ModelCompressionBreakdown]:
-    """Query per-model compression ratio breakdown from the telemetry DB.
-
-    Joins tp_events with tp_costs and tp_usage to compute per-model compression
-    stats. Falls back gracefully when tables are absent or data is sparse.
+    """Query per-model compression ratio breakdown from the monitor DB.
 
     Args:
         db_path: Optional path to the SQLite DB (uses default if None).
@@ -333,59 +468,73 @@ def get_model_compression_breakdown(
     Returns:
         List of ModelCompressionBreakdown sorted by tokens_saved descending.
         Returns empty list if no data or DB is unavailable.
+
+    ``compressed_tokens`` records tokens *removed* by compression (priced at
+    the full input rate), not tokens remaining afterwards. So raw
+    (pre-compression) tokens = ``input_tokens + compressed_tokens``, and
+    final (billed) tokens = ``input_tokens``.
+
+    ``savings_amount`` here is compression savings only — it deliberately
+    does not blend in cache-read savings, unlike ``get_savings_report``'s
+    aggregate figure, because this field is specifically about compression.
     """
     try:
         conn = _get_conn(db_path)
     except TelemetryUnavailable:
         return []
     try:
-        s, e = _ts_range(days)
+        since = _date_cutoff(days)
         cur = conn.cursor()
         try:
             cur.execute(
-                """
-                SELECT
-                    e.model,
-                    COUNT(*) AS req_count,
-                    COALESCE(AVG(c.baseline_input_tokens), 0) AS avg_raw,
-                    COALESCE(AVG(u.input_billed), 0) AS avg_final,
-                    COALESCE(SUM(CASE WHEN COALESCE(e.route,'') != 'claude-code' THEN c.savings_total ELSE 0 END), 0) AS savings,
-                    COALESCE(SUM(c.baseline_input_tokens - u.input_billed), 0) AS tokens_saved
-                FROM tp_events e
-                LEFT JOIN tp_costs c ON e.trace_id = c.trace_id
-                LEFT JOIN tp_usage u ON e.trace_id = u.trace_id
-                WHERE e.ts >= ? AND e.ts <= ?
-                  AND e.event_type = 'request_end'
-                  AND (e.model IS NOT NULL AND e.model != '')
-                GROUP BY e.model
-                ORDER BY tokens_saved DESC
-                """,
-                (s, e),
+                "SELECT model, COUNT(*) as req_count, "
+                "COALESCE(AVG(input_tokens + compressed_tokens),0) as avg_raw, "
+                "COALESCE(AVG(input_tokens),0) as avg_final, "
+                "COALESCE(SUM(compressed_tokens),0) as tokens_saved, "
+                "COALESCE(SUM(CASE WHEN cache_origin='proxy' THEN compressed_tokens "
+                "ELSE 0 END),0) as comp_proxy "
+                "FROM requests WHERE timestamp >= ? AND status_code < 400 "
+                "AND model IS NOT NULL AND model != '' "
+                "GROUP BY model ORDER BY tokens_saved DESC",
+                (since,),
             )
             rows = cur.fetchall()
         except sqlite3.OperationalError as exc:
-            if "no such table" in str(exc):
+            if "no such column" in str(exc) and "cache_origin" in str(exc):
+                cur.execute(
+                    "SELECT model, COUNT(*) as req_count, "
+                    "COALESCE(AVG(input_tokens + compressed_tokens),0) as avg_raw, "
+                    "COALESCE(AVG(input_tokens),0) as avg_final, "
+                    "COALESCE(SUM(compressed_tokens),0) as tokens_saved, "
+                    "COALESCE(SUM(compressed_tokens),0) as comp_proxy "
+                    "FROM requests WHERE timestamp >= ? AND status_code < 400 "
+                    "AND model IS NOT NULL AND model != '' "
+                    "GROUP BY model ORDER BY tokens_saved DESC",
+                    (since,),
+                )
+                rows = cur.fetchall()
+            elif "no such table" in str(exc):
                 return []
-            raise
+            else:
+                raise
 
         results = []
         for r in rows:
             avg_raw = r["avg_raw"] or 0.0
             avg_final = r["avg_final"] or 0.0
-            # Compression ratio: final / raw (< 1.0 means compressed; 0 if no data)
-            if avg_raw > 0:
-                ratio = avg_final / avg_raw
-            else:
-                ratio = 1.0  # no compression data → treat as no compression
+            # Compression ratio: final / raw (< 1.0 means compressed; 1.0 if no data)
+            ratio = (avg_final / avg_raw) if avg_raw > 0 else 1.0
+            model = r["model"] or "unknown"
+            savings_amount = (r["comp_proxy"] or 0) / 1_000_000 * get_rates(model).get("input", 0.0)
             results.append(
                 ModelCompressionBreakdown(
-                    model=r["model"] or "unknown",
+                    model=model,
                     request_count=r["req_count"],
                     avg_compression_ratio=round(ratio, 4),
-                    tokens_saved=max(int(r["tokens_saved"]), 0),
+                    tokens_saved=max(int(r["tokens_saved"] or 0), 0),
                     avg_raw_tokens=round(avg_raw, 1),
                     avg_final_tokens=round(avg_final, 1),
-                    savings_amount=round(r["savings"] or 0.0, 6),
+                    savings_amount=round(savings_amount, 6),
                 )
             )
         return results
@@ -394,27 +543,39 @@ def get_model_compression_breakdown(
 
 
 def get_daily_trend(db_path: str | Path | None = None, days: int = 30) -> list[DailyTrend]:
-    """Fetch daily aggregated usage for trend charts."""
+    """Fetch daily aggregated usage for trend charts, from the monitor DB."""
     try:
         conn = _get_conn(db_path)
     except TelemetryUnavailable:
         return []
     try:
-        s, e = _ts_range(days)
+        since = _date_cutoff(days)
         cur = conn.cursor()
-        cur.execute(
-            "SELECT DATE(e.ts,'unixepoch') as dt, COALESCE(SUM(c.actual_cost),0) as cost, COALESCE(SUM(u.input_billed),0) as inp, COALESCE(SUM(u.output_billed),0) as outp, COUNT(*) as cnt FROM tp_events e LEFT JOIN tp_usage u ON e.trace_id=u.trace_id LEFT JOIN tp_costs c ON e.trace_id=c.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end' GROUP BY dt ORDER BY dt",
-            (s, e),
-        )
+        try:
+            cur.execute(
+                "SELECT DATE(timestamp) as d, "
+                "COALESCE(SUM(estimated_cost),0) as cost, "
+                "COALESCE(SUM(input_tokens),0) as inp, "
+                "COALESCE(SUM(output_tokens),0) as outp, "
+                "COUNT(*) as cnt "
+                "FROM requests WHERE timestamp >= ? AND status_code < 400 "
+                "GROUP BY d ORDER BY d",
+                (since,),
+            )
+            rows = cur.fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc) or "no such column" in str(exc):
+                return []
+            raise
         return [
             DailyTrend(
-                date=r["dt"],
-                cost=r["cost"],
+                date=r["d"],
+                cost=r["cost"] or 0.0,
                 input_tokens=r["inp"],
                 output_tokens=r["outp"],
                 request_count=r["cnt"],
             )
-            for r in cur.fetchall()
+            for r in rows
         ]
     finally:
         conn.close()
