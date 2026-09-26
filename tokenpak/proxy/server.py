@@ -73,6 +73,7 @@ __all__ = (
 )
 
 
+import asyncio
 import gzip
 import json
 import logging
@@ -4731,6 +4732,92 @@ def auto_detect_upstream(request_headers: Mapping[str, str]) -> str:
     return "https://api.anthropic.com"
 
 
+class _AsyncBackgroundTaskThread:
+    """Host asyncio-native background tasks on a dedicated loop/thread.
+
+    ``ProxyServer`` is thread-based and owns no event loop of its own, but
+    ``BackgroundOAuthRefresher`` and ``BackgroundCooldownClearer`` are
+    asyncio-native (``asyncio.create_task`` / ``asyncio.Event``) — the same
+    two components ``server_async.py``'s ASGI lifespan starts on its own
+    loop. This runs exactly one loop in exactly one thread to host them and
+    defers all refresh/clear logic to those existing single-owner
+    components; it is a transport for their lifecycle, not a second
+    implementation of it.
+    """
+
+    def __init__(self, tasks: list[Any]) -> None:
+        self._tasks = tasks
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._ready = threading.Event()
+        self._start_error: BaseException | None = None
+
+    @property
+    def thread_alive(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def start(self, timeout: float = 5.0) -> None:
+        """Start the loop thread and every task (idempotent; no-op if empty)."""
+        if not self._tasks or self.thread_alive:
+            return
+        self._ready.clear()
+        self._start_error = None
+        thread = threading.Thread(
+            target=self._run,
+            name="tokenpak-oauth-refresher",
+            daemon=True,
+        )
+        self._thread = thread
+        thread.start()
+        self._ready.wait(timeout=timeout)
+        if self._start_error is not None:
+            err, self._start_error = self._start_error, None
+            raise err
+
+    def _run(self) -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            for task in self._tasks:
+                loop.run_until_complete(task.start())
+        except BaseException as exc:  # noqa: BLE001 - surfaced to start()
+            self._start_error = exc
+            self._ready.set()
+            loop.close()
+            self._loop = None
+            return
+        self._loop = loop
+        self._ready.set()
+        try:
+            loop.run_forever()
+        finally:
+            loop.close()
+
+    def stop(self, timeout: float = 10.0) -> None:
+        """Signal every task to stop and join the loop thread (idempotent)."""
+        loop = self._loop
+        thread = self._thread
+        if loop is None or thread is None:
+            return
+
+        async def _stop_all() -> None:
+            for task in self._tasks:
+                await task.stop()
+
+        try:
+            future = asyncio.run_coroutine_threadsafe(_stop_all(), loop)
+            future.result(timeout=timeout)
+        except Exception as exc:
+            logger.warning("[tokenpak] OAuth/cooldown background task stop error: %s", exc)
+        try:
+            loop.call_soon_threadsafe(loop.stop)
+        except RuntimeError:
+            pass
+        thread.join(timeout=timeout)
+        self._thread = None
+        self._loop = None
+
+
 class ProxyServer:
     """
     TokenPak HTTP proxy server.
@@ -4903,6 +4990,41 @@ class ProxyServer:
         except Exception:
             self.monitor = None
 
+        # Native-OAuth token refresh + cooldown auto-clear. Mirrors the two
+        # background tasks server_async.py's ASGI lifespan starts on its own
+        # event loop (BackgroundOAuthRefresher / BackgroundCooldownClearer) —
+        # same single-owner components, same config keys — so this
+        # thread-based entrypoint stops silently dropping them. Config is
+        # resolved now (construction), matching the memory guard above; the
+        # background thread itself starts only once the listener binds
+        # successfully, in start().
+        self._oauth_background_tasks: list[Any] = []
+        try:
+            from tokenpak.core.config import get_config
+
+            auth_cfg = get_config().get("auth", {})
+            if not isinstance(auth_cfg, dict):
+                auth_cfg = {}
+            if auth_cfg.get("auto_clear_cooldowns", True):
+                from tokenpak.core.auth.cooldown_manager import BackgroundCooldownClearer
+
+                self._oauth_background_tasks.append(
+                    BackgroundCooldownClearer(interval=60, enabled=True)
+                )
+            if auth_cfg.get("oauth_auto_refresh", True):
+                from tokenpak.core.auth.oauth_manager import BackgroundOAuthRefresher
+
+                self._oauth_background_tasks.append(
+                    BackgroundOAuthRefresher(interval=300, enabled=True)
+                )
+        except Exception:
+            logger.warning(
+                "ProxyServer: could not configure OAuth/cooldown background tasks",
+                exc_info=True,
+            )
+            self._oauth_background_tasks = []
+        self._oauth_refresher_thread = _AsyncBackgroundTaskThread(self._oauth_background_tasks)
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -5000,6 +5122,20 @@ class ProxyServer:
                 else:
                     self._server = None
                 raise
+
+            # Native-OAuth refresh + cooldown auto-clear. Best-effort, unlike
+            # the memory guard above: get_expiring_profiles() always returns
+            # empty today (no login flow populates auth-profiles.json yet),
+            # so a failure here changes no live behavior — it only closes the
+            # gap for when native OAuth login ships. Never let it block or
+            # roll back an already-bound listener.
+            try:
+                self._oauth_refresher_thread.start()
+            except Exception as exc:
+                print(
+                    f"TokenPak: OAuth/cooldown background thread start error (non-fatal): {exc}",
+                    flush=True,
+                )
 
             if not blocking:
                 server_thread = threading.Thread(
@@ -5109,6 +5245,18 @@ class ProxyServer:
         guard_error: Exception | None = None
         prior_state = self._lifecycle_state
         self._lifecycle_state = "stopping"
+
+        # Stop the OAuth/cooldown background thread first and unconditionally.
+        # It is idempotent (a no-op if never started) and touches none of the
+        # request-path state the branches below reason about, so it is safe
+        # to retire here regardless of which shutdown branch runs next.
+        try:
+            self._oauth_refresher_thread.stop()
+        except Exception as exc:
+            print(
+                f"TokenPak: OAuth/cooldown background thread stop error (non-fatal): {exc}",
+                flush=True,
+            )
 
         # A startup rollback may retain a listener solely because close failed.
         # It was never served, so retry close directly rather than calling
@@ -5346,6 +5494,14 @@ class ProxyServer:
                 },
             }
         return self._memory_guard.stats
+
+    def _oauth_refresher_snapshot(self) -> dict[str, object]:
+        """Return lifecycle truth for the OAuth/cooldown background thread."""
+        return {
+            "enabled": bool(self._oauth_background_tasks),
+            "task_count": len(self._oauth_background_tasks),
+            "thread_alive": self._oauth_refresher_thread.thread_alive,
+        }
 
     # ------------------------------------------------------------------
     # Status endpoints (also used by handler GET routes)
