@@ -85,6 +85,7 @@ def write_audit(
     event_type: str,
     session_id: str,
     decision_str: str = "",
+    reason: Optional[str] = None,
     pending_id: Optional[str] = None,
     projected_cost: Optional[float] = None,
     projected_tokens: Optional[int] = None,
@@ -123,7 +124,7 @@ def write_audit(
                     session_id or "",
                     event_type,
                     decision_str or "",
-                    "",  # reason — populated by caller via extra if needed
+                    reason or "",
                     int(projected_tokens or 0),
                     float(projected_cost or 0.0),
                     pending_id or "",
