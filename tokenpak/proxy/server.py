@@ -124,6 +124,24 @@ from .connection_pool import ConnectionPool, PoolConfig
 from .creds_injection import maybe_inject as _creds_router_inject
 from .degradation import DegradationEventType, get_degradation_tracker
 from .error_response import normalize_upstream_error
+from .execution_ledger import (
+    begin_plan as _execution_ledger_begin_plan,
+)
+from .execution_ledger import (
+    check_restart_recovered_failure as _execution_ledger_check_restart_recovered_failure,
+)
+from .execution_ledger import (
+    complete_plan as _execution_ledger_complete_plan,
+)
+from .execution_ledger import (
+    fail_plan as _execution_ledger_fail_plan,
+)
+from .execution_ledger import (
+    hash_request as _execution_ledger_hash_request,
+)
+from .execution_ledger import (
+    recover_orphaned_plans as _execution_ledger_recover_orphaned_plans,
+)
 from .headers import (
     CLAUDE_CODE_HEADER_ALLOWLIST,
     forward_headers,
@@ -1652,6 +1670,38 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         )
         _tip_plan_id = extract_tip_plan_id(dict(self.headers), body, _req_id)
 
+        # Durable-ledger ingress check: if a previous proxy process died
+        # mid-request for this exact tip_plan_id, the startup recovery pass
+        # (see ProxyServer.start()) already marked that plan terminally
+        # failed. Surface it here, before any upstream work, as an explicit
+        # TIPError/recovery_status signal instead of letting a stale retry
+        # silently re-attempt a request whose original outcome is unknown.
+        if should_log and is_model_request:
+            try:
+                _recovered = _execution_ledger_check_restart_recovered_failure(_tip_plan_id)
+            except Exception:
+                _recovered = None
+            if _recovered is not None:
+                _recovery_payload = build_terminal_recovery_payload(
+                    request_id=_req_id,
+                    tip_plan_id=_tip_plan_id,
+                    error_type="proxy_restart_detected",
+                    message=(
+                        "TokenPak proxy restarted while this request was in "
+                        "flight. The original outcome is unknown and it was "
+                        "not retried automatically; please resend the "
+                        "request."
+                    ),
+                    stream_started=bool(_recovered.get("stream_started")),
+                )
+                _recovery_body = json.dumps(_recovery_payload).encode()
+                self.send_response(502)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(_recovery_body)))
+                self.end_headers()
+                self.wfile.write(_recovery_body)
+                return
+
         model = "unknown"
         input_tokens = 0
         sent_input_tokens = 0
@@ -2494,6 +2544,19 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     _req_id, model=model, started_at=t0, admission_ticket=_sg_admission_ticket
                 )
 
+                # Durable write-ahead ledger entry — written BEFORE the
+                # upstream call below is dispatched, so a proxy crash between
+                # this line and the completion/failure calls further down
+                # leaves a detectable orphaned "in_flight" row for the next
+                # process's startup recovery pass (ProxyServer.start()).
+                _execution_ledger_begin_plan(
+                    _tip_plan_id,
+                    request_id=_req_id,
+                    request_hash=_execution_ledger_hash_request(body),
+                    target_url=target_url,
+                    stream_started=False,
+                )
+
             if is_streaming:
                 # ── Streaming (SSE) path ──────────────────────────────────
                 # Use pool.stream() so the connection is kept alive after SSE ends.
@@ -2973,6 +3036,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     _inflight_finish(_req_id)
                 except Exception:
                     pass
+
+                # Durable ledger: this plan reached a known outcome in this
+                # process, so it is no longer a restart-recovery candidate.
+                _execution_ledger_complete_plan(_tip_plan_id)
 
                 # Cache attribution: who placed the cache_control markers that
                 # produced these cache_read_tokens. Byte-preserved → client did;
@@ -3517,6 +3584,19 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
         finally:
+            # Durable-ledger safety net: mark this plan failed on every exit
+            # path that did not already reach the success-path
+            # complete_plan() call above (exceptions, client disconnects,
+            # pre-send blocks, early returns). fail_plan()'s UPDATE is
+            # guarded on status='in_flight', so this is a harmless no-op
+            # whenever complete_plan() already ran, and a harmless no-op
+            # when begin_plan() was never called for this plan id (e.g.
+            # non-model requests) — it only ever changes rows this exact
+            # request wrote.
+            try:
+                _execution_ledger_fail_plan(_tip_plan_id, reason="handler_exit_unrecorded")
+            except Exception:
+                pass
             # Registration is facts-only and finish() is idempotent. Keep the
             # normal-path finish above for prompt disappearance, while this
             # safety net covers upstream exceptions and client disconnects.
@@ -4863,6 +4943,24 @@ class ProxyServer:
                             warning,
                             recovered=_all_ok,
                         )
+                # Durable-ledger recovery pass — runs before the listener
+                # accepts any connection. Any row still "in_flight" here
+                # belongs to a process other than this one (this process
+                # has not yet dispatched a single upstream call), so it can
+                # only mean that a prior process died mid-request. Each
+                # such row is marked failed so the client's next retry with
+                # the same tip_plan_id gets an explicit signal instead of a
+                # bare connection reset repeated indefinitely.
+                try:
+                    _recovered_plans = _execution_ledger_recover_orphaned_plans()
+                except Exception:
+                    _recovered_plans = []
+                if _recovered_plans:
+                    print(
+                        f"TokenPak: recovered {len(_recovered_plans)} "
+                        "in-flight execution plan(s) interrupted by a "
+                        "previous proxy restart."
+                    )
                 server = _ThreadedHTTPServer((self.host, self.port), _ProxyHandler)
             except Exception:
                 self._lifecycle_state = "start_failed"
