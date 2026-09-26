@@ -202,10 +202,29 @@ def _heartbeat_loop(url: str, interval: int) -> None:
         try:
             from tokenpak.core.config import get_metrics_enabled
 
-            if not get_metrics_enabled():
-                time.sleep(interval)
-                continue
-        except Exception:
+            metrics_enabled = get_metrics_enabled()
+        except (ImportError, AttributeError) as exc:
+            # Import-shape drift (e.g. a rename/move of get_metrics_enabled)
+            # must be loud: silently swallowing this in a bare `except
+            # Exception` is exactly how a dead import can disable this
+            # heartbeat forever without anyone noticing.
+            logger.error(
+                "install metrics: get_metrics_enabled is not importable/callable (%s) — "
+                "heartbeat enablement check is broken; treating metrics as disabled "
+                "this cycle",
+                exc,
+            )
+            time.sleep(interval)
+            continue
+        except Exception as exc:
+            # Genuinely transient failure reading the config (e.g. a race
+            # on the config file) — keep the loop's existing forgiving
+            # retry behavior, just with visibility instead of dead silence.
+            logger.debug("install metrics: metrics-enabled check failed (%s)", exc)
+            time.sleep(interval)
+            continue
+
+        if not metrics_enabled:
             time.sleep(interval)
             continue
 
