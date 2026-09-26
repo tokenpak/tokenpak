@@ -30,6 +30,9 @@ class DegradationEventType:
     PROVIDER_FAILOVER = "provider_failover"  # Primary failed, fallback used
     CONFIG_FALLBACK = "config_fallback"  # Bad config, defaults applied
     STARTUP_WARNING = "startup_warning"  # Non-fatal startup issue
+    VAULT_INDEX_STALE = (
+        "vault_index_stale"  # index.json unreadable/corrupt; serving prior/empty state
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +82,7 @@ class DegradationTracker:
         # Counters (never reset, lifetime totals)
         self._compression_failures: int = 0
         self._provider_failovers: int = 0
+        self._vault_index_load_failures: int = 0
 
     # ------------------------------------------------------------------
     # Recording
@@ -104,6 +108,8 @@ class DegradationTracker:
                 self._compression_failures += 1
             elif event_type == DegradationEventType.PROVIDER_FAILOVER:
                 self._provider_failovers += 1
+            elif event_type == DegradationEventType.VAULT_INDEX_STALE:
+                self._vault_index_load_failures += 1
 
     def record_compression_failure(self, exc: Exception) -> None:
         """Shortcut: record a compression/hook failure."""
@@ -124,6 +130,26 @@ class DegradationTracker:
     def record_config_fallback(self, detail: str) -> None:
         """Shortcut: record a config fallback."""
         self.record(DegradationEventType.CONFIG_FALLBACK, detail, recovered=True)
+
+    def record_vault_index_load_failure(
+        self, reason: str, exc: BaseException, *, cold_start: bool
+    ) -> None:
+        """Shortcut: record a corrupt/unreadable vault ``index.json``.
+
+        ``cold_start=True`` — no generation has ever loaded successfully, so
+        the proxy keeps running with an empty vault index (no fallback data
+        exists yet) until a later reload succeeds.
+
+        ``cold_start=False`` — a previously loaded generation already exists
+        in memory and keeps being served unchanged (stale, not fresh) while
+        this reload attempt is discarded.
+        """
+        variant = "cold_start_empty" if cold_start else "warm_reload_stale"
+        self.record(
+            DegradationEventType.VAULT_INDEX_STALE,
+            f"variant={variant} reason={reason}: {type(exc).__name__}: {exc}",
+            recovered=not cold_start,
+        )
 
     # ------------------------------------------------------------------
     # Queries
@@ -165,6 +191,7 @@ class DegradationTracker:
         with self._lock:
             total_comp = self._compression_failures
             total_fo = self._provider_failovers
+            total_vault = self._vault_index_load_failures
             recent = list(self._events)[-10:]
 
         is_deg = self.is_degraded()
@@ -173,6 +200,7 @@ class DegradationTracker:
             "status": "degraded" if is_deg else "healthy",
             "lifetime_compression_failures": total_comp,
             "lifetime_provider_failovers": total_fo,
+            "lifetime_vault_index_load_failures": total_vault,
             "recent_events": [e.to_dict() for e in reversed(recent)],
             "message": (
                 "⚠️  Proxy is running in degraded mode — some features reduced, "
