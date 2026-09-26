@@ -166,11 +166,15 @@ async def _ws_handler(websocket: Any, compact_request_body: CompactRequest) -> N
 
 def start_ws_server(
     compact_request_body: CompactRequest,
+    host: str = "127.0.0.1",
 ) -> "threading.Thread | None":
     """Start the asyncio WebSocket server in a daemon thread on WS_PORT.
 
     Args:
         compact_request_body: The compression callable from runtime/proxy.py.
+        host: Bind host for the WebSocket listener. Defaults to loopback
+            (mirrors ``ProxyServer.__init__``'s safe default) so this server
+            is never accidentally exposed off-host.
 
     Returns:
         The daemon thread running the WS server, or None if websockets not installed.
@@ -188,8 +192,8 @@ def start_ws_server(
             await _ws_handler(ws, compact_request_body)
 
         try:
-            async with ws_serve(_handler, "0.0.0.0", WS_PORT, reuse_address=True):
-                print(f"[ws] TokenPak WebSocket server ready — port={WS_PORT}")
+            async with ws_serve(_handler, host, WS_PORT, reuse_address=True):
+                print(f"[ws] TokenPak WebSocket server ready — host={host} port={WS_PORT}")
                 await asyncio.Future()  # run until cancelled
         except Exception as exc:
             print(f"[ws] WebSocket server error: {exc}")

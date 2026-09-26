@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
+import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -143,3 +145,71 @@ def test_ws_reconnects_after_clean_close():
     second.close.assert_awaited_with(1000, "Done")
     assert compact.call_count == 2
     assert ws_proxy._ws_active_connections == 0
+
+
+# ---------------------------------------------------------------------------
+# Bind-host regression tests (backbone audit finding 4.7-1)
+# ---------------------------------------------------------------------------
+
+
+def test_start_ws_server_default_host_param_is_loopback():
+    """start_ws_server's default bind host must be loopback, not 0.0.0.0.
+
+    Regression guard: this shim previously hardcoded "0.0.0.0" with no way
+    to override it. It should mirror ProxyServer.__init__'s safe default.
+    """
+    sig = inspect.signature(ws_proxy.start_ws_server)
+    assert sig.parameters["host"].default == "127.0.0.1"
+
+
+def test_start_ws_server_binds_to_loopback_by_default(monkeypatch):
+    """Calling start_ws_server() with no explicit host must pass loopback to ws_serve."""
+    captured: dict = {}
+
+    class _ImmediateFailCtx:
+        async def __aenter__(self):
+            # Fail fast so the daemon thread's event loop exits cleanly
+            # instead of blocking forever on asyncio.Future().
+            raise RuntimeError("test-stop")
+
+        async def __aexit__(self, *exc_info):
+            return False
+
+    def _fake_serve(_handler, host, port, **kwargs):
+        captured["host"] = host
+        captured["port"] = port
+        return _ImmediateFailCtx()
+
+    fake_module = SimpleNamespace(serve=_fake_serve)
+    monkeypatch.setitem(sys.modules, "websockets.asyncio.server", fake_module)
+
+    thread = ws_proxy.start_ws_server(MagicMock())
+    assert thread is not None
+    thread.join(timeout=5.0)
+    assert not thread.is_alive()
+    assert captured["host"] == "127.0.0.1"
+
+
+def test_start_ws_server_honors_explicit_host_override(monkeypatch):
+    """An explicit host argument must be forwarded to ws_serve unchanged."""
+    captured: dict = {}
+
+    class _ImmediateFailCtx:
+        async def __aenter__(self):
+            raise RuntimeError("test-stop")
+
+        async def __aexit__(self, *exc_info):
+            return False
+
+    def _fake_serve(_handler, host, port, **kwargs):
+        captured["host"] = host
+        return _ImmediateFailCtx()
+
+    fake_module = SimpleNamespace(serve=_fake_serve)
+    monkeypatch.setitem(sys.modules, "websockets.asyncio.server", fake_module)
+
+    thread = ws_proxy.start_ws_server(MagicMock(), host="192.0.2.1")
+    assert thread is not None
+    thread.join(timeout=5.0)
+    assert not thread.is_alive()
+    assert captured["host"] == "192.0.2.1"
