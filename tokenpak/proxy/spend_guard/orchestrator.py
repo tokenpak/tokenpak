@@ -158,7 +158,9 @@ def evaluate(
                 "cancel",
                 session_id,
                 decision_str="cancel",
+                reason="tip_directive_cancel",
                 pending_id=existing.pending_id,
+                projected_tokens=existing.projected_tokens,
                 tip=tip_directive,
             )
             return GuardOutcome(
@@ -200,7 +202,9 @@ def evaluate(
                 outcome.audit_event or "pending",
                 session_id,
                 decision_str=outcome.kind,
+                reason=f"pending_intent_resolved:{intent.value}",
                 pending_id=existing_pending.pending_id,
+                projected_tokens=existing_pending.projected_tokens,
                 tip=tip_directive,
             )
             return outcome
@@ -213,7 +217,9 @@ def evaluate(
                 "pending_waiting",
                 session_id,
                 decision_str="block",
+                reason="pending_waiting:intent_parser_module_unavailable",
                 pending_id=existing_pending.pending_id,
+                projected_tokens=existing_pending.projected_tokens,
                 tip=tip_directive,
             )
             return GuardOutcome(
@@ -238,7 +244,9 @@ def evaluate(
             "anti_loop_hit",
             session_id,
             decision_str="block",
+            reason="anti_loop_cache_hit:recent_block_same_request_hash",
             pending_id=recent.pending_id,
+            projected_tokens=recent.projected_tokens,
             tip=tip_directive,
         )
         return GuardOutcome(
@@ -336,7 +344,10 @@ def evaluate(
                         "rolling_cap_block",
                         session_id,
                         decision_str="rolling_cap_block",
+                        reason=f"rolling_cap_breach:{breach.cap_dimension}",
                         projected_cost=est.projected_cost_usd,
+                        projected_tokens=int(est.projected_input_tokens)
+                        + int(est.projected_output_tokens),
                         tip=tip_directive,
                     )
                     return GuardOutcome(
@@ -351,7 +362,10 @@ def evaluate(
                         "rolling_cap_tip_bypass",
                         session_id,
                         decision_str="allow",
+                        reason=f"rolling_cap_breach_tip_bypassed:{breach.cap_dimension}",
                         projected_cost=est.projected_cost_usd,
+                        projected_tokens=int(est.projected_input_tokens)
+                        + int(est.projected_output_tokens),
                         tip=tip_directive,
                     )
                     # TIP-authorized forward still spends — track it so
@@ -422,8 +436,10 @@ def evaluate(
             "estimate",
             session_id,
             decision_str="estimate",
+            reason="tip_estimate_only",
             tip=tip_directive,
             projected_cost=est.projected_cost_usd,
+            projected_tokens=int(est.projected_input_tokens) + int(est.projected_output_tokens),
         )
         return GuardOutcome(
             kind="estimate",
@@ -441,7 +457,9 @@ def evaluate(
                 "warn",
                 session_id,
                 decision_str="warn",
+                reason=decision.reason,
                 projected_cost=est.projected_cost_usd,
+                projected_tokens=int(est.projected_input_tokens) + int(est.projected_output_tokens),
                 tip=tip_directive,
             )
         # Even with TIP-bypass we audit (allow path with tip_directive set)
@@ -451,7 +469,9 @@ def evaluate(
                 "tip_bypass",
                 session_id,
                 decision_str="allow",
+                reason=f"tip_bypass:{decision.reason}",
                 projected_cost=est.projected_cost_usd,
+                projected_tokens=int(est.projected_input_tokens) + int(est.projected_output_tokens),
                 tip=tip_directive,
             )
         kind: OutcomeKind = "forward_modified" if forward_body is not body else "forward"
@@ -467,7 +487,9 @@ def evaluate(
             "hard_block",
             session_id,
             decision_str="hard_block",
+            reason=decision.reason,
             projected_cost=est.projected_cost_usd,
+            projected_tokens=int(est.projected_input_tokens) + int(est.projected_output_tokens),
             tip=tip_directive,
         )
         return GuardOutcome(
@@ -486,7 +508,9 @@ def evaluate(
             "block",
             session_id,
             decision_str="block_session_identity_unavailable",
+            reason=f"{decision.reason}:session_id_unavailable",
             projected_cost=est.projected_cost_usd,
+            projected_tokens=int(est.projected_input_tokens) + int(est.projected_output_tokens),
             tip=tip_directive,
         )
         return GuardOutcome(
@@ -525,7 +549,9 @@ def evaluate(
             "block",
             session_id,
             decision_str="block_store_unavailable",
+            reason=f"{decision.reason}:pending_store_write_failed",
             projected_cost=est.projected_cost_usd,
+            projected_tokens=int(est.projected_input_tokens) + int(est.projected_output_tokens),
             tip=tip_directive,
         )
         return GuardOutcome(
@@ -540,8 +566,10 @@ def evaluate(
         "block",
         session_id,
         decision_str="block",
+        reason=decision.reason,
         pending_id=pending.pending_id,
         projected_cost=est.projected_cost_usd,
+        projected_tokens=int(est.projected_input_tokens) + int(est.projected_output_tokens),
         tip=tip_directive,
     )
     return GuardOutcome(
