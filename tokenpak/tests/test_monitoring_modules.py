@@ -742,6 +742,42 @@ class TestRequestLoggerInit(unittest.TestCase):
         self.assertEqual(rl._queue.qsize(), 0)
         rl.stop()
 
+    def test_log_records_drop_on_queue_full(self):
+        """A full queue must count the drop and surface a reason, never pass silently."""
+        import queue
+
+        from tokenpak.telemetry.monitoring.request_logger import (
+            LEVEL_INFO,
+            RequestLogger,
+            RequestLogRecord,
+        )
+
+        rl = RequestLogger(
+            config={
+                "enabled": True,
+                "level": "info",
+                "destination": "stdout",
+                "retention_days": 7,
+            }
+        )
+        record = RequestLogRecord(
+            request_id="r5",
+            timestamp="2026-04-12T20:00:00Z",
+            level=LEVEL_INFO,
+        )
+
+        before = rl.dropped_count()
+        with (
+            mock.patch.object(rl._queue, "put_nowait", side_effect=queue.Full),
+            mock.patch("tokenpak.telemetry.monitoring.request_logger._log") as mock_log,
+        ):
+            rl.log(record)  # must not raise / must not block
+
+        self.assertEqual(rl.dropped_count(), before + 1)
+        mock_log.warning.assert_called_once()
+        self.assertIn("queue-full", mock_log.warning.call_args[0])
+        rl.stop()
+
 
 class TestModuleLevelConvenienceFunctions(unittest.TestCase):
     def test_new_request_id_module_level(self):

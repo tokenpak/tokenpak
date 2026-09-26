@@ -136,6 +136,7 @@ class _FlakyConnection:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.chaos
 def test_write_row_retries_transient_lock_then_succeeds(tmp_path, monkeypatch):
     db = tmp_path / "monitor.db"
     mon = Monitor(db_path=str(db))
@@ -156,6 +157,7 @@ def test_write_row_retries_transient_lock_then_succeeds(tmp_path, monkeypatch):
     assert _row_count(db) == 1
 
 
+@pytest.mark.chaos
 def test_write_row_raises_after_retries_exhausted(tmp_path, monkeypatch):
     db = tmp_path / "monitor.db"
     Monitor(db_path=str(db))
@@ -180,6 +182,7 @@ def test_write_row_raises_after_retries_exhausted(tmp_path, monkeypatch):
     assert locked.attempts == monitor_module._DB_WRITE_RETRY_ATTEMPTS
 
 
+@pytest.mark.chaos
 def test_write_row_does_not_retry_non_transient_errors(tmp_path, monkeypatch):
     db = tmp_path / "monitor.db"
     Monitor(db_path=str(db))
@@ -199,6 +202,7 @@ def test_write_row_does_not_retry_non_transient_errors(tmp_path, monkeypatch):
     assert broken.attempts == 1
 
 
+@pytest.mark.chaos
 def test_async_writer_counts_dropped_rows(tmp_path, monkeypatch):
     db = tmp_path / "monitor.db"
     mon = Monitor(db_path=str(db))
@@ -346,6 +350,7 @@ def test_log_fallback_routes_through_guarded_write(tmp_path, monkeypatch):
     assert str(mode).lower() == "wal"
 
 
+@pytest.mark.chaos
 def test_log_fallback_counts_drop_instead_of_raising(tmp_path, monkeypatch):
     db = tmp_path / "monitor.db"
     mon = Monitor(db_path=str(db))
