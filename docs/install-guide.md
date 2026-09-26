@@ -171,5 +171,5 @@ pip install --upgrade tokenpak
 ## What's Next?
 
 - **[Quick Start Guide](./quickstart.md)** — Get running in 5 minutes
-- **[API Reference](./api-reference.md)** — Explore the full API
+- **[API Reference](./API_REFERENCE.md)** — Explore the full API
 - **[Examples](../examples/)** — Real-world usage patterns
