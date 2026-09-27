@@ -6,6 +6,74 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.30.0] — 2026-09-26
+
+### Added
+
+- A durable, SQLite-backed execution ledger records in-flight upstream proxy
+  calls before dispatch. A proxy restart mid-stream now leaves an explicit
+  `terminally_failed` / `recovery_status` signal for a retried request instead
+  of a bare connection reset. This does not implement transparent replay or a
+  full exactly-once resume state machine; it is a fast, honest fail-with-signal
+  decision.
+
+### Fixed
+
+- Semantic-cache keys now include model/provider identity, preventing a cached
+  response from one model being served for a request to a different model.
+- `tip_spend_guard.*` configuration now rejects unknown keys instead of
+  silently ignoring them.
+- Vault-index load failures now emit explicit telemetry instead of a silent
+  stdout print.
+- Spend-guard audit rows now carry an explicit reason and projected-token count
+  on every decision path, including previously-unlabeled hard-block branches.
+- Savings/compare/leaderboard reads are retargeted onto the canonical monitor
+  store instead of a stale/dead schema path.
+- The execution-ledger database path now routes through the canonical path
+  resolver instead of a hardcoded location.
+- The background OAuth refresher is now wired into the thread-based proxy
+  server; it previously never ran against that server variant.
+- The WebSocket bind host is now parameterized (default loopback); the
+  `ProxyServer` bind-host docstring is corrected to match actual behavior.
+- The telemetry heartbeat no longer imports a dead `metrics-enabled` symbol
+  silently; the import failure is now surfaced instead of swallowed.
+- `RequestLogger` queue-full drops now record an explicit reason and counter
+  instead of dropping silently.
+- Codex spend-guard bypass while the local proxy is unhealthy is now
+  audit-logged instead of passing through unrecorded.
+- The Pro gating-table split is documented as an external contract and the one
+  confirmed overlap is guarded; unused legacy CLI shim modules that had drifted
+  from their canonical implementations are now thin, explicitly-deprecated
+  re-exports instead of duplicated dead code.
+- The import-linter architecture-layering gate is now enforced in CI on
+  `tokenpak/**` pull requests; it previously existed but did not gate merges.
+
+### Changed
+
+- Clarified repo-root `docs/` purpose versus the sibling docs repository and
+  deduplicated overlapping API-reference content.
+
+### Compatibility
+
+- No breaking API, CLI, storage, or configuration changes. Existing
+  configurations, TIP-1.0, and the Pro 0.5.0 pairing are unaffected; the
+  OSS/Pro compatibility surface touched by this release (Pro gating-table
+  documentation) was not itself changed, only clarified and guarded.
+- See [upgrade, rollback and release status](docs/release-log/v1.30.0.md).
+
+### Security
+
+This release accepts the open NLTK GHSA-8mgp-746c-j5xp and Accelerate
+GHSA-4j2p-28q2-5m79 optional-dependency findings for this release only, following
+a fresh September 26 dependency reassessment. Both are High under CVSS v3.1; the
+Accelerate advisory separately lists Moderate severity under CVSS v4. No verified
+published fix is available for either. The base install excludes both packages.
+Optional integrations must avoid untrusted model paths and checkpoint
+repositories and cannot rely on these APIs for filesystem containment. See
+SECURITY.md for affected extras and limitations. Both findings remain open and
+must be resolved or reassessed before another release; all other release checks
+remain required.
+
 ## [1.29.0] — 2026-09-21
 
 ### Added
