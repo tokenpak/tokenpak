@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-09-12T23:06:27Z",
-  "package_version": "1.28.0",
+  "generated_at": "2026-09-27T17:02:11Z",
+  "package_version": "1.30.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -118,6 +118,58 @@
     {
       "module": "tokenpak",
       "name": "watchdog"
+    },
+    {
+      "module": "tokenpak.agent.cli.commands.metrics",
+      "name": "SEP"
+    },
+    {
+      "module": "tokenpak.agent.cli.commands.metrics",
+      "name": "cmd_history"
+    },
+    {
+      "module": "tokenpak.agent.cli.commands.metrics",
+      "name": "cmd_preview"
+    },
+    {
+      "module": "tokenpak.agent.cli.commands.metrics",
+      "name": "cmd_status"
+    },
+    {
+      "module": "tokenpak.agent.cli.commands.metrics",
+      "name": "cmd_sync"
+    },
+    {
+      "module": "tokenpak.agent.cli.commands.metrics",
+      "name": "metrics_cmd"
+    },
+    {
+      "module": "tokenpak.agent.cli.commands.serve",
+      "name": "run_serve_cmd"
+    },
+    {
+      "module": "tokenpak.agent.license",
+      "name": "LicenseTier"
+    },
+    {
+      "module": "tokenpak.agent.license",
+      "name": "TIER_FEATURES"
+    },
+    {
+      "module": "tokenpak.agent.license",
+      "name": "required_tier_for"
+    },
+    {
+      "module": "tokenpak.agent.license.validator",
+      "name": "LicenseTier"
+    },
+    {
+      "module": "tokenpak.agent.license.validator",
+      "name": "TIER_FEATURES"
+    },
+    {
+      "module": "tokenpak.agent.license.validator",
+      "name": "required_tier_for"
     },
     {
       "module": "tokenpak.alerts",
@@ -9596,6 +9648,38 @@
       "name": "SelectedExample"
     },
     {
+      "module": "tokenpak.proxy.execution_ledger",
+      "name": "RESTART_FAILURE_REASON"
+    },
+    {
+      "module": "tokenpak.proxy.execution_ledger",
+      "name": "begin_plan"
+    },
+    {
+      "module": "tokenpak.proxy.execution_ledger",
+      "name": "check_restart_recovered_failure"
+    },
+    {
+      "module": "tokenpak.proxy.execution_ledger",
+      "name": "complete_plan"
+    },
+    {
+      "module": "tokenpak.proxy.execution_ledger",
+      "name": "fail_plan"
+    },
+    {
+      "module": "tokenpak.proxy.execution_ledger",
+      "name": "hash_request"
+    },
+    {
+      "module": "tokenpak.proxy.execution_ledger",
+      "name": "lookup_plan"
+    },
+    {
+      "module": "tokenpak.proxy.execution_ledger",
+      "name": "recover_orphaned_plans"
+    },
+    {
       "module": "tokenpak.proxy.failover",
       "name": "DEFAULT_YAML_TEMPLATE"
     },
@@ -13721,6 +13805,10 @@
     },
     {
       "module": "tokenpak.services.optimization.cache_key",
+      "name": "extract_model_features"
+    },
+    {
+      "module": "tokenpak.services.optimization.cache_key",
       "name": "extract_query_text"
     },
     {
@@ -16581,6 +16669,10 @@
     },
     {
       "module": "tokenpak.telemetry.query_dsl",
+      "name": "detect_provider"
+    },
+    {
+      "module": "tokenpak.telemetry.query_dsl",
       "name": "get_cost_summary"
     },
     {
@@ -16594,6 +16686,10 @@
     {
       "module": "tokenpak.telemetry.query_dsl",
       "name": "get_model_usage"
+    },
+    {
+      "module": "tokenpak.telemetry.query_dsl",
+      "name": "get_rates"
     },
     {
       "module": "tokenpak.telemetry.query_dsl",
