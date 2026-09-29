@@ -1,8 +1,14 @@
 # TokenPak
 
-> **Local proxy. Measured context efficiency.**
+> **The open logistics layer for AI context.**
 
-TokenPak is an open-source LLM proxy that compresses context, routes requests intelligently, and tracks costs locally before forwarding requests to your configured provider.
+TokenPak is a local proxy for coding agents that records each request and shows how far the session can go: measured usage, estimated cost, burn and runway.
+
+**Know how far your agent can go.** Today, the open-source core ships the session trip computer (on by default in the Claude Code footer, the Codex pane and `tokenpak status`; forecasts appear only where calibrated) and Spend Guard limits; calibrated forecasts for more model and effort combinations, and Pro reroute recommendations once calibration evidence exists, are planned.
+
+**Who it's for:** Developers and tech leads running long coding-agent sessions in Claude Code or Codex who want to see what a session has used, what finishing will likely cost, and how far it can go.
+
+The default proxy preserves conversation turns; a forwarded request can correctly report zero tokens saved. Explicit compression operations can reduce eligible content. Provider-bound requests still go to your chosen provider, with no TokenPak cloud relay.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -11,7 +17,7 @@ TokenPak is an open-source LLM proxy that compresses context, routes requests in
 
 ## Why TokenPak?
 
-LLM APIs charge per token. Most conversations are bloated with repetitive context, verbose code comments, and redundant structure. TokenPak fixes that at the proxy layer — transparently, locally, without ever seeing your content.
+LLM APIs charge per token. Install TokenPak, launch your agent through it, and get a measured receipt on the first request, then see your session's usage and runway as you work, without changing your code.
 
 | Metric | Value |
 |--------|-------|
@@ -63,7 +69,7 @@ Then point your LLM client at `http://localhost:8766` (OpenAI-compatible clients
 
 - :material-lan: **[Proxy Setup](guides/proxy-setup.md)**
 
- Connect Claude Code, OpenAI clients, or any HTTP-based LLM tool.
+ Connect Claude Code, Codex, or the OpenAI SDK, Anthropic SDK and LiteLLM adapters. Cursor, Cline, Continue.dev and Aider are compatibility targets, not yet independently verified.
 
 - :material-chef-hat: **[Recipe Development](guides/recipes.md)**
 
@@ -75,7 +81,7 @@ Then point your LLM client at `http://localhost:8766` (OpenAI-compatible clients
 
 - :material-server: **[Team Server](guides/team-server.md)**
 
- Deploy a shared TokenPak instance for your whole team.
+ Planned architecture for a shared proxy, not a shipped feature.
 
 </div>
 
@@ -122,7 +128,7 @@ Then point your LLM client at `http://localhost:8766` (OpenAI-compatible clients
 | [Proxy Setup](guides/proxy-setup.md) | Multi-provider routing, SSL, authentication |
 | [Recipe Development](guides/recipes.md) | Custom compression recipes |
 | [Telemetry Dashboard](guides/telemetry.md) | Cost reports, export, alerts |
-| [Team Server](guides/team-server.md) | Shared instance for teams |
+| [Team Server](guides/team-server.md) | Planned shared-proxy architecture (not shipped) |
 
 ---
 

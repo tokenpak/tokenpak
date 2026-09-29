@@ -7,7 +7,13 @@
 
 > **The open logistics layer for AI context.**
 
-TokenPak runs as a **local LLM proxy with request records and explicit context tools**. The default proxy preserves conversation turns; a forwarded request can correctly report zero tokens saved. Explicit compression operations can reduce eligible content. Provider-bound requests still go to your chosen provider, with no TokenPak cloud relay.
+TokenPak is a local proxy for coding agents that records each request and shows how far the session can go: measured usage, estimated cost, burn and runway.
+
+**Know how far your agent can go.** Today, the open-source core ships the session trip computer (on by default in the Claude Code footer, the Codex pane and `tokenpak status`; forecasts appear only where calibrated) and Spend Guard limits; calibrated forecasts for more model and effort combinations, and Pro reroute recommendations once calibration evidence exists, are planned.
+
+**Who it's for:** Developers and tech leads running long coding-agent sessions in Claude Code or Codex who want to see what a session has used, what finishing will likely cost, and how far it can go.
+
+The default proxy preserves conversation turns; a forwarded request can correctly report zero tokens saved. Explicit compression operations can reduce eligible content. Provider-bound requests still go to your chosen provider, with no TokenPak cloud relay.
 
 ---
 
@@ -30,7 +36,8 @@ receipt in terminal 1. In this unmodified reference setup, the built-in Pak
 builder leaves every system, user, and assistant conversation turn intact, so
 the receipt truthfully reports `0 tokens saved`. This verifies routing and
 accounting without claiming savings that did not occur. The session-only
-footer is off by default and does not alter the provider response.
+`--stats-footer` receipt line is off by default and does not alter the
+provider response.
 
 See the [first receipt guide](docs/first-receipt.md) for prerequisites,
 the expected zero-savings output, the five-minute reference target, and the
@@ -127,6 +134,7 @@ index and developer editable-install path.
 
 > **Dispatch (v0.1-alpha preview):** a scoped, resumable, reviewable workflow-control surface. Released packages include the CLI and runtime modules; runtime commands require the optional `[dispatch]` dependencies. Live station execution and delivery receipts are not wired yet. See the [Dispatch guide](docs/guides/dispatch.md).
 
+- **Session trip computer** — measured usage, estimated cost, burn and runway for each session, on by default in the Claude Code footer and the Codex pane; forecasts appear only where calibrated.
 - **Context tools and truthful receipts** — explicit compression operations can
   reduce eligible content. The built-in Pak builder preserves role-bearing
   conversation turns; byte-preserved routes report zero product-attributed
@@ -136,7 +144,7 @@ index and developer editable-install path.
 - **Client integration** — setup guides and helpers for the compatibility tiers above
 - **Routing policy** — configuration and observe-mode records; automatic model
   changes and fallback enforcement are not active by default
-- **Cost tracking** — per model, per session, per agent; local SQLite, zero cloud
+- **Cost tracking** — per model, per session, per agent; local SQLite, adds no cloud service
 - **TIP Spend Guard** — pre-send circuit breaker; blocks runaway requests before provider call. Yes/No release or `[TIP: allow=once max=$X]` directive. Catches both single-request spikes and the death-by-1000-cuts pattern via session-cumulative tracking. See [docs/spend-guard.md](docs/spend-guard.md).
 - **Vault indexing + semantic search** — index your codebase; search without an LLM call
 - **MultiPak Pro Phase 1 OSS surface** — read-only Vault Pak adapter, companion journal promotion-candidate marking, `tokenpak pak` CLI, `/pak/v1/*` proxy stubs. Full MultiPak (capture pipeline, recall ranking, Handoff Paks, anchor hydration) requires `tokenpak-paid` (Pro). See [docs/multipak.md](docs/multipak.md).
