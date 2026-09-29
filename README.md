@@ -134,6 +134,7 @@ index and developer editable-install path.
 
 > **Dispatch (v0.1-alpha preview):** a scoped, resumable, reviewable workflow-control surface. Released packages include the CLI and runtime modules; runtime commands require the optional `[dispatch]` dependencies. Live station execution and delivery receipts are not wired yet. See the [Dispatch guide](docs/guides/dispatch.md).
 
+- **Session trip computer** — measured usage, estimated cost, burn and runway for each session, on by default in the Claude Code footer and the Codex pane; forecasts appear only where calibrated.
 - **Context tools and truthful receipts** — explicit compression operations can
   reduce eligible content. The built-in Pak builder preserves role-bearing
   conversation turns; byte-preserved routes report zero product-attributed
@@ -143,7 +144,7 @@ index and developer editable-install path.
 - **Client integration** — setup guides and helpers for the compatibility tiers above
 - **Routing policy** — configuration and observe-mode records; automatic model
   changes and fallback enforcement are not active by default
-- **Cost tracking** — per model, per session, per agent; local SQLite, zero cloud
+- **Cost tracking** — per model, per session, per agent; local SQLite, adds no cloud service
 - **TIP Spend Guard** — pre-send circuit breaker; blocks runaway requests before provider call. Yes/No release or `[TIP: allow=once max=$X]` directive. Catches both single-request spikes and the death-by-1000-cuts pattern via session-cumulative tracking. See [docs/spend-guard.md](docs/spend-guard.md).
 - **Vault indexing + semantic search** — index your codebase; search without an LLM call
 - **MultiPak Pro Phase 1 OSS surface** — read-only Vault Pak adapter, companion journal promotion-candidate marking, `tokenpak pak` CLI, `/pak/v1/*` proxy stubs. Full MultiPak (capture pipeline, recall ranking, Handoff Paks, anchor hydration) requires `tokenpak-paid` (Pro). See [docs/multipak.md](docs/multipak.md).
