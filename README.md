@@ -7,7 +7,13 @@
 
 > **The open logistics layer for AI context.**
 
-TokenPak runs as a **local LLM proxy with request records and explicit context tools**. The default proxy preserves conversation turns; a forwarded request can correctly report zero tokens saved. Explicit compression operations can reduce eligible content. Provider-bound requests still go to your chosen provider, with no TokenPak cloud relay.
+TokenPak is a local proxy for coding agents that records each request and shows how far the session can go: measured usage, estimated cost, burn and runway.
+
+**Know how far your agent can go.** Today, the open-source core ships the session trip computer (on by default in the Claude Code footer, the Codex pane and `tokenpak status`; forecasts appear only where calibrated) and Spend Guard limits; calibrated forecasts for more model and effort combinations, and Pro reroute recommendations once calibration evidence exists, are planned.
+
+**Who it's for:** Developers and tech leads running long coding-agent sessions in Claude Code or Codex who want to see what a session has used, what finishing will likely cost, and how far it can go.
+
+The default proxy preserves conversation turns; a forwarded request can correctly report zero tokens saved. Explicit compression operations can reduce eligible content. Provider-bound requests still go to your chosen provider, with no TokenPak cloud relay.
 
 ---
 
@@ -30,7 +36,8 @@ receipt in terminal 1. In this unmodified reference setup, the built-in Pak
 builder leaves every system, user, and assistant conversation turn intact, so
 the receipt truthfully reports `0 tokens saved`. This verifies routing and
 accounting without claiming savings that did not occur. The session-only
-footer is off by default and does not alter the provider response.
+`--stats-footer` receipt line is off by default and does not alter the
+provider response.
 
 See the [first receipt guide](docs/first-receipt.md) for prerequisites,
 the expected zero-savings output, the five-minute reference target, and the
