@@ -242,7 +242,7 @@ def _openclaw_extract(headers: Mapping[str, object], body: bytes) -> Optional[Pl
 
         ``None`` when the User-Agent does not match — caller should let
         other extractors try. **No filesystem access happens for non-OpenClaw
-        traffic** (per Kevin's gate G6).
+        traffic** (per gate G6).
     """
     del body  # reserved for future extractors
 

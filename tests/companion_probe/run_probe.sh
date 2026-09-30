@@ -12,7 +12,7 @@
 #   7. System prompt survival through compaction
 #
 # Usage:
-#   bash /home/sue/tokenpak/tests/companion_probe/run_probe.sh
+#   bash /home/user/tokenpak/tests/companion_probe/run_probe.sh
 #
 # After launching, try these in the Claude Code TUI:
 #   1. "run the probe"           → tests MCP tools (#4, #5)

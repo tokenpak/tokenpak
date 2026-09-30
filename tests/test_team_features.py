@@ -235,8 +235,8 @@ class TestSharedVault:
 class TestTemplate:
     def test_render_substitutes_variables(self):
         t = Template(name="greet", content="Hello, {{name}}!", created_by="admin")
-        rendered = t.render({"name": "Kevin"})
-        assert rendered == "Hello, Kevin!"
+        rendered = t.render({"name": "Ada"})
+        assert rendered == "Hello, Ada!"
 
     def test_render_no_variables(self):
         t = Template(name="fixed", content="Static content", created_by="admin")
@@ -303,8 +303,8 @@ class TestTemplateStore:
     def test_use_renders_template(self):
         store = self._store()
         store.create("greet", "Hi {{name}}", created_by="alpha", actor_role=ROLE_ADMIN)
-        result = store.use("greet", variables={"name": "Kevin"})
-        assert result == "Hi Kevin"
+        result = store.use("greet", variables={"name": "Ada"})
+        assert result == "Hi Ada"
 
     def test_use_admin_only_template_as_member_raises(self):
         store = self._store()

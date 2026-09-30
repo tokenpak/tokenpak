@@ -58,7 +58,7 @@
           "description": "Creator identifier. Format: agent:id, user:id, service:name, system:id",
           "minLength": 1,
           "maxLength": 256,
-          "examples": ["agent:research_agent", "user:kevin"]
+          "examples": ["agent:research_agent", "user:alice"]
         },
         "target": {
           "type": "string",

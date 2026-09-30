@@ -147,7 +147,7 @@ def _format_action(action: argparse.Action) -> Optional[str]:
     if action.default not in (None, argparse.SUPPRESS, False, True):
         # Normalize host-specific paths so the generated docs are stable
         # across runners. argparse defaults that contain the runtime user's
-        # home directory (e.g. /home/sue, /home/runner) get rewritten to
+        # home directory (e.g. /home/alice, /home/runner) get rewritten to
         # `~`. Without this, docs/cli-reference.md drifts every time it's
         # regenerated on a different machine and the CLI Docs CI gate
         # spuriously fails.

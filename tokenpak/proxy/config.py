@@ -442,7 +442,7 @@ def skeleton_active() -> bool:
 # constants here keeps the proxy/config.py inventory consistent and makes
 # them visible to anyone grepping for tunables.
 # Authoritative behavior: tokenpak/proxy/spend_guard/policy.py:load_config()
-# v1.5.2 (Kevin DECISION 2026-05-11 rev 2): default basis is
+# v1.5.2 (maintainer decision 2026-05-11 rev 2): default basis is
 # context-window-utilisation %. Dollar bands stay reachable as opt-in
 # profile overrides — see SPEND_GUARD_*_COST_USD knobs below.
 SPEND_GUARD_ENABLED: bool = _cfg("spend_guard.enabled", True, "TOKENPAK_SPEND_GUARD_ENABLED", bool)

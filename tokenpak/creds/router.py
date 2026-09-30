@@ -17,7 +17,7 @@ Three-layer decision chain (first match wins):
    platform matches the destination host.
 
 Ambiguity at any layer = :class:`AmbiguousRoute`. Fail loudly per
-the Kevin 2026-04-16 scope decision — never silently route to the
+the 2026-04-16 scope decision — never silently route to the
 wrong account.
 """
 

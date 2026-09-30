@@ -25,6 +25,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCANNER = REPO_ROOT / "scripts" / "release_gate" / "check_release_leaks.py"
+# Built at runtime so this file carries no literal private home path.
+_AGENT_HOME = "/home/{}/".format("sue")
 
 
 def _write(root: Path, relpath: str, content: str) -> None:
@@ -63,7 +65,7 @@ def test_clean_tree_passes(tmp_path):
 def test_untouched_private_path_leak_fails(tmp_path):
     # An untouched file with a private home path — the exact class the delta
     # gate misses when no PR touches the file.
-    _write(tmp_path, "tokenpak/proxy/cache.py", 'CACHE_DIR = "/home/sue/.cache"\n')
+    _write(tmp_path, "tokenpak/proxy/cache.py", f'CACHE_DIR = "{_AGENT_HOME}.cache"\n')
     res = _run_tree(tmp_path)
     assert res.returncode == 1, "private-path leak must fail the gate"
     assert "tokenpak/proxy/cache.py" in res.stdout
@@ -198,7 +200,7 @@ def _make_sdist(dist_dir: Path, files: dict[str, str], name: str = "tokenpak-9.9
 
 def test_dist_mode_strips_prefix_and_detects_leak(tmp_path):
     dist = tmp_path / "dist"
-    _make_sdist(dist, {"tokenpak/proxy/cache.py": 'D = "/home/sue/x"\n'})
+    _make_sdist(dist, {"tokenpak/proxy/cache.py": f'D = "{_AGENT_HOME}x"\n'})
     res = _run_dist(dist)
     assert res.returncode == 1, "sdist leak must be detected"
     # path reported repo-relative (version prefix stripped)
@@ -375,7 +377,7 @@ def test_non_apache_license_section_fails(tmp_path):
     # Scope ruling (2026-06-28): Apache-2.0 ONLY. The generic "<license-id> §N"
     # SPDX carve-out is NOT used, so a non-Apache license-section citation (e.g.
     # "MIT §6") is NOT allowlisted and still trips the §[0-9] rule. (Widening to
-    # other SPDX identifiers is a separate Suki/Kevin policy decision.)
+    # other SPDX identifiers is a separate maintainer policy decision.)
     _write(tmp_path, "tokenpak/_meta/note.md", "see MIT §6 for the clause\n")
     res = _run_tree(tmp_path)
     assert res.returncode == 1, (
@@ -435,9 +437,9 @@ def test_internal_vault_path_leak_fails(tmp_path):
 
 
 def test_internal_vault_path_various_numbered_folders_fail(tmp_path):
-    # Any two-digit numbered top-level vault folder is internal: 00_kevin,
+    # Any two-digit numbered top-level vault folder is internal: 00_private,
     # 06_RUNTIME, 03_AGENT_PACKS, ... — all caught by the single path pattern.
-    for i, ref in enumerate(("~/vault/00_kevin/y.md", "~/vault/06_RUNTIME/scripts/z.sh")):
+    for i, ref in enumerate(("~/vault/00_private/y.md", "~/vault/06_RUNTIME/scripts/z.sh")):
         _write(tmp_path, f"tokenpak/core/v{i}.py", f"# see {ref}\n")
     res = _run_tree(tmp_path)
     assert res.returncode == 1, "all numbered vault folders must fail the gate"
@@ -460,3 +462,19 @@ def test_vault_path_no_false_positive_on_user_surfaces(tmp_path):
     )
     res = _run_tree(tmp_path)
     assert res.returncode == 0, f"narrow vault pattern must not false-positive:\n{res.stdout}"
+
+
+def test_private_term_register_hit_fails_without_echoing_line(tmp_path, monkeypatch):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_leak_scanner_under_test", SCANNER)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["_leak_scanner_under_test"] = mod
+    spec.loader.exec_module(mod)
+    reg = mod._load_private_terms()
+    monkeypatch.setitem(reg.PRIVATE_TERMS, "name", frozenset({reg.term_hash("zorblax")}))
+    _write(tmp_path, "tokenpak/core/n.py", "# written by Zorblax\nX = 1\n")
+    files = mod.collect_tree(str(tmp_path))
+    findings = mod.scan_files(files)
+    assert findings and findings[0].pattern.startswith("private-name")
+    assert "Zorblax" not in findings[0].text

@@ -30,7 +30,7 @@ from typing import List, Mapping, Optional, TypeAlias, Union, cast
 
 DEFAULT_HANDOFF_DIR = Path.home() / ".tokenpak" / "handoffs"
 DEFAULT_TTL_HOURS = 24
-REGISTERED_AGENTS = {"cali", "sue", "trix", "kevin"}
+REGISTERED_AGENTS = {"cali", "sue", "trix", "operator"}
 
 JsonValue: TypeAlias = Union[
     None,

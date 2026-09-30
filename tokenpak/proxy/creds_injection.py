@@ -98,7 +98,7 @@ def maybe_inject(
 ) -> bool:
     """Inject a router-chosen credential into ``fwd_headers``.
 
-    Policy (Kevin 2026-04-17, "explicit-only override"):
+    Policy (maintainer decision 2026-04-17, "explicit-only override"):
 
     * If the client sent an explicit tokenpak header (``X-Tokenpak-
       Credential`` or ``X-Tokenpak-Caller``), run the router — the

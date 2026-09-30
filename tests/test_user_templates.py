@@ -96,8 +96,8 @@ def test_use_no_variables():
 
 def test_use_substitutes_variables():
     ut.add("greet", "Hello {{name}}, welcome to {{place}}!")
-    result = ut.use("greet", {"name": "Kevin", "place": "Vietnam"})
-    assert result == "Hello Kevin, welcome to Vietnam!"
+    result = ut.use("greet", {"name": "Ada", "place": "Vietnam"})
+    assert result == "Hello Ada, welcome to Vietnam!"
 
 
 def test_use_partial_substitution():

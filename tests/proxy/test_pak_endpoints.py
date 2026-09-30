@@ -330,7 +330,7 @@ def test_inspect_vault_returns_pak_when_indexed(tmp_path):
         blocks = {
             "fake#deadbeef": {
                 "block_id": "fake#deadbeef",
-                "source_path": "/home/sue/tokenpak/README.md",
+                "source_path": "/home/user/tokenpak/README.md",
                 "raw_tokens": 100,
                 "_content_file": str(cf),
                 "file_type": "text",

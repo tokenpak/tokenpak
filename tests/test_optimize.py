@@ -45,7 +45,7 @@ SKIP_PRO_TIER_INFRASTRUCTURE_NOT_IN_OSS = (
 pytestmark = pytest.mark.needs_cali_env
 
 # Ensure tokenpak is importable
-sys.path.insert(0, "/home/cali/tokenpak")
+sys.path.insert(0, "/home/user/tokenpak")
 
 from tokenpak.cli.commands.optimize import (
     _analyze_compression,
