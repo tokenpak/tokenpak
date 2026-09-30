@@ -91,7 +91,7 @@ def _dollar_plane_cfg() -> SpendGuardConfig:
     """Reconstruct the v1.5.1 dollar-plane default profile for tests that
     exercise the LEGACY session-cumulative defense.
 
-    Under v1.5.2 defaults (Kevin DECISION 2026-05-11 rev 2),
+    Under v1.5.2 defaults (maintainer decision 2026-05-11 rev 2),
     the dollar plane is opt-in only. These tests explicitly engage it to
     keep regression coverage on the legacy band.
     """

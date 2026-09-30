@@ -45,8 +45,8 @@ def vault_block(tmp_path):
     cf = tmp_path / "block.txt"
     cf.write_text("hello world")
     return {
-        "block_id": "/home/sue/tokenpak/README.md#abc12345",
-        "source_path": "/home/sue/tokenpak/README.md",
+        "block_id": "/home/user/tokenpak/README.md#abc12345",
+        "source_path": "/home/user/tokenpak/README.md",
         "risk_class": "narrative",
         "must_keep": False,
         "raw_tokens": 100,
@@ -68,7 +68,7 @@ def test_vault_block_to_pak_returns_pak_instance(vault_block):
 def test_vault_block_to_pak_id_prefixed(vault_block):
     """Pak IDs from vault blocks are prefixed `vault:` for namespace clarity."""
     pak = vault_block_to_pak(vault_block)
-    assert pak.pak_id == "vault:/home/sue/tokenpak/README.md#abc12345"
+    assert pak.pak_id == "vault:/home/user/tokenpak/README.md#abc12345"
     assert pak.pak_id.startswith("vault:")
 
 
@@ -193,7 +193,7 @@ def test_source_created_at_falls_back_when_file_missing():
 
 
 def test_infer_project_from_path():
-    assert _infer_project("/home/sue/tokenpak/README.md") == "tokenpak"
+    assert _infer_project("/home/user/tokenpak/README.md") == "tokenpak"
 
 
 def test_infer_project_returns_none_for_empty_path():

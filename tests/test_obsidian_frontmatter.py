@@ -13,7 +13,7 @@ def test_duplicate_keys_detected_in_lenient_mode():
     connector = _connector()
     content = """---
 assigned_to: sue
-assigned_to: kevin
+assigned_to: alice
 priority: p1
 ---
 Body
@@ -23,7 +23,7 @@ Body
     diag = connector.last_frontmatter_diagnostics
 
     assert "assigned_to" in diag.duplicate_keys
-    assert data["assigned_to"] == ["kevin"]
+    assert data["assigned_to"] == ["alice"]
     assert data["priority"] == "p1"
 
 
@@ -31,7 +31,7 @@ def test_strict_mode_rejects_duplicate_keys():
     connector = _connector()
     content = """---
 assigned_to: sue
-assigned_to: kevin
+assigned_to: alice
 ---
 Body
 """
@@ -85,13 +85,13 @@ Body
 def test_multi_assignee_normalizes_to_list():
     connector = _connector()
     content = """---
-assigned_to: sue, kevin, trix
+assigned_to: sue, alice, trix
 ---
 Body
 """
 
     data = connector.extract_frontmatter(content)
-    assert data["assigned_to"] == ["sue", "kevin", "trix"]
+    assert data["assigned_to"] == ["sue", "alice", "trix"]
 
 
 def test_clean_frontmatter_backward_compatible():

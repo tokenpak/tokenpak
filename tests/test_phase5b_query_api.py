@@ -61,7 +61,7 @@ MODELS = [
     "gemini-2-flash",
     "gemini-pro",
 ]
-AGENTS = ["sue", "cali", "trix", "kevin", None]
+AGENTS = ["sue", "cali", "trix", "alice", None]
 NOW = time.time()
 THREE_MONTHS_AGO = NOW - (90 * 24 * 3600)
 

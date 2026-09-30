@@ -289,7 +289,7 @@ def test_export_vault_not_indexed_exits_1(capsys, tmp_path):
 
 
 def test_import_rejects_missing_file(capsys, tmp_path):
-    """Beta 1 ``pak import`` is OSS (Kevin directive 2026-05-15).
+    """Beta 1 ``pak import`` is OSS (maintainer directive 2026-05-15).
 
     The verb installs a Pak file into the local store, verifying the
     file's declared checksum. ``pak import`` against a non-existent

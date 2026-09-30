@@ -113,9 +113,8 @@ jobs:
             'TSG-[0-9]'
             'TIP-[0-9][0-9]'
             '\.claude/projects'
-            '/home/sue/'
+            '/home/(sue|trix|cali|dee|aya|reipo|suki)/'
             '~/vault/[0-9][0-9]_'
-            'trixxie168'
             # Internal standard / section / artifact citations. Widened
             # 2026-06-28 (leak-gate Std/§ scanner extension) from the
             # range-limited 'Std 2[0-9]'/'Std 3[0-9]' to ALL 'Std NN' (00-99),
@@ -146,7 +145,7 @@ jobs:
           # "internal fleet", "fleet worker", "fleet workflow",
           # "fleet orchestration", "Sue/Suki/Cali/Trix fleet") are
           # NOT masked and remain forbidden.
-          # Narrow standards-implementation allowlist (Kevin standing-override
+          # Narrow standards-implementation allowlist (maintainer standing override
           # 2026-05-16): release-gate implementation/test/workflow surfaces
           # legitimately reference Std 21 (Branching & Merge Policy) and
           # Std 30 (Release-Gate Trust Contract) — those standards are
@@ -178,7 +177,7 @@ jobs:
           #
           # This is a standards-implementation + generated-artifact exception,
           # NOT a general public-language exemption: agent names, internal
-          # fleet names, internal task IDs, /home/sue/ paths,
+          # fleet names, internal task IDs, private home paths,
           # .claude/projects paths, etc. all remain forbidden everywhere
           # except where they are LITERAL GENERATED PACKAGE MODULE NAMES
           # (which is the openclaw narrow case under Tier 2 only).
@@ -286,7 +285,7 @@ jobs:
           # masks below are SCOPED to this exact hook surface (mirroring
           # is_openclaw_integration_path for the importable module surface)
           # and mask ONLY those functional openclaw forms. OAS-/agent/
-          # /home/sue//Std/fleet patterns are NOT masked here and remain
+          # private-home-path/Std/fleet patterns are NOT masked here and remain
           # enforced; a bare `openclaw` on any path OUTSIDE this hook bundle
           # is still caught.
           is_openclaw_integration_hook_path() {
@@ -321,7 +320,7 @@ jobs:
               #     `tokenpak.sdk.openclaw`, or bare provider-name strings)
               #
               # Other patterns (agent names Sue/Cali/Trix/Suki/Aya/Dee/ReiPo,
-              # internal task IDs, /home/sue/ paths, .claude/projects,
+              # internal task IDs, private home paths, .claude/projects,
               # other Std numbers, "Suki: auto-commit", etc.) remain
               # enforced even in snapshot files.
               # Snapshot-surface citation cite-list (Std 30 amendment — Class D;
@@ -510,7 +509,7 @@ jobs:
               # identifiers) in a non-integration changed file is still caught.
               # Even on integration paths, ONLY the functional forms above are
               # masked — other forbidden patterns (agent names like Suki, Sue,
-              # Cali; internal IDs; /home/sue/ paths; .claude/projects; Std
+              # Cali; internal IDs; private home paths; .claude/projects; Std
               # numbers) are checked through their own (unmasked) content and
               # remain enforced there too. Human-facing prose uses the
               # CamelCase "OpenClaw" brand, which the lowercase \bopenclaw\b
@@ -573,7 +572,7 @@ jobs:
               # exact "Apache-2.0 §N" literal for the section pattern. A bare
               # internal "§N" (or any other license-id prefix) is still caught.
               # Apache-2.0 ONLY per the 2026-06-28 ruling — the generic
-              # "<license-id> §N" SPDX carve-out is a separate Suki/Kevin policy
+              # "<license-id> §N" SPDX carve-out is a separate maintainer policy
               # decision. (Reached only for non-snapshot/non-impl paths; those
               # are handled above with their own §-citation cite-lists.) Mirror
               # of _mask_license_citations in check_release_leaks.py.
@@ -599,6 +598,14 @@ jobs:
               fi
             done
           done < changed-files.txt
+
+          # Personal names and host handles are matched through the hashed
+          # register (scripts/release_gate/private_terms.py), never by literal
+          # pattern, so the check itself carries no private words.
+          # shellcheck disable=SC2046
+          if ! python3 scripts/release_gate/private_terms.py $(tr '\n' ' ' < changed-files.txt); then
+            fail=1
+          fi
 
           if [ "$fail" -ne 0 ]; then
             echo

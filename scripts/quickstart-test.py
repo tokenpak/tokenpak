@@ -211,7 +211,7 @@ def main():
     
     print()
     print(f"{Color.BLUE}📖 Learn more: https://docs.tokenpak.dev{Color.NC}")
-    print(f"{Color.BLUE}💬 Issues & feedback: https://github.com/repliflow/tokenpak/issues{Color.NC}")
+    print(f"{Color.BLUE}💬 Issues & feedback: https://github.com/tokenpak/tokenpak/issues{Color.NC}")
     print()
 
 

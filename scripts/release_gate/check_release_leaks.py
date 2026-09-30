@@ -57,12 +57,15 @@ Exit status: ``0`` if no unallowlisted match is found, ``1`` otherwise.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import re
+import sys
 import tarfile
 import tempfile
 import zipfile
 from dataclasses import dataclass
+from pathlib import Path
 
 # ──────────────────────────────────────────────────────────────────────────
 # Forbidden-pattern register (verbatim from identity-language-check.yml).
@@ -98,9 +101,11 @@ PATTERNS: list[str] = [
     r"TSG-[0-9]",
     r"TIP-[0-9][0-9]",
     CLAUDE_PROJECTS,
-    r"/home/sue/",
+    # Private home directories of the internal agent accounts. Personal
+    # names and host handles are matched through the hashed register in
+    # private_terms.py (see scan_files), never by literal pattern.
+    r"/home/(sue|trix|cali|dee|aya|reipo|suki)/",
     r"~/vault/[0-9][0-9]_",
-    r"trixxie168",
     # Internal standard / section / artifact citations. Widened 2026-06-28
     # (leak-gate Std/§ scanner extension) from the old range-limited
     # ``Std 2[0-9]`` / ``Std 3[0-9]`` to catch ALL ``Std NN`` (00-99), the
@@ -224,7 +229,7 @@ def is_perm_tier_cli_path(path: str) -> bool:
 # preserves the deliberately-narrow scope of the Std-21/30-only mask it
 # replaces, per the trust-gate review). Derived by measurement against the
 # v1.10.0 tree. CHANGING A CITE-LIST IS A RELEASE-GATE MASKING-POLICY CHANGE
-# == Std 30 amendment == Kevin gate. Kept in semantic sync with the sed mirror
+# == Std 30 amendment == maintainer gate. Kept in semantic sync with the sed mirror
 # in identity-language-check.yml (SYNC OBLIGATION).
 RELGATE_IMPL_STD_CITES = ("02", "10", "12", "21", "30")
 RELGATE_IMPL_SECTION_CITES = (
@@ -285,7 +290,7 @@ def _mask_relgate_impl(text: str) -> str:
 # Scope ruling (2026-06-28): Apache-2.0 ONLY. The broader generic
 # "<license-id> §N" SPDX carve-out is deliberately NOT used here; widening to
 # other SPDX identifiers is a separate masking-policy decision that requires
-# explicit Suki/Kevin approval with evidence. Matches the full section number so
+# explicit maintainer approval with evidence. Matches the full section number so
 # "§10" / "§6.1" mask cleanly. Mirror: identity-language-check.yml.
 APACHE_LEGAL_SECTION = r"Apache-2\.0 §[0-9]+(?:\.[0-9]+)*"
 
@@ -591,7 +596,23 @@ class Finding:
     text: str
 
 
+def _load_private_terms():
+    """Load the hashed private-term register that sits next to this script."""
+    name = "_tokenpak_private_terms"
+    mod = sys.modules.get(name)
+    if mod is None:
+        path = Path(__file__).resolve().with_name("private_terms.py")
+        spec = importlib.util.spec_from_file_location(name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load private-term register from {path}")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+
 def scan_files(files: list[ScanFile]) -> list[Finding]:
+    register = _load_private_terms()
     compiled = [(p, re.compile(p)) for p in PATTERNS]
     findings: list[Finding] = []
     for sf in files:
@@ -601,6 +622,16 @@ def scan_files(files: list[ScanFile]) -> list[Finding]:
         except UnicodeDecodeError:
             continue
         orig_lines = content.split("\n")
+        for idx, line in enumerate(orig_lines):
+            for hit in register.find_private_terms(line):
+                findings.append(
+                    Finding(
+                        path=sf.relpath,
+                        line=idx + 1,
+                        pattern=f"private-{hit.kind} (hashed register)",
+                        text="<redacted>",
+                    )
+                )
         for pat, rx in compiled:
             masked = mask_content(pat, sf.relpath, content)
             for idx, mline in enumerate(masked.split("\n")):

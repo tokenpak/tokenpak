@@ -7,7 +7,7 @@ companion + external dashboards call to consume proxy-owned state
 (vault index, budget tracker, journal, stats) without reaching into the
 Python package directly.
 
-Architectural contract (per Kevin's 2026-04-17 design call):
+Architectural contract (per the 2026-04-17 design call):
     - Proxy owns the heavy-lifting modules (VaultIndex, etc.)
     - Companion is a thin HTTP adapter — tool calls become requests here
     - No adapter reimplements what lives in the proxy

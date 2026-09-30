@@ -20,7 +20,7 @@ from tokenpak.compression.pipeline import CompressionPipeline
 # Fixtures
 # ---------------------------------------------------------------------------
 
-LONG_PATH = "/home/trix/Projects/tokenpak/tokenpak/agent/compression/pipeline.py"  # 61 chars
+LONG_PATH = "/home/user/Projects/tokenpak/tokenpak/agent/compression/pipeline.py"  # 61 chars
 SHORT_PATH = "/tmp/x.py"  # 9 chars
 SERVICE_NAME = "openclaw-gateway-proxy-service"  # 30 chars
 ENV_VAR = "TOKENPAK_PROXY_BASE_URL"  # 23 chars

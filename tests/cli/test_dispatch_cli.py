@@ -598,11 +598,11 @@ def test_sanitizer_extra_terms_redacts_injected_names():
         sanitize_public_text,
     )
 
-    leaky = "Sue reviewed /home/sue/secret/path and approved task TSR-1234"
+    leaky = "Sue reviewed /home/olduser/secret/path and approved task TSR-1234"
 
     # Default: paths + id-shaped tokens redacted; injected name still present.
     default_out = sanitize_public_text(leaky)
-    assert "/home/sue/" not in default_out
+    assert "/home/olduser/" not in default_out
     assert "TSR-1234" not in default_out
     assert "[redacted]" in default_out
     assert "Sue" in default_out  # not redacted without extra_terms
@@ -610,7 +610,7 @@ def test_sanitizer_extra_terms_redacts_injected_names():
     # With extra_terms: the injected name is redacted too.
     injected_out = sanitize_public_text(leaky, extra_terms=["Sue"])
     assert "Sue" not in injected_out
-    assert "/home/sue/" not in injected_out
+    assert "/home/olduser/" not in injected_out
     assert "TSR-1234" not in injected_out
 
 

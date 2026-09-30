@@ -6,7 +6,7 @@
  * BEFORE requiring handler.js so the module-load-time os.homedir() resolves
  * to the test sandbox.
  *
- * Each of Kevin's 6 Path C handler safeguards is exercised by at least one
+ * Each of the 6 Path C handler safeguards is exercised by at least one
  * case (atomicity, schema validation, perms, missing-key fallback, and the
  * non-target-event filter); plus happy path, monotonic event_count, and
  * throw resistance for the host gateway.

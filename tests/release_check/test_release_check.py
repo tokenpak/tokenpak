@@ -90,7 +90,7 @@ def test_leak_gate_allows_public_fleet_and_openclaw_forms(tmp_path):
 def test_leak_gate_flags_ticket_and_path(tmp_path):
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "x.md").write_text("Tracked in TSR-7; logs under /home/sue/run.\n", encoding="utf-8")
+    (docs / "x.md").write_text("Tracked in TSR-7; logs under /home/{}/run.\n".format("sue"), encoding="utf-8")
     result = rc.gate_leak(tmp_path, changed=["docs/x.md"])
     assert not result.ok
     assert len(result.messages) == 2

@@ -18,10 +18,10 @@ except ImportError as _exc:
 
 
 def test_extracts_file_paths_correctly():
-    text = "See /home/trix/Projects/tokenpak/tokenpak/agent/vault/indexer.py for details."
+    text = "See /home/user/Projects/tokenpak/tokenpak/agent/vault/indexer.py for details."
     out = EntityExtractor().extract(text)
     paths = [e.value for e in out.by_type(EntityType.FILE_PATH)]
-    assert "/home/trix/Projects/tokenpak/tokenpak/agent/vault/indexer.py" in paths
+    assert "/home/user/Projects/tokenpak/tokenpak/agent/vault/indexer.py" in paths
 
 
 def test_extracts_api_endpoints_from_docs():

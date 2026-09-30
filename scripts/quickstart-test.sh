@@ -186,5 +186,5 @@ fi
 
 echo ""
 echo -e "${BLUE}📖 Learn more: https://docs.tokenpak.dev${NC}"
-echo -e "${BLUE}💬 Issues & feedback: https://github.com/repliflow/tokenpak/issues${NC}"
+echo -e "${BLUE}💬 Issues & feedback: https://github.com/tokenpak/tokenpak/issues${NC}"
 echo ""
