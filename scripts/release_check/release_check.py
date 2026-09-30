@@ -163,6 +163,8 @@ _PATTERN_REGISTER_FALLBACK = frozenset(
     {
         "scripts/release_gate/check_release_leaks.py",
         "scripts/release_gate/public_safety_scan.py",
+        ".github/workflows/identity-language-check.yml",
+        ".pre-commit-config.yaml",
     }
 )
 
