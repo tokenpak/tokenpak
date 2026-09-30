@@ -192,6 +192,8 @@ _EXCLUDE_PREFIXES = ("tests/", "packages/tests/", "sdk/dist/")
 _PATTERN_REGISTER_FILES = {
     "scripts/release_gate/public_safety_scan.py",
     "scripts/release_gate/check_release_leaks.py",
+    ".github/workflows/identity-language-check.yml",
+    ".pre-commit-config.yaml",
 }
 
 _MANIFEST_BASENAMES = {

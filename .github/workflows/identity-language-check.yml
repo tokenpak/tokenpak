@@ -26,7 +26,6 @@ jobs:
       - name: Compute changed files
         id: changed
         run: |
-          # shellcheck disable=SC2002
           set -euo pipefail
           event="${{ github.event_name }}"
           case "$event" in
@@ -62,11 +61,10 @@ jobs:
             > changed-files.txt || true
           rm all-changed-files.txt
           echo "Changed files (filtered):"
-          cat changed-files.txt | sed 's/^/  /'
+          sed 's/^/  /' changed-files.txt
 
       - name: Scan for forbidden identity / language
         run: |
-          # shellcheck disable=SC2016,SC2088
           set -euo pipefail
           if [ ! -s changed-files.txt ]; then
             echo "No relevant files changed; skipping."
@@ -116,7 +114,7 @@ jobs:
             'TIP-[0-9][0-9]'
             '\.claude/projects'
             '/home/(sue|trix|cali|dee|aya|reipo|suki)/'
-            '~/vault/[0-9][0-9]_'
+            '[~]/vault/[0-9][0-9]_'
             # Internal standard / section / artifact citations. Widened
             # 2026-06-28 (leak-gate Std/§ scanner extension) from the
             # range-limited 'Std 2[0-9]'/'Std 3[0-9]' to ALL 'Std NN' (00-99),
@@ -415,7 +413,7 @@ jobs:
                 -e 's/--tier=fleet/--tier=__PUBLIC_PERMTIER_FLEET__/g' \
                 -e 's/permissions[[:space:]]+set[[:space:]]+fleet/permissions set __PUBLIC_PERMTIER_FLEET__/g' \
                 -e 's/"set fleet/"set __PUBLIC_PERMTIER_FLEET__/g' \
-                -e 's/set fleet`/set __PUBLIC_PERMTIER_FLEET__`/g' \
+                -e 's/set fleet\x60/set __PUBLIC_PERMTIER_FLEET__\x60/g' \
                 -e 's/fleet[[:space:]]+mode/__PUBLIC_PERMTIER_FLEET__ mode/g' \
                 -e 's/fleet-mode/__PUBLIC_PERMTIER_FLEET__-mode/g' \
                 -e 's/fleet[[:space:]]+off/__PUBLIC_PERMTIER_FLEET__ off/g' \
@@ -425,9 +423,9 @@ jobs:
                 -e 's/launcher[[:space:]]+fleet[[:space:]]+state/launcher __PUBLIC_PERMTIER_FLEET__ state/g' \
                 -e 's/launcher[[:space:]]+fleet$/launcher __PUBLIC_PERMTIER_FLEET__/g' \
                 -e 's/auto\/fleet/auto\/__PUBLIC_PERMTIER_FLEET__/g' \
-                -e 's/`fleet`/`__PUBLIC_PERMTIER_FLEET__`/g' \
+                -e 's/\x60fleet\x60/\x60__PUBLIC_PERMTIER_FLEET__\x60/g' \
                 -e "s/'fleet'/'__PUBLIC_PERMTIER_FLEET__'/g" \
-                -e 's/``fleet``/``__PUBLIC_PERMTIER_FLEET__``/g' \
+                -e 's/\x60\x60fleet\x60\x60/\x60\x60__PUBLIC_PERMTIER_FLEET__\x60\x60/g' \
                 -e 's/^([[:space:]]+)fleet([[:space:]]+\(persistent)/\1__PUBLIC_PERMTIER_FLEET__\2/g' \
                 -e 's/fleet[[:space:]]+never[[:space:]]+persists/__PUBLIC_PERMTIER_FLEET__ never persists/g' \
                 -e 's/fleet[[:space:]]+is[[:space:]]+(a[[:space:]]+launcher|NOT|the[[:space:]]+separate)/__PUBLIC_PERMTIER_FLEET__ is \1/g' \

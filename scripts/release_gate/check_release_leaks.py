@@ -105,7 +105,7 @@ PATTERNS: list[str] = [
     # names and host handles are matched through the hashed register in
     # private_terms.py (see scan_files), never by literal pattern.
     r"/home/(sue|trix|cali|dee|aya|reipo|suki)/",
-    r"~/vault/[0-9][0-9]_",
+    r"[~]/vault/[0-9][0-9]_",
     # Internal standard / section / artifact citations. Widened 2026-06-28
     # (leak-gate Std/§ scanner extension) from the old range-limited
     # ``Std 2[0-9]`` / ``Std 3[0-9]`` to catch ALL ``Std NN`` (00-99), the
