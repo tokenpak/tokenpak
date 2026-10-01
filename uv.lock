@@ -6,13 +6,13 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
-    "python_full_version == '3.11.*' and sys_platform == 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version < '3.11'",
 ]
@@ -805,7 +805,7 @@ name = "cuda-bindings"
 version = "13.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cuda-pathfinder", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "cuda-pathfinder" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a9/21/8464d133752951c154feafb3b65c297e7d80f301183d220bec4c830f1441/cuda_bindings-13.3.1-cp310-cp310-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:120fcc53d57903df529c3486962c56528cba5b7d6c57c99537320ed9922c8b86", size = 6073403, upload-time = "2026-05-29T23:11:36.22Z" },
@@ -840,43 +840,43 @@ wheels = [
 
 [package.optional-dependencies]
 cublas = [
-    { name = "nvidia-cublas", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-cuda-nvrtc", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cublas", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-cuda-nvrtc", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cudart = [
-    { name = "nvidia-cuda-runtime", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cuda-runtime", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cufft = [
-    { name = "nvidia-cufft", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-nvjitlink", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cufft", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-nvjitlink", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cufile = [
-    { name = "nvidia-cufile", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cufile", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cupti = [
-    { name = "nvidia-cuda-cupti", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cuda-cupti", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 curand = [
-    { name = "nvidia-curand", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-curand", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cusolver = [
-    { name = "nvidia-cublas", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-cusolver", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-cusparse", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-nvjitlink", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cublas", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-cusolver", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-cusparse", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-nvjitlink", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 cusparse = [
-    { name = "nvidia-cusparse", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "nvidia-nvjitlink", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cusparse", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
+    { name = "nvidia-nvjitlink", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 nvjitlink = [
-    { name = "nvidia-nvjitlink", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-nvjitlink", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 nvrtc = [
-    { name = "nvidia-cuda-nvrtc", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cuda-nvrtc", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 nvtx = [
-    { name = "nvidia-nvtx", marker = "(python_full_version < '3.11' and platform_machine == 'AMD64' and sys_platform == 'win32') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-nvtx", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
 ]
 
 [[package]]
@@ -945,7 +945,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -1909,7 +1909,7 @@ wheels = [
 
 [[package]]
 name = "litellm"
-version = "1.93.0"
+version = "1.93.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -1925,18 +1925,43 @@ dependencies = [
     { name = "tiktoken" },
     { name = "tokenizers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/93/e1/4f05ca4cbb4efb739c9e66a182ecd5c816bc05bf3665ec8e0fb4ab408379/litellm-1.93.0.tar.gz", hash = "sha256:140bf215e264c71601bca9c06d2436c5451bb59e1e195ea23fc2d3d87b6929ec", size = 15948866, upload-time = "2026-07-19T03:01:24.389Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/97/dd/28024c0e4cf2dc6ab1bad59b8357af7f460e952c69526eae28f12ac4ee5e/litellm-1.93.2.tar.gz", hash = "sha256:c5d5223ef07f36e0886397fb45cc9db4150f86a0c6f6835cee1d5524cab69dfd", size = 15955441, upload-time = "2026-08-09T02:17:49.646Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5a/03/604e71df027a7a420dbf2078e522753e7cfd309cabeaf1492f5ee2ebcefa/litellm-1.93.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:5d84aead083d3d0619b2d293f8006ebbe75611bbdcef470d659c9e2d131d4454", size = 20168095, upload-time = "2026-07-19T03:00:52.962Z" },
-    { url = "https://files.pythonhosted.org/packages/0b/55/e5f7b567f73028ca743fdc0a2bb7db920bf90ebe533f8b8f83e2c9734b48/litellm-1.93.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:6b49f653e6205cbc725257da8797277f77065c69865fb3489bc5ed0896b66ee0", size = 20161816, upload-time = "2026-07-19T03:00:56.318Z" },
-    { url = "https://files.pythonhosted.org/packages/33/fa/36bbb088d4a70f610518012529f1e81445dc6e3868ed36a5b4f705f8dec0/litellm-1.93.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:952029d422c2cec8117b444d66d6de87ac970ecf0b2e1383b02788ef90ba3603", size = 20167087, upload-time = "2026-07-19T03:00:59.756Z" },
-    { url = "https://files.pythonhosted.org/packages/7d/15/52ee5e4743ad656a4d408ca6fcd8bca844b572b6a8e9776f1232bd7d9d8d/litellm-1.93.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:460001b7c88c5b6675ad482ae3cecba96e21f890604b4febb1a67807ace1c750", size = 20161646, upload-time = "2026-07-19T03:01:02.827Z" },
-    { url = "https://files.pythonhosted.org/packages/be/69/cabe7e747fea4c744752bd7ff8f7f208723151a63a89bb7c2437212523ff/litellm-1.93.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:3daf5c5aceb07f5d68871071e0ecdc678caccebadca9143cc00bb76f5a8c54e8", size = 20164234, upload-time = "2026-07-19T03:01:05.713Z" },
-    { url = "https://files.pythonhosted.org/packages/c5/db/6af798603c6e2cf21ad7f2edf7e95019bd859dda82284b94014d608fcd85/litellm-1.93.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:0784172435de48f66ef7ad89d421604db1ad0db1321ef7f39dbcfe6b20111417", size = 20156724, upload-time = "2026-07-19T03:01:09.037Z" },
-    { url = "https://files.pythonhosted.org/packages/f5/e1/eabe3f13d9c8b853a01377b59e78a295f34c24c36b09e5fc1c60c0167f19/litellm-1.93.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:23b8eea4fb8b3b6ade05e7b6085ec9ca12daffcfb38d033d0bbce9c1d5894da5", size = 20164863, upload-time = "2026-07-19T03:01:12.035Z" },
-    { url = "https://files.pythonhosted.org/packages/64/49/2db5757f7e284eb12618b547cb62dab49687ffaf1d749ca048210e3d0dbd/litellm-1.93.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:98c15e84d32e922a821c105308bf9ddae8700de9ed396530bee2cbb1cacf4cbb", size = 20157288, upload-time = "2026-07-19T03:01:15.395Z" },
-    { url = "https://files.pythonhosted.org/packages/0d/7f/b48d88cb32055b4ba7e51cd67e4ea13a589d4a568d33c3d0dc6994d13b83/litellm-1.93.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:1a476ebc340c070c982eab15b4673fa63a70f5936935f9f20e4d2acb5f35d23b", size = 20165502, upload-time = "2026-07-19T03:01:18.425Z" },
-    { url = "https://files.pythonhosted.org/packages/45/6c/65a7f916326daa151131f1fce5e254d4834127a95d53a18f1c4d238dd5c3/litellm-1.93.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:cd70ccd4ba3ef1a395535c287bce72d30c7d937ecca4290c0db37a00738f7ada", size = 20159007, upload-time = "2026-07-19T03:01:21.704Z" },
+    { url = "https://files.pythonhosted.org/packages/88/08/9506771ea0a3433e683b6ad6f874cd91ede91485044f1d258e66c9266ff8/litellm-1.93.2-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:f34309706eb90960d67b05872a3b8314563b81b193b909eaab9d133b82a203fb", size = 19937087, upload-time = "2026-08-09T02:16:21.033Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/ad/c981a75ec07140221c6645c47414598456b65f3c650f1a77b4a796524161/litellm-1.93.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:d230bbb7818ebad79da838f1b343c36666cb800e0aa80ca95c9ef4c8494278e4", size = 19862987, upload-time = "2026-08-09T02:16:23.758Z" },
+    { url = "https://files.pythonhosted.org/packages/42/a7/96488b36428f2aa166ee571927c1608f7df591c198f46021db568da59f8e/litellm-1.93.2-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:f8740072e67ca25d4cb2c59e2d1fc49f1d064952c05db175c84eb1e496e9cb85", size = 20169541, upload-time = "2026-08-09T02:16:26.25Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/36/91126e7e529ee369288d886116fb3d0b6685b64d26a3948629b8f18de059/litellm-1.93.2-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:78fc2df99e32d9762eee6755a11ad98d405a9f8154994afd841b256d2a7086e4", size = 20162865, upload-time = "2026-08-09T02:16:28.661Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/08/2ba7298d9d61abf5585c679c9f69a237ac4a7ba69965d86982d2023aab68/litellm-1.93.2-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:248ac86bbb03be2a94690e8f31c3de4adf2367f351d1fd1ae43903237cfa365d", size = 20234315, upload-time = "2026-08-09T02:16:31.044Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/e9/1c7045cbd4d04eaa53fb07e4b7b8b903d77f49a518a2aebbaf18433b9543/litellm-1.93.2-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:67e152a87185b47698f4c240290352cbdd18fdcd4285dc8f76f2f79d8186ca9c", size = 20291455, upload-time = "2026-08-09T02:16:33.337Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/c3/f6297826575f2d8dce2b55e6865b015f227c2540e3b1dd94c688e08d57a1/litellm-1.93.2-cp310-cp310-win_amd64.whl", hash = "sha256:f556aa24817052689989e254863bfc50b48e5500999005fce92e6c2d16548f87", size = 19775603, upload-time = "2026-08-09T02:16:35.606Z" },
+    { url = "https://files.pythonhosted.org/packages/64/c7/cb3f49dc60d57dda7fe368310fd5da2a94ec9b6a746bcf343a61e10bdeda/litellm-1.93.2-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:1bd0690efc94357e559de97927fd98437555cd5b5dd832544cfcca87297ccb80", size = 19938326, upload-time = "2026-08-09T02:16:38.041Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/bd/d77184fdaaf57d67d65da91dcfc61c7f656703e7ce4f950e07523e7de4e3/litellm-1.93.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:845ececc628737909b1422d1af18bd19ae453727a66244aa9da3ca37a3773111", size = 19862606, upload-time = "2026-08-09T02:16:40.653Z" },
+    { url = "https://files.pythonhosted.org/packages/53/99/d8dd58b6840754a13cc2e1111b283aa28cbfc0ccc653a8725050916bb08e/litellm-1.93.2-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:498f9878ea773305e0638b6159d7e1ef27bb0b9a4292538d6634312d18a4e781", size = 20168532, upload-time = "2026-08-09T02:16:42.997Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/ca/559ca0f5e0b99b9f641086ae924c782f8d521d09384fbe9abbe0bddb6e61/litellm-1.93.2-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:1e5618ef495b2e02299b376ca84ffb2647837aafee478cf3a1be17d47a8f0f73", size = 20162696, upload-time = "2026-08-09T02:16:45.283Z" },
+    { url = "https://files.pythonhosted.org/packages/92/3e/18c31b27c7d1271b43bdc8ffbef01bfba68d90248bbe60bb2130dd17e43c/litellm-1.93.2-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:c2da463d70c9fffbea9532fd000e035328f5266b399a2fb4c6c76b3470478337", size = 20233518, upload-time = "2026-08-09T02:16:47.87Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/98/a6bae7c52f09cd03487a040f98eeedb899b3cf3fc541b87c6d051ee92e0d/litellm-1.93.2-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:2cf122399f84f8f04621ed6ef8f276dd6d61f4fab108932ce0e30368de34dd42", size = 20291180, upload-time = "2026-08-09T02:16:50.549Z" },
+    { url = "https://files.pythonhosted.org/packages/77/2d/81d974f2533cf039afda7e3e0f769dc73dc692c75ec867cf29ec6f41c06f/litellm-1.93.2-cp311-cp311-win_amd64.whl", hash = "sha256:8eaaf780fab9a19234735ef94225172179d15bc28b67ddbec125194249a504b7", size = 19775654, upload-time = "2026-08-09T02:16:53.162Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/05/72fd8051f0f2f3c84b90986e6f4551db7c8b190ba3300f111461b7701689/litellm-1.93.2-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:3bf532c164ad7cb1b76f2c62afefdcc656b9b296374d075a4150e2ce10bb74c3", size = 19937403, upload-time = "2026-08-09T02:16:55.545Z" },
+    { url = "https://files.pythonhosted.org/packages/9e/4d/5081b39bdb73cab04f8a86294a4534a029cf0434ac6932c7ae8049d55723/litellm-1.93.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:526b7afc037f79dfdd5c607f5085ac597c7fd301a6dedabea40baae899b27f19", size = 19853652, upload-time = "2026-08-09T02:16:57.977Z" },
+    { url = "https://files.pythonhosted.org/packages/70/3f/fb70691266a7fd08c202406abea0153e82fa17f134cd9d58e4029cc741db/litellm-1.93.2-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:294ad19f356f821ce97a5428d09439be5f38d22b218c73008d8a49e3e42eb145", size = 20165680, upload-time = "2026-08-09T02:17:00.65Z" },
+    { url = "https://files.pythonhosted.org/packages/81/91/84424ce2a25595463e5d24e9cf8949877cd4ce93c0fcbf6486ecd685094f/litellm-1.93.2-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:6f6a5e3907f0a1c9d8ff8d71a6cbac8a592e47a40da3f97167074947b5ba7d11", size = 20157772, upload-time = "2026-08-09T02:17:03.027Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/8d/b0eac7ee6d174564f820565c8c9a726ae83dbb8c4d3522daf175b95da002/litellm-1.93.2-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:8541f1b7fd5c437ad249ad68d0a11f68e5e2866b0649da5fa7d63b595e9b8b22", size = 20229256, upload-time = "2026-08-09T02:17:05.271Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/6d/03e931c1cb2d1e1b7a968de21aa9e4db853928200da856c35c940ee6faa9/litellm-1.93.2-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:712c9387419d7b06a10df59973f5e530592d61b2314102b0fa3142f3743f9a9e", size = 20287257, upload-time = "2026-08-09T02:17:08.175Z" },
+    { url = "https://files.pythonhosted.org/packages/16/05/6c0fe2fcf31c260474c55fabe4ecb0e9e1343c9b9132e28589391b2ad33e/litellm-1.93.2-cp312-cp312-win_amd64.whl", hash = "sha256:cc0d58ccabd22ef7ef44a9e6f7247deb54ae42f5e126e6f00360c2b28b41bc2b", size = 19772580, upload-time = "2026-08-09T02:17:11.254Z" },
+    { url = "https://files.pythonhosted.org/packages/70/74/e9046cffa69b32b710452480598e418b26a29896ece680c80ec23997fd16/litellm-1.93.2-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:f4071bef03e4c2942cd2ddc752727345b85447d6a7fee1ff5a4f8b92187966b0", size = 19938095, upload-time = "2026-08-09T02:17:13.929Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/db/6ef38a7a2f73d5cc507423954fa535a8546ead375c4c71265c093bdb4e9e/litellm-1.93.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:8a99ac7c0c1b78acd6bfd1959e9f203dca71fdbceb5f0c8691c2ad8eee450d7d", size = 19854187, upload-time = "2026-08-09T02:17:16.588Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/b3/80ee0143b88e2921f8c8f24c7331478258a8bf25a3d4d4450bd96043403e/litellm-1.93.2-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:a81ceff44c58ef504ab8bd787d03b82618765b9cfd530942386ae6d23c58be94", size = 20166307, upload-time = "2026-08-09T02:17:19.078Z" },
+    { url = "https://files.pythonhosted.org/packages/98/60/cb326e1094f7042f28f9e21543d9f367a8aa25af6915bf4253b77da5c2a2/litellm-1.93.2-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:dee1b02b7f52a5a408bf7c8d499f0834e49194651743758a511dcdd926c0b692", size = 20158336, upload-time = "2026-08-09T02:17:21.507Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/87/bad75146863531172c9dbae189486c7f4425b56a6641b55ab20745316048/litellm-1.93.2-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:d2edfa14b99bce706b35981703692e3ee631f9b87bf6dc28fb53b574f6480b20", size = 20229711, upload-time = "2026-08-09T02:17:24.073Z" },
+    { url = "https://files.pythonhosted.org/packages/df/28/040b1853021ed8fd57be19eb2affb024d168951fe7e7abdbad91da3f6f3f/litellm-1.93.2-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:ae75a61c9abc827aa3131b7e640c952367a450830bb7c531b426b4ec2bb45f85", size = 20287584, upload-time = "2026-08-09T02:17:26.542Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/0b/4208815b0d666636cbf7afbd571eec3004d3a15d3150a23a9009fc2ce930/litellm-1.93.2-cp313-cp313-win_amd64.whl", hash = "sha256:c54a09ab20f94120a9d60a30d9970439dcefa00d2565d190505ff006a80c7a69", size = 19772641, upload-time = "2026-08-09T02:17:29.308Z" },
+    { url = "https://files.pythonhosted.org/packages/09/4a/ff7a9c000519d2bab362318bf744a24c2500228e5fceaa6ac23acab96fa0/litellm-1.93.2-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:204cb0763fff9285bc87eb2dc0fc59b591999e5d94863d0964f806424d3c0cd6", size = 19943639, upload-time = "2026-08-09T02:17:31.811Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/26/29e9276ce4aa8ed133d9fd5ecc07375017d2228215547c6bbb17ccbc59b4/litellm-1.93.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:3126c84361606b9fb07fde7d57eccd8a1747304d64c4143e2e5e40ae6e7693fb", size = 19855435, upload-time = "2026-08-09T02:17:34.376Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/20/2c9c818248ae019b2d496ca41900a9a5651ab05e2400794cd8dc8b89b6d2/litellm-1.93.2-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:1c84f7c4acb4e926a79b93145ab23231b300fc687bde7172ef884fc52d6011e0", size = 20166947, upload-time = "2026-08-09T02:17:36.828Z" },
+    { url = "https://files.pythonhosted.org/packages/50/af/4016682be48350407837941ad1a1ae8185cca65b102e04e89eee2a2abccb/litellm-1.93.2-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:cacf35cf703b12c54516fc6464a3e08c6dbb1dcfb97239e1f629294fe36a1cba", size = 20160055, upload-time = "2026-08-09T02:17:39.674Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/b5/c25d7fbe08490d8211bd6b69af23f3a922b68ad8c87c776480b0de64a505/litellm-1.93.2-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:0a7f3e5138e307e429bd8fa29cc0c48bb1e2b827792e8f7799ca4c8cff736103", size = 20230910, upload-time = "2026-08-09T02:17:42.159Z" },
+    { url = "https://files.pythonhosted.org/packages/21/27/341b18a40d4d98a2ac09025c248a3a7edddaf15ce4096ac4a783ff2f70db/litellm-1.93.2-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:d8684629be3f7b5f8e2b6e5fe5ea27ff957c63a8d525d81c1460d8436e2e1857", size = 20288903, upload-time = "2026-08-09T02:17:44.433Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/45/dd9ef72075a83854f852b1bf9a97ec7029a2be9fb4e338fc6623eb09fc90/litellm-1.93.2-cp314-cp314-win_amd64.whl", hash = "sha256:a783b8b18ed68cb6a3b79d2b00273ec21aef92442e9b2712a50036cb84bfe583", size = 19772974, upload-time = "2026-08-09T02:17:46.972Z" },
 ]
 
 [[package]]
@@ -2436,13 +2461,13 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
-    "python_full_version == '3.11.*' and sys_platform == 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/6a/51/63fe664f3908c97be9d2e4f1158eb633317598cfa6e1fc14af5383f17512/networkx-3.6.1.tar.gz", hash = "sha256:26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509", size = 2517025, upload-time = "2025-12-08T17:02:39.908Z" }
@@ -2658,10 +2683,10 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/22/fd/89965aa4ac08c74998539fcbf24fa3540f3e15237fbeb6bcf9c908f4aade/numpy-2.5.1.tar.gz", hash = "sha256:a48a113e6afea91f5608793bafa7ef2ad481fefbda87ec5069f483de61cb9fa3", size = 20755553, upload-time = "2026-07-04T17:08:00.933Z" }
@@ -2716,7 +2741,7 @@ name = "nvidia-cublas"
 version = "13.1.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cuda-nvrtc", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "nvidia-cuda-nvrtc" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/a1/0bd24ee8c8d03adac032fd2909426a00c88f8c57961b1277ded97f91119f/nvidia_cublas-13.1.1.3-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:b7a210458267ac818974c53038fbec2e969d5c99f305ab15c72522fa9f001dd5", size = 542848918, upload-time = "2026-04-08T18:46:22.985Z" },
@@ -2755,7 +2780,7 @@ name = "nvidia-cudnn-cu13"
 version = "9.20.0.48"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "nvidia-cublas" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/56/c5/83384d846b2fd17c44bd499b36c75a45ed4f095fbbb2252294e89cea5c5c/nvidia_cudnn_cu13-9.20.0.48-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:e31454ae00094b0c55319d9d15b6fa2fc50a9e1c0f5c8c80fb75258234e731e1", size = 444574296, upload-time = "2026-03-09T19:28:27.751Z" },
@@ -2767,7 +2792,7 @@ name = "nvidia-cufft"
 version = "12.0.0.61"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "nvidia-nvjitlink" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/ae/f417a75c0259e85c1d2f83ca4e960289a5f814ed0cea74d18c353d3e989d/nvidia_cufft-12.0.0.61-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:2708c852ef8cd89d1d2068bdbece0aa188813a0c934db3779b9b1faa8442e5f5", size = 214053554, upload-time = "2025-09-04T08:31:38.196Z" },
@@ -2797,9 +2822,9 @@ name = "nvidia-cusolver"
 version = "12.0.4.66"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
-    { name = "nvidia-cusparse", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
-    { name = "nvidia-nvjitlink", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "nvidia-cublas" },
+    { name = "nvidia-cusparse" },
+    { name = "nvidia-nvjitlink" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/c3/b30c9e935fc01e3da443ec0116ed1b2a009bb867f5324d3f2d7e533e776b/nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:02c2457eaa9e39de20f880f4bd8820e6a1cfb9f9a34f820eb12a155aa5bc92d2", size = 223467760, upload-time = "2025-09-04T08:33:04.222Z" },
@@ -2811,7 +2836,7 @@ name = "nvidia-cusparse"
 version = "12.6.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "nvidia-nvjitlink" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f8/94/5c26f33738ae35276672f12615a64bd008ed5be6d1ebcb23579285d960a9/nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:80bcc4662f23f1054ee334a15c72b8940402975e0eab63178fc7e670aa59472c", size = 162155568, upload-time = "2025-09-04T08:33:42.864Z" },
@@ -3007,10 +3032,10 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "python-dateutil", marker = "python_full_version < '3.11'" },
-    { name = "pytz", marker = "python_full_version < '3.11'" },
-    { name = "tzdata", marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "python-dateutil" },
+    { name = "pytz" },
+    { name = "tzdata" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/01/d40b85317f86cf08d853a4f495195c73815fdf205eef3993821720274518/pandas-2.3.3.tar.gz", hash = "sha256:e05e1af93b977f7eafa636d043f9f94c7ee3ac81af99c13508215942e64c993b", size = 4495223, upload-time = "2025-09-29T23:34:51.853Z" }
 wheels = [
@@ -3072,20 +3097,20 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
-    "python_full_version == '3.11.*' and sys_platform == 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "python-dateutil", marker = "python_full_version >= '3.11'" },
-    { name = "tzdata", marker = "(python_full_version >= '3.11' and sys_platform == 'emscripten') or (python_full_version >= '3.11' and sys_platform == 'win32')" },
+    { name = "python-dateutil" },
+    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f8/87/4341c6252d1c47b08768c3d25ac487362bf403f0313ddae4a2a26c9b1b4c/pandas-3.0.3.tar.gz", hash = "sha256:696a4a00a2a2a35d4e5deb3fc946641b96c944f02230e4f76137fe35d806c4fc", size = 4651414, upload-time = "2026-05-11T18:54:29.21Z" }
 wheels = [
@@ -4202,13 +4227,13 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
-    "python_full_version == '3.11.*' and sys_platform == 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/aa/2a/9618a122aeb2a169a28b03889a2995fe297588964333d4a7d67bdf46e147/rpds_py-2026.6.3.tar.gz", hash = "sha256:1cebd1337c242e4ec2293e541f712b2da849b29f48f0c293684b71c0632625d4", size = 64051, upload-time = "2026-06-30T07:17:53.009Z" }
@@ -4387,10 +4412,10 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "joblib", marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "threadpoolctl", marker = "python_full_version < '3.11'" },
+    { name = "joblib" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" } },
+    { name = "threadpoolctl" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/98/c2/a7855e41c9d285dfe86dc50b250978105dce513d6e459ea66a6aeb0e1e0c/scikit_learn-1.7.2.tar.gz", hash = "sha256:20e9e49ecd130598f1ca38a1d85090e1a600147b9c02fa6f15d69cb53d968fda", size = 7193136, upload-time = "2025-09-09T08:21:29.075Z" }
 wheels = [
@@ -4435,23 +4460,23 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
-    "python_full_version == '3.11.*' and sys_platform == 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "joblib", marker = "python_full_version >= '3.11'" },
-    { name = "narwhals", marker = "python_full_version >= '3.11'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "joblib" },
+    { name = "narwhals" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "threadpoolctl", marker = "python_full_version >= '3.11'" },
+    { name = "threadpoolctl" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/fa/6f/37092bdb25f712817231799fc5674d8e704066a8a70c1d2d40517e18b4ab/scikit_learn-1.9.0.tar.gz", hash = "sha256:8833266989d3a5110178a9fae30783675460724d0e1efb13b14901d2c660c557", size = 7750767, upload-time = "2026-06-02T11:54:32.706Z" }
 wheels = [
@@ -4495,7 +4520,7 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0f/37/6964b830433e654ec7485e45a00fc9a27cf868d622838f6b6d9c5ec0d532/scipy-1.15.3.tar.gz", hash = "sha256:eae3cf522bc7df64b42cad3925c876e1b0b6c35c1337c93e12c0f366f55b0eaf", size = 59419214, upload-time = "2025-05-08T16:13:05.955Z" }
 wheels = [
@@ -4556,7 +4581,7 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/97/5a3609c4f8d58b039179648e62dd220f89864f56f7357f5d4f45c29eb2cc/scipy-1.17.1.tar.gz", hash = "sha256:95d8e012d8cb8816c226aef832200b1d45109ed4464303e997c5b13122b297c0", size = 30573822, upload-time = "2026-02-23T00:26:24.851Z" }
 wheels = [
@@ -4631,14 +4656,14 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and sys_platform == 'win32'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a7/25/c2700dfaf6442b4effaa91af24ebce5dc9d31bb4a69706313aae70d72cd0/scipy-1.18.0.tar.gz", hash = "sha256:67b2ad2ad54c72ca6d04975a9b2df8c3638c34ddd5b28738e94fc2b57929d378", size = 30774447, upload-time = "2026-06-19T15:01:43.456Z" }
 wheels = [
@@ -4689,8 +4714,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
-    { name = "jeepney", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "cryptography" },
+    { name = "jeepney" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
@@ -5284,7 +5309,7 @@ name = "tree-sitter-languages"
 version = "1.10.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "tree-sitter", marker = "python_full_version < '3.13'" },
+    { name = "tree-sitter" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/38/9c/2f92455805ce8e236c5e5f5b5bc9ef158da798dea575ab3e835d8c17a202/tree_sitter_languages-1.10.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5580348f0b20233b1d5431fa178ccd3d07423ca4a3275df02a44608fd72344b9", size = 8884873, upload-time = "2024-02-04T10:27:51.698Z" },
