@@ -6,6 +6,54 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.30.1] — 2026-10-01
+
+### Fixed
+
+- The Claude Code footer and the Codex pane showed only `TokenPak` instead of
+  the session line when the user's locale collates regex ranges, for example
+  `en_US.UTF-8` on Linux. The footer's ASCII check now runs in byte order
+  under any locale.
+
+### Changed
+
+- The README and the documentation home page now open with what TokenPak
+  shows for a coding-agent session: measured usage, estimated cost, burn and
+  runway.
+- Personal names are removed from source comments, schema examples and test
+  fixtures.
+- The orchestration handoff's human recipient is now registered as
+  `operator`. A handoff addressed to the previous name fails as an unknown
+  agent.
+- The release metadata's documentation-revision pin now names the rewritten
+  commit ID of the same documentation content. The documentation repository's
+  history was rewritten to remove personal data.
+
+### Compatibility
+
+- No API, CLI, storage or configuration change apart from the handoff
+  recipient name above.
+- TokenPak Pro 0.5.1 supports TokenPak 1.26.0 through 1.30.0. It refuses to run
+  on 1.30.1. Keep Pro installations on 1.30.0 until Pro 0.5.2, which adds
+  1.30.1, is installed.
+- See [upgrade, rollback and release status](docs/release-log/v1.30.1.md).
+
+### Known issues
+
+- `tokenpak doctor` reports "legacy DB" for a newly created `monitor.db` that
+  has no schema-version or budget-alert table yet. The database is not legacy;
+  no action is needed.
+
+### Security
+
+This release accepts the open NLTK GHSA-8mgp-746c-j5xp and Accelerate
+GHSA-4j2p-28q2-5m79 optional-dependency findings for this release only,
+following a fresh October 1 dependency reassessment. Neither advisory lists a
+patched version, and no verified published fix is available for either. The
+base install excludes both packages. SECURITY.md lists the affected extras and
+limitations. Both findings remain open and must be resolved or reassessed
+before another release.
+
 ## [1.30.0] — 2026-09-26
 
 ### Added
