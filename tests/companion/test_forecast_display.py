@@ -89,6 +89,28 @@ def test_native_reader_separates_sessions_and_clear(tmp_path, monkeypatch):
     assert "waiting for data" in changed.stdout and "1.23" not in changed.stdout
 
 
+def _has_locale(name):
+    try:
+        listed = subprocess.run(["locale", "-a"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    key = name.lower().replace("-", "")
+    return any(line.strip().lower().replace("-", "") == key for line in listed.stdout.splitlines())
+
+
+@pytest.mark.skipif(not _has_locale("en_US.UTF-8"), reason="en_US.UTF-8 locale is not installed")
+def test_native_reader_prints_ascii_line_under_collating_locale(tmp_path, monkeypatch):
+    # Outside the C locale, regex bracket ranges follow collation order; the
+    # reader's ASCII guard must still accept a plain ASCII line.
+    cache(monkeypatch, tmp_path, "session-one")
+    monkeypatch.setenv("LANG", "en_US.UTF-8")
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.delenv("LC_COLLATE", raising=False)
+    got = native(tmp_path, json.dumps({"session_id": "session-one"}))
+    assert got.returncode == 0 and not got.stderr
+    assert "forecast learning" in got.stdout
+
+
 @pytest.mark.parametrize(
     "payload",
     [
