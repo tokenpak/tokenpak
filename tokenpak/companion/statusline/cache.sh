@@ -41,6 +41,8 @@ tp_read_line() {
 tp_print_line() {
     local columns="$1"
     # All emitted bytes are ASCII. Refuse unsafe/oversized cache contents.
+    # The C locale keeps the range in byte order; other locales collate it.
+    local LC_ALL=C
     if [[ "$TP_LINE" =~ [^\ -\~] ]] || [ "${#TP_LINE}" -gt "$columns" ]; then
         TP_LINE="TokenPak"
     fi
