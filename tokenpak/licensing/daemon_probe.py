@@ -37,7 +37,8 @@ DaemonStateReason = Literal[
 ]
 DaemonProbeResult = tuple[DaemonState, DaemonStateReason]
 
-_SOCK_INFO_PATH = Path.home() / ".tokenpak" / "pro" / "daemon.sock-info"
+# Test/embedder pin; ``None`` means resolve dynamically through ``tokenpak._paths``.
+_SOCK_INFO_PATH: Optional[Path] = None
 _PROBE_TIMEOUT_SEC = 0.5
 _MAX_HEALTH_BODY_BYTES = 65_536
 _MAX_SOCK_INFO_BYTES = 8_192
@@ -71,9 +72,18 @@ class _DeadlineSocket(socket.socket):
 
 
 def sock_info_path() -> Path:
-    """Return the canonical daemon sock-info path."""
+    """Return the daemon sock-info path under the license's selected home.
 
-    return _SOCK_INFO_PATH
+    Uses the same selected home as the license (``TOKENPAK_HOME``, else the
+    home that holds state, else canonical). It never falls through to another
+    profile's daemon.
+    """
+
+    if _SOCK_INFO_PATH is not None:
+        return _SOCK_INFO_PATH
+    from tokenpak import _paths
+
+    return _paths.under("pro", "daemon.sock-info")
 
 
 def _read_sock_info(path: Path) -> dict[str, Any] | None:
@@ -214,7 +224,7 @@ def _fetch_health(port: int) -> DaemonProbeResult:
 def probe_daemon(*, sock_info_override: Optional[Path] = None) -> DaemonProbeResult:
     """Return daemon state plus a closed-vocabulary diagnostic reason."""
 
-    path = sock_info_override or _SOCK_INFO_PATH
+    path = sock_info_override or sock_info_path()
     try:
         path_stat = path.lstat()
     except FileNotFoundError:

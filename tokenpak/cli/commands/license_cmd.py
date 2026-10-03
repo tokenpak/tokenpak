@@ -43,6 +43,13 @@ def _render_summary(s: dict[str, Any]) -> str:
         if cta:
             lines.append(cta)
         lines.append("")
+    elif s["status"] == "expired":
+        lines.append(
+            "  ⚠ License expired — it no longer entitles Pro. Pro is not active until "
+            "a current license is installed.\n"
+            f"     {_lic.EDITION_BASE} features remain active in the meantime."
+        )
+        lines.append("")
     elif s["status"] == "pending_validation":
         lines.append(
             "  ⏳ Pending validation — license key is stored but the validator "

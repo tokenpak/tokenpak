@@ -6,6 +6,34 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.30.2] — Unreleased (local candidate, not published)
+
+### Fixed
+
+- `tokenpak activate` no longer overwrites an installed, current license when a
+  different key is activated. It leaves the file unchanged and names
+  `tokenpak deactivate` as the way to replace it. The same key is accepted as
+  already active, and an expired or pending license can still be replaced.
+- `tokenpak license` and `tokenpak features` honour `expires_at` and the
+  issuer's `grace_days`, so a lapsed license reads as expired and no longer
+  grants Pro through its tier.
+
+- License writes are serialized under one lock, and an unverified write never
+  replaces a signed install, even with a matching key. License and daemon
+  sock-info paths resolve through the shared path contract inside the selected
+  home. Windows takes a real cross-process license lock and fails safe without
+  one. Prepared on this branch; not verified live.
+
+### Changed
+
+- The release identity moves to 1.30.2 so that the corrected build is a
+  distinct version from the published 1.30.1. Pip treats two builds with the
+  same version as identical, so a corrected 1.30.1 could not replace one
+  already installed. TokenPak Pro 0.6.0 requires exactly this version.
+- A paired-upgrade check script for the OSS and Pro pair is added to the source
+  tree (`scripts/release/paired_upgrade_gate.py`). It is not part of the wheel
+  and adds no runtime command.
+
 ## [1.30.1] — 2026-10-01
 
 ### Fixed

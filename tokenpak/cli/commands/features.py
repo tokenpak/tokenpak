@@ -94,7 +94,7 @@ def cmd_features_list(args: Any) -> int:
             json.dumps(
                 {
                     "active_tier": active_tier,
-                    "license_status": (lic.status if lic else "free"),
+                    "license_status": (_lic._license_status(lic) if lic else "free"),
                     "features": rows,
                 },
                 indent=2,
@@ -111,7 +111,7 @@ def cmd_features_list(args: Any) -> int:
     # --json keeps the internal names: that surface is for diagnostics.
     print(f"Edition: {_lic.public_edition(active_tier)}")
     if lic and lic.status:
-        print(f"License status: {lic.status}")
+        print(f"License status: {_lic._license_status(lic)}")
     print("─" * 60)
     print(f"{'feature':<32} {'requires':<14} {'state':<10}")
     print(f"{'─' * 32} {'─' * 14} {'─' * 10}")
@@ -169,6 +169,13 @@ def _row(feature: str, required: str, active_tier: str, lic: Any) -> dict[str, s
         reason = (
             "License key stored but not yet validated — entitlements "
             "remain Free until validation completes."
+        )
+    elif lic and _lic._license_status(lic) == "expired":
+        state = "locked"
+        when = f" {lic.expires_at}" if lic.expires_at else ""
+        reason = (
+            f"License expired{when}; {required} features stay locked "
+            "until a current license is installed."
         )
     else:
         state = "locked"
