@@ -25,8 +25,10 @@ Design invariants:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -213,9 +215,11 @@ class License:
     email: str = ""
     status: str = "active"  # active | pending_validation | expired | revoked
     features_override: list[str] = field(default_factory=list)
+    #: Days past ``expires_at`` the issuer allows, stamped into a signed license.
+    grace_days: int = 0
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "tier": self.tier,
             "key": self.key,
             "activated_at": self.activated_at,
@@ -225,6 +229,9 @@ class License:
             "status": self.status,
             "features_override": list(self.features_override),
         }
+        if self.grace_days:
+            data["grace_days"] = self.grace_days
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "License":
@@ -237,7 +244,64 @@ class License:
             email=str(data.get("email") or ""),
             status=str(data.get("status") or "active").lower(),
             features_override=list(data.get("features_override") or []),
+            grace_days=_grace_days(data.get("grace_days")),
         )
+
+
+def _grace_days(raw: Any) -> int:
+    """Read an issuer-stamped grace cushion; anything but a non-negative int is 0.
+
+    A corrupt field must never extend a license beyond its declared end.
+    """
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return 0
+    return raw if raw >= 0 else 0
+
+
+def _license_is_expired(lic: License, *, now: Optional[Any] = None) -> bool:
+    """Whether *lic*'s declared end date has passed.
+
+    ``expires_at`` is read the way the Pro gate reads it (ISO-8601, a trailing
+    ``Z`` accepted) and extended by the issuer's ``grace_days``, so both sides
+    agree on when a license ends. A value with no offset, including a bare
+    date, is taken as UTC. No ``expires_at`` means no expiry. A value that
+    cannot be read counts as expired, and a ``grace_days`` too large to add
+    is ignored: nothing here ever widens what a license unlocks, so a corrupt
+    field must not extend one, and must not raise out of a gate either.
+
+    A signed Pro license carries ``expires_at`` but no ``status``, so without
+    this a lapsed license read as ``active`` here while the Pro gate had
+    already refused it.
+    """
+    raw = lic.expires_at
+    if not raw:
+        return False
+    import datetime
+
+    try:
+        end = datetime.datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=datetime.timezone.utc)
+    try:
+        end += datetime.timedelta(days=lic.grace_days)
+    except OverflowError:
+        # A cushion past what a timedelta holds, or one that carries the end
+        # beyond the last representable date, is corrupt. The declared end stands.
+        pass
+    return (now or datetime.datetime.now(datetime.timezone.utc)) > end
+
+
+def _license_status(lic: License) -> str:
+    """The license's status as it applies now.
+
+    The stored ``status`` is what the writer last recorded. An ``active``
+    license past its ``expires_at`` is ``expired`` whatever the file says.
+    """
+    if lic.status == "active" and _license_is_expired(lic):
+        return "expired"
+    return lic.status
 
 
 def load_license() -> License:
@@ -254,8 +318,75 @@ def load_license() -> License:
     return License.from_dict(data)
 
 
+class LicenseInstalledError(Exception):
+    """An unverified write was refused: a current signed paid license is installed."""
+
+
+_LICENSE_LOCK_TIMEOUT = 30.0
+_LICENSE_LOCK_POLL = 0.05
+
+
+class LicenseLockError(OSError):
+    """The license write lock could not be taken; nothing was written."""
+
+
+def _lock_acquire(fh):
+    """Take the exclusive lock on byte 0 of ``fh``: POSIX ``flock``, Windows ``msvcrt``.
+
+    Returns the matching release callable. Raises ``LicenseLockError`` when no
+    supported backend exists or the lock is not obtained within the timeout —
+    never degrades to an unlocked write.
+    """
+    try:
+        import fcntl
+    except ImportError:
+        fcntl = None
+    if fcntl is not None:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        return lambda: fcntl.flock(fh, fcntl.LOCK_UN)
+    try:
+        import msvcrt
+    except ImportError:
+        raise LicenseLockError("no supported file-lock backend (fcntl/msvcrt)") from None
+    deadline = time.monotonic() + _LICENSE_LOCK_TIMEOUT
+    while True:
+        fh.seek(0)
+        try:
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            break
+        except OSError as exc:
+            if time.monotonic() >= deadline:
+                raise LicenseLockError("timed out waiting for the license lock") from exc
+            time.sleep(_LICENSE_LOCK_POLL)
+
+    def _release():
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+
+    return _release
+
+
+@contextlib.contextmanager
+def _license_write_lock(p: Path):
+    """Cross-process lock shared with the Pro installer/refresher (flock / msvcrt byte 0)."""
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p.with_name(p.name + ".lock"), "a") as fh:
+        release = _lock_acquire(fh)
+        try:
+            yield
+        finally:
+            release()
+
+
 def save_license(lic: License) -> None:
     """Persist license to disk (atomic write, owner-only).
+
+    The write is serialized with the Pro installer under a shared lock and
+    re-checks the installed file under it: this schema cannot hold a signature,
+    so it never replaces a signed current paid license, whatever its key
+    (``LicenseInstalledError``); a matching key does not mean unchanged
+    signature or terms. Same-key re-activation is a no-write result in
+    ``activate``. The lock is POSIX ``flock`` or Windows ``msvcrt`` byte 0; with neither, or on timeout, the write fails (``LicenseLockError``) before touching the license.
 
     This wrote the license at the process umask — 0664 on a default Linux
     setup — into a home created by a bare ``mkdir``, so activating on a fresh
@@ -276,6 +407,15 @@ def save_license(lic: License) -> None:
         # applied regardless of whether the home could be re-secured.
         pass
     p.parent.mkdir(parents=True, exist_ok=True)
+    with _license_write_lock(p):
+        if _holds_signed_paid_license_file():
+            raise LicenseInstalledError("license_already_installed")
+        _write_license_file(lic, p)
+
+
+def _write_license_file(lic: License, p: Path) -> None:
+    from tokenpak import _paths
+
     tmp = p.with_suffix(p.suffix + ".tmp")
     tmp.write_text(json.dumps(lic.to_dict(), indent=2), encoding="utf-8")
     try:
@@ -334,6 +474,48 @@ def _devshim_tier(key: str) -> str:
         if segment in paid:
             return segment
     return TIER_PRO
+
+
+def _holds_current_paid_entitlement(lic: License) -> bool:
+    """Whether *lic* entitles a paid tier right now (active, paid, unexpired)."""
+    return (
+        lic.status == "active"
+        and _TIER_ORDER.get(effective_tier(lic.tier), 0) > _TIER_ORDER[TIER_FREE]
+        and not _license_is_expired(lic)
+    )
+
+
+def _holds_signed_paid_license_file() -> bool:
+    """Whether the installed file is a signed paid license that is still current.
+
+    The Pro gate derives the tier from ``plan`` when present, but ``License``
+    reads only ``tier``, so a signed ``plan``-only license loads as Free here.
+    This reads the file itself, and only ever *withholds* an overwrite: it never
+    grants anything, and the signature is verified by the Pro daemon, not here.
+    """
+    try:
+        data = json.loads(_license_path().read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    if not isinstance(data, dict) or not isinstance(data.get("signature"), dict):
+        return False
+    names = {str(data.get("tier") or "").lower(), str(data.get("plan") or "").lower()}
+    if not names & {TIER_PRO, "internal"}:
+        return False
+    lic = License.from_dict(data)
+    return lic.status == "active" and not _license_is_expired(lic)
+
+
+def _already_installed_result() -> ActivationResult:
+    return ActivationResult(
+        ok=False,
+        summary=(
+            "A current Pro license is already installed, so this key was not stored. "
+            "Storing it would replace the installed license before the new key is "
+            "verified. To replace the installed license, run: tokenpak deactivate"
+        ),
+        error="license_already_installed",
+    )
 
 
 def activate(key: str, *, email: str = "") -> ActivationResult:
@@ -453,6 +635,22 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
             ),
         )
 
+    # Staging a new key overwrites license.json before anything verifies it.
+    # Over a license that is installed and still current, that trades a working
+    # entitlement — including its signature, which this schema cannot hold and
+    # cannot be re-derived from the key — for a pending stub, so one mistyped
+    # key silently takes Pro away. Leave the installed license alone; replacing
+    # it is a deliberate ``deactivate`` first.
+    installed = load_license()
+    if _holds_current_paid_entitlement(installed) or _holds_signed_paid_license_file():
+        if installed.key and installed.key == key:
+            return ActivationResult(
+                ok=True,
+                license=installed,
+                summary=f"This key is already active. Active tier: {installed.tier}.",
+            )
+        return _already_installed_result()
+
     lic = License(
         tier=TIER_FREE,  # validator upgrades this once wired
         key=key,
@@ -462,6 +660,8 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
     )
     try:
         save_license(lic)
+    except LicenseInstalledError:
+        return _already_installed_result()
     except Exception as exc:
         return ActivationResult(
             ok=False,
@@ -473,6 +673,18 @@ def activate(key: str, *, email: str = "") -> ActivationResult:
     # key, or timeout keeps the stored license at tier=FREE /
     # status=pending_validation. Local file edits MUST NEVER unlock Pro.
     daemon_state, advisory = _consult_daemon_for_tier(lic)
+    if advisory == "license_replaced_during_consult":
+        # Another writer installed a signed license while we consulted the
+        # daemon; ``lic`` was never persisted, so it must not be returned.
+        return ActivationResult(
+            ok=False,
+            summary=(
+                "Another license was installed while this key was being verified, "
+                "so this activation was not applied and the installed license was "
+                "left unchanged. Run `tokenpak status` to see it, or retry."
+            ),
+            error="license_replaced_during_consult",
+        )
     if daemon_state == "verified":
         summary = f"License key stored and verified by the Pro daemon. Active tier: {lic.tier}."
     elif daemon_state == "unverified":
@@ -576,6 +788,8 @@ def _consult_daemon_for_tier(lic: "License") -> tuple[str, str]:
         lic.status = "active"
         try:
             save_license(lic)
+        except LicenseInstalledError:
+            return ("unverified", "license_replaced_during_consult")
         except Exception:
             return ("unreachable", "save_failed")
         return ("verified", f"daemon_tier:{daemon_tier}")
@@ -608,8 +822,9 @@ def is_feature_enabled(feature: str, *, lic: Optional[License] = None) -> bool:
     # Explicit per-license feature override takes precedence
     if feature in lic.features_override:
         return True
-    if lic.status != "active":
-        # pending_validation / expired / revoked → Free-only
+    if lic.status != "active" or _license_is_expired(lic):
+        # pending_validation / expired / revoked, or past its end date → Free-only
+        # (an explicit features_override above still takes precedence)
         return required == TIER_FREE
     return _TIER_ORDER.get(effective_tier(lic.tier), 0) >= _TIER_ORDER[required]
 
@@ -755,7 +970,7 @@ def summary_for_cli(lic: Optional[License] = None) -> dict[str, Any]:
     return {
         "tier": lic.tier,
         "tier_label": describe_tier(lic.tier),
-        "status": lic.status,
+        "status": _license_status(lic),
         "email": lic.email,
         "activated_at": lic.activated_at,
         "expires_at": lic.expires_at,

@@ -4,3 +4,14 @@
 # following day. This entry is scoped to that single commit, file, rule,
 # and line; it allowlists nothing else.
 c16e5ec33e5267cdc197a169e61e2564fe24a727:tokenpak/tests/test_security.py:generic-api-key:255
+
+# Commit 0fc4667c010a82460e38e8c61729033fd5ea794c (PR #875) newly authors synthetic pending-license
+# strings in two license-lifecycle test files. They are fixtures, not
+# credentials. History is published and not rewritten, and gitleaks scans each
+# incoming commit, so a later edit cannot clear them. Each entry is scoped to
+# one commit, file, rule, and line; default rules stay active for everything else.
+0fc4667c010a82460e38e8c61729033fd5ea794c:tests/licensing/test_concurrent_writers.py:generic-api-key:27
+0fc4667c010a82460e38e8c61729033fd5ea794c:tests/licensing/test_concurrent_writers.py:generic-api-key:57
+0fc4667c010a82460e38e8c61729033fd5ea794c:tests/license/test_license_lifecycle_recovery.py:generic-api-key:310
+0fc4667c010a82460e38e8c61729033fd5ea794c:tests/license/test_license_lifecycle_recovery.py:generic-api-key:319
+0fc4667c010a82460e38e8c61729033fd5ea794c:tests/license/test_license_lifecycle_recovery.py:generic-api-key:332
