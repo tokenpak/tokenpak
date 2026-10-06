@@ -60,6 +60,8 @@ def test_public_docs_avoid_overbroad_trust_claims():
     ):
         assert forbidden not in public_text
 
+    # The repository copy only points at the documentation-site comparison. It
+    # must not carry a claims table of its own.
     comparison = _read("docs/comparison.md")
-    assert "configured upstream API" in comparison
-    assert "No prompt content goes through TokenPak's cloud" in comparison
+    assert "https://docs.tokenpak.ai/comparison/" in comparison
+    assert "|---" not in comparison

@@ -1,31 +1,17 @@
-# TokenPak — npm SDK
+# TokenPak — TypeScript SDK (source only)
 
-> Deterministic context compression for LLMs. Cut token costs automatically — measure your own savings with the SDK.
+> A source-only TypeScript client for an HTTP service that serves compression, cache, content-block and telemetry endpoints (default `http://localhost:8000`); it is not published to npm.
 
-[![npm version](https://badge.fury.io/js/tokenpak.svg)](https://www.npmjs.com/package/tokenpak)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ## Installation
 
-```bash
-npm install tokenpak
-# or
-yarn add tokenpak
-# or
-pnpm add tokenpak
-```
+This package is not published to npm, so `npm install tokenpak` does not install it. Build it from this repository (see [Development setup](#development-setup)) and import it from the built `dist/` directory.
 
 ## Requirements
 
 - Node.js ≥ 18
-
-Works with any LLM client (OpenAI SDK, Anthropic SDK, LangChain, etc.) — no proxy required.
-
-**Optional:** Run a local [TokenPak server](https://github.com/tokenpak/tokenpak) for advanced caching and analytics:
-```bash
-pip install tokenpak
-tokenpak serve --port 8000
-```
+- A running HTTP service that implements the paths the client calls: `/compress`, `/compress/conversation`, `/cache`, `/blocks` and `/telemetry`. The `tokenpak serve` proxy does not serve these paths. [`examples/api_server`](../examples/api_server) serves the compression paths only.
 
 ---
 
@@ -45,6 +31,8 @@ npm test
 ---
 
 ## Quick Start
+
+The examples import from `'tokenpak'`. With a local build, import from the built `dist/` directory instead.
 
 ### Compress a single prompt
 

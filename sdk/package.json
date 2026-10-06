@@ -1,7 +1,7 @@
 {
   "name": "tokenpak",
   "version": "1.0.0",
-  "description": "TokenPak — deterministic context compression for LLMs",
+  "description": "A source-only TypeScript client for an HTTP service that serves compression, cache, content-block and telemetry endpoints (default http://localhost:8000); it is not published to npm.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

@@ -134,7 +134,7 @@ index and developer editable-install path.
 
 > **Dispatch (v0.1-alpha preview):** a scoped, resumable, reviewable workflow-control surface. Released packages include the CLI and runtime modules; runtime commands require the optional `[dispatch]` dependencies. Live station execution and delivery receipts are not wired yet. See the [Dispatch guide](docs/guides/dispatch.md).
 
-- **Session trip computer** — measured usage, estimated cost, burn and runway for each session, on by default in the Claude Code footer and the Codex pane; forecasts appear only where calibrated.
+- **Session trip computer** — measured usage, estimated cost, burn and runway for each session, on by default in the Claude Code footer and the Codex pane. Forecasts are estimates shown as ranges, not guarantees, and appear only for a model and effort combination with enough local history; the rest show `learning`.
 - **Context tools and truthful receipts** — explicit compression operations can
   reduce eligible content. The built-in Pak builder preserves role-bearing
   conversation turns; byte-preserved routes report zero product-attributed
