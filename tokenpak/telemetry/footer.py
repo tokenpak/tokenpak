@@ -24,20 +24,9 @@ def log_failover_event(chain: List[str], original: str, final: str, reason: str 
     logger.info(f"Failover: {chain_str}{reason_part}")
 
 
-def _pending_marker() -> str:
-    """Short pending-update marker, or empty when no update is pending."""
-    try:
-        from tokenpak.core.runtime.update_pending import footer_marker
-
-        return footer_marker()
-    except Exception:
-        return ""
-
-
 def render_footer_oneline(stats: RequestStats) -> str:
     """Single-line footer for inline use."""
-    marker = _pending_marker()
-    return f"{stats.footer_oneline} | {marker}" if marker else stats.footer_oneline
+    return stats.footer_oneline
 
 
 def render_footer(stats: RequestStats, session: Optional[SessionStats] = None) -> str:
@@ -69,10 +58,6 @@ def render_footer(stats: RequestStats, session: Optional[SessionStats] = None) -
             f"${session.session_total_cost_saved:.2f} saved"
         )
         lines.append(sess_line)
-
-    marker = _pending_marker()
-    if marker:
-        lines.append(marker)
 
     lines.append(sep)
     return "\n".join(lines)

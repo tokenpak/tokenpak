@@ -35,14 +35,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-__all__ = ["PendingUpdate", "detect", "footer_marker", "marker_path", "stack_units"]
+__all__ = ["PendingUpdate", "cached_detect", "detect", "marker_path", "stack_units"]
 
 MARKER_NAME = "pending-release.json"
 MARKER_SCHEMA = "tokenpak-pending-release/1"
 _VERSION_RE = re.compile(r"^\d{1,4}(?:\.\d{1,5}){1,3}(?:(?:a|b|rc|\.post|\.dev)\d{1,5})?$")
 _UNIT_RE = re.compile(r"^[A-Za-z0-9_.@:-]+\.service$")
 _MARKER_MAX_BYTES = 64 * 1024
-_FOOTER_TTL_SECONDS = 60.0
+_CACHE_TTL_SECONDS = 60.0
 
 SOURCE_STAGED = "staged"
 SOURCE_INSTALLED = "installed"
@@ -183,24 +183,20 @@ def detect(
     return PendingUpdate()
 
 
-_footer_cache: tuple[float, str] = (0.0, "")
+_cache: tuple[float, PendingUpdate] = (0.0, PendingUpdate())
 
 
-def footer_marker() -> str:
-    """Short footer text when an update is pending, else an empty string.
+def cached_detect(ttl: float = _CACHE_TTL_SECONDS) -> PendingUpdate:
+    """:func:`detect`, reused for ``ttl`` seconds.
 
-    Cached for a minute and never touches the network, so it is safe to call on
-    every render. It compares against the version loaded in this process, so it
-    is accurate inside the proxy (where it catches an upgrade made on disk) and
-    for a staged marker anywhere.
+    For long-lived callers that refresh often (the status-line writer). It adds
+    at most one loopback ``/health`` read per ``ttl`` and never raises.
     """
-    global _footer_cache
+    global _cache
     now = time.monotonic()
-    stamp, text = _footer_cache
-    if stamp and now - stamp < _FOOTER_TTL_SECONDS:
-        return text
-    loaded = _loaded_version()
-    found = detect(probe=False, running=loaded)
-    text = f"↑ update {found.target} pending" if found.pending and found.target else ""
-    _footer_cache = (now, text)
-    return text
+    stamp, found = _cache
+    if stamp and now - stamp < ttl:
+        return found
+    found = detect()
+    _cache = (now, found)
+    return found

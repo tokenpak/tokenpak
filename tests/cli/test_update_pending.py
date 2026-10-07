@@ -21,7 +21,7 @@ def _isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(up, "_loaded_version", lambda: "1.30.2")
     monkeypatch.setattr(up, "_disk_version", lambda: "1.30.2")
     monkeypatch.setattr(up, "_health_version", lambda timeout=0.5: None)
-    monkeypatch.setattr(up, "_footer_cache", (0.0, ""))
+    monkeypatch.setattr(up, "_cache", (0.0, up.PendingUpdate()))
     monkeypatch.setattr(update_apply, "PROBE_INTERVAL_SECONDS", 0.0)
     monkeypatch.setattr(update_apply, "_watched_ports", lambda port: [port])
     return tmp_path
@@ -123,36 +123,6 @@ def test_stack_units_filters_unsafe_names():
     assert up.stack_units() == []
     _write_marker(stack_units=["a.service", "b.service"])
     assert up.stack_units() == ["a.service", "b.service"]
-
-
-# --- footer ------------------------------------------------------------------
-
-
-def test_footer_marker_empty_when_not_pending():
-    assert up.footer_marker() == ""
-
-
-def test_footer_marker_text_and_render():
-    from tokenpak.telemetry.footer import render_footer, render_footer_oneline
-    from tokenpak.telemetry.proxy_collector import RequestStats
-
-    stats = RequestStats(
-        request_id="r",
-        timestamp=__import__("datetime").datetime.now(),
-        input_tokens_raw=10,
-        input_tokens_sent=10,
-        tokens_saved=0,
-        percent_saved=0.0,
-        cost_saved=0.0,
-    )
-    clean_one, clean_multi = render_footer_oneline(stats), render_footer(stats)
-    assert "update" not in clean_one and "update" not in clean_multi
-
-    _write_marker("1.30.3")
-    up._footer_cache = (0.0, "")
-    assert up.footer_marker() == "↑ update 1.30.3 pending"
-    assert render_footer_oneline(stats) == f"{clean_one} | ↑ update 1.30.3 pending"
-    assert "↑ update 1.30.3 pending" in render_footer(stats)
 
 
 # --- doctor ------------------------------------------------------------------
@@ -417,3 +387,11 @@ def test_apply_reprobes_right_before_stopping(capsys, monkeypatch):
     monkeypatch.setattr(update_apply, "_systemctl", lambda *a: pytest.fail("must not stop"))
     assert update_apply.run(_args()) == EXIT_BUSY
     assert "requests arrived during the check" in capsys.readouterr().out
+
+
+def test_cached_detect_reuses_result_within_ttl(monkeypatch):
+    calls = []
+    monkeypatch.setattr(up, "detect", lambda **k: calls.append(1) or up.PendingUpdate())
+    up.cached_detect()
+    up.cached_detect()
+    assert len(calls) == 1
