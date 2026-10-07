@@ -478,3 +478,25 @@ def test_private_term_register_hit_fails_without_echoing_line(tmp_path, monkeypa
     findings = mod.scan_files(files)
     assert findings and findings[0].pattern.startswith("private-name")
     assert "Zorblax" not in findings[0].text
+
+
+def test_text_whose_probe_ends_inside_a_multibyte_character_is_still_scanned(tmp_path):
+    # The binary probe reads the first 4096 bytes. A multibyte character cut at that
+    # boundary is valid text, so the file must be scanned, not skipped as binary.
+    text = "#" * 4095 + "\u2500" + "\n# last reviewed by Sue\n"
+    assert len(text.encode("utf-8")[:4096]) == 4096
+    assert text.encode("utf-8")[:4096].endswith(b"\xe2")  # first byte of the 3-byte character
+    _write(tmp_path, "tokenpak/core/notes.py", text)
+    res = _run_tree(tmp_path)
+    assert res.returncode == 1, "a leak in a file whose probe ends mid-character must be found"
+    assert "tokenpak/core/notes.py" in res.stdout
+
+
+def test_binary_and_non_utf8_files_are_still_skipped(tmp_path):
+    (tmp_path / "tokenpak").mkdir()
+    (tmp_path / "tokenpak" / "blob.dat").write_bytes(b"\x00\x01 last reviewed by Sue \xff")
+    (tmp_path / "tokenpak" / "latin1.txt").write_bytes(b"caf\xe9 last reviewed by Sue\n")
+    # A short file that ends in an incomplete sequence is not valid UTF-8 either.
+    (tmp_path / "tokenpak" / "short.txt").write_bytes(b"last reviewed by Sue \xe2")
+    res = _run_tree(tmp_path)
+    assert res.returncode == 0, f"binary and non-UTF-8 files are not scanned:\n{res.stdout}"
