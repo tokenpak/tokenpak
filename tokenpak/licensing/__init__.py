@@ -20,7 +20,9 @@ Design invariants:
       one feature confirmed to overlap (``X1_ab_testing`` here /
       ``ab_testing`` there); that agreement is regression-tested in
       ``tests/license/test_gating_tables_no_silent_divergence.py``.
-    - License store is JSON at ~/.tokenpak/license.json (human-inspectable)
+    - License store is JSON (human-inspectable): ``license.json`` in the
+      TokenPak home, found in whichever default home holds it (see
+      ``tokenpak._paths.license_file``)
 """
 
 from __future__ import annotations
@@ -165,11 +167,15 @@ def known_tiers() -> tuple[str, ...]:
 def _license_path() -> Path:
     """Resolve the license file path through the canonical path resolver.
 
-    Resolution order:
+    One answer for every reader of the license, through
+    ``tokenpak._paths.license_file``:
       1. ``TOKENPAK_LICENSE_FILE`` env var (explicit override).
-      2. ``<TOKENPAK_HOME>/license.json`` via ``tokenpak._paths.under``,
-         which honors ``TOKENPAK_HOME`` then canonical ``~/.tpk/`` then
-         legacy ``~/.tokenpak/``.
+      2. ``<TOKENPAK_HOME>/license.json`` when ``TOKENPAK_HOME`` is set; the
+         default homes are not consulted.
+      3. Otherwise whichever of ``~/.tpk/license.json`` (canonical, preferred)
+         and ``~/.tokenpak/license.json`` (legacy) exists, even when the other
+         home holds the rest of the install's state.
+      4. No license anywhere: the selected home's ``license.json``.
 
     Beta-1 regression fix (found during validation): previously this hardcoded
     ``Path.home() / ".tokenpak" / "license.json"``, which silently
@@ -178,29 +184,25 @@ def _license_path() -> Path:
     ``~/.tokenpak/license.json`` instead of writing under the test
     sandbox — a sandbox-escape + home-directory boundary violation in one.
     """
-    override = os.environ.get("TOKENPAK_LICENSE_FILE")
-    if override:
-        return Path(override)
     from tokenpak import _paths
 
-    return _paths.under("license.json")
+    return _paths.license_file()
 
 
 def _license_write_path() -> Path:
-    """Where a newly activated license is written.
+    """Where a license is written: the file in effect, else the install's write home.
 
-    Reads resolve compatibility-first and may name a directory this install
-    merely inherited; writes must not. Creating a license in a home the
-    install does not live in is how a leftover legacy directory captures a
-    canonical installation — the file itself becomes the evidence that
-    resolution then follows.
+    A license that is already installed is replaced where it is, in whichever
+    default home holds it, so a read and the write that follows name the same
+    file and the same ``.lock``. Only when no license exists anywhere does the
+    write fall to the home a *new* install uses. That keeps the original
+    guarantee: reads resolve compatibility-first and may name a directory this
+    install merely inherited, and a write must not start a license there,
+    because the file itself becomes the evidence that resolution then follows.
     """
-    override = os.environ.get("TOKENPAK_LICENSE_FILE")
-    if override:
-        return Path(override)
     from tokenpak import _paths
 
-    return _paths.write_under("license.json")
+    return _paths.license_file(for_write=True)
 
 
 @dataclass

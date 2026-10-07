@@ -6,6 +6,59 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.30.3] — Unreleased
+
+### Fixed
+
+- A license is found when it is in the older home folder. TokenPak keeps its
+  files in `~/.tpk`, or in `~/.tokenpak` on an installation that predates it,
+  and it chose one folder for everything by what that folder held. An
+  installation whose license sat in `~/.tokenpak` while `~/.tpk` held other
+  files (companion data, logs, the Pro daemon directory) therefore read as
+  unlicensed: `tokenpak license` and `tokenpak features` showed the free plan,
+  and `tokenpak activate` would have stored a new pending key in `~/.tpk` next
+  to the installed license. The license file is now looked up on its own: with
+  `TOKENPAK_LICENSE_FILE` and `TOKENPAK_HOME` unset, TokenPak uses
+  `~/.tpk/license.json` if it exists, otherwise `~/.tokenpak/license.json`.
+- Activating, refreshing and removing a license act on the file that was found,
+  and its `license.json.lock` file is created beside it. `tokenpak activate`
+  still refuses to overwrite an installed, current signed license, now including
+  one in the other folder, and the same key is still accepted as already active.
+
+### Changed
+
+- The release identity moves to 1.30.3. The fix changes behavior, and pip treats
+  two builds with the same version as identical, so a corrected 1.30.2 could not
+  replace an installed 1.30.2.
+
+### Compatibility
+
+- Only the license file is looked up this way. `TOKENPAK_LICENSE_FILE` still
+  names the license file outright. With `TOKENPAK_HOME` set, only
+  `<TOKENPAK_HOME>/license.json` is used, so a scoped home never sees a license
+  in the default folders. Every other file, including the Pro daemon connection
+  file (`pro/daemon.sock-info`), stays in the selected home. Nothing is moved or
+  copied, and `license.json` keeps its format.
+- If both `~/.tpk/license.json` and `~/.tokenpak/license.json` exist, the one in
+  `~/.tpk` is used. A pending key that 1.30.2 stored in `~/.tpk` therefore takes
+  precedence over an installed license in `~/.tokenpak`; `tokenpak deactivate`
+  removes the file in use, and the license in `~/.tokenpak` then takes effect.
+- No symbol is added to or removed from the public API snapshot.
+- TokenPak Pro 0.6.0 requires exactly TokenPak 1.30.3. Upgrade the pair together;
+  the [1.30.3 release log](docs/release-log/v1.30.3.md) has the steps. Pro 0.5.x
+  stays with TokenPak 1.30.1 or earlier.
+
+### Known issues
+
+- `tokenpak doctor` reports "legacy DB" for a newly created `monitor.db` that
+  has no schema-version or budget-alert table yet. The database is not legacy;
+  no action is needed. Tracked in
+  [#338](https://github.com/tokenpak/tokenpak/issues/338).
+- A native token forwarding test fails intermittently with
+  `KeyError: 'failure_kind'` in the project's test runs; a re-run passes. The
+  cause is not yet identified. Tracked in
+  [#337](https://github.com/tokenpak/tokenpak/issues/337).
+
 ## [1.30.2] — 2026-10-07
 
 ### Fixed
