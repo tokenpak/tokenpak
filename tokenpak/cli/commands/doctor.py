@@ -287,6 +287,8 @@ def _update_state() -> tuple[str, str | None]:
     NOT issue a fresh blocking network probe (truth-over-polish + zero added
     latency in doctor). Returns ``(state, latest)`` where ``state`` is:
 
+    - ``"pending"``   — a newer version is staged or installed but not running
+                        yet (local check, no network); ``latest`` is that version.
     - ``"available"`` — cached PyPI version is newer than the running version.
     - ``"current"``   — cached version is <= running version (up to date).
     - ``"unknown"``   — no usable cache (never checked yet, opted out, or the
@@ -295,6 +297,14 @@ def _update_state() -> tuple[str, str | None]:
 
     Never raises.
     """
+    try:
+        from tokenpak.core.runtime import update_pending
+
+        _found = update_pending.detect()
+        if _found.pending and _found.target:
+            return ("pending", _found.target)
+    except Exception:
+        pass
     try:
         from tokenpak import _cli_core
 
@@ -422,8 +432,17 @@ def build_lifecycle_summary(
     else:  # unknown
         rows.append(("Proxy", "yellow", "Unknown", "Run: tokenpak status"))
 
-    # Update — from the cached L1 check only.
-    if update_state == "available":
+    # Update — a pending (staged or installed) update first, then the cached L1 check.
+    if update_state == "pending":
+        rows.append(
+            (
+                "Update",
+                "yellow",
+                f"{update_latest} pending" if update_latest else "pending",
+                "Run: tokenpak update apply",
+            )
+        )
+    elif update_state == "available":
         rows.append(
             (
                 "Update",

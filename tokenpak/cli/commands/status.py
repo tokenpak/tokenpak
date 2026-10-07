@@ -1150,6 +1150,16 @@ def _print_runtime_and_routing(
 
     print()
     print("  🚦 Runtime")
+    _pending_row = None
+    try:
+        from tokenpak.core.runtime import update_pending as _up
+
+        _live = (snap.health_payload or {}).get("version") if snap.health_ok else None
+        _found = _up.detect(probe=False, running=_live) if _live else _up.detect(probe=False)
+        if _found.pending:
+            _pending_row = _found
+    except Exception:
+        _pending_row = None
     if snap.running:
         pid_note = f"PID {snap.pid}" if snap.pid else "PID unknown"
         row("Proxy", "running", f"port {port}, {pid_note}")
@@ -1187,6 +1197,8 @@ def _print_runtime_and_routing(
         row("Uptime", _fmt_uptime(uptime_s))
     if errors > 0:
         row("Errors", errors, "run `tokenpak doctor`")
+    if _pending_row is not None:
+        row("Update", "pending", f"{_pending_row.summary()}; `tokenpak update apply`")
 
     print()
     print("  🔀 Routing")

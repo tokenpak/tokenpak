@@ -56,6 +56,11 @@ EXIT_RUNTIME_UNAVAILABLE = 7
 #: Persisted state exists but could not be parsed or trusted.
 EXIT_CORRUPT_STATE = 8
 
+#: TokenPak is in use right now (a request is in flight or a client is
+#: connected), so a disruptive action was refused. Nothing was changed; run it
+#: again when the proxy is idle.
+EXIT_BUSY = 9
+
 
 #: Human-readable meaning per code, for ``docs/errors.md`` generation and for
 #: tests that assert the table and the documentation have not drifted apart.
@@ -69,9 +74,11 @@ EXIT_CODE_MEANINGS: dict[int, str] = {
     EXIT_ENTITLEMENT_REQUIRED: "The requested capability requires an entitlement",
     EXIT_RUNTIME_UNAVAILABLE: "The proxy is not running or is unhealthy",
     EXIT_CORRUPT_STATE: "Stored state could not be parsed",
+    EXIT_BUSY: "TokenPak is in use; nothing was changed — retry when idle",
 }
 
 __all__ = [
+    "EXIT_BUSY",
     "EXIT_CODE_MEANINGS",
     "EXIT_CORRUPT_STATE",
     "EXIT_ENTITLEMENT_REQUIRED",
