@@ -1562,6 +1562,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         from tokenpak.proxy.spend_guard.request_accounting import RequestAccounting
 
         self._token_guard_probe = None
+        self._guard_accounting = None
         try:
             self._guard_accounting = RequestAccounting(self._ps, self.headers)
         except Exception as exc:
@@ -1572,17 +1573,34 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         try:
             forward()
         finally:
-            try:
-                if self._token_guard_probe is not None:
-                    registry, provider, owner = self._token_guard_probe
-                    # Local refusal or downstream cancellation has no provider
-                    # health verdict. Known success/failure already clears the
-                    # owner; identity matching cannot release another probe.
-                    registry.release_probe(provider, owner)
-            finally:
+            self._release_request_holds()
+
+    def _release_request_holds(self) -> None:
+        """Release the request's provider probe and close its accounting.
+
+        Idempotent: it runs ahead of a local refusal and again when the request
+        ends.
+        """
+        try:
+            if self._token_guard_probe is not None:
+                registry, provider, owner = self._token_guard_probe
+                self._token_guard_probe = None
+                # Local refusal or downstream cancellation has no provider
+                # health verdict. Known success/failure already clears the
+                # owner; identity matching cannot release another probe.
+                registry.release_probe(provider, owner)
+        finally:
+            if self._guard_accounting is not None:
                 self._guard_accounting.finish()
 
     def _write_accounting_block(self, outcome) -> None:
+        # A refusal with no provider send is the request's final result, so
+        # settle its holds first. Once the client can read the refusal it may
+        # retry at once, and must not meet the unsent reservation or half-open
+        # probe of the request it was just refused. A sent request keeps its
+        # hold until usage is recorded.
+        if self._guard_accounting is not None and self._guard_accounting.attempts == 0:
+            self._release_request_holds()
         raw = outcome.response_body or b"{}"
         self.send_response(outcome.http_status or 402)
         self.send_header("Content-Type", "application/json")

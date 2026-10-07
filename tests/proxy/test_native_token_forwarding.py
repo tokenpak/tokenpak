@@ -10,6 +10,7 @@ import struct
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from pathlib import Path
 
 import httpx
@@ -505,6 +506,56 @@ def test_repeated_local_native_refusals_do_not_mark_provider_unhealthy(domain):
     )
     assert len(domain[3]) == 1
     assert settled(domain)[2]["token_coverage_complete"]
+
+
+def test_local_refusal_settles_its_holds_before_the_client_can_read_it(domain, monkeypatch):
+    # A refusal is the request's final answer. If a client could read it before
+    # the request released its unsent reservation and half-open probe, an
+    # immediate retry could be refused by the hold it was just refused for (a
+    # 402 without `failure_kind`), or find the probe still taken.
+    from tokenpak.proxy.spend_guard.reservation import ReservationStore
+
+    from .spend_guard.native_text_fixtures import BETA, native_text_body
+
+    registry = breaker_module.CircuitBreakerRegistry(
+        breaker_module.CircuitBreakerConfig(failure_threshold=1, recovery_timeout=0)
+    )
+    monkeypatch.setattr(breaker_module, "_registry", registry)
+    registry.record_failure("anthropic")  # Synthetic health setup; no provider request.
+    release_started, may_finish = threading.Event(), threading.Event()
+    original_release = ReservationStore.release_unsent
+
+    def held_release(store, ref):
+        release_started.set()
+        assert may_finish.wait(10)
+        return original_release(store, ref)
+
+    monkeypatch.setattr(ReservationStore, "release_unsent", held_release)
+    body = native_text_body(max_tokens=16)
+    body["context_management"] = None
+    headers = {"anthropic-beta": BETA, "X-Claude-Code-Session-Id": "session-a"}
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        refused = pool.submit(send, domain, body=body, url=URL + "?beta=true", headers=headers)
+        try:
+            assert release_started.wait(8)
+            with pytest.raises(FutureTimeoutError):
+                refused.result(timeout=0.3)  # The release is pending, so no refusal is readable.
+        finally:
+            may_finish.set()
+        status, raw = refused.result(timeout=8)
+    assert status == 402
+    assert json.loads(raw)["error"]["failure_kind"] == "spend_guard_internal_error"
+    assert domain[3] == []
+    with sqlite3.connect(domain[1]) as conn:
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM budget_reservations WHERE status='active'"
+            ).fetchone()[0]
+            == 0
+        )
+    owner = object()
+    assert registry.allow_request("anthropic", probe_owner=owner)  # The probe is free again.
+    assert registry.release_probe("anthropic", owner)
 
 
 def test_actual_provider_failure_still_counts_for_token_requests(domain):

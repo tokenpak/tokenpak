@@ -6,6 +6,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- A request the token guard refuses locally now releases its unsent reservation
+  and half-open provider probe before the refusal is sent. A client that
+  retries as soon as it reads the refusal is no longer refused again by the
+  hold of the request it was just refused for.
+
 ## [1.30.2] — 2026-10-07
 
 ### Fixed
