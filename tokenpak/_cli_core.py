@@ -9355,7 +9355,7 @@ def _build_demo_parser(sub: Subparsers) -> None:
     p_rlist.add_argument(
         "--category",
         default=None,
-        help="Filter by category (general, python, javascript, markdown, config, common_patterns)",
+        help="Filter by category (common_patterns, config, general, go, javascript, markdown, python, rust)",
     )
     p_rlist.set_defaults(func=cmd_recipe_list)
 
@@ -9435,11 +9435,15 @@ def _build_demo_parser(sub: Subparsers) -> None:
 
     # ── Demo ───────────────────────────────────────────────────────────────────
     p_demo = sub.add_parser("demo", help="Show OSS compression recipes and apply to sample input")
-    p_demo.add_argument("--list", action="store_true", help="List all 50 baked-in recipes")
+    p_demo.add_argument(
+        "--list",
+        action="store_true",
+        help="List the 57 baked-in recipes, plus any custom recipes you have added",
+    )
     p_demo.add_argument(
         "--category",
         default=None,
-        help="Filter by category (general, python, javascript, markdown, config, common_patterns)",
+        help="Filter by category (common_patterns, config, general, go, javascript, markdown, python, rust)",
     )
     p_demo.add_argument("--recipe", default=None, help="Show details for a specific recipe by name")
     p_demo.add_argument("--file", default=None, help="Show which recipes match a given file path")

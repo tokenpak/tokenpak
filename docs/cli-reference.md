@@ -50,8 +50,8 @@ See compression in action
 
 **Flags:**
 
-- `--list` — List all 50 baked-in recipes
-- `--category` — Filter by category (general, python, javascript, markdown, config, common_patterns)
+- `--list` — List the 57 baked-in recipes, plus any custom recipes you have added
+- `--category` — Filter by category (common_patterns, config, general, go, javascript, markdown, python, rust)
 - `--recipe` — Show details for a specific recipe by name
 - `--file` — Show which recipes match a given file path
 - `--seed` — Populate dashboard with 500 realistic demo events (24h window)
