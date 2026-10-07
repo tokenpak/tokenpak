@@ -515,4 +515,4 @@ Single-host proxy only for now. Multi-user deployments (shared proxy on a LAN or
 
 ---
 
-*See also: [TokenPak vs. the Alternatives](comparison.md#for-claude-code-users-specifically) — how TokenPak's Claude Code features compare to Helicone, LiteLLM, Portkey, Langfuse, LangSmith, and OpenRouter.*
+*See also: [How TokenPak fits with gateways and observability tools](comparison.md).*

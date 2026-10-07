@@ -57,6 +57,7 @@ Exit status: ``0`` if no unallowlisted match is found, ``1`` otherwise.
 from __future__ import annotations
 
 import argparse
+import codecs
 import importlib.util
 import os
 import re
@@ -503,16 +504,21 @@ class ScanFile:
     abspath: str
 
 
+_PROBE_BYTES = 4096
+
+
 def _looks_binary(abspath: str) -> bool:
     ext = os.path.splitext(abspath)[1].lower()
     if ext in _BINARY_EXT:
         return True
     try:
         with open(abspath, "rb") as fh:
-            chunk = fh.read(4096)
+            chunk = fh.read(_PROBE_BYTES)
         if b"\x00" in chunk:
             return True
-        chunk.decode("utf-8")
+        # The probe may end inside a multibyte character. That is valid text, not a
+        # decoding error, so only a probe that holds the whole file must decode strictly.
+        codecs.getincrementaldecoder("utf-8")().decode(chunk, final=len(chunk) < _PROBE_BYTES)
     except (UnicodeDecodeError, OSError):
         return True
     return False

@@ -2,7 +2,8 @@
 
 **The Context Standard for AI — JavaScript/TypeScript SDK**
 
-[![npm version](https://badge.fury.io/js/tokenpak.svg)](https://www.npmjs.com/package/tokenpak)
+> A source-only TypeScript library for building, validating and serializing TokenPak context packs; it is not published to npm.
+
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 [![Zero dependencies](https://img.shields.io/badge/dependencies-zero-green)](package.json)
 
@@ -19,11 +20,17 @@ Build, bundle, validate, and transmit structured AI context as [TokenPak](https:
 
 ## Install
 
+This package is not published to npm, so `npm install tokenpak` does not install it. Build it from this repository and import it from the built `dist/` directory:
+
 ```bash
-npm install tokenpak
+cd packages/tokenpak-js
+npm ci
+npm run build
 ```
 
 ## Quick Start
+
+The examples import from `'tokenpak'`. With a local build, import from the built `dist/` directory instead.
 
 ```typescript
 import { TokenPak, Block, Policy, validate } from 'tokenpak';

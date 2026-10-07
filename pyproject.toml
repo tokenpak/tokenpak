@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 name = "tokenpak"
 dynamic = ["version"]
 # version sourced from tokenpak/__init__.py via [tool.setuptools.dynamic]
-description = "Cut LLM costs with deterministic context compression, smart routing, and cost tracking"
+description = "Local proxy for coding agents that records each request and shows how far the session can go: measured usage, estimated cost, burn and runway."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [

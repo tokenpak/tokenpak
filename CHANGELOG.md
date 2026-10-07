@@ -6,7 +6,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.30.2] — Unreleased (local candidate, not published)
+## [1.30.2] — 2026-10-07
 
 ### Fixed
 
@@ -16,23 +16,85 @@ This project follows [Semantic Versioning](https://semver.org/).
   already active, and an expired or pending license can still be replaced.
 - `tokenpak license` and `tokenpak features` honour `expires_at` and the
   issuer's `grace_days`, so a lapsed license reads as expired and no longer
-  grants Pro through its tier.
-
+  grants Pro through its tier. An unreadable `expires_at` counts as expired.
 - License writes are serialized under one lock, and an unverified write never
-  replaces a signed install, even with a matching key. License and daemon
-  sock-info paths resolve through the shared path contract inside the selected
-  home. Windows takes a real cross-process license lock and fails safe without
-  one. Prepared on this branch; not verified live.
+  replaces a signed install, even with a matching key. Windows takes a real
+  cross-process license lock and fails safe without one.
+- The Pro daemon's connection file (`pro/daemon.sock-info`) is now looked up
+  under the selected TokenPak home (`TOKENPAK_HOME`, else the home that holds
+  state) instead of always under `~/.tokenpak`.
 
 ### Changed
 
-- The release identity moves to 1.30.2 so that the corrected build is a
-  distinct version from the published 1.30.1. Pip treats two builds with the
-  same version as identical, so a corrected 1.30.1 could not replace one
-  already installed. TokenPak Pro 0.6.0 requires exactly this version.
+- The release identity moves to 1.30.2. The license fixes change behavior, and
+  pip treats two builds with the same version as identical, so a corrected
+  1.30.1 could not replace an installed 1.30.1. TokenPak Pro 0.6.0 requires
+  exactly this version.
 - A paired-upgrade check script for the OSS and Pro pair is added to the source
   tree (`scripts/release/paired_upgrade_gate.py`). It is not part of the wheel
   and adds no runtime command.
+- The package summary and `tokenpak.__description__`, the SDK and JavaScript
+  package readmes, and the comparison page no longer claim automatic cost cuts,
+  default compression and routing, or hard budget caps. Neither JavaScript
+  package is on npm, so their readmes no longer say to `npm install tokenpak`,
+  and the SDK is marked private. The comparison page points to the
+  documentation site, and the README and documentation home describe forecasts
+  as estimates shown as ranges.
+
+### Compatibility
+
+- No symbol is added to or removed from the public API snapshot.
+  `tokenpak.licensing.save_license` now raises the new `LicenseInstalledError`
+  instead of replacing a current signed license, and the new `LicenseLockError`
+  when it cannot take the write lock; neither class is in the module's
+  `__all__`.
+- `license.json` keeps its format. A license write now also creates an empty
+  `license.json.lock` file beside it.
+- TokenPak Pro 0.6.0 requires exactly TokenPak 1.30.2. Pro 0.5.2 declares
+  TokenPak 1.26.0 through 1.30.1, so Pro 0.5.x installations stay on TokenPak
+  1.30.1 until Pro 0.6.0 is installed. Upgrade the pair together and verify it
+  with the paired-upgrade check; the release log has the steps.
+- See [upgrade, rollback and release status](docs/release-log/v1.30.2.md).
+
+### Known issues
+
+- `tokenpak doctor` reports "legacy DB" for a newly created `monitor.db` that
+  has no schema-version or budget-alert table yet. The database is not legacy;
+  no action is needed. Tracked in
+  [#338](https://github.com/tokenpak/tokenpak/issues/338).
+- A native token forwarding test fails intermittently with
+  `KeyError: 'failure_kind'` in the project's test runs; a re-run passes. The
+  cause is not yet identified. Tracked in
+  [#337](https://github.com/tokenpak/tokenpak/issues/337).
+
+### Security
+
+This release accepts the open NLTK GHSA-8mgp-746c-j5xp and Accelerate
+GHSA-4j2p-28q2-5m79 optional-dependency findings for this release only,
+following a fresh October 7 dependency reassessment. Neither advisory lists a
+patched version, and no verified published fix is available for either: the
+newest published versions are NLTK 3.10.3 and Accelerate 1.15.0, and the locked
+versions are NLTK 3.10.3 and Accelerate 1.14.0. The base install excludes both
+packages. SECURITY.md lists the affected extras and limitations. Both findings
+remain open and must be resolved or reassessed before another release.
+
+LiteLLM GHSA-3cv6-jpf6-8222 (medium) concerns the LiteLLM proxy server and is
+fixed in LiteLLM 1.93.2; the advisory lists the fixed release for each affected
+line. TokenPak's optional `integrations-litellm` extra requires
+`litellm>=1.0.0` with no upper bound, so a new install resolves a fixed
+version. Installing or upgrading TokenPak does not upgrade a LiteLLM that is
+already installed. The repository's development lock moves to LiteLLM 1.93.2 in
+a follow-up.
+
+Other open advisories at this release are also fixed upstream and sit only in
+the repository's development locks: urllib3 2.7.0 (two high, one medium;
+fixed in 2.8.0), multidict 6.7.1 (fixed in 6.9.1, through aiohttp) and
+Werkzeug 3.1.8 (fixed in 3.1.9, through Flask). TokenPak requires
+`urllib3>=2.0.0` and caps none of these packages, so a new install resolves
+fixed versions. Upgrading TokenPak does not upgrade an urllib3 that is already
+installed; run `python -m pip install -U urllib3` in existing environments.
+The locks move to the fixed versions in a follow-up. Development-only
+JavaScript tooling alerts do not affect the published package.
 
 ## [1.30.1] — 2026-10-01
 

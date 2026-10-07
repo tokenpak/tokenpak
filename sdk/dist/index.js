@@ -1,6 +1,6 @@
 "use strict";
 /**
- * TokenPak — Deterministic context compression for LLMs
+ * TokenPak — TypeScript client for an HTTP service that serves compression, cache, content-block and telemetry endpoints
  *
  * @packageDocumentation
  *

@@ -59,4 +59,4 @@ pip install --upgrade tokenpak==X.Y.Z
 
 ---
 
-*TokenPak — Deterministic compression for multi-agent AI*
+*TokenPak: a local proxy for coding agents that shows measured usage, estimated cost, burn and runway.*
