@@ -44,6 +44,8 @@ def _request_config(intent=None):
 
 
 class RequestAccounting:
+    _finished = False
+
     def __init__(self, owner, headers):
         from tokenpak.proxy.request_pipeline import _resolve_agent_id, _resolve_session_id
 
@@ -380,12 +382,16 @@ class RequestAccounting:
         )
 
     def finish(self) -> None:
-        if self.store is None:
+        # Idempotent: a refusal finishes the request before it is written, and
+        # the handler finishes it again when the request ends. A failed attempt
+        # stays unfinished so that the later call retries it.
+        if self.store is None or self._finished:
             return
         try:
             if self.ref is not None and self.attempts == 0:
                 self.store.release_unsent(self.ref)
             self.store.finish_request(self.coverage_id)
+            self._finished = True
         except Exception:
             # The durable preflight/hold remains unresolved. Never convert a
             # cleanup failure into a successful accounting observation.
