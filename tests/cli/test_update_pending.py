@@ -22,6 +22,8 @@ def _isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(up, "_disk_version", lambda: "1.30.2")
     monkeypatch.setattr(up, "_health_version", lambda timeout=0.5: None)
     monkeypatch.setattr(up, "_footer_cache", (0.0, ""))
+    monkeypatch.setattr(update_apply, "PROBE_INTERVAL_SECONDS", 0.0)
+    monkeypatch.setattr(update_apply, "_watched_ports", lambda port: [port])
     return tmp_path
 
 
@@ -351,3 +353,67 @@ def test_update_command_reports_pending_instead_of_downloading(capsys, monkeypat
     out = capsys.readouterr().out
     assert "Update pending: 1.30.2 → 1.30.3, applies at next launch" in out
     assert "tokenpak update apply" in out
+
+
+# --- idle gate stability -----------------------------------------------------
+
+
+def _obs(in_flight=0, total=5, pid=1, inbound=0, up=True):
+    return {
+        "up": up,
+        "health": {"in_flight_requests": in_flight, "requests_total": total, "pid": pid}
+        if up
+        else {},
+        "inbound": {8766: inbound} if up else {},
+    }
+
+
+def test_gate_waits_the_interval_between_two_probes():
+    slept = []
+    seq = iter([_obs(), _obs()])
+    reason, _ = update_apply.idle_gate(
+        interval=5.0, sleeper=slept.append, observe=lambda: next(seq)
+    )
+    assert reason is None and slept == [5.0]
+
+
+def test_gate_refuses_when_requests_arrive_between_probes():
+    seq = iter([_obs(total=5), _obs(total=6)])
+    reason, _ = update_apply.idle_gate(
+        interval=0, sleeper=lambda s: None, observe=lambda: next(seq)
+    )
+    assert reason == "requests arrived during the check"
+
+
+def test_gate_refuses_when_busy_on_second_probe():
+    seq = iter([_obs(), _obs(inbound=2)])
+    reason, _ = update_apply.idle_gate(
+        interval=0, sleeper=lambda s: None, observe=lambda: next(seq)
+    )
+    assert reason == "2 clients are connected to TokenPak"
+
+
+def test_gate_counts_daemon_port_connections():
+    obs = _obs()
+    obs["inbound"] = {8766: 0, 9100: 1}
+    assert update_apply._sample_busy(obs) == "1 client is connected to TokenPak"
+
+
+def test_apply_busy_on_second_probe_stops_nothing(capsys, monkeypatch):
+    _write_marker("1.30.3")
+    seq = iter([_obs(), _obs(in_flight=1)])
+    monkeypatch.setattr(update_apply, "sample", lambda port=None: next(seq))
+    monkeypatch.setattr(update_apply, "_units_loaded", lambda units: True)
+    monkeypatch.setattr(update_apply, "_systemctl", lambda *a: pytest.fail("must not stop"))
+    assert update_apply.run(_args()) == EXIT_BUSY
+    assert "1 request in flight" in capsys.readouterr().out
+
+
+def test_apply_reprobes_right_before_stopping(capsys, monkeypatch):
+    _write_marker("1.30.3")
+    seq = iter([_obs(), _obs(), _obs(total=9)])  # two gate probes, then the final one
+    monkeypatch.setattr(update_apply, "sample", lambda port=None: next(seq))
+    monkeypatch.setattr(update_apply, "_units_loaded", lambda units: True)
+    monkeypatch.setattr(update_apply, "_systemctl", lambda *a: pytest.fail("must not stop"))
+    assert update_apply.run(_args()) == EXIT_BUSY
+    assert "requests arrived during the check" in capsys.readouterr().out

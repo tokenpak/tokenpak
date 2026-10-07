@@ -278,6 +278,11 @@ Update tokenpak
 - `--core-only` — Update core only, skip config merge
 - `--dry-run` — Show what would change without applying
 
+**Subcommands:**
+
+- `apply` — Restart TokenPak so a staged or installed update takes effect. Refuses, and changes nothing, while a request is in flight or a client is connected.
+  - `--check` — Report whether it would apply now, without restarting anything
+
 ### `tokenpak uninstall`
 
 Un-route (--soft) or purge state + remove package (--hard)

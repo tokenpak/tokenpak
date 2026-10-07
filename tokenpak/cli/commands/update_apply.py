@@ -16,7 +16,7 @@ import os
 import shutil
 import subprocess
 import time
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from tokenpak.cli.exit_codes import (
     EXIT_BUSY,
@@ -26,6 +26,8 @@ from tokenpak.cli.exit_codes import (
 )
 from tokenpak.core.runtime import update_pending as _pending
 
+#: Spacing between the two idle observations, and the quiet window they bound.
+PROBE_INTERVAL_SECONDS = 5.0
 _STARTUP_WAIT_SECONDS = 20.0
 _SYSTEMCTL_TIMEOUT_SECONDS = 60
 
@@ -64,26 +66,92 @@ def established_connections(port: int) -> Optional[int]:
     return total if seen else None
 
 
-def busy_reason(port: Optional[int] = None) -> Optional[str]:
-    """Why the proxy is in use right now, or ``None`` when it is idle or down."""
+def _watched_ports(proxy_port: int) -> list[int]:
+    """Ports whose inbound connections count as "in use": the proxy and, when
+    the Pro daemon has published its port, the daemon."""
+    ports = [proxy_port]
+    try:
+        import json
+
+        from tokenpak.licensing.daemon_probe import sock_info_path
+
+        daemon = int(json.loads(sock_info_path().read_text(encoding="utf-8"))["port"])
+        if daemon not in ports:
+            ports.append(daemon)
+    except Exception:
+        pass
+    return ports
+
+
+def sample(port: Optional[int] = None) -> dict[str, Any]:
+    """One read-only observation of the proxy (and daemon) for the idle gate."""
     from tokenpak.core.runtime import lifecycle
 
     port = port or _port()
     ok, health = lifecycle.probe_health(port, timeout=2.0)
-    if not ok:
+    inbound = {p: established_connections(p) for p in _watched_ports(port)} if ok else {}
+    return {"up": ok, "health": health if ok else {}, "inbound": inbound}
+
+
+def _sample_busy(obs: dict[str, Any]) -> Optional[str]:
+    """Why a single observation is not idle, or ``None``."""
+    if not obs["up"]:
         return None  # nothing answering: nothing to interrupt
     try:
-        in_flight = int(health.get("in_flight_requests") or 0)
+        in_flight = int(obs["health"].get("in_flight_requests") or 0)
     except (TypeError, ValueError):
         in_flight = 0
     if in_flight > 0:
         noun = "request" if in_flight == 1 else "requests"
         return f"{in_flight} {noun} in flight"
-    clients = established_connections(port)
+    clients = sum(n or 0 for n in obs["inbound"].values())
     if clients:
         noun = "client is" if clients == 1 else "clients are"
-        return f"{clients} {noun} connected to the proxy"
+        return f"{clients} {noun} connected to TokenPak"
     return None
+
+
+def _changed_between(first: dict[str, Any], second: dict[str, Any]) -> Optional[str]:
+    """Why two idle observations are not a stable idle window, or ``None``."""
+    if first["up"] != second["up"]:
+        return "the proxy changed state during the check"
+    if not first["up"]:
+        return None
+    one, two = first["health"], second["health"]
+    if one.get("requests_total") != two.get("requests_total"):
+        return "requests arrived during the check"
+    if one.get("pid") != two.get("pid"):
+        return "the proxy process changed during the check"
+    return None
+
+
+def idle_gate(
+    *,
+    interval: Optional[float] = None,
+    sleeper: Callable[[float], None] = time.sleep,
+    observe: Optional[Callable[[], dict[str, Any]]] = None,
+) -> tuple[Optional[str], dict[str, Any]]:
+    """Two idle observations ``interval`` seconds apart, with no traffic between.
+
+    Returns ``(reason, last_observation)``; ``reason`` is ``None`` when idle.
+    ``interval``, ``sleeper`` and ``observe`` are injectable for tests.
+    """
+    look = observe or sample
+    wait = PROBE_INTERVAL_SECONDS if interval is None else interval
+    first = look()
+    reason = _sample_busy(first)
+    if reason:
+        return reason, first
+    if first["up"]:
+        sleeper(wait)
+    second = look()
+    reason = _sample_busy(second) or _changed_between(first, second)
+    return reason, second
+
+
+def busy_reason(port: Optional[int] = None) -> Optional[str]:
+    """Why the proxy is in use right now (single observation), or ``None``."""
+    return _sample_busy(sample(port))
 
 
 def _systemctl(*args: str) -> subprocess.CompletedProcess[str]:
@@ -138,7 +206,7 @@ def run(args: argparse.Namespace) -> int:
 
     print(f"Update pending: {found.summary()}")
 
-    reason = busy_reason()
+    reason, last = idle_gate()
     if reason:
         print(f"✗ Not applied: {reason}.")
         print("  Nothing was changed. Run `tokenpak update apply` when the proxy is idle,")
@@ -161,6 +229,14 @@ def run(args: argparse.Namespace) -> int:
         print("✗ No service manager detected for TokenPak, so nothing was restarted.")
         print(f"  Apply it yourself: {_manual_step(found, units)}")
         return EXIT_MISSING_PREREQUISITE
+
+    # Re-probe immediately before acting: traffic may have arrived since the gate.
+    again = sample()
+    reason = _sample_busy(again) or _changed_between(last, again)
+    if reason:
+        print(f"✗ Not applied: {reason}.")
+        print("  Nothing was changed. Run `tokenpak update apply` when the proxy is idle.")
+        return EXIT_BUSY
 
     try:
         if found.source == _pending.SOURCE_STAGED:
