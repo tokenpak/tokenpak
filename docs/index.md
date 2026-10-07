@@ -4,7 +4,7 @@
 
 TokenPak is a local proxy for coding agents that records each request and shows how far the session can go: measured usage, estimated cost, burn and runway.
 
-**Know how far your agent can go.** Today, the open-source core ships the session trip computer (on by default in the Claude Code footer, the Codex pane and `tokenpak status`; forecasts appear only where calibrated) and Spend Guard limits; calibrated forecasts for more model and effort combinations, and Pro reroute recommendations once calibration evidence exists, are planned.
+**Know how far your agent can go.** Today, the open-source core ships the session trip computer (on by default in the Claude Code footer, the Codex pane and `tokenpak status`) and Spend Guard limits. Forecasts are estimates shown as ranges, not guarantees, and appear only for a model and effort combination with enough local history; the rest show `learning`. Calibrated forecasts for more model and effort combinations, and Pro reroute recommendations once calibration evidence exists, are planned.
 
 **Who it's for:** Developers and tech leads running long coding-agent sessions in Claude Code or Codex who want to see what a session has used, what finishing will likely cost, and how far it can go.
 

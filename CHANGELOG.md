@@ -33,11 +33,13 @@ This project follows [Semantic Versioning](https://semver.org/).
 - A paired-upgrade check script for the OSS and Pro pair is added to the source
   tree (`scripts/release/paired_upgrade_gate.py`). It is not part of the wheel
   and adds no runtime command.
-- The package summary, SDK readme and comparison page no longer claim
-  automatic cost cuts, default compression and routing, or hard budget caps,
-  and the SDK readme no longer says to `npm install tokenpak` (the SDK is
-  source-only and not on npm). The comparison page points to the documentation
-  site, and the README describes forecasts as estimates shown as ranges.
+- The package summary and `tokenpak.__description__`, the SDK and JavaScript
+  package readmes, and the comparison page no longer claim automatic cost cuts,
+  default compression and routing, or hard budget caps. Neither JavaScript
+  package is on npm, so their readmes no longer say to `npm install tokenpak`,
+  and the SDK is marked private. The comparison page points to the
+  documentation site, and the README and documentation home describe forecasts
+  as estimates shown as ranges.
 
 ### Compatibility
 
@@ -69,12 +71,20 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 This release accepts the open NLTK GHSA-8mgp-746c-j5xp and Accelerate
 GHSA-4j2p-28q2-5m79 optional-dependency findings for this release only,
-following a fresh October 6 dependency reassessment. Neither advisory lists a
+following a fresh October 7 dependency reassessment. Neither advisory lists a
 patched version, and no verified published fix is available for either: the
 newest published versions are NLTK 3.10.3 and Accelerate 1.15.0, and the locked
 versions are NLTK 3.10.3 and Accelerate 1.14.0. The base install excludes both
 packages. SECURITY.md lists the affected extras and limitations. Both findings
 remain open and must be resolved or reassessed before another release.
+
+LiteLLM GHSA-3cv6-jpf6-8222 (medium) concerns the LiteLLM proxy server and is
+fixed in LiteLLM 1.93.2; the advisory lists the fixed release for each affected
+line. TokenPak's optional `integrations-litellm` extra requires
+`litellm>=1.0.0` with no upper bound, so a new install resolves a fixed
+version. Installing or upgrading TokenPak does not upgrade a LiteLLM that is
+already installed. The repository's development lock moves to LiteLLM 1.93.2 in
+a follow-up.
 
 ## [1.30.1] — 2026-10-01
 

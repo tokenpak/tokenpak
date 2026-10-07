@@ -22,7 +22,7 @@ from typing import Any, Callable
 __version__ = "1.30.2"
 __author__ = "TokenPak Contributors"
 __license__ = "Apache-2.0"
-__description__ = "Deterministic compression for multi-agent AI workflows"
+__description__ = "Local proxy for coding agents that records each request and shows how far the session can go: measured usage, estimated cost, burn and runway."
 
 # ---------------------------------------------------------------------------
 # Lazy public API — imports deferred to avoid 2-4s startup cost when only

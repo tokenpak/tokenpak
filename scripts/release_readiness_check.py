@@ -8,10 +8,15 @@ resolvability, the import/CLI surface and byte-preservation of a sentinel
 ``license.json``. Every child process runs with a throwaway HOME/TMPDIR and
 no proxy/token env; nothing here imports an app factory or touches signing keys.
 
-Usage: release_readiness_check.py --out DIR --worktree-root DIR [--oss REPO@SHA] [--paid REPO@SHA] [--prior-oss REPO@SHA]
+Usage:
+    release_readiness_check.py --out DIR \\
+        --oss REPO@SHA --paid REPO@SHA --prior-oss REPO@SHA --server REPO@SHA \\
+        [--worktree-root DIR]
 
-Default pins are directory names (relative to --worktree-root) plus a full commit SHA.
-The operator must supply --worktree-root; the tool fails closed without it.
+Every input is an explicit ``REPO@SHA`` pin and nothing is defaulted. ``REPO`` is a
+path to a git checkout, absolute or relative to ``--worktree-root``; ``SHA`` is the
+full 40-character commit id to export. A relative ``REPO`` fails closed when
+``--worktree-root`` is not given.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -28,14 +34,6 @@ import tempfile
 import time
 from pathlib import Path
 
-# Archival pins: "<dir name under --worktree-root>@<full sha>". Explicit absolute
-# REPO@SHA values passed on the command line take precedence.
-DEFAULTS = {
-    "oss": "productization-entitlements-20261003@910923215dc6945cf7382d26c74d80d29d766139",
-    "paid": "paid-stored-token-20261003@d5e7ceb62a07443f36db97d7061c45cde1c7ee73",
-    "prior_oss": "release-v1.30.1@562fef78baf9fab9becd11bd7a5ec136da2ee02b",
-}
-SERVER = "license-server-init-safety-20261003@08def751d6b475013db517c3f826e3ba38cc7aba"
 SENTINEL = b'{"sentinel":"NOT-A-REAL-LICENSE","bytes":"\\u00ff\\n"}\n\x00\xff'
 BUILD_SNIPPET = (
     "import sys;from setuptools import build_meta as b;print(b.build_wheel(sys.argv[1]))"
@@ -133,6 +131,36 @@ def export(spec: str, dest: Path) -> dict:
     }
 
 
+_COMMIT_ID = re.compile(r"[0-9a-fA-F]{40}")
+
+
+def pin(spec: str) -> str:
+    """argparse type for ``REPO@SHA``: a non-empty repo path and a full 40-hex commit id."""
+    repo, sep, sha = spec.rpartition("@")
+    if not sep or not repo or not _COMMIT_ID.fullmatch(sha):
+        raise argparse.ArgumentTypeError(f"expected REPO@<40-hex commit id>, got {spec!r}")
+    return spec
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Every input is required; there are no defaults to go stale."""
+    ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    ap.add_argument("--out", required=True, help="directory for the manifest and retained wheels")
+    ap.add_argument(
+        "--worktree-root",
+        default=None,
+        help="directory that relative REPO names resolve against",
+    )
+    for flag, what in (
+        ("--oss", "OSS candidate"),
+        ("--paid", "paid candidate"),
+        ("--prior-oss", "prior OSS release, used as the rollback input"),
+        ("--server", "server candidate (its requirements are compared; it is never imported)"),
+    ):
+        ap.add_argument(flag, required=True, type=pin, metavar="REPO@SHA", help=what)
+    return ap
+
+
 def resolve_spec(spec: str, root: Path | None) -> str:
     """Resolve a ``REPO@SHA`` pin; relative repo names need an operator-provided root."""
     repo, sha = spec.rsplit("@", 1)
@@ -200,17 +228,12 @@ def release_semantics(g: dict) -> dict:
     )
     blockers.append(
         "deployment_gates_unverified"
-    )  # Worker revision/trust/signer: never checkable here
+    )  # service revision, trust and signer alignment: never checkable here
     return {"packaging_check_completed": True, "release_ready": False, "release_blockers": blockers}
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--worktree-root", default=None, help="directory holding the pinned worktrees")
-    for k, v in DEFAULTS.items():
-        ap.add_argument("--" + k.replace("_", "-"), default=v)
-    a = ap.parse_args()
+def main(argv: list[str] | None = None) -> int:
+    a = build_parser().parse_args(argv)
     root = Path(a.worktree_root) if a.worktree_root else None
     if root is not None and not root.is_dir():
         raise SystemExit(f"error: --worktree-root is not a directory: {root}")
@@ -258,7 +281,7 @@ def main() -> int:
 
     # Server is a separate deployment (no wheel, never imported/instantiated here: init may
     # create keys). Only its pinned requirements are compared with the client metadata.
-    res["inputs"]["server"] = export(resolve_spec(SERVER, root), scratch / "src-server")
+    res["inputs"]["server"] = export(resolve_spec(a.server, root), scratch / "src-server")
     from packaging.requirements import Requirement as R
 
     srv = {}
@@ -303,12 +326,18 @@ def main() -> int:
         r["license_bytes_intact"] = lic.exists() and sha256(lic) == want
         steps.append(r)
 
-    pip("install prior OSS 1.30.1 (562fef78)", str(wheels["prior_oss"]), expect="prior_oss")
+    prior_v = res["builds"]["prior_oss"]["meta"]["version"]
+    pip(f"install prior OSS {prior_v}", str(wheels["prior_oss"]), expect="prior_oss")
     # Candidate OSS and prior OSS share a version string: pip treats it as satisfied,
     # so a real transition needs --force-reinstall. Record the collision, then force.
     pip("install candidate OSS without force (collision probe)", str(wheels["oss"]))
-    pip("force candidate OSS over prior", "--force-reinstall", str(wheels["oss"]), expect="oss")
-    pip("add paid candidate 0.5.2", str(wheels["paid"]))
+    pip(
+        f"force candidate OSS {om['version']} over prior",
+        "--force-reinstall",
+        str(wheels["oss"]),
+        expect="oss",
+    )
+    pip(f"add paid candidate {pm['version']}", str(wheels["paid"]))
     r = run([py, "-m", "pip", "uninstall", "-y", "tokenpak-paid"], scratch, env)
     r["label"] = "downgrade/OSS-fallback: remove paid"
     r["license_bytes_intact"] = sha256(lic) == want

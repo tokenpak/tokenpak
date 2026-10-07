@@ -2,6 +2,7 @@
   "name": "tokenpak",
   "version": "1.0.0",
   "description": "A source-only TypeScript client for an HTTP service that serves compression, cache, content-block and telemetry endpoints (default http://localhost:8000); it is not published to npm.",
+  "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
