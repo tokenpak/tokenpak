@@ -86,6 +86,16 @@ version. Installing or upgrading TokenPak does not upgrade a LiteLLM that is
 already installed. The repository's development lock moves to LiteLLM 1.93.2 in
 a follow-up.
 
+Other open advisories at this release are also fixed upstream and sit only in
+the repository's development locks: urllib3 2.7.0 (two high, one medium;
+fixed in 2.8.0), multidict 6.7.1 (fixed in 6.9.1, through aiohttp) and
+Werkzeug 3.1.8 (fixed in 3.1.9, through Flask). TokenPak requires
+`urllib3>=2.0.0` and caps none of these packages, so a new install resolves
+fixed versions. Upgrading TokenPak does not upgrade an urllib3 that is already
+installed; run `python -m pip install -U urllib3` in existing environments.
+The locks move to the fixed versions in a follow-up. Development-only
+JavaScript tooling alerts do not affect the published package.
+
 ## [1.30.1] — 2026-10-01
 
 ### Fixed
