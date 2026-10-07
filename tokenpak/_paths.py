@@ -18,6 +18,9 @@ A *new* install always starts canonical: :func:`write_home` will not begin one
 in the legacy directory. An *existing* legacy install keeps reading and writing
 where it already lives until ``tokenpak config migrate`` moves it explicitly.
 
+The license file is the one exception to "one home per install": it is found
+per file, in whichever default home holds it. See :func:`license_file`.
+
 Layout:
     <home>/
         config.{json,yaml}      user config (config commands)
@@ -438,6 +441,64 @@ def is_configured() -> bool:
     return config_read_path() is not None
 
 
+#: Env override naming the license file itself. It wins over every home.
+LICENSE_FILE_ENV = "TOKENPAK_LICENSE_FILE"
+_LICENSE_FILENAME = "license.json"
+
+
+def _license_present(path: Path) -> bool:
+    """True when *path* is an existing license file (or a link to one).
+
+    A file that exists but cannot be inspected counts as present. Skipping it
+    would quietly hand the install to a different license, which is the
+    "unreadable is not empty" rule :func:`_holds_state` applies to a home.
+    """
+    try:
+        return path.is_file()
+    except OSError:
+        return True
+
+
+def license_file(for_write: bool = False) -> Path:
+    """The license file to read, or with ``for_write=True`` the one to write.
+
+    The license is found per file, not per home. :func:`home` picks one
+    directory for the whole install by what that directory holds, so a license
+    that sat in the older home while newer state (companion data, logs, a Pro
+    daemon directory) had been created in the canonical one was invisible: the
+    install read as unlicensed although the file was on disk.
+
+    Order, first match wins:
+
+    1. ``TOKENPAK_LICENSE_FILE`` — that file, for reads and writes.
+    2. ``TOKENPAK_HOME`` — ``<TOKENPAK_HOME>/license.json``, for reads and
+       writes. A scoped home is a closed world: the default homes are never
+       consulted, so a sandbox cannot see or replace a real license.
+    3. ``~/.tpk/license.json`` if it exists, else ``~/.tokenpak/license.json``
+       if it exists — for reads *and* writes, so activation, refresh and
+       removal act on the file that is actually in effect. Where both exist
+       the canonical one wins.
+    4. No license in either home. Reads use ``home()/license.json`` and writes
+       use ``write_home()/license.json``, so a first license goes where the
+       rest of a new install's state goes (never into the legacy home by
+       itself).
+
+    This checks that a file is present, not that it is valid. It moves,
+    copies and creates nothing, and it leaves :func:`home` and
+    :func:`write_home` exactly as they are for all other state.
+    """
+    override = os.environ.get(LICENSE_FILE_ENV)
+    if override:
+        return Path(override)
+    scoped = os.environ.get(ENV_VAR, "").strip() != ""
+    if not scoped:
+        for base in (canonical_home(), legacy_home()):
+            candidate = base / _LICENSE_FILENAME
+            if _license_present(candidate):
+                return candidate
+    return (write_home() if for_write else home()) / _LICENSE_FILENAME
+
+
 def secure_file(path: Path, *, mode: int = 0o600) -> None:
     """Restrict a state file to the owner. Best effort; never raises.
 
@@ -671,6 +732,8 @@ __all__ = [
     "companion_write_dir",
     "ensure_home",
     "under",
+    "license_file",
+    "LICENSE_FILE_ENV",
     "is_legacy_active",
     "monitor_db",
     "monitor_db_candidates",

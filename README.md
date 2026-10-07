@@ -151,7 +151,7 @@ index and developer editable-install path.
 - **CLI + proxy server** — `tokenpak serve`, `tokenpak cost`, `tokenpak savings`
 - **Value proof** — `tokenpak prove run` benchmarks direct API vs. TokenPak on your own prompt workload and prints a side-by-side cost/token report. See the [value proof guide](docs/guides/value-proof.md).
 - **A/B testing and replay/debug** — compare compression configs, replay past requests
-- **50 built-in compression recipes** — YAML, customizable
+- **57 built-in compression recipes** — YAML, customizable
 
 Provider cache reuse is distinct from TokenPak context reduction. A provider cache hit does not mean the proxy omitted that context from the request. See [docs/quickstart.md](docs/quickstart.md) and [docs/api-tpk-v1.md](docs/api-tpk-v1.md) to get started.
 

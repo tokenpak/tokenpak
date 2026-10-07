@@ -15,3 +15,11 @@ c16e5ec33e5267cdc197a169e61e2564fe24a727:tokenpak/tests/test_security.py:generic
 0fc4667c010a82460e38e8c61729033fd5ea794c:tests/license/test_license_lifecycle_recovery.py:generic-api-key:310
 0fc4667c010a82460e38e8c61729033fd5ea794c:tests/license/test_license_lifecycle_recovery.py:generic-api-key:319
 0fc4667c010a82460e38e8c61729033fd5ea794c:tests/license/test_license_lifecycle_recovery.py:generic-api-key:332
+
+# Commit e84595bf6c5fefc84f7ee679187c62b65019512d (this change) authors two
+# synthetic license-key strings in the license lookup tests. They are fixtures,
+# not credentials. History is published and not rewritten, and gitleaks scans
+# each incoming commit, so a later edit cannot clear them. Each entry is scoped
+# to one commit, file, rule, and line; default rules stay active for everything else.
+e84595bf6c5fefc84f7ee679187c62b65019512d:tests/licensing/test_license_file_either_home.py:generic-api-key:48
+e84595bf6c5fefc84f7ee679187c62b65019512d:tests/licensing/test_license_file_either_home.py:generic-api-key:49

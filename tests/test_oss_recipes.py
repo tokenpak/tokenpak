@@ -3,6 +3,12 @@
 Covers: loading, schema validation, category counts, file matching,
 and per-category sample recipe content checks.
 At least 2 tests per category (10 categories × 2+ = 20+ tests).
+
+The recipes under test are the ones the package ships, in
+``tokenpak/recipes_oss/``: that directory is what the loader reads and what
+``pyproject.toml`` packages, so it is what ``tokenpak recipe list`` counts. A
+second copy of the same files sits in ``recipes/oss/`` at the repository root.
+It is not packaged, and one test below keeps it identical to the shipped copy.
 """
 
 from __future__ import annotations
@@ -17,11 +23,15 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tokenpak.compression.recipes import (
+    _OSS_RECIPES_DIR,
     CompressionRecipe,
     CompressionRecipeEngine,
 )
 
-RECIPES_DIR = Path(__file__).parent.parent / "recipes" / "oss"
+# The shipped recipes: the directory the loader reads and the wheel packages.
+RECIPES_DIR = Path(__file__).parent.parent / "tokenpak" / "recipes_oss"
+# A second copy at the repository root. It is not packaged.
+REPO_ROOT_RECIPES_DIR = Path(__file__).parent.parent / "recipes" / "oss"
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -38,16 +48,47 @@ def engine() -> CompressionRecipeEngine:
 
 
 def test_recipes_dir_exists():
-    assert RECIPES_DIR.exists(), f"recipes/oss dir missing: {RECIPES_DIR}"
+    assert RECIPES_DIR.exists(), f"shipped recipes dir missing: {RECIPES_DIR}"
 
 
-def test_fifty_yaml_files():
+def test_recipes_dir_is_the_directory_the_loader_reads():
+    """The directory these tests count is the one the loader packages and reads."""
+    assert RECIPES_DIR.resolve() == Path(_OSS_RECIPES_DIR).resolve()
+
+
+def test_shipped_yaml_file_count():
     files = list(RECIPES_DIR.glob("*.yaml")) + list(RECIPES_DIR.glob("*.yml"))
     assert len(files) == 57, f"Expected 57 recipe files, found {len(files)}"
 
 
-def test_engine_loads_all_fifty(engine):
+def test_engine_loads_all_shipped_recipes(engine):
     assert len(engine.list_recipes()) == 57
+
+
+def _recipe_bytes(root: Path) -> dict[str, bytes]:
+    return {
+        f.name: f.read_bytes() for f in sorted(list(root.glob("*.yaml")) + list(root.glob("*.yml")))
+    }
+
+
+def test_repo_root_copy_is_identical_to_the_shipped_recipes():
+    """``recipes/oss/`` must not drift from ``tokenpak/recipes_oss/``.
+
+    Only the shipped directory reaches users, so a recipe added to one tree and
+    not the other would change what the repository shows without changing the
+    package (or the reverse).
+    """
+    if not REPO_ROOT_RECIPES_DIR.is_dir():
+        pytest.skip(f"no repository-root recipe copy at {REPO_ROOT_RECIPES_DIR}")
+    shipped = _recipe_bytes(RECIPES_DIR)
+    copy = _recipe_bytes(REPO_ROOT_RECIPES_DIR)
+    only_shipped = sorted(set(shipped) - set(copy))
+    only_copy = sorted(set(copy) - set(shipped))
+    different = sorted(n for n in set(shipped) & set(copy) if shipped[n] != copy[n])
+    assert not (only_shipped or only_copy or different), (
+        f"recipes/oss/ differs from tokenpak/recipes_oss/: "
+        f"only shipped={only_shipped}, only repo-root={only_copy}, different={different}"
+    )
 
 
 def test_each_yaml_is_valid_schema():
@@ -149,6 +190,27 @@ def test_category_config_count(engine):
 
 def test_category_common_patterns_count(engine):
     assert len(engine.by_category("common_patterns")) == 13
+
+
+def test_category_go_count(engine):
+    assert len(engine.by_category("go")) == 1
+
+
+def test_category_rust_count(engine):
+    assert len(engine.by_category("rust")) == 1
+
+
+def test_categories_cover_every_shipped_recipe(engine):
+    assert engine.categories() == [
+        "common_patterns",
+        "config",
+        "general",
+        "go",
+        "javascript",
+        "markdown",
+        "python",
+        "rust",
+    ]
 
 
 # ─── GENERAL recipes ─────────────────────────────────────────────────────────

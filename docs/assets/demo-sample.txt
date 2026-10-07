@@ -16,5 +16,5 @@
   Try it with your own traffic:
     tokenpak serve        → start the proxy (zero-config)
     tokenpak cost         → track your real savings
-    tokenpak demo --list  → browse 50 built-in compression recipes
+    tokenpak demo --list  → browse 57 built-in compression recipes
 

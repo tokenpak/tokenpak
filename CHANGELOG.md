@@ -6,12 +6,99 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.30.3] — 2026-10-07
+
 ### Fixed
 
-- A request the token guard refuses locally now releases its unsent reservation
-  and half-open provider probe before the refusal is sent. A client that
-  retries as soon as it reads the refusal is no longer refused again by the
-  hold of the request it was just refused for.
+- A license is found when it is in the older home folder. TokenPak keeps its
+  files in `~/.tpk`, or in `~/.tokenpak` on an installation that predates it,
+  and it chose one folder for everything by what that folder held. An
+  installation whose license sat in `~/.tokenpak` while `~/.tpk` held other
+  files (companion data, logs, the Pro daemon directory) therefore read as
+  unlicensed: `tokenpak license` and `tokenpak features` showed the free plan,
+  and `tokenpak activate` would have stored a new pending key in `~/.tpk` next
+  to the installed license. The license file is now looked up on its own: with
+  `TOKENPAK_LICENSE_FILE` and `TOKENPAK_HOME` unset, TokenPak uses
+  `~/.tpk/license.json` if it exists, otherwise `~/.tokenpak/license.json`.
+- Activating, refreshing and removing a license act on the file that was found,
+  and its `license.json.lock` file is created beside it. `tokenpak activate`
+  still refuses to overwrite an installed, current signed license, now including
+  one in the other folder, and the same key is still accepted as already active.
+- A request the token guard refuses locally now releases its spend hold, and
+  the half-open provider probe it took, before the refusal is sent. A client
+  that retried as soon as it read the refusal could be refused again, with a
+  `tokenpak_spend_guard_reservation_blocked` 402, by the hold of the request it
+  had just been refused for; that false refusal no longer occurs. Spend
+  enforcement is unchanged: a request that was sent keeps its hold until usage
+  is recorded, and a refused request consumes nothing. This was the cause of
+  the intermittent failure reported in
+  [#337](https://github.com/tokenpak/tokenpak/issues/337).
+
+### Changed
+
+- The release identity moves to 1.30.3. The fix changes behavior, and pip treats
+  two builds with the same version as identical, so a corrected 1.30.2 could not
+  replace an installed 1.30.2.
+- The built-in compression recipe count is corrected to 57 in the README, the
+  `tokenpak demo --list` help, the CLI reference and the demo sample. They said
+  50, the count before 1.18.0; the package has shipped 57 recipes since 1.18.0.
+  The `--category` help for `tokenpak demo` and `tokenpak recipe list` now names
+  all eight categories, including `go` and `rust`. The recipes themselves are
+  unchanged. The recipe tests now count the recipes the package ships, and a new
+  test keeps the second copy under `recipes/oss/` identical to them.
+
+### Compatibility
+
+- Only the license file is looked up this way. `TOKENPAK_LICENSE_FILE` still
+  names the license file outright. With `TOKENPAK_HOME` set, only
+  `<TOKENPAK_HOME>/license.json` is used, so a scoped home never sees a license
+  in the default folders. Every other file, including the Pro daemon connection
+  file (`pro/daemon.sock-info`), stays in the selected home. Nothing is moved or
+  copied, and `license.json` keeps its format.
+- If both `~/.tpk/license.json` and `~/.tokenpak/license.json` exist, the one in
+  `~/.tpk` is used. A pending key that 1.30.2 stored in `~/.tpk` therefore takes
+  precedence over an installed license in `~/.tokenpak`; `tokenpak deactivate`
+  removes the file in use, and the license in `~/.tokenpak` then takes effect.
+- No symbol is added to or removed from the public API snapshot.
+- TokenPak Pro 0.6.0 requires exactly TokenPak 1.30.3, not 1.30.2. Upgrade the
+  pair together; the [1.30.3 release log](docs/release-log/v1.30.3.md) has the
+  steps. Pro 0.5.x stays with TokenPak 1.30.1 or earlier.
+
+### Known issues
+
+- `tokenpak doctor` reports "legacy DB" for a newly created `monitor.db` that
+  has no schema-version or budget-alert table yet. The database is not legacy;
+  no action is needed. Tracked in
+  [#338](https://github.com/tokenpak/tokenpak/issues/338).
+
+### Security
+
+The NLTK and Accelerate findings that the 1.30.2 notes accepted for that
+release only were reassessed on October 7, 2026, before this release. Nothing
+has changed. GitHub's records for NLTK
+[GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp) (High)
+and Accelerate
+[GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79) (High
+under CVSS v3.1, Moderate under v4) still list no patched version for either,
+and neither is withdrawn. The newest published versions are still NLTK 3.10.3
+(August 12) and Accelerate 1.15.0 (September 9), and the locked versions are
+NLTK 3.10.3 and Accelerate 1.14.0. The Accelerate 1.15.0 wheel still joins the
+file names in a checkpoint index to the checkpoint folder with no path check, so
+its newer version is not a fix. The base install excludes both packages.
+SECURITY.md lists the affected extras and limitations. Both findings remain
+open; as for 1.30.2, they are accepted for this release only and must be
+resolved or reassessed before another release.
+
+The repository's development locks now carry the fixed versions that the 1.30.2
+notes deferred: urllib3 2.8.0, multidict 6.9.1, Werkzeug 3.1.9 and LiteLLM
+1.93.2, with the same urllib3 and multidict versions in the client qualification
+lock. Those advisories affected only the locks. TokenPak requires
+`urllib3>=2.0.0` and caps none of these packages, so a new install already
+resolved fixed versions. Upgrading TokenPak does not upgrade a package that is
+already installed; run `python -m pip install -U urllib3` in existing
+environments, and upgrade `litellm` if you installed the `integrations-litellm`
+extra. The remaining development-only JavaScript tooling alert (sprintf-js, no
+patched release) does not affect the published package.
 
 ## [1.30.2] — 2026-10-07
 
